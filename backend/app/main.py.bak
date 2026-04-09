@@ -1,14 +1,15 @@
+from datetime import datetime, timezone
+import os
+import random
+import re
+
+import httpx
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
-from datetime import datetime, timezone
-from .api import commands, turns
-import httpx
-import random
-import re
-import os
 
+from .api import commands, turns
 from .db import init_db, get_session
 from .models import Game, Message
 
@@ -37,25 +38,13 @@ GAME_SYSTEMS = {
         )
     },
     "warhammer": {
-        "prompt": (
-            "Jesteś Mistrzem Gry Warhammer Fantasy Roleplay. "
-            "Odpowiadasz po polsku. Klimat Starego Świata, mrok, brud, chaos, "
-            "intryga. Używaj zasad d100."
-        )
+        "prompt": "Jesteś Mistrzem Gry Warhammer Fantasy Roleplay. Odpowiadasz po polsku. Klimat Starego Świata, mrok, brud, chaos, intryga. Używaj zasad d100."
     },
     "cyberpunk": {
-        "prompt": (
-            "Jesteś Mistrzem Gry Cyberpunk RED. "
-            "Odpowiadasz po polsku. Klimat Night City, edgerunnerzy, "
-            "korporacje, slang cyberpunkowy."
-        )
+        "prompt": "Jesteś Mistrzem Gry Cyberpunk RED. Odpowiadasz po polsku. Klimat Night City, edgerunnerzy, korporacje, slang cyberpunkowy."
     },
     "neuroshima": {
-        "prompt": (
-            "Jesteś Mistrzem Gry Neuroshima. "
-            "Odpowiadasz po polsku. Klimat post-apo Polski, Moloch, "
-            "Hegemonia, brud i przemoc."
-        )
+        "prompt": "Jesteś Mistrzem Gry Neuroshima. Odpowiadasz po polsku. Klimat post-apo Polski, Moloch, Hegemonia, brud i przemoc."
     },
 }
 

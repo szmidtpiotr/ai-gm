@@ -3,114 +3,506 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Game Master 🇵🇱</title>
+    <title>AI Game Master PL</title>
     <style>
-        body { 
-            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; 
-            max-width: 900px; margin: 0 auto; padding: 2rem; 
-            line-height: 1.6;
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 1rem;
+            background: #f8f9fa;
+            color: #333;
         }
-        #chat { 
-            height: 500px; border: 1px solid #d4d1ca; padding: 1rem; 
-            overflow-y: auto; margin: 1rem 0; background: #f9f8f5;
-            font-family: inherit;
+
+        h1 {
+            margin-top: 0;
         }
-        input, select, button, textarea { 
-            padding: 0.75rem; margin: 0.25rem; border: 1px solid #d4d1ca; 
-            border-radius: 0.375rem; font-family: inherit;
+
+        #status {
+            font-size: 0.875rem;
+            color: #666;
+            margin-bottom: 1rem;
         }
-        button { background: #01696f; color: white; cursor: pointer; }
-        textarea { width: 55%; resize: vertical; min-height: 80px; }
-        .response { margin: 1rem 0; padding: 1rem; background: white; border-left: 4px solid #01696f; }
-        .error { color: #a12c7b; background: #f9e8f0; }
+
+        #setup-panel {
+            display: flex;
+            gap: 0.75rem;
+            align-items: end;
+            flex-wrap: wrap;
+            margin: 1rem 0;
+            padding: 1rem;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+
+        .field-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            min-width: 180px;
+        }
+
+        .field-group label {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .field-group select {
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+            background: white;
+        }
+
+        #games {
+            margin: 1rem 0;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .game {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            margin: 0.25rem 0;
+            border-radius: 4px;
+            cursor: pointer;
+            background: white;
+        }
+
+        .game:hover {
+            background: #f1f3f5;
+        }
+
+        #chat {
+            height: 60vh;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 1rem;
+            background: white;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .controls {
+            margin-bottom: 1rem;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        #input {
+            flex: 1 1 500px;
+            min-width: 240px;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 0.75rem 1rem;
+            margin: 0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .message {
+            margin: 0.5rem 0;
+            padding: 0.75rem;
+            border-radius: 4px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+
+        .user {
+            background: #007bff;
+            color: white;
+            margin-left: 20%;
+        }
+
+        .assistant {
+            background: #e9ecef;
+            margin-right: 20%;
+        }
+
+        .dice {
+            background: #28a745;
+            color: white;
+        }
+
+        .error {
+            background: #dc3545;
+            color: white;
+        }
+
+        .system {
+            background: #fff3cd;
+            color: #664d03;
+            border: 1px solid #ffecb5;
+        }
+
+        .meta {
+            font-size: 0.875rem;
+            color: #666;
+            margin-top: 0.25rem;
+        }
+
+        @media (max-width: 768px) {
+            #chat {
+                height: 50vh;
+            }
+
+            .user {
+                margin-left: 5%;
+            }
+
+            .assistant {
+                margin-right: 5%;
+            }
+
+            .input-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            #input {
+                width: 100%;
+                min-width: 0;
+            }
+        }
     </style>
 </head>
 <body>
-    <h1>🎲 AI Game Master <span style="font-size: 0.8em;">(Warhammer, Cyberpunk, Neuroshima)</span></h1>
-    
-    <div style="margin: 1.5rem 0;">
-        <label>Gra: 
-            <select id="game">
-                <option value="warhammer">⚔️ Warhammer</option>
-                <option value="cyberpunk">💉 Cyberpunk RED</option>
-                <option value="neuroshima">☢️ Neuroshima HEX</option>
-            </select>
-        </label>
-        <label>Model: <input id="model" value="gemma3:1b" /></label>
-        <input id="dice" placeholder="d20, 2d6+3..." value="1d20" />
-        <button id="roll">🎲 Rzuć</button>
-    </div>
-    
-    <div>
-        <textarea id="msg" placeholder="Twoja akcja... (Enter = wyślij, Shift+Enter = nowa linia)" rows="4"></textarea>
-        <button id="send">Wyślij</button>
-    </div>
-    
-    <div id="chat">Witaj w świecie RPG! Wybierz grę i rozpocznij sesję...</div>
-    <div id="status">Gotowy • <a href="http://localhost:8000/docs" target="_blank">API Docs</a></div>
+    <h1>🎲 AI Game Master PL</h1>
 
-    <h2>Testy</h2>
-    <button onclick="testWarhammer()">🛡️ Warhammer 40k</button>
-    <button onclick="testCyberpunk()">💉 Cyberpunk</button>
-    <button onclick="testNeuroshima()">☢️ Neuroshima</button>
+    <div id="status">Gotowy. Wybierz system gry i silnik, a potem zacznij sesję.</div>
+
+    <div id="setup-panel">
+        <div class="field-group">
+            <label for="system-select">System gry</label>
+            <select id="system-select">
+				<option value="fantasy">Fantasy</option>
+                <option value="warhammer" selected>Warhammer</option>
+                <option value="cyberpunk">Cyberpunk</option>
+                <option value="neuroshima">Neuroshima</option>
+                
+            </select>
+        </div>
+
+        <div class="field-group">
+            <label for="engine-select">Silnik</label>
+            <select id="engine-select">
+                <option value="gemma3:1b" selected>gemma3:1b</option>
+                <option value="llama3.2">llama3.2</option>
+                <option value="mistral">mistral</option>
+            </select>
+        </div>
+    </div>
+
+    <div id="games"></div>
+
+    <div class="controls">
+        <button id="new-game" class="btn-primary">Nowa gra</button>
+        <button id="clear-chat" class="btn-secondary">Wyczyść chat</button>
+    </div>
+
+    <div id="chat"></div>
+
+    <div class="input-row">
+        <input id="input" type="text" placeholder="Wpisz /sheet albo opisz akcję..." autofocus>
+        <button id="send" class="btn-primary">Wyślij</button>
+        <button id="dice" class="btn-secondary">🎲</button>
+        <button id="save-game" class="btn-primary">💾 Zapisz grę</button>
+    </div>
 
     <script>
-        const API_CHAT = '/gm/chat';
+        const API_TURNS = '/api/campaigns/1/turns';
         const API_DICE = '/gm/dice';
-        const chatBox = document.getElementById('chat');
-        const input = document.getElementById('msg');
-        const sendBtn = document.getElementById('send');
-        const diceBtn = document.getElementById('roll');
-        const diceInput = document.getElementById('dice');
-        const gameSelect = document.getElementById('game');
-        const modelInput = document.getElementById('model');
+        const API_GAMES = '/api/games';
+        const DEFAULT_CHARACTER_ID = 1;
 
-        function addLine(who, text, isError = false) {
-            const div = document.createElement('div');
-            div.className = `response ${isError ? 'error' : ''}`;
-            div.innerHTML = `<strong>${who}:</strong> ${text}`;
-            chatBox.appendChild(div);
-            chatBox.scrollTop = chatBox.scrollHeight;
+        let chatHistory = [];
+        let currentGameId = null;
+        let gameTitle = 'Nowa sesja';
+        let gameSystem = 'warhammer';
+        let gameEngine = 'gemma3:1b';
+
+        const chatEl = document.getElementById('chat');
+        const inputEl = document.getElementById('input');
+        const sendBtn = document.getElementById('send');
+        const diceBtn = document.getElementById('dice');
+        const gamesEl = document.getElementById('games');
+        const statusEl = document.getElementById('status');
+        const newGameBtn = document.getElementById('new-game');
+        const clearChatBtn = document.getElementById('clear-chat');
+        const saveGameBtn = document.getElementById('save-game');
+        const systemSelectEl = document.getElementById('system-select');
+        const engineSelectEl = document.getElementById('engine-select');
+
+        function updateStatus(text = '') {
+            if (text) {
+                statusEl.textContent = text;
+                return;
+            }
+            statusEl.textContent = `System: ${gameSystem} | Silnik: ${gameEngine} | ${currentGameId ? 'Aktywna sesja: ' + gameTitle : 'Tryb lokalny / brak zapisanej sesji'}`;
         }
 
-        async function sendChat() {
-            const text = input.value.trim();
-            if (!text) return;
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text ?? '';
+            return div.innerHTML;
+        }
 
-            addLine('Ty', text);
-            input.value = '';
-            sendBtn.disabled = true;
-            input.focus();
+        function addLine(role, content, className = '') {
+            const div = document.createElement('div');
+            div.className = `message ${className}`.trim();
+            div.innerHTML = `<strong>${escapeHtml(role)}:</strong> ${escapeHtml(content)}`;
+            chatEl.appendChild(div);
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        function addJsonBlock(role, payload, className = 'assistant') {
+            const div = document.createElement('div');
+            div.className = `message ${className}`.trim();
+            div.innerHTML = `<strong>${escapeHtml(role)}:</strong><pre style="margin:0.5rem 0 0; white-space:pre-wrap; overflow:auto;">${escapeHtml(JSON.stringify(payload, null, 2))}</pre>`;
+            chatEl.appendChild(div);
+            chatEl.scrollTop = chatEl.scrollHeight;
+        }
+
+        function renderTurnResponse(data) {
+            if (!data || typeof data !== 'object') {
+                addLine('System', 'Nieprawidłowa odpowiedź serwera', 'error');
+                return;
+            }
+
+            if (data.route === 'command') {
+                const command = data.command || 'command';
+                const result = data.result || {};
+
+                if (command === '/help' && result.message) {
+                    addLine('MG', result.message, 'assistant');
+                    return;
+                }
+
+                if (command === '/name' && result.character_name) {
+                    addLine('System', `Zmieniono imię postaci na: ${result.character_name}`, 'system');
+                    return;
+                }
+
+                if (command === '/sheet') {
+                    addJsonBlock('Karta postaci', result.character || result, 'assistant');
+                    return;
+                }
+
+                addJsonBlock(`Wynik ${command}`, result, 'assistant');
+                return;
+            }
+
+            if (data.route === 'narrative') {
+                const result = data.result || {};
+                const message = result.message || result.content || 'Brak odpowiedzi';
+                addLine('MG', message, 'assistant');
+                return;
+            }
+
+            addJsonBlock('Odpowiedź', data, 'assistant');
+        }
+
+        async function loadGames() {
+            try {
+                const resp = await fetch(API_GAMES);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const games = await resp.json();
+
+                gamesEl.innerHTML = '<h3>Sesje:</h3>';
+
+                if (!Array.isArray(games) || games.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'game';
+                    empty.textContent = 'Brak zapisanych sesji';
+                    gamesEl.appendChild(empty);
+                    return;
+                }
+
+                games.forEach(game => {
+                    const btn = document.createElement('div');
+                    btn.className = 'game';
+                    btn.innerHTML = `<strong>${escapeHtml(game.title || 'Bez nazwy')}</strong> (${escapeHtml(game.system || 'brak systemu')}${game.model ? ', ' + escapeHtml(game.model) : ''})`;
+                    btn.onclick = () => loadGame(game.id, game.title);
+                    gamesEl.appendChild(btn);
+                });
+            } catch (e) {
+                console.error('Load games failed:', e);
+                gamesEl.innerHTML = '<h3>Sesje:</h3><div class="game">Nie udało się wczytać listy sesji</div>';
+            }
+        }
+
+        async function loadGame(id, title) {
+            currentGameId = id;
+            gameTitle = title || 'Sesja';
+            updateStatus(`Ładowanie sesji: ${gameTitle}...`);
 
             try {
-                const resp = await fetch(API_CHAT, {
+                const resp = await fetch(`${API_GAMES}/${id}`);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+
+                chatHistory = Array.isArray(data.messages)
+                    ? data.messages.map(m => ({ role: m.role, content: m.content }))
+                    : [];
+
+                if (data.system) {
+                    gameSystem = data.system;
+                    systemSelectEl.value = data.system;
+                }
+
+                if (data.model) {
+                    gameEngine = data.model;
+                    engineSelectEl.value = data.model;
+                }
+
+                chatEl.innerHTML = '';
+                chatHistory.forEach(msg => {
+                    const label = msg.role === 'user' ? 'Gracz' : 'MG';
+                    const className = msg.role === 'user' ? 'user' : 'assistant';
+                    addLine(label, msg.content, className);
+                });
+
+                updateStatus(`Załadowano: ${gameTitle} | System: ${gameSystem} | Silnik: ${gameEngine}`);
+            } catch (e) {
+                console.error('Load game failed:', e);
+                addLine('Błąd', `Nie udało się załadować gry: ${e.message}`, 'error');
+                updateStatus('Błąd podczas ładowania sesji');
+            }
+        }
+
+        async function createGame(title, system) {
+            try {
+                const resp = await fetch(API_GAMES, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        model: modelInput.value.trim() || 'gemma3:1b',
-                        messages: [{ role: 'user', content: text }],
-                        game_system: gameSelect.value
+                        title,
+                        system,
+                        model: gameEngine
                     })
                 });
 
-                if (!resp.ok) {
-                    const errText = await resp.text();
-                    throw new Error(`HTTP ${resp.status}: ${errText}`);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const game = await resp.json();
+                currentGameId = game.id;
+                gameTitle = title;
+
+                updateStatus(`Nowa gra: ${title} | System: ${gameSystem} | Silnik: ${gameEngine}`);
+                loadGames();
+            } catch (e) {
+                console.error('Create game failed:', e);
+                addLine('Błąd', `Nie udało się utworzyć gry: ${e.message}`, 'error');
+            }
+        }
+
+        async function saveGame() {
+            if (!currentGameId) {
+                const title = prompt('Nazwa gry:', gameTitle);
+                if (title) {
+                    gameTitle = title;
+                    gameSystem = systemSelectEl.value;
+                    gameEngine = engineSelectEl.value;
+                    await createGame(title, gameSystem);
                 }
+                return;
+            }
+
+            updateStatus(`Sesja aktywna: ${gameTitle} | System: ${gameSystem} | Silnik: ${gameEngine}`);
+        }
+
+        async function sendMessage() {
+            const text = inputEl.value.trim();
+            if (!text) return;
+
+            gameSystem = systemSelectEl.value;
+            gameEngine = engineSelectEl.value;
+
+            addLine('Gracz', text, 'user');
+            chatHistory.push({ role: 'user', content: text });
+            inputEl.value = '';
+            updateStatus('Wysyłanie tury...');
+
+            try {
+                const resp = await fetch(API_TURNS, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        character_id: DEFAULT_CHARACTER_ID,
+                        text,
+                        system: gameSystem,
+                        engine: gameEngine,
+                        game_id: currentGameId
+                    })
+                });
 
                 const data = await resp.json();
-                const answer = data.message?.content || 'Brak odpowiedzi z modelu';
-                addLine('MG', answer);
-            } catch (err) {
-                addLine('Błąd', String(err), true);
-                console.error('Chat error:', err);
-            } finally {
-                sendBtn.disabled = false;
+
+                if (!resp.ok) {
+                    const detail = data.detail || data.error || `HTTP ${resp.status}`;
+                    throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+                }
+
+                renderTurnResponse(data);
+
+                if (data.route === 'narrative') {
+                    const result = data.result || {};
+                    const content = result.message || result.content || 'Brak odpowiedzi';
+                    chatHistory.push({ role: 'assistant', content });
+                } else if (data.route === 'command') {
+                    chatHistory.push({ role: 'assistant', content: JSON.stringify(data.result || {}, null, 2) });
+                }
+
+                updateStatus();
+            } catch (e) {
+                addLine('Błąd', `Serwer: ${e.message}`, 'error');
+                updateStatus('Błąd podczas wysyłania tury');
             }
         }
 
         async function rollDice() {
-            const dice = diceInput.value.trim();
+            const dice = prompt('Kość (d20, 2d6+3, d100):', '1d20');
             if (!dice) return;
 
             try {
@@ -120,47 +512,63 @@
                     body: JSON.stringify({ dice })
                 });
 
-                if (!resp.ok) {
-                    const errText = await resp.text();
-                    throw new Error(`HTTP ${resp.status}: ${errText}`);
-                }
-
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
                 const data = await resp.json();
-                addLine('Kość', `${data.dice} = [${data.rolls.join(', ')}] = ${data.total}`);
-            } catch (err) {
-                addLine('Błąd', String(err), true);
-                console.error('Dice error:', err);
+                addLine('🎲', `${data.dice} = [${data.rolls.join(', ')}] = ${data.total}`, 'dice');
+            } catch (e) {
+                addLine('Błąd', `Kość: ${e.message}`, 'error');
             }
         }
 
-        // Event listeners
-        sendBtn.addEventListener('click', sendChat);
-        diceBtn.addEventListener('click', rollDice);
+        systemSelectEl.onchange = () => {
+            gameSystem = systemSelectEl.value;
+            updateStatus();
+        };
 
-        input.addEventListener('keydown', (e) => {
+        engineSelectEl.onchange = () => {
+            gameEngine = engineSelectEl.value;
+            updateStatus();
+        };
+
+        sendBtn.onclick = sendMessage;
+        diceBtn.onclick = rollDice;
+
+        newGameBtn.onclick = async () => {
+            const title = prompt('Nazwa gry:', 'Nowa sesja');
+            if (!title) return;
+
+            gameTitle = title;
+            gameSystem = systemSelectEl.value;
+            gameEngine = engineSelectEl.value;
+            chatHistory = [];
+            chatEl.innerHTML = '';
+            currentGameId = null;
+
+            await createGame(title, gameSystem);
+        };
+
+        clearChatBtn.onclick = () => {
+            chatEl.innerHTML = '';
+            chatHistory = [];
+            currentGameId = null;
+            gameTitle = 'Nowa sesja';
+            updateStatus('Chat wyczyszczony');
+        };
+
+        saveGameBtn.onclick = saveGame;
+
+        inputEl.onkeydown = (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                sendChat();
+                sendMessage();
             }
-        });
+        };
 
-        // Test functions
-        async function testChat(system, msg) {
-            gameSelect.value = system;
-            input.value = msg;
-            addLine(`Test ${system}`, msg);
-            await sendChat();
-        }
-
-        async function testWarhammer() {
-            await testChat('warhammer', 'Jestem kapitan Ultramarines. Co widzę wokół?');
-        }
-        async function testCyberpunk() {
-            await testChat('cyberpunk', 'Jestem netrunnerem w Night City. Szukam eddies.');
-        }
-        async function testNeuroshima() {
-            await testChat('neuroshima', 'Walczę z mutantami Molocha. Atakuję!');
-        }
+        gameSystem = systemSelectEl.value;
+        gameEngine = engineSelectEl.value;
+        updateStatus();
+        loadGames();
+        setInterval(loadGames, 10000);
     </script>
 </body>
 </html>

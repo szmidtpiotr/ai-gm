@@ -1,15 +1,26 @@
-# AI GM
+# 🎲 AI Game Master 🇵🇱
 
-Private AI Game Master project powered by Ollama.
+Lokalny AI Mistrz Gry RPG z GPU acceleration. Obsługuje Warhammer Fantasy, Cyberpunk RED, Neuroshima HEX.
 
-## Goal
+## Quick Start
 
-A self-hosted terminal-based and web-based AI RPG engine for Polish gameplay, with support for systems like Warhammer, Cyberpunk and Neuroshima, plus multiplayer sessions for invited friends.
+```bash
+git clone <your-repo>
+cd ai-gm
+docker compose up -d --build
+```
 
-## Status
+**Play**: http://localhost:3000  
+**API Docs**: http://localhost:8000/docs  
+**Ollama**: http://localhost:11434
 
-Project initialization.
+## Features
 
-## Notes
+- 🎯 **3 RPG systems**: Warhammer (d100), Cyberpunk RED, Neuroshima HEX
+- ⚡ **GPU acceleration** (NVIDIA via Docker)
+- 🗣️ **Chat**: Kontekstowe odpowiedzi Mistrza Gry
+- 🎲 **Dice**: `1d20`, `2d6+3`, `d100` z automatycznym parsowaniem
+- ⌨️ **Enter = send**, `Shift+Enter` = nowa linia
+- 🔄 **Session memory** w UI
 
-Repository created and connected to GitHub.
+## Stack
