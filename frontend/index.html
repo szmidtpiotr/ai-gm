@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Game Master 🇵🇱</title>
+    <style>
+        body { 
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; 
+            max-width: 900px; margin: 0 auto; padding: 2rem; 
+            line-height: 1.6;
+        }
+        #chat { 
+            height: 500px; border: 1px solid #d4d1ca; padding: 1rem; 
+            overflow-y: auto; margin: 1rem 0; background: #f9f8f5;
+            font-family: inherit;
+        }
+        input, select, button, textarea { 
+            padding: 0.75rem; margin: 0.25rem; border: 1px solid #d4d1ca; 
+            border-radius: 0.375rem; font-family: inherit;
+        }
+        button { background: #01696f; color: white; cursor: pointer; }
+        textarea { width: 55%; resize: vertical; min-height: 80px; }
+        .response { margin: 1rem 0; padding: 1rem; background: white; border-left: 4px solid #01696f; }
+        .error { color: #a12c7b; background: #f9e8f0; }
+    </style>
+</head>
+<body>
+    <h1>🎲 AI Game Master <span style="font-size: 0.8em;">(Warhammer, Cyberpunk, Neuroshima)</span></h1>
+    
+    <div style="margin: 1.5rem 0;">
+        <label>Gra: 
+            <select id="game">
+                <option value="warhammer">⚔️ Warhammer</option>
+                <option value="cyberpunk">💉 Cyberpunk RED</option>
+                <option value="neuroshima">☢️ Neuroshima HEX</option>
+            </select>
+        </label>
+        <label>Model: <input id="model" value="gemma3:1b" /></label>
+        <input id="dice" placeholder="d20, 2d6+3..." value="1d20" />
+        <button id="roll">🎲 Rzuć</button>
+    </div>
+    
+    <div>
+        <textarea id="msg" placeholder="Twoja akcja... (Enter = wyślij, Shift+Enter = nowa linia)" rows="4"></textarea>
+        <button id="send">Wyślij</button>
+    </div>
+    
+    <div id="chat">Witaj w świecie RPG! Wybierz grę i rozpocznij sesję...</div>
+    <div id="status">Gotowy • <a href="http://localhost:8000/docs" target="_blank">API Docs</a></div>
+
+    <h2>Testy</h2>
+    <button onclick="testWarhammer()">🛡️ Warhammer 40k</button>
+    <button onclick="testCyberpunk()">💉 Cyberpunk</button>
+    <button onclick="testNeuroshima()">☢️ Neuroshima</button>
+
+    <script>
+        const API_CHAT = '/gm/chat';
+        const API_DICE = '/gm/dice';
+        const chatBox = document.getElementById('chat');
+        const input = document.getElementById('msg');
+        const sendBtn = document.getElementById('send');
+        const diceBtn = document.getElementById('roll');
+        const diceInput = document.getElementById('dice');
+        const gameSelect = document.getElementById('game');
+        const modelInput = document.getElementById('model');
+
+        function addLine(who, text, isError = false) {
+            const div = document.createElement('div');
+            div.className = `response ${isError ? 'error' : ''}`;
+            div.innerHTML = `<strong>${who}:</strong> ${text}`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function sendChat() {
+            const text = input.value.trim();
+            if (!text) return;
+
+            addLine('Ty', text);
+            input.value = '';
+            sendBtn.disabled = true;
+            input.focus();
+
+            try {
+                const resp = await fetch(API_CHAT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: modelInput.value.trim() || 'gemma3:1b',
+                        messages: [{ role: 'user', content: text }],
+                        game_system: gameSelect.value
+                    })
+                });
+
+                if (!resp.ok) {
+                    const errText = await resp.text();
+                    throw new Error(`HTTP ${resp.status}: ${errText}`);
+                }
+
+                const data = await resp.json();
+                const answer = data.message?.content || 'Brak odpowiedzi z modelu';
+                addLine('MG', answer);
+            } catch (err) {
+                addLine('Błąd', String(err), true);
+                console.error('Chat error:', err);
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
+
+        async function rollDice() {
+            const dice = diceInput.value.trim();
+            if (!dice) return;
+
+            try {
+                const resp = await fetch(API_DICE, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dice })
+                });
+
+                if (!resp.ok) {
+                    const errText = await resp.text();
+                    throw new Error(`HTTP ${resp.status}: ${errText}`);
+                }
+
+                const data = await resp.json();
+                addLine('Kość', `${data.dice} = [${data.rolls.join(', ')}] = ${data.total}`);
+            } catch (err) {
+                addLine('Błąd', String(err), true);
+                console.error('Dice error:', err);
+            }
+        }
+
+        // Event listeners
+        sendBtn.addEventListener('click', sendChat);
+        diceBtn.addEventListener('click', rollDice);
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChat();
+            }
+        });
+
+        // Test functions
+        async function testChat(system, msg) {
+            gameSelect.value = system;
+            input.value = msg;
+            addLine(`Test ${system}`, msg);
+            await sendChat();
+        }
+
+        async function testWarhammer() {
+            await testChat('warhammer', 'Jestem kapitan Ultramarines. Co widzę wokół?');
+        }
+        async function testCyberpunk() {
+            await testChat('cyberpunk', 'Jestem netrunnerem w Night City. Szukam eddies.');
+        }
+        async function testNeuroshima() {
+            await testChat('neuroshima', 'Walczę z mutantami Molocha. Atakuję!');
+        }
+    </script>
+</body>
+</html>
