@@ -9,3 +9,7 @@ A self-hosted terminal-based and web-based AI RPG engine for Polish gameplay, wi
 ## Status
 
 Project initialization.
+
+## Notes
+
+Repository created and connected to GitHub.
