@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     system_id TEXT NOT NULL,
     model_id TEXT NOT NULL,
     owner_user_id INTEGER NOT NULL,
+    language TEXT NOT NULL DEFAULT 'pl',
     mode TEXT NOT NULL DEFAULT 'solo',
     status TEXT NOT NULL DEFAULT 'active',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

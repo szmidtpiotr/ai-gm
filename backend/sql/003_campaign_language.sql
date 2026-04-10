@@ -1,0 +1,1 @@
+ALTER TABLE campaigns ADD COLUMN language TEXT NOT NULL DEFAULT 'pl';

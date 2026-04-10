@@ -32,9 +32,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      GAME_LANG: pl-PL
-      DATABASE_URL: sqlite:////data/ai_gm.db
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-60}
+      DEFAULT_CAMPAIGN_LANGUAGE: ${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
+      GAME_LANG: ${GAME_LANG:-pl-PL}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/ai_gm.db}
+
     volumes:
       - ai_gm_data:/data
     depends_on:

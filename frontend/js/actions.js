@@ -1,0 +1,277 @@
+window.createCampaign = async function () {
+  const { systemSelectEl, engineSelectEl } = window.getEls();
+
+  const title = prompt(
+    'Tytuł kampanii:',
+    `Kampania ${new Date().toISOString().slice(0, 10)}`
+  );
+  if (!title) return;
+
+  const payload = {
+    title: title.trim(),
+    system_id: systemSelectEl.value,
+    model_id: engineSelectEl.value || (window.state.models[0]?.name ?? 'gemma3:1b'),
+    owner_user_id: 1,
+    language: window.state.lang || 'pl',
+    mode: 'solo',
+    status: 'active'
+  };
+
+  try {
+    const resp = await fetch(window.API_CAMPAIGNS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.detail || `HTTP ${resp.status}`);
+    }
+
+    await window.loadCampaigns(data.id);
+    await window.loadCharacters(data.id);
+
+    window.addMessage({
+      speaker: 'System',
+      text: `Utworzono kampanię: ${data.title}`,
+      role: 'system',
+      route: 'campaign'
+    });
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Tworzenie kampanii: ${e.message}`,
+      role: 'error'
+    });
+  }
+};
+
+window.deleteCampaign = async function () {
+  if (!window.state.selectedCampaignId) {
+    alert('Najpierw wybierz kampanię');
+    return;
+  }
+
+  const campaign = window.currentCampaign();
+  const label = campaign?.title || `#${window.state.selectedCampaignId}`;
+  const confirmed = confirm(`Usunąć kampanię "${label}"?`);
+  if (!confirmed) return;
+
+  try {
+    const resp = await fetch(`/api/campaigns/${window.state.selectedCampaignId}`, {
+      method: 'DELETE'
+    });
+
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const data = await resp.json();
+        detail = data.detail || detail;
+      } catch (_) {}
+      throw new Error(detail);
+    }
+
+    window.addMessage({
+      speaker: 'System',
+      text: `Usunięto kampanię: ${label}`,
+      role: 'system',
+      route: 'campaign'
+    });
+
+    await window.loadCampaigns();
+    if (window.state.selectedCampaignId) {
+      await window.loadCharacters(window.state.selectedCampaignId);
+    }
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Usuwanie kampanii: ${e.message}`,
+      role: 'error'
+    });
+  }
+};
+
+window.createCharacter = async function () {
+  const { systemSelectEl } = window.getEls();
+
+  if (!window.state.selectedCampaignId) {
+    alert('Najpierw wybierz kampanię');
+    return;
+  }
+
+  const name = prompt('Imię postaci:', 'Nowy Bohater');
+  if (!name) return;
+
+  const payload = {
+    user_id: 1,
+    name: name.trim(),
+    system_id: systemSelectEl.value,
+    sheet_json: {
+      level: 1,
+      hp: 20,
+      stats: {},
+      inventory: []
+    },
+    location: 'Start',
+    is_active: 1
+  };
+
+  try {
+    const resp = await fetch(`/api/campaigns/${window.state.selectedCampaignId}/characters`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.detail || `HTTP ${resp.status}`);
+    }
+
+    await window.loadCharacters(window.state.selectedCampaignId, data.id);
+
+    window.addMessage({
+      speaker: 'System',
+      text: `Utworzono postać: ${data.name}`,
+      role: 'system',
+      route: 'character'
+    });
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Tworzenie postaci: ${e.message}`,
+      role: 'error'
+    });
+  }
+};
+
+window.sendMessage = async function () {
+  const { inputEl, systemSelectEl, engineSelectEl } = window.getEls();
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  const clientCreatedAt = new Date().toISOString();
+
+  if (!window.state.selectedCampaignId) {
+    window.addMessage({
+      speaker: 'System',
+      text: window.t('error.no_campaign'),
+      role: 'error',
+      createdAt: clientCreatedAt
+    });
+    return;
+  }
+
+  if (!window.state.selectedCharacterId) {
+    window.addMessage({
+      speaker: 'System',
+      text: window.t('error.no_character'),
+      role: 'error',
+      createdAt: clientCreatedAt
+    });
+    return;
+  }
+
+  const selectedEngine = window.state.selectedEngine || engineSelectEl.value || '';
+
+  if (!selectedEngine) {
+    window.addMessage({
+      speaker: 'System',
+      text: 'Nie wybrano modelu.',
+      role: 'error',
+      createdAt: clientCreatedAt
+    });
+    return;
+  }
+
+  let turnNumber = window.nextTurnNumber();
+
+  window.addMessage({
+    speaker: window.currentCharacterName(),
+    text,
+    role: 'user',
+    route: 'input',
+    turn: turnNumber,
+    createdAt: clientCreatedAt
+  });
+
+  inputEl.value = '';
+
+  try {
+    const payload = {
+      character_id: window.state.selectedCharacterId,
+      text,
+      system: systemSelectEl.value,
+      engine: selectedEngine,
+      game_id: window.state.selectedCampaignId
+    };
+
+    const resp = await fetch(
+      `/api/campaigns/${window.state.selectedCampaignId}/turns`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      const detail = data.detail || data.error || `HTTP ${resp.status}`;
+      throw new Error(
+        typeof detail === 'string' ? detail : JSON.stringify(detail)
+      );
+    }
+
+    if (data.turn_number) {
+      turnNumber = Number(data.turn_number);
+      if (turnNumber > window.state.turnNumber) {
+        window.state.turnNumber = turnNumber;
+      }
+    }
+
+    window.renderTurnResponse(data, turnNumber);
+    await window.loadTurns(window.state.selectedCampaignId);
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Serwer: ${e.message}`,
+      role: 'error',
+      turn: turnNumber
+    });
+  }
+};
+
+
+
+window.rollDice = async function () {
+  const dice = prompt('Kość (d20, 2d6+3, d100):', '1d20');
+  if (!dice) return;
+
+  try {
+    const resp = await fetch('/gm/dice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dice })
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    window.addMessage({
+      speaker: '🎲',
+      text: `${data.dice} = [${data.rolls.join(', ')}] = ${data.total}`,
+      role: 'system'
+    });
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Kość: ${e.message}`,
+      role: 'error'
+    });
+  }
+};

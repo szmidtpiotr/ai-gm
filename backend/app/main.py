@@ -1,16 +1,19 @@
-from fastapi import FastAPI, HTTPException, Depends
+from datetime import datetime, timezone
+import os
+import random
+import re
+
+import httpx
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
-from datetime import datetime, timezone
-from .api import commands, turns
-import httpx
-import random
-import re
-import os
 
-from .db import init_db, get_session
-from .models import Game, Message
+from app.api import campaigns, characters, commands, turns
+from app.api.health import router as health_router
+from app.api.models import router as models_router
+from app.db import get_session, init_db
+from app.models import Game, Message
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 
@@ -26,6 +29,10 @@ app.add_middleware(
 
 app.include_router(commands.router, prefix="/api")
 app.include_router(turns.router, prefix="/api")
+app.include_router(campaigns.router, prefix="/api")
+app.include_router(characters.router, prefix="/api")
+app.include_router(health_router, prefix="/api")
+app.include_router(models_router, prefix="/api")
 
 GAME_SYSTEMS = {
     "fantasy": {
@@ -87,11 +94,6 @@ async def root():
     return {"status": "ok"}
 
 
-@app.get("/health")
-async def health():
-    return {"status": "healthy", "ollama": OLLAMA_BASE_URL}
-
-
 @app.get("/games")
 async def games(session: Session = Depends(get_session)):
     games = session.exec(select(Game).order_by(Game.updated_at.desc())).all()
@@ -122,7 +124,7 @@ async def get_game(game_id: int, session: Session = Depends(get_session)):
 
     return {
         "game": game,
-        "messages": messages
+        "messages": messages,
     }
 
 

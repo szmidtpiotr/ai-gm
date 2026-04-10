@@ -1,72 +1,93 @@
-from app.services.ollama_service import OllamaService, OllamaServiceError
+import sqlite3
+from app.services.ollama_service import generate_chat
 
-SYSTEM_PROMPTS = {
-    "warhammer": (
-        "Jesteś mistrzem gry RPG Warhammer. "
-        "Opisz po polsku. Używaj prostych słów. "
-        "Krótkie zdania. Kończ: 'Co robisz?'"
-    ),
-    "cyberpunk": (
-        "Jesteś mistrzem gry RPG cyberpunk. "
-        "Opisz po polsku. Używaj prostych słów. "
-        "Krótkie zdania. Kończ: 'Co robisz?'"
-    ),
-    "neuroshima": (
-        "Jesteś mistrzem gry RPG Neuroshima. "
-        "Opisz po polsku. Używaj prostych słów. "
-        "Krótkie zdania. Kończ: 'Co robisz?'"
-    ),
-    "fantasy": (
-        "Jesteś mistrzem gry RPG fantasy. "
-        "Opisz po polsku. Używaj prostych słów. "
-        "Krótkie zdania. Kończ: 'Co robisz?'"
-    ),
-}
 
-ENGINE_MODEL_MAP = {
-    "gemma3:1b": "gemma3:1b",
-    "llama3.2": "llama3.2:latest",
-}
+SYSTEM_PROMPT = """Jesteś mistrzem gry RPG prowadzącym krótką, klimatyczną sesję solo po polsku.
+Prowadź narrację jasno i konkretnie.
+Uwzględniaj ostatni kontekst rozmowy.
+Nie powtarzaj dokładnie wypowiedzi gracza.
+Kończ odpowiedź naturalnym rozwinięciem sceny albo pytaniem "Co robisz?" jeśli pasuje.
+Jeśli wejście gracza jest bardzo krótkie lub niejasne, poproś o doprecyzowanie w świecie gry.
+"""
 
-def _normalize_system(system: str | None) -> str:
-    return (system or "fantasy").strip().lower()
 
-def _resolve_model(engine: str | None) -> str:
-    engine = (engine or "").strip().lower()
-    return ENGINE_MODEL_MAP.get(engine, "gemma3:1b")
+def load_recent_turns(conn: sqlite3.Connection, campaign_id: int, limit: int = 8) -> list[sqlite3.Row]:
+    rows = conn.execute(
+        """
+        SELECT user_text, assistant_text, route
+        FROM campaign_turns
+        WHERE campaign_id = ?
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (campaign_id, limit),
+    ).fetchall()
 
-def run_narrative_turn(*, campaign_id: int, character_id: int, text: str, 
-                      system: str | None, engine: str | None, game_id: int | None = None) -> dict:
-    clean_text = text.strip()
-    if len(clean_text) < 3:
-        return {"route": "narrative", "result": {"message": "Wpisz więcej tekstu.", "campaign_id": campaign_id}}
-    
-    system_key = _normalize_system(system)
-    system_prompt = SYSTEM_PROMPTS.get(system_key, SYSTEM_PROMPTS["fantasy"])
-    model = _resolve_model(engine)
-    
-    service = OllamaService()
-    
-    try:
-        narrative_text = service.generate_narrative(
-            model=model,
-            system_prompt=f"{system_prompt}\n\nPROSTE SŁOWA. TYLKO POLSKI. BEZ BŁĘDÓW.",
-            user_text=clean_text,
-            character_id=character_id,
-            campaign_id=campaign_id,
-            game_id=game_id,
-        )
-    except OllamaServiceError:
-        return {"route": "narrative", "result": {"message": "Narracja niedostępna.", "campaign_id": campaign_id}}
-    
+    rows = list(rows)
+    rows.reverse()
+    return rows
+
+
+def build_messages(
+    campaign: sqlite3.Row,
+    character: sqlite3.Row | None,
+    recent_turns: list[sqlite3.Row],
+    user_text: str,
+) -> list[dict]:
+    system_id = campaign["system_id"] if campaign and campaign["system_id"] else "fantasy"
+    language = campaign["language"] if campaign and campaign["language"] else "pl"
+    character_name = character["name"] if character and character["name"] else "Bohater"
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                f"{SYSTEM_PROMPT}\n"
+                f"System gry: {system_id}\n"
+                f"Język: {language}\n"
+                f"Postać gracza: {character_name}\n"
+            ),
+        }
+    ]
+
+    for turn in recent_turns:
+        if turn["user_text"]:
+            messages.append({
+                "role": "user",
+                "content": turn["user_text"],
+            })
+
+        if turn["assistant_text"] and turn["route"] == "narrative":
+            messages.append({
+                "role": "assistant",
+                "content": turn["assistant_text"],
+            })
+
+    messages.append({
+        "role": "user",
+        "content": user_text,
+    })
+
+    return messages
+
+
+def run_narrative_turn(
+    conn: sqlite3.Connection,
+    campaign: sqlite3.Row,
+    character: sqlite3.Row | None,
+    user_text: str,
+    model: str,
+) -> dict:
+    recent_turns = load_recent_turns(conn, campaign["id"], limit=8)
+    messages = build_messages(
+        campaign=campaign,
+        character=character,
+        recent_turns=recent_turns,
+        user_text=user_text,
+    )
+
+    reply = generate_chat(model=model, messages=messages)
+
     return {
-        "route": "narrative",
-        "result": {
-            "message": narrative_text,
-            "campaign_id": campaign_id,
-            "character_id": character_id,
-            "text": clean_text,
-            "system": system_key,
-            "engine": model,
-        },
+        "message": reply
     }
