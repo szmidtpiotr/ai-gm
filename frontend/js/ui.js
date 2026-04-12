@@ -39,6 +39,72 @@ window.applyTranslations = function () {
   if (els.sendBtn) els.sendBtn.textContent = window.t('button.send');
 };
 
+window.scrollChatToBottom = function () {
+  const { chatEl } = window.getEls();
+  if (!chatEl) return;
+
+  requestAnimationFrame(() => {
+    chatEl.scrollTop = chatEl.scrollHeight;
+  });
+};
+
+window.removeThinkingBubble = function () {
+  const { chatEl } = window.getEls();
+  if (!chatEl) return;
+
+  const existing = chatEl.querySelector('#thinking-bubble');
+  if (existing) existing.remove();
+};
+
+window.showThinkingBubble = function ({
+  speaker = null,
+  route = 'narrative',
+  turn = null
+} = {}) {
+  const { chatEl } = window.getEls();
+  if (!chatEl) return;
+
+  const existing = chatEl.querySelector('#thinking-bubble');
+  if (existing) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'message assistant thinking';
+  wrap.id = 'thinking-bubble';
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+
+  const left = document.createElement('div');
+  left.innerHTML =
+    `<strong>${window.escapeHtml(speaker || window.t('chat.gm'))}</strong>` +
+    `${turn ? ` • ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
+
+  const right = document.createElement('div');
+  right.innerHTML = route
+    ? `<span class="route-badge">${window.escapeHtml(route)}</span>`
+    : '';
+
+  meta.appendChild(left);
+  meta.appendChild(right);
+
+  const body = document.createElement('div');
+  body.className = 'thinking-wrap';
+  body.innerHTML = `
+    <span class="thinking-text">${window.escapeHtml(speaker || window.t('chat.gm') || 'GM')} myśli</span>
+    <span class="typing-dots" aria-hidden="true">
+      <span></span>
+      <span></span>
+      <span></span>
+    </span>
+  `;
+
+  wrap.appendChild(meta);
+  wrap.appendChild(body);
+  chatEl.appendChild(wrap);
+
+  window.scrollChatToBottom();
+};
+
 window.addMessage = function ({
   speaker,
   text,
@@ -78,12 +144,69 @@ window.addMessage = function ({
   meta.appendChild(right);
 
   const body = document.createElement('div');
+  body.className = 'message-body';
   body.innerHTML = `<pre>${window.escapeHtml(text)}</pre>`;
 
   wrap.appendChild(meta);
   wrap.appendChild(body);
   chatEl.appendChild(wrap);
-  chatEl.scrollTop = chatEl.scrollHeight;
+
+  window.scrollChatToBottom();
+};
+
+window.replaceThinkingBubble = function ({
+  speaker,
+  text,
+  role = 'assistant',
+  route = '',
+  turn = null,
+  createdAt = null
+}) {
+  const { chatEl } = window.getEls();
+  if (!chatEl) return;
+
+  const existing = chatEl.querySelector('#thinking-bubble');
+  if (!existing) {
+    window.addMessage({ speaker, text, role, route, turn, createdAt });
+    return;
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = `message ${role}`;
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+
+  const left = document.createElement('div');
+  left.innerHTML =
+    `<strong>${window.escapeHtml(speaker)}</strong>` +
+    `${turn ? ` • ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
+
+  const right = document.createElement('div');
+  const parts = [];
+
+  if (route) {
+    parts.push(`<span class="route-badge">${window.escapeHtml(route)}</span>`);
+  }
+
+  if (createdAt) {
+    parts.push(`<span>${window.escapeHtml(window.formatTimestamp(createdAt))}</span>`);
+  }
+
+  right.innerHTML = parts.join(' ');
+
+  meta.appendChild(left);
+  meta.appendChild(right);
+
+  const body = document.createElement('div');
+  body.className = 'message-body';
+  body.innerHTML = `<pre>${window.escapeHtml(text)}</pre>`;
+
+  wrap.appendChild(meta);
+  wrap.appendChild(body);
+
+  existing.replaceWith(wrap);
+  window.scrollChatToBottom();
 };
 
 window.addJsonMessage = function (
@@ -118,6 +241,7 @@ window.renderTurnResponse = function (data, turnNumber) {
   const createdAt = data?.created_at || null;
 
   if (!data || typeof data !== 'object') {
+    window.removeThinkingBubble();
     window.addMessage({
       speaker: 'System',
       text: window.t('error.invalid_response'),
@@ -145,6 +269,7 @@ window.renderTurnResponse = function (data, turnNumber) {
 
       if (option) option.textContent = renamedTo;
 
+      window.removeThinkingBubble();
       window.addMessage({
         speaker: 'System',
         text: `${window.t('system.name_changed')} ${renamedTo}`,
@@ -157,6 +282,7 @@ window.renderTurnResponse = function (data, turnNumber) {
     }
 
     if (result.command === '/sheet') {
+      window.removeThinkingBubble();
       window.addJsonMessage(
         'Karta postaci',
         result.character || result,
@@ -168,6 +294,7 @@ window.renderTurnResponse = function (data, turnNumber) {
       return;
     }
 
+    window.removeThinkingBubble();
     window.addJsonMessage(
       `Wynik ${result.command || 'komendy'}`,
       result,
@@ -183,7 +310,7 @@ window.renderTurnResponse = function (data, turnNumber) {
     const result = data.result || {};
     const message = result.message || result.content || 'Brak odpowiedzi';
 
-    window.addMessage({
+    window.replaceThinkingBubble({
       speaker: window.t('chat.gm'),
       text: message,
       role: 'assistant',
@@ -194,6 +321,7 @@ window.renderTurnResponse = function (data, turnNumber) {
     return;
   }
 
+  window.removeThinkingBubble();
   window.addJsonMessage('Odpowiedź', data, 'assistant', 'unknown', turnNumber, createdAt);
 };
 
@@ -237,6 +365,7 @@ window.renderHistoryPanel = function () {
     `;
 
     const body = document.createElement('div');
+    body.className = 'message-body';
     body.innerHTML = `
       <pre>${window.escapeHtml(turn.user_text || '')}</pre>
       <div style="margin-top:8px;">
@@ -263,6 +392,7 @@ window.renderHistoryPanel = function () {
 
 window.renderTurnsToChat = function () {
   window.clearChat();
+  window.removeThinkingBubble();
 
   const turns = Array.isArray(window.state.turns) ? window.state.turns : [];
 
@@ -301,10 +431,5 @@ window.renderTurnsToChat = function () {
     }
   });
 
-  const chatEl = document.getElementById('chat');
-  if (chatEl) {
-    requestAnimationFrame(() => {
-      chatEl.scrollTop = chatEl.scrollHeight;
-    });
-  }
+  window.scrollChatToBottom();
 };

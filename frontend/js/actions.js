@@ -1,3 +1,8 @@
+window.chatRequestState = window.chatRequestState || {
+  inFlight: false,
+  requestId: 0
+};
+
 window.createCampaign = async function () {
   const { systemSelectEl, engineSelectEl } = window.getEls();
 
@@ -149,9 +154,13 @@ window.createCharacter = async function () {
 };
 
 window.sendMessage = async function () {
-  const { inputEl, systemSelectEl, engineSelectEl } = window.getEls();
+  const { inputEl, systemSelectEl, engineSelectEl, sendBtnEl } = window.getEls();
   const text = inputEl.value.trim();
   if (!text) return;
+
+  if (window.chatRequestState?.inFlight) {
+    return;
+  }
 
   const clientCreatedAt = new Date().toISOString();
 
@@ -187,6 +196,12 @@ window.sendMessage = async function () {
     return;
   }
 
+  window.chatRequestState.inFlight = true;
+  const requestId = ++window.chatRequestState.requestId;
+
+  if (sendBtnEl) sendBtnEl.disabled = true;
+  inputEl.disabled = true;
+
   let turnNumber = window.nextTurnNumber();
 
   window.addMessage({
@@ -199,6 +214,14 @@ window.sendMessage = async function () {
   });
 
   inputEl.value = '';
+
+  window.removeThinkingBubble();
+
+  window.showThinkingBubble({
+    speaker: window.t('chat.gm'),
+    route: 'narrative',
+    turn: turnNumber
+  });
 
   try {
     const payload = {
@@ -220,6 +243,10 @@ window.sendMessage = async function () {
 
     const data = await resp.json();
 
+    if (requestId !== window.chatRequestState.requestId) {
+      return;
+    }
+
     if (!resp.ok) {
       const detail = data.detail || data.error || `HTTP ${resp.status}`;
       throw new Error(
@@ -227,30 +254,45 @@ window.sendMessage = async function () {
       );
     }
 
-	if (data.result?.message) {
-	  // Backend returns nested {result: {message: "..."}}
-	  data.message = data.result.message;
-	  data.turn_number = data.turn_number || window.state.turnNumber + 1;
-	}
+    if (data.result?.message) {
+      data.message = data.result.message;
+      data.turn_number = data.turn_number || window.state.turnNumber + 1;
+    }
 
-	turnNumber = Number(data.turn_number || turnNumber);
-	if (turnNumber > window.state.turnNumber) {
-	  window.state.turnNumber = turnNumber;
-	}
+    turnNumber = Number(data.turn_number || turnNumber);
+    if (turnNumber > window.state.turnNumber) {
+      window.state.turnNumber = turnNumber;
+    }
 
-	window.renderTurnResponse(data, turnNumber);
+    await window.renderTurnResponse(data, turnNumber);
+
+    if (requestId !== window.chatRequestState.requestId) {
+      return;
+    }
+
     await window.loadTurns(window.state.selectedCampaignId);
   } catch (e) {
-    window.addMessage({
+    if (requestId !== window.chatRequestState.requestId) {
+      return;
+    }
+
+    await window.removeThinkingBubble();
+    await window.addMessage({
       speaker: 'Błąd',
       text: `Serwer: ${e.message}`,
       role: 'error',
       turn: turnNumber
     });
+  } finally {
+    if (requestId === window.chatRequestState.requestId) {
+      window.chatRequestState.inFlight = false;
+    }
+
+    if (sendBtnEl) sendBtnEl.disabled = false;
+    inputEl.disabled = false;
+    inputEl.focus();
   }
 };
-
-
 
 window.rollDice = async function () {
   const dice = prompt('Kość (d20, 2d6+3, d100):', '1d20');

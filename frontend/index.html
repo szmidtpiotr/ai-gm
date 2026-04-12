@@ -4,216 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>AI-GM</title>
-  <style>
-    :root {
-      --bg: #111827;
-      --panel: #1f2937;
-      --panel-2: #374151;
-      --text: #f9fafb;
-      --muted: #9ca3af;
-      --accent: #14b8a6;
-      --danger: #ef4444;
-      --warning: #f59e0b;
-      --ok: #22c55e;
-      --border: #4b5563;
-      --user: #1d4ed8;
-      --assistant: #065f46;
-      --system: #6b7280;
-      --radius: 12px;
-      --gap: 12px;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-    }
-
-    .app {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 16px;
-    }
-
-    .topbar, .controls, .composer, .statusbar {
-      display: grid;
-      gap: var(--gap);
-    }
-
-    .topbar {
-      grid-template-columns: 1fr;
-      margin-bottom: 16px;
-    }
-
-    .title {
-      font-size: 24px;
-      font-weight: bold;
-    }
-
-    .statusbar {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      margin-bottom: 16px;
-    }
-
-    .status-card {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 10px 12px;
-      font-size: 14px;
-      min-height: 44px;
-    }
-
-    .controls {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      margin-bottom: 16px;
-    }
-
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .field label {
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .field-row {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      gap: 8px;
-      align-items: stretch;
-    }
-
-    .field-row.single-action {
-      grid-template-columns: 1fr auto;
-    }
-
-    select, input, button, textarea {
-      width: 100%;
-      min-height: 44px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: var(--panel);
-      color: var(--text);
-      padding: 10px 12px;
-      font-size: 16px;
-    }
-
-    button {
-      cursor: pointer;
-      background: var(--accent);
-      color: #04130f;
-      font-weight: bold;
-    }
-
-    button.secondary {
-      background: var(--panel-2);
-      color: var(--text);
-    }
-
-    button.danger {
-      background: var(--danger);
-      color: #fff;
-    }
-
-    button:disabled,
-    select:disabled,
-    textarea:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .chat {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 16px;
-      min-height: 420px;
-      max-height: 60vh;
-      overflow-y: auto;
-      margin-bottom: 16px;
-    }
-
-    .message {
-      border-radius: var(--radius);
-      padding: 12px;
-      margin-bottom: 12px;
-      border: 1px solid var(--border);
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .message.user { background: rgba(29, 78, 216, 0.20); }
-    .message.assistant { background: rgba(6, 95, 70, 0.22); }
-    .message.system { background: rgba(107, 114, 128, 0.18); }
-    .message.error { background: rgba(239, 68, 68, 0.18); border-color: var(--danger); }
-
-    .meta {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 8px;
-      flex-wrap: wrap;
-    }
-
-    .route-badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 999px;
-      background: var(--panel-2);
-      color: var(--text);
-      font-size: 12px;
-    }
-
-    .composer {
-      grid-template-columns: 1fr auto auto;
-      align-items: end;
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 88px;
-    }
-
-    pre {
-      margin: 0;
-      white-space: pre-wrap;
-      word-break: break-word;
-      font-size: 14px;
-    }
-
-    .muted { color: var(--muted); }
-
-    @media (max-width: 900px) {
-      .statusbar, .controls {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    @media (max-width: 640px) {
-      .statusbar, .controls, .composer {
-        grid-template-columns: 1fr;
-      }
-
-      .field-row,
-      .field-row.single-action {
-        grid-template-columns: 1fr;
-      }
-
-      .chat {
-        min-height: 320px;
-        max-height: 52vh;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="app">
@@ -238,14 +29,14 @@
         </div>
       </div>
 
-	<div class="field">
-	  <label for="character-select" id="label-character">Postać</label>
-	  <div class="field-row">
-		<select id="character-select"></select>
-		<button type="button" class="secondary" id="create-character-btn">Nowa</button>
-		<button type="button" class="secondary" id="history-btn">Historia</button>
-	  </div>
-	</div>
+      <div class="field">
+        <label for="character-select" id="label-character">Postać</label>
+        <div class="field-row">
+          <select id="character-select"></select>
+          <button type="button" class="secondary" id="create-character-btn">Nowa</button>
+          <button type="button" class="secondary" id="history-btn">Historia</button>
+        </div>
+      </div>
 
       <div class="field">
         <label for="system-select" id="label-system">System</label>
@@ -262,24 +53,40 @@
         <select id="engine-select"></select>
       </div>
     </div>
-	
-	<div class="field">
-  <label for="ollama-url" id="label-ollama-url">Ollama Host</label>
-  <div class="field-row single-action">
-    <input id="ollama-url" placeholder="http://ollama:11434" value="http://ollama:11434">
-    <button type="button" class="secondary" id="test-ollama-btn">Test</button>
-  </div>
-</div>
 
+    <div class="field">
+      <label for="ollama-url" id="label-ollama-url">Ollama Host</label>
+      <div class="field-row single-action">
+        <input id="ollama-url" placeholder="http://ollama:11434" value="http://ollama:11434">
+        <button type="button" class="secondary" id="test-ollama-btn">Test</button>
+      </div>
+    </div>
 
+    <div class="chat" id="chat">
+      <
+        Thinking bubble should be inserted here dynamically as a normal GM/assistant message:
+        <div class="message assistant thinking" id="thinking-bubble">
+          <div class="meta">
+            <span>GM</span>
+            <span class="route-badge">thinking</span>
+          </div>
+          <div class="thinking-wrap">
+            <span class="thinking-text">GM myśli</span>
+            <span class="typing-dots" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </div>
+        </div>
+     
+    </div>
 
-    <div class="chat" id="chat"></div>
-	
-	<div class="chat" id="history-panel" style="display:none; min-height:220px; max-height:32vh;">
-	  <div class="muted">Historia kampanii...</div>
-	</div>
-    
-	<div class="composer">
+    <div class="chat history-panel" id="history-panel">
+      <div class="muted">Historia kampanii...</div>
+    </div>
+
+    <div class="composer">
       <textarea id="input" placeholder="Wpisz /sheet albo opisz akcję..."></textarea>
       <button type="button" class="secondary" id="dice-btn">🎲</button>
       <button type="button" id="send-btn">Wyślij</button>
