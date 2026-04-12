@@ -1,5 +1,5 @@
 window.loadTranslations = async function (lang) {
-  const resp = await fetch(`./i18n/${lang}.json`);
+  const resp = await fetch(`/i18n/${lang}.json`);
   if (!resp.ok) throw new Error(`Translation load failed: ${resp.status}`);
   window.state.translations = await resp.json();
   window.state.lang = lang;
@@ -15,7 +15,9 @@ window.loadHealth = async function () {
   } = window.getEls();
 
   try {
-    const resp = await fetch(window.API_HEALTH);
+    const resp = await fetch(window.API_HEALTH, {
+  headers: { 'X-Ollama-Base-Url': window.getOllamaBaseUrl() }
+});
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
 
@@ -37,7 +39,9 @@ window.loadHealth = async function () {
 window.loadModels = async function () {
   const { engineSelectEl } = window.getEls();
 
-  const resp = await fetch(window.API_MODELS);
+const resp = await fetch(window.API_MODELS, {
+  headers: { 'X-Ollama-Base-Url': window.getOllamaBaseUrl() }
+});
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
   const data = await resp.json();
@@ -91,11 +95,19 @@ window.loadModels = async function () {
 window.loadCampaigns = async function (preferredCampaignId = null) {
   const { campaignSelectEl, characterSelectEl } = window.getEls();
 
-  const resp = await fetch(window.API_CAMPAIGNS);
+const resp = await fetch(window.API_CAMPAIGNS);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
   const data = await resp.json();
-  window.state.campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
+  window.state.campaigns = Array.isArray(data.campaigns)
+  ? data.campaigns.map(c => ({
+      ...c,
+      systemid: c.systemid ?? c.system_id,
+      modelid: c.modelid ?? c.model_id,
+      owneruserid: c.owneruserid ?? c.owner_user_id,
+      createdat: c.createdat ?? c.created_at
+    }))
+  : [];
 
   campaignSelectEl.innerHTML = '';
 
@@ -119,7 +131,7 @@ window.loadCampaigns = async function (preferredCampaignId = null) {
   window.state.campaigns.forEach(campaign => {
     const option = document.createElement('option');
     option.value = String(campaign.id);
-    option.textContent = `${campaign.id}: ${campaign.title}`;
+    option.textContent = campaign.title;
     campaignSelectEl.appendChild(option);
   });
 
@@ -214,4 +226,16 @@ window.loadTurns = async function (campaignId, limit = 30) {
 
   window.renderTurnsToChat();
   window.renderHistoryPanel();
+};
+
+window.getOllamaBaseUrl = function () {
+  const saved = localStorage.getItem('ai-gm:ollamaBaseUrl') || '';
+  return saved.trim() || 'http://ollama:11434';
+};
+
+window.getApiHeaders = function () {
+  return {
+    'Content-Type': 'application/json',
+    'X-Ollama-Base-Url': window.getOllamaBaseUrl()
+  };
 };

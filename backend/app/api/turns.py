@@ -2,130 +2,97 @@ from pathlib import Path
 import json
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Header
 from pydantic import BaseModel
 
-from app.core.turn_engine import run_narrative_turn
+from app.core.turn_engine import runnarrativeturn
 
 router = APIRouter()
-
-DB_PATH = Path("/data/ai_gm.db")
+DBPATH = Path("data/ai-gm.db")
 
 
 class TurnCreate(BaseModel):
-    character_id: int
+    characterid: int
     text: str
     system: str | None = None
     engine: str | None = None
-    game_id: int | None = None
+    gameid: int | None = None
 
 
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
+def getdb():
+    conn = sqlite3.connect(DBPATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def get_campaign_or_404(conn: sqlite3.Connection, campaign_id: int):
+def getcampaignor404(conn: sqlite3.Connection, campaignid: int):
     campaign = conn.execute(
-        """
-        SELECT *
-        FROM campaigns
-        WHERE id = ?
-        """,
-        (campaign_id,),
+        "SELECT * FROM campaigns WHERE id = ?",
+        (campaignid,),
     ).fetchone()
-
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-
     return campaign
 
 
-def get_character_or_404(conn: sqlite3.Connection, campaign_id: int, character_id: int):
+def getcharacteror404(conn: sqlite3.Connection, campaignid: int, characterid: int):
     character = conn.execute(
-        """
-        SELECT *
-        FROM characters
-        WHERE id = ? AND campaign_id = ?
-        """,
-        (character_id, campaign_id),
+        "SELECT * FROM characters WHERE id = ? AND campaignid = ?",
+        (characterid, campaignid),
     ).fetchone()
-
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
-
     return character
 
 
-def create_turn_log(
+def createturnlog(
     conn: sqlite3.Connection,
-    campaign_id: int,
-    character_id: int | None,
-    user_text: str,
-    assistant_text: str | None,
+    campaignid: int,
+    characterid: int | None,
+    usertext: str,
+    assistanttext: str | None,
     route: str,
 ):
     cur = conn.cursor()
     cur.execute(
-        """
-        INSERT INTO campaign_turns (
-            campaign_id,
-            character_id,
-            user_text,
-            assistant_text,
-            route
-        )
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        (campaign_id, character_id, user_text, assistant_text, route),
+        "INSERT INTO campaignturns (campaignid, characterid, usertext, assistanttext, route) VALUES (?, ?, ?, ?, ?)",
+        (campaignid, characterid, usertext, assistanttext, route),
     )
-    turn_id = cur.lastrowid
-
+    turnid = cur.lastrowid
     row = cur.execute(
-        """
-        SELECT id, created_at
-        FROM campaign_turns
-        WHERE id = ?
-        """,
-        (turn_id,),
+        "SELECT id, createdat FROM campaignturns WHERE id = ?",
+        (turnid,),
     ).fetchone()
-
     conn.commit()
-
     return {
-        "turn_number": row["id"],
-        "created_at": row["created_at"],
+        "turnnumber": row["id"],
+        "createdat": row["createdat"],
     }
 
 
-@router.get("/campaigns/{campaign_id}/turns")
-def list_campaign_turns(
-    campaign_id: int,
-    limit: int = Query(default=30, ge=1, le=100),
-):
-    conn = get_db()
+@router.get("/campaigns/{campaignid}/turns")
+def listcampaignturns(campaignid: int, limit: int = Query(default=30, ge=1, le=100)):
+    conn = getdb()
     try:
-        get_campaign_or_404(conn, campaign_id)
-
+        getcampaignor404(conn, campaignid)
         rows = conn.execute(
             """
             SELECT
                 t.id,
-                t.campaign_id,
-                t.character_id,
-                t.user_text,
-                t.assistant_text,
+                t.campaignid,
+                t.characterid,
+                t.usertext,
+                t.assistanttext,
                 t.route,
-                t.created_at,
-                c.name AS character_name
-            FROM campaign_turns t
-            LEFT JOIN characters c ON c.id = t.character_id
-            WHERE t.campaign_id = ?
+                t.createdat,
+                c.name AS charactername
+            FROM campaignturns t
+            LEFT JOIN characters c ON c.id = t.characterid
+            WHERE t.campaignid = ?
             ORDER BY t.id DESC
             LIMIT ?
             """,
-            (campaign_id, limit),
+            (campaignid, limit),
         ).fetchall()
 
         turns = []
@@ -133,21 +100,20 @@ def list_campaign_turns(
             turns.append(
                 {
                     "id": row["id"],
-                    "turn_number": row["id"],
-                    "campaign_id": row["campaign_id"],
-                    "character_id": row["character_id"],
-                    "character_name": row["character_name"],
-                    "user_text": row["user_text"],
-                    "assistant_text": row["assistant_text"],
+                    "turnnumber": row["id"],
+                    "campaignid": row["campaignid"],
+                    "characterid": row["characterid"],
+                    "charactername": row["charactername"],
+                    "usertext": row["usertext"],
+                    "assistanttext": row["assistanttext"],
                     "route": row["route"],
-                    "created_at": row["created_at"],
+                    "createdat": row["createdat"],
                 }
             )
 
         turns.reverse()
-
         return {
-            "campaign_id": campaign_id,
+            "campaignid": campaignid,
             "turns": turns,
             "count": len(turns),
         }
@@ -155,126 +121,80 @@ def list_campaign_turns(
         conn.close()
 
 
-@router.get("/campaigns/{campaign_id}/turns/{turn_id}")
-def get_campaign_turn(campaign_id: int, turn_id: int):
-    conn = get_db()
+@router.post("/campaigns/{campaignid}/turns")
+def createturn(
+    campaignid: int,
+    payload: TurnCreate,
+    x_ollama_base_url: str | None = Header(default=None),
+):
+    conn = getdb()
     try:
-        get_campaign_or_404(conn, campaign_id)
-
-        row = conn.execute(
-            """
-            SELECT
-                t.id,
-                t.campaign_id,
-                t.character_id,
-                t.user_text,
-                t.assistant_text,
-                t.route,
-                t.created_at,
-                c.name AS character_name
-            FROM campaign_turns t
-            LEFT JOIN characters c ON c.id = t.character_id
-            WHERE t.campaign_id = ? AND t.id = ?
-            """,
-            (campaign_id, turn_id),
-        ).fetchone()
-
-        if not row:
-            raise HTTPException(status_code=404, detail="Turn not found")
-
-        return {
-            "id": row["id"],
-            "turn_number": row["id"],
-            "campaign_id": row["campaign_id"],
-            "character_id": row["character_id"],
-            "character_name": row["character_name"],
-            "user_text": row["user_text"],
-            "assistant_text": row["assistant_text"],
-            "route": row["route"],
-            "created_at": row["created_at"],
-        }
-    finally:
-        conn.close()
-
-
-@router.post("/campaigns/{campaign_id}/turns")
-def create_turn(campaign_id: int, payload: TurnCreate):
-    conn = get_db()
-    try:
-        campaign = get_campaign_or_404(conn, campaign_id)
-        character = get_character_or_404(conn, campaign_id, payload.character_id)
-
+        campaign = getcampaignor404(conn, campaignid)
+        character = getcharacteror404(conn, campaignid, payload.characterid)
         text = (payload.text or "").strip()
+
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
 
         if text.startswith("/"):
             route = "command"
 
-            if text.startswith("/name "):
-                new_name = text[6:].strip()
-                if not new_name:
+            if text.startswith("/name"):
+                newname = text[5:].strip()
+                if not newname:
                     raise HTTPException(status_code=400, detail="Character name is required")
 
                 conn.execute(
-                    """
-                    UPDATE characters
-                    SET name = ?
-                    WHERE id = ? AND campaign_id = ?
-                    """,
-                    (new_name, payload.character_id, campaign_id),
+                    "UPDATE characters SET name = ? WHERE id = ? AND campaignid = ?",
+                    (newname, payload.characterid, campaignid),
                 )
                 conn.commit()
 
                 result = {
-                    "command": "/name",
-                    "character_name": new_name,
+                    "command": "name",
+                    "charactername": newname,
                 }
-
-                log = create_turn_log(
+                log = createturnlog(
                     conn=conn,
-                    campaign_id=campaign_id,
-                    character_id=payload.character_id,
-                    user_text=text,
-                    assistant_text=json.dumps(result, ensure_ascii=False),
+                    campaignid=campaignid,
+                    characterid=payload.characterid,
+                    usertext=text,
+                    assistanttext=json.dumps(result, ensure_ascii=False),
                     route=route,
                 )
-
                 return {
-                    "turn_number": log["turn_number"],
-                    "created_at": log["created_at"],
+                    "turnnumber": log["turnnumber"],
+                    "createdat": log["createdat"],
                     "route": "command",
                     "result": result,
                 }
 
             if text == "/sheet":
                 result = {
-                    "command": "/sheet",
+                    "command": "sheet",
                     "character": {
                         "id": character["id"],
                         "name": character["name"],
-                        "campaign_id": character["campaign_id"],
-                        "user_id": character["user_id"],
-                        "system_id": character["system_id"],
-                        "sheet_json": character["sheet_json"],
+                        "campaignid": character["campaignid"],
+                        "userid": character["userid"],
+                        "systemid": character["systemid"],
+                        "sheetjson": character["sheetjson"],
                         "location": character["location"],
-                        "is_active": character["is_active"],
-                        "created_at": character["created_at"],
+                        "isactive": character["isactive"],
+                        "createdat": character["createdat"],
                     },
                 }
-
-                log = create_turn_log(
+                log = createturnlog(
                     conn=conn,
-                    campaign_id=campaign_id,
-                    character_id=payload.character_id,
-                    user_text=text,
-                    assistant_text=json.dumps(result, ensure_ascii=False),
+                    campaignid=campaignid,
+                    characterid=payload.characterid,
+                    usertext=text,
+                    assistanttext=json.dumps(result, ensure_ascii=False),
                     route=route,
                 )
-
                 return {
-                    "turn_number": log["turn_number"],
-                    "created_at": log["created_at"],
+                    "turnnumber": log["turnnumber"],
+                    "createdat": log["createdat"],
                     "route": "command",
                     "result": result,
                 }
@@ -283,50 +203,49 @@ def create_turn(campaign_id: int, payload: TurnCreate):
                 "command": text.split(" ", 1)[0],
                 "message": "Unknown command",
             }
-
-            log = create_turn_log(
+            log = createturnlog(
                 conn=conn,
-                campaign_id=campaign_id,
-                character_id=payload.character_id,
-                user_text=text,
-                assistant_text=json.dumps(result, ensure_ascii=False),
+                campaignid=campaignid,
+                characterid=payload.characterid,
+                usertext=text,
+                assistanttext=json.dumps(result, ensure_ascii=False),
                 route=route,
             )
-
             return {
-                "turn_number": log["turn_number"],
-                "created_at": log["created_at"],
+                "turnnumber": log["turnnumber"],
+                "createdat": log["createdat"],
                 "route": "command",
                 "result": result,
             }
 
         route = "narrative"
-        model = payload.engine or campaign["model_id"] or "gemma3:1b"
+        model = payload.engine or campaign["modelid"] or "gemma3:1b"
 
-        result = run_narrative_turn(
+        result = runnarrativeturn(
             conn=conn,
             campaign=campaign,
             character=character,
-            user_text=text,
+            usertext=text,
             model=model,
+            ollamabaseurl=x_ollama_base_url,
         )
 
-        assistant_text = result.get("message", "").strip()
-        if not assistant_text:
+        assistanttext = (result.get("message") or "").strip()
+        if not assistanttext:
             raise HTTPException(status_code=500, detail="Empty narrative response")
 
-        log = create_turn_log(
+        log = createturnlog(
             conn=conn,
-            campaign_id=campaign_id,
-            character_id=payload.character_id,
-            user_text=text,
-            assistant_text=assistant_text,
+            campaignid=campaignid,
+            characterid=payload.characterid,
+            usertext=text,
+            assistanttext=assistanttext,
             route=route,
         )
 
         return {
-            "turn_number": log["turn_number"],
-            "created_at": log["created_at"],
+            "turnnumber": log["turnnumber"],
+            "createdat": log["createdat"],
             "route": "narrative",
             "result": result,
         }

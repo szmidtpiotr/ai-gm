@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 import httpx
 import os
 
@@ -9,13 +9,16 @@ OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "10"))
 
 
 @router.get("/models")
-async def list_models():
+async def list_models(request: Request):
+    ollama_base_url = request.headers.get("X-Ollama-Base-Url", OLLAMA_BASE_URL)
+
     try:
         async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-            resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
+            resp = await client.get(f"{ollama_base_url}/api/tags")
             resp.raise_for_status()
             data = resp.json()
             models = data.get("models", []) or []
+
             return [
                 {"name": m.get("name"), "size": m.get("size", 0)}
                 for m in models if m.get("name")

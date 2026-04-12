@@ -3,6 +3,10 @@ window.bindEvents = function () {
   const historyBtn = document.getElementById('history-btn');
   const historyPanelEl = document.getElementById('history-panel');
 
+  if (els.ollamaUrlEl) {
+    els.ollamaUrlEl.value = window.getOllamaBaseUrl();
+  }
+
   els.campaignSelectEl.onchange = async () => {
     window.state.selectedCampaignId = Number(els.campaignSelectEl.value);
     localStorage.setItem(
@@ -16,12 +20,12 @@ window.bindEvents = function () {
       await window.loadTranslations(campaign.language);
     }
 
-    if (campaign?.system_id) {
-      els.systemSelectEl.value = campaign.system_id;
+    if (campaign?.system_id || campaign?.systemid) {
+      els.systemSelectEl.value = campaign.system_id || campaign.systemid;
     }
 
-    if (campaign?.model_id) {
-      window.state.selectedEngine = campaign.model_id;
+    if (campaign?.model_id || campaign?.modelid) {
+      window.state.selectedEngine = campaign.model_id || campaign.modelid;
     } else if (!window.state.selectedEngine) {
       window.state.selectedEngine = els.engineSelectEl.value;
     }
@@ -49,6 +53,44 @@ window.bindEvents = function () {
     window.state.selectedEngine = els.engineSelectEl.value;
     localStorage.setItem('ai-gm:selectedEngine', window.state.selectedEngine);
   };
+
+  if (els.ollamaUrlEl) {
+    els.ollamaUrlEl.onchange = () => {
+      const value = (els.ollamaUrlEl.value || '').trim() || 'http://ollama:11434';
+      localStorage.setItem('ai-gm:ollamaBaseUrl', value);
+      els.ollamaUrlEl.value = value;
+    };
+  }
+
+  if (els.testOllamaBtn && els.ollamaUrlEl) {
+    els.testOllamaBtn.onclick = async () => {
+      const value = (els.ollamaUrlEl.value || '').trim() || 'http://ollama:11434';
+      localStorage.setItem('ai-gm:ollamaBaseUrl', value);
+      els.ollamaUrlEl.value = value;
+
+      try {
+        await window.loadHealth();
+        await window.loadModels();
+
+        if (window.state.selectedEngine) {
+          els.engineSelectEl.value = window.state.selectedEngine;
+        }
+
+        window.addMessage({
+          speaker: 'System',
+          text: `Ollama Host ustawiony na ${value}`,
+          role: 'system',
+          route: 'config'
+        });
+      } catch (e) {
+        window.addMessage({
+          speaker: 'Błąd',
+          text: `Test Ollama Host nie powiódł się: ${e.message}`,
+          role: 'error'
+        });
+      }
+    };
+  }
 
   els.sendBtn.onclick = window.sendMessage;
   els.diceBtn.onclick = window.rollDice;

@@ -1,0 +1,3961 @@
+# AI-GM PROJECT DUMP
+# Generated: 2026-04-11T23:24:09+02:00
+# Mode: focus
+# Root: /home/piotrszmidt/projects/ai-gm
+
+## REPO INFO
+Branch: main
+Commit: be4d094
+
+### git status --short
+ M backend/app/api/health.py
+ M backend/app/api/models.py
+ M backend/app/api/turns.py
+ M backend/app/core/turn_engine.py
+ M backend/app/services/ollama_service.py
+ M frontend/index.html
+ M frontend/js/api.js
+ M frontend/js/events.js
+ M frontend/js/ui.js
+ M frontend/nginx.conf
+?? ai-gm-dump-focus-20260411-232409.txt
+?? dumpproject.sh
+
+### git diff --stat
+ backend/app/api/health.py              |  40 ++--
+ backend/app/api/models.py              |  22 +--
+ backend/app/api/turns.py               | 324 +++++++++------------------------
+ backend/app/core/turn_engine.py        |  87 +++------
+ backend/app/services/ollama_service.py |  29 +--
+ frontend/index.html                    |  10 +
+ frontend/js/api.js                     |  36 +++-
+ frontend/js/events.js                  |  50 ++++-
+ frontend/js/ui.js                      |  54 ++++--
+ frontend/nginx.conf                    |   4 +-
+ 10 files changed, 283 insertions(+), 373 deletions(-)
+
+### git diff -- backend frontend docker-compose.yml README.md
+diff --git a/backend/app/api/health.py b/backend/app/api/health.py
+index bae28f7..b1f61d0 100644
+--- a/backend/app/api/health.py
++++ b/backend/app/api/health.py
+@@ -1,39 +1,31 @@
+-from fastapi import APIRouter
++from fastapi import APIRouter, Request
+ import os
+ import httpx
+ 
+ router = APIRouter()
+-
+-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+-OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "10"))
+-
++OLLAMABASEURL = os.getenv('OLLAMABASEURL', 'http://ollama:11434')
++OLLAMATIMEOUT = float(os.getenv('OLLAMATIMEOUT', '10'))
+ 
+ @router.get("/health")
+-async def health():
++async def health(request: Request):
++    ollama_base_url = request.headers.get("X-Ollama-Base-Url", OLLAMABASEURL)
+     ollama = {
+         "reachable": False,
+-        "base_url": OLLAMA_BASE_URL,
++        "base_url": ollama_base_url,
+         "model_count": 0,
+-        "models": [],
++        "models": []
+     }
+-
+     try:
+-        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+-            resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
++        async with httpx.AsyncClient(timeout=OLLAMATIMEOUT) as client:
++            resp = await client.get(f"{ollama_base_url}/api/tags")
+             resp.raise_for_status()
+             data = resp.json()
+-            models = data.get("models", []) or []
+-
+-        ollama = {
+-            "reachable": True,
+-            "base_url": OLLAMA_BASE_URL,
+-            "model_count": len(models),
+-            "models": [m.get("name") for m in models if m.get("name")],
+-        }
++            models = data.get("models", [])
++            ollama.update({
++                "reachable": True,
++                "model_count": len(models),
++                "models": [m.get("name") for m in models if m.get("name")]
++            })
+     except Exception as e:
+         ollama["error"] = str(e)
+-
+-    return {
+-        "status": "ok",
+-        "ollama": ollama,
+-    }
+\ No newline at end of file
++    return {"status": "ok", "ollama": ollama}
+\ No newline at end of file
+diff --git a/backend/app/api/models.py b/backend/app/api/models.py
+index cb80f64..f64f1cd 100644
+--- a/backend/app/api/models.py
++++ b/backend/app/api/models.py
+@@ -1,27 +1,23 @@
+-from fastapi import APIRouter, HTTPException
++from fastapi import APIRouter, HTTPException, Request
+ import httpx
+ import os
+ 
+ router = APIRouter()
+-
+-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+-OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "10"))
+-
++OLLAMABASEURL = os.getenv('OLLAMABASEURL', 'http://ollama:11434')
++OLLAMATIMEOUT = float(os.getenv('OLLAMATIMEOUT', '10'))
+ 
+ @router.get("/models")
+-async def list_models():
++async def listmodels(request: Request):
++    ollama_base_url = request.headers.get("X-Ollama-Base-Url", OLLAMABASEURL)
+     try:
+-        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+-            resp = await client.get(f"{OLLAMA_BASE_URL}/api/tags")
++        async with httpx.AsyncClient(timeout=OLLAMATIMEOUT) as client:
++            resp = await client.get(f"{ollama_base_url}/api/tags")
+             resp.raise_for_status()
+             data = resp.json()
+-            models = data.get("models", []) or []
++            models = data.get("models", [])
+             return [
+                 {"name": m.get("name"), "size": m.get("size", 0)}
+                 for m in models if m.get("name")
+             ]
+     except Exception as e:
+-        raise HTTPException(
+-            status_code=502,
+-            detail=f"Ollama models fetch failed: {str(e)}"
+-        )
+\ No newline at end of file
++        raise HTTPException(status_code=502, detail=f"Ollama models fetch failed: {str(e)}")
+\ No newline at end of file
+diff --git a/backend/app/api/turns.py b/backend/app/api/turns.py
+index 2a84de0..2c4234f 100644
+--- a/backend/app/api/turns.py
++++ b/backend/app/api/turns.py
+@@ -1,335 +1,193 @@
+ from pathlib import Path
+ import json
+ import sqlite3
+-
+-from fastapi import APIRouter, HTTPException, Query
++from fastapi import APIRouter, HTTPException, Query, Header
+ from pydantic import BaseModel
+-
+-from app.core.turn_engine import run_narrative_turn
++from app.core.turnengine import runnarrativeturn
+ 
+ router = APIRouter()
+-
+-DB_PATH = Path("/data/ai_gm.db")
++DBPATH = Path("data/ai-gm.db")
+ 
+ 
+ class TurnCreate(BaseModel):
+-    character_id: int
++    characterid: int
+     text: str
+     system: str | None = None
+     engine: str | None = None
+-    game_id: int | None = None
++    gameid: int | None = None
+ 
+ 
+-def get_db():
+-    conn = sqlite3.connect(DB_PATH)
++def getdb():
++    conn = sqlite3.connect(DBPATH)
+     conn.row_factory = sqlite3.Row
+     return conn
+ 
+ 
+-def get_campaign_or_404(conn: sqlite3.Connection, campaign_id: int):
+-    campaign = conn.execute(
+-        """
+-        SELECT *
+-        FROM campaigns
+-        WHERE id = ?
+-        """,
+-        (campaign_id,),
+-    ).fetchone()
+-
++def getcampaignor404(conn: sqlite3.Connection, campaignid: int):
++    campaign = conn.execute("SELECT * FROM campaigns WHERE id = ?", (campaignid,)).fetchone()
+     if not campaign:
+         raise HTTPException(status_code=404, detail="Campaign not found")
+-
+     return campaign
+ 
+ 
+-def get_character_or_404(conn: sqlite3.Connection, campaign_id: int, character_id: int):
++def getcharacteror404(conn: sqlite3.Connection, campaignid: int, characterid: int):
+     character = conn.execute(
+-        """
+-        SELECT *
+-        FROM characters
+-        WHERE id = ? AND campaign_id = ?
+-        """,
+-        (character_id, campaign_id),
++        "SELECT * FROM characters WHERE id = ? AND campaignid = ?",
++        (characterid, campaignid),
+     ).fetchone()
+-
+     if not character:
+         raise HTTPException(status_code=404, detail="Character not found")
+-
+     return character
+ 
+ 
+-def create_turn_log(
+-    conn: sqlite3.Connection,
+-    campaign_id: int,
+-    character_id: int | None,
+-    user_text: str,
+-    assistant_text: str | None,
+-    route: str,
+-):
++def createturnlog(conn: sqlite3.Connection, campaignid: int, characterid: int | None, usertext: str, assistanttext: str | None, route: str):
+     cur = conn.cursor()
+     cur.execute(
+-        """
+-        INSERT INTO campaign_turns (
+-            campaign_id,
+-            character_id,
+-            user_text,
+-            assistant_text,
+-            route
+-        )
+-        VALUES (?, ?, ?, ?, ?)
+-        """,
+-        (campaign_id, character_id, user_text, assistant_text, route),
++        "INSERT INTO campaignturns (campaignid, characterid, usertext, assistanttext, route) VALUES (?, ?, ?, ?, ?)",
++        (campaignid, characterid, usertext, assistanttext, route),
+     )
+-    turn_id = cur.lastrowid
+-
+-    row = cur.execute(
+-        """
+-        SELECT id, created_at
+-        FROM campaign_turns
+-        WHERE id = ?
+-        """,
+-        (turn_id,),
+-    ).fetchone()
+-
++    turnid = cur.lastrowid
++    row = cur.execute("SELECT id, createdat FROM campaignturns WHERE id = ?", (turnid,)).fetchone()
+     conn.commit()
+-
+-    return {
+-        "turn_number": row["id"],
+-        "created_at": row["created_at"],
+-    }
++    return {"turnnumber": row["id"], "createdat": row["createdat"]}
+ 
+ 
+-@router.get("/campaigns/{campaign_id}/turns")
+-def list_campaign_turns(
+-    campaign_id: int,
+-    limit: int = Query(default=30, ge=1, le=100),
+-):
+-    conn = get_db()
++@router.get("/campaigns/{campaignid}/turns")
++def listcampaignturns(campaignid: int, limit: int = Query(default=30, ge=1, le=100)):
++    conn = getdb()
+     try:
+-        get_campaign_or_404(conn, campaign_id)
+-
++        getcampaignor404(conn, campaignid)
+         rows = conn.execute(
+             """
+-            SELECT
+-                t.id,
+-                t.campaign_id,
+-                t.character_id,
+-                t.user_text,
+-                t.assistant_text,
+-                t.route,
+-                t.created_at,
+-                c.name AS character_name
+-            FROM campaign_turns t
+-            LEFT JOIN characters c ON c.id = t.character_id
+-            WHERE t.campaign_id = ?
++            SELECT t.id, t.campaignid, t.characterid, t.usertext, t.assistanttext, t.route, t.createdat,
++                   c.name AS charactername
++            FROM campaignturns t
++            LEFT JOIN characters c ON c.id = t.characterid
++            WHERE t.campaignid = ?
+             ORDER BY t.id DESC
+             LIMIT ?
+             """,
+-            (campaign_id, limit),
++            (campaignid, limit),
+         ).fetchall()
+ 
+         turns = []
+         for row in rows:
+-            turns.append(
+-                {
+-                    "id": row["id"],
+-                    "turn_number": row["id"],
+-                    "campaign_id": row["campaign_id"],
+-                    "character_id": row["character_id"],
+-                    "character_name": row["character_name"],
+-                    "user_text": row["user_text"],
+-                    "assistant_text": row["assistant_text"],
+-                    "route": row["route"],
+-                    "created_at": row["created_at"],
+-                }
+-            )
++            turns.append({
++                "id": row["id"],
++                "turnnumber": row["id"],
++                "campaignid": row["campaignid"],
++                "characterid": row["characterid"],
++                "charactername": row["charactername"],
++                "usertext": row["usertext"],
++                "assistanttext": row["assistanttext"],
++                "route": row["route"],
++                "createdat": row["createdat"],
++            })
+ 
+         turns.reverse()
+-
+-        return {
+-            "campaign_id": campaign_id,
+-            "turns": turns,
+-            "count": len(turns),
+-        }
++        return {"campaignid": campaignid, "turns": turns, "count": len(turns)}
+     finally:
+         conn.close()
+ 
+ 
+-@router.get("/campaigns/{campaign_id}/turns/{turn_id}")
+-def get_campaign_turn(campaign_id: int, turn_id: int):
+-    conn = get_db()
++@router.post("/campaigns/{campaignid}/turns")
++def createturn(campaignid: int, payload: TurnCreate, x_ollama_base_url: str | None = Header(default=None)):
++    conn = getdb()
+     try:
+-        get_campaign_or_404(conn, campaign_id)
+-
+-        row = conn.execute(
+-            """
+-            SELECT
+-                t.id,
+-                t.campaign_id,
+-                t.character_id,
+-                t.user_text,
+-                t.assistant_text,
+-                t.route,
+-                t.created_at,
+-                c.name AS character_name
+-            FROM campaign_turns t
+-            LEFT JOIN characters c ON c.id = t.character_id
+-            WHERE t.campaign_id = ? AND t.id = ?
+-            """,
+-            (campaign_id, turn_id),
+-        ).fetchone()
+-
+-        if not row:
+-            raise HTTPException(status_code=404, detail="Turn not found")
+-
+-        return {
+-            "id": row["id"],
+-            "turn_number": row["id"],
+-            "campaign_id": row["campaign_id"],
+-            "character_id": row["character_id"],
+-            "character_name": row["character_name"],
+-            "user_text": row["user_text"],
+-            "assistant_text": row["assistant_text"],
+-            "route": row["route"],
+-            "created_at": row["created_at"],
+-        }
+-    finally:
+-        conn.close()
+-
+-
+-@router.post("/campaigns/{campaign_id}/turns")
+-def create_turn(campaign_id: int, payload: TurnCreate):
+-    conn = get_db()
+-    try:
+-        campaign = get_campaign_or_404(conn, campaign_id)
+-        character = get_character_or_404(conn, campaign_id, payload.character_id)
+-
++        campaign = getcampaignor404(conn, campaignid)
++        character = getcharacteror404(conn, campaignid, payload.characterid)
+         text = (payload.text or "").strip()
++
+         if not text:
+             raise HTTPException(status_code=400, detail="Text is required")
+ 
+         if text.startswith("/"):
+             route = "command"
+ 
+-            if text.startswith("/name "):
+-                new_name = text[6:].strip()
+-                if not new_name:
++            if text.startswith("/name"):
++                newname = text[6:].strip()
++                if not newname:
+                     raise HTTPException(status_code=400, detail="Character name is required")
+ 
+                 conn.execute(
+-                    """
+-                    UPDATE characters
+-                    SET name = ?
+-                    WHERE id = ? AND campaign_id = ?
+-                    """,
+-                    (new_name, payload.character_id, campaign_id),
++                    "UPDATE characters SET name = ? WHERE id = ? AND campaignid = ?",
++                    (newname, payload.characterid, campaignid),
+                 )
+                 conn.commit()
+ 
+-                result = {
+-                    "command": "/name",
+-                    "character_name": new_name,
+-                }
+-
+-                log = create_turn_log(
++                result = {"command": "name", "charactername": newname}
++                log = createturnlog(
+                     conn=conn,
+-                    campaign_id=campaign_id,
+-                    character_id=payload.character_id,
+-                    user_text=text,
+-                    assistant_text=json.dumps(result, ensure_ascii=False),
++                    campaignid=campaignid,
++                    characterid=payload.characterid,
++                    usertext=text,
++                    assistanttext=json.dumps(result, ensure_ascii=False),
+                     route=route,
+                 )
++                return {"turnnumber": log["turnnumber"], "createdat": log["createdat"], "route": "command", "result": result}
+ 
+-                return {
+-                    "turn_number": log["turn_number"],
+-                    "created_at": log["created_at"],
+-                    "route": "command",
+-                    "result": result,
+-                }
+-
+-            if text == "/sheet":
++            if text == "sheet":
+                 result = {
+-                    "command": "/sheet",
++                    "command": "sheet",
+                     "character": {
+                         "id": character["id"],
+                         "name": character["name"],
+-                        "campaign_id": character["campaign_id"],
+-                        "user_id": character["user_id"],
+-                        "system_id": character["system_id"],
+-                        "sheet_json": character["sheet_json"],
++                        "campaignid": character["campaignid"],
++                        "userid": character["userid"],
++                        "systemid": character["systemid"],
++                        "sheetjson": character["sheetjson"],
+                         "location": character["location"],
+-                        "is_active": character["is_active"],
+-                        "created_at": character["created_at"],
++                        "isactive": character["isactive"],
++                        "createdat": character["createdat"],
+                     },
+                 }
+-
+-                log = create_turn_log(
++                log = createturnlog(
+                     conn=conn,
+-                    campaign_id=campaign_id,
+-                    character_id=payload.character_id,
+-                    user_text=text,
+-                    assistant_text=json.dumps(result, ensure_ascii=False),
++                    campaignid=campaignid,
++                    characterid=payload.characterid,
++                    usertext=text,
++                    assistanttext=json.dumps(result, ensure_ascii=False),
+                     route=route,
+                 )
++                return {"turnnumber": log["turnnumber"], "createdat": log["createdat"], "route": "command", "result": result}
+ 
+-                return {
+-                    "turn_number": log["turn_number"],
+-                    "created_at": log["created_at"],
+-                    "route": "command",
+-                    "result": result,
+-                }
+-
+-            result = {
+-                "command": text.split(" ", 1)[0],
+-                "message": "Unknown command",
+-            }
+-
+-            log = create_turn_log(
++            result = {"command": text.split(" ", 1)[0], "message": "Unknown command"}
++            log = createturnlog(
+                 conn=conn,
+-                campaign_id=campaign_id,
+-                character_id=payload.character_id,
+-                user_text=text,
+-                assistant_text=json.dumps(result, ensure_ascii=False),
++                campaignid=campaignid,
++                characterid=payload.characterid,
++                usertext=text,
++                assistanttext=json.dumps(result, ensure_ascii=False),
+                 route=route,
+             )
+-
+-            return {
+-                "turn_number": log["turn_number"],
+-                "created_at": log["created_at"],
+-                "route": "command",
+-                "result": result,
+-            }
++            return {"turnnumber": log["turnnumber"], "createdat": log["createdat"], "route": "command", "result": result}
+ 
+         route = "narrative"
+-        model = payload.engine or campaign["model_id"] or "gemma3:1b"
++        model = payload.engine or campaign["modelid"] or "gemma3:1b"
+ 
+-        result = run_narrative_turn(
++        result = runnarrativeturn(
+             conn=conn,
+             campaign=campaign,
+             character=character,
+-            user_text=text,
++            usertext=text,
+             model=model,
++            ollama_base_url=x_ollama_base_url,
+         )
+ 
+-        assistant_text = result.get("message", "").strip()
+-        if not assistant_text:
++        assistanttext = (result.get("message") or "").strip()
++        if not assistanttext:
+             raise HTTPException(status_code=500, detail="Empty narrative response")
+ 
+-        log = create_turn_log(
++        log = createturnlog(
+             conn=conn,
+-            campaign_id=campaign_id,
+-            character_id=payload.character_id,
+-            user_text=text,
+-            assistant_text=assistant_text,
++            campaignid=campaignid,
++            characterid=payload.characterid,
++            usertext=text,
++            assistanttext=assistanttext,
+             route=route,
+         )
+ 
+-        return {
+-            "turn_number": log["turn_number"],
+-            "created_at": log["created_at"],
+-            "route": "narrative",
+-            "result": result,
+-        }
++        return {"turnnumber": log["turnnumber"], "createdat": log["createdat"], "route": "narrative", "result": result}
+     except RuntimeError as e:
+         raise HTTPException(status_code=502, detail=str(e))
+     finally:
+diff --git a/backend/app/core/turn_engine.py b/backend/app/core/turn_engine.py
+index cf26cc8..da11f05 100644
+--- a/backend/app/core/turn_engine.py
++++ b/backend/app/core/turn_engine.py
+@@ -1,93 +1,64 @@
+ import sqlite3
+-from app.services.ollama_service import generate_chat
+-
++from app.services.ollamaservice import generatechat
+ 
+ SYSTEM_PROMPT = """Jesteś mistrzem gry RPG prowadzącym krótką, klimatyczną sesję solo po polsku.
+ Prowadź narrację jasno i konkretnie.
+ Uwzględniaj ostatni kontekst rozmowy.
+ Nie powtarzaj dokładnie wypowiedzi gracza.
+-Kończ odpowiedź naturalnym rozwinięciem sceny albo pytaniem "Co robisz?" jeśli pasuje.
++Kończ odpowiedź naturalnym rozwinięciem sceny albo pytaniem "Co robisz?", jeśli pasuje.
+ Jeśli wejście gracza jest bardzo krótkie lub niejasne, poproś o doprecyzowanie w świecie gry.
+ """
+ 
+ 
+-def load_recent_turns(conn: sqlite3.Connection, campaign_id: int, limit: int = 8) -> list[sqlite3.Row]:
++def loadrecentturns(conn: sqlite3.Connection, campaignid: int, limit: int = 8) -> list[sqlite3.Row]:
+     rows = conn.execute(
+-        """
+-        SELECT user_text, assistant_text, route
+-        FROM campaign_turns
+-        WHERE campaign_id = ?
+-        ORDER BY id DESC
+-        LIMIT ?
+-        """,
+-        (campaign_id, limit),
++        "SELECT usertext, assistanttext, route FROM campaignturns WHERE campaignid = ? ORDER BY id DESC LIMIT ?",
++        (campaignid, limit),
+     ).fetchall()
+-
+     rows = list(rows)
+     rows.reverse()
+     return rows
+ 
+ 
+-def build_messages(
++def buildmessages(
+     campaign: sqlite3.Row,
+     character: sqlite3.Row | None,
+-    recent_turns: list[sqlite3.Row],
+-    user_text: str,
++    recentturns: list[sqlite3.Row],
++    usertext: str,
+ ) -> list[dict]:
+-    system_id = campaign["system_id"] if campaign and campaign["system_id"] else "fantasy"
++    systemid = campaign["systemid"] if campaign and campaign["systemid"] else "fantasy"
+     language = campaign["language"] if campaign and campaign["language"] else "pl"
+-    character_name = character["name"] if character and character["name"] else "Bohater"
+-
+-    messages = [
+-        {
+-            "role": "system",
+-            "content": (
+-                f"{SYSTEM_PROMPT}\n"
+-                f"System gry: {system_id}\n"
+-                f"Język: {language}\n"
+-                f"Postać gracza: {character_name}\n"
+-            ),
+-        }
+-    ]
++    charactername = character["name"] if character and character["name"] else "Bohater"
+ 
+-    for turn in recent_turns:
+-        if turn["user_text"]:
+-            messages.append({
+-                "role": "user",
+-                "content": turn["user_text"],
+-            })
++    messages = [{
++        "role": "system",
++        "content": f"{SYSTEM_PROMPT}\nSystem gry: {systemid}\nJęzyk: {language}\nPostać gracza: {charactername}"
++    }]
+ 
+-        if turn["assistant_text"] and turn["route"] == "narrative":
+-            messages.append({
+-                "role": "assistant",
+-                "content": turn["assistant_text"],
+-            })
+-
+-    messages.append({
+-        "role": "user",
+-        "content": user_text,
+-    })
++    for turn in recentturns:
++        if turn["usertext"]:
++            messages.append({"role": "user", "content": turn["usertext"]})
++        if turn["assistanttext"] and turn["route"] == "narrative":
++            messages.append({"role": "assistant", "content": turn["assistanttext"]})
+ 
++    messages.append({"role": "user", "content": usertext})
+     return messages
+ 
+ 
+-def run_narrative_turn(
++def runnarrativeturn(
+     conn: sqlite3.Connection,
+     campaign: sqlite3.Row,
+     character: sqlite3.Row | None,
+-    user_text: str,
++    usertext: str,
+     model: str,
++    ollama_base_url: str | None = None,
+ ) -> dict:
+-    recent_turns = load_recent_turns(conn, campaign["id"], limit=8)
+-    messages = build_messages(
++    recentturns = loadrecentturns(conn, campaign["id"], limit=8)
++    messages = buildmessages(
+         campaign=campaign,
+         character=character,
+-        recent_turns=recent_turns,
+-        user_text=user_text,
++        recentturns=recentturns,
++        usertext=usertext,
+     )
+-
+-    reply = generate_chat(model=model, messages=messages)
+-
+-    return {
+-        "message": reply
+-    }
+\ No newline at end of file
++    reply = generatechat(model=model, messages=messages, base_url=ollama_base_url)
++    return {"message": reply}
+\ No newline at end of file
+diff --git a/backend/app/services/ollama_service.py b/backend/app/services/ollama_service.py
+index 9269626..c6ed65d 100644
+--- a/backend/app/services/ollama_service.py
++++ b/backend/app/services/ollama_service.py
+@@ -1,32 +1,33 @@
+ import os
+ import httpx
+ 
+-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+-OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "120"))
++OLLAMA_BASE_URL = os.getenv("OLLAMABASEURL", "http://ollama:11434")
++OLLAMA_TIMEOUT = float(os.getenv("OLLAMATIMEOUT", 120))
+ 
+ 
+-def generate_chat(model: str, messages: list[dict]) -> str:
++def resolve_ollama_base_url(base_url: str | None = None) -> str:
++    value = (base_url or "").strip()
++    return value or OLLAMA_BASE_URL
++
++
++def generatechat(model: str, messages: list[dict], base_url: str | None = None) -> str:
+     payload = {
+         "model": model,
+         "messages": messages,
+         "stream": False,
+     }
+ 
++    ollama_base_url = resolve_ollama_base_url(base_url)
++
+     try:
+         with httpx.Client(timeout=OLLAMA_TIMEOUT) as client:
+-            resp = client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
++            resp = client.post(f"{ollama_base_url}/api/chat", json=payload)
+             resp.raise_for_status()
+             data = resp.json()
+-
+-        content = (
+-            data.get("message", {}) or {}
+-        ).get("content", "").strip()
+-
+-        if not content:
+-            raise RuntimeError("Ollama returned empty content")
+-
+-        return content
+-
++            content = (data.get("message") or {}).get("content", "").strip()
++            if not content:
++                raise RuntimeError("Ollama returned empty content")
++            return content
+     except httpx.TimeoutException as e:
+         raise RuntimeError(f"Ollama timeout: {e}") from e
+     except httpx.HTTPStatusError as e:
+diff --git a/frontend/index.html b/frontend/index.html
+index 582b8d5..b88a759 100755
+--- a/frontend/index.html
++++ b/frontend/index.html
+@@ -262,6 +262,16 @@
+         <select id="engine-select"></select>
+       </div>
+     </div>
++	
++	<div class="field">
++  <label for="ollama-url" id="label-ollama-url">Ollama Host</label>
++  <div class="field-row single-action">
++    <input id="ollama-url" placeholder="http://ollama:11434" value="http://ollama:11434">
++    <button type="button" class="secondary" id="test-ollama-btn">Test</button>
++  </div>
++</div>
++
++
+ 
+     <div class="chat" id="chat"></div>
+ 	
+diff --git a/frontend/js/api.js b/frontend/js/api.js
+index d79504f..aa59b35 100644
+--- a/frontend/js/api.js
++++ b/frontend/js/api.js
+@@ -1,5 +1,5 @@
+ window.loadTranslations = async function (lang) {
+-  const resp = await fetch(`./i18n/${lang}.json`);
++  const resp = await fetch(`/i18n/${lang}.json`);
+   if (!resp.ok) throw new Error(`Translation load failed: ${resp.status}`);
+   window.state.translations = await resp.json();
+   window.state.lang = lang;
+@@ -15,7 +15,9 @@ window.loadHealth = async function () {
+   } = window.getEls();
+ 
+   try {
+-    const resp = await fetch(window.API_HEALTH);
++    const resp = await fetch(window.API_HEALTH, {
++  headers: { 'X-Ollama-Base-Url': window.getOllamaBaseUrl() }
++});
+     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+     const data = await resp.json();
+ 
+@@ -37,7 +39,9 @@ window.loadHealth = async function () {
+ window.loadModels = async function () {
+   const { engineSelectEl } = window.getEls();
+ 
+-  const resp = await fetch(window.API_MODELS);
++const resp = await fetch(window.API_MODELS, {
++  headers: { 'X-Ollama-Base-Url': window.getOllamaBaseUrl() }
++});
+   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+ 
+   const data = await resp.json();
+@@ -91,11 +95,19 @@ window.loadModels = async function () {
+ window.loadCampaigns = async function (preferredCampaignId = null) {
+   const { campaignSelectEl, characterSelectEl } = window.getEls();
+ 
+-  const resp = await fetch(window.API_CAMPAIGNS);
++const resp = await fetch(window.API_CAMPAIGNS);
+   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+ 
+   const data = await resp.json();
+-  window.state.campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
++  window.state.campaigns = Array.isArray(data.campaigns)
++  ? data.campaigns.map(c => ({
++      ...c,
++      systemid: c.systemid ?? c.system_id,
++      modelid: c.modelid ?? c.model_id,
++      owneruserid: c.owneruserid ?? c.owner_user_id,
++      createdat: c.createdat ?? c.created_at
++    }))
++  : [];
+ 
+   campaignSelectEl.innerHTML = '';
+ 
+@@ -119,7 +131,7 @@ window.loadCampaigns = async function (preferredCampaignId = null) {
+   window.state.campaigns.forEach(campaign => {
+     const option = document.createElement('option');
+     option.value = String(campaign.id);
+-    option.textContent = `${campaign.id}: ${campaign.title}`;
++    option.textContent = campaign.title;
+     campaignSelectEl.appendChild(option);
+   });
+ 
+@@ -214,4 +226,16 @@ window.loadTurns = async function (campaignId, limit = 30) {
+ 
+   window.renderTurnsToChat();
+   window.renderHistoryPanel();
++};
++
++window.getOllamaBaseUrl = function () {
++  const saved = localStorage.getItem('ai-gm:ollamaBaseUrl') || '';
++  return saved.trim() || 'http://ollama:11434';
++};
++
++window.getApiHeaders = function () {
++  return {
++    'Content-Type': 'application/json',
++    'X-Ollama-Base-Url': window.getOllamaBaseUrl()
++  };
+ };
+\ No newline at end of file
+diff --git a/frontend/js/events.js b/frontend/js/events.js
+index a1be4dd..4ddac82 100644
+--- a/frontend/js/events.js
++++ b/frontend/js/events.js
+@@ -3,6 +3,10 @@ window.bindEvents = function () {
+   const historyBtn = document.getElementById('history-btn');
+   const historyPanelEl = document.getElementById('history-panel');
+ 
++  if (els.ollamaUrlEl) {
++    els.ollamaUrlEl.value = window.getOllamaBaseUrl();
++  }
++
+   els.campaignSelectEl.onchange = async () => {
+     window.state.selectedCampaignId = Number(els.campaignSelectEl.value);
+     localStorage.setItem(
+@@ -16,12 +20,12 @@ window.bindEvents = function () {
+       await window.loadTranslations(campaign.language);
+     }
+ 
+-    if (campaign?.system_id) {
+-      els.systemSelectEl.value = campaign.system_id;
++    if (campaign?.system_id || campaign?.systemid) {
++      els.systemSelectEl.value = campaign.system_id || campaign.systemid;
+     }
+ 
+-    if (campaign?.model_id) {
+-      window.state.selectedEngine = campaign.model_id;
++    if (campaign?.model_id || campaign?.modelid) {
++      window.state.selectedEngine = campaign.model_id || campaign.modelid;
+     } else if (!window.state.selectedEngine) {
+       window.state.selectedEngine = els.engineSelectEl.value;
+     }
+@@ -50,6 +54,44 @@ window.bindEvents = function () {
+     localStorage.setItem('ai-gm:selectedEngine', window.state.selectedEngine);
+   };
+ 
++  if (els.ollamaUrlEl) {
++    els.ollamaUrlEl.onchange = () => {
++      const value = (els.ollamaUrlEl.value || '').trim() || 'http://ollama:11434';
++      localStorage.setItem('ai-gm:ollamaBaseUrl', value);
++      els.ollamaUrlEl.value = value;
++    };
++  }
++
++  if (els.testOllamaBtn && els.ollamaUrlEl) {
++    els.testOllamaBtn.onclick = async () => {
++      const value = (els.ollamaUrlEl.value || '').trim() || 'http://ollama:11434';
++      localStorage.setItem('ai-gm:ollamaBaseUrl', value);
++      els.ollamaUrlEl.value = value;
++
++      try {
++        await window.loadHealth();
++        await window.loadModels();
++
++        if (window.state.selectedEngine) {
++          els.engineSelectEl.value = window.state.selectedEngine;
++        }
++
++        window.addMessage({
++          speaker: 'System',
++          text: `Ollama Host ustawiony na ${value}`,
++          role: 'system',
++          route: 'config'
++        });
++      } catch (e) {
++        window.addMessage({
++          speaker: 'Błąd',
++          text: `Test Ollama Host nie powiódł się: ${e.message}`,
++          role: 'error'
++        });
++      }
++    };
++  }
++
+   els.sendBtn.onclick = window.sendMessage;
+   els.diceBtn.onclick = window.rollDice;
+   els.createCampaignBtn.onclick = window.createCampaign;
+diff --git a/frontend/js/ui.js b/frontend/js/ui.js
+index 92deffb..ff8124b 100644
+--- a/frontend/js/ui.js
++++ b/frontend/js/ui.js
+@@ -5,6 +5,8 @@ window.getEls = function () {
+     characterSelectEl: document.getElementById('character-select'),
+     systemSelectEl: document.getElementById('system-select'),
+     engineSelectEl: document.getElementById('engine-select'),
++    ollamaUrlEl: document.getElementById('ollama-url'),
++    testOllamaBtn: document.getElementById('test-ollama-btn'),
+     chatEl: document.getElementById('chat'),
+     inputEl: document.getElementById('input'),
+     sendBtn: document.getElementById('send-btn'),
+@@ -19,19 +21,22 @@ window.getEls = function () {
+     labelCampaignEl: document.getElementById('label-campaign'),
+     labelCharacterEl: document.getElementById('label-character'),
+     labelSystemEl: document.getElementById('label-system'),
+-    labelEngineEl: document.getElementById('label-engine')
++    labelEngineEl: document.getElementById('label-engine'),
++    labelOllamaUrlEl: document.getElementById('label-ollama-url')
+   };
+ };
+ 
+ window.applyTranslations = function () {
+   const els = window.getEls();
+-  els.appTitleEl.textContent = window.t('app.title');
+-  els.labelCampaignEl.textContent = window.t('campaign.label');
+-  els.labelCharacterEl.textContent = window.t('character.label');
+-  els.labelSystemEl.textContent = window.t('system.label');
+-  els.labelEngineEl.textContent = window.t('engine.label');
+-  els.inputEl.placeholder = window.t('input.placeholder');
+-  els.sendBtn.textContent = window.t('button.send');
++
++  if (els.appTitleEl) els.appTitleEl.textContent = window.t('app.title');
++  if (els.labelCampaignEl) els.labelCampaignEl.textContent = window.t('campaign.label');
++  if (els.labelCharacterEl) els.labelCharacterEl.textContent = window.t('character.label');
++  if (els.labelSystemEl) els.labelSystemEl.textContent = window.t('system.label');
++  if (els.labelEngineEl) els.labelEngineEl.textContent = window.t('engine.label');
++  if (els.labelOllamaUrlEl) els.labelOllamaUrlEl.textContent = 'Ollama Host';
++  if (els.inputEl) els.inputEl.placeholder = window.t('input.placeholder');
++  if (els.sendBtn) els.sendBtn.textContent = window.t('button.send');
+ };
+ 
+ window.addMessage = function ({
+@@ -43,6 +48,7 @@ window.addMessage = function ({
+   createdAt = null
+ }) {
+   const { chatEl } = window.getEls();
++  if (!chatEl) return;
+ 
+   const wrap = document.createElement('div');
+   wrap.className = `message ${role}`;
+@@ -103,9 +109,9 @@ window.updateUiState = function () {
+   const hasCampaign = !!window.state.selectedCampaignId;
+   const hasCharacter = !!window.state.selectedCharacterId;
+ 
+-  els.deleteCampaignBtn.disabled = !hasCampaign;
+-  els.createCharacterBtn.disabled = !hasCampaign;
+-  els.sendBtn.disabled = !(hasCampaign && hasCharacter);
++  if (els.deleteCampaignBtn) els.deleteCampaignBtn.disabled = !hasCampaign;
++  if (els.createCharacterBtn) els.createCharacterBtn.disabled = !hasCampaign;
++  if (els.sendBtn) els.sendBtn.disabled = !(hasCampaign && hasCharacter);
+ };
+ 
+ window.renderTurnResponse = function (data, turnNumber) {
+@@ -131,9 +137,12 @@ window.renderTurnResponse = function (data, turnNumber) {
+       if (active) active.name = renamedTo;
+ 
+       const { characterSelectEl } = window.getEls();
+-      const option = characterSelectEl.querySelector(
+-        `option[value="${window.state.selectedCharacterId}"]`
+-      );
++      const option = characterSelectEl
++        ? characterSelectEl.querySelector(
++            `option[value="${window.state.selectedCharacterId}"]`
++          )
++        : null;
++
+       if (option) option.textContent = renamedTo;
+ 
+       window.addMessage({
+@@ -190,18 +199,22 @@ window.renderTurnResponse = function (data, turnNumber) {
+ 
+ window.clearChat = function () {
+   const { chatEl } = window.getEls();
+-  chatEl.innerHTML = '';
++  if (chatEl) chatEl.innerHTML = '';
+ };
+ 
+ window.clearHistoryPanel = function () {
+   const historyPanelEl = document.getElementById('history-panel');
+-  historyPanelEl.innerHTML = '<div class="muted">Brak historii.</div>';
++  if (historyPanelEl) {
++    historyPanelEl.innerHTML = '<div class="muted">Brak historii.</div>';
++  }
+ };
+ 
+ window.renderHistoryPanel = function () {
+   const historyPanelEl = document.getElementById('history-panel');
+   const turns = Array.isArray(window.state.turns) ? window.state.turns : [];
+ 
++  if (!historyPanelEl) return;
++
+   if (turns.length === 0) {
+     historyPanelEl.innerHTML = '<div class="muted">Brak historii.</div>';
+     return;
+@@ -241,6 +254,7 @@ window.renderHistoryPanel = function () {
+   historyPanelEl.querySelectorAll('.replay-turn-btn').forEach((btn) => {
+     btn.onclick = () => {
+       const { inputEl } = window.getEls();
++      if (!inputEl) return;
+       inputEl.value = btn.getAttribute('data-text') || '';
+       inputEl.focus();
+     };
+@@ -288,7 +302,9 @@ window.renderTurnsToChat = function () {
+   });
+ 
+   const chatEl = document.getElementById('chat');
+-  requestAnimationFrame(() => {
+-    chatEl.scrollTop = chatEl.scrollHeight;
+-  });
++  if (chatEl) {
++    requestAnimationFrame(() => {
++      chatEl.scrollTop = chatEl.scrollHeight;
++    });
++  }
+ };
+\ No newline at end of file
+diff --git a/frontend/nginx.conf b/frontend/nginx.conf
+index 812d32e..078c55b 100755
+--- a/frontend/nginx.conf
++++ b/frontend/nginx.conf
+@@ -16,7 +16,7 @@ server {
+ 		if ($request_method = 'OPTIONS') {
+ 			add_header 'Access-Control-Allow-Origin' '*';
+ 			add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+-			add_header 'Access-Control-Allow-Headers' 'Content-Type';
++			add_header 'Access-Control-Allow-Headers' 'Content-Type, X-Ollama-Base-Url';
+ 			return 204;
+ 		}
+ 		add_header 'Access-Control-Allow-Origin' '*' always;
+@@ -37,7 +37,7 @@ server {
+         if ($request_method = 'OPTIONS') {
+             add_header 'Access-Control-Allow-Origin' '*';
+             add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS';
+-            add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization';
++            add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization, X-Ollama-Base-Url';
+             add_header 'Access-Control-Max-Age' 86400;
+             return 204;
+         }
+
+
+## TREE
+./backend/app/api/auth.py
+./backend/app/api/campaigns.py
+./backend/app/api/characters.py
+./backend/app/api/commands.py
+./backend/app/api/health.py
+./backend/app/api/models.py
+./backend/app/api/turns.py
+./backend/app/core/command_router.py
+./backend/app/core/config.py
+./backend/app/core/event_store.py
+./backend/app/core/intent_parser.py
+./backend/app/core/permissions.py
+./backend/app/core/prompt_builder.py
+./backend/app/core/turn_engine.py
+./backend/app/db.py
+./backend/app/main.py
+./backend/app/models.py
+./backend/app/services/auth_service.py
+./backend/app/services/campaign_service.py
+./backend/app/services/character_service.py
+./backend/app/services/commands_service.py
+./backend/app/services/inventory_service.py
+./backend/app/services/ollama_service.py
+./backend/app/systems/base.py
+./backend/app/systems/cyberpunk.py
+./backend/app/systems/fantasy.py
+./backend/app/systems/__init__.py
+./backend/app/systems/neuroshima.py
+./backend/Dockerfile
+./backend/requirements.txt
+./backend/sql/002_turn_engine.sql
+./backend/sql/003_campaign_language.sql
+./backend/sql/004_campaign_turns.sql
+./backend/sql/schema.sql
+./backend/sql/seed.sql
+./docker-compose.yml
+./docs/architecture.md
+./dumpproject.sh
+./frontend/i18n/en.json
+./frontend/i18n/pl.json
+./frontend/index.html
+./frontend/js/actions.js
+./frontend/js/api.js
+./frontend/js/config.js
+./frontend/js/events.js
+./frontend/js/main.js
+./frontend/js/state.js
+./frontend/js/ui.js
+./frontend/js/utils.js
+./frontend/nginx.conf
+./.gitignore
+./README.md
+
+## FILE GROUP: FOCUSED PROJECT FILES
+
+===== FILE: ./backend/app/api/auth.py =====
+
+===== END FILE: ./backend/app/api/auth.py =====
+
+
+===== FILE: ./backend/app/api/campaigns.py =====
+import sqlite3
+
+from fastapi import APIRouter, HTTPException, Response, status
+from pydantic import BaseModel
+
+from app.core.config import DEFAULT_CAMPAIGN_LANGUAGE
+
+DB_PATH = "/data/ai_gm.db"
+
+router = APIRouter()
+
+
+class CampaignCreateRequest(BaseModel):
+    title: str
+    system_id: str
+    model_id: str
+    owner_user_id: int
+    language: str = DEFAULT_CAMPAIGN_LANGUAGE
+    mode: str = "solo"
+    status: str = "active"
+
+
+@router.get("/campaigns")
+def list_campaigns():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    rows = conn.execute(
+        """
+        SELECT id, title, system_id, model_id, owner_user_id, language, mode, status, created_at
+        FROM campaigns
+        ORDER BY id ASC
+        """
+    ).fetchall()
+
+    conn.close()
+
+    return {
+        "campaigns": [dict(row) for row in rows]
+    }
+
+
+@router.get("/campaigns/{campaign_id}")
+def get_campaign(campaign_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    row = conn.execute(
+        """
+        SELECT id, title, system_id, model_id, owner_user_id, language, mode, status, created_at
+        FROM campaigns
+        WHERE id = ?
+        """,
+        (campaign_id,),
+    ).fetchone()
+
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    return dict(row)
+
+
+@router.post("/campaigns")
+def create_campaign(req: CampaignCreateRequest):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO campaigns (title, system_id, model_id, owner_user_id, language, mode, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            req.title,
+            req.system_id,
+            req.model_id,
+            req.owner_user_id,
+            req.language,
+            req.mode,
+            req.status,
+        ),
+    )
+    conn.commit()
+
+    campaign_id = cur.lastrowid
+
+    row = conn.execute(
+        """
+        SELECT id, title, system_id, model_id, owner_user_id, language, mode, status, created_at
+        FROM campaigns
+        WHERE id = ?
+        """,
+        (campaign_id,),
+    ).fetchone()
+
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=500, detail="Campaign created but could not be loaded")
+
+    return dict(row)
+
+
+@router.delete("/campaigns/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_campaign(campaign_id: int):
+    conn = sqlite3.connect(DB_PATH)
+
+    try:
+        row = conn.execute(
+            "SELECT id FROM campaigns WHERE id = ?",
+            (campaign_id,),
+        ).fetchone()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
+        conn.execute("BEGIN")
+
+        conn.execute(
+            "DELETE FROM campaign_turns WHERE campaign_id = ?",
+            (campaign_id,),
+        )
+
+        conn.execute(
+            "DELETE FROM characters WHERE campaign_id = ?",
+            (campaign_id,),
+        )
+
+        conn.execute(
+            "DELETE FROM campaigns WHERE id = ?",
+            (campaign_id,),
+        )
+
+        conn.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete campaign: {str(e)}")
+    finally:
+        conn.close()
+===== END FILE: ./backend/app/api/campaigns.py =====
+
+
+===== FILE: ./backend/app/api/characters.py =====
+import json
+import sqlite3
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+DB_PATH = "/data/ai_gm.db"
+
+router = APIRouter()
+
+
+class CharacterCreateRequest(BaseModel):
+    user_id: int
+    name: str
+    system_id: str
+    sheet_json: dict = {}
+    location: str | None = None
+    is_active: int = 1
+
+
+@router.get("/campaigns/{campaign_id}/characters")
+def list_characters(campaign_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    campaign = conn.execute(
+        "SELECT id FROM campaigns WHERE id = ?",
+        (campaign_id,),
+    ).fetchone()
+
+    if not campaign:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    rows = conn.execute(
+        """
+        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at
+        FROM characters
+        WHERE campaign_id = ?
+        ORDER BY id ASC
+        """,
+        (campaign_id,),
+    ).fetchall()
+
+    conn.close()
+
+    characters = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["sheet_json"] = json.loads(item["sheet_json"]) if item["sheet_json"] else {}
+        except Exception:
+            item["sheet_json"] = {}
+        characters.append(item)
+
+    return {"characters": characters}
+
+
+@router.get("/characters/{character_id}")
+def get_character(character_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+
+    row = conn.execute(
+        """
+        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at
+        FROM characters
+        WHERE id = ?
+        """,
+        (character_id,),
+    ).fetchone()
+
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Character not found")
+
+    item = dict(row)
+    try:
+        item["sheet_json"] = json.loads(item["sheet_json"]) if item["sheet_json"] else {}
+    except Exception:
+        item["sheet_json"] = {}
+
+    return item
+
+
+@router.post("/campaigns/{campaign_id}/characters")
+def create_character(campaign_id: int, req: CharacterCreateRequest):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    campaign = conn.execute(
+        """
+        SELECT id, system_id
+        FROM campaigns
+        WHERE id = ?
+        """,
+        (campaign_id,),
+    ).fetchone()
+
+    if not campaign:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    if req.system_id != campaign["system_id"]:
+        conn.close()
+        raise HTTPException(
+            status_code=400,
+            detail=f"system_id mismatch: campaign uses '{campaign['system_id']}'"
+        )
+
+    cur.execute(
+        """
+        INSERT INTO characters (campaign_id, user_id, name, system_id, sheet_json, location, is_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            campaign_id,
+            req.user_id,
+            req.name,
+            req.system_id,
+            json.dumps(req.sheet_json, ensure_ascii=False),
+            req.location,
+            req.is_active,
+        ),
+    )
+    conn.commit()
+
+    character_id = cur.lastrowid
+
+    row = conn.execute(
+        """
+        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at
+        FROM characters
+        WHERE id = ?
+        """,
+        (character_id,),
+    ).fetchone()
+
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=500, detail="Character created but could not be loaded")
+
+    item = dict(row)
+    try:
+        item["sheet_json"] = json.loads(item["sheet_json"]) if item["sheet_json"] else {}
+    except Exception:
+        item["sheet_json"] = {}
+
+    return item
+===== END FILE: ./backend/app/api/characters.py =====
+
+
+===== FILE: ./backend/app/api/commands.py =====
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from app.services.commands_service import execute_command_logic
+
+router = APIRouter()
+
+
+class CommandRequest(BaseModel):
+    character_id: int
+    text: str
+
+
+@router.post("/commands/execute")
+def execute_command(req: CommandRequest):
+    try:
+        result = execute_command_logic(req.character_id, req.text)
+        return result.payload
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+===== END FILE: ./backend/app/api/commands.py =====
+
+
+===== FILE: ./backend/app/api/health.py =====
+from fastapi import APIRouter, Request
+import os
+import httpx
+
+router = APIRouter()
+OLLAMABASEURL = os.getenv('OLLAMABASEURL', 'http://ollama:11434')
+OLLAMATIMEOUT = float(os.getenv('OLLAMATIMEOUT', '10'))
+
+@router.get("/health")
+async def health(request: Request):
+    ollama_base_url = request.headers.get("X-Ollama-Base-Url", OLLAMABASEURL)
+    ollama = {
+        "reachable": False,
+        "base_url": ollama_base_url,
+        "model_count": 0,
+        "models": []
+    }
+    try:
+        async with httpx.AsyncClient(timeout=OLLAMATIMEOUT) as client:
+            resp = await client.get(f"{ollama_base_url}/api/tags")
+            resp.raise_for_status()
+            data = resp.json()
+            models = data.get("models", [])
+            ollama.update({
+                "reachable": True,
+                "model_count": len(models),
+                "models": [m.get("name") for m in models if m.get("name")]
+            })
+    except Exception as e:
+        ollama["error"] = str(e)
+    return {"status": "ok", "ollama": ollama}
+===== END FILE: ./backend/app/api/health.py =====
+
+
+===== FILE: ./backend/app/api/models.py =====
+from fastapi import APIRouter, HTTPException, Request
+import httpx
+import os
+
+router = APIRouter()
+OLLAMABASEURL = os.getenv('OLLAMABASEURL', 'http://ollama:11434')
+OLLAMATIMEOUT = float(os.getenv('OLLAMATIMEOUT', '10'))
+
+@router.get("/models")
+async def listmodels(request: Request):
+    ollama_base_url = request.headers.get("X-Ollama-Base-Url", OLLAMABASEURL)
+    try:
+        async with httpx.AsyncClient(timeout=OLLAMATIMEOUT) as client:
+            resp = await client.get(f"{ollama_base_url}/api/tags")
+            resp.raise_for_status()
+            data = resp.json()
+            models = data.get("models", [])
+            return [
+                {"name": m.get("name"), "size": m.get("size", 0)}
+                for m in models if m.get("name")
+            ]
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Ollama models fetch failed: {str(e)}")
+===== END FILE: ./backend/app/api/models.py =====
+
+
+===== FILE: ./backend/app/api/turns.py =====
+from pathlib import Path
+import json
+import sqlite3
+from fastapi import APIRouter, HTTPException, Query, Header
+from pydantic import BaseModel
+from app.core.turnengine import runnarrativeturn
+
+router = APIRouter()
+DBPATH = Path("data/ai-gm.db")
+
+
+class TurnCreate(BaseModel):
+    characterid: int
+    text: str
+    system: str | None = None
+    engine: str | None = None
+    gameid: int | None = None
+
+
+def getdb():
+    conn = sqlite3.connect(DBPATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def getcampaignor404(conn: sqlite3.Connection, campaignid: int):
+    campaign = conn.execute("SELECT * FROM campaigns WHERE id = ?", (campaignid,)).fetchone()
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    return campaign
+
+
+def getcharacteror404(conn: sqlite3.Connection, campaignid: int, characterid: int):
+    character = conn.execute(
+        "SELECT * FROM characters WHERE id = ? AND campaignid = ?",
+        (characterid, campaignid),
+    ).fetchone()
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return character
+
+
+def createturnlog(conn: sqlite3.Connection, campaignid: int, characterid: int | None, usertext: str, assistanttext: str | None, route: str):
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO campaignturns (campaignid, characterid, usertext, assistanttext, route) VALUES (?, ?, ?, ?, ?)",
+        (campaignid, characterid, usertext, assistanttext, route),
+    )
+    turnid = cur.lastrowid
+    row = cur.execute("SELECT id, createdat FROM campaignturns WHERE id = ?", (turnid,)).fetchone()
+    conn.commit()
+    return {"turnnumber": row["id"], "createdat": row["createdat"]}
+
+
+@router.get("/campaigns/{campaignid}/turns")
+def listcampaignturns(campaignid: int, limit: int = Query(default=30, ge=1, le=100)):
+    conn = getdb()
+    try:
+        getcampaignor404(conn, campaignid)
+        rows = conn.execute(
+            """
+            SELECT t.id, t.campaignid, t.characterid, t.usertext, t.assistanttext, t.route, t.createdat,
+                   c.name AS charactername
+            FROM campaignturns t
+            LEFT JOIN characters c ON c.id = t.characterid
+            WHERE t.campaignid = ?
+            ORDER BY t.id DESC
+            LIMIT ?
+            """,
+            (campaignid, limit),
+        ).fetchall()
+
+        turns = []
+        for row in rows:
+            turns.append({
+                "id": row["id"],
+                "turnnumber": row["id"],
+                "campaignid": row["campaignid"],
+                "characterid": row["characterid"],
+                "charactername": row["charactername"],
+                "usertext": row["usertext"],
+                "assistanttext": row["assistanttext"],
+                "route": row["route"],
+                "createdat": row["createdat"],
+            })
+
+        turns.reverse()
+        return {"campaignid": campaignid, "turns": turns, "count": len(turns)}
+    finally:
+        conn.close()
+
+
+@router.post("/campaigns/{campaignid}/turns")
+def createturn(campaignid: int, payload: TurnCreate, x_ollama_base_url: str | None = Header(default=None)):
+    conn = getdb()
+    try:
+        campaign = getcampaignor404(conn, campaignid)
+        character = getcharacteror404(conn, campaignid, payload.characterid)
+        text = (payload.text or "").strip()
+
+        if not text:
+            raise HTTPException(status_code=400, detail="Text is required")
+
+        if text.startswith("/"):
+            route = "command"
+
+            if text.startswith("/name"):
+                newname = text[6:].strip()
+                if not newname:
+                    raise HTTPException(status_code=400, detail="Character name is required")
+
+                conn.execute(
+                    "UPDATE characters SET name = ? WHERE id = ? AND campaignid = ?",
+                    (newname, payload.characterid, campaignid),
+                )
+                conn.commit()
+
+                result = {"command": "name", "charactername": newname}
+                log = createturnlog(
+                    conn=conn,
+                    campaignid=campaignid,
+                    characterid=payload.characterid,
+                    usertext=text,
+                    assistanttext=json.dumps(result, ensure_ascii=False),
+                    route=route,
+                )
+                return {"turnnumber": log["turnnumber"], "createdat": log["createdat"], "route": "command", "result": result}
+
+            if text == "sheet":
+                result = {
+                    "command": "sheet",
+                    "character": {
+                        "id": character["id"],
+                        "name": character["name"],
+                        "campaignid": character["campaignid"],
+                        "userid": character["userid"],
+                        "systemid": character["systemid"],
+                        "sheetjson": character["sheetjson"],
+                        "location": character["location"],
+                        "isactive": character["isactive"],
+                        "createdat": character["createdat"],
+                    },
+                }
+                log = createturnlog(
+                    conn=conn,
+                    campaignid=campaignid,
+                    characterid=payload.characterid,
+                    usertext=text,
+                    assistanttext=json.dumps(result, ensure_ascii=False),
+                    route=route,
+                )
+                return {"turnnumber": log["turnnumber"], "createdat": log["createdat"], "route": "command", "result": result}
+
+            result = {"command": text.split(" ", 1)[0], "message": "Unknown command"}
+            log = createturnlog(
+                conn=conn,
+                campaignid=campaignid,
+                characterid=payload.characterid,
+                usertext=text,
+                assistanttext=json.dumps(result, ensure_ascii=False),
+                route=route,
+            )
+            return {"turnnumber": log["turnnumber"], "createdat": log["createdat"], "route": "command", "result": result}
+
+        route = "narrative"
+        model = payload.engine or campaign["modelid"] or "gemma3:1b"
+
+        result = runnarrativeturn(
+            conn=conn,
+            campaign=campaign,
+            character=character,
+            usertext=text,
+            model=model,
+            ollama_base_url=x_ollama_base_url,
+        )
+
+        assistanttext = (result.get("message") or "").strip()
+        if not assistanttext:
+            raise HTTPException(status_code=500, detail="Empty narrative response")
+
+        log = createturnlog(
+            conn=conn,
+            campaignid=campaignid,
+            characterid=payload.characterid,
+            usertext=text,
+            assistanttext=assistanttext,
+            route=route,
+        )
+
+        return {"turnnumber": log["turnnumber"], "createdat": log["createdat"], "route": "narrative", "result": result}
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    finally:
+        conn.close()
+===== END FILE: ./backend/app/api/turns.py =====
+
+
+===== FILE: ./backend/app/core/command_router.py =====
+def is_command(text: str) -> bool:
+    return text.strip().startswith("/")
+
+def parse_command(text: str) -> tuple[str, str]:
+    raw = text.strip()
+    if not raw.startswith("/"):
+        return "", raw
+    parts = raw.split(" ", 1)
+    cmd = parts[0].lower()
+    arg = parts[1].strip() if len(parts) > 1 else ""
+    return cmd, arg
+
+===== END FILE: ./backend/app/core/command_router.py =====
+
+
+===== FILE: ./backend/app/core/config.py =====
+import os
+
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+DEFAULT_CAMPAIGN_LANGUAGE = os.getenv("DEFAULT_CAMPAIGN_LANGUAGE", "pl")
+APP_ENV = os.getenv("APP_ENV", "dev")
+
+===== END FILE: ./backend/app/core/config.py =====
+
+
+===== FILE: ./backend/app/core/event_store.py =====
+
+===== END FILE: ./backend/app/core/event_store.py =====
+
+
+===== FILE: ./backend/app/core/intent_parser.py =====
+
+===== END FILE: ./backend/app/core/intent_parser.py =====
+
+
+===== FILE: ./backend/app/core/permissions.py =====
+
+===== END FILE: ./backend/app/core/permissions.py =====
+
+
+===== FILE: ./backend/app/core/prompt_builder.py =====
+
+===== END FILE: ./backend/app/core/prompt_builder.py =====
+
+
+===== FILE: ./backend/app/core/turn_engine.py =====
+import sqlite3
+from app.services.ollamaservice import generatechat
+
+SYSTEM_PROMPT = """Jesteś mistrzem gry RPG prowadzącym krótką, klimatyczną sesję solo po polsku.
+Prowadź narrację jasno i konkretnie.
+Uwzględniaj ostatni kontekst rozmowy.
+Nie powtarzaj dokładnie wypowiedzi gracza.
+Kończ odpowiedź naturalnym rozwinięciem sceny albo pytaniem "Co robisz?", jeśli pasuje.
+Jeśli wejście gracza jest bardzo krótkie lub niejasne, poproś o doprecyzowanie w świecie gry.
+"""
+
+
+def loadrecentturns(conn: sqlite3.Connection, campaignid: int, limit: int = 8) -> list[sqlite3.Row]:
+    rows = conn.execute(
+        "SELECT usertext, assistanttext, route FROM campaignturns WHERE campaignid = ? ORDER BY id DESC LIMIT ?",
+        (campaignid, limit),
+    ).fetchall()
+    rows = list(rows)
+    rows.reverse()
+    return rows
+
+
+def buildmessages(
+    campaign: sqlite3.Row,
+    character: sqlite3.Row | None,
+    recentturns: list[sqlite3.Row],
+    usertext: str,
+) -> list[dict]:
+    systemid = campaign["systemid"] if campaign and campaign["systemid"] else "fantasy"
+    language = campaign["language"] if campaign and campaign["language"] else "pl"
+    charactername = character["name"] if character and character["name"] else "Bohater"
+
+    messages = [{
+        "role": "system",
+        "content": f"{SYSTEM_PROMPT}\nSystem gry: {systemid}\nJęzyk: {language}\nPostać gracza: {charactername}"
+    }]
+
+    for turn in recentturns:
+        if turn["usertext"]:
+            messages.append({"role": "user", "content": turn["usertext"]})
+        if turn["assistanttext"] and turn["route"] == "narrative":
+            messages.append({"role": "assistant", "content": turn["assistanttext"]})
+
+    messages.append({"role": "user", "content": usertext})
+    return messages
+
+
+def runnarrativeturn(
+    conn: sqlite3.Connection,
+    campaign: sqlite3.Row,
+    character: sqlite3.Row | None,
+    usertext: str,
+    model: str,
+    ollama_base_url: str | None = None,
+) -> dict:
+    recentturns = loadrecentturns(conn, campaign["id"], limit=8)
+    messages = buildmessages(
+        campaign=campaign,
+        character=character,
+        recentturns=recentturns,
+        usertext=usertext,
+    )
+    reply = generatechat(model=model, messages=messages, base_url=ollama_base_url)
+    return {"message": reply}
+===== END FILE: ./backend/app/core/turn_engine.py =====
+
+
+===== FILE: ./backend/app/services/auth_service.py =====
+
+===== END FILE: ./backend/app/services/auth_service.py =====
+
+
+===== FILE: ./backend/app/services/campaign_service.py =====
+
+===== END FILE: ./backend/app/services/campaign_service.py =====
+
+
+===== FILE: ./backend/app/services/character_service.py =====
+
+===== END FILE: ./backend/app/services/character_service.py =====
+
+
+===== FILE: ./backend/app/services/commands_service.py =====
+import json
+import sqlite3
+from dataclasses import dataclass
+from typing import Any
+
+DB_PATH = "/data/ai_gm.db"
+
+
+@dataclass
+class CommandResult:
+    ok: bool
+    type: str
+    command: str
+    payload: dict[str, Any]
+
+
+def get_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def is_command(text: str) -> bool:
+    return (text or "").strip().startswith("/")
+
+
+def execute_command_logic(character_id: int, text: str) -> CommandResult:
+    text = (text or "").strip()
+
+    if not text.startswith("/"):
+        raise ValueError("Not a command")
+
+    parts = text.split(" ", 1)
+    cmd = parts[0].lower()
+    arg = parts[1].strip() if len(parts) > 1 else ""
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    try:
+        cur.execute("SELECT * FROM characters WHERE id = ?", (character_id,))
+        row = cur.fetchone()
+
+        if not row:
+            raise LookupError("Character not found")
+
+        sheet = json.loads(row["sheet_json"])
+
+        if cmd == "/help":
+            return CommandResult(
+                ok=True,
+                type="command",
+                command="/help",
+                payload={
+                    "ok": True,
+                    "type": "command",
+                    "command": "/help",
+                    "message": "Commands: /help, /name, /sheet, /inv, /roll, /say, /do, /ooc"
+                },
+            )
+
+        if cmd == "/name":
+            if not arg:
+                raise ValueError("Usage: /name NEW_NAME")
+
+            sheet["name"] = arg
+            cur.execute(
+                "UPDATE characters SET name = ?, sheet_json = ? WHERE id = ?",
+                (arg, json.dumps(sheet), character_id)
+            )
+            conn.commit()
+
+            return CommandResult(
+                ok=True,
+                type="command",
+                command="/name",
+                payload={
+                    "result": {  # ← Wrap in "result"
+                        "character_name": arg
+                    }
+                },
+            )
+
+        if cmd == "/sheet":
+            return CommandResult(
+                ok=True,
+                type="command",
+                command="/sheet",
+                payload={
+                    "result": {  # ← Wrap in "result" for frontend
+                        "sheet": sheet
+                    }
+                },
+            )
+
+        raise ValueError(f"Unknown command: {cmd}")
+    finally:
+        conn.close()
+===== END FILE: ./backend/app/services/commands_service.py =====
+
+
+===== FILE: ./backend/app/services/inventory_service.py =====
+
+===== END FILE: ./backend/app/services/inventory_service.py =====
+
+
+===== FILE: ./backend/app/services/ollama_service.py =====
+import os
+import httpx
+
+OLLAMA_BASE_URL = os.getenv("OLLAMABASEURL", "http://ollama:11434")
+OLLAMA_TIMEOUT = float(os.getenv("OLLAMATIMEOUT", 120))
+
+
+def resolve_ollama_base_url(base_url: str | None = None) -> str:
+    value = (base_url or "").strip()
+    return value or OLLAMA_BASE_URL
+
+
+def generatechat(model: str, messages: list[dict], base_url: str | None = None) -> str:
+    payload = {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+    }
+
+    ollama_base_url = resolve_ollama_base_url(base_url)
+
+    try:
+        with httpx.Client(timeout=OLLAMA_TIMEOUT) as client:
+            resp = client.post(f"{ollama_base_url}/api/chat", json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            content = (data.get("message") or {}).get("content", "").strip()
+            if not content:
+                raise RuntimeError("Ollama returned empty content")
+            return content
+    except httpx.TimeoutException as e:
+        raise RuntimeError(f"Ollama timeout: {e}") from e
+    except httpx.HTTPStatusError as e:
+        detail = e.response.text if e.response is not None else str(e)
+        raise RuntimeError(f"Ollama HTTP error: {detail}") from e
+    except httpx.RequestError as e:
+        raise RuntimeError(f"Ollama connection error: {e}") from e
+===== END FILE: ./backend/app/services/ollama_service.py =====
+
+
+===== FILE: ./backend/app/systems/base.py =====
+from typing import Protocol
+
+class SystemAdapter(Protocol):
+    system_id: str
+
+    def create_default_sheet(self, player_name: str) -> dict: ...
+    def list_supported_commands(self) -> list[str]: ...
+
+===== END FILE: ./backend/app/systems/base.py =====
+
+
+===== FILE: ./backend/app/systems/cyberpunk.py =====
+
+===== END FILE: ./backend/app/systems/cyberpunk.py =====
+
+
+===== FILE: ./backend/app/systems/fantasy.py =====
+class FantasySystem:
+    system_id = "fantasy"
+
+    def create_default_sheet(self, player_name: str) -> dict:
+        might = 2
+        agility = 1
+        wits = 1
+        will = 0
+
+        return {
+            "name": player_name,
+            "class": "adventurer",
+            "level": 1,
+            "xp": 0,
+            "attributes": {
+                "might": might,
+                "agility": agility,
+                "wits": wits,
+                "will": will
+            },
+            "skills": {
+                "melee": 2,
+                "ranged": 0,
+                "athletics": 2,
+                "stealth": 0,
+                "lore": 0,
+                "notice": 2,
+                "survival": 0,
+                "persuasion": 0,
+                "intimidation": 0,
+                "craft": 0,
+                "magic": 0,
+                "healing": 0
+            },
+            "resources": {
+                "health": {
+                    "current": 10 + might,
+                    "max": 10 + might
+                },
+                "focus": {
+                    "current": 5 + will,
+                    "max": 5 + will
+                },
+                "defense": 10 + agility
+            },
+            "inventory": {
+                "slots_max": 8 + might,
+                "coins": 10
+            },
+            "conditions": [],
+            "equipped": {
+                "weapon": "rusty sword",
+                "armor": "leather jack"
+            },
+            "notes": []
+        }
+
+    def list_supported_commands(self) -> list[str]:
+        return ["/help", "/name", "/sheet", "/inv", "/roll", "/say", "/do", "/ooc"]
+===== END FILE: ./backend/app/systems/fantasy.py =====
+
+
+===== FILE: ./backend/app/systems/__init__.py =====
+from .fantasy import FantasySystem
+
+SYSTEMS = {
+    "fantasy": FantasySystem(),
+}
+
+def get_system(system_id: str):
+    return SYSTEMS.get(system_id)
+
+===== END FILE: ./backend/app/systems/__init__.py =====
+
+
+===== FILE: ./backend/app/systems/neuroshima.py =====
+
+===== END FILE: ./backend/app/systems/neuroshima.py =====
+
+
+===== FILE: ./backend/sql/002_turn_engine.sql =====
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS campaigns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    system_id TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    owner_user_id INTEGER NOT NULL,
+    mode TEXT NOT NULL DEFAULT 'solo',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS campaign_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    role TEXT NOT NULL DEFAULT 'player',
+    joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(campaign_id, user_id),
+    FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS characters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    system_id TEXT NOT NULL,
+    sheet_json TEXT NOT NULL,
+    location TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS inventory_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    character_id INTEGER NOT NULL,
+    item_key TEXT NOT NULL,
+    item_name TEXT NOT NULL,
+    qty INTEGER NOT NULL DEFAULT 1,
+    equipped INTEGER NOT NULL DEFAULT 0,
+    meta_json TEXT,
+    FOREIGN KEY (character_id) REFERENCES characters(id)
+);
+
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL,
+    room_id TEXT,
+    actor_character_id INTEGER,
+    event_type TEXT NOT NULL,
+    visibility TEXT NOT NULL DEFAULT 'campaign',
+    content TEXT NOT NULL,
+    payload_json TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+    FOREIGN KEY (actor_character_id) REFERENCES characters(id)
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL,
+    character_id INTEGER,
+    speaker_name TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    event_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+    FOREIGN KEY (character_id) REFERENCES characters(id),
+    FOREIGN KEY (event_id) REFERENCES events(id)
+);
+
+===== END FILE: ./backend/sql/002_turn_engine.sql =====
+
+
+===== FILE: ./backend/sql/003_campaign_language.sql =====
+ALTER TABLE campaigns ADD COLUMN language TEXT NOT NULL DEFAULT 'pl';
+
+===== END FILE: ./backend/sql/003_campaign_language.sql =====
+
+
+===== FILE: ./backend/sql/004_campaign_turns.sql =====
+CREATE TABLE IF NOT EXISTS campaign_turns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL,
+    character_id INTEGER NOT NULL,
+    user_text TEXT NOT NULL,
+    route TEXT NOT NULL,
+    assistant_text TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+    FOREIGN KEY (character_id) REFERENCES characters(id)
+);
+===== END FILE: ./backend/sql/004_campaign_turns.sql =====
+
+
+===== FILE: ./backend/sql/schema.sql =====
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS campaigns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    system_id TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    owner_user_id INTEGER NOT NULL,
+    language TEXT NOT NULL DEFAULT 'pl',
+    mode TEXT NOT NULL DEFAULT 'solo',
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS campaign_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    role TEXT NOT NULL DEFAULT 'player',
+    joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(campaign_id, user_id),
+    FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS characters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    campaign_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    system_id TEXT NOT NULL,
+    sheet_json TEXT NOT NULL,
+    location TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+===== END FILE: ./backend/sql/schema.sql =====
+
+
+===== FILE: ./backend/sql/seed.sql =====
+INSERT OR IGNORE INTO users (id, username, password_hash, display_name)
+VALUES (1, 'demo', 'demo', 'Demo Player');
+
+INSERT OR IGNORE INTO campaigns (id, title, system_id, model_id, owner_user_id, mode, status)
+VALUES (1, 'Fantasy Test', 'fantasy', 'gemma3:1b', 1, 'solo', 'active');
+
+INSERT OR IGNORE INTO campaign_members (campaign_id, user_id, role)
+VALUES (1, 1, 'owner');
+
+INSERT OR IGNORE INTO characters (
+    id,
+    campaign_id,
+    user_id,
+    name,
+    system_id,
+    sheet_json,
+    location,
+    is_active
+) VALUES (
+    1,
+    1,
+    1,
+    'Arthos',
+    'fantasy',
+    '{"name":"Arthos","class":"adventurer","level":1,"xp":0,"attributes":{"might":2,"agility":1,"wits":1,"will":0},"skills":{"melee":2,"ranged":0,"athletics":2,"stealth":0,"lore":0,"notice":2,"survival":0,"persuasion":0,"intimidation":0,"craft":0,"magic":0,"healing":0},"resources":{"health":{"current":12,"max":12},"focus":{"current":5,"max":5},"defense":11},"inventory":{"slots_max":10,"coins":10},"conditions":[],"equipped":{"weapon":"rusty sword","armor":"leather jack"},"notes":[]}',
+    'Roadside inn',
+    1
+);
+
+===== END FILE: ./backend/sql/seed.sql =====
+
+
+===== FILE: ./docker-compose.yml =====
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    networks:
+      - ai-gm
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/11434'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-60}
+      DEFAULT_CAMPAIGN_LANGUAGE: ${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
+      GAME_LANG: ${GAME_LANG:-pl-PL}
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/ai_gm.db}
+
+    volumes:
+      - ai_gm_data:/data
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - ai-gm
+
+  frontend:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - ai-gm
+
+volumes:
+  ollama:
+  ai_gm_data:
+
+networks:
+  ai-gm:
+    driver: bridge
+
+===== END FILE: ./docker-compose.yml =====
+
+
+===== FILE: ./docs/architecture.md =====
+# Architecture Notes
+
+## Phase 1
+
+Goal: create a minimal FastAPI backend, then connect it to Ollama.
+
+## Components
+
+- backend: FastAPI API service
+- ollama: local model runtime already installed on host
+- future web UI: browser client
+- future terminal UI: CLI/TUI client
+
+===== END FILE: ./docs/architecture.md =====
+
+
+===== FILE: ./frontend/i18n/en.json =====
+{
+  "app.title": "AI-GM",
+  "campaign.label": "Campaign",
+  "character.label": "Character",
+  "system.label": "System",
+  "engine.label": "Engine",
+  "language.label": "Language",
+  "status.backend": "Backend",
+  "status.ollama": "Ollama",
+  "status.models": "Models",
+  "status.connected": "Connected",
+  "status.disconnected": "Disconnected",
+  "chat.turn": "Turn",
+  "chat.you": "Player",
+  "chat.gm": "GM",
+  "input.placeholder": "Type /sheet or describe your action...",
+  "button.send": "Send",
+  "loading": "Loading...",
+  "empty.characters": "No characters in campaign",
+  "empty.campaigns": "No campaigns",
+  "health.host": "Host",
+  "health.ok": "OK",
+  "health.fail": "Error",
+  "error.no_campaign": "No campaign selected",
+  "error.no_character": "No character selected",
+  "error.invalid_response": "Invalid server response",
+  "system.ready": "Frontend is ready. You can type /sheet or describe an action.",
+  "system.name_changed": "Character name changed to:"
+}
+===== END FILE: ./frontend/i18n/en.json =====
+
+
+===== FILE: ./frontend/i18n/pl.json =====
+{
+  "app.title": "AI-GM",
+  "campaign.label": "Kampania",
+  "character.label": "Postać",
+  "system.label": "System",
+  "engine.label": "Silnik",
+  "language.label": "Język",
+  "status.backend": "Backend",
+  "status.ollama": "Ollama",
+  "status.models": "Modele",
+  "status.connected": "Połączono",
+  "status.disconnected": "Brak połączenia",
+  "chat.turn": "Tura",
+  "chat.you": "Gracz",
+  "chat.gm": "MG",
+  "input.placeholder": "Wpisz /sheet albo opisz akcję...",
+  "button.send": "Wyślij",
+  "loading": "Ładowanie...",
+  "empty.characters": "Brak postaci w kampanii",
+  "empty.campaigns": "Brak kampanii",
+  "health.host": "Host",
+  "health.ok": "OK",
+  "health.fail": "Błąd",
+  "error.no_campaign": "Brak wybranej kampanii",
+  "error.no_character": "Brak wybranej postaci",
+  "error.invalid_response": "Nieprawidłowa odpowiedź serwera",
+  "system.ready": "Frontend gotowy. Możesz wpisać /sheet albo opisać akcję.",
+  "system.name_changed": "Zmieniono imię postaci na:"
+}
+===== END FILE: ./frontend/i18n/pl.json =====
+
+
+===== FILE: ./frontend/index.html =====
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI-GM</title>
+  <style>
+    :root {
+      --bg: #111827;
+      --panel: #1f2937;
+      --panel-2: #374151;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --accent: #14b8a6;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --ok: #22c55e;
+      --border: #4b5563;
+      --user: #1d4ed8;
+      --assistant: #065f46;
+      --system: #6b7280;
+      --radius: 12px;
+      --gap: 12px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .topbar, .controls, .composer, .statusbar {
+      display: grid;
+      gap: var(--gap);
+    }
+
+    .topbar {
+      grid-template-columns: 1fr;
+      margin-bottom: 16px;
+    }
+
+    .title {
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .statusbar {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-bottom: 16px;
+    }
+
+    .status-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      font-size: 14px;
+      min-height: 44px;
+    }
+
+    .controls {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-bottom: 16px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .field-row.single-action {
+      grid-template-columns: 1fr auto;
+    }
+
+    select, input, button, textarea {
+      width: 100%;
+      min-height: 44px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 16px;
+    }
+
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      color: #04130f;
+      font-weight: bold;
+    }
+
+    button.secondary {
+      background: var(--panel-2);
+      color: var(--text);
+    }
+
+    button.danger {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    button:disabled,
+    select:disabled,
+    textarea:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .chat {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      min-height: 420px;
+      max-height: 60vh;
+      overflow-y: auto;
+      margin-bottom: 16px;
+    }
+
+    .message {
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .message.user { background: rgba(29, 78, 216, 0.20); }
+    .message.assistant { background: rgba(6, 95, 70, 0.22); }
+    .message.system { background: rgba(107, 114, 128, 0.18); }
+    .message.error { background: rgba(239, 68, 68, 0.18); border-color: var(--danger); }
+
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .route-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .composer {
+      grid-template-columns: 1fr auto auto;
+      align-items: end;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 88px;
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 14px;
+    }
+
+    .muted { color: var(--muted); }
+
+    @media (max-width: 900px) {
+      .statusbar, .controls {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .statusbar, .controls, .composer {
+        grid-template-columns: 1fr;
+      }
+
+      .field-row,
+      .field-row.single-action {
+        grid-template-columns: 1fr;
+      }
+
+      .chat {
+        min-height: 320px;
+        max-height: 52vh;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <div class="title" id="app-title">AI-GM</div>
+    </div>
+
+    <div class="statusbar">
+      <div class="status-card" id="status-backend">Backend: ...</div>
+      <div class="status-card" id="status-ollama">Ollama: ...</div>
+      <div class="status-card" id="status-models">Modele: ...</div>
+      <div class="status-card" id="status-host">Host: ...</div>
+    </div>
+
+    <div class="controls">
+      <div class="field">
+        <label for="campaign-select" id="label-campaign">Kampania</label>
+        <div class="field-row">
+          <select id="campaign-select"></select>
+          <button type="button" class="secondary" id="create-campaign-btn">Nowa</button>
+          <button type="button" class="danger" id="delete-campaign-btn">Usuń</button>
+        </div>
+      </div>
+
+	<div class="field">
+	  <label for="character-select" id="label-character">Postać</label>
+	  <div class="field-row">
+		<select id="character-select"></select>
+		<button type="button" class="secondary" id="create-character-btn">Nowa</button>
+		<button type="button" class="secondary" id="history-btn">Historia</button>
+	  </div>
+	</div>
+
+      <div class="field">
+        <label for="system-select" id="label-system">System</label>
+        <select id="system-select">
+          <option value="fantasy">fantasy</option>
+          <option value="warhammer">warhammer</option>
+          <option value="cyberpunk">cyberpunk</option>
+          <option value="neuroshima">neuroshima</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="engine-select" id="label-engine">Silnik</label>
+        <select id="engine-select"></select>
+      </div>
+    </div>
+	
+	<div class="field">
+  <label for="ollama-url" id="label-ollama-url">Ollama Host</label>
+  <div class="field-row single-action">
+    <input id="ollama-url" placeholder="http://ollama:11434" value="http://ollama:11434">
+    <button type="button" class="secondary" id="test-ollama-btn">Test</button>
+  </div>
+</div>
+
+
+
+    <div class="chat" id="chat"></div>
+	
+	<div class="chat" id="history-panel" style="display:none; min-height:220px; max-height:32vh;">
+	  <div class="muted">Historia kampanii...</div>
+	</div>
+    
+	<div class="composer">
+      <textarea id="input" placeholder="Wpisz /sheet albo opisz akcję..."></textarea>
+      <button type="button" class="secondary" id="dice-btn">🎲</button>
+      <button type="button" id="send-btn">Wyślij</button>
+    </div>
+  </div>
+
+  <script src="./js/config.js"></script>
+  <script src="./js/state.js"></script>
+  <script src="./js/utils.js"></script>
+  <script src="./js/ui.js"></script>
+  <script src="./js/api.js"></script>
+  <script src="./js/actions.js"></script>
+  <script src="./js/events.js"></script>
+  <script src="./js/main.js"></script>
+</body>
+</html>
+===== END FILE: ./frontend/index.html =====
+
+
+===== FILE: ./frontend/js/actions.js =====
+window.createCampaign = async function () {
+  const { systemSelectEl, engineSelectEl } = window.getEls();
+
+  const title = prompt(
+    'Tytuł kampanii:',
+    `Kampania ${new Date().toISOString().slice(0, 10)}`
+  );
+  if (!title) return;
+
+  const payload = {
+    title: title.trim(),
+    system_id: systemSelectEl.value,
+    model_id: engineSelectEl.value || (window.state.models[0]?.name ?? 'gemma3:1b'),
+    owner_user_id: 1,
+    language: window.state.lang || 'pl',
+    mode: 'solo',
+    status: 'active'
+  };
+
+  try {
+    const resp = await fetch(window.API_CAMPAIGNS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.detail || `HTTP ${resp.status}`);
+    }
+
+    await window.loadCampaigns(data.id);
+    await window.loadCharacters(data.id);
+
+    window.addMessage({
+      speaker: 'System',
+      text: `Utworzono kampanię: ${data.title}`,
+      role: 'system',
+      route: 'campaign'
+    });
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Tworzenie kampanii: ${e.message}`,
+      role: 'error'
+    });
+  }
+};
+
+window.deleteCampaign = async function () {
+  if (!window.state.selectedCampaignId) {
+    alert('Najpierw wybierz kampanię');
+    return;
+  }
+
+  const campaign = window.currentCampaign();
+  const label = campaign?.title || `#${window.state.selectedCampaignId}`;
+  const confirmed = confirm(`Usunąć kampanię "${label}"?`);
+  if (!confirmed) return;
+
+  try {
+    const resp = await fetch(`/api/campaigns/${window.state.selectedCampaignId}`, {
+      method: 'DELETE'
+    });
+
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const data = await resp.json();
+        detail = data.detail || detail;
+      } catch (_) {}
+      throw new Error(detail);
+    }
+
+    window.addMessage({
+      speaker: 'System',
+      text: `Usunięto kampanię: ${label}`,
+      role: 'system',
+      route: 'campaign'
+    });
+
+    await window.loadCampaigns();
+    if (window.state.selectedCampaignId) {
+      await window.loadCharacters(window.state.selectedCampaignId);
+    }
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Usuwanie kampanii: ${e.message}`,
+      role: 'error'
+    });
+  }
+};
+
+window.createCharacter = async function () {
+  const { systemSelectEl } = window.getEls();
+
+  if (!window.state.selectedCampaignId) {
+    alert('Najpierw wybierz kampanię');
+    return;
+  }
+
+  const name = prompt('Imię postaci:', 'Nowy Bohater');
+  if (!name) return;
+
+  const payload = {
+    user_id: 1,
+    name: name.trim(),
+    system_id: systemSelectEl.value,
+    sheet_json: {
+      level: 1,
+      hp: 20,
+      stats: {},
+      inventory: []
+    },
+    location: 'Start',
+    is_active: 1
+  };
+
+  try {
+    const resp = await fetch(`/api/campaigns/${window.state.selectedCampaignId}/characters`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      throw new Error(data.detail || `HTTP ${resp.status}`);
+    }
+
+    await window.loadCharacters(window.state.selectedCampaignId, data.id);
+
+    window.addMessage({
+      speaker: 'System',
+      text: `Utworzono postać: ${data.name}`,
+      role: 'system',
+      route: 'character'
+    });
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Tworzenie postaci: ${e.message}`,
+      role: 'error'
+    });
+  }
+};
+
+window.sendMessage = async function () {
+  const { inputEl, systemSelectEl, engineSelectEl } = window.getEls();
+  const text = inputEl.value.trim();
+  if (!text) return;
+
+  const clientCreatedAt = new Date().toISOString();
+
+  if (!window.state.selectedCampaignId) {
+    window.addMessage({
+      speaker: 'System',
+      text: window.t('error.no_campaign'),
+      role: 'error',
+      createdAt: clientCreatedAt
+    });
+    return;
+  }
+
+  if (!window.state.selectedCharacterId) {
+    window.addMessage({
+      speaker: 'System',
+      text: window.t('error.no_character'),
+      role: 'error',
+      createdAt: clientCreatedAt
+    });
+    return;
+  }
+
+  const selectedEngine = window.state.selectedEngine || engineSelectEl.value || '';
+
+  if (!selectedEngine) {
+    window.addMessage({
+      speaker: 'System',
+      text: 'Nie wybrano modelu.',
+      role: 'error',
+      createdAt: clientCreatedAt
+    });
+    return;
+  }
+
+  let turnNumber = window.nextTurnNumber();
+
+  window.addMessage({
+    speaker: window.currentCharacterName(),
+    text,
+    role: 'user',
+    route: 'input',
+    turn: turnNumber,
+    createdAt: clientCreatedAt
+  });
+
+  inputEl.value = '';
+
+  try {
+    const payload = {
+      character_id: window.state.selectedCharacterId,
+      text,
+      system: systemSelectEl.value,
+      engine: selectedEngine,
+      game_id: window.state.selectedCampaignId
+    };
+
+    const resp = await fetch(
+      `/api/campaigns/${window.state.selectedCampaignId}/turns`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      const detail = data.detail || data.error || `HTTP ${resp.status}`;
+      throw new Error(
+        typeof detail === 'string' ? detail : JSON.stringify(detail)
+      );
+    }
+
+    if (data.turn_number) {
+      turnNumber = Number(data.turn_number);
+      if (turnNumber > window.state.turnNumber) {
+        window.state.turnNumber = turnNumber;
+      }
+    }
+
+    window.renderTurnResponse(data, turnNumber);
+    await window.loadTurns(window.state.selectedCampaignId);
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Serwer: ${e.message}`,
+      role: 'error',
+      turn: turnNumber
+    });
+  }
+};
+
+
+
+window.rollDice = async function () {
+  const dice = prompt('Kość (d20, 2d6+3, d100):', '1d20');
+  if (!dice) return;
+
+  try {
+    const resp = await fetch('/gm/dice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dice })
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    window.addMessage({
+      speaker: '🎲',
+      text: `${data.dice} = [${data.rolls.join(', ')}] = ${data.total}`,
+      role: 'system'
+    });
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Kość: ${e.message}`,
+      role: 'error'
+    });
+  }
+};
+===== END FILE: ./frontend/js/actions.js =====
+
+
+===== FILE: ./frontend/js/api.js =====
+window.loadTranslations = async function (lang) {
+  const resp = await fetch(`/i18n/${lang}.json`);
+  if (!resp.ok) throw new Error(`Translation load failed: ${resp.status}`);
+  window.state.translations = await resp.json();
+  window.state.lang = lang;
+  window.applyTranslations();
+};
+
+window.loadHealth = async function () {
+  const {
+    statusBackendEl,
+    statusOllamaEl,
+    statusModelsEl,
+    statusHostEl
+  } = window.getEls();
+
+  try {
+    const resp = await fetch(window.API_HEALTH, {
+  headers: { 'X-Ollama-Base-Url': window.getOllamaBaseUrl() }
+});
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    statusBackendEl.textContent = `${window.t('status.backend')}: OK`;
+    statusOllamaEl.textContent =
+      `${window.t('status.ollama')}: ${data.ollama?.reachable ? 'OK' : window.t('status.disconnected')}`;
+    statusModelsEl.textContent =
+      `${window.t('status.models')}: ${data.ollama?.model_count ?? 0}`;
+    statusHostEl.textContent =
+      `${window.t('health.host')}: ${data.ollama?.base_url || '-'}`;
+  } catch (e) {
+    statusBackendEl.textContent = `${window.t('status.backend')}: ${window.t('health.fail')}`;
+    statusOllamaEl.textContent = `${window.t('status.ollama')}: ${window.t('status.disconnected')}`;
+    statusModelsEl.textContent = `${window.t('status.models')}: 0`;
+    statusHostEl.textContent = `${window.t('health.host')}: -`;
+  }
+};
+
+window.loadModels = async function () {
+  const { engineSelectEl } = window.getEls();
+
+const resp = await fetch(window.API_MODELS, {
+  headers: { 'X-Ollama-Base-Url': window.getOllamaBaseUrl() }
+});
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+  const data = await resp.json();
+
+  window.state.models = Array.isArray(data.models)
+    ? data.models
+    : Array.isArray(data)
+      ? data
+      : [];
+
+  engineSelectEl.innerHTML = '';
+
+  if (window.state.models.length === 0) {
+    engineSelectEl.innerHTML = '<option value="" disabled selected>Brak modeli</option>';
+    engineSelectEl.disabled = true;
+    window.state.selectedEngine = null;
+    return;
+  }
+
+  engineSelectEl.disabled = false;
+
+  window.state.models.forEach(model => {
+    const name = typeof model === 'string' ? model : model.name;
+    const option = document.createElement('option');
+    option.value = name;
+    option.textContent = name;
+    engineSelectEl.appendChild(option);
+  });
+
+  const savedEngine = localStorage.getItem('ai-gm:selectedEngine');
+  const preferredEngine =
+    savedEngine ||
+    window.state.selectedEngine ||
+    window.state.models[0].name ||
+    window.state.models[0];
+
+  const exists = window.state.models.some(model => {
+    const name = typeof model === 'string' ? model : model.name;
+    return name === preferredEngine;
+  });
+
+  window.state.selectedEngine = exists
+    ? preferredEngine
+    : (typeof window.state.models[0] === 'string'
+        ? window.state.models[0]
+        : window.state.models[0].name);
+
+  engineSelectEl.value = window.state.selectedEngine;
+};
+
+window.loadCampaigns = async function (preferredCampaignId = null) {
+  const { campaignSelectEl, characterSelectEl } = window.getEls();
+
+const resp = await fetch(window.API_CAMPAIGNS);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+  const data = await resp.json();
+  window.state.campaigns = Array.isArray(data.campaigns)
+  ? data.campaigns.map(c => ({
+      ...c,
+      systemid: c.systemid ?? c.system_id,
+      modelid: c.modelid ?? c.model_id,
+      owneruserid: c.owneruserid ?? c.owner_user_id,
+      createdat: c.createdat ?? c.created_at
+    }))
+  : [];
+
+  campaignSelectEl.innerHTML = '';
+
+  if (window.state.campaigns.length === 0) {
+    campaignSelectEl.innerHTML = '<option value="" disabled selected>Brak kampanii</option>';
+    campaignSelectEl.disabled = true;
+
+    window.state.selectedCampaignId = null;
+    window.state.characters = [];
+    window.state.selectedCharacterId = null;
+
+    characterSelectEl.innerHTML = '<option value="" disabled selected>Brak postaci</option>';
+    characterSelectEl.disabled = true;
+
+    window.updateUiState();
+    return;
+  }
+
+  campaignSelectEl.disabled = false;
+
+  window.state.campaigns.forEach(campaign => {
+    const option = document.createElement('option');
+    option.value = String(campaign.id);
+    option.textContent = campaign.title;
+    campaignSelectEl.appendChild(option);
+  });
+
+  const savedCampaignId = Number(localStorage.getItem('ai-gm:selectedCampaignId'));
+  const candidateId = preferredCampaignId || savedCampaignId;
+
+  const selectedId = candidateId && window.state.campaigns.some(
+    c => Number(c.id) === Number(candidateId)
+  )
+    ? Number(candidateId)
+    : Number(window.state.campaigns[0].id);
+
+  window.state.selectedCampaignId = selectedId;
+  campaignSelectEl.value = String(selectedId);
+
+  window.updateUiState();
+};
+
+
+window.loadCharacters = async function (campaignId, preferredCharacterId = null) {
+  const { characterSelectEl } = window.getEls();
+
+  if (!campaignId) {
+    window.state.characters = [];
+    window.state.selectedCharacterId = null;
+    characterSelectEl.innerHTML = '<option value="" disabled selected>Brak postaci</option>';
+    characterSelectEl.disabled = true;
+    window.updateUiState();
+    return;
+  }
+
+  const resp = await fetch(`/api/campaigns/${campaignId}/characters`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+  const data = await resp.json();
+  window.state.characters = Array.isArray(data.characters) ? data.characters : [];
+  characterSelectEl.innerHTML = '';
+
+  if (window.state.characters.length === 0) {
+    characterSelectEl.innerHTML =
+      `<option value="" disabled selected>${window.escapeHtml(window.t('empty.characters'))}</option>`;
+    characterSelectEl.disabled = true;
+    window.state.selectedCharacterId = null;
+    window.updateUiState();
+    return;
+  }
+
+  characterSelectEl.disabled = false;
+
+  window.state.characters.forEach(character => {
+    const option = document.createElement('option');
+    option.value = String(character.id);
+    option.textContent = character.name;
+    characterSelectEl.appendChild(option);
+  });
+
+  const savedCharacterId = Number(localStorage.getItem('ai-gm:selectedCharacterId'));
+  const candidateId = preferredCharacterId || savedCharacterId;
+
+  const selectedId = candidateId && window.state.characters.some(
+    c => Number(c.id) === Number(candidateId)
+  )
+    ? Number(candidateId)
+    : Number(window.state.characters[0].id);
+
+  window.state.selectedCharacterId = selectedId;
+  characterSelectEl.value = String(selectedId);
+
+  window.updateUiState();
+};
+
+window.loadTurns = async function (campaignId, limit = 30) {
+  if (!campaignId) {
+    window.state.turns = [];
+    window.clearChat();
+    window.clearHistoryPanel();
+    return;
+  }
+
+  const resp = await fetch(`/api/campaigns/${campaignId}/turns?limit=${limit}`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+  const data = await resp.json();
+  window.state.turns = Array.isArray(data.turns) ? data.turns : [];
+
+  if (window.state.turns.length > 0) {
+    const lastTurn = window.state.turns[window.state.turns.length - 1];
+    window.state.turnNumber = Number(lastTurn.turn_number || lastTurn.id || 0);
+  } else {
+    window.state.turnNumber = 0;
+  }
+
+  window.renderTurnsToChat();
+  window.renderHistoryPanel();
+};
+
+window.getOllamaBaseUrl = function () {
+  const saved = localStorage.getItem('ai-gm:ollamaBaseUrl') || '';
+  return saved.trim() || 'http://ollama:11434';
+};
+
+window.getApiHeaders = function () {
+  return {
+    'Content-Type': 'application/json',
+    'X-Ollama-Base-Url': window.getOllamaBaseUrl()
+  };
+};
+===== END FILE: ./frontend/js/api.js =====
+
+
+===== FILE: ./frontend/js/config.js =====
+window.API_HEALTH = '/api/health';
+window.API_MODELS = '/api/models';
+window.API_CAMPAIGNS = '/api/campaigns';
+===== END FILE: ./frontend/js/config.js =====
+
+
+===== FILE: ./frontend/js/events.js =====
+window.bindEvents = function () {
+  const els = window.getEls();
+  const historyBtn = document.getElementById('history-btn');
+  const historyPanelEl = document.getElementById('history-panel');
+
+  if (els.ollamaUrlEl) {
+    els.ollamaUrlEl.value = window.getOllamaBaseUrl();
+  }
+
+  els.campaignSelectEl.onchange = async () => {
+    window.state.selectedCampaignId = Number(els.campaignSelectEl.value);
+    localStorage.setItem(
+      'ai-gm:selectedCampaignId',
+      String(window.state.selectedCampaignId)
+    );
+
+    const campaign = window.currentCampaign();
+
+    if (campaign?.language && campaign.language !== window.state.lang) {
+      await window.loadTranslations(campaign.language);
+    }
+
+    if (campaign?.system_id || campaign?.systemid) {
+      els.systemSelectEl.value = campaign.system_id || campaign.systemid;
+    }
+
+    if (campaign?.model_id || campaign?.modelid) {
+      window.state.selectedEngine = campaign.model_id || campaign.modelid;
+    } else if (!window.state.selectedEngine) {
+      window.state.selectedEngine = els.engineSelectEl.value;
+    }
+
+    if (window.state.selectedEngine) {
+      els.engineSelectEl.value = window.state.selectedEngine;
+      localStorage.setItem('ai-gm:selectedEngine', window.state.selectedEngine);
+    }
+
+    await window.loadCharacters(window.state.selectedCampaignId);
+    await window.loadTurns(window.state.selectedCampaignId);
+    window.updateUiState();
+  };
+
+  els.characterSelectEl.onchange = () => {
+    window.state.selectedCharacterId = Number(els.characterSelectEl.value);
+    localStorage.setItem(
+      'ai-gm:selectedCharacterId',
+      String(window.state.selectedCharacterId)
+    );
+    window.updateUiState();
+  };
+
+  els.engineSelectEl.onchange = () => {
+    window.state.selectedEngine = els.engineSelectEl.value;
+    localStorage.setItem('ai-gm:selectedEngine', window.state.selectedEngine);
+  };
+
+  if (els.ollamaUrlEl) {
+    els.ollamaUrlEl.onchange = () => {
+      const value = (els.ollamaUrlEl.value || '').trim() || 'http://ollama:11434';
+      localStorage.setItem('ai-gm:ollamaBaseUrl', value);
+      els.ollamaUrlEl.value = value;
+    };
+  }
+
+  if (els.testOllamaBtn && els.ollamaUrlEl) {
+    els.testOllamaBtn.onclick = async () => {
+      const value = (els.ollamaUrlEl.value || '').trim() || 'http://ollama:11434';
+      localStorage.setItem('ai-gm:ollamaBaseUrl', value);
+      els.ollamaUrlEl.value = value;
+
+      try {
+        await window.loadHealth();
+        await window.loadModels();
+
+        if (window.state.selectedEngine) {
+          els.engineSelectEl.value = window.state.selectedEngine;
+        }
+
+        window.addMessage({
+          speaker: 'System',
+          text: `Ollama Host ustawiony na ${value}`,
+          role: 'system',
+          route: 'config'
+        });
+      } catch (e) {
+        window.addMessage({
+          speaker: 'Błąd',
+          text: `Test Ollama Host nie powiódł się: ${e.message}`,
+          role: 'error'
+        });
+      }
+    };
+  }
+
+  els.sendBtn.onclick = window.sendMessage;
+  els.diceBtn.onclick = window.rollDice;
+  els.createCampaignBtn.onclick = window.createCampaign;
+  els.deleteCampaignBtn.onclick = window.deleteCampaign;
+  els.createCharacterBtn.onclick = window.createCharacter;
+
+  if (historyBtn && historyPanelEl) {
+    historyBtn.onclick = async () => {
+      if (!window.state.selectedCampaignId) return;
+
+      await window.loadTurns(window.state.selectedCampaignId);
+
+      historyPanelEl.style.display =
+        historyPanelEl.style.display === 'none' ? 'block' : 'none';
+    };
+  }
+
+  els.inputEl.onkeydown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      window.sendMessage();
+    }
+  };
+};
+===== END FILE: ./frontend/js/events.js =====
+
+
+===== FILE: ./frontend/js/main.js =====
+window.bootstrap = async function () {
+  try {
+    window.bindEvents();
+    await window.loadTranslations('pl');
+    await window.loadHealth();
+    await window.loadModels();
+    await window.loadCampaigns();
+
+    if (window.state.selectedCampaignId) {
+      const { systemSelectEl, engineSelectEl } = window.getEls();
+      const campaign = window.currentCampaign();
+
+      if (campaign?.system_id) {
+        systemSelectEl.value = campaign.system_id;
+      }
+
+	const savedEngine = localStorage.getItem('ai-gm:selectedEngine');
+
+	if (savedEngine) {
+	  window.state.selectedEngine = savedEngine;
+	} else if (campaign?.model_id) {
+	  window.state.selectedEngine = campaign.model_id;
+	} else {
+	  window.state.selectedEngine = engineSelectEl.value;
+	}
+
+	if (window.state.selectedEngine) {
+	  engineSelectEl.value = window.state.selectedEngine;
+	}
+
+      await window.loadCharacters(window.state.selectedCampaignId);
+		  try {
+	  await window.loadTurns(window.state.selectedCampaignId);
+	} catch (e) {
+	  console.warn('History load skipped:', e);
+	}
+    }
+
+    window.updateUiState();
+
+    if (!window.state.turns || window.state.turns.length === 0) {
+      window.addMessage({
+        speaker: 'System',
+        text: window.t('system.ready'),
+        role: 'system'
+      });
+    }
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Bootstrap failed: ${e.message}`,
+      role: 'error'
+    });
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  window.bootstrap();
+  setInterval(window.loadHealth, 15000);
+});
+===== END FILE: ./frontend/js/main.js =====
+
+
+===== FILE: ./frontend/js/state.js =====
+window.state = {
+  lang: 'pl',
+  translations: {},
+  campaigns: [],
+  characters: [],
+  models: [],
+  turns: [],
+  selectedCampaignId: null,
+  selectedCharacterId: null,
+  selectedEngine: null,
+  turnNumber: 0
+};
+===== END FILE: ./frontend/js/state.js =====
+
+
+===== FILE: ./frontend/js/ui.js =====
+window.getEls = function () {
+  return {
+    appTitleEl: document.getElementById('app-title'),
+    campaignSelectEl: document.getElementById('campaign-select'),
+    characterSelectEl: document.getElementById('character-select'),
+    systemSelectEl: document.getElementById('system-select'),
+    engineSelectEl: document.getElementById('engine-select'),
+    ollamaUrlEl: document.getElementById('ollama-url'),
+    testOllamaBtn: document.getElementById('test-ollama-btn'),
+    chatEl: document.getElementById('chat'),
+    inputEl: document.getElementById('input'),
+    sendBtn: document.getElementById('send-btn'),
+    diceBtn: document.getElementById('dice-btn'),
+    createCampaignBtn: document.getElementById('create-campaign-btn'),
+    deleteCampaignBtn: document.getElementById('delete-campaign-btn'),
+    createCharacterBtn: document.getElementById('create-character-btn'),
+    statusBackendEl: document.getElementById('status-backend'),
+    statusOllamaEl: document.getElementById('status-ollama'),
+    statusModelsEl: document.getElementById('status-models'),
+    statusHostEl: document.getElementById('status-host'),
+    labelCampaignEl: document.getElementById('label-campaign'),
+    labelCharacterEl: document.getElementById('label-character'),
+    labelSystemEl: document.getElementById('label-system'),
+    labelEngineEl: document.getElementById('label-engine'),
+    labelOllamaUrlEl: document.getElementById('label-ollama-url')
+  };
+};
+
+window.applyTranslations = function () {
+  const els = window.getEls();
+
+  if (els.appTitleEl) els.appTitleEl.textContent = window.t('app.title');
+  if (els.labelCampaignEl) els.labelCampaignEl.textContent = window.t('campaign.label');
+  if (els.labelCharacterEl) els.labelCharacterEl.textContent = window.t('character.label');
+  if (els.labelSystemEl) els.labelSystemEl.textContent = window.t('system.label');
+  if (els.labelEngineEl) els.labelEngineEl.textContent = window.t('engine.label');
+  if (els.labelOllamaUrlEl) els.labelOllamaUrlEl.textContent = 'Ollama Host';
+  if (els.inputEl) els.inputEl.placeholder = window.t('input.placeholder');
+  if (els.sendBtn) els.sendBtn.textContent = window.t('button.send');
+};
+
+window.addMessage = function ({
+  speaker,
+  text,
+  role = 'assistant',
+  route = '',
+  turn = null,
+  createdAt = null
+}) {
+  const { chatEl } = window.getEls();
+  if (!chatEl) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = `message ${role}`;
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+
+  const left = document.createElement('div');
+  left.innerHTML =
+    `<strong>${window.escapeHtml(speaker)}</strong>` +
+    `${turn ? ` • ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
+
+  const right = document.createElement('div');
+  const parts = [];
+
+  if (route) {
+    parts.push(`<span class="route-badge">${window.escapeHtml(route)}</span>`);
+  }
+
+  if (createdAt) {
+    parts.push(`<span>${window.escapeHtml(window.formatTimestamp(createdAt))}</span>`);
+  }
+
+  right.innerHTML = parts.join(' ');
+
+  meta.appendChild(left);
+  meta.appendChild(right);
+
+  const body = document.createElement('div');
+  body.innerHTML = `<pre>${window.escapeHtml(text)}</pre>`;
+
+  wrap.appendChild(meta);
+  wrap.appendChild(body);
+  chatEl.appendChild(wrap);
+  chatEl.scrollTop = chatEl.scrollHeight;
+};
+
+window.addJsonMessage = function (
+  title,
+  obj,
+  role = 'assistant',
+  route = 'command',
+  turn = window.state.turnNumber,
+  createdAt = null
+) {
+  window.addMessage({
+    speaker: title,
+    text: JSON.stringify(obj, null, 2),
+    role,
+    route,
+    turn,
+    createdAt
+  });
+};
+
+window.updateUiState = function () {
+  const els = window.getEls();
+  const hasCampaign = !!window.state.selectedCampaignId;
+  const hasCharacter = !!window.state.selectedCharacterId;
+
+  if (els.deleteCampaignBtn) els.deleteCampaignBtn.disabled = !hasCampaign;
+  if (els.createCharacterBtn) els.createCharacterBtn.disabled = !hasCampaign;
+  if (els.sendBtn) els.sendBtn.disabled = !(hasCampaign && hasCharacter);
+};
+
+window.renderTurnResponse = function (data, turnNumber) {
+  const createdAt = data?.created_at || null;
+
+  if (!data || typeof data !== 'object') {
+    window.addMessage({
+      speaker: 'System',
+      text: window.t('error.invalid_response'),
+      role: 'error',
+      turn: turnNumber,
+      createdAt
+    });
+    return;
+  }
+
+  if (data.route === 'command') {
+    const result = data.result || data;
+    const renamedTo = result.character_name || result.name || null;
+
+    if (result.command === '/name' && renamedTo) {
+      const active = window.currentCharacter();
+      if (active) active.name = renamedTo;
+
+      const { characterSelectEl } = window.getEls();
+      const option = characterSelectEl
+        ? characterSelectEl.querySelector(
+            `option[value="${window.state.selectedCharacterId}"]`
+          )
+        : null;
+
+      if (option) option.textContent = renamedTo;
+
+      window.addMessage({
+        speaker: 'System',
+        text: `${window.t('system.name_changed')} ${renamedTo}`,
+        role: 'system',
+        route: 'command',
+        turn: turnNumber,
+        createdAt
+      });
+      return;
+    }
+
+    if (result.command === '/sheet') {
+      window.addJsonMessage(
+        'Karta postaci',
+        result.character || result,
+        'assistant',
+        'command',
+        turnNumber,
+        createdAt
+      );
+      return;
+    }
+
+    window.addJsonMessage(
+      `Wynik ${result.command || 'komendy'}`,
+      result,
+      'assistant',
+      'command',
+      turnNumber,
+      createdAt
+    );
+    return;
+  }
+
+  if (data.route === 'narrative') {
+    const result = data.result || {};
+    const message = result.message || result.content || 'Brak odpowiedzi';
+
+    window.addMessage({
+      speaker: window.t('chat.gm'),
+      text: message,
+      role: 'assistant',
+      route: 'narrative',
+      turn: turnNumber,
+      createdAt
+    });
+    return;
+  }
+
+  window.addJsonMessage('Odpowiedź', data, 'assistant', 'unknown', turnNumber, createdAt);
+};
+
+window.clearChat = function () {
+  const { chatEl } = window.getEls();
+  if (chatEl) chatEl.innerHTML = '';
+};
+
+window.clearHistoryPanel = function () {
+  const historyPanelEl = document.getElementById('history-panel');
+  if (historyPanelEl) {
+    historyPanelEl.innerHTML = '<div class="muted">Brak historii.</div>';
+  }
+};
+
+window.renderHistoryPanel = function () {
+  const historyPanelEl = document.getElementById('history-panel');
+  const turns = Array.isArray(window.state.turns) ? window.state.turns : [];
+
+  if (!historyPanelEl) return;
+
+  if (turns.length === 0) {
+    historyPanelEl.innerHTML = '<div class="muted">Brak historii.</div>';
+    return;
+  }
+
+  historyPanelEl.innerHTML = '';
+
+  turns.forEach((turn) => {
+    const item = document.createElement('div');
+    item.className = 'message system';
+
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.innerHTML = `
+      <div>
+        <strong>Tura ${window.escapeHtml(turn.turn_number || turn.id)}</strong>
+        • ${window.escapeHtml(turn.character_name || 'Gracz')}
+      </div>
+      <div>${window.escapeHtml(window.formatTimestamp(turn.created_at))}</div>
+    `;
+
+    const body = document.createElement('div');
+    body.innerHTML = `
+      <pre>${window.escapeHtml(turn.user_text || '')}</pre>
+      <div style="margin-top:8px;">
+        <button type="button" class="secondary replay-turn-btn" data-text="${window.escapeHtml(turn.user_text || '')}">
+          Wyślij ponownie
+        </button>
+      </div>
+    `;
+
+    item.appendChild(meta);
+    item.appendChild(body);
+    historyPanelEl.appendChild(item);
+  });
+
+  historyPanelEl.querySelectorAll('.replay-turn-btn').forEach((btn) => {
+    btn.onclick = () => {
+      const { inputEl } = window.getEls();
+      if (!inputEl) return;
+      inputEl.value = btn.getAttribute('data-text') || '';
+      inputEl.focus();
+    };
+  });
+};
+
+window.renderTurnsToChat = function () {
+  window.clearChat();
+
+  const turns = Array.isArray(window.state.turns) ? window.state.turns : [];
+
+  turns.forEach((turn) => {
+    if (turn.user_text) {
+      window.addMessage({
+        speaker: turn.character_name || 'Gracz',
+        text: turn.user_text,
+        role: 'user',
+        route: 'input',
+        turn: turn.turn_number || turn.id,
+        createdAt: turn.created_at
+      });
+    }
+
+    if (turn.assistant_text) {
+      if (turn.route === 'narrative') {
+        window.addMessage({
+          speaker: window.t('chat.gm'),
+          text: turn.assistant_text,
+          role: 'assistant',
+          route: 'narrative',
+          turn: turn.turn_number || turn.id,
+          createdAt: turn.created_at
+        });
+      } else {
+        window.addMessage({
+          speaker: 'System',
+          text: turn.assistant_text,
+          role: 'system',
+          route: turn.route || 'command',
+          turn: turn.turn_number || turn.id,
+          createdAt: turn.created_at
+        });
+      }
+    }
+  });
+
+  const chatEl = document.getElementById('chat');
+  if (chatEl) {
+    requestAnimationFrame(() => {
+      chatEl.scrollTop = chatEl.scrollHeight;
+    });
+  }
+};
+===== END FILE: ./frontend/js/ui.js =====
+
+
+===== FILE: ./frontend/js/utils.js =====
+window.t = function (key) {
+  return window.state.translations[key] || key;
+};
+
+window.escapeHtml = function (value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+};
+
+window.formatTimestamp = function (value) {
+  if (!value) return '';
+
+  const normalized = String(value).includes('T')
+    ? String(value)
+    : String(value).replace(' ', 'T');
+
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  return date.toLocaleString('pl-PL', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+};
+
+window.currentCampaign = function () {
+  return window.state.campaigns.find(
+    c => Number(c.id) === Number(window.state.selectedCampaignId)
+  ) || null;
+};
+
+window.currentCharacter = function () {
+  return window.state.characters.find(
+    c => Number(c.id) === Number(window.state.selectedCharacterId)
+  ) || null;
+};
+
+window.currentCharacterName = function () {
+  return window.currentCharacter()?.name || window.t('chat.you');
+};
+
+window.nextTurnNumber = function () {
+  window.state.turnNumber += 1;
+  return window.state.turnNumber;
+};
+===== END FILE: ./frontend/js/utils.js =====
+
+
+===== FILE: ./frontend/nginx.conf =====
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # API root endpoints (games, health)
+	location /api/ {
+		proxy_pass http://backend:8000;
+		proxy_http_version 1.1;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_request_buffering off;
+
+		if ($request_method = 'OPTIONS') {
+			add_header 'Access-Control-Allow-Origin' '*';
+			add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
+			add_header 'Access-Control-Allow-Headers' 'Content-Type, X-Ollama-Base-Url';
+			return 204;
+		}
+		add_header 'Access-Control-Allow-Origin' '*' always;
+	}
+
+    location /gm/ {
+        proxy_pass http://backend:8000;  # ← NO trailing slash (path preserved)
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Content-Type $content_type;
+        proxy_set_header Content-Length $content_length;
+        proxy_request_buffering off;
+
+        # CORS preflight OPTIONS
+        if ($request_method = 'OPTIONS') {
+            add_header 'Access-Control-Allow-Origin' '*';
+            add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS';
+            add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization, X-Ollama-Base-Url';
+            add_header 'Access-Control-Max-Age' 86400;
+            return 204;
+        }
+
+        # CORS headers for all responses
+        add_header 'Access-Control-Allow-Origin' '*' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS' always;
+        add_header 'Access-Control-Allow-Headers' 'Content-Type, Authorization' always;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+        add_header Content-Type "text/html; charset=utf-8";
+    }
+}
+===== END FILE: ./frontend/nginx.conf =====
+
+
+===== FILE: ./README.md =====
+# 🎲 AI Game Master 🇵🇱
+
+Lokalny AI Mistrz Gry RPG z GPU acceleration. Obsługuje Warhammer Fantasy, Cyberpunk RED, Neuroshima HEX.
+
+## Quick Start
+
+```bash
+git clone <your-repo>
+cd ai-gm
+docker compose up -d --build
+```
+
+**Play**: http://localhost:3000  
+**API Docs**: http://localhost:8000/docs  
+**Ollama**: http://localhost:11434
+
+## Features
+
+- 🎯 **3 RPG systems**: Warhammer (d100), Cyberpunk RED, Neuroshima HEX
+- ⚡ **GPU acceleration** (NVIDIA via Docker)
+- 🗣️ **Chat**: Kontekstowe odpowiedzi Mistrza Gry
+- 🎲 **Dice**: `1d20`, `2d6+3`, `d100` z automatycznym parsowaniem
+- ⌨️ **Enter = send**, `Shift+Enter` = nowa linia
+- 🔄 **Session memory** w UI
+
+## Stack
+
+===== END FILE: ./README.md =====
+

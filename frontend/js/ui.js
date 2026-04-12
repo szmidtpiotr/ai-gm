@@ -5,6 +5,8 @@ window.getEls = function () {
     characterSelectEl: document.getElementById('character-select'),
     systemSelectEl: document.getElementById('system-select'),
     engineSelectEl: document.getElementById('engine-select'),
+    ollamaUrlEl: document.getElementById('ollama-url'),
+    testOllamaBtn: document.getElementById('test-ollama-btn'),
     chatEl: document.getElementById('chat'),
     inputEl: document.getElementById('input'),
     sendBtn: document.getElementById('send-btn'),
@@ -19,19 +21,22 @@ window.getEls = function () {
     labelCampaignEl: document.getElementById('label-campaign'),
     labelCharacterEl: document.getElementById('label-character'),
     labelSystemEl: document.getElementById('label-system'),
-    labelEngineEl: document.getElementById('label-engine')
+    labelEngineEl: document.getElementById('label-engine'),
+    labelOllamaUrlEl: document.getElementById('label-ollama-url')
   };
 };
 
 window.applyTranslations = function () {
   const els = window.getEls();
-  els.appTitleEl.textContent = window.t('app.title');
-  els.labelCampaignEl.textContent = window.t('campaign.label');
-  els.labelCharacterEl.textContent = window.t('character.label');
-  els.labelSystemEl.textContent = window.t('system.label');
-  els.labelEngineEl.textContent = window.t('engine.label');
-  els.inputEl.placeholder = window.t('input.placeholder');
-  els.sendBtn.textContent = window.t('button.send');
+
+  if (els.appTitleEl) els.appTitleEl.textContent = window.t('app.title');
+  if (els.labelCampaignEl) els.labelCampaignEl.textContent = window.t('campaign.label');
+  if (els.labelCharacterEl) els.labelCharacterEl.textContent = window.t('character.label');
+  if (els.labelSystemEl) els.labelSystemEl.textContent = window.t('system.label');
+  if (els.labelEngineEl) els.labelEngineEl.textContent = window.t('engine.label');
+  if (els.labelOllamaUrlEl) els.labelOllamaUrlEl.textContent = 'Ollama Host';
+  if (els.inputEl) els.inputEl.placeholder = window.t('input.placeholder');
+  if (els.sendBtn) els.sendBtn.textContent = window.t('button.send');
 };
 
 window.addMessage = function ({
@@ -43,6 +48,7 @@ window.addMessage = function ({
   createdAt = null
 }) {
   const { chatEl } = window.getEls();
+  if (!chatEl) return;
 
   const wrap = document.createElement('div');
   wrap.className = `message ${role}`;
@@ -103,9 +109,9 @@ window.updateUiState = function () {
   const hasCampaign = !!window.state.selectedCampaignId;
   const hasCharacter = !!window.state.selectedCharacterId;
 
-  els.deleteCampaignBtn.disabled = !hasCampaign;
-  els.createCharacterBtn.disabled = !hasCampaign;
-  els.sendBtn.disabled = !(hasCampaign && hasCharacter);
+  if (els.deleteCampaignBtn) els.deleteCampaignBtn.disabled = !hasCampaign;
+  if (els.createCharacterBtn) els.createCharacterBtn.disabled = !hasCampaign;
+  if (els.sendBtn) els.sendBtn.disabled = !(hasCampaign && hasCharacter);
 };
 
 window.renderTurnResponse = function (data, turnNumber) {
@@ -131,9 +137,12 @@ window.renderTurnResponse = function (data, turnNumber) {
       if (active) active.name = renamedTo;
 
       const { characterSelectEl } = window.getEls();
-      const option = characterSelectEl.querySelector(
-        `option[value="${window.state.selectedCharacterId}"]`
-      );
+      const option = characterSelectEl
+        ? characterSelectEl.querySelector(
+            `option[value="${window.state.selectedCharacterId}"]`
+          )
+        : null;
+
       if (option) option.textContent = renamedTo;
 
       window.addMessage({
@@ -190,17 +199,21 @@ window.renderTurnResponse = function (data, turnNumber) {
 
 window.clearChat = function () {
   const { chatEl } = window.getEls();
-  chatEl.innerHTML = '';
+  if (chatEl) chatEl.innerHTML = '';
 };
 
 window.clearHistoryPanel = function () {
   const historyPanelEl = document.getElementById('history-panel');
-  historyPanelEl.innerHTML = '<div class="muted">Brak historii.</div>';
+  if (historyPanelEl) {
+    historyPanelEl.innerHTML = '<div class="muted">Brak historii.</div>';
+  }
 };
 
 window.renderHistoryPanel = function () {
   const historyPanelEl = document.getElementById('history-panel');
   const turns = Array.isArray(window.state.turns) ? window.state.turns : [];
+
+  if (!historyPanelEl) return;
 
   if (turns.length === 0) {
     historyPanelEl.innerHTML = '<div class="muted">Brak historii.</div>';
@@ -241,6 +254,7 @@ window.renderHistoryPanel = function () {
   historyPanelEl.querySelectorAll('.replay-turn-btn').forEach((btn) => {
     btn.onclick = () => {
       const { inputEl } = window.getEls();
+      if (!inputEl) return;
       inputEl.value = btn.getAttribute('data-text') || '';
       inputEl.focus();
     };
@@ -288,7 +302,9 @@ window.renderTurnsToChat = function () {
   });
 
   const chatEl = document.getElementById('chat');
-  requestAnimationFrame(() => {
-    chatEl.scrollTop = chatEl.scrollHeight;
-  });
+  if (chatEl) {
+    requestAnimationFrame(() => {
+      chatEl.scrollTop = chatEl.scrollHeight;
+    });
+  }
 };
