@@ -20,7 +20,7 @@ window.createCampaign = async function () {
   try {
     const resp = await fetch(window.API_CAMPAIGNS, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: window.getApiHeaders(),
       body: JSON.stringify(payload)
     });
 
@@ -121,7 +121,7 @@ window.createCharacter = async function () {
   try {
     const resp = await fetch(`/api/campaigns/${window.state.selectedCampaignId}/characters`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: window.getApiHeaders(),
       body: JSON.stringify(payload)
     });
 
@@ -213,7 +213,7 @@ window.sendMessage = async function () {
       `/api/campaigns/${window.state.selectedCampaignId}/turns`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: window.getApiHeaders(),
         body: JSON.stringify(payload)
       }
     );
@@ -227,14 +227,18 @@ window.sendMessage = async function () {
       );
     }
 
-    if (data.turn_number) {
-      turnNumber = Number(data.turn_number);
-      if (turnNumber > window.state.turnNumber) {
-        window.state.turnNumber = turnNumber;
-      }
-    }
+	if (data.result?.message) {
+	  // Backend returns nested {result: {message: "..."}}
+	  data.message = data.result.message;
+	  data.turn_number = data.turn_number || window.state.turnNumber + 1;
+	}
 
-    window.renderTurnResponse(data, turnNumber);
+	turnNumber = Number(data.turn_number || turnNumber);
+	if (turnNumber > window.state.turnNumber) {
+	  window.state.turnNumber = turnNumber;
+	}
+
+	window.renderTurnResponse(data, turnNumber);
     await window.loadTurns(window.state.selectedCampaignId);
   } catch (e) {
     window.addMessage({

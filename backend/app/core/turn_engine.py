@@ -14,9 +14,9 @@ SYSTEMPROMPT = (
 def loadrecentturns(conn: sqlite3.Connection, campaignid: int, limit: int = 8) -> list[sqlite3.Row]:
     rows = conn.execute(
         """
-        SELECT usertext, assistanttext, route
-        FROM campaignturns
-        WHERE campaignid = ?
+        SELECT user_text, assistant_text, route
+        FROM campaign_turns
+        WHERE campaign_id = ?
         ORDER BY id DESC
         LIMIT ?
         """,
@@ -33,7 +33,7 @@ def buildmessages(
     recentturns: list[sqlite3.Row],
     usertext: str,
 ) -> list[dict]:
-    systemid = campaign["systemid"] if campaign and campaign["systemid"] else "fantasy"
+    systemid = campaign["system_id"] if campaign and campaign["system_id"] else "fantasy"
     language = campaign["language"] if campaign and campaign["language"] else "pl"
     charactername = character["name"] if character and character["name"] else "Bohater"
 
@@ -50,10 +50,10 @@ def buildmessages(
     ]
 
     for turn in recentturns:
-        if turn["usertext"]:
-            messages.append({"role": "user", "content": turn["usertext"]})
-        if turn["assistanttext"] and turn["route"] == "narrative":
-            messages.append({"role": "assistant", "content": turn["assistanttext"]})
+        if turn["user_text"]:
+            messages.append({"role": "user", "content": turn["user_text"]})
+        if turn["assistant_text"] and turn["route"] == "narrative":
+            messages.append({"role": "assistant", "content": turn["assistant_text"]})
 
     messages.append({"role": "user", "content": usertext})
     return messages

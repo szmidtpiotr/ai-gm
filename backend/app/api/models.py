@@ -11,20 +11,15 @@ OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "10"))
 @router.get("/models")
 async def list_models(request: Request):
     ollama_base_url = request.headers.get("X-Ollama-Base-Url", OLLAMA_BASE_URL)
-
     try:
         async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
             resp = await client.get(f"{ollama_base_url}/api/tags")
             resp.raise_for_status()
             data = resp.json()
-            models = data.get("models", []) or []
-
+            models = data.get("models", [])
             return [
-                {"name": m.get("name"), "size": m.get("size", 0)}
+                {"name": m["model"], "size": m["size"]}  # Use internal "model" field
                 for m in models if m.get("name")
             ]
     except Exception as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Ollama models fetch failed: {str(e)}"
-        )
+        raise HTTPException(status_code=502, detail=f"Ollama models fetch failed: {str(e)}")
