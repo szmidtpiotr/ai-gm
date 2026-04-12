@@ -8,5 +8,6 @@ window.state = {
   selectedCampaignId: null,
   selectedCharacterId: null,
   selectedEngine: null,
-  turnNumber: 0
+  // turnNumber: 0   ← DELETE this line
+  turnNumbers: {}   // NEW: per‑campaign counters
 };

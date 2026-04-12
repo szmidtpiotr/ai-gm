@@ -14,6 +14,9 @@ from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.db import get_session, init_db
 from app.models import Game, Message
+from app.api import turns
+
+
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 
@@ -33,6 +36,8 @@ app.include_router(campaigns.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
+app.include_router(turns.router, prefix="/campaigns", tags=["turns"])
+
 
 GAME_SYSTEMS = {
     "fantasy": {

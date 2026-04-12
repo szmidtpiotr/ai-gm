@@ -1,6 +1,28 @@
+window.state = window.state || {
+  lang: 'pl',
+  translations: {},
+  campaigns: [],
+  characters: [],
+  models: [],
+  turns: [],
+  selectedCampaignId: null,
+  selectedCharacterId: null,
+  selectedEngine: null,
+  turnNumbers: {}
+};
+
 window.chatRequestState = window.chatRequestState || {
   inFlight: false,
   requestId: 0
+};
+
+window.nextTurnNumber = function () {
+  const id = window.state.selectedCampaignId;
+  if (!id) return 1;
+
+  const current = window.state.turnNumbers[id] || 0;
+  window.state.turnNumbers[id] = current + 1;
+  return window.state.turnNumbers[id];
 };
 
 window.createCampaign = async function () {
@@ -256,12 +278,12 @@ window.sendMessage = async function () {
 
     if (data.result?.message) {
       data.message = data.result.message;
-      data.turn_number = data.turn_number || window.state.turnNumber + 1;
+      data.turn_number = data.turn_number || window.state.turnNumbers[window.state.selectedCampaignId] + 1;
     }
 
     turnNumber = Number(data.turn_number || turnNumber);
-    if (turnNumber > window.state.turnNumber) {
-      window.state.turnNumber = turnNumber;
+    if (window.state.turnNumbers[window.state.selectedCampaignId] == null || turnNumber > window.state.turnNumbers[window.state.selectedCampaignId]) {
+      window.state.turnNumbers[window.state.selectedCampaignId] = turnNumber;
     }
 
     await window.renderTurnResponse(data, turnNumber);

@@ -1,8 +1,7 @@
-from pathlib import Path
 import json
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, Query, Header
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from app.core.turn_engine import runnarrativeturn
@@ -35,7 +34,9 @@ def get_campaign_or_404(conn: sqlite3.Connection, campaign_id: int):
     return campaign
 
 
-def get_character_or_404(conn: sqlite3.Connection, campaign_id: int, character_id: int):
+def get_character_or_404(
+    conn: sqlite3.Connection, campaign_id: int, character_id: int
+):
     character = conn.execute(
         "SELECT * FROM characters WHERE id = ? AND campaign_id = ?",
         (character_id, campaign_id),
@@ -43,6 +44,18 @@ def get_character_or_404(conn: sqlite3.Connection, campaign_id: int, character_i
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
     return character
+
+
+def get_next_turn_number(conn: sqlite3.Connection, campaign_id: int) -> int:
+    row = conn.execute(
+        """
+        SELECT COALESCE(MAX(turn_number), 0) AS max_turn
+        FROM campaign_turns
+        WHERE campaign_id = ?
+        """,
+        (campaign_id,),
+    ).fetchone()
+    return int(row["max_turn"] or 0) + 1
 
 
 def create_turn_log(
@@ -54,27 +67,52 @@ def create_turn_log(
     route: str,
 ):
     cur = conn.cursor()
+    turn_number = get_next_turn_number(conn, campaign_id)
+
     cur.execute(
-        "INSERT INTO campaign_turns (campaign_id, character_id, user_text, assistant_text, route) VALUES (?, ?, ?, ?, ?)",
-        (campaign_id, character_id, user_text, assistant_text, route),
+        """
+        INSERT INTO campaign_turns (
+            campaign_id,
+            character_id,
+            user_text,
+            route,
+            assistant_text,
+            turn_number
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (campaign_id, character_id, user_text, route, assistant_text, turn_number),
     )
+
     turn_id = cur.lastrowid
+
     row = cur.execute(
-        "SELECT id, created_at FROM campaign_turns WHERE id = ?",
+        """
+        SELECT id, campaign_id, turn_number, created_at
+        FROM campaign_turns
+        WHERE id = ?
+        """,
         (turn_id,),
     ).fetchone()
+
     conn.commit()
+
     return {
-        "turn_number": row["id"],
+        "id": row["id"],
+        "campaign_id": row["campaign_id"],
+        "turn_number": row["turn_number"],
         "created_at": row["created_at"],
     }
 
 
 @router.get("/campaigns/{campaign_id}/turns")
-def list_campaign_turns(campaign_id: int, limit: int = Query(default=30, ge=1, le=100)):
+def list_campaign_turns(
+    campaign_id: int, limit: int = Query(default=30, ge=1, le=100)
+):
     conn = get_db()
     try:
         get_campaign_or_404(conn, campaign_id)
+
         rows = conn.execute(
             """
             SELECT
@@ -82,14 +120,15 @@ def list_campaign_turns(campaign_id: int, limit: int = Query(default=30, ge=1, l
                 t.campaign_id,
                 t.character_id,
                 t.user_text,
-                t.assistant_text,
                 t.route,
+                t.assistant_text,
                 t.created_at,
+                t.turn_number,
                 c.name AS character_name
             FROM campaign_turns t
             LEFT JOIN characters c ON c.id = t.character_id
             WHERE t.campaign_id = ?
-            ORDER BY t.id DESC
+            ORDER BY t.turn_number DESC
             LIMIT ?
             """,
             (campaign_id, limit),
@@ -100,7 +139,7 @@ def list_campaign_turns(campaign_id: int, limit: int = Query(default=30, ge=1, l
             turns.append(
                 {
                     "id": row["id"],
-                    "turn_number": row["id"],
+                    "turn_number": row["turn_number"],
                     "campaign_id": row["campaign_id"],
                     "character_id": row["character_id"],
                     "character_name": row["character_name"],
@@ -112,6 +151,7 @@ def list_campaign_turns(campaign_id: int, limit: int = Query(default=30, ge=1, l
             )
 
         turns.reverse()
+
         return {
             "campaign_id": campaign_id,
             "turns": turns,
@@ -142,7 +182,9 @@ def create_turn(
             if text.startswith("/name"):
                 new_name = text[5:].strip()
                 if not new_name:
-                    raise HTTPException(status_code=400, detail="Character name is required")
+                    raise HTTPException(
+                        status_code=400, detail="Character name is required"
+                    )
 
                 conn.execute(
                     "UPDATE characters SET name = ? WHERE id = ? AND campaign_id = ?",
@@ -154,6 +196,7 @@ def create_turn(
                     "command": "name",
                     "character_name": new_name,
                 }
+
                 log = create_turn_log(
                     conn=conn,
                     campaign_id=campaign_id,
@@ -162,7 +205,10 @@ def create_turn(
                     assistant_text=json.dumps(result, ensure_ascii=False),
                     route=route,
                 )
+
                 return {
+                    "id": log["id"],
+                    "campaign_id": log["campaign_id"],
                     "turn_number": log["turn_number"],
                     "created_at": log["created_at"],
                     "route": "command",
@@ -184,6 +230,7 @@ def create_turn(
                         "created_at": character["created_at"],
                     },
                 }
+
                 log = create_turn_log(
                     conn=conn,
                     campaign_id=campaign_id,
@@ -192,7 +239,10 @@ def create_turn(
                     assistant_text=json.dumps(result, ensure_ascii=False),
                     route=route,
                 )
+
                 return {
+                    "id": log["id"],
+                    "campaign_id": log["campaign_id"],
                     "turn_number": log["turn_number"],
                     "created_at": log["created_at"],
                     "route": "command",
@@ -203,6 +253,7 @@ def create_turn(
                 "command": text.split(" ", 1)[0],
                 "message": "Unknown command",
             }
+
             log = create_turn_log(
                 conn=conn,
                 campaign_id=campaign_id,
@@ -211,7 +262,10 @@ def create_turn(
                 assistant_text=json.dumps(result, ensure_ascii=False),
                 route=route,
             )
+
             return {
+                "id": log["id"],
+                "campaign_id": log["campaign_id"],
                 "turn_number": log["turn_number"],
                 "created_at": log["created_at"],
                 "route": "command",
@@ -244,14 +298,15 @@ def create_turn(
         )
 
         return {
+            "id": log["id"],
+            "campaign_id": log["campaign_id"],
             "turn_number": log["turn_number"],
             "created_at": log["created_at"],
             "route": "narrative",
             "result": result,
         }
+
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
     finally:
-        conn.close()
-        
-        
+        conn.close()# test

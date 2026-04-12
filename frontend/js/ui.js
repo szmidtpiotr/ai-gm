@@ -214,7 +214,7 @@ window.addJsonMessage = function (
   obj,
   role = 'assistant',
   route = 'command',
-  turn = window.state.turnNumber,
+  turn = window.state.turnNumbers?.[window.state.selectedCampaignId] || 0,
   createdAt = null
 ) {
   window.addMessage({
@@ -322,7 +322,14 @@ window.renderTurnResponse = function (data, turnNumber) {
   }
 
   window.removeThinkingBubble();
-  window.addJsonMessage('Odpowiedź', data, 'assistant', 'unknown', turnNumber, createdAt);
+  window.addJsonMessage(
+    'Odpowiedź',
+    data,
+    'assistant',
+    'unknown',
+    turnNumber,
+    createdAt
+  );
 };
 
 window.clearChat = function () {
