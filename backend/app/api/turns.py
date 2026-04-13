@@ -1,6 +1,8 @@
 import json
+import os
 import sqlite3
 
+import requests
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel
 
@@ -22,6 +24,50 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def get_ollama_base_url(override: str | None = None) -> str:
+    return (override or os.getenv("OLLAMA_BASE_URL") or "http://ollama:11434").rstrip("/")
+
+
+def get_available_model_names(ollama_base_url: str) -> list[str]:
+    try:
+        response = requests.get(f"{ollama_base_url}/api/tags", timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        models = data.get("models") or []
+        return [m.get("name") for m in models if m.get("name")]
+    except requests.RequestException as e:
+        raise RuntimeError(f"Could not fetch Ollama models from {ollama_base_url}: {e}")
+
+
+def resolve_model_name(
+    requested_model: str | None,
+    campaign_model: str | None,
+    ollama_base_url: str,
+) -> str:
+    available = get_available_model_names(ollama_base_url)
+
+    if not available:
+        raise RuntimeError("No Ollama models are installed")
+
+    if requested_model and requested_model in available:
+        return requested_model
+
+    if campaign_model and campaign_model in available:
+        return campaign_model
+
+    preferred = [
+        "gemma4:e4b",
+        "gemma3:4b",
+        "gemma3:1b",
+    ]
+
+    for model_name in preferred:
+        if model_name in available:
+            return model_name
+
+    return available[0]
 
 
 def get_campaign_or_404(conn: sqlite3.Connection, campaign_id: int):
@@ -273,7 +319,13 @@ def create_turn(
             }
 
         route = "narrative"
-        model = payload.engine or campaign["model_id"] or "gemma3:4b"
+        ollama_base_url = get_ollama_base_url(x_ollama_base_url)
+
+        model = resolve_model_name(
+            requested_model=payload.engine,
+            campaign_model=campaign["model_id"],
+            ollama_base_url=ollama_base_url,
+        )
 
         result = runnarrativeturn(
             conn=conn,
@@ -281,7 +333,7 @@ def create_turn(
             character=character,
             usertext=text,
             model=model,
-            ollamabaseurl=x_ollama_base_url,
+            ollamabaseurl=ollama_base_url,
         )
 
         assistant_text = (result.get("message") or "").strip()
@@ -309,4 +361,4 @@ def create_turn(
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
     finally:
-        conn.close()# test
+        conn.close()
