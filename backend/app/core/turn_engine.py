@@ -25,7 +25,7 @@ def loadrecentturns(conn: sqlite3.Connection, campaignid: int, limit: int = 8) -
     rows = list(rows)
     rows.reverse()
     return rows
-
+ 
 
 def buildmessages(
     campaign: sqlite3.Row,
