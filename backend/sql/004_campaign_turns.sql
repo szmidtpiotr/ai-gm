@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS campaign_turns (
     user_text TEXT NOT NULL,
     route TEXT NOT NULL,
     assistant_text TEXT,
+    turn_number INTEGER NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
