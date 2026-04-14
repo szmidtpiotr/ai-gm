@@ -1,137 +1,126 @@
-# 🎲 AI Game Master 🇵🇱
+# 🎲 AI Game Master
 
-Lokalny AI Mistrz Gry RPG uruchamiany przez Docker Compose, z backendem FastAPI, frontendem na Nginx oraz lokalnym Ollama z obsługą GPU NVIDIA. Projekt działa lokalnie, udostępnia API pod `/api`, dokumentację Swagger pod `/docs` i zapisuje kampanie, postacie oraz tury w SQLite.[web:95]
+A locally-run AI-powered RPG Game Master. You type your actions — the AI narrates the world, runs the rules, and plays all NPCs. Built with FastAPI, SQLite, Ollama (local LLM), and a browser-based frontend.
 
-## Opis
+---
 
-AI Game Master to polskojęzyczny silnik narracyjny do prowadzenia kampanii RPG lokalnie, bez zależności od zewnętrznych usług LLM. Aktualna architektura wykorzystuje kontenery `backend`, `frontend` i `ollama`, a stan gry jest trwale przechowywany w wolumenie Dockera pod `/data`, dzięki czemu kampanie i historia tur przetrwają restart usług.[web:95]
+## 🧠 What Is This?
 
-Backend udostępnia endpointy kampanii, postaci, modeli, komend i tur, a frontend jest serwowany na porcie 3000. Narracja działa przez Ollama, a po ostatnich zmianach numeracja tur jest prowadzona niezależnie per kampania przez pole `turn_number`, zamiast opierać się na globalnym identyfikatorze rekordu.[cite:1]
+AI GM is a text-based fantasy RPG where a local LLM (via Ollama) acts as the Game Master. It narrates scenes, resolves actions with dice rolls, manages your character sheet, and tracks the full campaign history — all running on your own machine, no external API required.
 
-## Funkcje
+---
 
-- Lokalny AI GM uruchamiany przez FastAPI i Ollama.[web:95]
-- Frontend dostępny pod `http://localhost:3000`.[cite:1]
-- Swagger UI pod `http://localhost:8000/docs`.[cite:1]
-- API pod `http://localhost:8000/api`.[cite:1]
-- Ollama pod `http://localhost:11434`.[cite:1]
-- Obsługa kampanii, postaci i tur narracyjnych.[cite:1]
-- Numeracja `turn_number` liczona per kampania, poprawnie rosnąca niezależnie od `id` w tabeli.[cite:1]
-- Trwała baza SQLite w wolumenie Dockera `ai_gm_data`.[cite:1]
-- Dev mode z bind mountem backendu i `uvicorn --reload` przez `docker-compose.override.yml`.[cite:1]
-- Możliwość użycia modeli Ollama takich jak `gemma3:4b`, po wcześniejszym pobraniu ich do kontenera Ollama.[web:79][web:93]
+## 🚀 Quick Start
 
-## Architektura
-
-| Usługa | Rola | Port | Uwagi |
-|---|---|---:|---|
-| `frontend` | statyczny UI przez Nginx | 3000 | serwuje pliki z `./frontend` przez bind mount.[cite:1] |
-| `backend` | API FastAPI | 8000 | udostępnia `/api/*`, `/docs` i korzysta z SQLite oraz Ollama.[cite:1] |
-| `ollama` | lokalny serwer modeli | 11434 | uruchamiany w Dockerze, z konfiguracją GPU NVIDIA.[cite:1] |
-| `ai_gm_data` | trwałe dane | — | przechowuje plik bazy SQLite pod `/data/ai_gm.db`.[cite:1] |
-
-## Endpointy
-
-Na podstawie aktualnego OpenAPI backend wystawia między innymi poniższe ścieżki.[cite:1]
-
-- `GET /api/health`
-- `GET /api/models`
-- `GET /api/campaigns`
-- `POST /api/campaigns`
-- `GET /api/campaigns/{campaign_id}`
-- `DELETE /api/campaigns/{campaign_id}`
-- `GET /api/campaigns/{campaign_id}/characters`
-- `POST /api/campaigns/{campaign_id}/characters`
-- `GET /api/campaigns/{campaign_id}/turns`
-- `POST /api/campaigns/{campaign_id}/turns`
-- `POST /api/commands/execute`
-
-## Quick start
-
-### 1. Uruchomienie
+### 1. Clone & run
 
 ```bash
-git clone <your-repo>
-cd ai-gm
+git clone https://github.com/szmidtpiotr/AI-GM.git
+cd AI-GM
 docker compose up -d --build
 ```
 
-Po uruchomieniu aplikacja jest dostępna pod poniższymi adresami.[cite:1]
+| Service | URL |
+|---|---|
+| Game UI | http://localhost:3000 |
+| API docs (Swagger) | http://localhost:8000/docs |
+| API | http://localhost:8000/api |
+| Ollama | http://localhost:11434 |
 
-- UI: `http://localhost:3000`
-- API docs: `http://localhost:8000/docs`
-- API: `http://localhost:8000/api`
-- Ollama: `http://localhost:11434`
+### 2. Pull an LLM model
 
-### 2. Pobranie modelu do Ollama
-
-Jeżeli kampania ma ustawiony model `gemma3:4b`, ten model musi być dostępny w kontenerze `ollama`, a nie tylko na zewnętrznym hoście. W praktyce oznacza to konieczność wykonania `ollama pull` wewnątrz usługi Dockerowej, bo backend domyślnie komunikuje się z `http://ollama:11434` przez sieć Compose.[web:95][cite:1]
+Models must be pulled into the Ollama container (not the host):
 
 ```bash
-docker compose exec ollama ollama list
 docker compose exec ollama ollama pull gemma3:4b
-docker compose exec ollama ollama list | grep gemma3
+docker compose exec ollama ollama list
 ```
 
-### 3. Szybki test API
+Recommended models: `gemma3:4b`, `llama3`, `mistral`
+
+### 3. Quick API test
 
 ```bash
+curl -s http://localhost:8000/api/health
 curl -s http://localhost:8000/api/campaigns | jq
 ```
 
-## Przykładowy workflow
+---
 
-### Utworzenie kampanii
+## 🏗️ Architecture
 
-```bash
-curl -s -X POST http://localhost:8000/api/campaigns \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "title":"Test Campaign",
-    "system_id":"fantasy",
-    "model_id":"gemma3:4b",
-    "owner_user_id":1,
-    "language":"pl"
-  }' | jq
-```
+| Service | Role | Port |
+|---|---|---|
+| `frontend` | Static UI served by Nginx | 3000 |
+| `backend` | FastAPI REST API | 8000 |
+| `ollama` | Local LLM runner (NVIDIA GPU support) | 11434 |
+| `ai_gm_data` | Persistent Docker volume for SQLite DB | — |
 
-### Utworzenie postaci
+Data is stored in `/data/ai_gm.db` (SQLite) inside the `ai_gm_data` Docker volume — campaigns and history survive container restarts.
 
-```bash
-curl -s -X POST http://localhost:8000/api/campaigns/16/characters \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "name":"Test Character",
-    "user_id":1,
-    "system_id":"fantasy"
-  }' | jq
-```
+---
 
-### Wysłanie tury narracyjnej
+## 📡 API Endpoints
 
-```bash
-curl -s -X POST http://localhost:8000/api/campaigns/16/turns \
-  -H 'Content-Type: application/json' \
-  -d '{"character_id":17,"text":"Patrzę wokół pokoju"}' | jq
-```
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/health` | Health check |
+| GET | `/api/models` | List available Ollama models |
+| GET | `/api/campaigns` | List all campaigns |
+| POST | `/api/campaigns` | Create new campaign |
+| GET | `/api/campaigns/{id}` | Get campaign details |
+| DELETE | `/api/campaigns/{id}` | Delete campaign |
+| GET | `/api/campaigns/{id}/characters` | List characters in campaign |
+| POST | `/api/campaigns/{id}/characters` | Create character |
+| GET | `/api/campaigns/{id}/turns` | Get full turn history |
+| POST | `/api/campaigns/{id}/turns` | Submit player action (triggers GM response) |
+| POST | `/api/commands/execute` | Execute a game command |
 
-### Odczyt historii kampanii
+Full interactive docs at `http://localhost:8000/docs`.
 
-```bash
-curl -s http://localhost:8000/api/campaigns/16/turns | jq
-```
+---
 
-## Turn numbering
+## 🎮 Game Rules (Phase 5.5 — Locked)
 
-Projekt używa numeracji tur niezależnej od technicznego klucza głównego tabeli. Pole `turn_number` jest liczone osobno dla każdej kampanii, a endpoint listujący tury zwraca dane posortowane po `t.turn_number DESC`, dzięki czemu historia kampanii zachowuje logiczną kolejność nawet wtedy, gdy globalne `id` rekordów rośnie w całej bazie.[cite:1]
+### Stats
+7 core stats: **STR, DEX, CON, INT, WIS, CHA, LCK**
+Modifier formula: `floor((value - 10) / 2)`
 
-Praktyczny przykład potwierdzony podczas testów wyglądał tak: kampania 16 miała tury z `turn_number` równymi 1, 2, 3 i 4, podczas gdy odpowiadające im rekordy miały `id` 82, 85, 86 i 87. To potwierdza, że numeracja kampanii została skutecznie oddzielona od identyfikatorów SQLite.[cite:1]
+### Archetypes
+- **Warrior** — STR/CON focus, melee combat skills
+- **Mage** — INT/WIS focus, arcana and spells
 
-## Tryb developerski
+### Dice System
+`d20 + stat modifier + skill rank + proficiency bonus ≥ DC`
 
-W trybie developerskim backend działa z bind mountem `./backend:/app` oraz z `uvicorn --reload`, dzięki czemu zmiany w kodzie są widoczne bez przebudowy obrazu. Zostało to zweryfikowane przez poprawne przeładowania WatchFiles po zmianach w `app/main.py` i `app/api/turns.py`.[cite:1]
+| Difficulty | DC |
+|---|---|
+| Easy | 8 |
+| Medium | 12 |
+| Hard | 16 |
+| Extreme | 20 |
+| Legendary | 24+ |
 
-Przykładowy `docker-compose.override.yml`:
+- **Nat 20** → auto-success + double damage
+- **Nat 1** → auto-fail + narrative complication
+- **Advantage** → roll 2d20, take higher
+- **Disadvantage** → roll 2d20, take lower
+
+### Skills (10 total)
+`athletics`, `stealth`, `awareness`, `survival`, `lore`, `investigation`, `arcana`, `medicine`, `persuasion`, `intimidation`
+
+Skill ranks: 0–5 (Untrained → Master). Proficiency bonus applies at rank ≥ 3.
+
+### Saves
+`fortitude_save` (CON), `reflex_save` (DEX), `willpower_save` (WIS), `arcane_save` (INT)
+
+---
+
+## 🛠️ Developer Setup
+
+### Dev mode (live reload)
+
+Create `docker-compose.override.yml`:
 
 ```yaml
 services:
@@ -144,59 +133,78 @@ services:
       WATCHFILES_FORCE_POLLING: "true"
 ```
 
-Uruchomienie w dev mode:
+Then run:
 
 ```bash
 docker compose up -d --build
 docker compose logs -f backend
 ```
 
-## Konfiguracja
+Code changes in `./backend` are reflected immediately without rebuild.
 
-Domyślna konfiguracja backendu korzysta z następujących zmiennych środowiskowych zdefiniowanych w Compose lub `.env`.[cite:1]
+### Environment variables
 
-| Zmienna | Domyślna wartość | Opis |
+| Variable | Default | Description |
 |---|---|---|
-| `OLLAMA_BASE_URL` | `http://ollama:11434` | adres Ollama używany przez backend.[cite:1] |
-| `OLLAMA_TIMEOUT` | `60` | timeout połączenia do modelu.[cite:1] |
-| `DEFAULT_CAMPAIGN_LANGUAGE` | `pl` | domyślny język kampanii.[cite:1] |
-| `GAME_LANG` | `pl-PL` | ustawienie języka gry.[cite:1] |
-| `DATABASE_URL` | `sqlite:////data/ai_gm.db` | ścieżka do bazy SQLite.[cite:1] |
+| `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama address used by backend |
+| `OLLAMA_TIMEOUT` | `60` | LLM request timeout (seconds) |
+| `DEFAULT_CAMPAIGN_LANGUAGE` | `pl` | Default campaign language |
+| `GAME_LANG` | `pl-PL` | Game language setting |
+| `DATABASE_URL` | `sqlite:////data/ai_gm.db` | SQLite path |
 
-Jeżeli chcesz używać zewnętrznego hosta Ollama zamiast kontenera Compose, ustaw `OLLAMA_BASE_URL` w `.env` na adres zewnętrzny i zrestartuj backend. Bez tego backend używa wewnętrznej nazwy sieciowej `ollama` i wymaga pobrania modeli do kontenera `ollama`.[cite:1]
+To use an external Ollama host instead of the container:
 
 ```env
-OLLAMA_BASE_URL=http://your-external-host:11434
+OLLAMA_BASE_URL=http://your-host:11434
 ```
 
-## Stack
+### Branch workflow
 
-- Python 3.12 + FastAPI + Pydantic.[cite:1]
-- SQLite jako lokalna baza danych kampanii, postaci i tur.[cite:1]
-- Ollama jako lokalny runner modeli LLM.[web:95]
-- Docker Compose jako warstwa orkiestracji.[web:22]
-- Nginx jako prosty serwer frontendu.[cite:1]
+- Develop on feature branches
+- Merge to `main` when confirmed working
+- Pull `main` on production desktop: `git pull && docker compose up -d --build`
 
-## Znane uwagi
+---
 
-Aktualnie w logach może pojawiać się ostrzeżenie Pydantic dotyczące pola `model_id` i przestrzeni nazw `model_`. To ostrzeżenie nie blokuje działania aplikacji, ale warto je później uporządkować w modelu `CampaignCreateRequest` przez konfigurację `protected_namespaces` albo zmianę nazwy pola po stronie modelu danych.[cite:1]
+## 📦 Tech Stack
 
-W OpenAPI była też widoczna dodatkowa ścieżka `/campaigns/campaigns/{campaign_id}/turns`, co wskazuje na tymczasowy problem z podwójnym prefiksem routera. Główna ścieżka robocza pozostaje jednak poprawna i dostępna pod `/api/campaigns/{campaign_id}/turns`.[cite:1]
+- **Python 3.12** + FastAPI + Pydantic
+- **SQLite** — campaigns, characters, turns, game state
+- **Ollama** — local LLM runner (Gemma, Llama, Mistral, etc.)
+- **Docker Compose** — orchestration
+- **Nginx** — static frontend server
 
-## Roadmap
+---
 
-- uporządkowanie prefixów routerów i usunięcie duplikatu ścieżki,
-- dopracowanie frontendu pod pełen gameplay loop,
-- lepsza obsługa wielu modeli Ollama i wyboru modelu w UI,
-- eksport i import kampanii,
-- rozbudowa sheetów postaci i komend systemowych.
+## 🗺️ Roadmap
 
-## Repozytorium
+| Phase | Name | Status |
+|---|---|---|
+| 1 | Core game loop | ✅ Done |
+| 2 | Player object + World system | ✅ Done |
+| 3 | AI GM prompt engineering | ✅ Done |
+| 3.1 | Character creation + opening scene | ✅ Done |
+| 3.2 | Roll system + action resolution | 🔄 In Progress |
+| 4 | Save / Load system | ✅ Done |
+| 5 | Web UI + Core backend (FastAPI + SQLite) | 🔄 In Progress |
+| 5.5 | Game Design rules session | ✅ Done (locked) |
+| 6 | Character creation & sheet UI | 🔴 Next |
+| 7 | Dice roll full fix (wired to sheet) | 🔴 Planned |
+| 8 | Admin backend UI | 💡 Future |
+| 9 | Persistent memory across sessions | 💡 Future |
+| 10 | Polish, sound, map, modding | 💡 Future |
 
-Aby zaktualizować README w repozytorium GitHub, skopiuj zawartość tego pliku do `README.md` w katalogu głównym projektu, a następnie wykonaj standardowy commit i push:[cite:1]
+### Active Dev Improvements
+- ⚡ Streaming LLM responses (SSE, typewriter effect)
+- 📋 Export / copy session as text (debugging)
+- 🕹️ Command autocomplete + help overlay
+- 📊 LLM I/O logger (compare model quality)
+- 🧭 Campaign summary / history window
 
-```bash
-git add README.md docker-compose.override.yml backend/app/main.py backend/app/api/turns.py
-git commit -m "docs: expand README with setup, API, dev mode and turn numbering"
-git push
-```
+---
+
+## 📝 Notes
+
+- Turn numbers (`turn_number`) are counted per campaign, independent of SQLite row IDs
+- Pydantic warning on `model_id` / `model_` namespace — cosmetic only, does not affect function
+- API path `/campaigns/campaigns/{id}/turns` was a temporary router prefix bug — main path `/api/campaigns/{id}/turns` is correct
