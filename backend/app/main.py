@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import os
 import random
@@ -25,23 +26,6 @@ if _DATABASE_URL.startswith("sqlite:///"):
     DB_PATH = _DATABASE_URL[len("sqlite:///"):]
 else:
     DB_PATH = "/data/ai_gm.db"
-
-app = FastAPI(title="AI Game Master PL")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.include_router(commands.router, prefix="/api")
-app.include_router(turns.router, prefix="/api")
-app.include_router(campaigns.router, prefix="/api")
-app.include_router(characters.router, prefix="/api")
-app.include_router(health_router, prefix="/api")
-app.include_router(models_router, prefix="/api")
 
 
 GAME_SYSTEMS = {
@@ -121,14 +105,34 @@ def run_raw_migrations():
     conn.close()
 
 
-@app.on_event("startup")
-def on_startup():
-    # Ensure data directory exists before SQLModel creates the DB
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
     init_db()
     run_raw_migrations()
+    yield
+    # Shutdown (nothing needed)
+
+
+app = FastAPI(title="AI Game Master PL", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(commands.router, prefix="/api")
+app.include_router(turns.router, prefix="/api")
+app.include_router(campaigns.router, prefix="/api")
+app.include_router(characters.router, prefix="/api")
+app.include_router(health_router, prefix="/api")
+app.include_router(models_router, prefix="/api")
 
 
 @app.get("/")
@@ -136,13 +140,13 @@ async def root():
     return {"status": "ok"}
 
 
-@app.get("/games")
+@app.get("/api/games")
 async def games(session: Session = Depends(get_session)):
     games = session.exec(select(Game).order_by(Game.updated_at.desc())).all()
     return games
 
 
-@app.post("/games")
+@app.post("/api/games")
 async def create_game(req: GameCreateReq, session: Session = Depends(get_session)):
     if req.system not in GAME_SYSTEMS:
         raise HTTPException(status_code=400, detail="Nieznany system gry")
@@ -154,7 +158,7 @@ async def create_game(req: GameCreateReq, session: Session = Depends(get_session
     return game
 
 
-@app.get("/games/{game_id}")
+@app.get("/api/games/{game_id}")
 async def get_game(game_id: int, session: Session = Depends(get_session)):
     game = session.get(Game, game_id)
     if not game:
@@ -170,7 +174,7 @@ async def get_game(game_id: int, session: Session = Depends(get_session)):
     }
 
 
-@app.post("/gm/dice")
+@app.post("/api/gm/dice")
 async def gm_dice(req: DiceReq):
     match = re.match(r"(\d*)?d(\d+)([+-]\d+)?", req.dice.strip(), re.I)
     if not match:
@@ -186,7 +190,7 @@ async def gm_dice(req: DiceReq):
     return {"dice": req.dice.strip(), "rolls": rolls, "total": total}
 
 
-@app.post("/gm/chat")
+@app.post("/api/gm/chat")
 async def gm_chat(req: ChatReq, session: Session = Depends(get_session)):
     if req.game_system not in GAME_SYSTEMS:
         raise HTTPException(status_code=400, detail="Nieznany system gry")
