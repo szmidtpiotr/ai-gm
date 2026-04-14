@@ -221,6 +221,28 @@ input:disabled {
   color: var(--assistant);
 }
 
+/* Streaming bubble: stable min-height prevents jarring resize as tokens arrive */
+.message.assistant.streaming {
+  min-height: 64px;
+  min-width: 200px;
+}
+
+/* Blinking cursor at end of streaming text */
+.message.assistant.streaming pre.streaming-text::after {
+  content: '▋';
+  display: inline-block;
+  animation: stream-cursor 0.7s step-end infinite;
+  color: var(--accent-light);
+  font-size: 0.85em;
+  vertical-align: baseline;
+  margin-left: 2px;
+}
+
+@keyframes stream-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 .message.system {
   align-self: center;
   width: 100%;

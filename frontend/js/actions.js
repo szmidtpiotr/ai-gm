@@ -237,8 +237,8 @@ window.sendMessage = async function () {
 
   inputEl.value = '';
 
+  // Show thinking bubble with animated dots immediately
   window.removeThinkingBubble();
-
   window.showThinkingBubble({
     speaker: window.t('chat.gm'),
     route: 'narrative',
@@ -265,7 +265,6 @@ window.sendMessage = async function () {
     );
 
     if (!resp.ok) {
-      // Try to read error body
       let detail = `HTTP ${resp.status}`;
       try {
         const errData = await resp.json();
@@ -276,19 +275,12 @@ window.sendMessage = async function () {
 
     if (requestId !== window.chatRequestState.requestId) return;
 
-    // Remove thinking bubble and create streaming message bubble
-    window.removeThinkingBubble();
-    const streamBubble = window.createStreamingBubble({
-      speaker: window.t('chat.gm'),
-      route: 'narrative',
-      turn: turnNumber
-    });
-
-    // Read SSE stream
+    // Read SSE stream — keep thinking bubble until first real token arrives
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     let fullText = '';
+    let streamBubble = null; // created lazily on first token
 
     while (true) {
       const { done, value } = await reader.read();
@@ -303,21 +295,45 @@ window.sendMessage = async function () {
         const token = line.slice(6); // strip "data: "
 
         if (token === '[DONE]') {
-          // Stream finished — finalize bubble
-          window.finalizeStreamingBubble(streamBubble, fullText);
+          // If streamBubble was never created (e.g. empty response), finalise gracefully
+          if (streamBubble) {
+            window.finalizeStreamingBubble(streamBubble, fullText);
+          } else {
+            window.removeThinkingBubble();
+          }
           // Sync turn list
           await window.loadTurns(window.state.selectedCampaignId);
           break;
         }
 
         if (token.startsWith('[ERROR]')) {
-          window.finalizeStreamingBubble(streamBubble, `⚠️ ${token.slice(8)}`);
+          if (streamBubble) {
+            window.finalizeStreamingBubble(streamBubble, `⚠️ ${token.slice(8)}`);
+          } else {
+            window.removeThinkingBubble();
+            window.addMessage({
+              speaker: 'Błąd',
+              text: `⚠️ ${token.slice(8)}`,
+              role: 'error',
+              turn: turnNumber
+            });
+          }
           break;
         }
 
         // Normal token — unescape \n back to real newlines
         const realToken = token.replace(/\\n/g, '\n');
         fullText += realToken;
+
+        // Lazy creation: swap thinking bubble → streaming bubble on first token
+        if (!streamBubble) {
+          streamBubble = window.createStreamingBubble({
+            speaker: window.t('chat.gm'),
+            route: 'narrative',
+            turn: turnNumber
+          });
+        }
+
         window.appendToStreamingBubble(streamBubble, realToken);
       }
     }
