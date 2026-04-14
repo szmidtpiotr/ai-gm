@@ -39,12 +39,22 @@ window.applyTranslations = function () {
   if (els.sendBtn) els.sendBtn.textContent = window.t('button.send');
 };
 
+// Scroll chat to bottom — direct, no rAF wrapping (rAF per-token kills streaming paint)
 window.scrollChatToBottom = function () {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
+  chatEl.scrollTop = chatEl.scrollHeight;
+};
 
+// Throttled scroll used during streaming — max once per animation frame
+window._scrollPending = false;
+window.scrollChatToBottomThrottled = function () {
+  if (window._scrollPending) return;
+  window._scrollPending = true;
   requestAnimationFrame(() => {
-    chatEl.scrollTop = chatEl.scrollHeight;
+    window._scrollPending = false;
+    const { chatEl } = window.getEls();
+    if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
   });
 };
 
@@ -145,6 +155,8 @@ window.createStreamingBubble = function ({
   const body = document.createElement('div');
   body.className = 'message-body';
 
+  // Use a <span> inside <pre> so textContent updates are immediate
+  // and the element has no artificial height constraints
   const pre = document.createElement('pre');
   pre.className = 'streaming-text';
   pre.textContent = '';
@@ -160,13 +172,18 @@ window.createStreamingBubble = function ({
 
 /**
  * Appends a token string to the streaming bubble's <pre> element.
+ * Uses throttled scroll — does NOT queue a rAF on every single token.
  */
 window.appendToStreamingBubble = function (bubbleEl, token) {
   if (!bubbleEl) return;
   const pre = bubbleEl.querySelector('pre.streaming-text');
   if (!pre) return;
+
+  // Append directly — no innerHTML, no extra DOM nodes, no forced layout
   pre.textContent += token;
-  window.scrollChatToBottom();
+
+  // Throttled scroll: at most one scroll per animation frame
+  window.scrollChatToBottomThrottled();
 };
 
 /**
