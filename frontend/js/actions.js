@@ -254,8 +254,9 @@ window.sendMessage = async function () {
       game_id: window.state.selectedCampaignId
     };
 
+    // --- STREAMING via SSE ---
     const resp = await fetch(
-      `/api/campaigns/${window.state.selectedCampaignId}/turns`,
+      `/api/campaigns/${window.state.selectedCampaignId}/turns/stream`,
       {
         method: 'POST',
         headers: window.getApiHeaders(),
@@ -263,43 +264,69 @@ window.sendMessage = async function () {
       }
     );
 
-    const data = await resp.json();
-
-    if (requestId !== window.chatRequestState.requestId) {
-      return;
-    }
-
     if (!resp.ok) {
-      const detail = data.detail || data.error || `HTTP ${resp.status}`;
-      throw new Error(
-        typeof detail === 'string' ? detail : JSON.stringify(detail)
-      );
+      // Try to read error body
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const errData = await resp.json();
+        detail = errData.detail || errData.error || detail;
+      } catch (_) {}
+      throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
     }
 
-    if (data.result?.message) {
-      data.message = data.result.message;
-      data.turn_number = data.turn_number || window.state.turnNumbers[window.state.selectedCampaignId] + 1;
+    if (requestId !== window.chatRequestState.requestId) return;
+
+    // Remove thinking bubble and create streaming message bubble
+    window.removeThinkingBubble();
+    const streamBubble = window.createStreamingBubble({
+      speaker: window.t('chat.gm'),
+      route: 'narrative',
+      turn: turnNumber
+    });
+
+    // Read SSE stream
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // keep incomplete last line
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const token = line.slice(6); // strip "data: "
+
+        if (token === '[DONE]') {
+          // Stream finished — finalize bubble
+          window.finalizeStreamingBubble(streamBubble, fullText);
+          // Sync turn list
+          await window.loadTurns(window.state.selectedCampaignId);
+          break;
+        }
+
+        if (token.startsWith('[ERROR]')) {
+          window.finalizeStreamingBubble(streamBubble, `⚠️ ${token.slice(8)}`);
+          break;
+        }
+
+        // Normal token — unescape \n back to real newlines
+        const realToken = token.replace(/\\n/g, '\n');
+        fullText += realToken;
+        window.appendToStreamingBubble(streamBubble, realToken);
+      }
     }
 
-    turnNumber = Number(data.turn_number || turnNumber);
-    if (window.state.turnNumbers[window.state.selectedCampaignId] == null || turnNumber > window.state.turnNumbers[window.state.selectedCampaignId]) {
-      window.state.turnNumbers[window.state.selectedCampaignId] = turnNumber;
-    }
-
-    await window.renderTurnResponse(data, turnNumber);
-
-    if (requestId !== window.chatRequestState.requestId) {
-      return;
-    }
-
-    await window.loadTurns(window.state.selectedCampaignId);
   } catch (e) {
-    if (requestId !== window.chatRequestState.requestId) {
-      return;
-    }
+    if (requestId !== window.chatRequestState.requestId) return;
 
-    await window.removeThinkingBubble();
-    await window.addMessage({
+    window.removeThinkingBubble();
+    window.addMessage({
       speaker: 'Błąd',
       text: `Serwer: ${e.message}`,
       role: 'error',
