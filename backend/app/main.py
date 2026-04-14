@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import os
 import random
 import re
+import sqlite3
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException
@@ -17,8 +18,8 @@ from app.models import Game, Message
 from app.api import turns
 
 
-
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
+DB_PATH = "/data/ai_gm.db"
 
 app = FastAPI(title="AI Game Master PL")
 
@@ -89,9 +90,32 @@ class GameCreateReq(BaseModel):
     model: str = "gemma3:1b"
 
 
+RAW_MIGRATIONS = [
+    "ALTER TABLE characters ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE campaign_turns ADD COLUMN character_id INTEGER",
+]
+
+
+def run_raw_migrations():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    for sql in RAW_MIGRATIONS:
+        try:
+            conn.execute(sql)
+            conn.commit()
+            print(f"[migration] applied: {sql}")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
+                print(f"[migration] already applied: {sql}")
+            else:
+                print(f"[migration] ERROR: {sql} -> {e}")
+    conn.close()
+
+
 @app.on_event("startup")
 def on_startup():
     init_db()
+    run_raw_migrations()
 
 
 @app.get("/")
