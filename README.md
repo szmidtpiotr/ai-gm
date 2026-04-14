@@ -15,8 +15,8 @@ AI GM is a text-based fantasy RPG where a local LLM (via Ollama) acts as the Gam
 ### 1. Clone & run
 
 ```bash
-git clone https://github.com/szmidtpiotr/AI-GM.git
-cd AI-GM
+git clone https://github.com/szmidtpiotr/ai-gm.git
+cd ai-gm
 docker compose up -d --build
 ```
 
@@ -36,7 +36,7 @@ docker compose exec ollama ollama pull gemma3:4b
 docker compose exec ollama ollama list
 ```
 
-Recommended models: `gemma3:4b`, `llama3`, `mistral`
+Recommended models: `gemma3:4b`, `llama3.1:8b`, `mistral`
 
 ### 3. Quick API test
 
@@ -83,7 +83,7 @@ Full interactive docs at `http://localhost:8000/docs`.
 ## 🎮 Game Rules (Phase 5.5 — Locked)
 
 ### Stats
-7 core stats: **STR, DEX, CON, INT, WIS, CHA, LCK**
+7 core stats: **STR, DEX, CON, INT, WIS, CHA, LCK**  
 Modifier formula: `floor((value - 10) / 2)`
 
 ### Archetypes
@@ -113,6 +113,28 @@ Skill ranks: 0–5 (Untrained → Master). Proficiency bonus applies at rank ≥
 
 ### Saves
 `fortitude_save` (CON), `reflex_save` (DEX), `willpower_save` (WIS), `arcane_save` (INT)
+
+### Roll Cue Format (machine-readable, frozen)
+The GM emits exactly one of these strings as the last line of a response when a roll is needed:
+```
+Roll Stealth d20
+Roll Initiative d20
+Roll Attack d20
+Roll Dex Save d20
+Roll Str Save d20
+Roll Con Save d20
+Roll Int Save d20
+Roll Wis Save d20
+Roll Cha Save d20
+```
+No punctuation, no markdown, no extra words. Parser depends on this exact format.
+
+### Commands
+| Command | Description |
+|---|---|
+| `/sheet` | Returns full character JSON |
+| `/roll` | Rolls d20 + modifier for last GM-requested roll |
+| `/help` | Lists available commands |
 
 ---
 
@@ -178,28 +200,33 @@ OLLAMA_BASE_URL=http://your-host:11434
 
 ## 🗺️ Roadmap
 
-| Phase | Name | Status |
-|---|---|---|
-| 1 | Core game loop | ✅ Done |
-| 2 | Player object + World system | ✅ Done |
-| 3 | AI GM prompt engineering | ✅ Done |
-| 3.1 | Character creation + opening scene | ✅ Done |
-| 3.2 | Roll system + action resolution | 🔄 In Progress |
-| 4 | Save / Load system | ✅ Done |
-| 5 | Web UI + Core backend (FastAPI + SQLite) | 🔄 In Progress |
-| 5.5 | Game Design rules session | ✅ Done (locked) |
-| 6 | Character creation & sheet UI | 🔴 Next |
-| 7 | Dice roll full fix (wired to sheet) | 🔴 Planned |
-| 8 | Admin backend UI | 💡 Future |
-| 9 | Persistent memory across sessions | 💡 Future |
-| 10 | Polish, sound, map, modding | 💡 Future |
+```
+✅ Phase 1   — Core game loop (input → AI → output)
+✅ Phase 2   — Player object + World/scene system
+✅ Phase 3   — AI GM prompt engineering
+✅ Phase 3.1 — Character creation + opening scene
+🔄 Phase 3.2 — Roll system + action resolution       ← YOU ARE HERE
+🔴 Phase 4   — Save / Load system (formalise endpoints)
+🔴 Phase 5   — Combat system v1 (enemy stats, HP, turn-based)
+🔴 Phase 6   — NPC system + dialogue
+🔴 Phase 7   — Main quest skeleton (Act 1)
+💡 Phase 8   — Web UI (browser-based interface)
+💡 Phase 9   — Persistent memory across sessions
+💡 Phase 10  — Polish, sound, map, modding
+```
 
-### Active Dev Improvements
-- ⚡ Streaming LLM responses (SSE, typewriter effect)
-- 📋 Export / copy session as text (debugging)
-- 🕹️ Command autocomplete + help overlay
-- 📊 LLM I/O logger (compare model quality)
-- 🧭 Campaign summary / history window
+### 🔧 Active Dev — Planned Improvements
+
+| Feature | Status | Notes |
+|---|---|---|
+| ⚡ Streaming LLM responses (SSE typewriter) | Planned | Ollama supports `stream=True`; frontend via SSE |
+| 📋 Export / copy session as text | Planned | Debug tool — saves turn history to `.txt` |
+| 🕹️ `/help` command overlay | Planned | Lists all commands with descriptions |
+| 🗂️ Campaign summary / history window | Planned | Scrollable session log panel |
+| 📊 LLM I/O logger | Planned | Logs model name, prompt, response, duration to `.jsonl` |
+| 🔬 LLM parameter tweaking | Planned | `temperature`, `top_p`, `top_k` via config or CLI flags |
+| 🧹 Clear chat on new campaign | Planned | Wipe history when new campaign starts |
+| 🖥️ Prod/dev environment (Ubuntu Desktop) | Planned | systemd service for prod, override for dev |
 
 ---
 
@@ -208,3 +235,5 @@ OLLAMA_BASE_URL=http://your-host:11434
 - Turn numbers (`turn_number`) are counted per campaign, independent of SQLite row IDs
 - Pydantic warning on `model_id` / `model_` namespace — cosmetic only, does not affect function
 - API path `/campaigns/campaigns/{id}/turns` was a temporary router prefix bug — main path `/api/campaigns/{id}/turns` is correct
+- GM input classifier: dialogue → no roll, normal action → no roll, risky action → roll cue as last line
+- Roll cue format is frozen — model upgrades must be re-tested against the parser
