@@ -221,18 +221,22 @@ input:disabled {
   color: var(--assistant);
 }
 
-/* Streaming bubble: stable min-height + min-width prevents jarring resize as tokens arrive */
+/*
+  Streaming bubble:
+  - NO fixed width — let the bubble grow naturally with content
+  - max-width is already inherited from .message via --bubble-max
+  - min-width keeps it from starting too narrow
+  - height is fully auto so it expands line by line as tokens arrive
+*/
 .message.assistant.streaming {
-  min-height: 80px;
   min-width: 220px;
-  width: var(--bubble-max); /* lock width so bubble doesn't grow horizontally token by token */
+  height: auto;
 }
 
-/* The <pre> inside the streaming bubble: stable height, smooth text growth */
+/* The <pre> inside the streaming bubble grows freely with content */
 .message.assistant.streaming pre.streaming-text {
   min-height: 1.6em;
   will-change: contents;
-  overflow: hidden;
 }
 
 /* Blinking cursor at end of streaming text */
