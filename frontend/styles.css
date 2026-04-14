@@ -1,20 +1,22 @@
 :root {
-  --bg: #111827;
-  --panel: #1f2937;
-  --panel-2: #374151;
-  --text: #f9fafb;
-  --muted: #9ca3af;
-  --accent: #14b8a6;
-  --danger: #ef4444;
-  --warning: #f59e0b;
-  --ok: #22c55e;
-  --border: #4b5563;
-  --user: #1d4ed8;
-  --assistant: #065f46;
-  --system: #6b7280;
+  /* Light theme */
+  --bg: #f5f0e8;
+  --panel: #fffdf8;
+  --panel-2: #f0ebe0;
+  --text: #1a1410;
+  --muted: #6b6050;
+  --accent: #7c4f1e;
+  --accent-light: #c8944a;
+  --danger: #b91c1c;
+  --warning: #b45309;
+  --ok: #15803d;
+  --border: #d6cfc0;
+  --user: #1e3a5f;
+  --assistant: #2d4a2d;
+  --system: #5a5040;
   --radius: 12px;
   --gap: 12px;
-  --shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  --shadow: 0 4px 16px rgba(80, 50, 20, 0.10);
   --bubble-max: min(78%, 860px);
 }
 
@@ -29,7 +31,7 @@ body {
 
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
+  font-family: 'Georgia', 'Times New Roman', serif;
   background: var(--bg);
   color: var(--text);
 }
@@ -54,8 +56,10 @@ body {
 }
 
 .title {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: bold;
+  color: var(--accent);
+  letter-spacing: 0.02em;
 }
 
 .statusbar {
@@ -70,6 +74,7 @@ body {
   padding: 10px 12px;
   font-size: 14px;
   min-height: 44px;
+  color: var(--muted);
 }
 
 .controls {
@@ -86,7 +91,10 @@ body {
 
 .field label {
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13px;
+  font-family: Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .field-row {
@@ -111,19 +119,28 @@ textarea {
   background: var(--panel);
   color: var(--text);
   padding: 10px 12px;
-  font-size: 16px;
+  font-size: 15px;
+  font-family: Arial, sans-serif;
+}
+
+select:focus,
+input:focus,
+textarea:focus {
+  outline: 2px solid var(--accent-light);
+  border-color: var(--accent-light);
 }
 
 button {
   cursor: pointer;
   background: var(--accent);
-  color: #04130f;
+  color: #fff8f0;
   font-weight: bold;
+  font-family: Arial, sans-serif;
   transition: transform 0.16s ease, filter 0.16s ease, opacity 0.16s ease;
 }
 
 button:hover:not(:disabled) {
-  filter: brightness(1.05);
+  filter: brightness(1.12);
 }
 
 button:active:not(:disabled) {
@@ -133,6 +150,7 @@ button:active:not(:disabled) {
 button.secondary {
   background: var(--panel-2);
   color: var(--text);
+  border: 1px solid var(--border);
 }
 
 button.danger {
@@ -144,7 +162,7 @@ button:disabled,
 select:disabled,
 textarea:disabled,
 input:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -161,6 +179,7 @@ input:disabled {
   overflow-y: auto;
   overflow-x: hidden;
   margin-bottom: 16px;
+  background-image: url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23c8a87a' fill-opacity='0.07'%3E%3Cpath d='M0 0h40v40H0z'/%3E%3Cpath d='M0 20h40M20 0v40' stroke='%23c8a87a' stroke-width='0.5' fill='none'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 .history-panel {
@@ -182,45 +201,58 @@ input:disabled {
   overflow-wrap: anywhere;
   box-shadow: var(--shadow);
   animation: bubble-in 180ms ease-out;
+  font-family: 'Georgia', serif;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
 .message.user {
   align-self: flex-end;
-  background: rgba(29, 78, 216, 0.20);
-  border-color: rgba(96, 165, 250, 0.35);
+  background: rgba(30, 58, 95, 0.08);
+  border-color: rgba(30, 58, 95, 0.22);
   border-bottom-right-radius: 6px;
+  color: var(--user);
 }
 
 .message.assistant {
   align-self: flex-start;
-  background: rgba(6, 95, 70, 0.22);
-  border-color: rgba(45, 212, 191, 0.22);
+  background: rgba(45, 74, 45, 0.08);
+  border-color: rgba(45, 74, 45, 0.22);
   border-bottom-left-radius: 6px;
+  color: var(--assistant);
 }
 
 .message.system {
   align-self: center;
   width: 100%;
   max-width: 100%;
-  background: rgba(107, 114, 128, 0.18);
+  background: rgba(90, 80, 64, 0.07);
+  border-color: var(--border);
+  color: var(--system);
+  font-style: italic;
+  font-size: 13px;
 }
 
 .message.error {
   align-self: stretch;
   width: 100%;
   max-width: 100%;
-  background: rgba(239, 68, 68, 0.18);
+  background: rgba(185, 28, 28, 0.08);
   border-color: var(--danger);
+  color: var(--danger);
 }
 
 .meta {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   flex-wrap: wrap;
+  font-family: Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .route-badge {
@@ -228,8 +260,9 @@ input:disabled {
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--panel-2);
-  color: var(--text);
-  font-size: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  border: 1px solid var(--border);
 }
 
 .composer {
@@ -240,6 +273,7 @@ input:disabled {
 textarea {
   resize: vertical;
   min-height: 88px;
+  font-family: Arial, sans-serif;
 }
 
 pre {
@@ -248,10 +282,12 @@ pre {
   word-break: break-word;
   overflow-wrap: anywhere;
   font-size: 14px;
+  font-family: 'Georgia', serif;
 }
 
 .muted {
   color: var(--muted);
+  font-family: Arial, sans-serif;
 }
 
 /* Thinking bubble */
@@ -269,6 +305,7 @@ pre {
 .message.thinking .thinking-text {
   color: var(--muted);
   font-size: 14px;
+  font-style: italic;
 }
 
 .typing-dots {
@@ -282,7 +319,7 @@ pre {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: rgba(249, 250, 251, 0.8);
+  background: var(--accent-light);
   animation: typing-bounce 1.2s infinite ease-in-out;
 }
 
