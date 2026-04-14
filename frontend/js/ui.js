@@ -105,6 +105,92 @@ window.showThinkingBubble = function ({
   window.scrollChatToBottom();
 };
 
+// --- STREAMING BUBBLE FUNCTIONS ---
+
+/**
+ * Creates a live streaming bubble in the chat, replacing the thinking bubble.
+ * Returns the bubble element so tokens can be appended to it.
+ */
+window.createStreamingBubble = function ({
+  speaker = null,
+  route = 'narrative',
+  turn = null
+} = {}) {
+  const { chatEl } = window.getEls();
+  if (!chatEl) return null;
+
+  // Remove thinking bubble first
+  window.removeThinkingBubble();
+
+  const wrap = document.createElement('div');
+  wrap.className = 'message assistant streaming';
+  wrap.id = 'streaming-bubble';
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+
+  const left = document.createElement('div');
+  left.innerHTML =
+    `<strong>${window.escapeHtml(speaker || window.t('chat.gm'))}</strong>` +
+    `${turn ? ` • ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
+
+  const right = document.createElement('div');
+  right.innerHTML = route
+    ? `<span class="route-badge">${window.escapeHtml(route)}</span>`
+    : '';
+
+  meta.appendChild(left);
+  meta.appendChild(right);
+
+  const body = document.createElement('div');
+  body.className = 'message-body';
+
+  const pre = document.createElement('pre');
+  pre.className = 'streaming-text';
+  pre.textContent = '';
+
+  body.appendChild(pre);
+  wrap.appendChild(meta);
+  wrap.appendChild(body);
+  chatEl.appendChild(wrap);
+
+  window.scrollChatToBottom();
+  return wrap;
+};
+
+/**
+ * Appends a token string to the streaming bubble's <pre> element.
+ */
+window.appendToStreamingBubble = function (bubbleEl, token) {
+  if (!bubbleEl) return;
+  const pre = bubbleEl.querySelector('pre.streaming-text');
+  if (!pre) return;
+  pre.textContent += token;
+  window.scrollChatToBottom();
+};
+
+/**
+ * Finalizes the streaming bubble: removes streaming class, adds action buttons if applicable.
+ * fullText is the complete assembled response text.
+ */
+window.finalizeStreamingBubble = function (bubbleEl, fullText) {
+  if (!bubbleEl) return;
+
+  bubbleEl.classList.remove('streaming');
+  bubbleEl.removeAttribute('id');
+
+  // Add dice action buttons if GM narrative contains dice expressions
+  const route = bubbleEl.querySelector('.route-badge')?.textContent || '';
+  if (route === 'narrative') {
+    const diceList = window.extractDiceFromText(fullText);
+    window.appendActionButtons(bubbleEl, diceList);
+  }
+
+  window.scrollChatToBottom();
+};
+
+// --- END STREAMING BUBBLE FUNCTIONS ---
+
 // Detect dice expressions in a string and return array of unique dice types found (e.g. ["d20","d6"])
 window.extractDiceFromText = function (text) {
   const matches = text.match(/\d*d\d+(?:[+-]\d+)?/gi);
