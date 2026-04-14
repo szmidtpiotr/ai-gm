@@ -15,7 +15,6 @@ from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.db import get_session, init_db
 from app.models import Game, Message
-from app.api import turns
 
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
@@ -43,14 +42,13 @@ app.include_router(campaigns.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
-app.include_router(turns.router, prefix="/campaigns", tags=["turns"])
 
 
 GAME_SYSTEMS = {
     "fantasy": {
         "prompt": (
             "Jesteś Mistrzem Gry prostego systemu fantasy. "
-            "Odpowiadasz po polsku. Prowadź przyg odę w klimacie mrocznego, "
+            "Odpowiadasz po polsku. Prowadź przygodę w klimacie mrocznego, "
             "brudnego fantasy. Reaguj na działania gracza, zachowuj spójność świata, "
             "opisuj konsekwencje działań i czasem dawaj 2-3 sensowne opcje."
         )
