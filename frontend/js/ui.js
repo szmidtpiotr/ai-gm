@@ -184,28 +184,31 @@ window.rollAndAppend = async function (diceExpr, wrapEl) {
 };
 
 // Append action bar to a GM narrative message element
-// Always shown after every GM narrative, regardless of dice in text
+// Roll buttons only shown when GM text contains dice expressions
 window.appendActionButtons = function (wrapEl, diceList) {
+  const hasDice = diceList && diceList.length > 0;
+
+  // Only show action bar when there are dice to roll
+  if (!hasDice) return;
+
   const bar = document.createElement('div');
   bar.className = 'action-bar';
 
-  // If there are specific dice detected from text, add those first
-  if (diceList && diceList.length > 0) {
-    diceList.forEach(({ full, dice }) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'secondary action-dice-btn';
-      btn.textContent = `🎲 Rzuć ${dice}`;
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        await window.rollAndAppend(full, wrapEl);
-        btn.disabled = false;
-      });
-      bar.appendChild(btn);
+  // Add specific dice buttons detected from GM text
+  diceList.forEach(({ full, dice }) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'secondary action-dice-btn';
+    btn.textContent = `🎲 Rzuć ${dice}`;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      await window.rollAndAppend(full, wrapEl);
+      btn.disabled = false;
     });
-  }
+    bar.appendChild(btn);
+  });
 
-  // Always add: open dice chooser button
+  // Dice chooser button (custom roll)
   const diceChooseBtn = document.createElement('button');
   diceChooseBtn.type = 'button';
   diceChooseBtn.className = 'secondary action-dice-choose-btn';
@@ -215,11 +218,11 @@ window.appendActionButtons = function (wrapEl, diceList) {
   });
   bar.appendChild(diceChooseBtn);
 
-  // Always add: focus input
+  // Focus input button
   const focusBtn = document.createElement('button');
   focusBtn.type = 'button';
   focusBtn.className = 'secondary';
-  focusBtn.textContent = '✍️ Wpisz akcję';
+  focusBtn.textContent = '✍️ Inna akcja';
   focusBtn.addEventListener('click', () => {
     const { inputEl } = window.getEls();
     if (inputEl) inputEl.focus();
@@ -329,7 +332,7 @@ window.replaceThinkingBubble = function ({
   wrap.appendChild(meta);
   wrap.appendChild(body);
 
-  // Always add action bar after GM narrative
+  // Add action bar only when GM narrative contains dice expressions
   if (role === 'assistant' && route === 'narrative') {
     const diceList = window.extractDiceFromText(text);
     window.appendActionButtons(wrap, diceList);
@@ -567,7 +570,7 @@ window.renderTurnsToChat = function () {
         msgWrap.appendChild(meta);
         msgWrap.appendChild(body);
 
-        // Always add action bar for narrative turns
+        // Add action bar only when GM text contains dice expressions
         const diceList = window.extractDiceFromText(turn.assistant_text);
         window.appendActionButtons(msgWrap, diceList);
 
