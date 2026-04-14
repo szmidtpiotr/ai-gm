@@ -18,8 +18,14 @@ from app.models import Game, Message
 from app.api import turns
 
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
-DB_PATH = os.getenv("DB_PATH", "/data/ai_gm.db")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+
+# Extract the file path from DATABASE_URL so both init_db() and raw migrations use the same file
+_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////data/ai_gm.db")
+if _DATABASE_URL.startswith("sqlite:///"):
+    DB_PATH = _DATABASE_URL[len("sqlite:///"):]
+else:
+    DB_PATH = "/data/ai_gm.db"
 
 app = FastAPI(title="AI Game Master PL")
 
@@ -44,7 +50,7 @@ GAME_SYSTEMS = {
     "fantasy": {
         "prompt": (
             "Jesteś Mistrzem Gry prostego systemu fantasy. "
-            "Odpowiadasz po polsku. Prowadź przygodę w klimacie mrocznego, "
+            "Odpowiadasz po polsku. Prowadź przyg odę w klimacie mrocznego, "
             "brudnego fantasy. Reaguj na działania gracza, zachowuj spójność świata, "
             "opisuj konsekwencje działań i czasem dawaj 2-3 sensowne opcje."
         )
@@ -97,7 +103,6 @@ RAW_MIGRATIONS = [
 
 
 def run_raw_migrations():
-    # Ensure directory exists before connecting
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
@@ -110,8 +115,9 @@ def run_raw_migrations():
             conn.commit()
             print(f"[migration] applied: {sql}")
         except sqlite3.OperationalError as e:
-            if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
-                print(f"[migration] already applied: {sql}")
+            msg = str(e).lower()
+            if "duplicate column" in msg or "already exists" in msg or "no such table" in msg:
+                print(f"[migration] skipped ({e}): {sql}")
             else:
                 print(f"[migration] ERROR ({e}): {sql}")
     conn.close()
@@ -119,6 +125,10 @@ def run_raw_migrations():
 
 @app.on_event("startup")
 def on_startup():
+    # Ensure data directory exists before SQLModel creates the DB
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     init_db()
     run_raw_migrations()
 
