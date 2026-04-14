@@ -226,6 +226,7 @@ window.sendMessage = async function () {
 
   let turnNumber = window.nextTurnNumber();
 
+  // Show user message
   window.addMessage({
     speaker: window.currentCharacterName(),
     text,
@@ -237,7 +238,7 @@ window.sendMessage = async function () {
 
   inputEl.value = '';
 
-  // Show thinking bubble with animated dots immediately
+  // Show thinking bubble with animated dots BEFORE fetch so it appears immediately
   window.removeThinkingBubble();
   window.showThinkingBubble({
     speaker: window.t('chat.gm'),
@@ -281,10 +282,33 @@ window.sendMessage = async function () {
     let buffer = '';
     let fullText = '';
     let streamBubble = null; // created lazily on first token
+    let streamDone = false;  // flag to break outer while loop cleanly
 
-    while (true) {
+    while (!streamDone) {
       const { done, value } = await reader.read();
-      if (done) break;
+
+      // On stream close, flush whatever is still in buffer
+      if (done) {
+        if (buffer.trim()) {
+          const remaining = buffer.trim();
+          if (remaining.startsWith('data: ')) {
+            const token = remaining.slice(6);
+            if (token !== '[DONE]' && !token.startsWith('[ERROR]')) {
+              const realToken = token.replace(/\\n/g, '\n');
+              fullText += realToken;
+              if (!streamBubble) {
+                streamBubble = window.createStreamingBubble({
+                  speaker: window.t('chat.gm'),
+                  route: 'narrative',
+                  turn: turnNumber
+                });
+              }
+              window.appendToStreamingBubble(streamBubble, realToken);
+            }
+          }
+        }
+        break;
+      }
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
@@ -295,7 +319,7 @@ window.sendMessage = async function () {
         const token = line.slice(6); // strip "data: "
 
         if (token === '[DONE]') {
-          // If streamBubble was never created (e.g. empty response), finalise gracefully
+          // Finalize bubble and exit both loops
           if (streamBubble) {
             window.finalizeStreamingBubble(streamBubble, fullText);
           } else {
@@ -303,7 +327,8 @@ window.sendMessage = async function () {
           }
           // Sync turn list
           await window.loadTurns(window.state.selectedCampaignId);
-          break;
+          streamDone = true;
+          break; // exit for loop; while checks streamDone
         }
 
         if (token.startsWith('[ERROR]')) {
@@ -318,6 +343,7 @@ window.sendMessage = async function () {
               turn: turnNumber
             });
           }
+          streamDone = true;
           break;
         }
 
@@ -336,6 +362,14 @@ window.sendMessage = async function () {
 
         window.appendToStreamingBubble(streamBubble, realToken);
       }
+    }
+
+    // If stream ended without [DONE] (e.g. server closed early), finalize gracefully
+    if (!streamDone && streamBubble) {
+      window.finalizeStreamingBubble(streamBubble, fullText);
+      await window.loadTurns(window.state.selectedCampaignId);
+    } else if (!streamDone) {
+      window.removeThinkingBubble();
     }
 
   } catch (e) {
