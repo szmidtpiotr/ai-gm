@@ -105,6 +105,73 @@ window.showThinkingBubble = function ({
   window.scrollChatToBottom();
 };
 
+// Detect dice expressions in a string and return array of unique dice types found (e.g. ["d20","d6"])
+window.extractDiceFromText = function (text) {
+  const matches = text.match(/\d*d\d+(?:[+-]\d+)?/gi);
+  if (!matches) return [];
+  // deduplicate, keep only the dice part (e.g. "d20" from "1d20+3" -> "d20")
+  const seen = new Set();
+  const result = [];
+  matches.forEach(m => {
+    const clean = m.replace(/^\d+/, '').replace(/[+-]\d+$/, ''); // e.g. "d20"
+    if (!seen.has(clean)) {
+      seen.add(clean);
+      result.push({ full: m, dice: clean });
+    }
+  });
+  return result;
+};
+
+// Append quick-action buttons to a message element
+window.appendActionButtons = function (wrapEl, diceList) {
+  if (!diceList || diceList.length === 0) return;
+
+  const bar = document.createElement('div');
+  bar.className = 'action-bar';
+
+  diceList.forEach(({ full, dice }) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'secondary action-dice-btn';
+    btn.textContent = `🎲 Rzuć ${dice}`;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        const resp = await fetch('/gm/dice', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dice: full })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        window.addMessage({
+          speaker: '🎲',
+          text: `${data.dice} = [${data.rolls.join(', ')}] = ${data.total}`,
+          role: 'system'
+        });
+      } catch (e) {
+        window.addMessage({ speaker: 'Błąd', text: `Kość: ${e.message}`, role: 'error' });
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    bar.appendChild(btn);
+  });
+
+  // "Type custom action" shortcut — focuses the input
+  const focusBtn = document.createElement('button');
+  focusBtn.type = 'button';
+  focusBtn.className = 'secondary';
+  focusBtn.textContent = '✍️ Wpisz akcję';
+  focusBtn.addEventListener('click', () => {
+    const { inputEl } = window.getEls();
+    if (inputEl) inputEl.focus();
+  });
+  bar.appendChild(focusBtn);
+
+  wrapEl.appendChild(bar);
+};
+
 window.addMessage = function ({
   speaker,
   text,
@@ -204,6 +271,14 @@ window.replaceThinkingBubble = function ({
 
   wrap.appendChild(meta);
   wrap.appendChild(body);
+
+  // Detect dice rolls in GM narrative and add action buttons
+  if (role === 'assistant' && route === 'narrative') {
+    const diceList = window.extractDiceFromText(text);
+    if (diceList.length > 0) {
+      window.appendActionButtons(wrap, diceList);
+    }
+  }
 
   existing.replaceWith(wrap);
   window.scrollChatToBottom();
@@ -417,14 +492,33 @@ window.renderTurnsToChat = function () {
 
     if (turn.assistant_text) {
       if (turn.route === 'narrative') {
-        window.addMessage({
-          speaker: window.t('chat.gm'),
-          text: turn.assistant_text,
-          role: 'assistant',
-          route: 'narrative',
-          turn: turn.turn_number || turn.id,
-          createdAt: turn.created_at
-        });
+        const msgWrap = document.createElement('div');
+        msgWrap.className = 'message assistant';
+        const { chatEl } = window.getEls();
+
+        // Build message manually to attach dice buttons
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        const left = document.createElement('div');
+        left.innerHTML = `<strong>${window.escapeHtml(window.t('chat.gm'))}</strong> • ${window.escapeHtml(window.t('chat.turn'))} ${turn.turn_number || turn.id}`;
+        const right = document.createElement('div');
+        right.innerHTML = `<span class="route-badge">narrative</span> <span>${window.escapeHtml(window.formatTimestamp(turn.created_at))}</span>`;
+        meta.appendChild(left);
+        meta.appendChild(right);
+
+        const body = document.createElement('div');
+        body.className = 'message-body';
+        body.innerHTML = `<pre>${window.escapeHtml(turn.assistant_text)}</pre>`;
+
+        msgWrap.appendChild(meta);
+        msgWrap.appendChild(body);
+
+        const diceList = window.extractDiceFromText(turn.assistant_text);
+        if (diceList.length > 0) {
+          window.appendActionButtons(msgWrap, diceList);
+        }
+
+        if (chatEl) chatEl.appendChild(msgWrap);
       } else {
         window.addMessage({
           speaker: 'System',
