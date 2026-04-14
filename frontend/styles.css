@@ -353,6 +353,120 @@ pre {
   }
 }
 
+/* ── Action bar (appears below every GM narrative bubble) ── */
+.action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.action-bar button {
+  min-height: 34px;
+  padding: 4px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  width: auto;
+}
+
+/* Dice-specific buttons get a warm amber tint */
+.action-bar .action-dice-btn {
+  background: rgba(200, 148, 74, 0.18);
+  border-color: var(--accent-light);
+  color: var(--accent);
+}
+
+.action-bar .action-dice-btn:hover:not(:disabled) {
+  background: rgba(200, 148, 74, 0.32);
+}
+
+.action-bar .action-dice-choose-btn {
+  background: rgba(124, 79, 30, 0.10);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.action-bar .action-dice-choose-btn:hover:not(:disabled) {
+  background: rgba(124, 79, 30, 0.20);
+}
+
+/* ── Dice chooser dialog (inline popover inside the bubble) ── */
+.dice-dialog {
+  position: relative;
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--accent-light);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(80, 50, 20, 0.14);
+  animation: bubble-in 140ms ease-out;
+}
+
+.dice-dialog-title {
+  font-size: 12px;
+  font-family: Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.dice-quick-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.dice-quick-btns .dice-quick {
+  min-height: 32px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  width: auto;
+  border-radius: 8px;
+  background: rgba(200, 148, 74, 0.15);
+  border-color: var(--accent-light);
+  color: var(--accent);
+  letter-spacing: 0.03em;
+}
+
+.dice-quick-btns .dice-quick:hover:not(:disabled) {
+  background: rgba(200, 148, 74, 0.30);
+}
+
+.dice-custom-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dice-custom-row input.dice-custom-input {
+  min-height: 34px;
+  width: 120px;
+  padding: 4px 10px;
+  font-size: 13px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.dice-custom-row .dice-custom-roll {
+  min-height: 34px;
+  padding: 4px 14px;
+  font-size: 13px;
+  width: auto;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff8f0;
+  font-weight: 700;
+}
+
+/* ── Responsive ── */
 @media (max-width: 900px) {
   .statusbar,
   .controls {
@@ -385,5 +499,13 @@ pre {
   .message.user,
   .message.assistant {
     max-width: 100%;
+  }
+
+  .action-bar {
+    gap: 6px;
+  }
+
+  .dice-quick-btns {
+    gap: 4px;
   }
 }
