@@ -4,9 +4,11 @@ import sqlite3
 
 import requests
 from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.core.turn_engine import runnarrativeturn
+from app.core.turn_engine import buildmessages, loadrecentturns, runnarrativeturn
+from app.services.ollama_service import generatechat_stream
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
@@ -357,6 +359,102 @@ def create_turn(
             "route": "narrative",
             "result": result,
         }
+
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/campaigns/{campaign_id}/turns/stream")
+def create_turn_stream(
+    campaign_id: int,
+    payload: TurnCreate,
+    x_ollama_base_url: str | None = Header(default=None),
+):
+    """
+    Streaming version of the turn endpoint.
+    Returns a text/event-stream (SSE) response.
+    Each chunk: 'data: <token>\\n\\n'
+    Final chunk: 'data: [DONE]\\n\\n'
+
+    The full assembled text is also saved to campaign_turns after streaming completes.
+    NOTE: Since we need to collect the full text to save it, we buffer internally
+    and yield tokens as they arrive.
+    """
+    conn = get_db()
+    try:
+        campaign = get_campaign_or_404(conn, campaign_id)
+        character = get_character_or_404(conn, campaign_id, payload.character_id)
+        text = (payload.text or "").strip()
+
+        if not text:
+            raise HTTPException(status_code=400, detail="Text is required")
+
+        # Commands are not streamed — return immediately as JSON-in-SSE
+        if text.startswith("/"):
+            def command_stream():
+                yield f"data: [CMD] {text}\n\n"
+                yield "data: [DONE]\n\n"
+            return StreamingResponse(command_stream(), media_type="text/event-stream")
+
+        ollama_base_url = get_ollama_base_url(x_ollama_base_url)
+        model = resolve_model_name(
+            requested_model=payload.engine,
+            campaign_model=campaign["model_id"],
+            ollama_base_url=ollama_base_url,
+        )
+
+        recent_turns = loadrecentturns(conn, campaign_id, limit=8)
+        messages = buildmessages(
+            campaign=campaign,
+            character=character,
+            recentturns=recent_turns,
+            usertext=text,
+        )
+
+        # We need a fresh connection for the post-stream DB write
+        # because the generator runs after this function returns
+        campaign_id_val = campaign_id
+        character_id_val = payload.character_id
+        user_text_val = text
+
+        def token_generator():
+            collected = []
+            for chunk in generatechat_stream(model=model, messages=messages, base_url=ollama_base_url):
+                if chunk.startswith("data: [DONE]"):
+                    # Save the full text to DB
+                    full_text = "".join(collected).replace("\\n", "\n")
+                    if full_text.strip():
+                        save_conn = get_db()
+                        try:
+                            create_turn_log(
+                                conn=save_conn,
+                                campaign_id=campaign_id_val,
+                                character_id=character_id_val,
+                                user_text=user_text_val,
+                                assistant_text=full_text.strip(),
+                                route="narrative",
+                            )
+                        finally:
+                            save_conn.close()
+                    yield chunk
+                elif chunk.startswith("data: [ERROR]"):
+                    yield chunk
+                else:
+                    # Extract the token from 'data: <token>\n\n'
+                    token = chunk[6:].rstrip("\n")
+                    collected.append(token)
+                    yield chunk
+
+        return StreamingResponse(
+            token_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",  # Disable nginx buffering
+            },
+        )
 
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
