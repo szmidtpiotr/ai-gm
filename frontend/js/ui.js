@@ -109,11 +109,10 @@ window.showThinkingBubble = function ({
 window.extractDiceFromText = function (text) {
   const matches = text.match(/\d*d\d+(?:[+-]\d+)?/gi);
   if (!matches) return [];
-  // deduplicate, keep only the dice part (e.g. "d20" from "1d20+3" -> "d20")
   const seen = new Set();
   const result = [];
   matches.forEach(m => {
-    const clean = m.replace(/^\d+/, '').replace(/[+-]\d+$/, ''); // e.g. "d20"
+    const clean = m.replace(/^\d+/, '').replace(/[+-]\d+$/, '');
     if (!seen.has(clean)) {
       seen.add(clean);
       result.push({ full: m, dice: clean });
@@ -122,43 +121,101 @@ window.extractDiceFromText = function (text) {
   return result;
 };
 
-// Append quick-action buttons to a message element
-window.appendActionButtons = function (wrapEl, diceList) {
-  if (!diceList || diceList.length === 0) return;
+// Show inline dice roll dialog
+window.showDiceDialog = function (wrapEl) {
+  // Remove existing dialog if any
+  const existing = wrapEl.querySelector('.dice-dialog');
+  if (existing) { existing.remove(); return; }
 
+  const dialog = document.createElement('div');
+  dialog.className = 'dice-dialog';
+
+  const commonDice = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'];
+
+  dialog.innerHTML = `
+    <div class="dice-dialog-title">Wybierz kość lub wpisz:</div>
+    <div class="dice-quick-btns">
+      ${commonDice.map(d => `<button type="button" class="secondary dice-quick" data-dice="${d}">${d}</button>`).join('')}
+    </div>
+    <div class="dice-custom-row">
+      <input type="text" class="dice-custom-input" placeholder="np. 2d6+3" style="width:110px;padding:4px 8px;border-radius:6px;border:1px solid var(--color-border,#ccc);background:var(--color-surface,#fff);color:inherit;font-size:0.9em;">
+      <button type="button" class="secondary dice-custom-roll">Rzuć</button>
+    </div>
+  `;
+
+  wrapEl.appendChild(dialog);
+
+  // Quick dice buttons
+  dialog.querySelectorAll('.dice-quick').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const dice = btn.getAttribute('data-dice');
+      await window.rollAndAppend(dice, wrapEl);
+      dialog.remove();
+    });
+  });
+
+  // Custom input roll
+  dialog.querySelector('.dice-custom-roll').addEventListener('click', async () => {
+    const val = dialog.querySelector('.dice-custom-input').value.trim();
+    if (!val) return;
+    await window.rollAndAppend(val, wrapEl);
+    dialog.remove();
+  });
+};
+
+// Roll dice and append result to chat
+window.rollAndAppend = async function (diceExpr, wrapEl) {
+  try {
+    const resp = await fetch('/gm/dice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dice: diceExpr })
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    window.addMessage({
+      speaker: '🎲',
+      text: `${data.dice} = [${data.rolls.join(', ')}] = ${data.total}`,
+      role: 'system'
+    });
+  } catch (e) {
+    window.addMessage({ speaker: 'Błąd', text: `Kość: ${e.message}`, role: 'error' });
+  }
+};
+
+// Append action bar to a GM narrative message element
+// Always shown after every GM narrative, regardless of dice in text
+window.appendActionButtons = function (wrapEl, diceList) {
   const bar = document.createElement('div');
   bar.className = 'action-bar';
 
-  diceList.forEach(({ full, dice }) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'secondary action-dice-btn';
-    btn.textContent = `🎲 Rzuć ${dice}`;
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      try {
-        const resp = await fetch('/gm/dice', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dice: full })
-        });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-        window.addMessage({
-          speaker: '🎲',
-          text: `${data.dice} = [${data.rolls.join(', ')}] = ${data.total}`,
-          role: 'system'
-        });
-      } catch (e) {
-        window.addMessage({ speaker: 'Błąd', text: `Kość: ${e.message}`, role: 'error' });
-      } finally {
+  // If there are specific dice detected from text, add those first
+  if (diceList && diceList.length > 0) {
+    diceList.forEach(({ full, dice }) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'secondary action-dice-btn';
+      btn.textContent = `🎲 Rzuć ${dice}`;
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        await window.rollAndAppend(full, wrapEl);
         btn.disabled = false;
-      }
+      });
+      bar.appendChild(btn);
     });
-    bar.appendChild(btn);
-  });
+  }
 
-  // "Type custom action" shortcut — focuses the input
+  // Always add: open dice chooser button
+  const diceChooseBtn = document.createElement('button');
+  diceChooseBtn.type = 'button';
+  diceChooseBtn.className = 'secondary action-dice-choose-btn';
+  diceChooseBtn.textContent = '🎲 Rzuć kość';
+  diceChooseBtn.addEventListener('click', () => {
+    window.showDiceDialog(wrapEl);
+  });
+  bar.appendChild(diceChooseBtn);
+
+  // Always add: focus input
   const focusBtn = document.createElement('button');
   focusBtn.type = 'button';
   focusBtn.className = 'secondary';
@@ -272,12 +329,10 @@ window.replaceThinkingBubble = function ({
   wrap.appendChild(meta);
   wrap.appendChild(body);
 
-  // Detect dice rolls in GM narrative and add action buttons
+  // Always add action bar after GM narrative
   if (role === 'assistant' && route === 'narrative') {
     const diceList = window.extractDiceFromText(text);
-    if (diceList.length > 0) {
-      window.appendActionButtons(wrap, diceList);
-    }
+    window.appendActionButtons(wrap, diceList);
   }
 
   existing.replaceWith(wrap);
@@ -496,7 +551,6 @@ window.renderTurnsToChat = function () {
         msgWrap.className = 'message assistant';
         const { chatEl } = window.getEls();
 
-        // Build message manually to attach dice buttons
         const meta = document.createElement('div');
         meta.className = 'meta';
         const left = document.createElement('div');
@@ -513,10 +567,9 @@ window.renderTurnsToChat = function () {
         msgWrap.appendChild(meta);
         msgWrap.appendChild(body);
 
+        // Always add action bar for narrative turns
         const diceList = window.extractDiceFromText(turn.assistant_text);
-        if (diceList.length > 0) {
-          window.appendActionButtons(msgWrap, diceList);
-        }
+        window.appendActionButtons(msgWrap, diceList);
 
         if (chatEl) chatEl.appendChild(msgWrap);
       } else {
