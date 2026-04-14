@@ -74,6 +74,8 @@ Data is stored in `/data/ai_gm.db` (SQLite) inside the `ai_gm_data` Docker volum
 | POST | `/api/campaigns/{id}/characters` | Create character |
 | GET | `/api/campaigns/{id}/turns` | Get full turn history |
 | POST | `/api/campaigns/{id}/turns` | Submit player action (triggers GM response) |
+| POST | `/api/campaigns/{id}/turns/stream` | Submit action — streaming SSE response |
+| POST | `/api/campaigns/{id}/export` | Export full session to `/data/exports/*.txt` |
 | POST | `/api/commands/execute` | Execute a game command |
 
 Full interactive docs at `http://localhost:8000/docs`.
@@ -132,9 +134,79 @@ No punctuation, no markdown, no extra words. Parser depends on this exact format
 ### Commands
 | Command | Description |
 |---|---|
+| `/help` | Lists all available commands |
 | `/sheet` | Returns full character JSON |
 | `/roll` | Rolls d20 + modifier for last GM-requested roll |
-| `/help` | Lists available commands |
+| `/name <name>` | Rename your character |
+| `/history` | Shows the last 10 turns of the session |
+| `/export` | Exports full session to `/data/exports/` on the server |
+
+---
+
+## ⚡ Streaming Responses (SSE)
+
+The game supports **Server-Sent Events** for typewriter-style streaming. Use the stream endpoint:
+
+```
+POST /api/campaigns/{id}/turns/stream
+```
+
+Each chunk is formatted as:
+```
+data: <token>\n\n
+```
+Final chunk:
+```
+data: [DONE]\n\n
+```
+Error chunk:
+```
+data: [ERROR] <message>\n\n
+```
+
+The full response is automatically saved to `campaign_turns` after the stream completes.
+
+---
+
+## 🔬 LLM Parameter Tuning
+
+Edit `backend/app/core/llm_config.py` or set environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `LLM_TEMPERATURE` | `0.8` | Randomness (0.0–2.0) |
+| `LLM_TOP_P` | `0.9` | Nucleus sampling |
+| `LLM_TOP_K` | `40` | Top-K token cutoff |
+| `LLM_REPEAT_PENALTY` | `1.1` | Penalise repetition |
+| `LLM_MAX_TOKENS` | `512` | Max tokens per response |
+
+Example in `docker-compose.override.yml`:
+```yaml
+services:
+  backend:
+    environment:
+      LLM_TEMPERATURE: "1.0"
+      LLM_MAX_TOKENS: "768"
+```
+
+---
+
+## 📊 LLM I/O Logger
+
+Every LLM call is automatically logged to `/data/llm_log.jsonl` (one JSON line per request):
+
+```json
+{"ts": "2026-04-14T21:00:00Z", "model": "gemma3:4b", "input_chars": 1420, "output_chars": 312, "duration_sec": 4.2, "response_preview": "Widzisz przed sobą..."}
+```
+
+Use this to compare models, track response times, and analyse quality:
+
+```bash
+# Peek at the log
+docker compose exec backend tail -f /data/llm_log.jsonl
+# Copy to host for analysis
+docker compose cp backend:/data/llm_log.jsonl ./llm_log.jsonl
+```
 
 ---
 
@@ -142,43 +214,25 @@ No punctuation, no markdown, no extra words. Parser depends on this exact format
 
 ### Dev mode (live reload)
 
-Create `docker-compose.override.yml`:
-
-```yaml
-services:
-  backend:
-    volumes:
-      - ./backend:/app
-      - ai_gm_data:/data
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    environment:
-      WATCHFILES_FORCE_POLLING: "true"
-```
-
-Then run:
+The repo ships with `docker-compose.override.yml` which automatically enables live reload in dev. Just run:
 
 ```bash
 docker compose up -d --build
 docker compose logs -f backend
 ```
 
-Code changes in `./backend` are reflected immediately without rebuild.
+Code changes in `./backend` are reflected immediately without a full rebuild.
 
 ### Environment variables
 
 | Variable | Default | Description |
 |---|---|---|
 | `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama address used by backend |
-| `OLLAMA_TIMEOUT` | `60` | LLM request timeout (seconds) |
+| `OLLAMA_TIMEOUT` | `120` | LLM request timeout (seconds) |
 | `DEFAULT_CAMPAIGN_LANGUAGE` | `pl` | Default campaign language |
 | `GAME_LANG` | `pl-PL` | Game language setting |
 | `DATABASE_URL` | `sqlite:////data/ai_gm.db` | SQLite path |
-
-To use an external Ollama host instead of the container:
-
-```env
-OLLAMA_BASE_URL=http://your-host:11434
-```
+| `LLM_LOG_PATH` | `/data/llm_log.jsonl` | Path for LLM I/O log |
 
 ### Branch workflow
 
@@ -215,18 +269,17 @@ OLLAMA_BASE_URL=http://your-host:11434
 💡 Phase 10  — Polish, sound, map, modding
 ```
 
-### 🔧 Active Dev — Planned Improvements
+### ✅ Recently Shipped
 
 | Feature | Status | Notes |
 |---|---|---|
-| ⚡ Streaming LLM responses (SSE typewriter) | Planned | Ollama supports `stream=True`; frontend via SSE |
-| 📋 Export / copy session as text | Planned | Debug tool — saves turn history to `.txt` |
-| 🕹️ `/help` command overlay | Planned | Lists all commands with descriptions |
-| 🗂️ Campaign summary / history window | Planned | Scrollable session log panel |
-| 📊 LLM I/O logger | Planned | Logs model name, prompt, response, duration to `.jsonl` |
-| 🔬 LLM parameter tweaking | Planned | `temperature`, `top_p`, `top_k` via config or CLI flags |
-| 🧹 Clear chat on new campaign | Planned | Wipe history when new campaign starts |
-| 🖥️ Prod/dev environment (Ubuntu Desktop) | Planned | systemd service for prod, override for dev |
+| ⚡ Streaming LLM responses (SSE typewriter) | ✅ Done | `/turns/stream` endpoint, token-by-token SSE |
+| 🕹️ `/help` command | ✅ Done | Lists all commands with descriptions |
+| 📋 `/history` command | ✅ Done | Shows last 10 turns in session |
+| 📤 `/export` + `POST /export` endpoint | ✅ Done | Saves full session to `/data/exports/*.txt` |
+| 📊 LLM I/O logger | ✅ Done | Auto-logs to `/data/llm_log.jsonl` per request |
+| 🔬 LLM parameter tweaking | ✅ Done | `llm_config.py` + env var overrides |
+| 🧹 Clear chat on new campaign | ✅ Done | Frontend clears state on campaign change |
 
 ---
 
@@ -237,3 +290,4 @@ OLLAMA_BASE_URL=http://your-host:11434
 - API path `/campaigns/campaigns/{id}/turns` was a temporary router prefix bug — main path `/api/campaigns/{id}/turns` is correct
 - GM input classifier: dialogue → no roll, normal action → no roll, risky action → roll cue as last line
 - Roll cue format is frozen — model upgrades must be re-tested against the parser
+- LLM logs never crash the game — all logging errors are silently swallowed

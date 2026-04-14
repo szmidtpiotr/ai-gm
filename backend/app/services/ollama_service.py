@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from typing import Generator
 
 import httpx
@@ -13,14 +14,23 @@ def resolve_ollama_base_url(base_url: str | None = None) -> str:
     return value or OLLAMA_BASE_URL
 
 
-def generatechat(model: str, messages: list[dict], base_url: str | None = None) -> str:
+def generatechat(model: str, messages: list[dict], base_url: str | None = None, llm_params: dict | None = None) -> str:
+    params = llm_params or {}
     payload = {
         "model": model,
         "messages": messages,
         "stream": False,
+        "options": {
+            "temperature": params.get("temperature", 0.8),
+            "top_p": params.get("top_p", 0.9),
+            "top_k": params.get("top_k", 40),
+            "repeat_penalty": params.get("repeat_penalty", 1.1),
+            "num_predict": params.get("max_tokens", 512),
+        },
     }
 
     ollama_base_url = resolve_ollama_base_url(base_url)
+    t_start = time.time()
 
     try:
         with httpx.Client(timeout=OLLAMA_TIMEOUT) as client:
@@ -30,7 +40,10 @@ def generatechat(model: str, messages: list[dict], base_url: str | None = None) 
             content = (data.get("message") or {}).get("content", "").strip()
             if not content:
                 raise RuntimeError("Ollama returned empty content")
-            return content
+
+        duration = round(time.time() - t_start, 2)
+        _log_llm_io(model=model, messages=messages, response=content, duration=duration)
+        return content
     except httpx.TimeoutException as e:
         raise RuntimeError(f"Ollama timeout: {e}") from e
     except httpx.HTTPStatusError as e:
@@ -41,20 +54,30 @@ def generatechat(model: str, messages: list[dict], base_url: str | None = None) 
 
 
 def generatechat_stream(
-    model: str, messages: list[dict], base_url: str | None = None
+    model: str, messages: list[dict], base_url: str | None = None, llm_params: dict | None = None
 ) -> Generator[str, None, None]:
     """
     Streams the LLM response token by token as Server-Sent Events (SSE).
     Yields SSE-formatted strings: 'data: <token>\\n\\n'
     Sends 'data: [DONE]\\n\\n' when finished.
     """
+    params = llm_params or {}
     payload = {
         "model": model,
         "messages": messages,
         "stream": True,
+        "options": {
+            "temperature": params.get("temperature", 0.8),
+            "top_p": params.get("top_p", 0.9),
+            "top_k": params.get("top_k", 40),
+            "repeat_penalty": params.get("repeat_penalty", 1.1),
+            "num_predict": params.get("max_tokens", 512),
+        },
     }
 
     ollama_base_url = resolve_ollama_base_url(base_url)
+    t_start = time.time()
+    collected_tokens: list[str] = []
 
     try:
         with httpx.Client(timeout=OLLAMA_TIMEOUT) as client:
@@ -69,11 +92,15 @@ def generatechat_stream(
                         continue
                     token = (chunk.get("message") or {}).get("content", "")
                     if token:
-                        # Escape newlines so SSE stays valid
+                        collected_tokens.append(token)
                         safe = token.replace("\n", "\\n")
                         yield f"data: {safe}\n\n"
                     if chunk.get("done"):
                         break
+
+        full_response = "".join(collected_tokens)
+        duration = round(time.time() - t_start, 2)
+        _log_llm_io(model=model, messages=messages, response=full_response, duration=duration)
         yield "data: [DONE]\n\n"
     except httpx.TimeoutException as e:
         yield f"data: [ERROR] Ollama timeout: {e}\n\n"
@@ -82,3 +109,25 @@ def generatechat_stream(
         yield f"data: [ERROR] Ollama HTTP error: {detail}\n\n"
     except httpx.RequestError as e:
         yield f"data: [ERROR] Ollama connection error: {e}\n\n"
+
+
+def _log_llm_io(model: str, messages: list[dict], response: str, duration: float) -> None:
+    """
+    Appends one JSON line to /data/llm_log.jsonl for later analysis.
+    Format: {timestamp, model, input_tokens_approx, output_tokens_approx, duration_sec, response_preview}
+    """
+    try:
+        log_path = os.getenv("LLM_LOG_PATH", "/data/llm_log.jsonl")
+        prompt_chars = sum(len(m.get("content", "")) for m in messages)
+        entry = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "model": model,
+            "input_chars": prompt_chars,
+            "output_chars": len(response),
+            "duration_sec": duration,
+            "response_preview": response[:120].replace("\n", " "),
+        }
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass  # Never crash the game over a logging failure

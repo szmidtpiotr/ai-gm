@@ -101,6 +101,9 @@ def create_campaign(req: CampaignCreateRequest):
     if not row:
         raise HTTPException(status_code=500, detail="Campaign created but could not be loaded")
 
+    # NOTE: Chat history lives in the frontend — switching to a new campaign
+    # clears the UI automatically because the campaign_id changes.
+    # The backend does not maintain an in-memory chat state.
     return dict(row)
 
 

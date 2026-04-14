@@ -7,11 +7,24 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.core.llm_config import get_llm_params
 from app.core.turn_engine import buildmessages, loadrecentturns, runnarrativeturn
 from app.services.ollama_service import generatechat_stream
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
+
+# ---------------------------------------------------------------------------
+# Command registry — used by /help and the command dispatcher
+# ---------------------------------------------------------------------------
+COMMAND_REGISTRY = {
+    "/help": "Show this list of available commands",
+    "/sheet": "Display your full character sheet",
+    "/roll": "Roll d20 + modifier for the last GM-requested roll",
+    "/name <new name>": "Rename your character",
+    "/history": "Show the last 10 turns of the session",
+    "/export": "Export the full session to a text file on the server (/data/exports/)",
+}
 
 
 class TurnCreate(BaseModel):
@@ -153,6 +166,55 @@ def create_turn_log(
     }
 
 
+# ---------------------------------------------------------------------------
+# Helper: export session to text file
+# ---------------------------------------------------------------------------
+
+def _export_session_to_file(conn: sqlite3.Connection, campaign_id: int) -> str:
+    """Writes all turns for campaign_id to /data/exports/campaign_<id>_<ts>.txt"""
+    import time
+
+    rows = conn.execute(
+        """
+        SELECT turn_number, user_text, assistant_text, created_at
+        FROM campaign_turns
+        WHERE campaign_id = ?
+        ORDER BY turn_number ASC
+        """,
+        (campaign_id,),
+    ).fetchall()
+
+    campaign = conn.execute(
+        "SELECT title, system_id FROM campaigns WHERE id = ?",
+        (campaign_id,),
+    ).fetchone()
+
+    export_dir = "/data/exports"
+    os.makedirs(export_dir, exist_ok=True)
+    ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+    filename = f"{export_dir}/campaign_{campaign_id}_{ts}.txt"
+
+    with open(filename, "w", encoding="utf-8") as f:
+        title = campaign["title"] if campaign else f"Campaign {campaign_id}"
+        system = campaign["system_id"] if campaign else "unknown"
+        f.write(f"=== {title} [{system}] ===\n")
+        f.write(f"Exported: {ts}\n")
+        f.write("=" * 60 + "\n\n")
+
+        for row in rows:
+            f.write(f"[Turn {row['turn_number']}] {row['created_at']}\n")
+            f.write(f"PLAYER: {row['user_text']}\n")
+            if row["assistant_text"]:
+                f.write(f"GM:     {row['assistant_text']}\n")
+            f.write("\n")
+
+    return filename
+
+
+# ---------------------------------------------------------------------------
+# GET turns list
+# ---------------------------------------------------------------------------
+
 @router.get("/campaigns/{campaign_id}/turns")
 def list_campaign_turns(
     campaign_id: int, limit: int = Query(default=30, ge=1, le=100)
@@ -209,6 +271,26 @@ def list_campaign_turns(
         conn.close()
 
 
+# ---------------------------------------------------------------------------
+# Export session endpoint
+# ---------------------------------------------------------------------------
+
+@router.post("/campaigns/{campaign_id}/export")
+def export_session(campaign_id: int):
+    """Exports the full session to a .txt file under /data/exports/"""
+    conn = get_db()
+    try:
+        get_campaign_or_404(conn, campaign_id)
+        filepath = _export_session_to_file(conn, campaign_id)
+        return {"status": "ok", "file": filepath}
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# POST turn (non-streaming)
+# ---------------------------------------------------------------------------
+
 @router.post("/campaigns/{campaign_id}/turns")
 def create_turn(
     campaign_id: int,
@@ -226,44 +308,39 @@ def create_turn(
 
         if text.startswith("/"):
             route = "command"
+            cmd = text.split(" ", 1)[0].lower()
 
-            if text.startswith("/name"):
+            # /help
+            if cmd == "/help":
+                result = {
+                    "command": "help",
+                    "commands": COMMAND_REGISTRY,
+                }
+                log = create_turn_log(
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+                )
+                return {**log, "route": "command", "result": result}
+
+            # /name
+            if cmd == "/name":
                 new_name = text[5:].strip()
                 if not new_name:
-                    raise HTTPException(
-                        status_code=400, detail="Character name is required"
-                    )
-
+                    raise HTTPException(status_code=400, detail="Character name is required")
                 conn.execute(
                     "UPDATE characters SET name = ? WHERE id = ? AND campaign_id = ?",
                     (new_name, payload.character_id, campaign_id),
                 )
                 conn.commit()
-
-                result = {
-                    "command": "name",
-                    "character_name": new_name,
-                }
-
+                result = {"command": "name", "character_name": new_name}
                 log = create_turn_log(
-                    conn=conn,
-                    campaign_id=campaign_id,
-                    character_id=payload.character_id,
-                    user_text=text,
-                    assistant_text=json.dumps(result, ensure_ascii=False),
-                    route=route,
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
                 )
+                return {**log, "route": "command", "result": result}
 
-                return {
-                    "id": log["id"],
-                    "campaign_id": log["campaign_id"],
-                    "turn_number": log["turn_number"],
-                    "created_at": log["created_at"],
-                    "route": "command",
-                    "result": result,
-                }
-
-            if text == "/sheet":
+            # /sheet
+            if cmd == "/sheet":
                 result = {
                     "command": "sheet",
                     "character": {
@@ -278,47 +355,57 @@ def create_turn(
                         "created_at": character["created_at"],
                     },
                 }
-
                 log = create_turn_log(
-                    conn=conn,
-                    campaign_id=campaign_id,
-                    character_id=payload.character_id,
-                    user_text=text,
-                    assistant_text=json.dumps(result, ensure_ascii=False),
-                    route=route,
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
                 )
+                return {**log, "route": "command", "result": result}
 
-                return {
-                    "id": log["id"],
-                    "campaign_id": log["campaign_id"],
-                    "turn_number": log["turn_number"],
-                    "created_at": log["created_at"],
-                    "route": "command",
-                    "result": result,
-                }
+            # /history
+            if cmd == "/history":
+                rows = conn.execute(
+                    """
+                    SELECT turn_number, user_text, assistant_text, created_at
+                    FROM campaign_turns
+                    WHERE campaign_id = ?
+                    ORDER BY turn_number DESC
+                    LIMIT 10
+                    """,
+                    (campaign_id,),
+                ).fetchall()
+                history = [
+                    {
+                        "turn": r["turn_number"],
+                        "player": r["user_text"],
+                        "gm": r["assistant_text"],
+                        "at": r["created_at"],
+                    }
+                    for r in reversed(rows)
+                ]
+                result = {"command": "history", "turns": history}
+                log = create_turn_log(
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+                )
+                return {**log, "route": "command", "result": result}
 
-            result = {
-                "command": text.split(" ", 1)[0],
-                "message": "Unknown command",
-            }
+            # /export
+            if cmd == "/export":
+                filepath = _export_session_to_file(conn, campaign_id)
+                result = {"command": "export", "file": filepath}
+                log = create_turn_log(
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+                )
+                return {**log, "route": "command", "result": result}
 
+            # Unknown command
+            result = {"command": cmd, "message": f"Unknown command '{cmd}'. Type /help for a list."}
             log = create_turn_log(
-                conn=conn,
-                campaign_id=campaign_id,
-                character_id=payload.character_id,
-                user_text=text,
-                assistant_text=json.dumps(result, ensure_ascii=False),
-                route=route,
+                conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
             )
-
-            return {
-                "id": log["id"],
-                "campaign_id": log["campaign_id"],
-                "turn_number": log["turn_number"],
-                "created_at": log["created_at"],
-                "route": "command",
-                "result": result,
-            }
+            return {**log, "route": "command", "result": result}
 
         route = "narrative"
         ollama_base_url = get_ollama_base_url(x_ollama_base_url)
@@ -366,6 +453,10 @@ def create_turn(
         conn.close()
 
 
+# ---------------------------------------------------------------------------
+# POST turn streaming (SSE)
+# ---------------------------------------------------------------------------
+
 @router.post("/campaigns/{campaign_id}/turns/stream")
 def create_turn_stream(
     campaign_id: int,
@@ -377,10 +468,7 @@ def create_turn_stream(
     Returns a text/event-stream (SSE) response.
     Each chunk: 'data: <token>\\n\\n'
     Final chunk: 'data: [DONE]\\n\\n'
-
-    The full assembled text is also saved to campaign_turns after streaming completes.
-    NOTE: Since we need to collect the full text to save it, we buffer internally
-    and yield tokens as they arrive.
+    The full assembled text is saved to campaign_turns after streaming completes.
     """
     conn = get_db()
     try:
@@ -391,7 +479,7 @@ def create_turn_stream(
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
 
-        # Commands are not streamed — return immediately as JSON-in-SSE
+        # Commands are not streamed
         if text.startswith("/"):
             def command_stream():
                 yield f"data: [CMD] {text}\n\n"
@@ -413,17 +501,20 @@ def create_turn_stream(
             usertext=text,
         )
 
-        # We need a fresh connection for the post-stream DB write
-        # because the generator runs after this function returns
+        llm_params = get_llm_params()
         campaign_id_val = campaign_id
         character_id_val = payload.character_id
         user_text_val = text
 
         def token_generator():
             collected = []
-            for chunk in generatechat_stream(model=model, messages=messages, base_url=ollama_base_url):
+            for chunk in generatechat_stream(
+                model=model,
+                messages=messages,
+                base_url=ollama_base_url,
+                llm_params=llm_params,
+            ):
                 if chunk.startswith("data: [DONE]"):
-                    # Save the full text to DB
                     full_text = "".join(collected).replace("\\n", "\n")
                     if full_text.strip():
                         save_conn = get_db()
@@ -442,7 +533,6 @@ def create_turn_stream(
                 elif chunk.startswith("data: [ERROR]"):
                     yield chunk
                 else:
-                    # Extract the token from 'data: <token>\n\n'
                     token = chunk[6:].rstrip("\n")
                     collected.append(token)
                     yield chunk
@@ -452,7 +542,7 @@ def create_turn_stream(
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",  # Disable nginx buffering
+                "X-Accel-Buffering": "no",
             },
         )
 
