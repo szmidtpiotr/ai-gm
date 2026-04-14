@@ -19,7 +19,7 @@ from app.api import turns
 
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
-DB_PATH = "/data/ai_gm.db"
+DB_PATH = os.getenv("DB_PATH", "/data/ai_gm.db")
 
 app = FastAPI(title="AI Game Master PL")
 
@@ -97,6 +97,11 @@ RAW_MIGRATIONS = [
 
 
 def run_raw_migrations():
+    # Ensure directory exists before connecting
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
+    print(f"[migration] db path: {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     for sql in RAW_MIGRATIONS:
@@ -108,7 +113,7 @@ def run_raw_migrations():
             if "duplicate column" in str(e).lower() or "already exists" in str(e).lower():
                 print(f"[migration] already applied: {sql}")
             else:
-                print(f"[migration] ERROR: {sql} -> {e}")
+                print(f"[migration] ERROR ({e}): {sql}")
     conn.close()
 
 
