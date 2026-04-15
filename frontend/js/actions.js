@@ -121,29 +121,64 @@ window.deleteCampaign = async function () {
 };
 
 window.createCharacter = async function () {
-  const { systemSelectEl } = window.getEls();
+  if (!window.state.selectedCampaignId) {
+    alert('Najpierw wybierz kampanię');
+    return;
+  }
+
+  window.setCharacterModalOpen(true);
+};
+
+window.createCharacterFromForm = async function () {
+  const {
+    characterCreateNameEl,
+    characterCreateBackgroundEl,
+    characterCreateFormEl,
+    characterCreateSubmitEl
+  } = window.getEls();
 
   if (!window.state.selectedCampaignId) {
     alert('Najpierw wybierz kampanię');
     return;
   }
 
-  const name = prompt('Imię postaci:', 'Nowy Bohater');
-  if (!name) return;
+  const name = (characterCreateNameEl?.value || '').trim();
+  const background = (characterCreateBackgroundEl?.value || '').trim();
+  const archetype = characterCreateFormEl?.dataset?.archetype || '';
+
+  if (!name) {
+    alert('Podaj imię postaci');
+    characterCreateNameEl?.focus();
+    return;
+  }
+  if (!background) {
+    alert('Podaj historię postaci');
+    characterCreateBackgroundEl?.focus();
+    return;
+  }
+  if (!archetype) {
+    alert('Wybierz archetyp postaci');
+    return;
+  }
 
   const payload = {
     user_id: 1,
-    name: name.trim(),
-    system_id: systemSelectEl.value,
+    name,
+    system_id: 'fantasy',
     sheet_json: {
+      archetype,
+      background,
       level: 1,
-      hp: 20,
+      hp: archetype === 'Warrior' ? 24 : 16,
+      mana: archetype === 'Mage' ? 24 : 6,
       stats: {},
       inventory: []
     },
     location: 'Start',
     is_active: 1
   };
+
+  if (characterCreateSubmitEl) characterCreateSubmitEl.disabled = true;
 
   try {
     const resp = await fetch(`/api/campaigns/${window.state.selectedCampaignId}/characters`, {
@@ -153,12 +188,22 @@ window.createCharacter = async function () {
     });
 
     const data = await resp.json();
-
     if (!resp.ok) {
       throw new Error(data.detail || `HTTP ${resp.status}`);
     }
 
     await window.loadCharacters(window.state.selectedCampaignId, data.id);
+    await window.loadTurns(window.state.selectedCampaignId);
+    window.setCharacterModalOpen(false);
+    window.updateUiState();
+
+    if (characterCreateFormEl) {
+      characterCreateFormEl.reset();
+      characterCreateFormEl.dataset.archetype = '';
+    }
+    document.querySelectorAll('.archetype-card').forEach((card) => {
+      card.classList.remove('selected');
+    });
 
     window.addMessage({
       speaker: 'System',
@@ -172,6 +217,8 @@ window.createCharacter = async function () {
       text: `Tworzenie postaci: ${e.message}`,
       role: 'error'
     });
+  } finally {
+    if (characterCreateSubmitEl) characterCreateSubmitEl.disabled = false;
   }
 };
 

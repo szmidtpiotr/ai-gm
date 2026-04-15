@@ -8,6 +8,8 @@ window.getEls = function () {
     ollamaUrlEl: document.getElementById('ollama-url'),
     testOllamaBtn: document.getElementById('test-ollama-btn'),
     chatEl: document.getElementById('chat'),
+    historyPanelEl: document.getElementById('history-panel'),
+    composerEl: document.querySelector('.composer'),
     inputEl: document.getElementById('input'),
     sendBtn: document.getElementById('send-btn'),
     diceBtn: document.getElementById('dice-btn'),
@@ -22,8 +24,26 @@ window.getEls = function () {
     labelCharacterEl: document.getElementById('label-character'),
     labelSystemEl: document.getElementById('label-system'),
     labelEngineEl: document.getElementById('label-engine'),
-    labelOllamaUrlEl: document.getElementById('label-ollama-url')
+    labelOllamaUrlEl: document.getElementById('label-ollama-url'),
+    characterCreateOverlayEl: document.getElementById('character-create-overlay'),
+    characterCreatePanelEl: document.getElementById('character-create-panel'),
+    characterCreateCloseEl: document.getElementById('character-create-close'),
+    characterCreateFormEl: document.getElementById('character-create-form'),
+    characterCreateNameEl: document.getElementById('character-create-name'),
+    characterCreateBackgroundEl: document.getElementById('character-create-background'),
+    characterCreateSubmitEl: document.getElementById('character-create-submit')
   };
+};
+
+window.characterModalOpen = window.characterModalOpen || false;
+
+window.setCharacterModalOpen = function (open) {
+  window.characterModalOpen = !!open;
+  const els = window.getEls();
+  if (open && els.characterCreateNameEl) {
+    setTimeout(() => els.characterCreateNameEl.focus(), 0);
+  }
+  window.updateUiState();
 };
 
 window.applyTranslations = function () {
@@ -463,10 +483,29 @@ window.updateUiState = function () {
   const els = window.getEls();
   const hasCampaign = !!window.state.selectedCampaignId;
   const hasCharacter = !!window.state.selectedCharacterId;
+  const shouldForceCharacterModal = hasCampaign && !hasCharacter;
+  const shouldShowCharacterModal = shouldForceCharacterModal || window.characterModalOpen;
 
   if (els.deleteCampaignBtn) els.deleteCampaignBtn.disabled = !hasCampaign;
   if (els.createCharacterBtn) els.createCharacterBtn.disabled = !hasCampaign;
   if (els.sendBtn) els.sendBtn.disabled = !(hasCampaign && hasCharacter);
+
+  if (els.characterCreateCloseEl) {
+    els.characterCreateCloseEl.style.display = shouldForceCharacterModal ? 'none' : 'inline-flex';
+  }
+  if (els.chatEl) {
+    els.chatEl.style.display = shouldForceCharacterModal ? 'none' : 'flex';
+  }
+  if (els.composerEl) {
+    els.composerEl.style.display = shouldForceCharacterModal ? 'none' : 'grid';
+  }
+  if (els.historyPanelEl) {
+    els.historyPanelEl.style.display = shouldForceCharacterModal ? 'none' : els.historyPanelEl.style.display;
+  }
+  if (els.characterCreateOverlayEl) {
+    els.characterCreateOverlayEl.style.display = shouldShowCharacterModal ? 'flex' : 'none';
+    els.characterCreateOverlayEl.setAttribute('aria-hidden', shouldShowCharacterModal ? 'false' : 'true');
+  }
 };
 
 window.renderTurnResponse = function (data, turnNumber) {

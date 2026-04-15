@@ -76,6 +76,42 @@
     </div>
   </div>
 
+  <div class="character-modal-overlay" id="character-create-overlay" aria-hidden="true">
+    <section class="character-modal" id="character-create-panel" role="dialog" aria-modal="true" aria-labelledby="character-create-title">
+      <button type="button" class="character-modal-close secondary" id="character-create-close" aria-label="Zamknij">×</button>
+      <h2 id="character-create-title">Stwórz postać</h2>
+      <p class="muted">Nie masz jeszcze bohatera w tej kampanii. Przygotuj kartę i zacznij przygodę.</p>
+
+      <form id="character-create-form">
+        <div class="field">
+          <label for="character-create-name">Imię postaci</label>
+          <input id="character-create-name" type="text" placeholder="np. Aldric z Północy" required>
+        </div>
+
+        <div class="field">
+          <label for="character-create-background">Historia / tło postaci</label>
+          <textarea id="character-create-background" placeholder="Kim był twój bohater przed początkiem kampanii?" required></textarea>
+        </div>
+
+        <div class="field">
+          <label>Archetyp</label>
+          <div class="archetype-grid" id="archetype-grid">
+            <button type="button" class="archetype-card" data-archetype="Warrior">
+              <span class="archetype-title">Warrior</span>
+              <span class="archetype-desc">Frontowy wojownik: wytrzymały, pewny stali, silny w bezpośrednim starciu.</span>
+            </button>
+            <button type="button" class="archetype-card" data-archetype="Mage">
+              <span class="archetype-title">Mage</span>
+              <span class="archetype-desc">Tkacz arkanów: kruchy, ale groźny dzięki zaklęciom i mistycznej wiedzy.</span>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="character-create-submit">Create Character</button>
+      </form>
+    </section>
+  </div>
+
   <script src="./js/config.js"></script>
   <script src="./js/state.js"></script>
   <script src="./js/utils.js"></script>

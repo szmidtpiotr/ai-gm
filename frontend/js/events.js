@@ -2,6 +2,7 @@ window.bindEvents = function () {
   const els = window.getEls();
   const historyBtn = document.getElementById('history-btn');
   const historyPanelEl = document.getElementById('history-panel');
+  const archetypeCards = Array.from(document.querySelectorAll('.archetype-card'));
 
   if (els.ollamaUrlEl) {
     els.ollamaUrlEl.value = window.getOllamaBaseUrl();
@@ -97,6 +98,36 @@ window.bindEvents = function () {
   els.createCampaignBtn.onclick = window.createCampaign;
   els.deleteCampaignBtn.onclick = window.deleteCampaign;
   els.createCharacterBtn.onclick = window.createCharacter;
+
+  if (els.characterCreateFormEl) {
+    els.characterCreateFormEl.onsubmit = async (e) => {
+      e.preventDefault();
+      await window.createCharacterFromForm();
+    };
+  }
+
+  if (els.characterCreateCloseEl) {
+    els.characterCreateCloseEl.onclick = () => window.setCharacterModalOpen(false);
+  }
+
+  if (els.characterCreateOverlayEl) {
+    els.characterCreateOverlayEl.onclick = (e) => {
+      if (e.target === els.characterCreateOverlayEl && window.state.selectedCharacterId) {
+        window.setCharacterModalOpen(false);
+      }
+    };
+  }
+
+  archetypeCards.forEach((card) => {
+    card.onclick = () => {
+      const archetype = card.getAttribute('data-archetype');
+      if (els.characterCreateFormEl) {
+        els.characterCreateFormEl.dataset.archetype = archetype || '';
+      }
+      archetypeCards.forEach((item) => item.classList.remove('selected'));
+      card.classList.add('selected');
+    };
+  });
 
   if (historyBtn && historyPanelEl) {
     historyBtn.onclick = async () => {
