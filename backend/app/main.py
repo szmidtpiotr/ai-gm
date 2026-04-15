@@ -81,6 +81,7 @@ class GameCreateReq(BaseModel):
 RAW_MIGRATIONS = [
     "ALTER TABLE characters ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE campaign_turns ADD COLUMN character_id INTEGER",
+    "ALTER TABLE characters ADD COLUMN sheet_json TEXT",
 ]
 
 
