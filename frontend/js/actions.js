@@ -26,16 +26,22 @@ window.nextTurnNumber = function () {
 };
 
 window.createCampaign = async function () {
-  const { systemSelectEl, engineSelectEl } = window.getEls();
+  window.setCampaignModalOpen(true);
+};
 
-  const title = prompt(
-    'Tytuł kampanii:',
-    `Kampania ${new Date().toISOString().slice(0, 10)}`
-  );
+window.createCampaignFromForm = async function () {
+  const { systemSelectEl, engineSelectEl } = window.getEls();
+  const {
+    campaignCreateTitleInputEl,
+    campaignCreateFormEl,
+    campaignCreateSubmitEl
+  } = window.getEls();
+
+  const title = (campaignCreateTitleInputEl?.value || '').trim();
   if (!title) return;
 
   const payload = {
-    title: title.trim(),
+    title,
     system_id: systemSelectEl.value,
     model_id: engineSelectEl.value || (window.state.models[0]?.name ?? 'gemma3:1b'),
     owner_user_id: 1,
@@ -43,6 +49,8 @@ window.createCampaign = async function () {
     mode: 'solo',
     status: 'active'
   };
+
+  if (campaignCreateSubmitEl) campaignCreateSubmitEl.disabled = true;
 
   try {
     const resp = await fetch(window.API_CAMPAIGNS, {
@@ -59,6 +67,11 @@ window.createCampaign = async function () {
 
     await window.loadCampaigns(data.id);
     await window.loadCharacters(data.id);
+    window.setCampaignModalOpen(false);
+
+    if (campaignCreateFormEl) {
+      campaignCreateFormEl.reset();
+    }
 
     window.addMessage({
       speaker: 'System',
@@ -72,6 +85,8 @@ window.createCampaign = async function () {
       text: `Tworzenie kampanii: ${e.message}`,
       role: 'error'
     });
+  } finally {
+    if (campaignCreateSubmitEl) campaignCreateSubmitEl.disabled = false;
   }
 };
 
@@ -121,44 +136,124 @@ window.deleteCampaign = async function () {
 };
 
 window.createCharacter = async function () {
-  const { systemSelectEl } = window.getEls();
+  if (!window.state.selectedCampaignId) {
+    alert('Najpierw wybierz kampanię');
+    return;
+  }
+
+  window.setCharacterModalOpen(true);
+};
+
+window.createCharacterFromForm = async function () {
+  const {
+    campaignSelectEl,
+    characterCreateNameEl,
+    characterCreateBackgroundEl,
+    characterCreateFormEl,
+    characterCreateSubmitEl
+  } = window.getEls();
 
   if (!window.state.selectedCampaignId) {
     alert('Najpierw wybierz kampanię');
     return;
   }
 
-  const name = prompt('Imię postaci:', 'Nowy Bohater');
-  if (!name) return;
+  // Guard against stale local campaign id after refresh/deletions.
+  await window.loadCampaigns(window.state.selectedCampaignId);
+  const selectedCampaignId = Number(
+    campaignSelectEl?.value || window.state.selectedCampaignId || 0
+  );
+  if (!selectedCampaignId) {
+    alert('Najpierw wybierz kampanię');
+    return;
+  }
+
+  const name = (characterCreateNameEl?.value || '').trim();
+  const background = (characterCreateBackgroundEl?.value || '').trim();
+  const archetype = characterCreateFormEl?.dataset?.archetype || '';
+  const campaign = window.currentCampaign ? window.currentCampaign() : null;
+  const campaignSystem = campaign?.system_id || campaign?.systemid || 'fantasy';
+
+  if (!name) {
+    alert('Podaj imię postaci');
+    characterCreateNameEl?.focus();
+    return;
+  }
+  if (!background) {
+    alert('Podaj historię postaci');
+    characterCreateBackgroundEl?.focus();
+    return;
+  }
+  if (!archetype) {
+    alert('Wybierz archetyp postaci');
+    return;
+  }
 
   const payload = {
     user_id: 1,
-    name: name.trim(),
-    system_id: systemSelectEl.value,
+    name,
+    system_id: campaignSystem,
     sheet_json: {
+      archetype,
+      background,
       level: 1,
-      hp: 20,
-      stats: {},
+      current_hp: archetype === 'Warrior' ? 24 : 16,
+      max_hp: archetype === 'Warrior' ? 24 : 16,
+      current_mana: archetype === 'Mage' ? 24 : 6,
+      max_mana: archetype === 'Mage' ? 24 : 6,
+      stats: {
+        STR: archetype === 'Warrior' ? 14 : 10,
+        DEX: 12,
+        CON: archetype === 'Warrior' ? 13 : 10,
+        INT: archetype === 'Mage' ? 14 : 10,
+        WIS: 11,
+        CHA: 10,
+        LCK: 10
+      },
+      skills: {
+        Athletics: archetype === 'Warrior' ? 2 : 1,
+        Swordsmanship: archetype === 'Warrior' ? 2 : 0,
+        Archery: 1,
+        Stealth: 1,
+        Survival: 1,
+        Persuasion: 1,
+        Insight: 1,
+        Arcana: archetype === 'Mage' ? 2 : 0,
+        Alchemy: archetype === 'Mage' ? 1 : 0,
+        Lore: 1
+      },
       inventory: []
     },
     location: 'Start',
     is_active: 1
   };
 
+  if (characterCreateSubmitEl) characterCreateSubmitEl.disabled = true;
+
   try {
-    const resp = await fetch(`/api/campaigns/${window.state.selectedCampaignId}/characters`, {
+    const resp = await fetch(`/api/campaigns/${selectedCampaignId}/characters`, {
       method: 'POST',
       headers: window.getApiHeaders(),
       body: JSON.stringify(payload)
     });
 
     const data = await resp.json();
-
     if (!resp.ok) {
       throw new Error(data.detail || `HTTP ${resp.status}`);
     }
 
-    await window.loadCharacters(window.state.selectedCampaignId, data.id);
+    await window.loadCharacters(selectedCampaignId, data.id);
+    await window.loadTurns(selectedCampaignId);
+    window.setCharacterModalOpen(false);
+    window.updateUiState();
+
+    if (characterCreateFormEl) {
+      characterCreateFormEl.reset();
+      characterCreateFormEl.dataset.archetype = '';
+    }
+    document.querySelectorAll('.archetype-card').forEach((card) => {
+      card.classList.remove('selected');
+    });
 
     window.addMessage({
       speaker: 'System',
@@ -167,11 +262,14 @@ window.createCharacter = async function () {
       route: 'character'
     });
   } catch (e) {
+    alert(`Tworzenie postaci nie powiodło się: ${e.message}`);
     window.addMessage({
       speaker: 'Błąd',
       text: `Tworzenie postaci: ${e.message}`,
       role: 'error'
     });
+  } finally {
+    if (characterCreateSubmitEl) characterCreateSubmitEl.disabled = false;
   }
 };
 

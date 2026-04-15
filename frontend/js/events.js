@@ -2,10 +2,34 @@ window.bindEvents = function () {
   const els = window.getEls();
   const historyBtn = document.getElementById('history-btn');
   const historyPanelEl = document.getElementById('history-panel');
+  const archetypeCards = Array.from(document.querySelectorAll('.archetype-card'));
+  const defaultOllamaUrl = 'http://ollama:11434';
+  const customStorageKey = 'ai-gm:ollamaCustomUrl';
+  const ollamaOptionsEl = document.getElementById('ollama-url-options');
+  const customOptionId = 'ollama-custom-option';
 
-  if (els.ollamaUrlEl) {
-    els.ollamaUrlEl.value = window.getOllamaBaseUrl();
-  }
+  const syncOllamaPreset = () => {
+    if (!els.ollamaUrlPresetEl) return;
+    const value = (window.getOllamaBaseUrl() || '').trim() || defaultOllamaUrl;
+    els.ollamaUrlPresetEl.value = value;
+
+    if (!ollamaOptionsEl) return;
+    let customOption = document.getElementById(customOptionId);
+
+    if (value === defaultOllamaUrl) {
+      if (customOption) customOption.remove();
+      return;
+    }
+
+    if (!customOption) {
+      customOption = document.createElement('option');
+      customOption.id = customOptionId;
+      ollamaOptionsEl.appendChild(customOption);
+    }
+    customOption.value = value;
+    customOption.label = `Custom: ${value}`;
+  };
+  syncOllamaPreset();
 
   els.campaignSelectEl.onchange = async () => {
     window.state.selectedCampaignId = Number(els.campaignSelectEl.value);
@@ -54,19 +78,28 @@ window.bindEvents = function () {
     localStorage.setItem('ai-gm:selectedEngine', window.state.selectedEngine);
   };
 
-  if (els.ollamaUrlEl) {
-    els.ollamaUrlEl.onchange = () => {
-      const value = (els.ollamaUrlEl.value || '').trim() || 'http://ollama:11434';
+  if (els.ollamaUrlPresetEl) {
+    const applyOllamaFieldValue = () => {
+      const value = (els.ollamaUrlPresetEl.value || '').trim() || defaultOllamaUrl;
       localStorage.setItem('ai-gm:ollamaBaseUrl', value);
-      els.ollamaUrlEl.value = value;
+      if (value !== defaultOllamaUrl) {
+        localStorage.setItem(customStorageKey, value);
+      }
+      syncOllamaPreset();
     };
+
+    els.ollamaUrlPresetEl.onchange = applyOllamaFieldValue;
+    els.ollamaUrlPresetEl.onblur = applyOllamaFieldValue;
   }
 
-  if (els.testOllamaBtn && els.ollamaUrlEl) {
+  if (els.testOllamaBtn) {
     els.testOllamaBtn.onclick = async () => {
-      const value = (els.ollamaUrlEl.value || '').trim() || 'http://ollama:11434';
+      const value = (els.ollamaUrlPresetEl?.value || '').trim() || defaultOllamaUrl;
       localStorage.setItem('ai-gm:ollamaBaseUrl', value);
-      els.ollamaUrlEl.value = value;
+      if (value !== defaultOllamaUrl) {
+        localStorage.setItem(customStorageKey, value);
+      }
+      syncOllamaPreset();
 
       try {
         await window.loadHealth();
@@ -78,10 +111,11 @@ window.bindEvents = function () {
 
         window.addMessage({
           speaker: 'System',
-          text: `Ollama Host ustawiony na ${value}`,
+          text: `API URL ustawiony na ${value}`,
           role: 'system',
           route: 'config'
         });
+        window.location.reload();
       } catch (e) {
         window.addMessage({
           speaker: 'Błąd',
@@ -93,10 +127,61 @@ window.bindEvents = function () {
   }
 
   els.sendBtn.onclick = window.sendMessage;
-  els.diceBtn.onclick = window.rollDice;
+  if (els.diceBtn) {
+    els.diceBtn.onclick = () => window.setSheetPanelOpen(!window.state.sheetPanelOpen);
+  }
   els.createCampaignBtn.onclick = window.createCampaign;
   els.deleteCampaignBtn.onclick = window.deleteCampaign;
   els.createCharacterBtn.onclick = window.createCharacter;
+
+  if (els.characterCreateFormEl) {
+    els.characterCreateFormEl.onsubmit = async (e) => {
+      e.preventDefault();
+      await window.createCharacterFromForm();
+    };
+  }
+
+  if (els.campaignCreateFormEl) {
+    els.campaignCreateFormEl.onsubmit = async (e) => {
+      e.preventDefault();
+      await window.createCampaignFromForm();
+    };
+  }
+
+  if (els.campaignCreateCloseEl) {
+    els.campaignCreateCloseEl.onclick = () => window.setCampaignModalOpen(false);
+  }
+
+  if (els.campaignCreateOverlayEl) {
+    els.campaignCreateOverlayEl.onclick = (e) => {
+      if (e.target === els.campaignCreateOverlayEl) {
+        window.setCampaignModalOpen(false);
+      }
+    };
+  }
+
+  if (els.characterCreateCloseEl) {
+    els.characterCreateCloseEl.onclick = () => window.setCharacterModalOpen(false);
+  }
+
+  if (els.characterCreateOverlayEl) {
+    els.characterCreateOverlayEl.onclick = (e) => {
+      if (e.target === els.characterCreateOverlayEl && window.state.selectedCharacterId) {
+        window.setCharacterModalOpen(false);
+      }
+    };
+  }
+
+  archetypeCards.forEach((card) => {
+    card.onclick = () => {
+      const archetype = card.getAttribute('data-archetype');
+      if (els.characterCreateFormEl) {
+        els.characterCreateFormEl.dataset.archetype = archetype || '';
+      }
+      archetypeCards.forEach((item) => item.classList.remove('selected'));
+      card.classList.add('selected');
+    };
+  });
 
   if (historyBtn && historyPanelEl) {
     historyBtn.onclick = async () => {

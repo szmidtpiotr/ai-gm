@@ -70,6 +70,9 @@ class ChatReq(BaseModel):
 
 class DiceReq(BaseModel):
     dice: str
+    character_id: int | None = None
+    roll_key: str | None = None
+    dc: int | None = None
 
 
 class GameCreateReq(BaseModel):
@@ -132,6 +135,9 @@ app.include_router(commands.router, prefix="/api")
 app.include_router(turns.router, prefix="/api")
 app.include_router(campaigns.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
+# Keep non-prefixed character endpoints available for direct local calls
+# (e.g. /characters/{id}/sheet), while preserving /api/* routes.
+app.include_router(characters.router)
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 
@@ -183,10 +189,97 @@ async def gm_dice(req: DiceReq):
 
     num = int(match.group(1) or 1)
     sides = int(match.group(2))
-    mod = int(match.group(3) or 0)
+    base_mod = int(match.group(3) or 0)
 
     rolls = [random.randint(1, sides) for _ in range(num)]
-    total = sum(rolls) + mod
+    total = sum(rolls) + base_mod
+
+    if req.character_id and req.roll_key and num == 1 and sides == 20:
+        skill_to_stat = {
+            "athletics": "STR",
+            "melee_attack": "STR",
+            "stealth": "DEX",
+            "reflex_save": "DEX",
+            "ranged_attack": "DEX",
+            "fortitude_save": "CON",
+            "arcana": "INT",
+            "lore": "INT",
+            "investigation": "INT",
+            "arcane_save": "INT",
+            "spell_attack": "INT",
+            "awareness": "WIS",
+            "survival": "WIS",
+            "medicine": "WIS",
+            "willpower_save": "WIS",
+            "persuasion": "CHA",
+            "intimidation": "CHA",
+        }
+        aliases = {
+            "str_save": "fortitude_save",
+            "dex_save": "reflex_save",
+            "int_save": "arcane_save",
+            "wis_save": "willpower_save",
+            "cha_save": "persuasion",
+            "con_save": "fortitude_save",
+            "attack": "melee_attack",
+        }
+        normalized_key = req.roll_key.strip().lower().replace("-", "_")
+        normalized_key = normalized_key.replace(" ", "_")
+        normalized_key = aliases.get(normalized_key, normalized_key)
+
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?",
+            (req.character_id,),
+        ).fetchone()
+        conn.close()
+
+        if not row:
+            raise HTTPException(status_code=404, detail="Character not found")
+
+        try:
+            sheet = json.loads(row["sheet_json"]) if row["sheet_json"] else {}
+        except Exception:
+            sheet = {}
+
+        stats = sheet.get("stats") if isinstance(sheet.get("stats"), dict) else {}
+        skills = sheet.get("skills") if isinstance(sheet.get("skills"), dict) else {}
+
+        stat_name = skill_to_stat.get(normalized_key)
+        stat_value = 10
+        if stat_name:
+            stat_value = int(
+                stats.get(
+                    stat_name,
+                    stats.get(stat_name.lower(), 10),
+                )
+            )
+        stat_modifier = (stat_value - 10) // 2
+        skill_rank = int(skills.get(normalized_key, 0))
+        proficiency_bonus = 2 if skill_rank >= 3 else 0
+        computed_modifier = stat_modifier + skill_rank + proficiency_bonus + base_mod
+        d20_roll = rolls[0]
+        total = d20_roll + computed_modifier
+
+        return {
+            "dice": req.dice.strip(),
+            "rolls": rolls,
+            "roll": d20_roll,
+            "modifier": computed_modifier,
+            "total": total,
+            "dc": req.dc,
+            "success": (total >= req.dc) if req.dc is not None else None,
+            "breakdown": {
+                "roll_key": normalized_key,
+                "stat": stat_name,
+                "stat_value": stat_value,
+                "stat_modifier": stat_modifier,
+                "skill_rank": skill_rank,
+                "proficiency_bonus": proficiency_bonus,
+                "base_modifier": base_mod,
+            },
+        }
 
     return {"dice": req.dice.strip(), "rolls": rolls, "total": total}
 

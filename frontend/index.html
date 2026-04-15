@@ -12,14 +12,23 @@
       <div class="title" id="app-title">AI-GM</div>
     </div>
 
-    <div class="statusbar">
-      <div class="status-card" id="status-backend">Backend: ...</div>
-      <div class="status-card" id="status-ollama">Ollama: ...</div>
-      <div class="status-card" id="status-models">Modele: ...</div>
-      <div class="status-card" id="status-host">Host: ...</div>
-    </div>
-
     <div class="controls">
+      <div class="field top-row-field">
+        <label for="ollama-url" id="label-ollama-url">API URL</label>
+        <div class="field-row ollama-host-row">
+          <input id="ollama-url-preset" list="ollama-url-options" value="http://ollama:11434" placeholder="http://ollama:11434">
+          <datalist id="ollama-url-options">
+            <option value="http://ollama:11434">Default: http://ollama:11434</option>
+          </datalist>
+          <button type="button" class="secondary" id="test-ollama-btn">Connect</button>
+        </div>
+      </div>
+
+      <div class="field top-row-field">
+        <label for="engine-select" id="label-engine">Silnik</label>
+        <select id="engine-select"></select>
+      </div>
+
       <div class="field">
         <label for="campaign-select" id="label-campaign">Kampania</label>
         <div class="field-row">
@@ -38,42 +47,102 @@
         </div>
       </div>
 
-      <div class="field">
-        <label for="system-select" id="label-system">System</label>
-        <select id="system-select">
-          <option value="fantasy">fantasy</option>
-          <option value="warhammer">warhammer</option>
-          <option value="cyberpunk">cyberpunk</option>
-          <option value="neuroshima">neuroshima</option>
-        </select>
+    </div>
+
+    <div class="play-area">
+      <div class="play-main">
+        <!-- Thinking bubble is inserted here dynamically by ui.js -->
+        <div class="chat" id="chat"></div>
+
+        <div class="chat history-panel" id="history-panel">
+          <div class="muted">Historia kampanii...</div>
+        </div>
+
+        <div class="composer">
+          <textarea id="input" placeholder="Wpisz /sheet albo opisz akcję..."></textarea>
+          <div class="composer-actions">
+            <button type="button" class="secondary sheet-inline-btn" id="dice-btn">👤 Karta postaci</button>
+            <button type="button" id="send-btn">Wyślij</button>
+          </div>
+        </div>
       </div>
 
-      <div class="field">
-        <label for="engine-select" id="label-engine">Silnik</label>
-        <select id="engine-select"></select>
-      </div>
+      <aside class="sheet-panel" id="sheet-panel">
+        <div class="sheet-panel-body" id="sheet-panel-body">
+          <div class="muted">Wybierz postać</div>
+        </div>
+      </aside>
     </div>
+  </div>
 
-    <div class="field">
-      <label for="ollama-url" id="label-ollama-url">Ollama Host</label>
-      <div class="field-row single-action">
-        <input id="ollama-url" placeholder="http://ollama:11434" value="http://ollama:11434">
-        <button type="button" class="secondary" id="test-ollama-btn">Test</button>
-      </div>
+  <div class="status-dock" id="status-dock">
+    <div class="status-dot-wrap" title="Backend">
+      <span class="status-dot unknown" id="status-backend-dot"></span>
+      <span class="status-dot-label">Backend</span>
     </div>
-
-    <!-- Thinking bubble is inserted here dynamically by ui.js -->
-    <div class="chat" id="chat"></div>
-
-    <div class="chat history-panel" id="history-panel">
-      <div class="muted">Historia kampanii...</div>
+    <div class="status-dot-wrap" title="Ollama">
+      <span class="status-dot unknown" id="status-ollama-dot"></span>
+      <span class="status-dot-label">Ollama</span>
     </div>
+  </div>
 
-    <div class="composer">
-      <textarea id="input" placeholder="Wpisz /sheet albo opisz akcję..."></textarea>
-      <button type="button" class="secondary" id="dice-btn">🎲</button>
-      <button type="button" id="send-btn">Wyślij</button>
-    </div>
+  <div class="bottom-system-field">
+    <label for="system-select" id="label-system">System</label>
+    <select id="system-select">
+      <option value="fantasy" selected>fantasy</option>
+    </select>
+  </div>
+
+  <div class="character-modal-overlay" id="character-create-overlay" aria-hidden="true">
+    <section class="character-modal" id="character-create-panel" role="dialog" aria-modal="true" aria-labelledby="character-create-title">
+      <button type="button" class="character-modal-close secondary" id="character-create-close" aria-label="Zamknij">×</button>
+      <h2 id="character-create-title">Stwórz postać</h2>
+      <p class="muted">Nie masz jeszcze bohatera w tej kampanii. Przygotuj kartę i zacznij przygodę.</p>
+
+      <form id="character-create-form">
+        <div class="field">
+          <label for="character-create-name">Imię postaci</label>
+          <input id="character-create-name" type="text" placeholder="np. Aldric z Północy" required>
+        </div>
+
+        <div class="field">
+          <label for="character-create-background">Historia / tło postaci</label>
+          <textarea id="character-create-background" placeholder="Kim był twój bohater przed początkiem kampanii?" required></textarea>
+        </div>
+
+        <div class="field">
+          <label>Archetyp</label>
+          <div class="archetype-grid" id="archetype-grid">
+            <button type="button" class="archetype-card" data-archetype="Warrior">
+              <span class="archetype-title">Warrior</span>
+              <span class="archetype-desc">Frontowy wojownik: wytrzymały, pewny stali, silny w bezpośrednim starciu.</span>
+            </button>
+            <button type="button" class="archetype-card" data-archetype="Mage">
+              <span class="archetype-title">Mage</span>
+              <span class="archetype-desc">Tkacz arkanów: kruchy, ale groźny dzięki zaklęciom i mistycznej wiedzy.</span>
+            </button>
+          </div>
+        </div>
+
+        <button type="submit" id="character-create-submit">Create Character</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="character-modal-overlay" id="campaign-create-overlay" aria-hidden="true">
+    <section class="character-modal campaign-modal" id="campaign-create-panel" role="dialog" aria-modal="true" aria-labelledby="campaign-create-title">
+      <button type="button" class="character-modal-close secondary" id="campaign-create-close" aria-label="Zamknij">×</button>
+      <h2 id="campaign-create-title">Nowa kampania</h2>
+      <p class="muted">Podaj nazwę kampanii. System i model zostaną użyte z aktualnych ustawień.</p>
+
+      <form id="campaign-create-form">
+        <div class="field">
+          <label for="campaign-create-title-input">Tytuł kampanii</label>
+          <input id="campaign-create-title-input" type="text" placeholder="np. Cienie nad Averheim" required>
+        </div>
+        <button type="submit" id="campaign-create-submit">Utwórz kampanię</button>
+      </form>
+    </section>
   </div>
 
   <script src="./js/config.js"></script>
@@ -84,5 +153,6 @@
   <script src="./js/actions.js"></script>
   <script src="./js/events.js"></script>
   <script src="./js/main.js"></script>
+  <script src="./js/app.js"></script>
 </body>
 </html>

@@ -5,25 +5,59 @@ window.getEls = function () {
     characterSelectEl: document.getElementById('character-select'),
     systemSelectEl: document.getElementById('system-select'),
     engineSelectEl: document.getElementById('engine-select'),
-    ollamaUrlEl: document.getElementById('ollama-url'),
+    ollamaUrlPresetEl: document.getElementById('ollama-url-preset'),
     testOllamaBtn: document.getElementById('test-ollama-btn'),
     chatEl: document.getElementById('chat'),
+    historyPanelEl: document.getElementById('history-panel'),
+    composerEl: document.querySelector('.composer'),
     inputEl: document.getElementById('input'),
     sendBtn: document.getElementById('send-btn'),
     diceBtn: document.getElementById('dice-btn'),
     createCampaignBtn: document.getElementById('create-campaign-btn'),
     deleteCampaignBtn: document.getElementById('delete-campaign-btn'),
     createCharacterBtn: document.getElementById('create-character-btn'),
-    statusBackendEl: document.getElementById('status-backend'),
-    statusOllamaEl: document.getElementById('status-ollama'),
-    statusModelsEl: document.getElementById('status-models'),
-    statusHostEl: document.getElementById('status-host'),
+    statusBackendDotEl: document.getElementById('status-backend-dot'),
+    statusOllamaDotEl: document.getElementById('status-ollama-dot'),
     labelCampaignEl: document.getElementById('label-campaign'),
     labelCharacterEl: document.getElementById('label-character'),
     labelSystemEl: document.getElementById('label-system'),
     labelEngineEl: document.getElementById('label-engine'),
-    labelOllamaUrlEl: document.getElementById('label-ollama-url')
+    labelOllamaUrlEl: document.getElementById('label-ollama-url'),
+    characterCreateOverlayEl: document.getElementById('character-create-overlay'),
+    characterCreatePanelEl: document.getElementById('character-create-panel'),
+    characterCreateCloseEl: document.getElementById('character-create-close'),
+    characterCreateFormEl: document.getElementById('character-create-form'),
+    characterCreateNameEl: document.getElementById('character-create-name'),
+    characterCreateBackgroundEl: document.getElementById('character-create-background'),
+    characterCreateSubmitEl: document.getElementById('character-create-submit'),
+    campaignCreateOverlayEl: document.getElementById('campaign-create-overlay'),
+    campaignCreatePanelEl: document.getElementById('campaign-create-panel'),
+    campaignCreateCloseEl: document.getElementById('campaign-create-close'),
+    campaignCreateFormEl: document.getElementById('campaign-create-form'),
+    campaignCreateTitleInputEl: document.getElementById('campaign-create-title-input'),
+    campaignCreateSubmitEl: document.getElementById('campaign-create-submit')
   };
+};
+
+window.characterModalOpen = window.characterModalOpen || false;
+window.campaignModalOpen = window.campaignModalOpen || false;
+
+window.setCharacterModalOpen = function (open) {
+  window.characterModalOpen = !!open;
+  const els = window.getEls();
+  if (open && els.characterCreateNameEl) {
+    setTimeout(() => els.characterCreateNameEl.focus(), 0);
+  }
+  window.updateUiState();
+};
+
+window.setCampaignModalOpen = function (open) {
+  window.campaignModalOpen = !!open;
+  const els = window.getEls();
+  if (open && els.campaignCreateTitleInputEl) {
+    setTimeout(() => els.campaignCreateTitleInputEl.focus(), 0);
+  }
+  window.updateUiState();
 };
 
 window.applyTranslations = function () {
@@ -34,7 +68,7 @@ window.applyTranslations = function () {
   if (els.labelCharacterEl) els.labelCharacterEl.textContent = window.t('character.label');
   if (els.labelSystemEl) els.labelSystemEl.textContent = window.t('system.label');
   if (els.labelEngineEl) els.labelEngineEl.textContent = window.t('engine.label');
-  if (els.labelOllamaUrlEl) els.labelOllamaUrlEl.textContent = 'Ollama Host';
+  if (els.labelOllamaUrlEl) els.labelOllamaUrlEl.textContent = 'API URL';
   if (els.inputEl) els.inputEl.placeholder = window.t('input.placeholder');
   if (els.sendBtn) els.sendBtn.textContent = window.t('button.send');
 };
@@ -461,12 +495,36 @@ window.addJsonMessage = function (
 
 window.updateUiState = function () {
   const els = window.getEls();
-  const hasCampaign = !!window.state.selectedCampaignId;
+  const activeCampaign = window.currentCampaign ? window.currentCampaign() : null;
+  const hasCampaign = !!activeCampaign;
   const hasCharacter = !!window.state.selectedCharacterId;
+  const shouldForceCharacterModal = hasCampaign && !hasCharacter;
+  const shouldShowCharacterModal = shouldForceCharacterModal || window.characterModalOpen;
 
   if (els.deleteCampaignBtn) els.deleteCampaignBtn.disabled = !hasCampaign;
   if (els.createCharacterBtn) els.createCharacterBtn.disabled = !hasCampaign;
   if (els.sendBtn) els.sendBtn.disabled = !(hasCampaign && hasCharacter);
+
+  if (els.characterCreateCloseEl) {
+    els.characterCreateCloseEl.style.display = shouldForceCharacterModal ? 'none' : 'inline-flex';
+  }
+  if (els.chatEl) {
+    els.chatEl.style.display = shouldForceCharacterModal ? 'none' : 'flex';
+  }
+  if (els.composerEl) {
+    els.composerEl.style.display = shouldForceCharacterModal ? 'none' : 'grid';
+  }
+  if (els.historyPanelEl) {
+    els.historyPanelEl.style.display = shouldForceCharacterModal ? 'none' : els.historyPanelEl.style.display;
+  }
+  if (els.characterCreateOverlayEl) {
+    els.characterCreateOverlayEl.style.display = shouldShowCharacterModal ? 'flex' : 'none';
+    els.characterCreateOverlayEl.setAttribute('aria-hidden', shouldShowCharacterModal ? 'false' : 'true');
+  }
+  if (els.campaignCreateOverlayEl) {
+    els.campaignCreateOverlayEl.style.display = window.campaignModalOpen ? 'flex' : 'none';
+    els.campaignCreateOverlayEl.setAttribute('aria-hidden', window.campaignModalOpen ? 'false' : 'true');
+  }
 };
 
 window.renderTurnResponse = function (data, turnNumber) {
