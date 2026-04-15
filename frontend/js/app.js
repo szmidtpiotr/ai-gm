@@ -42,6 +42,9 @@ window.getStatModifier = function (value) {
 window.getArchetypeFromSheet = function (sheet) {
   const value = String(sheet?.archetype || "").trim();
   if (!value) return "Unknown";
+  const normalized = value.toLowerCase();
+  if (normalized === "mage") return "Mage";
+  if (normalized === "warrior") return "Warrior";
   return value;
 };
 
@@ -121,7 +124,7 @@ window.renderCharacterSheetPanel = function () {
       <div class="sheet-bar"><div class="sheet-bar-fill hp" style="width:${hpPercent}%"></div></div>
     </div>
 
-    ${archetype === "Mage" ? `
+    ${archetype.toLowerCase() === "mage" ? `
       <div class="sheet-resource">
         <div class="sheet-resource-top">
           <span>Mana</span>
