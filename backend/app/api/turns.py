@@ -1,5 +1,7 @@
 import json
+import logging
 import os
+import re
 import sqlite3
 
 import requests
@@ -10,7 +12,9 @@ from pydantic import BaseModel
 from app.core.llm_config import get_llm_params
 from app.services.dice import (
     format_roll_result_message,
+    parse_character_sheet,
     parse_roll_command,
+    resolve_test_name,
     resolve_roll,
 )
 from app.services.game_engine import build_narrative_messages, run_narrative_turn
@@ -18,6 +22,7 @@ from app.services.ollama_service import generatechat_stream
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Command registry — used by /help and the command dispatcher
@@ -44,6 +49,21 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def validate_roll_cue_name(assistant_text: str) -> str | None:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return None
+    last_line = (lines[-1] or "").strip()
+    cue_match = re.match(r"^Roll (.+?) (d\d+)$", last_line, re.I)
+    if not cue_match:
+        return None
+    raw_test_name = (cue_match.group(1) or "").strip()
+    canonical = resolve_test_name(raw_test_name)
+    if canonical is None:
+        logger.warning("Unknown LLM roll cue test name ignored: %s", raw_test_name)
+    return canonical
 
 
 def get_ollama_base_url(override: str | None = None) -> str:
@@ -313,12 +333,15 @@ def create_turn(
 
         roll_request = parse_roll_command(text)
         roll_result_message = None
+        roll_result_data = None
         if roll_request:
+            character_sheet = parse_character_sheet(character["sheet_json"])
             roll_result = resolve_roll(
-                sheet_json_text=character["sheet_json"],
-                skill=roll_request["skill"],
-                dice=roll_request["dice"],
+                character_sheet=character_sheet,
+                test_name=roll_request["skill"],
+                raw_roll=roll_request.get("raw_roll"),
             )
+            roll_result_data = roll_result
             roll_result_message = format_roll_result_message(roll_result)
 
         if text.startswith("/") and not roll_request:
@@ -439,11 +462,13 @@ def create_turn(
             model=model,
             ollama_base_url=ollama_base_url,
             roll_result_message=roll_result_message,
+            roll_result_data=roll_result_data,
         )
 
         assistant_text = (result.get("message") or "").strip()
         if not assistant_text:
             raise HTTPException(status_code=500, detail="Empty narrative response")
+        validate_roll_cue_name(assistant_text)
 
         log = create_turn_log(
             conn=conn,
@@ -497,12 +522,15 @@ def create_turn_stream(
 
         roll_request = parse_roll_command(text)
         roll_result_message = None
+        roll_result_data = None
         if roll_request:
+            character_sheet = parse_character_sheet(character["sheet_json"])
             roll_result = resolve_roll(
-                sheet_json_text=character["sheet_json"],
-                skill=roll_request["skill"],
-                dice=roll_request["dice"],
+                character_sheet=character_sheet,
+                test_name=roll_request["skill"],
+                raw_roll=roll_request.get("raw_roll"),
             )
+            roll_result_data = roll_result
             roll_result_message = format_roll_result_message(roll_result)
 
         # Commands are not streamed (except /roll, which is turned into a narrative input)
@@ -526,6 +554,7 @@ def create_turn_stream(
             character=character,
             user_text=text,
             roll_result_message=roll_result_message,
+            roll_result_data=roll_result_data,
         )
 
         llm_params = get_llm_params()
@@ -544,6 +573,7 @@ def create_turn_stream(
                 if chunk.startswith("data: [DONE]"):
                     full_text = "".join(collected).replace("\\n", "\n")
                     if full_text.strip():
+                        validate_roll_cue_name(full_text.strip())
                         save_conn = get_db()
                         try:
                             create_turn_log(

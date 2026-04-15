@@ -253,10 +253,12 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
     const pending = window.state.pendingRoll;
     const diceList = window.extractDiceFromText(renderedText);
     if (pending) {
+      const canonicalSkill = pending.canonical_skill || pending.skill;
       window.state.activeRollRequest = {
-        skill: pending.skill,
+        skill: canonicalSkill,
+        display_name: pending.skill,
         dice: pending.dice,
-        label: `Roll ${pending.skill} ${pending.dice}`,
+        label: `Roll ${canonicalSkill} ${pending.dice}`,
       };
       window.updateActionTriggerBtn(true);
     } else if (diceList && diceList.length > 0) {
@@ -459,10 +461,12 @@ window.replaceThinkingBubble = function ({
     const pending = window.state.pendingRoll;
     const diceList = window.extractDiceFromText(renderedText);
     if (pending) {
+      const canonicalSkill = pending.canonical_skill || pending.skill;
       window.state.activeRollRequest = {
-        skill: pending.skill,
+        skill: canonicalSkill,
+        display_name: pending.skill,
         dice: pending.dice,
-        label: `Roll ${pending.skill} ${pending.dice}`,
+        label: `Roll ${canonicalSkill} ${pending.dice}`,
       };
       window.updateActionTriggerBtn(true);
     } else if (diceList && diceList.length > 0) {
@@ -742,11 +746,23 @@ window.renderTurnsToChat = function () {
         const lastLineRaw = (lines[lines.length - 1] || '').trim();
         const cueMatch = lastLineRaw.match(/^Roll (.+?) (d\d+)$/i);
         if (cueMatch) {
-          lastNarrativeRollRequest = {
-            skill: (cueMatch[1] || '').trim(),
-            dice: (cueMatch[2] || 'd20').toLowerCase(),
-            label: `Roll ${(cueMatch[1] || '').trim()} ${(cueMatch[2] || 'd20').toLowerCase()}`,
-          };
+          const rawName = (cueMatch[1] || '').trim();
+          const canonicalSkill = typeof window.resolveRollTestName === 'function'
+            ? window.resolveRollTestName(rawName)
+            : null;
+          if (canonicalSkill) {
+            const displayName = typeof window.formatRollTestDisplayName === 'function'
+              ? window.formatRollTestDisplayName(canonicalSkill)
+              : canonicalSkill;
+            lastNarrativeRollRequest = {
+              skill: canonicalSkill,
+              display_name: displayName,
+              dice: (cueMatch[2] || 'd20').toLowerCase(),
+              label: `Roll ${canonicalSkill} ${(cueMatch[2] || 'd20').toLowerCase()}`,
+            };
+          } else {
+            lastNarrativeRollRequest = null;
+          }
         } else {
           const diceList = window.extractDiceFromText(assistantText);
           lastNarrativeRollRequest = (diceList && diceList.length > 0) ? diceList[0] : null;
@@ -855,7 +871,7 @@ window.initActionPopup = function () {
     const req = window.state.activeRollRequest;
     if (!req) return;
     const { inputEl } = window.getEls();
-    const rollSkill = (req.skill || 'Attack').trim() || 'Attack';
+    const rollSkill = (req.skill || 'melee_attack').trim() || 'melee_attack';
     const rollDice = (req.dice || 'd20').trim().toLowerCase() || 'd20';
     if (inputEl) {
       inputEl.value = `/roll ${rollSkill} ${rollDice}`;

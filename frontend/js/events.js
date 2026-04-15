@@ -128,7 +128,12 @@ window.bindEvents = function () {
 
   els.sendBtn.onclick = window.sendMessage;
   if (els.diceBtn) {
-    els.diceBtn.onclick = window.rollDice;
+    els.diceBtn.onclick = () => {
+      const isOpen = !!window.state.sheetPanelOpen;
+      if (typeof window.setSheetPanelOpen === 'function') {
+        window.setSheetPanelOpen(!isOpen);
+      }
+    };
   }
   if (els.contextualRollBtn) {
     els.contextualRollBtn.onclick = window.performPendingRoll;

@@ -10,15 +10,43 @@ def build_narrative_messages(
     character: sqlite3.Row | None,
     user_text: str,
     roll_result_message: str | None = None,
+    roll_result_data: dict | None = None,
 ) -> list[dict]:
     recent_turns = loadrecentturns(conn, campaign["id"], limit=8)
     final_user_text = roll_result_message if roll_result_message else user_text
-    return buildmessages(
+    messages = buildmessages(
         campaign=campaign,
         character=character,
         recentturns=recent_turns,
         usertext=final_user_text,
     )
+    if not roll_result_data or not messages:
+        return messages
+
+    if roll_result_data.get("is_nat20"):
+        roll_context = (
+            "ROLL RESULT: CRITICAL SUCCESS (Natural 20). "
+            "Narrate a dramatic, exceptional success. "
+            "If combat: double damage dice."
+        )
+    elif roll_result_data.get("is_nat1"):
+        roll_context = (
+            "ROLL RESULT: CRITICAL FAILURE (Natural 1). "
+            "Narrate a failure with an unexpected complication or twist. "
+            "Do not just say the player failed — add a narrative consequence."
+        )
+    else:
+        roll_context = (
+            "ROLL RESULT: "
+            f"{roll_result_data.get('test')} check — rolled {roll_result_data.get('total')} "
+            f"(d20: {roll_result_data.get('raw')} + stat: {roll_result_data.get('stat_mod')} + "
+            f"skill: {roll_result_data.get('skill_rank')} + proficiency: {roll_result_data.get('proficiency')})"
+        )
+
+    first = messages[0]
+    if isinstance(first, dict) and first.get("role") == "system":
+        first["content"] = f"{first.get('content', '').rstrip()}\n\n{roll_context}"
+    return messages
 
 
 def run_narrative_turn(
@@ -29,6 +57,7 @@ def run_narrative_turn(
     model: str,
     ollama_base_url: str | None = None,
     roll_result_message: str | None = None,
+    roll_result_data: dict | None = None,
 ) -> dict:
     messages = build_narrative_messages(
         conn=conn,
@@ -36,6 +65,7 @@ def run_narrative_turn(
         character=character,
         user_text=user_text,
         roll_result_message=roll_result_message,
+        roll_result_data=roll_result_data,
     )
     reply = generatechat(model=model, messages=messages, base_url=ollama_base_url)
     return {"message": reply}
