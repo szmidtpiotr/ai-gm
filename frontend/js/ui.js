@@ -495,7 +495,8 @@ window.addJsonMessage = function (
 
 window.updateUiState = function () {
   const els = window.getEls();
-  const hasCampaign = !!window.state.selectedCampaignId;
+  const activeCampaign = window.currentCampaign ? window.currentCampaign() : null;
+  const hasCampaign = !!activeCampaign;
   const hasCharacter = !!window.state.selectedCharacterId;
   const shouldForceCharacterModal = hasCampaign && !hasCharacter;
   const shouldShowCharacterModal = shouldForceCharacterModal || window.characterModalOpen;

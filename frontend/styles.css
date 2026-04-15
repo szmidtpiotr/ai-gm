@@ -90,6 +90,32 @@ body {
   display: none !important;
 }
 
+.bottom-system-field {
+  position: fixed;
+  left: 14px;
+  bottom: 10px;
+  width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 1100;
+}
+
+.bottom-system-field label {
+  color: var(--muted);
+  font-size: 11px;
+  font-family: Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.bottom-system-field select {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -951,5 +977,11 @@ pre {
     bottom: 8px;
     padding: 5px 8px;
     gap: 8px;
+  }
+
+  .bottom-system-field {
+    left: 8px;
+    bottom: 8px;
+    width: 140px;
   }
 }

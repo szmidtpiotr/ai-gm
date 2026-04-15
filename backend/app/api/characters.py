@@ -44,7 +44,11 @@ def _stat_modifier(value: int) -> int:
 
 def _build_character_sheet(base_sheet: dict, archetype: str | None = None) -> dict:
     sheet = dict(base_sheet or {})
-    stats = dict(sheet.get("stats") or {})
+    source_stats = dict(sheet.get("stats") or {})
+    stats = {}
+    for upper_key in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"):
+        lower_key = upper_key.lower()
+        stats[upper_key] = int(source_stats.get(upper_key, source_stats.get(lower_key, 10)))
     skills = dict(sheet.get("skills") or {})
 
     normalized_archetype = (archetype or sheet.get("archetype") or "").strip().lower()
@@ -54,24 +58,24 @@ def _build_character_sheet(base_sheet: dict, archetype: str | None = None) -> di
 
     # Archetype bonuses on top of existing values.
     if normalized_archetype == "warrior":
-        stats["str"] = int(stats.get("str", 10)) + 2
-        stats["con"] = int(stats.get("con", 10)) + 1
+        stats["STR"] = int(stats.get("STR", 10)) + 2
+        stats["CON"] = int(stats.get("CON", 10)) + 1
         skills["athletics"] = max(int(skills.get("athletics", 0)), 2)
         skills["melee_attack"] = max(int(skills.get("melee_attack", 0)), 2)
         skills["intimidation"] = max(int(skills.get("intimidation", 0)), 1)
     else:
-        stats["int"] = int(stats.get("int", 10)) + 2
-        stats["wis"] = int(stats.get("wis", 10)) + 1
+        stats["INT"] = int(stats.get("INT", 10)) + 2
+        stats["WIS"] = int(stats.get("WIS", 10)) + 1
         skills["arcana"] = max(int(skills.get("arcana", 0)), 2)
         skills["lore"] = max(int(skills.get("lore", 0)), 2)
         skills["spell_attack"] = max(int(skills.get("spell_attack", 0)), 1)
 
     # Keep stat values inside the defined 1-20 range.
-    for stat_key in ("str", "dex", "con", "int", "wis", "cha", "lck"):
+    for stat_key in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"):
         stats[stat_key] = max(1, min(20, int(stats.get(stat_key, 10))))
 
-    con_mod = _stat_modifier(stats["con"])
-    int_mod = _stat_modifier(stats["int"])
+    con_mod = _stat_modifier(stats["CON"])
+    int_mod = _stat_modifier(stats["INT"])
 
     if normalized_archetype == "warrior":
         hp = 12 + con_mod
@@ -95,7 +99,7 @@ def _build_character_sheet(base_sheet: dict, archetype: str | None = None) -> di
     return sheet
 
 
-def _public_sheet(sheet: dict) -> dict:
+def _strip_hidden_fields(sheet: dict) -> dict:
     sanitized = dict(sheet or {})
     sanitized.pop("hidden_potential", None)
     return sanitized
@@ -134,7 +138,7 @@ def list_characters(campaign_id: int):
             item["sheet_json"] = json.loads(item["sheet_json"]) if item["sheet_json"] else {}
         except Exception:
             item["sheet_json"] = {}
-        item["sheet_json"] = _public_sheet(item["sheet_json"])
+        item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
         characters.append(item)
 
     return {"characters": characters}
@@ -164,7 +168,7 @@ def get_character(character_id: int):
         item["sheet_json"] = json.loads(item["sheet_json"]) if item["sheet_json"] else {}
     except Exception:
         item["sheet_json"] = {}
-    item["sheet_json"] = _public_sheet(item["sheet_json"])
+    item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
 
     return item
 
@@ -192,7 +196,7 @@ def get_character_sheet(character_id: int):
         sheet_json = json.loads(row["sheet_json"]) if row["sheet_json"] else {}
     except Exception:
         sheet_json = {}
-    return {"sheet_json": _public_sheet(sheet_json)}
+    return {"sheet_json": _strip_hidden_fields(sheet_json)}
 
 
 @router.patch("/characters/{character_id}/sheet")
@@ -249,7 +253,7 @@ def patch_character_sheet(character_id: int, req: CharacterSheetPatchRequest):
         item["sheet_json"] = json.loads(item["sheet_json"]) if item["sheet_json"] else {}
     except Exception:
         item["sheet_json"] = {}
-    item["sheet_json"] = _public_sheet(item["sheet_json"])
+    item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
 
     return item
 
@@ -330,6 +334,6 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         item["sheet_json"] = json.loads(item["sheet_json"]) if item["sheet_json"] else {}
     except Exception:
         item["sheet_json"] = {}
-    item["sheet_json"] = _public_sheet(item["sheet_json"])
+    item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
 
     return item

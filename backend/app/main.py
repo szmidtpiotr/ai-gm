@@ -196,23 +196,23 @@ async def gm_dice(req: DiceReq):
 
     if req.character_id and req.roll_key and num == 1 and sides == 20:
         skill_to_stat = {
-            "athletics": "str",
-            "melee_attack": "str",
-            "stealth": "dex",
-            "reflex_save": "dex",
-            "ranged_attack": "dex",
-            "fortitude_save": "con",
-            "arcana": "int",
-            "lore": "int",
-            "investigation": "int",
-            "arcane_save": "int",
-            "spell_attack": "int",
-            "awareness": "wis",
-            "survival": "wis",
-            "medicine": "wis",
-            "willpower_save": "wis",
-            "persuasion": "cha",
-            "intimidation": "cha",
+            "athletics": "STR",
+            "melee_attack": "STR",
+            "stealth": "DEX",
+            "reflex_save": "DEX",
+            "ranged_attack": "DEX",
+            "fortitude_save": "CON",
+            "arcana": "INT",
+            "lore": "INT",
+            "investigation": "INT",
+            "arcane_save": "INT",
+            "spell_attack": "INT",
+            "awareness": "WIS",
+            "survival": "WIS",
+            "medicine": "WIS",
+            "willpower_save": "WIS",
+            "persuasion": "CHA",
+            "intimidation": "CHA",
         }
         aliases = {
             "str_save": "fortitude_save",
@@ -247,7 +247,14 @@ async def gm_dice(req: DiceReq):
         skills = sheet.get("skills") if isinstance(sheet.get("skills"), dict) else {}
 
         stat_name = skill_to_stat.get(normalized_key)
-        stat_value = int(stats.get(stat_name, 10)) if stat_name else 10
+        stat_value = 10
+        if stat_name:
+            stat_value = int(
+                stats.get(
+                    stat_name,
+                    stats.get(stat_name.lower(), 10),
+                )
+            )
         stat_modifier = (stat_value - 10) // 2
         skill_rank = int(skills.get(normalized_key, 0))
         proficiency_bonus = 2 if skill_rank >= 3 else 0

@@ -146,6 +146,7 @@ window.createCharacter = async function () {
 
 window.createCharacterFromForm = async function () {
   const {
+    campaignSelectEl,
     characterCreateNameEl,
     characterCreateBackgroundEl,
     characterCreateFormEl,
@@ -157,9 +158,21 @@ window.createCharacterFromForm = async function () {
     return;
   }
 
+  // Guard against stale local campaign id after refresh/deletions.
+  await window.loadCampaigns(window.state.selectedCampaignId);
+  const selectedCampaignId = Number(
+    campaignSelectEl?.value || window.state.selectedCampaignId || 0
+  );
+  if (!selectedCampaignId) {
+    alert('Najpierw wybierz kampanię');
+    return;
+  }
+
   const name = (characterCreateNameEl?.value || '').trim();
   const background = (characterCreateBackgroundEl?.value || '').trim();
   const archetype = characterCreateFormEl?.dataset?.archetype || '';
+  const campaign = window.currentCampaign ? window.currentCampaign() : null;
+  const campaignSystem = campaign?.system_id || campaign?.systemid || 'fantasy';
 
   if (!name) {
     alert('Podaj imię postaci');
@@ -179,7 +192,7 @@ window.createCharacterFromForm = async function () {
   const payload = {
     user_id: 1,
     name,
-    system_id: 'fantasy',
+    system_id: campaignSystem,
     sheet_json: {
       archetype,
       background,
@@ -218,7 +231,7 @@ window.createCharacterFromForm = async function () {
   if (characterCreateSubmitEl) characterCreateSubmitEl.disabled = true;
 
   try {
-    const resp = await fetch(`/api/campaigns/${window.state.selectedCampaignId}/characters`, {
+    const resp = await fetch(`/api/campaigns/${selectedCampaignId}/characters`, {
       method: 'POST',
       headers: window.getApiHeaders(),
       body: JSON.stringify(payload)
@@ -229,8 +242,8 @@ window.createCharacterFromForm = async function () {
       throw new Error(data.detail || `HTTP ${resp.status}`);
     }
 
-    await window.loadCharacters(window.state.selectedCampaignId, data.id);
-    await window.loadTurns(window.state.selectedCampaignId);
+    await window.loadCharacters(selectedCampaignId, data.id);
+    await window.loadTurns(selectedCampaignId);
     window.setCharacterModalOpen(false);
     window.updateUiState();
 
@@ -249,6 +262,7 @@ window.createCharacterFromForm = async function () {
       route: 'character'
     });
   } catch (e) {
+    alert(`Tworzenie postaci nie powiodło się: ${e.message}`);
     window.addMessage({
       speaker: 'Błąd',
       text: `Tworzenie postaci: ${e.message}`,
