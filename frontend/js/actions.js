@@ -18,19 +18,17 @@ window.chatRequestState = window.chatRequestState || {
 window.state.pendingRoll = window.state.pendingRoll || null;
 
 window._updateRollButtonsState = function () {
-  const { diceBtn, contextualRollBtn } = window.getEls();
+  const { contextualRollBtn } = window.getEls();
   const pending = window.state.pendingRoll;
-  if (!contextualRollBtn || !diceBtn) return;
+  if (!contextualRollBtn) return;
 
   if (pending) {
     contextualRollBtn.textContent = `🎲 Rzuć ${pending.dice} — ${pending.skill}`;
     contextualRollBtn.style.display = 'block';
-    diceBtn.disabled = true;
     return;
   }
 
   contextualRollBtn.style.display = 'none';
-  diceBtn.disabled = false;
 };
 
 window.parsePendingRoll = function (text) {
