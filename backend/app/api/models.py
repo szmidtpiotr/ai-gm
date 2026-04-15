@@ -18,7 +18,7 @@ async def list_models(request: Request):
             data = resp.json()
             models = data.get("models", [])
             return [
-                {"name": m["model"], "size": m["size"]}  # Use internal "model" field
+                {"name": m["name"], "size": m.get("size", 0)}
                 for m in models if m.get("name")
             ]
     except Exception as e:
