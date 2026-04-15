@@ -132,6 +132,9 @@ app.include_router(commands.router, prefix="/api")
 app.include_router(turns.router, prefix="/api")
 app.include_router(campaigns.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
+# Keep non-prefixed character endpoints available for direct local calls
+# (e.g. /characters/{id}/sheet), while preserving /api/* routes.
+app.include_router(characters.router)
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 
