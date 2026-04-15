@@ -17,6 +17,167 @@ window.SHEET_SKILLS = [
   "Alchemy",
   "Lore"
 ];
+window.state.lastApiCall = window.state.lastApiCall || null;
+
+window._debugFormatTs = function (date = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
+window._debugRoleFromMessageEl = function (msgEl) {
+  if (!msgEl || !msgEl.classList) return "unknown";
+  if (msgEl.classList.contains("user")) return "player";
+  if (msgEl.classList.contains("assistant")) return "gm";
+  if (msgEl.classList.contains("error")) return "error";
+  if (msgEl.classList.contains("system")) return "system";
+  return "unknown";
+};
+
+window._debugCollectLastMessages = function (count) {
+  const chatEl = document.getElementById("chat");
+  if (!chatEl) return [];
+  const all = Array.from(chatEl.querySelectorAll(".message"));
+  const selected = all.slice(Math.max(0, all.length - count));
+  return selected.map((msgEl) => {
+    const role = window._debugRoleFromMessageEl(msgEl);
+    const content = (msgEl.querySelector("pre")?.textContent || "").trim();
+    return { role, content };
+  }).filter((item) => item.content.length > 0);
+};
+
+window._debugCollectErrors = function () {
+  const chatEl = document.getElementById("chat");
+  if (!chatEl) return [];
+  return Array.from(chatEl.querySelectorAll(".message.error pre"))
+    .map((el) => (el.textContent || "").trim())
+    .filter(Boolean);
+};
+
+window._debugCharacterLine = function () {
+  const character = window.currentCharacter ? window.currentCharacter() : null;
+  const sheet = window.state.characterSheet && typeof window.state.characterSheet === "object"
+    ? window.state.characterSheet
+    : {};
+  const stats = sheet.stats && typeof sheet.stats === "object" ? sheet.stats : {};
+  const hp = `${Number(sheet.current_hp || 0)}/${Number(sheet.max_hp || 0)}`;
+  const str = Number(stats.STR ?? stats.str ?? 0);
+  const dex = Number(stats.DEX ?? stats.dex ?? 0);
+  const con = Number(stats.CON ?? stats.con ?? 0);
+  return `CHARACTER: ${character?.name || "Unknown"} | HP: ${hp} | STR:${str} DEX:${dex} CON:${con}`;
+};
+
+window._debugBuildSnapshotText = function (messageCount) {
+  const ts = window._debugFormatTs();
+  const lines = [`--- DEBUG SNAPSHOT [${ts}] ---`];
+  lines.push(window._debugCharacterLine());
+  lines.push("LAST TURNS:");
+
+  const turns = window._debugCollectLastMessages(messageCount);
+  if (turns.length === 0) {
+    lines.push("  [system] none");
+  } else {
+    turns.forEach((m) => lines.push(`  [${m.role}] ${m.content}`));
+  }
+
+  const lastApi = window.state.lastApiCall;
+  if (lastApi && lastApi.url) {
+    lines.push(`LAST API: ${lastApi.method || "GET"} ${lastApi.url} → ${lastApi.status ?? "?"}`);
+  } else {
+    lines.push("LAST API: none");
+  }
+
+  const errors = window._debugCollectErrors();
+  lines.push(`ERROR: ${errors.length ? errors.join(" | ") : "none"}`);
+  lines.push("-----------------------------------------");
+  return lines.join("\n");
+};
+
+window._debugShowManualCopyPopup = function (text) {
+  const wrap = document.createElement("div");
+  wrap.style.cssText = [
+    "position:fixed",
+    "inset:0",
+    "background:rgba(0,0,0,0.35)",
+    "display:flex",
+    "align-items:center",
+    "justify-content:center",
+    "z-index:2000",
+    "padding:16px"
+  ].join(";");
+
+  const panel = document.createElement("div");
+  panel.style.cssText = [
+    "background:var(--panel,#fff)",
+    "border:1px solid var(--border,#ccc)",
+    "border-radius:10px",
+    "width:min(900px,95vw)",
+    "padding:12px",
+    "display:flex",
+    "flex-direction:column",
+    "gap:10px"
+  ].join(";");
+
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.cssText = "width:100%;min-height:300px;font-family:monospace;font-size:12px;";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "secondary";
+  closeBtn.textContent = "Zamknij";
+  closeBtn.onclick = () => wrap.remove();
+
+  panel.appendChild(ta);
+  panel.appendChild(closeBtn);
+  wrap.appendChild(panel);
+  document.body.appendChild(wrap);
+  ta.focus();
+  ta.select();
+};
+
+window.copyDebugSnapshot = async function () {
+  const rawCount = prompt("Ile ostatnich wiadomości skopiować?", "8");
+  if (rawCount === null) return;
+  const messageCount = Math.max(1, Math.min(100, Number.parseInt(rawCount, 10) || 8));
+  const text = window._debugBuildSnapshotText(messageCount);
+
+  try {
+    await navigator.clipboard.writeText(text);
+    window.addMessage?.({
+      speaker: "System",
+      text: "Snapshot debug skopiowany do schowka.",
+      role: "system",
+    });
+  } catch (_err) {
+    window._debugShowManualCopyPopup(text);
+  }
+};
+
+window.bindDebugSnapshotButton = function () {
+  const btn = document.getElementById("copy-debug-btn");
+  if (!btn) return;
+  btn.onclick = window.copyDebugSnapshot;
+};
+
+window.installApiDebugTracker = function () {
+  if (window.__apiDebugTrackerInstalled) return;
+  if (typeof window.fetch !== "function") return;
+  window.__apiDebugTrackerInstalled = true;
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = async function (input, init) {
+    const method = (init?.method || "GET").toUpperCase();
+    const url = typeof input === "string" ? input : (input?.url || "");
+    try {
+      const response = await originalFetch(input, init);
+      window.state.lastApiCall = { method, url, status: response.status };
+      return response;
+    } catch (error) {
+      window.state.lastApiCall = { method, url, status: "ERR" };
+      throw error;
+    }
+  };
+};
 
 window.ROLL_VALID_TESTS = new Set([
   "athletics", "stealth", "awareness", "survival", "lore", "investigation",
@@ -259,6 +420,9 @@ window.bindCharacterSheetPanel = function () {
 };
 
 window.initCharacterSheetPanel = async function () {
+  window.installApiDebugTracker();
+  window.bindDebugSnapshotButton();
+
   const savedState = localStorage.getItem(window.SHEET_PANEL_STORAGE_KEY);
   if (savedState === "1") window.state.sheetPanelOpen = true;
   if (savedState === "0") window.state.sheetPanelOpen = false;
