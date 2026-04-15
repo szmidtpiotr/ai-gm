@@ -182,6 +182,7 @@ async def get_game(game_id: int, session: Session = Depends(get_session)):
 
 
 @app.post("/api/gm/dice")
+@app.post("/gm/dice")
 async def gm_dice(req: DiceReq):
     match = re.match(r"(\d*)?d(\d+)([+-]\d+)?", req.dice.strip(), re.I)
     if not match:

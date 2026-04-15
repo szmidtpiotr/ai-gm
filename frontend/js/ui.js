@@ -13,6 +13,7 @@ window.getEls = function () {
     inputEl: document.getElementById('input'),
     sendBtn: document.getElementById('send-btn'),
     diceBtn: document.getElementById('dice-btn'),
+    contextualRollBtn: document.getElementById('contextual-roll-btn'),
     createCampaignBtn: document.getElementById('create-campaign-btn'),
     deleteCampaignBtn: document.getElementById('delete-campaign-btn'),
     createCharacterBtn: document.getElementById('create-character-btn'),
@@ -240,9 +241,31 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
   if (pre) pre.style.cssText = '';
 
   const route = bubbleEl.querySelector('.route-badge')?.textContent || '';
+  let renderedText = fullText;
+  if (route === 'narrative' && typeof window.parsePendingRoll === 'function') {
+    renderedText = window.parsePendingRoll(fullText);
+    if (pre) pre.textContent = renderedText;
+  } else if (typeof window.parsePendingRoll === 'function') {
+    window.parsePendingRoll('');
+  }
+
   if (route === 'narrative') {
-    const diceList = window.extractDiceFromText(fullText);
-    window.appendActionButtons(bubbleEl, diceList);
+    const pending = window.state.pendingRoll;
+    const diceList = window.extractDiceFromText(renderedText);
+    if (pending) {
+      window.state.activeRollRequest = {
+        skill: pending.skill,
+        dice: pending.dice,
+        label: `Roll ${pending.skill} ${pending.dice}`,
+      };
+      window.updateActionTriggerBtn(true);
+    } else if (diceList && diceList.length > 0) {
+      window.state.activeRollRequest = diceList[0];
+      window.updateActionTriggerBtn(true);
+    } else {
+      window.state.activeRollRequest = null;
+      window.updateActionTriggerBtn();
+    }
   }
 
   window.scrollChatToBottom();
@@ -308,7 +331,7 @@ window.showDiceDialog = function (wrapEl) {
 // Roll dice and append result to chat
 window.rollAndAppend = async function (diceExpr, wrapEl) {
   try {
-    const resp = await fetch('/gm/dice', {
+    const resp = await fetch('/api/gm/dice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dice: diceExpr })
@@ -323,47 +346,6 @@ window.rollAndAppend = async function (diceExpr, wrapEl) {
   } catch (e) {
     window.addMessage({ speaker: 'B\u0142\u0105d', text: `Ko\u015b\u0107: ${e.message}`, role: 'error' });
   }
-};
-
-// Append action bar with dice buttons to a GM narrative bubble
-window.appendActionButtons = function (wrapEl, diceList) {
-  const hasDice = diceList && diceList.length > 0;
-  if (!hasDice) return;
-
-  const bar = document.createElement('div');
-  bar.className = 'action-bar';
-
-  diceList.forEach(({ full, dice }) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'secondary action-dice-btn';
-    btn.textContent = `\uD83C\uDFB2 Rzu\u0107 ${dice}`;
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
-      await window.rollAndAppend(full, wrapEl);
-      btn.disabled = false;
-    });
-    bar.appendChild(btn);
-  });
-
-  const diceChooseBtn = document.createElement('button');
-  diceChooseBtn.type = 'button';
-  diceChooseBtn.className = 'secondary action-dice-choose-btn';
-  diceChooseBtn.textContent = '\uD83C\uDFB2 Rzu\u0107 ko\u015b\u0107';
-  diceChooseBtn.addEventListener('click', () => window.showDiceDialog(wrapEl));
-  bar.appendChild(diceChooseBtn);
-
-  const focusBtn = document.createElement('button');
-  focusBtn.type = 'button';
-  focusBtn.className = 'secondary';
-  focusBtn.textContent = '\u270D\uFE0F Inna akcja';
-  focusBtn.addEventListener('click', () => {
-    const { inputEl } = window.getEls();
-    if (inputEl) inputEl.focus();
-  });
-  bar.appendChild(focusBtn);
-
-  wrapEl.appendChild(bar);
 };
 
 window.addMessage = function ({
@@ -432,6 +414,13 @@ window.replaceThinkingBubble = function ({
     return;
   }
 
+  let renderedText = text;
+  if (route === 'narrative' && typeof window.parsePendingRoll === 'function') {
+    renderedText = window.parsePendingRoll(text);
+  } else if (typeof window.parsePendingRoll === 'function') {
+    window.parsePendingRoll('');
+  }
+
   const wrap = document.createElement('div');
   wrap.className = `message ${role}`;
 
@@ -461,14 +450,28 @@ window.replaceThinkingBubble = function ({
 
   const body = document.createElement('div');
   body.className = 'message-body';
-  body.innerHTML = `<pre>${window.escapeHtml(text)}</pre>`;
+  body.innerHTML = `<pre>${window.escapeHtml(renderedText)}</pre>`;
 
   wrap.appendChild(meta);
   wrap.appendChild(body);
 
   if (role === 'assistant' && route === 'narrative') {
-    const diceList = window.extractDiceFromText(text);
-    window.appendActionButtons(wrap, diceList);
+    const pending = window.state.pendingRoll;
+    const diceList = window.extractDiceFromText(renderedText);
+    if (pending) {
+      window.state.activeRollRequest = {
+        skill: pending.skill,
+        dice: pending.dice,
+        label: `Roll ${pending.skill} ${pending.dice}`,
+      };
+      window.updateActionTriggerBtn(true);
+    } else if (diceList && diceList.length > 0) {
+      window.state.activeRollRequest = diceList[0];
+      window.updateActionTriggerBtn(true);
+    } else {
+      window.state.activeRollRequest = null;
+      window.updateActionTriggerBtn();
+    }
   }
 
   existing.replaceWith(wrap);
@@ -692,6 +695,7 @@ window.renderTurnsToChat = function () {
   window.removeThinkingBubble();
 
   const turns = Array.isArray(window.state.turns) ? window.state.turns : [];
+  let lastNarrativeRollRequest = null;
 
   turns.forEach((turn) => {
     if (turn.user_text) {
@@ -707,6 +711,9 @@ window.renderTurnsToChat = function () {
 
     if (turn.assistant_text) {
       if (turn.route === 'narrative') {
+        const assistantText = String(turn.assistant_text || '');
+        if (!assistantText.trim()) return;
+
         const msgWrap = document.createElement('div');
         msgWrap.className = 'message assistant';
         const { chatEl } = window.getEls();
@@ -726,13 +733,24 @@ window.renderTurnsToChat = function () {
 
         const body = document.createElement('div');
         body.className = 'message-body';
-        body.innerHTML = `<pre>${window.escapeHtml(turn.assistant_text)}</pre>`;
+        body.innerHTML = `<pre>${window.escapeHtml(assistantText)}</pre>`;
 
         msgWrap.appendChild(meta);
         msgWrap.appendChild(body);
 
-        const diceList = window.extractDiceFromText(turn.assistant_text);
-        window.appendActionButtons(msgWrap, diceList);
+        const lines = assistantText.split('\n');
+        const lastLineRaw = (lines[lines.length - 1] || '').trim();
+        const cueMatch = lastLineRaw.match(/^Roll (.+?) (d\d+)$/i);
+        if (cueMatch) {
+          lastNarrativeRollRequest = {
+            skill: (cueMatch[1] || '').trim(),
+            dice: (cueMatch[2] || 'd20').toLowerCase(),
+            label: `Roll ${(cueMatch[1] || '').trim()} ${(cueMatch[2] || 'd20').toLowerCase()}`,
+          };
+        } else {
+          const diceList = window.extractDiceFromText(assistantText);
+          lastNarrativeRollRequest = (diceList && diceList.length > 0) ? diceList[0] : null;
+        }
 
         if (chatEl) chatEl.appendChild(msgWrap);
       } else {
@@ -748,5 +766,113 @@ window.renderTurnsToChat = function () {
     }
   });
 
+  window.state.activeRollRequest = lastNarrativeRollRequest;
+  window.updateActionTriggerBtn(!!lastNarrativeRollRequest);
   window.scrollChatToBottom();
+};
+
+window.updateActionTriggerBtn = function (openPopup = false) {
+  const hasActiveRoll = !!window.state.activeRollRequest;
+  const popup = document.getElementById('action-popup');
+  if (!popup) return;
+  if (hasActiveRoll && openPopup) {
+    popup.classList.remove('hidden');
+    if (typeof window.positionActionPopup === 'function') {
+      window.positionActionPopup();
+    }
+    if (typeof window.setActionInputLocked === 'function') {
+      window.setActionInputLocked(true);
+    }
+  } else {
+    popup.classList.add('hidden');
+    if (typeof window.setActionInputLocked === 'function') {
+      window.setActionInputLocked(false);
+    }
+  }
+};
+
+window.positionActionPopup = function () {
+  const popup = document.getElementById('action-popup');
+  const sheetPanel = document.getElementById('sheet-panel');
+  const diceBtn = document.getElementById('dice-btn');
+  if (!popup) return;
+
+  const anchorEl = (sheetPanel && sheetPanel.offsetParent !== null) ? sheetPanel : diceBtn;
+  if (!anchorEl) return;
+
+  const anchorRect = anchorEl.getBoundingClientRect();
+  const popupRect = popup.getBoundingClientRect();
+  const gap = 12;
+
+  let left = anchorRect.left + (anchorRect.width / 2) - (popupRect.width / 2);
+  let top = anchorRect.bottom + gap;
+
+  const minMargin = 12;
+  const maxLeft = window.innerWidth - popupRect.width - minMargin;
+  left = Math.max(minMargin, Math.min(left, maxLeft));
+  const maxTop = window.innerHeight - popupRect.height - minMargin;
+  top = Math.max(minMargin, Math.min(top, maxTop));
+
+  popup.style.left = `${Math.round(left)}px`;
+  popup.style.top = `${Math.round(top)}px`;
+};
+
+window.setActionInputLocked = function (locked) {
+  const { inputEl } = window.getEls();
+  if (!inputEl) return;
+  inputEl.readOnly = !!locked;
+  if (locked) {
+    inputEl.value = '';
+    inputEl.placeholder = 'Wybierz: 🎲 Rzuć kość lub ✍️ Akcja';
+    inputEl.blur();
+  } else if (inputEl.placeholder === 'Wybierz: 🎲 Rzuć kość lub ✍️ Akcja') {
+    inputEl.placeholder = 'Wpisz /sheet albo opisz akcję...';
+  }
+};
+
+window.initActionPopup = function () {
+  const popup = document.getElementById('action-popup');
+  const rollBtn = document.getElementById('popup-roll-btn');
+  const actionBtn = document.getElementById('popup-action-btn');
+
+  if (!popup || !rollBtn || !actionBtn) return;
+
+  const repositionIfVisible = () => {
+    if (!popup.classList.contains('hidden') && typeof window.positionActionPopup === 'function') {
+      window.positionActionPopup();
+    }
+  };
+
+  window.addEventListener('resize', repositionIfVisible);
+  window.addEventListener('scroll', repositionIfVisible, true);
+
+  // Keep popup visible while a roll decision is pending.
+  // Do not close on outside click; close only via explicit action buttons.
+
+  // Rzuć kość
+  rollBtn.addEventListener('click', async () => {
+    popup.classList.add('hidden');
+    const req = window.state.activeRollRequest;
+    if (!req) return;
+    const { inputEl } = window.getEls();
+    const rollSkill = (req.skill || 'Attack').trim() || 'Attack';
+    const rollDice = (req.dice || 'd20').trim().toLowerCase() || 'd20';
+    if (inputEl) {
+      inputEl.value = `/roll ${rollSkill} ${rollDice}`;
+    }
+    await window.sendMessage();
+    window.state.activeRollRequest = null;
+    window.updateActionTriggerBtn();
+  });
+
+  // Akcja — fokus na input z hintami
+  actionBtn.addEventListener('click', () => {
+    popup.classList.add('hidden');
+    const { inputEl } = window.getEls();
+    window.setActionInputLocked(false);
+    if (inputEl) {
+      inputEl.placeholder = 'Opisz swoją akcję...';
+      inputEl.focus();
+    }
+  });
 };

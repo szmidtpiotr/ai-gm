@@ -15,6 +15,78 @@ window.chatRequestState = window.chatRequestState || {
   inFlight: false,
   requestId: 0
 };
+window.state.pendingRoll = window.state.pendingRoll || null;
+
+window._validRollSkills = new Set([
+  'athletics', 'stealth', 'awareness', 'survival', 'lore', 'investigation',
+  'arcana', 'medicine', 'persuasion', 'intimidation', 'melee_attack',
+  'ranged_attack', 'spell_attack', 'fortitude_save', 'reflex_save',
+  'willpower_save', 'arcane_save'
+]);
+
+window._updateRollButtonsState = function () {
+  const { diceBtn, contextualRollBtn } = window.getEls();
+  const pending = window.state.pendingRoll;
+  if (!contextualRollBtn || !diceBtn) return;
+
+  if (pending) {
+    contextualRollBtn.textContent = `🎲 Rzuć ${pending.dice} — ${pending.skill}`;
+    contextualRollBtn.style.display = 'block';
+    diceBtn.disabled = true;
+    return;
+  }
+
+  contextualRollBtn.style.display = 'none';
+  diceBtn.disabled = false;
+};
+
+window.parsePendingRoll = function (text) {
+  const sourceText = String(text || '');
+  const lines = sourceText.split('\n');
+  const lastLineRaw = (lines[lines.length - 1] || '').trim();
+  const match = lastLineRaw.match(/^Roll (.+?) (d\d+)$/i);
+
+  if (!match) {
+    window.state.pendingRoll = null;
+    window._updateRollButtonsState();
+    return sourceText;
+  }
+
+  const skillLabel = (match[1] || '').trim();
+  const normalizedSkill = skillLabel.toLowerCase().replace(/\s+/g, '_');
+  const diceExpr = (match[2] || 'd20').toLowerCase();
+
+  // Accept frozen values directly; otherwise keep original label for display.
+  const displaySkill = skillLabel;
+  if (window._validRollSkills.has(normalizedSkill) || skillLabel.length > 0) {
+    window.state.pendingRoll = { skill: displaySkill, dice: diceExpr };
+  } else {
+    window.state.pendingRoll = null;
+  }
+
+  window._updateRollButtonsState();
+
+  lines.pop();
+  return lines.join('\n').trimEnd();
+};
+
+window.performPendingRoll = function () {
+  const pending = window.state.pendingRoll;
+  if (!pending) return;
+
+  const diceMatch = pending.dice.match(/^d(\d+)$/i);
+  const sides = diceMatch ? Number(diceMatch[1]) : 20;
+  const roll = Math.floor(Math.random() * sides) + 1;
+
+  window.addMessage({
+    speaker: 'System',
+    text: `🎲 Roll ${pending.skill} ${pending.dice} → ${roll}`,
+    role: 'system'
+  });
+
+  window.state.pendingRoll = null;
+  window._updateRollButtonsState();
+};
 
 window.nextTurnNumber = function () {
   const id = window.state.selectedCampaignId;
@@ -160,12 +232,37 @@ window.createCharacterFromForm = async function () {
 
   // Guard against stale local campaign id after refresh/deletions.
   await window.loadCampaigns(window.state.selectedCampaignId);
-  const selectedCampaignId = Number(
+  let selectedCampaignId = Number(
     campaignSelectEl?.value || window.state.selectedCampaignId || 0
   );
   if (!selectedCampaignId) {
     alert('Najpierw wybierz kampanię');
     return;
+  }
+
+  // Preflight campaign validation against backend to avoid hidden stale state.
+  try {
+    const checkResp = await fetch(`/api/campaigns/${selectedCampaignId}`);
+    if (checkResp.status === 404) {
+      const listResp = await fetch(window.API_CAMPAIGNS);
+      if (listResp.ok) {
+        const listData = await listResp.json();
+        const campaigns = Array.isArray(listData.campaigns) ? listData.campaigns : [];
+        if (campaigns.length > 0) {
+          selectedCampaignId = Number(campaigns[0].id);
+          window.state.selectedCampaignId = selectedCampaignId;
+          if (campaignSelectEl) {
+            campaignSelectEl.value = String(selectedCampaignId);
+          }
+          localStorage.setItem('ai-gm:selectedCampaignId', String(selectedCampaignId));
+        } else {
+          alert('Brak kampanii. Utwórz najpierw kampanię.');
+          return;
+        }
+      }
+    }
+  } catch (_) {
+    // Continue with currently selected id; submit may still provide concrete backend error.
   }
 
   const name = (characterCreateNameEl?.value || '').trim();
@@ -504,7 +601,7 @@ window.rollDice = async function () {
   if (!dice) return;
 
   try {
-    const resp = await fetch('/gm/dice', {
+    const resp = await fetch('/api/gm/dice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dice })

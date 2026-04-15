@@ -56,5 +56,6 @@ window.bootstrap = async function () {
 
 document.addEventListener('DOMContentLoaded', () => {
   window.bootstrap();
+  window.initActionPopup();
   setInterval(window.loadHealth, 15000);
 });

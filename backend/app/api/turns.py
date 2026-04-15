@@ -8,7 +8,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.core.llm_config import get_llm_params
-from app.core.turn_engine import buildmessages, loadrecentturns, runnarrativeturn
+from app.services.dice import (
+    format_roll_result_message,
+    parse_roll_command,
+    resolve_roll,
+)
+from app.services.game_engine import build_narrative_messages, run_narrative_turn
 from app.services.ollama_service import generatechat_stream
 
 router = APIRouter()
@@ -306,7 +311,17 @@ def create_turn(
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
 
-        if text.startswith("/"):
+        roll_request = parse_roll_command(text)
+        roll_result_message = None
+        if roll_request:
+            roll_result = resolve_roll(
+                sheet_json_text=character["sheet_json"],
+                skill=roll_request["skill"],
+                dice=roll_request["dice"],
+            )
+            roll_result_message = format_roll_result_message(roll_result)
+
+        if text.startswith("/") and not roll_request:
             route = "command"
             cmd = text.split(" ", 1)[0].lower()
 
@@ -416,13 +431,14 @@ def create_turn(
             ollama_base_url=ollama_base_url,
         )
 
-        result = runnarrativeturn(
+        result = run_narrative_turn(
             conn=conn,
             campaign=campaign,
             character=character,
-            usertext=text,
+            user_text=text,
             model=model,
-            ollamabaseurl=ollama_base_url,
+            ollama_base_url=ollama_base_url,
+            roll_result_message=roll_result_message,
         )
 
         assistant_text = (result.get("message") or "").strip()
@@ -433,7 +449,7 @@ def create_turn(
             conn=conn,
             campaign_id=campaign_id,
             character_id=payload.character_id,
-            user_text=text,
+            user_text=roll_result_message or text,
             assistant_text=assistant_text,
             route=route,
         )
@@ -479,8 +495,18 @@ def create_turn_stream(
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
 
-        # Commands are not streamed
-        if text.startswith("/"):
+        roll_request = parse_roll_command(text)
+        roll_result_message = None
+        if roll_request:
+            roll_result = resolve_roll(
+                sheet_json_text=character["sheet_json"],
+                skill=roll_request["skill"],
+                dice=roll_request["dice"],
+            )
+            roll_result_message = format_roll_result_message(roll_result)
+
+        # Commands are not streamed (except /roll, which is turned into a narrative input)
+        if text.startswith("/") and not roll_request:
             def command_stream():
                 yield f"data: [CMD] {text}\n\n"
                 yield "data: [DONE]\n\n"
@@ -493,18 +519,19 @@ def create_turn_stream(
             ollama_base_url=ollama_base_url,
         )
 
-        recent_turns = loadrecentturns(conn, campaign_id, limit=8)
-        messages = buildmessages(
+        llm_user_text = roll_result_message or text
+        messages = build_narrative_messages(
+            conn=conn,
             campaign=campaign,
             character=character,
-            recentturns=recent_turns,
-            usertext=text,
+            user_text=text,
+            roll_result_message=roll_result_message,
         )
 
         llm_params = get_llm_params()
         campaign_id_val = campaign_id
         character_id_val = payload.character_id
-        user_text_val = text
+        user_text_val = llm_user_text
 
         def token_generator():
             collected = []

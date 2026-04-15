@@ -61,7 +61,17 @@
         <div class="composer">
           <textarea id="input" placeholder="Wpisz /sheet albo opisz akcję..."></textarea>
           <div class="composer-actions">
+            <button type="button" class="secondary" id="contextual-roll-btn" style="display:none;">
+              🎲 Rzuć d20
+            </button>
             <button type="button" class="secondary sheet-inline-btn" id="dice-btn">👤 Karta postaci</button>
+            <div class="action-trigger-wrap" style="position:relative;">
+              <div id="action-popup-backdrop" class="action-popup-backdrop hidden"></div>
+              <div id="action-popup" class="action-popup hidden">
+                <button type="button" id="popup-roll-btn" class="action-popup__btn">🎲 Rzuć kość</button>
+                <button type="button" id="popup-action-btn" class="action-popup__btn">✍️ Akcja</button>
+              </div>
+            </div>
             <button type="button" id="send-btn">Wyślij</button>
           </div>
         </div>

@@ -128,7 +128,10 @@ window.bindEvents = function () {
 
   els.sendBtn.onclick = window.sendMessage;
   if (els.diceBtn) {
-    els.diceBtn.onclick = () => window.setSheetPanelOpen(!window.state.sheetPanelOpen);
+    els.diceBtn.onclick = window.rollDice;
+  }
+  if (els.contextualRollBtn) {
+    els.contextualRollBtn.onclick = window.performPendingRoll;
   }
   els.createCampaignBtn.onclick = window.createCampaign;
   els.deleteCampaignBtn.onclick = window.deleteCampaign;
