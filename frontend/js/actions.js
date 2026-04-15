@@ -176,7 +176,7 @@ window.createCharacter = async function () {
 };
 
 window.sendMessage = async function () {
-  const { inputEl, systemSelectEl, engineSelectEl } = window.getEls();
+  const { inputEl, systemSelectEl, engineSelectEl, sendBtnEl } = window.getEls();
   const text = inputEl.value.trim();
   if (!text) return;
 
@@ -221,8 +221,6 @@ window.sendMessage = async function () {
   window.chatRequestState.inFlight = true;
   const requestId = ++window.chatRequestState.requestId;
 
-  // Disable UI
-  const sendBtnEl = document.getElementById('send-btn');
   if (sendBtnEl) sendBtnEl.disabled = true;
   inputEl.disabled = true;
 
@@ -257,6 +255,8 @@ window.sendMessage = async function () {
       game_id: window.state.selectedCampaignId
     };
 
+    // Thinking bubble stays visible while waiting for response headers.
+    // On first real token it swaps to the streaming bubble.
     const resp = await fetch(
       `/api/campaigns/${window.state.selectedCampaignId}/turns/stream`,
       {
@@ -277,26 +277,27 @@ window.sendMessage = async function () {
 
     if (requestId !== window.chatRequestState.requestId) return;
 
-    // Read SSE stream line by line.
-    // IMPORTANT: split on real newline character (\n), NOT escaped string.
-    // Thinking bubble stays until first real token arrives.
+    // Read SSE stream.
+    // IMPORTANT: SSE lines are separated by real newline characters (\n).
+    // We must split on the actual newline char — NOT the two-char sequence \\n.
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     let fullText = '';
-    let streamBubble = null;
+    let streamBubble = null; // created lazily on first real token
     let streamDone = false;
 
     while (!streamDone) {
       const { done, value } = await reader.read();
 
       if (done) {
-        // Flush remaining buffer on stream close
+        // Flush any remaining data in buffer
         if (buffer.trim()) {
           const remaining = buffer.trim();
           if (remaining.startsWith('data: ')) {
             const token = remaining.slice(6);
             if (token !== '[DONE]' && !token.startsWith('[ERROR]')) {
+              // Unescape literal \n sequences the server may have encoded
               const realToken = token.replace(/\\n/g, '\n');
               fullText += realToken;
               if (!streamBubble) {
@@ -315,14 +316,14 @@ window.sendMessage = async function () {
 
       buffer += decoder.decode(value, { stream: true });
 
-      // SSE lines are separated by real newline characters
+      // Split on REAL newline characters — SSE protocol uses \n as line separator.
+      // Using a string literal '\n' (one char) is correct here.
       const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete last line
+      buffer = lines.pop(); // keep incomplete last line in buffer
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith('data: ')) continue;
-        const token = trimmed.slice(6);
+        if (!line.startsWith('data: ')) continue;
+        const token = line.slice(6);
 
         if (token === '[DONE]') {
           if (streamBubble) {
@@ -336,7 +337,7 @@ window.sendMessage = async function () {
         }
 
         if (token.startsWith('[ERROR]')) {
-          const errMsg = token.slice(7).trim() || 'Nieznany błąd';
+          const errMsg = token.slice(8) || 'Nieznany błąd';
           if (streamBubble) {
             window.finalizeStreamingBubble(streamBubble, `⚠️ ${errMsg}`);
           } else {
@@ -352,11 +353,11 @@ window.sendMessage = async function () {
           break;
         }
 
-        // Normal token — unescape \n sequences back to real newlines
+        // Normal token — unescape literal \n sequences the server may encode
         const realToken = token.replace(/\\n/g, '\n');
         fullText += realToken;
 
-        // Lazy bubble creation: swap thinking -> streaming on first real token
+        // Lazy bubble creation: thinking stays until first real token
         if (!streamBubble) {
           streamBubble = window.createStreamingBubble({
             speaker: window.t('chat.gm'),
@@ -394,8 +395,7 @@ window.sendMessage = async function () {
       window.chatRequestState.inFlight = false;
     }
 
-    const sendBtn = document.getElementById('send-btn');
-    const inp = document.getElementById('input');
+    const { sendBtn, inputEl: inp } = window.getEls();
     if (sendBtn) sendBtn.disabled = false;
     if (inp) { inp.disabled = false; inp.focus(); }
   }

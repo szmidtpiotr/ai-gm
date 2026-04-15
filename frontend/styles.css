@@ -223,9 +223,11 @@ input:disabled {
 
 /*
   Streaming bubble:
-  - Fixed width from the start — no resize jitter as tokens arrive
-  - overflow: hidden prevents scrollbars during token fill
-  - No bubble-in animation (was already visible as thinking bubble)
+  - Fixed width from the start so it never resizes as tokens arrive.
+  - After finalizeStreamingBubble removes .streaming, the bubble keeps
+    its rendered width via the max-width cap — no snap/jitter.
+  - overflow: hidden prevents scrollbars during token fill.
+  - No bubble-in animation (was already visible as thinking bubble).
 */
 .message.assistant.streaming {
   width: var(--bubble-max);
@@ -233,6 +235,16 @@ input:disabled {
   min-width: 260px;
   overflow: hidden;
   animation: none;
+}
+
+/*
+  Once .streaming is removed, preserve visual stability:
+  - max-width keeps the bubble from jumping wider.
+  - width auto lets it be narrower if content is short (natural).
+*/
+.message.assistant:not(.streaming):not(.thinking) {
+  width: auto;
+  max-width: var(--bubble-max);
 }
 
 /*
@@ -349,7 +361,6 @@ pre {
   min-height: 72px;
   padding: 14px 18px;
   gap: 8px;
-  /* No bubble-in re-entrance — it just appears */
   animation: bubble-in 180ms ease-out;
 }
 
