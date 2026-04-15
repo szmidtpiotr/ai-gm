@@ -18,6 +18,77 @@ window.SHEET_SKILLS = [
   "Lore"
 ];
 
+window.ROLL_VALID_TESTS = new Set([
+  "athletics", "stealth", "awareness", "survival", "lore", "investigation",
+  "arcana", "medicine", "persuasion", "intimidation",
+  "melee_attack", "ranged_attack", "spell_attack",
+  "fortitude_save", "reflex_save", "willpower_save", "arcane_save"
+]);
+
+window.ROLL_TEST_ALIASES = {
+  "Str Save": "fortitude_save",
+  "Con Save": "fortitude_save",
+  "Dex Save": "reflex_save",
+  "Wis Save": "willpower_save",
+  "Int Save": "arcane_save",
+  "Cha Save": "willpower_save",
+  "Athletics": "athletics",
+  "Stealth": "stealth",
+  "Awareness": "awareness",
+  "Perception": "awareness",
+  "Survival": "survival",
+  "Lore": "lore",
+  "Investigation": "investigation",
+  "Arcana": "arcana",
+  "Medicine": "medicine",
+  "Persuasion": "persuasion",
+  "Intimidation": "intimidation",
+  "Attack": "melee_attack",
+  "Melee Attack": "melee_attack",
+  "Ranged Attack": "ranged_attack",
+  "Spell Attack": "spell_attack",
+  "Initiative": "reflex_save"
+};
+
+window.resolveRollTestName = function (raw) {
+  const source = String(raw || "").trim();
+  if (!source) return null;
+  const titleKey = source
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
+  if (window.ROLL_TEST_ALIASES[titleKey]) {
+    return window.ROLL_TEST_ALIASES[titleKey];
+  }
+  const normalized = source.toLowerCase().replace(/-/g, "_").replace(/\s+/g, "_");
+  return window.ROLL_VALID_TESTS.has(normalized) ? normalized : null;
+};
+
+window.formatRollTestDisplayName = function (canonicalName) {
+  const normalized = String(canonicalName || "").trim().toLowerCase();
+  const labels = {
+    athletics: "Athletics",
+    stealth: "Stealth",
+    awareness: "Awareness",
+    survival: "Survival",
+    lore: "Lore",
+    investigation: "Investigation",
+    arcana: "Arcana",
+    medicine: "Medicine",
+    persuasion: "Persuasion",
+    intimidation: "Intimidation",
+    melee_attack: "Melee Attack",
+    ranged_attack: "Ranged Attack",
+    spell_attack: "Spell Attack",
+    fortitude_save: "Fortitude Save",
+    reflex_save: "Reflex Save",
+    willpower_save: "Willpower Save",
+    arcane_save: "Arcane Save",
+  };
+  return labels[normalized] || canonicalName;
+};
+
 window.getSheetEls = function () {
   return {
     playAreaEl: document.querySelector(".play-area"),

@@ -17,13 +17,6 @@ window.chatRequestState = window.chatRequestState || {
 };
 window.state.pendingRoll = window.state.pendingRoll || null;
 
-window._validRollSkills = new Set([
-  'athletics', 'stealth', 'awareness', 'survival', 'lore', 'investigation',
-  'arcana', 'medicine', 'persuasion', 'intimidation', 'melee_attack',
-  'ranged_attack', 'spell_attack', 'fortitude_save', 'reflex_save',
-  'willpower_save', 'arcane_save'
-]);
-
 window._updateRollButtonsState = function () {
   const { diceBtn, contextualRollBtn } = window.getEls();
   const pending = window.state.pendingRoll;
@@ -53,16 +46,26 @@ window.parsePendingRoll = function (text) {
   }
 
   const skillLabel = (match[1] || '').trim();
-  const normalizedSkill = skillLabel.toLowerCase().replace(/\s+/g, '_');
+  const canonicalSkill = typeof window.resolveRollTestName === 'function'
+    ? window.resolveRollTestName(skillLabel)
+    : null;
   const diceExpr = (match[2] || 'd20').toLowerCase();
 
-  // Accept frozen values directly; otherwise keep original label for display.
-  const displaySkill = skillLabel;
-  if (window._validRollSkills.has(normalizedSkill) || skillLabel.length > 0) {
-    window.state.pendingRoll = { skill: displaySkill, dice: diceExpr };
-  } else {
+  if (!canonicalSkill) {
+    console.warn('Ignoring unknown roll cue test name:', skillLabel);
     window.state.pendingRoll = null;
+    window._updateRollButtonsState();
+    return sourceText;
   }
+
+  const displaySkill = typeof window.formatRollTestDisplayName === 'function'
+    ? window.formatRollTestDisplayName(canonicalSkill)
+    : canonicalSkill;
+  window.state.pendingRoll = {
+    skill: displaySkill,
+    canonical_skill: canonicalSkill,
+    dice: diceExpr
+  };
 
   window._updateRollButtonsState();
 

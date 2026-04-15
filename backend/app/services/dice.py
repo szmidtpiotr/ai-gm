@@ -6,27 +6,33 @@ import re
 logger = logging.getLogger(__name__)
 
 
-SKILL_TO_STAT = {
+SKILL_STAT_MAP = {
     "athletics": "STR",
     "melee_attack": "STR",
     "stealth": "DEX",
-    "reflex_save": "DEX",
     "ranged_attack": "DEX",
-    "fortitude_save": "CON",
     "arcana": "INT",
     "lore": "INT",
     "investigation": "INT",
-    "arcane_save": "INT",
     "spell_attack": "INT",
     "awareness": "WIS",
     "survival": "WIS",
     "medicine": "WIS",
-    "willpower_save": "WIS",
     "persuasion": "CHA",
     "intimidation": "CHA",
 }
 
-VALID_TEST_NAMES = set(SKILL_TO_STAT.keys())
+SAVE_STAT_MAP = {
+    "fortitude_save": "CON",
+    "reflex_save": "DEX",
+    "willpower_save": "WIS",
+    "arcane_save": "INT",
+}
+
+# Keep spell_attack in INT mapping, as locked in phases.
+SKILL_STAT_MAP["spell_attack"] = "INT"
+
+VALID_TEST_NAMES = set(SKILL_STAT_MAP.keys()) | set(SAVE_STAT_MAP.keys())
 
 TEST_NAME_ALIASES = {
     "Str Save": "fortitude_save",
@@ -59,16 +65,17 @@ def parse_roll_command(text: str) -> dict | None:
     if not raw:
         return None
 
-    # /roll Stealth, /roll Attack d20
-    slash_match = re.match(r"^/roll(?:\s+(.+?))?(?:\s+(d\d+))?$", raw, re.I)
+    # /roll Stealth, /roll Attack d20, /roll Attack 14
+    slash_match = re.match(r"^/roll(?:\s+(.+?))?(?:\s+(d\d+|\d+))?$", raw, re.I)
     if slash_match:
         raw_skill = (slash_match.group(1) or "Attack").strip()
         canonical_skill = resolve_test_name(raw_skill)
         if not canonical_skill:
             logger.warning("Unknown /roll test name: %s", raw_skill)
             return None
-        dice = (slash_match.group(2) or "d20").strip().lower()
-        return {"skill": canonical_skill, "dice": dice}
+        roll_arg = (slash_match.group(2) or "d20").strip().lower()
+        raw_roll = _safe_int(roll_arg, 0) if roll_arg.isdigit() else None
+        return {"skill": canonical_skill, "dice": roll_arg, "raw_roll": raw_roll}
 
     # Roll Attack d20 (button-like payload)
     roll_line_match = re.match(r"^roll\s+(.+?)\s+(d\d+)$", raw, re.I)
@@ -81,6 +88,7 @@ def parse_roll_command(text: str) -> dict | None:
         return {
             "skill": canonical_skill,
             "dice": (roll_line_match.group(2) or "d20").strip().lower(),
+            "raw_roll": None,
         }
 
     return None
@@ -110,41 +118,82 @@ def _safe_int(value, default: int) -> int:
         return default
 
 
-def resolve_roll(sheet_json_text: str | None, skill: str, dice: str = "d20") -> dict:
-    dice_match = re.match(r"^d(\d+)$", (dice or "").strip(), re.I)
-    sides = _safe_int(dice_match.group(1), 20) if dice_match else 20
-    if sides <= 0:
-        sides = 20
-
-    normalized_skill = resolve_test_name(skill) or "melee_attack"
-    d20_roll = random.randint(1, sides)
-
+def parse_character_sheet(sheet_json_text: str | None) -> dict:
     try:
         sheet = json.loads(sheet_json_text) if sheet_json_text else {}
     except Exception:
         sheet = {}
+    return sheet if isinstance(sheet, dict) else {}
 
+
+def roll_d20(advantage: bool = False, disadvantage: bool = False) -> int:
+    if advantage and not disadvantage:
+        return max(random.randint(1, 20), random.randint(1, 20))
+    if disadvantage and not advantage:
+        return min(random.randint(1, 20), random.randint(1, 20))
+    return random.randint(1, 20)
+
+
+def resolve_roll(
+    character_sheet: dict,
+    test_name: str,
+    raw_roll: int | None = None,
+    advantage: bool = False,
+    disadvantage: bool = False,
+) -> dict:
+    normalized_test = resolve_test_name(test_name) or "melee_attack"
+    sheet = character_sheet if isinstance(character_sheet, dict) else {}
     stats = sheet.get("stats") if isinstance(sheet.get("stats"), dict) else {}
     skills = sheet.get("skills") if isinstance(sheet.get("skills"), dict) else {}
 
-    stat_name = SKILL_TO_STAT.get(normalized_skill)
-    stat_value = _safe_int(stats.get(stat_name, 10), 10) if stat_name else 10
-    stat_modifier = (stat_value - 10) // 2 if stat_name else 0
-    skill_rank = _safe_int(skills.get(normalized_skill, 0), 0)
-    proficiency_bonus = 2 if skill_rank >= 3 else 0
-    modifier = stat_modifier + skill_rank + proficiency_bonus
-    total = d20_roll + modifier
+    effective_raw_roll = raw_roll
+    if effective_raw_roll is None or advantage or disadvantage:
+        effective_raw_roll = roll_d20(advantage=advantage, disadvantage=disadvantage)
+    effective_raw_roll = _safe_int(effective_raw_roll, 1)
+    if effective_raw_roll < 1:
+        effective_raw_roll = 1
+    if effective_raw_roll > 20:
+        effective_raw_roll = 20
+
+    if normalized_test in SAVE_STAT_MAP:
+        stat_key = SAVE_STAT_MAP[normalized_test]
+        stat_value = _safe_int(stats.get(stat_key, 10), 10)
+        stat_mod = (stat_value - 10) // 2
+        total = effective_raw_roll + stat_mod
+        return {
+            "test": normalized_test,
+            "raw": effective_raw_roll,
+            "stat_mod": stat_mod,
+            "skill_rank": 0,
+            "proficiency": 0,
+            "total": total,
+            "is_nat20": effective_raw_roll == 20,
+            "is_nat1": effective_raw_roll == 1,
+        }
+
+    stat_key = SKILL_STAT_MAP.get(normalized_test)
+    stat_value = _safe_int(stats.get(stat_key, 10), 10) if stat_key else 10
+    stat_mod = (stat_value - 10) // 2 if stat_key else 0
+    skill_rank = _safe_int(skills.get(normalized_test, 0), 0)
+    proficiency = 2 if skill_rank >= 3 else 0
+    total = effective_raw_roll + stat_mod + skill_rank + proficiency
 
     return {
-        "skill": normalized_skill,
-        "d20": d20_roll,
-        "modifier": modifier,
+        "test": normalized_test,
+        "raw": effective_raw_roll,
+        "stat_mod": stat_mod,
+        "skill_rank": skill_rank,
+        "proficiency": proficiency,
         "total": total,
+        "is_nat20": effective_raw_roll == 20,
+        "is_nat1": effective_raw_roll == 1,
     }
 
 
 def format_roll_result_message(roll_result: dict) -> str:
     return (
-        f"[Roll result: {roll_result['skill']} — rolled "
-        f"{roll_result['d20']} + {roll_result['modifier']} = {roll_result['total']}]"
+        f"[Roll result: {roll_result['test']} — rolled "
+        f"{roll_result['raw']} + "
+        f"{roll_result['stat_mod'] + roll_result['skill_rank'] + roll_result['proficiency']} "
+        f"= {roll_result['total']}]"
     )
