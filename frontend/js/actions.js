@@ -238,7 +238,7 @@ window.sendMessage = async function () {
 
   inputEl.value = '';
 
-  // Show thinking bubble with animated dots BEFORE fetch so it appears immediately
+  // Show thinking bubble with animated dots immediately — before fetch even starts
   window.removeThinkingBubble();
   window.showThinkingBubble({
     speaker: window.t('chat.gm'),
@@ -256,6 +256,9 @@ window.sendMessage = async function () {
     };
 
     // --- STREAMING via SSE ---
+    // NOTE: fetch() itself returns only after the response headers arrive.
+    // The thinking bubble stays visible during this entire wait. Only when
+    // the first token chunk arrives do we swap to the streaming bubble.
     const resp = await fetch(
       `/api/campaigns/${window.state.selectedCampaignId}/turns/stream`,
       {
@@ -276,18 +279,24 @@ window.sendMessage = async function () {
 
     if (requestId !== window.chatRequestState.requestId) return;
 
-    // Read SSE stream — keep thinking bubble until first real token arrives
+    // Read SSE stream.
+    // Strategy:
+    //   - Keep thinking bubble visible until first real token arrives
+    //   - On first token: swap thinking -> streaming bubble (createStreamingBubble
+    //     removes thinking bubble internally)
+    //   - Stream tokens directly into <pre> via textContent append
+    //   - On [DONE]: finalize bubble (remove .streaming class, show dice buttons)
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     let fullText = '';
-    let streamBubble = null; // created lazily on first token
-    let streamDone = false;  // flag to break outer while loop cleanly
+    let streamBubble = null; // created lazily on first real token
+    let streamDone = false;
 
     while (!streamDone) {
       const { done, value } = await reader.read();
 
-      // On stream close, flush whatever is still in buffer
+      // On stream close, flush remaining buffer
       if (done) {
         if (buffer.trim()) {
           const remaining = buffer.trim();
@@ -297,6 +306,7 @@ window.sendMessage = async function () {
               const realToken = token.replace(/\\n/g, '\n');
               fullText += realToken;
               if (!streamBubble) {
+                // First token — swap thinking bubble to streaming bubble
                 streamBubble = window.createStreamingBubble({
                   speaker: window.t('chat.gm'),
                   route: 'narrative',
@@ -312,33 +322,33 @@ window.sendMessage = async function () {
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop(); // keep incomplete last line
+      buffer = lines.pop(); // keep incomplete last line in buffer
 
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue;
-        const token = line.slice(6); // strip "data: "
+        const token = line.slice(6);
 
         if (token === '[DONE]') {
-          // Finalize bubble and exit both loops
           if (streamBubble) {
             window.finalizeStreamingBubble(streamBubble, fullText);
           } else {
+            // [DONE] arrived with no tokens at all — remove thinking bubble
             window.removeThinkingBubble();
           }
-          // Sync turn list
           await window.loadTurns(window.state.selectedCampaignId);
           streamDone = true;
-          break; // exit for loop; while checks streamDone
+          break;
         }
 
         if (token.startsWith('[ERROR]')) {
+          const errMsg = token.slice(8) || 'Nieznany błąd';
           if (streamBubble) {
-            window.finalizeStreamingBubble(streamBubble, `⚠️ ${token.slice(8)}`);
+            window.finalizeStreamingBubble(streamBubble, `⚠️ ${errMsg}`);
           } else {
             window.removeThinkingBubble();
             window.addMessage({
               speaker: 'Błąd',
-              text: `⚠️ ${token.slice(8)}`,
+              text: `⚠️ ${errMsg}`,
               role: 'error',
               turn: turnNumber
             });
@@ -347,11 +357,11 @@ window.sendMessage = async function () {
           break;
         }
 
-        // Normal token — unescape \n back to real newlines
+        // Normal token — unescape \n sequences back to real newlines
         const realToken = token.replace(/\\n/g, '\n');
         fullText += realToken;
 
-        // Lazy creation: swap thinking bubble → streaming bubble on first token
+        // Lazy bubble creation: thinking stays until first real token
         if (!streamBubble) {
           streamBubble = window.createStreamingBubble({
             speaker: window.t('chat.gm'),
@@ -364,12 +374,14 @@ window.sendMessage = async function () {
       }
     }
 
-    // If stream ended without [DONE] (e.g. server closed early), finalize gracefully
-    if (!streamDone && streamBubble) {
-      window.finalizeStreamingBubble(streamBubble, fullText);
-      await window.loadTurns(window.state.selectedCampaignId);
-    } else if (!streamDone) {
-      window.removeThinkingBubble();
+    // Stream ended without [DONE] (server closed early) — finalize gracefully
+    if (!streamDone) {
+      if (streamBubble) {
+        window.finalizeStreamingBubble(streamBubble, fullText);
+        await window.loadTurns(window.state.selectedCampaignId);
+      } else {
+        window.removeThinkingBubble();
+      }
     }
 
   } catch (e) {
@@ -387,9 +399,9 @@ window.sendMessage = async function () {
       window.chatRequestState.inFlight = false;
     }
 
-    if (sendBtnEl) sendBtnEl.disabled = false;
-    inputEl.disabled = false;
-    inputEl.focus();
+    const { sendBtn, inputEl: inp } = window.getEls();
+    if (sendBtn) sendBtn.disabled = false;
+    if (inp) { inp.disabled = false; inp.focus(); }
   }
 };
 

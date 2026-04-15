@@ -119,7 +119,10 @@ window.showThinkingBubble = function ({
 
 /**
  * Creates a live streaming bubble in the chat, replacing the thinking bubble.
- * Returns the bubble element so tokens can be appended to it.
+ * The bubble starts with a fixed min-width/min-height so it never collapses
+ * while waiting for the first token. A CSS blinking cursor (::after) is shown
+ * via the .streaming class — no JS cursor needed.
+ * Returns the bubble element and the <pre> node so tokens can be appended.
  */
 window.createStreamingBubble = function ({
   speaker = null,
@@ -155,16 +158,22 @@ window.createStreamingBubble = function ({
   const body = document.createElement('div');
   body.className = 'message-body';
 
-  // Use a <span> inside <pre> so textContent updates are immediate
-  // and the element has no artificial height constraints
+  // <pre> with explicit display:block and min-height so it is always
+  // painted — even before the first token arrives. The CSS ::after
+  // blinking cursor on .streaming keeps it visually non-empty.
   const pre = document.createElement('pre');
   pre.className = 'streaming-text';
+  pre.style.cssText = 'display:block;min-height:1.4em;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;';
   pre.textContent = '';
 
   body.appendChild(pre);
   wrap.appendChild(meta);
   wrap.appendChild(body);
   chatEl.appendChild(wrap);
+
+  // Force a layout pass so the bubble is visibly painted before tokens arrive
+  // eslint-disable-next-line no-unused-expressions
+  wrap.offsetHeight;
 
   window.scrollChatToBottom();
   return wrap;
@@ -187,7 +196,8 @@ window.appendToStreamingBubble = function (bubbleEl, token) {
 };
 
 /**
- * Finalizes the streaming bubble: removes streaming class, adds action buttons if applicable.
+ * Finalizes the streaming bubble: removes streaming class, removes inline
+ * size lock, adds action buttons if applicable.
  * fullText is the complete assembled response text.
  */
 window.finalizeStreamingBubble = function (bubbleEl, fullText) {
@@ -195,6 +205,10 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
 
   bubbleEl.classList.remove('streaming');
   bubbleEl.removeAttribute('id');
+
+  // Remove the inline style lock so the bubble shrinks/grows naturally
+  const pre = bubbleEl.querySelector('pre.streaming-text');
+  if (pre) pre.style.cssText = '';
 
   // Add dice action buttons if GM narrative contains dice expressions
   const route = bubbleEl.querySelector('.route-badge')?.textContent || '';
