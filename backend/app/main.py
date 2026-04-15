@@ -16,16 +16,13 @@ from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.db import get_session, init_db
 from app.models import Game, Message
+from app.services.dice import build_gm_dice_breakdown, parse_character_sheet
 
 
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 
-# Extract the file path from DATABASE_URL so both init_db() and raw migrations use the same file
-_DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////data/ai_gm.db")
-if _DATABASE_URL.startswith("sqlite:///"):
-    DB_PATH = _DATABASE_URL[len("sqlite:///"):]
-else:
-    DB_PATH = "/data/ai_gm.db"
+# Keep DB path consistent with API routers using raw sqlite connections.
+DB_PATH = "/data/ai_gm.db"
 
 
 GAME_SYSTEMS = {
@@ -196,38 +193,6 @@ async def gm_dice(req: DiceReq):
     total = sum(rolls) + base_mod
 
     if req.character_id and req.roll_key and num == 1 and sides == 20:
-        skill_to_stat = {
-            "athletics": "STR",
-            "melee_attack": "STR",
-            "stealth": "DEX",
-            "reflex_save": "DEX",
-            "ranged_attack": "DEX",
-            "fortitude_save": "CON",
-            "arcana": "INT",
-            "lore": "INT",
-            "investigation": "INT",
-            "arcane_save": "INT",
-            "spell_attack": "INT",
-            "awareness": "WIS",
-            "survival": "WIS",
-            "medicine": "WIS",
-            "willpower_save": "WIS",
-            "persuasion": "CHA",
-            "intimidation": "CHA",
-        }
-        aliases = {
-            "str_save": "fortitude_save",
-            "dex_save": "reflex_save",
-            "int_save": "arcane_save",
-            "wis_save": "willpower_save",
-            "cha_save": "persuasion",
-            "con_save": "fortitude_save",
-            "attack": "melee_attack",
-        }
-        normalized_key = req.roll_key.strip().lower().replace("-", "_")
-        normalized_key = normalized_key.replace(" ", "_")
-        normalized_key = aliases.get(normalized_key, normalized_key)
-
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
@@ -239,47 +204,23 @@ async def gm_dice(req: DiceReq):
         if not row:
             raise HTTPException(status_code=404, detail="Character not found")
 
-        try:
-            sheet = json.loads(row["sheet_json"]) if row["sheet_json"] else {}
-        except Exception:
-            sheet = {}
-
-        stats = sheet.get("stats") if isinstance(sheet.get("stats"), dict) else {}
-        skills = sheet.get("skills") if isinstance(sheet.get("skills"), dict) else {}
-
-        stat_name = skill_to_stat.get(normalized_key)
-        stat_value = 10
-        if stat_name:
-            stat_value = int(
-                stats.get(
-                    stat_name,
-                    stats.get(stat_name.lower(), 10),
-                )
-            )
-        stat_modifier = (stat_value - 10) // 2
-        skill_rank = int(skills.get(normalized_key, 0))
-        proficiency_bonus = 2 if skill_rank >= 3 else 0
-        computed_modifier = stat_modifier + skill_rank + proficiency_bonus + base_mod
         d20_roll = rolls[0]
-        total = d20_roll + computed_modifier
+        sheet = parse_character_sheet(row["sheet_json"])
+        breakdown = build_gm_dice_breakdown(sheet, req.roll_key, d20_roll)
+        if breakdown is None:
+            raise HTTPException(status_code=404, detail="Unknown roll_key")
+
+        final_total = breakdown["final_total"] + base_mod
 
         return {
             "dice": req.dice.strip(),
             "rolls": rolls,
             "roll": d20_roll,
-            "modifier": computed_modifier,
-            "total": total,
+            "modifier": (final_total - d20_roll),
+            "total": d20_roll,
             "dc": req.dc,
-            "success": (total >= req.dc) if req.dc is not None else None,
-            "breakdown": {
-                "roll_key": normalized_key,
-                "stat": stat_name,
-                "stat_value": stat_value,
-                "stat_modifier": stat_modifier,
-                "skill_rank": skill_rank,
-                "proficiency_bonus": proficiency_bonus,
-                "base_modifier": base_mod,
-            },
+            "success": (final_total >= req.dc) if req.dc is not None else None,
+            "breakdown": breakdown,
         }
 
     return {"dice": req.dice.strip(), "rolls": rolls, "total": total}

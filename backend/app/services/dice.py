@@ -59,6 +59,19 @@ TEST_NAME_ALIASES = {
     "Initiative": "reflex_save",
 }
 
+# Mapping used by POST /api/gm/dice endpoint (Phase 7 tests).
+GM_DICE_ALIAS_MAP = {
+    "attack": "melee_attack",
+    "dex_save": "reflex_save",
+    "int_save": "arcane_save",
+    "wis_save": "willpower_save",
+}
+
+GM_DICE_DIRECT_STAT_ALIASES = {
+    "str_save": "STR",
+    "con_save": "CON",
+}
+
 
 def parse_roll_command(text: str) -> dict | None:
     raw = (text or "").strip()
@@ -197,3 +210,64 @@ def format_roll_result_message(roll_result: dict) -> str:
         f"{roll_result['stat_mod'] + roll_result['skill_rank'] + roll_result['proficiency']} "
         f"= {roll_result['total']}]"
     )
+
+
+def resolve_gm_dice_roll_key(roll_key: str) -> dict | None:
+    normalized = (roll_key or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if not normalized:
+        return None
+
+    if normalized in GM_DICE_DIRECT_STAT_ALIASES:
+        return {
+            "skill": None,
+            "stat": GM_DICE_DIRECT_STAT_ALIASES[normalized],
+            "resolved_key": normalized,
+            "is_save": True,
+        }
+
+    canonical = GM_DICE_ALIAS_MAP.get(normalized, normalized)
+    if canonical in SAVE_STAT_MAP:
+        return {
+            "skill": canonical,
+            "stat": SAVE_STAT_MAP[canonical],
+            "resolved_key": canonical,
+            "is_save": True,
+        }
+    if canonical in SKILL_STAT_MAP:
+        return {
+            "skill": canonical,
+            "stat": SKILL_STAT_MAP[canonical],
+            "resolved_key": canonical,
+            "is_save": False,
+        }
+
+    return None
+
+
+def build_gm_dice_breakdown(character_sheet: dict, roll_key: str, roll: int) -> dict | None:
+    resolved = resolve_gm_dice_roll_key(roll_key)
+    if not resolved:
+        return None
+
+    sheet = character_sheet if isinstance(character_sheet, dict) else {}
+    stats = sheet.get("stats") if isinstance(sheet.get("stats"), dict) else {}
+    skills = sheet.get("skills") if isinstance(sheet.get("skills"), dict) else {}
+
+    stat_key = resolved["stat"]
+    stat_value = _safe_int(stats.get(stat_key, 10), 10)
+    stat_modifier = (stat_value - 10) // 2
+
+    skill = resolved["skill"]
+    skill_rank = 0 if (resolved["is_save"] or not skill) else _safe_int(skills.get(skill, 0), 0)
+    proficiency_bonus = 0 if resolved["is_save"] else (2 if skill_rank >= 3 else 0)
+    final_total = _safe_int(roll, 0) + stat_modifier + skill_rank + proficiency_bonus
+
+    return {
+        "roll": _safe_int(roll, 0),
+        "stat": stat_key,
+        "stat_modifier": stat_modifier,
+        "skill": skill or resolved["resolved_key"],
+        "skill_rank": skill_rank,
+        "proficiency_bonus": proficiency_bonus,
+        "final_total": final_total,
+    }
