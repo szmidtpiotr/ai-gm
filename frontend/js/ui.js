@@ -39,14 +39,14 @@ window.applyTranslations = function () {
   if (els.sendBtn) els.sendBtn.textContent = window.t('button.send');
 };
 
-// Scroll chat to bottom — direct, no rAF wrapping (rAF per-token kills streaming paint)
+// Scroll chat to bottom — immediate, no rAF (rAF per-token kills streaming paint)
 window.scrollChatToBottom = function () {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
   chatEl.scrollTop = chatEl.scrollHeight;
 };
 
-// Throttled scroll used during streaming — max once per animation frame
+// Throttled scroll during streaming — max once per animation frame
 window._scrollPending = false;
 window.scrollChatToBottomThrottled = function () {
   if (window._scrollPending) return;
@@ -61,7 +61,6 @@ window.scrollChatToBottomThrottled = function () {
 window.removeThinkingBubble = function () {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
-
   const existing = chatEl.querySelector('#thinking-bubble');
   if (existing) existing.remove();
 };
@@ -74,6 +73,7 @@ window.showThinkingBubble = function ({
   const { chatEl } = window.getEls();
   if (!chatEl) return;
 
+  // Only one thinking bubble at a time
   const existing = chatEl.querySelector('#thinking-bubble');
   if (existing) return;
 
@@ -87,7 +87,7 @@ window.showThinkingBubble = function ({
   const left = document.createElement('div');
   left.innerHTML =
     `<strong>${window.escapeHtml(speaker || window.t('chat.gm'))}</strong>` +
-    `${turn ? ` • ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
+    `${turn ? ` \u2022 ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
 
   const right = document.createElement('div');
   right.innerHTML = route
@@ -99,18 +99,17 @@ window.showThinkingBubble = function ({
 
   const body = document.createElement('div');
   body.className = 'thinking-wrap';
-  body.innerHTML = `
-    <span class="thinking-text">${window.escapeHtml(speaker || window.t('chat.gm') || 'GM')} myśli</span>
-    <span class="typing-dots" aria-hidden="true">
-      <span></span>
-      <span></span>
-      <span></span>
-    </span>
-  `;
+  body.innerHTML =
+    `<span class="thinking-text">${window.escapeHtml(speaker || window.t('chat.gm') || 'GM')} my\u015bli</span>` +
+    `<span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>`;
 
   wrap.appendChild(meta);
   wrap.appendChild(body);
   chatEl.appendChild(wrap);
+
+  // Force layout so browser actually paints this before continuing
+  // eslint-disable-next-line no-unused-expressions
+  wrap.offsetHeight;
 
   window.scrollChatToBottom();
 };
@@ -118,11 +117,14 @@ window.showThinkingBubble = function ({
 // --- STREAMING BUBBLE FUNCTIONS ---
 
 /**
- * Creates a live streaming bubble in the chat, replacing the thinking bubble.
- * The bubble starts with a fixed min-width/min-height so it never collapses
- * while waiting for the first token. A CSS blinking cursor (::after) is shown
- * via the .streaming class — no JS cursor needed.
- * Returns the bubble element and the <pre> node so tokens can be appended.
+ * Creates the live streaming bubble, replacing the thinking bubble.
+ *
+ * KEY FIX: The bubble is given a FIXED width (var(--bubble-max)) from the
+ * very start so it never resizes as tokens arrive. This eliminates the
+ * layout-jitter / reflow-on-every-token problem.
+ *
+ * animation:none is applied via CSS (.streaming class) so there is no
+ * re-entrance flash when transitioning from the thinking bubble.
  */
 window.createStreamingBubble = function ({
   speaker = null,
@@ -132,7 +134,6 @@ window.createStreamingBubble = function ({
   const { chatEl } = window.getEls();
   if (!chatEl) return null;
 
-  // Remove thinking bubble first
   window.removeThinkingBubble();
 
   const wrap = document.createElement('div');
@@ -145,7 +146,7 @@ window.createStreamingBubble = function ({
   const left = document.createElement('div');
   left.innerHTML =
     `<strong>${window.escapeHtml(speaker || window.t('chat.gm'))}</strong>` +
-    `${turn ? ` • ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
+    `${turn ? ` \u2022 ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
 
   const right = document.createElement('div');
   right.innerHTML = route
@@ -158,11 +159,9 @@ window.createStreamingBubble = function ({
   const body = document.createElement('div');
   body.className = 'message-body';
 
-  // <pre> with explicit display:block and min-height so it is always
-  // painted — even before the first token arrives. The CSS ::after
-  // blinking cursor on .streaming keeps it visually non-empty.
   const pre = document.createElement('pre');
   pre.className = 'streaming-text';
+  // Inline style only sets min-height as safety net; width is controlled by CSS
   pre.style.cssText = 'display:block;min-height:1.4em;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;';
   pre.textContent = '';
 
@@ -171,7 +170,7 @@ window.createStreamingBubble = function ({
   wrap.appendChild(body);
   chatEl.appendChild(wrap);
 
-  // Force a layout pass so the bubble is visibly painted before tokens arrive
+  // Force layout paint before first token arrives
   // eslint-disable-next-line no-unused-expressions
   wrap.offsetHeight;
 
@@ -180,25 +179,21 @@ window.createStreamingBubble = function ({
 };
 
 /**
- * Appends a token string to the streaming bubble's <pre> element.
- * Uses throttled scroll — does NOT queue a rAF on every single token.
+ * Appends a token to the streaming bubble's <pre>.
+ * Throttled scroll — at most one scroll per animation frame.
  */
 window.appendToStreamingBubble = function (bubbleEl, token) {
   if (!bubbleEl) return;
   const pre = bubbleEl.querySelector('pre.streaming-text');
   if (!pre) return;
-
-  // Append directly — no innerHTML, no extra DOM nodes, no forced layout
   pre.textContent += token;
-
-  // Throttled scroll: at most one scroll per animation frame
   window.scrollChatToBottomThrottled();
 };
 
 /**
- * Finalizes the streaming bubble: removes streaming class, removes inline
- * size lock, adds action buttons if applicable.
- * fullText is the complete assembled response text.
+ * Finalizes the streaming bubble: removes .streaming class so the bubble
+ * shrinks back to fit-content width (natural size), removes inline style
+ * lock, and adds action buttons if the narrative contains dice expressions.
  */
 window.finalizeStreamingBubble = function (bubbleEl, fullText) {
   if (!bubbleEl) return;
@@ -206,11 +201,10 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
   bubbleEl.classList.remove('streaming');
   bubbleEl.removeAttribute('id');
 
-  // Remove the inline style lock so the bubble shrinks/grows naturally
+  // Remove inline min-height lock — let the bubble size to its content
   const pre = bubbleEl.querySelector('pre.streaming-text');
   if (pre) pre.style.cssText = '';
 
-  // Add dice action buttons if GM narrative contains dice expressions
   const route = bubbleEl.querySelector('.route-badge')?.textContent || '';
   if (route === 'narrative') {
     const diceList = window.extractDiceFromText(fullText);
@@ -222,7 +216,7 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
 
 // --- END STREAMING BUBBLE FUNCTIONS ---
 
-// Detect dice expressions in a string and return array of unique dice types found (e.g. ["d20","d6"])
+// Detect dice expressions in text, return array of unique dice types
 window.extractDiceFromText = function (text) {
   const matches = text.match(/\d*d\d+(?:[+-]\d+)?/gi);
   if (!matches) return [];
@@ -240,7 +234,6 @@ window.extractDiceFromText = function (text) {
 
 // Show inline dice roll dialog
 window.showDiceDialog = function (wrapEl) {
-  // Remove existing dialog if any
   const existing = wrapEl.querySelector('.dice-dialog');
   if (existing) { existing.remove(); return; }
 
@@ -250,19 +243,18 @@ window.showDiceDialog = function (wrapEl) {
   const commonDice = ['d4', 'd6', 'd8', 'd10', 'd12', 'd20', 'd100'];
 
   dialog.innerHTML = `
-    <div class="dice-dialog-title">Wybierz kość lub wpisz:</div>
+    <div class="dice-dialog-title">Wybierz ko\u015b\u0107 lub wpisz:</div>
     <div class="dice-quick-btns">
       ${commonDice.map(d => `<button type="button" class="secondary dice-quick" data-dice="${d}">${d}</button>`).join('')}
     </div>
     <div class="dice-custom-row">
       <input type="text" class="dice-custom-input" placeholder="np. 2d6+3" style="width:110px;padding:4px 8px;border-radius:6px;border:1px solid var(--color-border,#ccc);background:var(--color-surface,#fff);color:inherit;font-size:0.9em;">
-      <button type="button" class="secondary dice-custom-roll">Rzuć</button>
+      <button type="button" class="secondary dice-custom-roll">Rzu\u0107</button>
     </div>
   `;
 
   wrapEl.appendChild(dialog);
 
-  // Quick dice buttons
   dialog.querySelectorAll('.dice-quick').forEach(btn => {
     btn.addEventListener('click', async () => {
       const dice = btn.getAttribute('data-dice');
@@ -271,7 +263,6 @@ window.showDiceDialog = function (wrapEl) {
     });
   });
 
-  // Custom input roll
   dialog.querySelector('.dice-custom-roll').addEventListener('click', async () => {
     const val = dialog.querySelector('.dice-custom-input').value.trim();
     if (!val) return;
@@ -291,32 +282,28 @@ window.rollAndAppend = async function (diceExpr, wrapEl) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     window.addMessage({
-      speaker: '🎲',
+      speaker: '\uD83C\uDFB2',
       text: `${data.dice} = [${data.rolls.join(', ')}] = ${data.total}`,
       role: 'system'
     });
   } catch (e) {
-    window.addMessage({ speaker: 'Błąd', text: `Kość: ${e.message}`, role: 'error' });
+    window.addMessage({ speaker: 'B\u0142\u0105d', text: `Ko\u015b\u0107: ${e.message}`, role: 'error' });
   }
 };
 
-// Append action bar to a GM narrative message element
-// Roll buttons only shown when GM text contains dice expressions
+// Append action bar with dice buttons to a GM narrative bubble
 window.appendActionButtons = function (wrapEl, diceList) {
   const hasDice = diceList && diceList.length > 0;
-
-  // Only show action bar when there are dice to roll
   if (!hasDice) return;
 
   const bar = document.createElement('div');
   bar.className = 'action-bar';
 
-  // Add specific dice buttons detected from GM text
   diceList.forEach(({ full, dice }) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'secondary action-dice-btn';
-    btn.textContent = `🎲 Rzuć ${dice}`;
+    btn.textContent = `\uD83C\uDFB2 Rzu\u0107 ${dice}`;
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       await window.rollAndAppend(full, wrapEl);
@@ -325,21 +312,17 @@ window.appendActionButtons = function (wrapEl, diceList) {
     bar.appendChild(btn);
   });
 
-  // Dice chooser button (custom roll)
   const diceChooseBtn = document.createElement('button');
   diceChooseBtn.type = 'button';
   diceChooseBtn.className = 'secondary action-dice-choose-btn';
-  diceChooseBtn.textContent = '🎲 Rzuć kość';
-  diceChooseBtn.addEventListener('click', () => {
-    window.showDiceDialog(wrapEl);
-  });
+  diceChooseBtn.textContent = '\uD83C\uDFB2 Rzu\u0107 ko\u015b\u0107';
+  diceChooseBtn.addEventListener('click', () => window.showDiceDialog(wrapEl));
   bar.appendChild(diceChooseBtn);
 
-  // Focus input button
   const focusBtn = document.createElement('button');
   focusBtn.type = 'button';
   focusBtn.className = 'secondary';
-  focusBtn.textContent = '✍️ Inna akcja';
+  focusBtn.textContent = '\u270D\uFE0F Inna akcja';
   focusBtn.addEventListener('click', () => {
     const { inputEl } = window.getEls();
     if (inputEl) inputEl.focus();
@@ -369,7 +352,7 @@ window.addMessage = function ({
   const left = document.createElement('div');
   left.innerHTML =
     `<strong>${window.escapeHtml(speaker)}</strong>` +
-    `${turn ? ` • ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
+    `${turn ? ` \u2022 ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
 
   const right = document.createElement('div');
   const parts = [];
@@ -424,7 +407,7 @@ window.replaceThinkingBubble = function ({
   const left = document.createElement('div');
   left.innerHTML =
     `<strong>${window.escapeHtml(speaker)}</strong>` +
-    `${turn ? ` • ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
+    `${turn ? ` \u2022 ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
 
   const right = document.createElement('div');
   const parts = [];
@@ -449,7 +432,6 @@ window.replaceThinkingBubble = function ({
   wrap.appendChild(meta);
   wrap.appendChild(body);
 
-  // Add action bar only when GM narrative contains dice expressions
   if (role === 'assistant' && route === 'narrative') {
     const diceList = window.extractDiceFromText(text);
     window.appendActionButtons(wrap, diceList);
@@ -573,7 +555,7 @@ window.renderTurnResponse = function (data, turnNumber) {
 
   window.removeThinkingBubble();
   window.addJsonMessage(
-    'Odpowiedź',
+    'Odpowied\u017a',
     data,
     'assistant',
     'unknown',
@@ -616,7 +598,7 @@ window.renderHistoryPanel = function () {
     meta.innerHTML = `
       <div>
         <strong>Tura ${window.escapeHtml(turn.turn_number || turn.id)}</strong>
-        • ${window.escapeHtml(turn.character_name || 'Gracz')}
+        \u2022 ${window.escapeHtml(turn.character_name || 'Gracz')}
       </div>
       <div>${window.escapeHtml(window.formatTimestamp(turn.created_at))}</div>
     `;
@@ -627,7 +609,7 @@ window.renderHistoryPanel = function () {
       <pre>${window.escapeHtml(turn.user_text || '')}</pre>
       <div style="margin-top:8px;">
         <button type="button" class="secondary replay-turn-btn" data-text="${window.escapeHtml(turn.user_text || '')}">
-          Wyślij ponownie
+          Wy\u015blij ponownie
         </button>
       </div>
     `;
@@ -674,9 +656,13 @@ window.renderTurnsToChat = function () {
         const meta = document.createElement('div');
         meta.className = 'meta';
         const left = document.createElement('div');
-        left.innerHTML = `<strong>${window.escapeHtml(window.t('chat.gm'))}</strong> • ${window.escapeHtml(window.t('chat.turn'))} ${turn.turn_number || turn.id}`;
+        left.innerHTML =
+          `<strong>${window.escapeHtml(window.t('chat.gm'))}</strong>` +
+          ` \u2022 ${window.escapeHtml(window.t('chat.turn'))} ${turn.turn_number || turn.id}`;
         const right = document.createElement('div');
-        right.innerHTML = `<span class="route-badge">narrative</span> <span>${window.escapeHtml(window.formatTimestamp(turn.created_at))}</span>`;
+        right.innerHTML =
+          `<span class="route-badge">narrative</span>` +
+          ` <span>${window.escapeHtml(window.formatTimestamp(turn.created_at))}</span>`;
         meta.appendChild(left);
         meta.appendChild(right);
 
@@ -687,7 +673,6 @@ window.renderTurnsToChat = function () {
         msgWrap.appendChild(meta);
         msgWrap.appendChild(body);
 
-        // Add action bar only when GM text contains dice expressions
         const diceList = window.extractDiceFromText(turn.assistant_text);
         window.appendActionButtons(msgWrap, diceList);
 
