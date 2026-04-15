@@ -8,11 +8,16 @@ window.loadTranslations = async function (lang) {
 
 window.loadHealth = async function () {
   const {
-    statusBackendEl,
-    statusOllamaEl,
-    statusModelsEl,
-    statusHostEl
+    statusBackendDotEl,
+    statusOllamaDotEl
   } = window.getEls();
+
+  const setDotState = (dotEl, state, title) => {
+    if (!dotEl) return;
+    dotEl.classList.remove('ok', 'warn', 'error', 'unknown');
+    dotEl.classList.add(state);
+    if (title) dotEl.title = title;
+  };
 
   try {
     const resp = await fetch(window.API_HEALTH, {
@@ -21,18 +26,15 @@ window.loadHealth = async function () {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
 
-    statusBackendEl.textContent = `${window.t('status.backend')}: OK`;
-    statusOllamaEl.textContent =
-      `${window.t('status.ollama')}: ${data.ollama?.reachable ? 'OK' : window.t('status.disconnected')}`;
-    statusModelsEl.textContent =
-      `${window.t('status.models')}: ${data.ollama?.model_count ?? 0}`;
-    statusHostEl.textContent =
-      `${window.t('health.host')}: ${data.ollama?.base_url || '-'}`;
+    setDotState(statusBackendDotEl, 'ok', 'Backend: OK');
+    setDotState(
+      statusOllamaDotEl,
+      data.ollama?.reachable ? 'ok' : 'warn',
+      `Ollama: ${data.ollama?.reachable ? 'OK' : window.t('status.disconnected')}`
+    );
   } catch (e) {
-    statusBackendEl.textContent = `${window.t('status.backend')}: ${window.t('health.fail')}`;
-    statusOllamaEl.textContent = `${window.t('status.ollama')}: ${window.t('status.disconnected')}`;
-    statusModelsEl.textContent = `${window.t('status.models')}: 0`;
-    statusHostEl.textContent = `${window.t('health.host')}: -`;
+    setDotState(statusBackendDotEl, 'error', `Backend: ${window.t('health.fail')}`);
+    setDotState(statusOllamaDotEl, 'error', `Ollama: ${window.t('status.disconnected')}`);
   }
 };
 
