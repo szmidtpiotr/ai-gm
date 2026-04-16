@@ -16,6 +16,7 @@ from sqlmodel import Session, select
 from app.api import campaigns, characters, commands, turns
 from app.api.health import router as health_router
 from app.api.models import router as models_router
+from app.migrations_admin import run_admin_migrations
 from app.routers.settings import router as settings_router
 from app.db import get_session, init_db
 from app.models import Game, Message
@@ -199,6 +200,7 @@ async def lifespan(app: FastAPI):
         os.makedirs(db_dir, exist_ok=True)
     init_db()
     run_raw_migrations()
+    run_admin_migrations()
     yield
     # Shutdown (nothing needed)
 
