@@ -25,7 +25,26 @@
       </div>
     </header>
 
+    <section class="admin-warning">
+      <strong>Warning:</strong> Export configuration before bulk edits or import commit.
+    </section>
+
     <section class="admin-login" id="admin-login-box">
+      <div class="field-row dev-login-row">
+        <div class="field">
+          <label for="admin-dev-username">Dev Login</label>
+          <input id="admin-dev-username" value="demo" />
+        </div>
+        <div class="field">
+          <label for="admin-dev-password">Dev Password</label>
+          <input id="admin-dev-password" type="password" value="demo" />
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="admin-dev-login-btn" class="secondary">Generate Token</button>
+        </div>
+      </div>
+
       <div class="field">
         <label for="admin-base-url">API Base URL</label>
         <input id="admin-base-url" value="/api" />
@@ -41,13 +60,20 @@
       <div id="admin-login-status" class="muted">Not connected.</div>
     </section>
 
+    <div class="admin-tabs">
+      <button class="secondary admin-tab active" data-tab="stats">Stats</button>
+      <button class="secondary admin-tab" data-tab="skills">Skills</button>
+      <button class="secondary admin-tab" data-tab="dc">DC</button>
+      <button class="secondary admin-tab" data-tab="accounts">Accounts</button>
+    </div>
+
     <main class="admin-main">
-      <section class="admin-card">
+      <section class="admin-card admin-tab-panel active" data-panel="stats">
         <h2>Stats</h2>
         <div id="stats-list" class="table-wrap"></div>
       </section>
 
-      <section class="admin-card">
+      <section class="admin-card admin-tab-panel" data-panel="skills">
         <h2>Skills</h2>
         <div class="inline-form" id="new-skill-form">
           <input id="new-skill-key" placeholder="key">
@@ -59,12 +85,12 @@
         <div id="skills-list" class="table-wrap"></div>
       </section>
 
-      <section class="admin-card">
+      <section class="admin-card admin-tab-panel" data-panel="dc">
         <h2>DC Tiers</h2>
         <div id="dc-list" class="table-wrap"></div>
       </section>
 
-      <section class="admin-card">
+      <section class="admin-card admin-tab-panel" data-panel="accounts">
         <h2>Accounts</h2>
         <div id="accounts-list" class="table-wrap"></div>
       </section>

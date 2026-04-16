@@ -7,7 +7,7 @@ from app.services.admin_accounts import (
     soft_delete_account,
     update_account,
 )
-from app.services.admin_auth import verify_admin_token
+from app.services.admin_auth import issue_dev_admin_token, verify_admin_token
 from app.services.admin_config_transfer import export_config, import_config
 from app.services.admin_config import (
     create_skill,
@@ -25,6 +25,11 @@ router = APIRouter()
 
 class AdminAuthReq(BaseModel):
     token: str
+
+
+class AdminDevLoginReq(BaseModel):
+    username: str
+    password: str
 
 
 class StatPatchReq(BaseModel):
@@ -90,6 +95,19 @@ def admin_auth(req: AdminAuthReq):
     if not verify_admin_token(req.token):
         raise HTTPException(status_code=401, detail="Invalid admin token")
     return {"ok": True}
+
+
+@router.post("/admin/dev-login")
+def admin_dev_login(req: AdminDevLoginReq):
+    try:
+        token = issue_dev_admin_token(req.username.strip(), req.password)
+        return {"ok": True, "token": token}
+    except ValueError:
+        raise HTTPException(status_code=400, detail="username and password are required") from None
+    except PermissionError as e:
+        if str(e) == "inactive_user":
+            raise HTTPException(status_code=403, detail="User is inactive") from None
+        raise HTTPException(status_code=401, detail="Invalid credentials") from None
 
 
 @router.get("/admin/verify")

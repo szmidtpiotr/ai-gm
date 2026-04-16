@@ -21,6 +21,38 @@ window.state.lastApiCall = window.state.lastApiCall || null;
 window.state.llmSettings = window.state.llmSettings || null;
 window.state.showAllProviderModels = window.state.showAllProviderModels ?? false;
 
+window.LLM_SETTINGS_STORAGE_KEY = "ai-gm:llmSettings";
+
+window._safeLlmSettingsForStorage = function (settings) {
+  if (!settings || typeof settings !== "object") return null;
+  return {
+    provider: String(settings.provider || ""),
+    base_url: String(settings.base_url || ""),
+    model: String(settings.model || ""),
+  };
+};
+
+window.persistLlmSettingsToStorage = function (settings) {
+  const safe = window._safeLlmSettingsForStorage(settings);
+  if (!safe) return;
+  localStorage.setItem(window.LLM_SETTINGS_STORAGE_KEY, JSON.stringify(safe));
+};
+
+window.restoreLlmSettingsFromStorage = function () {
+  try {
+    const raw = localStorage.getItem(window.LLM_SETTINGS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const safe = window._safeLlmSettingsForStorage(parsed);
+    if (!safe) return null;
+    // Need at least provider+model to make sense for model list loading.
+    if (!safe.provider || !safe.model) return null;
+    return safe;
+  } catch (_err) {
+    return null;
+  }
+};
+
 window.prettyLlmErrorMessage = function (rawMessage) {
   const msg = String(rawMessage || '').trim();
   const lower = msg.toLowerCase();
@@ -161,6 +193,9 @@ window.connectLlmSettings = async function () {
   const data = await resp.json();
   window.state.llmSettings = data?.settings || null;
   window.state.selectedEngine = payload.model;
+  // Persist provider/base_url/model across browser refresh.
+  // Intentionally do NOT persist api_key (frontend could expose it via localStorage).
+  window.persistLlmSettingsToStorage(window.state.llmSettings);
   localStorage.setItem('ai-gm:selectedEngine', payload.model);
   return data;
 };
@@ -192,8 +227,22 @@ window.initLlmProviderControls = async function () {
     });
   }
   window.updateLlmProviderFormVisibility();
+
+  // Fallback: if backend runtime config returns empty strings, restore the last
+  // connected provider/base_url/model from localStorage.
+  const saved = window.restoreLlmSettingsFromStorage();
+  if (saved) {
+    window.state.llmSettings = saved;
+    window.applyLlmSettingsToForm(saved);
+  }
+
   try {
-    await window.loadLlmSettings();
+    const live = await window.loadLlmSettings();
+    // If backend didn't have runtime config persisted, keep the localStorage values.
+    if (saved && (!live?.provider || !live?.model)) {
+      window.state.llmSettings = saved;
+      window.applyLlmSettingsToForm(saved);
+    }
   } catch (_err) {
     // Keep defaults if settings endpoint is unavailable.
   }

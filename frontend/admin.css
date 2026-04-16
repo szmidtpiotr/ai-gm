@@ -45,10 +45,23 @@
   gap: 8px;
 }
 
-.admin-main {
+.dev-login-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 12px;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.admin-warning {
+  border: 1px solid #5a4a1e;
+  background: #2a2414;
+  color: #f1dc9a;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.admin-main {
+  display: block;
 }
 
 .admin-card {
@@ -57,6 +70,7 @@
   padding: 12px;
   display: grid;
   gap: 8px;
+  margin-bottom: 12px;
 }
 
 .admin-card h2 {
@@ -77,7 +91,8 @@
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
+  min-width: 860px;
 }
 
 .admin-table th,
@@ -90,7 +105,7 @@
 
 .admin-table input {
   width: 100%;
-  min-width: 80px;
+  min-width: 120px;
 }
 
 .admin-log {
@@ -109,4 +124,32 @@
   max-height: 260px;
   overflow: auto;
   font-size: 12px;
+}
+
+.lock-badge {
+  display: inline-block;
+  margin-left: 6px;
+  color: #f1dc9a;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-tab {
+  min-width: 100px;
+}
+
+.admin-tab.active {
+  outline: 2px solid #8f6328;
+}
+
+.admin-tab-panel {
+  display: none;
+}
+
+.admin-tab-panel.active {
+  display: block;
 }

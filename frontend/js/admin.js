@@ -28,6 +28,11 @@
     el.newSkillStat = document.getElementById("new-skill-stat");
     el.newSkillRank = document.getElementById("new-skill-rank");
     el.newSkillBtn = document.getElementById("new-skill-btn");
+    el.devUsername = document.getElementById("admin-dev-username");
+    el.devPassword = document.getElementById("admin-dev-password");
+    el.devLoginBtn = document.getElementById("admin-dev-login-btn");
+    el.tabButtons = Array.from(document.querySelectorAll(".admin-tab"));
+    el.tabPanels = Array.from(document.querySelectorAll(".admin-tab-panel"));
   }
 
   function log(msg) {
@@ -79,15 +84,19 @@
     return `<table class="admin-table"><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
   }
 
+  function isLocked(record) {
+    return Boolean(record && record.locked_at);
+  }
+
   async function loadStats() {
     const data = await api("/admin/stats");
     const rows = data.items.map((x) => `
       <tr>
-        <td>${esc(x.key)}</td>
+        <td>${esc(x.key)}${isLocked(x) ? '<span class="lock-badge" title="Locked row">🔒</span>' : ""}</td>
         <td><input data-row="stat" data-key="${esc(x.key)}" data-field="label" value="${esc(x.label)}"></td>
         <td><input data-row="stat" data-key="${esc(x.key)}" data-field="description" value="${esc(x.description)}"></td>
         <td><input type="number" data-row="stat" data-key="${esc(x.key)}" data-field="sort_order" value="${esc(x.sort_order)}"></td>
-        <td><button data-save="stat" data-key="${esc(x.key)}" class="secondary">Save</button></td>
+        <td><button data-save="stat" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="secondary">Save</button></td>
       </tr>
     `).join("");
     el.statsList.innerHTML = table(["Key", "Label", "Description", "Order", "Action"], rows);
@@ -97,14 +106,14 @@
     const data = await api("/admin/skills");
     const rows = data.items.map((x) => `
       <tr>
-        <td>${esc(x.key)}</td>
+        <td>${esc(x.key)}${isLocked(x) ? '<span class="lock-badge" title="Locked row">🔒</span>' : ""}</td>
         <td><input data-row="skill" data-key="${esc(x.key)}" data-field="label" value="${esc(x.label)}"></td>
         <td><input data-row="skill" data-key="${esc(x.key)}" data-field="linked_stat" value="${esc(x.linked_stat)}"></td>
         <td><input type="number" data-row="skill" data-key="${esc(x.key)}" data-field="rank_ceiling" value="${esc(x.rank_ceiling)}"></td>
         <td><input type="number" data-row="skill" data-key="${esc(x.key)}" data-field="sort_order" value="${esc(x.sort_order)}"></td>
         <td>
-          <button data-save="skill" data-key="${esc(x.key)}" class="secondary">Save</button>
-          <button data-delete="skill" data-key="${esc(x.key)}" class="danger">Delete</button>
+          <button data-save="skill" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="secondary">Save</button>
+          <button data-delete="skill" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="danger">Delete</button>
         </td>
       </tr>
     `).join("");
@@ -115,11 +124,11 @@
     const data = await api("/admin/dc");
     const rows = data.items.map((x) => `
       <tr>
-        <td>${esc(x.key)}</td>
+        <td>${esc(x.key)}${isLocked(x) ? '<span class="lock-badge" title="Locked row">🔒</span>' : ""}</td>
         <td><input data-row="dc" data-key="${esc(x.key)}" data-field="label" value="${esc(x.label)}"></td>
         <td><input type="number" data-row="dc" data-key="${esc(x.key)}" data-field="value" value="${esc(x.value)}"></td>
         <td><input type="number" data-row="dc" data-key="${esc(x.key)}" data-field="sort_order" value="${esc(x.sort_order)}"></td>
-        <td><button data-save="dc" data-key="${esc(x.key)}" class="secondary">Save</button></td>
+        <td><button data-save="dc" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="secondary">Save</button></td>
       </tr>
     `).join("");
     el.dcList.innerHTML = table(["Key", "Label", "Value", "Order", "Action"], rows);
@@ -159,7 +168,12 @@
     if (!btn) return;
     const type = btn.dataset.save;
     const key = btn.dataset.key;
+    const locked = btn.dataset.locked === "1";
     try {
+      if (locked) {
+        const accepted = window.confirm(`Row ${type}:${key} is locked. Override with force=true?`);
+        if (!accepted) return;
+      }
       if (type === "stat") {
         await api(`/admin/stats/${encodeURIComponent(key)}`, {
           method: "PATCH",
@@ -213,7 +227,14 @@
     if (!btn) return;
     const type = btn.dataset.delete;
     const key = btn.dataset.key;
+    const locked = btn.dataset.locked === "1";
     try {
+      const accepted = window.confirm(
+        locked
+          ? `Locked ${type}:${key}. Confirm force delete?`
+          : `Confirm delete ${type}:${key}?`
+      );
+      if (!accepted) return;
       if (type === "skill") {
         await api(`/admin/skills/${encodeURIComponent(key)}`, {
           method: "DELETE",
@@ -235,6 +256,8 @@
     if (!btn) return;
     const key = btn.dataset.key;
     try {
+      const accepted = window.confirm(`Reset sheet for account:${key}? This cannot be undone.`);
+      if (!accepted) return;
       await api(`/admin/accounts/${encodeURIComponent(key)}/reset-sheet`, { method: "POST" });
       log(`Reset sheet for account:${key}`);
       await refreshAll();
@@ -316,6 +339,10 @@
       return;
     }
     try {
+      if (!dryRun) {
+        const accepted = window.confirm("Commit import will overwrite current config tables. Continue?");
+        if (!accepted) return;
+      }
       const result = await api(`/admin/config/import?dry_run=${dryRun ? "true" : "false"}`, {
         method: "POST",
         body: JSON.stringify(state.selectedImportPayload),
@@ -350,6 +377,28 @@
     }
   }
 
+  async function devLogin() {
+    state.baseUrl = (el.baseUrl.value || "/api").trim().replace(/\/+$/, "");
+    try {
+      const result = await api("/admin/dev-login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: (el.devUsername.value || "").trim(),
+          password: el.devPassword.value || "",
+        }),
+      });
+      if (!result.token) {
+        throw new Error("dev login returned no token");
+      }
+      el.token.value = result.token;
+      await connect();
+      log("Dev login generated token and connected.");
+    } catch (err) {
+      log(`Dev login failed -> ${err.message}`);
+      alert(err.message);
+    }
+  }
+
   function logout() {
     state.token = "";
     state.connected = false;
@@ -372,9 +421,19 @@
     el.importFile.addEventListener("change", handleImportFileChange);
     el.importDryBtn.addEventListener("click", () => handleImport(true));
     el.importCommitBtn.addEventListener("click", () => handleImport(false));
+    el.devLoginBtn.addEventListener("click", devLogin);
     document.body.addEventListener("click", handleSave);
     document.body.addEventListener("click", handleDelete);
     document.body.addEventListener("click", handleReset);
+    el.tabButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.tab;
+        el.tabButtons.forEach((x) => x.classList.toggle("active", x === btn));
+        el.tabPanels.forEach((panel) => {
+          panel.classList.toggle("active", panel.dataset.panel === tab);
+        });
+      });
+    });
   }
 
   function init() {
