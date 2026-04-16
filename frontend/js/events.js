@@ -3,33 +3,6 @@ window.bindEvents = function () {
   const historyBtn = document.getElementById('history-btn');
   const historyPanelEl = document.getElementById('history-panel');
   const archetypeCards = Array.from(document.querySelectorAll('.archetype-card'));
-  const defaultOllamaUrl = 'http://ollama:11434';
-  const customStorageKey = 'ai-gm:ollamaCustomUrl';
-  const ollamaOptionsEl = document.getElementById('ollama-url-options');
-  const customOptionId = 'ollama-custom-option';
-
-  const syncOllamaPreset = () => {
-    if (!els.ollamaUrlPresetEl) return;
-    const value = (window.getOllamaBaseUrl() || '').trim() || defaultOllamaUrl;
-    els.ollamaUrlPresetEl.value = value;
-
-    if (!ollamaOptionsEl) return;
-    let customOption = document.getElementById(customOptionId);
-
-    if (value === defaultOllamaUrl) {
-      if (customOption) customOption.remove();
-      return;
-    }
-
-    if (!customOption) {
-      customOption = document.createElement('option');
-      customOption.id = customOptionId;
-      ollamaOptionsEl.appendChild(customOption);
-    }
-    customOption.value = value;
-    customOption.label = `Custom: ${value}`;
-  };
-  syncOllamaPreset();
 
   els.campaignSelectEl.onchange = async () => {
     window.state.selectedCampaignId = Number(els.campaignSelectEl.value);
@@ -78,30 +51,12 @@ window.bindEvents = function () {
     localStorage.setItem('ai-gm:selectedEngine', window.state.selectedEngine);
   };
 
-  if (els.ollamaUrlPresetEl) {
-    const applyOllamaFieldValue = () => {
-      const value = (els.ollamaUrlPresetEl.value || '').trim() || defaultOllamaUrl;
-      localStorage.setItem('ai-gm:ollamaBaseUrl', value);
-      if (value !== defaultOllamaUrl) {
-        localStorage.setItem(customStorageKey, value);
-      }
-      syncOllamaPreset();
-    };
-
-    els.ollamaUrlPresetEl.onchange = applyOllamaFieldValue;
-    els.ollamaUrlPresetEl.onblur = applyOllamaFieldValue;
-  }
-
   if (els.testOllamaBtn) {
     els.testOllamaBtn.onclick = async () => {
-      const value = (els.ollamaUrlPresetEl?.value || '').trim() || defaultOllamaUrl;
-      localStorage.setItem('ai-gm:ollamaBaseUrl', value);
-      if (value !== defaultOllamaUrl) {
-        localStorage.setItem(customStorageKey, value);
-      }
-      syncOllamaPreset();
-
       try {
+        if (typeof window.connectLlmSettings === 'function') {
+          await window.connectLlmSettings();
+        }
         await window.loadHealth();
         await window.loadModels();
 
@@ -111,15 +66,17 @@ window.bindEvents = function () {
 
         window.addMessage({
           speaker: 'System',
-          text: `API URL ustawiony na ${value}`,
+          text: `Połączenie LLM zapisane (provider: ${window.state.llmSettings?.provider || 'unknown'})`,
           role: 'system',
           route: 'config'
         });
-        window.location.reload();
       } catch (e) {
+        const pretty = typeof window.prettyLlmErrorMessage === 'function'
+          ? window.prettyLlmErrorMessage(e.message)
+          : e.message;
         window.addMessage({
           speaker: 'Błąd',
-          text: `Test Ollama Host nie powiódł się: ${e.message}`,
+          text: `Połączenie LLM nie powiodło się: ${pretty}`,
           role: 'error'
         });
       }

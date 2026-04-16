@@ -18,6 +18,186 @@ window.SHEET_SKILLS = [
   "Lore"
 ];
 window.state.lastApiCall = window.state.lastApiCall || null;
+window.state.llmSettings = window.state.llmSettings || null;
+window.state.showAllProviderModels = window.state.showAllProviderModels ?? false;
+
+window.prettyLlmErrorMessage = function (rawMessage) {
+  const msg = String(rawMessage || '').trim();
+  const lower = msg.toLowerCase();
+  if (!msg) return 'Unknown LLM error.';
+  if (lower.includes('invalid_api_key') || lower.includes('invalid api key')) {
+    return 'LLM auth failed: invalid API key. Paste the token without "Bearer".';
+  }
+  if (lower.includes('connection refused') || lower.includes('connecterror')) {
+    return 'LLM connection failed: provider host refused connection. Check URL/port.';
+  }
+  if (lower.includes('timeout')) {
+    return 'LLM request timed out. Try again or use a smaller/faster model.';
+  }
+  if (lower.includes('unknown llm provider')) {
+    return 'LLM provider config is invalid. Reconnect with a supported provider.';
+  }
+  if (lower.startsWith('{') && lower.includes('"error"')) {
+    return `LLM provider error: ${msg}`;
+  }
+  return `LLM error: ${msg}`;
+};
+
+window.normalizeLlmBaseUrlInput = function (rawBaseUrl, provider) {
+  let value = String(rawBaseUrl || '').trim().replace(/\/+$/, '');
+  const lower = value.toLowerCase();
+  if (provider === 'openai') {
+    if (lower.endsWith('/v1/chat/completions')) {
+      value = value.slice(0, -'/v1/chat/completions'.length);
+    } else if (lower.endsWith('/chat/completions')) {
+      value = value.slice(0, -'/chat/completions'.length);
+    } else if (lower.endsWith('/v1/models')) {
+      value = value.slice(0, -'/v1/models'.length);
+    } else if (lower.endsWith('/v1')) {
+      value = value.slice(0, -'/v1'.length);
+    }
+  } else if (provider === 'ollama') {
+    if (lower.endsWith('/api/chat')) {
+      value = value.slice(0, -'/api/chat'.length);
+    } else if (lower.endsWith('/api/tags')) {
+      value = value.slice(0, -'/api/tags'.length);
+    } else if (lower.endsWith('/api')) {
+      value = value.slice(0, -'/api'.length);
+    }
+  }
+  return value.replace(/\/+$/, '');
+};
+
+window.getLlmProviderPayloadFromForm = function () {
+  const { llmProviderSelectEl, llmBaseUrlInputEl, llmApiKeyInputEl, engineSelectEl } = window.getEls();
+  const selected = (llmProviderSelectEl?.value || 'ollama-local').trim();
+  const model = (engineSelectEl?.value || 'gemma4:e4b').trim() || 'gemma4:e4b';
+
+  if (selected === 'ollama-local') {
+    return {
+      provider: 'ollama',
+      base_url: 'http://localhost:11434',
+      model,
+      api_key: '',
+    };
+  }
+  if (selected === 'ollama-remote') {
+    const base = window.normalizeLlmBaseUrlInput((llmBaseUrlInputEl?.value || '').trim(), 'ollama');
+    return {
+      provider: 'ollama',
+      base_url: base || 'http://host:11434',
+      model,
+      api_key: (llmApiKeyInputEl?.value || '').trim(),
+    };
+  }
+  const openaiBase = window.normalizeLlmBaseUrlInput((llmBaseUrlInputEl?.value || '').trim(), 'openai');
+  return {
+    provider: 'openai',
+    base_url: openaiBase || 'https://api.llmapi.ai',
+    model,
+    api_key: (llmApiKeyInputEl?.value || '').trim(),
+  };
+};
+
+window.updateLlmProviderFormVisibility = function () {
+  const {
+    llmProviderSelectEl,
+    llmBaseUrlInputEl,
+    llmApiKeyInputEl,
+    llmBaseUrlFieldEl,
+    llmApiKeyFieldEl,
+    openaiModelsToggleWrapEl,
+  } = window.getEls();
+  if (!llmProviderSelectEl || !llmBaseUrlInputEl || !llmApiKeyInputEl) return;
+  const selected = llmProviderSelectEl.value;
+  const hideExtra = selected === 'ollama-local';
+  if (llmBaseUrlFieldEl) llmBaseUrlFieldEl.style.display = hideExtra ? 'none' : 'flex';
+  if (llmApiKeyFieldEl) llmApiKeyFieldEl.style.display = hideExtra ? 'none' : 'flex';
+  if (openaiModelsToggleWrapEl) {
+    openaiModelsToggleWrapEl.style.display = selected === 'openai' ? 'block' : 'none';
+  }
+  if (selected === 'ollama-remote') {
+    llmBaseUrlInputEl.placeholder = 'http://host:port';
+    llmApiKeyInputEl.placeholder = 'API key (optional)';
+  } else if (selected === 'openai') {
+    llmBaseUrlInputEl.placeholder = 'https://api.llmapi.ai';
+    llmApiKeyInputEl.placeholder = 'Bearer token';
+  }
+};
+
+window.applyLlmSettingsToForm = function (settings) {
+  const { llmProviderSelectEl, llmBaseUrlInputEl, llmApiKeyInputEl, engineSelectEl } = window.getEls();
+  if (!settings) return;
+  const provider = (settings.provider || 'ollama').toLowerCase();
+  const baseUrl = settings.base_url || '';
+  if (llmProviderSelectEl) {
+    if (provider === 'openai') {
+      llmProviderSelectEl.value = 'openai';
+    } else if (baseUrl && baseUrl !== 'http://localhost:11434') {
+      llmProviderSelectEl.value = 'ollama-remote';
+    } else {
+      llmProviderSelectEl.value = 'ollama-local';
+    }
+  }
+  if (llmBaseUrlInputEl) llmBaseUrlInputEl.value = baseUrl || 'http://localhost:11434';
+  if (llmApiKeyInputEl) llmApiKeyInputEl.value = '';
+  if (engineSelectEl && settings.model) {
+    engineSelectEl.value = settings.model;
+    window.state.selectedEngine = settings.model;
+  }
+  window.updateLlmProviderFormVisibility();
+};
+
+window.connectLlmSettings = async function () {
+  const payload = window.getLlmProviderPayloadFromForm();
+  const resp = await fetch('/api/settings/llm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status}`);
+  }
+  const data = await resp.json();
+  window.state.llmSettings = data?.settings || null;
+  window.state.selectedEngine = payload.model;
+  localStorage.setItem('ai-gm:selectedEngine', payload.model);
+  return data;
+};
+
+window.loadLlmSettings = async function () {
+  const resp = await fetch('/api/settings/llm');
+  if (!resp.ok) {
+    throw new Error(`HTTP ${resp.status}`);
+  }
+  const settings = await resp.json();
+  window.state.llmSettings = settings;
+  window.applyLlmSettingsToForm(settings);
+  return settings;
+};
+
+window.initLlmProviderControls = async function () {
+  const { llmProviderSelectEl, showAllModelsToggleEl } = window.getEls();
+  if (llmProviderSelectEl) {
+    llmProviderSelectEl.addEventListener('change', async () => {
+      window.updateLlmProviderFormVisibility();
+      await window.loadModels();
+    });
+  }
+  if (showAllModelsToggleEl) {
+    showAllModelsToggleEl.checked = !!window.state.showAllProviderModels;
+    showAllModelsToggleEl.addEventListener('change', async () => {
+      window.state.showAllProviderModels = !!showAllModelsToggleEl.checked;
+      await window.loadModels();
+    });
+  }
+  window.updateLlmProviderFormVisibility();
+  try {
+    await window.loadLlmSettings();
+  } catch (_err) {
+    // Keep defaults if settings endpoint is unavailable.
+  }
+};
 
 window._debugFormatTs = function (date = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");

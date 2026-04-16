@@ -1,0 +1,103 @@
+{
+  "id": null,
+  "uid": "ai-gm-top-errors",
+  "title": "AI GM - Top Error Signatures (24h)",
+  "tags": ["ai-gm", "errors", "triage"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "query": "label_values(service)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "bargauge",
+      "title": "Top error_type (24h)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (error_type) (count_over_time({service=~\"$service\", error_type!=\"\"}[24h])))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "bargauge",
+      "title": "Top providers by errors (24h)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (llm_provider) (count_over_time({service=~\"$service\", level=~\"error|warn\"}[24h])))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "Latest Error Events",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "{service=~\"$service\", level=~\"error|warn\"}",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "wrapLogMessage": true
+      },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 10 }
+    }
+  ]
+}

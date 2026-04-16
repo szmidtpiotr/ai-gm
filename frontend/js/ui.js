@@ -5,7 +5,13 @@ window.getEls = function () {
     characterSelectEl: document.getElementById('character-select'),
     systemSelectEl: document.getElementById('system-select'),
     engineSelectEl: document.getElementById('engine-select'),
-    ollamaUrlPresetEl: document.getElementById('ollama-url-preset'),
+    llmProviderSelectEl: document.getElementById('llm-provider-select'),
+    llmBaseUrlInputEl: document.getElementById('llm-base-url-input'),
+    llmApiKeyInputEl: document.getElementById('llm-api-key-input'),
+    llmBaseUrlFieldEl: document.getElementById('llm-base-url-field'),
+    llmApiKeyFieldEl: document.getElementById('llm-api-key-field'),
+    showAllModelsToggleEl: document.getElementById('show-all-models-toggle'),
+    openaiModelsToggleWrapEl: document.getElementById('openai-models-toggle-wrap'),
     testOllamaBtn: document.getElementById('test-ollama-btn'),
     chatEl: document.getElementById('chat'),
     historyPanelEl: document.getElementById('history-panel'),
@@ -23,7 +29,9 @@ window.getEls = function () {
     labelCharacterEl: document.getElementById('label-character'),
     labelSystemEl: document.getElementById('label-system'),
     labelEngineEl: document.getElementById('label-engine'),
-    labelOllamaUrlEl: document.getElementById('label-ollama-url'),
+    labelLlmProviderEl: document.getElementById('label-llm-provider'),
+    labelLlmBaseUrlEl: document.getElementById('label-llm-base-url'),
+    labelLlmApiKeyEl: document.getElementById('label-llm-api-key'),
     characterCreateOverlayEl: document.getElementById('character-create-overlay'),
     characterCreatePanelEl: document.getElementById('character-create-panel'),
     characterCreateCloseEl: document.getElementById('character-create-close'),
@@ -68,8 +76,10 @@ window.applyTranslations = function () {
   if (els.labelCampaignEl) els.labelCampaignEl.textContent = window.t('campaign.label');
   if (els.labelCharacterEl) els.labelCharacterEl.textContent = window.t('character.label');
   if (els.labelSystemEl) els.labelSystemEl.textContent = window.t('system.label');
-  if (els.labelEngineEl) els.labelEngineEl.textContent = window.t('engine.label');
-  if (els.labelOllamaUrlEl) els.labelOllamaUrlEl.textContent = 'API URL';
+  if (els.labelEngineEl) els.labelEngineEl.textContent = 'Model';
+  if (els.labelLlmProviderEl) els.labelLlmProviderEl.textContent = 'Provider';
+  if (els.labelLlmBaseUrlEl) els.labelLlmBaseUrlEl.textContent = 'URL';
+  if (els.labelLlmApiKeyEl) els.labelLlmApiKeyEl.textContent = 'API Key';
   if (els.inputEl) els.inputEl.placeholder = window.t('input.placeholder');
   if (els.sendBtn) els.sendBtn.textContent = window.t('button.send');
 };

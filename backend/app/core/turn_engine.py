@@ -1,6 +1,6 @@
 import sqlite3
 
-from app.services.ollama_service import generatechat
+from app.services.llm_service import generate_chat
 
 SYSTEMPROMPT = """
 Jesteś Mistrzem Gry w tekstowej grze RPG fantasy.
@@ -162,7 +162,6 @@ def runnarrativeturn(
     character: sqlite3.Row | None,
     usertext: str,
     model: str,
-    ollamabaseurl: str | None = None,
 ) -> dict:
     recentturns = loadrecentturns(conn, campaign["id"], limit=8)
     messages = buildmessages(
@@ -171,5 +170,5 @@ def runnarrativeturn(
         recentturns=recentturns,
         usertext=usertext,
     )
-    reply = generatechat(model=model, messages=messages, base_url=ollamabaseurl)
+    reply = generate_chat(messages=messages, model=model)
     return {"message": reply}

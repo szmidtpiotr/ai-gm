@@ -1,25 +1,63 @@
-from fastapi import APIRouter, HTTPException, Request
-import httpx
-import os
+from fastapi import APIRouter, HTTPException, Query
+
+from app.services.llm_service import get_health
 
 router = APIRouter()
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
-OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "10"))
+
+def _curate_narration_models(provider: str, models: list[str]) -> list[str]:
+    if not models:
+        return []
+
+    preferred_openai_order = [
+        "OpenEuro-Polish",
+        "gpt-4o",
+        "gpt-4.1",
+        "claude-sonnet-4-5",
+        "claude-sonnet-4",
+        "gemini-2.5-pro",
+        "mistral-large-latest",
+        "qwen-max",
+        "qwen3-32b",
+        "llama-3.3-70b-instruct",
+    ]
+    if provider == "openai":
+        lower_map = {m.lower(): m for m in models}
+        curated: list[str] = []
+        for preferred in preferred_openai_order:
+            key = preferred.lower()
+            if key in lower_map and lower_map[key] not in curated:
+                curated.append(lower_map[key])
+        keyword_hits = [
+            m
+            for m in models
+            if any(
+                kw in m.lower()
+                for kw in ("polish", "openeuro", "gpt-4o", "gpt-4.1", "claude-sonnet", "gemini-2.5-pro")
+            )
+        ]
+        for m in keyword_hits:
+            if m not in curated:
+                curated.append(m)
+        return curated[:20] if curated else models[:20]
+
+    # For Ollama keep raw model list as-is (no curation/filtering).
+    return models
 
 
 @router.get("/models")
-async def list_models(request: Request):
-    ollama_base_url = request.headers.get("X-Ollama-Base-Url", OLLAMA_BASE_URL)
+async def list_models(show_all: bool = Query(default=False)):
     try:
-        async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
-            resp = await client.get(f"{ollama_base_url}/api/tags")
-            resp.raise_for_status()
-            data = resp.json()
-            models = data.get("models", [])
-            return [
-                {"name": m["name"], "size": m.get("size", 0)}
-                for m in models if m.get("name")
-            ]
+        llm = get_health()
+        provider = str(llm.get("provider") or "ollama").lower()
+        model_names = llm.get("models") or []
+        if not model_names and llm.get("model"):
+            model_names = [llm["model"]]
+        clean_names = [name for name in model_names if name]
+        if show_all:
+            curated = clean_names
+        else:
+            curated = _curate_narration_models(provider, clean_names)
+        return [{"name": name, "size": 0} for name in curated]
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Ollama models fetch failed: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Models fetch failed: {str(e)}")

@@ -20,17 +20,15 @@ window.loadHealth = async function () {
   };
 
   try {
-    const resp = await fetch(window.API_HEALTH, {
-  headers: { 'X-Ollama-Base-Url': window.getOllamaBaseUrl() }
-});
+    const resp = await fetch(window.API_HEALTH);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
 
     setDotState(statusBackendDotEl, 'ok', 'Backend: OK');
     setDotState(
       statusOllamaDotEl,
-      data.ollama?.reachable ? 'ok' : 'warn',
-      `Ollama: ${data.ollama?.reachable ? 'OK' : window.t('status.disconnected')}`
+      data.llm?.reachable ? 'ok' : 'warn',
+      `LLM: ${data.llm?.reachable ? 'OK' : window.t('status.disconnected')}`
     );
   } catch (e) {
     setDotState(statusBackendDotEl, 'error', `Backend: ${window.t('health.fail')}`);
@@ -40,11 +38,19 @@ window.loadHealth = async function () {
 
 window.loadModels = async function () {
   const { engineSelectEl } = window.getEls();
+  const provider = String(window.state.llmSettings?.provider || '').toLowerCase();
+  const wantAll = provider === 'openai' && !!window.state.showAllProviderModels;
+  const modelsUrl = wantAll ? `${window.API_MODELS}?show_all=1` : window.API_MODELS;
 
-const resp = await fetch(window.API_MODELS, {
-  headers: { 'X-Ollama-Base-Url': window.getOllamaBaseUrl() }
-});
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+const resp = await fetch(modelsUrl);
+  if (!resp.ok) {
+    let detail = `HTTP ${resp.status}`;
+    try {
+      const data = await resp.json();
+      detail = data.detail || detail;
+    } catch (_err) {}
+    throw new Error(window.prettyLlmErrorMessage(detail));
+  }
 
   const data = await resp.json();
 
@@ -57,13 +63,14 @@ const resp = await fetch(window.API_MODELS, {
   engineSelectEl.innerHTML = '';
 
   if (window.state.models.length === 0) {
-    engineSelectEl.innerHTML = '<option value="" disabled selected>Brak modeli</option>';
-    engineSelectEl.disabled = true;
-    window.state.selectedEngine = null;
+    const fallbackOption = document.createElement('option');
+    fallbackOption.value = 'gemma4:e4b';
+    fallbackOption.textContent = 'gemma4:e4b';
+    engineSelectEl.appendChild(fallbackOption);
+    engineSelectEl.value = 'gemma4:e4b';
+    window.state.selectedEngine = 'gemma4:e4b';
     return;
   }
-
-  engineSelectEl.disabled = false;
 
   window.state.models.forEach(model => {
     const name = typeof model === 'string' ? model : model.name;
@@ -74,9 +81,11 @@ const resp = await fetch(window.API_MODELS, {
   });
 
   const savedEngine = localStorage.getItem('ai-gm:selectedEngine');
+  const preferredFromRuntime = (window.state.llmSettings && window.state.llmSettings.model) || '';
   const preferredEngine =
-    savedEngine ||
     window.state.selectedEngine ||
+    preferredFromRuntime ||
+    savedEngine ||
     window.state.models[0].name ||
     window.state.models[0];
 
@@ -230,14 +239,8 @@ window.loadTurns = async function (campaignId, limit = 30) {
   window.renderHistoryPanel();
 };
 
-window.getOllamaBaseUrl = function () {
-  const saved = localStorage.getItem('ai-gm:ollamaBaseUrl') || '';
-  return saved.trim() || 'http://ollama:11434';
-};
-
 window.getApiHeaders = function () {
   return {
-    'Content-Type': 'application/json',
-    'X-Ollama-Base-Url': window.getOllamaBaseUrl()
+    'Content-Type': 'application/json'
   };
 };

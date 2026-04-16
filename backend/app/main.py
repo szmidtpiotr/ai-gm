@@ -5,7 +5,6 @@ import random
 import re
 import sqlite3
 import json
-import httpx
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -14,12 +13,12 @@ from sqlmodel import Session, select
 from app.api import campaigns, characters, commands, turns
 from app.api.health import router as health_router
 from app.api.models import router as models_router
+from app.routers.settings import router as settings_router
 from app.db import get_session, init_db
 from app.models import Game, Message
 from app.services.dice import build_gm_dice_breakdown, parse_character_sheet
+from app.services.llm_service import generate_chat
 
-
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
 
 # Keep DB path consistent with API routers using raw sqlite connections.
 DB_PATH = "/data/ai_gm.db"
@@ -137,6 +136,8 @@ app.include_router(characters.router, prefix="/api")
 app.include_router(characters.router)
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
+app.include_router(settings_router, prefix="/api")
+app.include_router(settings_router)
 
 
 @app.get("/")
@@ -236,17 +237,8 @@ async def gm_chat(req: ChatReq, session: Session = Depends(get_session)):
     ] + req.messages
 
     try:
-        async with httpx.AsyncClient(timeout=180.0) as client:
-            resp = await client.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json={
-                    "model": req.model,
-                    "messages": messages,
-                    "stream": False,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        assistant_content = generate_chat(messages=messages, model=req.model)
+        data = {"message": {"content": assistant_content}}
 
         if req.game_id:
             game = session.get(Game, req.game_id)
@@ -255,7 +247,6 @@ async def gm_chat(req: ChatReq, session: Session = Depends(get_session)):
                 if last_user_msg:
                     session.add(Message(game_id=req.game_id, role="user", content=last_user_msg))
 
-                assistant_content = data.get("message", {}).get("content", "")
                 if assistant_content:
                     session.add(Message(game_id=req.game_id, role="assistant", content=assistant_content))
 
@@ -264,4 +255,4 @@ async def gm_chat(req: ChatReq, session: Session = Depends(get_session)):
 
         return data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ollama error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"LLM error: {str(e)}")

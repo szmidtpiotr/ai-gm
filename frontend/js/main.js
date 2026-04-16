@@ -1,5 +1,8 @@
 window.bootstrap = async function () {
   try {
+    if (typeof window.initLlmProviderControls === 'function') {
+      await window.initLlmProviderControls();
+    }
     window.bindEvents();
     await window.loadTranslations('pl');
     await window.loadHealth();
@@ -14,19 +17,21 @@ window.bootstrap = async function () {
         systemSelectEl.value = campaign.system_id;
       }
 
-	const savedEngine = localStorage.getItem('ai-gm:selectedEngine');
+      const runtimeModel = window.state.llmSettings?.model || '';
+      const savedEngine = localStorage.getItem('ai-gm:selectedEngine');
+      if (runtimeModel) {
+        window.state.selectedEngine = runtimeModel;
+      } else if (savedEngine) {
+        window.state.selectedEngine = savedEngine;
+      } else if (campaign?.model_id) {
+        window.state.selectedEngine = campaign.model_id;
+      } else {
+        window.state.selectedEngine = engineSelectEl.value;
+      }
 
-	if (savedEngine) {
-	  window.state.selectedEngine = savedEngine;
-	} else if (campaign?.model_id) {
-	  window.state.selectedEngine = campaign.model_id;
-	} else {
-	  window.state.selectedEngine = engineSelectEl.value;
-	}
-
-	if (window.state.selectedEngine) {
-	  engineSelectEl.value = window.state.selectedEngine;
-	}
+      if (window.state.selectedEngine) {
+        engineSelectEl.value = window.state.selectedEngine;
+      }
 
       await window.loadCharacters(window.state.selectedCampaignId);
 		  try {

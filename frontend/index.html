@@ -13,20 +13,45 @@
     </div>
 
     <div class="controls">
-      <div class="field top-row-field">
-        <label for="ollama-url" id="label-ollama-url">API URL</label>
-        <div class="field-row ollama-host-row">
-          <input id="ollama-url-preset" list="ollama-url-options" value="http://ollama:11434" placeholder="http://ollama:11434">
-          <datalist id="ollama-url-options">
-            <option value="http://ollama:11434">Default: http://ollama:11434</option>
-          </datalist>
-          <button type="button" class="secondary" id="test-ollama-btn">Connect</button>
+      <div class="llm-controls" id="llm-controls">
+        <div class="field top-row-field" id="llm-provider-field">
+          <label for="llm-provider-select" id="label-llm-provider">Provider</label>
+          <select id="llm-provider-select">
+            <option value="ollama-local" selected>Ollama (local)</option>
+            <option value="ollama-remote">Ollama (remote)</option>
+            <option value="openai">OpenAI-compatible API</option>
+          </select>
         </div>
-      </div>
 
-      <div class="field top-row-field">
-        <label for="engine-select" id="label-engine">Silnik</label>
-        <select id="engine-select"></select>
+        <div class="field top-row-field" id="llm-model-field">
+          <label for="engine-select" id="label-engine">Model</label>
+          <div class="field-row ollama-host-row">
+            <select id="engine-select">
+              <option value="gemma4:e4b">gemma4:e4b</option>
+            </select>
+            <button type="button" class="secondary" id="test-ollama-btn">Connect</button>
+          </div>
+          <div class="muted" id="openai-models-toggle-wrap" style="margin-top:6px; display:none;">
+            <label for="show-all-models-toggle" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="show-all-models-toggle">
+              Show all provider models
+            </label>
+          </div>
+        </div>
+
+        <div class="field top-row-field" id="llm-base-url-field">
+          <label for="llm-base-url-input" id="label-llm-base-url">URL</label>
+          <div class="field-row ollama-host-row">
+            <input id="llm-base-url-input" value="http://localhost:11434" placeholder="http://host:port">
+          </div>
+        </div>
+
+        <div class="field top-row-field" id="llm-api-key-field">
+          <label for="llm-api-key-input" id="label-llm-api-key">API Key</label>
+          <div class="field-row ollama-host-row">
+            <input id="llm-api-key-input" type="password" placeholder="API key (optional)">
+          </div>
+        </div>
       </div>
 
       <div class="field">

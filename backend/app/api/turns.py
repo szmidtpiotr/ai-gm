@@ -1,15 +1,12 @@
 import json
 import logging
-import os
 import re
 import sqlite3
 
-import requests
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app.core.llm_config import get_llm_params
 from app.services.dice import (
     format_roll_result_message,
     parse_character_sheet,
@@ -18,7 +15,7 @@ from app.services.dice import (
     resolve_roll,
 )
 from app.services.game_engine import build_narrative_messages, run_narrative_turn
-from app.services.ollama_service import generatechat_stream
+from app.services.llm_service import generate_chat_stream, get_effective_config, get_health
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
@@ -66,47 +63,24 @@ def validate_roll_cue_name(assistant_text: str) -> str | None:
     return canonical
 
 
-def get_ollama_base_url(override: str | None = None) -> str:
-    return (override or os.getenv("OLLAMA_BASE_URL") or "http://ollama:11434").rstrip("/")
-
-
-def get_available_model_names(ollama_base_url: str) -> list[str]:
-    try:
-        response = requests.get(f"{ollama_base_url}/api/tags", timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        models = data.get("models") or []
-        return [m.get("name") for m in models if m.get("name")]
-    except requests.RequestException as e:
-        raise RuntimeError(f"Could not fetch Ollama models from {ollama_base_url}: {e}")
-
-
 def resolve_model_name(
     requested_model: str | None,
     campaign_model: str | None,
-    ollama_base_url: str,
 ) -> str:
-    available = get_available_model_names(ollama_base_url)
+    effective = get_effective_config()
+    if effective["provider"] == "openai":
+        return (requested_model or campaign_model or effective["model"]).strip()
 
+    health = get_health()
+    available = health.get("models") or []
     if not available:
-        raise RuntimeError("No Ollama models are installed")
-
+        return (requested_model or campaign_model or effective["model"]).strip()
     if requested_model and requested_model in available:
         return requested_model
-
     if campaign_model and campaign_model in available:
         return campaign_model
-
-    preferred = [
-        "gemma4:e4b",
-        "gemma3:4b",
-        "gemma3:1b",
-    ]
-
-    for model_name in preferred:
-        if model_name in available:
-            return model_name
-
+    if effective["model"] in available:
+        return effective["model"]
     return available[0]
 
 
@@ -446,12 +420,9 @@ def create_turn(
             return {**log, "route": "command", "result": result}
 
         route = "narrative"
-        ollama_base_url = get_ollama_base_url(x_ollama_base_url)
-
         model = resolve_model_name(
             requested_model=payload.engine,
             campaign_model=campaign["model_id"],
-            ollama_base_url=ollama_base_url,
         )
 
         result = run_narrative_turn(
@@ -460,7 +431,7 @@ def create_turn(
             character=character,
             user_text=text,
             model=model,
-            ollama_base_url=ollama_base_url,
+            ollama_base_url=x_ollama_base_url,
             roll_result_message=roll_result_message,
             roll_result_data=roll_result_data,
         )
@@ -540,11 +511,9 @@ def create_turn_stream(
                 yield "data: [DONE]\n\n"
             return StreamingResponse(command_stream(), media_type="text/event-stream")
 
-        ollama_base_url = get_ollama_base_url(x_ollama_base_url)
         model = resolve_model_name(
             requested_model=payload.engine,
             campaign_model=campaign["model_id"],
-            ollama_base_url=ollama_base_url,
         )
 
         llm_user_text = roll_result_message or text
@@ -557,18 +526,15 @@ def create_turn_stream(
             roll_result_data=roll_result_data,
         )
 
-        llm_params = get_llm_params()
         campaign_id_val = campaign_id
         character_id_val = payload.character_id
         user_text_val = llm_user_text
 
         def token_generator():
             collected = []
-            for chunk in generatechat_stream(
-                model=model,
+            for chunk in generate_chat_stream(
                 messages=messages,
-                base_url=ollama_base_url,
-                llm_params=llm_params,
+                model=model,
             ):
                 if chunk.startswith("data: [DONE]"):
                     full_text = "".join(collected).replace("\\n", "\n")

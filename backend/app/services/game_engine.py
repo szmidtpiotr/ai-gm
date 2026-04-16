@@ -1,7 +1,7 @@
 import sqlite3
 
 from app.core.turn_engine import buildmessages, loadrecentturns
-from app.services.ollama_service import generatechat
+from app.services.llm_service import generate_chat
 
 
 def build_narrative_messages(
@@ -67,5 +67,5 @@ def run_narrative_turn(
         roll_result_message=roll_result_message,
         roll_result_data=roll_result_data,
     )
-    reply = generatechat(model=model, messages=messages, base_url=ollama_base_url)
+    reply = generate_chat(messages=messages, model=model)
     return {"message": reply}

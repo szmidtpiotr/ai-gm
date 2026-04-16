@@ -534,13 +534,16 @@ window.sendMessage = async function () {
 
         if (token.startsWith('[ERROR]')) {
           const errMsg = token.slice(8) || 'Nieznany błąd';
+          const pretty = typeof window.prettyLlmErrorMessage === 'function'
+            ? window.prettyLlmErrorMessage(errMsg)
+            : errMsg;
           if (streamBubble) {
-            window.finalizeStreamingBubble(streamBubble, `⚠️ ${errMsg}`);
+            window.finalizeStreamingBubble(streamBubble, `⚠️ ${pretty}`);
           } else {
             window.removeThinkingBubble();
             window.addMessage({
               speaker: 'Błąd',
-              text: `⚠️ ${errMsg}`,
+              text: `⚠️ ${pretty}`,
               role: 'error',
               turn: turnNumber
             });
@@ -580,9 +583,12 @@ window.sendMessage = async function () {
     if (requestId !== window.chatRequestState.requestId) return;
 
     window.removeThinkingBubble();
+    const pretty = typeof window.prettyLlmErrorMessage === 'function'
+      ? window.prettyLlmErrorMessage(e.message)
+      : e.message;
     window.addMessage({
       speaker: 'Błąd',
-      text: `Serwer: ${e.message}`,
+      text: `Serwer: ${pretty}`,
       role: 'error',
       turn: turnNumber
     });
