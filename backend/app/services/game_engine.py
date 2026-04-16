@@ -1,6 +1,7 @@
 import sqlite3
 
 from app.core.turn_engine import buildmessages, loadrecentturns
+from app.services.config_service import build_runtime_config_block
 from app.services.llm_service import generate_chat
 
 
@@ -19,6 +20,7 @@ def build_narrative_messages(
         character=character,
         recentturns=recent_turns,
         usertext=final_user_text,
+        runtime_config_block=build_runtime_config_block(),
     )
     if not roll_result_data or not messages:
         return messages

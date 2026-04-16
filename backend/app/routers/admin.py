@@ -3,6 +3,8 @@ from pydantic import BaseModel
 
 from app.services.admin_auth import verify_admin_token
 from app.services.admin_config import (
+    create_skill,
+    delete_skill,
     list_dc,
     list_skills,
     list_stats,
@@ -30,6 +32,18 @@ class SkillPatchReq(BaseModel):
     linked_stat: str | None = None
     rank_ceiling: int | None = None
     sort_order: int | None = None
+    force: bool = False
+
+
+class SkillCreateReq(BaseModel):
+    key: str
+    label: str
+    linked_stat: str
+    rank_ceiling: int = 5
+    sort_order: int = 0
+
+
+class SkillDeleteReq(BaseModel):
     force: bool = False
 
 
@@ -71,6 +85,27 @@ def admin_stats(_: None = Depends(require_admin_token)):
 @router.get("/admin/skills")
 def admin_skills(_: None = Depends(require_admin_token)):
     return {"items": list_skills()}
+
+
+@router.post("/admin/skills")
+def admin_create_skill(req: SkillCreateReq, _: None = Depends(require_admin_token)):
+    try:
+        item = create_skill(
+            key=req.key.strip(),
+            label=req.label.strip(),
+            linked_stat=req.linked_stat.strip().upper(),
+            rank_ceiling=req.rank_ceiling,
+            sort_order=req.sort_order,
+        )
+        return {"item": item}
+    except ValueError as e:
+        if str(e) == "skill_exists":
+            raise HTTPException(status_code=409, detail="Skill key already exists") from None
+        if str(e) == "invalid_linked_stat":
+            raise HTTPException(status_code=422, detail="linked_stat must reference an existing stat key") from None
+        if str(e) == "invalid_rank_ceiling":
+            raise HTTPException(status_code=422, detail="rank_ceiling must be >= 1") from None
+        raise HTTPException(status_code=422, detail="Invalid skill payload") from None
 
 
 @router.get("/admin/dc")
@@ -117,6 +152,25 @@ def admin_patch_skill(key: str, req: SkillPatchReq, _: None = Depends(require_ad
         if str(e) == "invalid_rank_ceiling":
             raise HTTPException(status_code=422, detail="rank_ceiling must be >= 1") from None
         raise HTTPException(status_code=422, detail="Invalid skill payload") from None
+
+
+@router.delete("/admin/skills/{key}")
+def admin_delete_skill(key: str, req: SkillDeleteReq, _: None = Depends(require_admin_token)):
+    try:
+        delete_skill(key, force=req.force)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Skill not found") from None
+    except PermissionError:
+        raise HTTPException(status_code=423, detail="Skill is locked; set force=true to override") from None
+    except LookupError as e:
+        parts = str(e).split(":")
+        if len(parts) >= 3 and parts[0] == "skill_in_use":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Skill is referenced in character sheet (character_id={parts[1]}, rank={parts[2]})",
+            ) from None
+        raise HTTPException(status_code=409, detail="Skill is referenced and cannot be deleted") from None
 
 
 @router.patch("/admin/dc/{key}")

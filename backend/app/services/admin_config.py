@@ -235,3 +235,89 @@ def update_dc(
         return new_row or {}
     finally:
         conn.close()
+
+
+def create_skill(
+    *,
+    key: str,
+    label: str,
+    linked_stat: str,
+    rank_ceiling: int = 5,
+    sort_order: int = 0,
+) -> dict:
+    if rank_ceiling < 1:
+        raise ValueError("invalid_rank_ceiling")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        existing = _fetch_one(conn, "SELECT key FROM game_config_skills WHERE key = ?", (key,))
+        if existing:
+            raise ValueError("skill_exists")
+
+        stat_exists = _fetch_one(conn, "SELECT key FROM game_config_stats WHERE key = ?", (linked_stat,))
+        if not stat_exists:
+            raise ValueError("invalid_linked_stat")
+
+        conn.execute(
+            """
+            INSERT INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order, locked_at)
+            VALUES (?, ?, ?, ?, ?, NULL)
+            """,
+            (key, label, linked_stat, rank_ceiling, sort_order),
+        )
+        new_row = _fetch_one(
+            conn,
+            """
+            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at
+            FROM game_config_skills WHERE key = ?
+            """,
+            (key,),
+        )
+        _audit(conn, "game_config_skills", key, "INSERT", None, new_row)
+        conn.commit()
+        return new_row or {}
+    finally:
+        conn.close()
+
+
+def _character_uses_skill(conn: sqlite3.Connection, skill_key: str) -> tuple[int, int | None]:
+    rows = conn.execute("SELECT id, sheet_json FROM characters").fetchall()
+    for row in rows:
+        sheet_raw = row["sheet_json"] or "{}"
+        try:
+            parsed = json.loads(sheet_raw)
+        except Exception:
+            parsed = {}
+        skills = parsed.get("skills") if isinstance(parsed, dict) else None
+        if isinstance(skills, dict) and skill_key in skills:
+            return row["id"], int(skills.get(skill_key) or 0)
+    return 0, None
+
+
+def delete_skill(key: str, *, force: bool) -> None:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        current = _fetch_one(
+            conn,
+            """
+            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at
+            FROM game_config_skills WHERE key = ?
+            """,
+            (key,),
+        )
+        if not current:
+            raise KeyError("not_found")
+        if current.get("locked_at") and not force:
+            raise PermissionError("locked")
+
+        character_id, rank = _character_uses_skill(conn, key)
+        if character_id:
+            raise LookupError(f"skill_in_use:{character_id}:{rank}")
+
+        conn.execute("DELETE FROM game_config_skills WHERE key = ?", (key,))
+        _audit(conn, "game_config_skills", key, "DELETE", current, None)
+        conn.commit()
+    finally:
+        conn.close()

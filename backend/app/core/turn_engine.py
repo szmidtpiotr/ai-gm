@@ -129,20 +129,25 @@ def buildmessages(
     character: sqlite3.Row | None,
     recentturns: list[sqlite3.Row],
     usertext: str,
+    runtime_config_block: str | None = None,
 ) -> list[dict]:
     systemid = campaign["system_id"] if campaign and campaign["system_id"] else "fantasy"
     language = campaign["language"] if campaign and campaign["language"] else "pl"
     charactername = character["name"] if character and character["name"] else "Bohater"
 
+    system_content = (
+        f"{SYSTEMPROMPT}\n"
+        f"System gry: {systemid}\n"
+        f"Język: {language}\n"
+        f"Postać gracza: {charactername}"
+    )
+    if runtime_config_block:
+        system_content = f"{system_content}\n\n{runtime_config_block}"
+
     messages = [
         {
             "role": "system",
-            "content": (
-                f"{SYSTEMPROMPT}\n"
-                f"System gry: {systemid}\n"
-                f"Język: {language}\n"
-                f"Postać gracza: {charactername}"
-            ),
+            "content": system_content,
         }
     ]
 
