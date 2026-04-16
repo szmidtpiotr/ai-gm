@@ -10,7 +10,8 @@ ADMIN_MIGRATIONS = [
         key TEXT PRIMARY KEY,
         label TEXT NOT NULL,
         description TEXT NOT NULL,
-        sort_order INTEGER NOT NULL DEFAULT 0
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        locked_at TEXT
     )
     """,
     """
@@ -19,7 +20,8 @@ ADMIN_MIGRATIONS = [
         label TEXT NOT NULL,
         linked_stat TEXT NOT NULL,
         rank_ceiling INTEGER NOT NULL DEFAULT 5,
-        sort_order INTEGER NOT NULL DEFAULT 0
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        locked_at TEXT
     )
     """,
     """
@@ -27,7 +29,8 @@ ADMIN_MIGRATIONS = [
         key TEXT PRIMARY KEY,
         label TEXT NOT NULL,
         value INTEGER NOT NULL,
-        sort_order INTEGER NOT NULL DEFAULT 0
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        locked_at TEXT
     )
     """,
     """
@@ -39,9 +42,27 @@ ADMIN_MIGRATIONS = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_name TEXT NOT NULL,
+        row_key TEXT,
+        operation TEXT NOT NULL,
+        old_values TEXT,
+        new_values TEXT,
+        performed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
     CREATE INDEX IF NOT EXISTS idx_game_config_skills_linked_stat
     ON game_config_skills(linked_stat)
     """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_admin_audit_log_table_time
+    ON admin_audit_log(table_name, performed_at)
+    """,
+    "ALTER TABLE game_config_stats ADD COLUMN locked_at TEXT",
+    "ALTER TABLE game_config_skills ADD COLUMN locked_at TEXT",
+    "ALTER TABLE game_config_dc ADD COLUMN locked_at TEXT",
 ]
 
 ADMIN_SEEDS = [
@@ -77,6 +98,18 @@ ADMIN_SEEDS = [
     ('extreme', 'Ekstremalne', 20, 4),
     ('legendary', 'Legendarne', 24, 5)
     """,
+    """
+    UPDATE game_config_stats
+    SET locked_at = COALESCE(locked_at, '2026-04-14T00:00:00Z')
+    """,
+    """
+    UPDATE game_config_skills
+    SET locked_at = COALESCE(locked_at, '2026-04-14T00:00:00Z')
+    """,
+    """
+    UPDATE game_config_dc
+    SET locked_at = COALESCE(locked_at, '2026-04-14T00:00:00Z')
+    """,
 ]
 
 
@@ -97,7 +130,7 @@ def run_admin_migrations() -> None:
                 print(f"[admin_migration] applied: {sql.strip().splitlines()[0]}")
             except sqlite3.OperationalError as e:
                 msg = str(e).lower()
-                if "already exists" in msg:
+                if "already exists" in msg or "duplicate column" in msg:
                     print(f"[admin_migration] skipped ({e}): {sql.strip().splitlines()[0]}")
                 else:
                     print(f"[admin_migration] ERROR ({e}): {sql.strip().splitlines()[0]}")
