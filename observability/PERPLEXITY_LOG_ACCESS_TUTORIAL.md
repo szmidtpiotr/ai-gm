@@ -87,6 +87,30 @@ If Perplexity side supports remote fetch:
 2. Disable direct public exposure of Grafana/Loki ports.
 3. Allow access only from Tailscale IP range.
 
+## Option C (recommended with connectors): Remote MCP connector (read-only)
+If you want Perplexity to directly call tools over MCP (without scraping exports/tokens), use the Observability VM MCP server.
+
+1. Expose MCP server publicly with Nginx Proxy Manager (create a new Proxy Host):
+- Domain: `aigm-mcp.studio-colorbox.com`
+- Forward Host/IP: `192.168.1.19`
+- Forward Port: `8001`
+- Scheme: `http`
+- Enable SSL
+
+2. Add connector in Perplexity Web UI:
+- Settings → Connectors → `+ Custom connector` → `Remote`
+- Name: `AI-GM Observability MCP` (any)
+- MCP Server URL: `https://aigm-mcp.studio-colorbox.com/mcp`
+- Authentication: `None`
+- Transport: `Streamable HTTP`
+- Confirm acknowledgement checkbox → Add
+
+3. Use it in a conversation:
+- In the Sources selector, enable the new connector.
+- Perplexity tools available from the connector:
+  - `loki_query(query, since_minutes, limit)`
+  - `campaign_story(campaign_id, limit_turns)`
+
 ## Suggested Perplexity prompt template
 
 ```text

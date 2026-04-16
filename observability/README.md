@@ -56,3 +56,24 @@ Sync current app DB snapshot to VM:
 chmod +x observability/sync_story_db_to_observability.sh
 ./observability/sync_story_db_to_observability.sh
 ```
+
+## Perplexity custom connector (MCP)
+Observability VM can expose a small read-only MCP server for external log/story analysis.
+
+MCP server (inside the VM):
+- HTTP endpoint (Streamable HTTP): `http://127.0.0.1:8001/mcp`
+- Tools:
+  - `loki_query(query, since_minutes, limit)`
+  - `campaign_story(campaign_id, limit_turns)`
+
+Recommended Nginx Proxy Manager (create a new Proxy Host):
+- Domain: `aigm-mcp.studio-colorbox.com`
+- Scheme: `http`
+- Forward Host/IP: `192.168.1.19`
+- Forward Port: `8001`
+- Enable SSL
+
+Perplexity Web UI → Add Custom connector:
+- Transport: `Streamable HTTP`
+- Authentication: `None`
+- MCP Server URL: `https://aigm-mcp.studio-colorbox.com/mcp`
