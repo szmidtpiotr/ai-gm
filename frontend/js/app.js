@@ -22,6 +22,31 @@ window.state.llmSettings = window.state.llmSettings || null;
 window.state.showAllProviderModels = window.state.showAllProviderModels ?? false;
 
 window.LLM_SETTINGS_STORAGE_KEY = "ai-gm:llmSettings";
+window.LLM_SETTINGS_COLLAPSE_PREF_KEY = "ai-gm:llmSettingsCollapsedPref";
+window.LLM_API_KEY_SET_STORAGE_KEY = "ai-gm:llmApiKeySet";
+
+window.state.mechanicMetadata = window.state.mechanicMetadata || null;
+
+window.getTestDescription = function (canonicalKey) {
+  const meta = window.state?.mechanicMetadata;
+  const map = meta?.test_descriptions || {};
+  const key = String(canonicalKey || "").trim();
+  return map[key] || "";
+};
+
+window.loadMechanicMetadata = async function () {
+  try {
+    const resp = await fetch('/api/mechanics/metadata');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    window.state.mechanicMetadata = data || null;
+    return window.state.mechanicMetadata;
+  } catch (_err) {
+    // Keep metadata optional — game can still function without descriptions.
+    window.state.mechanicMetadata = window.state.mechanicMetadata || { test_descriptions: {} };
+    return window.state.mechanicMetadata;
+  }
+};
 
 window._safeLlmSettingsForStorage = function (settings) {
   if (!settings || typeof settings !== "object") return null;
@@ -51,6 +76,60 @@ window.restoreLlmSettingsFromStorage = function () {
   } catch (_err) {
     return null;
   }
+};
+
+window.setLlmControlsCollapsed = function (collapsed) {
+  const llmControlsEl = document.getElementById("llm-controls");
+  if (!llmControlsEl) return;
+  llmControlsEl.classList.toggle("llm-controls--collapsed", !!collapsed);
+
+  const hintEl = document.getElementById("llm-settings-toggle-hint");
+  if (!hintEl) return;
+  const settings = window.state?.llmSettings || window.restoreLlmSettingsFromStorage();
+  const provider = String(settings?.provider || "").toLowerCase() || "unknown";
+  const apiKeySet = !!settings?.api_key_set;
+  const connected = provider === "ollama" || apiKeySet;
+  hintEl.textContent = connected ? "Saved" : "Connect";
+};
+
+window.getLlmControlsCollapsedPref = function () {
+  const raw = localStorage.getItem(window.LLM_SETTINGS_COLLAPSE_PREF_KEY);
+  if (raw === "1") return true;
+  if (raw === "0") return false;
+  return null;
+};
+
+window.computeDefaultLlmControlsCollapsed = function () {
+  // Default UX: hide the panel to maximize chat space.
+  // Users can always expand via the toggle.
+  return true;
+};
+
+window.initLlmSettingsCollapse = function () {
+  const toggleBtn = document.getElementById("llm-settings-toggle-btn");
+  if (!toggleBtn) return;
+
+  const pref = window.getLlmControlsCollapsedPref();
+  const collapsed = pref !== null ? pref : window.computeDefaultLlmControlsCollapsed();
+  window.setLlmControlsCollapsed(collapsed);
+
+  toggleBtn.addEventListener("click", () => {
+    const llmControlsEl = document.getElementById("llm-controls");
+    const isCollapsed = !!llmControlsEl?.classList?.contains("llm-controls--collapsed");
+    const next = !isCollapsed;
+    localStorage.setItem(window.LLM_SETTINGS_COLLAPSE_PREF_KEY, next ? "1" : "0");
+    window.setLlmControlsCollapsed(next);
+  });
+};
+
+window.syncLlmControlsCollapseToCurrentState = function () {
+  const pref = window.getLlmControlsCollapsedPref();
+  if (pref !== null) {
+    window.setLlmControlsCollapsed(pref);
+    return;
+  }
+  const collapsed = window.computeDefaultLlmControlsCollapsed();
+  window.setLlmControlsCollapsed(collapsed);
 };
 
 window.prettyLlmErrorMessage = function (rawMessage) {
@@ -181,6 +260,7 @@ window.applyLlmSettingsToForm = function (settings) {
 };
 
 window.connectLlmSettings = async function () {
+  const userId = window.state?.playerUserId || 1;
   const payload = window.getLlmProviderPayloadFromForm();
   const resp = await fetch('/api/settings/llm', {
     method: 'POST',
@@ -191,12 +271,34 @@ window.connectLlmSettings = async function () {
     throw new Error(`HTTP ${resp.status}`);
   }
   const data = await resp.json();
-  window.state.llmSettings = data?.settings || null;
+  let newSettings = data?.settings || null;
+
+  // Persist per-user settings (including api_key) so that refresh/another device works.
+  try {
+    const userResp = await fetch(`/api/users/${userId}/llm-settings`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (userResp.ok) {
+      const userData = await userResp.json();
+      newSettings = userData?.settings || newSettings;
+      localStorage.setItem(
+        window.LLM_API_KEY_SET_STORAGE_KEY,
+        newSettings?.api_key_set ? "1" : "0"
+      );
+    }
+  } catch (_err) {
+    // Keep runtime settings in memory.
+  }
+
+  window.state.llmSettings = newSettings;
   window.state.selectedEngine = payload.model;
   // Persist provider/base_url/model across browser refresh.
   // Intentionally do NOT persist api_key (frontend could expose it via localStorage).
   window.persistLlmSettingsToStorage(window.state.llmSettings);
   localStorage.setItem('ai-gm:selectedEngine', payload.model);
+  window.syncLlmControlsCollapseToCurrentState();
   return data;
 };
 
@@ -211,19 +313,33 @@ window.loadLlmSettings = async function () {
   return settings;
 };
 
+window.loadUserLlmSettings = async function (userId) {
+  const uid = userId || (window.currentUserId ? window.currentUserId() : 1);
+  const resp = await fetch(`/api/users/${uid}/llm-settings`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const settings = await resp.json();
+  window.state.llmSettings = settings || null;
+  window.persistLlmSettingsToStorage(window.state.llmSettings);
+  localStorage.setItem(window.LLM_API_KEY_SET_STORAGE_KEY, window.state.llmSettings?.api_key_set ? "1" : "0");
+  window.applyLlmSettingsToForm(window.state.llmSettings);
+  return window.state.llmSettings;
+};
+
 window.initLlmProviderControls = async function () {
   const { llmProviderSelectEl, showAllModelsToggleEl } = window.getEls();
   if (llmProviderSelectEl) {
     llmProviderSelectEl.addEventListener('change', async () => {
       window.updateLlmProviderFormVisibility();
-      await window.loadModels();
+      const userId = window.state?.playerUserId || 1;
+      await window.loadModels(userId);
     });
   }
   if (showAllModelsToggleEl) {
     showAllModelsToggleEl.checked = !!window.state.showAllProviderModels;
     showAllModelsToggleEl.addEventListener('change', async () => {
       window.state.showAllProviderModels = !!showAllModelsToggleEl.checked;
-      await window.loadModels();
+      const userId = window.state?.playerUserId || 1;
+      await window.loadModels(userId);
     });
   }
   window.updateLlmProviderFormVisibility();
@@ -236,16 +352,7 @@ window.initLlmProviderControls = async function () {
     window.applyLlmSettingsToForm(saved);
   }
 
-  try {
-    const live = await window.loadLlmSettings();
-    // If backend didn't have runtime config persisted, keep the localStorage values.
-    if (saved && (!live?.provider || !live?.model)) {
-      window.state.llmSettings = saved;
-      window.applyLlmSettingsToForm(saved);
-    }
-  } catch (_err) {
-    // Keep defaults if settings endpoint is unavailable.
-  }
+  // Don't auto-load global runtime settings here; we load per-user settings after login.
 };
 
 window._debugFormatTs = function (date = new Date()) {

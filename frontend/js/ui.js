@@ -268,6 +268,7 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
         skill: canonicalSkill,
         display_name: pending.skill,
         dice: pending.dice,
+          description: pending.description || '',
         label: `Roll ${canonicalSkill} ${pending.dice}`,
       };
       window.updateActionTriggerBtn(true);
@@ -768,6 +769,9 @@ window.renderTurnsToChat = function () {
               skill: canonicalSkill,
               display_name: displayName,
               dice: (cueMatch[2] || 'd20').toLowerCase(),
+              description: typeof window.getTestDescription === 'function'
+                ? window.getTestDescription(canonicalSkill)
+                : '',
               label: `Roll ${canonicalSkill} ${(cueMatch[2] || 'd20').toLowerCase()}`,
             };
           } else {
@@ -801,6 +805,13 @@ window.updateActionTriggerBtn = function (openPopup = false) {
   const hasActiveRoll = !!window.state.activeRollRequest;
   const popup = document.getElementById('action-popup');
   if (!popup) return;
+
+  const hint = document.getElementById('action-popup-roll-hint');
+  if (hint) {
+    const desc = window.state.activeRollRequest?.description || '';
+    hint.textContent = hasActiveRoll && desc ? `Opis: ${desc}` : '';
+  }
+
   if (hasActiveRoll && openPopup) {
     popup.classList.remove('hidden');
     if (typeof window.positionActionPopup === 'function') {

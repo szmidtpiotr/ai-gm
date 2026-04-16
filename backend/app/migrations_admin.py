@@ -6,6 +6,17 @@ DB_PATH = "/data/ai_gm.db"
 
 ADMIN_MIGRATIONS = [
     """
+    CREATE TABLE IF NOT EXISTS user_llm_settings (
+        user_id INTEGER PRIMARY KEY,
+        provider TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        model TEXT NOT NULL,
+        api_key TEXT NOT NULL DEFAULT '',
+        api_key_set INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS game_config_stats (
         key TEXT PRIMARY KEY,
         label TEXT NOT NULL,
@@ -69,6 +80,8 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_stats ADD COLUMN locked_at TEXT",
     "ALTER TABLE game_config_skills ADD COLUMN locked_at TEXT",
     "ALTER TABLE game_config_dc ADD COLUMN locked_at TEXT",
+    "ALTER TABLE game_config_skills ADD COLUMN description TEXT",
+    "ALTER TABLE game_config_dc ADD COLUMN description TEXT",
     "ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
 ]
 
@@ -83,27 +96,27 @@ ADMIN_SEEDS = [
     ('CHA', 'Charisma', 'Persuasion and intimidation presence', 6)
     """,
     """
-    INSERT OR IGNORE INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order) VALUES
-    ('stealth', 'Stealth', 'DEX', 5, 1),
-    ('athletics', 'Athletics', 'STR', 5, 2),
-    ('initiative', 'Initiative', 'DEX', 5, 3),
-    ('attack', 'Attack', 'STR', 5, 4),
-    ('awareness', 'Awareness', 'WIS', 5, 5),
-    ('persuasion', 'Persuasion', 'CHA', 5, 6),
-    ('intimidation', 'Intimidation', 'CHA', 5, 7),
-    ('survival', 'Survival', 'WIS', 5, 8),
-    ('lore', 'Lore', 'INT', 5, 9),
-    ('arcana', 'Arcana', 'INT', 5, 10),
-    ('medicine', 'Medicine', 'WIS', 5, 11),
-    ('investigation', 'Investigation', 'INT', 5, 12)
+    INSERT OR IGNORE INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order, description) VALUES
+    ('stealth', 'Stealth', 'DEX', 5, 1, 'Ciche poruszanie się i unikanie wykrycia. Odpowiada za wymykanie się, skradanie i działanie w cieniu.'),
+    ('athletics', 'Athletics', 'STR', 5, 2, 'Wysiłek fizyczny: bieganie, skoki, wspinaczka i dźwiganie.'),
+    ('initiative', 'Initiative', 'DEX', 5, 3, 'Szybka reakcja i gotowość do działania. Odpowiada za tempo i pierwszeństwo w niebezpiecznych chwilach.'),
+    ('attack', 'Attack', 'STR', 5, 4, 'Zdolność do skutecznego uderzenia: celowanie, siła i timing ataku.'),
+    ('awareness', 'Awareness', 'WIS', 5, 5, 'Wnikliwa obserwacja i czujność. Pomaga dostrzec zagrożenia, śledzić tropy i wyłapać drobne sygnały.'),
+    ('persuasion', 'Persuasion', 'CHA', 5, 6, 'Urok, argumenty i przekonywanie innych. Odpowiada za perswazję i rozmowę prowadzącą do zgody.'),
+    ('intimidation', 'Intimidation', 'CHA', 5, 7, 'Straszenie, stanowczość i presja psychiczna. Odpowiada za zastraszanie i wymuszanie reakcji.'),
+    ('survival', 'Survival', 'WIS', 5, 8, 'Przetrwanie w trudnych warunkach. Odpowiada za orientację, instynkt i decyzje w terenie.'),
+    ('lore', 'Lore', 'INT', 5, 9, 'Wiedza z opowieści i dawnych ksiąg. Odpowiada za rozpoznanie kultury, historii, symboli i opowieści świata.'),
+    ('arcana', 'Arcana', 'INT', 5, 10, 'Rozumienie magii i zjawisk magicznych. Odpowiada za rozpoznawanie zaklęć, rytuałów i sekretów arkanów.'),
+    ('medicine', 'Medicine', 'WIS', 5, 11, 'Udzielanie pomocy i leczenie. Odpowiada za ocenę ran, dobór środków i stabilizację w walce.'),
+    ('investigation', 'Investigation', 'INT', 5, 12, 'Dociekliwość i analizowanie szczegółów. Odpowiada za szukanie tropów, wyciąganie wniosków i składanie faktów.')
     """,
     """
-    INSERT OR IGNORE INTO game_config_dc (key, label, value, sort_order) VALUES
-    ('easy', 'Łatwe', 8, 1),
-    ('medium', 'Średnie', 12, 2),
-    ('hard', 'Trudne', 16, 3),
-    ('extreme', 'Ekstremalne', 20, 4),
-    ('legendary', 'Legendarne', 24, 5)
+    INSERT OR IGNORE INTO game_config_dc (key, label, value, sort_order, description) VALUES
+    ('easy', 'Łatwe', 8, 1, 'Proste, oczywiste działania. Jeśli gracz robi to sprytnie, zwykle ma dużą szansę na sukces.'),
+    ('medium', 'Średnie', 12, 2, 'Wymaga skupienia i pewnej biegłości. Błędy kosztują, ale to nadal realna próba.'),
+    ('hard', 'Trudne', 16, 3, 'Niepewne i wymagające. Nawet przy dobrym przygotowaniu jest sporo ryzyka.'),
+    ('extreme', 'Ekstremalne', 20, 4, 'Granica możliwości. Taka próba jest ryzykowna i często wiąże się z konsekwencjami porażki.'),
+    ('legendary', 'Legendarne', 24, 5, 'Działanie na poziomie legend. Tylko wyjątkowe przygotowanie, talent lub dramatyczny zryw może mieć sens.')
     """,
     """
     UPDATE game_config_stats

@@ -147,8 +147,8 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
         for row in payload["tables"]["game_config_skills"]:
             conn.execute(
                 """
-                INSERT INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order, locked_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order, locked_at, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row.get("key"),
@@ -157,14 +157,15 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
                     int(row.get("rank_ceiling", 5)),
                     int(row.get("sort_order", 0)),
                     row.get("locked_at"),
+                    row.get("description", "") or "",
                 ),
             )
 
         for row in payload["tables"]["game_config_dc"]:
             conn.execute(
                 """
-                INSERT INTO game_config_dc (key, label, value, sort_order, locked_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO game_config_dc (key, label, value, sort_order, locked_at, description)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row.get("key"),
@@ -172,6 +173,7 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
                     int(row.get("value", 0)),
                     int(row.get("sort_order", 0)),
                     row.get("locked_at"),
+                    row.get("description", "") or "",
                 ),
             )
 

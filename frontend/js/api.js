@@ -6,7 +6,7 @@ window.loadTranslations = async function (lang) {
   window.applyTranslations();
 };
 
-window.loadHealth = async function () {
+window.loadHealth = async function (userId = null) {
   const {
     statusBackendDotEl,
     statusOllamaDotEl
@@ -20,7 +20,8 @@ window.loadHealth = async function () {
   };
 
   try {
-    const resp = await fetch(window.API_HEALTH);
+    const url = userId ? `${window.API_HEALTH}?user_id=${encodeURIComponent(String(userId))}` : window.API_HEALTH;
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
 
@@ -36,13 +37,17 @@ window.loadHealth = async function () {
   }
 };
 
-window.loadModels = async function () {
+window.loadModels = async function (userId = null) {
   const { engineSelectEl } = window.getEls();
   const provider = String(window.state.llmSettings?.provider || '').toLowerCase();
   const wantAll = provider === 'openai' && !!window.state.showAllProviderModels;
-  const modelsUrl = wantAll ? `${window.API_MODELS}?show_all=1` : window.API_MODELS;
 
-const resp = await fetch(modelsUrl);
+  let modelsUrl = wantAll ? `${window.API_MODELS}?show_all=1` : window.API_MODELS;
+  if (userId) {
+    modelsUrl += wantAll ? `&user_id=${encodeURIComponent(String(userId))}` : `?user_id=${encodeURIComponent(String(userId))}`;
+  }
+
+  const resp = await fetch(modelsUrl);
   if (!resp.ok) {
     let detail = `HTTP ${resp.status}`;
     try {
@@ -105,20 +110,24 @@ const resp = await fetch(modelsUrl);
 
 window.loadCampaigns = async function (preferredCampaignId = null) {
   const { campaignSelectEl, characterSelectEl } = window.getEls();
+  const uid = window.state?.playerUserId || null;
 
 const resp = await fetch(window.API_CAMPAIGNS);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
   const data = await resp.json();
-  window.state.campaigns = Array.isArray(data.campaigns)
-  ? data.campaigns.map(c => ({
-      ...c,
-      systemid: c.systemid ?? c.system_id,
-      modelid: c.modelid ?? c.model_id,
-      owneruserid: c.owneruserid ?? c.owner_user_id,
-      createdat: c.createdat ?? c.created_at
-    }))
-  : [];
+  const rawCampaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
+  const visibleCampaigns = uid
+    ? rawCampaigns.filter((c) => Number(c.owner_user_id ?? c.owneruserid) === Number(uid))
+    : rawCampaigns;
+
+  window.state.campaigns = visibleCampaigns.map(c => ({
+    ...c,
+    systemid: c.systemid ?? c.system_id,
+    modelid: c.modelid ?? c.model_id,
+    owneruserid: c.owneruserid ?? c.owner_user_id,
+    createdat: c.createdat ?? c.created_at
+  }));
 
   campaignSelectEl.innerHTML = '';
 
@@ -178,7 +187,11 @@ window.loadCharacters = async function (campaignId, preferredCharacterId = null)
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
   const data = await resp.json();
-  window.state.characters = Array.isArray(data.characters) ? data.characters : [];
+  const uid = window.state?.playerUserId || null;
+  const rawChars = Array.isArray(data.characters) ? data.characters : [];
+  window.state.characters = uid
+    ? rawChars.filter((ch) => Number(ch.user_id ?? ch.userid) === Number(uid))
+    : rawChars;
   characterSelectEl.innerHTML = '';
 
   if (window.state.characters.length === 0) {
@@ -214,7 +227,7 @@ window.loadCharacters = async function (campaignId, preferredCharacterId = null)
   window.updateUiState();
 };
 
-window.loadTurns = async function (campaignId, limit = 30) {
+window.loadTurns = async function (campaignId, limit = 30, userId = null) {
   if (!campaignId) {
     window.state.turns = [];
     window.clearChat();
@@ -222,11 +235,21 @@ window.loadTurns = async function (campaignId, limit = 30) {
     return;
   }
 
+  const uid = userId || window.state?.playerUserId || null;
+
   const resp = await fetch(`/api/campaigns/${campaignId}/turns?limit=${limit}`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
   const data = await resp.json();
-  window.state.turns = Array.isArray(data.turns) ? data.turns : [];
+  const turns = Array.isArray(data.turns) ? data.turns : [];
+  window.state.turns = uid
+    ? turns.filter((t) => {
+        const cuid = t?.character_user_id ?? null;
+        // Keep command/system turns even if character_user_id is missing.
+        if (!cuid) return true;
+        return Number(cuid) === Number(uid);
+      })
+    : turns;
 
   if (window.state.turns.length > 0) {
     const lastTurn = window.state.turns[window.state.turns.length - 1];

@@ -58,6 +58,7 @@ def run_narrative_turn(
     user_text: str,
     model: str,
     ollama_base_url: str | None = None,
+    llm_config: dict[str, str] | None = None,
     roll_result_message: str | None = None,
     roll_result_data: dict | None = None,
 ) -> dict:
@@ -69,5 +70,5 @@ def run_narrative_turn(
         roll_result_message=roll_result_message,
         roll_result_data=roll_result_data,
     )
-    reply = generate_chat(messages=messages, model=model)
+    reply = generate_chat(messages=messages, model=model, llm_config=llm_config)
     return {"message": reply}

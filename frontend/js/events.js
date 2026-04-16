@@ -33,16 +33,36 @@ window.bindEvents = function () {
     }
 
     await window.loadCharacters(window.state.selectedCampaignId);
+
+    // Apply per-user LLM settings after character list refresh.
+    const userId = window.state?.playerUserId || 1;
+    try {
+      await window.loadUserLlmSettings(userId);
+      await window.loadHealth(userId);
+      await window.loadModels(userId);
+      window.syncLlmControlsCollapseToCurrentState?.();
+    } catch (_err) {
+      // Keep UI operational with existing in-memory/lclocal values.
+    }
     await window.loadTurns(window.state.selectedCampaignId);
     window.updateUiState();
   };
 
-  els.characterSelectEl.onchange = () => {
+  els.characterSelectEl.onchange = async () => {
     window.state.selectedCharacterId = Number(els.characterSelectEl.value);
     localStorage.setItem(
       'ai-gm:selectedCharacterId',
       String(window.state.selectedCharacterId)
     );
+    const userId = window.state?.playerUserId || 1;
+    try {
+      await window.loadUserLlmSettings(userId);
+      await window.loadHealth(userId);
+      await window.loadModels(userId);
+      window.syncLlmControlsCollapseToCurrentState?.();
+    } catch (_err) {
+      // ignore
+    }
     window.updateUiState();
   };
 
@@ -54,11 +74,12 @@ window.bindEvents = function () {
   if (els.testOllamaBtn) {
     els.testOllamaBtn.onclick = async () => {
       try {
+        const userId = window.state?.playerUserId || 1;
         if (typeof window.connectLlmSettings === 'function') {
           await window.connectLlmSettings();
         }
-        await window.loadHealth();
-        await window.loadModels();
+        await window.loadHealth(userId);
+        await window.loadModels(userId);
 
         if (window.state.selectedEngine) {
           els.engineSelectEl.value = window.state.selectedEngine;

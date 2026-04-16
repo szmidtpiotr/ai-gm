@@ -34,11 +34,29 @@ def get_runtime_config(mask_api_key: bool = False) -> dict[str, str]:
     }
 
 
-def get_effective_config() -> dict[str, str]:
-    provider = _runtime_config["provider"] or os.getenv("LLM_PROVIDER", "ollama")
-    base_url = _runtime_config["base_url"] or os.getenv("LLM_BASE_URL", "http://localhost:11434")
-    model = _runtime_config["model"] or os.getenv("LLM_MODEL", "gemma4:e4b")
-    api_key = _runtime_config["api_key"] or os.getenv("LLM_API_KEY", "")
+def get_effective_config(llm_config: dict[str, str] | None = None) -> dict[str, str]:
+    """
+    Effective LLM config resolution.
+
+    Precedence:
+    1) explicit llm_config override (if provided)
+    2) global runtime config (set by /api/settings/llm)
+    3) environment variables
+    """
+    override = llm_config or {}
+
+    def _pick(field: str, env_key: str) -> str:
+        # If a field is explicitly present in the override, respect it even if it's an empty string.
+        if field in override:
+            val = override.get(field)
+            return (val or "").strip()
+        runtime_val = _runtime_config.get(field, "")
+        return (runtime_val or os.getenv(env_key, "") or "").strip()
+
+    provider = _pick("provider", "LLM_PROVIDER") or "ollama"
+    base_url = _pick("base_url", "LLM_BASE_URL") or "http://localhost:11434"
+    model = _pick("model", "LLM_MODEL") or "gemma4:e4b"
+    api_key = _pick("api_key", "LLM_API_KEY")
     normalized_provider = provider.strip().lower()
     return {
         "provider": normalized_provider,
@@ -196,8 +214,8 @@ def _resolve_model(model: str | None, effective: dict[str, str]) -> str:
     return (model or "").strip() or effective["model"]
 
 
-def generate_chat(messages: list[dict], model: str | None = None) -> str:
-    effective = get_effective_config()
+def generate_chat(messages: list[dict], model: str | None = None, llm_config: dict[str, str] | None = None) -> str:
+    effective = get_effective_config(llm_config)
     resolved_model = _resolve_model(model, effective)
     provider = effective["provider"]
     if provider == "ollama":
@@ -207,8 +225,10 @@ def generate_chat(messages: list[dict], model: str | None = None) -> str:
     raise RuntimeError(f"Unknown LLM provider: {provider}")
 
 
-def generate_chat_stream(messages: list[dict], model: str | None = None) -> Generator[str, None, None]:
-    effective = get_effective_config()
+def generate_chat_stream(
+    messages: list[dict], model: str | None = None, llm_config: dict[str, str] | None = None
+) -> Generator[str, None, None]:
+    effective = get_effective_config(llm_config)
     resolved_model = _resolve_model(model, effective)
     provider = effective["provider"]
     if provider == "ollama":
@@ -220,8 +240,8 @@ def generate_chat_stream(messages: list[dict], model: str | None = None) -> Gene
     raise RuntimeError(f"Unknown LLM provider: {provider}")
 
 
-def get_health() -> dict[str, Any]:
-    effective = get_effective_config()
+def get_health(llm_config: dict[str, str] | None = None) -> dict[str, Any]:
+    effective = get_effective_config(llm_config)
     provider = effective["provider"]
     try:
         if provider == "ollama":

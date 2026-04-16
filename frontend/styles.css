@@ -94,6 +94,28 @@ body {
   margin-bottom: 4px;
 }
 
+.llm-settings-toggle-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+#llm-settings-toggle-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+#llm-controls-body {
+  grid-column: 1 / -1;
+}
+
+.llm-controls.llm-controls--collapsed #llm-controls-body {
+  display: none;
+}
+
 .llm-controls .field {
   margin-bottom: 0;
 }
@@ -485,6 +507,28 @@ input:disabled {
   align-items: center;
   justify-content: center;
   padding: 20px;
+}
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 6, 0.78);
+  z-index: 1400;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.auth-overlay-panel {
+  width: min(520px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: var(--shadow);
+  animation: bubble-in 180ms ease-out;
+  display: grid;
+  gap: 12px;
 }
 
 .character-modal {

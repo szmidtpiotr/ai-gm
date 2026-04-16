@@ -27,10 +27,18 @@
     el.newSkillLabel = document.getElementById("new-skill-label");
     el.newSkillStat = document.getElementById("new-skill-stat");
     el.newSkillRank = document.getElementById("new-skill-rank");
+    el.newSkillDescription = document.getElementById("new-skill-description");
     el.newSkillBtn = document.getElementById("new-skill-btn");
     el.devUsername = document.getElementById("admin-dev-username");
     el.devPassword = document.getElementById("admin-dev-password");
     el.devLoginBtn = document.getElementById("admin-dev-login-btn");
+    el.userLlmUserSelect = document.getElementById("user-llm-user-select");
+    el.userLlmLoadBtn = document.getElementById("user-llm-load-btn");
+    el.userLlmSaveBtn = document.getElementById("user-llm-save-btn");
+    el.userLlmProvider = document.getElementById("user-llm-provider");
+    el.userLlmBaseUrl = document.getElementById("user-llm-base-url");
+    el.userLlmApiKey = document.getElementById("user-llm-api-key");
+    el.userLlmModel = document.getElementById("user-llm-model");
     el.tabButtons = Array.from(document.querySelectorAll(".admin-tab"));
     el.tabPanels = Array.from(document.querySelectorAll(".admin-tab-panel"));
   }
@@ -48,6 +56,8 @@
     el.importDryBtn.disabled = !connected || !state.selectedImportPayload;
     el.importCommitBtn.disabled = !connected || !state.selectedImportPayload;
     el.newSkillBtn.disabled = !connected;
+    if (el.userLlmLoadBtn) el.userLlmLoadBtn.disabled = !connected;
+    if (el.userLlmSaveBtn) el.userLlmSaveBtn.disabled = !connected;
     el.loginStatus.textContent = connected ? "Connected." : "Not connected.";
   }
 
@@ -110,6 +120,7 @@
         <td><input data-row="skill" data-key="${esc(x.key)}" data-field="label" value="${esc(x.label)}"></td>
         <td><input data-row="skill" data-key="${esc(x.key)}" data-field="linked_stat" value="${esc(x.linked_stat)}"></td>
         <td><input type="number" data-row="skill" data-key="${esc(x.key)}" data-field="rank_ceiling" value="${esc(x.rank_ceiling)}"></td>
+        <td><input data-row="skill" data-key="${esc(x.key)}" data-field="description" value="${esc(x.description || '')}"></td>
         <td><input type="number" data-row="skill" data-key="${esc(x.key)}" data-field="sort_order" value="${esc(x.sort_order)}"></td>
         <td>
           <button data-save="skill" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="secondary">Save</button>
@@ -117,7 +128,7 @@
         </td>
       </tr>
     `).join("");
-    el.skillsList.innerHTML = table(["Key", "Label", "Linked Stat", "Rank", "Order", "Action"], rows);
+    el.skillsList.innerHTML = table(["Key", "Label", "Linked Stat", "Rank", "Description", "Order", "Action"], rows);
   }
 
   async function loadDc() {
@@ -127,11 +138,12 @@
         <td>${esc(x.key)}${isLocked(x) ? '<span class="lock-badge" title="Locked row">🔒</span>' : ""}</td>
         <td><input data-row="dc" data-key="${esc(x.key)}" data-field="label" value="${esc(x.label)}"></td>
         <td><input type="number" data-row="dc" data-key="${esc(x.key)}" data-field="value" value="${esc(x.value)}"></td>
+        <td><input data-row="dc" data-key="${esc(x.key)}" data-field="description" value="${esc(x.description || '')}"></td>
         <td><input type="number" data-row="dc" data-key="${esc(x.key)}" data-field="sort_order" value="${esc(x.sort_order)}"></td>
         <td><button data-save="dc" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="secondary">Save</button></td>
       </tr>
     `).join("");
-    el.dcList.innerHTML = table(["Key", "Label", "Value", "Order", "Action"], rows);
+    el.dcList.innerHTML = table(["Key", "Label", "Value", "Description", "Order", "Action"], rows);
   }
 
   async function loadAccounts() {
@@ -153,8 +165,36 @@
     el.accountsList.innerHTML = table(["ID", "Username", "Display Name", "Active", "Chars", "Action"], rows);
   }
 
+  async function loadUserLlmUsers() {
+    const data = await api("/admin/accounts");
+    const items = Array.isArray(data.items) ? data.items : [];
+    const sel = el.userLlmUserSelect;
+    if (!sel) return;
+    sel.innerHTML = '<option value="" selected disabled>Select user...</option>';
+    items.forEach((x) => {
+      const opt = document.createElement("option");
+      opt.value = String(x.id);
+      opt.textContent = `${x.id} — ${x.username} (${x.display_name})`;
+      sel.appendChild(opt);
+    });
+    el.userLlmLoadBtn && (el.userLlmLoadBtn.disabled = !sel.value);
+  }
+
+  async function loadUserLlmSettingsForUser(userId) {
+    if (!userId) return;
+    const result = await api(`/admin/users/${encodeURIComponent(userId)}/llm-settings`);
+    const settings = result?.settings || {};
+
+    if (el.userLlmProvider) el.userLlmProvider.value = settings.provider || "ollama";
+    if (el.userLlmBaseUrl) el.userLlmBaseUrl.value = settings.base_url || "";
+    if (el.userLlmModel) el.userLlmModel.value = settings.model || "";
+    if (el.userLlmApiKey) el.userLlmApiKey.value = "";
+
+    if (el.userLlmSaveBtn) el.userLlmSaveBtn.disabled = false;
+  }
+
   async function refreshAll() {
-    await Promise.all([loadStats(), loadSkills(), loadDc(), loadAccounts()]);
+    await Promise.all([loadStats(), loadSkills(), loadDc(), loadAccounts(), loadUserLlmUsers()]);
   }
 
   function getInputValue(rowType, key, field) {
@@ -191,6 +231,7 @@
             label: getInputValue("skill", key, "label"),
             linked_stat: getInputValue("skill", key, "linked_stat").toUpperCase(),
             rank_ceiling: Number(getInputValue("skill", key, "rank_ceiling")),
+            description: getInputValue("skill", key, "description"),
             sort_order: Number(getInputValue("skill", key, "sort_order")),
             force: true,
           }),
@@ -201,6 +242,7 @@
           body: JSON.stringify({
             label: getInputValue("dc", key, "label"),
             value: Number(getInputValue("dc", key, "value")),
+            description: getInputValue("dc", key, "description"),
             sort_order: Number(getInputValue("dc", key, "sort_order")),
             force: true,
           }),
@@ -277,12 +319,14 @@
           linked_stat: el.newSkillStat.value.trim().toUpperCase(),
           rank_ceiling: Number(el.newSkillRank.value || 5),
           sort_order: 999,
+          description: (el.newSkillDescription?.value || "").trim(),
         }),
       });
       log(`Created skill:${el.newSkillKey.value.trim()}`);
       el.newSkillKey.value = "";
       el.newSkillLabel.value = "";
       el.newSkillStat.value = "";
+      if (el.newSkillDescription) el.newSkillDescription.value = "";
       await loadSkills();
     } catch (err) {
       log(`Create skill failed -> ${err.message}`);
@@ -422,6 +466,50 @@
     el.importDryBtn.addEventListener("click", () => handleImport(true));
     el.importCommitBtn.addEventListener("click", () => handleImport(false));
     el.devLoginBtn.addEventListener("click", devLogin);
+    if (el.userLlmUserSelect && el.userLlmLoadBtn) {
+      el.userLlmUserSelect.addEventListener("change", () => {
+        el.userLlmLoadBtn.disabled = !el.userLlmUserSelect.value;
+        if (el.userLlmSaveBtn) el.userLlmSaveBtn.disabled = true;
+      });
+      el.userLlmLoadBtn.addEventListener("click", async () => {
+        try {
+          const userId = el.userLlmUserSelect.value;
+          if (!userId) return;
+          await loadUserLlmSettingsForUser(userId);
+          log(`Loaded user LLM for user:${userId}`);
+        } catch (err) {
+          log(`Load user LLM failed -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
+
+    if (el.userLlmSaveBtn) {
+      el.userLlmSaveBtn.addEventListener("click", async () => {
+        try {
+          const userId = el.userLlmUserSelect?.value;
+          if (!userId) return;
+          const apiKeyRaw = (el.userLlmApiKey?.value || "").trim();
+          const apiKey = apiKeyRaw ? apiKeyRaw : null; // null => keep current api_key
+
+          await api(`/admin/users/${encodeURIComponent(userId)}/llm-settings`, {
+            method: "PUT",
+            body: JSON.stringify({
+              provider: el.userLlmProvider?.value || "ollama",
+              base_url: el.userLlmBaseUrl?.value || "",
+              model: el.userLlmModel?.value || "",
+              api_key: apiKey,
+            }),
+          });
+
+          log(`Saved user LLM for user:${userId}`);
+          await loadUserLlmSettingsForUser(userId);
+        } catch (err) {
+          log(`Save user LLM failed -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
     document.body.addEventListener("click", handleSave);
     document.body.addEventListener("click", handleDelete);
     document.body.addEventListener("click", handleReset);
@@ -432,6 +520,14 @@
         el.tabPanels.forEach((panel) => {
           panel.classList.toggle("active", panel.dataset.panel === tab);
         });
+
+        if (tab === "user-llm" && state.connected) {
+          // Ensure users list exists (cheap) and keep panel ready.
+          if (el.userLlmUserSelect && el.userLlmUserSelect.value) {
+            // Don't auto-load settings to avoid surprises; user clicks Load.
+            if (el.userLlmLoadBtn) el.userLlmLoadBtn.disabled = false;
+          }
+        }
       });
     });
   }

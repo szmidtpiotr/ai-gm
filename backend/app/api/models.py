@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from app.services.llm_service import get_health
+from app.services.user_llm_settings import get_user_llm_settings_full
 
 router = APIRouter()
 
@@ -46,9 +47,9 @@ def _curate_narration_models(provider: str, models: list[str]) -> list[str]:
 
 
 @router.get("/models")
-async def list_models(show_all: bool = Query(default=False)):
+async def list_models(show_all: bool = Query(default=False), user_id: int | None = Query(default=None)):
     try:
-        llm = get_health()
+        llm = get_health(get_user_llm_settings_full(user_id) if user_id else None)
         provider = str(llm.get("provider") or "ollama").lower()
         model_names = llm.get("models") or []
         if not model_names and llm.get("model"):

@@ -7,6 +7,7 @@ import sqlite3
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.services.llm_service import generate_chat
+from app.services.user_llm_settings import get_user_llm_settings_full
 
 DB_PATH = "/data/ai_gm.db"
 HIDDEN_POTENTIALS = ["blessed", "cursed", "gifted", "hollow"]
@@ -445,7 +446,10 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         finally:
             settings_conn.close()
 
-        opening_message = (generate_chat(messages=messages, model=model) or "").strip() or None
+        llm_config = get_user_llm_settings_full(req.user_id)
+        # Prefer per-user model selection when generating the opening message.
+        model = llm_config.get("model") or model
+        opening_message = (generate_chat(messages=messages, model=model, llm_config=llm_config) or "").strip() or None
 
         if opening_message:
             next_turn_row = conn.execute(

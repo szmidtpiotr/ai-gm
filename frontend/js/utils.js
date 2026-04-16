@@ -47,6 +47,13 @@ window.currentCharacterName = function () {
   return window.currentCharacter()?.name || window.t('chat.you');
 };
 
+window.currentUserId = function () {
+  const character = window.currentCharacter ? window.currentCharacter() : null;
+  const raw = character?.user_id ?? character?.userid ?? character?.userId;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+};
+
 window.nextTurnNumber = function () {
   window.state.turnNumber += 1;
   return window.state.turnNumber;

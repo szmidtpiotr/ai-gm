@@ -19,6 +19,11 @@ from app.services.admin_config import (
     update_skill,
     update_stat,
 )
+from app.services.user_llm_settings import (
+    get_user_llm_settings_full,
+    get_user_llm_settings_masked,
+    upsert_user_llm_settings,
+)
 
 router = APIRouter()
 
@@ -44,6 +49,7 @@ class SkillPatchReq(BaseModel):
     linked_stat: str | None = None
     rank_ceiling: int | None = None
     sort_order: int | None = None
+    description: str | None = None
     force: bool = False
 
 
@@ -53,6 +59,7 @@ class SkillCreateReq(BaseModel):
     linked_stat: str
     rank_ceiling: int = 5
     sort_order: int = 0
+    description: str | None = ""
 
 
 class SkillDeleteReq(BaseModel):
@@ -63,6 +70,7 @@ class DcPatchReq(BaseModel):
     label: str | None = None
     value: int | None = None
     sort_order: int | None = None
+    description: str | None = None
     force: bool = False
 
 
@@ -77,6 +85,13 @@ class ConfigImportReq(BaseModel):
     exported_at: str | None = None
     exported_by: str | None = None
     excluded: list[str] | None = None
+
+
+class UserLlmSettingsReq(BaseModel):
+    provider: str
+    base_url: str
+    model: str
+    api_key: str | None = None
 
 
 def require_admin_token(
@@ -134,6 +149,7 @@ def admin_create_skill(req: SkillCreateReq, _: None = Depends(require_admin_toke
             linked_stat=req.linked_stat.strip().upper(),
             rank_ceiling=req.rank_ceiling,
             sort_order=req.sort_order,
+            description=(req.description or "").strip() if req.description is not None else None,
         )
         return {"item": item}
     except ValueError as e:
@@ -177,6 +193,7 @@ def admin_patch_skill(key: str, req: SkillPatchReq, _: None = Depends(require_ad
             linked_stat=req.linked_stat,
             rank_ceiling=req.rank_ceiling,
             sort_order=req.sort_order,
+            description=req.description,
             force=req.force,
         )
         return {"item": item}
@@ -219,6 +236,7 @@ def admin_patch_dc(key: str, req: DcPatchReq, _: None = Depends(require_admin_to
             label=req.label,
             value=req.value,
             sort_order=req.sort_order,
+            description=req.description,
             force=req.force,
         )
         return {"item": item}
@@ -271,6 +289,28 @@ def admin_delete_account(account_id: int, _: None = Depends(require_admin_token)
         return {"ok": True}
     except KeyError:
         raise HTTPException(status_code=404, detail="Account not found") from None
+
+
+@router.get("/admin/users/{user_id}/llm-settings")
+def admin_get_user_llm_settings(user_id: int, _: None = Depends(require_admin_token)):
+    return {"ok": True, "settings": get_user_llm_settings_masked(user_id=user_id)}
+
+
+@router.put("/admin/users/{user_id}/llm-settings")
+def admin_put_user_llm_settings(
+    user_id: int, req: UserLlmSettingsReq, _: None = Depends(require_admin_token)
+):
+    api_key = req.api_key
+    if api_key is not None and not api_key.strip():
+        api_key = None
+    upsert_user_llm_settings(
+        user_id=user_id,
+        provider=req.provider,
+        base_url=req.base_url,
+        model=req.model,
+        api_key=api_key,
+    )
+    return {"ok": True, "settings": get_user_llm_settings_masked(user_id=user_id)}
 
 
 @router.get("/admin/config/export")

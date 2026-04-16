@@ -56,7 +56,7 @@ def list_stats() -> list[dict]:
 def list_skills() -> list[dict]:
     return _fetch_all(
         """
-        SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at
+        SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description
         FROM game_config_skills
         ORDER BY sort_order ASC, key ASC
         """
@@ -66,7 +66,7 @@ def list_skills() -> list[dict]:
 def list_dc() -> list[dict]:
     return _fetch_all(
         """
-        SELECT key, label, value, sort_order, locked_at
+        SELECT key, label, value, sort_order, locked_at, description
         FROM game_config_dc
         ORDER BY sort_order ASC, key ASC
         """
@@ -126,6 +126,7 @@ def update_skill(
     linked_stat: str | None,
     rank_ceiling: int | None,
     sort_order: int | None,
+    description: str | None,
     force: bool,
 ) -> dict:
     conn = sqlite3.connect(DB_PATH)
@@ -134,7 +135,7 @@ def update_skill(
         current = _fetch_one(
             conn,
             """
-            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at
+            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description
             FROM game_config_skills WHERE key = ?
             """,
             (key,),
@@ -158,11 +159,12 @@ def update_skill(
             "linked_stat": final_linked_stat,
             "rank_ceiling": final_rank,
             "sort_order": sort_order if sort_order is not None else current["sort_order"],
+            "description": description if description is not None else current.get("description"),
         }
         conn.execute(
             """
             UPDATE game_config_skills
-            SET label = ?, linked_stat = ?, rank_ceiling = ?, sort_order = ?
+            SET label = ?, linked_stat = ?, rank_ceiling = ?, sort_order = ?, description = ?
             WHERE key = ?
             """,
             (
@@ -170,13 +172,14 @@ def update_skill(
                 updates["linked_stat"],
                 updates["rank_ceiling"],
                 updates["sort_order"],
+                updates["description"],
                 key,
             ),
         )
         new_row = _fetch_one(
             conn,
             """
-            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at
+            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description
             FROM game_config_skills WHERE key = ?
             """,
             (key,),
@@ -194,6 +197,7 @@ def update_dc(
     label: str | None,
     value: int | None,
     sort_order: int | None,
+    description: str | None,
     force: bool,
 ) -> dict:
     conn = sqlite3.connect(DB_PATH)
@@ -201,7 +205,7 @@ def update_dc(
     try:
         current = _fetch_one(
             conn,
-            "SELECT key, label, value, sort_order, locked_at FROM game_config_dc WHERE key = ?",
+            "SELECT key, label, value, sort_order, locked_at, description FROM game_config_dc WHERE key = ?",
             (key,),
         )
         if not current:
@@ -213,6 +217,7 @@ def update_dc(
             "label": label if label is not None else current["label"],
             "value": value if value is not None else current["value"],
             "sort_order": sort_order if sort_order is not None else current["sort_order"],
+            "description": description if description is not None else current.get("description"),
         }
         if updates["value"] < 1:
             raise ValueError("invalid_dc_value")
@@ -220,14 +225,14 @@ def update_dc(
         conn.execute(
             """
             UPDATE game_config_dc
-            SET label = ?, value = ?, sort_order = ?
+            SET label = ?, value = ?, sort_order = ?, description = ?
             WHERE key = ?
             """,
-            (updates["label"], updates["value"], updates["sort_order"], key),
+            (updates["label"], updates["value"], updates["sort_order"], updates["description"], key),
         )
         new_row = _fetch_one(
             conn,
-            "SELECT key, label, value, sort_order, locked_at FROM game_config_dc WHERE key = ?",
+            "SELECT key, label, value, sort_order, locked_at, description FROM game_config_dc WHERE key = ?",
             (key,),
         )
         _audit(conn, "game_config_dc", key, "UPDATE", current, new_row)
@@ -244,6 +249,7 @@ def create_skill(
     linked_stat: str,
     rank_ceiling: int = 5,
     sort_order: int = 0,
+    description: str | None = None,
 ) -> dict:
     if rank_ceiling < 1:
         raise ValueError("invalid_rank_ceiling")
@@ -261,15 +267,15 @@ def create_skill(
 
         conn.execute(
             """
-            INSERT INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order, locked_at)
-            VALUES (?, ?, ?, ?, ?, NULL)
+            INSERT INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order, locked_at, description)
+            VALUES (?, ?, ?, ?, ?, NULL, ?)
             """,
-            (key, label, linked_stat, rank_ceiling, sort_order),
+            (key, label, linked_stat, rank_ceiling, sort_order, description or ""),
         )
         new_row = _fetch_one(
             conn,
             """
-            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at
+            SELECT key, label, linked_stat, rank_ceiling, sort_order, locked_at, description
             FROM game_config_skills WHERE key = ?
             """,
             (key,),

@@ -65,6 +65,7 @@
       <button class="secondary admin-tab" data-tab="skills">Skills</button>
       <button class="secondary admin-tab" data-tab="dc">DC</button>
       <button class="secondary admin-tab" data-tab="accounts">Accounts</button>
+      <button class="secondary admin-tab" data-tab="user-llm">User LLM</button>
     </div>
 
     <main class="admin-main">
@@ -81,6 +82,11 @@
           <input id="new-skill-stat" placeholder="linked_stat (e.g. STR)">
           <input id="new-skill-rank" placeholder="rank_ceiling" type="number" min="1" value="5">
           <button id="new-skill-btn" class="secondary" disabled>Add Skill</button>
+          <input
+            id="new-skill-description"
+            placeholder="description (used for fuzzy action -> test mapping)"
+            style="grid-column: 1 / -1;"
+          >
         </div>
         <div id="skills-list" class="table-wrap"></div>
       </section>
@@ -93,6 +99,46 @@
       <section class="admin-card admin-tab-panel" data-panel="accounts">
         <h2>Accounts</h2>
         <div id="accounts-list" class="table-wrap"></div>
+      </section>
+
+      <section class="admin-card admin-tab-panel" data-panel="user-llm">
+        <h2>User LLM Settings</h2>
+
+        <div class="inline-form llm-admin-form">
+          <select id="user-llm-user-select">
+            <option value="" selected disabled>Select user...</option>
+          </select>
+          <button id="user-llm-load-btn" class="secondary" type="button" disabled>Load</button>
+        </div>
+
+        <div class="user-llm-grid">
+          <div class="field">
+            <label for="user-llm-provider">Provider</label>
+            <select id="user-llm-provider">
+              <option value="ollama">ollama</option>
+              <option value="openai">openai</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="user-llm-base-url">URL</label>
+            <input id="user-llm-base-url" placeholder="http://localhost:11434">
+          </div>
+
+          <div class="field">
+            <label for="user-llm-api-key">API key (optional)</label>
+            <input id="user-llm-api-key" type="password" placeholder="leave empty to keep current">
+          </div>
+
+          <div class="field">
+            <label for="user-llm-model">Model</label>
+            <input id="user-llm-model" placeholder="gemma4:e4b">
+          </div>
+        </div>
+
+        <div class="inline-form">
+          <button id="user-llm-save-btn" class="secondary" type="button" disabled>Save</button>
+        </div>
       </section>
     </main>
 

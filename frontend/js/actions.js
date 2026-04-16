@@ -55,7 +55,10 @@ window.parsePendingRoll = function (text) {
   window.state.pendingRoll = {
     skill: displaySkill,
     canonical_skill: canonicalSkill,
-    dice: diceExpr
+    dice: diceExpr,
+    description: typeof window.getTestDescription === 'function'
+      ? window.getTestDescription(canonicalSkill)
+      : '',
   };
 
   window._updateRollButtonsState();
@@ -110,7 +113,7 @@ window.createCampaignFromForm = async function () {
     title,
     system_id: systemSelectEl.value,
     model_id: engineSelectEl.value || (window.state.models[0]?.name ?? 'gemma3:1b'),
-    owner_user_id: 1,
+    owner_user_id: window.state?.playerUserId || 1,
     language: window.state.lang || 'pl',
     mode: 'solo',
     status: 'active'
@@ -122,8 +125,9 @@ window.createCampaignFromForm = async function () {
     if (typeof window.connectLlmSettings === 'function') {
       try {
         await window.connectLlmSettings();
-        if (typeof window.loadHealth === 'function') await window.loadHealth();
-        if (typeof window.loadModels === 'function') await window.loadModels();
+        const userId = window.state?.playerUserId || 1;
+        if (typeof window.loadHealth === 'function') await window.loadHealth(userId);
+        if (typeof window.loadModels === 'function') await window.loadModels(userId);
       } catch (llmErr) {
         throw new Error(`Połączenie LLM nieaktywne: ${llmErr.message}`);
       }
@@ -291,7 +295,7 @@ window.createCharacterFromForm = async function () {
   }
 
   const payload = {
-    user_id: 1,
+    user_id: window.state?.playerUserId || 1,
     name,
     system_id: campaignSystem,
     sheet_json: {
@@ -335,8 +339,9 @@ window.createCharacterFromForm = async function () {
     if (typeof window.connectLlmSettings === 'function') {
       try {
         await window.connectLlmSettings();
-        if (typeof window.loadHealth === 'function') await window.loadHealth();
-        if (typeof window.loadModels === 'function') await window.loadModels();
+        const userId = window.state?.playerUserId || 1;
+        if (typeof window.loadHealth === 'function') await window.loadHealth(userId);
+        if (typeof window.loadModels === 'function') await window.loadModels(userId);
       } catch (llmErr) {
         throw new Error(`Połączenie LLM nieaktywne: ${llmErr.message}`);
       }

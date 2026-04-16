@@ -16,6 +16,7 @@ from app.services.dice import (
 )
 from app.services.game_engine import build_narrative_messages, run_narrative_turn
 from app.services.llm_service import generate_chat_stream, get_effective_config, get_health
+from app.services.user_llm_settings import get_user_llm_settings_full
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
@@ -66,12 +67,13 @@ def validate_roll_cue_name(assistant_text: str) -> str | None:
 def resolve_model_name(
     requested_model: str | None,
     campaign_model: str | None,
+    llm_config: dict[str, str] | None = None,
 ) -> str:
-    effective = get_effective_config()
+    effective = get_effective_config(llm_config)
     if effective["provider"] == "openai":
         return (requested_model or campaign_model or effective["model"]).strip()
 
-    health = get_health()
+    health = get_health(llm_config)
     available = health.get("models") or []
     if not available:
         return (requested_model or campaign_model or effective["model"]).strip()
@@ -234,6 +236,7 @@ def list_campaign_turns(
                 t.created_at,
                 t.turn_number,
                 c.name AS character_name
+                ,c.user_id AS character_user_id
             FROM campaign_turns t
             LEFT JOIN characters c ON c.id = t.character_id
             WHERE t.campaign_id = ?
@@ -252,6 +255,7 @@ def list_campaign_turns(
                     "campaign_id": row["campaign_id"],
                     "character_id": row["character_id"],
                     "character_name": row["character_name"],
+                    "character_user_id": row["character_user_id"],
                     "user_text": row["user_text"],
                     "assistant_text": row["assistant_text"],
                     "route": row["route"],
@@ -300,6 +304,7 @@ def create_turn(
     try:
         campaign = get_campaign_or_404(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
+        llm_config = get_user_llm_settings_full(character["user_id"])
         text = (payload.text or "").strip()
 
         if not text:
@@ -423,6 +428,7 @@ def create_turn(
         model = resolve_model_name(
             requested_model=payload.engine,
             campaign_model=campaign["model_id"],
+            llm_config=llm_config,
         )
 
         result = run_narrative_turn(
@@ -432,6 +438,7 @@ def create_turn(
             user_text=text,
             model=model,
             ollama_base_url=x_ollama_base_url,
+            llm_config=llm_config,
             roll_result_message=roll_result_message,
             roll_result_data=roll_result_data,
         )
@@ -486,6 +493,7 @@ def create_turn_stream(
     try:
         campaign = get_campaign_or_404(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
+        llm_config = get_user_llm_settings_full(character["user_id"])
         text = (payload.text or "").strip()
 
         if not text:
@@ -514,6 +522,7 @@ def create_turn_stream(
         model = resolve_model_name(
             requested_model=payload.engine,
             campaign_model=campaign["model_id"],
+            llm_config=llm_config,
         )
 
         llm_user_text = roll_result_message or text
@@ -535,6 +544,7 @@ def create_turn_stream(
             for chunk in generate_chat_stream(
                 messages=messages,
                 model=model,
+                llm_config=llm_config,
             ):
                 if chunk.startswith("data: [DONE]"):
                     full_text = "".join(collected).replace("\\n", "\n")

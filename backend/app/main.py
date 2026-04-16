@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app.api import campaigns, characters, commands, turns
+from app.api import auth, campaigns, characters, commands, turns, mechanics
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.migrations_admin import run_admin_migrations
@@ -247,6 +247,8 @@ app.include_router(commands.router, prefix="/api")
 app.include_router(turns.router, prefix="/api")
 app.include_router(campaigns.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
+app.include_router(mechanics.router, prefix="/api")
 # Keep non-prefixed character endpoints available for direct local calls
 # (e.g. /characters/{id}/sheet), while preserving /api/* routes.
 app.include_router(characters.router)
