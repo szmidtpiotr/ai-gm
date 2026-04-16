@@ -80,8 +80,12 @@
 
 .inline-form {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 120px auto;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
   gap: 8px;
+}
+
+.inline-form button {
+  min-width: 120px;
 }
 
 .table-wrap {

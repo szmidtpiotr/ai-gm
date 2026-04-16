@@ -45,6 +45,46 @@ ADMIN_MIGRATIONS = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS game_config_weapons (
+        key TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        damage_die TEXT NOT NULL,
+        linked_stat TEXT NOT NULL,
+        allowed_classes TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        locked_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS game_config_enemies (
+        key TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        hp_base INTEGER NOT NULL,
+        ac_base INTEGER NOT NULL,
+        attack_bonus INTEGER NOT NULL,
+        damage_die TEXT NOT NULL,
+        description TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        locked_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS game_config_conditions (
+        key TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        effect_json TEXT NOT NULL,
+        description TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        locked_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS admin_tokens (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         token_hash TEXT NOT NULL UNIQUE,
@@ -117,6 +157,24 @@ ADMIN_SEEDS = [
     ('hard', 'Trudne', 16, 3, 'Niepewne i wymagające. Nawet przy dobrym przygotowaniu jest sporo ryzyka.'),
     ('extreme', 'Ekstremalne', 20, 4, 'Granica możliwości. Taka próba jest ryzykowna i często wiąże się z konsekwencjami porażki.'),
     ('legendary', 'Legendarne', 24, 5, 'Działanie na poziomie legend. Tylko wyjątkowe przygotowanie, talent lub dramatyczny zryw może mieć sens.')
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_weapons
+    (key, label, damage_die, linked_stat, allowed_classes, is_active, locked_at, created_at, updated_at)
+    VALUES
+    ('shortsword', 'Short Sword', 'd6', 'STR', '["warrior","ranger"]', 1, NULL, datetime('now'), datetime('now'))
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_enemies
+    (key, label, hp_base, ac_base, attack_bonus, damage_die, description, is_active, locked_at, created_at, updated_at)
+    VALUES
+    ('goblin', 'Goblin', 8, 11, 2, 'd6', 'Fast and opportunistic skirmisher.', 1, NULL, datetime('now'), datetime('now'))
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, locked_at, created_at, updated_at)
+    VALUES
+    ('poisoned', 'Poisoned', '{"stat_mods":{"STR":-2},"duration":"3 turns"}', 'Temporary STR penalty.', 1, NULL, datetime('now'), datetime('now'))
     """,
     """
     UPDATE game_config_stats

@@ -64,6 +64,9 @@
       <button class="secondary admin-tab active" data-tab="stats">Stats</button>
       <button class="secondary admin-tab" data-tab="skills">Skills</button>
       <button class="secondary admin-tab" data-tab="dc">DC</button>
+      <button class="secondary admin-tab" data-tab="weapons">Weapons</button>
+      <button class="secondary admin-tab" data-tab="enemies">Enemies</button>
+      <button class="secondary admin-tab" data-tab="conditions">Conditions</button>
       <button class="secondary admin-tab" data-tab="accounts">Accounts</button>
       <button class="secondary admin-tab" data-tab="user-llm">User LLM</button>
     </div>
@@ -94,6 +97,46 @@
       <section class="admin-card admin-tab-panel" data-panel="dc">
         <h2>DC Tiers</h2>
         <div id="dc-list" class="table-wrap"></div>
+      </section>
+
+      <section class="admin-card admin-tab-panel" data-panel="weapons">
+        <h2>Weapons</h2>
+        <div class="inline-form" id="new-weapon-form">
+          <input id="new-weapon-key" placeholder="key (e.g. shortsword)">
+          <input id="new-weapon-label" placeholder="label">
+          <input id="new-weapon-damage-die" placeholder="damage_die (e.g. d6)">
+          <input id="new-weapon-linked-stat" placeholder="linked_stat (e.g. STR)">
+          <input id="new-weapon-classes" placeholder="classes csv (warrior,ranger)">
+          <button id="new-weapon-btn" class="secondary" disabled>Add Weapon</button>
+        </div>
+        <div id="weapons-list" class="table-wrap"></div>
+      </section>
+
+      <section class="admin-card admin-tab-panel" data-panel="enemies">
+        <h2>Enemies</h2>
+        <div class="inline-form" id="new-enemy-form">
+          <input id="new-enemy-key" placeholder="key (e.g. goblin)">
+          <input id="new-enemy-label" placeholder="label">
+          <input id="new-enemy-hp-base" type="number" min="1" placeholder="hp_base">
+          <input id="new-enemy-ac-base" type="number" min="1" placeholder="ac_base">
+          <input id="new-enemy-attack-bonus" type="number" min="0" placeholder="attack_bonus">
+          <input id="new-enemy-damage-die" placeholder="damage_die (e.g. d6)">
+          <input id="new-enemy-description" placeholder="description" style="grid-column: 1 / -2;">
+          <button id="new-enemy-btn" class="secondary" disabled>Add Enemy</button>
+        </div>
+        <div id="enemies-list" class="table-wrap"></div>
+      </section>
+
+      <section class="admin-card admin-tab-panel" data-panel="conditions">
+        <h2>Conditions</h2>
+        <div class="inline-form" id="new-condition-form">
+          <input id="new-condition-key" placeholder="key (e.g. poisoned)">
+          <input id="new-condition-label" placeholder="label">
+          <input id="new-condition-description" placeholder="description">
+          <input id="new-condition-effect-json" placeholder='effect_json (e.g. {"stat_mods":{"STR":-2},"duration":"3 turns"})' style="grid-column: 1 / -2;">
+          <button id="new-condition-btn" class="secondary" disabled>Add Condition</button>
+        </div>
+        <div id="conditions-list" class="table-wrap"></div>
       </section>
 
       <section class="admin-card admin-tab-panel" data-panel="accounts">

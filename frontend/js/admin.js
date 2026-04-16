@@ -18,6 +18,9 @@
     el.skillsList = document.getElementById("skills-list");
     el.dcList = document.getElementById("dc-list");
     el.accountsList = document.getElementById("accounts-list");
+    el.weaponsList = document.getElementById("weapons-list");
+    el.enemiesList = document.getElementById("enemies-list");
+    el.conditionsList = document.getElementById("conditions-list");
     el.logBox = document.getElementById("admin-log-box");
     el.exportBtn = document.getElementById("export-config-btn");
     el.importFile = document.getElementById("import-config-file");
@@ -29,6 +32,25 @@
     el.newSkillRank = document.getElementById("new-skill-rank");
     el.newSkillDescription = document.getElementById("new-skill-description");
     el.newSkillBtn = document.getElementById("new-skill-btn");
+    el.newWeaponKey = document.getElementById("new-weapon-key");
+    el.newWeaponLabel = document.getElementById("new-weapon-label");
+    el.newWeaponDamageDie = document.getElementById("new-weapon-damage-die");
+    el.newWeaponLinkedStat = document.getElementById("new-weapon-linked-stat");
+    el.newWeaponClasses = document.getElementById("new-weapon-classes");
+    el.newWeaponBtn = document.getElementById("new-weapon-btn");
+    el.newEnemyKey = document.getElementById("new-enemy-key");
+    el.newEnemyLabel = document.getElementById("new-enemy-label");
+    el.newEnemyHpBase = document.getElementById("new-enemy-hp-base");
+    el.newEnemyAcBase = document.getElementById("new-enemy-ac-base");
+    el.newEnemyAttackBonus = document.getElementById("new-enemy-attack-bonus");
+    el.newEnemyDamageDie = document.getElementById("new-enemy-damage-die");
+    el.newEnemyDescription = document.getElementById("new-enemy-description");
+    el.newEnemyBtn = document.getElementById("new-enemy-btn");
+    el.newConditionKey = document.getElementById("new-condition-key");
+    el.newConditionLabel = document.getElementById("new-condition-label");
+    el.newConditionDescription = document.getElementById("new-condition-description");
+    el.newConditionEffectJson = document.getElementById("new-condition-effect-json");
+    el.newConditionBtn = document.getElementById("new-condition-btn");
     el.devUsername = document.getElementById("admin-dev-username");
     el.devPassword = document.getElementById("admin-dev-password");
     el.devLoginBtn = document.getElementById("admin-dev-login-btn");
@@ -56,6 +78,9 @@
     el.importDryBtn.disabled = !connected || !state.selectedImportPayload;
     el.importCommitBtn.disabled = !connected || !state.selectedImportPayload;
     el.newSkillBtn.disabled = !connected;
+    if (el.newWeaponBtn) el.newWeaponBtn.disabled = !connected;
+    if (el.newEnemyBtn) el.newEnemyBtn.disabled = !connected;
+    if (el.newConditionBtn) el.newConditionBtn.disabled = !connected;
     if (el.userLlmLoadBtn) el.userLlmLoadBtn.disabled = !connected;
     if (el.userLlmSaveBtn) el.userLlmSaveBtn.disabled = !connected;
     el.loginStatus.textContent = connected ? "Connected." : "Not connected.";
@@ -165,6 +190,64 @@
     el.accountsList.innerHTML = table(["ID", "Username", "Display Name", "Active", "Chars", "Action"], rows);
   }
 
+  async function loadWeapons() {
+    const data = await api("/admin/weapons");
+    const rows = data.items.map((x) => `
+      <tr>
+        <td>${esc(x.key)}${isLocked(x) ? '<span class="lock-badge" title="Locked row">🔒</span>' : ""}</td>
+        <td><input data-row="weapon" data-key="${esc(x.key)}" data-field="label" value="${esc(x.label)}"></td>
+        <td><input data-row="weapon" data-key="${esc(x.key)}" data-field="damage_die" value="${esc(x.damage_die)}"></td>
+        <td><input data-row="weapon" data-key="${esc(x.key)}" data-field="linked_stat" value="${esc(x.linked_stat)}"></td>
+        <td><input data-row="weapon" data-key="${esc(x.key)}" data-field="allowed_classes" value="${esc((x.allowed_classes || []).join(","))}"></td>
+        <td><input type="number" min="0" max="1" data-row="weapon" data-key="${esc(x.key)}" data-field="is_active" value="${esc(x.is_active)}"></td>
+        <td>
+          <button data-save="weapon" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="secondary">Save</button>
+          <button data-delete="weapon" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="danger">Delete</button>
+        </td>
+      </tr>
+    `).join("");
+    el.weaponsList.innerHTML = table(["Key", "Label", "Damage Die", "Linked Stat", "Classes", "Active", "Action"], rows);
+  }
+
+  async function loadEnemies() {
+    const data = await api("/admin/enemies");
+    const rows = data.items.map((x) => `
+      <tr>
+        <td>${esc(x.key)}${isLocked(x) ? '<span class="lock-badge" title="Locked row">🔒</span>' : ""}</td>
+        <td><input data-row="enemy" data-key="${esc(x.key)}" data-field="label" value="${esc(x.label)}"></td>
+        <td><input type="number" min="1" data-row="enemy" data-key="${esc(x.key)}" data-field="hp_base" value="${esc(x.hp_base)}"></td>
+        <td><input type="number" min="1" data-row="enemy" data-key="${esc(x.key)}" data-field="ac_base" value="${esc(x.ac_base)}"></td>
+        <td><input type="number" min="0" data-row="enemy" data-key="${esc(x.key)}" data-field="attack_bonus" value="${esc(x.attack_bonus)}"></td>
+        <td><input data-row="enemy" data-key="${esc(x.key)}" data-field="damage_die" value="${esc(x.damage_die)}"></td>
+        <td><input data-row="enemy" data-key="${esc(x.key)}" data-field="description" value="${esc(x.description || "")}"></td>
+        <td><input type="number" min="0" max="1" data-row="enemy" data-key="${esc(x.key)}" data-field="is_active" value="${esc(x.is_active)}"></td>
+        <td>
+          <button data-save="enemy" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="secondary">Save</button>
+          <button data-delete="enemy" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="danger">Delete</button>
+        </td>
+      </tr>
+    `).join("");
+    el.enemiesList.innerHTML = table(["Key", "Label", "HP", "AC", "Atk+", "Damage", "Description", "Active", "Action"], rows);
+  }
+
+  async function loadConditions() {
+    const data = await api("/admin/conditions");
+    const rows = data.items.map((x) => `
+      <tr>
+        <td>${esc(x.key)}${isLocked(x) ? '<span class="lock-badge" title="Locked row">🔒</span>' : ""}</td>
+        <td><input data-row="condition" data-key="${esc(x.key)}" data-field="label" value="${esc(x.label)}"></td>
+        <td><input data-row="condition" data-key="${esc(x.key)}" data-field="description" value="${esc(x.description || "")}"></td>
+        <td><input data-row="condition" data-key="${esc(x.key)}" data-field="effect_json" value="${esc(x.effect_json || "")}"></td>
+        <td><input type="number" min="0" max="1" data-row="condition" data-key="${esc(x.key)}" data-field="is_active" value="${esc(x.is_active)}"></td>
+        <td>
+          <button data-save="condition" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="secondary">Save</button>
+          <button data-delete="condition" data-key="${esc(x.key)}" data-locked="${isLocked(x) ? "1" : "0"}" class="danger">Delete</button>
+        </td>
+      </tr>
+    `).join("");
+    el.conditionsList.innerHTML = table(["Key", "Label", "Description", "Effect JSON", "Active", "Action"], rows);
+  }
+
   async function loadUserLlmUsers() {
     const data = await api("/admin/accounts");
     const items = Array.isArray(data.items) ? data.items : [];
@@ -194,7 +277,16 @@
   }
 
   async function refreshAll() {
-    await Promise.all([loadStats(), loadSkills(), loadDc(), loadAccounts(), loadUserLlmUsers()]);
+    await Promise.all([
+      loadStats(),
+      loadSkills(),
+      loadDc(),
+      loadWeapons(),
+      loadEnemies(),
+      loadConditions(),
+      loadAccounts(),
+      loadUserLlmUsers(),
+    ]);
   }
 
   function getInputValue(rowType, key, field) {
@@ -255,6 +347,46 @@
             is_active: Number(getInputValue("account", key, "is_active")),
           }),
         });
+      } else if (type === "weapon") {
+        await api(`/admin/weapons/${encodeURIComponent(key)}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            label: getInputValue("weapon", key, "label"),
+            damage_die: getInputValue("weapon", key, "damage_die"),
+            linked_stat: getInputValue("weapon", key, "linked_stat").toUpperCase(),
+            allowed_classes: getInputValue("weapon", key, "allowed_classes")
+              .split(",")
+              .map((x) => x.trim())
+              .filter(Boolean),
+            is_active: Number(getInputValue("weapon", key, "is_active")) === 1,
+            force: true,
+          }),
+        });
+      } else if (type === "enemy") {
+        await api(`/admin/enemies/${encodeURIComponent(key)}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            label: getInputValue("enemy", key, "label"),
+            hp_base: Number(getInputValue("enemy", key, "hp_base")),
+            ac_base: Number(getInputValue("enemy", key, "ac_base")),
+            attack_bonus: Number(getInputValue("enemy", key, "attack_bonus")),
+            damage_die: getInputValue("enemy", key, "damage_die"),
+            description: getInputValue("enemy", key, "description"),
+            is_active: Number(getInputValue("enemy", key, "is_active")) === 1,
+            force: true,
+          }),
+        });
+      } else if (type === "condition") {
+        await api(`/admin/conditions/${encodeURIComponent(key)}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            label: getInputValue("condition", key, "label"),
+            description: getInputValue("condition", key, "description"),
+            effect_json: getInputValue("condition", key, "effect_json"),
+            is_active: Number(getInputValue("condition", key, "is_active")) === 1,
+            force: true,
+          }),
+        });
       }
       log(`Saved ${type}:${key}`);
       await refreshAll();
@@ -279,6 +411,21 @@
       if (!accepted) return;
       if (type === "skill") {
         await api(`/admin/skills/${encodeURIComponent(key)}`, {
+          method: "DELETE",
+          body: JSON.stringify({ force: true }),
+        });
+      } else if (type === "weapon") {
+        await api(`/admin/weapons/${encodeURIComponent(key)}`, {
+          method: "DELETE",
+          body: JSON.stringify({ force: true }),
+        });
+      } else if (type === "enemy") {
+        await api(`/admin/enemies/${encodeURIComponent(key)}`, {
+          method: "DELETE",
+          body: JSON.stringify({ force: true }),
+        });
+      } else if (type === "condition") {
+        await api(`/admin/conditions/${encodeURIComponent(key)}`, {
           method: "DELETE",
           body: JSON.stringify({ force: true }),
         });
@@ -330,6 +477,86 @@
       await loadSkills();
     } catch (err) {
       log(`Create skill failed -> ${err.message}`);
+      alert(err.message);
+    }
+  }
+
+  async function handleCreateWeapon() {
+    try {
+      await api("/admin/weapons", {
+        method: "POST",
+        body: JSON.stringify({
+          key: el.newWeaponKey.value.trim(),
+          label: el.newWeaponLabel.value.trim(),
+          damage_die: el.newWeaponDamageDie.value.trim(),
+          linked_stat: el.newWeaponLinkedStat.value.trim().toUpperCase(),
+          allowed_classes: el.newWeaponClasses.value.split(",").map((x) => x.trim()).filter(Boolean),
+          is_active: true,
+        }),
+      });
+      log(`Created weapon:${el.newWeaponKey.value.trim()}`);
+      el.newWeaponKey.value = "";
+      el.newWeaponLabel.value = "";
+      el.newWeaponDamageDie.value = "";
+      el.newWeaponLinkedStat.value = "";
+      el.newWeaponClasses.value = "";
+      await loadWeapons();
+    } catch (err) {
+      log(`Create weapon failed -> ${err.message}`);
+      alert(err.message);
+    }
+  }
+
+  async function handleCreateEnemy() {
+    try {
+      await api("/admin/enemies", {
+        method: "POST",
+        body: JSON.stringify({
+          key: el.newEnemyKey.value.trim(),
+          label: el.newEnemyLabel.value.trim(),
+          hp_base: Number(el.newEnemyHpBase.value),
+          ac_base: Number(el.newEnemyAcBase.value),
+          attack_bonus: Number(el.newEnemyAttackBonus.value),
+          damage_die: el.newEnemyDamageDie.value.trim(),
+          description: el.newEnemyDescription.value.trim(),
+          is_active: true,
+        }),
+      });
+      log(`Created enemy:${el.newEnemyKey.value.trim()}`);
+      el.newEnemyKey.value = "";
+      el.newEnemyLabel.value = "";
+      el.newEnemyHpBase.value = "";
+      el.newEnemyAcBase.value = "";
+      el.newEnemyAttackBonus.value = "";
+      el.newEnemyDamageDie.value = "";
+      el.newEnemyDescription.value = "";
+      await loadEnemies();
+    } catch (err) {
+      log(`Create enemy failed -> ${err.message}`);
+      alert(err.message);
+    }
+  }
+
+  async function handleCreateCondition() {
+    try {
+      await api("/admin/conditions", {
+        method: "POST",
+        body: JSON.stringify({
+          key: el.newConditionKey.value.trim(),
+          label: el.newConditionLabel.value.trim(),
+          description: el.newConditionDescription.value.trim(),
+          effect_json: el.newConditionEffectJson.value.trim(),
+          is_active: true,
+        }),
+      });
+      log(`Created condition:${el.newConditionKey.value.trim()}`);
+      el.newConditionKey.value = "";
+      el.newConditionLabel.value = "";
+      el.newConditionDescription.value = "";
+      el.newConditionEffectJson.value = "";
+      await loadConditions();
+    } catch (err) {
+      log(`Create condition failed -> ${err.message}`);
       alert(err.message);
     }
   }
@@ -454,6 +681,9 @@
     el.skillsList.innerHTML = "";
     el.dcList.innerHTML = "";
     el.accountsList.innerHTML = "";
+    if (el.weaponsList) el.weaponsList.innerHTML = "";
+    if (el.enemiesList) el.enemiesList.innerHTML = "";
+    if (el.conditionsList) el.conditionsList.innerHTML = "";
     log("Logged out.");
   }
 
@@ -461,6 +691,9 @@
     el.loginBtn.addEventListener("click", connect);
     el.logoutBtn.addEventListener("click", logout);
     el.newSkillBtn.addEventListener("click", handleCreateSkill);
+    if (el.newWeaponBtn) el.newWeaponBtn.addEventListener("click", handleCreateWeapon);
+    if (el.newEnemyBtn) el.newEnemyBtn.addEventListener("click", handleCreateEnemy);
+    if (el.newConditionBtn) el.newConditionBtn.addEventListener("click", handleCreateCondition);
     el.exportBtn.addEventListener("click", handleExport);
     el.importFile.addEventListener("change", handleImportFileChange);
     el.importDryBtn.addEventListener("click", () => handleImport(true));

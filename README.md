@@ -1,18 +1,9 @@
-# 🎲 AI Game Master
+# AI-GM - RPG Game Project
 
-A locally-run AI-powered RPG Game Master. You type your actions — the AI narrates the world, runs the rules, and plays all NPCs. Built with FastAPI, SQLite, Ollama (local LLM), and a browser-based frontend.
+AI-GM is a browser-based RPG where the backend LLM acts as Game Master.  
+The project includes player gameplay UI, admin configuration UI, per-user LLM settings, and observability tooling.
 
----
-
-## 🧠 What Is This?
-
-AI GM is a text-based fantasy RPG where a local LLM (via Ollama) acts as the Game Master. It narrates scenes, resolves actions with dice rolls, manages your character sheet, and tracks the full campaign history — all running on your own machine, no external API required.
-
----
-
-## 🚀 Quick Start
-
-### 1. Clone & run
+## Quick Start
 
 ```bash
 git clone https://github.com/szmidtpiotr/ai-gm.git
@@ -20,274 +11,85 @@ cd ai-gm
 docker compose up -d --build
 ```
 
-| Service | URL |
-|---|---|
-| Game UI | http://localhost:3000 |
-| API docs (Swagger) | http://localhost:8000/docs |
-| API | http://localhost:8000/api |
-| Ollama | http://localhost:11434 |
-
-### 2. Pull an LLM model
-
-Models must be pulled into the Ollama container (not the host):
-
-```bash
-docker compose exec ollama ollama pull gemma3:4b
-docker compose exec ollama ollama list
-```
-
-Recommended models: `gemma3:4b`, `llama3.1:8b`, `mistral`
-
-### 3. Quick API test
-
-```bash
-curl -s http://localhost:8000/api/health
-curl -s http://localhost:8000/api/campaigns | jq
-```
-
----
-
-## 🏗️ Architecture
-
-| Service | Role | Port |
-|---|---|---|
-| `frontend` | Static UI served by Nginx | 3000 |
-| `backend` | FastAPI REST API | 8000 |
-| `ollama` | Local LLM runner (NVIDIA GPU support) | 11434 |
-| `ai_gm_data` | Persistent Docker volume for SQLite DB | — |
-
-Data is stored in `/data/ai_gm.db` (SQLite) inside the `ai_gm_data` Docker volume — campaigns and history survive container restarts.
-
----
-
-## 📡 API Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/health` | Health check |
-| GET | `/api/models` | List available Ollama models |
-| GET | `/api/campaigns` | List all campaigns |
-| POST | `/api/campaigns` | Create new campaign |
-| GET | `/api/campaigns/{id}` | Get campaign details |
-| DELETE | `/api/campaigns/{id}` | Delete campaign |
-| GET | `/api/campaigns/{id}/characters` | List characters in campaign |
-| POST | `/api/campaigns/{id}/characters` | Create character |
-| GET | `/api/campaigns/{id}/turns` | Get full turn history |
-| POST | `/api/campaigns/{id}/turns` | Submit player action (triggers GM response) |
-| POST | `/api/campaigns/{id}/turns/stream` | Submit action — streaming SSE response |
-| POST | `/api/campaigns/{id}/export` | Export full session to `/data/exports/*.txt` |
-| POST | `/api/commands/execute` | Execute a game command |
-
-Full interactive docs at `http://localhost:8000/docs`.
-
----
-
-## 🎮 Game Rules (Phase 5.5 — Locked)
-
-### Stats
-7 core stats: **STR, DEX, CON, INT, WIS, CHA, LCK**  
-Modifier formula: `floor((value - 10) / 2)`
-
-### Archetypes
-- **Warrior** — STR/CON focus, melee combat skills
-- **Mage** — INT/WIS focus, arcana and spells
-
-### Dice System
-`d20 + stat modifier + skill rank + proficiency bonus ≥ DC`
-
-| Difficulty | DC |
-|---|---|
-| Easy | 8 |
-| Medium | 12 |
-| Hard | 16 |
-| Extreme | 20 |
-| Legendary | 24+ |
-
-- **Nat 20** → auto-success + double damage
-- **Nat 1** → auto-fail + narrative complication
-- **Advantage** → roll 2d20, take higher
-- **Disadvantage** → roll 2d20, take lower
-
-### Skills (10 total)
-`athletics`, `stealth`, `awareness`, `survival`, `lore`, `investigation`, `arcana`, `medicine`, `persuasion`, `intimidation`
-
-Skill ranks: 0–5 (Untrained → Master). Proficiency bonus applies at rank ≥ 3.
-
-### Saves
-`fortitude_save` (CON), `reflex_save` (DEX), `willpower_save` (WIS), `arcane_save` (INT)
-
-### Roll Cue Format (machine-readable, frozen)
-The GM emits exactly one of these strings as the last line of a response when a roll is needed:
-```
-Roll Stealth d20
-Roll Initiative d20
-Roll Attack d20
-Roll Dex Save d20
-Roll Str Save d20
-Roll Con Save d20
-Roll Int Save d20
-Roll Wis Save d20
-Roll Cha Save d20
-```
-No punctuation, no markdown, no extra words. Parser depends on this exact format.
-
-### Commands
-| Command | Description |
-|---|---|
-| `/help` | Lists all available commands |
-| `/sheet` | Returns full character JSON |
-| `/roll` | Rolls d20 + modifier for last GM-requested roll |
-| `/name <name>` | Rename your character |
-| `/history` | Shows the last 10 turns of the session |
-| `/export` | Exports full session to `/data/exports/` on the server |
-
----
-
-## ⚡ Streaming Responses (SSE)
-
-The game supports **Server-Sent Events** for typewriter-style streaming. Use the stream endpoint:
-
-```
-POST /api/campaigns/{id}/turns/stream
-```
-
-Each chunk is formatted as:
-```
-data: <token>\n\n
-```
-Final chunk:
-```
-data: [DONE]\n\n
-```
-Error chunk:
-```
-data: [ERROR] <message>\n\n
-```
-
-The full response is automatically saved to `campaign_turns` after the stream completes.
-
----
-
-## 🔬 LLM Parameter Tuning
-
-Edit `backend/app/core/llm_config.py` or set environment variables:
-
-| Variable | Default | Description |
-|---|---|---|
-| `LLM_TEMPERATURE` | `0.8` | Randomness (0.0–2.0) |
-| `LLM_TOP_P` | `0.9` | Nucleus sampling |
-| `LLM_TOP_K` | `40` | Top-K token cutoff |
-| `LLM_REPEAT_PENALTY` | `1.1` | Penalise repetition |
-| `LLM_MAX_TOKENS` | `512` | Max tokens per response |
-
-Example in `docker-compose.override.yml`:
-```yaml
-services:
-  backend:
-    environment:
-      LLM_TEMPERATURE: "1.0"
-      LLM_MAX_TOKENS: "768"
-```
-
----
-
-## 📊 LLM I/O Logger
-
-Every LLM call is automatically logged to `/data/llm_log.jsonl` (one JSON line per request):
-
-```json
-{"ts": "2026-04-14T21:00:00Z", "model": "gemma3:4b", "input_chars": 1420, "output_chars": 312, "duration_sec": 4.2, "response_preview": "Widzisz przed sobą..."}
-```
-
-Use this to compare models, track response times, and analyse quality:
-
-```bash
-# Peek at the log
-docker compose exec backend tail -f /data/llm_log.jsonl
-# Copy to host for analysis
-docker compose cp backend:/data/llm_log.jsonl ./llm_log.jsonl
-```
-
----
-
-## 🛠️ Developer Setup
-
-### Dev mode (live reload)
-
-The repo ships with `docker-compose.override.yml` which automatically enables live reload in dev. Just run:
-
-```bash
-docker compose up -d --build
-docker compose logs -f backend
-```
-
-Code changes in `./backend` are reflected immediately without a full rebuild.
-
-### Environment variables
-
-| Variable | Default | Description |
-|---|---|---|
-| `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama address used by backend |
-| `OLLAMA_TIMEOUT` | `120` | LLM request timeout (seconds) |
-| `DEFAULT_CAMPAIGN_LANGUAGE` | `pl` | Default campaign language |
-| `GAME_LANG` | `pl-PL` | Game language setting |
-| `DATABASE_URL` | `sqlite:////data/ai_gm.db` | SQLite path |
-| `LLM_LOG_PATH` | `/data/llm_log.jsonl` | Path for LLM I/O log |
-
-### Branch workflow
-
-- Develop on feature branches
-- Merge to `main` when confirmed working
-- Pull `main` on production desktop: `git pull && docker compose up -d --build`
-
----
-
-## 📦 Tech Stack
-
-- **Python 3.12** + FastAPI + Pydantic
-- **SQLite** — campaigns, characters, turns, game state
-- **Ollama** — local LLM runner (Gemma, Llama, Mistral, etc.)
-- **Docker Compose** — orchestration
-- **Nginx** — static frontend server
-
----
-
-## 🗺️ Roadmap
-
-```
-✅ Phase 1   — Core game loop (input → AI → output)
-✅ Phase 2   — Player object + World/scene system
-✅ Phase 3   — AI GM prompt engineering
-✅ Phase 3.1 — Character creation + opening scene
-🔄 Phase 3.2 — Roll system + action resolution       ← YOU ARE HERE
-🔴 Phase 4   — Save / Load system (formalise endpoints)
-🔴 Phase 5   — Combat system v1 (enemy stats, HP, turn-based)
-🔴 Phase 6   — NPC system + dialogue
-🔴 Phase 7   — Main quest skeleton (Act 1)
-💡 Phase 8   — Web UI (browser-based interface)
-💡 Phase 9   — Persistent memory across sessions
-💡 Phase 10  — Polish, sound, map, modding
-```
-
-### ✅ Recently Shipped
-
-| Feature | Status | Notes |
-|---|---|---|
-| ⚡ Streaming LLM responses (SSE typewriter) | ✅ Done | `/turns/stream` endpoint, token-by-token SSE |
-| 🕹️ `/help` command | ✅ Done | Lists all commands with descriptions |
-| 📋 `/history` command | ✅ Done | Shows last 10 turns in session |
-| 📤 `/export` + `POST /export` endpoint | ✅ Done | Saves full session to `/data/exports/*.txt` |
-| 📊 LLM I/O logger | ✅ Done | Auto-logs to `/data/llm_log.jsonl` per request |
-| 🔬 LLM parameter tweaking | ✅ Done | `llm_config.py` + env var overrides |
-| 🧹 Clear chat on new campaign | ✅ Done | Frontend clears state on campaign change |
-
----
-
-## 📝 Notes
-
-- Turn numbers (`turn_number`) are counted per campaign, independent of SQLite row IDs
-- Pydantic warning on `model_id` / `model_` namespace — cosmetic only, does not affect function
-- API path `/campaigns/campaigns/{id}/turns` was a temporary router prefix bug — main path `/api/campaigns/{id}/turns` is correct
-- GM input classifier: dialogue → no roll, normal action → no roll, risky action → roll cue as last line
-- Roll cue format is frozen — model upgrades must be re-tested against the parser
-- LLM logs never crash the game — all logging errors are silently swallowed
+Services:
+- Frontend: `http://localhost:3001`
+- Backend API: `http://localhost:8000/api`
+- Swagger docs: `http://localhost:8000/docs`
+
+## Current Stack
+
+- Backend: FastAPI + SQLite
+- Frontend: static HTML/CSS/JS served by Nginx
+- LLM providers: Ollama and OpenAI-compatible endpoints
+- Runtime config storage: SQLite (`/data/ai_gm.db`)
+
+## Implemented Features
+
+### Player Side
+- Login gate before loading gameplay data.
+- Campaign/character/turn flow with streaming and non-streaming responses.
+- Per-user LLM settings (`provider`, `base_url`, `model`, optional `api_key`).
+- LLM panel collapsed by default, toggleable in UI.
+- Mechanics metadata endpoint for skill/DC descriptions and roll hints.
+
+### Admin Side
+- Token-protected `/api/admin/*` API.
+- Admin dev login endpoint for local development.
+- Tabbed admin panel with inline CRUD:
+  - stats
+  - skills
+  - dc tiers
+  - weapons
+  - enemies
+  - conditions
+  - accounts
+  - user LLM settings
+- Lock guard support (`locked_at` + `force=true`).
+- Audit log on create/update/delete operations.
+- Config export/import with dry-run and version checks.
+
+### Config Tables (seeded)
+- `game_config_stats`
+- `game_config_skills`
+- `game_config_dc`
+- `game_config_weapons` (example row: `shortsword`)
+- `game_config_enemies` (example row: `goblin`)
+- `game_config_conditions` (example row: `poisoned`)
+
+## Key API Groups
+
+- Gameplay:
+  - `/api/campaigns/*`
+  - `/api/characters/*`
+  - `/api/turns/*`
+- Player auth:
+  - `POST /api/auth/login`
+- LLM settings:
+  - `/api/users/{user_id}/llm-settings`
+- Admin:
+  - `/api/admin/*`
+- Mechanics metadata:
+  - `GET /api/mechanics/metadata`
+
+## Figma Handoff Docs
+
+Design-to-code handoff documents are tracked in:
+
+- `docs/figma-handoff/README.md`
+- `docs/figma-handoff/FIGMA_BRIEF.md`
+- `docs/figma-handoff/COMPONENT_MAP.md`
+- `docs/figma-handoff/UI_SPEC.md`
+
+## Observability
+
+Observability assets (Grafana/Loki/Promtail + MCP connector docs) are in:
+
+- `observability/`
+
+The Notion page `Debug Platform` is the operational source of truth; keep docs and repo synchronized.
+
+## Development Notes
+
+- Main branch is the source of truth for shipped features.
+- Use feature branches for isolated work, then merge when smoke tests pass.
+- Do not commit secrets (`.env`, `.secrets/`, credentials files).
