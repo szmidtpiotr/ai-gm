@@ -8,6 +8,7 @@ from app.services.admin_accounts import (
     update_account,
 )
 from app.services.admin_auth import verify_admin_token
+from app.services.admin_config_transfer import export_config, import_config
 from app.services.admin_config import (
     create_skill,
     delete_skill,
@@ -63,6 +64,14 @@ class DcPatchReq(BaseModel):
 class AccountPatchReq(BaseModel):
     display_name: str | None = None
     is_active: int | None = None
+
+
+class ConfigImportReq(BaseModel):
+    config_version: str
+    tables: dict
+    exported_at: str | None = None
+    exported_by: str | None = None
+    excluded: list[str] | None = None
 
 
 def require_admin_token(
@@ -244,3 +253,20 @@ def admin_delete_account(account_id: int, _: None = Depends(require_admin_token)
         return {"ok": True}
     except KeyError:
         raise HTTPException(status_code=404, detail="Account not found") from None
+
+
+@router.get("/admin/config/export")
+def admin_export_config(_: None = Depends(require_admin_token)):
+    return export_config()
+
+
+@router.post("/admin/config/import")
+def admin_import_config(
+    req: ConfigImportReq,
+    dry_run: bool = False,
+    _: None = Depends(require_admin_token),
+):
+    result = import_config(req.model_dump(), dry_run=dry_run)
+    if not result.get("ok"):
+        raise HTTPException(status_code=422, detail=result.get("errors") or ["Import failed"])
+    return result

@@ -53,6 +53,12 @@ ADMIN_MIGRATIONS = [
     )
     """,
     """
+    CREATE TABLE IF NOT EXISTS game_config_meta (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    )
+    """,
+    """
     CREATE INDEX IF NOT EXISTS idx_game_config_skills_linked_stat
     ON game_config_skills(linked_stat)
     """,
@@ -110,6 +116,10 @@ ADMIN_SEEDS = [
     """
     UPDATE game_config_dc
     SET locked_at = COALESCE(locked_at, '2026-04-14T00:00:00Z')
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value)
+    VALUES ('config_version', '1.0.0')
     """,
 ]
 
