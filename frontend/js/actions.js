@@ -19,15 +19,8 @@ window.state.pendingRoll = window.state.pendingRoll || null;
 
 window._updateRollButtonsState = function () {
   const { contextualRollBtn } = window.getEls();
-  const pending = window.state.pendingRoll;
   if (!contextualRollBtn) return;
-
-  if (pending) {
-    contextualRollBtn.textContent = `🎲 Rzuć ${pending.dice} — ${pending.skill}`;
-    contextualRollBtn.style.display = 'block';
-    return;
-  }
-
+  // Legacy inline roll button is disabled; use popup actions only.
   contextualRollBtn.style.display = 'none';
 };
 
@@ -126,6 +119,16 @@ window.createCampaignFromForm = async function () {
   if (campaignCreateSubmitEl) campaignCreateSubmitEl.disabled = true;
 
   try {
+    if (typeof window.connectLlmSettings === 'function') {
+      try {
+        await window.connectLlmSettings();
+        if (typeof window.loadHealth === 'function') await window.loadHealth();
+        if (typeof window.loadModels === 'function') await window.loadModels();
+      } catch (llmErr) {
+        throw new Error(`Połączenie LLM nieaktywne: ${llmErr.message}`);
+      }
+    }
+
     const resp = await fetch(window.API_CAMPAIGNS, {
       method: 'POST',
       headers: window.getApiHeaders(),
@@ -329,6 +332,16 @@ window.createCharacterFromForm = async function () {
   if (characterCreateSubmitEl) characterCreateSubmitEl.disabled = true;
 
   try {
+    if (typeof window.connectLlmSettings === 'function') {
+      try {
+        await window.connectLlmSettings();
+        if (typeof window.loadHealth === 'function') await window.loadHealth();
+        if (typeof window.loadModels === 'function') await window.loadModels();
+      } catch (llmErr) {
+        throw new Error(`Połączenie LLM nieaktywne: ${llmErr.message}`);
+      }
+    }
+
     const resp = await fetch(`/api/campaigns/${selectedCampaignId}/characters`, {
       method: 'POST',
       headers: window.getApiHeaders(),
@@ -359,6 +372,25 @@ window.createCharacterFromForm = async function () {
       role: 'system',
       route: 'character'
     });
+
+    const hasOpeningInTurns = Array.isArray(window.state.turns)
+      && window.state.turns.some((turn) => String(turn.assistant_text || '').trim() === String(data.opening_message || '').trim());
+    if (data.opening_message && !hasOpeningInTurns) {
+      window.addMessage({
+        speaker: window.t('chat.gm'),
+        text: data.opening_message,
+        role: 'assistant',
+        route: 'narrative'
+      });
+    } else if (data.opening_message) {
+      // Keep opening visible immediately after character creation.
+      window.renderTurnsToChat();
+    }
+
+    const { inputEl } = window.getEls();
+    if (inputEl) {
+      inputEl.focus();
+    }
   } catch (e) {
     alert(`Tworzenie postaci nie powiodło się: ${e.message}`);
     window.addMessage({
