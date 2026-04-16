@@ -63,6 +63,7 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_stats ADD COLUMN locked_at TEXT",
     "ALTER TABLE game_config_skills ADD COLUMN locked_at TEXT",
     "ALTER TABLE game_config_dc ADD COLUMN locked_at TEXT",
+    "ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
 ]
 
 ADMIN_SEEDS = [

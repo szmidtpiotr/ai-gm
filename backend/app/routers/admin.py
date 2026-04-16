@@ -1,6 +1,12 @@
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
+from app.services.admin_accounts import (
+    list_accounts,
+    reset_account_sheet,
+    soft_delete_account,
+    update_account,
+)
 from app.services.admin_auth import verify_admin_token
 from app.services.admin_config import (
     create_skill,
@@ -52,6 +58,11 @@ class DcPatchReq(BaseModel):
     value: int | None = None
     sort_order: int | None = None
     force: bool = False
+
+
+class AccountPatchReq(BaseModel):
+    display_name: str | None = None
+    is_active: int | None = None
 
 
 def require_admin_token(
@@ -192,3 +203,44 @@ def admin_patch_dc(key: str, req: DcPatchReq, _: None = Depends(require_admin_to
         if str(e) == "invalid_dc_value":
             raise HTTPException(status_code=422, detail="value must be >= 1") from None
         raise HTTPException(status_code=422, detail="Invalid dc payload") from None
+
+
+@router.get("/admin/accounts")
+def admin_accounts(_: None = Depends(require_admin_token)):
+    return {"items": list_accounts()}
+
+
+@router.patch("/admin/accounts/{account_id}")
+def admin_patch_account(
+    account_id: int, req: AccountPatchReq, _: None = Depends(require_admin_token)
+):
+    try:
+        item = update_account(
+            account_id,
+            display_name=req.display_name,
+            is_active=req.is_active,
+        )
+        return {"item": item}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Account not found") from None
+    except ValueError as e:
+        if str(e) == "invalid_is_active":
+            raise HTTPException(status_code=422, detail="is_active must be 0 or 1") from None
+        raise HTTPException(status_code=422, detail="Invalid account payload") from None
+
+
+@router.post("/admin/accounts/{account_id}/reset-sheet")
+def admin_reset_account_sheet(account_id: int, _: None = Depends(require_admin_token)):
+    try:
+        return reset_account_sheet(account_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Account not found") from None
+
+
+@router.delete("/admin/accounts/{account_id}")
+def admin_delete_account(account_id: int, _: None = Depends(require_admin_token)):
+    try:
+        soft_delete_account(account_id)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Account not found") from None
