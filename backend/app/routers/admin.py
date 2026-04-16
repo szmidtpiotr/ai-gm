@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from app.services.admin_auth import verify_admin_token
+from app.services.admin_config import list_dc, list_skills, list_stats
 
 router = APIRouter()
 
@@ -31,3 +32,18 @@ def admin_auth(req: AdminAuthReq):
 @router.get("/admin/verify")
 def admin_verify(_: None = Depends(require_admin_token)):
     return {"ok": True}
+
+
+@router.get("/admin/stats")
+def admin_stats(_: None = Depends(require_admin_token)):
+    return {"items": list_stats()}
+
+
+@router.get("/admin/skills")
+def admin_skills(_: None = Depends(require_admin_token)):
+    return {"items": list_skills()}
+
+
+@router.get("/admin/dc")
+def admin_dc(_: None = Depends(require_admin_token)):
+    return {"items": list_dc()}
