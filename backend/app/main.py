@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+import logging
 import os
 import random
 import re
 import sqlite3
 import json
-from fastapi import Depends, FastAPI, HTTPException
+import time
+import uuid
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
@@ -22,6 +25,33 @@ from app.services.llm_service import generate_chat
 
 # Keep DB path consistent with API routers using raw sqlite connections.
 DB_PATH = "/data/ai_gm.db"
+logger = logging.getLogger("ai_gm")
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        payload = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname.lower(),
+            "service": "backend",
+            "env": os.getenv("ENV", "dev"),
+            "message": record.getMessage(),
+        }
+        extra = getattr(record, "extra_fields", None)
+        if isinstance(extra, dict):
+            payload.update(extra)
+        return json.dumps(payload, ensure_ascii=False)
+
+
+def setup_structured_logging():
+    root = logging.getLogger()
+    if getattr(root, "_ai_gm_structured_logging", False):
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    root.handlers = [handler]
+    root.setLevel(logging.INFO)
+    root._ai_gm_structured_logging = True
 
 
 GAME_SYSTEMS = {
@@ -163,6 +193,7 @@ def run_raw_migrations():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    setup_structured_logging()
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
@@ -181,6 +212,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    request.state.request_id = request_id
+    start = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        response.headers["X-Request-Id"] = request_id
+        return response
+    finally:
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        logger.info(
+            "request_complete",
+            extra={
+                "extra_fields": {
+                    "request_id": request_id,
+                    "route": request.url.path,
+                    "method": request.method,
+                    "status_code": status_code,
+                    "elapsed_ms": elapsed_ms,
+                }
+            },
+        )
 
 app.include_router(commands.router, prefix="/api")
 app.include_router(turns.router, prefix="/api")

@@ -29,27 +29,34 @@
           "text": "All",
           "value": "$__all"
         }
-      },
-      {
-        "name": "provider",
-        "type": "query",
-        "datasource": {
-          "type": "loki",
-          "uid": "loki"
-        },
-        "query": "label_values(llm_provider)",
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        }
       }
     ]
   },
   "panels": [
+    {
+      "id": 99,
+      "type": "stat",
+      "title": "Backend requests (10m)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\"$service\"} |= \"request_complete\" [10m]))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 }
+    },
     {
       "id": 1,
       "type": "timeseries",
@@ -60,12 +67,12 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\", llm_provider=~\"$provider\", level=~\"error|warn\"}[1m]))",
+          "expr": "sum(count_over_time({service=~\"$service\", level=~\"error|warn\"}[1m]))",
           "refId": "A",
           "queryType": "range"
         }
       ],
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 }
     },
     {
       "id": 2,
@@ -77,12 +84,12 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\", llm_provider=~\"$provider\", error_type=\"llm_auth_error\"}[1m]))",
+          "expr": "sum(count_over_time({service=~\"$service\", error_type=\"llm_auth_error\"}[1m]))",
           "refId": "A",
           "queryType": "range"
         }
       ],
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 }
     },
     {
       "id": 3,
@@ -94,12 +101,12 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\", llm_provider=~\"$provider\", error_type=\"llm_connect_error\"}[1m]))",
+          "expr": "sum(count_over_time({service=~\"$service\", error_type=\"llm_connect_error\"}[1m]))",
           "refId": "A",
           "queryType": "range"
         }
       ],
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 }
     },
     {
       "id": 4,
@@ -111,12 +118,12 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\", llm_provider=~\"$provider\", error_type=\"llm_http_error\"}[1m]))",
+          "expr": "sum(count_over_time({service=~\"$service\", error_type=\"llm_http_error\"}[1m]))",
           "refId": "A",
           "queryType": "range"
         }
       ],
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 }
     },
     {
       "id": 5,
@@ -128,7 +135,7 @@
       },
       "targets": [
         {
-          "expr": "{service=~\"$service\", llm_provider=~\"$provider\", level=~\"error|warn\"}",
+          "expr": "{service=~\"$service\", level=~\"error|warn\"}",
           "refId": "A",
           "queryType": "range"
         }
@@ -138,7 +145,7 @@
         "showTime": true,
         "wrapLogMessage": true
       },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 }
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 20 }
     }
   ]
 }

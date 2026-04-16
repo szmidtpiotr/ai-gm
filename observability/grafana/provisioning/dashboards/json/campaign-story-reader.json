@@ -1,0 +1,139 @@
+{
+  "id": null,
+  "uid": "ai-gm-campaign-story-reader",
+  "title": "AI GM - Campaign Story Reader v2 (SQL)",
+  "tags": ["ai-gm", "story", "sqlite"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "campaign_id",
+        "type": "query",
+        "datasource": {
+          "type": "frser-sqlite-datasource",
+          "uid": "ai_gm_sqlite_story"
+        },
+        "query": "SELECT CAST(id AS TEXT) AS __value, CAST(id AS TEXT) AS __text FROM campaigns ORDER BY id DESC;",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 100,
+      "type": "table",
+      "title": "DB smoke test (no variables)",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ai_gm_sqlite_story"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT (SELECT COUNT(*) FROM campaigns) AS campaigns_count, (SELECT COUNT(*) FROM campaign_turns) AS turns_count;",
+          "queryText": "SELECT (SELECT COUNT(*) FROM campaigns) AS campaigns_count, (SELECT COUNT(*) FROM campaign_turns) AS turns_count;"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Selected campaign metadata",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ai_gm_sqlite_story"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT id AS campaign_id, title, system_id, model_id, language, mode, status, created_at FROM campaigns WHERE id = CAST(${campaign_id:raw} AS INTEGER);",
+          "queryText": "SELECT id AS campaign_id, title, system_id, model_id, language, mode, status, created_at FROM campaigns WHERE id = CAST(${campaign_id:raw} AS INTEGER);"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 18,
+        "x": 6,
+        "y": 4
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Turns in selected campaign",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ai_gm_sqlite_story"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT COUNT(*) AS turns FROM campaign_turns WHERE campaign_id = CAST(${campaign_id:raw} AS INTEGER);",
+          "queryText": "SELECT COUNT(*) AS turns FROM campaign_turns WHERE campaign_id = CAST(${campaign_id:raw} AS INTEGER);"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Campaign Story (all turns)",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ai_gm_sqlite_story"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT t.turn_number, c.title AS campaign_title, ch.name AS character_name, t.route, t.created_at, t.user_text, t.assistant_text FROM campaign_turns t LEFT JOIN campaigns c ON c.id = t.campaign_id LEFT JOIN characters ch ON ch.id = t.character_id WHERE t.campaign_id = CAST(${campaign_id:raw} AS INTEGER) ORDER BY t.turn_number ASC;",
+          "queryText": "SELECT t.turn_number, c.title AS campaign_title, ch.name AS character_name, t.route, t.created_at, t.user_text, t.assistant_text FROM campaign_turns t LEFT JOIN campaigns c ON c.id = t.campaign_id LEFT JOIN characters ch ON ch.id = t.character_id WHERE t.campaign_id = CAST(${campaign_id:raw} AS INTEGER) ORDER BY t.turn_number ASC;"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      }
+    }
+  ]
+}

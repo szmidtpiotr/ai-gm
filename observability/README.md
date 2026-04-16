@@ -13,6 +13,15 @@ This directory contains ready-to-run files for a Proxmox VM observability setup.
   - `llm-health-error-overview.json`
   - `turn-pipeline-stream-nonstream.json`
   - `top-error-signatures-24h.json`
+  - `campaign-story-reader.json`
+- alert rules provisioning:
+  - `grafana/provisioning/alerting/rules.yml`
+- Perplexity tutorial:
+  - `PERPLEXITY_LOG_ACCESS_TUTORIAL.md`
+- SQLite story reader:
+  - `grafana/provisioning/datasources/sqlite-story.yml`
+  - `SQL_CAMPAIGN_STORY_READER.md`
+  - `sync_story_db_to_observability.sh`
 
 ## Quick start
 
@@ -26,3 +35,24 @@ docker compose ps
 
 Grafana: `http://<VM_IP>:3000`  
 Login: `admin` + your `GRAFANA_ADMIN_PASSWORD`.
+
+## Game host log shipping
+
+To ship AI-GM container logs from the game host to Loki running on `192.168.1.19`:
+
+```bash
+docker compose -f observability/game-host-promtail-compose.yml up -d
+docker compose -f observability/game-host-promtail-compose.yml ps
+```
+
+Promtail health endpoint is exposed only locally on `127.0.0.1:9081`.
+
+## Story DB sync (Strategy B)
+
+Canonical story reader uses SQLite datasource on observability VM.
+Sync current app DB snapshot to VM:
+
+```bash
+chmod +x observability/sync_story_db_to_observability.sh
+./observability/sync_story_db_to_observability.sh
+```

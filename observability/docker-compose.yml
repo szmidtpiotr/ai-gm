@@ -6,7 +6,7 @@ services:
       - ./loki/loki-config.yml:/etc/loki/loki-config.yml:ro
       - loki-data:/loki
     ports:
-      - "127.0.0.1:3100:3100"
+      - "3100:3100"
     restart: unless-stopped
 
   promtail:
@@ -27,9 +27,11 @@ services:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-change-me-now}
       - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=frser-sqlite-datasource
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - /var/lib/ai-gm-db:/var/lib/ai-gm-db:ro
     ports:
       - "3000:3000"
     depends_on:

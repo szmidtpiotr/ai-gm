@@ -1,0 +1,205 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: ai-gm-alerts
+    folder: AI-GM
+    interval: 1m
+    rules:
+      - uid: ai-gm-backend-5xx
+        title: AI-GM Backend 5xx detected
+        condition: C
+        data:
+          - refId: A
+            queryType: range
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: loki
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: sum(count_over_time({service="backend"} | json | status_code=~"5.." [5m]))
+              queryType: range
+              refId: A
+          - refId: B
+            queryType: ""
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            queryType: ""
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [C]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: Backend returned 5xx within the last 5 minutes.
+        labels:
+          severity: critical
+          service: backend
+
+      - uid: ai-gm-llm-errors-spike
+        title: AI-GM LLM errors spike
+        condition: C
+        data:
+          - refId: A
+            queryType: range
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: loki
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: sum(count_over_time({service="backend", error_type=~"llm_.*"} [10m]))
+              queryType: range
+              refId: A
+          - refId: B
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [2]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [C]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              refId: C
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        annotations:
+          summary: More than 2 LLM-related errors in last 10 minutes.
+        labels:
+          severity: warning
+          service: backend
+
+      - uid: ai-gm-backend-logs-missing
+        title: AI-GM backend logs missing
+        condition: C
+        data:
+          - refId: A
+            queryType: range
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: loki
+            model:
+              datasource:
+                type: loki
+                uid: loki
+              editorMode: code
+              expr: sum(count_over_time({service="backend"} [10m]))
+              queryType: range
+              refId: A
+          - refId: B
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+          - refId: C
+            queryType: ""
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params: [1]
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [C]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: B
+              refId: C
+              type: threshold
+        noDataState: Alerting
+        execErrState: Error
+        for: 5m
+        annotations:
+          summary: No backend logs observed for at least 10 minutes.
+        labels:
+          severity: warning
+          service: backend
