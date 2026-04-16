@@ -17,6 +17,7 @@ from app.api import campaigns, characters, commands, turns
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.migrations_admin import run_admin_migrations
+from app.routers.admin import router as admin_router
 from app.routers.settings import router as settings_router
 from app.db import get_session, init_db
 from app.models import Game, Message
@@ -251,6 +252,7 @@ app.include_router(characters.router, prefix="/api")
 app.include_router(characters.router)
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(settings_router)
 
