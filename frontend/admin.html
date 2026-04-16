@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI-GM Admin</title>
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./admin.css">
+</head>
+<body>
+  <div class="admin-app">
+    <header class="admin-header">
+      <div>
+        <h1>AI-GM Admin Panel</h1>
+        <p class="muted">Token stays in memory only for this page session.</p>
+      </div>
+      <div class="admin-header-actions">
+        <button id="export-config-btn" class="secondary" disabled>Export Config</button>
+        <label class="import-label">
+          <input id="import-config-file" type="file" accept="application/json" disabled>
+          <span class="secondary">Choose Import File</span>
+        </label>
+        <button id="import-config-dry-btn" class="secondary" disabled>Import Dry Run</button>
+        <button id="import-config-commit-btn" class="danger" disabled>Import Commit</button>
+      </div>
+    </header>
+
+    <section class="admin-login" id="admin-login-box">
+      <div class="field">
+        <label for="admin-base-url">API Base URL</label>
+        <input id="admin-base-url" value="/api" />
+      </div>
+      <div class="field">
+        <label for="admin-token">Admin Bearer Token</label>
+        <input id="admin-token" type="password" placeholder="paste token here">
+      </div>
+      <div class="field-row">
+        <button id="admin-login-btn">Connect</button>
+        <button id="admin-logout-btn" class="secondary" disabled>Logout</button>
+      </div>
+      <div id="admin-login-status" class="muted">Not connected.</div>
+    </section>
+
+    <main class="admin-main">
+      <section class="admin-card">
+        <h2>Stats</h2>
+        <div id="stats-list" class="table-wrap"></div>
+      </section>
+
+      <section class="admin-card">
+        <h2>Skills</h2>
+        <div class="inline-form" id="new-skill-form">
+          <input id="new-skill-key" placeholder="key">
+          <input id="new-skill-label" placeholder="label">
+          <input id="new-skill-stat" placeholder="linked_stat (e.g. STR)">
+          <input id="new-skill-rank" placeholder="rank_ceiling" type="number" min="1" value="5">
+          <button id="new-skill-btn" class="secondary" disabled>Add Skill</button>
+        </div>
+        <div id="skills-list" class="table-wrap"></div>
+      </section>
+
+      <section class="admin-card">
+        <h2>DC Tiers</h2>
+        <div id="dc-list" class="table-wrap"></div>
+      </section>
+
+      <section class="admin-card">
+        <h2>Accounts</h2>
+        <div id="accounts-list" class="table-wrap"></div>
+      </section>
+    </main>
+
+    <section class="admin-log">
+      <h3>Activity Log</h3>
+      <pre id="admin-log-box"></pre>
+    </section>
+  </div>
+
+  <script src="./js/admin.js"></script>
+</body>
+</html>
