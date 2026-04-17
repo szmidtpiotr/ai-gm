@@ -101,13 +101,15 @@
 
       <section class="admin-card admin-tab-panel" data-panel="weapons">
         <h2>Weapons</h2>
+        <p class="muted">allowed_classes: comma-separated subset of warrior, ranger, scholar (matches backend validation).</p>
         <div class="inline-form" id="new-weapon-form">
-          <input id="new-weapon-key" placeholder="key (e.g. shortsword)">
+          <input id="new-weapon-key" placeholder="key (snake_case)">
           <input id="new-weapon-label" placeholder="label">
-          <input id="new-weapon-damage-die" placeholder="damage_die (e.g. d6)">
-          <input id="new-weapon-linked-stat" placeholder="linked_stat (e.g. STR)">
-          <input id="new-weapon-classes" placeholder="classes csv (warrior,ranger)">
-          <button id="new-weapon-btn" class="secondary" disabled>Add Weapon</button>
+          <input id="new-weapon-die" placeholder="damage_die (e.g. d6)">
+          <input id="new-weapon-stat" placeholder="linked_stat (STR)">
+          <input id="new-weapon-classes" placeholder="allowed: warrior,ranger">
+          <label class="inline-check"><input id="new-weapon-active" type="checkbox" checked> active</label>
+          <button id="new-weapon-btn" class="secondary" type="button" disabled>Add weapon</button>
         </div>
         <div id="weapons-list" class="table-wrap"></div>
       </section>
@@ -115,14 +117,15 @@
       <section class="admin-card admin-tab-panel" data-panel="enemies">
         <h2>Enemies</h2>
         <div class="inline-form" id="new-enemy-form">
-          <input id="new-enemy-key" placeholder="key (e.g. goblin)">
+          <input id="new-enemy-key" placeholder="key">
           <input id="new-enemy-label" placeholder="label">
-          <input id="new-enemy-hp-base" type="number" min="1" placeholder="hp_base">
-          <input id="new-enemy-ac-base" type="number" min="1" placeholder="ac_base">
-          <input id="new-enemy-attack-bonus" type="number" min="0" placeholder="attack_bonus">
-          <input id="new-enemy-damage-die" placeholder="damage_die (e.g. d6)">
-          <input id="new-enemy-description" placeholder="description" style="grid-column: 1 / -2;">
-          <button id="new-enemy-btn" class="secondary" disabled>Add Enemy</button>
+          <input id="new-enemy-hp" placeholder="hp_base" type="number">
+          <input id="new-enemy-ac" placeholder="ac_base" type="number">
+          <input id="new-enemy-atk" placeholder="attack_bonus" type="number">
+          <input id="new-enemy-die" placeholder="damage_die (d6)">
+          <input id="new-enemy-desc" placeholder="description" style="grid-column: 1 / -1;">
+          <label class="inline-check"><input id="new-enemy-active" type="checkbox" checked> active</label>
+          <button id="new-enemy-btn" class="secondary" type="button" disabled>Add enemy</button>
         </div>
         <div id="enemies-list" class="table-wrap"></div>
       </section>
@@ -130,11 +133,12 @@
       <section class="admin-card admin-tab-panel" data-panel="conditions">
         <h2>Conditions</h2>
         <div class="inline-form" id="new-condition-form">
-          <input id="new-condition-key" placeholder="key (e.g. poisoned)">
+          <input id="new-condition-key" placeholder="key">
           <input id="new-condition-label" placeholder="label">
-          <input id="new-condition-description" placeholder="description">
-          <input id="new-condition-effect-json" placeholder='effect_json (e.g. {"stat_mods":{"STR":-2},"duration":"3 turns"})' style="grid-column: 1 / -2;">
-          <button id="new-condition-btn" class="secondary" disabled>Add Condition</button>
+          <input id="new-condition-effect" placeholder='effect_json (e.g. {"stat_mods":{"STR":-2}})' style="grid-column: 1 / -1;">
+          <input id="new-condition-desc" placeholder="description" style="grid-column: 1 / -1;">
+          <label class="inline-check"><input id="new-condition-active" type="checkbox" checked> active</label>
+          <button id="new-condition-btn" class="secondary" type="button" disabled>Add condition</button>
         </div>
         <div id="conditions-list" class="table-wrap"></div>
       </section>

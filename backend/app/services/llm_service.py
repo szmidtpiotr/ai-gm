@@ -46,10 +46,13 @@ def get_effective_config(llm_config: dict[str, str] | None = None) -> dict[str, 
     override = llm_config or {}
 
     def _pick(field: str, env_key: str) -> str:
-        # If a field is explicitly present in the override, respect it even if it's an empty string.
+        # If a field is explicitly present in the override, use it — except `api_key`:
+        # an empty string in DB (user saved provider without pasting a key) should still
+        # fall back to runtime `/api/settings/llm` or `LLM_API_KEY`, otherwise OpenAI gets 401.
         if field in override:
-            val = override.get(field)
-            return (val or "").strip()
+            val = (override.get(field) or "").strip()
+            if field != "api_key" or val:
+                return val
         runtime_val = _runtime_config.get(field, "")
         return (runtime_val or os.getenv(env_key, "") or "").strip()
 
@@ -105,7 +108,13 @@ class OllamaDriver:
                 headers=_build_headers(api_key),
             )
             resp.raise_for_status()
-            data = resp.json()
+            try:
+                data = resp.json()
+            except ValueError as e:
+                peek = (resp.text or "")[:800]
+                raise RuntimeError(
+                    f"LLM returned non-JSON (status {resp.status_code}): {peek}"
+                ) from e
         content = ((data.get("message") or {}).get("content") or "").strip()
         if not content:
             raise RuntimeError("LLM returned empty response")
@@ -175,7 +184,13 @@ class OpenAIDriver:
                 headers=_build_headers(api_key),
             )
             resp.raise_for_status()
-            data = resp.json()
+            try:
+                data = resp.json()
+            except ValueError as e:
+                peek = (resp.text or "")[:800]
+                raise RuntimeError(
+                    f"LLM returned non-JSON (status {resp.status_code}): {peek}"
+                ) from e
         choices = data.get("choices") or []
         content = (((choices[0] or {}).get("message") or {}).get("content") or "").strip() if choices else ""
         if not content:
@@ -214,14 +229,39 @@ def _resolve_model(model: str | None, effective: dict[str, str]) -> str:
     return (model or "").strip() or effective["model"]
 
 
+def _raise_llm_http_error(exc: httpx.HTTPStatusError) -> None:
+    """Normalize provider HTTP failures so API layers return 502 + readable detail, not raw 500."""
+    status = exc.response.status_code if exc.response is not None else None
+    body = ""
+    if exc.response is not None:
+        try:
+            body = (exc.response.text or "").strip()
+        except Exception:
+            body = ""
+    if len(body) > 1200:
+        body = body[:1200] + "…"
+    raise RuntimeError(
+        f"LLM HTTP {status}: {body or exc!s}"
+    ) from exc
+
+
 def generate_chat(messages: list[dict], model: str | None = None, llm_config: dict[str, str] | None = None) -> str:
     effective = get_effective_config(llm_config)
     resolved_model = _resolve_model(model, effective)
     provider = effective["provider"]
-    if provider == "ollama":
-        return OllamaDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
-    if provider == "openai":
-        return OpenAIDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+    if provider == "openai" and not (effective.get("api_key") or "").strip():
+        raise RuntimeError(
+            "OpenAI API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
+        )
+    try:
+        if provider == "ollama":
+            return OllamaDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+        if provider == "openai":
+            return OpenAIDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+    except httpx.HTTPStatusError as exc:
+        _raise_llm_http_error(exc)
+    except httpx.RequestError as exc:
+        raise RuntimeError(f"LLM connection error: {exc}") from exc
     raise RuntimeError(f"Unknown LLM provider: {provider}")
 
 
@@ -231,6 +271,10 @@ def generate_chat_stream(
     effective = get_effective_config(llm_config)
     resolved_model = _resolve_model(model, effective)
     provider = effective["provider"]
+    if provider == "openai" and not (effective.get("api_key") or "").strip():
+        raise RuntimeError(
+            "OpenAI API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
+        )
     if provider == "ollama":
         yield from OllamaDriver.generate_stream(effective["base_url"], resolved_model, messages, effective["api_key"])
         return

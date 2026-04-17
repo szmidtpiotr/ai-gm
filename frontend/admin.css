@@ -78,14 +78,20 @@
   font-size: 18px;
 }
 
-.inline-form {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(120px, 1fr));
-  gap: 8px;
+.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.inline-form button {
-  min-width: 120px;
+.wide-input {
+  min-width: 240px;
+}
+
+.inline-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 120px auto;
+  gap: 8px;
 }
 
 .table-wrap {

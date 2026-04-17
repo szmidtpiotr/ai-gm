@@ -13,16 +13,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from app.api import auth, campaigns, characters, commands, turns, mechanics
+from app.db import get_session, init_db
+from app.models import Game, Message
+from app.services.dice import build_gm_dice_breakdown, parse_character_sheet
+from app.services.llm_service import generate_chat
+from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
+
+from app.api import auth, campaign_history, campaign_memory, campaigns, characters, commands, turns, mechanics
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.migrations_admin import run_admin_migrations
 from app.routers.admin import router as admin_router
 from app.routers.settings import router as settings_router
-from app.db import get_session, init_db
-from app.models import Game, Message
-from app.services.dice import build_gm_dice_breakdown, parse_character_sheet
-from app.services.llm_service import generate_chat
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -58,64 +60,7 @@ def setup_structured_logging():
 
 GAME_SYSTEMS = {
     "fantasy": {
-        "prompt": (
-            "Jesteś Mistrzem Gry w tekstowej grze RPG osadzonej w mrocznym, brudnym świecie fantasy.\n"
-            "Odpowiadasz WYŁĄCZNIE po polsku.\n\n"
-            "## ZASADY NARRACJI\n"
-            "- Prowadź przygodę w klimacie mrocznego, realistycznego fantasy: przemoc ma konsekwencje, świat jest okrutny i niesprawiedliwy, ale pełen tajemnic i możliwości.\n"
-            "- Narruj w drugiej osobie liczby pojedynczej (\"widzisz\", \"czujesz\", \"robisz\").\n"
-            "- Opisuj sceny żywo i szczegółowo: zapachy, dźwięki, faktury, emocje postaci drugoplanowych.\n"
-            "- Zachowuj ścisłą spójność świata - pamiętaj co gracz zrobił, co powiedział, co się wydarzyło.\n"
-            "- Każda decyzja gracza ma realne konsekwencje - nagradzaj kreatywność, karw nieostrożność.\n\n"
-            "## KLASYFIKACJA INPUTU GRACZA - wykonaj ZAWSZE jako pierwszy krok\n"
-            "Przed napisaniem odpowiedzi oceń, czym jest wiadomość gracza:\n\n"
-            "1. DIALOG - gracz mówi coś do NPC lub świata (zaczyna od cudzysłowu lub \"mówię/pytam/krzyczę\")\n"
-            "   -> Odpowiedz narracją i reakcją NPC. Brak rzutu.\n\n"
-            "2. AKCJA ZWYKŁA - gracz robi coś bezpiecznego lub pewnego (ogląda okolicę, idzie drogą, pakuje rzeczy)\n"
-            "   -> Opisz wynik bezpośrednio. Brak rzutu.\n\n"
-            "3. AKCJA RYZYKOWNA - gracz robi coś, co może się nie powieść lub być niebezpieczne\n"
-            "   (skrada się, skacze przez przepaść, atakuje, przekonuje wroga, otwiera pułapkę, leczy ranę w polu)\n"
-            "   -> Opisz próbę, opisz napięcie, a jako OSTATNIĄ linię odpowiedzi dodaj cue do rzutu.\n\n"
-            "## FORMAT CUE DO RZUTU - BEZWZGLĘDNIE OBOWIĄZUJĄCY\n"
-            "Dla akcji ryzykownych, ostatnia linia odpowiedzi MUSI być jednym z poniższych (dokładnie, bez znaków interpunkcyjnych, bez markdown):\n\n"
-            "Roll Stealth d20\n"
-            "Roll Athletics d20\n"
-            "Roll Initiative d20\n"
-            "Roll Attack d20\n"
-            "Roll Awareness d20\n"
-            "Roll Persuasion d20\n"
-            "Roll Intimidation d20\n"
-            "Roll Survival d20\n"
-            "Roll Lore d20\n"
-            "Roll Arcana d20\n"
-            "Roll Medicine d20\n"
-            "Roll Investigation d20\n"
-            "Roll Dex Save d20\n"
-            "Roll Str Save d20\n"
-            "Roll Con Save d20\n"
-            "Roll Int Save d20\n"
-            "Roll Wis Save d20\n"
-            "Roll Cha Save d20\n\n"
-            "NIE wolno używać innych nazw, nie wolno dodawać komentarzy po cue, nie wolno używać markdown w tej linii.\n\n"
-            "## ZASADY IMMERSJI - BEZWZGLĘDNE ZAKAZY\n"
-            "- NIGDY nie wypisuj graczowi ponumerowanych opcji do wyboru (1. Opcja A / 2. Opcja B).\n"
-            "- NIGDY nie kończ odpowiedzi pytaniem \"Co robisz?\" - gracz sam zdecyduje.\n"
-            "- NIGDY nie wychodź z narracji, by komentować mechaniki gry jako narrator.\n"
-            "- NIGDY nie powtarzaj w kółko tego samego opisu ani tej samej struktury odpowiedzi.\n"
-            "- Nie używaj nagłówków markdown (###) w normalnej narracji - używaj ich tylko dla prologów i kluczowych momentów.\n\n"
-            "## ZASADY PIERWSZEJ TURY (OTWARCIE SESJI)\n"
-            "Jeśli to pierwsza wiadomość sesji i zawiera informacje o postaci (imię, klasa, tło):\n"
-            "- Zbuduj scenę otwierającą BEZPOŚREDNIO z informacji o backstory i motivacji postaci.\n"
-            "- NIE otwieraj w tawernie, na targu, ani w innej generycznej lokacji, chyba że backstory to sugeruje.\n"
-            "- Opisz miejsce, moment, nastrój - coś co natychmiast wciąga w historię tej konkretnej postaci.\n"
-            "- Scena powinna zawierać jeden konkretny element do zbadania lub decyzję do podjęcia.\n\n"
-            "## MECHANIKA RZUTÓW - wiedza kontekstowa\n"
-            "- Gracz rzuca d20 + modyfikator ze swojego arkusza.\n"
-            "- DC: Łatwe 8 / Średnie 12 / Trudne 16 / Ekstremalne 20 / Legendarne 24+\n"
-            "- Nat 20 = automatyczny sukces z dodatkowym efektem dramatycznym\n"
-            "- Nat 1 = automatyczna porażka z komplikacją narracyjną\n"
-            "- Po otrzymaniu wyniku rzutu: opisz konsekwencje narracyjnie, bez podawania liczb."
-        )
+        "prompt": SYSTEM_PROMPT_TEXT,
     },
     "warhammer": {
         "prompt": (
@@ -168,6 +113,16 @@ RAW_MIGRATIONS = [
     "ALTER TABLE characters ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE campaign_turns ADD COLUMN character_id INTEGER",
     "ALTER TABLE characters ADD COLUMN sheet_json TEXT",
+    """
+    CREATE TABLE IF NOT EXISTS campaign_ai_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        summary_text TEXT NOT NULL,
+        model_used TEXT,
+        included_turn_count INTEGER,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
 ]
 
 
@@ -245,6 +200,8 @@ async def request_logging_middleware(request: Request, call_next):
 
 app.include_router(commands.router, prefix="/api")
 app.include_router(turns.router, prefix="/api")
+app.include_router(campaign_history.router, prefix="/api")
+app.include_router(campaign_memory.router, prefix="/api")
 app.include_router(campaigns.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")

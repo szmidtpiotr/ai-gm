@@ -495,6 +495,102 @@ window.bindDebugSnapshotButton = function () {
   btn.onclick = window.copyDebugSnapshot;
 };
 
+window.closeHistorySummaryModal = function () {
+  const overlay = document.getElementById("history-summary-overlay");
+  if (!overlay) return;
+  overlay.style.display = "none";
+  overlay.setAttribute("aria-hidden", "true");
+};
+
+window.openHistorySummaryModal = async function () {
+  const overlay = document.getElementById("history-summary-overlay");
+  const bodyEl = document.getElementById("history-summary-body");
+  const emptyEl = document.getElementById("history-summary-empty");
+  const loadingEl = document.getElementById("history-summary-loading");
+  const cid = window.state?.selectedCampaignId;
+  if (!cid) {
+    window.addMessage?.({
+      speaker: "System",
+      text: "Wybierz kampanię, żeby zobaczyć podsumowanie.",
+      role: "system",
+    });
+    return;
+  }
+  if (!overlay) return;
+  overlay.style.display = "flex";
+  overlay.setAttribute("aria-hidden", "false");
+  if (loadingEl) loadingEl.style.display = "block";
+  if (bodyEl) {
+    bodyEl.style.display = "none";
+    bodyEl.textContent = "";
+  }
+  if (emptyEl) {
+    emptyEl.style.display = "none";
+    emptyEl.textContent =
+      "Brak podsumowania (albo brak tur narracyjnych). Jako właściciel kampanii zapiszesz je przy następnym otwarciu, gdy LLM jest dostępny.";
+  }
+  try {
+    const uid = window.state?.playerUserId || 1;
+    const qs = new URLSearchParams({
+      user_id: String(uid),
+      stale_after_turns: "5",
+    });
+    let r = await fetch(
+      `/api/campaigns/${cid}/history/summary/ensure?${qs}`,
+      { method: "POST" }
+    );
+    let data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const r2 = await fetch(`/api/campaigns/${cid}/history/summary`);
+      const d2 = await r2.json().catch(() => ({}));
+      if (!r2.ok) {
+        const msg =
+          typeof data.detail === "string"
+            ? data.detail
+            : typeof d2.detail === "string"
+              ? d2.detail
+              : `HTTP ${r.status}`;
+        throw new Error(msg);
+      }
+      data = d2;
+    }
+    if (loadingEl) loadingEl.style.display = "none";
+    const s = data.summary;
+    if (s != null && String(s).trim() !== "") {
+      if (bodyEl) {
+        bodyEl.textContent = String(s);
+        bodyEl.style.display = "block";
+      }
+    } else if (emptyEl) {
+      emptyEl.style.display = "block";
+    }
+  } catch (e) {
+    if (loadingEl) loadingEl.style.display = "none";
+    if (bodyEl) {
+      bodyEl.textContent =
+        "Błąd wczytywania: " + (e && e.message ? e.message : String(e));
+      bodyEl.style.display = "block";
+    }
+  }
+};
+
+window.bindHistorySummaryButton = function () {
+  const btn = document.getElementById("history-summary-btn");
+  const overlay = document.getElementById("history-summary-overlay");
+  const closeBtn = document.getElementById("history-summary-close");
+  if (btn) {
+    btn.onclick = () => window.openHistorySummaryModal();
+  }
+  if (closeBtn) {
+    closeBtn.onclick = () => window.closeHistorySummaryModal();
+  }
+  if (overlay) {
+    overlay.onclick = (e) => {
+      if (e.target === overlay) window.closeHistorySummaryModal();
+    };
+  }
+};
+
 window.installApiDebugTracker = function () {
   if (window.__apiDebugTrackerInstalled) return;
   if (typeof window.fetch !== "function") return;
@@ -757,6 +853,7 @@ window.bindCharacterSheetPanel = function () {
 
 window.initCharacterSheetPanel = async function () {
   window.installApiDebugTracker();
+  window.bindHistorySummaryButton();
   window.bindDebugSnapshotButton();
 
   const savedState = localStorage.getItem(window.SHEET_PANEL_STORAGE_KEY);

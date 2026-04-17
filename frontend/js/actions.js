@@ -439,6 +439,101 @@ window.sendMessage = async function () {
     return;
   }
 
+  if (/^\/mem(\s|$)/i.test(text.trim())) {
+    const question = text.replace(/^\/mem\s*/i, '').trim();
+    if (!question) {
+      window.addMessage({
+        speaker: 'System',
+        text: 'Użyj: /mem [pytanie] — odpowiedź bazuje na zapisanym podsumowaniu (nie zmienia fabuły).',
+        role: 'error',
+        createdAt: clientCreatedAt
+      });
+      inputEl.value = '';
+      return;
+    }
+
+    window.chatRequestState.inFlight = true;
+    const requestId = ++window.chatRequestState.requestId;
+    const turnNumber = window.nextTurnNumber();
+    inputEl.value = '';
+
+    if (sendBtnEl) sendBtnEl.disabled = true;
+    inputEl.disabled = true;
+
+    window.addMessage({
+      speaker: window.currentCharacterName(),
+      text: text.trim(),
+      role: 'user',
+      route: 'memory',
+      turn: turnNumber,
+      createdAt: clientCreatedAt,
+      memoryTurn: true
+    });
+
+    window.removeThinkingBubble();
+    window.showThinkingBubble({
+      speaker: window.t('chat.gm'),
+      route: 'memory',
+      turn: turnNumber
+    });
+
+    try {
+      const uid = window.state?.playerUserId || 1;
+      const resp = await fetch(
+        `/api/campaigns/${window.state.selectedCampaignId}/memory/ask?user_id=${encodeURIComponent(uid)}`,
+        {
+          method: 'POST',
+          headers: window.getApiHeaders(),
+          body: JSON.stringify({
+            character_id: window.state.selectedCharacterId,
+            question: question,
+            user_line: text.trim()
+          })
+        }
+      );
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const detail = data.detail || data.message || `HTTP ${resp.status}`;
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+      }
+      if (requestId !== window.chatRequestState.requestId) return;
+
+      window.removeThinkingBubble();
+      window.addMessage({
+        speaker: window.t('chat.gm'),
+        text: data.answer || '',
+        role: 'assistant',
+        route: 'memory',
+        turn: data.turn_number || turnNumber,
+        createdAt: data.created_at || null,
+        memoryTurn: true
+      });
+      await window.loadTurns(window.state.selectedCampaignId);
+    } catch (e) {
+      if (requestId !== window.chatRequestState.requestId) return;
+      window.removeThinkingBubble();
+      const pretty = typeof window.prettyLlmErrorMessage === 'function'
+        ? window.prettyLlmErrorMessage(e.message)
+        : e.message;
+      window.addMessage({
+        speaker: 'Błąd',
+        text: pretty,
+        role: 'error',
+        turn: turnNumber
+      });
+    } finally {
+      if (requestId === window.chatRequestState.requestId) {
+        window.chatRequestState.inFlight = false;
+      }
+      if (sendBtnEl) sendBtnEl.disabled = false;
+      if (inputEl) {
+        inputEl.disabled = false;
+        inputEl.focus();
+      }
+    }
+    return;
+  }
+
   const selectedEngine = window.state.selectedEngine || engineSelectEl.value || '';
 
   if (!selectedEngine) {

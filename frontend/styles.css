@@ -103,6 +103,31 @@ body {
   margin-bottom: 2px;
 }
 
+.llm-settings-toggle-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.player-logout-inline {
+  flex: 0 0 auto;
+  width: auto !important;
+  min-width: 0;
+  min-height: 32px !important;
+  padding: 5px 12px !important;
+  font-size: 12px !important;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.campaign-character-in-llm {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
 #llm-settings-toggle-hint {
   font-size: 12px;
   color: var(--muted);
@@ -178,6 +203,23 @@ body {
   flex-direction: column;
   gap: 4px;
   z-index: 1100;
+}
+
+/* Kept in DOM for mechanics; not shown in UI. */
+.bottom-system-field.bottom-system-field--hidden {
+  position: fixed !important;
+  left: -10000px !important;
+  top: auto !important;
+  bottom: auto !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  z-index: -1 !important;
 }
 
 .bottom-system-field label {
@@ -560,6 +602,16 @@ input:disabled {
   line-height: 1;
 }
 
+.history-summary-body {
+  white-space: pre-wrap;
+  max-height: 60vh;
+  overflow: auto;
+  font-size: 14px;
+  line-height: 1.55;
+  margin-top: 8px;
+  color: var(--text, #e8e4dc);
+}
+
 .character-modal h2 {
   margin: 0 0 8px;
   color: var(--accent);
@@ -642,6 +694,31 @@ input:disabled {
   border-color: rgba(30, 58, 95, 0.22);
   border-bottom-right-radius: 6px;
   color: var(--user);
+}
+
+/* /mem — przypomnienia (bez wpływu na narrację): żółte tło, czarny tekst */
+.message.user.memory-turn {
+  background: #f5d84a;
+  border-color: #b8960f;
+  color: #111;
+}
+
+.message.assistant.memory-turn {
+  background: #f5d84a;
+  border-color: #b8960f;
+  color: #111;
+}
+
+.message.user.memory-turn .meta,
+.message.assistant.memory-turn .meta {
+  color: #1a1a1a;
+}
+
+.message.user.memory-turn .route-badge,
+.message.assistant.memory-turn .route-badge {
+  background: rgba(0, 0, 0, 0.08);
+  color: #222;
+  border-color: rgba(0, 0, 0, 0.18);
 }
 
 .message.assistant {
@@ -797,6 +874,24 @@ pre {
   Use display:flex with !important to override the .message display:block.
   Without this the thinking-wrap row (text + dots) would stack vertically.
 */
+.message.assistant.thinking.memory-turn {
+  background: #f5d84a;
+  border-color: #b8960f;
+  color: #111;
+}
+
+.message.assistant.thinking.memory-turn .meta {
+  color: #1a1a1a;
+}
+
+.message.assistant.thinking.memory-turn .thinking-text {
+  color: #111;
+}
+
+.message.assistant.thinking.memory-turn .typing-dots span {
+  background: #333;
+}
+
 .message.thinking {
   display: flex !important;
   flex-direction: column;
@@ -1085,11 +1180,6 @@ pre {
     gap: 8px;
   }
 
-  .bottom-system-field {
-    left: 8px;
-    bottom: 8px;
-    width: 140px;
-  }
 }
 
 .action-trigger-wrap {

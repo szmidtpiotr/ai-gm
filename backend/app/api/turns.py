@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import sqlite3
 
@@ -22,6 +23,92 @@ router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
 logger = logging.getLogger(__name__)
 
+
+def _truncate_for_story_log(text: str, max_chars: int) -> str:
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    return text[:max_chars] + "…[truncated]"
+
+
+def log_narrative_turn_structured(
+    *,
+    route: str,
+    campaign_id: int,
+    character_id: int | None,
+    turn_row: dict,
+    user_text: str,
+    assistant_text: str,
+) -> None:
+    """
+    Emit one JSON log line (via root JsonFormatter) for Loki/Grafana — near-live story
+    without syncing SQLite to the observability VM. Disable with NARRATIVE_STORY_LOG=0.
+
+    Optional: NARRATIVE_LOG_MAX_CHARS caps user_text / assistant_text size (0 = no cap).
+    """
+    if route != "narrative":
+        return
+    if os.getenv("NARRATIVE_STORY_LOG", "1").strip().lower() in ("0", "false", "no"):
+        return
+    try:
+        max_chars = int(os.getenv("NARRATIVE_LOG_MAX_CHARS", "0") or "0")
+    except ValueError:
+        max_chars = 0
+    try:
+        logger.info(
+            "narrative_turn",
+            extra={
+                "extra_fields": {
+                    "event": "narrative_turn",
+                    "campaign_id": campaign_id,
+                    "character_id": character_id,
+                    "turn_id": turn_row.get("id"),
+                    "turn_number": turn_row.get("turn_number"),
+                    "created_at": turn_row.get("created_at"),
+                    "user_text": _truncate_for_story_log(user_text or "", max_chars),
+                    "assistant_text": _truncate_for_story_log(assistant_text or "", max_chars),
+                }
+            },
+        )
+    except Exception:
+        # Never fail a turn because logging broke
+        pass
+
+
+def log_memory_turn_structured(
+    *,
+    campaign_id: int,
+    character_id: int | None,
+    turn_row: dict,
+    user_text: str,
+    assistant_text: str,
+) -> None:
+    """Emit JSON log line for /mem turns (Loki: event=memory_turn). Same opt-out as narrative."""
+    if os.getenv("NARRATIVE_STORY_LOG", "1").strip().lower() in ("0", "false", "no"):
+        return
+    try:
+        max_chars = int(os.getenv("NARRATIVE_LOG_MAX_CHARS", "0") or "0")
+    except ValueError:
+        max_chars = 0
+    try:
+        logger.info(
+            "memory_turn",
+            extra={
+                "extra_fields": {
+                    "event": "memory_turn",
+                    "campaign_id": campaign_id,
+                    "character_id": character_id,
+                    "turn_id": turn_row.get("id"),
+                    "turn_number": turn_row.get("turn_number"),
+                    "created_at": turn_row.get("created_at"),
+                    "user_text": _truncate_for_story_log(user_text or "", max_chars),
+                    "assistant_text": _truncate_for_story_log(assistant_text or "", max_chars),
+                }
+            },
+        )
+    except Exception:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Command registry — used by /help and the command dispatcher
 # ---------------------------------------------------------------------------
@@ -31,6 +118,7 @@ COMMAND_REGISTRY = {
     "/roll": "Roll d20 + modifier for the last GM-requested roll",
     "/name <new name>": "Rename your character",
     "/history": "Show the last 10 turns of the session",
+    "/mem [pytanie]": "Pytanie o przeszłość z podsumowań — bez wpływu na narrację (żółte dymki)",
     "/export": "Export the full session to a text file on the server (/data/exports/)",
 }
 
@@ -456,6 +544,14 @@ def create_turn(
             assistant_text=assistant_text,
             route=route,
         )
+        log_narrative_turn_structured(
+            route=route,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            turn_row=log,
+            user_text=roll_result_message or text,
+            assistant_text=assistant_text,
+        )
 
         return {
             "id": log["id"],
@@ -552,13 +648,21 @@ def create_turn_stream(
                         validate_roll_cue_name(full_text.strip())
                         save_conn = get_db()
                         try:
-                            create_turn_log(
+                            stream_log = create_turn_log(
                                 conn=save_conn,
                                 campaign_id=campaign_id_val,
                                 character_id=character_id_val,
                                 user_text=user_text_val,
                                 assistant_text=full_text.strip(),
                                 route="narrative",
+                            )
+                            log_narrative_turn_structured(
+                                route="narrative",
+                                campaign_id=campaign_id_val,
+                                character_id=character_id_val,
+                                turn_row=stream_log,
+                                user_text=user_text_val,
+                                assistant_text=full_text.strip(),
                             )
                         finally:
                             save_conn.close()

@@ -124,6 +124,9 @@ window.showThinkingBubble = function ({
 
   const wrap = document.createElement('div');
   wrap.className = 'message assistant thinking';
+  if (route === 'memory') {
+    wrap.classList.add('memory-turn');
+  }
   wrap.id = 'thinking-bubble';
 
   const meta = document.createElement('div');
@@ -367,13 +370,17 @@ window.addMessage = function ({
   role = 'assistant',
   route = '',
   turn = null,
-  createdAt = null
+  createdAt = null,
+  memoryTurn = false
 }) {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
 
   const wrap = document.createElement('div');
   wrap.className = `message ${role}`;
+  if (memoryTurn) {
+    wrap.classList.add('memory-turn');
+  }
 
   const meta = document.createElement('div');
   meta.className = 'meta';
@@ -713,19 +720,31 @@ window.renderTurnsToChat = function () {
   let lastNarrativeRollRequest = null;
 
   turns.forEach((turn) => {
+    const isMemory = turn.route === 'memory';
     if (turn.user_text) {
       window.addMessage({
         speaker: turn.character_name || 'Gracz',
         text: turn.user_text,
         role: 'user',
-        route: 'input',
+        route: isMemory ? 'memory' : 'input',
         turn: turn.turn_number || turn.id,
-        createdAt: turn.created_at
+        createdAt: turn.created_at,
+        memoryTurn: isMemory
       });
     }
 
     if (turn.assistant_text) {
-      if (turn.route === 'narrative') {
+      if (turn.route === 'memory') {
+        window.addMessage({
+          speaker: window.t('chat.gm'),
+          text: turn.assistant_text,
+          role: 'assistant',
+          route: 'memory',
+          turn: turn.turn_number || turn.id,
+          createdAt: turn.created_at,
+          memoryTurn: true
+        });
+      } else if (turn.route === 'narrative') {
         const assistantText = String(turn.assistant_text || '');
         if (!assistantText.trim()) return;
 

@@ -13,7 +13,8 @@ This directory contains ready-to-run files for a Proxmox VM observability setup.
   - `llm-health-error-overview.json`
   - `turn-pipeline-stream-nonstream.json`
   - `top-error-signatures-24h.json`
-  - `campaign-story-reader.json`
+  - `campaign-story-reader.json` (SQLite snapshot)
+  - `campaign-narrative-loki.json` (near-live `narrative_turn` logs)
 - alert rules provisioning:
   - `grafana/provisioning/alerting/rules.yml`
 - Perplexity tutorial:
@@ -35,6 +36,14 @@ docker compose ps
 
 Grafana: `http://<VM_IP>:3000`  
 Login: `admin` + your `GRAFANA_ADMIN_PASSWORD`.
+
+### Dashboard JSON updates (repo → running Grafana)
+
+File provisioning reads `grafana/provisioning/dashboards/json/*.json` (see `dashboards.yml`). After you `git pull` or copy a newer `campaign-narrative-loki.json` onto the VM:
+
+1. Ensure the bind mount still includes `./grafana/provisioning:/etc/grafana/provisioning:ro` (see `docker-compose.yml`).
+2. Wait up to **30s** (`updateIntervalSeconds`) or run **`docker compose restart grafana`** in the observability directory.
+3. Hard-refresh the Grafana UI (folder **AI-GM**). If the dashboard never updates, the remote host may be using a different path — copy the file to the path Grafana actually mounts, or use `scripts/sync-grafana-dashboard.sh` from the repo root with `GRAFANA_SSH` and `GRAFANA_REMOTE_JSON` set.
 
 ## Game host log shipping
 

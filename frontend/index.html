@@ -10,13 +10,15 @@
   <div class="app" id="game-app">
     <div class="topbar">
       <div class="title" id="app-title">AI-GM</div>
-      <button id="player-logout-btn" class="secondary" type="button" style="display:none;">Logout</button>
     </div>
 
     <div class="controls">
-      <div class="llm-controls" id="llm-controls">
+      <div class="llm-controls llm-controls--collapsed" id="llm-controls">
         <div class="llm-settings-toggle-row">
-          <button type="button" class="secondary" id="llm-settings-toggle-btn">LLM settings</button>
+          <div class="llm-settings-toggle-actions">
+            <button type="button" class="secondary" id="llm-settings-toggle-btn">LLM settings</button>
+            <button id="player-logout-btn" class="secondary player-logout-inline" type="button" style="display:none;">Logout</button>
+          </div>
           <span class="muted" id="llm-settings-toggle-hint"></span>
         </div>
 
@@ -59,24 +61,26 @@
               </label>
             </div>
           </div>
-        </div>
-      </div>
 
-      <div class="field">
-        <label for="campaign-select" id="label-campaign">Kampania</label>
-        <div class="field-row">
-          <select id="campaign-select"></select>
-          <button type="button" class="secondary" id="create-campaign-btn">Nowa</button>
-          <button type="button" class="danger" id="delete-campaign-btn">Usuń</button>
-        </div>
-      </div>
+          <div class="campaign-character-in-llm">
+            <div class="field">
+              <label for="campaign-select" id="label-campaign">Kampania</label>
+              <div class="field-row">
+                <select id="campaign-select"></select>
+                <button type="button" class="secondary" id="create-campaign-btn">Nowa</button>
+                <button type="button" class="danger" id="delete-campaign-btn">Usuń</button>
+              </div>
+            </div>
 
-      <div class="field">
-        <label for="character-select" id="label-character">Postać</label>
-        <div class="field-row">
-          <select id="character-select"></select>
-          <button type="button" class="secondary" id="create-character-btn">Nowa</button>
-          <button type="button" class="secondary" id="history-btn">Historia</button>
+            <div class="field">
+              <label for="character-select" id="label-character">Postać</label>
+              <div class="field-row">
+                <select id="character-select"></select>
+                <button type="button" class="secondary" id="create-character-btn">Nowa</button>
+                <button type="button" class="secondary" id="history-btn">Historia</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -92,7 +96,7 @@
         </div>
 
         <div class="composer">
-          <textarea id="input" placeholder="Wpisz /sheet albo opisz akcję..."></textarea>
+          <textarea id="input" placeholder="Akcja, /sheet, /mem [pytanie o przeszłość]…"></textarea>
           <div class="composer-actions">
             <button type="button" class="secondary" id="contextual-roll-btn" style="display:none;">
               🎲 Rzuć d20
@@ -115,7 +119,15 @@
         <div class="sheet-panel-body" id="sheet-panel-body">
           <div class="muted">Wybierz postać</div>
         </div>
-        <div style="padding: 10px 12px; border-top: 1px solid var(--border);">
+        <div style="padding: 10px 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">
+          <button
+            type="button"
+            id="history-summary-btn"
+            class="secondary"
+            style="min-height: 32px; font-size: 12px; padding: 6px 10px; opacity: 0.92;"
+          >
+            📜 Historia
+          </button>
           <button
             type="button"
             id="copy-debug-btn"
@@ -164,7 +176,7 @@
     </div>
   </div>
 
-  <div class="bottom-system-field">
+  <div class="bottom-system-field bottom-system-field--hidden" aria-hidden="true">
     <label for="system-select" id="label-system">System</label>
     <select id="system-select">
       <option value="fantasy" selected>fantasy</option>
@@ -204,6 +216,18 @@
 
         <button type="submit" id="character-create-submit">Create Character</button>
       </form>
+    </section>
+  </div>
+
+  <div class="character-modal-overlay" id="history-summary-overlay" aria-hidden="true">
+    <section class="character-modal history-summary-modal" role="dialog" aria-modal="true" aria-labelledby="history-summary-title">
+      <button type="button" class="character-modal-close secondary" id="history-summary-close" aria-label="Zamknij">×</button>
+      <h2 id="history-summary-title">Podsumowanie kampanii</h2>
+      <p id="history-summary-loading" class="muted" style="display: none;">Ładowanie…</p>
+      <div id="history-summary-body" class="history-summary-body muted" style="display: none;"></div>
+      <p id="history-summary-empty" class="muted" style="display: none;">
+        Brak podsumowania — pojawi się po turach narracyjnych, gdy właściciel kampanii otworzy to okno (automatyczne odświeżanie co 5 nowych tur).
+      </p>
     </section>
   </div>
 

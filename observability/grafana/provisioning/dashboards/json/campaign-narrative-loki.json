@@ -1,0 +1,91 @@
+{
+  "id": null,
+  "uid": "ai-gm-campaign-narrative-loki",
+  "title": "AI GM - Campaign narrative (Loki, near-live)",
+  "tags": ["ai-gm", "story", "loki", "narrative_turn", "memory_turn"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 8,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "campaign_id",
+        "label": "Campaign ID",
+        "description": "Numer kampanii (np. 12). Zostaw .+ aby zobaczyć wszystkie.",
+        "type": "textbox",
+        "query": ".+",
+        "current": { "value": ".+", "text": ".+" },
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "datasource": null,
+      "title": "Filtr",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "Wpisz ID kampanii w polu **Campaign ID** (np. `12`). Zostaw `.+` żeby wyświetlić wszystkie. Pola po kliknięciu `>` zawierają pełny JSON logu."
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "type": "logs",
+      "title": "Narrative turns — Gracz / GM",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 18, "w": 24, "x": 0, "y": 2 },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service=\"backend\"} |= \"narrative_turn\" | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\n🗣️  GRACZ:\\n{{.user_text}}\\n\\n🎲  GM:\\n{{.assistant_text}}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "/mem turns — Pytanie / Odpowiedź",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 20 },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service=\"backend\"} |= \"memory_turn\" | json | event=\"memory_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\n❓  PYTANIE:\\n{{.user_text}}\\n\\n💡  ODPOWIEDŹ:\\n{{.assistant_text}}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    }
+  ]
+}

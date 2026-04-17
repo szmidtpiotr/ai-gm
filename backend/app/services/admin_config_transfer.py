@@ -50,6 +50,25 @@ def _read_table(conn: sqlite3.Connection, table_name: str, order_by: str) -> lis
     return [dict(r) for r in rows]
 
 
+def _allowed_classes_to_db(value: Any) -> str:
+    """Normalize export/import shapes to JSON text for game_config_weapons.allowed_classes."""
+    if value is None:
+        return "[]"
+    if isinstance(value, list):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return "[]"
+        try:
+            json.loads(s)
+            return s
+        except json.JSONDecodeError:
+            parts = [p.strip() for p in s.split(",") if p.strip()]
+            return json.dumps(parts, ensure_ascii=False)
+    return "[]"
+
+
 def export_config(exported_by: str = "dev-local") -> dict[str, Any]:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -62,6 +81,9 @@ def export_config(exported_by: str = "dev-local") -> dict[str, Any]:
                 "game_config_stats": _read_table(conn, "game_config_stats", "sort_order ASC, key ASC"),
                 "game_config_skills": _read_table(conn, "game_config_skills", "sort_order ASC, key ASC"),
                 "game_config_dc": _read_table(conn, "game_config_dc", "sort_order ASC, key ASC"),
+                "game_config_weapons": _read_table(conn, "game_config_weapons", "key ASC"),
+                "game_config_enemies": _read_table(conn, "game_config_enemies", "key ASC"),
+                "game_config_conditions": _read_table(conn, "game_config_conditions", "key ASC"),
             },
             "excluded": ["admin_tokens", "admin_audit_log", "user_accounts"],
         }
@@ -89,6 +111,14 @@ def _validate_import_payload(payload: dict[str, Any]) -> tuple[bool, list[str]]:
     for table in required_tables:
         if table not in payload["tables"] or not isinstance(payload["tables"][table], list):
             errors.append(f"Missing or invalid table: {table}")
+    optional_tables = (
+        "game_config_weapons",
+        "game_config_enemies",
+        "game_config_conditions",
+    )
+    for table in optional_tables:
+        if table in payload["tables"] and not isinstance(payload["tables"][table], list):
+            errors.append(f"Invalid table (must be array): {table}")
     return len(errors) == 0, errors
 
 
@@ -110,11 +140,18 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
     try:
         current_version = _get_config_version(conn)
         before_snapshot = export_config(exported_by="pre-import-snapshot")
+        tbl = payload["tables"]
         changes = {
-            "stats": len(payload["tables"]["game_config_stats"]),
-            "skills": len(payload["tables"]["game_config_skills"]),
-            "dc": len(payload["tables"]["game_config_dc"]),
+            "stats": len(tbl["game_config_stats"]),
+            "skills": len(tbl["game_config_skills"]),
+            "dc": len(tbl["game_config_dc"]),
         }
+        if "game_config_weapons" in tbl:
+            changes["weapons"] = len(tbl["game_config_weapons"])
+        if "game_config_enemies" in tbl:
+            changes["enemies"] = len(tbl["game_config_enemies"])
+        if "game_config_conditions" in tbl:
+            changes["conditions"] = len(tbl["game_config_conditions"])
         if dry_run:
             return {
                 "ok": True,
@@ -176,6 +213,76 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
                     row.get("description", "") or "",
                 ),
             )
+
+        if "game_config_weapons" in tbl:
+            conn.execute("DELETE FROM game_config_weapons")
+            for row in tbl["game_config_weapons"]:
+                conn.execute(
+                    """
+                    INSERT INTO game_config_weapons (
+                        key, label, damage_die, linked_stat, allowed_classes,
+                        is_active, locked_at, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        row.get("key"),
+                        row.get("label"),
+                        row.get("damage_die"),
+                        row.get("linked_stat"),
+                        _allowed_classes_to_db(row.get("allowed_classes")),
+                        1 if int(row.get("is_active", 1)) else 0,
+                        row.get("locked_at"),
+                        row.get("created_at") or _now_iso(),
+                        row.get("updated_at") or _now_iso(),
+                    ),
+                )
+
+        if "game_config_enemies" in tbl:
+            conn.execute("DELETE FROM game_config_enemies")
+            for row in tbl["game_config_enemies"]:
+                conn.execute(
+                    """
+                    INSERT INTO game_config_enemies (
+                        key, label, hp_base, ac_base, attack_bonus, damage_die,
+                        description, is_active, locked_at, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        row.get("key"),
+                        row.get("label"),
+                        int(row.get("hp_base", 0)),
+                        int(row.get("ac_base", 0)),
+                        int(row.get("attack_bonus", 0)),
+                        row.get("damage_die"),
+                        row.get("description"),
+                        1 if int(row.get("is_active", 1)) else 0,
+                        row.get("locked_at"),
+                        row.get("created_at") or _now_iso(),
+                        row.get("updated_at") or _now_iso(),
+                    ),
+                )
+
+        if "game_config_conditions" in tbl:
+            conn.execute("DELETE FROM game_config_conditions")
+            for row in tbl["game_config_conditions"]:
+                conn.execute(
+                    """
+                    INSERT INTO game_config_conditions (
+                        key, label, effect_json, description, is_active,
+                        locked_at, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        row.get("key"),
+                        row.get("label"),
+                        row.get("effect_json") or "{}",
+                        row.get("description"),
+                        1 if int(row.get("is_active", 1)) else 0,
+                        row.get("locked_at"),
+                        row.get("created_at") or _now_iso(),
+                        row.get("updated_at") or _now_iso(),
+                    ),
+                )
 
         _set_config_version(conn, incoming_version)
         _audit(

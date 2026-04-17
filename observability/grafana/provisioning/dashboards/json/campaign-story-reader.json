@@ -5,7 +5,7 @@
   "tags": ["ai-gm", "story", "sqlite"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -29,6 +29,20 @@
   },
   "panels": [
     {
+      "id": 5,
+      "type": "text",
+      "datasource": null,
+      "title": "Story DB — not live",
+      "description": "Grafana reads a SQLite file copied to the observability VM. Re-querying does not pull from the running game.",
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Campaign story in Grafana is a **snapshot**, not live play\n\n- Datasource path on the observability host: `/var/lib/ai-gm-db/ai_gm.db` (see `sqlite-story.yml`).\n- **Dashboard refresh (e.g. 30s) only re-runs SQL on that file** — it does not connect to your game server or Docker volume.\n- To match chat/debug: **re-sync** the DB from the backend container, then refresh the dashboard (or re-run the panel query).\n\n**From the machine that runs the game stack:**\n\n```bash\n# repo: observability/sync_story_db_to_observability.sh\ndocker cp ai-gm-backend-1:/data/ai_gm.db /tmp/ai_gm_story_sync.db\nscp … /var/lib/ai-gm-db/ai_gm.db   # or use the full script (ssh + OBS_HOST)\n```\n\nIf counts in “DB smoke test” stay old after new turns, the snapshot was not updated yet."
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "pluginVersion": "11.0.0"
+    },
+    {
       "id": 100,
       "type": "table",
       "title": "DB smoke test (no variables)",
@@ -50,7 +64,7 @@
         "h": 4,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 5
       }
     },
     {
@@ -75,7 +89,7 @@
         "h": 4,
         "w": 18,
         "x": 6,
-        "y": 4
+        "y": 9
       }
     },
     {
@@ -107,7 +121,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 4
+        "y": 9
       }
     },
     {
@@ -132,7 +146,7 @@
         "h": 16,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 13
       }
     }
   ]

@@ -34,6 +34,7 @@ scrape_configs:
             service: service
             env: env
             request_id: request_id
+            event: event
             campaign_id: campaign_id
             character_id: character_id
             turn_id: turn_id
@@ -45,6 +46,8 @@ scrape_configs:
           service:
           env:
           request_id:
+          campaign_id:
+          event:
           llm_provider:
           llm_model:
           error_type:
