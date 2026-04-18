@@ -103,9 +103,10 @@
     return n;
   }
 
-  function canAdjustSkillLevel(key, delta, levels, snap) {
-    // Skills not rolled at creation (snap[key] === 0) are immutable in the wizard.
-    if (Number(snap[key] ?? 0) === 0) return false;
+  function canAdjustSkillLevel(key, delta, levels, snap, swapMap) {
+    // Skills not rolled at creation are immutable — UNLESS they were swapped into a slot.
+    const isSwappedIn = swapMap && Object.values(swapMap).includes(key);
+    if (!isSwappedIn && Number(snap[key] ?? 0) === 0) return false;
     const cur = Number(levels[key] ?? 0);
     const next = cur + delta;
     if (next < 0 || next > MAX_SKILL_CREATION_LVL) return false;
@@ -264,25 +265,78 @@
 
   function renderSkillsStep(w) {
     const changed = skillDiffCount(w.skillLevels, w.originalSkillSnapshot);
+    const atMax = changed >= PLAYER_SKILL_CHANGE_SLOTS;
     const slotRows = preRolledSkillSlotRows(w);
+
+    // Keys currently displayed (original or swapped-in)
+    const visibleKeys = new Set(
+      slotRows.map(({ key: origKey }) => w.skillSwapMap[origKey] || origKey)
+    );
+
+    // Unrolled skills available as swap candidates (not currently visible on screen)
+    const swapCandidates = ALL_CREATION_SKILL_ROWS.filter(
+      (row) => Number(w.originalSkillSnapshot[row.key] ?? 0) === 0 && !visibleKeys.has(row.key)
+    ).sort((a, b) => a.label.localeCompare(b.label));
+
     const rows =
       slotRows.length === 0
         ? '<p class="muted wizard-hint">Brak wylosowanych umiejętności (nieoczekiwany stan).</p>'
         : slotRows
-            .map(({ key, label, stat }) => {
-              const r = Math.max(0, Math.min(MAX_SKILL_CREATION_LVL, Number(w.skillLevels[key] ?? 0)));
+            .map(({ key: origKey }) => {
+              const isSwapped = origKey in (w.skillSwapMap || {});
+              const currentKey = isSwapped ? w.skillSwapMap[origKey] : origKey;
+              const currentRow =
+                ALL_CREATION_SKILL_ROWS.find((r) => r.key === currentKey) || {
+                  key: currentKey,
+                  label: skillKeyLabel(currentKey),
+                  stat: '?'
+                };
+              const inSwapMode = w.swapModeSlot === origKey;
+
+              if (inSwapMode) {
+                const opts = swapCandidates
+                  .map(
+                    (c) =>
+                      `<option value="${c.key}">${window.escapeHtml(c.label)} — ${c.stat}</option>`
+                  )
+                  .join('');
+                return `
+        <div class="wizard-skill-row wizard-skill-row--budget wizard-skill-row--swapping" data-skill-row="${origKey}">
+          <div class="wizard-skill-swap-row">
+            <select data-act="skill-swap-select" data-orig-skill="${origKey}" class="wizard-skill-swap-dropdown">
+              <option value="">— Wybierz skill do zamiany —</option>
+              ${opts}
+            </select>
+            <button type="button" class="secondary wizard-stat-btn" data-act="skill-swap-cancel" data-orig-skill="${origKey}" title="Anuluj zamianę">✕</button>
+          </div>
+        </div>`;
+              }
+
+              const r = Math.max(
+                0,
+                Math.min(MAX_SKILL_CREATION_LVL, Number(w.skillLevels[currentKey] ?? 0))
+              );
               const rankName = CREATION_RANK_LABELS[r] || CREATION_RANK_LABELS[0];
-              const pOk = canAdjustSkillLevel(key, 1, w.skillLevels, w.originalSkillSnapshot);
-              const mOk = canAdjustSkillLevel(key, -1, w.skillLevels, w.originalSkillSnapshot);
+              const swapMap = w.skillSwapMap || {};
+              const pOk = canAdjustSkillLevel(currentKey, 1, w.skillLevels, w.originalSkillSnapshot, swapMap);
+              const mOk = canAdjustSkillLevel(currentKey, -1, w.skillLevels, w.originalSkillSnapshot, swapMap);
               const pDis = pOk ? '' : 'disabled';
               const mDis = mOk ? '' : 'disabled';
+
+              const swapBtn = isSwapped
+                ? `<button type="button" class="wizard-skill-swap-btn wizard-skill-swap-btn--revert" data-act="skill-swap-revert" data-orig-skill="${origKey}" title="Cofnij zamianę">↩</button>`
+                : `<button type="button" class="wizard-skill-swap-btn" data-act="skill-swap-open" data-orig-skill="${origKey}" ${atMax ? 'disabled' : ''} title="Zamień na inny skill">↔</button>`;
+
               return `
-        <div class="wizard-skill-row wizard-skill-row--budget" data-skill-row="${key}">
-          <span class="wizard-skill-name">${window.escapeHtml(label)} <span class="muted">— ${stat}</span></span>
+        <div class="wizard-skill-row wizard-skill-row--budget${isSwapped ? ' wizard-skill-row--swapped' : ''}" data-skill-row="${origKey}">
+          <span class="wizard-skill-name">
+            ${window.escapeHtml(currentRow.label)} <span class="muted">— ${currentRow.stat}</span>
+            ${swapBtn}
+          </span>
           <div class="wizard-stat-controls wizard-skill-controls">
-            <button type="button" class="wizard-stat-btn secondary" data-act="skill-minus" data-skill="${key}" ${mDis} aria-label="Decrease ${label}">−</button>
+            <button type="button" class="wizard-stat-btn secondary" data-act="skill-minus" data-skill="${currentKey}" ${mDis} aria-label="Decrease ${currentRow.label}">−</button>
             <span class="wizard-skill-rank">${r} · ${rankName}</span>
-            <button type="button" class="wizard-stat-btn secondary" data-act="skill-plus" data-skill="${key}" ${pDis} aria-label="Increase ${label}">+</button>
+            <button type="button" class="wizard-stat-btn secondary" data-act="skill-plus" data-skill="${currentKey}" ${pDis} aria-label="Increase ${currentRow.label}">+</button>
           </div>
         </div>`;
             })
@@ -291,7 +345,7 @@
     return `
       <div class="wizard-section">
         <h3 class="wizard-section-title">Adjust your skills</h3>
-        <p class="muted wizard-hint">Wylosowane umiejętności (sloty). Możesz zmienić co najwyżej ${PLAYER_SKILL_CHANGE_SLOTS} slotów względem losu (poziomy 0–${MAX_SKILL_CREATION_LVL}; pozostałe umiejętności zostają na 0).</p>
+        <p class="muted wizard-hint">Wylosowane umiejętności. Możesz zmienić co najwyżej ${PLAYER_SKILL_CHANGE_SLOTS} slotów — w tym zamieniać skille (↔) lub zmieniać poziom (±). Każda zmiana kosztuje 1 slot; zamiana skilla kosztuje 2.</p>
         <p class="wizard-swaps"><strong>Zmieniono:</strong> ${changed} / ${PLAYER_SKILL_CHANGE_SLOTS}</p>
         <div class="wizard-skill-list wizard-skill-list--full">${rows}</div>
         <div class="wizard-actions">
@@ -398,6 +452,22 @@
   function bindWizardPanel(w) {
     const { wizardPanelEl } = getWizardEls();
     if (!wizardPanelEl) return;
+
+    wizardPanelEl.onchange = (e) => {
+      const sel = e.target.closest('[data-act="skill-swap-select"]');
+      if (!sel || !window.state.charCreationWizard) return;
+      const origKey = sel.getAttribute('data-orig-skill');
+      const newKey = sel.value;
+      if (!newKey || !origKey) return;
+      const cur = window.state.charCreationWizard;
+      const origLevel = Number(cur.skillLevels[origKey] ?? 0);
+      cur.skillSwapMap[origKey] = newKey;
+      cur.skillLevels[newKey] = origLevel;
+      cur.skillLevels[origKey] = 0;
+      cur.swapModeSlot = null;
+      paintWizard(cur);
+    };
+
     wizardPanelEl.onclick = (e) => {
       const btn = e.target.closest('[data-act]');
       if (btn) {
@@ -427,14 +497,39 @@
         } else if (act === 'reset-skills') {
           const cur = window.state.charCreationWizard;
           cur.skillLevels = { ...cur.originalSkillSnapshot };
+          cur.skillSwapMap = {};
+          cur.swapModeSlot = null;
           paintWizard(cur);
         } else if (act === 'skill-plus' || act === 'skill-minus') {
           const key = btn.getAttribute('data-skill');
           const cur = window.state.charCreationWizard;
           if (!cur || cur.step !== 3 || !key) return;
           const delta = act === 'skill-plus' ? 1 : -1;
-          if (!canAdjustSkillLevel(key, delta, cur.skillLevels, cur.originalSkillSnapshot)) return;
+          if (!canAdjustSkillLevel(key, delta, cur.skillLevels, cur.originalSkillSnapshot, cur.skillSwapMap || {})) return;
           cur.skillLevels[key] = Number(cur.skillLevels[key] ?? 0) + delta;
+          paintWizard(cur);
+        } else if (act === 'skill-swap-open') {
+          const origKey = btn.getAttribute('data-orig-skill');
+          const cur = window.state.charCreationWizard;
+          if (!cur || !origKey) return;
+          cur.swapModeSlot = origKey;
+          paintWizard(cur);
+        } else if (act === 'skill-swap-cancel') {
+          const cur = window.state.charCreationWizard;
+          if (!cur) return;
+          cur.swapModeSlot = null;
+          paintWizard(cur);
+        } else if (act === 'skill-swap-revert') {
+          const origKey = btn.getAttribute('data-orig-skill');
+          const cur = window.state.charCreationWizard;
+          if (!cur || !origKey) return;
+          const newKey = (cur.skillSwapMap || {})[origKey];
+          if (newKey) {
+            cur.skillLevels[origKey] = Number(cur.originalSkillSnapshot[origKey] ?? 0);
+            cur.skillLevels[newKey] = 0;
+            delete cur.skillSwapMap[origKey];
+          }
+          cur.swapModeSlot = null;
           paintWizard(cur);
         } else if (act === 'confirm-skills') {
           window.characterWizardGoToIdentity();
@@ -696,6 +791,8 @@
       unassignedPoints: 0,
       originalSkillSnapshot: { ...originalSkillSnapshot },
       skillLevels: { ...originalSkillSnapshot },
+      skillSwapMap: {},
+      swapModeSlot: null,
       identity: null,
       identityLoading: false,
       identityError: null,

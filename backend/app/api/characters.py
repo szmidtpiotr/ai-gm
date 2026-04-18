@@ -655,17 +655,6 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
 
     skills_after = _coerce_creation_skills_payload(req.skills, skills_sheet)
 
-    # Reject any attempt to assign ranks to skills that were not rolled at creation.
-    for k in CREATION_SKILL_POOL:
-        if int(skills_orig.get(k, 0) or 0) == 0 and int(skills_after.get(k, 0) or 0) > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Skill {k!r} was not assigned at character creation (rolled level 0) "
-                    "and cannot be increased during the creation wizard."
-                ),
-            )
-
     diff_n = _count_skill_slot_diffs(skills_orig, skills_after)
     if diff_n > PLAYER_SWAP_SLOTS:
         raise HTTPException(

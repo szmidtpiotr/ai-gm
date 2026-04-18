@@ -40,6 +40,12 @@ def list_campaigns():
             c.created_at,
             (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count
         FROM campaigns c
+        WHERE NOT (
+            c.status = 'active'
+            AND (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) = 0
+            AND c.created_at IS NOT NULL
+            AND c.created_at < datetime('now', '-1 hour')
+        )
         ORDER BY c.id ASC
         """
     ).fetchall()

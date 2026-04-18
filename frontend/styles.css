@@ -1521,12 +1521,76 @@ button.wizard-stat-btn {
 .wizard-skill-name {
   font-weight: 600;
   font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .wizard-skill-rank {
   font-size: 14px;
   color: var(--muted);
   flex-shrink: 0;
+}
+
+/* ↔ swap button */
+.wizard-skill-swap-btn {
+  background: none;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 5px;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.wizard-skill-swap-btn:hover:not(:disabled) {
+  color: var(--primary, #4f46e5);
+  border-color: var(--primary, #4f46e5);
+}
+.wizard-skill-swap-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.wizard-skill-swap-btn--revert {
+  color: var(--accent, #f59e0b);
+  border-color: var(--accent, #f59e0b);
+}
+.wizard-skill-swap-btn--revert:hover {
+  color: var(--accent-dark, #d97706);
+  border-color: var(--accent-dark, #d97706);
+}
+
+/* Swapped row highlight */
+.wizard-skill-row--swapped {
+  border-left: 3px solid var(--accent, #f59e0b);
+  padding-left: 6px;
+}
+
+/* Swap selection mode */
+.wizard-skill-row--swapping {
+  border-left: 3px solid var(--primary, #4f46e5);
+  padding-left: 6px;
+}
+.wizard-skill-swap-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  padding: 4px 0;
+}
+.wizard-skill-swap-dropdown {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  padding: 4px 8px;
+  border: 1px solid var(--border, #ccc);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  color: var(--text, #111);
+  cursor: pointer;
 }
 
 .wizard-center {
