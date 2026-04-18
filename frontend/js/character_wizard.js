@@ -218,7 +218,8 @@
   function renderStatsStep(w) {
     const sumCur = sumBases(w.bases);
     const unassigned = Number(w.unassignedPoints) || 0;
-    const allRange = CORE_STATS.every((k) => w.bases[k] >= 8 && w.bases[k] <= 18);
+    const belowMin = CORE_STATS.filter((k) => w.bases[k] < 8);
+    const allRange = belowMin.length === 0 && CORE_STATS.every((k) => w.bases[k] <= 18);
     const confirmOk = unassigned === 0 && allRange;
 
     const rows = CORE_STATS.map((k) => {
@@ -228,8 +229,9 @@
       const canMinus = v > 8;
       const pDis = canPlus ? '' : 'disabled';
       const mDis = canMinus ? '' : 'disabled';
+      const outOfRange = v < 8 ? ' wizard-stat-row--invalid' : '';
       return `
-        <div class="wizard-stat-row" data-stat="${k}">
+        <div class="wizard-stat-row${outOfRange}" data-stat="${k}">
           <div class="wizard-stat-label">${STAT_LABELS[k]}</div>
           <div class="wizard-stat-mod muted" aria-label="Modifier">${mod}</div>
           <div class="wizard-stat-controls">
@@ -240,10 +242,15 @@
         </div>`;
     }).join('');
 
+    const belowHint = belowMin.length > 0
+      ? `<p class="wizard-error" role="alert" style="margin-bottom:8px">Minimum stat value is 8. Reduce another stat to raise: ${belowMin.join(', ')}.</p>`
+      : '';
+
     return `
       <div class="wizard-section">
         <h3 class="wizard-section-title">Adjust your stats</h3>
         <p class="muted wizard-hint">Move points into an unassigned pool (down to 8) or spend pool points (up to 18). Class bonuses apply after confirmation.</p>
+        ${belowHint}
         <p class="wizard-points"><strong>Unassigned points:</strong> ${unassigned}</p>
         <p class="muted wizard-sum-hint">Current total (bases): ${sumCur} (rolled total ${w.sumTarget})</p>
         <p class="muted wizard-class-note">${window.escapeHtml(classBonusNote(w.archetype))}</p>

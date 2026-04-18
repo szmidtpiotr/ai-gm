@@ -1326,6 +1326,11 @@ pre {
   background: var(--panel-2);
 }
 
+.wizard-stat-row--invalid {
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.06);
+}
+
 .wizard-stat-label {
   font-weight: 700;
   font-size: 15px;

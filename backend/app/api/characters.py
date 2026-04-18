@@ -821,8 +821,12 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     if archetype not in ("warrior", "mage"):
         archetype = "warrior"
     base_sheet["archetype"] = archetype
+    # Roll 4d6 drop-lowest, then clamp each base to [STAT_ROLL_MIN, STAT_ROLL_MAX].
+    # The wizard requires every pre-bonus stat to be in that range; clamping ensures
+    # the player never opens step 2 with a stat that can't satisfy the confirm check.
     base_sheet["stats"] = {
-        k: roll_4d6_drop_lowest() for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
+        k: max(STAT_ROLL_MIN, min(STAT_ROLL_MAX, roll_4d6_drop_lowest()))
+        for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
     }
     skills_rolled = roll_creation_skills(archetype)
     base_sheet["skills"] = skills_rolled
