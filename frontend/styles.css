@@ -547,6 +547,10 @@ input:disabled {
   padding: 20px;
 }
 
+.character-modal-overlay[data-creation-busy='1'] {
+  cursor: wait;
+}
+
 .auth-overlay {
   position: fixed;
   inset: 0;

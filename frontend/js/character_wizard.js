@@ -122,6 +122,20 @@
     return snap;
   }
 
+  /** Only skills that were trained at roll (snapshot > 0) — shown as adjustable slots. */
+  function preRolledSkillSlotRows(w) {
+    const rows = ALL_CREATION_SKILL_ROWS.filter(
+      (row) => Number(w.originalSkillSnapshot[row.key] ?? 0) > 0
+    );
+    rows.sort((a, b) => {
+      const db =
+        Number(w.originalSkillSnapshot[b.key] ?? 0) - Number(w.originalSkillSnapshot[a.key] ?? 0);
+      if (db !== 0) return db;
+      return a.key.localeCompare(b.key);
+    });
+    return rows;
+  }
+
   function normalizeSkillKeyFromSheet(skills, canonicalKey) {
     const want = canonicalKey.toLowerCase();
     for (const [k, v] of Object.entries(skills || {})) {
@@ -238,14 +252,19 @@
 
   function renderSkillsStep(w) {
     const changed = skillDiffCount(w.skillLevels, w.originalSkillSnapshot);
-    const rows = ALL_CREATION_SKILL_ROWS.map(({ key, label, stat }) => {
-      const r = Math.max(0, Math.min(MAX_SKILL_CREATION_LVL, Number(w.skillLevels[key] ?? 0)));
-      const rankName = CREATION_RANK_LABELS[r] || CREATION_RANK_LABELS[0];
-      const pOk = canAdjustSkillLevel(key, 1, w.skillLevels, w.originalSkillSnapshot);
-      const mOk = canAdjustSkillLevel(key, -1, w.skillLevels, w.originalSkillSnapshot);
-      const pDis = pOk ? '' : 'disabled';
-      const mDis = mOk ? '' : 'disabled';
-      return `
+    const slotRows = preRolledSkillSlotRows(w);
+    const rows =
+      slotRows.length === 0
+        ? '<p class="muted wizard-hint">Brak wylosowanych umiejętności (nieoczekiwany stan).</p>'
+        : slotRows
+            .map(({ key, label, stat }) => {
+              const r = Math.max(0, Math.min(MAX_SKILL_CREATION_LVL, Number(w.skillLevels[key] ?? 0)));
+              const rankName = CREATION_RANK_LABELS[r] || CREATION_RANK_LABELS[0];
+              const pOk = canAdjustSkillLevel(key, 1, w.skillLevels, w.originalSkillSnapshot);
+              const mOk = canAdjustSkillLevel(key, -1, w.skillLevels, w.originalSkillSnapshot);
+              const pDis = pOk ? '' : 'disabled';
+              const mDis = mOk ? '' : 'disabled';
+              return `
         <div class="wizard-skill-row wizard-skill-row--budget" data-skill-row="${key}">
           <span class="wizard-skill-name">${window.escapeHtml(label)} <span class="muted">— ${stat}</span></span>
           <div class="wizard-stat-controls wizard-skill-controls">
@@ -254,12 +273,13 @@
             <button type="button" class="wizard-stat-btn secondary" data-act="skill-plus" data-skill="${key}" ${pDis} aria-label="Increase ${label}">+</button>
           </div>
         </div>`;
-    }).join('');
+            })
+            .join('');
 
     return `
       <div class="wizard-section">
         <h3 class="wizard-section-title">Adjust your skills</h3>
-        <p class="muted wizard-hint">Change at most ${PLAYER_SKILL_CHANGE_SLOTS} skills compared to the rolled set (0–${MAX_SKILL_CREATION_LVL} each).</p>
+        <p class="muted wizard-hint">Wylosowane umiejętności (sloty). Możesz zmienić co najwyżej ${PLAYER_SKILL_CHANGE_SLOTS} slotów względem losu (poziomy 0–${MAX_SKILL_CREATION_LVL}; pozostałe umiejętności zostają na 0).</p>
         <p class="wizard-swaps"><strong>Zmieniono:</strong> ${changed} / ${PLAYER_SKILL_CHANGE_SLOTS}</p>
         <div class="wizard-skill-list wizard-skill-list--full">${rows}</div>
         <div class="wizard-actions">

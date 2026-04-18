@@ -623,11 +623,13 @@ window.updateUiState = function () {
 
   const llmGate = typeof window.computeLlmGate === 'function' ? window.computeLlmGate() : { ok: true };
   const llmBlocked = !llmGate.ok;
+  const campaignCreationBusy = !!window.state._campaignCreationInFlight;
+  const characterCreationBusy = !!window.state._characterCreationInFlight;
 
   if (els.deleteCampaignBtn) els.deleteCampaignBtn.disabled = !hasCampaign;
-  if (els.createCampaignBtn) els.createCampaignBtn.disabled = llmBlocked;
-  if (els.campaignCreateSubmitEl) els.campaignCreateSubmitEl.disabled = llmBlocked;
-  if (els.characterCreateSubmitEl) els.characterCreateSubmitEl.disabled = llmBlocked;
+  if (els.createCampaignBtn) els.createCampaignBtn.disabled = llmBlocked || campaignCreationBusy;
+  if (els.campaignCreateSubmitEl) els.campaignCreateSubmitEl.disabled = llmBlocked || campaignCreationBusy;
+  if (els.characterCreateSubmitEl) els.characterCreateSubmitEl.disabled = llmBlocked || characterCreationBusy;
   if (els.sendBtn) els.sendBtn.disabled = !(hasCampaign && hasCharacter);
 
   if (els.characterCreateCloseEl) {

@@ -12,6 +12,44 @@ window.state = window.state || {
   expectCharacterCreationForCampaignId: null
 };
 
+window.state._campaignCreationInFlight = window.state._campaignCreationInFlight || false;
+window.state._characterCreationInFlight = window.state._characterCreationInFlight || false;
+
+/** Disable campaign create UI while POST /campaigns is in flight (prevents double submit). */
+window._setCampaignCreationBusy = function (busy) {
+  window.state._campaignCreationInFlight = !!busy;
+  const els = window.getEls();
+  const on = !!busy;
+  if (els.campaignCreateSubmitEl) els.campaignCreateSubmitEl.disabled = on;
+  if (els.campaignCreateCloseEl) els.campaignCreateCloseEl.disabled = on;
+  if (els.campaignCreateTitleInputEl) els.campaignCreateTitleInputEl.readOnly = on;
+  if (els.createCampaignBtn) els.createCampaignBtn.disabled = on;
+  if (els.campaignCreateOverlayEl) {
+    if (on) els.campaignCreateOverlayEl.setAttribute('data-creation-busy', '1');
+    else els.campaignCreateOverlayEl.removeAttribute('data-creation-busy');
+  }
+  if (typeof window.updateUiState === 'function') window.updateUiState();
+};
+
+/** Disable character create form while POST .../characters is in flight. */
+window._setCharacterCreationBusy = function (busy) {
+  window.state._characterCreationInFlight = !!busy;
+  const els = window.getEls();
+  const on = !!busy;
+  if (els.characterCreateSubmitEl) els.characterCreateSubmitEl.disabled = on;
+  if (els.characterCreateCloseEl) els.characterCreateCloseEl.disabled = on;
+  if (els.characterCreateNameEl) els.characterCreateNameEl.readOnly = on;
+  if (els.characterCreateBackgroundEl) els.characterCreateBackgroundEl.readOnly = on;
+  document.querySelectorAll('.archetype-card').forEach((c) => {
+    c.style.pointerEvents = on ? 'none' : '';
+  });
+  if (els.characterCreateOverlayEl) {
+    if (on) els.characterCreateOverlayEl.setAttribute('data-creation-busy', '1');
+    else els.characterCreateOverlayEl.removeAttribute('data-creation-busy');
+  }
+  if (typeof window.updateUiState === 'function') window.updateUiState();
+};
+
 window.chatRequestState = window.chatRequestState || {
   inFlight: false,
   requestId: 0
@@ -96,6 +134,7 @@ window.nextTurnNumber = function () {
 };
 
 window.createCampaign = async function () {
+  if (window.state._campaignCreationInFlight) return;
   window.setCampaignModalOpen(true);
 };
 
@@ -120,34 +159,33 @@ window.createCampaignFromForm = async function () {
     status: 'active'
   };
 
-  if (campaignCreateSubmitEl) campaignCreateSubmitEl.disabled = true;
-
+  window._setCampaignCreationBusy(true);
   const userIdPre = window.state?.playerUserId || 1;
   try {
-    if (typeof window.loadUserLlmSettings === 'function') {
-      await window.loadUserLlmSettings(userIdPre);
-    }
-  } catch (_e) {}
-
-  if (typeof window.computeLlmGate === 'function') {
-    const g = window.computeLlmGate();
-    if (!g.ok) {
-      const llmControlsEl = document.getElementById('llm-controls');
-      if (llmControlsEl) llmControlsEl.classList.remove('llm-controls--collapsed');
-      if (typeof window.setLlmControlsCollapsed === 'function') {
-        window.setLlmControlsCollapsed(false);
+    try {
+      if (typeof window.loadUserLlmSettings === 'function') {
+        await window.loadUserLlmSettings(userIdPre);
       }
-      window.addMessage({
-        speaker: 'System',
-        text: g.reason,
-        role: 'error',
-        route: 'config',
-      });
-      throw new Error(g.reason);
-    }
-  }
+    } catch (_e) {}
 
-  try {
+    if (typeof window.computeLlmGate === 'function') {
+      const g = window.computeLlmGate();
+      if (!g.ok) {
+        const llmControlsEl = document.getElementById('llm-controls');
+        if (llmControlsEl) llmControlsEl.classList.remove('llm-controls--collapsed');
+        if (typeof window.setLlmControlsCollapsed === 'function') {
+          window.setLlmControlsCollapsed(false);
+        }
+        window.addMessage({
+          speaker: 'System',
+          text: g.reason,
+          role: 'error',
+          route: 'config',
+        });
+        throw new Error(g.reason);
+      }
+    }
+
     if (typeof window.connectLlmSettings === 'function') {
       try {
         await window.connectLlmSettings();
@@ -192,7 +230,7 @@ window.createCampaignFromForm = async function () {
       role: 'error'
     });
   } finally {
-    if (campaignCreateSubmitEl) campaignCreateSubmitEl.disabled = false;
+    window._setCampaignCreationBusy(false);
   }
 };
 
@@ -360,34 +398,33 @@ window.createCharacterFromForm = async function () {
     is_active: 1
   };
 
-  if (characterCreateSubmitEl) characterCreateSubmitEl.disabled = true;
-
+  window._setCharacterCreationBusy(true);
   const userIdPre = window.state?.playerUserId || 1;
   try {
-    if (typeof window.loadUserLlmSettings === 'function') {
-      await window.loadUserLlmSettings(userIdPre);
-    }
-  } catch (_e) {}
-
-  if (typeof window.computeLlmGate === 'function') {
-    const g = window.computeLlmGate();
-    if (!g.ok) {
-      const llmControlsEl = document.getElementById('llm-controls');
-      if (llmControlsEl) llmControlsEl.classList.remove('llm-controls--collapsed');
-      if (typeof window.setLlmControlsCollapsed === 'function') {
-        window.setLlmControlsCollapsed(false);
+    try {
+      if (typeof window.loadUserLlmSettings === 'function') {
+        await window.loadUserLlmSettings(userIdPre);
       }
-      window.addMessage({
-        speaker: 'System',
-        text: g.reason,
-        role: 'error',
-        route: 'config',
-      });
-      throw new Error(g.reason);
-    }
-  }
+    } catch (_e) {}
 
-  try {
+    if (typeof window.computeLlmGate === 'function') {
+      const g = window.computeLlmGate();
+      if (!g.ok) {
+        const llmControlsEl = document.getElementById('llm-controls');
+        if (llmControlsEl) llmControlsEl.classList.remove('llm-controls--collapsed');
+        if (typeof window.setLlmControlsCollapsed === 'function') {
+          window.setLlmControlsCollapsed(false);
+        }
+        window.addMessage({
+          speaker: 'System',
+          text: g.reason,
+          role: 'error',
+          route: 'config',
+        });
+        throw new Error(g.reason);
+      }
+    }
+
     if (typeof window.connectLlmSettings === 'function') {
       try {
         await window.connectLlmSettings();
@@ -467,7 +504,7 @@ window.createCharacterFromForm = async function () {
       role: 'error'
     });
   } finally {
-    if (characterCreateSubmitEl) characterCreateSubmitEl.disabled = false;
+    window._setCharacterCreationBusy(false);
   }
 };
 

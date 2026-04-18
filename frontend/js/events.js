@@ -108,6 +108,7 @@ window.bindEvents = function () {
   if (els.characterCreateFormEl) {
     els.characterCreateFormEl.onsubmit = async (e) => {
       e.preventDefault();
+      if (window.state._characterCreationInFlight) return;
       await window.createCharacterFromForm();
     };
   }
@@ -115,17 +116,22 @@ window.bindEvents = function () {
   if (els.campaignCreateFormEl) {
     els.campaignCreateFormEl.onsubmit = async (e) => {
       e.preventDefault();
+      if (window.state._campaignCreationInFlight) return;
       await window.createCampaignFromForm();
     };
   }
 
   if (els.campaignCreateCloseEl) {
-    els.campaignCreateCloseEl.onclick = () => window.setCampaignModalOpen(false);
+    els.campaignCreateCloseEl.onclick = () => {
+      if (window.state._campaignCreationInFlight) return;
+      window.setCampaignModalOpen(false);
+    };
   }
 
   if (els.campaignCreateOverlayEl) {
     els.campaignCreateOverlayEl.onclick = (e) => {
       if (e.target === els.campaignCreateOverlayEl) {
+        if (window.state._campaignCreationInFlight) return;
         window.setCampaignModalOpen(false);
       }
     };
@@ -133,6 +139,7 @@ window.bindEvents = function () {
 
   if (els.characterCreateCloseEl) {
     els.characterCreateCloseEl.onclick = () => {
+      if (window.state._characterCreationInFlight) return;
       if (typeof window.isCharacterCreationWizardBlockingClose === 'function' && window.isCharacterCreationWizardBlockingClose()) {
         return;
       }
@@ -143,6 +150,7 @@ window.bindEvents = function () {
   if (els.characterCreateOverlayEl) {
     els.characterCreateOverlayEl.onclick = (e) => {
       if (e.target !== els.characterCreateOverlayEl) return;
+      if (window.state._characterCreationInFlight) return;
       if (typeof window.isCharacterCreationWizardBlockingClose === 'function' && window.isCharacterCreationWizardBlockingClose()) {
         return;
       }
