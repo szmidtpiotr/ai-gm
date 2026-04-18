@@ -52,8 +52,15 @@ class FantasySystem:
                 "weapon": "rusty sword",
                 "armor": "leather jack"
             },
-            "notes": []
+            "notes": [],
+            "identity": {
+                "appearance": "",
+                "personality": "",
+                "flaw": "",
+                "bonds": [{"text": "", "strength": "strong", "origin": "creation"}],
+                "secret": "",
+            },
         }
 
     def list_supported_commands(self) -> list[str]:
-        return ["/help", "/name", "/sheet", "/inv", "/roll", "/say", "/do", "/ooc"]
+        return ["/help", "/name", "/sheet", "/inv", "/roll", "/say", "/do", "/ooc", "/mem", "/helpme"]

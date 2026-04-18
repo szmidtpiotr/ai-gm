@@ -7,6 +7,8 @@
   "language.label": "Language",
   "status.backend": "Backend",
   "status.ollama": "Ollama",
+  "status.loki_na": "not configured (LOKI_URL)",
+  "status.loki_unknown": "unknown",
   "status.models": "Models",
   "status.connected": "Connected",
   "status.disconnected": "Disconnected",

@@ -5,25 +5,11 @@ window.API_BASE_URL = window.API_BASE_URL || "/api";
 window.SHEET_PANEL_STORAGE_KEY = "ai-gm:sheetPanelOpen";
 
 window.SHEET_STATS = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"];
-window.SHEET_SKILLS = [
-  "Athletics",
-  "Swordsmanship",
-  "Archery",
-  "Stealth",
-  "Survival",
-  "Persuasion",
-  "Insight",
-  "Arcana",
-  "Alchemy",
-  "Lore"
-];
 window.state.lastApiCall = window.state.lastApiCall || null;
 window.state.llmSettings = window.state.llmSettings || null;
 window.state.showAllProviderModels = window.state.showAllProviderModels ?? false;
 
-window.LLM_SETTINGS_STORAGE_KEY = "ai-gm:llmSettings";
 window.LLM_SETTINGS_COLLAPSE_PREF_KEY = "ai-gm:llmSettingsCollapsedPref";
-window.LLM_API_KEY_SET_STORAGE_KEY = "ai-gm:llmApiKeySet";
 
 window.state.mechanicMetadata = window.state.mechanicMetadata || null;
 
@@ -48,34 +34,11 @@ window.loadMechanicMetadata = async function () {
   }
 };
 
-window._safeLlmSettingsForStorage = function (settings) {
-  if (!settings || typeof settings !== "object") return null;
-  return {
-    provider: String(settings.provider || ""),
-    base_url: String(settings.base_url || ""),
-    model: String(settings.model || ""),
-  };
-};
-
-window.persistLlmSettingsToStorage = function (settings) {
-  const safe = window._safeLlmSettingsForStorage(settings);
-  if (!safe) return;
-  localStorage.setItem(window.LLM_SETTINGS_STORAGE_KEY, JSON.stringify(safe));
-};
+/** LLM provider/model/API key: backend (`GET/POST /api/settings/llm`, per-user PUT) is source of truth — not localStorage (iframes may block it). */
+window.persistLlmSettingsToStorage = function (_settings) {};
 
 window.restoreLlmSettingsFromStorage = function () {
-  try {
-    const raw = localStorage.getItem(window.LLM_SETTINGS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const safe = window._safeLlmSettingsForStorage(parsed);
-    if (!safe) return null;
-    // Need at least provider+model to make sense for model list loading.
-    if (!safe.provider || !safe.model) return null;
-    return safe;
-  } catch (_err) {
-    return null;
-  }
+  return null;
 };
 
 window.setLlmControlsCollapsed = function (collapsed) {
@@ -85,7 +48,7 @@ window.setLlmControlsCollapsed = function (collapsed) {
 
   const hintEl = document.getElementById("llm-settings-toggle-hint");
   if (!hintEl) return;
-  const settings = window.state?.llmSettings || window.restoreLlmSettingsFromStorage();
+  const settings = window.state?.llmSettings;
   const provider = String(settings?.provider || "").toLowerCase() || "unknown";
   const apiKeySet = !!settings?.api_key_set;
   const connected = provider === "ollama" || apiKeySet;
@@ -257,11 +220,61 @@ window.applyLlmSettingsToForm = function (settings) {
     window.state.selectedEngine = settings.model;
   }
   window.updateLlmProviderFormVisibility();
+  if (llmApiKeyInputEl) {
+    const masked = String(settings.api_key || '').trim();
+    const keySet = !!settings.api_key_set;
+    if (keySet && masked) {
+      llmApiKeyInputEl.placeholder = masked;
+    } else if (keySet) {
+      llmApiKeyInputEl.placeholder = 'Klucz API zapisany (wklej nowy, aby zamienić)';
+    }
+  }
+};
+
+window.computeLlmGate = function () {
+  const s = window.state.llmSettings;
+  const { llmProviderSelectEl, llmApiKeyInputEl, engineSelectEl } = window.getEls();
+  const providerUi = (llmProviderSelectEl?.value || 'ollama-local').toLowerCase();
+  const model =
+    String(s?.model || '').trim() ||
+    String(window.state.selectedEngine || '').trim() ||
+    String(engineSelectEl?.value || '').trim();
+
+  const keyInForm = (llmApiKeyInputEl?.value || '').trim();
+  const hasStoredKey = !!s?.api_key_set;
+
+  if (!model) {
+    return {
+      ok: false,
+      reason: 'Wybierz model LLM w panelu połączenia i zapisz (Connect).',
+    };
+  }
+
+  if (providerUi === 'ollama-local') {
+    return { ok: true };
+  }
+
+  if (!hasStoredKey && !keyInForm) {
+    return {
+      ok: false,
+      reason:
+        'Dla OpenAI / zdalnego Ollama potrzebny jest klucz API: wklej go w ustawieniach LLM i zapisz (Connect).',
+    };
+  }
+  return { ok: true };
 };
 
 window.connectLlmSettings = async function () {
   const userId = window.state?.playerUserId || 1;
-  const payload = window.getLlmProviderPayloadFromForm();
+  const raw = window.getLlmProviderPayloadFromForm();
+  const keyTrim = String(raw.api_key || '').trim();
+  const preserveKey = !keyTrim && !!(window.state.llmSettings && window.state.llmSettings.api_key_set);
+  const payload = {
+    provider: raw.provider,
+    base_url: raw.base_url,
+    model: raw.model,
+    api_key: preserveKey ? null : keyTrim || '',
+  };
   const resp = await fetch('/api/settings/llm', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -283,10 +296,6 @@ window.connectLlmSettings = async function () {
     if (userResp.ok) {
       const userData = await userResp.json();
       newSettings = userData?.settings || newSettings;
-      localStorage.setItem(
-        window.LLM_API_KEY_SET_STORAGE_KEY,
-        newSettings?.api_key_set ? "1" : "0"
-      );
     }
   } catch (_err) {
     // Keep runtime settings in memory.
@@ -294,11 +303,13 @@ window.connectLlmSettings = async function () {
 
   window.state.llmSettings = newSettings;
   window.state.selectedEngine = payload.model;
-  // Persist provider/base_url/model across browser refresh.
-  // Intentionally do NOT persist api_key (frontend could expose it via localStorage).
-  window.persistLlmSettingsToStorage(window.state.llmSettings);
-  localStorage.setItem('ai-gm:selectedEngine', payload.model);
   window.syncLlmControlsCollapseToCurrentState();
+  try {
+    await window.loadUserLlmSettings(userId);
+  } catch (_e) {
+    /* runtime settings already applied */
+  }
+  if (typeof window.updateUiState === 'function') window.updateUiState();
   return data;
 };
 
@@ -310,6 +321,7 @@ window.loadLlmSettings = async function () {
   const settings = await resp.json();
   window.state.llmSettings = settings;
   window.applyLlmSettingsToForm(settings);
+  if (typeof window.updateUiState === 'function') window.updateUiState();
   return settings;
 };
 
@@ -319,9 +331,8 @@ window.loadUserLlmSettings = async function (userId) {
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const settings = await resp.json();
   window.state.llmSettings = settings || null;
-  window.persistLlmSettingsToStorage(window.state.llmSettings);
-  localStorage.setItem(window.LLM_API_KEY_SET_STORAGE_KEY, window.state.llmSettings?.api_key_set ? "1" : "0");
   window.applyLlmSettingsToForm(window.state.llmSettings);
+  if (typeof window.updateUiState === 'function') window.updateUiState();
   return window.state.llmSettings;
 };
 
@@ -344,15 +355,11 @@ window.initLlmProviderControls = async function () {
   }
   window.updateLlmProviderFormVisibility();
 
-  // Fallback: if backend runtime config returns empty strings, restore the last
-  // connected provider/base_url/model from localStorage.
-  const saved = window.restoreLlmSettingsFromStorage();
-  if (saved) {
-    window.state.llmSettings = saved;
-    window.applyLlmSettingsToForm(saved);
+  try {
+    await window.loadLlmSettings();
+  } catch (e) {
+    console.warn('GET /api/settings/llm failed:', e);
   }
-
-  // Don't auto-load global runtime settings here; we load per-user settings after login.
 };
 
 window._debugFormatTs = function (date = new Date()) {
@@ -613,9 +620,10 @@ window.installApiDebugTracker = function () {
 
 window.ROLL_VALID_TESTS = new Set([
   "athletics", "stealth", "awareness", "survival", "lore", "investigation",
-  "arcana", "medicine", "persuasion", "intimidation",
+  "arcana", "alchemy", "medicine", "persuasion", "intimidation",
   "melee_attack", "ranged_attack", "spell_attack",
-  "fortitude_save", "reflex_save", "willpower_save", "arcane_save"
+  "fortitude_save", "reflex_save", "willpower_save", "arcane_save",
+  "death_save"
 ]);
 
 window.ROLL_TEST_ALIASES = {
@@ -633,6 +641,8 @@ window.ROLL_TEST_ALIASES = {
   "Lore": "lore",
   "Investigation": "investigation",
   "Arcana": "arcana",
+  "Alchemy": "alchemy",
+  "Death Save": "death_save",
   "Medicine": "medicine",
   "Persuasion": "persuasion",
   "Intimidation": "intimidation",
@@ -663,23 +673,44 @@ window.formatRollTestDisplayName = function (canonicalName) {
   const labels = {
     athletics: "Athletics",
     stealth: "Stealth",
+    sleight_of_hand: "Sleight of Hand",
+    endurance: "Endurance",
     awareness: "Awareness",
     survival: "Survival",
     lore: "Lore",
     investigation: "Investigation",
     arcana: "Arcana",
+    alchemy: "Alchemy",
     medicine: "Medicine",
     persuasion: "Persuasion",
     intimidation: "Intimidation",
     melee_attack: "Melee Attack",
     ranged_attack: "Ranged Attack",
     spell_attack: "Spell Attack",
+    death_save: "Death Save",
     fortitude_save: "Fortitude Save",
     reflex_save: "Reflex Save",
     willpower_save: "Willpower Save",
     arcane_save: "Arcane Save",
   };
   return labels[normalized] || canonicalName;
+};
+
+window.formatSheetSkillKeyLabel = function (key) {
+  const k = String(key || "").trim().toLowerCase();
+  const map = {
+    sleight_of_hand: "Sleight of Hand",
+    melee_attack: "Melee Attack",
+    ranged_attack: "Ranged Attack",
+    spell_attack: "Spell Attack",
+    alchemy: "Alchemy",
+  };
+  if (map[k]) return map[k];
+  return k
+    .split("_")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 };
 
 window.getSheetEls = function () {
@@ -763,16 +794,52 @@ window.renderCharacterSheetPanel = function () {
     `;
   }).join("");
 
-  const skillsHtml = window.SHEET_SKILLS.map((skill) => {
-    const value = Number(window.getSheetValue(skillsObj, [skill, skill.toLowerCase()], 0));
-    const clamped = Math.max(0, Math.min(5, value));
-    return `
+  const skillKeys = Object.keys(skillsObj || {}).sort((a, b) => a.localeCompare(b));
+  const skillsHtml =
+    skillKeys.length === 0
+      ? '<div class="muted">—</div>'
+      : skillKeys
+          .map((sk) => {
+            const raw = window.getSheetValue(skillsObj, [sk, sk.toLowerCase()], 0);
+            const value = Number(raw);
+            const clamped = Math.max(0, Math.min(5, Number.isFinite(value) ? value : 0));
+            const label = window.formatSheetSkillKeyLabel(sk);
+            return `
       <div class="sheet-skill">
-        <span>${window.escapeHtml(skill)}</span>
+        <span>${window.escapeHtml(label)}</span>
         <strong>${window.escapeHtml(clamped)}/5</strong>
       </div>
     `;
-  }).join("");
+          })
+          .join("");
+
+  const ident = sheet.identity && typeof sheet.identity === "object" ? sheet.identity : {};
+  const appearance = String(ident.appearance || "").trim();
+  const personality = String(ident.personality || "").trim();
+  const flaw = String(ident.flaw || "").trim();
+
+  const identityHtml =
+    appearance || personality || flaw
+      ? `
+    <div class="sheet-identity-block">
+      <h4 class="sheet-section-title">Postać</h4>
+      ${
+        appearance
+          ? `<div class="sheet-identity-field"><span class="sheet-identity-label">Wygląd</span><p class="sheet-identity-text">${window.escapeHtml(appearance)}</p></div>`
+          : ""
+      }
+      ${
+        personality
+          ? `<div class="sheet-identity-field"><span class="sheet-identity-label">Osobowość</span><p class="sheet-identity-text">${window.escapeHtml(personality)}</p></div>`
+          : ""
+      }
+      ${
+        flaw
+          ? `<div class="sheet-identity-field"><span class="sheet-identity-label">Wada</span><p class="sheet-identity-text">${window.escapeHtml(flaw)}</p></div>`
+          : ""
+      }
+    </div>`
+      : "";
 
   sheetPanelBodyEl.innerHTML = `
     <div class="sheet-heading">
@@ -807,6 +874,8 @@ window.renderCharacterSheetPanel = function () {
       <h4 class="sheet-section-title">Umiejętności</h4>
       <div class="sheet-skills-grid">${skillsHtml}</div>
     </div>
+
+    ${identityHtml}
   `;
 };
 

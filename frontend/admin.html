@@ -69,6 +69,9 @@
       <button class="secondary admin-tab" data-tab="conditions">Conditions</button>
       <button class="secondary admin-tab" data-tab="accounts">Accounts</button>
       <button class="secondary admin-tab" data-tab="user-llm">User LLM</button>
+      <button class="secondary admin-tab" data-tab="observability">Observability</button>
+      <button class="secondary admin-tab" data-tab="campaign-history">Historia kampanii</button>
+      <button class="secondary admin-tab" data-tab="character-recreate">Postać (recreate)</button>
     </div>
 
     <main class="admin-main">
@@ -186,6 +189,73 @@
         <div class="inline-form">
           <button id="user-llm-save-btn" class="secondary" type="button" disabled>Save</button>
         </div>
+      </section>
+
+      <section class="admin-card admin-tab-panel" data-panel="observability">
+        <h2>Observability — Loki</h2>
+        <p class="muted">
+          Base URL is stored in SQLite (<code>game_config_meta.loki_url</code>). Effective health check order:
+          <strong>database</strong> → <code>LOKI_URL</code> env. Default for new installs:
+          <code>http://loki:3100</code>.
+        </p>
+        <div class="field" style="max-width: 40rem;">
+          <label for="loki-url-input">Loki base URL</label>
+          <input id="loki-url-input" type="text" placeholder="http://loki:3100" autocomplete="off">
+        </div>
+        <div class="inline-form" style="margin-top: 0.75rem;">
+          <button id="loki-retrieve-btn" class="secondary" type="button" disabled>Retrieve</button>
+          <button id="loki-save-btn" class="primary" type="button" disabled>Save</button>
+        </div>
+        <p class="muted" id="loki-url-hint" style="margin-top: 0.75rem; white-space: pre-wrap;"></p>
+      </section>
+
+      <section class="admin-card admin-tab-panel" data-panel="character-recreate">
+        <h2>Odtwórz kartę w miejscu (to samo character id)</h2>
+        <p class="muted">
+          Nadpisuje <code>name</code> + <code>sheet_json</code> dla istniejącego <code>characters.id</code>.
+          Historia tur (<code>campaign_turns</code>) zostaje przypisana do tego samego id — nie tworzy nowej postaci.
+          Treść <code>sheet_json</code> jak przy <code>POST /campaigns/…/characters</code> (archetype, stats, skills, background, inventory w JSON karty).
+        </p>
+        <div class="inline-form" style="align-items: flex-end; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem;">
+          <button id="character-recreate-refresh-btn" class="secondary" type="button" disabled>Odśwież listę postaci</button>
+        </div>
+        <div id="character-recreate-list" class="table-wrap" style="margin-bottom: 1rem;"></div>
+        <div class="inline-form" style="flex-wrap: wrap; gap: 0.75rem; align-items: flex-end;">
+          <div class="field" style="margin: 0;">
+            <label for="character-recreate-id">character_id</label>
+            <input id="character-recreate-id" type="number" min="1" step="1" placeholder="np. 3" style="width: 8rem;">
+          </div>
+          <div class="field" style="margin: 0;">
+            <label for="character-recreate-name">name (opcjonalnie)</label>
+            <input id="character-recreate-name" type="text" placeholder="puste = bez zmiany imienia" style="width: 14rem;">
+          </div>
+          <label class="inline-check" style="margin: 0;">
+            <input id="character-recreate-clear-inv" type="checkbox" checked>
+            Wyczyść <code>inventory_items</code> (jeśli tabela jest)
+          </label>
+          <button id="character-recreate-load-btn" class="secondary" type="button" disabled>Wczytaj kartę z API</button>
+          <button id="character-recreate-apply-btn" class="danger" type="button" disabled>Zastosuj recreate</button>
+        </div>
+        <div class="field" style="margin-top: 1rem; max-width: 100%;">
+          <label for="character-recreate-json">sheet_json</label>
+          <textarea id="character-recreate-json" rows="16" style="width: 100%; font-family: ui-monospace, monospace; font-size: 12px;" spellcheck="false"></textarea>
+        </div>
+      </section>
+
+      <section class="admin-card admin-tab-panel" data-panel="campaign-history">
+        <h2>Historia kampanii (podsumowanie AI)</h2>
+        <p class="muted">
+          Wymusza ponowne wygenerowanie zapisanego podsumowania narracji (SQLite: <code>campaign_ai_summaries</code>)
+          z ustawień LLM właściciela kampanii. Parametr <code>user_id</code> w żądaniu jest ustawiany z kolumny właściciela.
+        </p>
+        <div class="inline-form" style="align-items: flex-end; flex-wrap: wrap; gap: 0.75rem;">
+          <div class="field" style="margin: 0;">
+            <label for="campaign-history-max-turns">max_turns</label>
+            <input id="campaign-history-max-turns" type="number" min="5" max="2000" value="200" style="width: 6rem;">
+          </div>
+          <button id="campaign-history-refresh-btn" class="secondary" type="button" disabled>Odśwież listę kampanii</button>
+        </div>
+        <div id="campaign-history-list" class="table-wrap"></div>
       </section>
     </main>
 

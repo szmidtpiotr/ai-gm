@@ -64,6 +64,21 @@
     el.userLlmBaseUrl = document.getElementById("user-llm-base-url");
     el.userLlmApiKey = document.getElementById("user-llm-api-key");
     el.userLlmModel = document.getElementById("user-llm-model");
+    el.campaignHistoryList = document.getElementById("campaign-history-list");
+    el.campaignHistoryRefreshBtn = document.getElementById("campaign-history-refresh-btn");
+    el.campaignHistoryMaxTurns = document.getElementById("campaign-history-max-turns");
+    el.lokiUrlInput = document.getElementById("loki-url-input");
+    el.lokiRetrieveBtn = document.getElementById("loki-retrieve-btn");
+    el.lokiSaveBtn = document.getElementById("loki-save-btn");
+    el.lokiUrlHint = document.getElementById("loki-url-hint");
+    el.characterRecreateId = document.getElementById("character-recreate-id");
+    el.characterRecreateName = document.getElementById("character-recreate-name");
+    el.characterRecreateClearInv = document.getElementById("character-recreate-clear-inv");
+    el.characterRecreateJson = document.getElementById("character-recreate-json");
+    el.characterRecreateLoadBtn = document.getElementById("character-recreate-load-btn");
+    el.characterRecreateApplyBtn = document.getElementById("character-recreate-apply-btn");
+    el.characterRecreateList = document.getElementById("character-recreate-list");
+    el.characterRecreateRefreshBtn = document.getElementById("character-recreate-refresh-btn");
     el.tabButtons = Array.from(document.querySelectorAll(".admin-tab"));
     el.tabPanels = Array.from(document.querySelectorAll(".admin-tab-panel"));
   }
@@ -86,6 +101,13 @@
     if (el.newConditionBtn) el.newConditionBtn.disabled = !connected;
     if (el.userLlmLoadBtn) el.userLlmLoadBtn.disabled = !connected;
     if (el.userLlmSaveBtn) el.userLlmSaveBtn.disabled = !connected;
+    if (el.campaignHistoryRefreshBtn) el.campaignHistoryRefreshBtn.disabled = !connected;
+    if (el.campaignHistoryMaxTurns) el.campaignHistoryMaxTurns.disabled = !connected;
+    if (el.lokiRetrieveBtn) el.lokiRetrieveBtn.disabled = !connected;
+    if (el.lokiSaveBtn) el.lokiSaveBtn.disabled = !connected;
+    if (el.characterRecreateLoadBtn) el.characterRecreateLoadBtn.disabled = !connected;
+    if (el.characterRecreateApplyBtn) el.characterRecreateApplyBtn.disabled = !connected;
+    if (el.characterRecreateRefreshBtn) el.characterRecreateRefreshBtn.disabled = !connected;
     el.loginStatus.textContent = connected ? "Connected." : "Not connected.";
   }
 
@@ -286,6 +308,69 @@
     );
   }
 
+  function clampCampaignHistoryMaxTurns(raw) {
+    const n = Number.parseInt(String(raw || "200"), 10);
+    if (Number.isNaN(n)) return 200;
+    return Math.min(2000, Math.max(5, n));
+  }
+
+  async function loadCampaignHistory() {
+    if (!el.campaignHistoryList) return;
+    const data = await api("/campaigns");
+    const campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
+    if (campaigns.length === 0) {
+      el.campaignHistoryList.innerHTML = "<p class=\"muted\">Brak kampanii.</p>";
+      return;
+    }
+    const rows = campaigns.map((c) => {
+      const id = c.id;
+      const owner = c.owner_user_id;
+      return `
+      <tr>
+        <td>${esc(id)}</td>
+        <td>${esc(c.title || "")}</td>
+        <td>${esc(owner)}</td>
+        <td>${esc(c.status || "")}</td>
+        <td>
+          <button type="button" class="secondary" data-campaign-summary-fetch="${esc(id)}">Pobierz zapisane</button>
+          <button type="button" class="danger" data-campaign-summary-regen="${esc(id)}" data-owner-id="${esc(owner)}">Regeneruj</button>
+        </td>
+      </tr>`;
+    }).join("");
+    el.campaignHistoryList.innerHTML = table(
+      ["ID kampanii", "Tytuł", "Właściciel (user_id)", "Status", "Historia"],
+      rows
+    );
+  }
+
+  async function loadCharacterRecreateList() {
+    if (!el.characterRecreateList) return;
+    const data = await api("/admin/characters");
+    const items = Array.isArray(data.items) ? data.items : [];
+    if (items.length === 0) {
+      el.characterRecreateList.innerHTML = "<p class=\"muted\">Brak postaci.</p>";
+      return;
+    }
+    const rows = items.map((c) => {
+      const id = c.id;
+      return `
+      <tr>
+        <td>${esc(id)}</td>
+        <td>${esc(c.name || "")}</td>
+        <td>${esc(c.campaign_id)}</td>
+        <td>${esc(c.campaign_title || "")}</td>
+        <td>${esc(c.user_id)}</td>
+        <td>
+          <button type="button" class="secondary" data-cr-select="${esc(id)}" data-cr-name="${esc(c.name || "")}">Wybierz</button>
+        </td>
+      </tr>`;
+    }).join("");
+    el.characterRecreateList.innerHTML = table(
+      ["ID", "Imię", "Kampania (id)", "Kampania (tytuł)", "user_id", "Akcja"],
+      rows
+    );
+  }
+
   async function loadAccounts() {
     const data = await api("/admin/accounts");
     const rows = data.items.map((x) => `
@@ -320,6 +405,21 @@
     el.userLlmLoadBtn && (el.userLlmLoadBtn.disabled = !sel.value);
   }
 
+  function formatLokiHint(data) {
+    if (!data) return "";
+    const stored = data.stored != null && String(data.stored).trim() !== "" ? data.stored : "—";
+    const env = data.from_env != null && String(data.from_env).trim() !== "" ? data.from_env : "—";
+    const def = data.builtin_default || "http://loki:3100";
+    return `Stored in DB: ${stored}\nLOKI_URL env: ${env}\nFallback default: ${def}`;
+  }
+
+  async function loadLokiSettings() {
+    if (!state.connected) return;
+    const data = await api("/admin/settings/loki");
+    if (el.lokiUrlInput) el.lokiUrlInput.value = data.loki_url || "";
+    if (el.lokiUrlHint) el.lokiUrlHint.textContent = formatLokiHint(data);
+  }
+
   async function loadUserLlmSettingsForUser(userId) {
     if (!userId) return;
     const result = await api(`/admin/users/${encodeURIComponent(userId)}/llm-settings`);
@@ -343,6 +443,9 @@
       loadConditions(),
       loadAccounts(),
       loadUserLlmUsers(),
+      loadCampaignHistory(),
+      loadCharacterRecreateList(),
+      loadLokiSettings(),
     ]);
   }
 
@@ -745,6 +848,7 @@
     if (el.enemiesList) el.enemiesList.innerHTML = "";
     if (el.conditionsList) el.conditionsList.innerHTML = "";
     el.accountsList.innerHTML = "";
+    if (el.campaignHistoryList) el.campaignHistoryList.innerHTML = "";
     log("Logged out.");
   }
 
@@ -760,6 +864,60 @@
     el.importDryBtn.addEventListener("click", () => handleImport(true));
     el.importCommitBtn.addEventListener("click", () => handleImport(false));
     el.devLoginBtn.addEventListener("click", devLogin);
+    if (el.campaignHistoryRefreshBtn) {
+      el.campaignHistoryRefreshBtn.addEventListener("click", async () => {
+        try {
+          await loadCampaignHistory();
+          log("Lista kampanii odświeżona (zakładka Historia).");
+        } catch (err) {
+          log(`Odświeżenie listy kampanii nie powiodło się -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
+    if (el.campaignHistoryList) {
+      el.campaignHistoryList.addEventListener("click", async (event) => {
+        const fetchBtn = event.target.closest("[data-campaign-summary-fetch]");
+        const regenBtn = event.target.closest("[data-campaign-summary-regen]");
+        if (!fetchBtn && !regenBtn) return;
+        if (!state.connected) return;
+        const maxTurns = clampCampaignHistoryMaxTurns(el.campaignHistoryMaxTurns?.value);
+        try {
+          if (fetchBtn) {
+            const campaignId = fetchBtn.getAttribute("data-campaign-summary-fetch");
+            const saved = await api(`/campaigns/${encodeURIComponent(campaignId)}/history/summary`);
+            const preview = (saved.summary || "").slice(0, 800);
+            log(
+              `Zapisane podsumowanie kampania:${campaignId} summary_id:${saved.summary_id ?? "brak"} ` +
+                `tury:${saved.included_turn_count ?? "?"} fragment:${preview || "(pusto)"}`
+            );
+            return;
+          }
+          const campaignId = regenBtn.getAttribute("data-campaign-summary-regen");
+          const ownerId = regenBtn.getAttribute("data-owner-id");
+          if (!campaignId || !ownerId) return;
+          const ok = window.confirm(
+            `Wygenerować ponownie podsumowanie AI dla kampanii ${campaignId} (właściciel user ${ownerId})? To wywołuje model LLM.`
+          );
+          if (!ok) return;
+          const result = await api(
+            `/campaigns/${encodeURIComponent(campaignId)}/history/summary?user_id=${encodeURIComponent(
+              ownerId
+            )}&persist=true&max_turns=${encodeURIComponent(String(maxTurns))}`,
+            { method: "POST", body: "{}" }
+          );
+          const snippet = (result.summary || "").slice(0, 400);
+          log(
+            `Zregenerowano kampania:${campaignId} zapis:${result.persisted} ` +
+              `tury:${result.included_turn_count} model:${result.model_used || "?"} ` +
+              `fragment:${snippet || "(pusto)"}`
+          );
+        } catch (err) {
+          log(`Akcja historii kampanii nie powiodła się -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
     if (el.userLlmUserSelect && el.userLlmLoadBtn) {
       el.userLlmUserSelect.addEventListener("change", () => {
         el.userLlmLoadBtn.disabled = !el.userLlmUserSelect.value;
@@ -773,6 +931,124 @@
           log(`Loaded user LLM for user:${userId}`);
         } catch (err) {
           log(`Load user LLM failed -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
+
+    if (el.lokiRetrieveBtn) {
+      el.lokiRetrieveBtn.addEventListener("click", async () => {
+        try {
+          await loadLokiSettings();
+          log("Loki settings retrieved from server.");
+        } catch (err) {
+          log(`Loki retrieve failed -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
+    if (el.characterRecreateRefreshBtn) {
+      el.characterRecreateRefreshBtn.addEventListener("click", async () => {
+        try {
+          await loadCharacterRecreateList();
+          log("Lista postaci (admin) odświeżona.");
+        } catch (err) {
+          log(`Lista postaci nie powiodła się -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
+    document.body.addEventListener("click", (e) => {
+      const pick = e.target.closest("[data-cr-select]");
+      if (!pick || !el.characterRecreateId) return;
+      const sid = pick.getAttribute("data-cr-select");
+      const nid = Number(sid);
+      if (!nid || nid < 1) return;
+      el.characterRecreateId.value = String(nid);
+      if (el.characterRecreateName) {
+        const nm = pick.getAttribute("data-cr-name");
+        el.characterRecreateName.value = nm != null ? nm : "";
+      }
+      log(`Wybrano postać id=${nid} (wypełniono character_id i imię).`);
+    });
+    if (el.characterRecreateLoadBtn && el.characterRecreateJson) {
+      el.characterRecreateLoadBtn.addEventListener("click", async () => {
+        try {
+          const id = Number(el.characterRecreateId?.value);
+          if (!id || id < 1) {
+            alert("Podaj poprawne character_id.");
+            return;
+          }
+          const r = await fetch(`${state.baseUrl}/characters/${encodeURIComponent(String(id))}`);
+          const raw = await r.text();
+          const data = raw ? JSON.parse(raw) : {};
+          if (!r.ok) {
+            throw new Error(data.detail ? JSON.stringify(data.detail) : r.statusText);
+          }
+          if (data.sheet_json) {
+            el.characterRecreateJson.value = JSON.stringify(data.sheet_json, null, 2);
+          }
+          if (el.characterRecreateName && !String(el.characterRecreateName.value || "").trim() && data.name) {
+            el.characterRecreateName.value = data.name;
+          }
+          log(`Wczytano sheet_json dla character_id=${id} (GET /characters).`);
+        } catch (err) {
+          log(`Wczytanie karty nie powiodło się -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
+    if (el.characterRecreateApplyBtn) {
+      el.characterRecreateApplyBtn.addEventListener("click", async () => {
+        if (!state.connected) return;
+        try {
+          const id = Number(el.characterRecreateId?.value);
+          if (!id || id < 1) {
+            alert("Podaj poprawne character_id.");
+            return;
+          }
+          let sheet;
+          try {
+            sheet = JSON.parse(el.characterRecreateJson.value || "{}");
+          } catch (e) {
+            alert("sheet_json: niepoprawny JSON.");
+            return;
+          }
+          const nameRaw = String(el.characterRecreateName?.value || "").trim();
+          const payload = {
+            sheet_json: sheet,
+            clear_inventory: !!(el.characterRecreateClearInv && el.characterRecreateClearInv.checked),
+          };
+          if (nameRaw) payload.name = nameRaw;
+          const ok = window.confirm(
+            `Nadpisać kartę postaci id=${id} w miejscu (historia tur bez zmian)? Tej operacji nie cofnie się automatycznie.`
+          );
+          if (!ok) return;
+          const result = await api(`/admin/characters/${encodeURIComponent(String(id))}/recreate`, {
+            method: "POST",
+            body: JSON.stringify(payload),
+          });
+          log(`Recreate OK: character_id=${result.character_id} name=${result.name || ""}`);
+        } catch (err) {
+          log(`Recreate nie powiodło się -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
+
+    if (el.lokiSaveBtn) {
+      el.lokiSaveBtn.addEventListener("click", async () => {
+        try {
+          const url = (el.lokiUrlInput?.value || "").trim();
+          const data = await api("/admin/settings/loki", {
+            method: "PUT",
+            body: JSON.stringify({ loki_url: url }),
+          });
+          if (el.lokiUrlInput) el.lokiUrlInput.value = data.loki_url || "";
+          if (el.lokiUrlHint) el.lokiUrlHint.textContent = formatLokiHint(data);
+          log(`Loki URL saved (${url ? "non-empty" : "cleared — env only"}).`);
+        } catch (err) {
+          log(`Loki save failed -> ${err.message}`);
           alert(err.message);
         }
       });
@@ -821,6 +1097,24 @@
             // Don't auto-load settings to avoid surprises; user clicks Load.
             if (el.userLlmLoadBtn) el.userLlmLoadBtn.disabled = false;
           }
+        }
+        if (tab === "campaign-history" && state.connected && el.campaignHistoryList) {
+          loadCampaignHistory().catch((err) => {
+            log(`Ładowanie zakładki Historia nie powiodło się -> ${err.message}`);
+            alert(err.message);
+          });
+        }
+        if (tab === "character-recreate" && state.connected && el.characterRecreateList) {
+          loadCharacterRecreateList().catch((err) => {
+            log(`Ładowanie listy postaci nie powiodło się -> ${err.message}`);
+            alert(err.message);
+          });
+        }
+        if (tab === "observability" && state.connected) {
+          loadLokiSettings().catch((err) => {
+            log(`Loki settings load failed -> ${err.message}`);
+            alert(err.message);
+          });
         }
       });
     });

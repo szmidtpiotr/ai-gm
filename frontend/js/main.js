@@ -9,10 +9,22 @@ window.bootstrap = async function () {
     }
 
     window.bindEvents();
+    if (typeof window.initArchiveToggle === 'function') {
+      window.initArchiveToggle();
+    }
     await window.loadTranslations('pl');
     await window.loadCampaigns();
     if (typeof window.initLlmSettingsCollapse === 'function') {
       window.initLlmSettingsCollapse();
+    }
+
+    const userId = window.state?.playerUserId || 1;
+    try {
+      if (typeof window.loadUserLlmSettings === 'function') {
+        await window.loadUserLlmSettings(userId);
+      }
+    } catch (e) {
+      console.warn('User LLM settings load failed:', e);
     }
 
     if (window.state.selectedCampaignId) {
@@ -25,13 +37,6 @@ window.bootstrap = async function () {
 
       await window.loadCharacters(window.state.selectedCampaignId);
 
-      const userId = window.state?.playerUserId || 1;
-      try {
-        await window.loadUserLlmSettings(userId);
-      } catch (e) {
-        console.warn('User LLM settings load failed:', e);
-      }
-
       await window.loadHealth(userId);
       await window.loadModels(userId);
       window.syncLlmControlsCollapseToCurrentState?.();
@@ -42,11 +47,15 @@ window.bootstrap = async function () {
         engineSelectEl.value = window.state.selectedEngine;
       }
 
-		  try {
-	  await window.loadTurns(window.state.selectedCampaignId);
-	} catch (e) {
-	  console.warn('History load skipped:', e);
-	}
+      try {
+        await window.loadTurns(window.state.selectedCampaignId);
+      } catch (e) {
+        console.warn('History load skipped:', e);
+      }
+    } else {
+      await window.loadHealth(userId);
+      await window.loadModels(userId);
+      window.syncLlmControlsCollapseToCurrentState?.();
     }
 
     window.updateUiState();

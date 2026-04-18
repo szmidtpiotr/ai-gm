@@ -10,6 +10,7 @@ window.bindEvents = function () {
       'ai-gm:selectedCampaignId',
       String(window.state.selectedCampaignId)
     );
+    window.state.helpmeLog = [];
 
     const campaign = window.currentCampaign();
 
@@ -29,7 +30,6 @@ window.bindEvents = function () {
 
     if (window.state.selectedEngine) {
       els.engineSelectEl.value = window.state.selectedEngine;
-      localStorage.setItem('ai-gm:selectedEngine', window.state.selectedEngine);
     }
 
     await window.loadCharacters(window.state.selectedCampaignId);
@@ -68,7 +68,6 @@ window.bindEvents = function () {
 
   els.engineSelectEl.onchange = () => {
     window.state.selectedEngine = els.engineSelectEl.value;
-    localStorage.setItem('ai-gm:selectedEngine', window.state.selectedEngine);
   };
 
   if (els.testOllamaBtn) {
@@ -147,12 +146,21 @@ window.bindEvents = function () {
   }
 
   if (els.characterCreateCloseEl) {
-    els.characterCreateCloseEl.onclick = () => window.setCharacterModalOpen(false);
+    els.characterCreateCloseEl.onclick = () => {
+      if (typeof window.isCharacterCreationWizardBlockingClose === 'function' && window.isCharacterCreationWizardBlockingClose()) {
+        return;
+      }
+      window.setCharacterModalOpen(false);
+    };
   }
 
   if (els.characterCreateOverlayEl) {
     els.characterCreateOverlayEl.onclick = (e) => {
-      if (e.target === els.characterCreateOverlayEl && window.state.selectedCharacterId) {
+      if (e.target !== els.characterCreateOverlayEl) return;
+      if (typeof window.isCharacterCreationWizardBlockingClose === 'function' && window.isCharacterCreationWizardBlockingClose()) {
+        return;
+      }
+      if (window.state.selectedCharacterId) {
         window.setCharacterModalOpen(false);
       }
     };

@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel
 
 from app.core.config import DEFAULT_CAMPAIGN_LANGUAGE
+from app.services.solo_death_service import death_summary_payload
 
 DB_PATH = "/data/ai_gm.db"
 
@@ -60,6 +61,20 @@ def get_campaign(campaign_id: int):
         raise HTTPException(status_code=404, detail="Campaign not found")
 
     return dict(row)
+
+
+@router.get("/campaigns/{campaign_id}/death-summary")
+def get_campaign_death_summary(campaign_id: int):
+    """Solo tombstone payload — only when campaign.status == ended."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        payload = death_summary_payload(conn, campaign_id)
+    finally:
+        conn.close()
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Campaign not ended or not found")
+    return payload
 
 
 @router.post("/campaigns")

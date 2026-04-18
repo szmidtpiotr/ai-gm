@@ -19,7 +19,7 @@ from app.services.dice import build_gm_dice_breakdown, parse_character_sheet
 from app.services.llm_service import generate_chat
 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
 
-from app.api import auth, campaign_history, campaign_memory, campaigns, characters, commands, turns, mechanics
+from app.api import auth, campaign_helpme, campaign_history, campaign_memory, campaigns, characters, commands, turns, mechanics
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.migrations_admin import run_admin_migrations
@@ -113,6 +113,9 @@ RAW_MIGRATIONS = [
     "ALTER TABLE characters ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE campaign_turns ADD COLUMN character_id INTEGER",
     "ALTER TABLE characters ADD COLUMN sheet_json TEXT",
+    "ALTER TABLE campaigns ADD COLUMN death_reason TEXT",
+    "ALTER TABLE campaigns ADD COLUMN ended_at TEXT",
+    "ALTER TABLE campaigns ADD COLUMN epitaph TEXT",
     """
     CREATE TABLE IF NOT EXISTS campaign_ai_summaries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -202,6 +205,7 @@ app.include_router(commands.router, prefix="/api")
 app.include_router(turns.router, prefix="/api")
 app.include_router(campaign_history.router, prefix="/api")
 app.include_router(campaign_memory.router, prefix="/api")
+app.include_router(campaign_helpme.router, prefix="/api")
 app.include_router(campaigns.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")

@@ -1,0 +1,14 @@
+{
+  "name": "ai-gm-benchmark",
+  "private": true,
+  "description": "CLI benchmark dla modeli LLMAPI (GM RPG po polsku)",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "benchmark": "node scripts/run-gm-benchmark.js",
+    "benchmark:verbose": "node scripts/run-gm-benchmark.js --verbose",
+    "list-llmapi-models": "node scripts/list-llmapi-models.js",
+    "list-llmapi-models:text-only": "node scripts/list-llmapi-models.js --text-only"
+  }
+}

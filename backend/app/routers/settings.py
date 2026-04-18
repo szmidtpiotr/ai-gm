@@ -15,16 +15,19 @@ class LlmSettingsReq(BaseModel):
     provider: str
     base_url: str
     model: str
-    api_key: str = ""
+    # null/omit = keep existing runtime API key (do not clear on save with empty field)
+    api_key: str | None = None
 
 
 @router.post("/settings/llm")
 def set_llm_settings(req: LlmSettingsReq):
+    current = get_runtime_config(mask_api_key=False)
+    resolved_key = req.api_key if req.api_key is not None else str(current.get("api_key") or "")
     set_runtime_config(
         provider=req.provider,
         base_url=req.base_url,
         model=req.model,
-        api_key=req.api_key,
+        api_key=resolved_key,
     )
     return {
         "ok": True,
@@ -41,7 +44,8 @@ class UserLlmSettingsReq(BaseModel):
     provider: str
     base_url: str
     model: str
-    api_key: str = ""
+    # null/omit = keep existing stored api_key
+    api_key: str | None = None
 
 
 @router.get("/users/{user_id}/llm-settings")

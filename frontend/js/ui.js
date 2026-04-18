@@ -25,6 +25,7 @@ window.getEls = function () {
     createCharacterBtn: document.getElementById('create-character-btn'),
     statusBackendDotEl: document.getElementById('status-backend-dot'),
     statusOllamaDotEl: document.getElementById('status-ollama-dot'),
+    statusLokiDotEl: document.getElementById('status-loki-dot'),
     labelCampaignEl: document.getElementById('label-campaign'),
     labelCharacterEl: document.getElementById('label-character'),
     labelSystemEl: document.getElementById('label-system'),
@@ -54,8 +55,15 @@ window.campaignModalOpen = window.campaignModalOpen || false;
 window.setCharacterModalOpen = function (open) {
   window.characterModalOpen = !!open;
   const els = window.getEls();
-  if (open && els.characterCreateNameEl) {
-    setTimeout(() => els.characterCreateNameEl.focus(), 0);
+  if (open) {
+    if (!window.state.charCreationWizard && typeof window.resetCharacterCreationWizardUi === 'function') {
+      window.resetCharacterCreationWizardUi();
+    }
+    if (els.characterCreateNameEl) {
+      setTimeout(() => els.characterCreateNameEl.focus(), 0);
+    }
+  } else if (typeof window.resetCharacterCreationWizardUi === 'function') {
+    window.resetCharacterCreationWizardUi();
   }
   window.updateUiState();
 };
@@ -126,6 +134,13 @@ window.showThinkingBubble = function ({
   wrap.className = 'message assistant thinking';
   if (route === 'memory') {
     wrap.classList.add('memory-turn');
+  }
+  if (route === 'helpme') {
+    wrap.classList.add('helpme-turn');
+  }
+  if (route && route !== 'narrative') {
+    wrap.classList.add('is-archived-bubble');
+    wrap.setAttribute('data-archived', '1');
   }
   wrap.id = 'thinking-bubble';
 
@@ -364,6 +379,61 @@ window.rollAndAppend = async function (diceExpr, wrapEl) {
   }
 };
 
+window.addBackInGameSeparator = function () {
+  const { chatEl } = window.getEls();
+  if (!chatEl) return;
+  const row = document.createElement('div');
+  row.className = 'chat-back-in-game';
+  row.textContent = '\u2014 wracamy do gry \u2014';
+  chatEl.appendChild(row);
+  window.scrollChatToBottom();
+  window.updateArchiveToggleUi?.();
+};
+
+// Decyduje, czy dany dymek ma być "archiwalny" (ukrywany domyślnie).
+// Widoczne są tylko: input gracza (narracyjny) oraz narracja GM.
+window.isArchiveBubble = function ({ role, route, memoryTurn, helpmeTurn } = {}) {
+  if (memoryTurn || helpmeTurn) return true;
+  if (role === 'system' || role === 'error') return true;
+  if (role === 'assistant') {
+    if (!route || route === 'narrative') return false;
+    return true;
+  }
+  if (role === 'user') {
+    if (!route || route === 'input') return false;
+    return true;
+  }
+  return false;
+};
+
+// Odświeża etykietę/licznik przycisku "archiwum" oraz klasę na #chat.
+window.updateArchiveToggleUi = function () {
+  const { chatEl } = window.getEls();
+  const btn = document.getElementById('archive-toggle-btn');
+  const countEl = document.getElementById('archive-toggle-count');
+  const labelEl = btn ? btn.querySelector('.archive-toggle-label') : null;
+  if (!chatEl || !btn) return;
+
+  const show = !!(window.state && window.state.showArchiveBubbles);
+  chatEl.classList.toggle('archive-hidden', !show);
+
+  const archivedNodes = chatEl.querySelectorAll(
+    '.is-archived-bubble, .chat-back-in-game'
+  );
+  const n = archivedNodes.length;
+
+  btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+  btn.setAttribute('data-count', String(n));
+  if (countEl) countEl.textContent = String(n);
+  if (labelEl) labelEl.textContent = show ? 'Ukryj archiwum' : 'Pokaż archiwum';
+};
+
+window.setShowArchiveBubbles = function (show) {
+  window.state = window.state || {};
+  window.state.showArchiveBubbles = !!show;
+  window.updateArchiveToggleUi();
+};
+
 window.addMessage = function ({
   speaker,
   text,
@@ -371,7 +441,9 @@ window.addMessage = function ({
   route = '',
   turn = null,
   createdAt = null,
-  memoryTurn = false
+  memoryTurn = false,
+  helpmeTurn = false,
+  oocTurn = false
 }) {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
@@ -380,6 +452,16 @@ window.addMessage = function ({
   wrap.className = `message ${role}`;
   if (memoryTurn) {
     wrap.classList.add('memory-turn');
+  }
+  if (helpmeTurn) {
+    wrap.classList.add('helpme-turn');
+  }
+  if (oocTurn || helpmeTurn) {
+    wrap.classList.add('message-ooc-helpme');
+  }
+  if (window.isArchiveBubble({ role, route, memoryTurn, helpmeTurn })) {
+    wrap.classList.add('is-archived-bubble');
+    wrap.setAttribute('data-archived', '1');
   }
 
   const meta = document.createElement('div');
@@ -411,10 +493,17 @@ window.addMessage = function ({
   body.innerHTML = `<pre>${window.escapeHtml(text)}</pre>`;
 
   wrap.appendChild(meta);
+  if (oocTurn || helpmeTurn) {
+    const lab = document.createElement('div');
+    lab.className = 'ooc-helpme-label';
+    lab.textContent = '[POMOC — poza fabułą]';
+    wrap.appendChild(lab);
+  }
   wrap.appendChild(body);
   chatEl.appendChild(wrap);
 
   window.scrollChatToBottom();
+  window.updateArchiveToggleUi?.();
 };
 
 window.replaceThinkingBubble = function ({
@@ -443,6 +532,10 @@ window.replaceThinkingBubble = function ({
 
   const wrap = document.createElement('div');
   wrap.className = `message ${role}`;
+  if (window.isArchiveBubble({ role, route })) {
+    wrap.classList.add('is-archived-bubble');
+    wrap.setAttribute('data-archived', '1');
+  }
 
   const meta = document.createElement('div');
   meta.className = 'meta';
@@ -498,6 +591,7 @@ window.replaceThinkingBubble = function ({
 
   existing.replaceWith(wrap);
   window.scrollChatToBottom();
+  window.updateArchiveToggleUi?.();
 };
 
 window.addJsonMessage = function (
@@ -526,8 +620,14 @@ window.updateUiState = function () {
   const shouldForceCharacterModal = hasCampaign && !hasCharacter;
   const shouldShowCharacterModal = shouldForceCharacterModal || window.characterModalOpen;
 
+  const llmGate = typeof window.computeLlmGate === 'function' ? window.computeLlmGate() : { ok: true };
+  const llmBlocked = !llmGate.ok;
+
   if (els.deleteCampaignBtn) els.deleteCampaignBtn.disabled = !hasCampaign;
-  if (els.createCharacterBtn) els.createCharacterBtn.disabled = !hasCampaign;
+  if (els.createCampaignBtn) els.createCampaignBtn.disabled = llmBlocked;
+  if (els.campaignCreateSubmitEl) els.campaignCreateSubmitEl.disabled = llmBlocked;
+  if (els.createCharacterBtn) els.createCharacterBtn.disabled = !hasCampaign || llmBlocked;
+  if (els.characterCreateSubmitEl) els.characterCreateSubmitEl.disabled = llmBlocked;
   if (els.sendBtn) els.sendBtn.disabled = !(hasCampaign && hasCharacter);
 
   if (els.characterCreateCloseEl) {
@@ -650,6 +750,7 @@ window.renderTurnResponse = function (data, turnNumber) {
 window.clearChat = function () {
   const { chatEl } = window.getEls();
   if (chatEl) chatEl.innerHTML = '';
+  window.updateArchiveToggleUi?.();
 };
 
 window.clearHistoryPanel = function () {
@@ -721,15 +822,17 @@ window.renderTurnsToChat = function () {
 
   turns.forEach((turn) => {
     const isMemory = turn.route === 'memory';
+    const isHelpme = turn.route === 'helpme';
     if (turn.user_text) {
       window.addMessage({
         speaker: turn.character_name || 'Gracz',
         text: turn.user_text,
         role: 'user',
-        route: isMemory ? 'memory' : 'input',
+        route: isMemory ? 'memory' : isHelpme ? 'helpme' : 'input',
         turn: turn.turn_number || turn.id,
         createdAt: turn.created_at,
-        memoryTurn: isMemory
+        memoryTurn: isMemory,
+        helpmeTurn: isHelpme
       });
     }
 
@@ -744,6 +847,18 @@ window.renderTurnsToChat = function () {
           createdAt: turn.created_at,
           memoryTurn: true
         });
+      } else if (turn.route === 'helpme') {
+        window.addMessage({
+          speaker: window.t('chat.gm'),
+          text: turn.assistant_text,
+          role: 'assistant',
+          route: 'helpme',
+          turn: turn.turn_number || turn.id,
+          createdAt: turn.created_at,
+          helpmeTurn: true,
+          oocTurn: !!turn.ooc
+        });
+        window.addBackInGameSeparator();
       } else if (turn.route === 'narrative') {
         const assistantText = String(turn.assistant_text || '');
         if (!assistantText.trim()) return;
@@ -818,6 +933,7 @@ window.renderTurnsToChat = function () {
   window.state.activeRollRequest = lastNarrativeRollRequest;
   window.updateActionTriggerBtn(!!lastNarrativeRollRequest);
   window.scrollChatToBottom();
+  window.updateArchiveToggleUi?.();
 };
 
 window.updateActionTriggerBtn = function (openPopup = false) {
@@ -931,4 +1047,18 @@ window.initActionPopup = function () {
       inputEl.focus();
     }
   });
+};
+
+// Obsługa przycisku "Pokaż/Ukryj archiwum" — jednorazowe podpięcie eventów
+// i ustawienie widoczności zgodnie ze stanem (domyślnie: ukryte po starcie
+// i po odświeżeniu strony).
+window.initArchiveToggle = function () {
+  const btn = document.getElementById('archive-toggle-btn');
+  if (!btn || btn.__wired) return;
+  btn.__wired = true;
+  btn.addEventListener('click', () => {
+    const show = !(window.state && window.state.showArchiveBubbles);
+    window.setShowArchiveBubbles(show);
+  });
+  window.updateArchiveToggleUi();
 };

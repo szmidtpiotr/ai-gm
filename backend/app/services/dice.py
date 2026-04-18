@@ -12,6 +12,7 @@ SKILL_STAT_MAP = {
     "stealth": "DEX",
     "ranged_attack": "DEX",
     "arcana": "INT",
+    "alchemy": "INT",
     "lore": "INT",
     "investigation": "INT",
     "spell_attack": "INT",
@@ -27,6 +28,7 @@ SAVE_STAT_MAP = {
     "reflex_save": "DEX",
     "willpower_save": "WIS",
     "arcane_save": "INT",
+    "death_save": "CON",
 }
 
 # Keep spell_attack in INT mapping, as locked in phases.
@@ -35,6 +37,8 @@ SKILL_STAT_MAP["spell_attack"] = "INT"
 VALID_TEST_NAMES = set(SKILL_STAT_MAP.keys()) | set(SAVE_STAT_MAP.keys())
 
 TEST_NAME_ALIASES = {
+    # resolve_test_name uses .title() on underscore tokens; "death_save" -> "Death_Save"
+    "Death_Save": "death_save",
     "Str Save": "fortitude_save",
     "Con Save": "fortitude_save",
     "Dex Save": "reflex_save",
@@ -47,11 +51,14 @@ TEST_NAME_ALIASES = {
     "Perception": "awareness",
     "Survival": "survival",
     "Lore": "lore",
+    "Alchemy": "alchemy",
     "Investigation": "investigation",
     "Arcana": "arcana",
     "Medicine": "medicine",
     "Persuasion": "persuasion",
     "Intimidation": "intimidation",
+    "Death Save": "death_save",
+    "Death Saving Throw": "death_save",
     "Attack": "melee_attack",
     "Melee Attack": "melee_attack",
     "Ranged Attack": "ranged_attack",

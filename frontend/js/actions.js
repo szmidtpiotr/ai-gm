@@ -121,13 +121,37 @@ window.createCampaignFromForm = async function () {
 
   if (campaignCreateSubmitEl) campaignCreateSubmitEl.disabled = true;
 
+  const userIdPre = window.state?.playerUserId || 1;
+  try {
+    if (typeof window.loadUserLlmSettings === 'function') {
+      await window.loadUserLlmSettings(userIdPre);
+    }
+  } catch (_e) {}
+
+  if (typeof window.computeLlmGate === 'function') {
+    const g = window.computeLlmGate();
+    if (!g.ok) {
+      const llmControlsEl = document.getElementById('llm-controls');
+      if (llmControlsEl) llmControlsEl.classList.remove('llm-controls--collapsed');
+      if (typeof window.setLlmControlsCollapsed === 'function') {
+        window.setLlmControlsCollapsed(false);
+      }
+      window.addMessage({
+        speaker: 'System',
+        text: g.reason,
+        role: 'error',
+        route: 'config',
+      });
+      throw new Error(g.reason);
+    }
+  }
+
   try {
     if (typeof window.connectLlmSettings === 'function') {
       try {
         await window.connectLlmSettings();
-        const userId = window.state?.playerUserId || 1;
-        if (typeof window.loadHealth === 'function') await window.loadHealth(userId);
-        if (typeof window.loadModels === 'function') await window.loadModels(userId);
+        if (typeof window.loadHealth === 'function') await window.loadHealth(userIdPre);
+        if (typeof window.loadModels === 'function') await window.loadModels(userIdPre);
       } catch (llmErr) {
         throw new Error(`Połączenie LLM nieaktywne: ${llmErr.message}`);
       }
@@ -275,7 +299,8 @@ window.createCharacterFromForm = async function () {
 
   const name = (characterCreateNameEl?.value || '').trim();
   const background = (characterCreateBackgroundEl?.value || '').trim();
-  const archetype = characterCreateFormEl?.dataset?.archetype || '';
+  const archetypeRaw = characterCreateFormEl?.dataset?.archetype || '';
+  const archetype = String(archetypeRaw).toLowerCase();
   const campaign = window.currentCampaign ? window.currentCampaign() : null;
   const campaignSystem = campaign?.system_id || campaign?.systemid || 'fantasy';
 
@@ -289,10 +314,30 @@ window.createCharacterFromForm = async function () {
     characterCreateBackgroundEl?.focus();
     return;
   }
-  if (!archetype) {
+  if (!archetype || (archetype !== 'warrior' && archetype !== 'mage')) {
     alert('Wybierz archetyp postaci');
     return;
   }
+
+  const statsBases =
+    archetype === 'warrior'
+      ? { STR: 12, DEX: 12, CON: 12, INT: 10, WIS: 11, CHA: 10, LCK: 10 }
+      : { STR: 10, DEX: 11, CON: 10, INT: 12, WIS: 11, CHA: 10, LCK: 10 };
+
+  const skillsLocked = {
+    athletics: archetype === 'warrior' ? 2 : 1,
+    stealth: 1,
+    sleight_of_hand: 0,
+    endurance: 1,
+    arcana: archetype === 'mage' ? 2 : 0,
+    investigation: 0,
+    lore: archetype === 'mage' ? 1 : 0,
+    awareness: 1,
+    survival: 1,
+    medicine: 0,
+    persuasion: 1,
+    intimidation: archetype === 'warrior' ? 1 : 0
+  };
 
   const payload = {
     user_id: window.state?.playerUserId || 1,
@@ -302,31 +347,12 @@ window.createCharacterFromForm = async function () {
       archetype,
       background,
       level: 1,
-      current_hp: archetype === 'Warrior' ? 24 : 16,
-      max_hp: archetype === 'Warrior' ? 24 : 16,
-      current_mana: archetype === 'Mage' ? 24 : 6,
-      max_mana: archetype === 'Mage' ? 24 : 6,
-      stats: {
-        STR: archetype === 'Warrior' ? 14 : 10,
-        DEX: 12,
-        CON: archetype === 'Warrior' ? 13 : 10,
-        INT: archetype === 'Mage' ? 14 : 10,
-        WIS: 11,
-        CHA: 10,
-        LCK: 10
-      },
-      skills: {
-        Athletics: archetype === 'Warrior' ? 2 : 1,
-        Swordsmanship: archetype === 'Warrior' ? 2 : 0,
-        Archery: 1,
-        Stealth: 1,
-        Survival: 1,
-        Persuasion: 1,
-        Insight: 1,
-        Arcana: archetype === 'Mage' ? 2 : 0,
-        Alchemy: archetype === 'Mage' ? 1 : 0,
-        Lore: 1
-      },
+      current_hp: 10,
+      max_hp: 10,
+      current_mana: 0,
+      max_mana: 0,
+      stats: statsBases,
+      skills: skillsLocked,
       inventory: []
     },
     location: 'Start',
@@ -335,13 +361,37 @@ window.createCharacterFromForm = async function () {
 
   if (characterCreateSubmitEl) characterCreateSubmitEl.disabled = true;
 
+  const userIdPre = window.state?.playerUserId || 1;
+  try {
+    if (typeof window.loadUserLlmSettings === 'function') {
+      await window.loadUserLlmSettings(userIdPre);
+    }
+  } catch (_e) {}
+
+  if (typeof window.computeLlmGate === 'function') {
+    const g = window.computeLlmGate();
+    if (!g.ok) {
+      const llmControlsEl = document.getElementById('llm-controls');
+      if (llmControlsEl) llmControlsEl.classList.remove('llm-controls--collapsed');
+      if (typeof window.setLlmControlsCollapsed === 'function') {
+        window.setLlmControlsCollapsed(false);
+      }
+      window.addMessage({
+        speaker: 'System',
+        text: g.reason,
+        role: 'error',
+        route: 'config',
+      });
+      throw new Error(g.reason);
+    }
+  }
+
   try {
     if (typeof window.connectLlmSettings === 'function') {
       try {
         await window.connectLlmSettings();
-        const userId = window.state?.playerUserId || 1;
-        if (typeof window.loadHealth === 'function') await window.loadHealth(userId);
-        if (typeof window.loadModels === 'function') await window.loadModels(userId);
+        if (typeof window.loadHealth === 'function') await window.loadHealth(userIdPre);
+        if (typeof window.loadModels === 'function') await window.loadModels(userIdPre);
       } catch (llmErr) {
         throw new Error(`Połączenie LLM nieaktywne: ${llmErr.message}`);
       }
@@ -359,17 +409,7 @@ window.createCharacterFromForm = async function () {
     }
 
     await window.loadCharacters(selectedCampaignId, data.id);
-    await window.loadTurns(selectedCampaignId);
-    window.setCharacterModalOpen(false);
     window.updateUiState();
-
-    if (characterCreateFormEl) {
-      characterCreateFormEl.reset();
-      characterCreateFormEl.dataset.archetype = '';
-    }
-    document.querySelectorAll('.archetype-card').forEach((card) => {
-      card.classList.remove('selected');
-    });
 
     window.addMessage({
       speaker: 'System',
@@ -378,22 +418,44 @@ window.createCharacterFromForm = async function () {
       route: 'character'
     });
 
-    const hasOpeningInTurns = Array.isArray(window.state.turns)
-      && window.state.turns.some((turn) => String(turn.assistant_text || '').trim() === String(data.opening_message || '').trim());
-    if (data.opening_message && !hasOpeningInTurns) {
-      window.addMessage({
-        speaker: window.t('chat.gm'),
-        text: data.opening_message,
-        role: 'assistant',
-        route: 'narrative'
+    if (typeof window.enterCharacterCreationWizard === 'function') {
+      window.enterCharacterCreationWizard({
+        characterId: data.id,
+        campaignId: selectedCampaignId,
+        sheetJson: data.sheet_json || {},
+        openingMessage: data.opening_message || null,
+        characterName: data.name || name
       });
-    } else if (data.opening_message) {
-      // Keep opening visible immediately after character creation.
-      window.renderTurnsToChat();
+    } else {
+      await window.loadTurns(selectedCampaignId);
+      window.setCharacterModalOpen(false);
+      window.updateUiState();
+      if (characterCreateFormEl) {
+        characterCreateFormEl.reset();
+        characterCreateFormEl.dataset.archetype = '';
+      }
+      document.querySelectorAll('.archetype-card').forEach((card) => {
+        card.classList.remove('selected');
+      });
+      const hasOpeningInTurns =
+        Array.isArray(window.state.turns) &&
+        window.state.turns.some(
+          (turn) => String(turn.assistant_text || '').trim() === String(data.opening_message || '').trim()
+        );
+      if (data.opening_message && !hasOpeningInTurns) {
+        window.addMessage({
+          speaker: window.t('chat.gm'),
+          text: data.opening_message,
+          role: 'assistant',
+          route: 'narrative'
+        });
+      } else if (data.opening_message) {
+        window.renderTurnsToChat();
+      }
     }
 
     const { inputEl } = window.getEls();
-    if (inputEl) {
+    if (inputEl && !window.state.charCreationWizard) {
       inputEl.focus();
     }
   } catch (e) {
@@ -406,6 +468,32 @@ window.createCharacterFromForm = async function () {
   } finally {
     if (characterCreateSubmitEl) characterCreateSubmitEl.disabled = false;
   }
+};
+
+/**
+ * When no narrative GM turn exists yet (e.g. opening generation failed at creation),
+ * send one minimal user line to start the story. Skips if history already has GM text.
+ */
+window.requestGmOpeningIfQuiet = async function (campaignId, characterId) {
+  if (!campaignId || !characterId) return;
+  if (window.chatRequestState?.inFlight) return;
+  const turns = window.state.turns || [];
+  if (
+    turns.some(
+      (t) =>
+        t.route === 'narrative' && String(t.assistant_text || '').trim().length > 0
+    )
+  ) {
+    return;
+  }
+  const { inputEl } = window.getEls();
+  const lang = window.state?.lang === 'en' ? 'en' : 'pl';
+  const starter =
+    lang === 'en'
+      ? 'I take in my surroundings and decide how to act.'
+      : 'Patrzę wokół i rozważam, co zrobić dalej.';
+  if (inputEl) inputEl.value = starter;
+  await window.sendMessage();
 };
 
 window.sendMessage = async function () {
@@ -534,6 +622,99 @@ window.sendMessage = async function () {
     return;
   }
 
+  if (/^\/helpme(\s|$)/i.test(text.trim())) {
+    const topic = text.replace(/^\/helpme\s*/i, '').trim();
+
+    window.chatRequestState.inFlight = true;
+    const requestId = ++window.chatRequestState.requestId;
+    const turnNumber = window.nextTurnNumber();
+    inputEl.value = '';
+
+    if (sendBtnEl) sendBtnEl.disabled = true;
+    inputEl.disabled = true;
+
+    window.addMessage({
+      speaker: window.currentCharacterName(),
+      text: text.trim(),
+      role: 'user',
+      route: 'helpme',
+      turn: turnNumber,
+      createdAt: clientCreatedAt,
+      helpmeTurn: true
+    });
+
+    window.removeThinkingBubble();
+    window.showThinkingBubble({
+      speaker: window.t('chat.gm'),
+      route: 'helpme',
+      turn: turnNumber
+    });
+
+    try {
+      const uid = window.state?.playerUserId || 1;
+      const resp = await fetch(
+        `/api/campaigns/${window.state.selectedCampaignId}/helpme?user_id=${encodeURIComponent(uid)}`,
+        {
+          method: 'POST',
+          headers: window.getApiHeaders(),
+          body: JSON.stringify({
+            character_id: window.state.selectedCharacterId,
+            topic: topic,
+            user_line: text.trim()
+          })
+        }
+      );
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const detail = data.detail || data.message || `HTTP ${resp.status}`;
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+      }
+      if (requestId !== window.chatRequestState.requestId) return;
+
+      window.removeThinkingBubble();
+      window.addMessage({
+        speaker: window.t('chat.gm'),
+        text: data.answer || '',
+        role: 'assistant',
+        route: 'helpme',
+        turn: data.turn_number || turnNumber,
+        createdAt: data.created_at || null,
+        helpmeTurn: true,
+        oocTurn: !!data.ooc
+      });
+      if (!Array.isArray(window.state.helpmeLog)) window.state.helpmeLog = [];
+      window.state.helpmeLog.push({
+        turn_number: data.turn_number || turnNumber,
+        user_text: text.trim(),
+        assistant_text: data.answer || '',
+        created_at: data.created_at || clientCreatedAt
+      });
+      await window.loadTurns(window.state.selectedCampaignId);
+    } catch (e) {
+      if (requestId !== window.chatRequestState.requestId) return;
+      window.removeThinkingBubble();
+      const pretty = typeof window.prettyLlmErrorMessage === 'function'
+        ? window.prettyLlmErrorMessage(e.message)
+        : e.message;
+      window.addMessage({
+        speaker: 'Błąd',
+        text: pretty,
+        role: 'error',
+        turn: turnNumber
+      });
+    } finally {
+      if (requestId === window.chatRequestState.requestId) {
+        window.chatRequestState.inFlight = false;
+      }
+      if (sendBtnEl) sendBtnEl.disabled = false;
+      if (inputEl) {
+        inputEl.disabled = false;
+        inputEl.focus();
+      }
+    }
+    return;
+  }
+
   const selectedEngine = window.state.selectedEngine || engineSelectEl.value || '';
 
   if (!selectedEngine) {
@@ -551,6 +732,11 @@ window.sendMessage = async function () {
 
   if (sendBtnEl) sendBtnEl.disabled = true;
   inputEl.disabled = true;
+
+  // Powrót do narracji — chowamy wszystkie dymki archiwalne (OOC / mem / system / błędy / separator).
+  if (typeof window.setShowArchiveBubbles === 'function') {
+    window.setShowArchiveBubbles(false);
+  }
 
   let turnNumber = window.nextTurnNumber();
 
@@ -593,6 +779,14 @@ window.sendMessage = async function () {
         body: JSON.stringify(payload)
       }
     );
+
+    if (resp.status === 410) {
+      window.removeThinkingBubble();
+      if (typeof window.showCampaignDeathScreen === 'function') {
+        await window.showCampaignDeathScreen(window.state.selectedCampaignId);
+      }
+      return;
+    }
 
     if (!resp.ok) {
       let detail = `HTTP ${resp.status}`;

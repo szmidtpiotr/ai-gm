@@ -20,8 +20,9 @@ def set_runtime_config(provider: str, base_url: str, model: str, api_key: str) -
     _runtime_config["api_key"] = (api_key or "").strip()
 
 
-def get_runtime_config(mask_api_key: bool = False) -> dict[str, str]:
+def get_runtime_config(mask_api_key: bool = False) -> dict[str, Any]:
     api_key = _runtime_config["api_key"]
+    key_set = bool((api_key or "").strip())
     if mask_api_key and api_key:
         shown = f"{api_key[:6]}..." if len(api_key) > 6 else f"{api_key}..."
     else:
@@ -31,6 +32,7 @@ def get_runtime_config(mask_api_key: bool = False) -> dict[str, str]:
         "base_url": _runtime_config["base_url"],
         "model": _runtime_config["model"],
         "api_key": shown,
+        "api_key_set": key_set,
     }
 
 

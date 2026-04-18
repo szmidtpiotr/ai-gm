@@ -1,0 +1,49 @@
+{
+  "defaults": {
+    "system_prompt": "Jesteś mistrzem gry w tekstowym RPG. Odpowiadasz wyłącznie po polsku. Pisz naturalnie, zwięźle i klimatycznie. Nie używaj anglicyzmów, jeśli istnieje naturalny polski odpowiednik.",
+    "temperature": 0.75,
+    "max_tokens": 1200
+  },
+  "tests": [
+    {
+      "id": "T01",
+      "name": "Karczma i akcje",
+      "user_prompt": "Prowadzisz tekstowe RPG fantasy. Odpowiadaj po polsku. Gracz wchodzi do karczmy w mieście pełnym plotek. Opisz scenę i podaj 3 możliwe akcje."
+    },
+    {
+      "id": "T02",
+      "name": "NPC i trop (alchemiczka)",
+      "user_prompt": "Gracz mówi: \"Pytam karczmarza o zaginioną alchemiczkę\". Odpowiedz jako GM. Daj reakcję NPC, jeden trop i jedno ryzyko. Nie zdradzaj całej tajemnicy."
+    },
+    {
+      "id": "T03",
+      "name": "Konsekwencje vs strażnik",
+      "user_prompt": "W poprzedniej scenie gracz obraził strażnika. Teraz próbuje wejść na targ. Opisz konsekwencję, ale zostaw uczciwą możliwość naprawy sytuacji."
+    },
+    {
+      "id": "T04",
+      "name": "Noc w wiosce (styl)",
+      "user_prompt": "Napisz klimatyczny opis nocy w słowiańskiej wiosce. Ma brzmieć naturalnie po polsku, bez anglicyzmów i bez nowomowy AI."
+    },
+    {
+      "id": "T05",
+      "name": "Improwizacja (ratusz)",
+      "user_prompt": "Gracz pyta: \"Czy w ratuszu jest sekretne wejście pod ziemię?\" Odpowiedz jako dobry GM, który improwizuje, ale utrzymuje wiarygodność świata."
+    },
+    {
+      "id": "T06",
+      "name": "Limit 120 słów + skrzynia",
+      "user_prompt": "Odpowiedź ma mieć maksymalnie 120 słów. Gracz otwiera zaklętą skrzynię. Opisz wynik i zakończ pytaniem o dalszy ruch."
+    },
+    {
+      "id": "T07",
+      "name": "Mroczne fantasy (strażnik)",
+      "user_prompt": "Prowadzisz mroczne fantasy. Gracz odnajduje rannego strażnika. Odpowiedz w tonie napięcia, ale bez brutalnych detali."
+    },
+    {
+      "id": "T08",
+      "name": "Fakty w pamięci (ścigany)",
+      "user_prompt": "Zapamiętaj: gracz ma żelazny klucz, jest ścigany przez dwóch zbirów i ma 1 punkt życia. Teraz opisz, co widzi na końcu ulicy, nie zapominając o tych faktach."
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, ConfigDict
 
@@ -7,6 +9,7 @@ from app.services.admin_accounts import (
     soft_delete_account,
     update_account,
 )
+from app.services.admin_character_recreate import list_characters_admin, recreate_character_in_place
 from app.services.admin_auth import issue_dev_admin_token, verify_admin_token
 from app.services.admin_config_transfer import export_config, import_config
 from app.services.admin_config import (
@@ -30,6 +33,12 @@ from app.services.admin_config import (
     update_dc,
     update_skill,
     update_stat,
+)
+from app.services.loki_settings import (
+    DEFAULT_LOKI_URL,
+    get_display_loki_url,
+    get_stored_loki_url,
+    set_stored_loki_url,
 )
 from app.services.user_llm_settings import (
     get_user_llm_settings_full,
@@ -91,6 +100,16 @@ class AccountPatchReq(BaseModel):
     is_active: int | None = None
 
 
+class AdminCharacterRecreateReq(BaseModel):
+    """Same shape as player character create `sheet_json` (archetype, stats, skills, background, …)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sheet_json: dict
+    name: str | None = None
+    clear_inventory: bool = True
+
+
 class ConfigImportReq(BaseModel):
     config_version: str
     tables: dict
@@ -104,6 +123,12 @@ class UserLlmSettingsReq(BaseModel):
     base_url: str
     model: str
     api_key: str | None = None
+
+
+class LokiUrlSettingsReq(BaseModel):
+    """Empty string clears DB row (health then uses LOKI_URL env only)."""
+
+    loki_url: str = ""
 
 
 class WeaponCreateReq(BaseModel):
@@ -584,6 +609,33 @@ def admin_reset_account_sheet(account_id: int, _: None = Depends(require_admin_t
         raise HTTPException(status_code=404, detail="Account not found") from None
 
 
+@router.get("/admin/characters")
+def admin_list_characters(_: None = Depends(require_admin_token)):
+    """Lista postaci (id, imię, kampania) — panel Recreate."""
+    return {"items": list_characters_admin()}
+
+
+@router.post("/admin/characters/{character_id}/recreate")
+def admin_recreate_character(
+    character_id: int, req: AdminCharacterRecreateReq, _: None = Depends(require_admin_token)
+):
+    """
+    Rebuild sheet in place: same `characters.id` (turn history unchanged).
+    Body: `sheet_json` like POST /campaigns/{id}/characters, optional `name`, optional `clear_inventory`.
+    """
+    try:
+        return recreate_character_in_place(
+            character_id,
+            name=req.name,
+            sheet_json=req.sheet_json,
+            clear_inventory=req.clear_inventory,
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Character not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+
+
 @router.delete("/admin/accounts/{account_id}")
 def admin_delete_account(account_id: int, _: None = Depends(require_admin_token)):
     try:
@@ -613,6 +665,33 @@ def admin_put_user_llm_settings(
         api_key=api_key,
     )
     return {"ok": True, "settings": get_user_llm_settings_masked(user_id=user_id)}
+
+
+@router.get("/admin/settings/loki")
+def admin_get_loki_settings(_: None = Depends(require_admin_token)):
+    stored = get_stored_loki_url()
+    env = (os.getenv("LOKI_URL") or "").strip()
+    return {
+        "ok": True,
+        "loki_url": get_display_loki_url(),
+        "stored": stored,
+        "from_env": env,
+        "builtin_default": DEFAULT_LOKI_URL,
+    }
+
+
+@router.put("/admin/settings/loki")
+def admin_put_loki_settings(req: LokiUrlSettingsReq, _: None = Depends(require_admin_token)):
+    set_stored_loki_url(req.loki_url)
+    stored = get_stored_loki_url()
+    env = (os.getenv("LOKI_URL") or "").strip()
+    return {
+        "ok": True,
+        "loki_url": get_display_loki_url(),
+        "stored": stored,
+        "from_env": env,
+        "builtin_default": DEFAULT_LOKI_URL,
+    }
 
 
 @router.get("/admin/config/export")

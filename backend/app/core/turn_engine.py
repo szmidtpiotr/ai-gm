@@ -8,6 +8,7 @@ SYSTEMPROMPT = SYSTEM_PROMPT_TEXT
 
 
 def loadrecentturns(conn: sqlite3.Connection, campaignid: int, limit: int = 8) -> list[sqlite3.Row]:
+    # Tylko narracja — trasy `memory`, `helpme`, `command` itd. nie trafiają do kontekstu GM.
     rows = conn.execute(
         """
         SELECT user_text, assistant_text, route

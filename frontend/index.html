@@ -7,22 +7,57 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div class="app" id="game-app">
-    <div class="topbar">
-      <div class="title" id="app-title">AI-GM</div>
+  <div
+    id="campaign-death-screen"
+    class="campaign-death-screen"
+    hidden
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="death-title-heading"
+  >
+    <div class="campaign-death-backdrop" id="campaign-death-backdrop" aria-hidden="true"></div>
+    <div class="campaign-death-dialog">
+      <button
+        type="button"
+        class="campaign-death-close"
+        id="campaign-death-close-btn"
+        aria-label="Zamknij"
+      >
+        ×
+      </button>
+      <div id="campaign-death-inner" class="campaign-death-card"></div>
     </div>
+  </div>
 
+  <div class="app" id="game-app">
     <div class="controls">
       <div class="llm-controls llm-controls--collapsed" id="llm-controls">
         <div class="llm-settings-toggle-row">
           <div class="llm-settings-toggle-actions">
-            <button type="button" class="secondary" id="llm-settings-toggle-btn">LLM settings</button>
-            <button id="player-logout-btn" class="secondary player-logout-inline" type="button" style="display:none;">Logout</button>
+            <button type="button" class="secondary" id="llm-settings-toggle-btn">Settings</button>
+            <div class="status-inline" id="status-inline">
+              <span class="status-dot-wrap" title="Backend">
+                <span class="status-dot unknown" id="status-backend-dot"></span>
+                <span class="status-dot-label">Backend</span>
+              </span>
+              <span class="status-dot-wrap" title="Ollama">
+                <span class="status-dot unknown" id="status-ollama-dot"></span>
+                <span class="status-dot-label">Ollama</span>
+              </span>
+              <span class="status-dot-wrap" title="Loki">
+                <span class="status-dot unknown" id="status-loki-dot"></span>
+                <span class="status-dot-label">Loki</span>
+              </span>
+            </div>
           </div>
           <span class="muted" id="llm-settings-toggle-hint"></span>
         </div>
 
         <div id="llm-controls-body">
+          <div class="settings-session-row">
+            <button id="player-logout-btn" class="secondary settings-logout-btn" type="button" style="display:none;">Logout</button>
+          </div>
           <div class="field top-row-field" id="llm-provider-field">
             <label for="llm-provider-select" id="label-llm-provider">Provider</label>
             <select id="llm-provider-select">
@@ -88,6 +123,13 @@
 
     <div class="play-area">
       <div class="play-main">
+        <div class="chat-toolbar">
+          <button type="button" id="archive-toggle-btn" class="archive-toggle-btn" aria-pressed="false" title="Pokaż/ukryj wiadomości OOC, /mem, systemowe i błędy">
+            <span class="archive-toggle-icon" aria-hidden="true">📦</span>
+            <span class="archive-toggle-label">Pokaż archiwum</span>
+            <span class="archive-toggle-count" id="archive-toggle-count">0</span>
+          </button>
+        </div>
         <!-- Thinking bubble is inserted here dynamically by ui.js -->
         <div class="chat" id="chat"></div>
 
@@ -165,17 +207,6 @@
     </div>
   </div>
 
-  <div class="status-dock" id="status-dock">
-    <div class="status-dot-wrap" title="Backend">
-      <span class="status-dot unknown" id="status-backend-dot"></span>
-      <span class="status-dot-label">Backend</span>
-    </div>
-    <div class="status-dot-wrap" title="Ollama">
-      <span class="status-dot unknown" id="status-ollama-dot"></span>
-      <span class="status-dot-label">Ollama</span>
-    </div>
-  </div>
-
   <div class="bottom-system-field bottom-system-field--hidden" aria-hidden="true">
     <label for="system-select" id="label-system">System</label>
     <select id="system-select">
@@ -187,35 +218,45 @@
     <section class="character-modal" id="character-create-panel" role="dialog" aria-modal="true" aria-labelledby="character-create-title">
       <button type="button" class="character-modal-close secondary" id="character-create-close" aria-label="Zamknij">×</button>
       <h2 id="character-create-title">Stwórz postać</h2>
-      <p class="muted">Nie masz jeszcze bohatera w tej kampanii. Przygotuj kartę i zacznij przygodę.</p>
+      <p class="muted" id="character-create-subtitle">Nie masz jeszcze bohatera w tej kampanii. Przygotuj kartę i zacznij przygodę.</p>
+      <p id="character-create-step-indicator" class="wizard-step-indicator muted" style="display: none;" aria-live="polite"></p>
 
-      <form id="character-create-form">
-        <div class="field">
-          <label for="character-create-name">Imię postaci</label>
-          <input id="character-create-name" type="text" placeholder="np. Aldric z Północy" required>
-        </div>
-
-        <div class="field">
-          <label for="character-create-background">Historia / tło postaci</label>
-          <textarea id="character-create-background" placeholder="Kim był twój bohater przed początkiem kampanii?" required></textarea>
-        </div>
-
-        <div class="field">
-          <label>Archetyp</label>
-          <div class="archetype-grid" id="archetype-grid">
-            <button type="button" class="archetype-card" data-archetype="Warrior">
-              <span class="archetype-title">Warrior</span>
-              <span class="archetype-desc">Frontowy wojownik: wytrzymały, pewny stali, silny w bezpośrednim starciu.</span>
-            </button>
-            <button type="button" class="archetype-card" data-archetype="Mage">
-              <span class="archetype-title">Mage</span>
-              <span class="archetype-desc">Tkacz arkanów: kruchy, ale groźny dzięki zaklęciom i mistycznej wiedzy.</span>
-            </button>
+      <div id="character-create-step-1-wrap">
+        <form id="character-create-form">
+          <div class="field">
+            <label for="character-create-name">Imię postaci</label>
+            <input id="character-create-name" type="text" placeholder="np. Aldric z Północy" required>
           </div>
-        </div>
 
-        <button type="submit" id="character-create-submit">Create Character</button>
-      </form>
+          <div class="field">
+            <label for="character-create-background">Historia / tło postaci</label>
+            <textarea id="character-create-background" placeholder="Kim był twój bohater przed początkiem kampanii?" required></textarea>
+          </div>
+
+          <div class="field">
+            <label>Archetyp</label>
+            <div class="archetype-grid" id="archetype-grid">
+              <button type="button" class="archetype-card" data-archetype="warrior">
+                <span class="archetype-title">Warrior</span>
+                <span class="archetype-desc">Frontowy wojownik: wytrzymały, pewny stali, silny w bezpośrednim starciu.</span>
+              </button>
+              <button type="button" class="archetype-card" data-archetype="mage">
+                <span class="archetype-title">Mage</span>
+                <span class="archetype-desc">Tkacz arkanów: kruchy, ale groźny dzięki zaklęciom i mistycznej wiedzy.</span>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" id="character-create-submit">Create Character</button>
+        </form>
+      </div>
+
+      <div id="character-wizard-host" class="character-wizard-host" style="display: none;">
+        <div id="character-wizard-panel" class="character-wizard-panel"></div>
+        <div class="wizard-nav-row" id="character-wizard-nav">
+          <button type="button" class="secondary wizard-nav-back" id="character-wizard-back">Back</button>
+        </div>
+      </div>
     </section>
   </div>
 
@@ -252,6 +293,8 @@
   <script src="./js/utils.js"></script>
   <script src="./js/ui.js"></script>
   <script src="./js/api.js"></script>
+  <script src="./js/character_wizard.js"></script>
+  <script src="./js/death_screen.js"></script>
   <script src="./js/actions.js"></script>
   <script src="./js/events.js"></script>
   <script src="./js/main.js"></script>

@@ -2,7 +2,34 @@ import sqlite3
 
 from app.core.turn_engine import buildmessages, loadrecentturns
 from app.services.config_service import build_runtime_config_block
+from app.services.dice import parse_character_sheet
 from app.services.llm_service import generate_chat
+from app.services.solo_death_service import DEATH_SAVE_FAILURE_THRESHOLD
+
+
+def _death_mechanica_system_append(
+    character: sqlite3.Row | None, roll_result_data: dict | None
+) -> str | None:
+    """
+    While the character has 1–2 death save failures, force the GM to end each non-roll
+    narrative with 'Roll Death Save d20'. Skip when this turn is a death save resolution.
+    """
+    if not character:
+        return None
+    sheet = parse_character_sheet(character["sheet_json"])
+    failures = int(sheet.get("death_save_failures") or 0)
+    if failures < 1 or failures >= DEATH_SAVE_FAILURE_THRESHOLD:
+        return None
+    if roll_result_data and roll_result_data.get("test") == "death_save":
+        return None
+    return (
+        "[MECHANIKA — STAN ŚMIERCI]\n"
+        "Postać jest nieprzytomna i walczy o życie.\n"
+        f"Liczba nieudanych rzutów śmierci: {failures} / {DEATH_SAVE_FAILURE_THRESHOLD}\n"
+        "Zasada: na końcu KAŻDEJ tury (nie rzutu) musisz dodać dokładnie tę linię jako ostatnią:\n"
+        "Roll Death Save d20\n"
+        "Nie narruj wyzdrowienia. Nie kończ stanu śmierci fabularnie. Tylko rzut może zmienić ten stan."
+    )
 
 
 def build_narrative_messages(
@@ -22,6 +49,13 @@ def build_narrative_messages(
         usertext=final_user_text,
         runtime_config_block=build_runtime_config_block(),
     )
+
+    death_append = _death_mechanica_system_append(character, roll_result_data)
+    if death_append and messages:
+        first = messages[0]
+        if isinstance(first, dict) and first.get("role") == "system":
+            first["content"] = f"{first.get('content', '').rstrip()}\n\n{death_append}"
+
     if not roll_result_data or not messages:
         return messages
 
@@ -44,6 +78,15 @@ def build_narrative_messages(
             f"(d20: {roll_result_data.get('raw')} + stat: {roll_result_data.get('stat_mod')} + "
             f"skill: {roll_result_data.get('skill_rank')} + proficiency: {roll_result_data.get('proficiency')})"
         )
+
+    if roll_result_data.get("test") == "death_save":
+        total_ds = int(roll_result_data.get("total") or 0)
+        if total_ds >= 10 or roll_result_data.get("is_nat20"):
+            roll_context += (
+                "\n\n[USTABILIZOWANIE] Postać ustabilizowała się. Stan śmierci zakończony (mechanicznie: "
+                "death_save_failures = 0). Zakończ ten stan w narracji; nie dodawaj na końcu linii "
+                "\"Roll Death Save d20\"."
+            )
 
     first = messages[0]
     if isinstance(first, dict) and first.get("role") == "system":

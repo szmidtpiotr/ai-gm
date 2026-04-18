@@ -192,6 +192,10 @@ ADMIN_SEEDS = [
     INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES ('config_version', '1.0.0')
     """,
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value)
+    VALUES ('loki_url', 'http://loki:3100')
+    """,
 ]
 
 

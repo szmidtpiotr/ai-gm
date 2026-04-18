@@ -1,0 +1,42 @@
+[
+  {
+    "label": "GLM-4.5 Flash",
+    "model": "glm-4.5-flash",
+    "enabled": true
+  },
+  {
+    "label": "GLM-4.7 Flash",
+    "model": "glm-4.7-flash",
+    "enabled": true
+  },
+  {
+    "label": "Gemma 3 4B IT",
+    "model": "gemma-3-4b-it",
+    "enabled": true
+  },
+  {
+    "label": "Gemma 3 12B IT",
+    "model": "gemma-3-12b-it",
+    "enabled": true
+  },
+  {
+    "label": "Qwen3 14B",
+    "model": "qwen3-14b",
+    "enabled": true
+  },
+  {
+    "label": "Qwen3 30B A3B Instruct",
+    "model": "qwen3-30b-a3b-instruct-2507",
+    "enabled": true
+  },
+  {
+    "label": "Llama 3.3 70B Instruct",
+    "model": "llama-3.3-70b-instruct",
+    "enabled": true
+  },
+  {
+    "label": "Mistral Small 3.2",
+    "model": "mistral-small-3.2",
+    "enabled": true
+  }
+]

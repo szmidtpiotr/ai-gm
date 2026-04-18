@@ -42,24 +42,11 @@ body {
   padding: 16px;
 }
 
-.topbar,
 .controls,
 .composer,
 .statusbar {
   display: grid;
   gap: var(--gap);
-}
-
-.topbar {
-  grid-template-columns: 1fr;
-  margin-bottom: 16px;
-}
-
-.title {
-  font-size: 26px;
-  font-weight: bold;
-  color: var(--accent);
-  letter-spacing: 0.02em;
 }
 
 .statusbar {
@@ -110,7 +97,16 @@ body {
   flex-wrap: wrap;
 }
 
-.player-logout-inline {
+.settings-session-row {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-logout-btn {
   flex: 0 0 auto;
   width: auto !important;
   min-width: 0;
@@ -721,6 +717,50 @@ input:disabled {
   border-color: rgba(0, 0, 0, 0.18);
 }
 
+/* /helpme — OOC doradca (róż, odrębny od narracji i /mem) */
+.chat-back-in-game {
+  align-self: center;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: Georgia, serif;
+  font-style: italic;
+  margin: 6px 0 10px;
+  letter-spacing: 0.02em;
+}
+
+.ooc-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #f4a0a0;
+  color: #5c1010;
+  border: 1px solid #e07070;
+}
+
+.message.user.helpme-turn,
+.message.assistant.helpme-turn {
+  background: #fde8e8;
+  border-color: #f4a0a0;
+  color: #9b1c1c;
+}
+
+.message.user.helpme-turn .meta,
+.message.assistant.helpme-turn .meta {
+  color: #741010;
+}
+
+.message.user.helpme-turn .route-badge,
+.message.assistant.helpme-turn .route-badge {
+  background: rgba(155, 28, 28, 0.12);
+  color: #7a1515;
+  border-color: rgba(155, 28, 28, 0.25);
+}
+
 .message.assistant {
   align-self: flex-start;
   background: rgba(45, 74, 45, 0.08);
@@ -890,6 +930,24 @@ pre {
 
 .message.assistant.thinking.memory-turn .typing-dots span {
   background: #333;
+}
+
+.message.assistant.thinking.helpme-turn {
+  background: #fde8e8;
+  border-color: #f4a0a0;
+  color: #9b1c1c;
+}
+
+.message.assistant.thinking.helpme-turn .meta {
+  color: #741010;
+}
+
+.message.assistant.thinking.helpme-turn .thinking-text {
+  color: #9b1c1c;
+}
+
+.message.assistant.thinking.helpme-turn .typing-dots span {
+  background: #9b1c1c;
 }
 
 .message.thinking {
@@ -1182,6 +1240,461 @@ pre {
 
 }
 
+/* --- Character creation wizard (Phase 7.6.9–7.6.11) --- */
+.wizard-step-indicator {
+  font-size: 13px;
+  margin: 0 0 12px;
+  letter-spacing: 0.02em;
+}
+
+.character-wizard-host {
+  display: grid;
+  gap: 14px;
+}
+
+.character-wizard-panel {
+  min-height: 120px;
+}
+
+.wizard-section-title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.wizard-hint {
+  font-size: 14px;
+  margin: 0 0 10px;
+}
+
+.wizard-points,
+.wizard-swaps {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.wizard-class-note {
+  font-size: 13px;
+  margin: 0 0 14px;
+}
+
+.wizard-stat-grid {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.wizard-stat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 56px) minmax(0, 48px) 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+}
+
+.wizard-stat-label {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.wizard-stat-mod {
+  font-size: 14px;
+  text-align: center;
+}
+
+.wizard-stat-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.wizard-stat-val {
+  min-width: 2ch;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.wizard-stat-btn {
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+}
+
+button.wizard-stat-btn {
+  width: auto;
+}
+
+.wizard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.wizard-nav-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.wizard-nav-back {
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+.wizard-skill-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .wizard-skill-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wizard-subtitle {
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.wizard-skill-preview {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.wizard-actions--inline {
+  margin-top: 0.75rem;
+  justify-content: flex-start;
+  gap: 0.5rem;
+}
+
+.wizard-skill-rep-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wizard-skill-rep-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+}
+
+.wizard-skill-rep-row:hover {
+  filter: brightness(1.03);
+}
+
+.wizard-skill-row--inactive {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wizard-sum-hint {
+  font-size: 0.85rem;
+  margin: 0.25rem 0;
+}
+
+.sheet-identity-block {
+  margin-top: 12px;
+}
+
+.sheet-identity-field {
+  margin-bottom: 10px;
+}
+
+.sheet-identity-label {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.sheet-identity-text {
+  margin: 0;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  line-height: 1.35;
+}
+
+.wizard-skill-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.wizard-skill-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  min-height: 52px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.wizard-skill-row:hover:not(:disabled) {
+  filter: brightness(1.03);
+}
+
+.wizard-skill-row--selected {
+  border-color: var(--accent-light);
+  box-shadow: 0 0 0 2px rgba(200, 148, 74, 0.22);
+  background: rgba(200, 148, 74, 0.1);
+}
+
+.wizard-skill-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.wizard-skill-rank {
+  font-size: 14px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.wizard-center {
+  text-align: center;
+  padding: 24px 12px;
+}
+
+.wizard-loading {
+  font-size: 16px;
+  margin: 0 0 16px;
+}
+
+.wizard-error {
+  color: var(--danger);
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
+.wizard-secret-hint {
+  font-size: 14px;
+  margin: 12px 0 0;
+}
+
+/* --- Phase 7.6.12: solo campaign death tombstone (modal — nie ukrywa #game-app) --- */
+.campaign-death-screen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  color: #e6e1d8;
+}
+
+body.campaign-death-active .campaign-death-screen {
+  display: block;
+}
+
+.campaign-death-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(10, 8, 6, 0.72);
+  cursor: pointer;
+}
+
+.campaign-death-dialog {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(540px, calc(100% - 32px));
+  max-height: min(92vh, 900px);
+  overflow-y: auto;
+  padding: 0;
+  background: linear-gradient(180deg, #0e0c0a 0%, #16120e 45%, #1a1510 100%);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  border: 1px solid #3a342c;
+}
+
+.campaign-death-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e6e1d8;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.campaign-death-close:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.campaign-death-card {
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 28px 20px 22px;
+  box-sizing: border-box;
+}
+
+.death-tomb-inner {
+  text-align: center;
+  padding: 20px 8px;
+}
+
+.death-cross {
+  font-size: 2rem;
+  color: #7a6f5e;
+  margin-bottom: 8px;
+}
+
+.death-title {
+  font-size: 1.1rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #a89880;
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+
+.death-name {
+  font-size: 1.55rem;
+  font-weight: 700;
+  margin: 0 0 8px;
+  color: #f0ebe3;
+}
+
+.death-meta,
+.death-reason {
+  font-size: 0.95rem;
+  color: #9a8f7e;
+  margin: 0 0 6px;
+  line-height: 1.45;
+}
+
+.death-epitaph {
+  margin: 18px 0;
+  padding: 14px 16px;
+  font-style: italic;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: #d4cdc0;
+  border-left: 3px solid #5c5346;
+  background: rgba(255, 255, 255, 0.04);
+  text-align: left;
+}
+
+.death-secret-block {
+  text-align: left;
+  margin: 16px 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid #3a342c;
+}
+
+.death-secret-label {
+  font-size: 0.8rem;
+  color: #8a8070;
+  margin-bottom: 6px;
+}
+
+.death-secret-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #c9c2b6;
+}
+
+.death-bonds-block {
+  text-align: left;
+  margin: 14px 0 20px;
+}
+
+.death-bonds-label {
+  font-size: 0.85rem;
+  color: #8a8070;
+  margin-bottom: 6px;
+}
+
+.death-bonds-list {
+  margin: 0;
+  padding-left: 1.2em;
+  color: #c9c2b6;
+  font-size: 0.95rem;
+}
+
+.death-bond-meta {
+  color: #7a7165;
+  font-size: 0.85rem;
+}
+
+.death-new-campaign-btn {
+  margin-top: 8px;
+  min-height: 48px;
+  padding: 12px 24px;
+  width: auto;
+  max-width: 100%;
+}
+
+.death-loading,
+.death-error {
+  text-align: center;
+  padding: 24px;
+}
+
+/* --- Phase 7.6.13: /helpme OOC bubble --- */
+.message.message-ooc-helpme {
+  background: rgba(79, 152, 163, 0.12);
+  border-left: 3px solid #4f98a3;
+  border-radius: 10px;
+}
+
+.message.message-ooc-helpme .message-body pre {
+  color: #4d4a45;
+}
+
+.ooc-helpme-label {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--muted);
+  padding: 2px 12px 8px;
+  letter-spacing: 0.02em;
+}
+
 .action-trigger-wrap {
   position: relative;
   display: flex;
@@ -1248,4 +1761,108 @@ pre {
 }
 .action-popup__btn:hover {
   background: rgba(200, 148, 74, 0.16);
+}
+
+/* ------------------------------------------------------------------ */
+/* Inline status dots (Backend / Ollama) obok Logout w pasku Settings  */
+/* ------------------------------------------------------------------ */
+.status-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 8px;
+  margin-left: 4px;
+  border-left: 1px solid var(--border);
+  height: 28px;
+}
+
+.status-inline .status-dot-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.status-inline .status-dot {
+  width: 9px;
+  height: 9px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Pasek nad czatem z przyciskiem "archiwum"                           */
+/* ------------------------------------------------------------------ */
+.chat-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px 6px;
+}
+
+.archive-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--panel);
+  color: var(--text);
+  border: 2px solid var(--border);
+  border-radius: 9px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(80, 50, 20, 0.08);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.archive-toggle-btn:hover {
+  background: rgba(200, 148, 74, 0.10);
+}
+
+.archive-toggle-btn[aria-pressed="true"] {
+  background: rgba(200, 148, 74, 0.18);
+  border-color: var(--accent-light);
+}
+
+.archive-toggle-btn[data-count="0"] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.archive-toggle-icon {
+  font-size: 13px;
+  line-height: 1;
+}
+
+.archive-toggle-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.archive-toggle-btn[aria-pressed="true"] .archive-toggle-count {
+  background: rgba(124, 79, 30, 0.12);
+  color: var(--accent);
+  border-color: var(--accent-light);
+}
+
+/* ------------------------------------------------------------------ */
+/* Ukrywanie "archiwalnych" dymków (OOC, /mem, system, error,          */
+/* separator "wracamy do gry") gdy archive-hidden jest aktywne.        */
+/* ------------------------------------------------------------------ */
+#chat.archive-hidden .is-archived-bubble,
+#chat.archive-hidden .chat-back-in-game {
+  display: none !important;
 }

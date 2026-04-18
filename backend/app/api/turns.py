@@ -16,7 +16,9 @@ from app.services.dice import (
     resolve_roll,
 )
 from app.services.game_engine import build_narrative_messages, run_narrative_turn
+from app.services.helpme_advisor_service import run_helpme_advisor
 from app.services.llm_service import generate_chat_stream, get_effective_config, get_health
+from app.services.solo_death_service import apply_death_save_outcome, end_solo_campaign_on_death
 from app.services.user_llm_settings import get_user_llm_settings_full
 
 router = APIRouter()
@@ -119,6 +121,7 @@ COMMAND_REGISTRY = {
     "/name <new name>": "Rename your character",
     "/history": "Show the last 10 turns of the session",
     "/mem [pytanie]": "Pytanie o przeszłość z podsumowań — bez wpływu na narrację (żółte dymki)",
+    "/helpme [pytanie]": "Doradca OOC — wskazówki bez zmiany fabuły (czerwone dymki); nie wpływa na kontekst narracji",
     "/export": "Export the full session to a text file on the server (/data/exports/)",
 }
 
@@ -194,6 +197,14 @@ def get_character_or_404(
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
     return character
+
+
+def get_active_campaign_or_gone(conn: sqlite3.Connection, campaign_id: int):
+    """404 if missing, 410 if campaign has ended (solo death / GM-ended)."""
+    campaign = get_campaign_or_404(conn, campaign_id)
+    if str(campaign["status"] or "").lower() == "ended":
+        raise HTTPException(status_code=410, detail="This campaign has ended.")
+    return campaign
 
 
 def get_next_turn_number(conn: sqlite3.Connection, campaign_id: int) -> int:
@@ -310,7 +321,7 @@ def list_campaign_turns(
 ):
     conn = get_db()
     try:
-        get_campaign_or_404(conn, campaign_id)
+        get_active_campaign_or_gone(conn, campaign_id)
 
         rows = conn.execute(
             """
@@ -336,6 +347,7 @@ def list_campaign_turns(
 
         turns = []
         for row in rows:
+            r_route = row["route"]
             turns.append(
                 {
                     "id": row["id"],
@@ -346,7 +358,8 @@ def list_campaign_turns(
                     "character_user_id": row["character_user_id"],
                     "user_text": row["user_text"],
                     "assistant_text": row["assistant_text"],
-                    "route": row["route"],
+                    "route": r_route,
+                    "ooc": r_route == "helpme",
                     "created_at": row["created_at"],
                 }
             )
@@ -390,7 +403,7 @@ def create_turn(
 ):
     conn = get_db()
     try:
-        campaign = get_campaign_or_404(conn, campaign_id)
+        campaign = get_active_campaign_or_gone(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
         llm_config = get_user_llm_settings_full(character["user_id"])
         text = (payload.text or "").strip()
@@ -410,6 +423,58 @@ def create_turn(
             )
             roll_result_data = roll_result
             roll_result_message = format_roll_result_message(roll_result)
+
+        if roll_result_data and roll_result_data.get("test") == "death_save":
+            sheet_dict = parse_character_sheet(character["sheet_json"])
+            new_sheet, died_here = apply_death_save_outcome(sheet_dict, roll_result_data)
+            conn.execute(
+                """
+                UPDATE characters SET sheet_json = ?
+                WHERE id = ? AND campaign_id = ?
+                """,
+                (
+                    json.dumps(new_sheet, ensure_ascii=False),
+                    payload.character_id,
+                    campaign_id,
+                ),
+            )
+            conn.commit()
+            character = get_character_or_404(conn, campaign_id, payload.character_id)
+            if died_here:
+                loc = (character["location"] or "unknown place").strip()
+                dr = f"Failed three death saves ({loc})"
+                epitaph = end_solo_campaign_on_death(
+                    conn,
+                    campaign_id=campaign_id,
+                    character_row=character,
+                    death_reason=dr,
+                )
+                user_line = roll_result_message or text
+                log = create_turn_log(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    user_text=user_line,
+                    assistant_text=epitaph,
+                    route="narrative",
+                )
+                log_narrative_turn_structured(
+                    route="narrative",
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    turn_row=log,
+                    user_text=user_line,
+                    assistant_text=epitaph,
+                )
+                return {
+                    "id": log["id"],
+                    "campaign_id": log["campaign_id"],
+                    "turn_number": log["turn_number"],
+                    "created_at": log["created_at"],
+                    "route": "narrative",
+                    "result": {"message": epitaph},
+                    "campaign_ended": True,
+                }
 
         if text.startswith("/") and not roll_request:
             route = "command"
@@ -493,6 +558,48 @@ def create_turn(
                     user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
                 )
                 return {**log, "route": "command", "result": result}
+
+            # /helpme — OOC advisor (route=helpme; nie wchodzi do kontekstu narracji)
+            if cmd == "/helpme":
+                topic = re.sub(r"^/helpme\s*", "", text, count=1, flags=re.I).strip()
+                owner_id = int(campaign["owner_user_id"])
+                llm_owner = get_user_llm_settings_full(owner_id)
+                model_h = resolve_model_name(
+                    requested_model=payload.engine,
+                    campaign_model=campaign["model_id"],
+                    llm_config=llm_owner,
+                )
+                try:
+                    out = run_helpme_advisor(
+                        conn=conn,
+                        campaign=campaign,
+                        character=character,
+                        topic=topic,
+                        user_id=owner_id,
+                        model=model_h,
+                    )
+                except RuntimeError as e:
+                    raise HTTPException(status_code=502, detail=str(e)) from None
+                msg = (out.get("message") or "").strip()
+                if not msg:
+                    raise HTTPException(status_code=502, detail="Empty /helpme response")
+                log = create_turn_log(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    user_text=text.strip(),
+                    assistant_text=msg,
+                    route="helpme",
+                )
+                return {
+                    "id": log["id"],
+                    "campaign_id": log["campaign_id"],
+                    "turn_number": log["turn_number"],
+                    "created_at": log["created_at"],
+                    "route": "helpme",
+                    "ooc": True,
+                    "result": {"message": msg},
+                }
 
             # /export
             if cmd == "/export":
@@ -587,13 +694,79 @@ def create_turn_stream(
     """
     conn = get_db()
     try:
-        campaign = get_campaign_or_404(conn, campaign_id)
+        campaign = get_active_campaign_or_gone(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
         llm_config = get_user_llm_settings_full(character["user_id"])
         text = (payload.text or "").strip()
 
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
+
+        if re.match(r"^/helpme(\s|$)", text, re.I):
+            topic = re.sub(r"^/helpme\s*", "", text, count=1, flags=re.I).strip()
+            owner_id = int(campaign["owner_user_id"])
+            llm_owner = get_user_llm_settings_full(owner_id)
+            model_h = resolve_model_name(
+                requested_model=payload.engine,
+                campaign_model=campaign["model_id"],
+                llm_config=llm_owner,
+            )
+            try:
+                out = run_helpme_advisor(
+                    conn=conn,
+                    campaign=campaign,
+                    character=character,
+                    topic=topic,
+                    user_id=owner_id,
+                    model=model_h,
+                )
+            except RuntimeError as e:
+                err = str(e)
+
+                def helpme_err_stream():
+                    yield f"data: [ERROR] {err}\n\n"
+
+                return StreamingResponse(
+                    helpme_err_stream(),
+                    media_type="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                )
+
+            msg = (out.get("message") or "").strip()
+            if not msg:
+
+                def helpme_empty_stream():
+                    yield "data: [ERROR] Empty /helpme response\n\n"
+
+                return StreamingResponse(
+                    helpme_empty_stream(),
+                    media_type="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                )
+
+            user_line = text.strip()
+            create_turn_log(
+                conn=conn,
+                campaign_id=campaign_id,
+                character_id=payload.character_id,
+                user_text=user_line,
+                assistant_text=msg,
+                route="helpme",
+            )
+
+            def helpme_token_stream():
+                safe = msg.replace("\\", "\\\\").replace("\n", "\\n")
+                yield f"data: {safe}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                helpme_token_stream(),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "X-Accel-Buffering": "no",
+                },
+            )
 
         roll_request = parse_roll_command(text)
         roll_result_message = None
@@ -607,6 +780,63 @@ def create_turn_stream(
             )
             roll_result_data = roll_result
             roll_result_message = format_roll_result_message(roll_result)
+
+        if roll_result_data and roll_result_data.get("test") == "death_save":
+            sheet_dict = parse_character_sheet(character["sheet_json"])
+            new_sheet, died_here = apply_death_save_outcome(sheet_dict, roll_result_data)
+            conn.execute(
+                """
+                UPDATE characters SET sheet_json = ?
+                WHERE id = ? AND campaign_id = ?
+                """,
+                (
+                    json.dumps(new_sheet, ensure_ascii=False),
+                    payload.character_id,
+                    campaign_id,
+                ),
+            )
+            conn.commit()
+            character = get_character_or_404(conn, campaign_id, payload.character_id)
+            if died_here:
+                loc = (character["location"] or "unknown place").strip()
+                dr = f"Failed three death saves ({loc})"
+                epitaph = end_solo_campaign_on_death(
+                    conn,
+                    campaign_id=campaign_id,
+                    character_row=character,
+                    death_reason=dr,
+                )
+                user_line = roll_result_message or text
+                log = create_turn_log(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    user_text=user_line,
+                    assistant_text=epitaph,
+                    route="narrative",
+                )
+                log_narrative_turn_structured(
+                    route="narrative",
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    turn_row=log,
+                    user_text=user_line,
+                    assistant_text=epitaph,
+                )
+
+                def death_token_stream():
+                    safe = epitaph.replace("\\", "\\\\").replace("\n", "\\n")
+                    yield f"data: {safe}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    death_token_stream(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "X-Accel-Buffering": "no",
+                    },
+                )
 
         # Commands are not streamed (except /roll, which is turned into a narrative input)
         if text.startswith("/") and not roll_request:

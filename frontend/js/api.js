@@ -9,7 +9,8 @@ window.loadTranslations = async function (lang) {
 window.loadHealth = async function (userId = null) {
   const {
     statusBackendDotEl,
-    statusOllamaDotEl
+    statusOllamaDotEl,
+    statusLokiDotEl
   } = window.getEls();
 
   const setDotState = (dotEl, state, title) => {
@@ -18,6 +19,8 @@ window.loadHealth = async function (userId = null) {
     dotEl.classList.add(state);
     if (title) dotEl.title = title;
   };
+
+  const prevBackendOk = window.__backendHealthOk;
 
   try {
     const url = userId ? `${window.API_HEALTH}?user_id=${encodeURIComponent(String(userId))}` : window.API_HEALTH;
@@ -31,9 +34,46 @@ window.loadHealth = async function (userId = null) {
       data.llm?.reachable ? 'ok' : 'warn',
       `LLM: ${data.llm?.reachable ? 'OK' : window.t('status.disconnected')}`
     );
+
+    const loki = data.loki;
+    if (!loki || loki.configured === false) {
+      setDotState(
+        statusLokiDotEl,
+        'unknown',
+        'Loki: ' + (window.t ? window.t('status.loki_na') : 'not configured (set LOKI_URL on backend)')
+      );
+    } else if (loki.reachable) {
+      setDotState(statusLokiDotEl, 'ok', 'Loki: OK');
+    } else {
+      let detail = loki.error ? String(loki.error) : window.t ? window.t('status.disconnected') : 'unreachable';
+      if (!loki.error && loki.http_status != null) {
+        detail = `HTTP ${loki.http_status}`;
+      }
+      setDotState(statusLokiDotEl, 'warn', `Loki: ${detail}`);
+    }
+
+    window.__backendHealthOk = true;
+
+    // After Docker / backend restart the UI still shows old chat; reload turns when health recovers.
+    if (prevBackendOk === false && typeof window.loadTurns === 'function') {
+      const cid = window.state?.selectedCampaignId;
+      if (cid) {
+        try {
+          await window.loadTurns(cid);
+        } catch (_err) {
+          /* keep green dot; next poll can retry */
+        }
+      }
+    }
   } catch (e) {
+    window.__backendHealthOk = false;
     setDotState(statusBackendDotEl, 'error', `Backend: ${window.t('health.fail')}`);
     setDotState(statusOllamaDotEl, 'error', `Ollama: ${window.t('status.disconnected')}`);
+    setDotState(
+      statusLokiDotEl,
+      'unknown',
+      'Loki: ' + (window.t ? window.t('status.loki_unknown') : 'unknown (backend unreachable)')
+    );
   }
 };
 
@@ -85,12 +125,10 @@ window.loadModels = async function (userId = null) {
     engineSelectEl.appendChild(option);
   });
 
-  const savedEngine = localStorage.getItem('ai-gm:selectedEngine');
   const preferredFromRuntime = (window.state.llmSettings && window.state.llmSettings.model) || '';
   const preferredEngine =
     window.state.selectedEngine ||
     preferredFromRuntime ||
-    savedEngine ||
     window.state.models[0].name ||
     window.state.models[0];
 
@@ -238,7 +276,20 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
   const uid = userId || window.state?.playerUserId || null;
 
   const resp = await fetch(`/api/campaigns/${campaignId}/turns?limit=${limit}`);
+  if (resp.status === 410) {
+    window.state.turns = [];
+    if (typeof window.showCampaignDeathScreen === 'function') {
+      await window.showCampaignDeathScreen(campaignId);
+    }
+    window.clearChat?.();
+    window.renderHistoryPanel?.();
+    return;
+  }
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+  if (typeof window.dismissCampaignDeathScreen === 'function') {
+    window.dismissCampaignDeathScreen();
+  }
 
   const data = await resp.json();
   const turns = Array.isArray(data.turns) ? data.turns : [];
