@@ -215,6 +215,7 @@
           Nadpisuje <code>name</code> + <code>sheet_json</code> dla istniejącego <code>characters.id</code>.
           Historia tur (<code>campaign_turns</code>) zostaje przypisana do tego samego id — nie tworzy nowej postaci.
           Treść <code>sheet_json</code> jak przy <code>POST /campaigns/…/characters</code> (archetype, stats, skills, background, inventory w JSON karty).
+          <strong>Usuń bohatera</strong> w tabeli wywołuje <code>DELETE /api/admin/characters/{id}</code> — usuwa wiersz postaci, tury tej postaci i ekwipunek; kampania zostaje (może być bez bohatera). Na przyszłość / rzadkie przypadki.
         </p>
         <div class="inline-form" style="align-items: flex-end; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 0.75rem;">
           <button id="character-recreate-refresh-btn" class="secondary" type="button" disabled>Odśwież listę postaci</button>

@@ -55,6 +55,41 @@ def _clear_inventory_if_exists(conn: sqlite3.Connection, character_id: int) -> N
         pass
 
 
+def delete_character_admin(character_id: int) -> dict:
+    """
+    Remove a hero row and all dependent data for this character_id.
+    Deletes campaign_turns and inventory_items for this character, then the characters row.
+    Campaign and campaign_ai_summaries rows are left intact (campaign may become character-less).
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            """
+            SELECT c.id, c.name, c.campaign_id, c.user_id
+            FROM characters c
+            WHERE c.id = ?
+            """,
+            (character_id,),
+        ).fetchone()
+        if not row:
+            raise KeyError("character_not_found")
+
+        audit_old = f"id={character_id},name={row['name']},campaign_id={row['campaign_id']},user_id={row['user_id']}"
+        conn.execute("BEGIN")
+        conn.execute("DELETE FROM campaign_turns WHERE character_id = ?", (character_id,))
+        _clear_inventory_if_exists(conn, character_id)
+        conn.execute("DELETE FROM characters WHERE id = ?", (character_id,))
+        _audit_character(conn, character_id, "DELETE_CHARACTER", audit_old, None)
+        conn.commit()
+        return {"ok": True, "deleted_id": character_id, "campaign_id": int(row["campaign_id"])}
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def recreate_character_in_place(
     character_id: int,
     *,

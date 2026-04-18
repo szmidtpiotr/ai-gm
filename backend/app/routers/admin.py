@@ -9,7 +9,11 @@ from app.services.admin_accounts import (
     soft_delete_account,
     update_account,
 )
-from app.services.admin_character_recreate import list_characters_admin, recreate_character_in_place
+from app.services.admin_character_recreate import (
+    delete_character_admin,
+    list_characters_admin,
+    recreate_character_in_place,
+)
 from app.services.admin_auth import issue_dev_admin_token, verify_admin_token
 from app.services.admin_config_transfer import export_config, import_config
 from app.services.admin_config import (
@@ -613,6 +617,18 @@ def admin_reset_account_sheet(account_id: int, _: None = Depends(require_admin_t
 def admin_list_characters(_: None = Depends(require_admin_token)):
     """Lista postaci (id, imię, kampania) — panel Recreate."""
     return {"items": list_characters_admin()}
+
+
+@router.delete("/admin/characters/{character_id}")
+def admin_delete_character(character_id: int, _: None = Depends(require_admin_token)):
+    """
+    Delete a user's hero (character row) and all turns for that character.
+    Intended for rare admin / recovery use; campaign remains (may have zero characters).
+    """
+    try:
+        return delete_character_admin(character_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Character not found") from None
 
 
 @router.post("/admin/characters/{character_id}/recreate")

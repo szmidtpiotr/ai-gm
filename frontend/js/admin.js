@@ -362,6 +362,7 @@
         <td>${esc(c.user_id)}</td>
         <td>
           <button type="button" class="secondary" data-cr-select="${esc(id)}" data-cr-name="${esc(c.name || "")}">Wybierz</button>
+          <button type="button" class="danger" data-char-delete="${esc(id)}" data-char-name="${esc(c.name || "")}">Usuń bohatera</button>
         </td>
       </tr>`;
     }).join("");
@@ -959,6 +960,34 @@
       });
     }
     document.body.addEventListener("click", (e) => {
+      const delBtn = e.target.closest("[data-char-delete]");
+      if (delBtn) {
+        if (!state.connected) return;
+        const sid = delBtn.getAttribute("data-char-delete");
+        const nid = Number(sid);
+        if (!nid || nid < 1) return;
+        const nm = (delBtn.getAttribute("data-char-name") || "").trim();
+        const ok = window.confirm(
+          `Usunąć bohatera id=${nid}${nm ? ` (${nm})` : ""}? ` +
+            "Zniknie wiersz postaci, wszystkie tury (campaign_turns) przypisane do tej postaci oraz ekwipunek. " +
+            "Kampania zostaje (może nie mieć bohatera). Operacji nie cofnie się automatycznie."
+        );
+        if (!ok) return;
+        (async () => {
+          try {
+            await api(`/admin/characters/${encodeURIComponent(String(nid))}`, { method: "DELETE" });
+            log(`Usunięto postać id=${nid} (DELETE /admin/characters).`);
+            if (el.characterRecreateId && Number(el.characterRecreateId.value) === nid) {
+              el.characterRecreateId.value = "";
+            }
+            await loadCharacterRecreateList();
+          } catch (err) {
+            log(`Usuwanie postaci nie powiodło się -> ${err.message}`);
+            alert(err.message);
+          }
+        })();
+        return;
+      }
       const pick = e.target.closest("[data-cr-select]");
       if (!pick || !el.characterRecreateId) return;
       const sid = pick.getAttribute("data-cr-select");
