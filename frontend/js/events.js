@@ -138,23 +138,29 @@ window.bindEvents = function () {
   }
 
   if (els.characterCreateCloseEl) {
-    els.characterCreateCloseEl.onclick = () => {
+    els.characterCreateCloseEl.onclick = async () => {
       if (window.state._characterCreationInFlight) return;
       if (typeof window.isCharacterCreationWizardBlockingClose === 'function' && window.isCharacterCreationWizardBlockingClose()) {
         return;
+      }
+      if (typeof window.abandonWizardCampaignIfNeeded === 'function') {
+        await window.abandonWizardCampaignIfNeeded();
       }
       window.setCharacterModalOpen(false);
     };
   }
 
   if (els.characterCreateOverlayEl) {
-    els.characterCreateOverlayEl.onclick = (e) => {
+    els.characterCreateOverlayEl.onclick = async (e) => {
       if (e.target !== els.characterCreateOverlayEl) return;
       if (window.state._characterCreationInFlight) return;
       if (typeof window.isCharacterCreationWizardBlockingClose === 'function' && window.isCharacterCreationWizardBlockingClose()) {
         return;
       }
       if (window.state.selectedCharacterId) {
+        if (typeof window.abandonWizardCampaignIfNeeded === 'function') {
+          await window.abandonWizardCampaignIfNeeded();
+        }
         window.setCharacterModalOpen(false);
       }
     };

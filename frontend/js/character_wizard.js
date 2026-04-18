@@ -104,6 +104,8 @@
   }
 
   function canAdjustSkillLevel(key, delta, levels, snap) {
+    // Skills not rolled at creation (snap[key] === 0) are immutable in the wizard.
+    if (Number(snap[key] ?? 0) === 0) return false;
     const cur = Number(levels[key] ?? 0);
     const next = cur + delta;
     if (next < 0 || next > MAX_SKILL_CREATION_LVL) return false;
@@ -112,7 +114,10 @@
   }
 
   function buildSkillSnapshotFromSheet(sheet) {
-    const raw = (sheet && sheet.skills_at_creation) || (sheet && sheet.skills) || {};
+    // Prefer skills_at_creation (the server-rolled snapshot) over skills (which may
+    // include archetype minimums applied after rolling).
+    const creationRaw = sheet && sheet.skills_at_creation;
+    const raw = creationRaw || (sheet && sheet.skills) || {};
     const snap = {};
     for (const { key } of ALL_CREATION_SKILL_ROWS) {
       let v = normalizeSkillKeyFromSheet(raw, key);
@@ -563,8 +568,11 @@
       );
     }
     const identity_overrides = {
-      appearance: (appEl && appEl.value) != null ? appEl.value : w.identity?.appearance || '',
-      personality: (perEl && perEl.value) != null ? perEl.value : w.identity?.personality || ''
+      appearance: appEl ? appEl.value : (w.identity?.appearance ?? ''),
+      personality: perEl ? perEl.value : (w.identity?.personality ?? ''),
+      flaw: w.identity?.flaw ?? '',
+      secret: w.identity?.secret ?? '',
+      bond: w.identity?.bond ?? ''
     };
 
     const url = `${apiRoot()}/characters/${w.characterId}/finalize-sheet`;
@@ -592,6 +600,9 @@
         return;
       }
 
+      if (window.state._wizardPendingCharacter) {
+        window.state._wizardPendingCharacter.finalized = true;
+      }
       window.state.charCreationWizard = null;
       showStep1Only();
 
@@ -692,6 +703,9 @@
   window.resetCharacterCreationWizardUi = function () {
     window.state.charCreationWizard = null;
     showStep1Only();
+    // NOTE: _wizardPendingCharacter is intentionally NOT cleared here —
+    // that allows Back → re-submit to reuse the existing character (Bug 3).
+    // Cleanup happens in abandonWizardCampaignIfNeeded() on explicit cancel.
   };
 
   window.isCharacterCreationWizardBlockingClose = function () {

@@ -14,6 +14,13 @@ window.state = window.state || {
 
 window.state._campaignCreationInFlight = window.state._campaignCreationInFlight || false;
 window.state._characterCreationInFlight = window.state._characterCreationInFlight || false;
+/**
+ * After a character is successfully created (POST .../characters), store a reference here
+ * so that if the player goes Back to step 1 and re-submits the form we skip the duplicate
+ * POST and re-enter the wizard with the same character.
+ * Cleared on: finalize success (finalized=true), or abandon cleanup (null).
+ */
+window.state._wizardPendingCharacter = window.state._wizardPendingCharacter || null;
 
 /** Disable campaign create UI while POST /campaigns is in flight (prevents double submit). */
 window._setCampaignCreationBusy = function (busy) {
@@ -36,7 +43,22 @@ window._setCharacterCreationBusy = function (busy) {
   window.state._characterCreationInFlight = !!busy;
   const els = window.getEls();
   const on = !!busy;
-  if (els.characterCreateSubmitEl) els.characterCreateSubmitEl.disabled = on;
+  if (els.characterCreateSubmitEl) {
+    els.characterCreateSubmitEl.disabled = on;
+    if (on) {
+      if (!els.characterCreateSubmitEl.dataset.origText) {
+        els.characterCreateSubmitEl.dataset.origText = els.characterCreateSubmitEl.textContent;
+      }
+      els.characterCreateSubmitEl.innerHTML =
+        'GM przygotowuje świat\u2026 <span class="typing-dots" aria-hidden="true"><span></span><span></span><span></span></span>';
+    } else {
+      const orig = els.characterCreateSubmitEl.dataset.origText;
+      if (orig) {
+        els.characterCreateSubmitEl.textContent = orig;
+        delete els.characterCreateSubmitEl.dataset.origText;
+      }
+    }
+  }
   if (els.characterCreateCloseEl) els.characterCreateCloseEl.disabled = on;
   if (els.characterCreateNameEl) els.characterCreateNameEl.readOnly = on;
   if (els.characterCreateBackgroundEl) els.characterCreateBackgroundEl.readOnly = on;
@@ -131,6 +153,39 @@ window.nextTurnNumber = function () {
   const current = window.state.turnNumbers[id] || 0;
   window.state.turnNumbers[id] = current + 1;
   return window.state.turnNumbers[id];
+};
+
+/**
+ * Bug 4: if the player opened the character creation modal, a character was created
+ * (POST .../characters), but they closed/cancelled before completing finalize-sheet,
+ * delete the campaign (and its orphaned character + turns) to avoid leftover junk data.
+ */
+window.abandonWizardCampaignIfNeeded = async function () {
+  const p = window.state._wizardPendingCharacter;
+  if (!p || p.finalized) return;
+  // Clear immediately to prevent re-entry.
+  window.state._wizardPendingCharacter = null;
+  window.state.expectCharacterCreationForCampaignId = null;
+  try {
+    const resp = await fetch(`/api/campaigns/${p.campaignId}`, {
+      method: 'DELETE',
+      headers: window.getApiHeaders ? window.getApiHeaders() : {}
+    });
+    if (!resp.ok && resp.status !== 404) {
+      console.warn('[wizard] campaign cleanup failed', resp.status);
+    }
+  } catch (e) {
+    console.warn('[wizard] campaign cleanup error', e);
+  }
+  try {
+    if (typeof window.loadCampaigns === 'function') {
+      await window.loadCampaigns();
+    }
+    if (typeof window.loadCharacters === 'function' && window.state.selectedCampaignId) {
+      await window.loadCharacters(window.state.selectedCampaignId);
+    }
+  } catch (_e) {}
+  if (typeof window.updateUiState === 'function') window.updateUiState();
 };
 
 window.createCampaign = async function () {
@@ -398,6 +453,25 @@ window.createCharacterFromForm = async function () {
     is_active: 1
   };
 
+  // Bug 3: if we already created a character for this campaign (e.g. player went Back
+  // from step 2 to step 1 and hit Create again), reuse that character instead of POSTing again.
+  const pendingChar = window.state._wizardPendingCharacter;
+  if (
+    pendingChar &&
+    !pendingChar.finalized &&
+    Number(pendingChar.campaignId) === Number(selectedCampaignId)
+  ) {
+    if (typeof window.enterCharacterCreationWizard === 'function') {
+      window.enterCharacterCreationWizard({
+        characterId: pendingChar.characterId,
+        campaignId: pendingChar.campaignId,
+        sheetJson: pendingChar.sheetJson || {},
+        characterName: pendingChar.characterName || name
+      });
+    }
+    return;
+  }
+
   window._setCharacterCreationBusy(true);
   const userIdPre = window.state?.playerUserId || 1;
   try {
@@ -457,6 +531,14 @@ window.createCharacterFromForm = async function () {
     });
 
     if (typeof window.enterCharacterCreationWizard === 'function') {
+      // Bug 3: store pending character so Back → re-submit reuses this character
+      window.state._wizardPendingCharacter = {
+        characterId: data.id,
+        campaignId: selectedCampaignId,
+        sheetJson: data.sheet_json || {},
+        characterName: data.name || name,
+        finalized: false
+      };
       window.enterCharacterCreationWizard({
         characterId: data.id,
         campaignId: selectedCampaignId,
