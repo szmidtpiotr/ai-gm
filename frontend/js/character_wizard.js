@@ -741,6 +741,9 @@
       if (window.state._wizardPendingCharacter) {
         window.state._wizardPendingCharacter.finalized = true;
       }
+      if (typeof window._clearWizardPendingSession === 'function') {
+        window._clearWizardPendingSession();
+      }
       window.state.charCreationWizard = null;
       showStep1Only();
 

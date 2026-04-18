@@ -1,5 +1,9 @@
 window.bootstrap = async function () {
   try {
+    if (typeof window.cleanupAbandonedWizardFromSession === 'function') {
+      await window.cleanupAbandonedWizardFromSession();
+    }
+
     if (typeof window.initLlmProviderControls === 'function') {
       await window.initLlmProviderControls();
     }

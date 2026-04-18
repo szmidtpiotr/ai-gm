@@ -22,6 +22,94 @@ window.state._characterCreationInFlight = window.state._characterCreationInFligh
  */
 window.state._wizardPendingCharacter = window.state._wizardPendingCharacter || null;
 
+/** Survives refresh: used to DELETE abandoned campaign on next load or via pagehide keepalive. */
+window.WIZARD_PENDING_SESSION_KEY = 'ai-gm:wizardPendingCharacter';
+
+window._persistWizardPendingSession = function () {
+  try {
+    const p = window.state._wizardPendingCharacter;
+    if (!p || p.finalized) {
+      sessionStorage.removeItem(window.WIZARD_PENDING_SESSION_KEY);
+      return;
+    }
+    sessionStorage.setItem(
+      window.WIZARD_PENDING_SESSION_KEY,
+      JSON.stringify({
+        campaignId: p.campaignId,
+        characterId: p.characterId,
+        characterName: p.characterName || '',
+        finalized: false
+      })
+    );
+  } catch (_e) {
+    /* optional */
+  }
+};
+
+window._clearWizardPendingSession = function () {
+  try {
+    sessionStorage.removeItem(window.WIZARD_PENDING_SESSION_KEY);
+  } catch (_e) {
+    /* optional */
+  }
+};
+
+/**
+ * After refresh / crash: remove campaign+character created for an unfinished wizard
+ * (sessionStorage still holds campaign id; in-memory _wizardPendingCharacter is gone).
+ */
+window.cleanupAbandonedWizardFromSession = async function () {
+  let raw = null;
+  try {
+    raw = sessionStorage.getItem(window.WIZARD_PENDING_SESSION_KEY);
+  } catch (_e) {
+    return;
+  }
+  if (!raw) return;
+  let p = null;
+  try {
+    p = JSON.parse(raw);
+  } catch (_e) {
+    window._clearWizardPendingSession();
+    return;
+  }
+  if (!p || p.finalized || !p.campaignId) {
+    window._clearWizardPendingSession();
+    return;
+  }
+  try {
+    const resp = await fetch(`/api/campaigns/${p.campaignId}`, {
+      method: 'DELETE',
+      headers: window.getApiHeaders ? window.getApiHeaders() : {}
+    });
+    if (!resp.ok && resp.status !== 404) {
+      console.warn('[wizard] session startup cleanup failed', resp.status);
+    }
+  } catch (e) {
+    console.warn('[wizard] session startup cleanup error', e);
+  }
+  window._clearWizardPendingSession();
+  window.state._wizardPendingCharacter = null;
+  window.state.expectCharacterCreationForCampaignId = null;
+};
+
+if (!window.__wizardPageHideCleanupRegistered) {
+  window.__wizardPageHideCleanupRegistered = true;
+  window.addEventListener('pagehide', () => {
+    const p = window.state._wizardPendingCharacter;
+    if (!p || p.finalized || !p.campaignId) return;
+    try {
+      fetch(`/api/campaigns/${p.campaignId}`, {
+        method: 'DELETE',
+        headers: window.getApiHeaders ? window.getApiHeaders() : {},
+        keepalive: true
+      }).catch(() => {});
+    } catch (_e) {
+      /* optional */
+    }
+  });
+}
+
 /** Disable campaign create UI while POST /campaigns is in flight (prevents double submit). */
 window._setCampaignCreationBusy = function (busy) {
   window.state._campaignCreationInFlight = !!busy;
@@ -166,6 +254,7 @@ window.abandonWizardCampaignIfNeeded = async function () {
   // Clear immediately to prevent re-entry.
   window.state._wizardPendingCharacter = null;
   window.state.expectCharacterCreationForCampaignId = null;
+  window._clearWizardPendingSession();
   try {
     const resp = await fetch(`/api/campaigns/${p.campaignId}`, {
       method: 'DELETE',
@@ -539,6 +628,7 @@ window.createCharacterFromForm = async function () {
         characterName: data.name || name,
         finalized: false
       };
+      window._persistWizardPendingSession();
       window.enterCharacterCreationWizard({
         characterId: data.id,
         campaignId: selectedCampaignId,
