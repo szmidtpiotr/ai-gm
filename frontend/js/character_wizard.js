@@ -95,27 +95,48 @@
       .join(' ');
   }
 
-  /** Sum of |current rank − rolled rank| per creation slot. Swaps at same rank add 0. */
-  function skillLevelChangeBudgetUsed(levels, snap, swapMap) {
+  /**
+   * Per rolled slot (origKey), not per global skill key — avoids double-counting when two
+   * slots share the same display skill after a swap (e.g. Arcana→Intimidation while Intimidation
+   * was also rolled).
+   */
+  function skillLevelChangeBudgetUsed(skillSlotLevels, snap) {
     let sum = 0;
     for (const { key: origKey } of ALL_CREATION_SKILL_ROWS) {
       if (Number(snap[origKey] ?? 0) === 0) continue;
-      const currentKey = (swapMap && swapMap[origKey]) || origKey;
-      const cur = Number(levels[currentKey] ?? 0);
+      const cur = Number(skillSlotLevels[origKey] ?? snap[origKey] ?? 0);
       const orig = Number(snap[origKey] ?? 0);
       sum += Math.abs(cur - orig);
     }
     return sum;
   }
 
-  function canAdjustSkillLevelForSlot(origKey, delta, levels, snap, swapMap) {
+  function canAdjustSkillLevelForSlot(origKey, delta, skillSlotLevels, snap) {
     if (Number(snap[origKey] ?? 0) === 0) return false;
-    const currentKey = (swapMap && swapMap[origKey]) || origKey;
-    const cur = Number(levels[currentKey] ?? 0);
+    const cur = Number(skillSlotLevels[origKey] ?? 0);
     const next = cur + delta;
     if (next < 0 || next > MAX_SKILL_CREATION_LVL) return false;
-    const test = { ...levels, [currentKey]: next };
-    return skillLevelChangeBudgetUsed(test, snap, swapMap) <= PLAYER_SKILL_CHANGE_SLOTS;
+    const test = { ...skillSlotLevels, [origKey]: next };
+    return skillLevelChangeBudgetUsed(test, snap) <= PLAYER_SKILL_CHANGE_SLOTS;
+  }
+
+  /** Derive flat skillLevels map (for finalize / server) from per-slot levels + swaps. */
+  function rebuildSkillLevelsFromSlots(w) {
+    const sm = w.skillSwapMap || {};
+    const ssl = w.skillSlotLevels || {};
+    const snap = w.originalSkillSnapshot || {};
+    const levels = {};
+    for (const { key } of ALL_CREATION_SKILL_ROWS) levels[key] = 0;
+    for (const { key: origKey } of ALL_CREATION_SKILL_ROWS) {
+      if (Number(snap[origKey] ?? 0) <= 0) continue;
+      const tgt = sm[origKey] || origKey;
+      const lv = Math.max(
+        0,
+        Math.min(MAX_SKILL_CREATION_LVL, Number(ssl[origKey] ?? snap[origKey] ?? 0))
+      );
+      levels[tgt] = lv;
+    }
+    w.skillLevels = levels;
   }
 
   function buildSkillSlotCurrentPayload(w) {
@@ -278,7 +299,8 @@
 
   function renderSkillsStep(w) {
     const swapMap = w.skillSwapMap || {};
-    const changed = skillLevelChangeBudgetUsed(w.skillLevels, w.originalSkillSnapshot, swapMap);
+    const ssl = w.skillSlotLevels || {};
+    const changed = skillLevelChangeBudgetUsed(ssl, w.originalSkillSnapshot);
     const slotRows = preRolledSkillSlotRows(w);
 
     // Keys currently displayed (original or swapped-in)
@@ -325,11 +347,11 @@
 
               const r = Math.max(
                 0,
-                Math.min(MAX_SKILL_CREATION_LVL, Number(w.skillLevels[currentKey] ?? 0))
+                Math.min(MAX_SKILL_CREATION_LVL, Number(ssl[origKey] ?? w.originalSkillSnapshot[origKey] ?? 0))
               );
               const rankName = CREATION_RANK_LABELS[r] || CREATION_RANK_LABELS[0];
-              const pOk = canAdjustSkillLevelForSlot(origKey, 1, w.skillLevels, w.originalSkillSnapshot, swapMap);
-              const mOk = canAdjustSkillLevelForSlot(origKey, -1, w.skillLevels, w.originalSkillSnapshot, swapMap);
+              const pOk = canAdjustSkillLevelForSlot(origKey, 1, ssl, w.originalSkillSnapshot);
+              const mOk = canAdjustSkillLevelForSlot(origKey, -1, ssl, w.originalSkillSnapshot);
               const pDis = pOk ? '' : 'disabled';
               const mDis = mOk ? '' : 'disabled';
 
@@ -470,11 +492,9 @@
       const newKey = sel.value;
       if (!newKey || !origKey) return;
       const cur = window.state.charCreationWizard;
-      const origLevel = Number(cur.skillLevels[origKey] ?? 0);
       cur.skillSwapMap[origKey] = newKey;
-      cur.skillLevels[newKey] = origLevel;
-      cur.skillLevels[origKey] = 0;
       cur.swapModeSlot = null;
+      rebuildSkillLevelsFromSlots(cur);
       paintWizard(cur);
     };
 
@@ -506,19 +526,25 @@
           window.characterWizardGoToSkills();
         } else if (act === 'reset-skills') {
           const cur = window.state.charCreationWizard;
-          cur.skillLevels = { ...cur.originalSkillSnapshot };
+          const snap = cur.originalSkillSnapshot || {};
+          cur.skillSlotLevels = {};
+          for (const { key } of ALL_CREATION_SKILL_ROWS) {
+            const v = Number(snap[key] ?? 0);
+            if (v > 0) cur.skillSlotLevels[key] = v;
+          }
           cur.skillSwapMap = {};
           cur.swapModeSlot = null;
+          rebuildSkillLevelsFromSlots(cur);
           paintWizard(cur);
         } else if (act === 'skill-plus' || act === 'skill-minus') {
           const origKey = btn.getAttribute('data-orig-slot');
           const cur = window.state.charCreationWizard;
           if (!cur || cur.step !== 3 || !origKey) return;
           const delta = act === 'skill-plus' ? 1 : -1;
-          const sm = cur.skillSwapMap || {};
-          const currentKey = sm[origKey] || origKey;
-          if (!canAdjustSkillLevelForSlot(origKey, delta, cur.skillLevels, cur.originalSkillSnapshot, sm)) return;
-          cur.skillLevels[currentKey] = Number(cur.skillLevels[currentKey] ?? 0) + delta;
+          if (!cur.skillSlotLevels) cur.skillSlotLevels = {};
+          if (!canAdjustSkillLevelForSlot(origKey, delta, cur.skillSlotLevels, cur.originalSkillSnapshot)) return;
+          cur.skillSlotLevels[origKey] = Number(cur.skillSlotLevels[origKey] ?? 0) + delta;
+          rebuildSkillLevelsFromSlots(cur);
           paintWizard(cur);
         } else if (act === 'skill-swap-open') {
           const origKey = btn.getAttribute('data-orig-skill');
@@ -535,13 +561,9 @@
           const origKey = btn.getAttribute('data-orig-skill');
           const cur = window.state.charCreationWizard;
           if (!cur || !origKey) return;
-          const newKey = (cur.skillSwapMap || {})[origKey];
-          if (newKey) {
-            cur.skillLevels[origKey] = Number(cur.originalSkillSnapshot[origKey] ?? 0);
-            cur.skillLevels[newKey] = 0;
-            delete cur.skillSwapMap[origKey];
-          }
+          if ((cur.skillSwapMap || {})[origKey]) delete cur.skillSwapMap[origKey];
           cur.swapModeSlot = null;
+          rebuildSkillLevelsFromSlots(cur);
           paintWizard(cur);
         } else if (act === 'confirm-skills') {
           window.characterWizardGoToIdentity();
@@ -674,6 +696,7 @@
     for (const k of CORE_STATS) {
       stat_overrides[STAT_API_KEYS[k]] = Number(w.bases[k]);
     }
+    rebuildSkillLevelsFromSlots(w);
     const skills = {};
     for (const { key } of ALL_CREATION_SKILL_ROWS) {
       skills[key] = Math.max(
@@ -791,6 +814,11 @@
     const originalBases = coreBasesFromStoredStats(stats, archetype);
     const sumTarget = sumBases(originalBases);
     const originalSkillSnapshot = buildSkillSnapshotFromSheet(sheet);
+    const skillSlotLevels = {};
+    for (const { key } of ALL_CREATION_SKILL_ROWS) {
+      const v = Number(originalSkillSnapshot[key] ?? 0);
+      if (v > 0) skillSlotLevels[key] = v;
+    }
 
     window.state.charCreationWizard = {
       step: 2,
@@ -803,7 +831,8 @@
       sumTarget,
       unassignedPoints: 0,
       originalSkillSnapshot: { ...originalSkillSnapshot },
-      skillLevels: { ...originalSkillSnapshot },
+      skillSlotLevels: { ...skillSlotLevels },
+      skillLevels: {},
       skillSwapMap: {},
       swapModeSlot: null,
       identity: null,
@@ -811,6 +840,8 @@
       identityError: null,
       finalizeError: null
     };
+
+    rebuildSkillLevelsFromSlots(window.state.charCreationWizard);
 
     window.characterModalOpen = true;
     paintWizard(window.state.charCreationWizard);
