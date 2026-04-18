@@ -17,5 +17,7 @@ window.state = {
   // turnNumber: 0   ← DELETE this line
   turnNumbers: {}, // per‑campaign counters
   /** Post-create wizard (stats → skills → identity); null when inactive. */
-  charCreationWizard: null
+  charCreationWizard: null,
+  /** After POST /campaigns (new campaign), force character modal until first hero exists. */
+  expectCharacterCreationForCampaignId: null
 };

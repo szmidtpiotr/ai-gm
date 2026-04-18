@@ -777,6 +777,14 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         conn.close()
         raise HTTPException(status_code=404, detail="Campaign not found")
 
+    existing = conn.execute(
+        "SELECT COUNT(*) AS n FROM characters WHERE campaign_id = ?",
+        (campaign_id,),
+    ).fetchone()
+    if existing and int(existing["n"] or 0) >= 1:
+        conn.close()
+        raise HTTPException(status_code=409, detail="Campaign already has a character.")
+
     if req.system_id != campaign["system_id"]:
         conn.close()
         raise HTTPException(

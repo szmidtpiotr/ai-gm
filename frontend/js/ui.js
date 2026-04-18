@@ -22,7 +22,6 @@ window.getEls = function () {
     contextualRollBtn: document.getElementById('contextual-roll-btn'),
     createCampaignBtn: document.getElementById('create-campaign-btn'),
     deleteCampaignBtn: document.getElementById('delete-campaign-btn'),
-    createCharacterBtn: document.getElementById('create-character-btn'),
     statusBackendDotEl: document.getElementById('status-backend-dot'),
     statusOllamaDotEl: document.getElementById('status-ollama-dot'),
     statusLokiDotEl: document.getElementById('status-loki-dot'),
@@ -617,7 +616,12 @@ window.updateUiState = function () {
   const activeCampaign = window.currentCampaign ? window.currentCampaign() : null;
   const hasCampaign = !!activeCampaign;
   const hasCharacter = !!window.state.selectedCharacterId;
-  const shouldForceCharacterModal = hasCampaign && !hasCharacter;
+  const expectId = window.state.expectCharacterCreationForCampaignId;
+  const shouldForceCharacterModal =
+    hasCampaign &&
+    !hasCharacter &&
+    expectId != null &&
+    Number(expectId) === Number(window.state.selectedCampaignId);
   const shouldShowCharacterModal = shouldForceCharacterModal || window.characterModalOpen;
 
   const llmGate = typeof window.computeLlmGate === 'function' ? window.computeLlmGate() : { ok: true };
@@ -626,7 +630,6 @@ window.updateUiState = function () {
   if (els.deleteCampaignBtn) els.deleteCampaignBtn.disabled = !hasCampaign;
   if (els.createCampaignBtn) els.createCampaignBtn.disabled = llmBlocked;
   if (els.campaignCreateSubmitEl) els.campaignCreateSubmitEl.disabled = llmBlocked;
-  if (els.createCharacterBtn) els.createCharacterBtn.disabled = !hasCampaign || llmBlocked;
   if (els.characterCreateSubmitEl) els.characterCreateSubmitEl.disabled = llmBlocked;
   if (els.sendBtn) els.sendBtn.disabled = !(hasCampaign && hasCharacter);
 

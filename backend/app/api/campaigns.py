@@ -28,9 +28,19 @@ def list_campaigns():
 
     rows = conn.execute(
         """
-        SELECT id, title, system_id, model_id, owner_user_id, language, mode, status, created_at
-        FROM campaigns
-        ORDER BY id ASC
+        SELECT
+            c.id,
+            c.title,
+            c.system_id,
+            c.model_id,
+            c.owner_user_id,
+            c.language,
+            c.mode,
+            c.status,
+            c.created_at,
+            (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count
+        FROM campaigns c
+        ORDER BY c.id ASC
         """
     ).fetchall()
 

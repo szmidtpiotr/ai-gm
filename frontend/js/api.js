@@ -164,7 +164,8 @@ const resp = await fetch(window.API_CAMPAIGNS);
     systemid: c.systemid ?? c.system_id,
     modelid: c.modelid ?? c.model_id,
     owneruserid: c.owneruserid ?? c.owner_user_id,
-    createdat: c.createdat ?? c.created_at
+    createdat: c.createdat ?? c.created_at,
+    character_count: Number(c.character_count ?? 0)
   }));
 
   campaignSelectEl.innerHTML = '';
@@ -173,6 +174,7 @@ const resp = await fetch(window.API_CAMPAIGNS);
     campaignSelectEl.innerHTML = '<option value="" disabled selected>Brak kampanii</option>';
     campaignSelectEl.disabled = true;
 
+    window.state.expectCharacterCreationForCampaignId = null;
     window.state.selectedCampaignId = null;
     window.state.characters = [];
     window.state.selectedCharacterId = null;
@@ -186,21 +188,39 @@ const resp = await fetch(window.API_CAMPAIGNS);
 
   campaignSelectEl.disabled = false;
 
+  const campaignPlayable = (c) => {
+    const st = String(c.status || '').toLowerCase();
+    const n = Number(c.character_count ?? 0);
+    return st === 'ended' || n >= 1;
+  };
+
   window.state.campaigns.forEach(campaign => {
     const option = document.createElement('option');
     option.value = String(campaign.id);
-    option.textContent = campaign.title;
+    const broken = !campaignPlayable(campaign);
+    option.textContent = broken ? `${campaign.title} (brak bohatera)` : campaign.title;
     campaignSelectEl.appendChild(option);
   });
 
   const savedCampaignId = Number(localStorage.getItem('ai-gm:selectedCampaignId'));
-  const candidateId = preferredCampaignId || savedCampaignId;
+  const prefOk =
+    preferredCampaignId &&
+    window.state.campaigns.some((c) => Number(c.id) === Number(preferredCampaignId));
+  const savedOk =
+    savedCampaignId &&
+    window.state.campaigns.some((c) => Number(c.id) === Number(savedCampaignId));
 
-  const selectedId = candidateId && window.state.campaigns.some(
-    c => Number(c.id) === Number(candidateId)
-  )
-    ? Number(candidateId)
-    : Number(window.state.campaigns[0].id);
+  let selectedId = null;
+  if (prefOk) {
+    selectedId = Number(preferredCampaignId);
+  } else if (savedOk && campaignPlayable(window.state.campaigns.find((c) => Number(c.id) === Number(savedCampaignId)))) {
+    selectedId = Number(savedCampaignId);
+  } else {
+    const firstPlayable = window.state.campaigns.find((c) => campaignPlayable(c));
+    selectedId = firstPlayable
+      ? Number(firstPlayable.id)
+      : Number(window.state.campaigns[0].id);
+  }
 
   window.state.selectedCampaignId = selectedId;
   campaignSelectEl.value = String(selectedId);
@@ -239,6 +259,13 @@ window.loadCharacters = async function (campaignId, preferredCharacterId = null)
     window.state.selectedCharacterId = null;
     window.updateUiState();
     return;
+  }
+
+  if (
+    window.state.expectCharacterCreationForCampaignId != null &&
+    Number(window.state.expectCharacterCreationForCampaignId) === Number(campaignId)
+  ) {
+    window.state.expectCharacterCreationForCampaignId = null;
   }
 
   characterSelectEl.disabled = false;

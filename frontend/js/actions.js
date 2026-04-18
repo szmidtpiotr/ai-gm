@@ -8,7 +8,8 @@ window.state = window.state || {
   selectedCampaignId: null,
   selectedCharacterId: null,
   selectedEngine: null,
-  turnNumbers: {}
+  turnNumbers: {},
+  expectCharacterCreationForCampaignId: null
 };
 
 window.chatRequestState = window.chatRequestState || {
@@ -169,6 +170,7 @@ window.createCampaignFromForm = async function () {
       throw new Error(data.detail || `HTTP ${resp.status}`);
     }
 
+    window.state.expectCharacterCreationForCampaignId = data.id;
     await window.loadCampaigns(data.id);
     await window.loadCharacters(data.id);
     window.setCampaignModalOpen(false);
@@ -205,6 +207,7 @@ window.deleteCampaign = async function () {
   const confirmed = confirm(`Usunąć kampanię "${label}"?`);
   if (!confirmed) return;
 
+  const deletingId = window.state.selectedCampaignId;
   try {
     const resp = await fetch(`/api/campaigns/${window.state.selectedCampaignId}`, {
       method: 'DELETE'
@@ -226,6 +229,13 @@ window.deleteCampaign = async function () {
       route: 'campaign'
     });
 
+    if (
+      window.state.expectCharacterCreationForCampaignId != null &&
+      Number(window.state.expectCharacterCreationForCampaignId) === Number(deletingId)
+    ) {
+      window.state.expectCharacterCreationForCampaignId = null;
+    }
+
     await window.loadCampaigns();
     if (window.state.selectedCampaignId) {
       await window.loadCharacters(window.state.selectedCampaignId);
@@ -237,15 +247,6 @@ window.deleteCampaign = async function () {
       role: 'error'
     });
   }
-};
-
-window.createCharacter = async function () {
-  if (!window.state.selectedCampaignId) {
-    alert('Najpierw wybierz kampanię');
-    return;
-  }
-
-  window.setCharacterModalOpen(true);
 };
 
 window.createCharacterFromForm = async function () {

@@ -5,7 +5,14 @@ window.bindEvents = function () {
   const archetypeCards = Array.from(document.querySelectorAll('.archetype-card'));
 
   els.campaignSelectEl.onchange = async () => {
-    window.state.selectedCampaignId = Number(els.campaignSelectEl.value);
+    const nextId = Number(els.campaignSelectEl.value);
+    if (
+      window.state.expectCharacterCreationForCampaignId != null &&
+      Number(window.state.expectCharacterCreationForCampaignId) !== nextId
+    ) {
+      window.state.expectCharacterCreationForCampaignId = null;
+    }
+    window.state.selectedCampaignId = nextId;
     localStorage.setItem(
       'ai-gm:selectedCampaignId',
       String(window.state.selectedCampaignId)
@@ -117,7 +124,6 @@ window.bindEvents = function () {
   }
   els.createCampaignBtn.onclick = window.createCampaign;
   els.deleteCampaignBtn.onclick = window.deleteCampaign;
-  els.createCharacterBtn.onclick = window.createCharacter;
 
   if (els.characterCreateFormEl) {
     els.characterCreateFormEl.onsubmit = async (e) => {
