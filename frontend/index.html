@@ -254,7 +254,12 @@
   <div class="character-modal-overlay" id="history-summary-overlay" aria-hidden="true">
     <section class="character-modal history-summary-modal" role="dialog" aria-modal="true" aria-labelledby="history-summary-title">
       <button type="button" class="character-modal-close secondary" id="history-summary-close" aria-label="Zamknij">×</button>
-      <h2 id="history-summary-title">Podsumowanie kampanii</h2>
+      <div class="history-summary-title-row">
+        <h2 id="history-summary-title">Podsumowanie kampanii</h2>
+        <button type="button" class="secondary history-summary-regen-btn" id="history-summary-regenerate-btn" title="Wygeneruj ponownie podsumowanie AI (LLM)">
+          Odśwież AI
+        </button>
+      </div>
       <p id="history-summary-loading" class="muted" style="display: none;">Ładowanie…</p>
       <div id="history-summary-body" class="history-summary-body muted" style="display: none;"></div>
       <p id="history-summary-empty" class="muted" style="display: none;">

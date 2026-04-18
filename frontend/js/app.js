@@ -509,8 +509,11 @@ window.closeHistorySummaryModal = function () {
   overlay.setAttribute("aria-hidden", "true");
 };
 
-window.openHistorySummaryModal = async function () {
-  const overlay = document.getElementById("history-summary-overlay");
+/**
+ * @param {{ forceRegenerate?: boolean }} opts
+ */
+window.loadHistorySummaryModalContent = async function (opts) {
+  const forceRegenerate = !!(opts && opts.forceRegenerate);
   const bodyEl = document.getElementById("history-summary-body");
   const emptyEl = document.getElementById("history-summary-empty");
   const loadingEl = document.getElementById("history-summary-loading");
@@ -523,9 +526,25 @@ window.openHistorySummaryModal = async function () {
     });
     return;
   }
-  if (!overlay) return;
-  overlay.style.display = "flex";
-  overlay.setAttribute("aria-hidden", "false");
+  const uid = window.state?.playerUserId || 1;
+
+  if (forceRegenerate) {
+    const camp = typeof window.currentCampaign === "function" ? window.currentCampaign() : null;
+    const ownerId = Number(camp?.owner_user_id ?? camp?.owneruserid ?? 0);
+    if (!camp || ownerId !== Number(uid)) {
+      window.addMessage?.({
+        speaker: "System",
+        text: "Tylko właściciel kampanii może ponownie wygenerować podsumowanie.",
+        role: "system",
+      });
+      return;
+    }
+    const ok = window.confirm(
+      "Wygenerować ponownie podsumowanie narracji? Wywoła model LLM i nadpisze zapisane podsumowanie."
+    );
+    if (!ok) return;
+  }
+
   if (loadingEl) loadingEl.style.display = "block";
   if (bodyEl) {
     bodyEl.style.display = "none";
@@ -534,32 +553,52 @@ window.openHistorySummaryModal = async function () {
   if (emptyEl) {
     emptyEl.style.display = "none";
     emptyEl.textContent =
-      "Brak podsumowania (albo brak tur narracyjnych). Jako właściciel kampanii zapiszesz je przy następnym otwarciu, gdy LLM jest dostępny.";
+      "Brak podsumowania — pojawi się po turach narracyjnych, gdy właściciel kampanii otworzy to okno (automatyczne odświeżanie co 5 nowych tur).";
   }
+
   try {
-    const uid = window.state?.playerUserId || 1;
-    const qs = new URLSearchParams({
-      user_id: String(uid),
-      stale_after_turns: "5",
-    });
-    let r = await fetch(
-      `/api/campaigns/${cid}/history/summary/ensure?${qs}`,
-      { method: "POST" }
-    );
-    let data = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      const r2 = await fetch(`/api/campaigns/${cid}/history/summary`);
-      const d2 = await r2.json().catch(() => ({}));
-      if (!r2.ok) {
+    let data;
+    if (forceRegenerate) {
+      const qs = new URLSearchParams({
+        user_id: String(uid),
+        persist: "true",
+        max_turns: "200",
+      });
+      const r = await fetch(`/api/campaigns/${cid}/history/summary?${qs}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      data = await r.json().catch(() => ({}));
+      if (!r.ok) {
         const msg =
-          typeof data.detail === "string"
-            ? data.detail
-            : typeof d2.detail === "string"
-              ? d2.detail
-              : `HTTP ${r.status}`;
+          typeof data.detail === "string" ? data.detail : `HTTP ${r.status}`;
         throw new Error(msg);
       }
-      data = d2;
+    } else {
+      const qs = new URLSearchParams({
+        user_id: String(uid),
+        stale_after_turns: "5",
+      });
+      let r = await fetch(
+        `/api/campaigns/${cid}/history/summary/ensure?${qs}`,
+        { method: "POST" }
+      );
+      data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        const r2 = await fetch(`/api/campaigns/${cid}/history/summary`);
+        const d2 = await r2.json().catch(() => ({}));
+        if (!r2.ok) {
+          const msg =
+            typeof data.detail === "string"
+              ? data.detail
+              : typeof d2.detail === "string"
+                ? d2.detail
+                : `HTTP ${r.status}`;
+          throw new Error(msg);
+        }
+        data = d2;
+      }
     }
     if (loadingEl) loadingEl.style.display = "none";
     const s = data.summary;
@@ -581,12 +620,44 @@ window.openHistorySummaryModal = async function () {
   }
 };
 
+window.openHistorySummaryModal = async function () {
+  const overlay = document.getElementById("history-summary-overlay");
+  const regenBtn = document.getElementById("history-summary-regenerate-btn");
+  if (!overlay) return;
+  const cid = window.state?.selectedCampaignId;
+  if (!cid) {
+    window.addMessage?.({
+      speaker: "System",
+      text: "Wybierz kampanię, żeby zobaczyć podsumowanie.",
+      role: "system",
+    });
+    return;
+  }
+  overlay.style.display = "flex";
+  overlay.setAttribute("aria-hidden", "false");
+
+  if (regenBtn) {
+    const camp = typeof window.currentCampaign === "function" ? window.currentCampaign() : null;
+    const ownerId = Number(camp?.owner_user_id ?? camp?.owneruserid ?? 0);
+    const uid = Number(window.state?.playerUserId || 0);
+    const isOwner = !!(camp && ownerId === uid);
+    regenBtn.style.display = isOwner ? "inline-flex" : "none";
+    regenBtn.disabled = !isOwner;
+  }
+
+  await window.loadHistorySummaryModalContent({ forceRegenerate: false });
+};
+
 window.bindHistorySummaryButton = function () {
   const btn = document.getElementById("history-summary-btn");
+  const regenBtn = document.getElementById("history-summary-regenerate-btn");
   const overlay = document.getElementById("history-summary-overlay");
   const closeBtn = document.getElementById("history-summary-close");
   if (btn) {
     btn.onclick = () => window.openHistorySummaryModal();
+  }
+  if (regenBtn) {
+    regenBtn.onclick = () => window.loadHistorySummaryModalContent({ forceRegenerate: true });
   }
   if (closeBtn) {
     closeBtn.onclick = () => window.closeHistorySummaryModal();

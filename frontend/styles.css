@@ -608,11 +608,38 @@ input:disabled {
   color: var(--text, #e8e4dc);
 }
 
+.history-summary-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+  padding-right: 48px;
+}
+
+.history-summary-title-row h2 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.history-summary-regen-btn {
+  font-size: 12px;
+  padding: 6px 10px;
+  min-height: 32px;
+  white-space: nowrap;
+}
+
 .character-modal h2 {
   margin: 0 0 8px;
   color: var(--accent);
   font-size: 22px;
   padding-right: 48px;
+}
+
+.history-summary-modal .history-summary-title-row h2 {
+  padding-right: 0;
 }
 
 .character-modal textarea {
