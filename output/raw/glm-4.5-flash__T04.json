@@ -1,0 +1,5 @@
+{
+  "error": "HTTP 403: email verification required to use free models — please verify your email address",
+  "model": "glm-4.5-flash",
+  "test_id": "T04"
+}

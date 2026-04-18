@@ -1,0 +1,5 @@
+{
+  "error": "HTTP 400: {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Developer instruction is not enabled for models/gemma-3-4b-it\",\n    \"status\": \"INVALID_ARGUMENT\"\n  }\n}\n",
+  "model": "gemma-3-4b-it",
+  "test_id": "T08"
+}
