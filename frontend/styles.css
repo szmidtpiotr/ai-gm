@@ -1498,6 +1498,17 @@ button.wizard-stat-btn {
   background: rgba(200, 148, 74, 0.1);
 }
 
+.wizard-skill-row--budget {
+  cursor: default;
+}
+
+.wizard-skill-row--budget .wizard-skill-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .wizard-skill-name {
   font-weight: 600;
   font-size: 15px;

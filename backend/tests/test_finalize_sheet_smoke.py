@@ -8,14 +8,13 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.api.characters import (  # noqa: E402
+    CREATION_SKILL_POOL,
     FinalizeSheetRequest,
     GeneratedIdentityPreview,
     IdentityOverrideIn,
-    LOCKED_SKILL_NAMES,
-    _apply_skill_replacements,
     _build_character_sheet,
     _core_bases_from_stored_stats,
-    _skill_rank_total,
+    _count_skill_slot_diffs,
     _stat_modifier,
 )
 
@@ -33,23 +32,13 @@ class TestFinalizeHelpers:
         assert bases["INT"] == 12
         assert bases["WIS"] == 10
 
-    def test_skill_replacement_moves_rank_preserves_total(self):
-        sk = {k: 0 for k in LOCKED_SKILL_NAMES}
-        sk["athletics"] = 3
-        sk["stealth"] = 0
-        sk["arcana"] = 1
-        swaps = [{"from_skill": "athletics", "to_skill": "stealth"}]
-        out = _apply_skill_replacements(sk, swaps)
-        assert out["athletics"] == 0
-        assert out["stealth"] == 3
-        assert _skill_rank_total(sk) == _skill_rank_total(out)
-
-    def test_skill_replacement_to_alchemy(self):
-        sk = {k: 0 for k in LOCKED_SKILL_NAMES}
-        sk["lore"] = 2
-        out = _apply_skill_replacements(sk, [{"from_skill": "lore", "to_skill": "alchemy"}])
-        assert out["lore"] == 0
-        assert out["alchemy"] == 2
+    def test_skill_slot_diffs_counts_keys(self):
+        orig = {k: 0 for k in CREATION_SKILL_POOL}
+        orig["athletics"] = 1
+        orig["arcana"] = 2
+        fin = dict(orig)
+        fin["stealth"] = 1
+        assert _count_skill_slot_diffs(orig, fin) == 1
 
     def test_build_sheet_recomputes_modifiers_hp_defense(self):
         sheet = {
@@ -80,7 +69,7 @@ class TestPydanticContracts:
     def test_finalize_request_empty_body(self):
         r = FinalizeSheetRequest()
         assert r.stat_overrides is None
-        assert r.skill_swaps is None
+        assert r.skills is None
         assert r.identity_overrides is None
 
     def test_identity_override_ignores_extra_keys(self):
@@ -95,4 +84,3 @@ class TestPydanticContracts:
             appearance="1", personality="2", flaw="3", bond="4", secret="5"
         )
         assert p.flaw == "3"
-

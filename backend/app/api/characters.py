@@ -7,6 +7,13 @@ import sqlite3
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict
+from app.character_creation_config import (
+    CREATION_SKILL_POOL,
+    MAX_SKILL_LVL_AT_CREATION,
+    PLAYER_SWAP_SLOTS,
+    roll_4d6_drop_lowest,
+    roll_creation_skills,
+)
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
@@ -172,37 +179,6 @@ def _strip_hidden_fields(sheet: dict) -> dict:
 SIX_CORE_STATS = ("STR", "DEX", "CON", "INT", "WIS", "CHA")
 STAT_ROLL_MIN = 8
 STAT_ROLL_MAX = 18
-# Spec: floor(12 × 0.4) is 4 in pure math; task caps at 5 swaps — use 5.
-MAX_SKILL_SWAPS = 5
-
-LOCKED_SKILL_NAMES = frozenset(
-    (
-        "athletics",
-        "stealth",
-        "sleight_of_hand",
-        "endurance",
-        "arcana",
-        "investigation",
-        "lore",
-        "awareness",
-        "survival",
-        "medicine",
-        "persuasion",
-        "intimidation",
-    )
-)
-
-# Skills that may receive ranks via replacement (locked twelve + combat/spell tests not in that list).
-REPLACEMENT_TARGET_SKILL_NAMES = frozenset(
-    LOCKED_SKILL_NAMES
-    | {
-        "melee_attack",
-        "ranged_attack",
-        "spell_attack",
-        "alchemy",
-    }
-)
-
 _STAT_OVERRIDE_ALIASES = {
     "str": "STR",
     "strength": "STR",
@@ -253,47 +229,47 @@ def _normalize_stat_override_key(raw: str) -> str | None:
     return _STAT_OVERRIDE_ALIASES.get(kl)
 
 
-def _skill_rank_total(skills: dict) -> int:
-    total = 0
-    for _k, v in (skills or {}).items():
-        try:
-            total += int(v)
-        except (TypeError, ValueError):
-            continue
-    return total
+def _count_skill_slot_diffs(orig: dict[str, int], final: dict[str, int]) -> int:
+    n = 0
+    for k in CREATION_SKILL_POOL:
+        o = int(orig.get(k, 0) or 0)
+        f = int(final.get(k, 0) or 0)
+        if o != f:
+            n += 1
+    return n
 
 
-def _apply_skill_replacements(skills: dict, swaps: list[dict]) -> dict:
-    """
-    Move rank from from_skill onto to_skill (to_skill must be empty before each step).
-    This matches the Phase 7.6 UI: replace one trained skill slot with another unused skill key.
-    """
-    out = {k: int(v) for k, v in (skills or {}).items()}
-    for sw in swaps:
-        a = (sw.get("from_skill") or "").strip()
-        b = (sw.get("to_skill") or "").strip()
-        r = int(out.get(a, 0))
-        if r <= 0:
+def _coerce_creation_skills_payload(
+    incoming: dict | None, sheet_skills: dict
+) -> dict[str, int]:
+    base = {k: int(sheet_skills.get(k, 0) or 0) for k in CREATION_SKILL_POOL}
+    if incoming is None:
+        return base
+    out = dict(base)
+    for raw_k, raw_v in incoming.items():
+        k = str(raw_k).strip()
+        if k not in CREATION_SKILL_POOL:
             raise HTTPException(
                 status_code=400,
-                detail=f"from_skill {a!r} has no rank to move for this replacement.",
+                detail=f"Unknown skill key {k!r}. Allowed keys are the creation skill pool.",
             )
-        prev_b = int(out.get(b, 0))
-        if prev_b != 0:
+        try:
+            v = int(raw_v)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Skill rank for {k!r} must be an integer.",
+            ) from None
+        if v < 0 or v > MAX_SKILL_LVL_AT_CREATION:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    f"Skill replacement target {b!r} must be inactive (rank 0) before replacing into it."
+                    f"Skill {k!r} must be between 0 and {MAX_SKILL_LVL_AT_CREATION} "
+                    f"at character creation; got {v}."
                 ),
             )
-        out[a] = 0
-        out[b] = r
+        out[k] = v
     return out
-
-
-class SkillSwapItem(BaseModel):
-    from_skill: str
-    to_skill: str
 
 
 class IdentityOverrideIn(BaseModel):
@@ -305,7 +281,7 @@ class IdentityOverrideIn(BaseModel):
 
 class FinalizeSheetRequest(BaseModel):
     stat_overrides: dict[str, int] | None = None
-    skill_swaps: list[SkillSwapItem] | None = None
+    skills: dict[str, int] | None = None
     identity_overrides: IdentityOverrideIn | None = None
 
 
@@ -342,8 +318,19 @@ def _identity_generation_user_prompt(
 ) -> str:
     lang = (session_language or "pl").strip().lower() or "pl"
     label = _SESSION_LANG_LABELS.get(lang, f"the campaign session language (ISO {lang})")
+    critical = (
+        "KRYTYCZNE: Wypełnij ABSOLUTNIE WSZYSTKIE pola. Żadne pole nie może być "
+        'pustym stringiem "". Każde pole musi zawierać konkretną treść:\n'
+        '- "flaw": jedna konkretna wada charakteru lub słabość bohatera (1-2 zdania)\n'
+        '- "secret": mroczna tajemnica którą bohater skrywa przed światem, '
+        "nigdy nieujawniana podczas gry (1-2 zdania, musi być konkretna)\n"
+        '- "bonds": lista z jednym obiektem:\n'
+        '  {"text": "konkretny opis więzi, zobowiązania lub osoby ważnej dla bohatera", '
+        '"strength": "strong", "origin": "creation"}\n'
+    )
     return (
-        "You are generating a character identity for a dark fantasy RPG.\n"
+        critical
+        + "\nYou are generating a character identity for a dark fantasy RPG.\n"
         f"Character name: {name}\n"
         f"Class: {char_class}\n"
         f"Backstory (may be any language — translate ideas, do not copy language if it conflicts): {backstory}\n\n"
@@ -351,17 +338,40 @@ def _identity_generation_user_prompt(
         "Do not use Spanish, English, or any other language for the JSON values unless it matches this session language.\n\n"
         "Generate in JSON format (respond ONLY with valid JSON, no markdown).\n"
         "Use exactly these keys as a JSON object: "
-        '"appearance", "personality", "flaw", "bond", "secret".\n\n'
+        '"appearance", "personality", "flaw", "secret", "bonds".\n'
+        '"bonds" MUST be a JSON array with exactly one object that includes a non-empty "text" string.\n\n'
         "appearance: 2-3 sentence physical description, gritty and specific\n"
         "personality: 2-3 sentences, defining character traits and worldview\n"
-        "flaw: 1 sentence, a genuine weakness or vice that creates story tension\n"
-        "bond: 1 sentence, a personal loyalty, debt, or unfinished business\n"
-        "secret: 1 sentence, something the character hides — shameful, dangerous, or tragic\n\n"
+        "flaw: 1-2 sentences, a genuine weakness or vice that creates story tension\n"
+        "secret: 1-2 sentences, something the character hides — shameful, dangerous, or tragic\n"
+        'bonds[0].text: 1-2 sentences, a personal loyalty, debt, or important person\n\n'
         f"Every string value MUST be in {label} ({lang})."
     )
 
 
-def _parse_identity_llm_response(raw: str) -> GeneratedIdentityPreview:
+_IDENTITY_RETRY_USER = (
+    "Poprzednia odpowiedź była niekompletna: flaw, secret lub bonds[0].text były puste. "
+    "Wygeneruj ponownie TEN SAM JSON z niepustymi, konkretnymi treściami we wszystkich polach."
+)
+
+
+def _bond_text_from_identity_dict(data: dict) -> str:
+    bonds = data.get("bonds")
+    if isinstance(bonds, list) and bonds:
+        b0 = bonds[0]
+        if isinstance(b0, dict):
+            return str(b0.get("text") or "").strip()
+    return str(data.get("bond") or "").strip()
+
+
+def _identity_dict_fields_non_empty(data: dict) -> bool:
+    flaw = str(data.get("flaw") or "").strip()
+    secret = str(data.get("secret") or "").strip()
+    bond = _bond_text_from_identity_dict(data)
+    return bool(flaw and secret and bond)
+
+
+def _parse_identity_llm_to_dict(raw: str) -> dict:
     cleaned = _strip_code_fences(raw)
     try:
         data = json.loads(cleaned)
@@ -369,11 +379,15 @@ def _parse_identity_llm_response(raw: str) -> GeneratedIdentityPreview:
         raise ValueError(f"Invalid JSON from LLM: {e}") from e
     if not isinstance(data, dict):
         raise ValueError("LLM JSON must be an object")
+    return data
+
+
+def _dict_to_identity_preview(data: dict) -> GeneratedIdentityPreview:
     return GeneratedIdentityPreview(
         appearance=str(data.get("appearance") or "").strip(),
         personality=str(data.get("personality") or "").strip(),
         flaw=str(data.get("flaw") or "").strip(),
-        bond=str(data.get("bond") or "").strip(),
+        bond=_bond_text_from_identity_dict(data),
         secret=str(data.get("secret") or "").strip(),
     )
 
@@ -515,7 +529,7 @@ def generate_character_identity(character_id: int):
     lang = session_language.strip().lower()
     label = _SESSION_LANG_LABELS.get(lang, f"session language ({lang})")
     user_prompt = _identity_generation_user_prompt(name, char_class, backstory, session_language)
-    messages = [
+    base_messages = [
         {
             "role": "system",
             "content": (
@@ -530,8 +544,8 @@ def generate_character_identity(character_id: int):
     model = (llm_config.get("model") or "").strip() or (str(row["model_id"] or "").strip() or None)
 
     try:
-        raw = (generate_chat(messages=messages, model=model, llm_config=llm_config) or "").strip()
-        preview = _parse_identity_llm_response(raw)
+        raw = (generate_chat(messages=base_messages, model=model, llm_config=llm_config) or "").strip()
+        data = _parse_identity_llm_to_dict(raw)
     except ValueError as e:
         logger.warning("[generate_identity] parse failed: %s", str(e))
         raise HTTPException(status_code=502, detail=str(e)) from None
@@ -539,13 +553,31 @@ def generate_character_identity(character_id: int):
         logger.warning("[generate_identity] LLM failed: %s", str(e))
         raise HTTPException(status_code=502, detail=str(e)) from None
 
-    return preview
+    if not _identity_dict_fields_non_empty(data):
+        retry_messages = [*base_messages, {"role": "user", "content": _IDENTITY_RETRY_USER}]
+        try:
+            raw2 = (generate_chat(messages=retry_messages, model=model, llm_config=llm_config) or "").strip()
+            data = _parse_identity_llm_to_dict(raw2)
+        except ValueError as e:
+            logger.warning("[generate_identity] parse failed on retry: %s", str(e))
+            raise HTTPException(status_code=502, detail=str(e)) from None
+        except Exception as e:
+            logger.warning("[generate_identity] LLM failed on retry: %s", str(e))
+            raise HTTPException(status_code=502, detail=str(e)) from None
+        if not _identity_dict_fields_non_empty(data):
+            logger.warning("[generate_identity] incomplete fields after retry")
+            raise HTTPException(
+                status_code=500,
+                detail="Identity generation incomplete — please try again",
+            )
+
+    return _dict_to_identity_preview(data)
 
 
 @router.post("/characters/{character_id}/finalize-sheet")
 def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
     """
-    One-shot end of character creation: optional stat redistribution, skill swaps, identity text.
+    One-shot end of character creation: optional stat redistribution, skill budget edits, identity text.
     Persists validated sheet_json.
     """
     conn = sqlite3.connect(DB_PATH)
@@ -621,47 +653,22 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                 ),
             )
 
-    swaps_list = [s.model_dump() for s in (req.skill_swaps or [])]
-    if len(swaps_list) > MAX_SKILL_SWAPS:
+    skills_sheet = {k: int(v) for k, v in (sheet.get("skills") or {}).items()}
+    orig_snapshot = sheet.get("skills_at_creation")
+    if isinstance(orig_snapshot, dict) and orig_snapshot:
+        skills_orig = {k: int(orig_snapshot.get(k, 0) or 0) for k in CREATION_SKILL_POOL}
+    else:
+        skills_orig = {k: int(skills_sheet.get(k, 0) or 0) for k in CREATION_SKILL_POOL}
+
+    skills_after = _coerce_creation_skills_payload(req.skills, skills_sheet)
+    diff_n = _count_skill_slot_diffs(skills_orig, skills_after)
+    if diff_n > PLAYER_SWAP_SLOTS:
         raise HTTPException(
             status_code=400,
-            detail=f"At most {MAX_SKILL_SWAPS} skill swaps allowed; got {len(swaps_list)}.",
-        )
-
-    skills_before = {k: int(v) for k, v in (sheet.get("skills") or {}).items()}
-    sum_sk_before = _skill_rank_total(skills_before)
-
-    for sw in swaps_list:
-        fs = (sw.get("from_skill") or "").strip()
-        ts = (sw.get("to_skill") or "").strip()
-        if fs == ts:
-            raise HTTPException(
-                status_code=400,
-                detail="Each skill replacement must use two different skills (from_skill != to_skill).",
-            )
-        if fs not in LOCKED_SKILL_NAMES:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"from_skill must be one of the twelve character skills; got {fs!r}. "
-                    f"Allowed: {', '.join(sorted(LOCKED_SKILL_NAMES))}."
-                ),
-            )
-        if ts not in REPLACEMENT_TARGET_SKILL_NAMES:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Replacement skill {ts!r} is not allowed. "
-                    f"Allowed targets: {', '.join(sorted(REPLACEMENT_TARGET_SKILL_NAMES))}."
-                ),
-            )
-
-    skills_after = _apply_skill_replacements(skills_before, swaps_list) if swaps_list else dict(skills_before)
-    sum_sk_after = _skill_rank_total(skills_after)
-    if sum_sk_after != sum_sk_before:
-        raise HTTPException(
-            status_code=400,
-            detail="Total skill ranks must stay the same after swaps (internal validation failed).",
+            detail=(
+                f"Too many skills differ from the rolled creation set ({diff_n} > {PLAYER_SWAP_SLOTS}). "
+                "Revert changes or adjust fewer skills."
+            ),
         )
 
     lck = int(raw_stats.get("LCK", raw_stats.get("lck", 10)))
@@ -763,6 +770,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
+    conn.execute("BEGIN IMMEDIATE")
 
     campaign = conn.execute(
         """
@@ -774,6 +782,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     ).fetchone()
 
     if not campaign:
+        conn.rollback()
         conn.close()
         raise HTTPException(status_code=404, detail="Campaign not found")
 
@@ -782,17 +791,37 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         (campaign_id,),
     ).fetchone()
     if existing and int(existing["n"] or 0) >= 1:
+        conn.rollback()
         conn.close()
         raise HTTPException(status_code=409, detail="Campaign already has a character.")
 
     if req.system_id != campaign["system_id"]:
+        conn.rollback()
         conn.close()
         raise HTTPException(
             status_code=400,
             detail=f"system_id mismatch: campaign uses '{campaign['system_id']}'"
         )
 
-    # Insert first, then auto-build sheet values as part of creation flow.
+    base_sheet = dict(req.sheet_json or {})
+    archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
+    if archetype not in ("warrior", "mage"):
+        archetype = "warrior"
+    base_sheet["archetype"] = archetype
+    base_sheet["stats"] = {
+        k: roll_4d6_drop_lowest() for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
+    }
+    skills_rolled = roll_creation_skills(archetype)
+    base_sheet["skills"] = skills_rolled
+    base_sheet["skills_at_creation"] = dict(skills_rolled)
+
+    created_sheet = _build_character_sheet(
+        base_sheet,
+        archetype,
+        apply_archetype_skill_minimums=False,
+    )
+    created_sheet["skills_at_creation"] = dict(skills_rolled)
+
     cur.execute(
         """
         INSERT INTO characters (campaign_id, user_id, name, system_id, sheet_json, location, is_active)
@@ -803,7 +832,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
             req.user_id,
             req.name,
             req.system_id,
-            json.dumps(req.sheet_json, ensure_ascii=False),
+            json.dumps(created_sheet, ensure_ascii=False),
             req.location,
             req.is_active,
         ),
@@ -811,17 +840,6 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     conn.commit()
 
     character_id = cur.lastrowid
-
-    created_sheet = _build_character_sheet(req.sheet_json, req.sheet_json.get("archetype"))
-    conn.execute(
-        """
-        UPDATE characters
-        SET sheet_json = ?
-        WHERE id = ?
-        """,
-        (json.dumps(created_sheet, ensure_ascii=False), character_id),
-    )
-    conn.commit()
 
     opening_message = None
     try:

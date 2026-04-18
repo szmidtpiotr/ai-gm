@@ -35,11 +35,21 @@
     { key: 'intimidation', label: 'Intimidation', stat: 'CHA' }
   ];
 
-  const RANK_LABELS = ['Untrained', 'Trained', 'Skilled', 'Expert', 'Master'];
-  const MAX_SWAPS = 5;
+  const EXTRA_CREATION_SKILLS = [
+    { key: 'melee_attack', label: 'Melee Attack', stat: 'STR' },
+    { key: 'ranged_attack', label: 'Ranged Attack', stat: 'DEX' },
+    { key: 'spell_attack', label: 'Spell Attack', stat: 'INT' },
+    { key: 'alchemy', label: 'Alchemy', stat: 'INT' }
+  ];
 
-  /** Skills that can receive a replacement rank (matches backend REPLACEMENT_TARGET_SKILL_NAMES). */
-  const SKILL_REPLACEMENT_EXTRA_KEYS = ['melee_attack', 'ranged_attack', 'spell_attack', 'alchemy'];
+  /** Full creation pool (matches backend CREATION_SKILL_POOL), sorted by key. */
+  const ALL_CREATION_SKILL_ROWS = [...LOCKED_SKILLS, ...EXTRA_CREATION_SKILLS].sort((a, b) =>
+    a.key.localeCompare(b.key)
+  );
+
+  const CREATION_RANK_LABELS = ['—', 'Trained', 'Skilled'];
+  const MAX_SKILL_CREATION_LVL = 2;
+  const PLAYER_SKILL_CHANGE_SLOTS = 4;
 
   function apiRoot() {
     const b = (window.API_BASE_URL || '/api').replace(/\/$/, '');
@@ -77,35 +87,39 @@
   }
 
   function skillKeyLabel(key) {
-    const found = LOCKED_SKILLS.find((x) => x.key === key);
+    const found = ALL_CREATION_SKILL_ROWS.find((x) => x.key === key);
     if (found) return found.label;
-    const extra = {
-      melee_attack: 'Melee Attack',
-      ranged_attack: 'Ranged Attack',
-      spell_attack: 'Spell Attack',
-      alchemy: 'Alchemy'
-    };
-    if (extra[key]) return extra[key];
     return String(key || '')
       .split('_')
       .map((w) => (w ? w.charAt(0).toUpperCase() + w.slice(1) : ''))
       .join(' ');
   }
 
-  function replacementPoolKeys() {
-    const locked = LOCKED_SKILLS.map((x) => x.key);
-    return Array.from(new Set([...locked, ...SKILL_REPLACEMENT_EXTRA_KEYS]));
+  function skillDiffCount(levels, snap) {
+    let n = 0;
+    for (const { key } of ALL_CREATION_SKILL_ROWS) {
+      if (Number(levels[key] ?? 0) !== Number(snap[key] ?? 0)) n += 1;
+    }
+    return n;
   }
 
-  /** Replacement targets: inactive (rank 0) and not the selected source slot. */
-  function replacementCandidates(w) {
-    const from = w.skillReplaceSource;
-    if (!from) return [];
-    const pool = replacementPoolKeys();
-    return pool.filter((k) => {
-      if (k === from) return false;
-      return Number(w.lockedSkills[k] || 0) === 0;
-    });
+  function canAdjustSkillLevel(key, delta, levels, snap) {
+    const cur = Number(levels[key] ?? 0);
+    const next = cur + delta;
+    if (next < 0 || next > MAX_SKILL_CREATION_LVL) return false;
+    const test = { ...levels, [key]: next };
+    return skillDiffCount(test, snap) <= PLAYER_SKILL_CHANGE_SLOTS;
+  }
+
+  function buildSkillSnapshotFromSheet(sheet) {
+    const raw = (sheet && sheet.skills_at_creation) || (sheet && sheet.skills) || {};
+    const snap = {};
+    for (const { key } of ALL_CREATION_SKILL_ROWS) {
+      let v = normalizeSkillKeyFromSheet(raw, key);
+      v = Math.max(0, Math.min(MAX_SKILL_CREATION_LVL, Number(v) || 0));
+      snap[key] = v;
+    }
+    return snap;
   }
 
   function normalizeSkillKeyFromSheet(skills, canonicalKey) {
@@ -115,14 +129,6 @@
       if (nk === want) return Number(v) || 0;
     }
     return 0;
-  }
-
-  function buildInitialLockedSkills(sheetSkills) {
-    const o = {};
-    for (const { key } of LOCKED_SKILLS) {
-      o[key] = normalizeSkillKeyFromSheet(sheetSkills, key);
-    }
-    return o;
   }
 
   function classBonusNote(archetype) {
@@ -231,67 +237,31 @@
   }
 
   function renderSkillsStep(w) {
-    const used = w.skillSwaps.length;
-    const atMax = used >= MAX_SWAPS;
-    const src = w.skillReplaceSource || '';
-    const rows = LOCKED_SKILLS.map(({ key, label, stat }) => {
-      const r = Math.max(0, Math.min(4, Number(w.lockedSkills[key] || 0)));
-      const rankName = RANK_LABELS[r] || RANK_LABELS[0];
-      const sel = src === key ? ' wizard-skill-row--selected' : '';
-      const tip = atMax ? ' title="Maximum replacements reached"' : '';
-      const inactive = r <= 0;
-      const rowDisabled = atMax || inactive ? ' disabled' : '';
+    const changed = skillDiffCount(w.skillLevels, w.originalSkillSnapshot);
+    const rows = ALL_CREATION_SKILL_ROWS.map(({ key, label, stat }) => {
+      const r = Math.max(0, Math.min(MAX_SKILL_CREATION_LVL, Number(w.skillLevels[key] ?? 0)));
+      const rankName = CREATION_RANK_LABELS[r] || CREATION_RANK_LABELS[0];
+      const pOk = canAdjustSkillLevel(key, 1, w.skillLevels, w.originalSkillSnapshot);
+      const mOk = canAdjustSkillLevel(key, -1, w.skillLevels, w.originalSkillSnapshot);
+      const pDis = pOk ? '' : 'disabled';
+      const mDis = mOk ? '' : 'disabled';
       return `
-        <button type="button" class="wizard-skill-row${sel}${inactive ? ' wizard-skill-row--inactive' : ''}" data-skill="${key}" data-skill-kind="active"${tip}${rowDisabled}>
+        <div class="wizard-skill-row wizard-skill-row--budget" data-skill-row="${key}">
           <span class="wizard-skill-name">${window.escapeHtml(label)} <span class="muted">— ${stat}</span></span>
-          <span class="wizard-skill-rank">${r} · ${rankName}</span>
-        </button>`;
+          <div class="wizard-stat-controls wizard-skill-controls">
+            <button type="button" class="wizard-stat-btn secondary" data-act="skill-minus" data-skill="${key}" ${mDis} aria-label="Decrease ${label}">−</button>
+            <span class="wizard-skill-rank">${r} · ${rankName}</span>
+            <button type="button" class="wizard-stat-btn secondary" data-act="skill-plus" data-skill="${key}" ${pDis} aria-label="Increase ${label}">+</button>
+          </div>
+        </div>`;
     }).join('');
-
-    const cands = replacementCandidates(w);
-    const repRows = src
-      ? cands
-          .map((key) => {
-            const label = skillKeyLabel(key);
-            return `
-        <button type="button" class="wizard-skill-rep-row" data-skill="${key}" data-skill-kind="replace">
-          <span class="wizard-skill-name">${window.escapeHtml(label)}</span>
-        </button>`;
-          })
-          .join('')
-      : '';
-
-    const fromRank = src
-      ? Math.max(0, Math.min(4, Number(w.lockedSkills[src] || 0)))
-      : 0;
-    const preview =
-      w.skillReplacePreview && w.skillReplacePreview.from && w.skillReplacePreview.to
-        ? `<p class="wizard-skill-preview muted" role="status">${window.escapeHtml(
-            `${skillKeyLabel(w.skillReplacePreview.from)} ${fromRank} → ${skillKeyLabel(w.skillReplacePreview.to)} ${fromRank}`
-          )}</p>`
-        : '';
 
     return `
       <div class="wizard-section">
         <h3 class="wizard-section-title">Adjust your skills</h3>
-        <p class="muted wizard-hint">Select a skill with rank &gt; 0, then pick a replacement that is not on your sheet yet (rank 0).</p>
-        <p class="wizard-swaps"><strong>Replacements used:</strong> ${used} / ${MAX_SWAPS}</p>
-        <div class="wizard-skill-columns">
-          <div>
-            <h4 class="wizard-subtitle">Your skills</h4>
-            <div class="wizard-skill-list">${rows}</div>
-          </div>
-          <div>
-            <h4 class="wizard-subtitle">${src ? 'Replace with…' : 'Pick a skill first'}</h4>
-            ${preview}
-            <div class="wizard-skill-rep-list">${src ? repRows || '<p class="muted">No eligible replacements.</p>' : '<p class="muted">Select a skill on the left.</p>'}</div>
-            ${src && w.skillReplacePreview && w.skillReplacePreview.from && w.skillReplacePreview.to ? `
-            <div class="wizard-actions wizard-actions--inline">
-              <button type="button" class="primary" data-act="apply-skill-replace">Apply replacement</button>
-              <button type="button" class="secondary" data-act="cancel-skill-replace">Cancel</button>
-            </div>` : ''}
-          </div>
-        </div>
+        <p class="muted wizard-hint">Change at most ${PLAYER_SKILL_CHANGE_SLOTS} skills compared to the rolled set (0–${MAX_SKILL_CREATION_LVL} each).</p>
+        <p class="wizard-swaps"><strong>Zmieniono:</strong> ${changed} / ${PLAYER_SKILL_CHANGE_SLOTS}</p>
+        <div class="wizard-skill-list wizard-skill-list--full">${rows}</div>
         <div class="wizard-actions">
           <button type="button" class="secondary" data-act="reset-skills">Reset</button>
           <button type="button" class="primary" data-act="confirm-skills">Confirm Skills →</button>
@@ -424,17 +394,15 @@
           window.characterWizardGoToSkills();
         } else if (act === 'reset-skills') {
           const cur = window.state.charCreationWizard;
-          cur.lockedSkills = { ...cur.originalLockedSkills };
-          cur.skillSwaps = [];
-          cur.skillReplaceSource = null;
-          cur.skillReplacePreview = null;
+          cur.skillLevels = { ...cur.originalSkillSnapshot };
           paintWizard(cur);
-        } else if (act === 'apply-skill-replace') {
-          window.characterWizardApplySkillReplace();
-        } else if (act === 'cancel-skill-replace') {
+        } else if (act === 'skill-plus' || act === 'skill-minus') {
+          const key = btn.getAttribute('data-skill');
           const cur = window.state.charCreationWizard;
-          if (!cur) return;
-          cur.skillReplacePreview = null;
+          if (!cur || cur.step !== 3 || !key) return;
+          const delta = act === 'skill-plus' ? 1 : -1;
+          if (!canAdjustSkillLevel(key, delta, cur.skillLevels, cur.originalSkillSnapshot)) return;
+          cur.skillLevels[key] = Number(cur.skillLevels[key] ?? 0) + delta;
           paintWizard(cur);
         } else if (act === 'confirm-skills') {
           window.characterWizardGoToIdentity();
@@ -445,68 +413,8 @@
         }
         return;
       }
-      const sk = e.target.closest('[data-skill]');
-      const cw = window.state.charCreationWizard;
-      if (sk && cw && cw.step === 3 && !sk.disabled) {
-        const key = sk.getAttribute('data-skill');
-        const kind = sk.getAttribute('data-skill-kind');
-        if (kind === 'active') {
-          window.characterWizardOnActiveSkillTap(key);
-        } else if (kind === 'replace') {
-          window.characterWizardOnReplaceSkillTap(key);
-        }
-      }
     };
   }
-
-  window.characterWizardOnActiveSkillTap = function (key) {
-    const w = window.state.charCreationWizard;
-    if (!w || w.step !== 3 || !key) return;
-    if (w.skillSwaps.length >= MAX_SWAPS) return;
-    const r = Number(w.lockedSkills[key] || 0);
-    if (r <= 0) return;
-    if (w.skillReplaceSource === key) {
-      w.skillReplaceSource = null;
-      w.skillReplacePreview = null;
-      paintWizard(w);
-      return;
-    }
-    w.skillReplaceSource = key;
-    w.skillReplacePreview = null;
-    paintWizard(w);
-  };
-
-  window.characterWizardOnReplaceSkillTap = function (toKey) {
-    const w = window.state.charCreationWizard;
-    if (!w || w.step !== 3 || !toKey) return;
-    const from = w.skillReplaceSource;
-    if (!from) return;
-    const r = Number(w.lockedSkills[from] || 0);
-    if (r <= 0) return;
-    if (Number(w.lockedSkills[toKey] || 0) !== 0) return;
-    if (from === toKey) return;
-    w.skillReplacePreview = { from, to: toKey };
-    paintWizard(w);
-  };
-
-  window.characterWizardApplySkillReplace = function () {
-    const w = window.state.charCreationWizard;
-    if (!w || w.step !== 3) return;
-    const pv = w.skillReplacePreview;
-    if (!pv || !pv.from || !pv.to) return;
-    if (w.skillSwaps.length >= MAX_SWAPS) return;
-    const from = pv.from;
-    const to = pv.to;
-    const r = Number(w.lockedSkills[from] || 0);
-    if (r <= 0) return;
-    if (Number(w.lockedSkills[to] || 0) !== 0) return;
-    w.lockedSkills[to] = r;
-    w.lockedSkills[from] = 0;
-    w.skillSwaps.push({ from_skill: from, to_skill: to });
-    w.skillReplaceSource = null;
-    w.skillReplacePreview = null;
-    paintWizard(w);
-  };
 
   window.characterWizardGoBack = function () {
     const w = window.state.charCreationWizard;
@@ -520,8 +428,6 @@
     if (w.step === 3) {
       w.step = 2;
       w.finalizeError = null;
-      w.skillReplaceSource = null;
-      w.skillReplacePreview = null;
       paintWizard(w);
       return;
     }
@@ -538,8 +444,6 @@
     const w = window.state.charCreationWizard;
     if (!w) return;
     w.step = 3;
-    w.skillReplaceSource = null;
-    w.skillReplacePreview = null;
     paintWizard(w);
   };
 
@@ -595,7 +499,16 @@
         data = {};
       }
       if (!resp.ok) {
-        throw new Error(formatDetail(data.detail) || `HTTP ${resp.status}`);
+        const msg = formatDetail(data.detail) || `HTTP ${resp.status}`;
+        if (resp.status === 500 && typeof window.addMessage === 'function') {
+          window.addMessage({
+            speaker: 'System',
+            text: msg,
+            role: 'error',
+            route: 'character'
+          });
+        }
+        throw new Error(msg);
       }
       w.identity = {
         appearance: data.appearance || '',
@@ -622,7 +535,13 @@
     for (const k of CORE_STATS) {
       stat_overrides[STAT_API_KEYS[k]] = Number(w.bases[k]);
     }
-    const skill_swaps = w.skillSwaps.map((x) => ({ ...x }));
+    const skills = {};
+    for (const { key } of ALL_CREATION_SKILL_ROWS) {
+      skills[key] = Math.max(
+        0,
+        Math.min(MAX_SKILL_CREATION_LVL, Number(w.skillLevels[key] ?? 0))
+      );
+    }
     const identity_overrides = {
       appearance: (appEl && appEl.value) != null ? appEl.value : w.identity?.appearance || '',
       personality: (perEl && perEl.value) != null ? perEl.value : w.identity?.personality || ''
@@ -638,7 +557,7 @@
       const resp = await fetch(url, {
         method: 'POST',
         headers: window.getApiHeaders(),
-        body: JSON.stringify({ stat_overrides, skill_swaps, identity_overrides })
+        body: JSON.stringify({ stat_overrides, skills, identity_overrides })
       });
       let data = {};
       try {
@@ -725,7 +644,7 @@
     const archetype = String(sheet.archetype || 'warrior').toLowerCase();
     const originalBases = coreBasesFromStoredStats(stats, archetype);
     const sumTarget = sumBases(originalBases);
-    const originalLocked = buildInitialLockedSkills(sheet.skills || {});
+    const originalSkillSnapshot = buildSkillSnapshotFromSheet(sheet);
 
     window.state.charCreationWizard = {
       step: 2,
@@ -737,11 +656,8 @@
       bases: { ...originalBases },
       sumTarget,
       unassignedPoints: 0,
-      originalLockedSkills: { ...originalLocked },
-      lockedSkills: { ...originalLocked },
-      skillSwaps: [],
-      skillReplaceSource: null,
-      skillReplacePreview: null,
+      originalSkillSnapshot: { ...originalSkillSnapshot },
+      skillLevels: { ...originalSkillSnapshot },
       identity: null,
       identityLoading: false,
       identityError: null,
