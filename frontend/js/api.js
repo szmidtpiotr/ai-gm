@@ -147,7 +147,7 @@ window.loadModels = async function (userId = null) {
 };
 
 window.loadCampaigns = async function (preferredCampaignId = null) {
-  const { campaignSelectEl, characterSelectEl } = window.getEls();
+  const { campaignSelectEl } = window.getEls();
   const uid = window.state?.playerUserId || null;
 
 const resp = await fetch(window.API_CAMPAIGNS);
@@ -178,9 +178,7 @@ const resp = await fetch(window.API_CAMPAIGNS);
     window.state.selectedCampaignId = null;
     window.state.characters = [];
     window.state.selectedCharacterId = null;
-
-    characterSelectEl.innerHTML = '<option value="" disabled selected>Brak postaci</option>';
-    characterSelectEl.disabled = true;
+    localStorage.removeItem('ai-gm:selectedCharacterId');
 
     window.updateUiState();
     return;
@@ -230,13 +228,10 @@ const resp = await fetch(window.API_CAMPAIGNS);
 
 
 window.loadCharacters = async function (campaignId, preferredCharacterId = null) {
-  const { characterSelectEl } = window.getEls();
-
   if (!campaignId) {
     window.state.characters = [];
     window.state.selectedCharacterId = null;
-    characterSelectEl.innerHTML = '<option value="" disabled selected>Brak postaci</option>';
-    characterSelectEl.disabled = true;
+    localStorage.removeItem('ai-gm:selectedCharacterId');
     window.updateUiState();
     return;
   }
@@ -250,13 +245,10 @@ window.loadCharacters = async function (campaignId, preferredCharacterId = null)
   window.state.characters = uid
     ? rawChars.filter((ch) => Number(ch.user_id ?? ch.userid) === Number(uid))
     : rawChars;
-  characterSelectEl.innerHTML = '';
 
   if (window.state.characters.length === 0) {
-    characterSelectEl.innerHTML =
-      `<option value="" disabled selected>${window.escapeHtml(window.t('empty.characters'))}</option>`;
-    characterSelectEl.disabled = true;
     window.state.selectedCharacterId = null;
+    localStorage.removeItem('ai-gm:selectedCharacterId');
     window.updateUiState();
     return;
   }
@@ -268,15 +260,6 @@ window.loadCharacters = async function (campaignId, preferredCharacterId = null)
     window.state.expectCharacterCreationForCampaignId = null;
   }
 
-  characterSelectEl.disabled = false;
-
-  window.state.characters.forEach(character => {
-    const option = document.createElement('option');
-    option.value = String(character.id);
-    option.textContent = character.name;
-    characterSelectEl.appendChild(option);
-  });
-
   const savedCharacterId = Number(localStorage.getItem('ai-gm:selectedCharacterId'));
   const candidateId = preferredCharacterId || savedCharacterId;
 
@@ -287,7 +270,7 @@ window.loadCharacters = async function (campaignId, preferredCharacterId = null)
     : Number(window.state.characters[0].id);
 
   window.state.selectedCharacterId = selectedId;
-  characterSelectEl.value = String(selectedId);
+  localStorage.setItem('ai-gm:selectedCharacterId', String(selectedId));
 
   window.updateUiState();
 };

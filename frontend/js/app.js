@@ -903,21 +903,7 @@ window.loadCharacterSheet = async function (characterId) {
 };
 
 window.bindCharacterSheetPanel = function () {
-  const characterSelect = document.getElementById("character-select");
-  if (characterSelect) {
-    characterSelect.addEventListener("change", async () => {
-      const id = Number(characterSelect.value);
-      await window.loadCharacterSheet(id);
-    });
-  }
-
-  const campaignSelect = document.getElementById("campaign-select");
-  if (campaignSelect) {
-    campaignSelect.addEventListener("change", async () => {
-      const selectedId = Number(document.getElementById("character-select")?.value || 0);
-      await window.loadCharacterSheet(selectedId);
-    });
-  }
+  /* Sheet refreshes when loadCharacters runs (see wrapper below) after campaign/character state updates. */
 };
 
 window.initCharacterSheetPanel = async function () {

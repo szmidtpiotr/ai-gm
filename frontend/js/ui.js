@@ -2,7 +2,6 @@ window.getEls = function () {
   return {
     appTitleEl: document.getElementById('app-title'),
     campaignSelectEl: document.getElementById('campaign-select'),
-    characterSelectEl: document.getElementById('character-select'),
     systemSelectEl: document.getElementById('system-select'),
     engineSelectEl: document.getElementById('engine-select'),
     llmProviderSelectEl: document.getElementById('llm-provider-select'),
@@ -26,7 +25,6 @@ window.getEls = function () {
     statusOllamaDotEl: document.getElementById('status-ollama-dot'),
     statusLokiDotEl: document.getElementById('status-loki-dot'),
     labelCampaignEl: document.getElementById('label-campaign'),
-    labelCharacterEl: document.getElementById('label-character'),
     labelSystemEl: document.getElementById('label-system'),
     labelEngineEl: document.getElementById('label-engine'),
     labelLlmProviderEl: document.getElementById('label-llm-provider'),
@@ -81,7 +79,6 @@ window.applyTranslations = function () {
 
   if (els.appTitleEl) els.appTitleEl.textContent = window.t('app.title');
   if (els.labelCampaignEl) els.labelCampaignEl.textContent = window.t('campaign.label');
-  if (els.labelCharacterEl) els.labelCharacterEl.textContent = window.t('character.label');
   if (els.labelSystemEl) els.labelSystemEl.textContent = window.t('system.label');
   if (els.labelEngineEl) els.labelEngineEl.textContent = 'Model';
   if (els.labelLlmProviderEl) els.labelLlmProviderEl.textContent = 'Provider';
@@ -678,14 +675,9 @@ window.renderTurnResponse = function (data, turnNumber) {
       const active = window.currentCharacter();
       if (active) active.name = renamedTo;
 
-      const { characterSelectEl } = window.getEls();
-      const option = characterSelectEl
-        ? characterSelectEl.querySelector(
-            `option[value="${window.state.selectedCharacterId}"]`
-          )
-        : null;
-
-      if (option) option.textContent = renamedTo;
+      if (typeof window.loadCharacterSheet === 'function' && window.state.selectedCharacterId) {
+        window.loadCharacterSheet(Number(window.state.selectedCharacterId)).catch(() => {});
+      }
 
       window.removeThinkingBubble();
       window.addMessage({

@@ -1,7 +1,5 @@
 window.bindEvents = function () {
   const els = window.getEls();
-  const historyBtn = document.getElementById('history-btn');
-  const historyPanelEl = document.getElementById('history-panel');
   const archetypeCards = Array.from(document.querySelectorAll('.archetype-card'));
 
   els.campaignSelectEl.onchange = async () => {
@@ -52,24 +50,6 @@ window.bindEvents = function () {
       // Keep UI operational with existing in-memory/lclocal values.
     }
     await window.loadTurns(window.state.selectedCampaignId);
-    window.updateUiState();
-  };
-
-  els.characterSelectEl.onchange = async () => {
-    window.state.selectedCharacterId = Number(els.characterSelectEl.value);
-    localStorage.setItem(
-      'ai-gm:selectedCharacterId',
-      String(window.state.selectedCharacterId)
-    );
-    const userId = window.state?.playerUserId || 1;
-    try {
-      await window.loadUserLlmSettings(userId);
-      await window.loadHealth(userId);
-      await window.loadModels(userId);
-      window.syncLlmControlsCollapseToCurrentState?.();
-    } catch (_err) {
-      // ignore
-    }
     window.updateUiState();
   };
 
@@ -182,17 +162,6 @@ window.bindEvents = function () {
       card.classList.add('selected');
     };
   });
-
-  if (historyBtn && historyPanelEl) {
-    historyBtn.onclick = async () => {
-      if (!window.state.selectedCampaignId) return;
-
-      await window.loadTurns(window.state.selectedCampaignId);
-
-      historyPanelEl.style.display =
-        historyPanelEl.style.display === 'none' ? 'block' : 'none';
-    };
-  }
 
   els.inputEl.onkeydown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
