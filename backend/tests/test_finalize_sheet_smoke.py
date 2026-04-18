@@ -5,7 +5,11 @@ Run: pytest backend/tests/test_finalize_sheet_smoke.py -v
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from fastapi import HTTPException  # noqa: E402
 
 from app.api.characters import (  # noqa: E402
     CREATION_SKILL_POOL,
@@ -14,8 +18,8 @@ from app.api.characters import (  # noqa: E402
     IdentityOverrideIn,
     _build_character_sheet,
     _core_bases_from_stored_stats,
-    _count_skill_slot_diffs,
     _stat_modifier,
+    _validate_creation_skills_after_swap,
 )
 
 
@@ -32,13 +36,33 @@ class TestFinalizeHelpers:
         assert bases["INT"] == 12
         assert bases["WIS"] == 10
 
-    def test_skill_slot_diffs_counts_keys(self):
+    def test_skill_level_budget_swap_same_rank_costs_zero(self):
+        orig = {k: 0 for k in CREATION_SKILL_POOL}
+        orig["survival"] = 1
+        orig["arcana"] = 0
+        fin = {k: 0 for k in CREATION_SKILL_POOL}
+        fin["survival"] = 0
+        fin["arcana"] = 1
+        assert _validate_creation_skills_after_swap(orig, fin, {"survival": "arcana"}) == 0
+
+    def test_skill_level_budget_rank_change_costs_abs_delta(self):
+        orig = {k: 0 for k in CREATION_SKILL_POOL}
+        orig["athletics"] = 1
+        fin = {k: 0 for k in CREATION_SKILL_POOL}
+        fin["athletics"] = 2
+        assert _validate_creation_skills_after_swap(orig, fin, None) == 1
+
+    def test_skill_level_budget_rejects_orphan_rank(self):
         orig = {k: 0 for k in CREATION_SKILL_POOL}
         orig["athletics"] = 1
         orig["arcana"] = 2
-        fin = dict(orig)
+        fin = {k: 0 for k in CREATION_SKILL_POOL}
+        fin["athletics"] = 1
+        fin["arcana"] = 2
         fin["stealth"] = 1
-        assert _count_skill_slot_diffs(orig, fin) == 1
+        with pytest.raises(HTTPException) as ei:
+            _validate_creation_skills_after_swap(orig, fin, None)
+        assert ei.value.status_code == 400
 
     def test_build_sheet_recomputes_modifiers_hp_defense(self):
         sheet = {
@@ -70,6 +94,7 @@ class TestPydanticContracts:
         r = FinalizeSheetRequest()
         assert r.stat_overrides is None
         assert r.skills is None
+        assert r.skill_slot_current is None
         assert r.identity_overrides is None
 
     def test_identity_override_ignores_extra_keys(self):

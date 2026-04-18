@@ -95,23 +95,36 @@
       .join(' ');
   }
 
-  function skillDiffCount(levels, snap) {
-    let n = 0;
-    for (const { key } of ALL_CREATION_SKILL_ROWS) {
-      if (Number(levels[key] ?? 0) !== Number(snap[key] ?? 0)) n += 1;
+  /** Sum of |current rank − rolled rank| per creation slot. Swaps at same rank add 0. */
+  function skillLevelChangeBudgetUsed(levels, snap, swapMap) {
+    let sum = 0;
+    for (const { key: origKey } of ALL_CREATION_SKILL_ROWS) {
+      if (Number(snap[origKey] ?? 0) === 0) continue;
+      const currentKey = (swapMap && swapMap[origKey]) || origKey;
+      const cur = Number(levels[currentKey] ?? 0);
+      const orig = Number(snap[origKey] ?? 0);
+      sum += Math.abs(cur - orig);
     }
-    return n;
+    return sum;
   }
 
-  function canAdjustSkillLevel(key, delta, levels, snap, swapMap) {
-    // Skills not rolled at creation are immutable — UNLESS they were swapped into a slot.
-    const isSwappedIn = swapMap && Object.values(swapMap).includes(key);
-    if (!isSwappedIn && Number(snap[key] ?? 0) === 0) return false;
-    const cur = Number(levels[key] ?? 0);
+  function canAdjustSkillLevelForSlot(origKey, delta, levels, snap, swapMap) {
+    if (Number(snap[origKey] ?? 0) === 0) return false;
+    const currentKey = (swapMap && swapMap[origKey]) || origKey;
+    const cur = Number(levels[currentKey] ?? 0);
     const next = cur + delta;
     if (next < 0 || next > MAX_SKILL_CREATION_LVL) return false;
-    const test = { ...levels, [key]: next };
-    return skillDiffCount(test, snap) <= PLAYER_SKILL_CHANGE_SLOTS;
+    const test = { ...levels, [currentKey]: next };
+    return skillLevelChangeBudgetUsed(test, snap, swapMap) <= PLAYER_SKILL_CHANGE_SLOTS;
+  }
+
+  function buildSkillSlotCurrentPayload(w) {
+    const out = {};
+    for (const { key: origKey } of ALL_CREATION_SKILL_ROWS) {
+      if (Number(w.originalSkillSnapshot[origKey] ?? 0) <= 0) continue;
+      out[origKey] = (w.skillSwapMap && w.skillSwapMap[origKey]) || origKey;
+    }
+    return out;
   }
 
   function buildSkillSnapshotFromSheet(sheet) {
@@ -264,14 +277,12 @@
   }
 
   function renderSkillsStep(w) {
-    const changed = skillDiffCount(w.skillLevels, w.originalSkillSnapshot);
-    const atMax = changed >= PLAYER_SKILL_CHANGE_SLOTS;
+    const swapMap = w.skillSwapMap || {};
+    const changed = skillLevelChangeBudgetUsed(w.skillLevels, w.originalSkillSnapshot, swapMap);
     const slotRows = preRolledSkillSlotRows(w);
 
     // Keys currently displayed (original or swapped-in)
-    const visibleKeys = new Set(
-      slotRows.map(({ key: origKey }) => w.skillSwapMap[origKey] || origKey)
-    );
+    const visibleKeys = new Set(slotRows.map(({ key: origKey }) => swapMap[origKey] || origKey));
 
     // Unrolled skills available as swap candidates (not currently visible on screen)
     const swapCandidates = ALL_CREATION_SKILL_ROWS.filter(
@@ -317,15 +328,14 @@
                 Math.min(MAX_SKILL_CREATION_LVL, Number(w.skillLevels[currentKey] ?? 0))
               );
               const rankName = CREATION_RANK_LABELS[r] || CREATION_RANK_LABELS[0];
-              const swapMap = w.skillSwapMap || {};
-              const pOk = canAdjustSkillLevel(currentKey, 1, w.skillLevels, w.originalSkillSnapshot, swapMap);
-              const mOk = canAdjustSkillLevel(currentKey, -1, w.skillLevels, w.originalSkillSnapshot, swapMap);
+              const pOk = canAdjustSkillLevelForSlot(origKey, 1, w.skillLevels, w.originalSkillSnapshot, swapMap);
+              const mOk = canAdjustSkillLevelForSlot(origKey, -1, w.skillLevels, w.originalSkillSnapshot, swapMap);
               const pDis = pOk ? '' : 'disabled';
               const mDis = mOk ? '' : 'disabled';
 
               const swapBtn = isSwapped
                 ? `<button type="button" class="wizard-skill-swap-btn wizard-skill-swap-btn--revert" data-act="skill-swap-revert" data-orig-skill="${origKey}" title="Cofnij zamianę">↩</button>`
-                : `<button type="button" class="wizard-skill-swap-btn" data-act="skill-swap-open" data-orig-skill="${origKey}" ${atMax ? 'disabled' : ''} title="Zamień na inny skill">↔</button>`;
+                : `<button type="button" class="wizard-skill-swap-btn" data-act="skill-swap-open" data-orig-skill="${origKey}" title="Zamień na inny skill">↔</button>`;
 
               return `
         <div class="wizard-skill-row wizard-skill-row--budget${isSwapped ? ' wizard-skill-row--swapped' : ''}" data-skill-row="${origKey}">
@@ -334,9 +344,9 @@
             ${swapBtn}
           </span>
           <div class="wizard-stat-controls wizard-skill-controls">
-            <button type="button" class="wizard-stat-btn secondary" data-act="skill-minus" data-skill="${currentKey}" ${mDis} aria-label="Decrease ${currentRow.label}">−</button>
+            <button type="button" class="wizard-stat-btn secondary" data-act="skill-minus" data-orig-slot="${origKey}" ${mDis} aria-label="Decrease ${currentRow.label}">−</button>
             <span class="wizard-skill-rank">${r} · ${rankName}</span>
-            <button type="button" class="wizard-stat-btn secondary" data-act="skill-plus" data-skill="${currentKey}" ${pDis} aria-label="Increase ${currentRow.label}">+</button>
+            <button type="button" class="wizard-stat-btn secondary" data-act="skill-plus" data-orig-slot="${origKey}" ${pDis} aria-label="Increase ${currentRow.label}">+</button>
           </div>
         </div>`;
             })
@@ -345,7 +355,7 @@
     return `
       <div class="wizard-section">
         <h3 class="wizard-section-title">Adjust your skills</h3>
-        <p class="muted wizard-hint">Wylosowane umiejętności. Możesz zmienić co najwyżej ${PLAYER_SKILL_CHANGE_SLOTS} slotów — w tym zamieniać skille (↔) lub zmieniać poziom (±). Każda zmiana kosztuje 1 slot; zamiana skilla kosztuje 2.</p>
+        <p class="muted wizard-hint">Wylosowane umiejętności. Zamiana skilla (↔) na inny o tym samym poziomie jest bezpłatna. Licznik dotyczy tylko zmian poziomu (±) względem wylosowanej wartości slotu — max ${PLAYER_SKILL_CHANGE_SLOTS} łącznie.</p>
         <p class="wizard-swaps"><strong>Zmieniono:</strong> ${changed} / ${PLAYER_SKILL_CHANGE_SLOTS}</p>
         <div class="wizard-skill-list wizard-skill-list--full">${rows}</div>
         <div class="wizard-actions">
@@ -501,12 +511,14 @@
           cur.swapModeSlot = null;
           paintWizard(cur);
         } else if (act === 'skill-plus' || act === 'skill-minus') {
-          const key = btn.getAttribute('data-skill');
+          const origKey = btn.getAttribute('data-orig-slot');
           const cur = window.state.charCreationWizard;
-          if (!cur || cur.step !== 3 || !key) return;
+          if (!cur || cur.step !== 3 || !origKey) return;
           const delta = act === 'skill-plus' ? 1 : -1;
-          if (!canAdjustSkillLevel(key, delta, cur.skillLevels, cur.originalSkillSnapshot, cur.skillSwapMap || {})) return;
-          cur.skillLevels[key] = Number(cur.skillLevels[key] ?? 0) + delta;
+          const sm = cur.skillSwapMap || {};
+          const currentKey = sm[origKey] || origKey;
+          if (!canAdjustSkillLevelForSlot(origKey, delta, cur.skillLevels, cur.originalSkillSnapshot, sm)) return;
+          cur.skillLevels[currentKey] = Number(cur.skillLevels[currentKey] ?? 0) + delta;
           paintWizard(cur);
         } else if (act === 'skill-swap-open') {
           const origKey = btn.getAttribute('data-orig-skill');
@@ -669,6 +681,7 @@
         Math.min(MAX_SKILL_CREATION_LVL, Number(w.skillLevels[key] ?? 0))
       );
     }
+    const skill_slot_current = buildSkillSlotCurrentPayload(w);
     const identity_overrides = {
       appearance: appEl ? appEl.value : (w.identity?.appearance ?? ''),
       personality: perEl ? perEl.value : (w.identity?.personality ?? ''),
@@ -687,7 +700,7 @@
       const resp = await fetch(url, {
         method: 'POST',
         headers: window.getApiHeaders(),
-        body: JSON.stringify({ stat_overrides, skills, identity_overrides })
+        body: JSON.stringify({ stat_overrides, skills, skill_slot_current, identity_overrides })
       });
       let data = {};
       try {

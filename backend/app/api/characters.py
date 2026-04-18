@@ -229,14 +229,72 @@ def _normalize_stat_override_key(raw: str) -> str | None:
     return _STAT_OVERRIDE_ALIASES.get(kl)
 
 
-def _count_skill_slot_diffs(orig: dict[str, int], final: dict[str, int]) -> int:
-    n = 0
+def _validate_creation_skills_after_swap(
+    skills_orig: dict[str, int],
+    skills_after: dict[str, int],
+    slot_current: dict[str, str] | None,
+) -> int:
+    """
+    Rolled creation slots (skills_orig[k] > 0) may move to another skill key via swap.
+    Budget counts only **level changes** per slot: sum_r |after[c_r] - orig[r]| ≤ PLAYER_SWAP_SLOTS.
+    Swapping rank r from Survival to Arcana at the same level costs 0.
+    """
+    rolled = [k for k in sorted(CREATION_SKILL_POOL) if int(skills_orig.get(k, 0) or 0) > 0]
+    if not rolled:
+        return 0
+
+    sc = slot_current or {}
+    seen_targets: set[str] = set()
+    mapping: dict[str, str] = {}
+    for r in rolled:
+        raw = sc.get(r, r)
+        ck = str(raw).strip()
+        if ck not in CREATION_SKILL_POOL:
+            raise HTTPException(
+                status_code=400,
+                detail=f"skill_slot_current: unknown skill {ck!r} for rolled slot {r!r}.",
+            )
+        if ck in seen_targets:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"skill_slot_current: two creation slots map to the same skill {ck!r}. "
+                    "Each rolled slot must target a distinct skill key."
+                ),
+            )
+        seen_targets.add(ck)
+        mapping[r] = ck
+
     for k in CREATION_SKILL_POOL:
-        o = int(orig.get(k, 0) or 0)
-        f = int(final.get(k, 0) or 0)
-        if o != f:
-            n += 1
-    return n
+        v = int(skills_after.get(k, 0) or 0)
+        if k in seen_targets:
+            continue
+        if v != 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Skill {k!r} has rank {v} but is not the target of any rolled creation slot. "
+                    "After swaps, only slot targets may be non-zero (plus keys with rank 0 everywhere else)."
+                ),
+            )
+
+    budget = 0
+    for r in rolled:
+        ck = mapping[r]
+        o = int(skills_orig.get(r, 0) or 0)
+        f = int(skills_after.get(ck, 0) or 0)
+        budget += abs(f - o)
+
+    if budget > PLAYER_SWAP_SLOTS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Too many skill level changes vs the rolled creation set (total {budget} > {PLAYER_SWAP_SLOTS}). "
+                "Swapping one skill for another at the same rank does not use this budget; only changing "
+                "ranks on your rolled slots does."
+            ),
+        )
+    return budget
 
 
 def _coerce_creation_skills_payload(
@@ -285,6 +343,8 @@ class IdentityOverrideIn(BaseModel):
 class FinalizeSheetRequest(BaseModel):
     stat_overrides: dict[str, int] | None = None
     skills: dict[str, int] | None = None
+    # Rolled slot key -> skill key that holds that slot's rank after optional swap (same as key if no swap).
+    skill_slot_current: dict[str, str] | None = None
     identity_overrides: IdentityOverrideIn | None = None
 
 
@@ -655,15 +715,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
 
     skills_after = _coerce_creation_skills_payload(req.skills, skills_sheet)
 
-    diff_n = _count_skill_slot_diffs(skills_orig, skills_after)
-    if diff_n > PLAYER_SWAP_SLOTS:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Too many skills differ from the rolled creation set ({diff_n} > {PLAYER_SWAP_SLOTS}). "
-                "Revert changes or adjust fewer skills."
-            ),
-        )
+    _validate_creation_skills_after_swap(skills_orig, skills_after, req.skill_slot_current)
 
     lck = int(raw_stats.get("LCK", raw_stats.get("lck", 10)))
     new_stats_input = {k: merged[k] for k in SIX_CORE_STATS}
