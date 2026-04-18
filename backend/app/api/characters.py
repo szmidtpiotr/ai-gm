@@ -277,6 +277,9 @@ class IdentityOverrideIn(BaseModel):
 
     appearance: str | None = None
     personality: str | None = None
+    flaw: str | None = None
+    secret: str | None = None
+    bond: str | None = None  # single bond text, stored as bonds[0].text
 
 
 class FinalizeSheetRequest(BaseModel):
@@ -318,34 +321,22 @@ def _identity_generation_user_prompt(
 ) -> str:
     lang = (session_language or "pl").strip().lower() or "pl"
     label = _SESSION_LANG_LABELS.get(lang, f"the campaign session language (ISO {lang})")
-    critical = (
-        "KRYTYCZNE: Wypełnij ABSOLUTNIE WSZYSTKIE pola. Żadne pole nie może być "
-        'pustym stringiem "". Każde pole musi zawierać konkretną treść:\n'
-        '- "flaw": jedna konkretna wada charakteru lub słabość bohatera (1-2 zdania)\n'
-        '- "secret": mroczna tajemnica którą bohater skrywa przed światem, '
-        "nigdy nieujawniana podczas gry (1-2 zdania, musi być konkretna)\n"
-        '- "bonds": lista z jednym obiektem:\n'
-        '  {"text": "konkretny opis więzi, zobowiązania lub osoby ważnej dla bohatera", '
-        '"strength": "strong", "origin": "creation"}\n'
-    )
     return (
-        critical
-        + "\nYou are generating a character identity for a dark fantasy RPG.\n"
-        f"Character name: {name}\n"
-        f"Class: {char_class}\n"
-        f"Backstory (may be any language — translate ideas, do not copy language if it conflicts): {backstory}\n\n"
-        f"CAMPAIGN SESSION LANGUAGE (mandatory for all output text): {lang} — write entirely in {label}. "
-        "Do not use Spanish, English, or any other language for the JSON values unless it matches this session language.\n\n"
-        "Generate in JSON format (respond ONLY with valid JSON, no markdown).\n"
-        "Use exactly these keys as a JSON object: "
-        '"appearance", "personality", "flaw", "secret", "bonds".\n'
-        '"bonds" MUST be a JSON array with exactly one object that includes a non-empty "text" string.\n\n'
-        "appearance: 2-3 sentence physical description, gritty and specific\n"
-        "personality: 2-3 sentences, defining character traits and worldview\n"
-        "flaw: 1-2 sentences, a genuine weakness or vice that creates story tension\n"
-        "secret: 1-2 sentences, something the character hides — shameful, dangerous, or tragic\n"
-        'bonds[0].text: 1-2 sentences, a personal loyalty, debt, or important person\n\n'
-        f"Every string value MUST be in {label} ({lang})."
+        f"Postać: {name}, Klasa: {char_class}\n"
+        f"Tło: {backstory}\n\n"
+        f"Język kampanii (OBOWIĄZKOWY dla wszystkich wartości JSON): {lang} ({label}).\n\n"
+        "Wygeneruj tożsamość bohatera jako JSON. ZASADY BEZWZGLĘDNE:\n"
+        '1. Każde pole MUSI zawierać niepusty tekst. "" jest BŁĘDEM.\n'
+        '2. "appearance": opis wyglądu fizycznego (2-3 zdania)\n'
+        '3. "personality": dominująca cecha charakteru (1-2 zdania)\n'
+        '4. "flaw": konkretna wada lub słabość która utrudnia życie bohaterowi (1-2 zdania).\n'
+        '   PRZYKŁAD: "Ma obsesyjny strach przed wodą po tym jak o mało nie utonął."\n'
+        '5. "secret": mroczna tajemnica skrywana przed wszystkimi (1-2 zdania).\n'
+        '   PRZYKŁAD: "Zabił własnego mentora podczas napadu szaleństwa i ukrył ciało."\n'
+        '6. "bonds": lista z DOKŁADNIE jednym elementem:\n'
+        '   [{"text": "opis konkretnej więzi z osobą lub miejscem", "strength": "strong", "origin": "creation"}]\n'
+        '   PRZYKŁAD text: "Przysiągł zemścić się na lordzie który spalił jego wioskę."\n'
+        "Zwróć WYŁĄCZNIE poprawny JSON, bez komentarzy, bez markdown."
     )
 
 
@@ -533,8 +524,10 @@ def generate_character_identity(character_id: int):
         {
             "role": "system",
             "content": (
-                "You output only valid JSON objects. No markdown fences, no commentary. "
-                f"All natural-language strings in the JSON MUST be written in {label} (language code {lang})."
+                "Jesteś generatorem tożsamości postaci RPG. "
+                "Odpowiadasz WYŁĄCZNIE poprawnym obiektem JSON — bez komentarzy, bez markdown, bez dodatkowego tekstu. "
+                f"Wszystkie wartości napisowe MUSZĄ być w języku {label} (kod: {lang}). "
+                'Żadne pole nie może być pustym stringiem "".'
             ),
         },
         {"role": "user", "content": user_prompt},
@@ -661,6 +654,18 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         skills_orig = {k: int(skills_sheet.get(k, 0) or 0) for k in CREATION_SKILL_POOL}
 
     skills_after = _coerce_creation_skills_payload(req.skills, skills_sheet)
+
+    # Reject any attempt to assign ranks to skills that were not rolled at creation.
+    for k in CREATION_SKILL_POOL:
+        if int(skills_orig.get(k, 0) or 0) == 0 and int(skills_after.get(k, 0) or 0) > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Skill {k!r} was not assigned at character creation (rolled level 0) "
+                    "and cannot be increased during the creation wizard."
+                ),
+            )
+
     diff_n = _count_skill_slot_diffs(skills_orig, skills_after)
     if diff_n > PLAYER_SWAP_SLOTS:
         raise HTTPException(
@@ -691,6 +696,14 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
             rebuilt["identity"]["appearance"] = io.appearance
         if io.personality is not None:
             rebuilt["identity"]["personality"] = io.personality
+        if io.flaw is not None:
+            rebuilt["identity"]["flaw"] = io.flaw
+        if io.secret is not None:
+            rebuilt["identity"]["secret"] = io.secret
+        if io.bond is not None:
+            rebuilt["identity"]["bonds"] = [
+                {"text": io.bond, "strength": "strong", "origin": "creation"}
+            ]
 
     conn.execute(
         """
