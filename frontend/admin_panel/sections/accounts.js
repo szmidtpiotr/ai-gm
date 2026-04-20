@@ -172,11 +172,16 @@ export async function init(container) {
         const tdRole = el("td");
         const roleBtn = el("button", "role-badge");
         roleBtn.type = "button";
-        const isAdm = Number(row.is_admin) === 1;
-        roleBtn.classList.add(isAdm ? "role-badge-admin" : "role-badge-player");
-        roleBtn.textContent = isAdm ? "Admin" : "Player";
+        function syncRoleUi() {
+          const adm = Number(row.is_admin) === 1;
+          roleBtn.classList.toggle("role-badge-admin", adm);
+          roleBtn.classList.toggle("role-badge-player", !adm);
+          roleBtn.textContent = adm ? "Admin" : "Player";
+        }
+        syncRoleUi();
         roleBtn.addEventListener("click", async () => {
-          const next = isAdm ? 0 : 1;
+          const curAdm = Number(row.is_admin) === 1;
+          const next = curAdm ? 0 : 1;
           const msg = next
             ? `Grant admin access to ${row.username}?`
             : `Revoke admin access from ${row.username}?`;
@@ -187,9 +192,7 @@ export async function init(container) {
           try {
             await patchAccount(row, { is_admin: next });
             row.is_admin = next;
-            roleBtn.classList.toggle("role-badge-admin", next === 1);
-            roleBtn.classList.toggle("role-badge-player", next !== 1);
-            roleBtn.textContent = next === 1 ? "Admin" : "Player";
+            syncRoleUi();
             showToast(next ? "Admin access granted." : "Admin access revoked.", "success");
           } catch (e) {
             showToast(parseApiError(e, "Role update failed."), "error");
@@ -201,14 +204,17 @@ export async function init(container) {
         const tdAct = el("td");
         const actBtn = el("button", "toggle-btn");
         actBtn.type = "button";
-        const active = Number(row.is_active) === 1;
-        actBtn.textContent = active ? "✅" : "❌";
+        function syncActiveUi() {
+          actBtn.textContent = Number(row.is_active) === 1 ? "✅" : "❌";
+        }
+        syncActiveUi();
         actBtn.addEventListener("click", async () => {
-          const next = active ? 0 : 1;
+          const cur = Number(row.is_active) === 1;
+          const next = cur ? 0 : 1;
           try {
             await patchAccount(row, { is_active: next });
             row.is_active = next;
-            actBtn.textContent = next ? "✅" : "❌";
+            syncActiveUi();
             showToast(next ? "User activated." : "User deactivated.", "success");
           } catch (e) {
             showToast(parseApiError(e, "Active toggle failed."), "error");

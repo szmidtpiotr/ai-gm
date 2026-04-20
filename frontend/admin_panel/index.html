@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=7" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=8" />
   </head>
   <body>
     <div class="admin-shell">
@@ -67,11 +67,16 @@
         </div>
         <div class="field">
           <label for="bearer-token">Bearer Token</label>
-          <input id="bearer-token" type="password" placeholder="Paste token here" />
+          <input id="bearer-token" type="password" placeholder="Paste token here" autocomplete="new-password" />
         </div>
 
         <details class="advanced-box">
           <summary>Advanced (Dev Login)</summary>
+          <p class="muted dev-login-hint">
+            The admin API expects a <strong>Bearer token</strong> (stored in <code>admin_tokens</code>), not your game password
+            alone. Dev login checks your <strong>username + password</strong> and mints a token, then connects for you. You can
+            also paste a token from elsewhere and use Connect only.
+          </p>
           <div class="dev-login-row">
             <div class="field">
               <label for="dev-username">Username</label>
@@ -81,7 +86,7 @@
               <label for="dev-password">Password</label>
               <input id="dev-password" type="password" autocomplete="current-password" />
             </div>
-            <button id="dev-login-btn" class="secondary-btn" type="button">Generate Token</button>
+            <button id="dev-login-btn" class="secondary-btn" type="button">Dev login &amp; connect</button>
           </div>
         </details>
 
@@ -176,9 +181,24 @@
             throw new Error(detail || "Dev login failed.");
           }
 
-          tokenInput.value = body.token;
-          showToast("Token generated from dev login.", "success");
-          appendLog(`[${timestamp()}] Generated token via dev login`);
+          const rawToken = String(body.token);
+          tokenInput.value = rawToken;
+          tokenInput.dispatchEvent(new Event("input", { bubbles: true }));
+          tokenInput.dispatchEvent(new Event("change", { bubbles: true }));
+
+          try {
+            await connect(baseUrl, rawToken);
+            updateConnectionUI(true);
+            showToast("Dev login succeeded — you are connected.", "success");
+            appendLog(`[${timestamp()}] Dev login + connect OK`);
+          } catch (connectErr) {
+            showToast(
+              connectErr.message ||
+                "Token received but verify failed — check API Base URL, then click Connect.",
+              "error",
+            );
+            appendLog(`[${timestamp()}] Dev login OK but connect/verify failed`);
+          }
         } catch (error) {
           showToast(error.message || "Dev login failed.", "error");
           appendLog(`[${timestamp()}] Dev login failed`);

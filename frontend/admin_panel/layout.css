@@ -322,6 +322,16 @@ body {
   margin-bottom: 10px;
 }
 
+.dev-login-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dev-login-hint code {
+  font-size: 12px;
+}
+
 .dev-login-row {
   display: grid;
   grid-template-columns: 1fr 1fr auto;
