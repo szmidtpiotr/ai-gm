@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=6" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=7" />
   </head>
   <body>
     <div class="admin-shell">
@@ -95,10 +95,6 @@
       import { adminFetch } from "/admin_panel/shared/api.js";
       import { autoConnect, connect, getBaseUrl, isConnected, logout } from "/admin_panel/shared/auth.js";
       import { showToast } from "/admin_panel/shared/toast.js";
-      import { init as initGameDesign } from "/admin_panel/sections/game_design.js";
-      import { init as initAccounts } from "/admin_panel/sections/accounts.js";
-      import { init as initTechnical } from "/admin_panel/sections/technical.js";
-      import { init as initConfig } from "/admin_panel/sections/config.js";
 
       const overlay = document.getElementById("login-overlay");
       const logoutBtn = document.getElementById("logout-btn");
@@ -164,9 +160,20 @@
             body: JSON.stringify({ username, password }),
           });
 
-          const body = await response.json();
+          let body = null;
+          try {
+            body = await response.json();
+          } catch (_parseErr) {
+            body = null;
+          }
           if (!response.ok || !body || !body.token) {
-            throw new Error("Dev login failed.");
+            const detail =
+              body && typeof body.detail === "string"
+                ? body.detail
+                : body && Array.isArray(body.detail)
+                  ? body.detail.join("; ")
+                  : `HTTP ${response.status}`;
+            throw new Error(detail || "Dev login failed.");
           }
 
           tokenInput.value = body.token;
@@ -193,7 +200,8 @@
         }
         gameDesignReady = true;
         try {
-          await initGameDesign(el);
+          const { init } = await import("/admin_panel/sections/game_design.js");
+          await init(el);
         } catch (err) {
           gameDesignReady = false;
           showToast(err.message || "Game Design failed to load.", "error");
@@ -210,7 +218,8 @@
         }
         accountsReady = true;
         try {
-          await initAccounts(el);
+          const { init } = await import("/admin_panel/sections/accounts.js");
+          await init(el);
         } catch (err) {
           accountsReady = false;
           showToast(err.message || "Accounts failed to load.", "error");
@@ -227,7 +236,8 @@
         }
         technicalReady = true;
         try {
-          await initTechnical(el);
+          const { init } = await import("/admin_panel/sections/technical.js");
+          await init(el);
         } catch (err) {
           technicalReady = false;
           showToast(err.message || "Technical section failed to load.", "error");
@@ -244,7 +254,8 @@
         }
         configReady = true;
         try {
-          await initConfig(el);
+          const { init } = await import("/admin_panel/sections/config.js");
+          await init(el);
         } catch (err) {
           configReady = false;
           showToast(err.message || "Config section failed to load.", "error");
@@ -282,9 +293,9 @@
         updateConnectionUI(connected && isConnected());
         appendLog(`[${timestamp()}] Admin panel initialized`);
 
-        connectBtn.addEventListener("click", handleConnect);
-        devLoginBtn.addEventListener("click", handleDevLogin);
-        logoutBtn.addEventListener("click", logout);
+        connectBtn?.addEventListener("click", handleConnect);
+        devLoginBtn?.addEventListener("click", handleDevLogin);
+        logoutBtn?.addEventListener("click", logout);
         wireSidebarNav();
         const activePanel = document.querySelector(".section-panel.active");
         if (activePanel && activePanel.dataset.section === "game-design") {
