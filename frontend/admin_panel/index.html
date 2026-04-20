@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=8" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=9" />
   </head>
   <body>
     <div class="admin-shell">
@@ -63,11 +63,17 @@
         <h2>Connect to Admin API</h2>
         <div class="field">
           <label for="api-base-url">API Base URL</label>
-          <input id="api-base-url" type="url" placeholder="http://localhost:8080" />
+          <input id="api-base-url" type="text" placeholder="https://your-host or http://localhost:8000" autocomplete="url" />
         </div>
         <div class="field">
           <label for="bearer-token">Bearer Token</label>
-          <input id="bearer-token" type="password" placeholder="Paste token here" autocomplete="new-password" />
+          <input
+            id="bearer-token"
+            type="text"
+            placeholder="Paste token here (shown as plain text)"
+            autocomplete="off"
+            spellcheck="false"
+          />
         </div>
 
         <details class="advanced-box">
@@ -156,20 +162,26 @@
           return;
         }
 
-        const endpoint = `${baseUrl.replace(/\/+$/, "")}/api/admin/dev-login`;
+        const root = baseUrl.replace(/\/+$/, "");
+        const endpoint = `${root}/api/admin/dev-login`;
 
         try {
           const response = await fetch(endpoint, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
             body: JSON.stringify({ username, password }),
           });
 
+          const rawText = await response.text();
           let body = null;
           try {
-            body = await response.json();
+            body = rawText ? JSON.parse(rawText) : null;
           } catch (_parseErr) {
-            body = null;
+            throw new Error(
+              rawText
+                ? `Dev login: expected JSON, got: ${rawText.slice(0, 120)}...`
+                : `Dev login: empty response (HTTP ${response.status}). Wrong API Base URL?`,
+            );
           }
           if (!response.ok || !body || !body.token) {
             const detail =
@@ -177,7 +189,9 @@
                 ? body.detail
                 : body && Array.isArray(body.detail)
                   ? body.detail.join("; ")
-                  : `HTTP ${response.status}`;
+                  : body && body.detail != null
+                    ? String(body.detail)
+                    : `HTTP ${response.status}`;
             throw new Error(detail || "Dev login failed.");
           }
 

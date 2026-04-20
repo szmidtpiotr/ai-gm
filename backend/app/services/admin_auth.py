@@ -4,6 +4,8 @@ import secrets
 import sqlite3
 from datetime import UTC, datetime
 
+import bcrypt
+
 
 DB_PATH = "/data/ai_gm.db"
 
@@ -42,12 +44,23 @@ def verify_admin_token(raw_token: str) -> bool:
 def _verify_user_password(stored_password_hash: str, raw_password: str) -> bool:
     if not stored_password_hash or not raw_password:
         return False
-    # Backward-compatible dev mode:
-    # - accepts legacy plain-text seed values (e.g., "demo")
-    # - accepts sha256 hash values
-    if hmac.compare_digest(stored_password_hash, raw_password):
-        return True
-    return hmac.compare_digest(stored_password_hash, hash_admin_token(raw_password))
+    stored = str(stored_password_hash)
+    # Bcrypt first: compare_digest(stored, raw_password) would raise ValueError on length mismatch.
+    if stored.startswith("$2"):
+        try:
+            return bcrypt.checkpw(raw_password.encode("utf-8"), stored.encode("ascii"))
+        except (ValueError, TypeError):
+            return False
+    # Legacy plain-text seed (e.g. "demo") or sha256(password) hex digest.
+    try:
+        if hmac.compare_digest(stored, raw_password):
+            return True
+    except ValueError:
+        pass
+    try:
+        return hmac.compare_digest(stored, hash_admin_token(raw_password))
+    except ValueError:
+        return False
 
 
 def issue_dev_admin_token(username: str, password: str) -> str:
