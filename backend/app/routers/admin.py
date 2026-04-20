@@ -1,7 +1,10 @@
 import os
+import shutil
+from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from app.services.admin_accounts import (
     list_accounts,
@@ -51,6 +54,14 @@ from app.services.user_llm_settings import (
 )
 
 router = APIRouter()
+
+PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
+PROMPT_NAME_TO_FILE: dict[str, str] = {
+    "system_prompt": "system_prompt.txt",
+    "history_summary_prompt": "history_summary_prompt.txt",
+    "memory_qa_prompt": "memory_qa_prompt.txt",
+    "helpme-gm": "helpme-gm.txt",
+}
 
 
 class AdminAuthReq(BaseModel):
@@ -209,6 +220,30 @@ class ConditionDeleteReq(BaseModel):
     force: bool = False
 
 
+class PromptPutReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str | None = None
+    restore_from_backup: bool = False
+
+    @model_validator(mode="after")
+    def _content_or_restore(self) -> "PromptPutReq":
+        if self.restore_from_backup:
+            return self
+        if self.content is None:
+            raise ValueError("content is required unless restore_from_backup is true")
+        return self
+
+
+def _prompt_paths(name: str) -> tuple[Path, Path, str]:
+    if name not in PROMPT_NAME_TO_FILE:
+        raise HTTPException(status_code=404, detail="Unknown prompt")
+    fn = PROMPT_NAME_TO_FILE[name]
+    path = PROMPTS_DIR / fn
+    bak = PROMPTS_DIR / (fn + ".bak")
+    return path, bak, fn
+
+
 def require_admin_token(
     authorization: str | None = Header(default=None),
 ) -> None:
@@ -243,6 +278,68 @@ def admin_dev_login(req: AdminDevLoginReq):
 @router.get("/admin/verify")
 def admin_verify(_: None = Depends(require_admin_token)):
     return {"ok": True}
+
+
+@router.get("/admin/prompts")
+def admin_prompts_list(_: None = Depends(require_admin_token)):
+    items: list[dict] = []
+    for logical_name, fn in PROMPT_NAME_TO_FILE.items():
+        path = PROMPTS_DIR / fn
+        if not path.is_file():
+            continue
+        st = path.stat()
+        bak = PROMPTS_DIR / (fn + ".bak")
+        items.append(
+            {
+                "name": logical_name,
+                "filename": fn,
+                "size_bytes": st.st_size,
+                "last_modified": datetime.fromtimestamp(st.st_mtime, tz=UTC).isoformat(),
+                "has_backup": bak.is_file(),
+            }
+        )
+    return {"items": items}
+
+
+@router.get("/admin/prompts/{name}")
+def admin_prompts_get(name: str, _: None = Depends(require_admin_token)):
+    path, bak, fn = _prompt_paths(name)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Prompt file not found")
+    st = path.stat()
+    content = path.read_text(encoding="utf-8")
+    return {
+        "name": name,
+        "filename": fn,
+        "content": content,
+        "size_bytes": st.st_size,
+        "last_modified": datetime.fromtimestamp(st.st_mtime, tz=UTC).isoformat(),
+        "has_backup": bak.is_file(),
+    }
+
+
+@router.put("/admin/prompts/{name}")
+def admin_prompts_put(name: str, req: PromptPutReq, _: None = Depends(require_admin_token)):
+    path, bak, fn = _prompt_paths(name)
+    try:
+        if req.restore_from_backup:
+            if not bak.is_file():
+                raise HTTPException(status_code=404, detail="No backup file (.bak) for this prompt")
+            text = bak.read_text(encoding="utf-8")
+            path.write_text(text, encoding="utf-8")
+            st = path.stat()
+            return {"ok": True, "name": name, "size_bytes": st.st_size}
+
+        text = req.content if req.content is not None else ""
+        if path.is_file():
+            shutil.copyfile(path, bak)
+        path.write_text(text, encoding="utf-8")
+        st = path.stat()
+        return {"ok": True, "name": name, "size_bytes": st.st_size}
+    except HTTPException:
+        raise
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to write prompt: {e}") from None
 
 
 @router.get("/admin/stats")
