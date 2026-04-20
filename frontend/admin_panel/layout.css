@@ -439,6 +439,8 @@ body {
 }
 
 .sub-tab-btn {
+  width: auto;
+  min-width: 0;
   min-height: 36px;
   padding: 6px 12px;
   border-radius: 8px;
@@ -449,6 +451,7 @@ body {
   font-family: Arial, sans-serif;
   font-size: 13px;
   font-weight: 600;
+  flex: 0 0 auto;
 }
 
 .sub-tab-btn:hover {
@@ -589,6 +592,15 @@ body {
 
 .admin-table-actions button {
   margin-right: 6px;
+  width: auto;
+  min-width: 0;
+}
+
+.toggle-btn,
+.primary-btn,
+.secondary-btn,
+.logout-btn {
+  width: auto;
 }
 
 .danger-outline {
