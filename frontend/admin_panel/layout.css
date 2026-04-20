@@ -35,7 +35,13 @@ body {
 .admin-shell {
   display: flex;
   align-items: stretch;
+  width: 100%;
   min-height: 100vh;
+}
+
+.admin-shell > .admin-main {
+  flex: 1 1 auto;
+  width: auto;
 }
 
 .admin-sidebar {
