@@ -1,9 +1,12 @@
 import os
+import re
 import shutil
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.services.admin_accounts import (
@@ -23,6 +26,7 @@ from app.services.admin_character_recreate import (
     list_characters_by_owner,
     recreate_character_in_place,
 )
+from app.migrations_admin import run_admin_migrations
 from app.services.admin_auth import issue_dev_admin_token, verify_admin_token
 from app.services.admin_config_transfer import export_config, import_config
 from app.services.admin_config import (
@@ -60,6 +64,11 @@ from app.services.user_llm_settings import (
 )
 
 router = APIRouter()
+
+ADMIN_SQLITE_PATH = "/data/ai_gm.db"
+ADMIN_DB_RESTORE_TMP = "/data/ai_gm_restore_tmp.db"
+ADMIN_DB_BAK_PATH = "/data/ai_gm.db.bak"
+_SAFE_SQLITE_TABLE = re.compile(r"^[a-zA-Z0-9_]+$")
 
 PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 PROMPT_NAME_TO_FILE: dict[str, str] = {
@@ -887,6 +896,113 @@ def admin_put_loki_settings(req: LokiUrlSettingsReq, _: None = Depends(require_a
         "from_env": env,
         "builtin_default": DEFAULT_LOKI_URL,
     }
+
+
+def _sqlite_integrity_ok(path: str) -> bool:
+    conn = sqlite3.connect(path)
+    try:
+        rows = conn.execute("PRAGMA integrity_check").fetchall()
+        return len(rows) == 1 and str(rows[0][0]).lower() == "ok"
+    finally:
+        conn.close()
+
+
+@router.get("/admin/db/info")
+def admin_db_info(_: None = Depends(require_admin_token)):
+    path = ADMIN_SQLITE_PATH
+    size = os.path.getsize(path) if os.path.isfile(path) else 0
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    try:
+        ver_row = conn.execute("SELECT sqlite_version() AS v").fetchone()
+        sqlite_version = str(ver_row["v"]) if ver_row else ""
+        names = [
+            str(r["name"])
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            ).fetchall()
+        ]
+        tables: list[dict] = []
+        for name in names:
+            if not _SAFE_SQLITE_TABLE.match(name):
+                continue
+            try:
+                n = conn.execute(f"SELECT COUNT(*) AS n FROM {name}").fetchone()
+                row_count = int(n["n"]) if n else 0
+            except sqlite3.Error:
+                row_count = -1
+            tables.append({"name": name, "row_count": row_count})
+        return {
+            "db_path": path,
+            "db_size_bytes": size,
+            "sqlite_version": sqlite_version,
+            "tables": tables,
+        }
+    finally:
+        conn.close()
+
+
+@router.post("/admin/db/migrate")
+def admin_db_migrate(_: None = Depends(require_admin_token)):
+    try:
+        run_admin_migrations()
+        return {"ok": True, "message": "Migrations complete"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/admin/db/backup")
+def admin_db_backup(_: None = Depends(require_admin_token)):
+    if not os.path.isfile(ADMIN_SQLITE_PATH):
+        raise HTTPException(status_code=404, detail="Database file not found")
+    fname = f"ai_gm_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.db"
+    return FileResponse(
+        path=ADMIN_SQLITE_PATH,
+        media_type="application/octet-stream",
+        filename=fname,
+    )
+
+
+@router.post("/admin/db/restore")
+async def admin_db_restore(
+    file: UploadFile = File(...),
+    _: None = Depends(require_admin_token),
+):
+    fn = (file.filename or "").strip().lower()
+    if not fn.endswith(".db"):
+        raise HTTPException(status_code=422, detail="File must have a .db extension")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=422, detail="Empty file")
+
+    tmp_path = ADMIN_DB_RESTORE_TMP
+    try:
+        with open(tmp_path, "wb") as out:
+            out.write(raw)
+
+        if not _sqlite_integrity_ok(tmp_path):
+            raise HTTPException(status_code=422, detail="Integrity check failed")
+
+        if os.path.isfile(ADMIN_SQLITE_PATH):
+            shutil.copy2(ADMIN_SQLITE_PATH, ADMIN_DB_BAK_PATH)
+        shutil.move(tmp_path, ADMIN_SQLITE_PATH)
+    except HTTPException:
+        if os.path.isfile(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        raise
+    except Exception as e:
+        if os.path.isfile(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    return {"ok": True, "message": "Database restored. Restart backend to reload."}
 
 
 @router.get("/admin/config/export")

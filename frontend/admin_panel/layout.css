@@ -905,6 +905,208 @@ body {
   box-sizing: border-box;
 }
 
+.warning-banner {
+  padding: 0.75rem 1rem;
+  border-radius: 4px;
+  margin-bottom: 14px;
+  font-size: 14px;
+  line-height: 1.45;
+  font-family: Arial, sans-serif;
+}
+
+.warning-banner-orange {
+  background: #7a3c00;
+  color: #fff7eb;
+  border-left: 4px solid #ff8c00;
+}
+
+.warning-banner-red {
+  background: #5a0000;
+  color: #fde8e8;
+  border-left: 4px solid #f44336;
+}
+
+.two-col-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .two-col-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.admin-card-title {
+  margin: 0 0 10px;
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.technical-section .technical-body,
+.config-section .two-col-cards {
+  margin-top: 4px;
+}
+
+.technical-btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.technical-helper {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.field-label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-family: Arial, sans-serif;
+  margin-bottom: 6px;
+}
+
+.technical-url-input {
+  width: 100%;
+  min-height: 40px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  box-sizing: border-box;
+  font-size: 14px;
+}
+
+.loki-info-table .loki-row-label {
+  width: 38%;
+  color: var(--muted);
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+}
+
+.loki-source-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: Arial, sans-serif;
+  text-transform: uppercase;
+}
+
+.db-table {
+  font-size: 0.85rem;
+}
+
+.db-table-name {
+  font-family: "Courier New", monospace;
+}
+
+.db-table-row-zero {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.svc-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.svc-status-dot.green {
+  background: #4caf50;
+}
+
+.svc-status-dot.red {
+  background: #f44336;
+}
+
+.svc-status-dot.grey {
+  background: #9e9e9e;
+}
+
+.health-card-body {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.health-error-small {
+  font-size: 12px;
+  color: var(--danger);
+  margin: 6px 0 0;
+}
+
+.health-last-checked {
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.technical-health-toolbar {
+  margin-bottom: 10px;
+}
+
+.config-diff-wrap {
+  margin-top: 16px;
+}
+
+.config-diff-heading {
+  margin: 0 0 8px;
+  color: var(--accent);
+}
+
+.config-version-line {
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+
+.config-diff-block {
+  margin-bottom: 14px;
+}
+
+.config-diff-sub {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.diff-table.diff-add tbody tr:nth-child(even) {
+  background: rgba(76, 175, 80, 0.12);
+}
+
+.diff-table.diff-add tbody tr:nth-child(odd) {
+  background: rgba(76, 175, 80, 0.06);
+}
+
+.config-diff-raw {
+  margin: 12px 0 0;
+  padding: 10px;
+  background: #221810;
+  color: #f2e6d2;
+  border-radius: 8px;
+  border: 1px solid #3a2d1f;
+  font-size: 12px;
+  overflow: auto;
+  max-height: 240px;
+}
+
 @media (max-width: 900px) {
   .admin-sidebar {
     flex-basis: 66px;

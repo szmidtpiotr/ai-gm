@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=5" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=6" />
   </head>
   <body>
     <div class="admin-shell">
@@ -45,14 +45,8 @@
         <section class="sections">
           <div class="section-panel active" data-section="game-design" aria-busy="true"></div>
           <div class="section-panel" data-section="accounts" aria-busy="true"></div>
-          <div class="section-panel" data-section="technical">
-            <h2>Technical</h2>
-            <p>Section placeholder. Coming in next phase.</p>
-          </div>
-          <div class="section-panel" data-section="config">
-            <h2>Config</h2>
-            <p>Section placeholder. Coming in next phase.</p>
-          </div>
+          <div class="section-panel" data-section="technical" aria-busy="true"></div>
+          <div class="section-panel" data-section="config" aria-busy="true"></div>
         </section>
 
         <div class="activity-log-wrap">
@@ -103,6 +97,8 @@
       import { showToast } from "/admin_panel/shared/toast.js";
       import { init as initGameDesign } from "/admin_panel/sections/game_design.js";
       import { init as initAccounts } from "/admin_panel/sections/accounts.js";
+      import { init as initTechnical } from "/admin_panel/sections/technical.js";
+      import { init as initConfig } from "/admin_panel/sections/config.js";
 
       const overlay = document.getElementById("login-overlay");
       const logoutBtn = document.getElementById("logout-btn");
@@ -184,6 +180,8 @@
 
       let gameDesignReady = false;
       let accountsReady = false;
+      let technicalReady = false;
+      let configReady = false;
 
       async function maybeInitGameDesign(section) {
         if (section !== "game-design" || gameDesignReady) {
@@ -219,6 +217,40 @@
         }
       }
 
+      async function maybeInitTechnical(section) {
+        if (section !== "technical" || technicalReady) {
+          return;
+        }
+        const el = document.querySelector('.section-panel[data-section="technical"]');
+        if (!el) {
+          return;
+        }
+        technicalReady = true;
+        try {
+          await initTechnical(el);
+        } catch (err) {
+          technicalReady = false;
+          showToast(err.message || "Technical section failed to load.", "error");
+        }
+      }
+
+      async function maybeInitConfig(section) {
+        if (section !== "config" || configReady) {
+          return;
+        }
+        const el = document.querySelector('.section-panel[data-section="config"]');
+        if (!el) {
+          return;
+        }
+        configReady = true;
+        try {
+          await initConfig(el);
+        } catch (err) {
+          configReady = false;
+          showToast(err.message || "Config section failed to load.", "error");
+        }
+      }
+
       function wireSidebarNav() {
         const navButtons = Array.from(document.querySelectorAll("#sidebar-nav button"));
         const panels = Array.from(document.querySelectorAll(".section-panel"));
@@ -237,6 +269,8 @@
 
             void maybeInitGameDesign(selected);
             void maybeInitAccounts(selected);
+            void maybeInitTechnical(selected);
+            void maybeInitConfig(selected);
           });
         });
       }
