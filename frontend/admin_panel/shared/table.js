@@ -287,7 +287,14 @@ export function renderTable(container, columns, rows, options = {}) {
           const prefix = colIdx === 0 && locked ? "🔒 " : "";
           if (col.type === "badge") {
             const pill = document.createElement("span");
-            pill.className = "admin-badge";
+            let cls = "admin-badge";
+            if (col.badgeClass) {
+              const extra = typeof col.badgeClass === "function" ? col.badgeClass(row) : col.badgeClass;
+              if (extra) {
+                cls += ` ${extra}`;
+              }
+            }
+            pill.className = cls;
             pill.textContent = String(row[col.key] ?? "");
             td.appendChild(pill);
           } else if (col.type === "boolean") {

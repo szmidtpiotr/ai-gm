@@ -32,24 +32,35 @@ from app.services.admin_config_transfer import export_config, import_config
 from app.services.admin_config import (
     create_condition,
     create_enemy,
-    create_weapon,
+    create_item,
+    create_loot_table,
     create_skill,
+    create_weapon,
     delete_condition,
     delete_enemy,
+    delete_item,
+    delete_loot_entry,
+    delete_loot_table,
     delete_weapon,
     delete_skill,
     list_conditions,
     list_enemies,
+    list_items,
+    list_loot_entries,
+    list_loot_tables,
     list_weapons,
     list_dc,
     list_skills,
     list_stats,
     update_condition,
     update_enemy,
+    update_item,
+    update_loot_table,
     update_weapon,
     update_dc,
     update_skill,
     update_stat,
+    upsert_loot_entry,
 )
 from app.services.loki_settings import (
     DEFAULT_LOKI_URL,
@@ -247,6 +258,62 @@ class ConditionPatchReq(BaseModel):
 
 class ConditionDeleteReq(BaseModel):
     force: bool = False
+
+
+class ItemCreateReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str
+    label: str
+    item_type: str = "misc"
+    description: str = ""
+    value_gp: int = 0
+    weight: float = 0.0
+    effect_json: str | None = None
+    is_active: bool = True
+
+
+class ItemPatchReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: str | None = None
+    item_type: str | None = None
+    description: str | None = None
+    value_gp: int | None = None
+    weight: float | None = None
+    effect_json: str | None = None
+    is_active: bool | None = None
+    force: bool = False
+
+
+class ItemDeleteReq(BaseModel):
+    force: bool = False
+
+
+class LootTableCreateReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str
+    label: str
+    description: str = ""
+    is_active: bool = True
+
+
+class LootTablePatchReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
+    force: bool = False
+
+
+class LootTableDeleteReq(BaseModel):
+    force: bool = False
+
+
+class LootEntryReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    item_key: str
+    weight: int = 10
+    qty_min: int = 1
+    qty_max: int = 1
 
 
 class PromptPutReq(BaseModel):
@@ -622,6 +689,199 @@ def admin_delete_condition(key: str, req: ConditionDeleteReq, _: None = Depends(
         raise HTTPException(status_code=404, detail="Condition not found") from None
     except PermissionError:
         raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+
+
+@router.get("/admin/items")
+def admin_items(_: None = Depends(require_admin_token)):
+    return {"items": list_items()}
+
+
+@router.post("/admin/items")
+def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)):
+    try:
+        item = create_item(
+            key=req.key,
+            label=req.label.strip(),
+            item_type=req.item_type,
+            description=req.description or "",
+            value_gp=req.value_gp,
+            weight=req.weight,
+            effect_json=req.effect_json,
+            is_active=req.is_active,
+        )
+        return {"item": item}
+    except ValueError as e:
+        if str(e) == "item_exists":
+            raise HTTPException(status_code=409, detail="Item key already exists") from None
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
+        if str(e) == "invalid_item_type":
+            raise HTTPException(
+                status_code=422,
+                detail="item_type must be one of: weapon, armor, consumable, misc, quest",
+            ) from None
+        if str(e) == "invalid_effect_json":
+            raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
+        if str(e) in ("invalid_value_gp", "invalid_weight"):
+            raise HTTPException(status_code=422, detail="value_gp and weight must be >= 0") from None
+        raise HTTPException(status_code=422, detail="Invalid item payload") from None
+
+
+@router.patch("/admin/items/{key}")
+def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admin_token)):
+    try:
+        item = update_item(
+            key,
+            label=req.label,
+            item_type=req.item_type,
+            description=req.description,
+            value_gp=req.value_gp,
+            weight=req.weight,
+            effect_json=req.effect_json,
+            is_active=req.is_active,
+            force=req.force,
+        )
+        return {"item": item}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Item not found") from None
+    except PermissionError:
+        raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+    except ValueError as e:
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
+        if str(e) == "invalid_item_type":
+            raise HTTPException(
+                status_code=422,
+                detail="item_type must be one of: weapon, armor, consumable, misc, quest",
+            ) from None
+        if str(e) == "invalid_effect_json":
+            raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
+        if str(e) in ("invalid_value_gp", "invalid_weight"):
+            raise HTTPException(status_code=422, detail="value_gp and weight must be >= 0") from None
+        raise HTTPException(status_code=422, detail="Invalid item payload") from None
+
+
+@router.delete("/admin/items/{key}")
+def admin_delete_item(key: str, req: ItemDeleteReq, _: None = Depends(require_admin_token)):
+    try:
+        delete_item(key, force=req.force)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Item not found") from None
+    except PermissionError:
+        raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+    except ValueError as e:
+        if str(e) == "in_use":
+            raise HTTPException(
+                status_code=409,
+                detail="Item is referenced by loot table entries. Cannot delete.",
+            ) from None
+        raise HTTPException(status_code=422, detail="Invalid delete request") from e
+
+
+@router.get("/admin/loot-tables")
+def admin_loot_tables(_: None = Depends(require_admin_token)):
+    return {"items": list_loot_tables()}
+
+
+@router.post("/admin/loot-tables")
+def admin_create_loot_table(req: LootTableCreateReq, _: None = Depends(require_admin_token)):
+    try:
+        item = create_loot_table(
+            key=req.key,
+            label=req.label.strip(),
+            description=req.description or "",
+            is_active=req.is_active,
+        )
+        return {"item": item}
+    except ValueError as e:
+        if str(e) == "loot_table_exists":
+            raise HTTPException(status_code=409, detail="Loot table key already exists") from None
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
+        raise HTTPException(status_code=422, detail="Invalid loot table payload") from None
+
+
+@router.patch("/admin/loot-tables/{key}")
+def admin_patch_loot_table(key: str, req: LootTablePatchReq, _: None = Depends(require_admin_token)):
+    try:
+        item = update_loot_table(
+            key,
+            label=req.label,
+            description=req.description,
+            is_active=req.is_active,
+            force=req.force,
+        )
+        return {"item": item}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Loot table not found") from None
+    except PermissionError:
+        raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+    except ValueError as e:
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
+        raise HTTPException(status_code=422, detail="Invalid loot table payload") from None
+
+
+@router.delete("/admin/loot-tables/{key}")
+def admin_delete_loot_table(key: str, req: LootTableDeleteReq, _: None = Depends(require_admin_token)):
+    try:
+        delete_loot_table(key, force=req.force)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Loot table not found") from None
+    except PermissionError:
+        raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+
+
+@router.get("/admin/loot-tables/{key}/entries")
+def admin_loot_table_entries(key: str, _: None = Depends(require_admin_token)):
+    try:
+        return {"items": list_loot_entries(key)}
+    except ValueError as e:
+        if str(e) == "loot_table_not_found":
+            raise HTTPException(status_code=404, detail="Loot table not found") from None
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="Invalid loot table key") from None
+        raise
+
+
+@router.post("/admin/loot-tables/{key}/entries")
+def admin_upsert_loot_entry(key: str, req: LootEntryReq, _: None = Depends(require_admin_token)):
+    try:
+        row = upsert_loot_entry(
+            key,
+            item_key=req.item_key.strip(),
+            weight=req.weight,
+            qty_min=req.qty_min,
+            qty_max=req.qty_max,
+        )
+        return {"item": row}
+    except ValueError as e:
+        if str(e) == "loot_table_not_found":
+            raise HTTPException(status_code=404, detail="Loot table not found") from None
+        if str(e) == "item_not_found":
+            raise HTTPException(status_code=422, detail="item_key must reference an existing item") from None
+        if str(e) == "invalid_weight":
+            raise HTTPException(status_code=422, detail="weight must be >= 1") from None
+        if str(e) == "invalid_qty_range":
+            raise HTTPException(status_code=422, detail="qty_min and qty_max must be >= 1 and qty_min <= qty_max") from None
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="Invalid key format") from None
+        raise HTTPException(status_code=422, detail="Invalid loot entry payload") from None
+
+
+@router.delete("/admin/loot-tables/{key}/entries/{item_key}")
+def admin_delete_loot_entry(key: str, item_key: str, _: None = Depends(require_admin_token)):
+    try:
+        delete_loot_entry(key, item_key)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Loot entry not found") from None
+    except ValueError as e:
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="Invalid key format") from None
+        raise
 
 
 @router.patch("/admin/stats/{key}")

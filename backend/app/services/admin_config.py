@@ -7,6 +7,7 @@ DB_PATH = "/data/ai_gm.db"
 KEY_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 DAMAGE_DIE_RE = re.compile(r"^\d*d\d+$")
 ALLOWED_CLASSES = {"warrior", "ranger", "scholar"}
+ALLOWED_ITEM_TYPES = {"weapon", "armor", "consumable", "misc", "quest"}
 
 
 def _fetch_all(query: str) -> list[dict]:
@@ -82,6 +83,13 @@ def _normalize_effect_json(effect_json: str) -> str:
     except Exception as exc:
         raise ValueError("invalid_effect_json") from exc
     return json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
+
+
+def _validate_item_type(item_type: str) -> str:
+    t = (item_type or "").strip().lower()
+    if t not in ALLOWED_ITEM_TYPES:
+        raise ValueError("invalid_item_type")
+    return t
 
 
 def list_stats() -> list[dict]:
@@ -848,6 +856,418 @@ def delete_condition(key: str, *, force: bool) -> None:
             raise PermissionError("locked")
         conn.execute("DELETE FROM game_config_conditions WHERE key = ?", (safe_key,))
         _audit(conn, "game_config_conditions", safe_key, "DELETE", current, None)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_items() -> list[dict]:
+    rows = _fetch_all(
+        """
+        SELECT key, label, item_type, description, value_gp, weight, effect_json, is_active,
+               locked_at, created_at, updated_at
+        FROM game_config_items
+        ORDER BY label COLLATE NOCASE ASC, key ASC
+        """
+    )
+    for row in rows:
+        row["is_active"] = bool(row.get("is_active", 1))
+    return rows
+
+
+def create_item(
+    *,
+    key: str,
+    label: str,
+    item_type: str = "misc",
+    description: str = "",
+    value_gp: int = 0,
+    weight: float = 0.0,
+    effect_json: str | None = None,
+    is_active: bool = True,
+) -> dict:
+    safe_key = _validate_key(key)
+    safe_type = _validate_item_type(item_type)
+    if value_gp < 0:
+        raise ValueError("invalid_value_gp")
+    if weight < 0:
+        raise ValueError("invalid_weight")
+    eff: str | None
+    if effect_json is None or (isinstance(effect_json, str) and not effect_json.strip()):
+        eff = None
+    else:
+        eff = _normalize_effect_json(effect_json)
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        existing = _fetch_one(conn, "SELECT key FROM game_config_items WHERE key = ?", (safe_key,))
+        if existing:
+            raise ValueError("item_exists")
+        conn.execute(
+            """
+            INSERT INTO game_config_items (
+                key, label, item_type, description, value_gp, weight, effect_json, is_active,
+                locked_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+            """,
+            (safe_key, label, safe_type, description or "", int(value_gp), float(weight), eff, 1 if is_active else 0),
+        )
+        new_row = _fetch_one(
+            conn,
+            """
+            SELECT key, label, item_type, description, value_gp, weight, effect_json, is_active,
+                   locked_at, created_at, updated_at
+            FROM game_config_items WHERE key = ?
+            """,
+            (safe_key,),
+        )
+        if new_row:
+            new_row["is_active"] = bool(new_row.get("is_active", 1))
+        _audit(conn, "game_config_items", safe_key, "CREATE", None, new_row)
+        conn.commit()
+        return new_row or {}
+    finally:
+        conn.close()
+
+
+def update_item(
+    key: str,
+    *,
+    label: str | None,
+    item_type: str | None,
+    description: str | None,
+    value_gp: int | None,
+    weight: float | None,
+    effect_json: str | None,
+    is_active: bool | None,
+    force: bool,
+) -> dict:
+    safe_key = _validate_key(key)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        current = _fetch_one(
+            conn,
+            """
+            SELECT key, label, item_type, description, value_gp, weight, effect_json, is_active,
+                   locked_at, created_at, updated_at
+            FROM game_config_items WHERE key = ?
+            """,
+            (safe_key,),
+        )
+        if not current:
+            raise KeyError("not_found")
+        if current.get("locked_at") and not force:
+            raise PermissionError("locked")
+
+        final_type = _validate_item_type(item_type) if item_type is not None else current["item_type"]
+        final_label = label if label is not None else current["label"]
+        final_desc = description if description is not None else current.get("description") or ""
+        final_gp = int(value_gp) if value_gp is not None else int(current["value_gp"])
+        final_w = float(weight) if weight is not None else float(current["weight"])
+        if final_gp < 0:
+            raise ValueError("invalid_value_gp")
+        if final_w < 0:
+            raise ValueError("invalid_weight")
+
+        if effect_json is None:
+            final_effect = current.get("effect_json")
+        elif isinstance(effect_json, str) and not effect_json.strip():
+            final_effect = None
+        else:
+            final_effect = _normalize_effect_json(effect_json)
+
+        final_active = (1 if is_active else 0) if is_active is not None else int(current.get("is_active", 1))
+
+        conn.execute(
+            """
+            UPDATE game_config_items
+            SET label = ?, item_type = ?, description = ?, value_gp = ?, weight = ?, effect_json = ?,
+                is_active = ?, updated_at = datetime('now')
+            WHERE key = ?
+            """,
+            (final_label, final_type, final_desc, final_gp, final_w, final_effect, final_active, safe_key),
+        )
+        new_row = _fetch_one(
+            conn,
+            """
+            SELECT key, label, item_type, description, value_gp, weight, effect_json, is_active,
+                   locked_at, created_at, updated_at
+            FROM game_config_items WHERE key = ?
+            """,
+            (safe_key,),
+        )
+        if new_row:
+            new_row["is_active"] = bool(new_row.get("is_active", 1))
+        _audit(conn, "game_config_items", safe_key, "UPDATE", dict(current), new_row)
+        conn.commit()
+        return new_row or {}
+    finally:
+        conn.close()
+
+
+def delete_item(key: str, *, force: bool) -> None:
+    safe_key = _validate_key(key)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        current = _fetch_one(
+            conn,
+            """
+            SELECT key, label, item_type, description, value_gp, weight, effect_json, is_active,
+                   locked_at, created_at, updated_at
+            FROM game_config_items WHERE key = ?
+            """,
+            (safe_key,),
+        )
+        if not current:
+            raise KeyError("not_found")
+        if current.get("locked_at") and not force:
+            raise PermissionError("locked")
+        ref = conn.execute(
+            "SELECT COUNT(*) AS c FROM game_config_loot_entries WHERE item_key = ?",
+            (safe_key,),
+        ).fetchone()
+        if ref and int(ref["c"]) > 0:
+            raise ValueError("in_use")
+        conn.execute("DELETE FROM game_config_items WHERE key = ?", (safe_key,))
+        cur_dict = dict(current)
+        cur_dict["is_active"] = bool(cur_dict.get("is_active", 1))
+        _audit(conn, "game_config_items", safe_key, "DELETE", cur_dict, None)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_loot_tables() -> list[dict]:
+    rows = _fetch_all(
+        """
+        SELECT key, label, description, is_active, locked_at, created_at, updated_at
+        FROM game_config_loot_tables
+        ORDER BY label COLLATE NOCASE ASC, key ASC
+        """
+    )
+    for row in rows:
+        row["is_active"] = bool(row.get("is_active", 1))
+    return rows
+
+
+def create_loot_table(
+    *,
+    key: str,
+    label: str,
+    description: str = "",
+    is_active: bool = True,
+) -> dict:
+    safe_key = _validate_key(key)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        existing = _fetch_one(conn, "SELECT key FROM game_config_loot_tables WHERE key = ?", (safe_key,))
+        if existing:
+            raise ValueError("loot_table_exists")
+        conn.execute(
+            """
+            INSERT INTO game_config_loot_tables (
+                key, label, description, is_active, locked_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+            """,
+            (safe_key, label, description or "", 1 if is_active else 0),
+        )
+        new_row = _fetch_one(
+            conn,
+            """
+            SELECT key, label, description, is_active, locked_at, created_at, updated_at
+            FROM game_config_loot_tables WHERE key = ?
+            """,
+            (safe_key,),
+        )
+        if new_row:
+            new_row["is_active"] = bool(new_row.get("is_active", 1))
+        _audit(conn, "game_config_loot_tables", safe_key, "CREATE", None, new_row)
+        conn.commit()
+        return new_row or {}
+    finally:
+        conn.close()
+
+
+def update_loot_table(
+    key: str,
+    *,
+    label: str | None,
+    description: str | None,
+    is_active: bool | None,
+    force: bool,
+) -> dict:
+    safe_key = _validate_key(key)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        current = _fetch_one(
+            conn,
+            """
+            SELECT key, label, description, is_active, locked_at, created_at, updated_at
+            FROM game_config_loot_tables WHERE key = ?
+            """,
+            (safe_key,),
+        )
+        if not current:
+            raise KeyError("not_found")
+        if current.get("locked_at") and not force:
+            raise PermissionError("locked")
+        conn.execute(
+            """
+            UPDATE game_config_loot_tables
+            SET label = ?, description = ?, is_active = ?, updated_at = datetime('now')
+            WHERE key = ?
+            """,
+            (
+                label if label is not None else current["label"],
+                description if description is not None else current.get("description") or "",
+                (1 if is_active else 0) if is_active is not None else int(current.get("is_active", 1)),
+                safe_key,
+            ),
+        )
+        new_row = _fetch_one(
+            conn,
+            """
+            SELECT key, label, description, is_active, locked_at, created_at, updated_at
+            FROM game_config_loot_tables WHERE key = ?
+            """,
+            (safe_key,),
+        )
+        if new_row:
+            new_row["is_active"] = bool(new_row.get("is_active", 1))
+        _audit(conn, "game_config_loot_tables", safe_key, "UPDATE", dict(current), new_row)
+        conn.commit()
+        return new_row or {}
+    finally:
+        conn.close()
+
+
+def delete_loot_table(key: str, *, force: bool) -> None:
+    safe_key = _validate_key(key)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        current = _fetch_one(
+            conn,
+            """
+            SELECT key, label, description, is_active, locked_at, created_at, updated_at
+            FROM game_config_loot_tables WHERE key = ?
+            """,
+            (safe_key,),
+        )
+        if not current:
+            raise KeyError("not_found")
+        if current.get("locked_at") and not force:
+            raise PermissionError("locked")
+        conn.execute("DELETE FROM game_config_loot_entries WHERE loot_table_key = ?", (safe_key,))
+        conn.execute("DELETE FROM game_config_loot_tables WHERE key = ?", (safe_key,))
+        cur_dict = dict(current)
+        cur_dict["is_active"] = bool(cur_dict.get("is_active", 1))
+        _audit(conn, "game_config_loot_tables", safe_key, "DELETE", cur_dict, None)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def list_loot_entries(loot_table_key: str) -> list[dict]:
+    safe_key = _validate_key(loot_table_key)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        parent = _fetch_one(conn, "SELECT key FROM game_config_loot_tables WHERE key = ?", (safe_key,))
+        if not parent:
+            raise ValueError("loot_table_not_found")
+        rows = conn.execute(
+            """
+            SELECT e.id, e.loot_table_key, e.item_key, e.weight, e.qty_min, e.qty_max,
+                   i.label AS item_label
+            FROM game_config_loot_entries e
+            JOIN game_config_items i ON i.key = e.item_key
+            WHERE e.loot_table_key = ?
+            ORDER BY i.label COLLATE NOCASE ASC, e.item_key ASC
+            """,
+            (safe_key,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def upsert_loot_entry(
+    loot_table_key: str,
+    item_key: str,
+    weight: int,
+    qty_min: int,
+    qty_max: int,
+) -> dict:
+    lt = _validate_key(loot_table_key)
+    ik = _validate_key(item_key)
+    if weight < 1:
+        raise ValueError("invalid_weight")
+    if qty_min < 1 or qty_max < 1 or qty_min > qty_max:
+        raise ValueError("invalid_qty_range")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        parent = _fetch_one(conn, "SELECT key FROM game_config_loot_tables WHERE key = ?", (lt,))
+        if not parent:
+            raise ValueError("loot_table_not_found")
+        item = _fetch_one(conn, "SELECT key FROM game_config_items WHERE key = ?", (ik,))
+        if not item:
+            raise ValueError("item_not_found")
+        conn.execute(
+            """
+            INSERT INTO game_config_loot_entries (loot_table_key, item_key, weight, qty_min, qty_max)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(loot_table_key, item_key) DO UPDATE SET
+                weight = excluded.weight,
+                qty_min = excluded.qty_min,
+                qty_max = excluded.qty_max
+            """,
+            (lt, ik, weight, qty_min, qty_max),
+        )
+        row = _fetch_one(
+            conn,
+            """
+            SELECT e.id, e.loot_table_key, e.item_key, e.weight, e.qty_min, e.qty_max, i.label AS item_label
+            FROM game_config_loot_entries e
+            JOIN game_config_items i ON i.key = e.item_key
+            WHERE e.loot_table_key = ? AND e.item_key = ?
+            """,
+            (lt, ik),
+        )
+        conn.commit()
+        return row or {}
+    finally:
+        conn.close()
+
+
+def delete_loot_entry(loot_table_key: str, item_key: str) -> None:
+    lt = _validate_key(loot_table_key)
+    ik = _validate_key(item_key)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = _fetch_one(
+            conn,
+            """
+            SELECT id, loot_table_key, item_key, weight, qty_min, qty_max
+            FROM game_config_loot_entries WHERE loot_table_key = ? AND item_key = ?
+            """,
+            (lt, ik),
+        )
+        if not cur:
+            raise KeyError("not_found")
+        conn.execute(
+            "DELETE FROM game_config_loot_entries WHERE loot_table_key = ? AND item_key = ?",
+            (lt, ik),
+        )
+        _audit(conn, "game_config_loot_entries", f"{lt}:{ik}", "DELETE", dict(cur), None)
         conn.commit()
     finally:
         conn.close()

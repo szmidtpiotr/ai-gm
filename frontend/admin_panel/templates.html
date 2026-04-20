@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bulk Import Templates — AI-GM Admin</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=11" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=12" />
   </head>
   <body class="templates-page">
     <header class="templates-page-header">
@@ -365,9 +365,110 @@
         </div>
       </section>
 
-      <section class="template-section template-section-coming" aria-labelledby="sec-items">
+      <section class="template-section" aria-labelledby="sec-items">
         <h2 id="sec-items">Items</h2>
-        <p class="muted">Item catalogue not yet implemented. Coming in the next update.</p>
+        <p class="muted">
+          Master catalogue entries for gear, consumables, quest objects, and other lootable or tradable items.
+        </p>
+        <div class="field-ref-wrap admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>key</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>lowercase_snake_case, unique</td>
+              </tr>
+              <tr>
+                <td><code>label</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Display name</td>
+              </tr>
+              <tr>
+                <td><code>item_type</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>weapon / armor / consumable / misc / quest</td>
+              </tr>
+              <tr>
+                <td><code>description</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Flavour text</td>
+              </tr>
+              <tr>
+                <td><code>value_gp</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Base gold value, default 0</td>
+              </tr>
+              <tr>
+                <td><code>weight</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Encumbrance units, default 0</td>
+              </tr>
+              <tr>
+                <td><code>effect_json</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>JSON string, same format as conditions</td>
+              </tr>
+              <tr>
+                <td><code>is_active</code></td>
+                <td>boolean</td>
+                <td>❌</td>
+                <td>Default true</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="template-example">
+          <div class="template-example-header">
+            <span class="template-example-label">Example JSON</span>
+            <button type="button" class="copy-json-btn" aria-label="Copy example JSON">📋 Copy</button>
+          </div>
+          <pre class="copy-block" data-table="items">[
+  {
+    "key": "health_potion",
+    "label": "Health Potion",
+    "item_type": "consumable",
+    "description": "Restores 2d6 HP when consumed.",
+    "value_gp": 25,
+    "weight": 0.5,
+    "effect_json": "{\"heal\":\"2d6\"}",
+    "is_active": true
+  },
+  {
+    "key": "iron_shield",
+    "label": "Iron Shield",
+    "item_type": "armor",
+    "description": "Sturdy shield. +2 AC when equipped.",
+    "value_gp": 40,
+    "weight": 6.0,
+    "effect_json": "{\"stat_mods\":{\"AC\":2}}",
+    "is_active": true
+  },
+  {
+    "key": "ancient_map",
+    "label": "Ancient Map",
+    "item_type": "quest",
+    "description": "A tattered map showing a ruined fortress.",
+    "value_gp": 0,
+    "weight": 0.1,
+    "is_active": true
+  }
+]</pre>
+        </div>
       </section>
     </main>
 

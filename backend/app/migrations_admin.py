@@ -124,6 +124,47 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_dc ADD COLUMN description TEXT",
     "ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
+    """
+    CREATE TABLE IF NOT EXISTS game_config_items (
+        key          TEXT PRIMARY KEY,
+        label        TEXT NOT NULL,
+        item_type    TEXT NOT NULL DEFAULT 'misc',
+        description  TEXT NOT NULL DEFAULT '',
+        value_gp     INTEGER NOT NULL DEFAULT 0,
+        weight       REAL NOT NULL DEFAULT 0.0,
+        effect_json  TEXT,
+        is_active    INTEGER NOT NULL DEFAULT 1,
+        locked_at    TEXT,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS game_config_loot_tables (
+        key          TEXT PRIMARY KEY,
+        label        TEXT NOT NULL,
+        description  TEXT NOT NULL DEFAULT '',
+        is_active    INTEGER NOT NULL DEFAULT 1,
+        locked_at    TEXT,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS game_config_loot_entries (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        loot_table_key TEXT NOT NULL REFERENCES game_config_loot_tables(key) ON DELETE CASCADE,
+        item_key       TEXT NOT NULL REFERENCES game_config_items(key) ON DELETE CASCADE,
+        weight         INTEGER NOT NULL DEFAULT 10,
+        qty_min        INTEGER NOT NULL DEFAULT 1,
+        qty_max        INTEGER NOT NULL DEFAULT 1,
+        UNIQUE(loot_table_key, item_key)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_loot_entries_table
+    ON game_config_loot_entries(loot_table_key)
+    """,
 ]
 
 ADMIN_SEEDS = [
