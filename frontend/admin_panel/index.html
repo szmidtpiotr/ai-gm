@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=3" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=4" />
   </head>
   <body>
     <div class="admin-shell">
@@ -190,7 +190,7 @@
         if (section !== "game-design" || gameDesignReady) {
           return;
         }
-        const el = document.querySelector('[data-section="game-design"]');
+        const el = document.querySelector('.section-panel[data-section="game-design"]');
         if (!el) {
           return;
         }
