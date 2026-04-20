@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=9" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=10" />
   </head>
   <body>
     <div class="admin-shell">
@@ -177,9 +177,29 @@
           try {
             body = rawText ? JSON.parse(rawText) : null;
           } catch (_parseErr) {
+            const snippet = (rawText || "").slice(0, 200);
+            const isHtml = /^\s*</.test(rawText || "");
+            const gateway =
+              response.status === 502 ||
+              response.status === 503 ||
+              response.status === 504 ||
+              /502|503|504|Bad Gateway|Service Temporarily|Gateway Time-out/i.test(snippet);
+            if (isHtml && gateway) {
+              throw new Error(
+                "502/503 from proxy: the AI-GM backend is not reachable (nginx got HTML instead of JSON). " +
+                  "On the server: docker compose ps && docker compose logs backend --tail 100 " +
+                  "(fix backend crash or wrong port; API Base URL must reach the same host that proxies /api to FastAPI).",
+              );
+            }
+            if (isHtml) {
+              throw new Error(
+                `Dev login: server returned HTML (HTTP ${response.status}), not JSON. ` +
+                  `Check API Base URL and that /api is proxied to the backend. Snippet: ${snippet.slice(0, 100)}...`,
+              );
+            }
             throw new Error(
               rawText
-                ? `Dev login: expected JSON, got: ${rawText.slice(0, 120)}...`
+                ? `Dev login: expected JSON, got: ${snippet.slice(0, 120)}...`
                 : `Dev login: empty response (HTTP ${response.status}). Wrong API Base URL?`,
             );
           }
