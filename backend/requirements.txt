@@ -6,3 +6,4 @@ websockets==15.0.1
 sqlmodel==0.0.22
 httpx
 requests>=2.31.0
+bcrypt>=4.2.0

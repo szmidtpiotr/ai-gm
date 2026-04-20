@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import sqlite3
 
+import bcrypt
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -21,14 +22,23 @@ def _verify_user_password(stored_password_hash: str, raw_password: str) -> bool:
     Backward-compatible password verification.
 
     Current seed uses plain-text `password_hash` (e.g. 'demo'), but older snapshots may
-    store sha256(raw_password). We accept both to avoid breaking existing deployments.
+    store sha256(raw_password). Admin-created users use bcrypt. We accept all to avoid
+    breaking existing deployments.
     """
     if not stored_password_hash or not raw_password:
         return False
     if hmac.compare_digest(stored_password_hash, raw_password):
         return True
     sha = hashlib.sha256(raw_password.encode("utf-8")).hexdigest()
-    return hmac.compare_digest(stored_password_hash, sha)
+    if hmac.compare_digest(stored_password_hash, sha):
+        return True
+    stored = str(stored_password_hash)
+    if stored.startswith("$2"):
+        try:
+            return bcrypt.checkpw(raw_password.encode("utf-8"), stored.encode("ascii"))
+        except (ValueError, TypeError):
+            return False
+    return False
 
 
 @router.post("/auth/login")

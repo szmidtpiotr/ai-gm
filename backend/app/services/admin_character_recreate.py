@@ -35,6 +35,32 @@ def list_characters_admin() -> list[dict]:
         conn.close()
 
 
+def list_characters_by_owner(user_id: int) -> list[dict]:
+    """Characters for one user, including sheet_json for inline admin editor."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                c.id,
+                c.name,
+                c.campaign_id,
+                c.user_id,
+                cp.title AS campaign_title,
+                c.sheet_json
+            FROM characters c
+            JOIN campaigns cp ON cp.id = c.campaign_id
+            WHERE c.user_id = ?
+            ORDER BY c.id ASC
+            """,
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def _audit_character(conn: sqlite3.Connection, character_id: int, operation: str, old: str | None, new: str | None) -> None:
     try:
         conn.execute(

@@ -777,6 +777,134 @@ body {
   font-size: 12px;
 }
 
+.accounts-section .accounts-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.accounts-section .accounts-heading {
+  margin: 0;
+  color: var(--accent);
+}
+
+.role-badge {
+  border: none;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: Arial, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  color: #fffdf8;
+}
+
+.role-badge-admin {
+  background: #991b1b;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.role-badge-player {
+  background: #6b6050;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.detail-panel-row .detail-panel {
+  padding: 1rem;
+  background: rgba(240, 235, 224, 0.85);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-panel-body {
+  min-height: 120px;
+}
+
+.detail-sub-panel[hidden] {
+  display: none !important;
+}
+
+.sheet-editor {
+  width: 100%;
+  min-height: 200px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #1a1a1a;
+  color: #f5f0e8;
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.sheet-editor-error {
+  color: var(--danger);
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.sheet-editor-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.accounts-llm-form .field {
+  margin-bottom: 10px;
+}
+
+.accounts-llm-form .field label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-family: Arial, sans-serif;
+  margin-bottom: 4px;
+}
+
+.accounts-llm-form input,
+.accounts-llm-form select {
+  width: 100%;
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.accounts-add-form .field {
+  margin-bottom: 10px;
+}
+
+.accounts-add-form .field label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: Arial, sans-serif;
+  margin-bottom: 4px;
+}
+
+.accounts-add-form input,
+.accounts-add-form select {
+  width: 100%;
+  min-height: 38px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  box-sizing: border-box;
+}
+
 @media (max-width: 900px) {
   .admin-sidebar {
     flex-basis: 66px;

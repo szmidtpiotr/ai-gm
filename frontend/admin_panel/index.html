@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=4" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=5" />
   </head>
   <body>
     <div class="admin-shell">
@@ -44,10 +44,7 @@
 
         <section class="sections">
           <div class="section-panel active" data-section="game-design" aria-busy="true"></div>
-          <div class="section-panel" data-section="accounts">
-            <h2>Accounts</h2>
-            <p>Section placeholder. Coming in next phase.</p>
-          </div>
+          <div class="section-panel" data-section="accounts" aria-busy="true"></div>
           <div class="section-panel" data-section="technical">
             <h2>Technical</h2>
             <p>Section placeholder. Coming in next phase.</p>
@@ -105,6 +102,7 @@
       import { autoConnect, connect, getBaseUrl, isConnected, logout } from "/admin_panel/shared/auth.js";
       import { showToast } from "/admin_panel/shared/toast.js";
       import { init as initGameDesign } from "/admin_panel/sections/game_design.js";
+      import { init as initAccounts } from "/admin_panel/sections/accounts.js";
 
       const overlay = document.getElementById("login-overlay");
       const logoutBtn = document.getElementById("logout-btn");
@@ -185,6 +183,7 @@
       }
 
       let gameDesignReady = false;
+      let accountsReady = false;
 
       async function maybeInitGameDesign(section) {
         if (section !== "game-design" || gameDesignReady) {
@@ -200,6 +199,23 @@
         } catch (err) {
           gameDesignReady = false;
           showToast(err.message || "Game Design failed to load.", "error");
+        }
+      }
+
+      async function maybeInitAccounts(section) {
+        if (section !== "accounts" || accountsReady) {
+          return;
+        }
+        const el = document.querySelector('.section-panel[data-section="accounts"]');
+        if (!el) {
+          return;
+        }
+        accountsReady = true;
+        try {
+          await initAccounts(el);
+        } catch (err) {
+          accountsReady = false;
+          showToast(err.message || "Accounts failed to load.", "error");
         }
       }
 
@@ -220,6 +236,7 @@
             });
 
             void maybeInitGameDesign(selected);
+            void maybeInitAccounts(selected);
           });
         });
       }

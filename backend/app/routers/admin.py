@@ -3,18 +3,24 @@ import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, ConfigDict, model_validator
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.services.admin_accounts import (
+    create_account_admin,
     list_accounts,
     reset_account_sheet,
     soft_delete_account,
     update_account,
 )
+from app.services.admin_campaigns import (
+    list_campaigns_by_owner,
+    regenerate_campaign_summary_admin,
+)
 from app.services.admin_character_recreate import (
     delete_character_admin,
     list_characters_admin,
+    list_characters_by_owner,
     recreate_character_in_place,
 )
 from app.services.admin_auth import issue_dev_admin_token, verify_admin_token
@@ -113,6 +119,20 @@ class DcPatchReq(BaseModel):
 class AccountPatchReq(BaseModel):
     display_name: str | None = None
     is_active: int | None = None
+    is_admin: int | None = Field(default=None, description="0 = player, 1 = admin")
+
+
+class AccountCreateReq(BaseModel):
+    username: str
+    password: str
+    display_name: str | None = None
+    is_admin: int = 0
+
+    @model_validator(mode="after")
+    def _validate_is_admin(self) -> "AccountCreateReq":
+        if self.is_admin not in (0, 1):
+            raise ValueError("is_admin must be 0 or 1")
+        return self
 
 
 class AdminCharacterRecreateReq(BaseModel):
@@ -683,6 +703,40 @@ def admin_accounts(_: None = Depends(require_admin_token)):
     return {"items": list_accounts()}
 
 
+@router.post("/admin/accounts/create")
+def admin_create_account(req: AccountCreateReq, _: None = Depends(require_admin_token)):
+    try:
+        row = create_account_admin(
+            username=req.username,
+            password=req.password,
+            display_name=req.display_name,
+            is_admin=req.is_admin,
+        )
+        return {
+            "ok": True,
+            "id": row["id"],
+            "username": row["username"],
+            "display_name": row["display_name"],
+            "is_admin": row["is_admin"],
+            "is_active": row["is_active"],
+            "created_at": row["created_at"],
+        }
+    except ValueError as e:
+        code = str(e)
+        if code == "username_taken":
+            raise HTTPException(status_code=409, detail="Username already exists") from None
+        if code == "invalid_username":
+            raise HTTPException(
+                status_code=422,
+                detail="username must be 3–40 chars: letters, digits, underscore, hyphen",
+            ) from None
+        if code == "invalid_password":
+            raise HTTPException(status_code=422, detail="password must be at least 8 characters") from None
+        if code == "invalid_is_admin":
+            raise HTTPException(status_code=422, detail="is_admin must be 0 or 1") from None
+        raise HTTPException(status_code=422, detail="Invalid account payload") from None
+
+
 @router.patch("/admin/accounts/{account_id}")
 def admin_patch_account(
     account_id: int, req: AccountPatchReq, _: None = Depends(require_admin_token)
@@ -692,6 +746,7 @@ def admin_patch_account(
             account_id,
             display_name=req.display_name,
             is_active=req.is_active,
+            is_admin=req.is_admin,
         )
         return {"item": item}
     except KeyError:
@@ -699,6 +754,8 @@ def admin_patch_account(
     except ValueError as e:
         if str(e) == "invalid_is_active":
             raise HTTPException(status_code=422, detail="is_active must be 0 or 1") from None
+        if str(e) == "invalid_is_admin":
+            raise HTTPException(status_code=422, detail="is_admin must be 0 or 1") from None
         raise HTTPException(status_code=422, detail="Invalid account payload") from None
 
 
@@ -710,9 +767,34 @@ def admin_reset_account_sheet(account_id: int, _: None = Depends(require_admin_t
         raise HTTPException(status_code=404, detail="Account not found") from None
 
 
+@router.get("/admin/campaigns")
+def admin_list_campaigns(
+    owner_id: int = Query(..., description="Campaign owner user id"),
+    _: None = Depends(require_admin_token),
+):
+    return {"items": list_campaigns_by_owner(owner_id)}
+
+
+@router.post("/admin/campaigns/{campaign_id}/regenerate-summary")
+def admin_regenerate_campaign_summary(
+    campaign_id: int, _: None = Depends(require_admin_token)
+):
+    try:
+        return regenerate_campaign_summary_admin(campaign_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Campaign not found") from None
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from None
+
+
 @router.get("/admin/characters")
-def admin_list_characters(_: None = Depends(require_admin_token)):
-    """Lista postaci (id, imię, kampania) — panel Recreate."""
+def admin_list_characters(
+    owner_id: int | None = Query(None, description="When set, only characters owned by this user"),
+    _: None = Depends(require_admin_token),
+):
+    """Lista postaci (id, imię, kampania); optional filter by owner_id includes sheet_json."""
+    if owner_id is not None:
+        return {"items": list_characters_by_owner(owner_id)}
     return {"items": list_characters_admin()}
 
 
