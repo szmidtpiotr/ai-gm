@@ -295,5 +295,12 @@
   <script src="./js/events.js"></script>
   <script src="./js/main.js"></script>
   <script src="./js/app.js"></script>
+  <script type="module">
+    import { initSlashCommands } from "./js/slash_commands.js";
+    const chatInput = document.getElementById("input");
+    if (chatInput) {
+      await initSlashCommands(chatInput);
+    }
+  </script>
 </body>
 </html>

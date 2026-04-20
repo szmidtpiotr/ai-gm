@@ -1,6 +1,6 @@
 import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
 import { showToast } from "/admin_panel/shared/toast.js?v=17";
-import { showConfirm } from "/admin_panel/shared/table.js?v=17";
+import { showConfirm } from "/admin_panel/shared/table.js?v=20";
 import { openModal } from "/admin_panel/shared/modal.js?v=17";
 
 function el(tag, cls, text) {

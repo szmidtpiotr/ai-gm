@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.services.admin_accounts import (
     create_account_admin,
@@ -66,6 +66,7 @@ from app.services.admin_config import (
     update_stat,
     upsert_loot_entry,
 )
+from app.services.client_ui_config import get_merged_slash_commands, set_slash_commands_ui
 from app.services.loki_settings import (
     DEFAULT_LOKI_URL,
     get_display_loki_url,
@@ -120,12 +121,21 @@ class SkillPatchReq(BaseModel):
 
 
 class SkillCreateReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     key: str
     label: str
     linked_stat: str
     rank_ceiling: int = 5
-    sort_order: int = 0
+    sort_order: int | None = None
     description: str | None = ""
+
+    @field_validator("sort_order", mode="before")
+    @classmethod
+    def _empty_sort_as_none(cls, v: object) -> object:
+        """Treat omitted / null like None so client need not send sort_order."""
+        if v is None or v == "":
+            return None
+        return v
 
 
 class SkillDeleteReq(BaseModel):
@@ -175,6 +185,16 @@ class ConfigImportReq(BaseModel):
     exported_at: str | None = None
     exported_by: str | None = None
     excluded: list[str] | None = None
+
+
+class SlashCommandItemReq(BaseModel):
+    command: str
+    description: str = Field(..., max_length=4000)
+
+
+class SlashCommandsPutReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    commands: list[SlashCommandItemReq]
 
 
 class UserLlmSettingsReq(BaseModel):
@@ -1632,3 +1652,21 @@ def admin_import_config(
     if not result.get("ok"):
         raise HTTPException(status_code=422, detail=result.get("errors") or ["Import failed"])
     return result
+
+
+@router.get("/admin/slash-commands")
+def admin_slash_commands_get(_: None = Depends(require_admin_token)):
+    """Editable descriptions for chat `/` commands (stored in game_config_meta)."""
+    return {"commands": get_merged_slash_commands()}
+
+
+@router.put("/admin/slash-commands")
+def admin_slash_commands_put(
+    req: SlashCommandsPutReq,
+    _: None = Depends(require_admin_token),
+):
+    try:
+        out = set_slash_commands_ui([c.model_dump() for c in req.commands])
+        return {"ok": True, "commands": out}
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from None

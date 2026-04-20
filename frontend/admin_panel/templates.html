@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bulk Import Templates — AI-GM Admin</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=18" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=21" />
   </head>
   <body class="templates-page">
     <header class="templates-page-header">
@@ -14,8 +14,9 @@
 
     <main class="templates-doc">
       <p class="templates-intro">
-        Reference for JSON arrays used with admin bulk import. Each block is a single array you can paste into import
-        flows. No login is required on this page.
+        Reference for JSON arrays used with admin bulk import. In the admin panel, open the matching Game Design
+        sub-tab (Skills, Weapons, …) and expand <strong>Bulk import (JSON array)</strong> — paste the array there (Dry
+        run / Commit). This page is a copy-friendly reference; no login required here.
       </p>
 
       <section class="template-section" aria-labelledby="sec-skills">
@@ -60,12 +61,6 @@
                 <td>Max rank achievable (1–10), default 5</td>
               </tr>
               <tr>
-                <td><code>sort_order</code></td>
-                <td>number</td>
-                <td>❌</td>
-                <td>Display order in UI, default 0</td>
-              </tr>
-              <tr>
                 <td><code>description</code></td>
                 <td>text</td>
                 <td>❌</td>
@@ -74,6 +69,16 @@
             </tbody>
           </table>
         </div>
+        <p class="muted">
+          Example <code>key</code> values are often already loaded from seed data. Re-importing them returns
+          <strong>409 Conflict</strong> — use new keys, or in the admin panel enable <strong>Skip 409</strong> on bulk
+          import so existing rows are skipped.
+        </p>
+        <p class="muted">
+          Do not include <code>sort_order</code> in import JSON: the server assigns <strong>max(existing) + 1</strong> for
+          each new skill (and the next new skill gets the following integer). Optional <code>sort_order</code> in JSON is
+          only if you need an explicit value.
+        </p>
         <div class="template-example">
           <div class="template-example-header">
             <span class="template-example-label">Example JSON</span>
@@ -85,7 +90,6 @@
     "label": "Athletics",
     "linked_stat": "STR",
     "rank_ceiling": 5,
-    "sort_order": 10,
     "description": "Physical effort: climbing, jumping, lifting, sprinting."
   },
   {
@@ -93,7 +97,6 @@
     "label": "Arcana",
     "linked_stat": "INT",
     "rank_ceiling": 5,
-    "sort_order": 20,
     "description": "Knowledge of spells, magical theory, and arcane phenomena."
   }
 ]</pre>
@@ -257,6 +260,12 @@
         <h2 id="sec-enemies">Enemies</h2>
         <p class="muted">
           Enemy templates used by the GM during combat encounters. Each defines the base stats for that enemy type.
+        </p>
+        <p class="muted">
+          Bulk import accepts canonical fields (<code>hp_base</code>, <code>ac_base</code>, <code>attack_bonus</code>).
+          For convenience, legacy aliases are mapped when the canonical field is omitted: <code>hp</code> →
+          <code>hp_base</code>, <code>ac</code> → <code>ac_base</code>, <code>atk_bonus</code> →
+          <code>attack_bonus</code>.
         </p>
         <div class="field-ref-wrap admin-table-wrap">
           <table class="admin-table">

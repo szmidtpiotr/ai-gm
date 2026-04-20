@@ -1,6 +1,6 @@
 import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
 import { showToast } from "/admin_panel/shared/toast.js?v=17";
-import { renderTable, showConfirm } from "/admin_panel/shared/table.js?v=17";
+import { renderTable, showConfirm } from "/admin_panel/shared/table.js?v=20";
 
 const SUB_TABS = [
   { id: "stats", label: "Stats" },
@@ -28,10 +28,20 @@ function el(tag, cls, text) {
 }
 
 function parseApiError(err, fallback) {
-  if (err instanceof APIError && err.body && typeof err.body === "object" && err.body.detail) {
-    return String(err.body.detail);
+  if (err instanceof APIError && err.body && typeof err.body === "object" && err.body.detail != null) {
+    const d = err.body.detail;
+    if (Array.isArray(d)) {
+      return d.map((x) => (typeof x === "object" && x.msg ? x.msg : String(x))).join("; ");
+    }
+    return String(d);
   }
   return fallback;
+}
+
+/** @param {string} listPath e.g. /api/admin/skills */
+async function fetchExistingKeysFromAdminList(listPath) {
+  const data = await adminFetch(listPath);
+  return new Set((data.items || []).map((r) => String(r.key)));
 }
 
 async function populateEnemyLootTableSelect(fieldsRoot) {
@@ -131,7 +141,6 @@ async function refreshStats(host) {
         { key: "key", label: "Key" },
         { key: "label", label: "Label", editable: true },
         { key: "description", label: "Description", editable: true },
-        { key: "sort_order", label: "Sort", type: "number", editable: true },
         { key: "locked_at", label: "Lock", type: "locked" },
       ],
       rows,
@@ -143,9 +152,6 @@ async function refreshStats(host) {
           }
           if (key === "description") {
             body.description = newValue;
-          }
-          if (key === "sort_order") {
-            body.sort_order = Number(newValue);
           }
           await adminFetch(`/api/admin/stats/${encodeURIComponent(row.key)}`, {
             method: "PATCH",
@@ -189,7 +195,6 @@ async function refreshSkills(host, statKeys) {
         { key: "label", label: "Label", editable: true },
         { key: "linked_stat", label: "Stat", editable: true },
         { key: "rank_ceiling", label: "Ceiling", type: "number", editable: true },
-        { key: "sort_order", label: "Sort", type: "number", editable: true },
         { key: "description", label: "Description", editable: true },
         { key: "locked_at", label: "Lock", type: "locked" },
       ],
@@ -206,9 +211,6 @@ async function refreshSkills(host, statKeys) {
           if (key === "rank_ceiling") {
             body.rank_ceiling = Number(newValue);
           }
-          if (key === "sort_order") {
-            body.sort_order = Number(newValue);
-          }
           if (key === "description") {
             body.description = newValue;
           }
@@ -219,11 +221,11 @@ async function refreshSkills(host, statKeys) {
           Object.assign(row, { [key]: newValue });
           showToast("Skill updated.", "success");
         },
-        onDelete: async (row) => {
+        onDelete: async (row, meta = {}) => {
           try {
             await adminFetch(`/api/admin/skills/${encodeURIComponent(row.key)}`, {
               method: "DELETE",
-              body: JSON.stringify({ force: false }),
+              body: JSON.stringify({ force: !!meta.force }),
             });
             showToast("Skill deleted.", "success");
             await refreshSkills(host, statKeys);
@@ -264,7 +266,6 @@ function mountSkills(host, statKeys) {
       <label class="field"><span>Label</span><input data-field="label" type="text" /></label>
       <label class="field"><span>Linked stat</span><select data-field="linked_stat"></select></label>
       <label class="field"><span>Rank ceiling</span><input data-field="rank_ceiling" type="number" value="5" /></label>
-      <label class="field"><span>Sort order</span><input data-field="sort_order" type="number" value="0" /></label>
       <label class="field add-form-span-2"><span>Description</span><input data-field="description" type="text" /></label>
     </div>
     <button type="button" class="primary-btn admin-add-form-submit" data-action="create-skill">Create</button>
@@ -277,6 +278,18 @@ function mountSkills(host, statKeys) {
   toggleRow.appendChild(toggle);
   root.appendChild(toggleRow);
   root.appendChild(details);
+  wireBulkJsonImport(root, {
+    hint: "Wklej tablicę JSON (jak w Import Templates). Klucze z przykładu (athletics, arcana) są zwykle już w bazie — dostaniesz 409, chyba że włączysz „Pomiń 409” albo zmienisz key.",
+    templatesHref: "/admin_panel/templates.html#sec-skills",
+    templatesAnchor: "Szablony JSON — Skills",
+    placeholder: '[{ "key": "athletics", "label": "Athletics", "linked_stat": "STR", ... }]',
+    validateRow: (row, i) => validateSkillImportRow(row, i, statKeys),
+    buildPayload: (row) => skillImportRowToPayload(row),
+    postPath: "/api/admin/skills",
+    existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/skills"),
+    refresh: () => refreshSkills(host, statKeys),
+    confirmNoun: "wierszy",
+  });
   const mount = el("div", "admin-table-mount");
   root.appendChild(mount);
 
@@ -285,7 +298,6 @@ function mountSkills(host, statKeys) {
     const label = fields.querySelector('[data-field="label"]').value.trim();
     const linked_stat = fields.querySelector('[data-field="linked_stat"]').value.trim();
     const rank_ceiling = Number(fields.querySelector('[data-field="rank_ceiling"]').value || 5);
-    const sort_order = Number(fields.querySelector('[data-field="sort_order"]').value || 0);
     const description = fields.querySelector('[data-field="description"]').value.trim();
     if (!key || !label || !linked_stat) {
       showToast("Key, label, and linked stat are required.", "info");
@@ -299,7 +311,6 @@ function mountSkills(host, statKeys) {
           label,
           linked_stat,
           rank_ceiling,
-          sort_order,
           description,
         }),
       });
@@ -326,7 +337,6 @@ async function refreshDc(host) {
         { key: "key", label: "Key" },
         { key: "label", label: "Label", editable: true },
         { key: "value", label: "Value", type: "number", editable: true },
-        { key: "sort_order", label: "Sort", type: "number", editable: true },
         { key: "description", label: "Description", editable: true },
         { key: "locked_at", label: "Lock", type: "locked" },
       ],
@@ -339,9 +349,6 @@ async function refreshDc(host) {
           }
           if (key === "value") {
             body.value = Number(newValue);
-          }
-          if (key === "sort_order") {
-            body.sort_order = Number(newValue);
           }
           if (key === "description") {
             body.description = newValue;
@@ -378,10 +385,7 @@ async function refreshWeapons(host, statKeys) {
   renderTable(tableHost, [], null, {});
   try {
     const data = await adminFetch("/api/admin/weapons");
-    const rows = (data.items || []).map((r) => ({
-      ...r,
-      _classes: formatAllowedClasses(r.allowed_classes),
-    }));
+    const rows = (data.items || []).map((r) => ({ ...r }));
     renderTable(
       tableHost,
       [
@@ -398,7 +402,14 @@ async function refreshWeapons(host, statKeys) {
         },
         { key: "damage_die", label: "Die", editable: true },
         { key: "linked_stat", label: "Stat", editable: true },
-        { key: "_classes", label: "Classes" },
+        {
+          key: "allowed_classes",
+          label: "Classes",
+          type: "checkbox-set",
+          editable: true,
+          editOptions: ["warrior", "ranger", "scholar"],
+          formatDisplay: (row) => formatAllowedClasses(row.allowed_classes),
+        },
         { key: "two_handed", label: "2H", type: "boolean", editable: true },
         { key: "finesse", label: "Finesse", type: "boolean", editable: true },
         {
@@ -433,6 +444,13 @@ async function refreshWeapons(host, statKeys) {
           }
           if (key === "linked_stat") {
             body.linked_stat = String(newValue).trim().toUpperCase();
+          }
+          if (key === "allowed_classes") {
+            if (!Array.isArray(newValue) || !newValue.length) {
+              showToast("Select at least one class (warrior, ranger, or scholar).", "error");
+              throw new Error("invalid_allowed_classes");
+            }
+            body.allowed_classes = newValue;
           }
           if (key === "two_handed") {
             body.two_handed = !!newValue;
@@ -469,16 +487,14 @@ async function refreshWeapons(host, statKeys) {
             method: "PATCH",
             body: JSON.stringify(body),
           });
-          Object.assign(row, res.item || {}, {
-            _classes: formatAllowedClasses((res.item && res.item.allowed_classes) || row.allowed_classes),
-          });
+          Object.assign(row, res.item || {});
           showToast("Weapon updated.", "success");
         },
-        onDelete: async (row) => {
+        onDelete: async (row, meta = {}) => {
           try {
             await adminFetch(`/api/admin/weapons/${encodeURIComponent(row.key)}`, {
               method: "DELETE",
-              body: JSON.stringify({ force: false }),
+              body: JSON.stringify({ force: !!meta.force }),
             });
             showToast("Weapon deleted.", "success");
             await refreshWeapons(host, statKeys);
@@ -538,6 +554,18 @@ function mountWeapons(host, statKeys) {
   toggleRow.appendChild(toggle);
   root.appendChild(toggleRow);
   root.appendChild(details);
+  wireBulkJsonImport(root, {
+    hint: "Wklej tablicę broni. Wymagane m.in. allowed_classes (niepusta tablica).",
+    templatesHref: "/admin_panel/templates.html#sec-weapons",
+    templatesAnchor: "Szablony JSON — Weapons",
+    placeholder: '[{ "key": "shortsword", "damage_die": "d6", "allowed_classes": ["warrior"], ... }]',
+    validateRow: (row, i) => validateWeaponImportRow(row, i, statKeys),
+    buildPayload: (row) => weaponImportRowToPayload(row),
+    postPath: "/api/admin/weapons",
+    existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/weapons"),
+    refresh: () => refreshWeapons(host, statKeys),
+    confirmNoun: "wierszy",
+  });
   const mount = el("div", "admin-table-mount");
   root.appendChild(mount);
   const sel = fields.querySelector('[data-field="linked_stat"]');
@@ -762,11 +790,11 @@ async function refreshEnemies(host) {
           });
           showToast("Enemy updated.", "success");
         },
-        onDelete: async (row) => {
+        onDelete: async (row, meta = {}) => {
           try {
             await adminFetch(`/api/admin/enemies/${encodeURIComponent(row.key)}`, {
               method: "DELETE",
-              body: JSON.stringify({ force: false }),
+              body: JSON.stringify({ force: !!meta.force }),
             });
             showToast("Enemy deleted.", "success");
             await refreshEnemies(host);
@@ -841,6 +869,18 @@ function mountEnemies(host) {
   toggleRow.appendChild(toggle);
   root.appendChild(toggleRow);
   root.appendChild(details);
+  wireBulkJsonImport(root, {
+    hint: "Wklej tablicę wrogów. loot_table_key musi istnieć w Loot Tables (inaczej POST zwróci błąd). drop_chance: 0–1.",
+    templatesHref: "/admin_panel/templates.html#sec-enemies",
+    templatesAnchor: "Szablony JSON — Enemies",
+    placeholder: '[{ "key": "goblin", "hp_base": 8, "ac_base": 11, ... }]',
+    validateRow: (row, i) => validateEnemyImportRow(row, i),
+    buildPayload: (row) => enemyImportRowToPayload(row),
+    postPath: "/api/admin/enemies",
+    existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/enemies"),
+    refresh: () => refreshEnemies(host),
+    confirmNoun: "wierszy",
+  });
   const mount = el("div", "admin-table-mount");
   root.appendChild(mount);
   fields.querySelector('[data-action="create-enemy"]').addEventListener("click", async () => {
@@ -945,11 +985,11 @@ async function refreshConditions(host) {
           Object.assign(row, res.item || {});
           showToast("Condition updated.", "success");
         },
-        onDelete: async (row) => {
+        onDelete: async (row, meta = {}) => {
           try {
             await adminFetch(`/api/admin/conditions/${encodeURIComponent(row.key)}`, {
               method: "DELETE",
-              body: JSON.stringify({ force: false }),
+              body: JSON.stringify({ force: !!meta.force }),
             });
             showToast("Condition deleted.", "success");
             await refreshConditions(host);
@@ -995,6 +1035,18 @@ function mountConditions(host) {
   toggleRow.appendChild(toggle);
   root.appendChild(toggleRow);
   root.appendChild(details);
+  wireBulkJsonImport(root, {
+    hint: "Wklej tablicę stanów. effect_json może być stringiem JSON lub obiektem.",
+    templatesHref: "/admin_panel/templates.html#sec-conditions",
+    templatesAnchor: "Szablony JSON — Conditions",
+    placeholder: '[{ "key": "poisoned", "effect_json": "{...}", ... }]',
+    validateRow: (row, i) => validateConditionImportRow(row, i),
+    buildPayload: (row) => conditionImportRowToPayload(row),
+    postPath: "/api/admin/conditions",
+    existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/conditions"),
+    refresh: () => refreshConditions(host),
+    confirmNoun: "wierszy",
+  });
   const mount = el("div", "admin-table-mount");
   root.appendChild(mount);
   fields.querySelector('[data-action="create-condition"]').addEventListener("click", async () => {
@@ -1028,6 +1080,159 @@ function itemTypeBadgeClass(row) {
   const t = String(row.item_type || "misc").toLowerCase();
   const ok = ["weapon", "armor", "consumable", "misc", "quest"];
   return `item-type-${ok.includes(t) ? t : "misc"}`;
+}
+
+const IMPORT_KEY_RE = /^[a-z0-9_]{1,40}$/;
+const IMPORT_DAMAGE_DIE_RE = /^\d*d\d+$/i;
+
+/**
+ * @param {HTMLElement} root
+ * @param {{
+ *   hint: string,
+ *   templatesHref?: string,
+ *   templatesAnchor?: string,
+ *   placeholder?: string,
+ *   validateRow: (raw: unknown, index: number) => string | null,
+ *   buildPayload: (raw: object) => object,
+ *   postPath: string,
+ *   refresh: () => void | Promise<void>,
+ *   confirmNoun?: string,
+ *   existingKeys?: () => Promise<Set<string>>,
+ * }} opts
+ */
+function wireBulkJsonImport(root, opts) {
+  const templatesHref = opts.templatesHref || "/admin_panel/templates.html";
+  const templatesAnchor = opts.templatesAnchor || "Import Templates — przykłady JSON";
+  const noun = opts.confirmNoun || "wierszy";
+  const bulk = el("details", "admin-bulk-import");
+  bulk.innerHTML = `
+    <summary>Bulk import (JSON array)</summary>
+    <p class="muted">${opts.hint}</p>
+    <p class="muted"><a href="${templatesHref}" target="_blank" rel="noopener noreferrer">${templatesAnchor}</a></p>
+    <label class="admin-bulk-skip muted"><input type="checkbox" data-bulk-skip-409 checked /> Pomiń wiersze przy 409 (klucz już istnieje)</label>
+    <textarea class="admin-bulk-textarea" data-bulk-json rows="8"></textarea>
+    <div class="admin-bulk-actions">
+      <button type="button" class="secondary-btn" data-bulk-dry>Dry run</button>
+      <button type="button" class="primary-btn" data-bulk-commit>Commit</button>
+    </div>
+    <pre class="admin-bulk-result muted" data-bulk-result></pre>
+  `;
+  root.appendChild(bulk);
+  const ta = bulk.querySelector("[data-bulk-json]");
+  ta.placeholder = opts.placeholder || "[...]";
+  const resultPre = bulk.querySelector("[data-bulk-result]");
+  bulk.querySelector("[data-bulk-dry]").addEventListener("click", async () => {
+    resultPre.textContent = "";
+    let parsed;
+    try {
+      parsed = JSON.parse(ta.value || "[]");
+    } catch (e) {
+      resultPre.textContent = `Invalid JSON: ${e.message || e}`;
+      showToast("Invalid JSON.", "error");
+      return;
+    }
+    if (!Array.isArray(parsed)) {
+      resultPre.textContent = "Top-level value must be a JSON array.";
+      showToast("Expected array.", "error");
+      return;
+    }
+    const errors = [];
+    parsed.forEach((row, i) => {
+      const err = opts.validateRow(row, i);
+      if (err) {
+        errors.push(err);
+      }
+    });
+    const dupWarn = [];
+    if (opts.existingKeys && errors.length === 0) {
+      try {
+        const existing = await opts.existingKeys();
+        parsed.forEach((row, i) => {
+          if (row && typeof row === "object" && row.key != null) {
+            const k = String(row.key).trim();
+            if (k && existing.has(k)) {
+              dupWarn.push(
+                `Row ${i + 1} (${k}): klucz już jest w bazie — POST zwróci 409 (Conflict). Włącz „Pomiń 409” lub użyj innego klucza.`,
+              );
+            }
+          }
+        });
+      } catch (e) {
+        resultPre.textContent = `Nie można wczytać istniejących kluczy: ${parseApiError(e, "błąd")}`;
+        showToast("Dry run: nie udało się pobrać listy z API.", "error");
+        return;
+      }
+    }
+    if (errors.length) {
+      resultPre.textContent = errors.join("\n");
+      showToast(`Dry run: ${errors.length} issue(s).`, "info");
+      return;
+    }
+    let msg = `OK — ${parsed.length} ${noun} gotowych do importu.`;
+    if (dupWarn.length) {
+      msg += `\n\nUwaga — duplikaty kluczy:\n${dupWarn.join("\n")}`;
+      showToast(`Dry run OK. ${dupWarn.length} klucz(y) już w bazie.`, "info");
+    } else {
+      showToast("Dry run OK.", "success");
+    }
+    resultPre.textContent = msg;
+  });
+  bulk.querySelector("[data-bulk-commit]").addEventListener("click", async () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(ta.value || "[]");
+    } catch (e) {
+      showToast(`Invalid JSON: ${e.message || e}`, "error");
+      return;
+    }
+    if (!Array.isArray(parsed)) {
+      showToast("Expected array.", "error");
+      return;
+    }
+    const errors = [];
+    parsed.forEach((row, i) => {
+      const err = opts.validateRow(row, i);
+      if (err) {
+        errors.push(err);
+      }
+    });
+    if (errors.length) {
+      resultPre.textContent = errors.join("\n");
+      showToast("Fix validation errors before commit.", "error");
+      return;
+    }
+    const skip409 = bulk.querySelector("[data-bulk-skip-409]")?.checked ?? true;
+    const ok = await showConfirm(`Utworzyć ${parsed.length} rekord(ów) z JSON?`, { dangerous: false });
+    if (!ok) {
+      return;
+    }
+    let okn = 0;
+    let skip409n = 0;
+    const fail = [];
+    for (let i = 0; i < parsed.length; i += 1) {
+      const r = parsed[i];
+      const key = r && typeof r === "object" && r.key != null ? String(r.key) : `row ${i + 1}`;
+      try {
+        await adminFetch(opts.postPath, { method: "POST", body: JSON.stringify(opts.buildPayload(r)) });
+        okn += 1;
+      } catch (e) {
+        if (skip409 && e instanceof APIError && e.status === 409) {
+          skip409n += 1;
+          continue;
+        }
+        fail.push(`${key}: ${parseApiError(e, "failed")}`);
+      }
+    }
+    resultPre.textContent = [
+      `Utworzono: ${okn}. Pominięto (409, klucz już istnieje): ${skip409n}. Inne błędy: ${fail.length}`,
+      fail.length ? `\n${fail.join("\n")}` : "",
+    ]
+      .filter(Boolean)
+      .join("");
+    const bad = fail.length;
+    showToast(`Import: ${okn} nowych, ${skip409n} pominiętych (409), ${bad} błędów.`, bad ? "info" : "success");
+    await opts.refresh();
+  });
 }
 
 function validateItemImportRow(raw, index) {
@@ -1083,6 +1288,349 @@ function validateItemImportRow(raw, index) {
     }
   }
   return null;
+}
+
+function itemImportRowToPayload(r) {
+  return {
+    key: String(r.key).trim(),
+    label: String(r.label).trim(),
+    item_type: String(r.item_type || "misc").toLowerCase(),
+    description: r.description != null ? String(r.description) : "",
+    value_gp: r.value_gp != null ? Number(r.value_gp) : 0,
+    weight: r.weight != null ? Number(r.weight) : 0,
+    weight_kg: r.weight_kg != null ? Number(r.weight_kg) : 0,
+    proficiency_classes: Array.isArray(r.proficiency_classes) ? r.proficiency_classes : [],
+    note: r.note != null && String(r.note).trim() ? String(r.note) : null,
+    effect_json: r.effect_json != null && String(r.effect_json).trim() ? String(r.effect_json) : null,
+    is_active: r.is_active !== false && r.is_active !== 0,
+  };
+}
+
+function validateSkillImportRow(raw, index, statKeys) {
+  const label = `Row ${index + 1}`;
+  if (!raw || typeof raw !== "object") {
+    return `${label}: must be an object`;
+  }
+  const key = String(raw.key || "").trim();
+  if (!IMPORT_KEY_RE.test(key)) {
+    return `${label}: key must be lowercase_snake_case, 1–40 chars`;
+  }
+  if (!String(raw.label || "").trim()) {
+    return `${label}: label is required`;
+  }
+  const ls = String(raw.linked_stat || "").trim();
+  if (!statKeys.includes(ls)) {
+    return `${label}: linked_stat must be one of configured stats (${statKeys.join(", ")})`;
+  }
+  const rc = raw.rank_ceiling != null ? Number(raw.rank_ceiling) : 5;
+  if (!Number.isFinite(rc) || rc < 1) {
+    return `${label}: rank_ceiling must be >= 1`;
+  }
+  return null;
+}
+
+function skillImportRowToPayload(raw) {
+  const payload = {
+    key: String(raw.key).trim(),
+    label: String(raw.label).trim(),
+    linked_stat: String(raw.linked_stat).trim(),
+    rank_ceiling: raw.rank_ceiling != null ? Number(raw.rank_ceiling) : 5,
+    description: raw.description != null ? String(raw.description) : "",
+  };
+  if (Object.prototype.hasOwnProperty.call(raw, "sort_order") && raw.sort_order != null && raw.sort_order !== "") {
+    const n = Number(raw.sort_order);
+    if (Number.isFinite(n)) {
+      payload.sort_order = n;
+    }
+  }
+  return payload;
+}
+
+function validateWeaponImportRow(raw, index, statKeys) {
+  const label = `Row ${index + 1}`;
+  if (!raw || typeof raw !== "object") {
+    return `${label}: must be an object`;
+  }
+  const key = String(raw.key || "").trim();
+  if (!IMPORT_KEY_RE.test(key)) {
+    return `${label}: key must be lowercase_snake_case, 1–40 chars`;
+  }
+  if (!String(raw.label || "").trim()) {
+    return `${label}: label is required`;
+  }
+  const dd = String(raw.damage_die || "").trim().toLowerCase();
+  if (!IMPORT_DAMAGE_DIE_RE.test(dd)) {
+    return `${label}: damage_die must match pattern like d6 or 2d8`;
+  }
+  const lst = String(raw.linked_stat || "").trim();
+  if (!statKeys.includes(lst)) {
+    return `${label}: linked_stat must be one of configured stats`;
+  }
+  const ac = raw.allowed_classes;
+  if (!Array.isArray(ac) || ac.length === 0) {
+    return `${label}: allowed_classes must be a non-empty array`;
+  }
+  for (const c of ac) {
+    const cl = String(c || "").toLowerCase();
+    if (!["warrior", "ranger", "scholar"].includes(cl)) {
+      return `${label}: invalid allowed_class "${c}"`;
+    }
+  }
+  const wt = String(raw.weapon_type || "melee").toLowerCase();
+  if (!["melee", "ranged", "spell"].includes(wt)) {
+    return `${label}: weapon_type must be melee, ranged, or spell`;
+  }
+  const wkg = raw.weight_kg != null ? Number(raw.weight_kg) : 0;
+  if (!Number.isFinite(wkg) || wkg < 0) {
+    return `${label}: weight_kg must be >= 0`;
+  }
+  if (raw.range_m != null && String(raw.range_m).trim() !== "") {
+    const rm = Number(raw.range_m);
+    if (!Number.isFinite(rm)) {
+      return `${label}: range_m must be a number or null`;
+    }
+  }
+  return null;
+}
+
+function weaponImportRowToPayload(raw) {
+  let range_m = null;
+  if (raw.range_m != null && String(raw.range_m).trim() !== "") {
+    range_m = Number(raw.range_m);
+  }
+  const noteRaw = raw.note != null ? String(raw.note).trim() : "";
+  return {
+    key: String(raw.key).trim(),
+    label: String(raw.label).trim(),
+    damage_die: String(raw.damage_die).trim().toLowerCase(),
+    linked_stat: String(raw.linked_stat).trim(),
+    allowed_classes: Array.isArray(raw.allowed_classes)
+      ? raw.allowed_classes.map((c) => String(c).toLowerCase())
+      : [],
+    description: raw.description != null ? String(raw.description) : "",
+    weapon_type: String(raw.weapon_type || "melee").toLowerCase(),
+    two_handed: !!(raw.two_handed === true || raw.two_handed === 1),
+    finesse: !!(raw.finesse === true || raw.finesse === 1),
+    range_m,
+    weight_kg: raw.weight_kg != null ? Number(raw.weight_kg) : 0,
+    note: noteRaw ? noteRaw : null,
+    is_active: raw.is_active !== false && raw.is_active !== 0,
+  };
+}
+
+/** Accept legacy field names: hp → hp_base, ac → ac_base, atk_bonus → attack_bonus. */
+function normalizeEnemyImportRaw(raw) {
+  if (!raw || typeof raw !== "object") {
+    return raw;
+  }
+  const o = { ...raw };
+  if (o.hp_base == null && o.hp != null) {
+    o.hp_base = o.hp;
+  }
+  if (o.ac_base == null && o.ac != null) {
+    o.ac_base = o.ac;
+  }
+  if (o.attack_bonus == null && o.atk_bonus != null) {
+    o.attack_bonus = o.atk_bonus;
+  }
+  return o;
+}
+
+function validateEnemyImportRow(raw, index) {
+  raw = normalizeEnemyImportRaw(raw);
+  const label = `Row ${index + 1}`;
+  if (!raw || typeof raw !== "object") {
+    return `${label}: must be an object`;
+  }
+  const key = String(raw.key || "").trim();
+  if (!IMPORT_KEY_RE.test(key)) {
+    return `${label}: key must be lowercase_snake_case, 1–40 chars`;
+  }
+  if (!String(raw.label || "").trim()) {
+    return `${label}: label is required`;
+  }
+  const hp = Number(raw.hp_base);
+  const ac = Number(raw.ac_base);
+  if (!Number.isFinite(hp) || hp < 1) {
+    return `${label}: hp_base must be >= 1`;
+  }
+  if (!Number.isFinite(ac) || ac < 1) {
+    return `${label}: ac_base must be >= 1`;
+  }
+  const ab = Number(raw.attack_bonus);
+  if (!Number.isFinite(ab) || ab < 0) {
+    return `${label}: attack_bonus must be >= 0`;
+  }
+  const dd = String(raw.damage_die || "").trim().toLowerCase();
+  if (!IMPORT_DAMAGE_DIE_RE.test(dd)) {
+    return `${label}: damage_die must match pattern like d6 or 2d8`;
+  }
+  const tier = String(raw.tier || "standard").toLowerCase();
+  if (!["weak", "standard", "elite", "boss"].includes(tier)) {
+    return `${label}: tier must be weak|standard|elite|boss`;
+  }
+  const apt = raw.attacks_per_turn != null ? Number(raw.attacks_per_turn) : 1;
+  if (!Number.isFinite(apt) || apt < 1) {
+    return `${label}: attacks_per_turn must be >= 1`;
+  }
+  const dt = String(raw.damage_type || "physical").toLowerCase();
+  if (!["physical", "magic", "fire", "poison", "misc"].includes(dt)) {
+    return `${label}: damage_type invalid`;
+  }
+  const xp = raw.xp_award != null ? Number(raw.xp_award) : 0;
+  if (!Number.isFinite(xp) || xp < 0) {
+    return `${label}: xp_award must be >= 0`;
+  }
+  if (raw.conditions_immune != null && !Array.isArray(raw.conditions_immune)) {
+    return `${label}: conditions_immune must be an array`;
+  }
+  if (raw.drop_chance != null) {
+    const dc = Number(raw.drop_chance);
+    if (!Number.isFinite(dc) || dc < 0 || dc > 1) {
+      return `${label}: drop_chance must be between 0 and 1`;
+    }
+  }
+  if (raw.loot_table_key != null && String(raw.loot_table_key).trim()) {
+    const lk = String(raw.loot_table_key).trim();
+    if (!IMPORT_KEY_RE.test(lk)) {
+      return `${label}: loot_table_key must be a valid key or null`;
+    }
+  }
+  return null;
+}
+
+function enemyImportRowToPayload(raw) {
+  raw = normalizeEnemyImportRaw(raw);
+  const lt = raw.loot_table_key != null && String(raw.loot_table_key).trim() ? String(raw.loot_table_key).trim() : null;
+  const noteRaw = raw.note != null ? String(raw.note).trim() : "";
+  return {
+    key: String(raw.key).trim(),
+    label: String(raw.label).trim(),
+    hp_base: Number(raw.hp_base),
+    ac_base: Number(raw.ac_base),
+    attack_bonus: Number(raw.attack_bonus),
+    damage_die: String(raw.damage_die).trim().toLowerCase(),
+    description: raw.description != null && String(raw.description).trim() ? String(raw.description) : null,
+    tier: String(raw.tier || "standard").toLowerCase(),
+    attacks_per_turn: raw.attacks_per_turn != null ? Number(raw.attacks_per_turn) : 1,
+    damage_bonus: raw.damage_bonus != null ? Number(raw.damage_bonus) : 0,
+    damage_type: String(raw.damage_type || "physical").toLowerCase(),
+    xp_award: raw.xp_award != null ? Number(raw.xp_award) : 0,
+    conditions_immune: Array.isArray(raw.conditions_immune) ? raw.conditions_immune : [],
+    loot_table_key: lt,
+    drop_chance: raw.drop_chance != null ? Number(raw.drop_chance) : 1,
+    note: noteRaw ? noteRaw : null,
+    is_active: raw.is_active !== false && raw.is_active !== 0,
+  };
+}
+
+function validateConditionImportRow(raw, index) {
+  const label = `Row ${index + 1}`;
+  if (!raw || typeof raw !== "object") {
+    return `${label}: must be an object`;
+  }
+  if (!IMPORT_KEY_RE.test(String(raw.key || "").trim())) {
+    return `${label}: key must be lowercase_snake_case, 1–40 chars`;
+  }
+  if (!String(raw.label || "").trim()) {
+    return `${label}: label is required`;
+  }
+  let ej = raw.effect_json;
+  if (ej != null && typeof ej === "object") {
+    try {
+      ej = JSON.stringify(ej);
+    } catch (_e) {
+      return `${label}: effect_json object not serializable`;
+    }
+  }
+  if (ej == null || !String(ej).trim()) {
+    return `${label}: effect_json is required`;
+  }
+  try {
+    JSON.parse(String(ej));
+  } catch (_e) {
+    return `${label}: effect_json must be valid JSON`;
+  }
+  return null;
+}
+
+function conditionImportRowToPayload(raw) {
+  let ej = raw.effect_json;
+  if (ej != null && typeof ej === "object") {
+    ej = JSON.stringify(ej);
+  }
+  const ar = raw.auto_remove != null ? String(raw.auto_remove).trim() : "";
+  return {
+    key: String(raw.key).trim(),
+    label: String(raw.label).trim(),
+    effect_json: String(ej),
+    description: raw.description != null && String(raw.description).trim() ? String(raw.description) : null,
+    stackable: !!(raw.stackable === true || raw.stackable === 1),
+    auto_remove: ar || null,
+    is_active: raw.is_active !== false && raw.is_active !== 0,
+  };
+}
+
+function validateConsumableImportRow(raw, index) {
+  const label = `Row ${index + 1}`;
+  if (!raw || typeof raw !== "object") {
+    return `${label}: must be an object`;
+  }
+  if (!IMPORT_KEY_RE.test(String(raw.key || "").trim())) {
+    return `${label}: key must be lowercase_snake_case, 1–40 chars`;
+  }
+  if (!String(raw.label || "").trim()) {
+    return `${label}: label is required`;
+  }
+  const et = String(raw.effect_type || "misc").toLowerCase();
+  if (!["heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff", "misc"].includes(et)) {
+    return `${label}: effect_type invalid`;
+  }
+  const tgt = String(raw.effect_target || "self").toLowerCase();
+  if (!["self", "ally", "any"].includes(tgt)) {
+    return `${label}: effect_target must be self, ally, or any`;
+  }
+  if (raw.effect_dice != null && String(raw.effect_dice).trim()) {
+    const d = String(raw.effect_dice).trim().toLowerCase();
+    if (!IMPORT_DAMAGE_DIE_RE.test(d)) {
+      return `${label}: effect_dice must match dice pattern (e.g. 2d4) or be null/empty`;
+    }
+  }
+  const ch = raw.charges != null ? Number(raw.charges) : 1;
+  if (!Number.isFinite(ch) || ch < 1) {
+    return `${label}: charges must be >= 1`;
+  }
+  const bp = raw.base_price != null ? Number(raw.base_price) : 0;
+  if (!Number.isFinite(bp) || bp < 0) {
+    return `${label}: base_price must be >= 0`;
+  }
+  const wkg = raw.weight_kg != null ? Number(raw.weight_kg) : 0;
+  if (!Number.isFinite(wkg) || wkg < 0) {
+    return `${label}: weight_kg must be >= 0`;
+  }
+  return null;
+}
+
+function consumableImportRowToPayload(raw) {
+  let effect_dice = null;
+  if (raw.effect_dice != null && String(raw.effect_dice).trim()) {
+    effect_dice = String(raw.effect_dice).trim();
+  }
+  const noteRaw = raw.note != null ? String(raw.note).trim() : "";
+  return {
+    key: String(raw.key).trim(),
+    label: String(raw.label).trim(),
+    description: raw.description != null ? String(raw.description) : "",
+    effect_type: String(raw.effect_type || "misc").toLowerCase(),
+    effect_dice,
+    effect_bonus: raw.effect_bonus != null ? Number(raw.effect_bonus) : 0,
+    effect_target: String(raw.effect_target || "self").toLowerCase(),
+    weight_kg: raw.weight_kg != null ? Number(raw.weight_kg) : 0,
+    charges: raw.charges != null ? Number(raw.charges) : 1,
+    base_price: raw.base_price != null ? Number(raw.base_price) : 0,
+    note: noteRaw ? noteRaw : null,
+    is_active: raw.is_active !== false && raw.is_active !== 0,
+  };
 }
 
 async function refreshItems(host) {
@@ -1177,11 +1725,11 @@ async function refreshItems(host) {
           });
           showToast("Item updated.", "success");
         },
-        onDelete: async (row) => {
+        onDelete: async (row, meta = {}) => {
           try {
             await adminFetch(`/api/admin/items/${encodeURIComponent(row.key)}`, {
               method: "DELETE",
-              body: JSON.stringify({ force: false }),
+              body: JSON.stringify({ force: !!meta.force }),
             });
             showToast("Item deleted.", "success");
             await refreshItems(host);
@@ -1244,18 +1792,18 @@ function mountItems(host) {
   root.appendChild(toggleRow);
   root.appendChild(details);
 
-  const bulk = el("details", "admin-bulk-import");
-  bulk.innerHTML = `
-    <summary>Bulk import (JSON array)</summary>
-    <p class="muted">Paste a JSON array of items. Dry run validates all rows; commit POSTs each row.</p>
-    <textarea class="admin-bulk-textarea" data-bulk-items rows="8" placeholder='[{ "key": "health_potion", ... }]'></textarea>
-    <div class="admin-bulk-actions">
-      <button type="button" class="secondary-btn" data-bulk-dry>Dry run</button>
-      <button type="button" class="primary-btn" data-bulk-commit>Commit</button>
-    </div>
-    <pre class="admin-bulk-result muted" data-bulk-result></pre>
-  `;
-  root.appendChild(bulk);
+  wireBulkJsonImport(root, {
+    hint: "Wklej tablicę przedmiotów (katalog). Dry run = walidacja; Commit = POST /api/admin/items.",
+    templatesHref: "/admin_panel/templates.html#sec-items",
+    templatesAnchor: "Szablony JSON — Items",
+    placeholder: '[{ "key": "health_potion", "item_type": "consumable", ... }]',
+    validateRow: (row, i) => validateItemImportRow(row, i),
+    buildPayload: (row) => itemImportRowToPayload(row),
+    postPath: "/api/admin/items",
+    existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/items"),
+    refresh: () => refreshItems(host),
+    confirmNoun: "przedmiotów",
+  });
 
   const mount = el("div", "admin-table-mount items-table-mount");
   root.appendChild(mount);
@@ -1293,95 +1841,6 @@ function mountItems(host) {
     } catch (e) {
       showToast(parseApiError(e, "Create failed."), "error");
     }
-  });
-
-  const ta = bulk.querySelector("[data-bulk-items]");
-  const resultPre = bulk.querySelector("[data-bulk-result]");
-  bulk.querySelector("[data-bulk-dry]").addEventListener("click", () => {
-    resultPre.textContent = "";
-    let parsed;
-    try {
-      parsed = JSON.parse(ta.value || "[]");
-    } catch (e) {
-      resultPre.textContent = `Invalid JSON: ${e.message || e}`;
-      showToast("Invalid JSON.", "error");
-      return;
-    }
-    if (!Array.isArray(parsed)) {
-      resultPre.textContent = "Top-level value must be a JSON array.";
-      showToast("Expected array.", "error");
-      return;
-    }
-    const errors = [];
-    parsed.forEach((row, i) => {
-      const err = validateItemImportRow(row, i);
-      if (err) {
-        errors.push(err);
-      }
-    });
-    if (errors.length) {
-      resultPre.textContent = errors.join("\n");
-      showToast(`Dry run: ${errors.length} issue(s).`, "info");
-    } else {
-      resultPre.textContent = `OK — ${parsed.length} row(s) would be imported.`;
-      showToast("Dry run OK.", "success");
-    }
-  });
-  bulk.querySelector("[data-bulk-commit]").addEventListener("click", async () => {
-    let parsed;
-    try {
-      parsed = JSON.parse(ta.value || "[]");
-    } catch (e) {
-      showToast(`Invalid JSON: ${e.message || e}`, "error");
-      return;
-    }
-    if (!Array.isArray(parsed)) {
-      showToast("Expected array.", "error");
-      return;
-    }
-    const errors = [];
-    parsed.forEach((row, i) => {
-      const err = validateItemImportRow(row, i);
-      if (err) {
-        errors.push(err);
-      }
-    });
-    if (errors.length) {
-      resultPre.textContent = errors.join("\n");
-      showToast("Fix validation errors before commit.", "error");
-      return;
-    }
-    const ok = await showConfirm(`Create ${parsed.length} item(s) from JSON?`, { dangerous: false });
-    if (!ok) {
-      return;
-    }
-    let okn = 0;
-    const fail = [];
-    for (let i = 0; i < parsed.length; i += 1) {
-      const r = parsed[i];
-      const body = {
-        key: String(r.key).trim(),
-        label: String(r.label).trim(),
-        item_type: String(r.item_type || "misc").toLowerCase(),
-        description: r.description != null ? String(r.description) : "",
-        value_gp: r.value_gp != null ? Number(r.value_gp) : 0,
-        weight: r.weight != null ? Number(r.weight) : 0,
-        weight_kg: r.weight_kg != null ? Number(r.weight_kg) : 0,
-        proficiency_classes: Array.isArray(r.proficiency_classes) ? r.proficiency_classes : [],
-        note: r.note != null && String(r.note).trim() ? String(r.note) : null,
-        effect_json: r.effect_json != null && String(r.effect_json).trim() ? String(r.effect_json) : null,
-        is_active: r.is_active !== false && r.is_active !== 0,
-      };
-      try {
-        await adminFetch("/api/admin/items", { method: "POST", body: JSON.stringify(body) });
-        okn += 1;
-      } catch (e) {
-        fail.push(`${body.key}: ${parseApiError(e, "failed")}`);
-      }
-    }
-    resultPre.textContent = `Created: ${okn}. Failed: ${fail.length}${fail.length ? `\n${fail.join("\n")}` : ""}`;
-    showToast(`Commit done: ${okn} created, ${fail.length} failed.`, fail.length ? "info" : "success");
-    await refreshItems(host);
   });
 
   host.appendChild(root);
@@ -1491,11 +1950,11 @@ async function refreshConsumables(host) {
           Object.assign(row, res.item || {});
           showToast("Consumable updated.", "success");
         },
-        onDelete: async (row) => {
+        onDelete: async (row, meta = {}) => {
           try {
             await adminFetch(`/api/admin/consumables/${encodeURIComponent(row.key)}`, {
               method: "DELETE",
-              body: JSON.stringify({ force: false }),
+              body: JSON.stringify({ force: !!meta.force }),
             });
             showToast("Consumable deleted.", "success");
             await refreshConsumables(host);
@@ -1561,6 +2020,18 @@ function mountConsumables(host) {
   toggleRow.appendChild(toggle);
   root.appendChild(toggleRow);
   root.appendChild(details);
+  wireBulkJsonImport(root, {
+    hint: "Wklej tablicę consumables (game_config_consumables). effect_dice w formacie kości (np. 2d4) lub null.",
+    templatesHref: "/admin_panel/templates.html#sec-consumables",
+    templatesAnchor: "Szablony JSON — Consumables",
+    placeholder: '[{ "key": "potion_healing_minor", "effect_type": "heal_hp", ... }]',
+    validateRow: (row, i) => validateConsumableImportRow(row, i),
+    buildPayload: (row) => consumableImportRowToPayload(row),
+    postPath: "/api/admin/consumables",
+    existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/consumables"),
+    refresh: () => refreshConsumables(host),
+    confirmNoun: "wierszy",
+  });
   const mount = el("div", "admin-table-mount");
   root.appendChild(mount);
   fields.querySelector('[data-action="create-consumable"]').addEventListener("click", async () => {
@@ -2023,11 +2494,11 @@ function mountLootTables(host) {
             showToast("Loot table updated.", "success");
             await refreshLootList();
           },
-          onDelete: async (row) => {
+          onDelete: async (row, meta = {}) => {
             try {
               await adminFetch(`/api/admin/loot-tables/${encodeURIComponent(row.key)}`, {
                 method: "DELETE",
-                body: JSON.stringify({ force: false }),
+                body: JSON.stringify({ force: !!meta.force }),
               });
               showToast("Loot table deleted.", "success");
               if (selectedKey === row.key) {
@@ -2057,25 +2528,24 @@ function mountLootTables(host) {
       );
       const tableEl = listMount.querySelector("table.admin-table");
       if (tableEl) {
-        tableEl.querySelectorAll("tbody tr").forEach((tr, idx) => {
-          const row = rows[idx];
+        tableEl.querySelectorAll("tbody tr").forEach((tr) => {
+          const keyTd = tr.querySelector('td[data-col="key"]');
+          const keyText = keyTd?.textContent?.trim() ?? "";
+          const row = rows.find((r) => r.key === keyText);
           if (!row || !row.key) {
             return;
           }
           if (selectedKey === row.key) {
             tr.classList.add("loot-row-selected");
           }
-          const keyCell = tr.querySelector('td[data-col="key"]');
-          if (keyCell) {
-            keyCell.classList.add("loot-row-select-cell");
-            keyCell.title = "Open this loot table";
-            keyCell.addEventListener("click", async () => {
-              selectedKey = row.key;
-              selectedLabel = row.label;
-              await refreshEntriesPanel();
-              await refreshLootList();
-            });
-          }
+          keyTd.classList.add("loot-row-select-cell");
+          keyTd.title = "Open this loot table";
+          keyTd.addEventListener("click", async () => {
+            selectedKey = row.key;
+            selectedLabel = row.label;
+            await refreshEntriesPanel();
+            await refreshLootList();
+          });
         });
       }
     } catch (e) {

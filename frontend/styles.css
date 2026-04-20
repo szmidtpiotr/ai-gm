@@ -1977,3 +1977,74 @@ body.campaign-death-active .campaign-death-screen {
 #chat.archive-hidden .chat-back-in-game {
   display: none !important;
 }
+
+/* ------------------------------------------------------------------ */
+/* Slash-command autocomplete (#input)                                 */
+/* ------------------------------------------------------------------ */
+#slash-popup.slash-popup {
+  position: fixed;
+  z-index: 1250;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: rgba(26, 20, 16, 0.92);
+  border: 1px solid rgba(214, 207, 192, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(10, 8, 6, 0.45);
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  color: var(--panel, #fffdf8);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.1s ease, visibility 0.1s ease;
+  max-height: calc(6 * 2.75rem);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+#slash-popup.slash-popup.slash-popup--open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+#slash-popup .slash-popup-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#slash-popup .slash-popup-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+
+#slash-popup .slash-popup-item:hover {
+  background: rgba(255, 253, 248, 0.08);
+}
+
+#slash-popup .slash-popup-item--active {
+  background: rgba(200, 148, 74, 0.18);
+  border-left-color: var(--accent-light, #c8944a);
+}
+
+#slash-popup .slash-popup-cmd {
+  font-weight: 700;
+  color: var(--accent-light, #c8944a);
+  flex: 0 0 auto;
+}
+
+#slash-popup .slash-popup-desc {
+  font-size: 12px;
+  color: rgba(239, 225, 204, 0.72);
+  flex: 1 1 140px;
+  min-width: 0;
+  line-height: 1.35;
+}

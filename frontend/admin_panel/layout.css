@@ -522,6 +522,51 @@ body {
   color: var(--muted);
 }
 
+.admin-table-th-sortable {
+  padding: 0;
+  vertical-align: bottom;
+}
+
+.admin-table-sort-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.admin-table-sort-btn:hover {
+  background: rgba(124, 79, 30, 0.08);
+  color: var(--text);
+}
+
+.admin-table-sort-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-table-sort-indicator {
+  flex: 0 0 auto;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+.admin-table-sort-inactive {
+  opacity: 0.35;
+}
+
 .admin-table tbody tr:nth-child(even) {
   background: rgba(255, 253, 248, 0.65);
 }
@@ -1083,6 +1128,47 @@ select.admin-table-cell-select {
   margin-top: 4px;
 }
 
+.slash-commands-card .slash-commands-rows {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 14px;
+}
+
+.slash-cmd-row {
+  display: grid;
+  gap: 6px;
+}
+
+.slash-cmd-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slash-cmd-name {
+  font-family: Arial, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--accent-light);
+}
+
+.slash-cmd-desc {
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font: 13px/1.4 Arial, sans-serif;
+  resize: vertical;
+}
+
+.slash-cmd-desc:focus {
+  outline: 2px solid rgba(200, 148, 74, 0.35);
+  outline-offset: 1px;
+}
+
 .technical-btn-row {
   display: flex;
   flex-wrap: wrap;
@@ -1460,6 +1546,13 @@ pre.copy-block {
   font-family: Arial, sans-serif;
   font-weight: 700;
   color: var(--accent);
+}
+
+.admin-bulk-skip {
+  display: block;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  cursor: pointer;
 }
 
 .admin-bulk-textarea {

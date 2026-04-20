@@ -1,6 +1,6 @@
 import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
 import { showToast } from "/admin_panel/shared/toast.js?v=17";
-import { showConfirm } from "/admin_panel/shared/table.js?v=17";
+import { showConfirm } from "/admin_panel/shared/table.js?v=20";
 
 function el(tag, cls, text) {
   const n = document.createElement(tag);
@@ -219,7 +219,70 @@ export async function init(container) {
   card2.appendChild(rowBtns);
   card2.appendChild(diffWrap);
 
+  const cardSlash = el("div", "admin-card slash-commands-card");
+  cardSlash.style.gridColumn = "1 / -1";
+  cardSlash.appendChild(el("h3", "admin-card-title", "Chat slash commands"));
+  cardSlash.appendChild(
+    el(
+      "p",
+      "muted",
+      "Descriptions for the in-game chat autocomplete (when players type /). Command names are fixed; only the help text is editable. Stored in the database.",
+    ),
+  );
+  const slashRows = el("div", "slash-commands-rows");
+  cardSlash.appendChild(slashRows);
+  const slashSave = el("button", "primary-btn", "Save descriptions");
+  slashSave.type = "button";
+  slashSave.disabled = true;
+  slashSave.addEventListener("click", async () => {
+    const textareas = slashRows.querySelectorAll("textarea.slash-cmd-desc");
+    const commands = Array.from(textareas).map((ta) => ({
+      command: ta.dataset.command || "",
+      description: ta.value.trim(),
+    }));
+    const label = slashSave.textContent;
+    slashSave.disabled = true;
+    slashSave.textContent = "⏳";
+    try {
+      await adminFetch("/api/admin/slash-commands", {
+        method: "PUT",
+        body: JSON.stringify({ commands }),
+      });
+      showToast("Slash command descriptions saved.", "success");
+    } catch (e) {
+      showToast(parseApiError(e, "Save failed."), "error");
+    } finally {
+      slashSave.textContent = label;
+      slashSave.disabled = false;
+    }
+  });
+  cardSlash.appendChild(slashSave);
+
+  (async () => {
+    try {
+      const data = await adminFetch("/api/admin/slash-commands");
+      const cmds = data.commands || [];
+      slashRows.innerHTML = "";
+      cmds.forEach((c) => {
+        const row = el("div", "slash-cmd-row");
+        const head = el("div", "slash-cmd-head");
+        head.appendChild(el("span", "slash-cmd-name", c.command || ""));
+        row.appendChild(head);
+        const ta = el("textarea", "slash-cmd-desc");
+        ta.rows = 2;
+        ta.value = c.description != null ? String(c.description) : "";
+        ta.dataset.command = c.command || "";
+        row.appendChild(ta);
+        slashRows.appendChild(row);
+      });
+      slashSave.disabled = false;
+    } catch (e) {
+      showToast(parseApiError(e, "Could not load slash command config."), "error");
+    }
+  })();
+
   grid.appendChild(card1);
   grid.appendChild(card2);
+  grid.appendChild(cardSlash);
   container.appendChild(grid);
 }

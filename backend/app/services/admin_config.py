@@ -431,7 +431,7 @@ def create_skill(
     label: str,
     linked_stat: str,
     rank_ceiling: int = 5,
-    sort_order: int = 0,
+    sort_order: int | None = None,
     description: str | None = None,
 ) -> dict:
     if rank_ceiling < 1:
@@ -448,12 +448,18 @@ def create_skill(
         if not stat_exists:
             raise ValueError("invalid_linked_stat")
 
+        if sort_order is None:
+            mx = conn.execute("SELECT COALESCE(MAX(sort_order), -1) AS m FROM game_config_skills").fetchone()
+            so = int(mx["m"]) + 1
+        else:
+            so = int(sort_order)
+
         conn.execute(
             """
             INSERT INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order, locked_at, description)
             VALUES (?, ?, ?, ?, ?, NULL, ?)
             """,
-            (key, label, linked_stat, rank_ceiling, sort_order, description or ""),
+            (key, label, linked_stat, rank_ceiling, so, description or ""),
         )
         new_row = _fetch_one(
             conn,
