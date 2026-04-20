@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bulk Import Templates — AI-GM Admin</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=12" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=18" />
   </head>
   <body class="templates-page">
     <header class="templates-page-header">
@@ -145,7 +145,49 @@
                 <td><code>allowed_classes</code></td>
                 <td>array[string]</td>
                 <td>✅</td>
-                <td>Subset of: ["warrior", "scholar"]</td>
+                <td>Subset of: ["warrior", "ranger", "scholar"]</td>
+              </tr>
+              <tr>
+                <td><code>description</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Flavour text; default empty string</td>
+              </tr>
+              <tr>
+                <td><code>weapon_type</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>melee | ranged | spell (default melee)</td>
+              </tr>
+              <tr>
+                <td><code>two_handed</code></td>
+                <td>boolean</td>
+                <td>❌</td>
+                <td>Two-handed weapon; default false</td>
+              </tr>
+              <tr>
+                <td><code>finesse</code></td>
+                <td>boolean</td>
+                <td>❌</td>
+                <td>Finesse property; default false</td>
+              </tr>
+              <tr>
+                <td><code>range_m</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Range in metres for ranged weapons; null if not applicable</td>
+              </tr>
+              <tr>
+                <td><code>weight_kg</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Mass in kilograms; default 0</td>
+              </tr>
+              <tr>
+                <td><code>note</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Internal design notes</td>
               </tr>
               <tr>
                 <td><code>is_active</code></td>
@@ -167,7 +209,14 @@
     "label": "Short Sword",
     "damage_die": "d6",
     "linked_stat": "STR",
-    "allowed_classes": ["warrior", "scholar"],
+    "allowed_classes": ["warrior", "ranger"],
+    "description": "A versatile blade for close combat.",
+    "weapon_type": "melee",
+    "two_handed": false,
+    "finesse": true,
+    "range_m": null,
+    "weight_kg": 1.0,
+    "note": null,
     "is_active": true
   },
   {
@@ -175,7 +224,14 @@
     "label": "Longbow",
     "damage_die": "d8",
     "linked_stat": "DEX",
-    "allowed_classes": ["warrior"],
+    "allowed_classes": ["warrior", "ranger"],
+    "description": "Heavy bow for long-range volleys.",
+    "weapon_type": "ranged",
+    "two_handed": true,
+    "finesse": false,
+    "range_m": 150,
+    "weight_kg": 1.0,
+    "note": null,
     "is_active": true
   },
   {
@@ -184,6 +240,13 @@
     "damage_die": "d6",
     "linked_stat": "INT",
     "allowed_classes": ["scholar"],
+    "description": "Arcane focus that channels forceful strikes.",
+    "weapon_type": "spell",
+    "two_handed": false,
+    "finesse": false,
+    "range_m": null,
+    "weight_kg": 0.5,
+    "note": null,
     "is_active": true
   }
 ]</pre>
@@ -243,6 +306,60 @@
                 <td>Damage dice (d6, 2d8 etc.)</td>
               </tr>
               <tr>
+                <td><code>tier</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>weak | standard | elite | boss (default standard)</td>
+              </tr>
+              <tr>
+                <td><code>attacks_per_turn</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Attacks per turn; default 1</td>
+              </tr>
+              <tr>
+                <td><code>damage_bonus</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Flat damage bonus; default 0</td>
+              </tr>
+              <tr>
+                <td><code>damage_type</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>physical | magic | fire | poison | misc (default physical)</td>
+              </tr>
+              <tr>
+                <td><code>xp_award</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>XP granted on defeat; default 0</td>
+              </tr>
+              <tr>
+                <td><code>conditions_immune</code></td>
+                <td>array[string]</td>
+                <td>❌</td>
+                <td>JSON array of condition keys this enemy ignores; default []</td>
+              </tr>
+              <tr>
+                <td><code>loot_table_key</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Optional reference to a loot table key</td>
+              </tr>
+              <tr>
+                <td><code>drop_chance</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>0.0–1.0 chance the loot table is rolled on defeat; default 1.0</td>
+              </tr>
+              <tr>
+                <td><code>note</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Internal design notes</td>
+              </tr>
+              <tr>
                 <td><code>description</code></td>
                 <td>text</td>
                 <td>❌</td>
@@ -271,6 +388,15 @@
     "attack_bonus": 2,
     "damage_die": "d6",
     "description": "Fast and opportunistic. Prefers ambushes.",
+    "tier": "weak",
+    "attacks_per_turn": 1,
+    "damage_bonus": 1,
+    "damage_type": "physical",
+    "xp_award": 3,
+    "conditions_immune": [],
+    "loot_table_key": null,
+    "drop_chance": 1.0,
+    "note": null,
     "is_active": true
   },
   {
@@ -281,6 +407,15 @@
     "attack_bonus": 3,
     "damage_die": "d8",
     "description": "Animated bones, fights without fear or pain.",
+    "tier": "standard",
+    "attacks_per_turn": 1,
+    "damage_bonus": 0,
+    "damage_type": "physical",
+    "xp_award": 10,
+    "conditions_immune": [],
+    "loot_table_key": null,
+    "drop_chance": 1.0,
+    "note": null,
     "is_active": true
   }
 ]</pre>
@@ -327,6 +462,18 @@
                 <td>text</td>
                 <td>❌</td>
                 <td>Plain-language explanation shown to players</td>
+              </tr>
+              <tr>
+                <td><code>stackable</code></td>
+                <td>boolean</td>
+                <td>❌</td>
+                <td>Whether multiple instances can stack; default false</td>
+              </tr>
+              <tr>
+                <td><code>auto_remove</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>When the engine removes the condition (e.g. end_of_encounter); null = manual only</td>
               </tr>
               <tr>
                 <td><code>is_active</code></td>
@@ -397,7 +544,7 @@
                 <td><code>item_type</code></td>
                 <td>text</td>
                 <td>✅</td>
-                <td>weapon / armor / consumable / misc / quest</td>
+                <td>weapon | armor | consumable | misc | quest (default misc)</td>
               </tr>
               <tr>
                 <td><code>description</code></td>
@@ -415,7 +562,25 @@
                 <td><code>weight</code></td>
                 <td>number</td>
                 <td>❌</td>
-                <td>Encumbrance units, default 0</td>
+                <td>Legacy encumbrance column; default 0. Prefer <code>weight_kg</code> for new data.</td>
+              </tr>
+              <tr>
+                <td><code>weight_kg</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Mass in kilograms (spec-aligned); default 0</td>
+              </tr>
+              <tr>
+                <td><code>proficiency_classes</code></td>
+                <td>array[string]</td>
+                <td>❌</td>
+                <td>JSON array, e.g. ["warrior"]; subset of warrior/ranger/scholar; default []</td>
+              </tr>
+              <tr>
+                <td><code>note</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Internal design notes</td>
               </tr>
               <tr>
                 <td><code>effect_json</code></td>
@@ -445,6 +610,8 @@
     "description": "Restores 2d6 HP when consumed.",
     "value_gp": 25,
     "weight": 0.5,
+    "weight_kg": 0.5,
+    "proficiency_classes": [],
     "effect_json": "{\"heal\":\"2d6\"}",
     "is_active": true
   },
@@ -465,6 +632,138 @@
     "description": "A tattered map showing a ruined fortress.",
     "value_gp": 0,
     "weight": 0.1,
+    "is_active": true
+  }
+]</pre>
+        </div>
+      </section>
+
+      <section class="template-section" aria-labelledby="sec-consumables">
+        <h2 id="sec-consumables">Consumables (game_config_consumables)</h2>
+        <p class="muted">
+          Standalone consumable definitions referenced by loot tables via <code>consumable_key</code>. Separate from
+          catalogue <code>item_type: consumable</code> rows in <code>game_config_items</code>.
+        </p>
+        <div class="field-ref-wrap admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>key</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>lowercase_snake_case, unique</td>
+              </tr>
+              <tr>
+                <td><code>label</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Display name</td>
+              </tr>
+              <tr>
+                <td><code>description</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Flavour text; default empty string</td>
+              </tr>
+              <tr>
+                <td><code>effect_type</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>
+                  heal_hp | restore_mana | remove_condition | add_condition | stat_buff | misc (default misc)
+                </td>
+              </tr>
+              <tr>
+                <td><code>effect_dice</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Dice expression e.g. 2d4; null uses flat effect_bonus only</td>
+              </tr>
+              <tr>
+                <td><code>effect_bonus</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Flat bonus; default 0</td>
+              </tr>
+              <tr>
+                <td><code>effect_target</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>self | ally | any (default self)</td>
+              </tr>
+              <tr>
+                <td><code>weight_kg</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Mass in kilograms; default 0</td>
+              </tr>
+              <tr>
+                <td><code>charges</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Uses per inventory stack; default 1</td>
+              </tr>
+              <tr>
+                <td><code>base_price</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Price in copper pieces (or project currency); default 0</td>
+              </tr>
+              <tr>
+                <td><code>note</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Internal design notes</td>
+              </tr>
+              <tr>
+                <td><code>is_active</code></td>
+                <td>boolean</td>
+                <td>❌</td>
+                <td>Default true</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="template-example">
+          <div class="template-example-header">
+            <span class="template-example-label">Example JSON</span>
+            <button type="button" class="copy-json-btn" aria-label="Copy example JSON">📋 Copy</button>
+          </div>
+          <pre class="copy-block" data-table="consumables">[
+  {
+    "key": "potion_healing_minor",
+    "label": "Minor healing potion",
+    "description": "A small vial of rose-tinted liquid.",
+    "effect_type": "heal_hp",
+    "effect_dice": "2d4",
+    "effect_bonus": 2,
+    "effect_target": "self",
+    "weight_kg": 0.1,
+    "charges": 1,
+    "base_price": 15,
+    "note": null,
+    "is_active": true
+  },
+  {
+    "key": "antidote_basic",
+    "label": "Basic antidote",
+    "description": "Counters common poisons.",
+    "effect_type": "remove_condition",
+    "effect_dice": null,
+    "effect_bonus": 0,
+    "effect_target": "self",
+    "weight_kg": 0.05,
+    "charges": 1,
+    "base_price": 20,
+    "note": null,
     "is_active": true
   }
 ]</pre>

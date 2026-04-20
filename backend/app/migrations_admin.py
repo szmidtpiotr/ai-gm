@@ -165,6 +165,46 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_loot_entries_table
     ON game_config_loot_entries(loot_table_key)
     """,
+    "ALTER TABLE game_config_weapons ADD COLUMN description TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE game_config_weapons ADD COLUMN weapon_type TEXT NOT NULL DEFAULT 'melee'",
+    "ALTER TABLE game_config_weapons ADD COLUMN two_handed INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_weapons ADD COLUMN finesse INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_weapons ADD COLUMN range_m INTEGER",
+    "ALTER TABLE game_config_weapons ADD COLUMN weight_kg REAL NOT NULL DEFAULT 0.0",
+    "ALTER TABLE game_config_weapons ADD COLUMN note TEXT",
+    "ALTER TABLE game_config_enemies ADD COLUMN tier TEXT NOT NULL DEFAULT 'standard'",
+    "ALTER TABLE game_config_enemies ADD COLUMN attacks_per_turn INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE game_config_enemies ADD COLUMN damage_bonus INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_enemies ADD COLUMN damage_type TEXT NOT NULL DEFAULT 'physical'",
+    "ALTER TABLE game_config_enemies ADD COLUMN xp_award INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_enemies ADD COLUMN conditions_immune TEXT",
+    "ALTER TABLE game_config_enemies ADD COLUMN loot_table_key TEXT REFERENCES game_config_loot_tables(key) ON DELETE SET NULL",
+    "ALTER TABLE game_config_enemies ADD COLUMN note TEXT",
+    "ALTER TABLE game_config_items ADD COLUMN proficiency_classes TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE game_config_items ADD COLUMN note TEXT",
+    "ALTER TABLE game_config_items ADD COLUMN weight_kg REAL NOT NULL DEFAULT 0.0",
+    "ALTER TABLE game_config_conditions ADD COLUMN stackable INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_conditions ADD COLUMN auto_remove TEXT",
+    """
+    CREATE TABLE IF NOT EXISTS game_config_consumables (
+        key            TEXT PRIMARY KEY,
+        label          TEXT NOT NULL,
+        description    TEXT NOT NULL DEFAULT '',
+        effect_type    TEXT NOT NULL DEFAULT 'misc',
+        effect_dice    TEXT,
+        effect_bonus   INTEGER NOT NULL DEFAULT 0,
+        effect_target  TEXT NOT NULL DEFAULT 'self',
+        weight_kg      REAL NOT NULL DEFAULT 0.0,
+        charges        INTEGER NOT NULL DEFAULT 1,
+        base_price     INTEGER NOT NULL DEFAULT 0,
+        note           TEXT,
+        is_active      INTEGER NOT NULL DEFAULT 1,
+        locked_at      TEXT,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "ALTER TABLE game_config_loot_entries ADD COLUMN consumable_key TEXT REFERENCES game_config_consumables(key) ON DELETE CASCADE",
 ]
 
 ADMIN_SEEDS = [
@@ -238,7 +278,166 @@ ADMIN_SEEDS = [
     INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES ('loki_url', 'http://loki:3100')
     """,
+    """
+    UPDATE game_config_enemies
+    SET tier = 'weak', attacks_per_turn = 1, damage_bonus = 1,
+        damage_type = 'physical', xp_award = 3
+    WHERE key = 'goblin'
+    """,
 ]
+
+
+def _rebuild_loot_entries_for_consumable_support(conn: sqlite3.Connection) -> None:
+    """Allow NULL item_key when consumable_key is set (SQLite cannot relax NOT NULL via ALTER)."""
+    cur = conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()
+    cols = {row[1]: row for row in cur}
+    if "item_key" not in cols:
+        return
+    if cols["item_key"][3] == 0:
+        return
+    print("[admin_migration] rebuilding game_config_loot_entries for nullable item_key + consumable_key + weapon_key XOR")
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        has_weapon = "weapon_key" in cols
+        conn.executescript(
+            """
+            DROP INDEX IF EXISTS idx_loot_entries_table;
+            DROP INDEX IF EXISTS ux_loot_entries_item;
+            DROP INDEX IF EXISTS ux_loot_entries_consumable;
+            DROP INDEX IF EXISTS ux_loot_entries_weapon;
+            CREATE TABLE game_config_loot_entries_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                loot_table_key TEXT NOT NULL REFERENCES game_config_loot_tables(key) ON DELETE CASCADE,
+                item_key TEXT REFERENCES game_config_items(key) ON DELETE CASCADE,
+                consumable_key TEXT REFERENCES game_config_consumables(key) ON DELETE CASCADE,
+                weapon_key TEXT REFERENCES game_config_weapons(key) ON DELETE CASCADE,
+                weight INTEGER NOT NULL DEFAULT 10,
+                qty_min INTEGER NOT NULL DEFAULT 1,
+                qty_max INTEGER NOT NULL DEFAULT 1,
+                CHECK (
+                    (CASE WHEN item_key IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN consumable_key IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN weapon_key IS NOT NULL THEN 1 ELSE 0 END) = 1
+                )
+            );
+            """
+        )
+        if has_weapon:
+            conn.execute(
+                """
+                INSERT INTO game_config_loot_entries_new
+                    (id, loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
+                SELECT id, loot_table_key, item_key,
+                       CASE WHEN typeof(consumable_key) = 'null' THEN NULL ELSE consumable_key END,
+                       CASE WHEN typeof(weapon_key) = 'null' THEN NULL ELSE weapon_key END,
+                       weight, qty_min, qty_max
+                FROM game_config_loot_entries
+                """
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO game_config_loot_entries_new
+                    (id, loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
+                SELECT id, loot_table_key, item_key,
+                       CASE WHEN typeof(consumable_key) = 'null' THEN NULL ELSE consumable_key END,
+                       NULL,
+                       weight, qty_min, qty_max
+                FROM game_config_loot_entries
+                """
+            )
+        conn.executescript(
+            """
+            DROP TABLE game_config_loot_entries;
+            ALTER TABLE game_config_loot_entries_new RENAME TO game_config_loot_entries;
+            CREATE INDEX IF NOT EXISTS idx_loot_entries_table
+                ON game_config_loot_entries(loot_table_key);
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_item
+                ON game_config_loot_entries(loot_table_key, item_key) WHERE item_key IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_consumable
+                ON game_config_loot_entries(loot_table_key, consumable_key) WHERE consumable_key IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_weapon
+                ON game_config_loot_entries(loot_table_key, weapon_key) WHERE weapon_key IS NOT NULL;
+            """
+        )
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
+
+
+def _upgrade_loot_entries_three_way_xor(conn: sqlite3.Connection) -> None:
+    """If loot_entries is still 2-way only, add weapon_key and rebuild CHECK + indexes for 3-way XOR."""
+    if not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_config_loot_entries'"
+    ).fetchone():
+        return
+    if conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name='ux_loot_entries_weapon'"
+    ).fetchone():
+        return
+    cols = {row[1]: row for row in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
+    if "weapon_key" not in cols:
+        try:
+            conn.execute(
+                """
+                ALTER TABLE game_config_loot_entries ADD COLUMN weapon_key TEXT
+                REFERENCES game_config_weapons(key) ON DELETE CASCADE
+                """
+            )
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" not in str(e).lower():
+                raise
+    cols = {row[1]: row for row in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
+    if "weapon_key" not in cols:
+        print("[admin_migration] loot_entries: weapon_key column missing, skipping XOR upgrade")
+        return
+    print("[admin_migration] upgrading game_config_loot_entries to item/consumable/weapon XOR")
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        conn.executescript(
+            """
+            DROP INDEX IF EXISTS idx_loot_entries_table;
+            DROP INDEX IF EXISTS ux_loot_entries_item;
+            DROP INDEX IF EXISTS ux_loot_entries_consumable;
+            DROP INDEX IF EXISTS ux_loot_entries_weapon;
+            CREATE TABLE game_config_loot_entries_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                loot_table_key TEXT NOT NULL REFERENCES game_config_loot_tables(key) ON DELETE CASCADE,
+                item_key TEXT REFERENCES game_config_items(key) ON DELETE CASCADE,
+                consumable_key TEXT REFERENCES game_config_consumables(key) ON DELETE CASCADE,
+                weapon_key TEXT REFERENCES game_config_weapons(key) ON DELETE CASCADE,
+                weight INTEGER NOT NULL DEFAULT 10,
+                qty_min INTEGER NOT NULL DEFAULT 1,
+                qty_max INTEGER NOT NULL DEFAULT 1,
+                CHECK (
+                    (CASE WHEN item_key IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN consumable_key IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN weapon_key IS NOT NULL THEN 1 ELSE 0 END) = 1
+                )
+            );
+            INSERT INTO game_config_loot_entries_new
+                (id, loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
+            SELECT id, loot_table_key, item_key,
+                   CASE WHEN typeof(consumable_key) = 'null' THEN NULL ELSE consumable_key END,
+                   CASE WHEN typeof(weapon_key) = 'null' THEN NULL ELSE weapon_key END,
+                   weight, qty_min, qty_max
+            FROM game_config_loot_entries;
+            DROP TABLE game_config_loot_entries;
+            ALTER TABLE game_config_loot_entries_new RENAME TO game_config_loot_entries;
+            CREATE INDEX IF NOT EXISTS idx_loot_entries_table
+                ON game_config_loot_entries(loot_table_key);
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_item
+                ON game_config_loot_entries(loot_table_key, item_key) WHERE item_key IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_consumable
+                ON game_config_loot_entries(loot_table_key, consumable_key) WHERE consumable_key IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_weapon
+                ON game_config_loot_entries(loot_table_key, weapon_key) WHERE weapon_key IS NOT NULL;
+            """
+        )
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
 
 
 def _migrate_legacy_archetype_json(conn: sqlite3.Connection) -> None:
@@ -292,6 +491,24 @@ def _migrate_legacy_archetype_json(conn: sqlite3.Connection) -> None:
         print(f"[admin_migration] archetype data: updated {cur.rowcount} character sheet(s)")
 
 
+def _ensure_enemy_loot_table_and_drop_chance(conn: sqlite3.Connection) -> None:
+    """Add loot_table_key / drop_chance on game_config_enemies if missing (idempotent)."""
+    cur = conn.cursor()
+    for sql in (
+        "ALTER TABLE game_config_enemies ADD COLUMN loot_table_key TEXT REFERENCES game_config_loot_tables(key) ON DELETE SET NULL",
+        "ALTER TABLE game_config_enemies ADD COLUMN drop_chance REAL NOT NULL DEFAULT 1.0",
+    ):
+        try:
+            cur.execute(sql)
+            conn.commit()
+            print(f"[admin_migration] applied: {sql[:72]}...")
+        except sqlite3.OperationalError as e:
+            msg = str(e).lower()
+            if "duplicate column" in msg or "already exists" in msg:
+                continue
+            raise
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -314,12 +531,16 @@ def run_admin_migrations() -> None:
                 else:
                     print(f"[admin_migration] ERROR ({e}): {sql.strip().splitlines()[0]}")
 
+        _rebuild_loot_entries_for_consumable_support(conn)
+        _upgrade_loot_entries_three_way_xor(conn)
+
         for sql in ADMIN_SEEDS:
             conn.execute(sql)
             conn.commit()
             print(f"[admin_migration] seeded: {sql.strip().splitlines()[0]}")
 
         _migrate_legacy_archetype_json(conn)
+        _ensure_enemy_loot_table_and_drop_chance(conn)
     finally:
         conn.close()
 

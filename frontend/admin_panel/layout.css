@@ -590,6 +590,119 @@ body {
   font-size: 12px;
 }
 
+.admin-badge.weapon-type-melee {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.admin-badge.weapon-type-ranged {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.admin-badge.weapon-type-spell {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.45);
+}
+
+.admin-badge.tier-weak {
+  background: rgba(148, 163, 184, 0.22);
+  border-color: rgba(148, 163, 184, 0.5);
+}
+
+.admin-badge.tier-standard {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.admin-badge.tier-elite {
+  background: rgba(249, 115, 22, 0.2);
+  border-color: rgba(249, 115, 22, 0.45);
+}
+
+.admin-badge.tier-boss {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.admin-badge.dmg-physical {
+  background: rgba(148, 163, 184, 0.15);
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.admin-badge.dmg-magic {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(99, 102, 241, 0.45);
+}
+
+.admin-badge.dmg-fire {
+  background: rgba(251, 113, 133, 0.22);
+  border-color: rgba(251, 113, 133, 0.5);
+}
+
+.admin-badge.dmg-poison {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.admin-badge.dmg-misc {
+  background: rgba(120, 113, 108, 0.2);
+  border-color: rgba(120, 113, 108, 0.4);
+}
+
+.admin-badge.effect-heal_hp {
+  background: rgba(34, 197, 94, 0.2);
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.admin-badge.effect-restore_mana {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.admin-badge.effect-remove_condition {
+  background: rgba(249, 115, 22, 0.2);
+  border-color: rgba(249, 115, 22, 0.45);
+}
+
+.admin-badge.effect-add_condition {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.45);
+}
+
+.admin-badge.effect-stat_buff {
+  background: rgba(234, 179, 8, 0.22);
+  border-color: rgba(234, 179, 8, 0.5);
+}
+
+.admin-badge.effect-misc {
+  background: rgba(120, 113, 108, 0.18);
+  border-color: rgba(120, 113, 108, 0.4);
+}
+
+.admin-badge.loot-src-item {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.45);
+  text-transform: lowercase;
+}
+
+.admin-badge.loot-src-consumable {
+  background: rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.45);
+  text-transform: lowercase;
+}
+
+.admin-badge.loot-src-weapon {
+  background: rgba(234, 88, 12, 0.2);
+  border-color: rgba(234, 88, 12, 0.45);
+  text-transform: lowercase;
+}
+
+select.admin-table-cell-select {
+  min-width: 120px;
+  max-width: 100%;
+}
+
 .toggle-btn {
   min-width: 44px;
   min-height: 32px;
@@ -1420,6 +1533,29 @@ pre.copy-block {
 
 .loot-entries-table-wrap {
   overflow-x: auto;
+}
+
+.loot-entry-label {
+  font-weight: 500;
+}
+
+.loot-entry-key {
+  font-size: 12px;
+}
+
+.loot-row-selected {
+  background: rgba(234, 179, 8, 0.12);
+}
+
+.loot-row-select-cell {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(120, 120, 120, 0.35);
+  text-underline-offset: 3px;
+}
+
+.loot-row-select-cell:hover {
+  text-decoration-color: currentColor;
 }
 
 .loot-add-entry {

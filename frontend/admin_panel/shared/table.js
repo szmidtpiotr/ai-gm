@@ -1,4 +1,4 @@
-import { openModal } from "/admin_panel/shared/modal.js";
+import { openModal } from "/admin_panel/shared/modal.js?v=17";
 
 /**
  * @param {string} message
@@ -74,6 +74,38 @@ function isRowLocked(row) {
   return !!(row.locked_at && String(row.locked_at).trim());
 }
 
+/** @param {string | { value: string, label?: string }} opt */
+function _selectOptValue(opt) {
+  if (typeof opt === "string") {
+    return opt;
+  }
+  return String(opt.value ?? "");
+}
+
+/** @param {string | { value: string, label?: string }} opt */
+function _selectOptLabel(opt) {
+  if (typeof opt === "string") {
+    return opt;
+  }
+  return String(opt.label ?? opt.value ?? "");
+}
+
+/**
+ * @param {object} row
+ * @param {{ key: string, editOptions?: Array<string | { value: string, label?: string }> }} col
+ */
+function _selectDropdownLabel(row, col) {
+  const v = row[col.key];
+  const opts = col.editOptions || [];
+  const s = v == null ? "" : String(v);
+  for (let i = 0; i < opts.length; i += 1) {
+    if (_selectOptValue(opts[i]) === s) {
+      return _selectOptLabel(opts[i]);
+    }
+  }
+  return s || "—";
+}
+
 /**
  * @param {HTMLElement} container
  * @param {Array<{ key: string, label: string, editable?: boolean, type?: string }>} columns
@@ -147,7 +179,196 @@ export function renderTable(container, columns, rows, options = {}) {
         const td = document.createElement("td");
         td.dataset.col = col.key;
 
-        if (col.type === "boolean" && col.editable !== false && onEdit) {
+        if (col.editable && onEdit && col.type === "badge" && col.editType === "select" && Array.isArray(col.editOptions)) {
+          const display = document.createElement("div");
+          display.className = "admin-table-cell-edit-host";
+          const pill = document.createElement("span");
+          let cls = "admin-badge";
+          if (col.badgeClass) {
+            const extra = typeof col.badgeClass === "function" ? col.badgeClass(row) : col.badgeClass;
+            if (extra) {
+              cls += ` ${extra}`;
+            }
+          }
+          pill.className = cls;
+          pill.textContent = String(row[col.key] ?? "");
+          display.appendChild(pill);
+
+          const applyBadge = () => {
+            pill.textContent = String(row[col.key] ?? "");
+            let c = "admin-badge";
+            if (col.badgeClass) {
+              const ex = typeof col.badgeClass === "function" ? col.badgeClass(row) : col.badgeClass;
+              if (ex) {
+                c += ` ${ex}`;
+              }
+            }
+            pill.className = c;
+          };
+
+          pill.addEventListener("click", () => {
+            if (display.querySelector("select")) {
+              return;
+            }
+            const sel = document.createElement("select");
+            sel.className = "admin-table-cell-input admin-table-cell-select";
+            col.editOptions.forEach((opt) => {
+              const o = document.createElement("option");
+              o.value = String(opt);
+              o.textContent = String(opt);
+              sel.appendChild(o);
+            });
+            const cur = String(row[col.key] ?? "");
+            sel.value = col.editOptions.includes(cur) ? cur : col.editOptions[0];
+
+            let committed = false;
+            const restorePill = () => {
+              if (sel.parentNode) {
+                sel.replaceWith(pill);
+              }
+              applyBadge();
+            };
+
+            const runCommit = async () => {
+              if (committed) {
+                return;
+              }
+              committed = true;
+              const newVal = sel.value;
+              let force = false;
+              if (locked) {
+                const res = await showConfirm(
+                  "This row is locked. Check “Force update” to save your edit.",
+                  { showForceCheckbox: true },
+                );
+                if (!res || !res.ok) {
+                  committed = false;
+                  restorePill();
+                  return;
+                }
+                force = !!res.force;
+              }
+              try {
+                await onEdit(row, col.key, newVal, { force });
+                row[col.key] = newVal;
+                restorePill();
+              } catch (_err) {
+                committed = false;
+                restorePill();
+              }
+            };
+
+            pill.replaceWith(sel);
+            sel.focus();
+
+            sel.addEventListener("change", () => {
+              void runCommit();
+            });
+            sel.addEventListener("blur", () => {
+              setTimeout(() => {
+                if (!committed && display.contains(sel)) {
+                  void runCommit();
+                }
+              }, 0);
+            });
+            sel.addEventListener("keydown", (ev) => {
+              if (ev.key === "Escape") {
+                ev.preventDefault();
+                committed = true;
+                restorePill();
+              }
+            });
+          });
+
+          td.appendChild(display);
+        } else if (
+          col.type === "select-dropdown" &&
+          col.editable &&
+          onEdit &&
+          Array.isArray(col.editOptions)
+        ) {
+          const display = document.createElement("div");
+          display.className = "admin-table-cell-edit-host";
+          const span = document.createElement("span");
+          span.className = "admin-table-cell-text";
+          const prefix = colIdx === 0 && locked ? "🔒 " : "";
+          span.textContent = prefix + _selectDropdownLabel(row, col);
+          display.appendChild(span);
+          span.addEventListener("click", () => {
+            if (display.querySelector("select")) {
+              return;
+            }
+            const sel = document.createElement("select");
+            sel.className = "admin-table-cell-input admin-table-cell-select";
+            col.editOptions.forEach((opt) => {
+              const o = document.createElement("option");
+              o.value = _selectOptValue(opt);
+              o.textContent = _selectOptLabel(opt);
+              sel.appendChild(o);
+            });
+            const cur = row[col.key] == null ? "" : String(row[col.key]);
+            sel.value = col.editOptions.some((o) => _selectOptValue(o) === cur) ? cur : _selectOptValue(col.editOptions[0]);
+
+            let committed = false;
+            const restore = () => {
+              if (sel.parentNode) {
+                sel.replaceWith(span);
+              }
+              span.textContent = prefix + _selectDropdownLabel(row, col);
+            };
+
+            const runCommit = async () => {
+              if (committed) {
+                return;
+              }
+              committed = true;
+              const newVal = sel.value;
+              let force = false;
+              if (locked) {
+                const res = await showConfirm(
+                  "This row is locked. Check “Force update” to save your edit.",
+                  { showForceCheckbox: true },
+                );
+                if (!res || !res.ok) {
+                  committed = false;
+                  restore();
+                  return;
+                }
+                force = !!res.force;
+              }
+              try {
+                await onEdit(row, col.key, newVal, { force });
+                row[col.key] = newVal;
+                restore();
+              } catch (_err) {
+                committed = false;
+                restore();
+              }
+            };
+
+            span.replaceWith(sel);
+            sel.focus();
+
+            sel.addEventListener("change", () => {
+              void runCommit();
+            });
+            sel.addEventListener("blur", () => {
+              setTimeout(() => {
+                if (!committed && display.contains(sel)) {
+                  void runCommit();
+                }
+              }, 0);
+            });
+            sel.addEventListener("keydown", (ev) => {
+              if (ev.key === "Escape") {
+                ev.preventDefault();
+                committed = true;
+                restore();
+              }
+            });
+          });
+          td.appendChild(display);
+        } else if (col.type === "boolean" && col.editable !== false && onEdit) {
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "toggle-btn";
@@ -181,9 +402,16 @@ export function renderTable(container, columns, rows, options = {}) {
           const prefix = colIdx === 0 && locked ? "🔒 " : "";
           const textVal =
             col.type === "number" ? String(Number(row[col.key] ?? 0)) : String(row[col.key] ?? "");
-          display.innerHTML = `<span class="admin-table-cell-text">${prefix}${textVal}</span>`;
+          const shown = typeof col.formatDisplay === "function" ? String(col.formatDisplay(row)) : textVal;
+          display.innerHTML = `<span class="admin-table-cell-text">${prefix}${shown}</span>`;
 
           const span = display.querySelector(".admin-table-cell-text");
+          if (col.tooltipField) {
+            const tip = row[col.tooltipField];
+            if (tip != null && String(tip).trim()) {
+              span.title = String(tip);
+            }
+          }
           span.addEventListener("click", () => {
             if (display.querySelector("input,textarea")) {
               return;
@@ -198,6 +426,12 @@ export function renderTable(container, columns, rows, options = {}) {
             if (col.type === "number") {
               editor.type = "number";
               editor.value = String(Number.isFinite(startVal) ? startVal : 0);
+              if (col.min != null) {
+                editor.min = String(col.min);
+              }
+              if (col.max != null) {
+                editor.max = String(col.max);
+              }
             } else if (col.type === "textarea") {
               editor.rows = 4;
               editor.value = String(startVal);
@@ -209,7 +443,11 @@ export function renderTable(container, columns, rows, options = {}) {
             let committed = false;
 
             const cancel = () => {
-              span.textContent = prefix + String(row[col.key] ?? "");
+              const revert =
+                typeof col.formatDisplay === "function"
+                  ? String(col.formatDisplay(row))
+                  : String(row[col.key] ?? "");
+              span.textContent = prefix + revert;
               editor.remove();
               display.classList.remove("is-editing");
             };
@@ -243,8 +481,10 @@ export function renderTable(container, columns, rows, options = {}) {
               }
               try {
                 await onEdit(row, col.key, newVal, { force });
-                span.textContent = prefix + String(newVal);
                 row[col.key] = newVal;
+                span.textContent =
+                  prefix +
+                  (typeof col.formatDisplay === "function" ? String(col.formatDisplay(row)) : String(newVal));
               } catch (_err) {
                 committed = false;
                 cancel();
@@ -282,10 +522,18 @@ export function renderTable(container, columns, rows, options = {}) {
           });
 
           td.appendChild(display);
-        } else {
-          td.classList.add("admin-table-cell-readonly");
-          const prefix = colIdx === 0 && locked ? "🔒 " : "";
-          if (col.type === "badge") {
+          } else {
+            td.classList.add("admin-table-cell-readonly");
+            const prefix = colIdx === 0 && locked ? "🔒 " : "";
+            if (col.tooltipField) {
+              const tip = row[col.tooltipField];
+              if (tip != null && String(tip).trim()) {
+                td.title = String(tip);
+              }
+            }
+            if (typeof col.formatDisplay === "function") {
+              td.textContent = prefix + col.formatDisplay(row);
+            } else if (col.type === "badge") {
             const pill = document.createElement("span");
             let cls = "admin-badge";
             if (col.badgeClass) {

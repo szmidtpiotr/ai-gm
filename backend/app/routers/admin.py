@@ -31,12 +31,14 @@ from app.services.admin_auth import issue_dev_admin_token, verify_admin_token
 from app.services.admin_config_transfer import export_config, import_config
 from app.services.admin_config import (
     create_condition,
+    create_consumable,
     create_enemy,
     create_item,
     create_loot_table,
     create_skill,
     create_weapon,
     delete_condition,
+    delete_consumable,
     delete_enemy,
     delete_item,
     delete_loot_entry,
@@ -44,6 +46,7 @@ from app.services.admin_config import (
     delete_weapon,
     delete_skill,
     list_conditions,
+    list_consumables,
     list_enemies,
     list_items,
     list_loot_entries,
@@ -57,6 +60,7 @@ from app.services.admin_config import (
     update_item,
     update_loot_table,
     update_weapon,
+    update_consumable,
     update_dc,
     update_skill,
     update_stat,
@@ -193,6 +197,13 @@ class WeaponCreateReq(BaseModel):
     damage_die: str
     linked_stat: str
     allowed_classes: list[str]
+    description: str = ""
+    weapon_type: str = "melee"
+    two_handed: bool = False
+    finesse: bool = False
+    range_m: int | None = None
+    weight_kg: float = 0.0
+    note: str | None = None
     is_active: bool = True
 
 
@@ -202,6 +213,13 @@ class WeaponPatchReq(BaseModel):
     damage_die: str | None = None
     linked_stat: str | None = None
     allowed_classes: list[str] | None = None
+    description: str | None = None
+    weapon_type: str | None = None
+    two_handed: bool | None = None
+    finesse: bool | None = None
+    range_m: int | None = None
+    weight_kg: float | None = None
+    note: str | None = None
     is_active: bool | None = None
     force: bool = False
 
@@ -219,6 +237,15 @@ class EnemyCreateReq(BaseModel):
     attack_bonus: int
     damage_die: str
     description: str | None = None
+    tier: str = "standard"
+    attacks_per_turn: int = 1
+    damage_bonus: int = 0
+    damage_type: str = "physical"
+    xp_award: int = 0
+    conditions_immune: list[str] = []
+    loot_table_key: str | None = None
+    drop_chance: float = 1.0
+    note: str | None = None
     is_active: bool = True
 
 
@@ -230,6 +257,15 @@ class EnemyPatchReq(BaseModel):
     attack_bonus: int | None = None
     damage_die: str | None = None
     description: str | None = None
+    tier: str | None = None
+    attacks_per_turn: int | None = None
+    damage_bonus: int | None = None
+    damage_type: str | None = None
+    xp_award: int | None = None
+    conditions_immune: list[str] | None = None
+    loot_table_key: str | None = None
+    drop_chance: float | None = None
+    note: str | None = None
     is_active: bool | None = None
     force: bool = False
 
@@ -244,6 +280,8 @@ class ConditionCreateReq(BaseModel):
     label: str
     effect_json: str
     description: str | None = None
+    stackable: bool = False
+    auto_remove: str | None = None
     is_active: bool = True
 
 
@@ -252,6 +290,8 @@ class ConditionPatchReq(BaseModel):
     label: str | None = None
     effect_json: str | None = None
     description: str | None = None
+    stackable: bool | None = None
+    auto_remove: str | None = None
     is_active: bool | None = None
     force: bool = False
 
@@ -268,6 +308,9 @@ class ItemCreateReq(BaseModel):
     description: str = ""
     value_gp: int = 0
     weight: float = 0.0
+    proficiency_classes: list[str] = []
+    weight_kg: float = 0.0
+    note: str | None = None
     effect_json: str | None = None
     is_active: bool = True
 
@@ -279,6 +322,9 @@ class ItemPatchReq(BaseModel):
     description: str | None = None
     value_gp: int | None = None
     weight: float | None = None
+    proficiency_classes: list[str] | None = None
+    weight_kg: float | None = None
+    note: str | None = None
     effect_json: str | None = None
     is_active: bool | None = None
     force: bool = False
@@ -298,6 +344,7 @@ class LootTableCreateReq(BaseModel):
 
 class LootTablePatchReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    new_key: str | None = None
     label: str | None = None
     description: str | None = None
     is_active: bool | None = None
@@ -310,10 +357,61 @@ class LootTableDeleteReq(BaseModel):
 
 class LootEntryReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    item_key: str
+    item_key: str | None = None
+    consumable_key: str | None = None
+    weapon_key: str | None = None
     weight: int = 10
     qty_min: int = 1
     qty_max: int = 1
+
+    @model_validator(mode="after")
+    def _xor_loot_source(self) -> "LootEntryReq":
+        ik = (self.item_key or "").strip() or None
+        ck = (self.consumable_key or "").strip() or None
+        wk = (self.weapon_key or "").strip() or None
+        if sum(1 for x in (ik, ck, wk) if x is not None) != 1:
+            raise ValueError("invalid_loot_entry_source")
+        self.item_key = ik
+        self.consumable_key = ck
+        self.weapon_key = wk
+        return self
+
+
+class ConsumableCreateReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str
+    label: str
+    description: str = ""
+    effect_type: str = "misc"
+    effect_dice: str | None = None
+    effect_bonus: int = 0
+    effect_target: str = "self"
+    weight_kg: float = 0.0
+    charges: int = 1
+    base_price: int = 0
+    note: str | None = None
+    is_active: bool = True
+
+
+class ConsumablePatchReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    new_key: str | None = None
+    label: str | None = None
+    description: str | None = None
+    effect_type: str | None = None
+    effect_dice: str | None = None
+    effect_bonus: int | None = None
+    effect_target: str | None = None
+    weight_kg: float | None = None
+    charges: int | None = None
+    base_price: int | None = None
+    note: str | None = None
+    is_active: bool | None = None
+    force: bool = False
+
+
+class ConsumableDeleteReq(BaseModel):
+    force: bool = False
 
 
 class PromptPutReq(BaseModel):
@@ -489,6 +587,13 @@ def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_to
             damage_die=req.damage_die,
             linked_stat=req.linked_stat.strip().upper(),
             allowed_classes=req.allowed_classes,
+            description=req.description,
+            weapon_type=req.weapon_type,
+            two_handed=req.two_handed,
+            finesse=req.finesse,
+            range_m=req.range_m,
+            weight_kg=req.weight_kg,
+            note=req.note,
             is_active=req.is_active,
         )
         return {"item": item}
@@ -503,6 +608,10 @@ def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_to
             raise HTTPException(status_code=422, detail="linked_stat must reference an existing stat key") from None
         if str(e) == "invalid_allowed_classes":
             raise HTTPException(status_code=422, detail="allowed_classes must be subset of [warrior,ranger,scholar]") from None
+        if str(e) == "invalid_weapon_type":
+            raise HTTPException(status_code=422, detail="weapon_type must be one of: melee, ranged, spell") from None
+        if str(e) == "invalid_weight_kg":
+            raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
         raise HTTPException(status_code=422, detail="Invalid weapon payload") from None
 
 
@@ -515,6 +624,13 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             damage_die=req.damage_die,
             linked_stat=req.linked_stat.strip().upper() if req.linked_stat is not None else None,
             allowed_classes=req.allowed_classes,
+            description=req.description,
+            weapon_type=req.weapon_type,
+            two_handed=req.two_handed,
+            finesse=req.finesse,
+            range_m=req.range_m,
+            weight_kg=req.weight_kg,
+            note=req.note,
             is_active=req.is_active,
             force=req.force,
         )
@@ -532,6 +648,10 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             raise HTTPException(status_code=422, detail="linked_stat must reference an existing stat key") from None
         if str(e) == "invalid_allowed_classes":
             raise HTTPException(status_code=422, detail="allowed_classes must be subset of [warrior,ranger,scholar]") from None
+        if str(e) == "invalid_weapon_type":
+            raise HTTPException(status_code=422, detail="weapon_type must be one of: melee, ranged, spell") from None
+        if str(e) == "invalid_weight_kg":
+            raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
         raise HTTPException(status_code=422, detail="Invalid weapon payload") from None
 
 
@@ -549,6 +669,13 @@ def admin_delete_weapon(key: str, req: WeaponDeleteReq, _: None = Depends(requir
             status_code=409,
             detail="Weapon is referenced in active character sheets. Cannot delete.",
         ) from None
+    except ValueError as e:
+        if str(e) == "in_use":
+            raise HTTPException(
+                status_code=409,
+                detail="Weapon is referenced by loot table entries. Cannot delete.",
+            ) from None
+        raise
 
 
 @router.get("/admin/enemies")
@@ -567,6 +694,15 @@ def admin_create_enemy(req: EnemyCreateReq, _: None = Depends(require_admin_toke
             attack_bonus=req.attack_bonus,
             damage_die=req.damage_die,
             description=req.description,
+            tier=req.tier,
+            attacks_per_turn=req.attacks_per_turn,
+            damage_bonus=req.damage_bonus,
+            damage_type=req.damage_type,
+            xp_award=req.xp_award,
+            conditions_immune=req.conditions_immune,
+            loot_table_key=req.loot_table_key,
+            drop_chance=req.drop_chance,
+            note=req.note,
             is_active=req.is_active,
         )
         return {"item": item}
@@ -583,6 +719,23 @@ def admin_create_enemy(req: EnemyCreateReq, _: None = Depends(require_admin_toke
             raise HTTPException(status_code=422, detail="ac_base must be >= 1") from None
         if str(e) == "invalid_attack_bonus":
             raise HTTPException(status_code=422, detail="attack_bonus must be >= 0") from None
+        if str(e) == "invalid_tier":
+            raise HTTPException(status_code=422, detail="tier must be one of: weak, standard, elite, boss") from None
+        if str(e) == "invalid_damage_type":
+            raise HTTPException(
+                status_code=422,
+                detail="damage_type must be one of: physical, magic, fire, poison, misc",
+            ) from None
+        if str(e) == "invalid_attacks_per_turn":
+            raise HTTPException(status_code=422, detail="attacks_per_turn must be >= 1") from None
+        if str(e) == "invalid_xp_award":
+            raise HTTPException(status_code=422, detail="xp_award must be >= 0") from None
+        if str(e) == "invalid_conditions_immune":
+            raise HTTPException(status_code=422, detail="conditions_immune must be a list of valid condition keys") from None
+        if str(e) == "invalid_loot_table_key":
+            raise HTTPException(status_code=422, detail="loot_table_key must reference an existing loot table") from None
+        if str(e) == "invalid_drop_chance":
+            raise HTTPException(status_code=422, detail="invalid_drop_chance") from None
         raise HTTPException(status_code=422, detail="Invalid enemy payload") from None
 
 
@@ -597,6 +750,15 @@ def admin_patch_enemy(key: str, req: EnemyPatchReq, _: None = Depends(require_ad
             attack_bonus=req.attack_bonus,
             damage_die=req.damage_die,
             description=req.description,
+            tier=req.tier,
+            attacks_per_turn=req.attacks_per_turn,
+            damage_bonus=req.damage_bonus,
+            damage_type=req.damage_type,
+            xp_award=req.xp_award,
+            conditions_immune=req.conditions_immune,
+            loot_table_key=req.loot_table_key,
+            note=req.note,
+            drop_chance=req.drop_chance,
             is_active=req.is_active,
             force=req.force,
         )
@@ -616,6 +778,23 @@ def admin_patch_enemy(key: str, req: EnemyPatchReq, _: None = Depends(require_ad
             raise HTTPException(status_code=422, detail="ac_base must be >= 1") from None
         if str(e) == "invalid_attack_bonus":
             raise HTTPException(status_code=422, detail="attack_bonus must be >= 0") from None
+        if str(e) == "invalid_tier":
+            raise HTTPException(status_code=422, detail="tier must be one of: weak, standard, elite, boss") from None
+        if str(e) == "invalid_damage_type":
+            raise HTTPException(
+                status_code=422,
+                detail="damage_type must be one of: physical, magic, fire, poison, misc",
+            ) from None
+        if str(e) == "invalid_attacks_per_turn":
+            raise HTTPException(status_code=422, detail="attacks_per_turn must be >= 1") from None
+        if str(e) == "invalid_xp_award":
+            raise HTTPException(status_code=422, detail="xp_award must be >= 0") from None
+        if str(e) == "invalid_conditions_immune":
+            raise HTTPException(status_code=422, detail="conditions_immune must be a list of valid condition keys") from None
+        if str(e) == "invalid_loot_table_key":
+            raise HTTPException(status_code=422, detail="loot_table_key must reference an existing loot table") from None
+        if str(e) == "invalid_drop_chance":
+            raise HTTPException(status_code=422, detail="invalid_drop_chance") from None
         raise HTTPException(status_code=422, detail="Invalid enemy payload") from None
 
 
@@ -643,6 +822,8 @@ def admin_create_condition(req: ConditionCreateReq, _: None = Depends(require_ad
             label=req.label.strip(),
             effect_json=req.effect_json,
             description=req.description,
+            stackable=req.stackable,
+            auto_remove=req.auto_remove,
             is_active=req.is_active,
         )
         return {"item": item}
@@ -664,6 +845,8 @@ def admin_patch_condition(key: str, req: ConditionPatchReq, _: None = Depends(re
             label=req.label,
             effect_json=req.effect_json,
             description=req.description,
+            stackable=req.stackable,
+            auto_remove=req.auto_remove,
             is_active=req.is_active,
             force=req.force,
         )
@@ -706,6 +889,9 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
             description=req.description or "",
             value_gp=req.value_gp,
             weight=req.weight,
+            proficiency_classes=req.proficiency_classes,
+            weight_kg=req.weight_kg,
+            note=req.note,
             effect_json=req.effect_json,
             is_active=req.is_active,
         )
@@ -724,6 +910,10 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
         if str(e) in ("invalid_value_gp", "invalid_weight"):
             raise HTTPException(status_code=422, detail="value_gp and weight must be >= 0") from None
+        if str(e) == "invalid_weight_kg":
+            raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
+        if str(e) == "invalid_proficiency_classes":
+            raise HTTPException(status_code=422, detail="proficiency_classes must be subset of [warrior,ranger,scholar]") from None
         raise HTTPException(status_code=422, detail="Invalid item payload") from None
 
 
@@ -737,6 +927,9 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             description=req.description,
             value_gp=req.value_gp,
             weight=req.weight,
+            proficiency_classes=req.proficiency_classes,
+            weight_kg=req.weight_kg,
+            note=req.note,
             effect_json=req.effect_json,
             is_active=req.is_active,
             force=req.force,
@@ -758,6 +951,10 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
         if str(e) in ("invalid_value_gp", "invalid_weight"):
             raise HTTPException(status_code=422, detail="value_gp and weight must be >= 0") from None
+        if str(e) == "invalid_weight_kg":
+            raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
+        if str(e) == "invalid_proficiency_classes":
+            raise HTTPException(status_code=422, detail="proficiency_classes must be subset of [warrior,ranger,scholar]") from None
         raise HTTPException(status_code=422, detail="Invalid item payload") from None
 
 
@@ -775,6 +972,111 @@ def admin_delete_item(key: str, req: ItemDeleteReq, _: None = Depends(require_ad
             raise HTTPException(
                 status_code=409,
                 detail="Item is referenced by loot table entries. Cannot delete.",
+            ) from None
+        raise HTTPException(status_code=422, detail="Invalid delete request") from e
+
+
+@router.get("/admin/consumables")
+def admin_consumables(_: None = Depends(require_admin_token)):
+    return {"items": list_consumables()}
+
+
+@router.post("/admin/consumables")
+def admin_create_consumable(req: ConsumableCreateReq, _: None = Depends(require_admin_token)):
+    try:
+        item = create_consumable(
+            key=req.key,
+            label=req.label.strip(),
+            description=req.description or "",
+            effect_type=req.effect_type,
+            effect_dice=req.effect_dice,
+            effect_bonus=req.effect_bonus,
+            effect_target=req.effect_target,
+            weight_kg=req.weight_kg,
+            charges=req.charges,
+            base_price=req.base_price,
+            note=req.note,
+            is_active=req.is_active,
+        )
+        return {"item": item}
+    except ValueError as e:
+        if str(e) == "consumable_exists":
+            raise HTTPException(status_code=409, detail="Consumable key already exists") from None
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
+        if str(e) == "invalid_effect_type":
+            raise HTTPException(status_code=422, detail="effect_type is invalid") from None
+        if str(e) == "invalid_effect_target":
+            raise HTTPException(status_code=422, detail="effect_target must be one of: self, ally, any") from None
+        if str(e) == "invalid_damage_die":
+            raise HTTPException(status_code=422, detail="effect_dice must match ^\\d*d\\d+$ (e.g. d6, 2d8)") from None
+        if str(e) == "invalid_charges":
+            raise HTTPException(status_code=422, detail="charges must be >= 1") from None
+        if str(e) == "invalid_base_price":
+            raise HTTPException(status_code=422, detail="base_price must be >= 0") from None
+        if str(e) == "invalid_weight_kg":
+            raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
+        raise HTTPException(status_code=422, detail="Invalid consumable payload") from None
+
+
+@router.patch("/admin/consumables/{key}")
+def admin_patch_consumable(key: str, req: ConsumablePatchReq, _: None = Depends(require_admin_token)):
+    try:
+        item = update_consumable(
+            key,
+            new_key=req.new_key,
+            label=req.label,
+            description=req.description,
+            effect_type=req.effect_type,
+            effect_dice=req.effect_dice,
+            effect_bonus=req.effect_bonus,
+            effect_target=req.effect_target,
+            weight_kg=req.weight_kg,
+            charges=req.charges,
+            base_price=req.base_price,
+            note=req.note,
+            is_active=req.is_active,
+            force=req.force,
+        )
+        return {"item": item}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Consumable not found") from None
+    except PermissionError:
+        raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+    except ValueError as e:
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
+        if str(e) == "consumable_exists":
+            raise HTTPException(status_code=409, detail="Consumable key already exists") from None
+        if str(e) == "invalid_effect_type":
+            raise HTTPException(status_code=422, detail="effect_type is invalid") from None
+        if str(e) == "invalid_effect_target":
+            raise HTTPException(status_code=422, detail="effect_target must be one of: self, ally, any") from None
+        if str(e) == "invalid_damage_die":
+            raise HTTPException(status_code=422, detail="effect_dice must match ^\\d*d\\d+$ (e.g. d6, 2d8)") from None
+        if str(e) == "invalid_charges":
+            raise HTTPException(status_code=422, detail="charges must be >= 1") from None
+        if str(e) == "invalid_base_price":
+            raise HTTPException(status_code=422, detail="base_price must be >= 0") from None
+        if str(e) == "invalid_weight_kg":
+            raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
+        raise HTTPException(status_code=422, detail="Invalid consumable payload") from None
+
+
+@router.delete("/admin/consumables/{key}")
+def admin_delete_consumable(key: str, req: ConsumableDeleteReq, _: None = Depends(require_admin_token)):
+    try:
+        delete_consumable(key, force=req.force)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Consumable not found") from None
+    except PermissionError:
+        raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+    except ValueError as e:
+        if str(e) == "in_use":
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete — used in a loot table.",
             ) from None
         raise HTTPException(status_code=422, detail="Invalid delete request") from e
 
@@ -807,6 +1109,7 @@ def admin_patch_loot_table(key: str, req: LootTablePatchReq, _: None = Depends(r
     try:
         item = update_loot_table(
             key,
+            new_key=req.new_key,
             label=req.label,
             description=req.description,
             is_active=req.is_active,
@@ -820,6 +1123,8 @@ def admin_patch_loot_table(key: str, req: LootTablePatchReq, _: None = Depends(r
     except ValueError as e:
         if str(e) == "invalid_key":
             raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
+        if str(e) == "loot_table_exists":
+            raise HTTPException(status_code=409, detail="Loot table key already exists") from None
         raise HTTPException(status_code=422, detail="Invalid loot table payload") from None
 
 
@@ -851,7 +1156,9 @@ def admin_upsert_loot_entry(key: str, req: LootEntryReq, _: None = Depends(requi
     try:
         row = upsert_loot_entry(
             key,
-            item_key=req.item_key.strip(),
+            item_key=req.item_key,
+            consumable_key=req.consumable_key,
+            weapon_key=req.weapon_key,
             weight=req.weight,
             qty_min=req.qty_min,
             qty_max=req.qty_max,
@@ -862,6 +1169,15 @@ def admin_upsert_loot_entry(key: str, req: LootEntryReq, _: None = Depends(requi
             raise HTTPException(status_code=404, detail="Loot table not found") from None
         if str(e) == "item_not_found":
             raise HTTPException(status_code=422, detail="item_key must reference an existing item") from None
+        if str(e) == "consumable_not_found":
+            raise HTTPException(status_code=422, detail="consumable_key must reference an existing consumable") from None
+        if str(e) == "invalid_loot_entry_source":
+            raise HTTPException(
+                status_code=422,
+                detail="Exactly one of item_key, weapon_key, or consumable_key must be set for a loot entry.",
+            ) from None
+        if str(e) == "weapon_not_found":
+            raise HTTPException(status_code=422, detail="weapon_key must reference an existing weapon") from None
         if str(e) == "invalid_weight":
             raise HTTPException(status_code=422, detail="weight must be >= 1") from None
         if str(e) == "invalid_qty_range":
@@ -869,6 +1185,42 @@ def admin_upsert_loot_entry(key: str, req: LootEntryReq, _: None = Depends(requi
         if str(e) == "invalid_key":
             raise HTTPException(status_code=422, detail="Invalid key format") from None
         raise HTTPException(status_code=422, detail="Invalid loot entry payload") from None
+
+
+@router.delete("/admin/loot-tables/{key}/entries/weapon/{weapon_key}")
+def admin_delete_loot_entry_weapon(key: str, weapon_key: str, _: None = Depends(require_admin_token)):
+    try:
+        delete_loot_entry(key, weapon_key=weapon_key)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Loot entry not found") from None
+    except ValueError as e:
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="Invalid key format") from None
+        if str(e) == "invalid_loot_entry_source":
+            raise HTTPException(
+                status_code=422,
+                detail="Exactly one of item_key, weapon_key, or consumable_key must be set for a loot entry.",
+            ) from None
+        raise
+
+
+@router.delete("/admin/loot-tables/{key}/entries/consumable/{consumable_key}")
+def admin_delete_loot_entry_consumable(key: str, consumable_key: str, _: None = Depends(require_admin_token)):
+    try:
+        delete_loot_entry(key, consumable_key=consumable_key)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Loot entry not found") from None
+    except ValueError as e:
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="Invalid key format") from None
+        if str(e) == "invalid_loot_entry_source":
+            raise HTTPException(
+                status_code=422,
+                detail="Exactly one of item_key, weapon_key, or consumable_key must be set for a loot entry.",
+            ) from None
+        raise
 
 
 @router.delete("/admin/loot-tables/{key}/entries/{item_key}")

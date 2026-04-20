@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=12" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=18" />
   </head>
   <body>
     <div class="admin-shell">
@@ -109,9 +109,10 @@
     </div>
 
     <script type="module">
-      import { adminFetch } from "/admin_panel/shared/api.js";
-      import { autoConnect, connect, getBaseUrl, isConnected, logout } from "/admin_panel/shared/auth.js";
-      import { showToast } from "/admin_panel/shared/toast.js";
+      /* Bump ?v= when changing admin JS/CSS so browsers do not serve stale ES modules. */
+      import { adminFetch } from "/admin_panel/shared/api.js?v=17";
+      import { autoConnect, connect, getBaseUrl, isConnected, logout } from "/admin_panel/shared/auth.js?v=17";
+      import { showToast } from "/admin_panel/shared/toast.js?v=17";
 
       const overlay = document.getElementById("login-overlay");
       const logoutBtn = document.getElementById("logout-btn");
@@ -260,7 +261,7 @@
         }
         gameDesignReady = true;
         try {
-          const { init } = await import("/admin_panel/sections/game_design.js");
+          const { init } = await import("/admin_panel/sections/game_design.js?v=18");
           await init(el);
         } catch (err) {
           gameDesignReady = false;
@@ -278,7 +279,7 @@
         }
         accountsReady = true;
         try {
-          const { init } = await import("/admin_panel/sections/accounts.js");
+          const { init } = await import("/admin_panel/sections/accounts.js?v=17");
           await init(el);
         } catch (err) {
           accountsReady = false;
@@ -296,7 +297,7 @@
         }
         technicalReady = true;
         try {
-          const { init } = await import("/admin_panel/sections/technical.js");
+          const { init } = await import("/admin_panel/sections/technical.js?v=17");
           await init(el);
         } catch (err) {
           technicalReady = false;
@@ -314,7 +315,7 @@
         }
         configReady = true;
         try {
-          const { init } = await import("/admin_panel/sections/config.js");
+          const { init } = await import("/admin_panel/sections/config.js?v=17");
           await init(el);
         } catch (err) {
           configReady = false;

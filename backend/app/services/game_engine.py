@@ -1,3 +1,4 @@
+import random
 import sqlite3
 
 from app.core.turn_engine import buildmessages, loadrecentturns
@@ -5,6 +6,59 @@ from app.services.config_service import build_runtime_config_block
 from app.services.dice import parse_character_sheet
 from app.services.llm_service import generate_chat
 from app.services.solo_death_service import DEATH_SAVE_FAILURE_THRESHOLD
+
+
+def resolve_enemy_loot(enemy_key: str) -> list[dict]:
+    """
+    Roll this enemy's drop_chance, then weight-pick one row from its loot table.
+    Returns [{source_type, source_key, qty}, ...] with no duplicated catalog data.
+    """
+    from app.services.admin_config import DB_PATH, list_loot_entries
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT loot_table_key, drop_chance FROM game_config_enemies WHERE key = ?",
+            (enemy_key,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        return []
+    lt = row["loot_table_key"]
+    if not lt:
+        return []
+    dc = float(row["drop_chance"] if row["drop_chance"] is not None else 1.0)
+    if random.random() > dc:
+        return []
+
+    entries = list_loot_entries(str(lt))
+    if not entries:
+        return []
+    total_w = sum(max(1, int(e.get("weight") or 0)) for e in entries)
+    if total_w < 1:
+        return []
+    r = random.random() * total_w
+    acc = 0.0
+    chosen = entries[-1]
+    for e in entries:
+        w = max(1, int(e.get("weight") or 0))
+        acc += w
+        if r < acc:
+            chosen = e
+            break
+    st = str(chosen.get("source_type") or "item")
+    if st == "item":
+        sk = chosen.get("item_key")
+    elif st == "consumable":
+        sk = chosen.get("consumable_key")
+    else:
+        sk = chosen.get("weapon_key")
+    qmin = max(1, int(chosen.get("qty_min") or 1))
+    qmax = max(qmin, int(chosen.get("qty_max") or qmin))
+    qty = random.randint(qmin, qmax)
+    return [{"source_type": st, "source_key": sk, "qty": qty}]
 
 
 def _death_mechanica_system_append(
