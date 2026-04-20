@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bulk Import Templates — AI-GM Admin</title>
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=11" />
+  </head>
+  <body class="templates-page">
+    <header class="templates-page-header">
+      <h1>Bulk Import Templates</h1>
+      <a class="templates-back-link" href="/admin/">← Admin Panel</a>
+    </header>
+
+    <main class="templates-doc">
+      <p class="templates-intro">
+        Reference for JSON arrays used with admin bulk import. Each block is a single array you can paste into import
+        flows. No login is required on this page.
+      </p>
+
+      <section class="template-section" aria-labelledby="sec-skills">
+        <h2 id="sec-skills">Skills</h2>
+        <p class="muted">
+          Skills are abilities characters develop during play, each linked to a core stat. They appear on character sheets
+          and in roll resolution.
+        </p>
+        <div class="field-ref-wrap admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>key</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>lowercase_snake_case, unique, 1–40 chars</td>
+              </tr>
+              <tr>
+                <td><code>label</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Display name shown to players</td>
+              </tr>
+              <tr>
+                <td><code>linked_stat</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Must be one of: STR, DEX, CON, INT, WIS, CHA, LCK</td>
+              </tr>
+              <tr>
+                <td><code>rank_ceiling</code></td>
+                <td>number</td>
+                <td>✅</td>
+                <td>Max rank achievable (1–10), default 5</td>
+              </tr>
+              <tr>
+                <td><code>sort_order</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Display order in UI, default 0</td>
+              </tr>
+              <tr>
+                <td><code>description</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Shown in tooltips and roll hints</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="template-example">
+          <div class="template-example-header">
+            <span class="template-example-label">Example JSON</span>
+            <button type="button" class="copy-json-btn" aria-label="Copy example JSON">📋 Copy</button>
+          </div>
+          <pre class="copy-block" data-table="skills">[
+  {
+    "key": "athletics",
+    "label": "Athletics",
+    "linked_stat": "STR",
+    "rank_ceiling": 5,
+    "sort_order": 10,
+    "description": "Physical effort: climbing, jumping, lifting, sprinting."
+  },
+  {
+    "key": "arcana",
+    "label": "Arcana",
+    "linked_stat": "INT",
+    "rank_ceiling": 5,
+    "sort_order": 20,
+    "description": "Knowledge of spells, magical theory, and arcane phenomena."
+  }
+]</pre>
+        </div>
+      </section>
+
+      <section class="template-section" aria-labelledby="sec-weapons">
+        <h2 id="sec-weapons">Weapons</h2>
+        <p class="muted">
+          Weapons available to characters during combat. Each weapon is linked to a stat for attack rolls and restricted
+          to specific archetypes.
+        </p>
+        <div class="field-ref-wrap admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>key</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>lowercase_snake_case, unique</td>
+              </tr>
+              <tr>
+                <td><code>label</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Display name</td>
+              </tr>
+              <tr>
+                <td><code>damage_die</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Dice notation: d6, d8, 2d6 etc.</td>
+              </tr>
+              <tr>
+                <td><code>linked_stat</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Stat used for attack rolls (STR/DEX/INT etc.)</td>
+              </tr>
+              <tr>
+                <td><code>allowed_classes</code></td>
+                <td>array[string]</td>
+                <td>✅</td>
+                <td>Subset of: ["warrior", "scholar"]</td>
+              </tr>
+              <tr>
+                <td><code>is_active</code></td>
+                <td>boolean</td>
+                <td>❌</td>
+                <td>Default true</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="template-example">
+          <div class="template-example-header">
+            <span class="template-example-label">Example JSON</span>
+            <button type="button" class="copy-json-btn" aria-label="Copy example JSON">📋 Copy</button>
+          </div>
+          <pre class="copy-block" data-table="weapons">[
+  {
+    "key": "shortsword",
+    "label": "Short Sword",
+    "damage_die": "d6",
+    "linked_stat": "STR",
+    "allowed_classes": ["warrior", "scholar"],
+    "is_active": true
+  },
+  {
+    "key": "longbow",
+    "label": "Longbow",
+    "damage_die": "d8",
+    "linked_stat": "DEX",
+    "allowed_classes": ["warrior"],
+    "is_active": true
+  },
+  {
+    "key": "tome_of_striking",
+    "label": "Tome of Striking",
+    "damage_die": "d6",
+    "linked_stat": "INT",
+    "allowed_classes": ["scholar"],
+    "is_active": true
+  }
+]</pre>
+        </div>
+      </section>
+
+      <section class="template-section" aria-labelledby="sec-enemies">
+        <h2 id="sec-enemies">Enemies</h2>
+        <p class="muted">
+          Enemy templates used by the GM during combat encounters. Each defines the base stats for that enemy type.
+        </p>
+        <div class="field-ref-wrap admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>key</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>lowercase_snake_case, unique</td>
+              </tr>
+              <tr>
+                <td><code>label</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Display name</td>
+              </tr>
+              <tr>
+                <td><code>hp_base</code></td>
+                <td>number</td>
+                <td>✅</td>
+                <td>Base hit points</td>
+              </tr>
+              <tr>
+                <td><code>ac_base</code></td>
+                <td>number</td>
+                <td>✅</td>
+                <td>Base armour class</td>
+              </tr>
+              <tr>
+                <td><code>attack_bonus</code></td>
+                <td>number</td>
+                <td>✅</td>
+                <td>Bonus added to attack rolls</td>
+              </tr>
+              <tr>
+                <td><code>damage_die</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Damage dice (d6, 2d8 etc.)</td>
+              </tr>
+              <tr>
+                <td><code>description</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Flavour text for the GM</td>
+              </tr>
+              <tr>
+                <td><code>is_active</code></td>
+                <td>boolean</td>
+                <td>❌</td>
+                <td>Default true</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="template-example">
+          <div class="template-example-header">
+            <span class="template-example-label">Example JSON</span>
+            <button type="button" class="copy-json-btn" aria-label="Copy example JSON">📋 Copy</button>
+          </div>
+          <pre class="copy-block" data-table="enemies">[
+  {
+    "key": "goblin",
+    "label": "Goblin",
+    "hp_base": 8,
+    "ac_base": 11,
+    "attack_bonus": 2,
+    "damage_die": "d6",
+    "description": "Fast and opportunistic. Prefers ambushes.",
+    "is_active": true
+  },
+  {
+    "key": "skeleton_warrior",
+    "label": "Skeleton Warrior",
+    "hp_base": 14,
+    "ac_base": 13,
+    "attack_bonus": 3,
+    "damage_die": "d8",
+    "description": "Animated bones, fights without fear or pain.",
+    "is_active": true
+  }
+]</pre>
+        </div>
+      </section>
+
+      <section class="template-section" aria-labelledby="sec-conditions">
+        <h2 id="sec-conditions">Conditions</h2>
+        <p class="muted">
+          Status effects that can be applied to characters or enemies. Each condition modifies stats for a defined
+          duration.
+        </p>
+        <div class="field-ref-wrap admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>key</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>lowercase_snake_case, unique</td>
+              </tr>
+              <tr>
+                <td><code>label</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Display name</td>
+              </tr>
+              <tr>
+                <td><code>effect_json</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>JSON string with stat_mods and duration</td>
+              </tr>
+              <tr>
+                <td><code>description</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Plain-language explanation shown to players</td>
+              </tr>
+              <tr>
+                <td><code>is_active</code></td>
+                <td>boolean</td>
+                <td>❌</td>
+                <td>Default true</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted" style="margin-top: 0">
+          <strong>effect_json</strong> structure (must be valid JSON encoded as a string):
+          <code>{ "stat_mods": { "STR": -2 }, "duration": "3 turns" }</code>
+        </p>
+        <div class="template-example">
+          <div class="template-example-header">
+            <span class="template-example-label">Example JSON</span>
+            <button type="button" class="copy-json-btn" aria-label="Copy example JSON">📋 Copy</button>
+          </div>
+          <pre class="copy-block" data-table="conditions">[
+  {
+    "key": "poisoned",
+    "label": "Poisoned",
+    "effect_json": "{\"stat_mods\":{\"STR\":-2},\"duration\":\"3 turns\"}",
+    "description": "Toxin weakens muscles. STR -2 for 3 turns.",
+    "is_active": true
+  },
+  {
+    "key": "blinded",
+    "label": "Blinded",
+    "effect_json": "{\"stat_mods\":{\"DEX\":-4},\"duration\":\"2 turns\"}",
+    "description": "Cannot see. DEX -4 for 2 turns.",
+    "is_active": true
+  }
+]</pre>
+        </div>
+      </section>
+
+      <section class="template-section template-section-coming" aria-labelledby="sec-items">
+        <h2 id="sec-items">Items</h2>
+        <p class="muted">Item catalogue not yet implemented. Coming in the next update.</p>
+      </section>
+    </main>
+
+    <script>
+      document.querySelectorAll(".copy-json-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const wrap = btn.closest(".template-example");
+          const pre = wrap && wrap.querySelector("pre.copy-block");
+          if (!pre) return;
+          const text = pre.textContent;
+          const orig = btn.textContent;
+          try {
+            await navigator.clipboard.writeText(text);
+            btn.textContent = "Copied!";
+            btn.disabled = true;
+            setTimeout(() => {
+              btn.textContent = orig;
+              btn.disabled = false;
+            }, 1800);
+          } catch {
+            btn.textContent = "Failed";
+            setTimeout(() => {
+              btn.textContent = orig;
+              btn.disabled = false;
+            }, 2000);
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
