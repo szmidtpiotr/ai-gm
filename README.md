@@ -93,3 +93,42 @@ The Notion page `Debug Platform` is the operational source of truth; keep docs a
 - Main branch is the source of truth for shipped features.
 - Use feature branches for isolated work, then merge when smoke tests pass.
 - Do not commit secrets (`.env`, `.secrets/`, credentials files).
+
+## Database Backup & Restore
+
+The SQLite database is stored at `./data/ai_gm.db` (bind-mounted into the backend
+container at `/data/ai_gm.db`).
+
+**Backup:**
+```bash
+./scripts/backup.sh
+# Saves timestamped copy to ./backups/
+```
+
+**Restore:**
+```bash
+./scripts/restore.sh ai_gm_20260420_143000.db
+# Auto-backs up current DB before replacing
+# Restart backend after: docker compose restart backend
+```
+
+**Manual one-liner:**
+```bash
+cp ./data/ai_gm.db ./backups/ai_gm_$(date +%Y%m%d_%H%M%S).db
+```
+
+### Migrating from a named Docker volume
+
+If you have existing data in the named Docker volume (`ai_gm_data` or similar),
+extract it before switching:
+
+```bash
+docker compose down
+docker run --rm \
+  -v <project>_ai_gm_data:/source \
+  -v "$(pwd)/data":/dest \
+  alpine cp /source/ai_gm.db /dest/ai_gm.db
+docker compose up -d
+```
+
+Then verify: `ls -lh ./data/ai_gm.db`

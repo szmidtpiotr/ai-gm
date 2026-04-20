@@ -5,7 +5,7 @@
 # Usage (from repo root, after git clone):
 #   chmod +x install.sh && ./install.sh
 #   ./install.sh --no-ollama              # use cloud OpenAI-compatible API (no local Ollama)
-#   ./install.sh --keep-db                 # do not wipe Docker volume (upgrade / preserve data)
+#   ./install.sh --keep-db                 # do not wipe ./data/ai_gm.db (upgrade / preserve data)
 #   ./install.sh --skip-docker-install     # fail if Docker is missing (CI / strict env)
 #
 # One-liner clone + install:
@@ -14,8 +14,8 @@
 # This script:
 #   - Optionally installs Docker Engine (Linux: get.docker.com; requires sudo)
 #   - Builds and starts backend + frontend via docker compose (production file only — no dev override)
-#   - Creates SQLite DB in volume ai_gm_data, applies SQL seeds, restarts backend so migrations run
-#   - Prints URLs, demo login, LLM hints, and volume info at the end
+#   - Creates SQLite DB at ./data/ai_gm.db (bind-mount), applies SQL seeds, restarts backend so migrations run
+#   - Prints URLs, demo login, LLM hints, and data path at the end
 # =============================================================================
 
 set -euo pipefail
@@ -23,7 +23,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Stable project name → predictable volume name: ${COMPOSE_PROJECT_NAME}_ai_gm_data
+# Stable project name → predictable Compose container/network naming
 export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-ai-gm}"
 
 COMPOSE_FILE="docker-compose.yml"
@@ -162,15 +162,19 @@ fi
 if ! _docker compose version >/dev/null 2>&1; then bad "docker compose is not usable (daemon or permissions)."; fi
 ok "Docker and Docker Compose are available"
 
-# --- Stop stack; optional remove volumes (clean SQLite) ---
+# --- Stop stack; optional clean SQLite on host (bind-mount ./data) ---
 if [[ "$FRESH_DB" == true ]]; then
-  log "Stopping stack and removing named volumes (clean database)…"
+  log "Stopping stack and removing anonymous volumes…"
   compose down -v 2>/dev/null || true
-  ok "Volumes removed (or stack was not running)"
+  log "Removing host database file (if any): ${SCRIPT_DIR}/data/ai_gm.db"
+  rm -f "${SCRIPT_DIR}/data/ai_gm.db" 2>/dev/null || true
+  ok "Clean database path (or stack was not running)"
 else
-  log "Stopping stack (keeping volumes)…"
+  log "Stopping stack (keeping ./data/ai_gm.db)…"
   compose down 2>/dev/null || true
 fi
+
+mkdir -p "${SCRIPT_DIR}/data" "${SCRIPT_DIR}/backups"
 
 # --- Build & start backend (production compose only — avoids docker-compose.override dev bind mounts) ---
 if [[ "$SKIP_BUILD" != true ]]; then
@@ -242,10 +246,10 @@ fi
   fi
   echo ""
   echo "Database:"
-  echo "  Engine: SQLite inside Docker volume (persisted)"
+  echo "  Engine: SQLite on host (bind-mounted into backend)"
+  echo "  Host path:         ${SCRIPT_DIR}/data/ai_gm.db"
   echo "  Path in container: /data/ai_gm.db"
-  echo "  Docker volume:    ${COMPOSE_PROJECT_NAME}_ai_gm_data"
-  echo "    inspect: docker volume inspect ${COMPOSE_PROJECT_NAME}_ai_gm_data"
+  echo "  Backups:           ${SCRIPT_DIR}/backups/ (see ./scripts/backup.sh)"
   echo ""
   echo "Demo login (from seed):"
   echo "  Username: demo"

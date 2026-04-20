@@ -1,6 +1,11 @@
 # Docker
 *.log
-data/
+
+# DB bind-mount data directory (ignore DB files; keep data/.gitkeep and backups/.gitkeep tracked)
+data/*
+!data/.gitkeep
+backups/*
+!backups/.gitkeep
 ollama/
 __pycache__/
 *.pyc
