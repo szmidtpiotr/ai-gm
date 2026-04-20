@@ -30,9 +30,9 @@ class TestFinalizeHelpers:
         assert bases["STR"] == 12
         assert bases["CON"] == 10
 
-    def test_core_bases_mage_strips_bonuses(self):
+    def test_core_bases_scholar_strips_bonuses(self):
         stored = {"STR": 10, "DEX": 10, "CON": 10, "INT": 14, "WIS": 11, "CHA": 10, "LCK": 10}
-        bases = _core_bases_from_stored_stats(stored, "mage")
+        bases = _core_bases_from_stored_stats(stored, "scholar")
         assert bases["INT"] == 12
         assert bases["WIS"] == 10
 

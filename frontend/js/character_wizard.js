@@ -187,7 +187,7 @@
 
   function classBonusNote(archetype) {
     const a = String(archetype || 'warrior').toLowerCase();
-    if (a === 'mage') {
+    if (a === 'scholar') {
       return '+2 INT, +1 WIS applied automatically after confirmation';
     }
     return '+2 STR, +1 CON applied automatically after confirmation';

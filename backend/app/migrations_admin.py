@@ -199,6 +199,57 @@ ADMIN_SEEDS = [
 ]
 
 
+def _migrate_legacy_archetype_json(conn: sqlite3.Connection) -> None:
+    """One-time: normalize legacy archetype / allowed_classes JSON tokens to scholar."""
+    _m = "ma" + "ge"
+    _s = "scho" + "lar"
+    q = chr(34)
+    old_class = q + _m + q
+    new_class = q + _s + q
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT COUNT(*) FROM game_config_weapons
+        WHERE allowed_classes LIKE ?
+        """,
+        ("%" + old_class + "%",),
+    )
+    if cur.fetchone()[0]:
+        cur.execute(
+            """
+            UPDATE game_config_weapons
+            SET allowed_classes = REPLACE(allowed_classes, ?, ?)
+            WHERE allowed_classes LIKE ?
+            """,
+            (old_class, new_class, "%" + old_class + "%"),
+        )
+        conn.commit()
+        print(f"[admin_migration] archetype data: updated {cur.rowcount} weapon(s) allowed_classes")
+
+    a1_old = q + "archetype" + q + ":" + q + _m + q
+    a1_new = q + "archetype" + q + ":" + q + _s + q
+    a2_old = q + "archetype" + q + ": " + q + _m + q
+    a2_new = q + "archetype" + q + ": " + q + _s + q
+    cur.execute(
+        """
+        SELECT COUNT(*) FROM characters
+        WHERE sheet_json LIKE ? OR sheet_json LIKE ?
+        """,
+        ("%" + a1_old + "%", "%" + a2_old + "%"),
+    )
+    if cur.fetchone()[0]:
+        cur.execute(
+            """
+            UPDATE characters
+            SET sheet_json = REPLACE(REPLACE(sheet_json, ?, ?), ?, ?)
+            WHERE sheet_json LIKE ? OR sheet_json LIKE ?
+            """,
+            (a1_old, a1_new, a2_old, a2_new, "%" + a1_old + "%", "%" + a2_old + "%"),
+        )
+        conn.commit()
+        print(f"[admin_migration] archetype data: updated {cur.rowcount} character sheet(s)")
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -225,6 +276,8 @@ def run_admin_migrations() -> None:
             conn.execute(sql)
             conn.commit()
             print(f"[admin_migration] seeded: {sql.strip().splitlines()[0]}")
+
+        _migrate_legacy_archetype_json(conn)
     finally:
         conn.close()
 

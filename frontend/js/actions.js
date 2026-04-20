@@ -497,7 +497,7 @@ window.createCharacterFromForm = async function () {
     characterCreateBackgroundEl?.focus();
     return;
   }
-  if (!archetype || (archetype !== 'warrior' && archetype !== 'mage')) {
+  if (!archetype || (archetype !== 'warrior' && archetype !== 'scholar')) {
     alert('Wybierz archetyp postaci');
     return;
   }
@@ -512,9 +512,9 @@ window.createCharacterFromForm = async function () {
     stealth: 1,
     sleight_of_hand: 0,
     endurance: 1,
-    arcana: archetype === 'mage' ? 2 : 0,
+    arcana: archetype === 'scholar' ? 2 : 0,
     investigation: 0,
-    lore: archetype === 'mage' ? 1 : 0,
+    lore: archetype === 'scholar' ? 1 : 0,
     awareness: 1,
     survival: 1,
     medicine: 0,

@@ -8,7 +8,7 @@ from typing import Final
 # --- Skill budget (creation only) ---
 SKILL_BUDGET: Final = {
     "warrior": {"slots": 8, "active_skills": 7},
-    "mage": {"slots": 10, "active_skills": 8},
+    "scholar": {"slots": 10, "active_skills": 8},
 }
 
 ARCHETYPE_SKILL_WEIGHTS: Final = {
@@ -19,7 +19,7 @@ ARCHETYPE_SKILL_WEIGHTS: Final = {
         "intimidation",
         "survival",
     ],
-    "mage": [
+    "scholar": [
         "arcana",
         "lore",
         "investigation",

@@ -109,7 +109,7 @@ def _build_character_sheet(
     skills = dict(sheet.get("skills") or {})
 
     normalized_archetype = (archetype or sheet.get("archetype") or "").strip().lower()
-    if normalized_archetype not in ("warrior", "mage"):
+    if normalized_archetype not in ("warrior", "scholar"):
         normalized_archetype = "warrior"
     sheet["archetype"] = normalized_archetype
 
@@ -208,7 +208,7 @@ def _core_bases_from_stored_stats(stats: dict, archetype: str) -> dict[str, int]
         lk = k.lower()
         out[k] = int(stats.get(k, stats.get(lk, 10)))
     a = (archetype or "warrior").strip().lower()
-    if a not in ("mage", "warrior"):
+    if a not in ("scholar", "warrior"):
         a = "warrior"
     if a == "warrior":
         out["STR"] -= 2
@@ -655,7 +655,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         sheet = {}
 
     archetype = str(sheet.get("archetype") or "warrior").strip().lower()
-    if archetype not in ("warrior", "mage"):
+    if archetype not in ("warrior", "scholar"):
         archetype = "warrior"
     sheet["archetype"] = archetype
 
@@ -859,7 +859,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
 
     base_sheet = dict(req.sheet_json or {})
     archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
-    if archetype not in ("warrior", "mage"):
+    if archetype not in ("warrior", "scholar"):
         archetype = "warrior"
     base_sheet["archetype"] = archetype
     # Roll 4d6 drop-lowest, then clamp each base to [STAT_ROLL_MIN, STAT_ROLL_MAX].
@@ -915,7 +915,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         skill_lines = ", ".join(
             f"{k}:{v}" for k, v in skills.items() if isinstance(v, (int, float)) and v > 0
         ) if skills else ""
-        archetype_label = "Mag" if archetype == "mage" else "Wojownik"
+        archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
 
         char_summary = (
             f"Postać: {name}, Archetyp: {archetype_label}, "
