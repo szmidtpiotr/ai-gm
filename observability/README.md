@@ -39,6 +39,8 @@ docker compose ps
 Grafana: `http://<VM_IP>:3000`  
 Login: `admin` + your `GRAFANA_ADMIN_PASSWORD`.
 
+Promtail (in this compose): HTTP `http://127.0.0.1:9080` — e.g. `http://127.0.0.1:9080/ready` (host-bound; see `docker-compose.yml` ports).
+
 ### Dashboard JSON updates (repo → running Grafana)
 
 File provisioning reads `grafana/provisioning/dashboards/json/*.json` (see `dashboards.yml`). After you `git pull` or copy a newer `campaign-narrative-loki.json` onto the VM:

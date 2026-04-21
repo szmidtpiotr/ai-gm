@@ -1,0 +1,79 @@
+==========================================
+AI-GM — installation summary (EXAMPLE)
+Generated: (run ./install.sh to produce a real file: install-summary.txt)
+==========================================
+
+This file mirrors what install.sh writes after a successful run.
+Override public URLs before install: PUBLIC_GRAFANA_URL, PUBLIC_LOKI_URL, PUBLIC_MCP_URL
+
+LLM mode: Ollama on host (http://host.docker.internal:11434)
+  LLM_PROVIDER=ollama
+  LLM_BASE_URL=http://host.docker.internal:11434
+  LLM_MODEL=gemma4:e4b
+
+--- Game stack (local) ---
+  Player UI:       http://localhost:3001
+  Backend API:     http://localhost:8000/api
+  Swagger docs:    http://localhost:8000/docs
+  Health:          http://localhost:8000/api/health
+  Player UI (LAN): http://192.168.1.61:3001
+  Backend (LAN):   http://192.168.1.61:8000/api
+  Swagger (LAN):   http://192.168.1.61:8000/docs
+
+--- Observability stack (Docker project: ai-gm-obs) ---
+  Grafana UI:      http://localhost:3000   (login: admin / password from GRAFANA_ADMIN_PASSWORD)
+  Loki ready:      http://localhost:3100/ready
+  Loki API prefix: http://localhost:3100/loki/
+  Promtail ready:  http://127.0.0.1:9080/ready
+  MCP (Streamable): http://127.0.0.1:8001/mcp
+  Grafana (LAN):   http://192.168.1.61:3000
+  Loki ready (LAN): http://192.168.1.61:3100/ready
+  MCP (LAN):       http://192.168.1.61:8001/mcp
+
+--- Story DB snapshot (Grafana SQL + MCP campaign_story) ---
+  Host directory:  /home/you/ai-gm/observability-data/story-db
+  Sync script:     /home/you/ai-gm/scripts/db-autosync.sh
+  Example (same host): SYNC_TRANSPORT=local REMOTE_DB_DIR=/home/you/ai-gm/observability-data/story-db /home/you/ai-gm/scripts/db-autosync.sh
+  Nginx TLS sample: /home/you/ai-gm/observability/reverse-proxy.nginx.example.conf
+
+--- Public HTTPS bookmarks (set PUBLIC_* before install to override defaults) ---
+  Grafana:  https://aigm-grafana.studio-colorbox.com/
+  Loki:     https://aigm-loki.studio-colorbox.com/loki/
+  MCP:      https://aigm-mcp.studio-colorbox.com/mcp
+
+--- Perplexity → Settings → Connectors → Custom connector (Remote) ---
+Use one connector for the MCP server (Loki + SQLite story tools). Grafana/Loki UIs are opened in a browser, not as MCP.
+
+  Field                 | Suggested value
+  ----------------------+--------------------------------------------------
+  Name                  | AI-GM Observability MCP
+  Description           | Read-only tools: loki_query + campaign_story (SQLite snapshot on obs. host).
+  MCP Server URL        | https://aigm-mcp.studio-colorbox.com/mcp
+  Transport             | Streamable HTTP
+  Authentication        | None  (use only with HTTPS + trusted network or VPN)
+                        |   - API Key: if your reverse proxy validates a static key (set same in Perplexity).
+                        |   - OAuth: if your proxy uses OAuth2 (Client ID / Secret from your IdP + Perplexity).
+
+  Compose / status:    cd /home/you/ai-gm/observability && docker compose -p ai-gm-obs ps
+
+--- Database (game) ---
+  Engine: SQLite on host (bind-mounted into backend)
+  Host path:         /home/you/ai-gm/data/ai_gm.db
+  Path in container: /data/ai_gm.db
+  Backups:           /home/you/ai-gm/backups/ (see ./scripts/backup.sh)
+
+Demo login (from seed):
+  Username: demo
+  Password: demo
+
+Next step (Ollama on host):
+  Install Ollama: https://ollama.com/download
+  Then on the host run (example):
+    ollama pull gemma4:e4b
+  Backend reaches Ollama at host.docker.internal:11434 (see docker-compose.yml).
+
+Useful commands:
+  docker compose -f docker-compose.yml ps
+  docker compose -f docker-compose.yml logs -f backend
+  docker compose -f docker-compose.yml down
+==========================================

@@ -17,6 +17,9 @@ services:
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - promtail-data:/tmp
+    ports:
+      # HTTP server (ready + metrics); bind localhost only — open on LAN if you need remote checks.
+      - "127.0.0.1:9080:9080"
     depends_on:
       - loki
     restart: unless-stopped

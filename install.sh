@@ -10,14 +10,25 @@
 #   GRAFANA_ADMIN_PASSWORD='…' ./install.sh --with-observability
 #       # same as default install, plus Grafana+Loki+Promtail+MCP (see observability/)
 #
-# One-liner clone + install:
+# Full stack (game + observability) on a new Linux host:
+#   export GRAFANA_ADMIN_PASSWORD='choose-a-strong-password'
+#   git clone https://github.com/szmidtpiotr/ai-gm.git && cd ai-gm && chmod +x install.sh && ./install.sh --with-observability
+#
+# Optional URLs embedded in install-summary.txt (Perplexity / bookmarks after TLS reverse proxy):
+#   PUBLIC_GRAFANA_URL  default https://aigm-grafana.studio-colorbox.com
+#   PUBLIC_LOKI_URL     default https://aigm-loki.studio-colorbox.com
+#   PUBLIC_MCP_URL      default https://aigm-mcp.studio-colorbox.com
+#   Override any before install, e.g.: PUBLIC_MCP_URL=https://mcp.example.com ./install.sh --with-observability
+#
+# One-liner (game only, default Ollama):
 #   git clone https://github.com/szmidtpiotr/ai-gm.git && cd ai-gm && chmod +x install.sh && ./install.sh
 #
 # This script:
 #   - Optionally installs Docker Engine (Linux: get.docker.com; requires sudo)
 #   - Builds and starts backend + frontend via docker compose (production file only — no dev override)
 #   - Creates SQLite DB at ./data/ai_gm.db (bind-mount), applies SQL seeds, restarts backend so migrations run
-#   - Prints URLs, demo login, LLM hints, and data path at the end
+#   - With --with-observability: starts Grafana+Loki+Promtail+MCP, first db-autosync for Grafana SQL/MCP story DB
+#   - Writes install-summary.txt (game + observability URLs, Perplexity MCP template, PUBLIC_* bookmarks)
 # =============================================================================
 
 set -euo pipefail
@@ -38,7 +49,7 @@ SKIP_BUILD=false
 WITH_OBSERVABILITY=false
 
 usage() {
-  sed -n '1,35p' "$0" | tail -n +2
+  sed -n '1,55p' "$0" | tail -n +2
   exit 0
 }
 
@@ -245,6 +256,10 @@ if [[ "$WITH_OBSERVABILITY" == true ]]; then
   ok "Observability stack is up (project: ${OBS_PROJECT_NAME})"
   warn "On this host, do not also run observability/game-host-promtail-compose.yml — the bundled Promtail already ships Docker logs to Loki."
   warn "Point reverse proxy (see observability/reverse-proxy.nginx.example.conf) at this machine for ports 3000 / 3100 / 8001."
+  if [[ -x "${SCRIPT_DIR}/scripts/db-autosync.sh" ]]; then
+    log "Seeding Grafana/MCP SQLite snapshot (first sync)…"
+    SYNC_TRANSPORT=local REMOTE_DB_DIR="${AI_GM_STORY_DB_DIR}" "${SCRIPT_DIR}/scripts/db-autosync.sh" || warn "db-autosync failed — run manually: SYNC_TRANSPORT=local REMOTE_DB_DIR=${AI_GM_STORY_DB_DIR} ${SCRIPT_DIR}/scripts/db-autosync.sh"
+  fi
 fi
 
 log "Waiting for API health…"
@@ -264,7 +279,13 @@ if command -v hostname >/dev/null 2>&1; then
   HOST_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
 fi
 
-{
+# Public HTTPS examples (override before install: PUBLIC_GRAFANA_URL / PUBLIC_LOKI_URL / PUBLIC_MCP_URL)
+PG_URL="${PUBLIC_GRAFANA_URL:-https://aigm-grafana.studio-colorbox.com}"
+PL_URL="${PUBLIC_LOKI_URL:-https://aigm-loki.studio-colorbox.com}"
+PM_URL="${PUBLIC_MCP_URL:-https://aigm-mcp.studio-colorbox.com}"
+STORY_DIR="${AI_GM_STORY_DB_DIR:-${SCRIPT_DIR}/observability-data/story-db}"
+
+emit_install_summary() {
   echo "=========================================="
   echo "AI-GM — installation summary"
   echo "Generated: $(date -Iseconds 2>/dev/null || date)"
@@ -275,28 +296,64 @@ fi
   echo "  LLM_BASE_URL=$LLM_BASE_URL"
   echo "  LLM_MODEL=$LLM_MODEL"
   echo ""
-  echo "URLs (this machine):"
-  echo "  Player UI:     http://localhost:3001"
-  echo "  Backend API:   http://localhost:8000/api"
-  echo "  Swagger docs:  http://localhost:8000/docs"
-  echo "  Health:        http://localhost:8000/api/health"
+  echo "--- Game stack (local) ---"
+  echo "  Player UI:       http://localhost:3001"
+  echo "  Backend API:     http://localhost:8000/api"
+  echo "  Swagger docs:    http://localhost:8000/docs"
+  echo "  Health:          http://localhost:8000/api/health"
   if [[ -n "$HOST_IP" && "$HOST_IP" != "127.0.0.1" ]]; then
-    echo "  Player (LAN):  http://${HOST_IP}:3001"
-  fi
-  if [[ "$WITH_OBSERVABILITY" == true ]]; then
-    echo ""
-    echo "Observability (same machine):"
-    echo "  Grafana:       http://localhost:3000  (admin + GRAFANA_ADMIN_PASSWORD)"
-    echo "  Loki ready:    http://localhost:3100/ready"
-    echo "  MCP (local):   http://127.0.0.1:8001/mcp"
-    if [[ -n "$HOST_IP" && "$HOST_IP" != "127.0.0.1" ]]; then
-      echo "  Grafana (LAN): http://${HOST_IP}:3000"
-    fi
-    echo "  Story DB dir:  ${AI_GM_STORY_DB_DIR:-${SCRIPT_DIR}/observability-data/story-db}  (sync: scripts/db-autosync.sh, set REMOTE_DB_DIR if non-default)"
-    echo "  Nginx example: ${SCRIPT_DIR}/observability/reverse-proxy.nginx.example.conf"
+    echo "  Player UI (LAN): http://${HOST_IP}:3001"
+    echo "  Backend (LAN):   http://${HOST_IP}:8000/api"
+    echo "  Swagger (LAN):   http://${HOST_IP}:8000/docs"
   fi
   echo ""
-  echo "Database:"
+  if [[ "$WITH_OBSERVABILITY" == true ]]; then
+    echo "--- Observability stack (Docker project: ${OBS_PROJECT_NAME}) ---"
+    echo "  Grafana UI:      http://localhost:3000   (login: admin / password from GRAFANA_ADMIN_PASSWORD)"
+    echo "  Loki ready:      http://localhost:3100/ready"
+    echo "  Loki API prefix: http://localhost:3100/loki/   (Prometheus-compatible queries via Grafana Explore)"
+    echo "  Promtail ready:  http://127.0.0.1:9080/ready   (log shipper; host-bound port in observability/docker-compose.yml)"
+    echo "  MCP (Streamable): http://127.0.0.1:8001/mcp   (Perplexity / MCP clients)"
+    if [[ -n "$HOST_IP" && "$HOST_IP" != "127.0.0.1" ]]; then
+      echo "  Grafana (LAN):   http://${HOST_IP}:3000"
+      echo "  Loki ready (LAN): http://${HOST_IP}:3100/ready"
+      echo "  MCP (LAN):       http://${HOST_IP}:8001/mcp"
+    fi
+    echo ""
+    echo "--- Story DB snapshot (Grafana SQL + MCP campaign_story) ---"
+    echo "  Host directory:  ${STORY_DIR}"
+    echo "  Sync script:     ${SCRIPT_DIR}/scripts/db-autosync.sh"
+    echo "  Example (same host): SYNC_TRANSPORT=local REMOTE_DB_DIR=${STORY_DIR} ${SCRIPT_DIR}/scripts/db-autosync.sh"
+    echo "  Nginx TLS sample: ${SCRIPT_DIR}/observability/reverse-proxy.nginx.example.conf"
+    echo ""
+    echo "--- Public HTTPS bookmarks (set PUBLIC_* before install to override defaults) ---"
+    echo "  Grafana:  ${PG_URL}/"
+    echo "  Loki:     ${PL_URL}/loki/"
+    echo "  MCP:      ${PM_URL}/mcp"
+    echo ""
+    echo "--- Perplexity → Settings → Connectors → Custom connector (Remote) ---"
+    echo "Use one connector for the MCP server (Loki + SQLite story tools). Grafana/Loki UIs are opened in a browser, not as MCP."
+    echo ""
+    echo "  Field                 | Suggested value"
+    echo "  ----------------------+--------------------------------------------------"
+    echo "  Name                  | AI-GM Observability MCP"
+    echo "  Description           | Read-only tools: loki_query + campaign_story (SQLite snapshot on obs. host)."
+    echo "  MCP Server URL        | ${PM_URL}/mcp"
+    echo "  Transport             | Streamable HTTP"
+    echo "  Authentication        | None  (use only with HTTPS + trusted network or VPN)"
+    echo "                        |   - API Key: if your reverse proxy validates a static key (set same in Perplexity)."
+    echo "                        |   - OAuth: if your proxy uses OAuth2 (Client ID / Secret from your IdP + Perplexity)."
+    echo ""
+    echo "  Compose / status:    cd ${SCRIPT_DIR}/observability && docker compose -p ${OBS_PROJECT_NAME} ps"
+  else
+    echo "--- Observability (not installed) ---"
+    echo "  To add Grafana + Loki + Promtail + MCP on this machine:"
+    echo "    export GRAFANA_ADMIN_PASSWORD='…'"
+    echo "    ./install.sh --keep-db --with-observability"
+    echo "  (or from fresh: ./install.sh --with-observability with GRAFANA_ADMIN_PASSWORD set)"
+  fi
+  echo ""
+  echo "--- Database (game) ---"
   echo "  Engine: SQLite on host (bind-mounted into backend)"
   echo "  Host path:         ${SCRIPT_DIR}/data/ai_gm.db"
   echo "  Path in container: /data/ai_gm.db"
@@ -326,7 +383,9 @@ fi
   echo "  docker compose -f docker-compose.yml logs -f backend"
   echo "  docker compose -f docker-compose.yml down"
   echo "=========================================="
-} | tee "$SUMMARY_FILE"
+}
+
+emit_install_summary | tee "$SUMMARY_FILE"
 
 ok "Summary written to $SUMMARY_FILE"
 echo ""
