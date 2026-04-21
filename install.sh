@@ -7,6 +7,8 @@
 #   ./install.sh --no-ollama              # use cloud OpenAI-compatible API (no local Ollama)
 #   ./install.sh --keep-db                 # do not wipe ./data/ai_gm.db (upgrade / preserve data)
 #   ./install.sh --skip-docker-install     # fail if Docker is missing (CI / strict env)
+#   GRAFANA_ADMIN_PASSWORD='…' ./install.sh --with-observability
+#       # same as default install, plus Grafana+Loki+Promtail+MCP (see observability/)
 #
 # One-liner clone + install:
 #   git clone https://github.com/szmidtpiotr/ai-gm.git && cd ai-gm && chmod +x install.sh && ./install.sh
@@ -33,9 +35,10 @@ NO_OLLAMA=false
 FRESH_DB=true
 INSTALL_DOCKER=true
 SKIP_BUILD=false
+WITH_OBSERVABILITY=false
 
 usage() {
-  sed -n '1,25p' "$0" | tail -n +2
+  sed -n '1,35p' "$0" | tail -n +2
   exit 0
 }
 
@@ -45,6 +48,7 @@ while [[ $# -gt 0 ]]; do
     --keep-db) FRESH_DB=false; shift ;;
     --skip-docker-install) INSTALL_DOCKER=false; shift ;;
     --skip-build) SKIP_BUILD=true; shift ;;
+    --with-observability) WITH_OBSERVABILITY=true; shift ;;
     -h|--help) usage ;;
     *) echo "Unknown option: $1 (use --help)"; exit 1 ;;
   esac
@@ -59,6 +63,16 @@ log() { echo "[install] $*"; }
 ok() { echo "✅ $*"; }
 warn() { echo "⚠️  $*"; }
 bad() { echo "❌ $*"; exit 1; }
+
+# Prompt template must pass tests before Docker build (same check as pre-push / server deploy).
+# Requires: python3 -m pip install pytest   (skipped if pytest not importable)
+if python3 -c 'import pytest' 2>/dev/null; then
+  log "Running prompt integrity tests (tests/test_prompt_integrity.py)…"
+  python3 -m pytest tests/test_prompt_integrity.py -q || bad "Prompt integrity tests failed — fix backend/prompts/system_prompt.txt"
+  ok "Prompt integrity OK"
+else
+  warn "pytest not installed — skipping prompt integrity (pip install pytest). Production deploy should run: cd ~/ai-gm && python3 -m pytest tests/test_prompt_integrity.py -q"
+fi
 
 # --- LLM defaults (exported for docker compose variable substitution) ---
 export DEFAULT_CAMPAIGN_LANGUAGE="${DEFAULT_CAMPAIGN_LANGUAGE:-pl}"
@@ -92,6 +106,14 @@ _docker() {
 
 compose() {
   _docker compose -f "$COMPOSE_FILE" "$@"
+}
+
+OBS_COMPOSE_FILE="${SCRIPT_DIR}/observability/docker-compose.yml"
+OBS_PROJECT_NAME="${OBS_PROJECT_NAME:-ai-gm-obs}"
+
+compose_obs() {
+  [[ -f "$OBS_COMPOSE_FILE" ]] || bad "Missing $OBS_COMPOSE_FILE (clone full repo)."
+  _docker compose -f "$OBS_COMPOSE_FILE" -p "$OBS_PROJECT_NAME" "$@"
 }
 
 # --- Host packages needed before get.docker.com (minimal cloud images often lack curl) ---
@@ -208,6 +230,28 @@ sleep 4
 log "Starting frontend…"
 compose up -d frontend
 
+if [[ "$WITH_OBSERVABILITY" == true ]]; then
+  if [[ -z "${GRAFANA_ADMIN_PASSWORD:-}" ]]; then
+    bad "Set GRAFANA_ADMIN_PASSWORD before using --with-observability (Grafana admin password)."
+  fi
+  export GRAFANA_ADMIN_PASSWORD
+  log "Preparing host directory for SQLite snapshot (Grafana + MCP)…"
+  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
+    mkdir -p /var/lib/ai-gm-db
+    chmod 755 /var/lib/ai-gm-db
+  else
+    sudo mkdir -p /var/lib/ai-gm-db
+    sudo chmod 755 /var/lib/ai-gm-db
+  fi
+  log "Starting observability stack (Grafana, Loki, Promtail, MCP)…"
+  compose_obs pull
+  compose_obs build mcp-server
+  compose_obs up -d
+  ok "Observability stack is up (project: ${OBS_PROJECT_NAME})"
+  warn "On this host, do not also run observability/game-host-promtail-compose.yml — the bundled Promtail already ships Docker logs to Loki."
+  warn "Point reverse proxy (see observability/reverse-proxy.nginx.example.conf) at this machine for ports 3000 / 3100 / 8001."
+fi
+
 log "Waiting for API health…"
 HEALTH_OK=""
 for _ in $(seq 1 24); do
@@ -243,6 +287,18 @@ fi
   echo "  Health:        http://localhost:8000/api/health"
   if [[ -n "$HOST_IP" && "$HOST_IP" != "127.0.0.1" ]]; then
     echo "  Player (LAN):  http://${HOST_IP}:3001"
+  fi
+  if [[ "$WITH_OBSERVABILITY" == true ]]; then
+    echo ""
+    echo "Observability (same machine):"
+    echo "  Grafana:       http://localhost:3000  (admin + GRAFANA_ADMIN_PASSWORD)"
+    echo "  Loki ready:    http://localhost:3100/ready"
+    echo "  MCP (local):   http://127.0.0.1:8001/mcp"
+    if [[ -n "$HOST_IP" && "$HOST_IP" != "127.0.0.1" ]]; then
+      echo "  Grafana (LAN): http://${HOST_IP}:3000"
+    fi
+    echo "  Story DB dir:  /var/lib/ai-gm-db  (sync with scripts/db-autosync.sh → OBS_HOST)"
+    echo "  Nginx example: ${SCRIPT_DIR}/observability/reverse-proxy.nginx.example.conf"
   fi
   echo ""
   echo "Database:"

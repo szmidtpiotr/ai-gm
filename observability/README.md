@@ -47,14 +47,20 @@ File provisioning reads `grafana/provisioning/dashboards/json/*.json` (see `dash
 
 ## Game host log shipping
 
-To ship AI-GM container logs from the game host to Loki running on `192.168.1.19`:
+If **Grafana+Loki+Promtail** from `observability/docker-compose.yml` already run on the same Docker host as the game stack, **do nothing extra** — bundled Promtail ships logs to Loki.
+
+Use `game-host-promtail-compose.yml` only when the **game** runs on a **different** machine than Loki. Edit `game-host-promtail.yml` → `clients[0].url` to your Loki push URL (example: `http://192.168.1.61:3100/loki/api/v1/push`), then:
 
 ```bash
 docker compose -f observability/game-host-promtail-compose.yml up -d
 docker compose -f observability/game-host-promtail-compose.yml ps
 ```
 
-Promtail health endpoint is exposed only locally on `127.0.0.1:9081`.
+Promtail health is bound to `127.0.0.1:9081` on that host.
+
+## Reverse proxy (public HTTPS)
+
+See `reverse-proxy.nginx.example.conf` for TLS server blocks pointing at the observability VM (Grafana `:3000`, Loki `:3100`, MCP `:8001`).
 
 ## Story DB sync (Strategy B)
 
@@ -78,7 +84,7 @@ MCP server (inside the VM):
 Recommended Nginx Proxy Manager (create a new Proxy Host):
 - Domain: `aigm-mcp.studio-colorbox.com`
 - Scheme: `http`
-- Forward Host/IP: `192.168.1.19`
+- Forward Host/IP: `<observability VM LAN IP>` (e.g. `192.168.1.61`)
 - Forward Port: `8001`
 - Enable SSL
 

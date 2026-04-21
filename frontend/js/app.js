@@ -892,7 +892,7 @@ window.renderCharacterSheetPanel = function () {
   const identityHtml =
     appearance || personality || flaw
       ? `
-    <div class="sheet-identity-block">
+    <div class="sheet-identity-block sheet-fluff">
       <h4 class="sheet-section-title">Postać</h4>
       ${
         appearance

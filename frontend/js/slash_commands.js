@@ -20,6 +20,14 @@ export const SLASH_COMMANDS = [
     command: "/mem",
     description: "Show campaign memory — location, NPCs, active quests",
   },
+  {
+    command: "/walka",
+    description: "Start combat in engine: /walka bandit (enemy keys from game config)",
+  },
+  {
+    command: "/atak",
+    description: "Same as /walka — deterministic combat start without waiting for GM tag",
+  },
 ];
 
 /** @type {{ command: string, description: string }[]} */

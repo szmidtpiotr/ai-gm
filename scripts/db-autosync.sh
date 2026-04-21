@@ -24,9 +24,12 @@
 # ENV VARS (all have defaults)
 #   OBS_HOST       observability VM IP/hostname (default: 192.168.1.19)
 #   OBS_USER       SSH user                     (default: root)
-#   OBS_KEY        path to SSH private key      (default: .secrets/ai_gm_debug_key)
+#   OBS_KEY        path to SSH private key      (default: REPO_ROOT/.secrets/ai_gm_debug_key)
 #   REMOTE_DB_DIR  target dir on VM             (default: /var/lib/ai-gm-db)
+#   SYNC_SOURCE    "docker" (default) or "host" — where to read the DB before scp
 #   BACKEND_CTR    backend Docker container name (default: ai-gm-backend-1)
+#   BACKEND_DB_PATH path inside container for docker cp (default: /data/ai_gm.db)
+#   HOST_DB_PATH   host filesystem path when SYNC_SOURCE=host (e.g. /ai-gm/data/ai_gm.db)
 #   SYNC_INTERVAL  seconds between syncs (--loop)(default: 300)
 #   LOG_FILE       log file for cron mode       (default: /tmp/ai-gm-db-sync.log)
 # ============================================================
@@ -38,7 +41,10 @@ OBS_HOST="${OBS_HOST:-192.168.1.19}"
 OBS_USER="${OBS_USER:-root}"
 OBS_KEY="${OBS_KEY:-${REPO_ROOT}/.secrets/ai_gm_debug_key}"
 REMOTE_DB_DIR="${REMOTE_DB_DIR:-/var/lib/ai-gm-db}"
+SYNC_SOURCE="${SYNC_SOURCE:-docker}"
 BACKEND_CTR="${BACKEND_CTR:-ai-gm-backend-1}"
+BACKEND_DB_PATH="${BACKEND_DB_PATH:-/data/ai_gm.db}"
+HOST_DB_PATH="${HOST_DB_PATH:-}"
 SYNC_INTERVAL="${SYNC_INTERVAL:-300}"
 LOG_FILE="${LOG_FILE:-/tmp/ai-gm-db-sync.log}"
 TMP_DB="/tmp/ai_gm_autosync_$$.db"
@@ -53,18 +59,40 @@ ts() { date '+%Y-%m-%d %H:%M:%S'; }
 log() { echo "[$(ts)] $*"; }
 
 run_sync() {
-    log "START sync  backend→${OBS_HOST}"
+    log "START sync  (${SYNC_SOURCE}) → ${OBS_HOST}"
 
-    if ! docker inspect "${BACKEND_CTR}" > /dev/null 2>&1; then
-        log "ERROR container '${BACKEND_CTR}' not found — is the game stack running?"
-        return 1
-    fi
-
-    docker cp "${BACKEND_CTR}:/data/ai_gm.db" "${TMP_DB}" 2>/dev/null || {
-        log "ERROR docker cp failed"
-        rm -f "${TMP_DB}"
-        return 1
-    }
+    case "${SYNC_SOURCE}" in
+        host)
+            if [[ -z "${HOST_DB_PATH}" ]]; then
+                log "ERROR SYNC_SOURCE=host requires HOST_DB_PATH (e.g. /ai-gm/data/ai_gm.db)"
+                return 1
+            fi
+            if [[ ! -f "${HOST_DB_PATH}" ]]; then
+                log "ERROR HOST_DB_PATH not a file: ${HOST_DB_PATH}"
+                return 1
+            fi
+            cp -f "${HOST_DB_PATH}" "${TMP_DB}" || {
+                log "ERROR cp from host failed"
+                rm -f "${TMP_DB}"
+                return 1
+            }
+            ;;
+        docker)
+            if ! docker inspect "${BACKEND_CTR}" > /dev/null 2>&1; then
+                log "ERROR container '${BACKEND_CTR}' not found — is the game stack running?"
+                return 1
+            fi
+            docker cp "${BACKEND_CTR}:${BACKEND_DB_PATH}" "${TMP_DB}" 2>/dev/null || {
+                log "ERROR docker cp ${BACKEND_CTR}:${BACKEND_DB_PATH} failed"
+                rm -f "${TMP_DB}"
+                return 1
+            }
+            ;;
+        *)
+            log "ERROR unknown SYNC_SOURCE='${SYNC_SOURCE}' (use docker or host)"
+            return 1
+            ;;
+    esac
 
     ssh -i "${OBS_KEY}" -o BatchMode=yes -o ConnectTimeout=8 \
         "${OBS_USER}@${OBS_HOST}" "mkdir -p ${REMOTE_DB_DIR}" 2>/dev/null || {

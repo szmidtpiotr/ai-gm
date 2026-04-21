@@ -198,6 +198,13 @@ window.parsePendingRoll = function (text) {
     return sourceText;
   }
 
+  const dcMatches = [...sourceText.matchAll(/\bDC\s*[:=]?\s*(\d+)/gi)];
+  let dcFromNarrative = null;
+  if (dcMatches.length) {
+    dcFromNarrative = parseInt(dcMatches[dcMatches.length - 1][1], 10);
+    if (Number.isNaN(dcFromNarrative)) dcFromNarrative = null;
+  }
+
   const displaySkill = typeof window.formatRollTestDisplayName === 'function'
     ? window.formatRollTestDisplayName(canonicalSkill)
     : canonicalSkill;
@@ -205,6 +212,7 @@ window.parsePendingRoll = function (text) {
     skill: displaySkill,
     canonical_skill: canonicalSkill,
     dice: diceExpr,
+    dc: dcFromNarrative,
     description: typeof window.getTestDescription === 'function'
       ? window.getTestDescription(canonicalSkill)
       : '',
@@ -708,12 +716,22 @@ window.requestGmOpeningIfQuiet = async function (campaignId, characterId) {
 
 window.sendMessage = async function () {
   const { inputEl, systemSelectEl, engineSelectEl, sendBtnEl } = window.getEls();
-  const text = inputEl.value.trim();
-  if (!text) return;
 
   if (window.chatRequestState?.inFlight) {
     return;
   }
+
+  const suppressUserBubble = !!window.__suppressNextUserBubbleForGm;
+  if (window.__suppressNextUserBubbleForGm) {
+    window.__suppressNextUserBubbleForGm = false;
+  }
+
+  let text = (inputEl.value || "").trim();
+  if (window.__pendingNarrativeUserTextForApi != null) {
+    text = String(window.__pendingNarrativeUserTextForApi);
+    window.__pendingNarrativeUserTextForApi = null;
+  }
+  if (!text) return;
 
   const clientCreatedAt = new Date().toISOString();
 
@@ -734,6 +752,89 @@ window.sendMessage = async function () {
       role: 'error',
       createdAt: clientCreatedAt
     });
+    return;
+  }
+
+  const combatStartMatch = text.trim().match(/^\/(?:walka|atak)\s+(.+)$/i);
+  if (combatStartMatch) {
+    const rawKeys = String(combatStartMatch[1] || '')
+      .split(/[,\s]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    if (!rawKeys.length) {
+      window.addMessage({
+        speaker: 'System',
+        text:
+          'Użyj: /walka klucz_wroga  lub  /atak klucz_wroga  — np. /walka bandit. ' +
+          'Kilku wrogów: /walka bandit,wolf. Uruchamia mechanikę walki bez czekania na tag od MG.',
+        role: 'error',
+        createdAt: clientCreatedAt
+      });
+      inputEl.value = '';
+      return;
+    }
+    try {
+      const resp = await fetch(
+        `/api/campaigns/${window.state.selectedCampaignId}/combat/start`,
+        {
+          method: 'POST',
+          headers: window.getApiHeaders(),
+          body: JSON.stringify({
+            enemy_keys: rawKeys,
+            character_id: window.state.selectedCharacterId
+          })
+        }
+      );
+      const data = await resp.json().catch(() => ({}));
+      if (resp.status === 409) {
+        const d = typeof data.detail === 'string' ? data.detail : 'Walka już trwa.';
+        window.addMessage({
+          speaker: 'System',
+          text: d,
+          role: 'error',
+          createdAt: clientCreatedAt
+        });
+        inputEl.value = '';
+        return;
+      }
+      if (!resp.ok) {
+        const detail = data.detail || data.message || `HTTP ${resp.status}`;
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+      }
+      window.addMessage({
+        speaker: 'System',
+        text:
+          `Walka w silniku: START vs ${rawKeys.join(', ')}. ` +
+          (data.current_turn === 'player'
+            ? 'Twoja tura — użyj przycisku Atak lub narracji zgodnej z panelem walki.'
+            : 'Sesja aktywna — sprawdź panel „Walka”.'),
+        role: 'system',
+        createdAt: clientCreatedAt
+      });
+      inputEl.value = '';
+      await window.loadTurns(window.state.selectedCampaignId);
+    } catch (e) {
+      window.addMessage({
+        speaker: 'Błąd',
+        text: `Rozpoczęcie walki: ${e.message || e}`,
+        role: 'error',
+        createdAt: clientCreatedAt
+      });
+      inputEl.value = '';
+    }
+    return;
+  }
+
+  if (/^\/search(\s|$)/i.test(text.trim())) {
+    window.addMessage({
+      speaker: 'System',
+      text:
+        'Komenda /search (w przygotowaniu): docelowo przeszukiwanie ciał i lokacji. ' +
+        'Na razie opisz przeszukanie w wiadomości do Mistrza Gry — automatyczne przeszukiwanie zwłok po walce jest wyłączone.',
+      role: 'system',
+      createdAt: clientCreatedAt
+    });
+    inputEl.value = '';
     return;
   }
 
@@ -950,15 +1051,31 @@ window.sendMessage = async function () {
 
   let turnNumber = window.nextTurnNumber();
 
-  // Show user message
-  window.addMessage({
-    speaker: window.currentCharacterName(),
-    text,
-    role: 'user',
-    route: 'input',
-    turn: turnNumber,
-    createdAt: clientCreatedAt
-  });
+  let textToSend = text;
+  if (/^\/roll\b/i.test(textToSend)) {
+    const hasExplicitDc = /\bdc\s+\d+\s*$/i.test(textToSend);
+    const pending = window.state.pendingRoll;
+    if (
+      !hasExplicitDc &&
+      pending &&
+      pending.dc != null &&
+      Number.isFinite(Number(pending.dc))
+    ) {
+      textToSend = `${textToSend} dc ${pending.dc}`;
+    }
+  }
+
+  // Show user message (skipped when combat attack card was already inserted in UI)
+  if (!suppressUserBubble) {
+    window.addMessage({
+      speaker: window.currentCharacterName(),
+      text,
+      role: 'user',
+      route: 'input',
+      turn: turnNumber,
+      createdAt: clientCreatedAt
+    });
+  }
 
   inputEl.value = '';
 
@@ -973,7 +1090,7 @@ window.sendMessage = async function () {
   try {
     const payload = {
       character_id: window.state.selectedCharacterId,
-      text,
+      text: textToSend,
       system: systemSelectEl.value,
       engine: selectedEngine,
       game_id: window.state.selectedCampaignId
@@ -1019,6 +1136,60 @@ window.sendMessage = async function () {
     let streamBubble = null; // created lazily on first real token
     let streamDone = false;
 
+    const applyCombatStartedSseToken = (token) => {
+      if (!token || !token.startsWith('[COMBAT_STARTED]')) return false;
+      const raw = token.slice('[COMBAT_STARTED]'.length);
+      try {
+        const cs = JSON.parse(raw);
+        if (typeof window.combatPanel?.render === 'function') {
+          window.combatPanel.render(cs);
+        }
+        if (typeof window.combatInput?.syncWithCombat === 'function') {
+          window.combatInput.syncWithCombat(cs);
+        }
+        if (typeof window.combatPanel?.show === 'function') {
+          window.combatPanel.show();
+        }
+        if (typeof window.addMessage === 'function') {
+          const enemies = (cs.combatants || [])
+            .filter((c) => c.type === 'enemy')
+            .map((c) => c.name)
+            .join(', ');
+          window.addMessage({
+            speaker: 'System',
+            text: `⚔ Walka rozpoczęta! Przeciwnicy: ${enemies}. Twoja tura.`,
+            role: 'system',
+            turn: turnNumber
+          });
+        }
+      } catch (_e) {
+        /* ignore malformed payload */
+      }
+      return true;
+    };
+
+    const applyCombatSseToken = (token) => {
+      if (!token || !token.startsWith('[COMBAT]')) return false;
+      if (token.startsWith('[COMBAT_STARTED]')) return false;
+      const raw = token.slice('[COMBAT]'.length);
+      try {
+        const comb = JSON.parse(raw);
+        if (
+          comb.new_combat_turn &&
+          comb.new_combat_turn !== 'ended' &&
+          typeof window.combatInput?.syncWithCombat === 'function'
+        ) {
+          window.combatInput.syncWithCombat({
+            status: 'active',
+            current_turn: comb.new_combat_turn,
+          });
+        }
+      } catch (_e) {
+        /* ignore malformed combat payload */
+      }
+      return true;
+    };
+
     while (!streamDone) {
       const { done, value } = await reader.read();
 
@@ -1028,7 +1199,11 @@ window.sendMessage = async function () {
           const remaining = buffer.trim();
           if (remaining.startsWith('data: ')) {
             const token = remaining.slice(6);
-            if (token !== '[DONE]' && !token.startsWith('[ERROR]')) {
+            if (applyCombatStartedSseToken(token)) {
+              /* skip */
+            } else if (applyCombatSseToken(token)) {
+              /* skip */
+            } else if (token !== '[DONE]' && !token.startsWith('[ERROR]')) {
               // Unescape literal \n sequences the server may have encoded
               const realToken = token.replace(/\\n/g, '\n');
               fullText += realToken;
@@ -1057,9 +1232,18 @@ window.sendMessage = async function () {
         if (!line.startsWith('data: ')) continue;
         const token = line.slice(6);
 
+        if (applyCombatStartedSseToken(token)) {
+          continue;
+        }
+
+        if (applyCombatSseToken(token)) {
+          continue;
+        }
+
         if (token === '[DONE]') {
+          const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
           if (streamBubble) {
-            window.finalizeStreamingBubble(streamBubble, fullText);
+            window.finalizeStreamingBubble(streamBubble, cleanedGm);
           } else {
             window.removeThinkingBubble();
           }
@@ -1108,7 +1292,8 @@ window.sendMessage = async function () {
     // Stream ended without [DONE] — finalize gracefully
     if (!streamDone) {
       if (streamBubble) {
-        window.finalizeStreamingBubble(streamBubble, fullText);
+        const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
+        window.finalizeStreamingBubble(streamBubble, cleanedGm);
         await window.loadTurns(window.state.selectedCampaignId);
       } else {
         window.removeThinkingBubble();

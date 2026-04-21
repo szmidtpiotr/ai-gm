@@ -9,7 +9,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.services.dice import (
-    format_roll_result_message,
+    ROLL_CARD_PREFIX,
+    build_roll_card_payload,
+    format_roll_for_llm,
     parse_character_sheet,
     parse_roll_command,
     resolve_test_name,
@@ -25,11 +27,85 @@ router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
 logger = logging.getLogger(__name__)
 
+COMBAT_START_RE = re.compile(r"\[COMBAT_START:([^\]]+)\]", re.IGNORECASE)
+
+
+def _maybe_start_combat_from_gm_tag(
+    campaign_id: int, character_id: int, assistant_text: str
+) -> dict | None:
+    """Parse [COMBAT_START:...] from GM text and initiate combat if allowed."""
+    match = COMBAT_START_RE.search(assistant_text or "")
+    if not match:
+        logger.info("combat_gm_tag_absent campaign_id=%s", campaign_id)
+        return None
+
+    enemy_keys_raw = match.group(1)
+    enemy_keys = [k.strip() for k in enemy_keys_raw.split(",") if k.strip()]
+
+    if not enemy_keys:
+        logger.warning("combat_gm_tag_empty campaign_id=%s", campaign_id)
+        return None
+
+    from app.services import combat_service as cs
+
+    existing = cs.get_active_combat(campaign_id)
+    if existing:
+        logger.info("combat_gm_tag_skip_already_active campaign_id=%s", campaign_id)
+        return None
+
+    try:
+        combat_state = cs.initiate_combat(campaign_id, character_id, enemy_keys)
+        logger.info(
+            "combat_gm_tag_started campaign_id=%s enemy_keys=%s combat_id=%s",
+            campaign_id,
+            enemy_keys,
+            combat_state.get("id"),
+        )
+        return combat_state
+    except Exception as e:
+        logger.error("combat_gm_tag_error campaign_id=%s error=%s", campaign_id, str(e))
+        return None
+
 
 def _truncate_for_story_log(text: str, max_chars: int) -> str:
     if max_chars <= 0 or len(text) <= max_chars:
         return text
     return text[:max_chars] + "…[truncated]"
+
+
+def _maybe_advance_combat_after_player_narrative(campaign_id: int) -> dict | None:
+    """
+    After the player's narrative message is resolved and GM text is saved, advance combat
+    initiative when it was the player's turn (so the next actor can act).
+    """
+    logger.info("combat_advance_check campaign_id=%s", campaign_id)
+    from app.services import combat_service as cs
+
+    combat = cs.get_active_combat(campaign_id)
+    if not combat or combat.get("status") != "active":
+        logger.info(
+            "combat_advance_skip campaign_id=%s reason=no_active_or_not_active",
+            campaign_id,
+        )
+        return None
+    if str(combat.get("current_turn") or "") != "player":
+        logger.info(
+            "combat_advance_skip campaign_id=%s reason=not_player_turn current_turn=%s",
+            campaign_id,
+            combat.get("current_turn"),
+        )
+        return None
+    try:
+        new_turn = cs.advance_turn(campaign_id)
+    except ValueError:
+        logger.warning("advance_turn after narrative failed for campaign %s", campaign_id)
+        return None
+    logger.info(
+        "combat_advance_ok campaign_id=%s new_combat_turn=%s",
+        campaign_id,
+        new_turn,
+    )
+    return {"combat_advanced": True, "new_combat_turn": new_turn}
 
 
 def log_narrative_turn_structured(
@@ -414,15 +490,25 @@ def create_turn(
         roll_request = parse_roll_command(text)
         roll_result_message = None
         roll_result_data = None
+        user_text_stored = text
         if roll_request:
             character_sheet = parse_character_sheet(character["sheet_json"])
             roll_result = resolve_roll(
                 character_sheet=character_sheet,
                 test_name=roll_request["skill"],
                 raw_roll=roll_request.get("raw_roll"),
+                dc=roll_request.get("dc"),
             )
             roll_result_data = roll_result
-            roll_result_message = format_roll_result_message(roll_result)
+            roll_result_message = format_roll_for_llm(roll_result)
+            user_text_stored = ROLL_CARD_PREFIX + "\n" + json.dumps(
+                build_roll_card_payload(
+                    roll_result,
+                    character_name=(character["name"] or "Bohater"),
+                    replay_command=text.strip(),
+                ),
+                ensure_ascii=False,
+            )
 
         if roll_result_data and roll_result_data.get("test") == "death_save":
             sheet_dict = parse_character_sheet(character["sheet_json"])
@@ -449,7 +535,7 @@ def create_turn(
                     character_row=character,
                     death_reason=dr,
                 )
-                user_line = roll_result_message or text
+                user_line = user_text_stored if roll_request else (roll_result_message or text)
                 log = create_turn_log(
                     conn=conn,
                     campaign_id=campaign_id,
@@ -641,14 +727,23 @@ def create_turn(
         assistant_text = (result.get("message") or "").strip()
         if not assistant_text:
             raise HTTPException(status_code=500, detail="Empty narrative response")
-        validate_roll_cue_name(assistant_text)
+
+        from app.services import combat_service as _cs
+
+        combat_before = _cs.get_active_combat(campaign_id)
+        combat_was_active = bool(combat_before) and str(
+            combat_before.get("current_turn") or ""
+        ) == "player"
+
+        clean_assistant = COMBAT_START_RE.sub("", assistant_text).rstrip()
+        validate_roll_cue_name(clean_assistant.strip())
 
         log = create_turn_log(
             conn=conn,
             campaign_id=campaign_id,
             character_id=payload.character_id,
-            user_text=roll_result_message or text,
-            assistant_text=assistant_text,
+            user_text=user_text_stored if roll_request else text,
+            assistant_text=clean_assistant,
             route=route,
         )
         log_narrative_turn_structured(
@@ -656,18 +751,34 @@ def create_turn(
             campaign_id=campaign_id,
             character_id=payload.character_id,
             turn_row=log,
-            user_text=roll_result_message or text,
-            assistant_text=assistant_text,
+            user_text=user_text_stored if roll_request else text,
+            assistant_text=clean_assistant,
         )
 
-        return {
+        new_combat = _maybe_start_combat_from_gm_tag(
+            campaign_id, payload.character_id, assistant_text
+        )
+        combat_extra = None
+        if combat_was_active and not new_combat:
+            combat_extra = _maybe_advance_combat_after_player_narrative(campaign_id)
+
+        result_out = (
+            {**result, "message": clean_assistant} if isinstance(result, dict) else result
+        )
+
+        out: dict = {
             "id": log["id"],
             "campaign_id": log["campaign_id"],
             "turn_number": log["turn_number"],
             "created_at": log["created_at"],
             "route": "narrative",
-            "result": result,
+            "result": result_out,
         }
+        if new_combat is not None:
+            out["combat_state"] = new_combat
+        if combat_extra:
+            out.update(combat_extra)
+        return out
 
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
@@ -771,15 +882,25 @@ def create_turn_stream(
         roll_request = parse_roll_command(text)
         roll_result_message = None
         roll_result_data = None
+        user_text_stored = text
         if roll_request:
             character_sheet = parse_character_sheet(character["sheet_json"])
             roll_result = resolve_roll(
                 character_sheet=character_sheet,
                 test_name=roll_request["skill"],
                 raw_roll=roll_request.get("raw_roll"),
+                dc=roll_request.get("dc"),
             )
             roll_result_data = roll_result
-            roll_result_message = format_roll_result_message(roll_result)
+            roll_result_message = format_roll_for_llm(roll_result)
+            user_text_stored = ROLL_CARD_PREFIX + "\n" + json.dumps(
+                build_roll_card_payload(
+                    roll_result,
+                    character_name=(character["name"] or "Bohater"),
+                    replay_command=text.strip(),
+                ),
+                ensure_ascii=False,
+            )
 
         if roll_result_data and roll_result_data.get("test") == "death_save":
             sheet_dict = parse_character_sheet(character["sheet_json"])
@@ -806,7 +927,7 @@ def create_turn_stream(
                     character_row=character,
                     death_reason=dr,
                 )
-                user_line = roll_result_message or text
+                user_line = user_text_stored if roll_request else (roll_result_message or text)
                 log = create_turn_log(
                     conn=conn,
                     campaign_id=campaign_id,
@@ -863,46 +984,82 @@ def create_turn_stream(
 
         campaign_id_val = campaign_id
         character_id_val = payload.character_id
-        user_text_val = llm_user_text
+        user_text_val = user_text_stored if roll_request else llm_user_text
 
         def token_generator():
-            collected = []
+            """
+            Order: (1) yield all LLM content SSE chunks to the client, (2) persist turn,
+            (3) yield optional [COMBAT_STARTED] / [COMBAT], (4) yield [DONE].
+            """
+            from app.services import combat_service as cs_snap
+
+            combat_before = cs_snap.get_active_combat(campaign_id_val)
+            combat_was_active = bool(combat_before) and str(
+                combat_before.get("current_turn") or ""
+            ) == "player"
+
+            collected: list[str] = []
+            saw_done = False
             for chunk in generate_chat_stream(
                 messages=messages,
                 model=model,
                 llm_config=llm_config,
             ):
+                if chunk.startswith("data: [ERROR]"):
+                    yield chunk
+                    return
                 if chunk.startswith("data: [DONE]"):
-                    full_text = "".join(collected).replace("\\n", "\n")
-                    if full_text.strip():
-                        validate_roll_cue_name(full_text.strip())
-                        save_conn = get_db()
-                        try:
-                            stream_log = create_turn_log(
-                                conn=save_conn,
-                                campaign_id=campaign_id_val,
-                                character_id=character_id_val,
-                                user_text=user_text_val,
-                                assistant_text=full_text.strip(),
-                                route="narrative",
-                            )
-                            log_narrative_turn_structured(
-                                route="narrative",
-                                campaign_id=campaign_id_val,
-                                character_id=character_id_val,
-                                turn_row=stream_log,
-                                user_text=user_text_val,
-                                assistant_text=full_text.strip(),
-                            )
-                        finally:
-                            save_conn.close()
-                    yield chunk
-                elif chunk.startswith("data: [ERROR]"):
-                    yield chunk
-                else:
-                    token = chunk[6:].rstrip("\n")
-                    collected.append(token)
-                    yield chunk
+                    saw_done = True
+                    break
+                token = chunk[6:].rstrip("\n")
+                collected.append(token)
+                yield chunk
+
+            if not saw_done:
+                logger.warning(
+                    "stream ended without data [DONE] for campaign_id=%s; skipping save",
+                    campaign_id_val,
+                )
+                return
+
+            full_raw = "".join(collected).replace("\\n", "\n")
+            new_combat = None
+            combat_extra = None
+            if full_raw.strip():
+                clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
+                validate_roll_cue_name(clean_text.strip())
+                save_conn = get_db()
+                try:
+                    stream_log = create_turn_log(
+                        conn=save_conn,
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        user_text=user_text_val,
+                        assistant_text=clean_text,
+                        route="narrative",
+                    )
+                    log_narrative_turn_structured(
+                        route="narrative",
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        turn_row=stream_log,
+                        user_text=user_text_val,
+                        assistant_text=clean_text,
+                    )
+                    new_combat = _maybe_start_combat_from_gm_tag(
+                        campaign_id_val, character_id_val, full_raw
+                    )
+                    if combat_was_active and not new_combat:
+                        combat_extra = _maybe_advance_combat_after_player_narrative(
+                            campaign_id_val
+                        )
+                finally:
+                    save_conn.close()
+            if new_combat:
+                yield f"data: [COMBAT_STARTED]{json.dumps(new_combat)}\n\n"
+            if combat_extra:
+                yield f"data: [COMBAT]{json.dumps(combat_extra)}\n\n"
+            yield "data: [DONE]\n\n"
 
         return StreamingResponse(
             token_generator(),

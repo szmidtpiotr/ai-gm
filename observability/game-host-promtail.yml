@@ -5,8 +5,11 @@ server:
 positions:
   filename: /tmp/positions.yaml
 
+# Push target: Loki HTTP API (adjust host if Loki runs elsewhere).
+# If game + observability run on the same host, do not use this file — use only
+# observability/docker-compose.yml (its Promtail already talks to Loki).
 clients:
-  - url: http://192.168.1.19:3100/loki/api/v1/push
+  - url: http://192.168.1.61:3100/loki/api/v1/push
 
 scrape_configs:
   - job_name: game-host-docker

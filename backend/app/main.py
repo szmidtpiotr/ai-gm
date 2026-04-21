@@ -8,6 +8,7 @@ import sqlite3
 import json
 import time
 import uuid
+from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -19,7 +20,7 @@ from app.services.dice import build_gm_dice_breakdown, parse_character_sheet
 from app.services.llm_service import generate_chat
 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
 
-from app.api import auth, campaign_helpme, campaign_history, campaign_memory, campaigns, characters, commands, turns, mechanics
+from app.api import auth, campaign_helpme, campaign_history, campaign_memory, campaigns, characters, combat, commands, turns, mechanics
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.migrations_admin import run_admin_migrations
@@ -150,6 +151,24 @@ def run_raw_migrations():
     conn.close()
 
 
+def run_app_sql_migrations():
+    """Apply optional SQL files from app/db/migrations/ (e.g. active_combat)."""
+    mig_dir = Path(__file__).resolve().parent / "db" / "migrations"
+    if not mig_dir.is_dir():
+        return
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        for path in sorted(mig_dir.glob("*.sql")):
+            sql = path.read_text(encoding="utf-8")
+            conn.executescript(sql)
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        print(f"[migration] sql file ERROR ({e})")
+        conn.rollback()
+    finally:
+        conn.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -159,6 +178,7 @@ async def lifespan(app: FastAPI):
         os.makedirs(db_dir, exist_ok=True)
     init_db()
     run_raw_migrations()
+    run_app_sql_migrations()
     run_admin_migrations()
     yield
     # Shutdown (nothing needed)
@@ -207,6 +227,7 @@ app.include_router(campaign_history.router, prefix="/api")
 app.include_router(campaign_memory.router, prefix="/api")
 app.include_router(campaign_helpme.router, prefix="/api")
 app.include_router(campaigns.router, prefix="/api")
+app.include_router(combat.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")

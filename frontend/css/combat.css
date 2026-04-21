@@ -1,0 +1,374 @@
+/* Phase 8B / 8D — combat panel (embedded under character sheet) */
+
+#combat-panel-slot {
+  display: none;
+  margin-top: 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#combat-panel-host {
+  width: 100%;
+  margin-top: 0;
+  max-height: min(55vh, 420px);
+  position: static;
+  top: auto;
+  right: auto;
+  left: auto;
+  z-index: auto;
+  font-family: Arial, sans-serif;
+  font-size: 13px;
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.combat-panel-host--hidden {
+  display: none !important;
+}
+
+.combat-panel-card {
+  position: relative;
+  background: var(--panel, #1e1a14);
+  border: 1px solid var(--border, #3d3428);
+  border-radius: 8px;
+  box-shadow: var(--shadow, 0 8px 28px rgba(0, 0, 0, 0.35));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  box-sizing: border-box;
+}
+
+.sheet-fluff {
+  transition: opacity 0.2s;
+}
+
+.combat-panel-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border, #3d3428);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.combat-panel-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text, #f5efe4);
+}
+
+.combat-panel-meta {
+  font-size: 11px;
+  color: var(--muted, #a89b88);
+}
+
+.combat-panel-body {
+  padding: 10px 12px;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.combat-combatant {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.combat-combatant-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  color: var(--text, #f5efe4);
+}
+
+.combat-hp-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted, #a89b88);
+}
+
+.combat-hp-bar {
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border, #3d3428);
+  background: #2a241c;
+  overflow: hidden;
+}
+
+.combat-hp-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s ease, background 0.2s ease;
+}
+
+.combat-hp-fill--high {
+  background: linear-gradient(90deg, #15803d, #22c55e);
+}
+
+.combat-hp-fill--mid {
+  background: linear-gradient(90deg, #a16207, #eab308);
+}
+
+.combat-hp-fill--low {
+  background: linear-gradient(90deg, #991b1b, #ef4444);
+}
+
+.combat-conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.combat-condition-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #3b2f6b;
+  color: #e9e4ff;
+  border: 1px solid #5b4d9a;
+}
+
+.combat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border, #3d3428);
+}
+
+.combat-btn {
+  flex: 1;
+  min-width: 72px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.combat-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.combat-btn--attack {
+  background: #15803d;
+  color: #f0fdf4;
+  border-color: #166534;
+}
+
+.combat-btn--flee {
+  background: #c2410c;
+  color: #fff7ed;
+  border-color: #9a3412;
+}
+
+.combat-btn--item {
+  background: #3f3f46;
+  color: #d4d4d8;
+  border-color: #52525b;
+}
+
+.combat-msg {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text, #f5efe4);
+}
+
+.combat-msg--error {
+  background: rgba(127, 29, 29, 0.35);
+  color: #fecaca;
+}
+
+.combat-enemy-turn-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius, 10px);
+  z-index: 2;
+}
+
+.combat-enemy-turn-label {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fef3c7;
+  text-shadow: 0 2px 8px #000;
+}
+
+.combat-loot-modal {
+  z-index: 75;
+}
+
+.combat-loot-modal,
+.combat-end-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.combat-end-screen {
+  z-index: 72;
+}
+
+.combat-loot-inner,
+.combat-end-inner {
+  width: min(420px, 100%);
+  max-height: min(80vh, 520px);
+  overflow-y: auto;
+  background: var(--panel, #1e1a14);
+  border: 1px solid var(--border, #3d3428);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.combat-end-inner--victory {
+  border-color: #ca8a04;
+  box-shadow: 0 0 0 1px rgba(202, 138, 4, 0.35), 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.combat-end-inner--fled {
+  border-color: #ea580c;
+}
+
+.combat-end-inner--defeat {
+  border-color: #7f1d1d;
+  background: #1c1212;
+}
+
+.combat-end-title {
+  margin: 0 0 10px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.combat-end-inner--victory .combat-end-title {
+  color: #fde68a;
+}
+
+.combat-end-inner--defeat .combat-end-title {
+  color: #fca5a5;
+}
+
+.combat-loot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.combat-loot-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border, #3d3428);
+}
+
+.combat-loot-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.combat-loot-qty {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--muted, #a89b88);
+}
+
+.combat-primary-btn {
+  margin-top: 14px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--accent, #c9a227);
+  color: #1a1410;
+  border: none;
+}
+
+.combat-primary-btn.secondary {
+  background: #3f3f46;
+  color: #f4f4f5;
+}
+
+.combat-waiting-msg {
+  font-size: 12px;
+  color: var(--muted, #a89b88);
+  text-align: center;
+  padding: 8px;
+}
+
+@media (max-width: 900px) {
+  #combat-panel-host {
+    max-height: 40vh;
+  }
+
+  .combat-panel-card {
+    border-radius: 8px;
+  }
+}
+
+/* Phase 8C — combat-aware composer */
+.combat-input-actions {
+  display: none;
+  flex-direction: row;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.combat-input-btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.combat-input-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.combat-input-btn--attack {
+  background: #2d7a3a;
+  color: #fff;
+}
+
+.combat-input-btn--attack:hover:not(:disabled) {
+  background: #38a047;
+}
+
+.combat-input-btn--flee {
+  background: #b45309;
+  color: #fff;
+}
+
+.combat-input-btn--flee:hover:not(:disabled) {
+  background: #d97706;
+}

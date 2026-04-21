@@ -396,10 +396,211 @@ window.isArchiveBubble = function ({ role, route, memoryTurn, helpmeTurn } = {})
     return true;
   }
   if (role === 'user') {
-    if (!route || route === 'input') return false;
+    if (!route || route === 'input' || route === 'dice') return false;
     return true;
   }
   return false;
+};
+
+window.ROLL_CARD_PREFIX = '__AI_GM_ROLL_V1__';
+
+window.tryParseRollCardFromText = function (text) {
+  const s = String(text || '').trim();
+  const p = window.ROLL_CARD_PREFIX;
+  if (!s.startsWith(p + '\n')) return null;
+  try {
+    return JSON.parse(s.slice(p.length).trim());
+  } catch (_e) {
+    return null;
+  }
+};
+
+/** Rich combat attack / enemy attack bubble — must match backend COMBAT_ROLL_CTX_PREFIX. */
+window.COMBAT_ROLL_PREFIX = '__AI_GM_COMBAT_ROLL_V1__';
+
+window.tryParseCombatRollCardFromText = function (text) {
+  const s = String(text || '').trim();
+  const p = window.COMBAT_ROLL_PREFIX;
+  if (!s.startsWith(p + '\n')) return null;
+  try {
+    return JSON.parse(s.slice(p.length).trim());
+  } catch (_e) {
+    return null;
+  }
+};
+
+window.formatCombatRollNum = function (n) {
+  const v = Number(n);
+  if (!Number.isFinite(v)) return '—';
+  if (v === 0) return '0';
+  return v > 0 ? String(v) : '\u2212' + String(Math.abs(v));
+};
+
+window.buildCombatRollCardHtml = function (data) {
+  if (!data || typeof data !== 'object') return '';
+  const kind = String(data.kind || 'player_attack');
+  const intent = String(data.intent || '').trim();
+  const name = window.escapeHtml(String(data.character_name || data.enemy_name || '?'));
+  const label = window.escapeHtml(String(data.attack_label || 'ATAK (STR)'));
+  const d20 = Number(data.d20);
+  const mods = Array.isArray(data.modifiers) ? data.modifiers : [];
+  const modSegs = mods
+    .map((m) => {
+      const nm = window.escapeHtml(String(m.name || '?'));
+      const vl = window.formatCombatRollNum(Number(m.value));
+      return `${nm}: ${vl}`;
+    })
+    .join('&nbsp;&nbsp;|&nbsp;&nbsp;');
+  const total = window.formatCombatRollNum(Number(data.total));
+  const hit = !!data.hit;
+  const dmg = data.damage != null ? String(data.damage) : '?';
+  const ac = data.target_ac != null ? window.formatCombatRollNum(Number(data.target_ac)) : null;
+
+  let cardMod = 'roll-card--neutral';
+  if (kind === 'enemy_attack') {
+    cardMod = hit ? 'roll-card--success' : 'roll-card--fail';
+  } else {
+    cardMod = hit ? 'roll-card--success' : 'roll-card--fail';
+  }
+
+  let line5 = '';
+  if (kind === 'enemy_attack') {
+    line5 = hit
+      ? `Cel: obrona ${ac != null ? ac : '—'} — ✅ TRAFIENIE — ${dmg} obrażeń!`
+      : `Cel: obrona ${ac != null ? ac : '—'} — ❌ PUDŁO`;
+  } else {
+    line5 = hit
+      ? `Atakuję z wynikiem ${total} — ✅ SUKCES — trafiam za ${dmg} obrażeń!`
+      : `Atakuję z wynikiem ${total} — ❌ PUDŁO`;
+  }
+
+  const intentBlock = intent
+    ? `<div class="combat-roll-card__intent">${window.escapeHtml(intent)}</div><div class="roll-card__sep" role="separator"></div>`
+    : '';
+
+  return (
+    `<div class="roll-card roll-card--light combat-roll-card ${cardMod}">` +
+    `${intentBlock}` +
+    `<div class="roll-card__line roll-card__line--head">🎲 ${name} \u2014 ${label}</div>` +
+    `<div class="roll-card__line roll-card__line--detail">` +
+    `1d20:&nbsp;&nbsp;<span class="roll-card__die">${Number.isFinite(d20) ? d20 : '?'}</span>` +
+    (modSegs
+      ? `&nbsp;&nbsp;|&nbsp;&nbsp; ${modSegs} &nbsp;&nbsp;|&nbsp;&nbsp; Wynik: <strong>${total}</strong>`
+      : `&nbsp;&nbsp;|&nbsp;&nbsp; Wynik: <strong>${total}</strong>`) +
+    `</div>` +
+    `<div class="roll-card__line roll-card__line--wynik">${window.escapeHtml(line5)}</div>` +
+    `</div>`
+  );
+};
+
+window.formatRollModifier = function (mod) {
+  const n = Number(mod);
+  if (!Number.isFinite(n)) return '±0';
+  if (n === 0) return '±0';
+  return n > 0 ? `+${n}` : `${n}`;
+};
+
+window.dcLabelPl = function (dc) {
+  if (dc == null || dc === '') return '—';
+  const n = Number(dc);
+  if (!Number.isFinite(n)) return '—';
+  const DC_LABELS = { 8: 'Łatwe', 12: 'Średnie', 16: 'Trudne', 20: 'Ekstremalne', 25: 'Legendarne' };
+  const keys = Object.keys(DC_LABELS)
+    .map(Number)
+    .filter((k) => k <= n);
+  const best = keys.length ? Math.max(...keys) : null;
+  return best != null ? DC_LABELS[best] : String(n);
+};
+
+window.rollSkillDisplayNamePl = function (skill) {
+  const k = String(skill || '').trim();
+  const SKILL_NAMES = {
+    attack: 'Atak (STR)',
+    athletics: 'Atletyka (STR)',
+    stealth: 'Skradanie (DEX)',
+    sleight_of_hand: 'Zręczność rąk (DEX)',
+    endurance: 'Wytrzymałość (CON)',
+    arcana: 'Arkana (INT)',
+    investigation: 'Śledztwo (INT)',
+    lore: 'Wiedza (INT)',
+    awareness: 'Spostrzegawczość (WIS)',
+    survival: 'Przetrwanie (WIS)',
+    medicine: 'Medycyna (WIS)',
+    persuasion: 'Perswazja (CHA)',
+    intimidation: 'Zastraszanie (CHA)',
+    melee_attack: 'Atak (STR)',
+    ranged_attack: 'Atak dystansowy (DEX)',
+    spell_attack: 'Atak magiczny (INT)',
+    death_save: 'Rzut przeciw śmierci',
+    fortitude_save: 'Rzut obronny: Tężyzna (CON)',
+    reflex_save: 'Rzut obronny: Refleks (DEX)',
+    willpower_save: 'Rzut obronny: Wola (WIS)',
+    arcane_save: 'Rzut obronny: Intelekt (INT)',
+    dex_save: 'Rzut obronny: Refleks (DEX)',
+    con_save: 'Rzut obronny: Tężyzna (CON)',
+    wis_save: 'Rzut obronny: Wola (WIS)',
+    str_save: 'Rzut obronny: Siła (STR)',
+    int_save: 'Rzut obronny: Intelekt (INT)',
+    cha_save: 'Rzut obronny: Charyzma (CHA)',
+    alchemy: 'Alchemia (INT)'
+  };
+  return SKILL_NAMES[k] || k;
+};
+
+window.buildRollCardHtml = function (data) {
+  const rolled = Number(data.rolled);
+  const mod = Number(data.modifier);
+  const total = Number(data.total);
+  const dc = data.dc != null && data.dc !== '' ? Number(data.dc) : null;
+  const success = data.success;
+  const isNat20 = !!data.is_nat20;
+  const isNat1 = !!data.is_nat1;
+  const rt = String(data.roll_type || '');
+
+  let dieCls = 'roll-card__die';
+  if (rolled === 20) dieCls += ' roll-card__die--nat20';
+
+  let cardMod = 'roll-card--neutral';
+  if (rt === 'attack' && isNat20) {
+    cardMod = 'roll-card--success';
+  } else if (rt === 'attack' && isNat1) {
+    cardMod = 'roll-card--fail';
+  } else if (success === true) {
+    cardMod = 'roll-card--success';
+  } else if (success === false) {
+    cardMod = 'roll-card--fail';
+  }
+
+  const skillLabel = window.rollSkillDisplayNamePl(String(data.skill || ''));
+  const modStr = window.formatRollModifier(mod);
+  const dcLabel = dc != null ? window.dcLabelPl(dc) : '';
+
+  let wynikTail = '';
+  if (rt === 'attack' && isNat20) {
+    wynikTail = ` \u2014 ${window.escapeHtml('⚡ TRAFIENIE KRYTYCZNE')}`;
+  } else if (rt === 'attack' && isNat1) {
+    wynikTail = ` \u2014 ${window.escapeHtml('💀 KRYTYCZNA PORAŻKA')}`;
+  } else {
+    if (success === true) {
+      wynikTail += ` <span class="roll-card__sf">(sukces)</span>`;
+    } else if (success === false) {
+      wynikTail += ` <span class="roll-card__sf">(porażka)</span>`;
+    }
+    if (dc != null && (success === true || success === false)) {
+      wynikTail += ` \u00b7 DC ${dc} (${window.escapeHtml(dcLabel)})`;
+    }
+  }
+
+  return (
+    `<div class="roll-card roll-card--light ${cardMod}">
+      <div class="roll-card__line roll-card__line--head">🎲 Rzut: ${window.escapeHtml(skillLabel)}</div>
+      <div class="roll-card__line roll-card__line--detail">
+        1d20:&nbsp;&nbsp;<span class="${dieCls}">${rolled}</span>
+        &nbsp;&nbsp;|&nbsp;&nbsp; Modyfikator (ranga + biegłość): ${window.escapeHtml(modStr)}
+      </div>
+      <div class="roll-card__line roll-card__line--wynik">Wynik: <strong>${total}</strong>${wynikTail}</div>
+    </div>`
+  );
 };
 
 // Odświeża etykietę/licznik przycisku "archiwum" oraz klasę na #chat.
@@ -444,8 +645,25 @@ window.addMessage = function ({
   const { chatEl } = window.getEls();
   if (!chatEl) return;
 
+  const combatRollPayload =
+    text && typeof window.tryParseCombatRollCardFromText === 'function'
+      ? window.tryParseCombatRollCardFromText(text)
+      : null;
+  const rollPayload =
+    role === 'user' && text && typeof window.tryParseRollCardFromText === 'function'
+      ? window.tryParseRollCardFromText(text)
+      : null;
+  const effRoute = combatRollPayload || rollPayload ? 'dice' : route;
+
   const wrap = document.createElement('div');
   wrap.className = `message ${role}`;
+  if (
+    combatRollPayload &&
+    String(combatRollPayload.kind || '') === 'enemy_attack' &&
+    role === 'assistant'
+  ) {
+    wrap.classList.add('enemy-roll-bubble');
+  }
   if (memoryTurn) {
     wrap.classList.add('memory-turn');
   }
@@ -455,7 +673,7 @@ window.addMessage = function ({
   if (oocTurn || helpmeTurn) {
     wrap.classList.add('message-ooc-helpme');
   }
-  if (window.isArchiveBubble({ role, route, memoryTurn, helpmeTurn })) {
+  if (window.isArchiveBubble({ role, route: effRoute, memoryTurn, helpmeTurn })) {
     wrap.classList.add('is-archived-bubble');
     wrap.setAttribute('data-archived', '1');
   }
@@ -471,8 +689,8 @@ window.addMessage = function ({
   const right = document.createElement('div');
   const parts = [];
 
-  if (route) {
-    parts.push(`<span class="route-badge">${window.escapeHtml(route)}</span>`);
+  if (effRoute) {
+    parts.push(`<span class="route-badge">${window.escapeHtml(effRoute)}</span>`);
   }
 
   if (createdAt) {
@@ -486,7 +704,28 @@ window.addMessage = function ({
 
   const body = document.createElement('div');
   body.className = 'message-body';
-  body.innerHTML = `<pre>${window.escapeHtml(text)}</pre>`;
+  if (
+    combatRollPayload &&
+    typeof window.buildCombatRollCardHtml === 'function' &&
+    (role === 'user' || (role === 'assistant' && String(combatRollPayload.kind || '') === 'enemy_attack'))
+  ) {
+    body.innerHTML = window.buildCombatRollCardHtml(combatRollPayload);
+  } else if (rollPayload && typeof window.buildRollCardHtml === 'function') {
+    body.innerHTML = window.buildRollCardHtml(rollPayload);
+  } else if (
+    role === 'user' &&
+    text &&
+    !rollPayload &&
+    !combatRollPayload &&
+    /^\s*(\/roll\b|roll\s+\S+\s+d\d+)/i.test(String(text).trim())
+  ) {
+    body.innerHTML =
+      '<div class="roll-card roll-card--light roll-card--neutral roll-card--pending">' +
+      '<div class="roll-card__line roll-card__line--detail">🎲 Rzut w toku…</div>' +
+      '</div>';
+  } else {
+    body.innerHTML = `<pre>${window.escapeHtml(text)}</pre>`;
+  }
 
   wrap.appendChild(meta);
   if (oocTurn || helpmeTurn) {
@@ -526,9 +765,26 @@ window.replaceThinkingBubble = function ({
     window.parsePendingRoll('');
   }
 
+  const combatRollPayload =
+    text && typeof window.tryParseCombatRollCardFromText === 'function'
+      ? window.tryParseCombatRollCardFromText(text)
+      : null;
+  const rollPayload =
+    role === 'user' && text && typeof window.tryParseRollCardFromText === 'function'
+      ? window.tryParseRollCardFromText(text)
+      : null;
+  const effRoute = combatRollPayload || rollPayload ? 'dice' : route;
+
   const wrap = document.createElement('div');
   wrap.className = `message ${role}`;
-  if (window.isArchiveBubble({ role, route })) {
+  if (
+    combatRollPayload &&
+    String(combatRollPayload.kind || '') === 'enemy_attack' &&
+    role === 'assistant'
+  ) {
+    wrap.classList.add('enemy-roll-bubble');
+  }
+  if (window.isArchiveBubble({ role, route: effRoute })) {
     wrap.classList.add('is-archived-bubble');
     wrap.setAttribute('data-archived', '1');
   }
@@ -544,8 +800,8 @@ window.replaceThinkingBubble = function ({
   const right = document.createElement('div');
   const parts = [];
 
-  if (route) {
-    parts.push(`<span class="route-badge">${window.escapeHtml(route)}</span>`);
+  if (effRoute) {
+    parts.push(`<span class="route-badge">${window.escapeHtml(effRoute)}</span>`);
   }
 
   if (createdAt) {
@@ -559,7 +815,17 @@ window.replaceThinkingBubble = function ({
 
   const body = document.createElement('div');
   body.className = 'message-body';
-  body.innerHTML = `<pre>${window.escapeHtml(renderedText)}</pre>`;
+  if (
+    combatRollPayload &&
+    typeof window.buildCombatRollCardHtml === 'function' &&
+    (role === 'user' || (role === 'assistant' && String(combatRollPayload.kind || '') === 'enemy_attack'))
+  ) {
+    body.innerHTML = window.buildCombatRollCardHtml(combatRollPayload);
+  } else if (rollPayload && typeof window.buildRollCardHtml === 'function') {
+    body.innerHTML = window.buildRollCardHtml(rollPayload);
+  } else {
+    body.innerHTML = `<pre>${window.escapeHtml(renderedText)}</pre>`;
+  }
 
   wrap.appendChild(meta);
   wrap.appendChild(body);
@@ -784,12 +1050,24 @@ window.renderHistoryPanel = function () {
       <div>${window.escapeHtml(window.formatTimestamp(turn.created_at))}</div>
     `;
 
+    const ut = turn.user_text || '';
+    const rollP =
+      typeof window.tryParseRollCardFromText === 'function'
+        ? window.tryParseRollCardFromText(ut)
+        : null;
+    const replayText =
+      rollP && rollP.replay_command ? String(rollP.replay_command) : ut;
+    const bodyHtml =
+      rollP && typeof window.buildRollCardHtml === 'function'
+        ? window.buildRollCardHtml(rollP)
+        : `<pre>${window.escapeHtml(ut)}</pre>`;
+
     const body = document.createElement('div');
     body.className = 'message-body';
     body.innerHTML = `
-      <pre>${window.escapeHtml(turn.user_text || '')}</pre>
+      ${bodyHtml}
       <div style="margin-top:8px;">
-        <button type="button" class="secondary replay-turn-btn" data-text="${window.escapeHtml(turn.user_text || '')}">
+        <button type="button" class="secondary replay-turn-btn" data-text="${window.escapeHtml(replayText)}">
           Wy\u015blij ponownie
         </button>
       </div>
@@ -821,11 +1099,18 @@ window.renderTurnsToChat = function () {
     const isMemory = turn.route === 'memory';
     const isHelpme = turn.route === 'helpme';
     if (turn.user_text) {
+      const cpMsg =
+        typeof window.tryParseCombatRollCardFromText === 'function'
+          ? window.tryParseCombatRollCardFromText(turn.user_text)
+          : null;
+      const isEnemyCard = !!(cpMsg && String(cpMsg.kind || '') === 'enemy_attack');
       window.addMessage({
-        speaker: turn.character_name || 'Gracz',
+        speaker: isEnemyCard
+          ? String(cpMsg.enemy_name || 'Wróg')
+          : turn.character_name || 'Gracz',
         text: turn.user_text,
-        role: 'user',
-        route: isMemory ? 'memory' : isHelpme ? 'helpme' : 'input',
+        role: isEnemyCard ? 'assistant' : 'user',
+        route: isMemory ? 'memory' : isHelpme ? 'helpme' : isEnemyCard ? 'combat' : 'input',
         turn: turn.turn_number || turn.id,
         createdAt: turn.created_at,
         memoryTurn: isMemory,

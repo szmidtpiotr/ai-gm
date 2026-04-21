@@ -5,6 +5,12 @@ window.state = {
   characters: [],
   models: [],
   turns: [],
+  /** Ostatnia lista tur z API (bez dopisków walki tylko po stronie klienta). */
+  serverTurns: [],
+  /** Tury walki dodane lokalnie (np. dymek rzutu wroga), scalane z `serverTurns` w `mergeTurnsForChat`. */
+  combatClientTurns: [],
+  /** Log silnika walki (GET /combat/turns), syntetyczne dymki — przeżywają F5. */
+  combatLogTurns: [],
   /** Wymiany /helpme (tylko klient; nie wysyłane do narracji — serwer i tak używa route=helpme). */
   helpmeLog: [],
   /** Czy pokazywać w czacie "archiwalne" dymki (OOC /helpme, /mem, system, error, separator). Domyślnie ukryte. */

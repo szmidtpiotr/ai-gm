@@ -275,8 +275,131 @@ window.loadCharacters = async function (campaignId, preferredCharacterId = null)
   window.updateUiState();
 };
 
+/**
+ * Scal tury z serwera z lokalnymi wpisami walki (np. karta rzutu wroga), posortuj po turze i czasie.
+ */
+window.mergeTurnsForChat = function () {
+  const s = Array.isArray(window.state.serverTurns) ? [...window.state.serverTurns] : [];
+  const logt = Array.isArray(window.state.combatLogTurns) ? [...window.state.combatLogTurns] : [];
+  const c = Array.isArray(window.state.combatClientTurns)
+    ? [...window.state.combatClientTurns]
+    : [];
+  const merged = s.concat(logt).concat(c);
+  merged.sort((a, b) => {
+    const ta = Date.parse(String(a.created_at || '')) || 0;
+    const tb = Date.parse(String(b.created_at || '')) || 0;
+    if (ta !== tb) return ta - tb;
+    const na = Number(a.turn_number || 0);
+    const nb = Number(b.turn_number || 0);
+    if (na !== nb) return na - nb;
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  });
+  return merged;
+};
+
+/**
+ * Mapuje wiersze `combat_turns` (atak wroga) na syntetyczne tury czatu z kartą rzutu.
+ */
+window.buildCombatLogChatTurnsFromRows = function (rows) {
+  const p = window.COMBAT_ROLL_PREFIX || '__AI_GM_COMBAT_ROLL_V1__';
+  const out = [];
+  if (!Array.isArray(rows)) return out;
+  for (const row of rows) {
+    if (String(row.actor) !== 'enemy' || String(row.event_type) !== 'attack') continue;
+    let meta = {};
+    try {
+      meta =
+        typeof row.narrative === 'string' && row.narrative.trim()
+          ? JSON.parse(row.narrative)
+          : {};
+    } catch (_e) {
+      meta = {};
+    }
+    const enemyName = String(meta.enemy_name || 'Wróg');
+    const raw = Number(meta.raw_d20);
+    const atkRoll = Number(row.roll_value);
+    const bonus =
+      Number.isFinite(raw) && Number.isFinite(atkRoll) ? atkRoll - raw : null;
+    const mods = [];
+    if (bonus != null && Number.isFinite(bonus)) {
+      mods.push({ name: 'Bonus do trafienia', value: bonus });
+    }
+    const pac = meta.target_ac != null ? Number(meta.target_ac) : null;
+    const hit = row.hit === 1;
+    const dmg = row.damage != null ? Number(row.damage) : null;
+    const summary = hit
+      ? `Atak wroga: wynik ${atkRoll} — trafienie za ${dmg != null ? dmg : '?'} HP`
+      : `Atak wroga: wynik ${atkRoll} — pudło.`;
+    const enemyPayload = {
+      kind: 'enemy_attack',
+      intent: '',
+      summary_line: summary,
+      enemy_name: enemyName,
+      attack_label: 'ATAK (wróg)',
+      d20: Number.isFinite(raw) ? raw : atkRoll,
+      modifiers: mods,
+      total: Number.isFinite(atkRoll) ? atkRoll : raw,
+      hit,
+      damage: dmg != null ? dmg : 0,
+      target_ac: pac != null && Number.isFinite(pac) ? pac : null,
+    };
+    out.push({
+      id: `combatlog-${row.id}`,
+      user_text: `${p}\n${JSON.stringify(enemyPayload)}`,
+      assistant_text: null,
+      character_name: enemyName,
+      character_user_id: null,
+      route: 'narrative',
+      turn_number: Number(row.turn_number),
+      created_at: row.created_at,
+      _fromCombatLog: true,
+    });
+  }
+  return out;
+};
+
+window.loadCombatLogTurns = async function (campaignId) {
+  if (!campaignId) {
+    window.state.combatLogTurns = [];
+    return [];
+  }
+  try {
+    const res = await fetch(`/api/campaigns/${campaignId}/combat/turns`, {
+      headers: window.getApiHeaders ? window.getApiHeaders() : {},
+    });
+    if (!res.ok) {
+      window.state.combatLogTurns = [];
+      return [];
+    }
+    const data = await res.json();
+    const rows = Array.isArray(data.turns) ? data.turns : [];
+    window.state.combatLogTurns =
+      typeof window.buildCombatLogChatTurnsFromRows === 'function'
+        ? window.buildCombatLogChatTurnsFromRows(rows)
+        : [];
+    return window.state.combatLogTurns;
+  } catch (_e) {
+    window.state.combatLogTurns = [];
+    return [];
+  }
+};
+
+window.refreshCombatLogTurns = async function (campaignId) {
+  await window.loadCombatLogTurns(campaignId);
+  window.state.combatClientTurns = [];
+  if (typeof window.mergeTurnsForChat === 'function') {
+    window.state.turns = window.mergeTurnsForChat();
+  }
+  if (typeof window.renderTurnsToChat === 'function') {
+    window.renderTurnsToChat();
+  }
+};
+
 window.loadTurns = async function (campaignId, limit = 30, userId = null) {
   if (!campaignId) {
+    window.state.serverTurns = [];
+    window.state.combatClientTurns = [];
+    window.state.combatLogTurns = [];
     window.state.turns = [];
     window.clearChat();
     window.clearHistoryPanel();
@@ -287,6 +410,9 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
 
   const resp = await fetch(`/api/campaigns/${campaignId}/turns?limit=${limit}`);
   if (resp.status === 410) {
+    window.state.serverTurns = [];
+    window.state.combatClientTurns = [];
+    window.state.combatLogTurns = [];
     window.state.turns = [];
     if (typeof window.showCampaignDeathScreen === 'function') {
       await window.showCampaignDeathScreen(campaignId);
@@ -303,7 +429,7 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
 
   const data = await resp.json();
   const turns = Array.isArray(data.turns) ? data.turns : [];
-  window.state.turns = uid
+  const serverList = uid
     ? turns.filter((t) => {
         const cuid = t?.character_user_id ?? null;
         // Keep command/system turns even if character_user_id is missing.
@@ -312,8 +438,15 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
       })
     : turns;
 
-  if (window.state.turns.length > 0) {
-    const lastTurn = window.state.turns[window.state.turns.length - 1];
+  window.state.serverTurns = serverList;
+  window.state.combatClientTurns = [];
+  if (typeof window.loadCombatLogTurns === 'function') {
+    await window.loadCombatLogTurns(campaignId);
+  }
+  window.state.turns = window.mergeTurnsForChat();
+
+  if (window.state.serverTurns.length > 0) {
+    const lastTurn = window.state.serverTurns[window.state.serverTurns.length - 1];
     window.state.turnNumber = Number(lastTurn.turn_number || lastTurn.id || 0);
   } else {
     window.state.turnNumber = 0;
@@ -321,6 +454,75 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
 
   window.renderTurnsToChat();
   window.renderHistoryPanel();
+
+  try {
+    const cr = await fetch(`/api/campaigns/${campaignId}/combat`, {
+      headers: window.getApiHeaders ? window.getApiHeaders() : {}
+    });
+    if (cr.status === 404) {
+      window.state.combatClientTurns = [];
+      window.state.combatLogTurns = [];
+      window.state.turns = window.mergeTurnsForChat();
+      if (typeof window.renderTurnsToChat === 'function') {
+        window.renderTurnsToChat();
+      }
+      if (typeof window.combatPanel?.hide === 'function') {
+        window.combatPanel.hide();
+      }
+      if (typeof window.combatInput?.syncWithCombat === 'function') {
+        window.combatInput.syncWithCombat(null);
+      }
+    } else if (cr.ok) {
+      const cs = await cr.json();
+      if (cs.status === 'ended') {
+        if (typeof window.combatPanel?.hide === 'function') {
+          window.combatPanel.hide();
+        }
+        if (typeof window.combatInput?.syncWithCombat === 'function') {
+          window.combatInput.syncWithCombat(null);
+        }
+        window.state.combatClientTurns = [];
+        if (typeof window.loadCombatLogTurns === 'function') {
+          await window.loadCombatLogTurns(campaignId);
+        }
+        window.state.turns = window.mergeTurnsForChat();
+        if (typeof window.renderTurnsToChat === 'function') {
+          window.renderTurnsToChat();
+        }
+        if (typeof window.addMessage === 'function') {
+          window.addMessage({
+            speaker: 'System',
+            text: 'Walka zakończona!',
+            role: 'system'
+          });
+        }
+      } else {
+        if (typeof window.combatPanel?.render === 'function') {
+          window.combatPanel.render(cs);
+        }
+        if (typeof window.combatInput?.syncWithCombat === 'function') {
+          window.combatInput.syncWithCombat(cs);
+        }
+        if (cs.status === 'active' && typeof window.combatPanel?.show === 'function') {
+          window.combatPanel.show();
+        }
+      }
+    } else {
+      if (typeof window.combatInput?.syncWithCombat === 'function') {
+        window.combatInput.syncWithCombat(null);
+      }
+    }
+  } catch (_e) {
+    /* ignore */
+  }
+
+  if (typeof window.afterTurnsLoaded === 'function') {
+    try {
+      await window.afterTurnsLoaded(campaignId);
+    } catch (_err) {
+      /* optional combat / hooks */
+    }
+  }
 };
 
 window.getApiHeaders = function () {

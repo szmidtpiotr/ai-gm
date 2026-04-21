@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Blocks push if system prompt fails integrity tests (see tests/test_prompt_integrity.py).
+# One-time: ./scripts/setup-git-hooks.sh
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+exec "$ROOT/scripts/verify_prompt_integrity.sh"

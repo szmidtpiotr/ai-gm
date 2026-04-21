@@ -205,6 +205,32 @@ ADMIN_MIGRATIONS = [
     )
     """,
     "ALTER TABLE game_config_loot_entries ADD COLUMN consumable_key TEXT REFERENCES game_config_consumables(key) ON DELETE CASCADE",
+    """
+    CREATE TABLE IF NOT EXISTS combat_turns (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        combat_id    INTEGER NOT NULL,
+        campaign_id  INTEGER NOT NULL,
+        turn_number  REAL NOT NULL,
+        actor        TEXT NOT NULL,
+        event_type   TEXT NOT NULL,
+        roll_value   INTEGER,
+        damage       INTEGER,
+        hp_after     INTEGER,
+        target_id    TEXT,
+        target_name  TEXT,
+        hit          INTEGER,
+        narrative    TEXT,
+        created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_combat_turns_campaign
+        ON combat_turns(campaign_id, turn_number)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_combat_turns_combat
+        ON combat_turns(combat_id, turn_number)
+    """,
 ]
 
 ADMIN_SEEDS = [
@@ -251,6 +277,22 @@ ADMIN_SEEDS = [
     (key, label, hp_base, ac_base, attack_bonus, damage_die, description, is_active, locked_at, created_at, updated_at)
     VALUES
     ('goblin', 'Goblin', 8, 11, 2, 'd6', 'Fast and opportunistic skirmisher.', 1, NULL, datetime('now'), datetime('now'))
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_enemies
+    (key, label, hp_base, ac_base, attack_bonus, damage_die, description, is_active, locked_at, created_at, updated_at)
+    VALUES
+    ('unknown_attacker', 'Nieznany napastnik', 12, 11, 2, '1d6',
+     'Generyczny przeciwnik, gdy nie znasz dokładnego typu — musi istnieć w silniku walki.', 1, NULL, datetime('now'), datetime('now')),
+    ('enemy', 'Wróg', 10, 10, 1, '1d4',
+     'Ogólny placeholder na wroga zgodny z tagiem [COMBAT_START:enemy].', 1, NULL, datetime('now'), datetime('now')),
+    ('guard', 'Strażnik', 15, 13, 3, '1d6', 'Straż miejska lub posterunek.', 1, NULL, datetime('now'), datetime('now')),
+    ('old_man', 'Starzec', 6, 8, 0, '1d3', 'Słabszy NPC (np. scena ze starcem).', 1, NULL, datetime('now'), datetime('now')),
+    ('wolf', 'Wilk', 10, 12, 3, '1d6', 'Dzikie zwierzę.', 1, NULL, datetime('now'), datetime('now')),
+    ('bandit', 'Bandyta', 12, 13, 3, '1d8', 'Typowy bandyta / rabuś.', 1, NULL, datetime('now'), datetime('now')),
+    ('orc', 'Ork', 18, 14, 4, '1d8', 'Wojownik orków.', 1, NULL, datetime('now'), datetime('now')),
+    ('skeleton', 'Szkielet', 10, 12, 2, '1d6', 'Nieumarły.', 1, NULL, datetime('now'), datetime('now')),
+    ('troll', 'Troll', 35, 15, 6, '1d10', 'Duży i wytrzymały przeciwnik.', 1, NULL, datetime('now'), datetime('now'))
     """,
     """
     INSERT OR IGNORE INTO game_config_conditions

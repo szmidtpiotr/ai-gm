@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.services.dice import (
     format_roll_result_message,
+    infer_roll_type,
     parse_character_sheet,
     parse_roll_command,
     resolve_roll,
@@ -144,13 +145,33 @@ def _run_game_engine_checks(failures):
         )
         _assert_true("nat20 inject marker", "CRITICAL SUCCESS (Natural 20)" in nat20[0]["content"], failures)
 
-        # Nat1 injection
+        # Nat1 injection — only attack rolls trigger combat crit failure text
         nat1 = game_engine.build_narrative_messages(
             conn=None,
             campaign={"id": 1},
             character=None,
             user_text="ignored",
-            roll_result_message="[Roll result: stealth — rolled 1 + 3 = 4]",
+            roll_result_message="[Roll result: melee_attack — rolled 1 + 3 = 4]",
+            roll_result_data={
+                "test": "melee_attack",
+                "raw": 1,
+                "stat_mod": 1,
+                "skill_rank": 2,
+                "proficiency": 0,
+                "total": 4,
+                "roll_type": "attack",
+                "is_nat20": False,
+                "is_nat1": True,
+            },
+        )
+        _assert_true("nat1 inject marker", "CRITICAL FAILURE (Natural 1)" in nat1[0]["content"], failures)
+
+        skill_nat1 = game_engine.build_narrative_messages(
+            conn=None,
+            campaign={"id": 1},
+            character=None,
+            user_text="ignored",
+            roll_result_message="stealth check",
             roll_result_data={
                 "test": "stealth",
                 "raw": 1,
@@ -158,11 +179,16 @@ def _run_game_engine_checks(failures):
                 "skill_rank": 2,
                 "proficiency": 0,
                 "total": 4,
+                "roll_type": infer_roll_type("stealth"),
                 "is_nat20": False,
                 "is_nat1": True,
             },
         )
-        _assert_true("nat1 inject marker", "CRITICAL FAILURE (Natural 1)" in nat1[0]["content"], failures)
+        _assert_true(
+            "skill nat1 no crit marker",
+            "CRITICAL FAILURE (Natural 1)" not in skill_nat1[0]["content"],
+            failures,
+        )
     finally:
         game_engine.loadrecentturns = original_load_recent
         game_engine.buildmessages = original_build_messages
