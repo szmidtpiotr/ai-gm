@@ -49,15 +49,6 @@ scrape_configs:
           level:
           service:
           env:
-          request_id:
-          campaign_id:
-          event:
-          route:
-          method:
-          status_code:
-          llm_provider:
-          llm_model:
-          error_type:
       - replace:
           expression: "(?i)(authorization: Bearer\\s+)[A-Za-z0-9._-]+"
           replace: "${1}[REDACTED]"

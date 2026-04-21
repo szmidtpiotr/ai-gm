@@ -28,6 +28,9 @@ scrape_configs:
         replacement: "/var/lib/docker/containers/*/*.log"
     pipeline_stages:
       - docker: {}
+      # Parse JSON into the pipeline for token redaction and for Loki `| json` queries.
+      # Do NOT promote high-cardinality fields (request_id, campaign_id, event, …) to
+      # Loki stream labels — that fragments or overloads ingestion; filter them with | json instead.
       - json:
           expressions:
             level: level
@@ -45,12 +48,6 @@ scrape_configs:
           level:
           service:
           env:
-          request_id:
-          campaign_id:
-          event:
-          llm_provider:
-          llm_model:
-          error_type:
       - replace:
           expression: "(?i)(authorization: Bearer\\s+)[A-Za-z0-9._-]+"
           replace: "${1}[REDACTED]"
