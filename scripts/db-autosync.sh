@@ -64,7 +64,11 @@ ts() { date '+%Y-%m-%d %H:%M:%S'; }
 log() { echo "[$(ts)] $*"; }
 
 run_sync() {
-    log "START sync  (${SYNC_SOURCE}, transport=${SYNC_TRANSPORT}) → ${OBS_HOST:-local}"
+    if [[ "${SYNC_TRANSPORT}" == "local" ]]; then
+        log "START sync  (${SYNC_SOURCE}, transport=local) → ${REMOTE_DB_DIR}/ai_gm.db"
+    else
+        log "START sync  (${SYNC_SOURCE}, transport=ssh) → ${OBS_USER}@${OBS_HOST}:${REMOTE_DB_DIR}/ai_gm.db"
+    fi
 
     case "${SYNC_SOURCE}" in
         host)
@@ -105,12 +109,19 @@ run_sync() {
             rm -f "${TMP_DB}"
             return 1
         }
-        cp -f "${TMP_DB}" "${REMOTE_DB_DIR}/ai_gm.db" || {
-            log "ERROR cp to ${REMOTE_DB_DIR}/ai_gm.db failed"
-            rm -f "${TMP_DB}"
+        # Atomic replace so Grafana's SQLite plugin picks up a new inode/file.
+        PARTIAL="${REMOTE_DB_DIR}/ai_gm.db.partial.$$"
+        cp -f "${TMP_DB}" "${PARTIAL}" || {
+            log "ERROR cp to ${PARTIAL} failed"
+            rm -f "${TMP_DB}" "${PARTIAL}"
             return 1
         }
-        chmod 644 "${REMOTE_DB_DIR}/ai_gm.db" 2>/dev/null || true
+        chmod 644 "${PARTIAL}" 2>/dev/null || true
+        mv -f "${PARTIAL}" "${REMOTE_DB_DIR}/ai_gm.db" || {
+            log "ERROR mv to ${REMOTE_DB_DIR}/ai_gm.db failed"
+            rm -f "${TMP_DB}" "${PARTIAL}"
+            return 1
+        }
         rm -f "${TMP_DB}"
         log "DONE  synced (local) → ${REMOTE_DB_DIR}/ai_gm.db"
         return 0
@@ -129,15 +140,20 @@ run_sync() {
         return 1
     }
 
+    REMOTE_PARTIAL="${REMOTE_DB_DIR}/ai_gm.db.partial.${RANDOM}"
     scp -i "${OBS_KEY}" -o BatchMode=yes -o ConnectTimeout=8 \
-        "${TMP_DB}" "${OBS_USER}@${OBS_HOST}:${REMOTE_DB_DIR}/ai_gm.db" 2>/dev/null || {
+        "${TMP_DB}" "${OBS_USER}@${OBS_HOST}:${REMOTE_PARTIAL}" 2>/dev/null || {
         log "ERROR scp upload failed"
         rm -f "${TMP_DB}"
         return 1
     }
 
     ssh -i "${OBS_KEY}" -o BatchMode=yes "${OBS_USER}@${OBS_HOST}" \
-        "chmod 644 ${REMOTE_DB_DIR}/ai_gm.db" 2>/dev/null || true
+        "mv -f '${REMOTE_PARTIAL}' '${REMOTE_DB_DIR}/ai_gm.db' && chmod 644 '${REMOTE_DB_DIR}/ai_gm.db'" 2>/dev/null || {
+        log "ERROR remote mv/chmod failed"
+        rm -f "${TMP_DB}"
+        return 1
+    }
 
     rm -f "${TMP_DB}"
     log "DONE  synced to ${OBS_HOST}:${REMOTE_DB_DIR}/ai_gm.db"

@@ -27,6 +27,16 @@ router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
 logger = logging.getLogger(__name__)
 
+
+def _flush_stdout_logs() -> None:
+    """Promtail reads Docker log streams; flush root handlers so JSON lines ship immediately."""
+    for h in logging.root.handlers:
+        try:
+            h.flush()
+        except Exception:
+            pass
+
+
 COMBAT_START_RE = re.compile(r"\[COMBAT_START:([^\]]+)\]", re.IGNORECASE)
 
 
@@ -148,6 +158,7 @@ def log_narrative_turn_structured(
                 }
             },
         )
+        _flush_stdout_logs()
     except Exception:
         # Never fail a turn because logging broke
         pass
@@ -184,6 +195,7 @@ def log_memory_turn_structured(
                 }
             },
         )
+        _flush_stdout_logs()
     except Exception:
         pass
 

@@ -5,7 +5,7 @@
   "tags": ["ai-gm", "story", "sqlite"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -37,7 +37,7 @@
       "gridPos": { "h": 5, "w": 24, "x": 0, "y": 0 },
       "options": {
         "mode": "markdown",
-        "content": "## Campaign story in Grafana is a **snapshot**, not live play\n\n- Datasource path on the observability host: `/var/lib/ai-gm-db/ai_gm.db` (see `sqlite-story.yml`).\n- **Dashboard refresh (e.g. 30s) only re-runs SQL on that file** — it does not connect to your game server or Docker volume.\n- To match chat/debug: **re-sync** the DB from the backend container, then refresh the dashboard (or re-run the panel query).\n\n**From the machine that runs the game stack:**\n\n```bash\n# repo: observability/sync_story_db_to_observability.sh\ndocker cp ai-gm-backend-1:/data/ai_gm.db /tmp/ai_gm_story_sync.db\nscp … /var/lib/ai-gm-db/ai_gm.db   # or use the full script (ssh + OBS_HOST)\n```\n\nIf counts in “DB smoke test” stay old after new turns, the snapshot was not updated yet."
+        "content": "## Campaign story in Grafana is a **snapshot**, not live play\n\n- Inside Grafana the file is always mounted at **`/var/lib/ai-gm-db/ai_gm.db`** (`sqlite-story.yml`). On the host that is usually `AI_GM_STORY_DB_DIR` (e.g. `…/observability-data/story-db`).\n- **Cron `scripts/db-autosync.sh`** copies `docker cp …/ai_gm.db` there (atomic `mv`). If turn counts look stale: check `/tmp/ai-gm-db-sync.log`, run sync once by hand, then **hard-refresh** this dashboard (or restart Grafana if the SQLite plugin still shows an old snapshot).\n\n**One-shot sync (same host as backend):**\n\n```bash\nSYNC_TRANSPORT=local REMOTE_DB_DIR=/home/YOU/ai-gm/observability-data/story-db ./scripts/db-autosync.sh\n```\n\n**Remote observability VM:** use `observability/sync_story_db_to_observability.sh` or `OBS_HOST=… ./scripts/db-autosync.sh` with SSH."
       },
       "fieldConfig": { "defaults": {}, "overrides": [] },
       "pluginVersion": "11.0.0"
