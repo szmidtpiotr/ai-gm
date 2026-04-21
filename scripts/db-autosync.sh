@@ -25,7 +25,8 @@
 #   OBS_HOST       observability VM IP/hostname (default: 192.168.1.19)
 #   OBS_USER       SSH user                     (default: root)
 #   OBS_KEY        path to SSH private key      (default: REPO_ROOT/.secrets/ai_gm_debug_key)
-#   REMOTE_DB_DIR  target dir on VM             (default: /var/lib/ai-gm-db)
+#   REMOTE_DB_DIR  target dir on obs. host      (default: /var/lib/ai-gm-db)
+#                  e.g. /home/you/ai-gm/observability-data/story-db when using AI_GM_STORY_DB_DIR
 #   SYNC_SOURCE    "docker" (default) or "host" — where to read the DB before scp
 #   BACKEND_CTR    backend Docker container name (default: ai-gm-backend-1)
 #   BACKEND_DB_PATH path inside container for docker cp (default: /data/ai_gm.db)
