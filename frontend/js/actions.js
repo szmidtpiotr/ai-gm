@@ -22,6 +22,10 @@ window.state._characterCreationInFlight = window.state._characterCreationInFligh
  */
 window.state._wizardPendingCharacter = window.state._wizardPendingCharacter || null;
 
+window.state._combatJustEnded = window.state._combatJustEnded || false;
+window.state._lastKilledEnemy = window.state._lastKilledEnemy || null;
+window.state._combatVictoryUiPending = window.state._combatVictoryUiPending || false;
+
 /** Survives refresh: used to DELETE abandoned campaign on next load or via pagehide keepalive. */
 window.WIZARD_PENDING_SESSION_KEY = 'ai-gm:wizardPendingCharacter';
 
@@ -726,16 +730,27 @@ window.sendMessage = async function () {
     window.__suppressNextUserBubbleForGm = false;
   }
 
-  let text = (inputEl.value || "").trim();
-  if (window.__pendingNarrativeUserTextForApi != null) {
-    text = String(window.__pendingNarrativeUserTextForApi);
+  const pendingLine = window.__pendingNarrativeUserTextForApi;
+  if (pendingLine != null) {
     window.__pendingNarrativeUserTextForApi = null;
+  }
+
+  let text = (inputEl.value || "").trim();
+  if (pendingLine != null) {
+    text = String(pendingLine);
   }
   if (!text) return;
 
   const clientCreatedAt = new Date().toISOString();
 
+  const restorePendingLine = () => {
+    if (pendingLine != null) {
+      window.__pendingNarrativeUserTextForApi = pendingLine;
+    }
+  };
+
   if (!window.state.selectedCampaignId) {
+    restorePendingLine();
     window.addMessage({
       speaker: 'System',
       text: window.t('error.no_campaign'),
@@ -746,6 +761,7 @@ window.sendMessage = async function () {
   }
 
   if (!window.state.selectedCharacterId) {
+    restorePendingLine();
     window.addMessage({
       speaker: 'System',
       text: window.t('error.no_character'),
@@ -826,15 +842,85 @@ window.sendMessage = async function () {
   }
 
   if (/^\/search(\s|$)/i.test(text.trim())) {
+    const target = text.replace(/^\/search\s*/i, '').trim() || null;
+
+    window.chatRequestState.inFlight = true;
+    const requestId = ++window.chatRequestState.requestId;
+    const turnNumber = window.nextTurnNumber();
+    inputEl.value = '';
+    if (sendBtnEl) sendBtnEl.disabled = true;
+    inputEl.disabled = true;
+
+    const speakerName =
+      typeof window.currentCharacterName === 'function'
+        ? window.currentCharacterName()
+        : 'Gracz';
+
     window.addMessage({
-      speaker: 'System',
-      text:
-        'Komenda /search (w przygotowaniu): docelowo przeszukiwanie ciał i lokacji. ' +
-        'Na razie opisz przeszukanie w wiadomości do Mistrza Gry — automatyczne przeszukiwanie zwłok po walce jest wyłączone.',
-      role: 'system',
+      speaker: speakerName,
+      text: text.trim(),
+      role: 'user',
+      route: 'narrative',
+      turn: turnNumber,
       createdAt: clientCreatedAt
     });
-    inputEl.value = '';
+
+    window.removeThinkingBubble();
+    window.showThinkingBubble({
+      speaker: window.t('chat.gm'),
+      route: 'narrative',
+      turn: turnNumber
+    });
+
+    try {
+      const resp = await fetch(
+        `/api/campaigns/${window.state.selectedCampaignId}/search`,
+        {
+          method: 'POST',
+          headers: window.getApiHeaders(),
+          body: JSON.stringify({
+            character_id: window.state.selectedCharacterId,
+            target: target,
+            context: window.state._lastKilledEnemy || null
+          })
+        }
+      );
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const detail = data.detail || data.message || `HTTP ${resp.status}`;
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+      }
+      if (requestId !== window.chatRequestState.requestId) return;
+
+      window.removeThinkingBubble();
+      window.state._lastKilledEnemy = null;
+
+      window.addMessage({
+        speaker: window.t('chat.gm'),
+        text: data.answer || data.message || '',
+        role: 'assistant',
+        route: 'narrative',
+        turn: data.turn_number || turnNumber,
+        createdAt: data.created_at || null
+      });
+
+      await window.loadTurns(window.state.selectedCampaignId);
+    } catch (e) {
+      window.removeThinkingBubble();
+      window.addMessage({
+        speaker: 'Błąd',
+        text: `/search: ${e.message}`,
+        role: 'error',
+        turn: turnNumber
+      });
+    } finally {
+      window.chatRequestState.inFlight = false;
+      if (sendBtnEl) sendBtnEl.disabled = false;
+      if (inputEl) {
+        inputEl.disabled = false;
+        inputEl.focus();
+      }
+    }
     return;
   }
 
@@ -1026,9 +1112,14 @@ window.sendMessage = async function () {
     return;
   }
 
-  const selectedEngine = window.state.selectedEngine || engineSelectEl.value || '';
+  const selectedEngine =
+    String(window.state.selectedEngine || '').trim() ||
+    String(engineSelectEl?.value || '').trim() ||
+    String(window.state.models?.[0]?.name || '').trim() ||
+    '';
 
   if (!selectedEngine) {
+    restorePendingLine();
     window.addMessage({
       speaker: 'System',
       text: 'Nie wybrano modelu.',
@@ -1190,6 +1281,32 @@ window.sendMessage = async function () {
       return true;
     };
 
+    const applyGmRollSseToken = (token) => {
+      if (!token || !token.startsWith('[GM_ROLL]')) return false;
+      try {
+        const rollData = JSON.parse(token.slice('[GM_ROLL]'.length));
+        if (typeof window.addGmRollBubble === 'function') {
+          window.addGmRollBubble(rollData, turnNumber);
+        }
+      } catch (_e) {
+        /* ignore malformed GM roll */
+      }
+      return true;
+    };
+
+    const applyCombatEndedSseToken = (token) => {
+      if (!token || !token.startsWith('[COMBAT_ENDED]')) return false;
+      try {
+        const data = JSON.parse(token.slice('[COMBAT_ENDED]'.length));
+        window.state._combatJustEnded = true;
+        window.state._lastKilledEnemy = data;
+        window.state._combatVictoryUiPending = true;
+      } catch (_e) {
+        /* ignore */
+      }
+      return true;
+    };
+
     while (!streamDone) {
       const { done, value } = await reader.read();
 
@@ -1202,6 +1319,10 @@ window.sendMessage = async function () {
             if (applyCombatStartedSseToken(token)) {
               /* skip */
             } else if (applyCombatSseToken(token)) {
+              /* skip */
+            } else if (applyGmRollSseToken(token)) {
+              /* skip */
+            } else if (applyCombatEndedSseToken(token)) {
               /* skip */
             } else if (token !== '[DONE]' && !token.startsWith('[ERROR]')) {
               // Unescape literal \n sequences the server may have encoded
@@ -1240,12 +1361,28 @@ window.sendMessage = async function () {
           continue;
         }
 
+        if (applyGmRollSseToken(token)) {
+          continue;
+        }
+
+        if (applyCombatEndedSseToken(token)) {
+          continue;
+        }
+
         if (token === '[DONE]') {
           const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
           if (streamBubble) {
             window.finalizeStreamingBubble(streamBubble, cleanedGm);
           } else {
             window.removeThinkingBubble();
+          }
+          if (
+            window.state._combatVictoryUiPending &&
+            window.state._lastKilledEnemy &&
+            typeof window.combatPanel?.showVictoryAfterNarration === 'function'
+          ) {
+            window.state._combatVictoryUiPending = false;
+            window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
           }
           await window.loadTurns(window.state.selectedCampaignId);
           streamDone = true;
@@ -1294,6 +1431,14 @@ window.sendMessage = async function () {
       if (streamBubble) {
         const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
         window.finalizeStreamingBubble(streamBubble, cleanedGm);
+        if (
+          window.state._combatVictoryUiPending &&
+          window.state._lastKilledEnemy &&
+          typeof window.combatPanel?.showVictoryAfterNarration === 'function'
+        ) {
+          window.state._combatVictoryUiPending = false;
+          window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
+        }
         await window.loadTurns(window.state.selectedCampaignId);
       } else {
         window.removeThinkingBubble();
@@ -1322,6 +1467,21 @@ window.sendMessage = async function () {
     if (sendBtn) sendBtn.disabled = false;
     if (inp) { inp.disabled = false; inp.focus(); }
   }
+};
+
+/**
+ * Narracja GM przez SSE z gotowym user_text (np. JSON pod COMBAT_ROLL prefix),
+ * bez dymku gracza — ten sam mechanizm co po ataku / ucieczce z panelu walki.
+ */
+window.triggerCombatNarration = async function (userText) {
+  if (typeof window.sendMessage !== 'function') return;
+  const s = typeof userText === 'string' ? userText.trim() : '';
+  if (!s) return;
+  const { inputEl } = window.getEls();
+  if (inputEl) inputEl.value = '';
+  window.__pendingNarrativeUserTextForApi = s;
+  window.__suppressNextUserBubbleForGm = true;
+  await window.sendMessage();
 };
 
 window.rollDice = async function () {

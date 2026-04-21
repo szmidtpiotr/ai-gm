@@ -174,6 +174,7 @@ class TestPhase8Combat(unittest.TestCase):
         self.assertTrue(r["hit"])
         self.assertEqual(r["damage"], 5)
         self.assertLess(r["target_hp_remaining"], 12)
+        self.assertEqual(r.get("enemy_key"), "bandit")
 
     @patch("app.services.combat_service.roll_damage_dice", return_value=0)
     def test_resolve_attack_miss(self, _dmg):

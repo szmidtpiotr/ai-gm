@@ -128,6 +128,9 @@
         this._triggerEnemyTurnFromInput();
       } finally {
         this._syncSheetChrome(combatState);
+        if (typeof window.updateCombatDebugStatusLabel === "function") {
+          window.updateCombatDebugStatusLabel(combatState);
+        }
       }
     }
 

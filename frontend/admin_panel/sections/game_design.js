@@ -1093,11 +1093,15 @@ const IMPORT_DAMAGE_DIE_RE = /^\d*d\d+$/i;
  *   templatesAnchor?: string,
  *   placeholder?: string,
  *   validateRow: (raw: unknown, index: number) => string | null,
- *   buildPayload: (raw: object) => object,
- *   postPath: string,
+ *   buildPayload?: (raw: object) => object,
+ *   postPath?: string,
  *   refresh: () => void | Promise<void>,
  *   confirmNoun?: string,
  *   existingKeys?: () => Promise<Set<string>>,
+ *   commitRows?: (
+ *     parsed: object[],
+ *     ctx: { skip409: boolean },
+ *   ) => Promise<{ okn: number; skip409n: number; fail: string[]; footer?: string }>,
  * }} opts
  */
 function wireBulkJsonImport(root, opts) {
@@ -1202,33 +1206,52 @@ function wireBulkJsonImport(root, opts) {
       return;
     }
     const skip409 = bulk.querySelector("[data-bulk-skip-409]")?.checked ?? true;
-    const ok = await showConfirm(`Utworzyć ${parsed.length} rekord(ów) z JSON?`, { dangerous: false });
+    const confirmMsg = opts.commitRows
+      ? `Zaimportować ${parsed.length} tabel loot (tworzenie tabel + wpisy entries)?`
+      : `Utworzyć ${parsed.length} rekord(ów) z JSON?`;
+    const ok = await showConfirm(confirmMsg, { dangerous: false });
     if (!ok) {
       return;
     }
     let okn = 0;
     let skip409n = 0;
     const fail = [];
-    for (let i = 0; i < parsed.length; i += 1) {
-      const r = parsed[i];
-      const key = r && typeof r === "object" && r.key != null ? String(r.key) : `row ${i + 1}`;
-      try {
-        await adminFetch(opts.postPath, { method: "POST", body: JSON.stringify(opts.buildPayload(r)) });
-        okn += 1;
-      } catch (e) {
-        if (skip409 && e instanceof APIError && e.status === 409) {
-          skip409n += 1;
-          continue;
+    let footer = "";
+    if (opts.commitRows) {
+      const res = await opts.commitRows(parsed, { skip409 });
+      okn = res.okn;
+      skip409n = res.skip409n;
+      fail.push(...res.fail);
+      footer = res.footer || "";
+    } else {
+      const postPath = opts.postPath;
+      const buildPayload = opts.buildPayload;
+      if (!postPath || !buildPayload) {
+        showToast("Bulk import: brak postPath/buildPayload.", "error");
+        return;
+      }
+      for (let i = 0; i < parsed.length; i += 1) {
+        const r = parsed[i];
+        const key = r && typeof r === "object" && r.key != null ? String(r.key) : `row ${i + 1}`;
+        try {
+          await adminFetch(postPath, { method: "POST", body: JSON.stringify(buildPayload(r)) });
+          okn += 1;
+        } catch (e) {
+          if (skip409 && e instanceof APIError && e.status === 409) {
+            skip409n += 1;
+            continue;
+          }
+          fail.push(`${key}: ${parseApiError(e, "failed")}`);
         }
-        fail.push(`${key}: ${parseApiError(e, "failed")}`);
       }
     }
     resultPre.textContent = [
       `Utworzono: ${okn}. Pominięto (409, klucz już istnieje): ${skip409n}. Inne błędy: ${fail.length}`,
+      footer,
       fail.length ? `\n${fail.join("\n")}` : "",
     ]
       .filter(Boolean)
-      .join("");
+      .join("\n");
     const bad = fail.length;
     showToast(`Import: ${okn} nowych, ${skip409n} pominiętych (409), ${bad} błędów.`, bad ? "info" : "success");
     await opts.refresh();
@@ -1304,6 +1327,154 @@ function itemImportRowToPayload(r) {
     effect_json: r.effect_json != null && String(r.effect_json).trim() ? String(r.effect_json) : null,
     is_active: r.is_active !== false && r.is_active !== 0,
   };
+}
+
+/**
+ * @param {unknown} en
+ * @param {string} label e.g. "Row 1 entry 2"
+ * @returns {string | null}
+ */
+function validateLootEntryImportSpec(en, label) {
+  if (!en || typeof en !== "object") {
+    return `${label}: must be an object`;
+  }
+  const ik = en.item_key != null && String(en.item_key).trim() ? String(en.item_key).trim() : "";
+  const wk = en.weapon_key != null && String(en.weapon_key).trim() ? String(en.weapon_key).trim() : "";
+  const ck = en.consumable_key != null && String(en.consumable_key).trim() ? String(en.consumable_key).trim() : "";
+  const nSet = (ik ? 1 : 0) + (wk ? 1 : 0) + (ck ? 1 : 0);
+  if (nSet !== 1) {
+    return `${label}: exactly one of item_key, weapon_key, consumable_key (non-empty)`;
+  }
+  const weight = en.weight != null ? Number(en.weight) : 10;
+  const qty_min = en.qty_min != null ? Number(en.qty_min) : 1;
+  const qty_max = en.qty_max != null ? Number(en.qty_max) : 1;
+  if (!Number.isFinite(weight) || weight < 1) {
+    return `${label}: weight must be a number >= 1`;
+  }
+  if (!Number.isFinite(qty_min) || qty_min < 1) {
+    return `${label}: qty_min must be a number >= 1`;
+  }
+  if (!Number.isFinite(qty_max) || qty_max < 1) {
+    return `${label}: qty_max must be a number >= 1`;
+  }
+  if (qty_min > qty_max) {
+    return `${label}: qty_min must be <= qty_max`;
+  }
+  return null;
+}
+
+/**
+ * @param {unknown} raw
+ * @param {number} index
+ * @returns {string | null}
+ */
+function validateLootTableBulkRow(raw, index) {
+  const label = `Row ${index + 1}`;
+  if (!raw || typeof raw !== "object") {
+    return `${label}: must be an object`;
+  }
+  const key = String(raw.key || "").trim();
+  if (!key) {
+    return `${label}: key is required`;
+  }
+  if (!IMPORT_KEY_RE.test(key)) {
+    return `${label}: key must be lowercase_snake_case, 1–40 chars`;
+  }
+  if (!String(raw.label || "").trim()) {
+    return `${label}: label is required`;
+  }
+  const entries = raw.entries;
+  if (entries == null) {
+    return null;
+  }
+  if (!Array.isArray(entries)) {
+    return `${label}: entries must be an array or omitted`;
+  }
+  for (let j = 0; j < entries.length; j += 1) {
+    const err = validateLootEntryImportSpec(entries[j], `${label} entry ${j + 1}`);
+    if (err) {
+      return err;
+    }
+  }
+  return null;
+}
+
+/** @param {object} en */
+function lootEntryImportToPayload(en) {
+  const weight = en.weight != null ? Number(en.weight) : 10;
+  const qty_min = en.qty_min != null ? Number(en.qty_min) : 1;
+  const qty_max = en.qty_max != null ? Number(en.qty_max) : 1;
+  const payload = { weight, qty_min, qty_max };
+  const ik = en.item_key != null && String(en.item_key).trim() ? String(en.item_key).trim() : "";
+  const wk = en.weapon_key != null && String(en.weapon_key).trim() ? String(en.weapon_key).trim() : "";
+  const ck = en.consumable_key != null && String(en.consumable_key).trim() ? String(en.consumable_key).trim() : "";
+  if (ik) {
+    payload.item_key = ik;
+  } else if (wk) {
+    payload.weapon_key = wk;
+  } else {
+    payload.consumable_key = ck;
+  }
+  return payload;
+}
+
+/**
+ * @param {object[]} parsed
+ * @param {{ skip409: boolean }} ctx
+ */
+async function commitLootTablesBulkImport(parsed, ctx) {
+  const { skip409 } = ctx;
+  let okn = 0;
+  let skip409n = 0;
+  const fail = [];
+  let entriesOk = 0;
+  let entriesFail = 0;
+  for (let i = 0; i < parsed.length; i += 1) {
+    const r = parsed[i];
+    const tableKey = String(r.key).trim();
+    const tableBody = {
+      key: tableKey,
+      label: String(r.label).trim(),
+      description: r.description != null ? String(r.description) : "",
+      is_active: r.is_active !== false && r.is_active !== 0,
+    };
+    let canPostEntries = false;
+    try {
+      await adminFetch("/api/admin/loot-tables", { method: "POST", body: JSON.stringify(tableBody) });
+      okn += 1;
+      canPostEntries = true;
+    } catch (e) {
+      if (e instanceof APIError && e.status === 409) {
+        if (skip409) {
+          skip409n += 1;
+          canPostEntries = true;
+        } else {
+          fail.push(`${tableKey}: ${parseApiError(e, "tabela już istnieje (409)")}`);
+        }
+      } else {
+        fail.push(`${tableKey}: ${parseApiError(e, "create table failed")}`);
+      }
+      if (!canPostEntries) {
+        continue;
+      }
+    }
+    const entries = Array.isArray(r.entries) ? r.entries : [];
+    for (let j = 0; j < entries.length; j += 1) {
+      const en = entries[j];
+      try {
+        await adminFetch(`/api/admin/loot-tables/${encodeURIComponent(tableKey)}/entries`, {
+          method: "POST",
+          body: JSON.stringify(lootEntryImportToPayload(en)),
+        });
+        entriesOk += 1;
+      } catch (err) {
+        entriesFail += 1;
+        fail.push(`${tableKey} entry ${j + 1}: ${parseApiError(err, "entry failed")}`);
+      }
+    }
+  }
+  const footer = `Wpisy loot (POST /entries): ${entriesOk} OK, ${entriesFail} błędów.`;
+  return { okn, skip409n, fail, footer };
 }
 
 function validateSkillImportRow(raw, index, statKeys) {
@@ -2572,6 +2743,25 @@ function mountLootTables(host) {
     } catch (e) {
       showToast(parseApiError(e, "Create failed."), "error");
     }
+  });
+
+  wireBulkJsonImport(left, {
+    hint:
+      "Każdy element: key, label, opcjonalnie description i is_active, opcjonalnie entries. W entries: dokładnie jedno z item_key | weapon_key | consumable_key (musi istnieć w katalogu), weight ≥ 1, qty_min / qty_max ≥ 1 i min ≤ max. Pusta lub brak entries = tabela bez wierszy. Przy 409 na tabeli z „Pomiń 409” wpisy i tak są wysyłane (upsert na istniejącą tabelę).",
+    templatesHref: "/admin_panel/templates.html#sec-loot-tables",
+    templatesAnchor: "Szablony JSON — Loot tables",
+    placeholder:
+      '[{"key":"example_loot","label":"Example","description":"","is_active":true,"entries":[{"item_key":"rope","weight":10,"qty_min":1,"qty_max":1}]}]',
+    validateRow: validateLootTableBulkRow,
+    existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/loot-tables"),
+    refresh: async () => {
+      await refreshLootList();
+      if (selectedKey) {
+        await refreshEntriesPanel();
+      }
+    },
+    confirmNoun: "tabel loot",
+    commitRows: (parsed, ctx) => commitLootTablesBulkImport(parsed, ctx),
   });
 
   void refreshLootList();

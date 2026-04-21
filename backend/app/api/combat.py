@@ -57,10 +57,11 @@ def post_start_combat(campaign_id: int, body: CombatStartRequest):
 
 @router.get("/campaigns/{campaign_id}/combat")
 def get_combat(campaign_id: int):
+    """Active combat only. When none, 200 + active:false (avoid 404 spam from UI polling)."""
     st = combat.get_active_combat(campaign_id)
     if not st:
-        raise HTTPException(status_code=404, detail="No active combat")
-    return st
+        return {"active": False, "combat": None}
+    return {"active": True, "combat": st}
 
 
 @router.get("/campaigns/{campaign_id}/combat/turns")
@@ -100,7 +101,29 @@ def post_enemy_turn(campaign_id: int):
 
 @router.post("/campaigns/{campaign_id}/combat/flee")
 def post_flee(campaign_id: int):
-    if not combat.get_active_combat(campaign_id):
-        raise HTTPException(status_code=404, detail="No active combat")
-    combat.end_combat(campaign_id, "fled")
-    return {"fled": True}
+    """
+    End active combat as fled. Returns 409 if there is no active combat row
+    (distinct from a missing HTTP route — avoids confusion with literal 404).
+    Idempotent: if combat already ended with reason fled, returns 200 with already_ended.
+    """
+    if combat.get_active_combat(campaign_id):
+        combat.end_combat(campaign_id, "fled")
+        return {
+            "fled": True,
+            "already_ended": False,
+            "combat_state": combat.load_combat_snapshot(campaign_id),
+        }
+    snap = combat.load_combat_snapshot(campaign_id)
+    if (
+        snap
+        and str(snap.get("status") or "") == "ended"
+        and str(snap.get("ended_reason") or "") == "fled"
+    ):
+        return {"fled": True, "already_ended": True, "combat_state": snap}
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            "Brak aktywnej walki — ucieczka z silnika jest możliwa tylko gdy trwa walka "
+            "(status active). Jeśli panel jest nieaktualny, odśwież stronę."
+        ),
+    )

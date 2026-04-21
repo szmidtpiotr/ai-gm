@@ -28,6 +28,11 @@ export const SLASH_COMMANDS = [
     command: "/atak",
     description: "Same as /walka — deterministic combat start without waiting for GM tag",
   },
+  {
+    command: "/search",
+    description: "Przeszukaj zabitą postać lub lokację",
+    usage: "/search [cel — opcjonalnie]",
+  },
 ];
 
 /** @type {{ command: string, description: string }[]} */

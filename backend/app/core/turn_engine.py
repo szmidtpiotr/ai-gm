@@ -14,14 +14,26 @@ COMBAT_ROLL_CTX_PREFIX = "__AI_GM_COMBAT_ROLL_V1__"
 def _user_text_for_llm_context(raw: str | None) -> str:
     """Strip structured combat roll JSON from history so the LLM sees short prose only."""
     s = (raw or "").strip()
-    if not s.startswith(COMBAT_ROLL_CTX_PREFIX + "\n"):
+    if not s.startswith(COMBAT_ROLL_CTX_PREFIX):
         return s or ""
+    tail = s[len(COMBAT_ROLL_CTX_PREFIX) :].lstrip("\r\n \t")
     try:
-        d = json.loads(s[len(COMBAT_ROLL_CTX_PREFIX) :].lstrip())
+        d = json.loads(tail)
     except (json.JSONDecodeError, TypeError, ValueError):
         return s
     if not isinstance(d, dict):
         return s
+    if d.get("kind") == "player_flee":
+        summary = (d.get("summary_line") or "").strip()
+        intent = (d.get("intent") or "").strip()
+        if summary and intent:
+            return f"{intent}\n\n{summary}"
+        if summary:
+            return summary
+        return (
+            "Gracz zakończył walkę w silniku przez ucieczkę. Opisz dynamicznie moment wycofania "
+            "się z walki i natychmiastowe konsekwencje (2–4 zdania). Nie kończ pytaniem o następną akcję."
+        )
     summary = (d.get("summary_line") or "").strip()
     intent = (d.get("intent") or "").strip()
     if summary and intent:

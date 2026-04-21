@@ -15,8 +15,8 @@
     <main class="templates-doc">
       <p class="templates-intro">
         Reference for JSON arrays used with admin bulk import. In the admin panel, open the matching Game Design
-        sub-tab (Skills, Weapons, …) and expand <strong>Bulk import (JSON array)</strong> — paste the array there (Dry
-        run / Commit). This page is a copy-friendly reference; no login required here.
+        sub-tab (Skills, Weapons, Loot Tables, …) and expand <strong>Bulk import (JSON array)</strong> — paste the array
+        there (Dry run / Commit). This page is a copy-friendly reference; no login required here.
       </p>
 
       <section class="template-section" aria-labelledby="sec-skills">
@@ -774,6 +774,99 @@
     "base_price": 20,
     "note": null,
     "is_active": true
+  }
+]</pre>
+        </div>
+      </section>
+
+      <section class="template-section" aria-labelledby="sec-loot-tables">
+        <h2 id="sec-loot-tables">Loot tables</h2>
+        <p class="muted">
+          Weighted drop tables: one object per table. Optional <code>entries</code> is an array of loot rows; each row
+          references exactly one catalogue key (<code>item_key</code>, <code>weapon_key</code>, or
+          <code>consumable_key</code>) that must already exist in the admin catalogues.
+        </p>
+        <div class="field-ref-wrap admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>key</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>lowercase_snake_case, unique per table</td>
+              </tr>
+              <tr>
+                <td><code>label</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Display name</td>
+              </tr>
+              <tr>
+                <td><code>description</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Default empty string</td>
+              </tr>
+              <tr>
+                <td><code>is_active</code></td>
+                <td>boolean</td>
+                <td>❌</td>
+                <td>Default true</td>
+              </tr>
+              <tr>
+                <td><code>entries</code></td>
+                <td>array</td>
+                <td>❌</td>
+                <td>Loot rows; omit or <code>[]</code> for an empty table</td>
+              </tr>
+              <tr>
+                <td><code>entries[].item_key</code> / <code>weapon_key</code> / <code>consumable_key</code></td>
+                <td>text</td>
+                <td>✅ per entry</td>
+                <td>Exactly one must be set; must match an existing row</td>
+              </tr>
+              <tr>
+                <td><code>entries[].weight</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Relative weight; default 10; must be ≥ 1</td>
+              </tr>
+              <tr>
+                <td><code>entries[].qty_min</code> / <code>qty_max</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Defaults 1; must be ≥ 1 and qty_min ≤ qty_max</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">
+          <strong>409 on table key:</strong> with <strong>Skip 409</strong> enabled in the admin panel, the create-table
+          step is skipped for duplicate keys, but <code>entries</code> are still POSTed (upsert) to the existing table.
+        </p>
+        <div class="template-example">
+          <div class="template-example-header">
+            <span class="template-example-label">Example JSON</span>
+            <button type="button" class="copy-json-btn" aria-label="Copy example JSON">📋 Copy</button>
+          </div>
+          <pre class="copy-block" data-table="loot-tables">[
+  {
+    "key": "example_loot_table",
+    "label": "Example drops",
+    "description": "Replace keys with real item / weapon / consumable keys from your project.",
+    "is_active": true,
+    "entries": [
+      { "item_key": "rope", "weight": 10, "qty_min": 1, "qty_max": 2 },
+      { "consumable_key": "potion_healing_minor", "weight": 3, "qty_min": 1, "qty_max": 1 }
+    ]
   }
 ]</pre>
         </div>

@@ -61,6 +61,11 @@ Tag [COMBAT_START] zastępuje tę instrukcję.
 Po dodaniu tagu system automatycznie uruchomi mechanikę walki.
 Gracz może też sam uruchomić walkę w silniku komendą /walka lub /atak (np. /walka bandit) — wtedy mechanika startuje bez tagu w Twojej odpowiedzi; kontynuuj narrację zgodnie z aktywną walką z kontekstu.
 
+UCIECZKA Z SILNIKA WALKI (komunikat techniczny / podsumowanie gracza):
+Gdy ostatnia wiadomość gracza opisuje zakończenie walki przez ucieczkę z panelu (mechanicznie walka już się skończyła),
+narruj krótką, dynamiczną scenę wycofania (2–4 zdania): chaos, pogoni, oddech, reakcja wrogów.
+Nie pytaj „co robisz?” na końcu — domknij moment i zostaw gracza w nowej sytuacji fabularnej.
+
 Przykład POPRAWNY:
   "Napastnik rzuca się na ciebie z nożem! Czas działać!
   [COMBAT_START:bandit]"

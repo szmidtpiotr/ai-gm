@@ -8,8 +8,10 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.core.turn_engine import COMBAT_ROLL_CTX_PREFIX
 from app.services.dice import (
     ROLL_CARD_PREFIX,
+    build_gm_defense_roll_payload,
     build_roll_card_payload,
     format_roll_for_llm,
     parse_character_sheet,
@@ -19,7 +21,12 @@ from app.services.dice import (
 )
 from app.services.game_engine import build_narrative_messages, run_narrative_turn
 from app.services.helpme_advisor_service import run_helpme_advisor
-from app.services.llm_service import generate_chat_stream, get_effective_config, get_health
+from app.services.llm_service import (
+    generate_chat,
+    generate_chat_stream,
+    get_effective_config,
+    get_health,
+)
 from app.services.solo_death_service import apply_death_save_outcome, end_solo_campaign_on_death
 from app.services.user_llm_settings import get_user_llm_settings_full
 
@@ -221,6 +228,44 @@ class TurnCreate(BaseModel):
     system: str | None = None
     engine: str | None = None
     game_id: int | None = None
+
+
+class SearchPayload(BaseModel):
+    character_id: int
+    target: str | None = None
+    context: dict | None = None
+
+
+def _stream_combat_roll_extras(user_text_val: str) -> tuple[dict | None, dict | None]:
+    """
+    For combat follow-up turns (COMBAT_ROLL prefix): optional GM defense bubble payload
+    and optional combat-ended hint for the client (victory after last kill).
+    """
+    s = (user_text_val or "").strip()
+    if not s.startswith(COMBAT_ROLL_CTX_PREFIX):
+        return None, None
+    tail = s[len(COMBAT_ROLL_CTX_PREFIX) :].lstrip("\r\n \t")
+    try:
+        payload = json.loads(tail)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None, None
+    # player_flee (and other kinds): no [GM_ROLL] / [COMBAT_ENDED] — flee ends via /combat/flee
+    if not isinstance(payload, dict) or payload.get("kind") != "player_attack":
+        return None, None
+    gm_roll: dict | None = None
+    if payload.get("hit"):
+        label = (payload.get("target_name") or "").strip() or "Wróg"
+        gm_roll = build_gm_defense_roll_payload(
+            enemy_key=str(payload.get("enemy_key") or ""),
+            enemy_label=label,
+        )
+    combat_ended: dict | None = None
+    if payload.get("combat_victory"):
+        name = (
+            (payload.get("target_name") or payload.get("enemy_name") or "Wróg").strip() or "Wróg"
+        )
+        combat_ended = {"reason": "enemy_killed", "enemy_name": name}
+    return gm_roll, combat_ended
 
 
 def get_db():
@@ -998,11 +1043,12 @@ def create_turn_stream(
         campaign_id_val = campaign_id
         character_id_val = payload.character_id
         user_text_val = user_text_stored if roll_request else llm_user_text
+        gm_roll_pre_payload, combat_ended_pre_payload = _stream_combat_roll_extras(user_text_val)
 
         def token_generator():
             """
-            Order: (1) yield all LLM content SSE chunks to the client, (2) persist turn,
-            (3) yield optional [COMBAT_STARTED] / [COMBAT], (4) yield [DONE].
+            Order: (1) optional [GM_ROLL], (2) optional [COMBAT_ENDED] before narrative,
+            (3) LLM chunks, (4) persist turn, (5) [COMBAT_STARTED] / [COMBAT], (6) [DONE].
             """
             from app.services import combat_service as cs_snap
 
@@ -1010,6 +1056,11 @@ def create_turn_stream(
             combat_was_active = bool(combat_before) and str(
                 combat_before.get("current_turn") or ""
             ) == "player"
+
+            if gm_roll_pre_payload:
+                yield f"data: [GM_ROLL]{json.dumps(gm_roll_pre_payload, ensure_ascii=False)}\n\n"
+            if combat_ended_pre_payload:
+                yield f"data: [COMBAT_ENDED]{json.dumps(combat_ended_pre_payload, ensure_ascii=False)}\n\n"
 
             collected: list[str] = []
             saw_done = False
@@ -1085,5 +1136,59 @@ def create_turn_stream(
 
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/campaigns/{campaign_id}/search")
+def search_body_or_location(
+    campaign_id: int,
+    payload: SearchPayload,
+):
+    conn = get_db()
+    try:
+        campaign = get_active_campaign_or_gone(conn, campaign_id)
+        character = get_character_or_404(conn, campaign_id, payload.character_id)
+
+        enemy_name = (payload.context or {}).get("enemy_name") or payload.target or "postać"
+
+        if not payload.target:
+            search_user_text = f"[Gracz przeszukuje: {enemy_name}]"
+        else:
+            search_user_text = f"[Gracz przeszukuje: {payload.target}]"
+
+        llm_config = get_user_llm_settings_full(character["user_id"])
+        model = resolve_model_name(
+            requested_model=None,
+            campaign_model=campaign["model_id"],
+            llm_config=llm_config,
+        )
+
+        messages = build_narrative_messages(
+            conn=conn,
+            campaign=campaign,
+            character=character,
+            user_text=search_user_text,
+            roll_result_message=None,
+            roll_result_data=None,
+        )
+
+        answer = generate_chat(messages=messages, model=model, llm_config=llm_config)
+        answer = (answer or "").strip()
+
+        log = create_turn_log(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            user_text=search_user_text,
+            assistant_text=answer,
+            route="narrative",
+        )
+
+        return {
+            "answer": answer,
+            "turn_number": log["turn_number"] if isinstance(log, dict) else None,
+            "created_at": log["created_at"] if isinstance(log, dict) else None,
+        }
     finally:
         conn.close()

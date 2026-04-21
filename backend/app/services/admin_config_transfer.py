@@ -69,6 +69,52 @@ def _allowed_classes_to_db(value: Any) -> str:
     return "[]"
 
 
+# Read-only snapshot for tools (LLM context, design docs). Not used by import_config.
+_CATALOG_SNAPSHOT_SPECS: tuple[tuple[str, str], ...] = (
+    ("game_config_meta", "key ASC"),
+    ("game_config_stats", "sort_order ASC, key ASC"),
+    ("game_config_skills", "sort_order ASC, key ASC"),
+    ("game_config_dc", "sort_order ASC, key ASC"),
+    ("game_config_weapons", "key ASC"),
+    ("game_config_enemies", "key ASC"),
+    ("game_config_conditions", "key ASC"),
+    ("game_config_items", "key ASC"),
+    ("game_config_consumables", "key ASC"),
+    ("game_config_loot_tables", "key ASC"),
+    ("game_config_loot_entries", "loot_table_key ASC, id ASC"),
+)
+
+
+def export_catalog_snapshot(exported_by: str = "dev-local") -> dict[str, Any]:
+    """
+    Full JSON snapshot of all game catalogue / mechanics tables (items, weapons, consumables,
+    enemies, loot, …). Intended for read-only context (e.g. attach to an LLM prompt) — not
+    the same shape as ``export_config`` used for atomic config import.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        tables: dict[str, list[dict[str, Any]]] = {}
+        for table_name, order_by in _CATALOG_SNAPSHOT_SPECS:
+            tables[table_name] = _read_table(conn, table_name, order_by)
+        payload = {
+            "export_kind": "catalog_snapshot",
+            "config_version": _get_config_version(conn),
+            "exported_at": _now_iso(),
+            "exported_by": exported_by,
+            "tables": tables,
+            "notes": (
+                "Read-only catalogue dump for design / LLM context. "
+                "Do not use as input to POST /admin/config/import (different subset and semantics)."
+            ),
+        }
+        _audit(conn, "EXPORT_CATALOG_SNAPSHOT", None, {"config_version": payload["config_version"]})
+        conn.commit()
+        return payload
+    finally:
+        conn.close()
+
+
 def export_config(exported_by: str = "dev-local") -> dict[str, Any]:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row

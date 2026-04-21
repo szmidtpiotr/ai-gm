@@ -257,6 +257,18 @@ window.appendToStreamingBubble = function (bubbleEl, token) {
 window.finalizeStreamingBubble = function (bubbleEl, fullText) {
   if (!bubbleEl) return;
 
+  if (window.state._combatJustEnded) {
+    window.state._combatJustEnded = false;
+    bubbleEl.classList.remove('streaming');
+    bubbleEl.removeAttribute('id');
+    const preEarly = bubbleEl.querySelector('pre.streaming-text');
+    if (preEarly) preEarly.style.cssText = '';
+    window.state.activeRollRequest = null;
+    window.updateActionTriggerBtn(false);
+    window.scrollChatToBottom();
+    return;
+  }
+
   bubbleEl.classList.remove('streaming');
   bubbleEl.removeAttribute('id');
 
@@ -375,6 +387,64 @@ window.rollAndAppend = async function (diceExpr, wrapEl) {
   }
 };
 
+window.addGmRollBubble = function (rollData, turn) {
+  const { chatEl } = window.getEls();
+  if (!chatEl) return;
+
+  const isCrit = rollData.is_nat20 || rollData.verdict === 'crit';
+  const isFumble = rollData.is_nat1 || rollData.verdict === 'fumble';
+  const isHit = rollData.verdict === 'hit' || isCrit;
+
+  let verdictLabel;
+  let verdictClass;
+  if (isCrit) {
+    verdictLabel = '\u26A1 TRAFIENIE KRYTYCZNE';
+    verdictClass = 'crit';
+  } else if (isFumble) {
+    verdictLabel = '\uD83D\uDC80 KRYTYCZNA PORA\u017BKA';
+    verdictClass = 'fumble';
+  } else if (isHit) {
+    verdictLabel = '\uD83D\uDDE1\uFE0F TRAFIENIE';
+    verdictClass = 'hit';
+  } else {
+    verdictLabel = '\uD83D\uDEE1\uFE0F PUD\u0141O';
+    verdictClass = 'miss';
+  }
+
+  const modAbs = Math.abs(Number(rollData.modifier) || 0);
+  const modSignChar = Number(rollData.modifier) >= 0 ? '+' : '\u2212';
+  const modBreakdown =
+    Number(rollData.modifier) === 0
+      ? ''
+      : `<span class="roll-card__sep">${modSignChar}</span><span class="roll-card__mod">${modAbs}</span><span class="roll-card__sep">=</span>`;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'message gm-roll-bubble';
+  wrap.dataset.turn = turn ?? '';
+
+  wrap.innerHTML = `
+    <div class="meta">
+      <div><strong>\uD83C\uDFB2 GM</strong> \u2022 tura ${window.escapeHtml(String(turn ?? ''))}</div>
+    </div>
+    <div class="message-body">
+      <div class="roll-card roll-card--gm roll-card--${verdictClass}">
+        <div class="roll-card__header">
+          <span class="roll-card__skill">${window.escapeHtml(rollData.label || rollData.skill)}</span>
+          <span class="roll-card__dice">d20</span>
+        </div>
+        <div class="roll-card__breakdown">
+          <span class="roll-card__raw">${window.escapeHtml(String(rollData.raw))}</span>
+          ${modBreakdown}
+          <span class="roll-card__total">${window.escapeHtml(String(rollData.total))}</span>
+        </div>
+        <div class="roll-card__verdict roll-card__verdict--${verdictClass}">${verdictLabel}</div>
+      </div>
+    </div>`;
+
+  chatEl.appendChild(wrap);
+  window.scrollChatToBottom();
+};
+
 window.addBackInGameSeparator = function () {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
@@ -421,9 +491,10 @@ window.COMBAT_ROLL_PREFIX = '__AI_GM_COMBAT_ROLL_V1__';
 window.tryParseCombatRollCardFromText = function (text) {
   const s = String(text || '').trim();
   const p = window.COMBAT_ROLL_PREFIX;
-  if (!s.startsWith(p + '\n')) return null;
+  if (!s.startsWith(p)) return null;
   try {
-    return JSON.parse(s.slice(p.length).trim());
+    const tail = s.slice(p.length).replace(/^\s+/, '').replace(/^\uFEFF/, '');
+    return JSON.parse(tail);
   } catch (_e) {
     return null;
   }
@@ -439,6 +510,21 @@ window.formatCombatRollNum = function (n) {
 window.buildCombatRollCardHtml = function (data) {
   if (!data || typeof data !== 'object') return '';
   const kind = String(data.kind || 'player_attack');
+  if (kind === 'player_flee') {
+    const name = window.escapeHtml(String(data.character_name || 'Bohater'));
+    const summary = window.escapeHtml(String(data.summary_line || 'Ucieczka z walki.'));
+    const intent = String(data.intent || '').trim();
+    const intentBlock = intent
+      ? `<div class="combat-roll-card__intent">${window.escapeHtml(intent)}</div><div class="roll-card__sep" role="separator"></div>`
+      : '';
+    return (
+      `<div class="roll-card roll-card--light combat-roll-card roll-card--neutral">` +
+      `${intentBlock}` +
+      `<div class="roll-card__line roll-card__line--head">🏃 ${name} — ucieczka</div>` +
+      `<div class="roll-card__line roll-card__line--wynik">${summary}</div>` +
+      `</div>`
+    );
+  }
   const intent = String(data.intent || '').trim();
   const name = window.escapeHtml(String(data.character_name || data.enemy_name || '?'));
   const label = window.escapeHtml(String(data.attack_label || 'ATAK (STR)'));

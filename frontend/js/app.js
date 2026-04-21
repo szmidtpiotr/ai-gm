@@ -502,6 +502,46 @@ window.bindDebugSnapshotButton = function () {
   btn.onclick = window.copyDebugSnapshot;
 };
 
+/**
+ * Tymczasowy podgląd stanu walki pod przyciskiem Copy Debug.
+ * @param {null|object} payload — `null`, obiekt stanu walki z syncu, albo odpowiedź GET `{ active, combat }`.
+ */
+window.updateCombatDebugStatusLabel = function (payload) {
+  const el = document.getElementById("combat-debug-status");
+  if (!el) return;
+
+  let cs = null;
+  let via = "sync ";
+
+  if (payload && typeof payload === "object" && "active" in payload && "combat" in payload) {
+    via = "GET ";
+    if (!payload.active || payload.combat == null) {
+      el.textContent = "COMBAT: " + via + "(brak — active=false)";
+      return;
+    }
+    cs = payload.combat;
+  } else {
+    cs = payload || null;
+    if (cs && typeof cs === "object" && Object.keys(cs).length === 0) {
+      cs = null;
+    }
+  }
+
+  if (!cs) {
+    el.textContent = "COMBAT: " + via + "brak aktywnej walki";
+    return;
+  }
+
+  const st = String(cs.status ?? "?");
+  const cur = cs.current_turn != null ? String(cs.current_turn) : "—";
+  const er = cs.ended_reason != null ? String(cs.ended_reason) : "";
+  const id = cs.id != null ? String(cs.id) : "";
+  const parts = ["status=" + st, "tura=" + cur];
+  if (er) parts.push("reason=" + er);
+  if (id) parts.push("#" + id);
+  el.textContent = "COMBAT: " + via + parts.join(" · ");
+};
+
 window.closeHistorySummaryModal = function () {
   const overlay = document.getElementById("history-summary-overlay");
   if (!overlay) return;

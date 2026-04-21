@@ -26,6 +26,10 @@
     constructor() {
       this._state = null;
       this._accumulatedLoot = [];
+      /** Loot from killing blow — applied after GM SSE narration (victory). */
+      this._pendingLoot = null;
+      /** When true, victory overlay is deferred until `showVictoryAfterNarration`. */
+      this._deferVictoryOverlay = false;
       this._busy = false;
       this._host = null;
       this._card = null;
@@ -119,7 +123,23 @@
       this.render(combatState);
     }
 
-    _playerAttackRollDbLine(intent, characterName, d20, mod, total, data) {
+    /**
+     * After combat-kill SSE narration: merge pending loot into accumulated list and show victory UI.
+     * @param {object|null} _killedData payload from [COMBAT_ENDED] (optional; victory uses `this._state`)
+     */
+    showVictoryAfterNarration(_killedData) {
+      this._deferVictoryOverlay = false;
+      const loot = this._pendingLoot;
+      if (Array.isArray(loot) && loot.length) {
+        this._pushLoot(loot);
+      }
+      this._pendingLoot = null;
+      if (this._state) {
+        this.showVictory(this._state);
+      }
+    }
+
+    _playerAttackRollDbLine(intent, characterName, d20, mod, total, data, combatVictory) {
       const hit = !!data.hit;
       const dmg = data.damage != null ? Number(data.damage) : null;
       const summary = hit
@@ -136,20 +156,90 @@
         total,
         hit,
         damage: dmg != null ? dmg : 0,
+        enemy_key: data.enemy_key != null ? String(data.enemy_key) : "",
+        target_name:
+          data.target_name != null ? String(data.target_name) : "",
+        enemy_dead: !!data.enemy_dead,
+        combat_victory: !!combatVictory,
       };
       return `${window.COMBAT_ROLL_PREFIX}\n${JSON.stringify(payload)}`;
     }
 
     /**
-     * Streams GM narrative for this attack; DB user line is already the combat roll JSON.
+     * Jedyny punkt wejścia narracji GM (SSE) po akcjach walki: atak i ucieczka.
+     * Nie wywołuj `window.triggerCombatNarration` ani `sendMessage` z panelu poza tą metodą.
      */
     async _sendCombatNarrativeFollowUp(dbUserLine) {
+      if (typeof window.triggerCombatNarration === "function") {
+        await window.triggerCombatNarration(dbUserLine);
+        return;
+      }
       if (typeof window.sendMessage !== "function") return;
       const { inputEl } = window.getEls ? window.getEls() : {};
       if (inputEl) inputEl.value = "";
       window.__pendingNarrativeUserTextForApi = dbUserLine;
       window.__suppressNextUserBubbleForGm = true;
       await window.sendMessage();
+    }
+
+    /** Wpis w czacie (JSON rzutu) przed strumieniem GM — tylko z `_onAttack`. */
+    _appendCombatAttackRollUserChatLine(dbLine, charName, turnNum) {
+      if (typeof window.addMessage === "function") {
+        window.addMessage({
+          speaker: charName,
+          text: dbLine,
+          role: "user",
+          route: "input",
+          turn: turnNum,
+          createdAt: new Date().toISOString(),
+        });
+      }
+      const { inputEl } = window.getEls ? window.getEls() : {};
+      if (inputEl) inputEl.value = "";
+    }
+
+    /**
+     * Nazwa aktualnego / głównego wroga przed ucieczką (snapshot stanu walki).
+     */
+    _fleeEnemyDisplayName(combatState) {
+      if (!combatState || !Array.isArray(combatState.combatants)) {
+        return "przeciwnik";
+      }
+      const cur = String(combatState.current_turn || "");
+      const byId = {};
+      combatState.combatants.forEach((c) => {
+        if (c && c.id != null) byId[String(c.id)] = c;
+      });
+      if (cur && cur !== "player" && byId[cur] && byId[cur].type === "enemy") {
+        return String(byId[cur].name || byId[cur].enemy_key || "przeciwnik");
+      }
+      const living = combatState.combatants.filter(
+        (c) => c && c.type === "enemy" && Number(c.hp_current ?? 0) > 0
+      );
+      if (living.length === 1) {
+        return String(living[0].name || living[0].enemy_key || "przeciwnik");
+      }
+      if (living.length > 1) {
+        const names = living
+          .map((e) => e.name || e.enemy_key)
+          .filter(Boolean);
+        return names.length ? names.join(", ") : "przeciwnicy";
+      }
+      return "przeciwnik";
+    }
+
+    _playerFleeDbLine(intent, characterName, enemyName) {
+      const en = (enemyName || "przeciwnik").trim() || "przeciwnik";
+      const summary = `Udało mi się wyrwać z walki z ${en} (silnik) — proszę o domknięcie sceny: chaos, reakcja wrogów, gdzie jestem teraz.`;
+      const payload = {
+        kind: "player_flee",
+        intent: (intent || "").trim(),
+        summary_line: summary,
+        character_name: characterName,
+        enemy_name: en,
+        success: true,
+      };
+      return `${window.COMBAT_ROLL_PREFIX}\n${JSON.stringify(payload)}`;
     }
 
     hide() {
@@ -255,7 +345,7 @@
       }
 
       const ended = String(st.status || "") === "ended";
-      if (ended) {
+      if (ended && !this._deferVictoryOverlay) {
         this._showEndScreen(st);
       } else {
         this._hideEnd();
@@ -385,13 +475,17 @@
       if (!cid) return;
       try {
         const resp = await fetch(`/api/campaigns/${cid}/combat`);
-        if (resp.status === 404) {
+        if (!resp.ok) return;
+        const cd = await resp.json().catch(() => ({}));
+        if (typeof window.updateCombatDebugStatusLabel === "function") {
+          window.updateCombatDebugStatusLabel(cd);
+        }
+        if (!cd.active || !cd.combat) {
           this._state = null;
           this.hide();
           return;
         }
-        if (!resp.ok) return;
-        const data = await resp.json();
+        const data = cd.combat;
         if (String(data.status) === "active") {
           this.show();
           this.render(data);
@@ -406,6 +500,11 @@
     applyCombatInitiated(combatState) {
       if (!combatState) return;
       this._accumulatedLoot = [];
+      this._pendingLoot = null;
+      this._deferVictoryOverlay = false;
+      if (typeof window !== "undefined" && window.state) {
+        window.state._combatVictoryUiPending = false;
+      }
       this.render(combatState);
       this.show();
     }
@@ -438,20 +537,29 @@
           method: "POST",
           headers: window.getApiHeaders ? window.getApiHeaders() : { "Content-Type": "application/json" },
         });
+        const fleeData = await resp.json().catch(() => ({}));
         if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
-          throw new Error(err.detail || `HTTP ${resp.status}`);
+          const detail = fleeData.detail || fleeData.message || `HTTP ${resp.status}`;
+          throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
         }
+        const combatSnap = this._state;
+        const enemyLabel = this._fleeEnemyDisplayName(combatSnap);
+
         this.hide();
-        if (typeof window.addMessage === "function") {
-          window.addMessage({
-            speaker: "System",
-            text: "Udało ci się uciec!",
-            role: "system",
-          });
+        if (typeof window.combatInput?.syncWithCombat === "function") {
+          window.combatInput.syncWithCombat(null);
         }
         this._accumulatedLoot = [];
         this._state = null;
+
+        if (!fleeData.already_ended) {
+          const nm =
+            typeof window.currentCharacterName === "function"
+              ? window.currentCharacterName()
+              : "Gracz";
+          const dbLine = this._playerFleeDbLine(intentRaw, nm, enemyLabel);
+          await this._sendCombatNarrativeFollowUp(dbLine);
+        }
       } catch (e) {
         this._setMsg(e.message || "Ucieczka nie powiodła się.", true);
       } finally {
@@ -503,6 +611,9 @@
         if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
 
         const cs = data.combat_state || null;
+        const endedNow = cs && String(cs.status) === "ended";
+        const victoryNarrationFirst =
+          endedNow && String(cs.ended_reason || "") === "victory";
 
         if (data.hit) {
           this._setMsg(`Trafienie! ${data.damage ?? "?"} obrażeń`);
@@ -511,40 +622,46 @@
         }
 
         if (data.enemy_dead) {
-          this._pushLoot(data.loot || []);
+          if (victoryNarrationFirst) {
+            this._pendingLoot = Array.isArray(data.loot) ? data.loot.slice() : [];
+          } else {
+            this._pushLoot(data.loot || []);
+          }
         }
 
         const charName =
           typeof window.currentCharacterName === "function"
             ? window.currentCharacterName()
             : String(sheet.name || "Bohater");
-        const dbLine = this._playerAttackRollDbLine(intentRaw, charName, d20, mod, total, data);
+        const dbLine = this._playerAttackRollDbLine(
+          intentRaw,
+          charName,
+          d20,
+          mod,
+          total,
+          data,
+          endedNow
+        );
         const turnNum =
           typeof window.nextTurnNumber === "function" ? window.nextTurnNumber() : null;
-        if (typeof window.addMessage === "function") {
-          window.addMessage({
-            speaker: charName,
-            text: dbLine,
-            role: "user",
-            route: "input",
-            turn: turnNum,
-            createdAt: new Date().toISOString(),
-          });
-        }
-        if (inputEl) inputEl.value = "";
+        this._appendCombatAttackRollUserChatLine(dbLine, charName, turnNum);
 
         if (cs) {
           this._state = cs;
+          if (victoryNarrationFirst) {
+            this._deferVictoryOverlay = true;
+          }
           this.render(cs);
         }
 
-        const endedNow = cs && String(cs.status) === "ended";
         await this._sendCombatNarrativeFollowUp(dbLine);
 
         if (endedNow) {
-          this.showVictory(cs);
           if (typeof window.combatInput?.syncWithCombat === "function") {
             window.combatInput.syncWithCombat(null);
+          }
+          if (!victoryNarrationFirst) {
+            this.showVictory(cs);
           }
           return;
         }

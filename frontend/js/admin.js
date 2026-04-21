@@ -23,6 +23,7 @@
     el.accountsList = document.getElementById("accounts-list");
     el.logBox = document.getElementById("admin-log-box");
     el.exportBtn = document.getElementById("export-config-btn");
+    el.exportCatalogSnapshotBtn = document.getElementById("export-catalog-snapshot-btn");
     el.importFile = document.getElementById("import-config-file");
     el.importDryBtn = document.getElementById("import-config-dry-btn");
     el.importCommitBtn = document.getElementById("import-config-commit-btn");
@@ -92,6 +93,7 @@
     state.connected = connected;
     el.logoutBtn.disabled = !connected;
     el.exportBtn.disabled = !connected;
+    if (el.exportCatalogSnapshotBtn) el.exportCatalogSnapshotBtn.disabled = !connected;
     el.importFile.disabled = !connected;
     el.importDryBtn.disabled = !connected || !state.selectedImportPayload;
     el.importCommitBtn.disabled = !connected || !state.selectedImportPayload;
@@ -748,6 +750,18 @@
     }
   }
 
+  async function handleExportCatalogSnapshot() {
+    try {
+      const payload = await api("/admin/config/catalog-snapshot");
+      const ts = new Date().toISOString().replaceAll(":", "-");
+      downloadJson(payload, `ai-gm-catalog-snapshot-${ts}.json`);
+      log("Exported catalog snapshot (all catalogue tables for LLM context).");
+    } catch (err) {
+      log(`Catalog snapshot export failed -> ${err.message}`);
+      alert(err.message);
+    }
+  }
+
   function handleImportFileChange() {
     const file = el.importFile.files && el.importFile.files[0];
     if (!file) {
@@ -861,6 +875,9 @@
     if (el.newEnemyBtn) el.newEnemyBtn.addEventListener("click", handleCreateEnemy);
     if (el.newConditionBtn) el.newConditionBtn.addEventListener("click", handleCreateCondition);
     el.exportBtn.addEventListener("click", handleExport);
+    if (el.exportCatalogSnapshotBtn) {
+      el.exportCatalogSnapshotBtn.addEventListener("click", handleExportCatalogSnapshot);
+    }
     el.importFile.addEventListener("change", handleImportFileChange);
     el.importDryBtn.addEventListener("click", () => handleImport(true));
     el.importCommitBtn.addEventListener("click", () => handleImport(false));

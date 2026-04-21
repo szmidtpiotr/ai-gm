@@ -173,6 +173,45 @@ def roll_d20(advantage: bool = False, disadvantage: bool = False) -> int:
     return random.randint(1, 20)
 
 
+def gm_enemy_modifier_from_key(enemy_key: str) -> int:
+    """Phase 8A — hardcoded defense/attack bonus by enemy key (wolf +1, default +2 bandit)."""
+    k = (enemy_key or "").lower()
+    if "wolf" in k:
+        return 1
+    return 2
+
+
+def build_gm_defense_roll_payload(*, enemy_key: str, enemy_label: str) -> dict[str, object]:
+    """
+    Cosmetic GM defense roll for SSE [GM_ROLL] (Phase 8A).
+    Verdict uses provisional DC 12; nat20/nat1 override.
+    """
+    raw = roll_d20()
+    modifier = gm_enemy_modifier_from_key(enemy_key)
+    total = int(raw) + int(modifier)
+    is_nat20 = raw == 20
+    is_nat1 = raw == 1
+    if is_nat20:
+        verdict = "crit"
+    elif is_nat1:
+        verdict = "fumble"
+    elif total >= 12:
+        verdict = "hit"
+    else:
+        verdict = "miss"
+    label = f"Obrona: {enemy_label}" if enemy_label else "Obrona przeciwnika"
+    return {
+        "skill": "reflex_save",
+        "label": label,
+        "raw": int(raw),
+        "modifier": int(modifier),
+        "total": int(total),
+        "is_nat20": bool(is_nat20),
+        "is_nat1": bool(is_nat1),
+        "verdict": verdict,
+    }
+
+
 def infer_roll_type(test: str) -> str:
     if test in ("melee_attack", "ranged_attack", "spell_attack"):
         return "attack"

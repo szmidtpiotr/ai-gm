@@ -556,6 +556,7 @@ def resolve_attack(
             out["hit"] = hit
             out["target_id"] = target_id
             out["target_name"] = enemy.get("name")
+            out["enemy_key"] = str(enemy.get("enemy_key") or "")
             out["attack_total"] = int(roll_result)
 
             loot: list[dict] = []

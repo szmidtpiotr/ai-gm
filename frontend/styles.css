@@ -2172,3 +2172,97 @@ body.campaign-death-active .campaign-death-screen {
   align-self: flex-start;
   max-width: min(100%, 640px);
 }
+
+/* ------------------------------------------------------------------ */
+/* GM roll bubble (SSE [GM_ROLL]) — styl zbliżony do kart rzutów      */
+/* ------------------------------------------------------------------ */
+.message.gm-roll-bubble {
+  align-self: flex-end;
+  max-width: min(100%, 420px);
+  background: rgba(90, 60, 20, 0.12);
+  border-color: rgba(200, 148, 74, 0.45);
+  border-bottom-right-radius: 6px;
+}
+
+.message.gm-roll-bubble .meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.message.gm-roll-bubble .message-body {
+  margin: 0;
+}
+
+.roll-card.roll-card--gm {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 253, 248, 0.06);
+  border: 1px solid rgba(214, 207, 192, 0.25);
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.roll-card--gm .roll-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.roll-card--gm .roll-card__skill {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.roll-card--gm .roll-card__dice {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.roll-card--gm .roll-card__breakdown {
+  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.roll-card--gm .roll-card__raw,
+.roll-card--gm .roll-card__total {
+  font-weight: 700;
+}
+
+.roll-card--gm .roll-card__sep {
+  margin: 0 4px;
+  opacity: 0.85;
+  border: none;
+  height: auto;
+}
+
+.roll-card--gm .roll-card__verdict {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding-top: 6px;
+  border-top: 1px solid rgba(214, 207, 192, 0.2);
+}
+
+.roll-card--gm.roll-card--crit .roll-card__verdict--crit {
+  color: #b45309;
+}
+
+.roll-card--gm.roll-card--fumble .roll-card__verdict--fumble {
+  color: #991b1b;
+}
+
+.roll-card--gm.roll-card--hit .roll-card__verdict--hit {
+  color: var(--ok, #15803d);
+}
+
+.roll-card--gm.roll-card--miss .roll-card__verdict--miss {
+  color: var(--muted);
+}

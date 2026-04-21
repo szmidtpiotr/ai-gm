@@ -28,7 +28,7 @@ from app.services.admin_character_recreate import (
 )
 from app.migrations_admin import run_admin_migrations
 from app.services.admin_auth import issue_dev_admin_token, verify_admin_token
-from app.services.admin_config_transfer import export_config, import_config
+from app.services.admin_config_transfer import export_catalog_snapshot, export_config, import_config
 from app.services.admin_config import (
     create_condition,
     create_consumable,
@@ -1640,6 +1640,12 @@ async def admin_db_restore(
 @router.get("/admin/config/export")
 def admin_export_config(_: None = Depends(require_admin_token)):
     return export_config()
+
+
+@router.get("/admin/config/catalog-snapshot")
+def admin_export_catalog_snapshot(_: None = Depends(require_admin_token)):
+    """All game_config_* catalogue tables (items, weapons, loot, …) for read-only / LLM context."""
+    return export_catalog_snapshot()
 
 
 @router.post("/admin/config/import")

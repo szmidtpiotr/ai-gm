@@ -459,22 +459,40 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
     const cr = await fetch(`/api/campaigns/${campaignId}/combat`, {
       headers: window.getApiHeaders ? window.getApiHeaders() : {}
     });
-    if (cr.status === 404) {
-      window.state.combatClientTurns = [];
-      window.state.combatLogTurns = [];
-      window.state.turns = window.mergeTurnsForChat();
-      if (typeof window.renderTurnsToChat === 'function') {
-        window.renderTurnsToChat();
-      }
-      if (typeof window.combatPanel?.hide === 'function') {
-        window.combatPanel.hide();
+    if (!cr.ok) {
+      if (typeof window.updateCombatDebugStatusLabel === 'function') {
+        const el = document.getElementById('combat-debug-status');
+        if (el) el.textContent = 'COMBAT: GET failed HTTP ' + cr.status;
       }
       if (typeof window.combatInput?.syncWithCombat === 'function') {
         window.combatInput.syncWithCombat(null);
       }
-    } else if (cr.ok) {
-      const cs = await cr.json();
-      if (cs.status === 'ended') {
+    } else {
+      const cd = await cr.json().catch(() => ({}));
+      if (typeof window.updateCombatDebugStatusLabel === 'function') {
+        window.updateCombatDebugStatusLabel(cd);
+      }
+      const cs = cd.combat;
+      const hasActiveCombat = cd.active === true && cs != null;
+
+      const clearCombatUi = () => {
+        window.state.combatClientTurns = [];
+        window.state.combatLogTurns = [];
+        window.state.turns = window.mergeTurnsForChat();
+        if (typeof window.renderTurnsToChat === 'function') {
+          window.renderTurnsToChat();
+        }
+        if (typeof window.combatPanel?.hide === 'function') {
+          window.combatPanel.hide();
+        }
+        if (typeof window.combatInput?.syncWithCombat === 'function') {
+          window.combatInput.syncWithCombat(null);
+        }
+      };
+
+      if (!hasActiveCombat) {
+        clearCombatUi();
+      } else if (cs.status === 'ended') {
         if (typeof window.combatPanel?.hide === 'function') {
           window.combatPanel.hide();
         }
@@ -506,10 +524,6 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
         if (cs.status === 'active' && typeof window.combatPanel?.show === 'function') {
           window.combatPanel.show();
         }
-      }
-    } else {
-      if (typeof window.combatInput?.syncWithCombat === 'function') {
-        window.combatInput.syncWithCombat(null);
       }
     }
   } catch (_e) {
