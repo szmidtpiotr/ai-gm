@@ -32,6 +32,8 @@
 #   BACKEND_DB_PATH path inside container for docker cp (default: /data/ai_gm.db)
 #   HOST_DB_PATH   host filesystem path when SYNC_SOURCE=host (e.g. /ai-gm/data/ai_gm.db)
 #   SYNC_INTERVAL  seconds between syncs (--loop)(default: 300)
+#   SYNC_TRANSPORT "ssh" (default) or "local" — local = copy to REMOTE_DB_DIR on this machine (no SSH)
+#   CRON_SCHEDULE  cron time spec for --install-cron (default: */5 * * * *)
 #   LOG_FILE       log file for cron mode       (default: /tmp/ai-gm-db-sync.log)
 # ============================================================
 set -euo pipefail
@@ -47,12 +49,14 @@ BACKEND_CTR="${BACKEND_CTR:-ai-gm-backend-1}"
 BACKEND_DB_PATH="${BACKEND_DB_PATH:-/data/ai_gm.db}"
 HOST_DB_PATH="${HOST_DB_PATH:-}"
 SYNC_INTERVAL="${SYNC_INTERVAL:-300}"
+SYNC_TRANSPORT="${SYNC_TRANSPORT:-ssh}"
+CRON_SCHEDULE="${CRON_SCHEDULE:-*/5 * * * *}"
 LOG_FILE="${LOG_FILE:-/tmp/ai-gm-db-sync.log}"
 TMP_DB="/tmp/ai_gm_autosync_$$.db"
 
 SCRIPT_ABS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 CRON_MARKER="# ai-gm-db-autosync"
-CRON_LINE="*/5 * * * * /bin/bash \"${SCRIPT_ABS}\" >> \"${LOG_FILE}\" 2>&1 ${CRON_MARKER}"
+CRON_WRAPPER="${REPO_ROOT}/scripts/.db-autosync-cron-wrap.sh"
 
 # ---- helpers ----
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
@@ -60,7 +64,7 @@ ts() { date '+%Y-%m-%d %H:%M:%S'; }
 log() { echo "[$(ts)] $*"; }
 
 run_sync() {
-    log "START sync  (${SYNC_SOURCE}) → ${OBS_HOST}"
+    log "START sync  (${SYNC_SOURCE}, transport=${SYNC_TRANSPORT}) → ${OBS_HOST:-local}"
 
     case "${SYNC_SOURCE}" in
         host)
@@ -94,6 +98,29 @@ run_sync() {
             return 1
             ;;
     esac
+
+    if [[ "${SYNC_TRANSPORT}" == "local" ]]; then
+        mkdir -p "${REMOTE_DB_DIR}" || {
+            log "ERROR cannot mkdir ${REMOTE_DB_DIR}"
+            rm -f "${TMP_DB}"
+            return 1
+        }
+        cp -f "${TMP_DB}" "${REMOTE_DB_DIR}/ai_gm.db" || {
+            log "ERROR cp to ${REMOTE_DB_DIR}/ai_gm.db failed"
+            rm -f "${TMP_DB}"
+            return 1
+        }
+        chmod 644 "${REMOTE_DB_DIR}/ai_gm.db" 2>/dev/null || true
+        rm -f "${TMP_DB}"
+        log "DONE  synced (local) → ${REMOTE_DB_DIR}/ai_gm.db"
+        return 0
+    fi
+
+    if [[ ! -f "${OBS_KEY}" ]]; then
+        log "ERROR missing SSH key: ${OBS_KEY} (set OBS_KEY or use SYNC_TRANSPORT=local)"
+        rm -f "${TMP_DB}"
+        return 1
+    fi
 
     ssh -i "${OBS_KEY}" -o BatchMode=yes -o ConnectTimeout=8 \
         "${OBS_USER}@${OBS_HOST}" "mkdir -p ${REMOTE_DB_DIR}" 2>/dev/null || {
@@ -129,9 +156,26 @@ case "${1:-}" in
         ;;
 
     --install-cron)
-        # Remove old entry if present, then add fresh one
+        cat > "${CRON_WRAPPER}" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+export SYNC_TRANSPORT="${SYNC_TRANSPORT}"
+export SYNC_SOURCE="${SYNC_SOURCE}"
+export REMOTE_DB_DIR="${REMOTE_DB_DIR}"
+export OBS_HOST="${OBS_HOST}"
+export OBS_USER="${OBS_USER}"
+export OBS_KEY="${OBS_KEY}"
+export BACKEND_CTR="${BACKEND_CTR}"
+export BACKEND_DB_PATH="${BACKEND_DB_PATH}"
+export HOST_DB_PATH="${HOST_DB_PATH}"
+exec "${SCRIPT_ABS}"
+EOF
+        chmod 700 "${CRON_WRAPPER}"
+        CRON_LINE="${CRON_SCHEDULE} \"${CRON_WRAPPER}\" >> \"${LOG_FILE}\" 2>&1 ${CRON_MARKER}"
         (crontab -l 2>/dev/null | grep -v "${CRON_MARKER}" || true; echo "${CRON_LINE}") | crontab -
-        echo "Cron job installed (every 5 min):"
+        echo "Cron job installed:"
+        echo "  schedule: ${CRON_SCHEDULE}"
+        echo "  wrapper:  ${CRON_WRAPPER}"
         crontab -l | grep "${CRON_MARKER}"
         echo ""
         echo "Logs: ${LOG_FILE}"
@@ -140,6 +184,7 @@ case "${1:-}" in
 
     --uninstall-cron)
         crontab -l 2>/dev/null | grep -v "${CRON_MARKER}" | crontab - || true
+        rm -f "${CRON_WRAPPER}" 2>/dev/null || true
         echo "Cron job removed."
         ;;
 
