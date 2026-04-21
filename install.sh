@@ -235,14 +235,9 @@ if [[ "$WITH_OBSERVABILITY" == true ]]; then
     bad "Set GRAFANA_ADMIN_PASSWORD before using --with-observability (Grafana admin password)."
   fi
   export GRAFANA_ADMIN_PASSWORD
-  log "Preparing host directory for SQLite snapshot (Grafana + MCP)…"
-  if [[ "${EUID:-$(id -u)}" -eq 0 ]]; then
-    mkdir -p /var/lib/ai-gm-db
-    chmod 755 /var/lib/ai-gm-db
-  else
-    sudo mkdir -p /var/lib/ai-gm-db
-    sudo chmod 755 /var/lib/ai-gm-db
-  fi
+  export AI_GM_STORY_DB_DIR="${AI_GM_STORY_DB_DIR:-${SCRIPT_DIR}/observability-data/story-db}"
+  log "Preparing SQLite snapshot directory: ${AI_GM_STORY_DB_DIR}"
+  mkdir -p "${AI_GM_STORY_DB_DIR}"
   log "Starting observability stack (Grafana, Loki, Promtail, MCP)…"
   compose_obs pull
   compose_obs build mcp-server
@@ -297,7 +292,7 @@ fi
     if [[ -n "$HOST_IP" && "$HOST_IP" != "127.0.0.1" ]]; then
       echo "  Grafana (LAN): http://${HOST_IP}:3000"
     fi
-    echo "  Story DB dir:  /var/lib/ai-gm-db  (sync with scripts/db-autosync.sh → OBS_HOST)"
+    echo "  Story DB dir:  ${AI_GM_STORY_DB_DIR:-${SCRIPT_DIR}/observability-data/story-db}  (sync: scripts/db-autosync.sh, set REMOTE_DB_DIR if non-default)"
     echo "  Nginx example: ${SCRIPT_DIR}/observability/reverse-proxy.nginx.example.conf"
   fi
   echo ""

@@ -30,6 +30,8 @@ This directory contains ready-to-run files for a Proxmox VM observability setup.
 cp -R observability /opt/ai-gm-observability
 cd /opt/ai-gm-observability
 export GRAFANA_ADMIN_PASSWORD='change-this-now'
+# Optional: if you cannot create /var/lib/ai-gm-db (needs root), use a user-writable dir:
+# export AI_GM_STORY_DB_DIR="$HOME/ai-gm-story-db" && mkdir -p "$AI_GM_STORY_DB_DIR"
 docker compose up -d
 docker compose ps
 ```
