@@ -137,10 +137,11 @@ def log_narrative_turn_structured(
             extra={
                 "extra_fields": {
                     "event": "narrative_turn",
-                    "campaign_id": campaign_id,
-                    "character_id": character_id,
-                    "turn_id": turn_row.get("id"),
-                    "turn_number": turn_row.get("turn_number"),
+                    # String IDs so Loki/Grafana `| json | campaign_id=~"1033"` matches reliably.
+                    "campaign_id": str(campaign_id),
+                    "character_id": "" if character_id is None else str(character_id),
+                    "turn_id": "" if turn_row.get("id") is None else str(turn_row.get("id")),
+                    "turn_number": "" if turn_row.get("turn_number") is None else str(turn_row.get("turn_number")),
                     "created_at": turn_row.get("created_at"),
                     "user_text": _truncate_for_story_log(user_text or "", max_chars),
                     "assistant_text": _truncate_for_story_log(assistant_text or "", max_chars),
@@ -173,10 +174,10 @@ def log_memory_turn_structured(
             extra={
                 "extra_fields": {
                     "event": "memory_turn",
-                    "campaign_id": campaign_id,
-                    "character_id": character_id,
-                    "turn_id": turn_row.get("id"),
-                    "turn_number": turn_row.get("turn_number"),
+                    "campaign_id": str(campaign_id),
+                    "character_id": "" if character_id is None else str(character_id),
+                    "turn_id": "" if turn_row.get("id") is None else str(turn_row.get("id")),
+                    "turn_number": "" if turn_row.get("turn_number") is None else str(turn_row.get("turn_number")),
                     "created_at": turn_row.get("created_at"),
                     "user_text": _truncate_for_story_log(user_text or "", max_chars),
                     "assistant_text": _truncate_for_story_log(assistant_text or "", max_chars),
