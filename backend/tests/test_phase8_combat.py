@@ -97,6 +97,11 @@ def _schema_sql() -> str:
       (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, loot_table_key, drop_chance)
     VALUES ('bandit', 'Bandit', 12, 13, 3, 1, '1d8', NULL, 0.0);
 
+    CREATE TABLE IF NOT EXISTS game_config_meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS active_combat (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       campaign_id INTEGER NOT NULL UNIQUE,
@@ -292,6 +297,7 @@ class TestPhase8Combat(unittest.TestCase):
         """Legacy JSON z enemy_key=enemy / name=Wróg → odpowiedź i stan z prawdziwym kluczem z config."""
         cs.initiate_combat(1, 1, ["bandit"])
         conn = sqlite3.connect(str(self._tmp))
+        conn.row_factory = sqlite3.Row
         row = conn.execute(
             "SELECT combatants FROM active_combat WHERE campaign_id=1"
         ).fetchone()
@@ -380,6 +386,7 @@ class TestAtakCommandTurn(unittest.TestCase):
 
     def setUp(self):
         import app.api.turns as turns_mod
+        import app.services.client_ui_config as client_ui_cfg
 
         self._turns_mod = turns_mod
         self._tmp = Path(__file__).resolve().parent / "_phase8_atak_turn_test.db"
@@ -390,10 +397,25 @@ class TestAtakCommandTurn(unittest.TestCase):
         conn.close()
         self._p_db = patch.object(cs, "COMBAT_DB_PATH", str(self._tmp))
         self._p_turns_db = patch.object(turns_mod, "DB_PATH", str(self._tmp))
+        self._p_client_cfg_db = patch.object(client_ui_cfg, "DB_PATH", str(self._tmp))
+        self._p_llm = patch.object(
+            turns_mod,
+            "get_user_llm_settings_full",
+            return_value={
+                "provider": "ollama",
+                "base_url": "http://127.0.0.1:11434",
+                "model": "m",
+                "api_key": "",
+            },
+        )
         self._p_db.start()
         self._p_turns_db.start()
+        self._p_client_cfg_db.start()
+        self._p_llm.start()
 
     def tearDown(self):
+        self._p_llm.stop()
+        self._p_client_cfg_db.stop()
         self._p_turns_db.stop()
         self._p_db.stop()
         if self._tmp.exists():
