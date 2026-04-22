@@ -9,6 +9,8 @@ window.state = {
   serverTurns: [],
   /** Tury walki dodane lokalnie (np. dymek rzutu wroga), scalane z `serverTurns` w `mergeTurnsForChat`. */
   combatClientTurns: [],
+  /** Klienckie dymki GM_ROLL z SSE — nie są zapisywane w DB, ale powinny przeżyć rerender chatu. */
+  gmRollClientTurns: [],
   /** Log silnika walki (GET /combat/turns), syntetyczne dymki — przeżywają F5. */
   combatLogTurns: [],
   /** Wymiany /helpme (tylko klient; nie wysyłane do narracji — serwer i tak używa route=helpme). */

@@ -249,6 +249,25 @@ window.appendToStreamingBubble = function (bubbleEl, token) {
   window.scrollChatToBottomThrottled();
 };
 
+window.suppressCombatEndedAutoUi = function () {
+  if (!window.state?._combatJustEnded) return false;
+  window.state.activeRollRequest = null;
+  if (typeof window.updateActionTriggerBtn === 'function') {
+    window.updateActionTriggerBtn(false);
+  }
+  return true;
+};
+
+window.consumeCombatJustEndedGuard = function () {
+  if (!window.state?._combatJustEnded) return false;
+  window.state._combatJustEnded = false;
+  window.state.activeRollRequest = null;
+  if (typeof window.updateActionTriggerBtn === 'function') {
+    window.updateActionTriggerBtn(false);
+  }
+  return true;
+};
+
 /**
  * Finalizes the streaming bubble: removes .streaming class so the bubble
  * shrinks back to fit-content width (natural size), removes inline style
@@ -257,14 +276,11 @@ window.appendToStreamingBubble = function (bubbleEl, token) {
 window.finalizeStreamingBubble = function (bubbleEl, fullText) {
   if (!bubbleEl) return;
 
-  if (window.state._combatJustEnded) {
-    window.state._combatJustEnded = false;
+  if (typeof window.suppressCombatEndedAutoUi === 'function' && window.suppressCombatEndedAutoUi()) {
     bubbleEl.classList.remove('streaming');
     bubbleEl.removeAttribute('id');
     const preEarly = bubbleEl.querySelector('pre.streaming-text');
     if (preEarly) preEarly.style.cssText = '';
-    window.state.activeRollRequest = null;
-    window.updateActionTriggerBtn(false);
     window.scrollChatToBottom();
     return;
   }
@@ -287,24 +303,25 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
 
   if (route === 'narrative') {
     const pending = window.state.pendingRoll;
-    const diceList = window.extractDiceFromText(renderedText);
     if (pending) {
       const canonicalSkill = pending.canonical_skill || pending.skill;
       window.state.activeRollRequest = {
         skill: canonicalSkill,
         display_name: pending.skill,
         dice: pending.dice,
-          description: pending.description || '',
+        description: pending.description || '',
         label: `Roll ${canonicalSkill} ${pending.dice}`,
       };
-      window.updateActionTriggerBtn(true);
-    } else if (diceList && diceList.length > 0) {
-      window.state.activeRollRequest = diceList[0];
-      window.updateActionTriggerBtn(true);
     } else {
       window.state.activeRollRequest = null;
-      window.updateActionTriggerBtn();
     }
+    if (
+      typeof window.isActiveRollRequestAllowed === 'function' &&
+      !window.isActiveRollRequestAllowed(window.state.activeRollRequest)
+    ) {
+      window.state.activeRollRequest = null;
+    }
+    window.updateActionTriggerBtn(!!window.state.activeRollRequest);
   }
 
   window.scrollChatToBottom();
@@ -387,59 +404,106 @@ window.rollAndAppend = async function (diceExpr, wrapEl) {
   }
 };
 
+window.buildGmRollBubbleHtml = function (rollData) {
+  let verdictLabel;
+  let cardMod = 'roll-card--neutral';
+  let gmVariant = '';
+  const verdict = String(rollData?.verdict || '').toLowerCase();
+  const isLegacyCrit = verdict === 'crit' || (!verdict && (rollData.raw === 20 || rollData.is_nat20));
+  const isLegacyFumble = verdict === 'fumble' || (!verdict && (rollData.raw === 1 || rollData.is_nat1));
+
+  if (verdict === 'perfect_dodge') {
+    verdictLabel = '\u{1F300} PERFEKCYJNY UNIK';
+    gmVariant = 'roll-card--dodge';
+  } else if (verdict === 'fumble_dodge') {
+    verdictLabel = '\uD83D\uDC80 FATALNE POTKNI\u0118CIE';
+    gmVariant = 'roll-card--hit';
+  } else if (verdict === 'dodged') {
+    verdictLabel = '\u{1F300} UNIK';
+    gmVariant = 'roll-card--dodge';
+  } else if (isLegacyCrit) {
+    verdictLabel = '\u26A1 TRAFIENIE KRYTYCZNE';
+    cardMod = 'roll-card--success';
+  } else if (isLegacyFumble) {
+    verdictLabel = '\uD83D\uDC80 KRYTYCZNA PORA\u017BKA';
+    cardMod = 'roll-card--fail';
+  } else if (verdict === 'hit') {
+    verdictLabel = '\uD83D\uDDE1\uFE0F TRAFIENIE';
+    gmVariant = 'roll-card--hit';
+  } else {
+    verdictLabel = '\uD83D\uDEE1\uFE0F PUD\u0141O';
+    cardMod = 'roll-card--fail';
+  }
+
+  let dieCls = 'roll-card__die';
+  if (Number(rollData.raw) === 20) dieCls += ' roll-card__die--nat20';
+  const modifier = Number(rollData.modifier) || 0;
+  const modStr = typeof window.formatRollModifier === 'function'
+    ? window.formatRollModifier(modifier)
+    : (modifier > 0 ? `+${modifier}` : `${modifier}`);
+
+  return `
+    <div class="roll-card roll-card--light roll-card--gm ${cardMod} ${gmVariant}">
+      <div class="roll-card__line roll-card__line--head">\uD83C\uDFB2 GM: ${window.escapeHtml(rollData.skill || rollData.label || 'Atak')}</div>
+      <div class="roll-card__line roll-card__line--detail">
+        ${window.escapeHtml(rollData.dice || '1d20')}:&nbsp;&nbsp;<span class="${dieCls}">${window.escapeHtml(String(rollData.raw ?? '?'))}</span>
+        &nbsp;&nbsp;|&nbsp;&nbsp; Modyfikator: ${window.escapeHtml(modStr)}
+      </div>
+      <div class="roll-card__line roll-card__line--wynik">
+        Wynik: <strong>${window.escapeHtml(String(rollData.total ?? '?'))}</strong>
+        &nbsp;&mdash;&nbsp;${window.escapeHtml(verdictLabel)}
+      </div>
+    </div>`;
+};
+
+window.GM_ROLL_CARD_PREFIX = '__AI_GM_GM_ROLL_V1__';
+
+window.tryParseGmRollCardFromText = function (text) {
+  const s = String(text || '').trim();
+  const p = window.GM_ROLL_CARD_PREFIX;
+  if (!s.startsWith(p + '\n')) return null;
+  try {
+    return JSON.parse(s.slice(p.length).trim());
+  } catch (_e) {
+    return null;
+  }
+};
+
+window.extractPersistedGmRollNarrative = function (text) {
+  const raw = String(text || '');
+  const p = window.GM_ROLL_CARD_PREFIX;
+  if (!raw.startsWith(p + '\n')) {
+    return { rollData: null, narrativeText: raw };
+  }
+  const nl = raw.indexOf('\n');
+  if (nl < 0) return { rollData: null, narrativeText: raw };
+  const rest = raw.slice(nl + 1);
+  const sepIdx = rest.indexOf('\n\n');
+  if (sepIdx < 0) {
+    const parsed = window.tryParseGmRollCardFromText(raw);
+    return { rollData: parsed, narrativeText: '' };
+  }
+  const jsonText = rest.slice(0, sepIdx).trim();
+  const narrativeText = rest.slice(sepIdx + 2);
+  try {
+    return {
+      rollData: JSON.parse(jsonText),
+      narrativeText
+    };
+  } catch (_e) {
+    return { rollData: null, narrativeText: raw };
+  }
+};
+
 window.addGmRollBubble = function (rollData, turn) {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
 
-  const isCrit = rollData.is_nat20 || rollData.verdict === 'crit';
-  const isFumble = rollData.is_nat1 || rollData.verdict === 'fumble';
-  const isHit = rollData.verdict === 'hit' || isCrit;
-
-  let verdictLabel;
-  let verdictClass;
-  if (isCrit) {
-    verdictLabel = '\u26A1 TRAFIENIE KRYTYCZNE';
-    verdictClass = 'crit';
-  } else if (isFumble) {
-    verdictLabel = '\uD83D\uDC80 KRYTYCZNA PORA\u017BKA';
-    verdictClass = 'fumble';
-  } else if (isHit) {
-    verdictLabel = '\uD83D\uDDE1\uFE0F TRAFIENIE';
-    verdictClass = 'hit';
-  } else {
-    verdictLabel = '\uD83D\uDEE1\uFE0F PUD\u0141O';
-    verdictClass = 'miss';
-  }
-
-  const modAbs = Math.abs(Number(rollData.modifier) || 0);
-  const modSignChar = Number(rollData.modifier) >= 0 ? '+' : '\u2212';
-  const modBreakdown =
-    Number(rollData.modifier) === 0
-      ? ''
-      : `<span class="roll-card__sep">${modSignChar}</span><span class="roll-card__mod">${modAbs}</span><span class="roll-card__sep">=</span>`;
-
   const wrap = document.createElement('div');
   wrap.className = 'message gm-roll-bubble';
-  wrap.dataset.turn = turn ?? '';
+  if (turn) wrap.dataset.turn = turn;
 
-  wrap.innerHTML = `
-    <div class="meta">
-      <div><strong>\uD83C\uDFB2 GM</strong> \u2022 tura ${window.escapeHtml(String(turn ?? ''))}</div>
-    </div>
-    <div class="message-body">
-      <div class="roll-card roll-card--gm roll-card--${verdictClass}">
-        <div class="roll-card__header">
-          <span class="roll-card__skill">${window.escapeHtml(rollData.label || rollData.skill)}</span>
-          <span class="roll-card__dice">d20</span>
-        </div>
-        <div class="roll-card__breakdown">
-          <span class="roll-card__raw">${window.escapeHtml(String(rollData.raw))}</span>
-          ${modBreakdown}
-          <span class="roll-card__total">${window.escapeHtml(String(rollData.total))}</span>
-        </div>
-        <div class="roll-card__verdict roll-card__verdict--${verdictClass}">${verdictLabel}</div>
-      </div>
-    </div>`;
+  wrap.innerHTML = window.buildGmRollBubbleHtml(rollData);
 
   chatEl.appendChild(wrap);
   window.scrollChatToBottom();
@@ -918,7 +982,6 @@ window.replaceThinkingBubble = function ({
 
   if (role === 'assistant' && route === 'narrative') {
     const pending = window.state.pendingRoll;
-    const diceList = window.extractDiceFromText(renderedText);
     if (pending) {
       const canonicalSkill = pending.canonical_skill || pending.skill;
       window.state.activeRollRequest = {
@@ -927,14 +990,16 @@ window.replaceThinkingBubble = function ({
         dice: pending.dice,
         label: `Roll ${canonicalSkill} ${pending.dice}`,
       };
-      window.updateActionTriggerBtn(true);
-    } else if (diceList && diceList.length > 0) {
-      window.state.activeRollRequest = diceList[0];
-      window.updateActionTriggerBtn(true);
     } else {
       window.state.activeRollRequest = null;
-      window.updateActionTriggerBtn();
     }
+    if (
+      typeof window.isActiveRollRequestAllowed === 'function' &&
+      !window.isActiveRollRequestAllowed(window.state.activeRollRequest)
+    ) {
+      window.state.activeRollRequest = null;
+    }
+    window.updateActionTriggerBtn(!!window.state.activeRollRequest);
   }
 
   existing.replaceWith(wrap);
@@ -1003,6 +1068,9 @@ window.updateUiState = function () {
   if (els.campaignCreateOverlayEl) {
     els.campaignCreateOverlayEl.style.display = window.campaignModalOpen ? 'flex' : 'none';
     els.campaignCreateOverlayEl.setAttribute('aria-hidden', window.campaignModalOpen ? 'false' : 'true');
+  }
+  if (typeof window.applyPlayerLlmSettingsAccessUi === 'function') {
+    window.applyPlayerLlmSettingsAccessUi();
   }
 };
 
@@ -1228,7 +1296,17 @@ window.renderTurnsToChat = function () {
         });
         window.addBackInGameSeparator();
       } else if (turn.route === 'narrative') {
-        const assistantText = String(turn.assistant_text || '');
+        const assistantTextRaw = String(turn.assistant_text || '');
+        const { rollData: persistedGmRoll, narrativeText } =
+          typeof window.extractPersistedGmRollNarrative === 'function'
+            ? window.extractPersistedGmRollNarrative(assistantTextRaw)
+            : { rollData: null, narrativeText: assistantTextRaw };
+
+        if (persistedGmRoll) {
+          window.addGmRollBubble(persistedGmRoll, turn.turn_number || turn.id);
+        }
+
+        const assistantText = String(narrativeText || '');
         if (!assistantText.trim()) return;
 
         const msgWrap = document.createElement('div');
@@ -1280,8 +1358,15 @@ window.renderTurnsToChat = function () {
             lastNarrativeRollRequest = null;
           }
         } else {
-          const diceList = window.extractDiceFromText(assistantText);
-          lastNarrativeRollRequest = (diceList && diceList.length > 0) ? diceList[0] : null;
+          lastNarrativeRollRequest = null;
+        }
+
+        if (
+          typeof window.isActiveRollRequestAllowed === 'function' &&
+          lastNarrativeRollRequest &&
+          !window.isActiveRollRequestAllowed(lastNarrativeRollRequest)
+        ) {
+          lastNarrativeRollRequest = null;
         }
 
         if (chatEl) chatEl.appendChild(msgWrap);
@@ -1305,7 +1390,18 @@ window.renderTurnsToChat = function () {
 };
 
 window.updateActionTriggerBtn = function (openPopup = false) {
-  const hasActiveRoll = !!window.state.activeRollRequest;
+  if (
+    window.state.activeRollRequest &&
+    typeof window.isActiveRollRequestAllowed === 'function' &&
+    !window.isActiveRollRequestAllowed(window.state.activeRollRequest)
+  ) {
+    window.state.activeRollRequest = null;
+  }
+  const req = window.state.activeRollRequest;
+  const hasActiveRoll =
+    !!req &&
+    (typeof window.isActiveRollRequestAllowed !== 'function' ||
+      window.isActiveRollRequestAllowed(req));
   const popup = document.getElementById('action-popup');
   if (!popup) return;
 
@@ -1393,7 +1489,13 @@ window.initActionPopup = function () {
   rollBtn.addEventListener('click', async () => {
     popup.classList.add('hidden');
     const req = window.state.activeRollRequest;
-    if (!req) return;
+    if (
+      !req ||
+      (typeof window.isActiveRollRequestAllowed === 'function' &&
+        !window.isActiveRollRequestAllowed(req))
+    ) {
+      return;
+    }
     const { inputEl } = window.getEls();
     const rollSkill = (req.skill || 'melee_attack').trim() || 'melee_attack';
     const rollDice = (req.dice || 'd20').trim().toLowerCase() || 'd20';

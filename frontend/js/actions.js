@@ -25,6 +25,39 @@ window.state._wizardPendingCharacter = window.state._wizardPendingCharacter || n
 window.state._combatJustEnded = window.state._combatJustEnded || false;
 window.state._lastKilledEnemy = window.state._lastKilledEnemy || null;
 window.state._combatVictoryUiPending = window.state._combatVictoryUiPending || false;
+window.state.gmRollClientTurns = window.state.gmRollClientTurns || [];
+
+/**
+ * Registry keys enabled for players (`GET /api/mechanics/slash-commands`). Filled by `loadSlashCommandCatalog`.
+ * When empty or unset, the client does not pre-block (the server still enforces).
+ * @type {Set<string> | null}
+ */
+window.__slashCommandsEnabledKeys = window.__slashCommandsEnabledKeys || null;
+
+/** @param {string} registryCommand e.g. "/atak", "/mem [pytanie]", "/search" */
+window.isPublicSlashCommandEnabled = function (registryCommand) {
+  const keys = window.__slashCommandsEnabledKeys;
+  if (!keys || !(keys instanceof Set) || keys.size === 0) return true;
+  return keys.has(String(registryCommand || '').trim());
+};
+
+/**
+ * Maps a user line to a registry key when it is handled by the main narrative stream (not /mem, /search, …).
+ * @param {string} line
+ * @returns {string | null}
+ */
+window.slashRegistryKeyForChatClient = function (line) {
+  const t = String(line || '').trim();
+  if (!t.startsWith('/')) return null;
+  if (/^\/roll\b/i.test(t)) return '/roll';
+  if (/^\/help\b/i.test(t)) return '/help';
+  if (/^\/sheet\b/i.test(t)) return '/sheet';
+  if (/^\/history\b/i.test(t)) return '/history';
+  if (/^\/export\b/i.test(t)) return '/export';
+  if (/^\/name\b/i.test(t)) return '/name <new name>';
+  if (/^\/(?:walka|atak)\s*$/i.test(t)) return '/atak';
+  return null;
+};
 
 /** Survives refresh: used to DELETE abandoned campaign on next load or via pagehide keepalive. */
 window.WIZARD_PENDING_SESSION_KEY = 'ai-gm:wizardPendingCharacter';
@@ -773,6 +806,16 @@ window.sendMessage = async function () {
 
   const combatStartMatch = text.trim().match(/^\/(?:walka|atak)\s+(.+)$/i);
   if (combatStartMatch) {
+    if (!window.isPublicSlashCommandEnabled('/atak')) {
+      window.addMessage({
+        speaker: 'System',
+        text: 'Ta komenda czatu jest wyłączona przez administratora.',
+        role: 'error',
+        createdAt: clientCreatedAt
+      });
+      inputEl.value = '';
+      return;
+    }
     const rawKeys = String(combatStartMatch[1] || '')
       .split(/[,\s]+/)
       .map((s) => s.trim().toLowerCase())
@@ -781,8 +824,8 @@ window.sendMessage = async function () {
       window.addMessage({
         speaker: 'System',
         text:
-          'Użyj: /walka klucz_wroga  lub  /atak klucz_wroga  — np. /walka bandit. ' +
-          'Kilku wrogów: /walka bandit,wolf. Uruchamia mechanikę walki bez czekania na tag od MG.',
+          'Aby rozpocząć walkę w silniku, podaj klucze wrogów: np. /atak bandit lub /walka bandit,wolf. ' +
+          'Samo /atak lub /walka (bez argumentów) pobiera stan aktywnej walki.',
         role: 'error',
         createdAt: clientCreatedAt
       });
@@ -842,12 +885,33 @@ window.sendMessage = async function () {
   }
 
   if (/^\/search(\s|$)/i.test(text.trim())) {
+    if (!window.isPublicSlashCommandEnabled('/search')) {
+      window.addMessage({
+        speaker: 'System',
+        text: 'Ta komenda czatu jest wyłączona przez administratora.',
+        role: 'error',
+        createdAt: clientCreatedAt
+      });
+      inputEl.value = '';
+      return;
+    }
+    const combatState = window.combatPanel?._state || null;
+    if (combatState && String(combatState.status || '') === 'active') {
+      window.addMessage({
+        speaker: 'System',
+        text: 'Nie możesz użyć /search w trakcie aktywnej walki.',
+        role: 'error',
+        createdAt: clientCreatedAt
+      });
+      return;
+    }
+
     const target = text.replace(/^\/search\s*/i, '').trim() || null;
 
+    inputEl.value = '';
     window.chatRequestState.inFlight = true;
     const requestId = ++window.chatRequestState.requestId;
-    const turnNumber = window.nextTurnNumber();
-    inputEl.value = '';
+    const turnNumber = window.nextTurnNumber?.() ?? Date.now();
     if (sendBtnEl) sendBtnEl.disabled = true;
     inputEl.disabled = true;
 
@@ -865,9 +929,9 @@ window.sendMessage = async function () {
       createdAt: clientCreatedAt
     });
 
-    window.removeThinkingBubble();
-    window.showThinkingBubble({
-      speaker: window.t('chat.gm'),
+    window.removeThinkingBubble?.();
+    window.showThinkingBubble?.({
+      speaker: window.t?.('chat.gm') ?? 'GM',
       route: 'narrative',
       turn: turnNumber
     });
@@ -886,17 +950,14 @@ window.sendMessage = async function () {
         }
       );
       const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        const detail = data.detail || data.message || `HTTP ${resp.status}`;
-        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
-      }
+      if (!resp.ok) throw new Error(data.detail ?? data.message ?? `HTTP ${resp.status}`);
       if (requestId !== window.chatRequestState.requestId) return;
 
-      window.removeThinkingBubble();
+      window.removeThinkingBubble?.();
       window.state._lastKilledEnemy = null;
 
       window.addMessage({
-        speaker: window.t('chat.gm'),
+        speaker: window.t?.('chat.gm') ?? 'GM',
         text: data.answer || data.message || '',
         role: 'assistant',
         route: 'narrative',
@@ -904,27 +965,41 @@ window.sendMessage = async function () {
         createdAt: data.created_at || null
       });
 
-      await window.loadTurns(window.state.selectedCampaignId);
+      await window.loadTurns?.(window.state.selectedCampaignId);
     } catch (e) {
-      window.removeThinkingBubble();
+      if (requestId !== window.chatRequestState.requestId) return;
+      window.removeThinkingBubble?.();
       window.addMessage({
-        speaker: 'Błąd',
-        text: `/search: ${e.message}`,
-        role: 'error',
+        speaker: window.t?.('chat.gm') ?? 'GM',
+        text: `❌ Błąd przeszukiwania: ${e.message}`,
+        role: 'assistant',
+        route: 'narrative',
         turn: turnNumber
       });
     } finally {
-      window.chatRequestState.inFlight = false;
-      if (sendBtnEl) sendBtnEl.disabled = false;
-      if (inputEl) {
-        inputEl.disabled = false;
-        inputEl.focus();
+      if (requestId === window.chatRequestState.requestId) {
+        window.chatRequestState.inFlight = false;
+        if (sendBtnEl) sendBtnEl.disabled = false;
+        if (inputEl) {
+          inputEl.disabled = false;
+          inputEl.focus();
+        }
       }
     }
     return;
   }
 
   if (/^\/mem(\s|$)/i.test(text.trim())) {
+    if (!window.isPublicSlashCommandEnabled('/mem [pytanie]')) {
+      window.addMessage({
+        speaker: 'System',
+        text: 'Ta komenda czatu jest wyłączona przez administratora.',
+        role: 'error',
+        createdAt: clientCreatedAt
+      });
+      inputEl.value = '';
+      return;
+    }
     const question = text.replace(/^\/mem\s*/i, '').trim();
     if (!question) {
       window.addMessage({
@@ -1020,6 +1095,16 @@ window.sendMessage = async function () {
   }
 
   if (/^\/helpme(\s|$)/i.test(text.trim())) {
+    if (!window.isPublicSlashCommandEnabled('/helpme [pytanie]')) {
+      window.addMessage({
+        speaker: 'System',
+        text: 'Ta komenda czatu jest wyłączona przez administratora.',
+        role: 'error',
+        createdAt: clientCreatedAt
+      });
+      inputEl.value = '';
+      return;
+    }
     const topic = text.replace(/^\/helpme\s*/i, '').trim();
 
     window.chatRequestState.inFlight = true;
@@ -1109,6 +1194,21 @@ window.sendMessage = async function () {
         inputEl.focus();
       }
     }
+    return;
+  }
+
+  const streamSlashKey =
+    typeof window.slashRegistryKeyForChatClient === 'function'
+      ? window.slashRegistryKeyForChatClient(text)
+      : null;
+  if (streamSlashKey && !window.isPublicSlashCommandEnabled(streamSlashKey)) {
+    restorePendingLine();
+    window.addMessage({
+      speaker: 'System',
+      text: 'Ta komenda czatu jest wyłączona przez administratora.',
+      role: 'error',
+      createdAt: clientCreatedAt
+    });
     return;
   }
 
@@ -1288,8 +1388,8 @@ window.sendMessage = async function () {
         if (typeof window.addGmRollBubble === 'function') {
           window.addGmRollBubble(rollData, turnNumber);
         }
-      } catch (_e) {
-        /* ignore malformed GM roll */
+      } catch (e) {
+        console.warn('GM_ROLL parse error', e);
       }
       return true;
     };
@@ -1303,6 +1403,43 @@ window.sendMessage = async function () {
         window.state._combatVictoryUiPending = true;
       } catch (_e) {
         /* ignore */
+      }
+      return true;
+    };
+
+    const applyCmdJsonToken = (token) => {
+      if (!token || !token.startsWith('[CMD_JSON]')) return false;
+      try {
+        const payload = JSON.parse(token.slice('[CMD_JSON]'.length));
+        const res = payload.result || {};
+        window.removeThinkingBubble();
+        if (res.command === 'atak') {
+          if (res.combat_active && res.combat_state) {
+            if (typeof window.combatPanel?.render === 'function') {
+              window.combatPanel.render(res.combat_state);
+            }
+            if (typeof window.combatInput?.syncWithCombat === 'function') {
+              window.combatInput.syncWithCombat(res.combat_state);
+            }
+            if (typeof window.combatPanel?.show === 'function') {
+              window.combatPanel.show();
+            }
+          }
+          const msg = res.feature_disabled
+            ? (res.message || 'Ta funkcja jest wyłączona przez administratora.')
+            : res.combat_active
+              ? 'Stan walki zsynchronizowany z silnikiem.'
+              : (res.message || 'Nie trwa żadna walka.');
+          window.addMessage({
+            speaker: 'System',
+            text: msg,
+            role: 'system',
+            turn: turnNumber
+          });
+        }
+        void window.loadTurns(window.state.selectedCampaignId);
+      } catch (_e) {
+        /* ignore malformed payload */
       }
       return true;
     };
@@ -1323,6 +1460,8 @@ window.sendMessage = async function () {
             } else if (applyGmRollSseToken(token)) {
               /* skip */
             } else if (applyCombatEndedSseToken(token)) {
+              /* skip */
+            } else if (applyCmdJsonToken(token)) {
               /* skip */
             } else if (token !== '[DONE]' && !token.startsWith('[ERROR]')) {
               // Unescape literal \n sequences the server may have encoded
@@ -1369,6 +1508,10 @@ window.sendMessage = async function () {
           continue;
         }
 
+        if (applyCmdJsonToken(token)) {
+          continue;
+        }
+
         if (token === '[DONE]') {
           const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
           if (streamBubble) {
@@ -1382,7 +1525,16 @@ window.sendMessage = async function () {
             typeof window.combatPanel?.showVictoryAfterNarration === 'function'
           ) {
             window.state._combatVictoryUiPending = false;
-            window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
+            if (
+              typeof window.consumeCombatJustEndedGuard === 'function' &&
+              window.consumeCombatJustEndedGuard()
+            ) {
+              if (typeof window.combatPanel?.cancelDeferredVictoryUi === 'function') {
+                window.combatPanel.cancelDeferredVictoryUi();
+              }
+            } else {
+              window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
+            }
           }
           await window.loadTurns(window.state.selectedCampaignId);
           streamDone = true;
@@ -1437,7 +1589,16 @@ window.sendMessage = async function () {
           typeof window.combatPanel?.showVictoryAfterNarration === 'function'
         ) {
           window.state._combatVictoryUiPending = false;
-          window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
+          if (
+            typeof window.consumeCombatJustEndedGuard === 'function' &&
+            window.consumeCombatJustEndedGuard()
+          ) {
+            if (typeof window.combatPanel?.cancelDeferredVictoryUi === 'function') {
+              window.combatPanel.cancelDeferredVictoryUi();
+            }
+          } else {
+            window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
+          }
         }
         await window.loadTurns(window.state.selectedCampaignId);
       } else {

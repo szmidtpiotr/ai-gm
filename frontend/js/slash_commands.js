@@ -9,24 +9,37 @@ export const SLASH_COMMANDS = [
     description: "Show available commands list",
   },
   {
-    command: "/helpme",
-    description: "Ask GM for out-of-character advice (OOC mode)",
-  },
-  {
     command: "/sheet",
     description: "Display your current character sheet",
   },
   {
-    command: "/mem",
-    description: "Show campaign memory — location, NPCs, active quests",
+    command: "/mem [pytanie]",
+    description: "Pytanie o przeszłość z podsumowań — bez wpływu na narrację (żółte dymki)",
   },
   {
-    command: "/walka",
-    description: "Start combat in engine: /walka bandit (enemy keys from game config)",
+    command: "/helpme [pytanie]",
+    description: "Doradca OOC — wskazówki bez zmiany fabuły (czerwone dymki); nie wpływa na kontekst narracji",
+  },
+  {
+    command: "/roll",
+    description: "Roll d20 + modifier for the last GM-requested roll",
+  },
+  {
+    command: "/name <new name>",
+    description: "Rename your character",
+  },
+  {
+    command: "/history",
+    description: "Show the last 10 turns of the session",
+  },
+  {
+    command: "/export",
+    description: "Export the full session to a text file on the server (/data/exports/)",
   },
   {
     command: "/atak",
-    description: "Same as /walka — deterministic combat start without waiting for GM tag",
+    description:
+      "Silnik walki: samo /atak synchronizuje panel (HP, tura). Z kluczami wroga, np. /atak bandit — start walki przez API bez tagu MG.",
   },
   {
     command: "/search",
@@ -60,6 +73,11 @@ export async function loadSlashCommandCatalog() {
       .map((x) => ({ command: x.command.trim(), description: x.description }));
     if (next.length) {
       activeSlashCommands = next;
+      if (typeof window !== "undefined") {
+        window.__slashCommandsEnabledKeys = new Set(
+          next.map((x) => String(x.command || "").trim()).filter(Boolean)
+        );
+      }
     }
   } catch (_e) {
     /* keep defaults */
@@ -98,7 +116,8 @@ function getSlashContext(value, cursorPos) {
  */
 function filterCommands(query) {
   const q = (query || "").toLowerCase();
-  return SLASH_COMMANDS.filter((c) => {
+  const list = activeSlashCommands;
+  return list.filter((c) => {
     const cmd = c.command.toLowerCase();
     const desc = c.description.toLowerCase();
     return cmd.includes(q) || desc.includes(q);

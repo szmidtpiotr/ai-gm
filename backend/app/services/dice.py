@@ -1,15 +1,17 @@
 import json
-import logging
 import random
 import re
 
-logger = logging.getLogger(__name__)
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 # Stored as user_text on narrative turns; frontend parses JSON after this line.
 ROLL_CARD_PREFIX = "__AI_GM_ROLL_V1__"
 
 
 SKILL_STAT_MAP = {
+    "initiative": "DEX",
     "athletics": "STR",
     "melee_attack": "STR",
     "stealth": "DEX",
@@ -66,7 +68,7 @@ TEST_NAME_ALIASES = {
     "Melee Attack": "melee_attack",
     "Ranged Attack": "ranged_attack",
     "Spell Attack": "spell_attack",
-    "Initiative": "reflex_save",
+    "Initiative": "initiative",
 }
 
 # Mapping used by POST /api/gm/dice endpoint (Phase 7 tests).
@@ -104,7 +106,7 @@ def parse_roll_command(text: str) -> dict | None:
         raw_skill = (slash_match.group(1) or "Attack").strip()
         canonical_skill = resolve_test_name(raw_skill)
         if not canonical_skill:
-            logger.warning("Unknown /roll test name: %s", raw_skill)
+            logger.warning("unknown_roll_test_name", raw_skill=raw_skill)
             return None
         roll_arg = (slash_match.group(2) or "d20").strip().lower()
         raw_roll = _safe_int(roll_arg, 0) if roll_arg.isdigit() else None
@@ -119,7 +121,7 @@ def parse_roll_command(text: str) -> dict | None:
         raw_skill = (roll_line_match.group(1) or "").strip()
         canonical_skill = resolve_test_name(raw_skill)
         if not canonical_skill:
-            logger.warning("Unknown roll cue test name: %s", raw_skill)
+            logger.warning("unknown_roll_cue_test_name", raw_skill=raw_skill)
             return None
         out = {
             "skill": canonical_skill,
@@ -213,11 +215,40 @@ def build_gm_defense_roll_payload(*, enemy_key: str, enemy_label: str) -> dict[s
 
 
 def infer_roll_type(test: str) -> str:
+    if test == "initiative":
+        return "initiative"
     if test in ("melee_attack", "ranged_attack", "spell_attack"):
         return "attack"
     if test in SAVE_STAT_MAP:
         return "saving_throw"
     return "skill_check"
+
+
+def _roll_outcome(roll_result: dict) -> str | None:
+    roll_type = roll_result.get("roll_type")
+    success = roll_result.get("success")
+    if roll_type == "attack":
+        if success is True or roll_result.get("is_nat20"):
+            return "hit"
+        if success is False or roll_result.get("is_nat1"):
+            return "miss"
+        return None
+    if success is True or roll_result.get("is_nat20"):
+        return "success"
+    if success is False or roll_result.get("is_nat1"):
+        return "fail"
+    return None
+
+
+def _log_roll_event(roll_result: dict) -> None:
+    logger.info(
+        "dice_roll",
+        roll_type=roll_result.get("roll_type"),
+        result=roll_result.get("total"),
+        dc=roll_result.get("dc"),
+        outcome=_roll_outcome(roll_result),
+        test=roll_result.get("test"),
+    )
 
 
 def resolve_roll(
@@ -251,7 +282,7 @@ def resolve_roll(
         total = effective_raw_roll + stat_mod
         modifier = stat_mod + 0 + 0
         success = None if dc is None else (total >= dc)
-        return {
+        roll_result = {
             "test": normalized_test,
             "raw": effective_raw_roll,
             "stat_mod": stat_mod,
@@ -265,6 +296,8 @@ def resolve_roll(
             "is_nat20": effective_raw_roll == 20,
             "is_nat1": effective_raw_roll == 1,
         }
+        _log_roll_event(roll_result)
+        return roll_result
 
     stat_key = SKILL_STAT_MAP.get(normalized_test)
     stat_value = _safe_int(stats.get(stat_key, 10), 10) if stat_key else 10
@@ -275,7 +308,7 @@ def resolve_roll(
     modifier = stat_mod + skill_rank + proficiency
     success = None if dc is None else (total >= dc)
 
-    return {
+    roll_result = {
         "test": normalized_test,
         "raw": effective_raw_roll,
         "stat_mod": stat_mod,
@@ -289,6 +322,8 @@ def resolve_roll(
         "is_nat20": effective_raw_roll == 20,
         "is_nat1": effective_raw_roll == 1,
     }
+    _log_roll_event(roll_result)
+    return roll_result
 
 
 def format_roll_result_message(roll_result: dict) -> str:

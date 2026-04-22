@@ -1,6 +1,6 @@
 import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
 import { showToast } from "/admin_panel/shared/toast.js?v=17";
-import { showConfirm } from "/admin_panel/shared/table.js?v=20";
+import { showConfirm } from "/admin_panel/shared/table.js?v=23";
 
 function el(tag, cls, text) {
   const n = document.createElement(tag);
@@ -65,35 +65,6 @@ export async function init(container) {
     }
   });
   card1.appendChild(expBtn);
-
-  const desc1b = el(
-    "p",
-    "muted",
-    "Catalog snapshot: every catalogue table (items, consumables, loot tables + entries, …) in one JSON file. Use as read-only context for an LLM (e.g. Perplexity) so it knows existing keys before proposing new content. Not valid for “Import Config” commit.",
-  );
-  card1.appendChild(desc1b);
-  const snapBtn = el("button", "secondary-btn", "⬇ Export catalog snapshot (LLM)");
-  snapBtn.type = "button";
-  snapBtn.addEventListener("click", async () => {
-    try {
-      const data = await adminFetch("/api/admin/config/catalog-snapshot");
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      const d = new Date();
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      a.download = `aigm_catalog_snapshot_${y}${m}${day}.json`;
-      a.click();
-      URL.revokeObjectURL(blobUrl);
-      showToast("Catalog snapshot exported.", "success");
-    } catch (e) {
-      showToast(parseApiError(e, "Snapshot export failed."), "error");
-    }
-  });
-  card1.appendChild(snapBtn);
 
   const card2 = el("div", "admin-card");
   card2.appendChild(el("h3", "admin-card-title", "Import Config"));
@@ -255,20 +226,25 @@ export async function init(container) {
     el(
       "p",
       "muted",
-      "Descriptions for the in-game chat autocomplete (when players type /). Command names are fixed; only the help text is editable. Stored in the database.",
+      "Lista poleceń jest zawsze zgodna z serwerem (COMMAND_REGISTRY + /search). Dla każdej pozycji: checkbox = czy gracz może użyć tej komendy w czacie; pole tekstowe = opis w podpowiedzi. Zapis w bazie.",
     ),
   );
   const slashRows = el("div", "slash-commands-rows");
   cardSlash.appendChild(slashRows);
-  const slashSave = el("button", "primary-btn", "Save descriptions");
+  const slashSave = el("button", "primary-btn", "Zapisz komendy");
   slashSave.type = "button";
   slashSave.disabled = true;
   slashSave.addEventListener("click", async () => {
-    const textareas = slashRows.querySelectorAll("textarea.slash-cmd-desc");
-    const commands = Array.from(textareas).map((ta) => ({
-      command: ta.dataset.command || "",
-      description: ta.value.trim(),
-    }));
+    const rows = slashRows.querySelectorAll(".slash-cmd-row");
+    const commands = Array.from(rows).map((row) => {
+      const ta = row.querySelector("textarea.slash-cmd-desc");
+      const cb = row.querySelector("input.slash-cmd-enabled");
+      return {
+        command: ta?.dataset.command || "",
+        description: (ta?.value || "").trim(),
+        enabled: !!(cb && cb.checked),
+      };
+    });
     const label = slashSave.textContent;
     slashSave.disabled = true;
     slashSave.textContent = "⏳";
@@ -277,7 +253,7 @@ export async function init(container) {
         method: "PUT",
         body: JSON.stringify({ commands }),
       });
-      showToast("Slash command descriptions saved.", "success");
+      showToast("Zapisano ustawienia komend czatu.", "success");
     } catch (e) {
       showToast(parseApiError(e, "Save failed."), "error");
     } finally {
@@ -287,28 +263,38 @@ export async function init(container) {
   });
   cardSlash.appendChild(slashSave);
 
-  (async () => {
-    try {
-      const data = await adminFetch("/api/admin/slash-commands");
-      const cmds = data.commands || [];
-      slashRows.innerHTML = "";
-      cmds.forEach((c) => {
-        const row = el("div", "slash-cmd-row");
-        const head = el("div", "slash-cmd-head");
-        head.appendChild(el("span", "slash-cmd-name", c.command || ""));
-        row.appendChild(head);
-        const ta = el("textarea", "slash-cmd-desc");
-        ta.rows = 2;
-        ta.value = c.description != null ? String(c.description) : "";
-        ta.dataset.command = c.command || "";
-        row.appendChild(ta);
-        slashRows.appendChild(row);
-      });
-      slashSave.disabled = false;
-    } catch (e) {
-      showToast(parseApiError(e, "Could not load slash command config."), "error");
-    }
-  })();
+  async function loadSlashCommandRows() {
+    const data = await adminFetch("/api/admin/slash-commands");
+    const cmds = data.commands || [];
+    slashRows.innerHTML = "";
+    cmds.forEach((c) => {
+      const row = el("div", "slash-cmd-row");
+      const head = el("div", "slash-cmd-head");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "slash-cmd-enabled";
+      cb.title = "Włącz / wyłącz dla gracza";
+      cb.checked = c.enabled !== false;
+      head.appendChild(cb);
+      head.appendChild(el("span", "slash-cmd-name", c.command || ""));
+      row.appendChild(head);
+      const ta = el("textarea", "slash-cmd-desc");
+      ta.rows = 2;
+      ta.value = c.description != null ? String(c.description) : "";
+      ta.dataset.command = c.command || "";
+      row.appendChild(ta);
+      slashRows.appendChild(row);
+    });
+    slashSave.disabled = false;
+  }
+
+  try {
+    await loadSlashCommandRows();
+  } catch (e) {
+    showToast(parseApiError(e, "Could not load slash command config."), "error");
+  }
+
+  window.__adminConfigReloadSlash = loadSlashCommandRows;
 
   grid.appendChild(card1);
   grid.appendChild(card2);

@@ -43,7 +43,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\"} |= \"/turns\" [1m]))",
+          "expr": "sum(count_over_time({service=~\"$service\"} | json | event=\"request_complete\" | route=~\".*/turns.*\" [1m]))",
           "refId": "A",
           "queryType": "range"
         }
@@ -60,7 +60,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\"} |= \"[ERROR]\" [1m]))",
+          "expr": "sum(count_over_time({service=~\"$service\"} | json | event=~\"llm_error|llm_timeout\" | route=~\".*/turns.*\" [1m]))",
           "refId": "A",
           "queryType": "range"
         }
@@ -111,7 +111,7 @@
       },
       "targets": [
         {
-          "expr": "{service=~\"$service\"} |= \"/turns\"",
+          "expr": "{service=~\"$service\"} | json | route=~\".*/turns.*\"",
           "refId": "A",
           "queryType": "range"
         }

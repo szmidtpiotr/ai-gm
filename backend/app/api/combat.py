@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services import combat_service as combat
+from app.services.client_ui_config import is_slash_command_enabled
 
 router = APIRouter(tags=["combat"])
 
@@ -19,7 +20,11 @@ class CombatStartRequest(BaseModel):
 
 class ResolveAttackRequest(BaseModel):
     roll_result: int
+    raw_d20: int | None = None
     attacker: str = "player"
+    # Opcjonalne — cel nadal wg tury w silniku; pola dla klienta (log / zgodność kontraktu).
+    enemy_key: str | None = None
+    target_id: str | None = None
 
 
 def _first_character_id(campaign_id: int) -> int:
@@ -39,6 +44,11 @@ def _first_character_id(campaign_id: int) -> int:
 
 @router.post("/campaigns/{campaign_id}/combat/start")
 def post_start_combat(campaign_id: int, body: CombatStartRequest):
+    if not is_slash_command_enabled("/atak"):
+        raise HTTPException(
+            status_code=403,
+            detail="Komenda /atak (start walki w silniku) jest wyłączona przez administratora.",
+        )
     if combat.get_active_combat(campaign_id):
         raise HTTPException(
             status_code=409,
@@ -74,7 +84,12 @@ def get_combat_turns(campaign_id: int, limit: int = Query(50, ge=1, le=200)):
 @router.post("/campaigns/{campaign_id}/combat/resolve-attack")
 def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest):
     try:
-        return combat.resolve_attack(campaign_id, body.roll_result, attacker=body.attacker)
+        return combat.resolve_attack(
+            campaign_id,
+            body.roll_result,
+            attacker=body.attacker,
+            raw_d20=body.raw_d20,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

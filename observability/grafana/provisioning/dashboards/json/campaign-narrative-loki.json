@@ -55,7 +55,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{service=\"backend\"} |= \"narrative_turn\" | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nGRACZ:\\n{{.user_text}}\\n\\nGM:\\n{{.assistant_text}}\"",
+          "expr": "{service=\"backend\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nGRACZ:\\n{{.user_text}}\\n\\nGM:\\n{{.assistant_text}}\"",
           "queryType": "range",
           "legendFormat": ""
         }
@@ -64,7 +64,7 @@
     {
       "id": 4,
       "type": "logs",
-      "title": "Debug — surowe linie (bez | json)",
+      "title": "Debug — narrative_turn przez | json",
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 5, "w": 24, "x": 0, "y": 14 },
       "options": {
@@ -81,7 +81,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{service=\"backend\"} |= \"narrative_turn\"",
+          "expr": "{service=\"backend\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\"",
           "queryType": "range",
           "legendFormat": ""
         }
@@ -107,7 +107,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{service=\"backend\"} |= \"memory_turn\" | json | event=\"memory_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nPYTANIE:\\n{{.user_text}}\\n\\nOdpowiedz:\\n{{.assistant_text}}\"",
+          "expr": "{service=\"backend\"} | json | event=\"memory_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nPYTANIE:\\n{{.user_text}}\\n\\nOdpowiedz:\\n{{.assistant_text}}\"",
           "queryType": "range",
           "legendFormat": ""
         }

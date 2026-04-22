@@ -1,7 +1,7 @@
 import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
-import { getBaseUrl, getToken } from "/admin_panel/shared/auth.js?v=17";
+import { getBaseUrl, getToken } from "/admin_panel/shared/auth.js?v=18";
 import { showToast } from "/admin_panel/shared/toast.js?v=17";
-import { showConfirm } from "/admin_panel/shared/table.js?v=20";
+import { showConfirm } from "/admin_panel/shared/table.js?v=23";
 
 function el(tag, cls, text) {
   const n = document.createElement(tag);

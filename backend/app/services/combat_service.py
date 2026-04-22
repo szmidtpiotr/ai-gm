@@ -7,19 +7,19 @@ Combatant runtime JSON uses hp_current / hp_max; character sheet uses current_hp
 from __future__ import annotations
 
 import json
-import logging
 import random
 import re
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
+from app.core.logging import get_logger
 from app.services.dice import parse_character_sheet, roll_d20
 
 # Tests may monkeypatch this to a temp file path.
 COMBAT_DB_PATH = "/data/ai_gm.db"
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _now_iso() -> str:
@@ -98,13 +98,62 @@ def _enemy_slug(key: str, index: int) -> str:
 def _fetch_enemy_row(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
     return conn.execute(
         """
-        SELECT key, label, hp_base, ac_base, attack_bonus, damage_die,
+        SELECT key, label, hp_base, ac_base, attack_bonus, damage_die, dex_modifier,
                loot_table_key, drop_chance
         FROM game_config_enemies
         WHERE key = ?
         """,
         (key,),
     ).fetchone()
+
+
+def _infer_template_key_from_combatant_slug(combatant_id: str) -> str | None:
+    """Combatant id like bandit_01 → template key bandit (matches initiate_combat slugging)."""
+    s = (combatant_id or "").strip()
+    m = re.match(r"^(.+)_(\d{2})$", s, re.I)
+    if not m:
+        return None
+    base = m.group(1).strip().strip("_")
+    return base.lower() if base else None
+
+
+def _roll_card_enemy_identity(
+    conn: sqlite3.Connection, enemy: dict, combatant_id: str
+) -> tuple[str, str]:
+    """
+    Canonical enemy_key + display name for API / COMBAT_ROLL cards (game_config_enemies.label).
+    Repairs legacy/generic combatant.enemy_key (e.g. \"enemy\") using slug inference.
+    """
+    ek = str(enemy.get("enemy_key") or "").strip()
+    nm = str(enemy.get("name") or "").strip()
+
+    def from_row(r: sqlite3.Row) -> tuple[str, str]:
+        k = str(r["key"])
+        lab = str(r["label"] or r["key"] or "").strip() or k
+        return k, lab
+
+    candidates: list[str] = []
+    if ek and ek.lower() != "enemy":
+        candidates.append(ek)
+    inferred = _infer_template_key_from_combatant_slug(combatant_id)
+    if inferred:
+        candidates.append(inferred)
+
+    seen: set[str] = set()
+    for cand in candidates:
+        cl = cand.lower()
+        if cl in seen:
+            continue
+        seen.add(cl)
+        row = _fetch_enemy_row(conn, cand)
+        if row:
+            return from_row(row)
+
+    if inferred:
+        return inferred, nm or "Nieznany wróg"
+    if ek and ek.lower() != "enemy":
+        return ek, nm or "Nieznany wróg"
+    return (inferred or ek or "unknown"), nm or "Nieznany wróg"
 
 
 def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -250,13 +299,9 @@ def _log_combat_end_event(conn: sqlite3.Connection, row: sqlite3.Row, reason: st
     )
     logger.info(
         "combat_ended",
-        extra={
-            "extra_fields": {
-                "combat_id": cid,
-                "campaign_id": camp,
-                "ended_reason": reason,
-            }
-        },
+        combat_id=cid,
+        campaign_id=camp,
+        ended_reason=reason,
     )
 
 
@@ -425,6 +470,7 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                     "hp_max": hp_max_e,
                     "defense": ac_e,
                     "attack_bonus": int(er["attack_bonus"] or 0),
+                    "dex_modifier": int(er["dex_modifier"] or 0),
                     "damage_dice": (er["damage_die"] or "1d6").strip().lower(),
                     "damage_stat": "STR",
                     "initiative_roll": init_e,
@@ -473,6 +519,13 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
     out = get_active_combat(campaign_id)
     if not out:
         raise RuntimeError("failed to load combat after insert")
+    logger.info(
+        "combat_start",
+        campaign_id=campaign_id,
+        enemy=",".join(enemy_keys),
+        enemy_keys=enemy_keys,
+        combat_id=out.get("id"),
+    )
     return out
 
 
@@ -502,13 +555,37 @@ def _all_enemies_dead(combatants: list[dict]) -> bool:
     return True
 
 
+def compute_player_attack_dodge_outcome(
+    attack_total: int,
+    dodge_roll_raw: int,
+    dex_modifier: int,
+    player_raw_d20: int | None,
+) -> tuple[bool, bool, int]:
+    """
+    Player attack total vs enemy d20+dex dodge. Returns (dodged, hit, dodge_total).
+    nat1: auto miss (no hit). nat20: auto hit (not dodged). Else: defender wins ties
+    (dodged when dodge_total >= attack_total).
+    """
+    dodge_total = int(dodge_roll_raw) + int(dex_modifier or 0)
+    atk = int(attack_total)
+    if player_raw_d20 is not None:
+        pr = int(player_raw_d20)
+        if pr == 1:
+            return True, False, dodge_total
+        if pr == 20:
+            return False, True, dodge_total
+    dodged = dodge_total >= atk
+    return dodged, (not dodged), dodge_total
+
+
 def resolve_attack(
     campaign_id: int,
     roll_result: int,
     attacker: str = "player",
+    raw_d20: int | None = None,
 ) -> dict[str, Any]:
     """
-    attacker: 'player' uses roll_result as total attack vs enemy AC.
+    attacker: 'player' uses roll_result as total attack vs enemy dodge roll.
     attacker: 'enemy' ignores roll_result; rolls d20+attack_bonus internally vs player AC.
     """
     with _conn() as conn:
@@ -551,13 +628,63 @@ def resolve_attack(
             if not enemy:
                 raise ValueError("enemy combatant missing")
 
-            ac = int(enemy.get("defense", 10))
-            hit = int(roll_result) >= ac
+            card_key, card_name = _roll_card_enemy_identity(conn, enemy, str(target_id))
+            old_ek = str(enemy.get("enemy_key") or "").strip().lower()
+            if old_ek in ("", "enemy"):
+                enemy["enemy_key"] = card_key
+            old_nm = str(enemy.get("name") or "").strip().lower()
+            if old_nm in ("", "wróg", "wrog", "enemy"):
+                enemy["name"] = card_name
+
+            player_raw = int(raw_d20) if raw_d20 is not None else None
+            player_nat20 = player_raw == 20
+            player_nat1 = player_raw == 1
+            dodge_roll: dict[str, Any] | None = None
+            dodged = False
+            hit = False
+            if player_nat1:
+                hit = False
+                dodged = True
+            else:
+                raw_dodge = roll_d20()
+                dex_mod = int(enemy.get("dex_modifier") or 0)
+                dodged, hit, dodge_total = compute_player_attack_dodge_outcome(
+                    int(roll_result),
+                    int(raw_dodge),
+                    dex_mod,
+                    player_raw,
+                )
+                dodge_roll = {
+                    "raw": raw_dodge,
+                    "modifier": dex_mod,
+                    "total": dodge_total,
+                    "dodged": dodged,
+                    "player_roll": int(roll_result),
+                    "verdict": (
+                        "hit"
+                        if player_nat20
+                        else (
+                            "perfect_dodge"
+                            if raw_dodge == 20
+                            else (
+                                "fumble_dodge"
+                                if raw_dodge == 1
+                                else ("dodged" if dodged else "hit")
+                            )
+                        )
+                    ),
+                }
             out["hit"] = hit
+            out["dodged"] = dodged
             out["target_id"] = target_id
-            out["target_name"] = enemy.get("name")
-            out["enemy_key"] = str(enemy.get("enemy_key") or "")
+            out["target_name"] = card_name
+            out["enemy_key"] = card_key
             out["attack_total"] = int(roll_result)
+            out["player_raw_d20"] = player_raw
+            out["player_nat20"] = player_nat20
+            out["player_nat1"] = player_nat1
+            if dodge_roll is not None:
+                out["dodge_roll"] = dodge_roll
 
             loot: list[dict] = []
             dmg = 0

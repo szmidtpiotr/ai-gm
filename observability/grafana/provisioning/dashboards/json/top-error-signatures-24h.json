@@ -111,7 +111,7 @@
       },
       "targets": [
         {
-          "expr": "{service=~\"$service\", level=~\"error|warn\"}",
+          "expr": "{service=~\"$service\"} | json | level=~\"error|warn\"",
           "refId": "A",
           "queryType": "range"
         }

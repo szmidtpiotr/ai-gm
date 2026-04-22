@@ -5,7 +5,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -28,7 +28,12 @@ from app.services.admin_character_recreate import (
 )
 from app.migrations_admin import run_admin_migrations
 from app.services.admin_auth import issue_dev_admin_token, verify_admin_token
-from app.services.admin_config_transfer import export_catalog_snapshot, export_config, import_config
+from app.services.admin_config_transfer import (
+    export_catalog_snapshot,
+    export_config,
+    import_catalog_snapshot,
+    import_config,
+)
 from app.services.admin_config import (
     create_condition,
     create_consumable,
@@ -190,6 +195,7 @@ class ConfigImportReq(BaseModel):
 class SlashCommandItemReq(BaseModel):
     command: str
     description: str = Field(..., max_length=4000)
+    enabled: bool
 
 
 class SlashCommandsPutReq(BaseModel):
@@ -255,6 +261,7 @@ class EnemyCreateReq(BaseModel):
     hp_base: int
     ac_base: int
     attack_bonus: int
+    dex_modifier: int = 0
     damage_die: str
     description: str | None = None
     tier: str = "standard"
@@ -275,6 +282,7 @@ class EnemyPatchReq(BaseModel):
     hp_base: int | None = None
     ac_base: int | None = None
     attack_bonus: int | None = None
+    dex_modifier: int | None = None
     damage_die: str | None = None
     description: str | None = None
     tier: str | None = None
@@ -712,6 +720,7 @@ def admin_create_enemy(req: EnemyCreateReq, _: None = Depends(require_admin_toke
             hp_base=req.hp_base,
             ac_base=req.ac_base,
             attack_bonus=req.attack_bonus,
+            dex_modifier=req.dex_modifier,
             damage_die=req.damage_die,
             description=req.description,
             tier=req.tier,
@@ -768,6 +777,7 @@ def admin_patch_enemy(key: str, req: EnemyPatchReq, _: None = Depends(require_ad
             hp_base=req.hp_base,
             ac_base=req.ac_base,
             attack_bonus=req.attack_bonus,
+            dex_modifier=req.dex_modifier,
             damage_die=req.damage_die,
             description=req.description,
             tier=req.tier,
@@ -1646,6 +1656,22 @@ def admin_export_config(_: None = Depends(require_admin_token)):
 def admin_export_catalog_snapshot(_: None = Depends(require_admin_token)):
     """All game_config_* catalogue tables (items, weapons, loot, …) for read-only / LLM context."""
     return export_catalog_snapshot()
+
+
+@router.post("/admin/config/catalog-snapshot/import")
+def admin_import_catalog_snapshot(
+    body: dict = Body(...),
+    dry_run: bool = False,
+    _: None = Depends(require_admin_token),
+):
+    """
+    Replace Game Design catalogue tables from a JSON file produced by
+    ``GET /admin/config/catalog-snapshot``. Ignores ``game_config_meta`` in the file.
+    """
+    result = import_catalog_snapshot(body, dry_run=dry_run)
+    if not result.get("ok"):
+        raise HTTPException(status_code=422, detail=result.get("errors") or ["Import failed"])
+    return result
 
 
 @router.post("/admin/config/import")

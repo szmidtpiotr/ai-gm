@@ -222,7 +222,7 @@ def list_weapons() -> list[dict]:
 def list_enemies() -> list[dict]:
     rows = _fetch_all(
         """
-        SELECT key, label, hp_base, ac_base, attack_bonus, damage_die,
+        SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                tier, attacks_per_turn, damage_bonus, damage_type,
                xp_award, conditions_immune, loot_table_key, drop_chance, note,
                description, is_active, locked_at, created_at, updated_at
@@ -787,6 +787,7 @@ def create_enemy(
     loot_table_key: str | None = None,
     drop_chance: float = 1.0,
     note: str | None = None,
+    dex_modifier: int = 0,
 ) -> dict:
     safe_key = _validate_key(key)
     safe_drop = _validate_drop_chance(drop_chance)
@@ -820,11 +821,11 @@ def create_enemy(
         conn.execute(
             """
             INSERT INTO game_config_enemies (
-                key, label, hp_base, ac_base, attack_bonus, damage_die,
+                key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                 tier, attacks_per_turn, damage_bonus, damage_type,
                 xp_award, conditions_immune, loot_table_key, drop_chance, note,
                 description, is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -832,6 +833,7 @@ def create_enemy(
                 hp_base,
                 ac_base,
                 attack_bonus,
+                int(dex_modifier or 0),
                 safe_damage_die,
                 safe_tier,
                 attacks_per_turn,
@@ -849,7 +851,7 @@ def create_enemy(
         new_row = _fetch_one(
             conn,
             """
-            SELECT key, label, hp_base, ac_base, attack_bonus, damage_die,
+            SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
                    xp_award, conditions_immune, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at
@@ -891,6 +893,7 @@ def update_enemy(
     loot_table_key: str | None = None,
     note: str | None = None,
     drop_chance: float | None = None,
+    dex_modifier: int | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -899,7 +902,7 @@ def update_enemy(
         current = _fetch_one(
             conn,
             """
-            SELECT key, label, hp_base, ac_base, attack_bonus, damage_die,
+            SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
                    xp_award, conditions_immune, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at
@@ -915,6 +918,7 @@ def update_enemy(
         final_hp_base = hp_base if hp_base is not None else current["hp_base"]
         final_ac_base = ac_base if ac_base is not None else current["ac_base"]
         final_attack_bonus = attack_bonus if attack_bonus is not None else current["attack_bonus"]
+        final_dex_modifier = dex_modifier if dex_modifier is not None else int(current.get("dex_modifier") or 0)
         final_damage_die = _validate_damage_die(damage_die) if damage_die is not None else current["damage_die"]
         if final_hp_base < 1:
             raise ValueError("invalid_hp_base")
@@ -956,7 +960,7 @@ def update_enemy(
         conn.execute(
             """
             UPDATE game_config_enemies
-            SET label = ?, hp_base = ?, ac_base = ?, attack_bonus = ?, damage_die = ?,
+            SET label = ?, hp_base = ?, ac_base = ?, attack_bonus = ?, dex_modifier = ?, damage_die = ?,
                 tier = ?, attacks_per_turn = ?, damage_bonus = ?, damage_type = ?,
                 xp_award = ?, conditions_immune = ?, loot_table_key = ?, drop_chance = ?, note = ?,
                 description = ?, is_active = ?, updated_at = datetime('now')
@@ -967,6 +971,7 @@ def update_enemy(
                 final_hp_base,
                 final_ac_base,
                 final_attack_bonus,
+                final_dex_modifier,
                 final_damage_die,
                 final_tier,
                 final_attacks,
@@ -985,7 +990,7 @@ def update_enemy(
         new_row = _fetch_one(
             conn,
             """
-            SELECT key, label, hp_base, ac_base, attack_bonus, damage_die,
+            SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
                    xp_award, conditions_immune, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at

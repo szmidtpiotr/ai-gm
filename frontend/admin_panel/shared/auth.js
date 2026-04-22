@@ -17,12 +17,25 @@ export function isConnected() {
   return Boolean(getToken() && getBaseUrl());
 }
 
+function defaultApiBaseUrl() {
+  if (typeof window === "undefined" || !window.location?.origin) return "";
+  return normalizeBaseUrl(window.location.origin);
+}
+
 export async function connect(baseUrl, token) {
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  let normalizedBaseUrl = normalizeBaseUrl(baseUrl);
   const normalizedToken = String(token || "").trim();
 
-  if (!normalizedBaseUrl || !normalizedToken) {
-    throw new Error("Base URL and token are required.");
+  if (!normalizedBaseUrl) {
+    normalizedBaseUrl = defaultApiBaseUrl();
+  }
+  if (!normalizedBaseUrl) {
+    throw new Error("API Base URL is missing (could not use this page’s origin).");
+  }
+  if (!normalizedToken) {
+    throw new Error(
+      "Bearer token is required — use “Dev login & connect” with a game username/password, or paste a token.",
+    );
   }
 
   const response = await fetch(`${normalizedBaseUrl}/api/admin/verify`, {
@@ -55,9 +68,18 @@ export function logout() {
 }
 
 export async function autoConnect() {
-  const baseUrl = getBaseUrl();
+  let baseUrl = normalizeBaseUrl(getBaseUrl());
   const token = getToken();
-  if (!baseUrl || !token) {
+  if (!token) {
+    return false;
+  }
+  if (!baseUrl) {
+    baseUrl = defaultApiBaseUrl();
+    if (baseUrl) {
+      localStorage.setItem(BASE_URL_KEY, baseUrl);
+    }
+  }
+  if (!baseUrl) {
     return false;
   }
 

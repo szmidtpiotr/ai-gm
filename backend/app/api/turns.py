@@ -1,17 +1,18 @@
 import json
-import logging
 import os
+import random
 import re
 import sqlite3
+import uuid
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.core.logging import bind_context, get_logger
 from app.core.turn_engine import COMBAT_ROLL_CTX_PREFIX
 from app.services.dice import (
     ROLL_CARD_PREFIX,
-    build_gm_defense_roll_payload,
     build_roll_card_payload,
     format_roll_for_llm,
     parse_character_sheet,
@@ -27,24 +28,24 @@ from app.services.llm_service import (
     get_effective_config,
     get_health,
 )
+from app.api.slash_command_registry import COMMAND_REGISTRY
+from app.services.client_ui_config import (
+    get_public_help_command_texts,
+    is_slash_command_enabled,
+    slash_registry_key_for_dispatch,
+)
 from app.services.solo_death_service import apply_death_save_outcome, end_solo_campaign_on_death
 from app.services.user_llm_settings import get_user_llm_settings_full
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
-logger = logging.getLogger(__name__)
-
-
-def _flush_stdout_logs() -> None:
-    """Promtail reads Docker log streams; flush root handlers so JSON lines ship immediately."""
-    for h in logging.root.handlers:
-        try:
-            h.flush()
-        except Exception:
-            pass
+logger = get_logger(__name__)
 
 
 COMBAT_START_RE = re.compile(r"\[COMBAT_START:([^\]]+)\]", re.IGNORECASE)
+GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
+# Short assistant line when combat victory follow-up skips the LLM (see create_turn_stream).
+COMBAT_VICTORY_STREAM_STUB = "Walka dobiegła końca."
 
 
 def _maybe_start_combat_from_gm_tag(
@@ -53,34 +54,34 @@ def _maybe_start_combat_from_gm_tag(
     """Parse [COMBAT_START:...] from GM text and initiate combat if allowed."""
     match = COMBAT_START_RE.search(assistant_text or "")
     if not match:
-        logger.info("combat_gm_tag_absent campaign_id=%s", campaign_id)
+        logger.info("combat_gm_tag_absent", campaign_id=campaign_id)
         return None
 
     enemy_keys_raw = match.group(1)
     enemy_keys = [k.strip() for k in enemy_keys_raw.split(",") if k.strip()]
 
     if not enemy_keys:
-        logger.warning("combat_gm_tag_empty campaign_id=%s", campaign_id)
+        logger.warning("combat_gm_tag_empty", campaign_id=campaign_id)
         return None
 
     from app.services import combat_service as cs
 
     existing = cs.get_active_combat(campaign_id)
     if existing:
-        logger.info("combat_gm_tag_skip_already_active campaign_id=%s", campaign_id)
+        logger.info("combat_gm_tag_skip_already_active", campaign_id=campaign_id)
         return None
 
     try:
         combat_state = cs.initiate_combat(campaign_id, character_id, enemy_keys)
         logger.info(
-            "combat_gm_tag_started campaign_id=%s enemy_keys=%s combat_id=%s",
-            campaign_id,
-            enemy_keys,
-            combat_state.get("id"),
+            "combat_gm_tag_started",
+            campaign_id=campaign_id,
+            enemy_keys=enemy_keys,
+            combat_id=combat_state.get("id"),
         )
         return combat_state
     except Exception as e:
-        logger.error("combat_gm_tag_error campaign_id=%s error=%s", campaign_id, str(e))
+        logger.error("combat_gm_tag_error", campaign_id=campaign_id, error_message=str(e))
         return None
 
 
@@ -95,32 +96,34 @@ def _maybe_advance_combat_after_player_narrative(campaign_id: int) -> dict | Non
     After the player's narrative message is resolved and GM text is saved, advance combat
     initiative when it was the player's turn (so the next actor can act).
     """
-    logger.info("combat_advance_check campaign_id=%s", campaign_id)
+    logger.info("combat_advance_check", campaign_id=campaign_id)
     from app.services import combat_service as cs
 
     combat = cs.get_active_combat(campaign_id)
     if not combat or combat.get("status") != "active":
         logger.info(
-            "combat_advance_skip campaign_id=%s reason=no_active_or_not_active",
-            campaign_id,
+            "combat_advance_skip",
+            campaign_id=campaign_id,
+            reason="no_active_or_not_active",
         )
         return None
     if str(combat.get("current_turn") or "") != "player":
         logger.info(
-            "combat_advance_skip campaign_id=%s reason=not_player_turn current_turn=%s",
-            campaign_id,
-            combat.get("current_turn"),
+            "combat_advance_skip",
+            campaign_id=campaign_id,
+            reason="not_player_turn",
+            current_turn=combat.get("current_turn"),
         )
         return None
     try:
         new_turn = cs.advance_turn(campaign_id)
     except ValueError:
-        logger.warning("advance_turn after narrative failed for campaign %s", campaign_id)
+        logger.warning("combat_advance_failed", campaign_id=campaign_id)
         return None
     logger.info(
-        "combat_advance_ok campaign_id=%s new_combat_turn=%s",
-        campaign_id,
-        new_turn,
+        "combat_advance_ok",
+        campaign_id=campaign_id,
+        new_combat_turn=new_turn,
     )
     return {"combat_advanced": True, "new_combat_turn": new_turn}
 
@@ -135,8 +138,8 @@ def log_narrative_turn_structured(
     assistant_text: str,
 ) -> None:
     """
-    Emit one JSON log line (via root JsonFormatter) for Loki/Grafana — near-live story
-    without syncing SQLite to the observability VM. Disable with NARRATIVE_STORY_LOG=0.
+    Emit one structured JSON log line for Loki/Grafana without syncing SQLite to
+    the observability VM. Disable with NARRATIVE_STORY_LOG=0.
 
     Optional: NARRATIVE_LOG_MAX_CHARS caps user_text / assistant_text size (0 = no cap).
     """
@@ -151,21 +154,14 @@ def log_narrative_turn_structured(
     try:
         logger.info(
             "narrative_turn",
-            extra={
-                "extra_fields": {
-                    "event": "narrative_turn",
-                    # String IDs so Loki/Grafana `| json | campaign_id=~"1033"` matches reliably.
-                    "campaign_id": str(campaign_id),
-                    "character_id": "" if character_id is None else str(character_id),
-                    "turn_id": "" if turn_row.get("id") is None else str(turn_row.get("id")),
-                    "turn_number": "" if turn_row.get("turn_number") is None else str(turn_row.get("turn_number")),
-                    "created_at": turn_row.get("created_at"),
-                    "user_text": _truncate_for_story_log(user_text or "", max_chars),
-                    "assistant_text": _truncate_for_story_log(assistant_text or "", max_chars),
-                }
-            },
+            campaign_id=str(campaign_id),
+            character_id="" if character_id is None else str(character_id),
+            db_turn_id="" if turn_row.get("id") is None else str(turn_row.get("id")),
+            turn_number="" if turn_row.get("turn_number") is None else str(turn_row.get("turn_number")),
+            created_at=turn_row.get("created_at"),
+            user_text=_truncate_for_story_log(user_text or "", max_chars),
+            assistant_text=_truncate_for_story_log(assistant_text or "", max_chars),
         )
-        _flush_stdout_logs()
     except Exception:
         # Never fail a turn because logging broke
         pass
@@ -189,37 +185,16 @@ def log_memory_turn_structured(
     try:
         logger.info(
             "memory_turn",
-            extra={
-                "extra_fields": {
-                    "event": "memory_turn",
-                    "campaign_id": str(campaign_id),
-                    "character_id": "" if character_id is None else str(character_id),
-                    "turn_id": "" if turn_row.get("id") is None else str(turn_row.get("id")),
-                    "turn_number": "" if turn_row.get("turn_number") is None else str(turn_row.get("turn_number")),
-                    "created_at": turn_row.get("created_at"),
-                    "user_text": _truncate_for_story_log(user_text or "", max_chars),
-                    "assistant_text": _truncate_for_story_log(assistant_text or "", max_chars),
-                }
-            },
+            campaign_id=str(campaign_id),
+            character_id="" if character_id is None else str(character_id),
+            db_turn_id="" if turn_row.get("id") is None else str(turn_row.get("id")),
+            turn_number="" if turn_row.get("turn_number") is None else str(turn_row.get("turn_number")),
+            created_at=turn_row.get("created_at"),
+            user_text=_truncate_for_story_log(user_text or "", max_chars),
+            assistant_text=_truncate_for_story_log(assistant_text or "", max_chars),
         )
-        _flush_stdout_logs()
     except Exception:
         pass
-
-
-# ---------------------------------------------------------------------------
-# Command registry — used by /help and the command dispatcher
-# ---------------------------------------------------------------------------
-COMMAND_REGISTRY = {
-    "/help": "Show this list of available commands",
-    "/sheet": "Display your full character sheet",
-    "/roll": "Roll d20 + modifier for the last GM-requested roll",
-    "/name <new name>": "Rename your character",
-    "/history": "Show the last 10 turns of the session",
-    "/mem [pytanie]": "Pytanie o przeszłość z podsumowań — bez wpływu na narrację (żółte dymki)",
-    "/helpme [pytanie]": "Doradca OOC — wskazówki bez zmiany fabuły (czerwone dymki); nie wpływa na kontekst narracji",
-    "/export": "Export the full session to a text file on the server (/data/exports/)",
-}
 
 
 class TurnCreate(BaseModel):
@@ -236,9 +211,213 @@ class SearchPayload(BaseModel):
     context: dict | None = None
 
 
-def _stream_combat_roll_extras(user_text_val: str) -> tuple[dict | None, dict | None]:
+def _start_turn_trace(campaign_id: int, character_id: int | None, route: str) -> str:
+    turn_id = str(uuid.uuid4())
+    context: dict[str, str] = {
+        "turn_id": turn_id,
+        "campaign_id": str(campaign_id),
+        "turn_route": route,
+    }
+    if character_id is not None:
+        context["character_id"] = str(character_id)
+    bind_context(**context)
+    return turn_id
+
+
+def _with_turn_trace(payload: dict, turn_id: str) -> dict:
+    return {**payload, "turn_id": turn_id}
+
+
+def _safe_int(value, fallback: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _player_ac_from_sheet_fallback(sheet: dict) -> int:
+    if not isinstance(sheet, dict):
+        return 12
+    defense = sheet.get("defense")
+    if isinstance(defense, dict):
+        for key in ("base", "ac", "total", "value"):
+            if defense.get(key) is not None:
+                return _safe_int(defense.get(key), 12)
+    for key in ("ac", "armor_class", "player_ac"):
+        if sheet.get(key) is not None:
+            return _safe_int(sheet.get(key), 12)
+    if isinstance(defense, (int, float, str)):
+        return _safe_int(defense, 12)
+    return 12
+
+
+def _resolve_player_ac(campaign_id: int) -> int:
+    from app.services import combat_service as cs
+
+    combat = cs.get_active_combat(campaign_id) or cs.load_combat_snapshot(campaign_id)
+    if isinstance(combat, dict):
+        for combatant in combat.get("combatants") or []:
+            if isinstance(combatant, dict) and str(combatant.get("type") or "") == "player":
+                defense = combatant.get("defense")
+                if defense is not None:
+                    return _safe_int(defense, 12)
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE campaign_id = ? ORDER BY id ASC LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return 12
+    return _player_ac_from_sheet_fallback(parse_character_sheet(row["sheet_json"]))
+
+
+def _find_enemy_for_gm_roll(campaign_id: int, payload: dict) -> dict | None:
+    from app.services import combat_service as cs
+
+    target_name = str(payload.get("target_name") or payload.get("enemy_name") or "").strip()
+    enemy_key = str(payload.get("enemy_key") or "").strip()
+    target_id = str(payload.get("target_id") or "").strip()
+    combat = cs.get_active_combat(campaign_id) or cs.load_combat_snapshot(campaign_id)
+    combatants = combat.get("combatants") if isinstance(combat, dict) else []
+
+    enemies = [c for c in combatants or [] if isinstance(c, dict) and c.get("type") == "enemy"]
+
+    def _hp_ok(e: dict) -> bool:
+        return _safe_int(e.get("hp_current"), 0) > 0
+
+    def _first_in_turn_order(pool: list[dict]) -> dict | None:
+        if not pool:
+            return None
+        if len(pool) == 1:
+            return pool[0]
+        turn_order = combat.get("turn_order") if isinstance(combat, dict) else []
+        pool_ids = {str(e.get("id") or "") for e in pool}
+        for turn_id in turn_order or []:
+            tid = str(turn_id)
+            if tid in pool_ids:
+                for e in pool:
+                    if str(e.get("id") or "") == tid:
+                        return e
+        return pool[0]
+
+    if enemies:
+        if target_id:
+            for enemy in enemies:
+                if str(enemy.get("id") or "") == target_id:
+                    return enemy
+
+        if enemy_key:
+            keyed = [e for e in enemies if str(e.get("enemy_key") or "").strip() == enemy_key]
+            living_keyed = [e for e in keyed if _hp_ok(e)]
+            pool = living_keyed if living_keyed else keyed
+            picked = _first_in_turn_order(pool)
+            if picked is not None:
+                return picked
+
+        if target_name:
+            target_name_l = target_name.lower()
+            named = [
+                e
+                for e in enemies
+                if str(e.get("name") or "").strip().lower() == target_name_l
+            ]
+            living_named = [e for e in named if _hp_ok(e)]
+            pool_n = living_named if living_named else named
+            picked_n = _first_in_turn_order(pool_n)
+            if picked_n is not None:
+                return picked_n
+
+        turn_order = combat.get("turn_order") if isinstance(combat, dict) else []
+        for turn_id in turn_order or []:
+            for enemy in enemies:
+                if str(enemy.get("id") or "") == str(turn_id) and _hp_ok(enemy):
+                    return enemy
+        for enemy in enemies:
+            if _hp_ok(enemy):
+                return enemy
+        return enemies[0]
+
+    if not target_name and not enemy_key:
+        return None
+    return {
+        "name": target_name or "Wróg",
+        "enemy_key": enemy_key,
+        "attack_bonus": 2,
+        "dex_modifier": 0,
+    }
+
+
+def _resolve_gm_roll(enemy: dict) -> dict:
+    raw = random.randint(1, 20)
+    modifier = _safe_int(enemy.get("attack_bonus"), 2)
+    total = raw + modifier
+    player_ac = _safe_int(enemy.get("_player_ac", enemy.get("player_ac")), 12)
+
+    if raw == 20:
+        verdict = "crit"
+    elif raw == 1:
+        verdict = "fumble"
+    elif total >= player_ac:
+        verdict = "hit"
+    else:
+        verdict = "miss"
+
+    enemy_name = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg").strip() or "Wróg"
+    return {
+        "skill": f"Atak — {enemy_name}",
+        "dice": "1d20",
+        "raw": raw,
+        "modifier": modifier,
+        "total": total,
+        "verdict": verdict,
+    }
+
+
+def _resolve_gm_dodge_roll(enemy: dict, player_hit_roll: int, player_raw_d20: int | None = None) -> dict:
+    from app.services.combat_service import compute_player_attack_dodge_outcome
+
+    raw = random.randint(1, 20)
+    dex_mod = _safe_int(enemy.get("dex_modifier"), 0)
+    dodged, _hit, total = compute_player_attack_dodge_outcome(
+        _safe_int(player_hit_roll, 0),
+        raw,
+        dex_mod,
+        player_raw_d20,
+    )
+    auto_hit = player_raw_d20 == 20
+
+    if auto_hit:
+        verdict = "hit"
+    elif raw == 20:
+        verdict = "perfect_dodge"
+    elif raw == 1:
+        verdict = "fumble_dodge"
+    elif dodged:
+        verdict = "dodged"
+    else:
+        verdict = "hit"
+
+    enemy_name = str(enemy.get("name") or enemy.get("enemy_key") or "Przeciwnik").strip() or "Przeciwnik"
+    return {
+        "skill": f"Unik — {enemy_name}",
+        "dice": "d20",
+        "raw": raw,
+        "modifier": dex_mod,
+        "total": total,
+        "verdict": verdict,
+        "dodged": dodged,
+        "player_roll": player_hit_roll,
+    }
+
+
+def _stream_combat_roll_extras(campaign_id: int, user_text_val: str) -> tuple[dict | None, dict | None]:
     """
-    For combat follow-up turns (COMBAT_ROLL prefix): optional GM defense bubble payload
+    For combat follow-up turns (COMBAT_ROLL prefix): optional GM attack roll bubble payload
     and optional combat-ended hint for the client (victory after last kill).
     """
     s = (user_text_val or "").strip()
@@ -253,18 +432,33 @@ def _stream_combat_roll_extras(user_text_val: str) -> tuple[dict | None, dict | 
     if not isinstance(payload, dict) or payload.get("kind") != "player_attack":
         return None, None
     gm_roll: dict | None = None
-    if payload.get("hit"):
-        label = (payload.get("target_name") or "").strip() or "Wróg"
-        gm_roll = build_gm_defense_roll_payload(
-            enemy_key=str(payload.get("enemy_key") or ""),
-            enemy_label=label,
-        )
+    enemy = _find_enemy_for_gm_roll(campaign_id, payload)
+    if enemy:
+        player_hit_roll = _safe_int(payload.get("total", payload.get("roll_result")), 0)
+        pr = payload.get("d20", payload.get("raw_d20"))
+        player_raw_d20: int | None
+        if pr in (None, ""):
+            player_raw_d20 = None
+        else:
+            player_raw_d20 = _safe_int(pr, 0)
+            if player_raw_d20 == 0:
+                player_raw_d20 = None
+        if player_raw_d20 != 1 and player_hit_roll > 0:
+            gm_roll = _resolve_gm_dodge_roll(dict(enemy), player_hit_roll, player_raw_d20)
     combat_ended: dict | None = None
     if payload.get("combat_victory"):
         name = (
             (payload.get("target_name") or payload.get("enemy_name") or "Wróg").strip() or "Wróg"
         )
+        if enemy:
+            name = str(enemy.get("name") or enemy.get("enemy_key") or name).strip() or name
         combat_ended = {"reason": "enemy_killed", "enemy_name": name}
+    logger.info(
+        "combat_roll_extras_result",
+        campaign_id=campaign_id,
+        gm_roll="present" if gm_roll else "absent",
+        combat_ended="present" if combat_ended else "absent",
+    )
     return gm_roll, combat_ended
 
 
@@ -272,6 +466,41 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _atak_command_response_for_api(campaign_id: int) -> dict:
+    """Wynik /atak i /walka w API — zależny od włączenia /atak w konfiguracji slash (admin)."""
+    if not is_slash_command_enabled("/atak"):
+        return {
+            "route": "command",
+            "command": "atak",
+            "combat_active": False,
+            "combat_state": None,
+            "feature_disabled": True,
+            "message": "Komenda /atak jest wyłączona przez administratora.",
+        }
+    return _atak_command_result(campaign_id)
+
+
+def _atak_command_result(campaign_id: int) -> dict:
+    """Stan aktywnej walki dla /atak (oraz aliasu /walka) — bez LLM, bez zmian w DB walki."""
+    from app.services import combat_service as cs
+
+    combat = cs.get_active_combat(campaign_id)
+    if combat:
+        return {
+            "route": "command",
+            "command": "atak",
+            "combat_active": True,
+            "combat_state": combat,
+        }
+    return {
+        "route": "command",
+        "command": "atak",
+        "combat_active": False,
+        "combat_state": None,
+        "message": "Nie trwa żadna walka.",
+    }
 
 
 def validate_roll_cue_name(assistant_text: str) -> str | None:
@@ -285,8 +514,20 @@ def validate_roll_cue_name(assistant_text: str) -> str | None:
     raw_test_name = (cue_match.group(1) or "").strip()
     canonical = resolve_test_name(raw_test_name)
     if canonical is None:
-        logger.warning("Unknown LLM roll cue test name ignored: %s", raw_test_name)
+        logger.warning("unknown_llm_roll_cue_ignored", raw_test_name=raw_test_name)
     return canonical
+
+
+def _sheet_current_hp(sheet: dict) -> int | None:
+    if not isinstance(sheet, dict):
+        return None
+    for k in ("current_hp", "hp", "health"):
+        if k in sheet and sheet[k] is not None:
+            try:
+                return int(sheet[k])
+            except (TypeError, ValueError):
+                continue
+    return None
 
 
 def resolve_model_name(
@@ -536,6 +777,7 @@ def create_turn(
     x_ollama_base_url: str | None = Header(default=None),
 ):
     conn = get_db()
+    turn_id = _start_turn_trace(campaign_id, payload.character_id, "turn")
     try:
         campaign = get_active_campaign_or_gone(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
@@ -550,7 +792,24 @@ def create_turn(
         roll_result_data = None
         user_text_stored = text
         if roll_request:
+            if not is_slash_command_enabled("/roll"):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Komenda /roll jest wyłączona przez administratora.",
+                )
             character_sheet = parse_character_sheet(character["sheet_json"])
+            if roll_request.get("skill") == "death_save":
+                hp_chk = _sheet_current_hp(character_sheet)
+                if hp_chk is not None and hp_chk > 0:
+                    logger.warning(
+                        "death_save_rejected",
+                        character_id=payload.character_id,
+                        hp=hp_chk,
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Nieprawidłowy rzut: death_save przy HP > 0",
+                    )
             roll_result = resolve_roll(
                 character_sheet=character_sheet,
                 test_name=roll_request["skill"],
@@ -618,23 +877,45 @@ def create_turn(
                     "route": "narrative",
                     "result": {"message": epitaph},
                     "campaign_ended": True,
+                    "turn_id": turn_id,
                 }
 
         if text.startswith("/") and not roll_request:
             route = "command"
             cmd = text.split(" ", 1)[0].lower()
+            sk_dispatch = slash_registry_key_for_dispatch(text)
+            if (
+                sk_dispatch
+                and not is_slash_command_enabled(sk_dispatch)
+                and cmd not in ("/atak", "/walka")
+            ):
+                token = sk_dispatch.split()[0].lstrip("/") or "cmd"
+                result = {
+                    "command": token,
+                    "disabled": True,
+                    "message": "Ta komenda została wyłączona przez administratora.",
+                }
+                log = create_turn_log(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    user_text=text,
+                    assistant_text=json.dumps(result, ensure_ascii=False),
+                    route=route,
+                )
+                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
             # /help
             if cmd == "/help":
                 result = {
                     "command": "help",
-                    "commands": COMMAND_REGISTRY,
+                    "commands": get_public_help_command_texts(),
                 }
                 log = create_turn_log(
                     conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
                     user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
                 )
-                return {**log, "route": "command", "result": result}
+                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
             # /name
             if cmd == "/name":
@@ -651,7 +932,7 @@ def create_turn(
                     conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
                     user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
                 )
-                return {**log, "route": "command", "result": result}
+                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
             # /sheet
             if cmd == "/sheet":
@@ -673,7 +954,7 @@ def create_turn(
                     conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
                     user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
                 )
-                return {**log, "route": "command", "result": result}
+                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
             # /history
             if cmd == "/history":
@@ -701,7 +982,7 @@ def create_turn(
                     conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
                     user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
                 )
-                return {**log, "route": "command", "result": result}
+                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
             # /helpme — OOC advisor (route=helpme; nie wchodzi do kontekstu narracji)
             if cmd == "/helpme":
@@ -743,6 +1024,7 @@ def create_turn(
                     "route": "helpme",
                     "ooc": True,
                     "result": {"message": msg},
+                    "turn_id": turn_id,
                 }
 
             # /export
@@ -753,7 +1035,20 @@ def create_turn(
                     conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
                     user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
                 )
-                return {**log, "route": "command", "result": result}
+                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
+            # /atak — stan silnika walki; /walka pozostaje aliasem (to samo zachowanie)
+            if cmd in ("/atak", "/walka"):
+                result = _atak_command_response_for_api(campaign_id)
+                log = create_turn_log(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    user_text=text,
+                    assistant_text=json.dumps(result, ensure_ascii=False),
+                    route=route,
+                )
+                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
             # Unknown command
             result = {"command": cmd, "message": f"Unknown command '{cmd}'. Type /help for a list."}
@@ -761,7 +1056,7 @@ def create_turn(
                 conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
                 user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
             )
-            return {**log, "route": "command", "result": result}
+            return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
         route = "narrative"
         model = resolve_model_name(
@@ -831,6 +1126,7 @@ def create_turn(
             "created_at": log["created_at"],
             "route": "narrative",
             "result": result_out,
+            "turn_id": turn_id,
         }
         if new_combat is not None:
             out["combat_state"] = new_combat
@@ -862,6 +1158,12 @@ def create_turn_stream(
     The full assembled text is saved to campaign_turns after streaming completes.
     """
     conn = get_db()
+    turn_id = _start_turn_trace(campaign_id, payload.character_id, "turn_stream")
+    stream_headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+        "X-Turn-Id": turn_id,
+    }
     try:
         campaign = get_active_campaign_or_gone(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
@@ -898,7 +1200,7 @@ def create_turn_stream(
                 return StreamingResponse(
                     helpme_err_stream(),
                     media_type="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                    headers=stream_headers,
                 )
 
             msg = (out.get("message") or "").strip()
@@ -910,7 +1212,7 @@ def create_turn_stream(
                 return StreamingResponse(
                     helpme_empty_stream(),
                     media_type="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                    headers=stream_headers,
                 )
 
             user_line = text.strip()
@@ -931,10 +1233,7 @@ def create_turn_stream(
             return StreamingResponse(
                 helpme_token_stream(),
                 media_type="text/event-stream",
-                headers={
-                    "Cache-Control": "no-cache",
-                    "X-Accel-Buffering": "no",
-                },
+                headers=stream_headers,
             )
 
         roll_request = parse_roll_command(text)
@@ -942,7 +1241,34 @@ def create_turn_stream(
         roll_result_data = None
         user_text_stored = text
         if roll_request:
+            if not is_slash_command_enabled("/roll"):
+
+                def roll_disabled_stream():
+                    yield "data: [ERROR] Komenda /roll jest wyłączona przez administratora.\n\n"
+
+                return StreamingResponse(
+                    roll_disabled_stream(),
+                    media_type="text/event-stream",
+                    headers=stream_headers,
+                )
             character_sheet = parse_character_sheet(character["sheet_json"])
+            if roll_request.get("skill") == "death_save":
+                hp_chk = _sheet_current_hp(character_sheet)
+                if hp_chk is not None and hp_chk > 0:
+                    logger.warning(
+                        "death_save_rejected_stream",
+                        character_id=payload.character_id,
+                        hp=hp_chk,
+                    )
+
+                    def death_save_invalid_stream():
+                        yield "data: [ERROR] Nieprawidłowy rzut: death_save przy HP > 0\n\n"
+
+                    return StreamingResponse(
+                        death_save_invalid_stream(),
+                        media_type="text/event-stream",
+                        headers=stream_headers,
+                    )
             roll_result = resolve_roll(
                 character_sheet=character_sheet,
                 test_name=roll_request["skill"],
@@ -1011,18 +1337,78 @@ def create_turn_stream(
                 return StreamingResponse(
                     death_token_stream(),
                     media_type="text/event-stream",
-                    headers={
-                        "Cache-Control": "no-cache",
-                        "X-Accel-Buffering": "no",
-                    },
+                    headers=stream_headers,
                 )
 
         # Commands are not streamed (except /roll, which is turned into a narrative input)
         if text.startswith("/") and not roll_request:
+            cmd = text.split(" ", 1)[0].lower()
+            sk_stream = slash_registry_key_for_dispatch(text)
+            if (
+                sk_stream
+                and not is_slash_command_enabled(sk_stream)
+                and cmd not in ("/atak", "/walka")
+            ):
+                route_cmd = "command"
+                token = sk_stream.split()[0].lstrip("/") or "cmd"
+                result = {
+                    "command": token,
+                    "disabled": True,
+                    "message": "Ta komenda została wyłączona przez administratora.",
+                }
+                log = create_turn_log(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    user_text=text,
+                    assistant_text=json.dumps(result, ensure_ascii=False),
+                    route=route_cmd,
+                )
+                outer = _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+                outer_json = json.dumps(outer, ensure_ascii=False)
+
+                def disabled_cmd_stream():
+                    yield f"data: [CMD_JSON]{outer_json}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    disabled_cmd_stream(),
+                    media_type="text/event-stream",
+                    headers=stream_headers,
+                )
+
+            if cmd in ("/atak", "/walka"):
+                route_cmd = "command"
+                result = _atak_command_response_for_api(campaign_id)
+                log = create_turn_log(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    user_text=text,
+                    assistant_text=json.dumps(result, ensure_ascii=False),
+                    route=route_cmd,
+                )
+                outer = _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+                outer_json = json.dumps(outer, ensure_ascii=False)
+
+                def atak_cmd_stream():
+                    yield f"data: [CMD_JSON]{outer_json}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    atak_cmd_stream(),
+                    media_type="text/event-stream",
+                    headers=stream_headers,
+                )
+
             def command_stream():
                 yield f"data: [CMD] {text}\n\n"
                 yield "data: [DONE]\n\n"
-            return StreamingResponse(command_stream(), media_type="text/event-stream")
+            return StreamingResponse(
+                command_stream(),
+                media_type="text/event-stream",
+                headers=stream_headers,
+            )
 
         model = resolve_model_name(
             requested_model=payload.engine,
@@ -1043,14 +1429,24 @@ def create_turn_stream(
         campaign_id_val = campaign_id
         character_id_val = payload.character_id
         user_text_val = user_text_stored if roll_request else llm_user_text
-        gm_roll_pre_payload, combat_ended_pre_payload = _stream_combat_roll_extras(user_text_val)
+        gm_roll_pre_payload, combat_ended_pre_payload = _stream_combat_roll_extras(
+            campaign_id_val, user_text_val
+        )
 
         def token_generator():
             """
             Order: (1) optional [GM_ROLL], (2) optional [COMBAT_ENDED] before narrative,
-            (3) LLM chunks, (4) persist turn, (5) [COMBAT_STARTED] / [COMBAT], (6) [DONE].
+            (3) LLM chunks — skipped when combat_victory follow-up (stub narrative only),
+            (4) persist turn, (5) [COMBAT_STARTED] / [COMBAT], (6) [DONE].
             """
             from app.services import combat_service as cs_snap
+
+            bind_context(
+                turn_id=turn_id,
+                campaign_id=str(campaign_id_val),
+                character_id=str(character_id_val),
+                turn_route="turn_stream",
+            )
 
             combat_before = cs_snap.get_active_combat(campaign_id_val)
             combat_was_active = bool(combat_before) and str(
@@ -1058,9 +1454,57 @@ def create_turn_stream(
             ) == "player"
 
             if gm_roll_pre_payload:
+                logger.info("combat_gm_roll_emit", campaign_id=campaign_id_val)
                 yield f"data: [GM_ROLL]{json.dumps(gm_roll_pre_payload, ensure_ascii=False)}\n\n"
             if combat_ended_pre_payload:
+                logger.info("combat_ended_emit", campaign_id=campaign_id_val)
                 yield f"data: [COMBAT_ENDED]{json.dumps(combat_ended_pre_payload, ensure_ascii=False)}\n\n"
+
+            if combat_ended_pre_payload:
+                clean_text = COMBAT_VICTORY_STREAM_STUB
+                validate_roll_cue_name(clean_text.strip())
+                persisted_assistant_text = clean_text
+                if gm_roll_pre_payload:
+                    persisted_assistant_text = (
+                        f"{GM_ROLL_CARD_PREFIX}\n"
+                        f"{json.dumps(gm_roll_pre_payload, ensure_ascii=False)}\n\n"
+                        f"{clean_text}"
+                    )
+                save_conn = get_db()
+                new_combat: dict | None = None
+                combat_extra: dict | None = None
+                try:
+                    stream_log = create_turn_log(
+                        conn=save_conn,
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        user_text=user_text_val,
+                        assistant_text=persisted_assistant_text,
+                        route="narrative",
+                    )
+                    log_narrative_turn_structured(
+                        route="narrative",
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        turn_row=stream_log,
+                        user_text=user_text_val,
+                        assistant_text=clean_text,
+                    )
+                    new_combat = _maybe_start_combat_from_gm_tag(
+                        campaign_id_val, character_id_val, clean_text
+                    )
+                    if combat_was_active and not new_combat:
+                        combat_extra = _maybe_advance_combat_after_player_narrative(
+                            campaign_id_val
+                        )
+                finally:
+                    save_conn.close()
+                if new_combat:
+                    yield f"data: [COMBAT_STARTED]{json.dumps(new_combat)}\n\n"
+                if combat_extra:
+                    yield f"data: [COMBAT]{json.dumps(combat_extra)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
 
             collected: list[str] = []
             saw_done = False
@@ -1081,8 +1525,8 @@ def create_turn_stream(
 
             if not saw_done:
                 logger.warning(
-                    "stream ended without data [DONE] for campaign_id=%s; skipping save",
-                    campaign_id_val,
+                    "stream_missing_done_marker",
+                    campaign_id=campaign_id_val,
                 )
                 return
 
@@ -1092,6 +1536,20 @@ def create_turn_stream(
             if full_raw.strip():
                 clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
                 validate_roll_cue_name(clean_text.strip())
+                if GM_ROLL_CARD_PREFIX in clean_text:
+                    clean_text = re.sub(
+                        rf"{re.escape(GM_ROLL_CARD_PREFIX)}\n.*?\n\n",
+                        "",
+                        clean_text,
+                        flags=re.DOTALL,
+                    ).strip()
+                persisted_assistant_text = clean_text
+                if gm_roll_pre_payload:
+                    persisted_assistant_text = (
+                        f"{GM_ROLL_CARD_PREFIX}\n"
+                        f"{json.dumps(gm_roll_pre_payload, ensure_ascii=False)}\n\n"
+                        f"{clean_text}"
+                    )
                 save_conn = get_db()
                 try:
                     stream_log = create_turn_log(
@@ -1099,7 +1557,7 @@ def create_turn_stream(
                         campaign_id=campaign_id_val,
                         character_id=character_id_val,
                         user_text=user_text_val,
-                        assistant_text=clean_text,
+                        assistant_text=persisted_assistant_text,
                         route="narrative",
                     )
                     log_narrative_turn_structured(
@@ -1128,10 +1586,7 @@ def create_turn_stream(
         return StreamingResponse(
             token_generator(),
             media_type="text/event-stream",
-            headers={
-                "Cache-Control": "no-cache",
-                "X-Accel-Buffering": "no",
-            },
+            headers=stream_headers,
         )
 
     except RuntimeError as e:
@@ -1145,7 +1600,13 @@ def search_body_or_location(
     campaign_id: int,
     payload: SearchPayload,
 ):
+    if not is_slash_command_enabled("/search"):
+        raise HTTPException(
+            status_code=403,
+            detail="Komenda /search jest wyłączona przez administratora.",
+        )
     conn = get_db()
+    turn_id = _start_turn_trace(campaign_id, payload.character_id, "search")
     try:
         campaign = get_active_campaign_or_gone(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
@@ -1184,11 +1645,20 @@ def search_body_or_location(
             assistant_text=answer,
             route="narrative",
         )
+        log_narrative_turn_structured(
+            route="narrative",
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            turn_row=log,
+            user_text=search_user_text,
+            assistant_text=answer,
+        )
 
         return {
             "answer": answer,
             "turn_number": log["turn_number"] if isinstance(log, dict) else None,
             "created_at": log["created_at"] if isinstance(log, dict) else None,
+            "turn_id": turn_id,
         }
     finally:
         conn.close()

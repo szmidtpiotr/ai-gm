@@ -105,7 +105,8 @@ def export_catalog_snapshot(exported_by: str = "dev-local") -> dict[str, Any]:
             "tables": tables,
             "notes": (
                 "Read-only catalogue dump for design / LLM context. "
-                "Do not use as input to POST /admin/config/import (different subset and semantics)."
+                "To restore these tables in the admin Game Design section, use "
+                "POST /api/admin/config/catalog-snapshot/import (not POST /admin/config/import)."
             ),
         }
         _audit(conn, "EXPORT_CATALOG_SNAPSHOT", None, {"config_version": payload["config_version"]})
@@ -289,9 +290,9 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
                 conn.execute(
                     """
                     INSERT INTO game_config_enemies (
-                        key, label, hp_base, ac_base, attack_bonus, damage_die,
+                        key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                         description, is_active, locked_at, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         row.get("key"),
@@ -299,6 +300,7 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
                         int(row.get("hp_base", 0)),
                         int(row.get("ac_base", 0)),
                         int(row.get("attack_bonus", 0)),
+                        int(row.get("dex_modifier", 0) or 0),
                         row.get("damage_die"),
                         row.get("description"),
                         1 if int(row.get("is_active", 1)) else 0,
@@ -339,5 +341,145 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
         )
         conn.commit()
         return {"ok": True, "dry_run": False, "changes": changes, "target_version": incoming_version}
+    finally:
+        conn.close()
+
+
+# Game-design catalogue tables only (not game_config_meta — avoids wiping slash_commands_ui, loki_url, etc.).
+# Order respects FK: loot_tables before enemies (loot_table_key); loot_entries last.
+_CATALOG_IMPORT_TABLES: tuple[str, ...] = (
+    "game_config_stats",
+    "game_config_skills",
+    "game_config_dc",
+    "game_config_weapons",
+    "game_config_conditions",
+    "game_config_items",
+    "game_config_consumables",
+    "game_config_loot_tables",
+    "game_config_enemies",
+    "game_config_loot_entries",
+)
+
+
+def _validate_catalog_snapshot_import(payload: dict[str, Any]) -> tuple[bool, list[str]]:
+    errors: list[str] = []
+    if not isinstance(payload, dict):
+        return False, ["Payload must be a JSON object"]
+    kind = payload.get("export_kind")
+    if kind is not None and kind != "catalog_snapshot":
+        errors.append("export_kind must be 'catalog_snapshot' (or omit if the file is otherwise valid)")
+    tables = payload.get("tables")
+    if not isinstance(tables, dict):
+        errors.append("Missing or invalid 'tables' object")
+        return False, errors
+    stats = tables.get("game_config_stats")
+    if not isinstance(stats, list) or len(stats) < 1:
+        errors.append("tables.game_config_stats must be a non-empty array")
+    for name in _CATALOG_IMPORT_TABLES:
+        if name in tables and not isinstance(tables[name], list):
+            errors.append(f"Table {name} must be an array when present")
+    return len(errors) == 0, errors
+
+
+def _default_for_missing_required(ctype: str | None) -> Any:
+    c = (ctype or "").upper()
+    if "INT" in c:
+        return 0
+    if "REAL" in c or "FLOA" in c or "DOUB" in c:
+        return 0.0
+    return ""
+
+
+def _insert_catalog_row(conn: sqlite3.Connection, table: str, row: dict[str, Any]) -> None:
+    cols_meta = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    names: list[str] = []
+    vals: list[Any] = []
+    for _cid, name, ctype, notnull, dflt_value, pk in cols_meta:
+        if name in row:
+            names.append(name)
+            vals.append(row[name])
+            continue
+        if int(pk or 0) == 1 and int(notnull or 0) == 1:
+            continue
+        if int(notnull or 0) == 0:
+            names.append(name)
+            vals.append(None)
+            continue
+        if dflt_value is not None:
+            continue
+        names.append(name)
+        vals.append(_default_for_missing_required(ctype))
+    if not names:
+        return
+    placeholders = ",".join(["?"] * len(names))
+    conn.execute(
+        f"INSERT INTO {table} ({','.join(names)}) VALUES ({placeholders})",
+        vals,
+    )
+
+
+def import_catalog_snapshot(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
+    """
+    Replace game-design catalogue tables from ``export_catalog_snapshot`` JSON.
+    Does **not** import ``game_config_meta`` even if present in the file.
+    """
+    ok, errors = _validate_catalog_snapshot_import(payload)
+    if not ok:
+        return {"ok": False, "dry_run": dry_run, "errors": errors}
+
+    tables_in = payload["tables"]
+    if not isinstance(tables_in, dict):
+        return {"ok": False, "dry_run": dry_run, "errors": ["Internal: tables is not a dict"]}
+
+    counts = {
+        t: len([x for x in (tables_in.get(t) or []) if isinstance(x, dict)]) for t in _CATALOG_IMPORT_TABLES
+    }
+    if dry_run:
+        return {
+            "ok": True,
+            "dry_run": True,
+            "would_import_rows": counts,
+            "note": "game_config_meta in the file is ignored on import.",
+        }
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("PRAGMA foreign_keys=OFF")
+        for t in reversed(_CATALOG_IMPORT_TABLES):
+            conn.execute(f"DELETE FROM {t}")
+        for t in _CATALOG_IMPORT_TABLES:
+            rows = tables_in.get(t) or []
+            if not isinstance(rows, list):
+                continue
+            for raw in rows:
+                if not isinstance(raw, dict):
+                    continue
+                _insert_catalog_row(conn, t, raw)
+        conn.execute("PRAGMA foreign_keys=ON")
+        _audit(
+            conn,
+            "IMPORT_CATALOG_SNAPSHOT",
+            None,
+            {"tables": list(_CATALOG_IMPORT_TABLES), "counts": counts},
+        )
+        conn.commit()
+        return {
+            "ok": True,
+            "dry_run": False,
+            "imported_rows": counts,
+            "note": "game_config_meta was not applied.",
+        }
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        try:
+            conn.execute("PRAGMA foreign_keys=ON")
+        except Exception:
+            pass
+        return {"ok": False, "dry_run": False, "errors": [str(e)]}
     finally:
         conn.close()

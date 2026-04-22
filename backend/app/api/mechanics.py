@@ -2,7 +2,7 @@ import sqlite3
 from fastapi import APIRouter
 
 from app.services.admin_config import list_dc, list_skills, list_stats
-from app.services.client_ui_config import get_merged_slash_commands
+from app.services.client_ui_config import get_public_slash_commands
 
 
 router = APIRouter()
@@ -44,6 +44,6 @@ def get_mechanics_metadata():
 
 @router.get("/mechanics/slash-commands")
 def get_slash_commands_public():
-    """Chat `/` autocomplete: command labels and descriptions (editable via admin Config)."""
-    return {"commands": get_merged_slash_commands()}
+    """Chat `/` autocomplete: tylko komendy włączone w adminie (Config → slash commands)."""
+    return {"commands": get_public_slash_commands()}
 

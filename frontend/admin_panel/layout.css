@@ -482,6 +482,12 @@ body {
   color: var(--accent);
 }
 
+.sub-tab-btn.sub-tab-btn-action {
+  margin-left: auto;
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
 .game-design-body {
   min-height: 200px;
 }
@@ -499,6 +505,42 @@ body {
   overflow-x: auto;
 }
 
+.admin-table-search-row {
+  margin-bottom: 10px;
+}
+
+.admin-table-search-input {
+  width: 100%;
+  max-width: 28rem;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: Arial, sans-serif;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.admin-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-table-toolbar-left {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-table-toolbar-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .admin-table {
   width: 100%;
   border-collapse: collapse;
@@ -512,6 +554,12 @@ body {
   padding: 8px 10px;
   text-align: left;
   vertical-align: top;
+}
+
+.admin-table-select-col {
+  width: 1%;
+  white-space: nowrap;
+  text-align: center !important;
 }
 
 .admin-table thead th {
@@ -565,6 +613,23 @@ body {
 
 .admin-table-sort-inactive {
   opacity: 0.35;
+}
+
+.admin-table-filter-row th {
+  padding: 6px 8px;
+  background: rgba(124, 79, 30, 0.04);
+}
+
+.admin-table-filter-select {
+  width: 100%;
+  min-width: 88px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
 }
 
 .admin-table tbody tr:nth-child(even) {
@@ -1050,6 +1115,41 @@ select.admin-table-cell-select {
   padding: 6px 8px;
   font-size: 14px;
   box-sizing: border-box;
+}
+
+.accounts-llm-model-row-inner {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  width: 100%;
+}
+
+.accounts-llm-form .accounts-llm-model-row-inner select {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.accounts-llm-form .accounts-llm-model-row-inner .secondary-btn {
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+.accounts-llm-openai-models-toggle {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.accounts-llm-openai-models-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-bottom: 0;
 }
 
 .accounts-add-form .field {

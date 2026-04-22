@@ -1,6 +1,8 @@
 window.state = window.state || {};
 window.state.characterSheet = window.state.characterSheet || null;
 window.state.sheetPanelOpen = window.state.sheetPanelOpen ?? false;
+/** `null` = unknown (legacy session without flag): keep LLM controls visible. `false` = non-admin. */
+window.state.playerIsAdmin = window.state.playerIsAdmin ?? null;
 window.API_BASE_URL = window.API_BASE_URL || "/api";
 window.SHEET_PANEL_STORAGE_KEY = "ai-gm:sheetPanelOpen";
 
@@ -10,6 +12,20 @@ window.state.llmSettings = window.state.llmSettings || null;
 window.state.showAllProviderModels = window.state.showAllProviderModels ?? false;
 
 window.LLM_SETTINGS_COLLAPSE_PREF_KEY = "ai-gm:llmSettingsCollapsedPref";
+
+window.playerMayEditLlmConnectionUi = function () {
+  if (window.state.playerIsAdmin === false) return false;
+  return true;
+};
+
+window.applyPlayerLlmSettingsAccessUi = function () {
+  const wrap = document.getElementById("llm-player-admin-only");
+  if (!wrap) return;
+  const show = window.playerMayEditLlmConnectionUi();
+  wrap.hidden = !show;
+  wrap.style.display = show ? "" : "none";
+  wrap.setAttribute("aria-hidden", show ? "false" : "true");
+};
 
 window.state.mechanicMetadata = window.state.mechanicMetadata || null;
 
@@ -26,6 +42,14 @@ window.loadMechanicMetadata = async function () {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     window.state.mechanicMetadata = data || null;
+    try {
+      const mod = await import("./slash_commands.js");
+      if (typeof mod.loadSlashCommandCatalog === "function") {
+        await mod.loadSlashCommandCatalog();
+      }
+    } catch (_e) {
+      /* module optional */
+    }
     return window.state.mechanicMetadata;
   } catch (_err) {
     // Keep metadata optional — game can still function without descriptions.
@@ -265,6 +289,9 @@ window.computeLlmGate = function () {
 };
 
 window.connectLlmSettings = async function () {
+  if (typeof window.playerMayEditLlmConnectionUi === "function" && !window.playerMayEditLlmConnectionUi()) {
+    throw new Error("Brak uprawnień do zmiany ustawień LLM.");
+  }
   const userId = window.state?.playerUserId || 1;
   const raw = window.getLlmProviderPayloadFromForm();
   const keyTrim = String(raw.api_key || '').trim();
@@ -734,7 +761,8 @@ window.ROLL_VALID_TESTS = new Set([
   "arcana", "alchemy", "medicine", "persuasion", "intimidation",
   "melee_attack", "ranged_attack", "spell_attack",
   "fortitude_save", "reflex_save", "willpower_save", "arcane_save",
-  "death_save"
+  "death_save",
+  "initiative",
 ]);
 
 window.ROLL_TEST_ALIASES = {
@@ -761,7 +789,7 @@ window.ROLL_TEST_ALIASES = {
   "Melee Attack": "melee_attack",
   "Ranged Attack": "ranged_attack",
   "Spell Attack": "spell_attack",
-  "Initiative": "reflex_save"
+  Initiative: "initiative",
 };
 
 window.resolveRollTestName = function (raw) {
@@ -777,6 +805,72 @@ window.resolveRollTestName = function (raw) {
   }
   const normalized = source.toLowerCase().replace(/-/g, "_").replace(/\s+/g, "_");
   return window.ROLL_VALID_TESTS.has(normalized) ? normalized : null;
+};
+
+/** Dozwolone skill z cue GM gdy postać ma HP > 0 (death_save tylko przy HP <= 0). */
+window.ALLOWED_ROLL_SKILLS_ALIVE = new Set([
+  "melee_attack",
+  "ranged_attack",
+  "spell_attack",
+  "athletics",
+  "stealth",
+  "awareness",
+  "survival",
+  "lore",
+  "investigation",
+  "arcana",
+  "alchemy",
+  "medicine",
+  "persuasion",
+  "intimidation",
+  "fortitude_save",
+  "reflex_save",
+  "willpower_save",
+  "arcane_save",
+  "initiative",
+]);
+
+window.getCharacterHpForRollRules = function () {
+  const sheet = window.state?.characterSheet;
+  if (!sheet) return null;
+  const v = window.getSheetValue(sheet, ["current_hp", "hp", "health"], null);
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+/**
+ * Czy wolno pokazać przycisk „Rzuć kość” / wysłać /roll dla tego cue.
+ * Brak jawnego skill w obiekcie (tylko wyciągnięta kość z tekstu) → false.
+ */
+window.isActiveRollRequestAllowed = function (req) {
+  if (!req) return false;
+  const skill = String(req.skill || "")
+    .trim()
+    .toLowerCase();
+  if (!skill) {
+    return false;
+  }
+  const hp = window.getCharacterHpForRollRules();
+
+  if (skill === "death_save") {
+    if (hp === null) {
+      console.warn("[roll] death_save: brak HP na arkuszu — cue zignorowany");
+      return false;
+    }
+    if (hp > 0) {
+      console.warn("[roll] death_save przy HP > 0 — cue zignorowany");
+      return false;
+    }
+    return true;
+  }
+
+  if (hp !== null && hp <= 0) {
+    console.warn("[roll] skill", skill, "przy HP <= 0 — oczekiwany death_save z GM");
+    return false;
+  }
+
+  return window.ALLOWED_ROLL_SKILLS_ALIVE.has(skill);
 };
 
 window.formatRollTestDisplayName = function (canonicalName) {
@@ -803,6 +897,7 @@ window.formatRollTestDisplayName = function (canonicalName) {
     reflex_save: "Reflex Save",
     willpower_save: "Willpower Save",
     arcane_save: "Arcane Save",
+    initiative: "Initiative",
   };
   return labels[normalized] || canonicalName;
 };

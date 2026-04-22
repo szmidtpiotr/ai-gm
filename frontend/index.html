@@ -36,7 +36,8 @@
       <div class="llm-controls llm-controls--collapsed" id="llm-controls">
         <div class="llm-settings-toggle-row">
           <div class="llm-settings-toggle-actions">
-            <button type="button" class="secondary" id="llm-settings-toggle-btn">Settings</button>
+            <button type="button" class="secondary llm-settings-toggle-btn" id="llm-settings-toggle-btn">Settings</button>
+            <button id="player-logout-btn" class="secondary llm-toolbar-logout-btn" type="button" style="display:none;">Logout</button>
             <div class="status-inline" id="status-inline">
               <span class="status-dot-wrap" title="Backend">
                 <span class="status-dot unknown" id="status-backend-dot"></span>
@@ -56,9 +57,7 @@
         </div>
 
         <div id="llm-controls-body">
-          <div class="settings-session-row">
-            <button id="player-logout-btn" class="secondary settings-logout-btn" type="button" style="display:none;">Logout</button>
-          </div>
+          <div id="llm-player-admin-only">
           <div class="field top-row-field" id="llm-provider-field">
             <label for="llm-provider-select" id="label-llm-provider">Provider</label>
             <select id="llm-provider-select">
@@ -96,6 +95,7 @@
                 Show all provider models
               </label>
             </div>
+          </div>
           </div>
 
           <div class="campaign-character-in-llm">

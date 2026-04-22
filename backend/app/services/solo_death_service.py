@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 import json
-import logging
 from datetime import datetime, timezone
 from typing import Any
 
 import sqlite3
 
+from app.core.logging import get_logger
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEATH_SAVE_FAILURE_THRESHOLD = 3
 
@@ -86,7 +86,7 @@ def generate_epitaph_llm(
     try:
         text = (generate_chat(messages=messages, model=model, llm_config=llm_config) or "").strip()
     except Exception as e:
-        logger.warning("[epitaph] LLM failed: %s", e)
+        logger.warning("epitaph_llm_failed", error_message=str(e))
         text = ""
     if not text:
         return f"Here lies {name}, {class_label}, claimed by fate."
@@ -147,6 +147,12 @@ def end_solo_campaign_on_death(
         (death_reason, ended_at, epitaph, campaign_id),
     )
     conn.commit()
+    logger.error(
+        "player_death",
+        cause=death_reason,
+        campaign_id=campaign_id,
+        character_name=name,
+    )
     return epitaph
 
 

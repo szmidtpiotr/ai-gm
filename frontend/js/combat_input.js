@@ -22,6 +22,28 @@
       return this._defaultPlaceholder;
     }
 
+    /**
+     * Aktywna walka, tura gracza — Enter w polu czatu ma działać jak przycisk „Atak”
+     * (resolve-attack + intent z textarea).
+     */
+    shouldHandleEnterAsPlayerAttack() {
+      this.init();
+      const cp = window.combatPanel;
+      const st = cp && cp._state;
+      if (!st || String(st.status) !== "active") return false;
+      if (String(st.current_turn || "") !== "player") return false;
+      if (cp._busy) return false;
+      if (typeof cp._onAttack !== "function") return false;
+      return true;
+    }
+
+    /** @returns {boolean} true gdy obsłużono (nie wywołuj sendMessage). */
+    triggerPlayerAttackFromEnter() {
+      if (!this.shouldHandleEnterAsPlayerAttack()) return false;
+      void window.combatPanel._onAttack();
+      return true;
+    }
+
     init() {
       if (this._inited) return;
       this._textarea = document.getElementById("input");

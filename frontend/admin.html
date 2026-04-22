@@ -183,7 +183,19 @@
 
           <div class="field">
             <label for="user-llm-model">Model</label>
-            <input id="user-llm-model" placeholder="gemma4:e4b">
+            <div style="display: flex; gap: 8px; align-items: stretch; width: 100%; max-width: 40rem;">
+              <select id="user-llm-model" style="flex: 1; min-width: 0;"></select>
+              <button type="button" class="secondary" id="user-llm-refresh-models-btn" title="Uses saved URL and API key. Save first if you edited them.">
+                Refresh models
+              </button>
+            </div>
+            <div class="muted" id="user-llm-show-all-wrap" style="margin-top: 6px; display: none;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="user-llm-show-all-models" />
+                Show all provider models
+              </label>
+            </div>
+            <p class="muted" id="user-llm-models-hint" style="margin-top: 6px; display: none;"></p>
           </div>
         </div>
 

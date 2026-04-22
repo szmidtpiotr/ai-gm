@@ -399,6 +399,7 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
   if (!campaignId) {
     window.state.serverTurns = [];
     window.state.combatClientTurns = [];
+    window.state.gmRollClientTurns = [];
     window.state.combatLogTurns = [];
     window.state.turns = [];
     window.clearChat();
@@ -412,6 +413,7 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
   if (resp.status === 410) {
     window.state.serverTurns = [];
     window.state.combatClientTurns = [];
+    window.state.gmRollClientTurns = [];
     window.state.combatLogTurns = [];
     window.state.turns = [];
     if (typeof window.showCampaignDeathScreen === 'function') {
@@ -440,6 +442,7 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
 
   window.state.serverTurns = serverList;
   window.state.combatClientTurns = [];
+  window.state.gmRollClientTurns = [];
   if (typeof window.loadCombatLogTurns === 'function') {
     await window.loadCombatLogTurns(campaignId);
   }
@@ -507,7 +510,12 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
         if (typeof window.renderTurnsToChat === 'function') {
           window.renderTurnsToChat();
         }
-        if (typeof window.addMessage === 'function') {
+        if (
+          typeof window.consumeCombatJustEndedGuard === 'function' &&
+          window.consumeCombatJustEndedGuard()
+        ) {
+          // Combat state stays synchronized, but suppress one-shot auto UI after victory.
+        } else if (typeof window.addMessage === 'function') {
           window.addMessage({
             speaker: 'System',
             text: 'Walka zakończona!',

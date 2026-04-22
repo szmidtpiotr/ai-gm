@@ -1,11 +1,9 @@
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-import logging
 import os
 import random
 import re
 import sqlite3
-import json
 import time
 import uuid
 from pathlib import Path
@@ -14,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from app.core.logging import bind_context, configure_logging, get_logger, reset_request_context
 from app.db import get_session, init_db
 from app.models import Game, Message
 from app.services.dice import build_gm_dice_breakdown, parse_character_sheet
@@ -30,33 +29,7 @@ from app.routers.settings import router as settings_router
 
 # Keep DB path consistent with API routers using raw sqlite connections.
 DB_PATH = "/data/ai_gm.db"
-logger = logging.getLogger("ai_gm")
-
-
-class JsonFormatter(logging.Formatter):
-    def format(self, record):
-        payload = {
-            "ts": datetime.now(timezone.utc).isoformat(),
-            "level": record.levelname.lower(),
-            "service": "backend",
-            "env": os.getenv("ENV", "dev"),
-            "message": record.getMessage(),
-        }
-        extra = getattr(record, "extra_fields", None)
-        if isinstance(extra, dict):
-            payload.update(extra)
-        return json.dumps(payload, ensure_ascii=False)
-
-
-def setup_structured_logging():
-    root = logging.getLogger()
-    if getattr(root, "_ai_gm_structured_logging", False):
-        return
-    handler = logging.StreamHandler()
-    handler.setFormatter(JsonFormatter())
-    root.handlers = [handler]
-    root.setLevel(logging.INFO)
-    root._ai_gm_structured_logging = True
+logger = get_logger("ai_gm")
 
 
 GAME_SYSTEMS = {
@@ -134,20 +107,20 @@ def run_raw_migrations():
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
-    print(f"[migration] db path: {DB_PATH}")
+    logger.info("migration_db_path", db_path=DB_PATH)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     for sql in RAW_MIGRATIONS:
         try:
             conn.execute(sql)
             conn.commit()
-            print(f"[migration] applied: {sql}")
+            logger.info("migration_applied", sql=sql)
         except sqlite3.OperationalError as e:
             msg = str(e).lower()
             if "duplicate column" in msg or "already exists" in msg or "no such table" in msg:
-                print(f"[migration] skipped ({e}): {sql}")
+                logger.info("migration_skipped", sql=sql, reason=str(e))
             else:
-                print(f"[migration] ERROR ({e}): {sql}")
+                logger.error("migration_error", sql=sql, error_message=str(e))
     conn.close()
 
 
@@ -163,7 +136,7 @@ def run_app_sql_migrations():
             conn.executescript(sql)
         conn.commit()
     except sqlite3.OperationalError as e:
-        print(f"[migration] sql file ERROR ({e})")
+        logger.error("migration_sql_file_error", error_message=str(e))
         conn.rollback()
     finally:
         conn.close()
@@ -172,7 +145,7 @@ def run_app_sql_migrations():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    setup_structured_logging()
+    configure_logging()
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
@@ -199,6 +172,8 @@ app.add_middleware(
 async def request_logging_middleware(request: Request, call_next):
     request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
     request.state.request_id = request_id
+    reset_request_context(request_id=request_id)
+    bind_context(route=request.url.path, method=request.method)
     start = time.perf_counter()
     status_code = 500
     try:
@@ -210,15 +185,8 @@ async def request_logging_middleware(request: Request, call_next):
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         logger.info(
             "request_complete",
-            extra={
-                "extra_fields": {
-                    "request_id": request_id,
-                    "route": request.url.path,
-                    "method": request.method,
-                    "status_code": status_code,
-                    "elapsed_ms": elapsed_ms,
-                }
-            },
+            status_code=status_code,
+            elapsed_ms=elapsed_ms,
         )
 
 app.include_router(commands.router, prefix="/api")
@@ -313,6 +281,20 @@ async def gm_dice(req: DiceReq):
             raise HTTPException(status_code=404, detail="Unknown roll_key")
 
         final_total = breakdown["final_total"] + base_mod
+        outcome = None
+        if req.dc is not None:
+            roll_type = str(breakdown.get("skill") or req.roll_key or "gm_dice")
+            outcome = "hit" if final_total >= req.dc and "attack" in roll_type else None
+            if outcome is None:
+                outcome = "success" if final_total >= req.dc else "fail"
+        logger.info(
+            "dice_roll",
+            roll_type=str(breakdown.get("skill") or req.roll_key or "gm_dice"),
+            result=final_total,
+            dc=req.dc,
+            outcome=outcome,
+            source="gm_dice",
+        )
 
         return {
             "dice": req.dice.strip(),
@@ -325,6 +307,14 @@ async def gm_dice(req: DiceReq):
             "breakdown": breakdown,
         }
 
+    logger.info(
+        "dice_roll",
+        roll_type=req.roll_key or req.dice.strip(),
+        result=total,
+        dc=req.dc,
+        outcome=("success" if req.dc is not None and total >= req.dc else "fail" if req.dc is not None else None),
+        source="gm_dice",
+    )
     return {"dice": req.dice.strip(), "rolls": rolls, "total": total}
 
 

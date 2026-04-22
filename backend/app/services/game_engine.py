@@ -165,7 +165,7 @@ def build_narrative_messages(
                     f"W bazie jest zapis zakończonej walki (powód: {er}). Gracz NIE ma teraz aktywnej walki "
                     "w mechanice — każda **nowa** potyczka wymaga na końcu Twojej odpowiedzi linii "
                     "[COMBAT_START:klucz_wroga] (wg słownika wrogów), chyba że gracz sam uruchomi walkę "
-                    "komendą /walka lub /atak w czacie.\n"
+                    "komendą /atak w czacie (odczyt stanu walki).\n"
                     "Nie kontynuuj w myśleniu starej sesji (inicjatywa, HP z poprzedniej walki) — to osobna walka."
                 )
             first["content"] = f"{first.get('content', '').rstrip()}\n\n{extra}"

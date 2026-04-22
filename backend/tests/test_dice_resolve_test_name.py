@@ -100,8 +100,8 @@ class TestAliases:
     def test_attack_maps_to_melee_attack(self):
         assert resolve_test_name("Attack") == "melee_attack"
 
-    def test_initiative_maps_to_reflex_save(self):
-        assert resolve_test_name("Initiative") == "reflex_save"
+    def test_initiative_maps_to_initiative(self):
+        assert resolve_test_name("Initiative") == "initiative"
 
 
 # ---------------------------------------------------------------------------

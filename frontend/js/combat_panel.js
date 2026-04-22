@@ -139,12 +139,23 @@
       }
     }
 
+    cancelDeferredVictoryUi() {
+      this._deferVictoryOverlay = false;
+      this._pendingLoot = null;
+      this._hideLoot();
+      this._hideEnd();
+    }
+
     _playerAttackRollDbLine(intent, characterName, d20, mod, total, data, combatVictory) {
       const hit = !!data.hit;
       const dmg = data.damage != null ? Number(data.damage) : null;
       const summary = hit
         ? `Atakuję z wynikiem ${total} — trafiam za ${dmg != null ? dmg : "?"} obrażeń!`
-        : `Atakuję z wynikiem ${total} — pudło!`;
+        : (data.player_nat1
+            ? `Atakuję z wynikiem ${total} — fatalnie pudłuję i tracę tempo ataku!`
+            : (data.dodged
+            ? `Atakuję z wynikiem ${total} — przeciwnik uskakuje i unika ciosu!`
+            : `Atakuję z wynikiem ${total} — pudło!`));
       const payload = {
         kind: "player_attack",
         intent: (intent || "").trim(),
@@ -157,6 +168,7 @@
         hit,
         damage: dmg != null ? dmg : 0,
         enemy_key: data.enemy_key != null ? String(data.enemy_key) : "",
+        target_id: data.target_id != null ? String(data.target_id) : "",
         target_name:
           data.target_name != null ? String(data.target_name) : "",
         enemy_dead: !!data.enemy_dead,
@@ -453,6 +465,11 @@
 
     _triggerDeathSavePrompt() {
       if (typeof window.updateActionTriggerBtn !== "function") return;
+      const hp =
+        typeof window.getCharacterHpForRollRules === "function"
+          ? window.getCharacterHpForRollRules()
+          : null;
+      if (hp === null || hp > 0) return;
       window.state.activeRollRequest = {
         skill: "death_save",
         dice: "d20",
@@ -567,6 +584,35 @@
       }
     }
 
+    /**
+     * Cel ataku gracza wg kolejki inicjatywy i żywych wrogów (zgodnie z silnikiem na backendzie).
+     * @returns {({ target_id: string, enemy_key: string, target_name: string })|null}
+     */
+    _currentPlayerAttackTarget() {
+      const cs = this._state;
+      if (!cs || String(cs.status) !== "active" || cs.current_turn !== "player") return null;
+      const combatants = Array.isArray(cs.combatants) ? cs.combatants : [];
+      const living = combatants.filter(
+        (c) => c && c.type === "enemy" && Number(c.hp_current ?? 0) > 0
+      );
+      if (!living.length) return null;
+      const order = Array.isArray(cs.turn_order) ? cs.turn_order : [];
+      const livingSet = new Set(living.map((e) => String(e.id)));
+      let tid = null;
+      for (const id of order) {
+        if (livingSet.has(String(id))) {
+          tid = String(id);
+          break;
+        }
+      }
+      if (!tid) tid = String(living[0].id);
+      const e = combatants.find((c) => c && String(c.id) === tid);
+      if (!e) return null;
+      const enemy_key = e.enemy_key != null ? String(e.enemy_key).trim() : "";
+      const target_name = e.name != null ? String(e.name).trim() : "";
+      return { target_id: tid, enemy_key, target_name };
+    }
+
     async _onAttack() {
       if (!this._state || this._state.status !== "active") {
         this._setMsg("Brak aktywnej walki.", true);
@@ -602,10 +648,23 @@
         const d20 = Number(diceData.total ?? 0);
         const total = d20 + mod;
 
+        const atkTarget = this._currentPlayerAttackTarget();
+        const resolveBody = {
+          roll_result: total,
+          raw_d20: d20,
+          attacker: "player",
+        };
+        if (atkTarget && atkTarget.enemy_key) {
+          resolveBody.enemy_key = atkTarget.enemy_key;
+        }
+        if (atkTarget && atkTarget.target_id) {
+          resolveBody.target_id = atkTarget.target_id;
+        }
+
         const res = await fetch(`/api/campaigns/${cid}/combat/resolve-attack`, {
           method: "POST",
           headers: window.getApiHeaders ? window.getApiHeaders() : { "Content-Type": "application/json" },
-          body: JSON.stringify({ roll_result: total, attacker: "player" }),
+          body: JSON.stringify(resolveBody),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
@@ -617,6 +676,10 @@
 
         if (data.hit) {
           this._setMsg(`Trafienie! ${data.damage ?? "?"} obrażeń`);
+        } else if (data.player_nat1) {
+          this._setMsg("Fatalne pudło!");
+        } else if (data.dodged) {
+          this._setMsg("Wróg unika ciosu!");
         } else {
           this._setMsg("Pudło!");
         }

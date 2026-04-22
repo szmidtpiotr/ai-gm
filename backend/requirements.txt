@@ -8,3 +8,5 @@ sqlmodel==0.0.22
 httpx
 requests>=2.31.0
 bcrypt>=4.2.0
+pytest>=8.0.0
+structlog>=24.4.0

@@ -9,6 +9,7 @@ from app.api.turns import (
     get_db,
     log_memory_turn_structured,
 )
+from app.services.client_ui_config import is_slash_command_enabled
 from app.services.memory_qa_service import answer_from_summaries
 
 router = APIRouter()
@@ -30,6 +31,12 @@ def post_memory_ask(
     body: MemoryAskBody,
     user_id: int = Query(..., description="Właściciel kampanii — spójnie z LLM."),
 ):
+    if not is_slash_command_enabled("/mem [pytanie]"):
+        raise HTTPException(
+            status_code=403,
+            detail="Komenda /mem jest wyłączona przez administratora.",
+        )
+
     conn = get_db()
     try:
         camp = get_campaign_or_404(conn, campaign_id)

@@ -183,6 +183,180 @@ function _selectDropdownLabel(row, col) {
   return s || "—";
 }
 
+const FILTER_ALL = "__admin_filter_all__";
+const FILTER_EMPTY = "__admin_filter_empty__";
+
+function isColumnFilterable(col) {
+  if (!col || col.filterable === false) {
+    return false;
+  }
+  if (Array.isArray(col.filterOptions)) {
+    return true;
+  }
+  if (col.type === "boolean") {
+    return true;
+  }
+  if (col.type === "checkbox-set" && Array.isArray(col.editOptions)) {
+    return true;
+  }
+  if (col.type === "select-dropdown" && Array.isArray(col.editOptions)) {
+    return true;
+  }
+  if (col.editType === "select" && Array.isArray(col.editOptions)) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeFilterToken(value) {
+  if (value == null) {
+    return FILTER_EMPTY;
+  }
+  const s = String(value);
+  return s === "" ? FILTER_EMPTY : s;
+}
+
+function filterOptionsForColumn(col) {
+  let base = [];
+  if (Array.isArray(col.filterOptions)) {
+    base = col.filterOptions;
+  } else if (col.type === "boolean") {
+    base = [
+      { value: "true", label: "Yes" },
+      { value: "false", label: "No" },
+    ];
+  } else if (Array.isArray(col.editOptions)) {
+    base = col.editOptions;
+  }
+
+  const out = [];
+  const seen = new Set();
+  base.forEach((opt) => {
+    const rawValue = typeof opt === "string" ? opt : (opt?.value ?? "");
+    const value = normalizeFilterToken(rawValue);
+    if (seen.has(value)) {
+      return;
+    }
+    seen.add(value);
+    const rawLabel = typeof opt === "string" ? opt : (opt?.label ?? rawValue);
+    out.push({
+      value,
+      label: value === FILTER_EMPTY ? (rawLabel || "— empty —") : String(rawLabel),
+    });
+  });
+  return out;
+}
+
+function getRowFilterTokens(row, col) {
+  if (typeof col.filterValue === "function") {
+    const custom = col.filterValue(row);
+    if (Array.isArray(custom)) {
+      return custom.map((v) => normalizeFilterToken(v));
+    }
+    return [normalizeFilterToken(custom)];
+  }
+  const raw = row[col.key];
+  if (col.type === "boolean") {
+    return [raw === true || raw === 1 || raw === "1" ? "true" : "false"];
+  }
+  if (Array.isArray(raw)) {
+    return raw.map((v) => normalizeFilterToken(v));
+  }
+  return [normalizeFilterToken(raw)];
+}
+
+function rowMatchesFilters(row, filterableColumns, filterState) {
+  for (let i = 0; i < filterableColumns.length; i += 1) {
+    const col = filterableColumns[i];
+    const selected = filterState[col.key] || FILTER_ALL;
+    if (selected === FILTER_ALL) {
+      continue;
+    }
+    const tokens = getRowFilterTokens(row, col);
+    if (!tokens.includes(selected)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Case-insensitive match across visible columns and any extra keys on the row (JSON cells, etc.).
+ * @param {object} row
+ * @param {Array<{ key: string }>} columns
+ * @param {string} q normalized lowercase query
+ */
+function rowMatchesTextSearch(row, columns, q) {
+  if (!q) {
+    return true;
+  }
+  const parts = [];
+  columns.forEach((c) => {
+    parts.push(String(getSortValueForColumn(row, c) ?? ""));
+  });
+  Object.keys(row).forEach((k) => {
+    if (!columns.some((c) => c.key === k)) {
+      const v = row[k];
+      if (v != null && typeof v === "object") {
+        try {
+          parts.push(JSON.stringify(v));
+        } catch (_e) {
+          parts.push(String(v));
+        }
+      } else {
+        parts.push(String(v ?? ""));
+      }
+    }
+  });
+  return parts.join("\u0000").toLowerCase().includes(q);
+}
+
+function defaultRowId(row, options = {}) {
+  if (typeof options.getRowId === "function") {
+    return String(options.getRowId(row));
+  }
+  if (typeof options.rowKey === "string" && row?.[options.rowKey] != null) {
+    return String(row[options.rowKey]);
+  }
+  if (row?.key != null) {
+    return String(row.key);
+  }
+  if (row?.id != null) {
+    return String(row.id);
+  }
+  return JSON.stringify(row);
+}
+
+function normalizeExportRows(rows, options = {}) {
+  if (typeof options.exportRows === "function") {
+    return options.exportRows(rows);
+  }
+  if (typeof options.exportRow === "function") {
+    return rows.map((row) => options.exportRow(row));
+  }
+  return rows;
+}
+
+function downloadTableJson(rows, options = {}) {
+  const payload = normalizeExportRows(rows, options);
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  const filenameBase = String(options.exportFilename || options.tableName || "admin_table")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  a.download = `${filenameBase || "admin_table"}_${y}${m}${day}.json`;
+  a.click();
+  URL.revokeObjectURL(blobUrl);
+}
+
 /**
  * @param {HTMLElement} container
  * @param {Array<{ key: string, label: string, editable?: boolean, type?: string }>} columns
@@ -192,6 +366,15 @@ function _selectDropdownLabel(row, col) {
  *   onDelete?: (row: object, meta?: { force?: boolean }) => Promise<void>,
  *   extraActions?: (row: object) => Array<{ label: string, class?: string, onClick: () => void | Promise<void> }>,
  *   sortable?: boolean,
+ *   selectable?: boolean,
+ *   rowKey?: string,
+ *   getRowId?: (row: object) => string,
+ *   tableName?: string,
+ *   exportFilename?: string,
+ *   exportRows?: (rows: Array<object>) => unknown,
+ *   exportRow?: (row: object) => unknown,
+ *   showTextSearch?: boolean,
+ *   searchPlaceholder?: string,
  * }} [options]
  */
 export function renderTable(container, columns, rows, options = {}) {
@@ -199,6 +382,7 @@ export function renderTable(container, columns, rows, options = {}) {
   const onDelete = options.onDelete;
   const extraActions = options.extraActions;
   const sortableTable = options.sortable !== false;
+  const selectable = !!options.selectable;
 
   if (!container.__adminSort) {
     container.__adminSort = { key: null, dir: "asc" };
@@ -209,11 +393,35 @@ export function renderTable(container, columns, rows, options = {}) {
     sortState.dir = "asc";
   }
 
+  if (!container.__adminFilters) {
+    container.__adminFilters = {};
+  }
+  const filterState = container.__adminFilters;
+  const filterableColumns = columns.filter((c) => isColumnFilterable(c));
+  Object.keys(filterState).forEach((key) => {
+    if (!filterableColumns.some((c) => c.key === key)) {
+      delete filterState[key];
+    }
+  });
+
   let displayRows = rows;
-  if (sortableTable && Array.isArray(rows) && rows.length && sortState.key) {
+  if (Array.isArray(rows) && filterableColumns.length) {
+    displayRows = rows.filter((row) => rowMatchesFilters(row, filterableColumns, filterState));
+  }
+
+  const textSearchOn = options.showTextSearch === true;
+  if (typeof container.__adminTextSearch !== "string") {
+    container.__adminTextSearch = "";
+  }
+  const textQ = (container.__adminTextSearch || "").trim().toLowerCase();
+  if (textSearchOn && textQ && Array.isArray(displayRows)) {
+    displayRows = displayRows.filter((row) => rowMatchesTextSearch(row, columns, textQ));
+  }
+
+  if (sortableTable && Array.isArray(displayRows) && displayRows.length && sortState.key) {
     const col = columns.find((c) => c.key === sortState.key && c.sortable !== false);
     if (col) {
-      displayRows = sortRowsCopy(rows, col, sortState.dir === "desc" ? "desc" : "asc");
+      displayRows = sortRowsCopy(displayRows, col, sortState.dir === "desc" ? "desc" : "asc");
     }
   }
 
@@ -221,11 +429,148 @@ export function renderTable(container, columns, rows, options = {}) {
   const wrap = document.createElement("div");
   wrap.className = "admin-table-wrap";
 
+  if (textSearchOn && Array.isArray(rows)) {
+    const searchRow = document.createElement("div");
+    searchRow.className = "admin-table-search-row";
+    const inp = document.createElement("input");
+    inp.type = "search";
+    inp.className = "admin-table-search-input";
+    inp.placeholder = options.searchPlaceholder || "Search this table…";
+    inp.setAttribute("aria-label", "Search rows");
+    inp.value = container.__adminTextSearch || "";
+    inp.addEventListener("input", (ev) => {
+      const t = ev.target;
+      container.__adminTextSearch = t.value;
+      const len = t.value.length;
+      const start = typeof t.selectionStart === "number" ? t.selectionStart : len;
+      const end = typeof t.selectionEnd === "number" ? t.selectionEnd : len;
+      container.__adminTextSearchCaretPending = { start, end };
+      renderTable(container, columns, rows, options);
+    });
+    searchRow.appendChild(inp);
+    wrap.appendChild(searchRow);
+  }
+
+  if (!container.__adminSelected) {
+    container.__adminSelected = new Set();
+  }
+  const selectedState = container.__adminSelected;
+  if (Array.isArray(rows)) {
+    const validIds = new Set(rows.map((row) => defaultRowId(row, options)));
+    [...selectedState].forEach((id) => {
+      if (!validIds.has(id)) {
+        selectedState.delete(id);
+      }
+    });
+  } else {
+    selectedState.clear();
+  }
+  const visibleRowIds = Array.isArray(displayRows) ? displayRows.map((row) => defaultRowId(row, options)) : [];
+  const selectedVisibleCount = visibleRowIds.filter((id) => selectedState.has(id)).length;
+  const selectedRows = Array.isArray(rows)
+    ? rows.filter((row) => selectedState.has(defaultRowId(row, options)))
+    : [];
+
+  if (selectable && Array.isArray(rows)) {
+    const toolbar = document.createElement("div");
+    toolbar.className = "admin-table-toolbar";
+    const left = document.createElement("div");
+    left.className = "admin-table-toolbar-left";
+    left.textContent = `Selected: ${selectedRows.length}`;
+    toolbar.appendChild(left);
+    const right = document.createElement("div");
+    right.className = "admin-table-toolbar-actions";
+
+    const mkBtn = (label, cls, onClick, disabled = false) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = cls;
+      btn.textContent = label;
+      btn.disabled = !!disabled;
+      btn.addEventListener("click", () => {
+        void onClick();
+      });
+      right.appendChild(btn);
+      return btn;
+    };
+
+    mkBtn("Select visible", "secondary-btn", () => {
+      visibleRowIds.forEach((id) => selectedState.add(id));
+      renderTable(container, columns, rows, options);
+    }, !visibleRowIds.length);
+
+    mkBtn("Clear selection", "secondary-btn", () => {
+      selectedState.clear();
+      renderTable(container, columns, rows, options);
+    }, !selectedRows.length);
+
+    mkBtn("Export all", "secondary-btn", () => {
+      downloadTableJson(rows, options);
+    }, !rows.length);
+
+    mkBtn("Export selected", "secondary-btn", () => {
+      downloadTableJson(selectedRows, options);
+    }, !selectedRows.length);
+
+    if (onDelete) {
+      mkBtn("Delete selected", "secondary-btn danger-outline", async () => {
+        const ok = await showConfirm(
+          `Delete ${selectedRows.length} selected row(s)?`,
+          { dangerous: true },
+        );
+        if (!ok) {
+          return;
+        }
+        let success = 0;
+        const deletedIds = new Set();
+        const failures = [];
+        for (let i = 0; i < selectedRows.length; i += 1) {
+          const row = selectedRows[i];
+          const rowId = defaultRowId(row, options);
+          try {
+            await onDelete(row, { force: false });
+            selectedState.delete(rowId);
+            deletedIds.add(rowId);
+            success += 1;
+          } catch (err) {
+            failures.push(rowId);
+          }
+        }
+        if (failures.length) {
+          window.alert?.(
+            `Deleted ${success} row(s). Failed to delete ${failures.length}: ${failures.join(", ")}`,
+          );
+        }
+        renderTable(container, columns, rows.filter((row) => !deletedIds.has(defaultRowId(row, options))), options);
+      }, !selectedRows.length);
+    }
+    toolbar.appendChild(right);
+    wrap.appendChild(toolbar);
+  }
+
   const table = document.createElement("table");
   table.className = "admin-table";
 
   const thead = document.createElement("thead");
   const hr = document.createElement("tr");
+  if (selectable && Array.isArray(rows)) {
+    const th = document.createElement("th");
+    th.className = "admin-table-select-col";
+    const allCb = document.createElement("input");
+    allCb.type = "checkbox";
+    allCb.checked = !!visibleRowIds.length && selectedVisibleCount === visibleRowIds.length;
+    allCb.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < visibleRowIds.length;
+    allCb.addEventListener("change", () => {
+      if (allCb.checked) {
+        visibleRowIds.forEach((id) => selectedState.add(id));
+      } else {
+        visibleRowIds.forEach((id) => selectedState.delete(id));
+      }
+      renderTable(container, columns, rows, options);
+    });
+    th.appendChild(allCb);
+    hr.appendChild(th);
+  }
   columns.forEach((c) => {
     const th = document.createElement("th");
     const canSort = sortableTable && c.sortable !== false && Array.isArray(rows);
@@ -272,9 +617,53 @@ export function renderTable(container, columns, rows, options = {}) {
     hr.appendChild(th);
   }
   thead.appendChild(hr);
+  if (Array.isArray(rows) && filterableColumns.length) {
+    const filterRow = document.createElement("tr");
+    filterRow.className = "admin-table-filter-row";
+    if (selectable) {
+      filterRow.appendChild(document.createElement("th"));
+    }
+    columns.forEach((c) => {
+      const th = document.createElement("th");
+      if (isColumnFilterable(c)) {
+        const select = document.createElement("select");
+        select.className = "admin-table-filter-select";
+        const allOpt = document.createElement("option");
+        allOpt.value = FILTER_ALL;
+        allOpt.textContent = "All";
+        select.appendChild(allOpt);
+        filterOptionsForColumn(c).forEach((opt) => {
+          const o = document.createElement("option");
+          o.value = opt.value;
+          o.textContent = opt.label;
+          select.appendChild(o);
+        });
+        const current = filterState[c.key] || FILTER_ALL;
+        select.value = [...select.options].some((opt) => opt.value === current) ? current : FILTER_ALL;
+        if (select.value === FILTER_ALL) {
+          delete filterState[c.key];
+        }
+        select.addEventListener("change", () => {
+          if (select.value === FILTER_ALL) {
+            delete filterState[c.key];
+          } else {
+            filterState[c.key] = select.value;
+          }
+          renderTable(container, columns, rows, options);
+        });
+        th.appendChild(select);
+      }
+      filterRow.appendChild(th);
+    });
+    if (onDelete || extraActions) {
+      filterRow.appendChild(document.createElement("th"));
+    }
+    thead.appendChild(filterRow);
+  }
   table.appendChild(thead);
 
   const tbody = document.createElement("tbody");
+  const selectionCols = selectable && Array.isArray(rows) ? 1 : 0;
   const actionCols = onDelete || extraActions ? 1 : 0;
 
   if (rows === null) {
@@ -282,7 +671,7 @@ export function renderTable(container, columns, rows, options = {}) {
       const tr = document.createElement("tr");
       tr.className = "admin-table-skeleton-row";
       const td = document.createElement("td");
-      td.colSpan = columns.length + actionCols;
+      td.colSpan = columns.length + actionCols + selectionCols;
       const bar = document.createElement("div");
       bar.className = "admin-table-skeleton-bar";
       td.appendChild(bar);
@@ -292,17 +681,43 @@ export function renderTable(container, columns, rows, options = {}) {
   } else if (!rows.length) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = columns.length + actionCols;
+    td.colSpan = columns.length + actionCols + selectionCols;
     td.className = "admin-table-empty";
     td.textContent = "No rows yet.";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+  } else if (!displayRows.length) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = columns.length + actionCols + selectionCols;
+    td.className = "admin-table-empty";
+    td.textContent = "No rows match current filters.";
     tr.appendChild(td);
     tbody.appendChild(tr);
   } else {
     displayRows.forEach((row) => {
       const locked = isRowLocked(row);
       const tr = document.createElement("tr");
+      const rowId = defaultRowId(row, options);
       if (locked) {
         tr.classList.add("admin-table-row-locked");
+      }
+      if (selectable) {
+        const tdSel = document.createElement("td");
+        tdSel.className = "admin-table-select-col";
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = selectedState.has(rowId);
+        cb.addEventListener("change", () => {
+          if (cb.checked) {
+            selectedState.add(rowId);
+          } else {
+            selectedState.delete(rowId);
+          }
+          renderTable(container, columns, rows, options);
+        });
+        tdSel.appendChild(cb);
+        tr.appendChild(tdSel);
       }
 
       columns.forEach((col, colIdx) => {
@@ -382,6 +797,7 @@ export function renderTable(container, columns, rows, options = {}) {
                 await onEdit(row, col.key, newVal, { force });
                 row[col.key] = newVal;
                 restorePill();
+                renderTable(container, columns, rows, options);
               } catch (_err) {
                 committed = false;
                 restorePill();
@@ -470,6 +886,7 @@ export function renderTable(container, columns, rows, options = {}) {
                 await onEdit(row, col.key, newVal, { force });
                 row[col.key] = newVal;
                 restore();
+                renderTable(container, columns, rows, options);
               } catch (_err) {
                 committed = false;
                 restore();
@@ -523,6 +940,7 @@ export function renderTable(container, columns, rows, options = {}) {
               await onEdit(row, col.key, next, { force });
               syncBtn();
               Object.assign(row, { [col.key]: next });
+              renderTable(container, columns, rows, options);
             } catch (_e) {
               syncBtn();
               /* caller surfaces toast */
@@ -596,6 +1014,7 @@ export function renderTable(container, columns, rows, options = {}) {
                 await onEdit(row, col.key, next, { force });
                 row[col.key] = next;
                 restore();
+                renderTable(container, columns, rows, options);
               } catch (_err) {
                 restore();
               }
@@ -702,6 +1121,7 @@ export function renderTable(container, columns, rows, options = {}) {
                 span.textContent =
                   prefix +
                   (typeof col.formatDisplay === "function" ? String(col.formatDisplay(row)) : String(newVal));
+                renderTable(container, columns, rows, options);
               } catch (_err) {
                 committed = false;
                 cancel();
@@ -827,4 +1247,23 @@ export function renderTable(container, columns, rows, options = {}) {
   table.appendChild(tbody);
   wrap.appendChild(table);
   container.appendChild(wrap);
+
+  const caret = container.__adminTextSearchCaretPending;
+  if (caret && textSearchOn && Array.isArray(rows)) {
+    const searchInp = wrap.querySelector(".admin-table-search-input");
+    delete container.__adminTextSearchCaretPending;
+    if (searchInp) {
+      requestAnimationFrame(() => {
+        searchInp.focus();
+        try {
+          const len = searchInp.value.length;
+          const a = Math.max(0, Math.min(typeof caret.start === "number" ? caret.start : len, len));
+          const b = Math.max(0, Math.min(typeof caret.end === "number" ? caret.end : len, len));
+          searchInp.setSelectionRange(a, b);
+        } catch (_e) {
+          /* ignore */
+        }
+      });
+    }
+  }
 }

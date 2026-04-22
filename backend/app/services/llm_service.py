@@ -1,9 +1,12 @@
 import os
 import re
 import json
+import time
 from typing import Any, Generator
 
 import httpx
+
+from app.core.logging import get_logger
 
 _runtime_config: dict[str, str] = {
     "provider": "",
@@ -11,6 +14,7 @@ _runtime_config: dict[str, str] = {
     "model": "",
     "api_key": "",
 }
+logger = get_logger(__name__)
 
 
 def set_runtime_config(provider: str, base_url: str, model: str, api_key: str) -> None:
@@ -94,6 +98,17 @@ def _normalize_base_url(base_url: str, provider: str) -> str:
     return value.rstrip("/")
 
 
+def _duration_ms(started_at: float) -> int:
+    return int((time.perf_counter() - started_at) * 1000)
+
+
+def _trim_error_message(raw: str) -> str:
+    text = (raw or "").strip()
+    if len(text) > 1200:
+        return text[:1200] + "…"
+    return text
+
+
 class OllamaDriver:
     @staticmethod
     def generate_chat(base_url: str, model: str, messages: list[dict], api_key: str) -> str:
@@ -124,6 +139,7 @@ class OllamaDriver:
 
     @staticmethod
     def generate_stream(base_url: str, model: str, messages: list[dict], api_key: str) -> Generator[str, None, None]:
+        started_at = time.perf_counter()
         payload = {
             "model": model,
             "messages": messages,
@@ -153,11 +169,32 @@ class OllamaDriver:
                             break
             yield "data: [DONE]\n\n"
         except httpx.TimeoutException as exc:
+            logger.error(
+                "llm_timeout",
+                model=model,
+                llm_provider="ollama",
+                duration_ms=_duration_ms(started_at),
+                error_message=str(exc),
+            )
             yield f"data: [ERROR] LLM timeout: {exc}\n\n"
         except httpx.HTTPStatusError as exc:
             detail = exc.response.text if exc.response is not None else str(exc)
+            logger.error(
+                "llm_error",
+                model=model,
+                llm_provider="ollama",
+                duration_ms=_duration_ms(started_at),
+                error_message=_trim_error_message(detail),
+            )
             yield f"data: [ERROR] LLM HTTP error: {detail}\n\n"
         except httpx.RequestError as exc:
+            logger.error(
+                "llm_error",
+                model=model,
+                llm_provider="ollama",
+                duration_ms=_duration_ms(started_at),
+                error_message=str(exc),
+            )
             yield f"data: [ERROR] LLM connection error: {exc}\n\n"
 
     @staticmethod
@@ -201,19 +238,48 @@ class OpenAIDriver:
 
     @staticmethod
     def generate_stream(base_url: str, model: str, messages: list[dict], api_key: str) -> Generator[str, None, None]:
+        started_at = time.perf_counter()
         try:
             # Phase 7.5 keeps stream interface compatibility by returning single chunk.
             content = OpenAIDriver.generate_chat(base_url, model, messages, api_key)
             yield f"data: {content.replace(chr(10), '\\n')}\n\n"
             yield "data: [DONE]\n\n"
         except httpx.TimeoutException as exc:
+            logger.error(
+                "llm_timeout",
+                model=model,
+                llm_provider="openai",
+                duration_ms=_duration_ms(started_at),
+                error_message=str(exc),
+            )
             yield f"data: [ERROR] LLM timeout: {exc}\n\n"
         except httpx.HTTPStatusError as exc:
             detail = exc.response.text if exc.response is not None else str(exc)
+            logger.error(
+                "llm_error",
+                model=model,
+                llm_provider="openai",
+                duration_ms=_duration_ms(started_at),
+                error_message=_trim_error_message(detail),
+            )
             yield f"data: [ERROR] LLM HTTP error: {detail}\n\n"
         except httpx.RequestError as exc:
+            logger.error(
+                "llm_error",
+                model=model,
+                llm_provider="openai",
+                duration_ms=_duration_ms(started_at),
+                error_message=str(exc),
+            )
             yield f"data: [ERROR] LLM connection error: {exc}\n\n"
         except Exception as exc:
+            logger.error(
+                "llm_error",
+                model=model,
+                llm_provider="openai",
+                duration_ms=_duration_ms(started_at),
+                error_message=str(exc),
+            )
             yield f"data: [ERROR] LLM error: {exc}\n\n"
 
     @staticmethod
@@ -251,6 +317,8 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
     effective = get_effective_config(llm_config)
     resolved_model = _resolve_model(model, effective)
     provider = effective["provider"]
+    started_at = time.perf_counter()
+    logger.info("llm_called", model=resolved_model, llm_provider=provider, stream=False)
     if provider == "openai" and not (effective.get("api_key") or "").strip():
         raise RuntimeError(
             "OpenAI API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
@@ -260,10 +328,43 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
             return OllamaDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
         if provider == "openai":
             return OpenAIDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+    except httpx.TimeoutException as exc:
+        logger.error(
+            "llm_timeout",
+            model=resolved_model,
+            llm_provider=provider,
+            duration_ms=_duration_ms(started_at),
+            error_message=str(exc),
+        )
+        raise RuntimeError(f"LLM timeout: {exc}") from exc
     except httpx.HTTPStatusError as exc:
+        detail = exc.response.text if exc.response is not None else str(exc)
+        logger.error(
+            "llm_error",
+            model=resolved_model,
+            llm_provider=provider,
+            duration_ms=_duration_ms(started_at),
+            error_message=_trim_error_message(detail),
+        )
         _raise_llm_http_error(exc)
     except httpx.RequestError as exc:
+        logger.error(
+            "llm_error",
+            model=resolved_model,
+            llm_provider=provider,
+            duration_ms=_duration_ms(started_at),
+            error_message=str(exc),
+        )
         raise RuntimeError(f"LLM connection error: {exc}") from exc
+    except RuntimeError as exc:
+        logger.error(
+            "llm_error",
+            model=resolved_model,
+            llm_provider=provider,
+            duration_ms=_duration_ms(started_at),
+            error_message=str(exc),
+        )
+        raise
     raise RuntimeError(f"Unknown LLM provider: {provider}")
 
 
@@ -273,6 +374,7 @@ def generate_chat_stream(
     effective = get_effective_config(llm_config)
     resolved_model = _resolve_model(model, effective)
     provider = effective["provider"]
+    logger.info("llm_called", model=resolved_model, llm_provider=provider, stream=True)
     if provider == "openai" and not (effective.get("api_key") or "").strip():
         raise RuntimeError(
             "OpenAI API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."

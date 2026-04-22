@@ -1,5 +1,8 @@
 window.bootstrap = async function () {
   try {
+    if (typeof window.applyPlayerLlmSettingsAccessUi === "function") {
+      window.applyPlayerLlmSettingsAccessUi();
+    }
     if (typeof window.cleanupAbandonedWizardFromSession === 'function') {
       await window.cleanupAbandonedWizardFromSession();
     }
@@ -86,21 +89,44 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.PLAYER_AUTH_STORAGE_KEY = "ai-gm:playerAuth";
 
-window._getStoredPlayerUserId = function () {
+window._readStoredPlayerAuth = function () {
   try {
     const raw = localStorage.getItem(window.PLAYER_AUTH_STORAGE_KEY);
-    if (!raw) return null;
+    if (!raw) return { userId: null, isAdmin: null };
     const parsed = JSON.parse(raw);
     const uid = parsed?.user_id ?? parsed?.userId;
     const n = Number(uid);
-    return Number.isFinite(n) && n > 0 ? n : null;
+    const userId = Number.isFinite(n) && n > 0 ? n : null;
+    const ia = parsed?.is_admin;
+    let isAdmin = null;
+    if (ia === 0 || ia === "0") isAdmin = false;
+    else if (ia === 1 || ia === "1") isAdmin = true;
+    else if (ia === true) isAdmin = true;
+    else if (ia === false) isAdmin = false;
+    return { userId, isAdmin };
   } catch (_err) {
-    return null;
+    return { userId: null, isAdmin: null };
   }
 };
 
-window._setStoredPlayerUserId = function (userId) {
-  localStorage.setItem(window.PLAYER_AUTH_STORAGE_KEY, JSON.stringify({ user_id: Number(userId) }));
+window._getStoredPlayerUserId = function () {
+  return window._readStoredPlayerAuth().userId;
+};
+
+/**
+ * @param {number} userId
+ * @param {number|boolean|null|undefined} isAdmin — 0/1 or boolean; omit for legacy payload shape
+ */
+window._setStoredPlayerUserId = function (userId, isAdmin) {
+  const payload = { user_id: Number(userId) };
+  if (isAdmin === 0 || isAdmin === 1) {
+    payload.is_admin = isAdmin;
+  } else if (isAdmin === true) {
+    payload.is_admin = 1;
+  } else if (isAdmin === false) {
+    payload.is_admin = 0;
+  }
+  localStorage.setItem(window.PLAYER_AUTH_STORAGE_KEY, JSON.stringify(payload));
 };
 
 window._setAuthedUiVisible = function (authed) {
@@ -120,7 +146,8 @@ window._setAuthedUiVisible = function (authed) {
 
 window.initPlayerAuthGate = async function () {
   // Early UI setup: block everything until logged in.
-  const storedUserId = window._getStoredPlayerUserId();
+  const storedAuth = window._readStoredPlayerAuth();
+  const storedUserId = storedAuth.userId;
   const loginBtn = document.getElementById("player-login-btn");
   const statusEl = document.getElementById("player-login-status");
   const usernameEl = document.getElementById("player-username");
@@ -161,6 +188,11 @@ window.initPlayerAuthGate = async function () {
   if (storedUserId) {
     window.state = window.state || {};
     window.state.playerUserId = storedUserId;
+    window.state.playerIsAdmin = storedAuth.isAdmin;
+
+    if (typeof window.applyPlayerLlmSettingsAccessUi === "function") {
+      window.applyPlayerLlmSettingsAccessUi();
+    }
 
     if (window.getLlmControlsCollapsedPref && window.getLlmControlsCollapsedPref() === null) {
       localStorage.setItem(window.LLM_SETTINGS_COLLAPSE_PREF_KEY, "1");
@@ -204,7 +236,28 @@ window.initPlayerAuthGate = async function () {
 
       window.state = window.state || {};
       window.state.playerUserId = Number(userId);
-      window._setStoredPlayerUserId(userId);
+      const ra = data.is_admin;
+      let storeAdmin = undefined;
+      if (ra === true) {
+        window.state.playerIsAdmin = true;
+        storeAdmin = 1;
+      } else if (ra === false) {
+        window.state.playerIsAdmin = false;
+        storeAdmin = 0;
+      } else {
+        const n = Number(ra);
+        if (Number.isFinite(n)) {
+          window.state.playerIsAdmin = n === 1;
+          storeAdmin = n === 1 ? 1 : 0;
+        } else {
+          window.state.playerIsAdmin = null;
+        }
+      }
+      window._setStoredPlayerUserId(userId, storeAdmin);
+
+      if (typeof window.applyPlayerLlmSettingsAccessUi === "function") {
+        window.applyPlayerLlmSettingsAccessUi();
+      }
 
       if (window.getLlmControlsCollapsedPref && window.getLlmControlsCollapsedPref() === null) {
         localStorage.setItem(window.LLM_SETTINGS_COLLAPSE_PREF_KEY, "1");

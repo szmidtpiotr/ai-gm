@@ -3,11 +3,13 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, Query
 
+from app.core.logging import get_logger, get_uptime_seconds
 from app.services.llm_service import get_health
 from app.services.loki_settings import get_effective_loki_base, get_stored_loki_url
 from app.services.user_llm_settings import get_user_llm_settings_full
 
 router = APIRouter()
+logger = get_logger(__name__)
 
 
 async def _loki_health() -> dict[str, Any]:
@@ -53,3 +55,10 @@ async def health(user_id: int | None = Query(default=None)):
         "ollama": llm,
         "loki": loki,
     }
+
+
+@router.get("/healthz")
+async def healthz():
+    uptime_s = get_uptime_seconds()
+    logger.info("heartbeat", uptime_s=uptime_s)
+    return {"status": "ok"}

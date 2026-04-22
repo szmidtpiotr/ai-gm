@@ -1,6 +1,6 @@
 import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
 import { showToast } from "/admin_panel/shared/toast.js?v=17";
-import { renderTable, showConfirm } from "/admin_panel/shared/table.js?v=20";
+import { renderTable, showConfirm } from "/admin_panel/shared/table.js?v=23";
 
 const SUB_TABS = [
   { id: "stats", label: "Stats" },
@@ -38,10 +38,82 @@ function parseApiError(err, fallback) {
   return fallback;
 }
 
+function downloadJsonFile(data, filenameBase) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const blobUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = blobUrl;
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  a.download = `${filenameBase}_${y}${m}${day}.json`;
+  a.click();
+  URL.revokeObjectURL(blobUrl);
+}
+
+function normalizeDiffValue(value) {
+  if (Array.isArray(value)) {
+    return [...value].map((v) => normalizeDiffValue(v)).sort();
+  }
+  if (value && typeof value === "object") {
+    const out = {};
+    Object.keys(value)
+      .sort()
+      .forEach((k) => {
+        out[k] = normalizeDiffValue(value[k]);
+      });
+    return out;
+  }
+  return value == null ? null : value;
+}
+
+function valuesDiffer(a, b) {
+  return JSON.stringify(normalizeDiffValue(a)) !== JSON.stringify(normalizeDiffValue(b));
+}
+
+function buildPatchFromExplicitFields(raw, existing, spec) {
+  const patch = {};
+  spec.forEach(({ rawKey, patchKey, getValue, getExistingValue }) => {
+    if (!Object.prototype.hasOwnProperty.call(raw, rawKey)) {
+      return;
+    }
+    const nextValue = getValue(raw);
+    const prevValue = typeof getExistingValue === "function" ? getExistingValue(existing) : existing?.[patchKey];
+    if (valuesDiffer(prevValue, nextValue)) {
+      patch[patchKey] = nextValue;
+    }
+  });
+  return patch;
+}
+
+function renderGameDesignTable(tableHost, tableName, columns, rows, options = {}) {
+  return renderTable(tableHost, columns, rows, {
+    selectable: true,
+    tableName,
+    exportFilename: tableName,
+    rowKey: "key",
+    showTextSearch: true,
+    searchPlaceholder: `Search ${tableName}…`,
+    ...options,
+  });
+}
+
 /** @param {string} listPath e.g. /api/admin/skills */
 async function fetchExistingKeysFromAdminList(listPath) {
   const data = await adminFetch(listPath);
   return new Set((data.items || []).map((r) => String(r.key)));
+}
+
+async function fetchExistingRowsByKeyFromAdminList(listPath) {
+  const data = await adminFetch(listPath);
+  const out = new Map();
+  (data.items || []).forEach((r) => {
+    if (r && r.key != null) {
+      out.set(String(r.key), r);
+    }
+  });
+  return out;
 }
 
 async function populateEnemyLootTableSelect(fieldsRoot) {
@@ -135,8 +207,9 @@ async function refreshStats(host) {
   try {
     const data = await adminFetch("/api/admin/stats");
     const rows = (data.items || []).map((r) => ({ ...r }));
-    renderTable(
+    renderGameDesignTable(
       tableHost,
+      "stats",
       [
         { key: "key", label: "Key" },
         { key: "label", label: "Label", editable: true },
@@ -188,12 +261,13 @@ async function refreshSkills(host, statKeys) {
   try {
     const data = await adminFetch("/api/admin/skills");
     const rows = (data.items || []).map((r) => ({ ...r }));
-    renderTable(
+    renderGameDesignTable(
       tableHost,
+      "skills",
       [
         { key: "key", label: "Key" },
         { key: "label", label: "Label", editable: true },
-        { key: "linked_stat", label: "Stat", editable: true },
+        { key: "linked_stat", label: "Stat", editable: true, filterable: true, filterOptions: statKeys },
         { key: "rank_ceiling", label: "Ceiling", type: "number", editable: true },
         { key: "description", label: "Description", editable: true },
         { key: "locked_at", label: "Lock", type: "locked" },
@@ -287,6 +361,16 @@ function mountSkills(host, statKeys) {
     buildPayload: (row) => skillImportRowToPayload(row),
     postPath: "/api/admin/skills",
     existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/skills"),
+    existingRows: () => fetchExistingRowsByKeyFromAdminList("/api/admin/skills"),
+    patchPath: (key) => `/api/admin/skills/${encodeURIComponent(key)}`,
+    buildDuplicatePatch: (raw, existing) =>
+      buildPatchFromExplicitFields(raw, existing, [
+        { rawKey: "label", patchKey: "label", getValue: (r) => String(r.label).trim() },
+        { rawKey: "linked_stat", patchKey: "linked_stat", getValue: (r) => String(r.linked_stat).trim().toUpperCase() },
+        { rawKey: "rank_ceiling", patchKey: "rank_ceiling", getValue: (r) => Number(r.rank_ceiling) },
+        { rawKey: "sort_order", patchKey: "sort_order", getValue: (r) => Number(r.sort_order) },
+        { rawKey: "description", patchKey: "description", getValue: (r) => (r.description == null ? null : String(r.description)) },
+      ]),
     refresh: () => refreshSkills(host, statKeys),
     confirmNoun: "wierszy",
   });
@@ -331,8 +415,9 @@ async function refreshDc(host) {
   try {
     const data = await adminFetch("/api/admin/dc");
     const rows = (data.items || []).map((r) => ({ ...r }));
-    renderTable(
+    renderGameDesignTable(
       tableHost,
+      "dc",
       [
         { key: "key", label: "Key" },
         { key: "label", label: "Label", editable: true },
@@ -386,8 +471,9 @@ async function refreshWeapons(host, statKeys) {
   try {
     const data = await adminFetch("/api/admin/weapons");
     const rows = (data.items || []).map((r) => ({ ...r }));
-    renderTable(
+    renderGameDesignTable(
       tableHost,
+      "weapons",
       [
         { key: "key", label: "Key" },
         { key: "label", label: "Label", editable: true },
@@ -401,7 +487,7 @@ async function refreshWeapons(host, statKeys) {
           editOptions: ["melee", "ranged", "spell"],
         },
         { key: "damage_die", label: "Die", editable: true },
-        { key: "linked_stat", label: "Stat", editable: true },
+        { key: "linked_stat", label: "Stat", editable: true, filterable: true, filterOptions: statKeys },
         {
           key: "allowed_classes",
           label: "Classes",
@@ -563,6 +649,23 @@ function mountWeapons(host, statKeys) {
     buildPayload: (row) => weaponImportRowToPayload(row),
     postPath: "/api/admin/weapons",
     existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/weapons"),
+    existingRows: () => fetchExistingRowsByKeyFromAdminList("/api/admin/weapons"),
+    patchPath: (key) => `/api/admin/weapons/${encodeURIComponent(key)}`,
+    buildDuplicatePatch: (raw, existing) =>
+      buildPatchFromExplicitFields(raw, existing, [
+        { rawKey: "label", patchKey: "label", getValue: (r) => String(r.label).trim() },
+        { rawKey: "damage_die", patchKey: "damage_die", getValue: (r) => String(r.damage_die).trim() },
+        { rawKey: "linked_stat", patchKey: "linked_stat", getValue: (r) => String(r.linked_stat).trim().toUpperCase() },
+        { rawKey: "allowed_classes", patchKey: "allowed_classes", getValue: (r) => (Array.isArray(r.allowed_classes) ? r.allowed_classes : []) },
+        { rawKey: "description", patchKey: "description", getValue: (r) => (r.description == null ? null : String(r.description)) },
+        { rawKey: "weapon_type", patchKey: "weapon_type", getValue: (r) => String(r.weapon_type).trim().toLowerCase() },
+        { rawKey: "two_handed", patchKey: "two_handed", getValue: (r) => !!r.two_handed },
+        { rawKey: "finesse", patchKey: "finesse", getValue: (r) => !!r.finesse },
+        { rawKey: "range_m", patchKey: "range_m", getValue: (r) => (r.range_m == null || r.range_m === "" ? null : Number(r.range_m)) },
+        { rawKey: "weight_kg", patchKey: "weight_kg", getValue: (r) => Number(r.weight_kg) },
+        { rawKey: "note", patchKey: "note", getValue: (r) => (r.note == null || String(r.note).trim() === "" ? null : String(r.note)) },
+        { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
+      ]),
     refresh: () => refreshWeapons(host, statKeys),
     confirmNoun: "wierszy",
   });
@@ -647,8 +750,9 @@ async function refreshEnemies(host) {
       _ci: Array.isArray(r.conditions_immune) ? JSON.stringify(r.conditions_immune) : "[]",
       _drop_pct: Math.round((r.drop_chance != null ? Number(r.drop_chance) : 1) * 100),
     }));
-    renderTable(
+    renderGameDesignTable(
       tableHost,
+      "enemies",
       [
         { key: "key", label: "Key" },
         { key: "label", label: "Label", editable: true },
@@ -702,6 +806,12 @@ async function refreshEnemies(host) {
       ],
       rows,
       {
+        exportRow: (row) => {
+          const copy = { ...row };
+          delete copy._ci;
+          delete copy._drop_pct;
+          return copy;
+        },
         onEdit: async (row, key, newValue, meta) => {
           const body = { force: !!(meta && meta.force) };
           if (key === "label") {
@@ -878,6 +988,28 @@ function mountEnemies(host) {
     buildPayload: (row) => enemyImportRowToPayload(row),
     postPath: "/api/admin/enemies",
     existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/enemies"),
+    existingRows: () => fetchExistingRowsByKeyFromAdminList("/api/admin/enemies"),
+    patchPath: (key) => `/api/admin/enemies/${encodeURIComponent(key)}`,
+    buildDuplicatePatch: (raw, existing) =>
+      buildPatchFromExplicitFields(raw, existing, [
+        { rawKey: "label", patchKey: "label", getValue: (r) => String(r.label).trim() },
+        { rawKey: "hp_base", patchKey: "hp_base", getValue: (r) => Number(r.hp_base) },
+        { rawKey: "ac_base", patchKey: "ac_base", getValue: (r) => Number(r.ac_base) },
+        { rawKey: "attack_bonus", patchKey: "attack_bonus", getValue: (r) => Number(r.attack_bonus) },
+        { rawKey: "dex_modifier", patchKey: "dex_modifier", getValue: (r) => Number(r.dex_modifier) },
+        { rawKey: "damage_die", patchKey: "damage_die", getValue: (r) => String(r.damage_die).trim() },
+        { rawKey: "description", patchKey: "description", getValue: (r) => (r.description == null ? null : String(r.description)) },
+        { rawKey: "tier", patchKey: "tier", getValue: (r) => String(r.tier).trim().toLowerCase() },
+        { rawKey: "attacks_per_turn", patchKey: "attacks_per_turn", getValue: (r) => Number(r.attacks_per_turn) },
+        { rawKey: "damage_bonus", patchKey: "damage_bonus", getValue: (r) => Number(r.damage_bonus) },
+        { rawKey: "damage_type", patchKey: "damage_type", getValue: (r) => String(r.damage_type).trim().toLowerCase() },
+        { rawKey: "xp_award", patchKey: "xp_award", getValue: (r) => Number(r.xp_award) },
+        { rawKey: "conditions_immune", patchKey: "conditions_immune", getValue: (r) => (Array.isArray(r.conditions_immune) ? r.conditions_immune : []) },
+        { rawKey: "loot_table_key", patchKey: "loot_table_key", getValue: (r) => (r.loot_table_key == null || String(r.loot_table_key).trim() === "" ? null : String(r.loot_table_key).trim()) },
+        { rawKey: "drop_chance", patchKey: "drop_chance", getValue: (r) => Number(r.drop_chance) },
+        { rawKey: "note", patchKey: "note", getValue: (r) => (r.note == null || String(r.note).trim() === "" ? null : String(r.note)) },
+        { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
+      ]),
     refresh: () => refreshEnemies(host),
     confirmNoun: "wierszy",
   });
@@ -944,8 +1076,9 @@ async function refreshConditions(host) {
   try {
     const data = await adminFetch("/api/admin/conditions");
     const rows = (data.items || []).map((r) => ({ ...r }));
-    renderTable(
+    renderGameDesignTable(
       tableHost,
+      "conditions",
       [
         { key: "key", label: "Key" },
         { key: "label", label: "Label", editable: true },
@@ -1044,6 +1177,17 @@ function mountConditions(host) {
     buildPayload: (row) => conditionImportRowToPayload(row),
     postPath: "/api/admin/conditions",
     existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/conditions"),
+    existingRows: () => fetchExistingRowsByKeyFromAdminList("/api/admin/conditions"),
+    patchPath: (key) => `/api/admin/conditions/${encodeURIComponent(key)}`,
+    buildDuplicatePatch: (raw, existing) =>
+      buildPatchFromExplicitFields(raw, existing, [
+        { rawKey: "label", patchKey: "label", getValue: (r) => String(r.label).trim() },
+        { rawKey: "effect_json", patchKey: "effect_json", getValue: (r) => (typeof r.effect_json === "string" ? r.effect_json : JSON.stringify(r.effect_json)) },
+        { rawKey: "description", patchKey: "description", getValue: (r) => (r.description == null ? null : String(r.description)) },
+        { rawKey: "stackable", patchKey: "stackable", getValue: (r) => !!r.stackable },
+        { rawKey: "auto_remove", patchKey: "auto_remove", getValue: (r) => (r.auto_remove == null || String(r.auto_remove).trim() === "" ? null : String(r.auto_remove).trim()) },
+        { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
+      ]),
     refresh: () => refreshConditions(host),
     confirmNoun: "wierszy",
   });
@@ -1098,6 +1242,9 @@ const IMPORT_DAMAGE_DIE_RE = /^\d*d\d+$/i;
  *   refresh: () => void | Promise<void>,
  *   confirmNoun?: string,
  *   existingKeys?: () => Promise<Set<string>>,
+ *   existingRows?: () => Promise<Map<string, object>>,
+ *   patchPath?: (key: string, raw: object) => string,
+ *   buildDuplicatePatch?: (raw: object, existing: object) => object,
  *   commitRows?: (
  *     parsed: object[],
  *     ctx: { skip409: boolean },
@@ -1148,16 +1295,22 @@ function wireBulkJsonImport(root, opts) {
       }
     });
     const dupWarn = [];
-    if (opts.existingKeys && errors.length === 0) {
+    if ((opts.existingKeys || opts.existingRows) && errors.length === 0) {
       try {
-        const existing = await opts.existingKeys();
+        const existingKeys = opts.existingKeys ? await opts.existingKeys() : null;
+        const existingRows = opts.existingRows ? await opts.existingRows() : null;
         parsed.forEach((row, i) => {
           if (row && typeof row === "object" && row.key != null) {
             const k = String(row.key).trim();
-            if (k && existing.has(k)) {
-              dupWarn.push(
-                `Row ${i + 1} (${k}): klucz już jest w bazie — POST zwróci 409 (Conflict). Włącz „Pomiń 409” lub użyj innego klucza.`,
-              );
+            if (k && ((existingKeys && existingKeys.has(k)) || (existingRows && existingRows.has(k)))) {
+              const existing = existingRows ? existingRows.get(k) : null;
+              const patch =
+                existing && typeof opts.buildDuplicatePatch === "function" ? opts.buildDuplicatePatch(row, existing) : {};
+              if (patch && Object.keys(patch).length) {
+                dupWarn.push(`Row ${i + 1} (${k}): duplicate key with changed fields -> will PATCH changed values only.`);
+              } else {
+                dupWarn.push(`Row ${i + 1} (${k}): duplicate key with no new field values -> will be skipped.`);
+              }
             }
           }
         });
@@ -1230,12 +1383,56 @@ function wireBulkJsonImport(root, opts) {
         showToast("Bulk import: brak postPath/buildPayload.", "error");
         return;
       }
+      let existingRows = null;
+      if (opts.existingRows) {
+        existingRows = await opts.existingRows();
+      }
+      const updates = [];
+      if (existingRows && typeof opts.buildDuplicatePatch === "function") {
+        parsed.forEach((r) => {
+          const key = r && typeof r === "object" && r.key != null ? String(r.key).trim() : "";
+          if (!key || !existingRows.has(key)) {
+            return;
+          }
+          const patch = opts.buildDuplicatePatch(r, existingRows.get(key));
+          if (patch && Object.keys(patch).length) {
+            updates.push({ key, patch, raw: r });
+          }
+        });
+      }
+      if (updates.length) {
+        const ack = await showConfirm(
+          `Found ${updates.length} duplicate key(s) with new field values. Check the box to apply PATCH only for changed fields.`,
+          {
+            showForceCheckbox: true,
+            forceCheckboxLabel: "I agree to update duplicate rows with changed fields only",
+          },
+        );
+        if (!ack || !ack.ok) {
+          showToast("Import cancelled.", "info");
+          return;
+        }
+      }
       for (let i = 0; i < parsed.length; i += 1) {
         const r = parsed[i];
         const key = r && typeof r === "object" && r.key != null ? String(r.key) : `row ${i + 1}`;
+        const existing = existingRows && existingRows.get(String(key).trim());
+        const patch =
+          existing && typeof opts.buildDuplicatePatch === "function" ? opts.buildDuplicatePatch(r, existing) : null;
         try {
-          await adminFetch(postPath, { method: "POST", body: JSON.stringify(buildPayload(r)) });
-          okn += 1;
+          if (existing && patch && Object.keys(patch).length && typeof opts.patchPath === "function") {
+            await adminFetch(opts.patchPath(String(key).trim(), r), {
+              method: "PATCH",
+              body: JSON.stringify({ ...patch, force: false }),
+            });
+            okn += 1;
+            existingRows.set(String(key).trim(), { ...existing, ...patch });
+          } else if (existing) {
+            skip409n += 1;
+          } else {
+            await adminFetch(postPath, { method: "POST", body: JSON.stringify(buildPayload(r)) });
+            okn += 1;
+          }
         } catch (e) {
           if (skip409 && e instanceof APIError && e.status === 409) {
             skip409n += 1;
@@ -1429,6 +1626,39 @@ async function commitLootTablesBulkImport(parsed, ctx) {
   const fail = [];
   let entriesOk = 0;
   let entriesFail = 0;
+  let existingRows = new Map();
+  try {
+    existingRows = await fetchExistingRowsByKeyFromAdminList("/api/admin/loot-tables");
+  } catch (_e) {
+    existingRows = new Map();
+  }
+  const duplicateUpdates = [];
+  parsed.forEach((r) => {
+    const tableKey = String(r?.key || "").trim();
+    if (!tableKey || !existingRows.has(tableKey)) {
+      return;
+    }
+    const patch = buildPatchFromExplicitFields(r, existingRows.get(tableKey), [
+      { rawKey: "label", patchKey: "label", getValue: (x) => String(x.label).trim() },
+      { rawKey: "description", patchKey: "description", getValue: (x) => (x.description == null ? "" : String(x.description)) },
+      { rawKey: "is_active", patchKey: "is_active", getValue: (x) => x.is_active !== false && x.is_active !== 0 },
+    ]);
+    if (Object.keys(patch).length) {
+      duplicateUpdates.push({ key: tableKey, patch });
+    }
+  });
+  if (duplicateUpdates.length) {
+    const ack = await showConfirm(
+      `Found ${duplicateUpdates.length} duplicate loot table key(s) with changed metadata. Check the box to PATCH changed table fields before entries sync.`,
+      {
+        showForceCheckbox: true,
+        forceCheckboxLabel: "I agree to update changed loot table fields on duplicate keys",
+      },
+    );
+    if (!ack || !ack.ok) {
+      return { okn: 0, skip409n: 0, fail: ["Import cancelled before duplicate loot-table updates."], footer: "" };
+    }
+  }
   for (let i = 0; i < parsed.length; i += 1) {
     const r = parsed[i];
     const tableKey = String(r.key).trim();
@@ -1439,24 +1669,35 @@ async function commitLootTablesBulkImport(parsed, ctx) {
       is_active: r.is_active !== false && r.is_active !== 0,
     };
     let canPostEntries = false;
+    const duplicatePatch = existingRows.has(tableKey)
+      ? buildPatchFromExplicitFields(r, existingRows.get(tableKey), [
+          { rawKey: "label", patchKey: "label", getValue: (x) => String(x.label).trim() },
+          { rawKey: "description", patchKey: "description", getValue: (x) => (x.description == null ? "" : String(x.description)) },
+          { rawKey: "is_active", patchKey: "is_active", getValue: (x) => x.is_active !== false && x.is_active !== 0 },
+        ])
+      : {};
     try {
-      await adminFetch("/api/admin/loot-tables", { method: "POST", body: JSON.stringify(tableBody) });
-      okn += 1;
-      canPostEntries = true;
-    } catch (e) {
-      if (e instanceof APIError && e.status === 409) {
-        if (skip409) {
-          skip409n += 1;
-          canPostEntries = true;
+      if (existingRows.has(tableKey)) {
+        if (Object.keys(duplicatePatch).length) {
+          await adminFetch(`/api/admin/loot-tables/${encodeURIComponent(tableKey)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ ...duplicatePatch, force: false }),
+          });
+          okn += 1;
+          existingRows.set(tableKey, { ...existingRows.get(tableKey), ...duplicatePatch });
         } else {
-          fail.push(`${tableKey}: ${parseApiError(e, "tabela już istnieje (409)")}`);
+          skip409n += 1;
         }
+        canPostEntries = true;
       } else {
-        fail.push(`${tableKey}: ${parseApiError(e, "create table failed")}`);
+        await adminFetch("/api/admin/loot-tables", { method: "POST", body: JSON.stringify(tableBody) });
+        okn += 1;
+        canPostEntries = true;
+        existingRows.set(tableKey, { ...tableBody });
       }
-      if (!canPostEntries) {
-        continue;
-      }
+    } catch (e) {
+      fail.push(`${tableKey}: ${parseApiError(e, "create/update table failed")}`);
+      continue;
     }
     const entries = Array.isArray(r.entries) ? r.entries : [];
     for (let j = 0; j < entries.length; j += 1) {
@@ -1813,8 +2054,9 @@ async function refreshItems(host) {
       ...r,
       _proficiency_json: JSON.stringify(Array.isArray(r.proficiency_classes) ? r.proficiency_classes : []),
     }));
-    renderTable(
+    renderGameDesignTable(
       tableHost,
+      "items",
       [
         { key: "key", label: "Key" },
         { key: "label", label: "Label", editable: true },
@@ -1839,6 +2081,11 @@ async function refreshItems(host) {
       ],
       rows,
       {
+        exportRow: (row) => {
+          const copy = { ...row };
+          delete copy._proficiency_json;
+          return copy;
+        },
         onEdit: async (row, key, newValue, meta) => {
           const body = { force: !!(meta && meta.force) };
           if (key === "label") {
@@ -1972,6 +2219,21 @@ function mountItems(host) {
     buildPayload: (row) => itemImportRowToPayload(row),
     postPath: "/api/admin/items",
     existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/items"),
+    existingRows: () => fetchExistingRowsByKeyFromAdminList("/api/admin/items"),
+    patchPath: (key) => `/api/admin/items/${encodeURIComponent(key)}`,
+    buildDuplicatePatch: (raw, existing) =>
+      buildPatchFromExplicitFields(raw, existing, [
+        { rawKey: "label", patchKey: "label", getValue: (r) => String(r.label).trim() },
+        { rawKey: "item_type", patchKey: "item_type", getValue: (r) => String(r.item_type || "misc").toLowerCase() },
+        { rawKey: "description", patchKey: "description", getValue: (r) => (r.description == null ? "" : String(r.description)) },
+        { rawKey: "value_gp", patchKey: "value_gp", getValue: (r) => Number(r.value_gp) },
+        { rawKey: "weight", patchKey: "weight", getValue: (r) => Number(r.weight) },
+        { rawKey: "weight_kg", patchKey: "weight_kg", getValue: (r) => Number(r.weight_kg) },
+        { rawKey: "proficiency_classes", patchKey: "proficiency_classes", getValue: (r) => (Array.isArray(r.proficiency_classes) ? r.proficiency_classes : []) },
+        { rawKey: "note", patchKey: "note", getValue: (r) => (r.note == null || String(r.note).trim() === "" ? null : String(r.note)) },
+        { rawKey: "effect_json", patchKey: "effect_json", getValue: (r) => (r.effect_json == null || String(r.effect_json).trim() === "" ? null : String(r.effect_json)) },
+        { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
+      ]),
     refresh: () => refreshItems(host),
     confirmNoun: "przedmiotów",
   });
@@ -2024,8 +2286,9 @@ async function refreshConsumables(host) {
   try {
     const data = await adminFetch("/api/admin/consumables");
     const rows = (data.items || []).map((r) => ({ ...r }));
-    renderTable(
+    renderGameDesignTable(
       tableHost,
+      "consumables",
       [
         { key: "key", label: "Key", editable: true },
         { key: "label", label: "Label", editable: true },
@@ -2200,6 +2463,22 @@ function mountConsumables(host) {
     buildPayload: (row) => consumableImportRowToPayload(row),
     postPath: "/api/admin/consumables",
     existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/consumables"),
+    existingRows: () => fetchExistingRowsByKeyFromAdminList("/api/admin/consumables"),
+    patchPath: (key) => `/api/admin/consumables/${encodeURIComponent(key)}`,
+    buildDuplicatePatch: (raw, existing) =>
+      buildPatchFromExplicitFields(raw, existing, [
+        { rawKey: "label", patchKey: "label", getValue: (r) => String(r.label).trim() },
+        { rawKey: "description", patchKey: "description", getValue: (r) => (r.description == null ? "" : String(r.description)) },
+        { rawKey: "effect_type", patchKey: "effect_type", getValue: (r) => String(r.effect_type || "misc").toLowerCase() },
+        { rawKey: "effect_dice", patchKey: "effect_dice", getValue: (r) => (r.effect_dice == null || String(r.effect_dice).trim() === "" ? null : String(r.effect_dice).trim()) },
+        { rawKey: "effect_bonus", patchKey: "effect_bonus", getValue: (r) => Number(r.effect_bonus) },
+        { rawKey: "effect_target", patchKey: "effect_target", getValue: (r) => String(r.effect_target || "self").toLowerCase() },
+        { rawKey: "weight_kg", patchKey: "weight_kg", getValue: (r) => Number(r.weight_kg) },
+        { rawKey: "charges", patchKey: "charges", getValue: (r) => Number(r.charges) },
+        { rawKey: "base_price", patchKey: "base_price", getValue: (r) => Number(r.base_price) },
+        { rawKey: "note", patchKey: "note", getValue: (r) => (r.note == null || String(r.note).trim() === "" ? null : String(r.note)) },
+        { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
+      ]),
     refresh: () => refreshConsumables(host),
     confirmNoun: "wierszy",
   });
@@ -2415,6 +2694,12 @@ function mountLootTables(host) {
       rkInp.value = selectedKey || "";
     }
     wrap.innerHTML = "";
+    const entriesSearch = el("input");
+    entriesSearch.type = "search";
+    entriesSearch.className = "admin-table-search-input";
+    entriesSearch.placeholder = "Search loot entries…";
+    entriesSearch.setAttribute("aria-label", "Search loot entries");
+    wrap.appendChild(entriesSearch);
     try {
       const [itemsData, weaponsData, consumablesData] = await Promise.all([
         adminFetch("/api/admin/items"),
@@ -2568,6 +2853,17 @@ function mountLootTables(host) {
     });
     tbl.appendChild(tb);
     wrap.appendChild(tbl);
+    entriesSearch.addEventListener("input", () => {
+      const q = (entriesSearch.value || "").trim().toLowerCase();
+      tb.querySelectorAll("tr").forEach((tr) => {
+        if (!tr.dataset.sourceKey) {
+          return;
+        }
+        const t = (tr.textContent || "").toLowerCase().replace(/\s+/g, " ");
+        tr.style.display = !q || t.includes(q) ? "" : "none";
+      });
+      recalcViz();
+    });
     renderWeightViz(entries);
     const descTa = right.querySelector("[data-loot-desc-edit]");
     try {
@@ -2630,8 +2926,9 @@ function mountLootTables(host) {
     try {
       const data = await adminFetch("/api/admin/loot-tables");
       const rows = (data.items || []).map((r) => ({ ...r }));
-      renderTable(
+      renderGameDesignTable(
         listMount,
+        "loot_tables",
         [
           { key: "key", label: "Key" },
           { key: "label", label: "Label", editable: true },
@@ -2967,9 +3264,80 @@ export async function init(container) {
     }
   }
 
+  function remountActiveGameDesignTab() {
+    const activeBtn = tabs.querySelector(".sub-tab-btn.active");
+    const id = activeBtn?.dataset?.subTab || "stats";
+    const p = panels.get(id);
+    if (p) {
+      p.innerHTML = "";
+    }
+    activated.delete(id);
+    activate(id);
+  }
+
+  const snapshotBtn = el("button", "sub-tab-btn sub-tab-btn-action", "⬇ Export catalog snapshot (LLM)");
+  snapshotBtn.type = "button";
+  snapshotBtn.addEventListener("click", async () => {
+    try {
+      const data = await adminFetch("/api/admin/config/catalog-snapshot");
+      downloadJsonFile(data, "aigm_catalog_snapshot");
+      showToast("Catalog snapshot exported.", "success");
+    } catch (e) {
+      showToast(parseApiError(e, "Snapshot export failed."), "error");
+    }
+  });
+  tabs.appendChild(snapshotBtn);
+
+  const importInput = el("input");
+  importInput.type = "file";
+  importInput.accept = "application/json,.json";
+  importInput.hidden = true;
+  importInput.addEventListener("change", async () => {
+    const f = importInput.files?.[0];
+    if (!f) {
+      return;
+    }
+    try {
+      const text = await f.text();
+      const payload = JSON.parse(text);
+      const ok = await showConfirm(
+        "Replace ALL Game Design catalogue tables from this file (stats, skills, DC, weapons, enemies, conditions, items, consumables, loot tables + entries)? " +
+          "game_config_meta in the file is ignored (slash commands / Loki URLs are not overwritten). This cannot be undone.",
+        { dangerous: true },
+      );
+      if (!ok) {
+        importInput.value = "";
+        return;
+      }
+      await adminFetch("/api/admin/config/catalog-snapshot/import", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      showToast("Catalog snapshot imported.", "success");
+      try {
+        const d2 = await adminFetch("/api/admin/stats");
+        statKeys.length = 0;
+        statKeys.push(...(d2.items || []).map((x) => x.key));
+      } catch (_e) {
+        /* keep previous statKeys */
+      }
+      remountActiveGameDesignTab();
+    } catch (e) {
+      showToast(parseApiError(e, "Import failed (invalid JSON or server rejected payload)."), "error");
+    } finally {
+      importInput.value = "";
+    }
+  });
+
+  const importBtn = el("button", "sub-tab-btn sub-tab-btn-action", "⬆ Import catalog snapshot (LLM)");
+  importBtn.type = "button";
+  importBtn.addEventListener("click", () => importInput.click());
+  tabs.appendChild(importBtn);
+  tabs.appendChild(importInput);
+
   tabs.addEventListener("click", (e) => {
     const b = e.target.closest(".sub-tab-btn");
-    if (!b) {
+    if (!b || !b.dataset.subTab) {
       return;
     }
     activate(b.dataset.subTab);

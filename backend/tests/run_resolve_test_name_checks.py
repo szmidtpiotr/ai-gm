@@ -39,7 +39,7 @@ def run():
         "Cha Save": "willpower_save",
         "Perception": "awareness",
         "Attack": "melee_attack",
-        "Initiative": "reflex_save",
+        "Initiative": "initiative",
         "stealth": "stealth",
         "STEALTH": "stealth",
         " Stealth ": "stealth",

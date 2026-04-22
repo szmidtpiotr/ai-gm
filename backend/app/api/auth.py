@@ -50,16 +50,34 @@ def player_login(req: PlayerLoginReq):
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    is_admin_val = 0
     try:
-        row = conn.execute(
-            """
-            SELECT id, username, password_hash, display_name, COALESCE(is_active, 1) AS is_active
-            FROM users
-            WHERE username = ?
-            LIMIT 1
-            """,
-            (username,),
-        ).fetchone()
+        try:
+            row = conn.execute(
+                """
+                SELECT id, username, password_hash, display_name,
+                       COALESCE(is_active, 1) AS is_active,
+                       COALESCE(is_admin, 0) AS is_admin
+                FROM users
+                WHERE username = ?
+                LIMIT 1
+                """,
+                (username,),
+            ).fetchone()
+            if row:
+                is_admin_val = int(row["is_admin"] or 0)
+        except sqlite3.OperationalError:
+            # Older DB snapshots without `is_admin` column.
+            row = conn.execute(
+                """
+                SELECT id, username, password_hash, display_name,
+                       COALESCE(is_active, 1) AS is_active
+                FROM users
+                WHERE username = ?
+                LIMIT 1
+                """,
+                (username,),
+            ).fetchone()
     except sqlite3.OperationalError:
         raise HTTPException(status_code=500, detail="DB is not initialized") from None
     finally:
@@ -79,5 +97,6 @@ def player_login(req: PlayerLoginReq):
         "user_id": int(row["id"]),
         "username": row["username"],
         "display_name": row["display_name"],
+        "is_admin": is_admin_val,
     }
 

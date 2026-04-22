@@ -1,6 +1,6 @@
 import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
 import { showToast } from "/admin_panel/shared/toast.js?v=17";
-import { showConfirm } from "/admin_panel/shared/table.js?v=20";
+import { showConfirm } from "/admin_panel/shared/table.js?v=23";
 import { openModal } from "/admin_panel/shared/modal.js?v=17";
 
 function el(tag, cls, text) {
@@ -418,6 +418,17 @@ function mountUserDetail(host, userRow) {
   void mountLlm(uid, panels.llm);
 }
 
+/**
+ * @param {unknown} data
+ * @returns {Array<{ name: string }>}
+ */
+function normalizeModelsListResponse(data) {
+  const raw = Array.isArray(data?.models) ? data.models : Array.isArray(data) ? data : [];
+  return raw
+    .map((m) => (typeof m === "string" ? { name: m } : m))
+    .filter((m) => m && typeof m.name === "string" && m.name.trim());
+}
+
 async function mountLlm(userId, host) {
   host.innerHTML = "";
   const wrap = el("div", "accounts-llm-form");
@@ -431,19 +442,162 @@ async function mountLlm(userId, host) {
     const base = el("input", "");
     base.type = "text";
     base.value = String(s.base_url || "");
-    const model = el("input", "");
-    model.type = "text";
-    model.value = String(s.model || "");
     const apiKey = el("input", "");
     apiKey.type = "password";
     apiKey.placeholder = "••••••• (masked)";
     apiKey.value = "";
 
-    [["Provider", prov], ["Base URL", base], ["Model", model], ["API Key", apiKey]].forEach(([label, inp]) => {
+    /** @type {HTMLInputElement | HTMLSelectElement | null} */
+    let modelControl = null;
+    /** @type {HTMLDivElement | null} */
+    let openaiShowAllWrap = null;
+    /** @type {HTMLInputElement | null} */
+    let showAllModelsEl = null;
+
+    const modelField = el("div", "field");
+    const modelLabel = el("label", "", "Model");
+    modelField.appendChild(modelLabel);
+
+    async function fetchModelsList(showAll) {
+      const p = prov.value.trim().toLowerCase();
+      let path = `/api/models?user_id=${encodeURIComponent(String(userId))}`;
+      if (p === "openai" && showAll) {
+        path += "&show_all=1";
+      }
+      const raw = await adminFetch(path);
+      return normalizeModelsListResponse(raw);
+    }
+
+    function getCurrentModelValue() {
+      if (!modelControl) return String(s.model || "").trim();
+      if (modelControl.tagName === "SELECT") {
+        return String(/** @type {HTMLSelectElement} */ (modelControl).value || "").trim();
+      }
+      return String(/** @type {HTMLInputElement} */ (modelControl).value || "").trim();
+    }
+
+    /**
+     * @param {string | undefined} preserveValue
+     * @param {boolean | undefined} showAllToggle — when set, drives OpenAI "show all" without reading the old checkbox
+     */
+    async function rebuildModelControl(preserveValue, showAllToggle) {
+      const useShowAll =
+        typeof showAllToggle === "boolean"
+          ? showAllToggle
+          : !!(showAllModelsEl && showAllModelsEl.checked);
+
+      const prev =
+        preserveValue !== undefined && preserveValue !== null
+          ? String(preserveValue).trim()
+          : getCurrentModelValue();
+      const saved = String(s.model || "").trim();
+      const p = prov.value.trim().toLowerCase();
+
+      modelControl = null;
+      showAllModelsEl = null;
+      openaiShowAllWrap = null;
+      modelField.replaceChildren(modelLabel);
+
+      if (p === "custom") {
+        const inp = el("input", "");
+        inp.type = "text";
+        inp.value = prev || saved;
+        modelControl = inp;
+        modelField.appendChild(inp);
+        return;
+      }
+
+      const rowInner = el("div", "accounts-llm-model-row-inner");
+      const sel = el("select", "");
+      modelControl = sel;
+
+      const refreshBtn = el("button", "secondary-btn", "Refresh models");
+      refreshBtn.type = "button";
+      refreshBtn.title = "Uses saved Base URL and API key. Save changes first if you edited them.";
+
+      let models = [];
+      let loadErr = null;
+      try {
+        models = await fetchModelsList(p === "openai" && useShowAll);
+      } catch (e) {
+        loadErr = parseApiError(e, "Could not load models.");
+      }
+
+      const names = new Set();
+      const addOpt = (name) => {
+        const n = String(name || "").trim();
+        if (!n || names.has(n)) return;
+        names.add(n);
+        const opt = document.createElement("option");
+        opt.value = n;
+        opt.textContent = n;
+        sel.appendChild(opt);
+      };
+
+      for (const m of models) {
+        addOpt(m.name);
+      }
+      const want = prev || saved;
+      if (want && !names.has(want)) {
+        addOpt(want);
+      }
+      if (!names.size) {
+        addOpt(want || "gemma4:e4b");
+      }
+
+      const pick =
+        want && names.has(want)
+          ? want
+          : sel.options[0]
+            ? sel.options[0].value
+            : "";
+
+      sel.value = pick;
+
+      rowInner.appendChild(sel);
+      rowInner.appendChild(refreshBtn);
+      modelField.appendChild(rowInner);
+
+      if (loadErr) {
+        const hint = el("p", "muted", loadErr);
+        hint.style.marginTop = "6px";
+        modelField.appendChild(hint);
+      }
+
+      if (p === "openai") {
+        openaiShowAllWrap = el("div", "accounts-llm-openai-models-toggle");
+        const lbl = document.createElement("label");
+        showAllModelsEl = /** @type {HTMLInputElement} */ (document.createElement("input"));
+        showAllModelsEl.type = "checkbox";
+        showAllModelsEl.checked = useShowAll;
+        lbl.appendChild(showAllModelsEl);
+        lbl.appendChild(document.createTextNode(" Show all provider models"));
+        openaiShowAllWrap.appendChild(lbl);
+        modelField.appendChild(openaiShowAllWrap);
+
+        showAllModelsEl.addEventListener("change", async (ev) => {
+          const t = /** @type {HTMLInputElement} */ (ev.target);
+          await rebuildModelControl(getCurrentModelValue(), !!t.checked);
+        });
+      }
+
+      refreshBtn.addEventListener("click", async () => {
+        await rebuildModelControl(getCurrentModelValue(), showAllModelsEl ? !!showAllModelsEl.checked : useShowAll);
+      });
+    }
+
+    [["Provider", prov], ["Base URL", base], ["API Key", apiKey]].forEach(([label, inp]) => {
       const f = el("div", "field");
       f.appendChild(el("label", "", String(label)));
       f.appendChild(inp);
       wrap.appendChild(f);
+    });
+    wrap.appendChild(modelField);
+
+    await rebuildModelControl(String(s.model || ""));
+
+    prov.addEventListener("change", async () => {
+      await rebuildModelControl(getCurrentModelValue());
     });
 
     const save = el("button", "primary-btn", "Save");
@@ -452,7 +606,7 @@ async function mountLlm(userId, host) {
       const body = {
         provider: prov.value.trim().toLowerCase(),
         base_url: base.value.trim(),
-        model: model.value.trim(),
+        model: getCurrentModelValue(),
       };
       if (apiKey.value.trim()) {
         body.api_key = apiKey.value;
@@ -464,6 +618,9 @@ async function mountLlm(userId, host) {
         });
         showToast("LLM settings saved.", "success");
         apiKey.value = "";
+        const dataFresh = await adminFetch(`/api/admin/users/${userId}/llm-settings`);
+        Object.assign(s, dataFresh.settings || {});
+        await rebuildModelControl(body.model);
       } catch (e) {
         showToast(parseApiError(e, "Save failed."), "error");
       }

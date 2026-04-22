@@ -1,8 +1,11 @@
 import os
 import sqlite3
 
+from app.core.logging import get_logger
+
 
 DB_PATH = "/data/ai_gm.db"
+logger = get_logger(__name__)
 
 ADMIN_MIGRATIONS = [
     """
@@ -64,6 +67,7 @@ ADMIN_MIGRATIONS = [
         hp_base INTEGER NOT NULL,
         ac_base INTEGER NOT NULL,
         attack_bonus INTEGER NOT NULL,
+        dex_modifier INTEGER NOT NULL DEFAULT 0,
         damage_die TEXT NOT NULL,
         description TEXT,
         is_active INTEGER NOT NULL DEFAULT 1,
@@ -177,6 +181,7 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_enemies ADD COLUMN damage_bonus INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE game_config_enemies ADD COLUMN damage_type TEXT NOT NULL DEFAULT 'physical'",
     "ALTER TABLE game_config_enemies ADD COLUMN xp_award INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_enemies ADD COLUMN dex_modifier INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE game_config_enemies ADD COLUMN conditions_immune TEXT",
     "ALTER TABLE game_config_enemies ADD COLUMN loot_table_key TEXT REFERENCES game_config_loot_tables(key) ON DELETE SET NULL",
     "ALTER TABLE game_config_enemies ADD COLUMN note TEXT",
@@ -326,6 +331,20 @@ ADMIN_SEEDS = [
         damage_type = 'physical', xp_award = 3
     WHERE key = 'goblin'
     """,
+    """
+    UPDATE game_config_enemies
+    SET dex_modifier = CASE key
+        WHEN 'bandit' THEN 1
+        WHEN 'wolf' THEN 2
+        WHEN 'skeleton' THEN -1
+        WHEN 'orc' THEN 0
+        WHEN 'troll' THEN -2
+        WHEN 'unknown_attacker' THEN 0
+        WHEN 'enemy' THEN 0
+        ELSE COALESCE(dex_modifier, 0)
+    END
+    WHERE key IN ('bandit', 'wolf', 'skeleton', 'orc', 'troll', 'unknown_attacker', 'enemy')
+    """,
 ]
 
 
@@ -337,7 +356,7 @@ def _rebuild_loot_entries_for_consumable_support(conn: sqlite3.Connection) -> No
         return
     if cols["item_key"][3] == 0:
         return
-    print("[admin_migration] rebuilding game_config_loot_entries for nullable item_key + consumable_key + weapon_key XOR")
+    logger.info("admin_migration_rebuild_loot_entries_nullable_item")
     conn.execute("PRAGMA foreign_keys=OFF")
     try:
         has_weapon = "weapon_key" in cols
@@ -432,9 +451,9 @@ def _upgrade_loot_entries_three_way_xor(conn: sqlite3.Connection) -> None:
                 raise
     cols = {row[1]: row for row in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
     if "weapon_key" not in cols:
-        print("[admin_migration] loot_entries: weapon_key column missing, skipping XOR upgrade")
+        logger.info("admin_migration_loot_entries_weapon_key_missing")
         return
-    print("[admin_migration] upgrading game_config_loot_entries to item/consumable/weapon XOR")
+    logger.info("admin_migration_upgrade_loot_entries_three_way_xor")
     conn.execute("PRAGMA foreign_keys=OFF")
     try:
         conn.executescript(
@@ -507,7 +526,10 @@ def _migrate_legacy_archetype_json(conn: sqlite3.Connection) -> None:
             (old_class, new_class, "%" + old_class + "%"),
         )
         conn.commit()
-        print(f"[admin_migration] archetype data: updated {cur.rowcount} weapon(s) allowed_classes")
+        logger.info(
+            "admin_migration_archetype_weapons_updated",
+            updated_count=cur.rowcount,
+        )
 
     a1_old = q + "archetype" + q + ":" + q + _m + q
     a1_new = q + "archetype" + q + ":" + q + _s + q
@@ -530,7 +552,10 @@ def _migrate_legacy_archetype_json(conn: sqlite3.Connection) -> None:
             (a1_old, a1_new, a2_old, a2_new, "%" + a1_old + "%", "%" + a2_old + "%"),
         )
         conn.commit()
-        print(f"[admin_migration] archetype data: updated {cur.rowcount} character sheet(s)")
+        logger.info(
+            "admin_migration_archetype_character_sheets_updated",
+            updated_count=cur.rowcount,
+        )
 
 
 def _ensure_enemy_loot_table_and_drop_chance(conn: sqlite3.Connection) -> None:
@@ -543,7 +568,7 @@ def _ensure_enemy_loot_table_and_drop_chance(conn: sqlite3.Connection) -> None:
         try:
             cur.execute(sql)
             conn.commit()
-            print(f"[admin_migration] applied: {sql[:72]}...")
+            logger.info("admin_migration_applied", sql_preview=f"{sql[:72]}...")
         except sqlite3.OperationalError as e:
             msg = str(e).lower()
             if "duplicate column" in msg or "already exists" in msg:
@@ -565,13 +590,24 @@ def run_admin_migrations() -> None:
             try:
                 conn.execute(sql)
                 conn.commit()
-                print(f"[admin_migration] applied: {sql.strip().splitlines()[0]}")
+                logger.info(
+                    "admin_migration_applied",
+                    sql_preview=sql.strip().splitlines()[0],
+                )
             except sqlite3.OperationalError as e:
                 msg = str(e).lower()
                 if "already exists" in msg or "duplicate column" in msg:
-                    print(f"[admin_migration] skipped ({e}): {sql.strip().splitlines()[0]}")
+                    logger.info(
+                        "admin_migration_skipped",
+                        sql_preview=sql.strip().splitlines()[0],
+                        reason=str(e),
+                    )
                 else:
-                    print(f"[admin_migration] ERROR ({e}): {sql.strip().splitlines()[0]}")
+                    logger.error(
+                        "admin_migration_error",
+                        sql_preview=sql.strip().splitlines()[0],
+                        error_message=str(e),
+                    )
 
         _rebuild_loot_entries_for_consumable_support(conn)
         _upgrade_loot_entries_three_way_xor(conn)
@@ -579,11 +615,14 @@ def run_admin_migrations() -> None:
         for sql in ADMIN_SEEDS:
             conn.execute(sql)
             conn.commit()
-            print(f"[admin_migration] seeded: {sql.strip().splitlines()[0]}")
+            logger.info(
+                "admin_migration_seeded",
+                sql_preview=sql.strip().splitlines()[0],
+            )
 
         _migrate_legacy_archetype_json(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)
     finally:
         conn.close()
 
-    print("[admin_migration] Phase 11.0 done.")
+    logger.info("admin_migration_complete", phase="11.0")

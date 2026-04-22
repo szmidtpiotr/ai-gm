@@ -180,6 +180,12 @@ window.bindEvents = function () {
   els.inputEl.onkeydown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      if (
+        typeof window.combatInput?.triggerPlayerAttackFromEnter === 'function' &&
+        window.combatInput.triggerPlayerAttackFromEnter()
+      ) {
+        return;
+      }
       window.sendMessage();
     }
   };

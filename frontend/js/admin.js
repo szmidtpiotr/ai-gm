@@ -65,6 +65,10 @@
     el.userLlmBaseUrl = document.getElementById("user-llm-base-url");
     el.userLlmApiKey = document.getElementById("user-llm-api-key");
     el.userLlmModel = document.getElementById("user-llm-model");
+    el.userLlmRefreshModelsBtn = document.getElementById("user-llm-refresh-models-btn");
+    el.userLlmShowAllWrap = document.getElementById("user-llm-show-all-wrap");
+    el.userLlmShowAllModels = document.getElementById("user-llm-show-all-models");
+    el.userLlmModelsHint = document.getElementById("user-llm-models-hint");
     el.campaignHistoryList = document.getElementById("campaign-history-list");
     el.campaignHistoryRefreshBtn = document.getElementById("campaign-history-refresh-btn");
     el.campaignHistoryMaxTurns = document.getElementById("campaign-history-max-turns");
@@ -423,6 +427,61 @@
     if (el.lokiUrlHint) el.lokiUrlHint.textContent = formatLokiHint(data);
   }
 
+  function normalizeModelsListPayload(data) {
+    const raw = Array.isArray(data?.models) ? data.models : Array.isArray(data) ? data : [];
+    return raw
+      .map((m) => (typeof m === "string" ? { name: m } : m))
+      .filter((m) => m && typeof m.name === "string" && m.name.trim());
+  }
+
+  async function fillUserLlmModelDropdown(userId, preferredModel) {
+    if (!el.userLlmModel || !userId) return;
+    const showAll = !!(el.userLlmShowAllModels && el.userLlmShowAllModels.checked);
+    const prov = String(el.userLlmProvider?.value || "").toLowerCase();
+    let path = `/models?user_id=${encodeURIComponent(String(userId))}`;
+    if (prov === "openai" && showAll) {
+      path += "&show_all=1";
+    }
+    if (el.userLlmModelsHint) {
+      el.userLlmModelsHint.style.display = "none";
+      el.userLlmModelsHint.textContent = "";
+    }
+    let models = [];
+    try {
+      const data = await api(path);
+      models = normalizeModelsListPayload(data);
+    } catch (err) {
+      if (el.userLlmModelsHint) {
+        el.userLlmModelsHint.textContent = err.message || "Could not load models.";
+        el.userLlmModelsHint.style.display = "block";
+      }
+    }
+    const sel = el.userLlmModel;
+    sel.innerHTML = "";
+    const names = new Set();
+    const addOpt = (name) => {
+      const n = String(name || "").trim();
+      if (!n || names.has(n)) return;
+      names.add(n);
+      const opt = document.createElement("option");
+      opt.value = n;
+      opt.textContent = n;
+      sel.appendChild(opt);
+    };
+    for (const m of models) {
+      addOpt(m.name);
+    }
+    const want = String(preferredModel || "").trim();
+    if (want && !names.has(want)) {
+      addOpt(want);
+    }
+    if (!names.size) {
+      addOpt(want || "gemma4:e4b");
+    }
+    const pick = want && names.has(want) ? want : sel.options[0] ? sel.options[0].value : "";
+    sel.value = pick;
+  }
+
   async function loadUserLlmSettingsForUser(userId) {
     if (!userId) return;
     const result = await api(`/admin/users/${encodeURIComponent(userId)}/llm-settings`);
@@ -430,8 +489,12 @@
 
     if (el.userLlmProvider) el.userLlmProvider.value = settings.provider || "ollama";
     if (el.userLlmBaseUrl) el.userLlmBaseUrl.value = settings.base_url || "";
-    if (el.userLlmModel) el.userLlmModel.value = settings.model || "";
     if (el.userLlmApiKey) el.userLlmApiKey.value = "";
+    if (el.userLlmShowAllWrap) {
+      el.userLlmShowAllWrap.style.display =
+        String(el.userLlmProvider?.value || "").toLowerCase() === "openai" ? "block" : "none";
+    }
+    await fillUserLlmModelDropdown(userId, settings.model || "");
 
     if (el.userLlmSaveBtn) el.userLlmSaveBtn.disabled = false;
   }
@@ -949,6 +1012,46 @@
           log(`Loaded user LLM for user:${userId}`);
         } catch (err) {
           log(`Load user LLM failed -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
+
+    if (el.userLlmRefreshModelsBtn) {
+      el.userLlmRefreshModelsBtn.addEventListener("click", async () => {
+        try {
+          const userId = el.userLlmUserSelect?.value;
+          if (!userId) return;
+          await fillUserLlmModelDropdown(userId, el.userLlmModel?.value || "");
+        } catch (err) {
+          log(`Refresh models failed -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
+    if (el.userLlmShowAllModels) {
+      el.userLlmShowAllModels.addEventListener("change", async () => {
+        try {
+          const userId = el.userLlmUserSelect?.value;
+          if (!userId) return;
+          await fillUserLlmModelDropdown(userId, el.userLlmModel?.value || "");
+        } catch (err) {
+          log(`Model list reload failed -> ${err.message}`);
+          alert(err.message);
+        }
+      });
+    }
+    if (el.userLlmProvider) {
+      el.userLlmProvider.addEventListener("change", async () => {
+        if (el.userLlmShowAllWrap) {
+          el.userLlmShowAllWrap.style.display = el.userLlmProvider.value === "openai" ? "block" : "none";
+        }
+        try {
+          const userId = el.userLlmUserSelect?.value;
+          if (!userId) return;
+          await fillUserLlmModelDropdown(userId, el.userLlmModel?.value || "");
+        } catch (err) {
+          log(`Model list reload failed -> ${err.message}`);
           alert(err.message);
         }
       });
