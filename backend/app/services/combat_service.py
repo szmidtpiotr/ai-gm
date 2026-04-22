@@ -167,6 +167,7 @@ def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
         "combatants": json.loads(row["combatants"] or "[]"),
         "status": row["status"],
         "ended_reason": row["ended_reason"],
+        "location_tag": row["location_tag"] if "location_tag" in row.keys() else None,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
@@ -381,14 +382,15 @@ def _save_combat_row(
     combatants: list[dict],
     status: str = "active",
     ended_reason: str | None = None,
+    location_tag: str | None = None,
 ) -> None:
     conn.execute(
         """
         INSERT INTO active_combat (
           campaign_id, character_id, round, turn_order, current_turn, combatants,
-          status, ended_reason, updated_at
+          status, ended_reason, location_tag, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(campaign_id) DO UPDATE SET
           character_id = excluded.character_id,
           round = excluded.round,
@@ -397,6 +399,7 @@ def _save_combat_row(
           combatants = excluded.combatants,
           status = excluded.status,
           ended_reason = excluded.ended_reason,
+          location_tag = excluded.location_tag,
           updated_at = excluded.updated_at
         """,
         (
@@ -408,6 +411,7 @@ def _save_combat_row(
             json.dumps(combatants, ensure_ascii=False),
             status,
             ended_reason,
+            location_tag,
             _now_iso(),
         ),
     )
@@ -497,6 +501,7 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
             combatants=combatants,
             status="active",
             ended_reason=None,
+            location_tag=None,
         )
         conn.commit()
 

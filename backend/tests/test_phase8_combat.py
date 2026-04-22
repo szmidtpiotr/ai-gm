@@ -107,6 +107,7 @@ def _schema_sql() -> str:
       combatants TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'active',
       ended_reason TEXT,
+      location_tag TEXT DEFAULT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
