@@ -236,6 +236,39 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_combat_turns_combat
         ON combat_turns(combat_id, turn_number)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS gameconfig_encounter_templates (
+        key           TEXT PRIMARY KEY,
+        label         TEXT NOT NULL,
+        difficulty    TEXT NOT NULL CHECK(difficulty IN ('trivial','easy','medium','hard','deadly')),
+        min_level     INTEGER DEFAULT 1,
+        max_level     INTEGER DEFAULT 5,
+        location_tags TEXT,
+        enemies_json  TEXT NOT NULL,
+        threat_total  INTEGER,
+        is_active     INTEGER DEFAULT 1,
+        note          TEXT,
+        created_at    TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at    TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """,
+    """
+    INSERT OR IGNORE INTO gameconfig_encounter_templates
+        (key, label, difficulty, min_level, max_level, location_tags, enemies_json, threat_total)
+    VALUES
+        ('enc_tavern_brawl', 'Bijatyka w tawernie', 'trivial', 1, 5, 'tavern', '[{"enemy_key":"tavernbrawler","count":2},{"enemy_key":"drunksoldier","count":1}]', 34),
+        ('enc_dungeon_rats', 'Szczury w piwnicy', 'trivial', 1, 3, 'dungeon', '[{"enemy_key":"giantrat","count":4}]', 20),
+        ('enc_city_mugger', 'Napad w zaułku', 'easy', 1, 5, 'city', '[{"enemy_key":"mugger","count":2}]', 18),
+        ('enc_city_thieves', 'Gang kieszonkowców', 'easy', 1, 4, 'city', '[{"enemy_key":"cutpurse","count":1},{"enemy_key":"pickpocket","count":1}]', 16),
+        ('enc_city_guard_corrupt', 'Przekupny strażnik', 'medium', 1, 5, 'city', '[{"enemy_key":"corruptguard","count":1},{"enemy_key":"thug","count":1}]', 37),
+        ('enc_road_bandits', 'Zasadzka na trakcie', 'medium', 1, 5, 'road,wilderness', '[{"enemy_key":"bandit","count":3},{"enemy_key":"banditarcher","count":1}]', 42),
+        ('enc_dungeon_zombie', 'Nieumarły w lochach', 'medium', 2, 5, 'dungeon', '[{"enemy_key":"zombie","count":2},{"enemy_key":"skeleton","count":1}]', 54),
+        ('enc_dungeon_skeletons', 'Obudzone kości', 'medium', 2, 5, 'dungeon', '[{"enemy_key":"skeletonwarrior","count":3}]', 75),
+        ('enc_road_lieutenant', 'Banda z dowódcą', 'hard', 2, 5, 'road,wilderness', '[{"enemy_key":"banditlieutenant","count":1},{"enemy_key":"bandit","count":2}]', 60),
+        ('enc_city_enforcer', 'Ściągacz długów', 'hard', 3, 5, 'city', '[{"enemy_key":"cityenforcer","count":1},{"enemy_key":"guildenforcer","count":1}]', 100),
+        ('enc_boss_cultleader', 'Przywódca Kultu', 'deadly', 4, 5, 'dungeon', '[{"enemy_key":"cultleader","count":1},{"enemy_key":"cultzealot","count":2}]', 376),
+        ('enc_boss_crimelord', 'Władca Podziemia', 'deadly', 5, 5, 'city', '[{"enemy_key":"crimelord","count":1},{"enemy_key":"cityenforcer","count":2}]', 450)
+    """,
 ]
 
 ADMIN_SEEDS = [
