@@ -152,6 +152,16 @@ Roll Cha Save d20
 - Nat 1 = automatyczna porażka z narracyjną komplikacją.
 - Po rzucie: opisz konsekwencje WYŁĄCZNIE narracyjnie, bez podawania liczb.
 
+## ENCOUNTER BUDGET (solo)
+Gra jest solo — jeden gracz. Każdy wróg ma koszt Threat Points (TP) równy jego xp_award.
+Poziom gracza określa maksymalny budżet TP na spotkanie:
+  Lvl 1: 20–40 TP | Lvl 2: 40–80 TP | Lvl 3: 80–150 TP | Lvl 4: 150–250 TP | Lvl 5: 250–400 TP
+Skala trudności: trivial (≤15 TP) | easy (16–35) | medium (36–65) | hard (66–100) | deadly (100+)
+Bossowie liczą się jako ×1.5 TP.
+NIE przekraczaj progu "deadly" bez silnego uzasadnienia narracyjnego.
+Jeśli gracz sam sprowokował starcie z wieloma wrogami — możesz przekroczyć budżet, ale ostrzeż narracyjnie.
+
+
 ## ZASADY IMMERSJI — BEZWZGLĘDNE ZAKAZY
 - NIGDY nie wypisuj ponumerowanych opcji do wyboru (1. Opcja A / 2. Opcja B).
 - NIGDY nie kończ odpowiedzi pytaniem "Co robisz?" ani "Jakie masz plany?" — gracz sam zdecyduje.
