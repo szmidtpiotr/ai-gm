@@ -100,7 +100,8 @@ def _run_game_engine_checks(failures):
     original_build_messages = game_engine.buildmessages
     try:
         game_engine.loadrecentturns = lambda conn, campaign_id, limit=8: []
-        game_engine.buildmessages = lambda campaign, character, recentturns, usertext: [
+        # FIX: Add runtime_config_block and combat_context_block kwargs
+        game_engine.buildmessages = lambda campaign, character, recentturns, usertext, runtime_config_block=None, combat_context_block=None: [
             {"role": "system", "content": "BASE SYSTEM"},
             {"role": "user", "content": usertext},
         ]
