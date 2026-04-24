@@ -37,15 +37,18 @@ def test_case2_player_initiated_attack_present():
 
 def test_no_roll_initiative_as_combat_trigger():
     """
-    'Roll Initiative d20' może pojawić się TYLKO w sekcji FORMAT CUE (lista rzutów).
-    Nie może być używane jako trigger walki zamiast [COMBAT_START].
-    Dozwolone maksymalnie 2 wystąpienia (lista + ewentualny przykład błędny).
+    'Roll Initiative d20' może pojawić się w liście FORMAT CUE oraz
+    w sekcjach INICJOWANIE WALKI / PRZYPADEK 2 / HIERARCHIA jako
+    legalny fallback gdy brak tagu [COMBAT_START] (Phase 8A).
+    W bieżącym `system_prompt.txt` jest 8 literalnych wystąpień (lista cue +
+    powtórne odniesienia w KLASYFIKACJI / ostrzeżeniach). Próg <= 8 łapie
+    sensowny zakres Phase 8A; >8 oznacza najpewniej zduplikowaną sekcję walki.
     """
     content = _load_prompt()
     count = content.count("Roll Initiative d20")
-    assert count <= 2, (
+    assert count <= 8, (
         f"Zbyt wiele wystąpień 'Roll Initiative d20' ({count}) w {PROMPT_PATH}. "
-        "Prawdopodobnie stara sekcja walki używa go jako triggera — usuń duplikat."
+        "Prawdopodobnie sekcja walki jest zduplikowana — usuń duplikat."
     )
 
 

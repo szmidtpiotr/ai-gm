@@ -22,6 +22,37 @@ COMBAT_DB_PATH = "/data/ai_gm.db"
 logger = get_logger(__name__)
 
 
+def _log_dice_roll_combat_resolve(
+    *,
+    source: str,
+    campaign_id: int,
+    result_total: int,
+    dc: int,
+    hit: bool,
+    raw_d20: int | None,
+) -> None:
+    """Loki-friendly ``dice_roll`` with DC and outcome (Combat System 2 — step 8.2)."""
+    if raw_d20 is not None:
+        r = int(raw_d20)
+        if r == 20:
+            outcome = "critical_hit"
+        elif r == 1:
+            outcome = "critical_miss"
+        else:
+            outcome = "hit" if hit else "miss"
+    else:
+        outcome = "hit" if hit else "miss"
+    logger.info(
+        "dice_roll",
+        roll_type="1d20",
+        result=int(result_total),
+        dc=int(dc),
+        outcome=outcome,
+        source=source,
+        campaign_id=int(campaign_id),
+    )
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -49,6 +80,23 @@ def _player_hp_pair(sheet: dict) -> tuple[int, int]:
     cur = int(sheet.get("current_hp", 0) or 0)
     mx = int(sheet.get("max_hp", cur) or cur)
     return cur, max(mx, 1)
+
+
+def _ability_stats_seven(sheet: dict) -> dict[str, int]:
+    """STR–CHA from sheet.stats plus speed (7 numeric fields for combat snapshot)."""
+    raw = sheet.get("stats")
+    stats = raw if isinstance(raw, dict) else {}
+    out: dict[str, int] = {}
+    for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA"):
+        try:
+            out[k] = int(stats.get(k, 10) or 10)
+        except (TypeError, ValueError):
+            out[k] = 10
+    try:
+        out["speed"] = int(sheet.get("speed", stats.get("speed", 30)) or 30)
+    except (TypeError, ValueError):
+        out["speed"] = 30
+    return out
 
 
 def roll_damage_dice(expr: str, mod: int = 0) -> int:
@@ -156,8 +204,26 @@ def _roll_card_enemy_identity(
     return (inferred or ek or "unknown"), nm or "Nieznany wróg"
 
 
+def _parse_loot_pool_column(raw: Any) -> list[dict[str, Any]]:
+    if raw is None or raw == "":
+        return []
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [x for x in data if isinstance(x, dict)]
+
+
+def _read_loot_pool_from_row(row: sqlite3.Row) -> list[dict[str, Any]]:
+    if "loot_pool" not in row.keys():
+        return []
+    return _parse_loot_pool_column(row["loot_pool"])
+
+
 def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
-    return {
+    d: dict[str, Any] = {
         "id": row["id"],
         "campaign_id": row["campaign_id"],
         "character_id": row["character_id"],
@@ -171,6 +237,9 @@ def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+    if "loot_pool" in row.keys():
+        d["loot_pool"] = _read_loot_pool_from_row(row)
+    return d
 
 
 def load_combat_snapshot(campaign_id: int) -> dict[str, Any] | None:
@@ -200,6 +269,45 @@ def get_active_combat(campaign_id: int) -> dict[str, Any] | None:
             return _row_to_combat_dict(row)
     except sqlite3.OperationalError:
         return None
+
+
+def get_enemy_catalog_for_prompt(conn: sqlite3.Connection) -> str:
+    """
+    Plain-text list of active enemies for system prompt injection (DB-driven keys).
+    Returns "" if none or on read errors.
+    """
+    max_chars = 1500
+    try:
+        rows = conn.execute(
+            """
+            SELECT key, label, hp_base, damage_die, attack_bonus
+            FROM game_config_enemies
+            WHERE is_active = 1
+            ORDER BY hp_base ASC, key ASC
+            """
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return ""
+    if not rows:
+        return ""
+    header = (
+        "Dostępni wrogowie w tym świecie (używaj ich kluczy w [COMBAT_START:]):\n"
+        "Lista pochodzi z bazy — preferuj te klucze zamiast wyłącznie przykładów ze statycznego promptu."
+    )
+    lines: list[str] = [header]
+    for row in rows:
+        key = str(row["key"])
+        label = str(row["label"] or key)
+        hp = int(row["hp_base"] or 0)
+        die = str(row["damage_die"] or "1d4")
+        atk = int(row["attack_bonus"] if row["attack_bonus"] is not None else 0)
+        sign = "+" if atk >= 0 else ""
+        lines.append(f"- {key} ({label}) — HP: {hp}, atak: {die}{sign}{atk}")
+    out = "\n".join(lines)
+    if len(out) <= max_chars:
+        return out
+    trimmed = out[: max_chars - 40].rstrip()
+    return f"{trimmed}\n\n[... skrócono listę wrogów do {max_chars} znaków ...]"
 
 
 def get_combat_context_for_prompt(campaign_id: int) -> str | None:
@@ -438,6 +546,7 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         ac = _player_ac_from_sheet(sheet)
         dex_mod = _stat_mod(sheet, "DEX")
         init_player = roll_d20() + dex_mod
+        ability_stats = _ability_stats_seven(sheet)
 
         combatants: list[dict[str, Any]] = [
             {
@@ -447,22 +556,36 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                 "hp_current": hp_cur,
                 "hp_max": hp_max,
                 "defense": ac,
+                "stats": ability_stats,
                 "initiative_roll": init_player,
                 "conditions": [],
             }
         ]
 
-        turn_slots: list[tuple[str, int, int]] = [("player", init_player, 0)]
-        idx = 0
+        resolved_enemies: list[tuple[str, sqlite3.Row]] = []
         for ek in enemy_keys:
-            idx += 1
             er = _fetch_enemy_row(conn, ek)
             if not er:
-                raise ValueError(f"unknown enemy key: {ek}")
+                logger.warning(
+                    "combat_unknown_enemy_key",
+                    enemy_key=ek,
+                    campaign_id=campaign_id,
+                    message="[COMBAT] unknown enemy key, skipping",
+                )
+                continue
+            resolved_enemies.append((ek, er))
+
+        if not resolved_enemies:
+            raise ValueError("no valid enemy keys after filtering unknown templates")
+
+        turn_slots: list[tuple[str, int, int]] = [("player", init_player, 0)]
+        idx = 0
+        for ek, er in resolved_enemies:
+            idx += 1
             slug = _enemy_slug(ek, idx)
             hp_max_e = int(er["hp_base"] or 1)
             ac_e = int(er["ac_base"] or 10)
-            dex_e_mod = 0
+            dex_e_mod = int(er["dex_modifier"] or 0)
             init_e = roll_d20() + dex_e_mod
             combatants.append(
                 {
@@ -510,25 +633,39 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
             (campaign_id,),
         ).fetchone()
         if id_row:
+            combat_id_int = int(id_row["id"])
             log_combat_turn(
                 conn,
-                combat_id=int(id_row["id"]),
+                combat_id=combat_id_int,
                 campaign_id=campaign_id,
                 turn_number=0.0,
                 actor="system",
                 event_type="start",
-                narrative=f"Walka rozpoczęta. Wrogowie: {', '.join(enemy_keys)}",
+                narrative=f"Walka rozpoczęta. Wrogowie: {', '.join(k for k, _ in resolved_enemies)}",
             )
+            for actor_id, init_total, _tie in turn_slots:
+                tn = _next_combat_log_sequence(conn, combat_id_int)
+                log_combat_turn(
+                    conn,
+                    combat_id=combat_id_int,
+                    campaign_id=campaign_id,
+                    turn_number=tn,
+                    actor=str(actor_id),
+                    event_type="initiative",
+                    roll_value=int(init_total),
+                    narrative=f"Inicjatywa: {actor_id} → wynik {int(init_total)}",
+                )
         conn.commit()
 
     out = get_active_combat(campaign_id)
     if not out:
         raise RuntimeError("failed to load combat after insert")
+    started_keys = [k for k, _ in resolved_enemies]
     logger.info(
         "combat_start",
         campaign_id=campaign_id,
-        enemy=",".join(enemy_keys),
-        enemy_keys=enemy_keys,
+        enemy=",".join(started_keys),
+        enemy_keys=started_keys,
         combat_id=out.get("id"),
     )
     return out
@@ -602,6 +739,7 @@ def resolve_attack(
             raise ValueError("no active combat")
 
         combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        loot_pool_accum: list[dict[str, Any]] = _read_loot_pool_from_row(row)
         ch_id = int(row["character_id"])
         character = conn.execute(
             "SELECT id, sheet_json FROM characters WHERE id = ?",
@@ -691,6 +829,16 @@ def resolve_attack(
             if dodge_roll is not None:
                 out["dodge_roll"] = dodge_roll
 
+            enemy_ac = int(enemy.get("defense", 0) or 0)
+            _log_dice_roll_combat_resolve(
+                source="combat_attack",
+                campaign_id=campaign_id,
+                result_total=int(roll_result),
+                dc=enemy_ac,
+                hit=bool(hit),
+                raw_d20=player_raw,
+            )
+
             loot: list[dict] = []
             dmg = 0
             if hit:
@@ -711,12 +859,34 @@ def resolve_attack(
                 dead = next_hp <= 0
                 out["enemy_dead"] = dead
                 if dead:
+                    enemy["dead"] = True
                     ek = str(enemy.get("enemy_key") or "")
                     if ek:
                         from app.services.game_engine import resolve_enemy_loot
 
                         loot = resolve_enemy_loot(ek)
+                    else:
+                        loot = []
                     out["loot"] = loot
+                    loot_pool_accum.extend(loot)
+                    cid_death = int(row["id"])
+                    death_tn = _next_combat_log_sequence(conn, cid_death)
+                    ename = str(enemy.get("name") or card_name or "Wróg")
+                    log_combat_turn(
+                        conn,
+                        combat_id=cid_death,
+                        campaign_id=campaign_id,
+                        turn_number=death_tn,
+                        actor=str(target_id),
+                        event_type="death",
+                        roll_value=None,
+                        damage=int(out.get("damage") or 0),
+                        hp_after=int(enemy.get("hp_current", 0) or 0),
+                        target_id=target_id,
+                        target_name=str(enemy.get("name") or "") or None,
+                        hit=None,
+                        narrative=f"{ename} pada — wróg nie żyje.",
+                    )
                     if _all_enemies_dead(combatants):
                         cid = int(row["id"])
                         tn = _next_combat_log_sequence(conn, cid)
@@ -736,7 +906,12 @@ def resolve_attack(
                             narrative=None,
                         )
                         _persist_combatants_and_maybe_end(
-                            conn, row, combatants, status="ended", ended_reason="victory"
+                            conn,
+                            row,
+                            combatants,
+                            status="ended",
+                            ended_reason="victory",
+                            loot_pool=loot_pool_accum,
                         )
                         conn.commit()
                         out["combat_state"] = load_combat_snapshot(campaign_id)
@@ -765,7 +940,7 @@ def resolve_attack(
                 narrative=None,
             )
 
-            _persist_combatants(conn, row, combatants)
+            _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
             conn.commit()
             out["combat_state"] = load_combat_snapshot(campaign_id)
             return out
@@ -799,6 +974,15 @@ def resolve_attack(
         out["raw_d20"] = raw
         out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg").strip()
         out["target_ac"] = pac
+
+        _log_dice_roll_combat_resolve(
+            source="combat_enemy",
+            campaign_id=campaign_id,
+            result_total=int(attack_roll),
+            dc=int(pac),
+            hit=bool(hit),
+            raw_d20=int(raw),
+        )
 
         dmg = 0
         if hit:
@@ -852,20 +1036,61 @@ def resolve_attack(
         out["combat_state"] = load_combat_snapshot(campaign_id)
 
     if attacker == "enemy" and out.get("player_incapacitated"):
-        end_combat(campaign_id, "player_dead")
+        end_combat(campaign_id, "player_dead", defeated_by=out.get("enemy_name"))
+        out["defeated_by"] = out.get("enemy_name")
         out["combat_state"] = load_combat_snapshot(campaign_id)
     return out
 
 
-def _persist_combatants(conn: sqlite3.Connection, row: sqlite3.Row, combatants: list[dict]) -> None:
-    conn.execute(
-        """
-        UPDATE active_combat
-        SET combatants = ?, updated_at = ?
-        WHERE campaign_id = ?
-        """,
-        (json.dumps(combatants, ensure_ascii=False), _now_iso(), row["campaign_id"]),
-    )
+def resolve_player_attack(
+    campaign_id: int,
+    roll_result: int,
+    raw_d20: int | None = None,
+) -> dict[str, Any]:
+    """Step 4.1 — alias for :func:`resolve_attack` with ``attacker='player'`` (dodge, damage, HP)."""
+    return resolve_attack(campaign_id, roll_result, attacker="player", raw_d20=raw_d20)
+
+
+def resolve_enemy_attack(
+    campaign_id: int,
+    roll_result: int | None = None,
+    raw_d20: int | None = None,
+) -> dict[str, Any]:
+    """Step 4.2 — alias for :func:`resolve_attack` with ``attacker='enemy'``. ``roll_result`` / ``raw_d20`` ignored."""
+    _ = (roll_result, raw_d20)
+    return resolve_attack(campaign_id, 0, attacker="enemy", raw_d20=None)
+
+
+def _persist_combatants(
+    conn: sqlite3.Connection,
+    row: sqlite3.Row,
+    combatants: list[dict],
+    *,
+    loot_pool: list[dict[str, Any]] | None = None,
+) -> None:
+    if loot_pool is not None and "loot_pool" in row.keys():
+        conn.execute(
+            """
+            UPDATE active_combat
+            SET combatants = ?, loot_pool = ?, updated_at = ?
+            WHERE campaign_id = ?
+            """,
+            (
+                json.dumps(combatants, ensure_ascii=False),
+                json.dumps(loot_pool, ensure_ascii=False),
+                _now_iso(),
+                row["campaign_id"],
+            ),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE active_combat
+            SET combatants = ?, updated_at = ?
+            WHERE campaign_id = ?
+            """,
+            (json.dumps(combatants, ensure_ascii=False), _now_iso(), row["campaign_id"]),
+        )
 
 
 def _persist_combatants_and_maybe_end(
@@ -875,26 +1100,62 @@ def _persist_combatants_and_maybe_end(
     *,
     status: str,
     ended_reason: str | None,
+    loot_pool: list[dict[str, Any]] | None = None,
 ) -> None:
-    conn.execute(
-        """
-        UPDATE active_combat
-        SET combatants = ?, status = ?, ended_reason = ?, updated_at = ?
-        WHERE campaign_id = ?
-        """,
-        (
-            json.dumps(combatants, ensure_ascii=False),
-            status,
-            ended_reason,
-            _now_iso(),
-            row["campaign_id"],
-        ),
-    )
+    if loot_pool is not None and "loot_pool" in row.keys():
+        conn.execute(
+            """
+            UPDATE active_combat
+            SET combatants = ?, status = ?, ended_reason = ?, loot_pool = ?, updated_at = ?
+            WHERE campaign_id = ?
+            """,
+            (
+                json.dumps(combatants, ensure_ascii=False),
+                status,
+                ended_reason,
+                json.dumps(loot_pool, ensure_ascii=False),
+                _now_iso(),
+                row["campaign_id"],
+            ),
+        )
+    else:
+        conn.execute(
+            """
+            UPDATE active_combat
+            SET combatants = ?, status = ?, ended_reason = ?, updated_at = ?
+            WHERE campaign_id = ?
+            """,
+            (
+                json.dumps(combatants, ensure_ascii=False),
+                status,
+                ended_reason,
+                _now_iso(),
+                row["campaign_id"],
+            ),
+        )
     if str(status) == "ended":
         _log_combat_end_event(conn, row, str(ended_reason or "ended"))
 
 
-def advance_turn(campaign_id: int) -> str:
+def get_current_actor(conn: sqlite3.Connection | None, campaign_id: int) -> str | None:
+    """Step 3.2 — whose turn: ``active_combat.current_turn`` (conn unused; combat DB is separate)."""
+    _ = conn
+    st = get_active_combat(campaign_id)
+    if not st:
+        return None
+    ct = st.get("current_turn")
+    if ct is None or str(ct).strip() == "":
+        return None
+    return str(ct)
+
+
+def is_combat_active(conn: sqlite3.Connection | None, campaign_id: int) -> bool:
+    """Step 3.2 — True if there is active combat for this campaign."""
+    _ = conn
+    return get_active_combat(campaign_id) is not None
+
+
+def _advance_turn_impl(campaign_id: int) -> str:
     with _conn() as conn:
         row = conn.execute(
             "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
@@ -949,7 +1210,35 @@ def advance_turn(campaign_id: int) -> str:
         return str(new_turn)
 
 
-def end_combat(campaign_id: int, reason: str) -> None:
+def advance_turn(
+    first: int | sqlite3.Connection | None,
+    second: int | None = None,
+) -> str | None:
+    """
+    Step 3.2 — advance to next living actor; bump ``round`` after a full cycle.
+
+    - Legacy: ``advance_turn(campaign_id: int) -> str`` (raises ``ValueError`` if no combat).
+    - Doc API: ``advance_turn(conn, campaign_id) -> str | None`` — ``conn`` is reserved for
+      callers sharing a narrative DB handle; combat state still uses ``COMBAT_DB_PATH``.
+      Returns ``None`` if there is no active combat (instead of raising).
+    """
+    if second is None:
+        if not isinstance(first, int):
+            raise TypeError("advance_turn(campaign_id): campaign_id must be int")
+        return _advance_turn_impl(first)
+    if not isinstance(second, int):
+        raise TypeError("advance_turn(conn, campaign_id): campaign_id must be int")
+    if first is not None and not isinstance(first, sqlite3.Connection):
+        raise TypeError("advance_turn(conn, campaign_id): conn must be sqlite3.Connection or None")
+    try:
+        return _advance_turn_impl(second)
+    except ValueError:
+        return None
+
+
+def end_combat(campaign_id: int, reason: str, *, defeated_by: str | None = None) -> None:
+    """End combat row (``status='ended'``, ``ended_reason``). For ``player_dead``, also ends solo campaign via :func:`solo_death_service.end_solo_campaign_on_death`."""
+    char_id: int | None = None
     with _conn() as conn:
         row = conn.execute(
             """
@@ -960,6 +1249,7 @@ def end_combat(campaign_id: int, reason: str) -> None:
         ).fetchone()
         if row:
             _log_combat_end_event(conn, row, reason)
+            char_id = int(row["character_id"])
         conn.execute(
             """
             UPDATE active_combat
@@ -969,3 +1259,53 @@ def end_combat(campaign_id: int, reason: str) -> None:
             (reason, _now_iso(), campaign_id),
         )
         conn.commit()
+
+    if reason != "player_dead" or char_id is None:
+        return
+
+    from app.services.admin_config import DB_PATH
+    from app.services.solo_death_service import end_solo_campaign_on_death
+
+    label = (defeated_by or "").strip() or "wróg"
+    death_reason = f"Poległ w walce z: {label}"
+
+    nconn: sqlite3.Connection | None = None
+    try:
+        nconn = sqlite3.connect(DB_PATH)
+        nconn.row_factory = sqlite3.Row
+        ch = nconn.execute(
+            """
+            SELECT id, name, sheet_json, user_id FROM characters
+            WHERE id = ? AND campaign_id = ?
+            """,
+            (char_id, campaign_id),
+        ).fetchone()
+        if not ch:
+            logger.warning(
+                "combat_player_dead_no_character",
+                campaign_id=campaign_id,
+                character_id=char_id,
+            )
+            return
+        camp = nconn.execute(
+            "SELECT status FROM campaigns WHERE id = ?",
+            (campaign_id,),
+        ).fetchone()
+        if camp and str(camp["status"] or "").lower() == "ended":
+            return
+        end_solo_campaign_on_death(
+            nconn,
+            campaign_id=campaign_id,
+            character_row=ch,
+            death_reason=death_reason,
+        )
+    except Exception as e:
+        logger.error(
+            "combat_player_dead_solo_death_failed",
+            campaign_id=campaign_id,
+            error_message=str(e),
+            exc_info=True,
+        )
+    finally:
+        if nconn is not None:
+            nconn.close()

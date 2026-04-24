@@ -104,6 +104,8 @@ window.bindEvents = function () {
   }
   els.createCampaignBtn.onclick = window.createCampaign;
   els.deleteCampaignBtn.onclick = window.deleteCampaign;
+  if (els.resetCampaignBtn) els.resetCampaignBtn.onclick = window.resetCampaignProgress;
+  if (els.resetCharacterBtn) els.resetCharacterBtn.onclick = window.resetCharacterProgress;
 
   if (els.characterCreateFormEl) {
     els.characterCreateFormEl.onsubmit = async (e) => {

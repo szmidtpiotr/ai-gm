@@ -15,6 +15,7 @@ This directory contains ready-to-run files for a Proxmox VM observability setup.
   - `top-error-signatures-24h.json`
   - `campaign-story-reader.json` (SQLite snapshot)
   - `campaign-narrative-loki.json` (near-live `narrative_turn` logs)
+  - `chat-stream-combat-trace.json` (**turn_stream_open**, **sse_narrative_progress**, **narrative_turn** z `turn_id` / `ui_trace_id`, **dice_roll** walki, resety kampanii/postaci)
 - alert rules provisioning:
   - `grafana/provisioning/alerting/rules.yml`
 - Perplexity tutorial:
@@ -48,6 +49,14 @@ File provisioning reads `grafana/provisioning/dashboards/json/*.json` (see `dash
 1. Ensure the bind mount still includes `./grafana/provisioning:/etc/grafana/provisioning:ro` (see `docker-compose.yml`).
 2. Wait up to **30s** (`updateIntervalSeconds`) or run **`docker compose restart grafana`** in the observability directory.
 3. Hard-refresh the Grafana UI (folder **AI-GM**). If the dashboard never updates, the remote host may be using a different path — copy the file to the path Grafana actually mounts, or use `scripts/sync-grafana-dashboard.sh` from the repo root with `GRAFANA_SSH` and `GRAFANA_REMOTE_JSON` set.
+
+### Chat / SSE / combat trace (Loki)
+
+Dashboard **„AI GM - Chat trace, SSE, walka (Loki)”** (`uid` Grafana: `ai-gm-chat-stream-combat-trace`, folder **AI-GM**).
+
+- Filtry: **Campaign ID** (regex), **turn_id** (regex, np. pełny UUID z `X-Turn-Id`).
+- Backend: opcjonalnie **`SSE_NARRATIVE_PROGRESS_LOG=1`** — wtedy panel „Postęp tokenów SSE” ma dane.
+- Promtail parsuje pole **`ui_trace_id`** z JSON (jak `turn_id`); filtrowanie po kliencie wygodniej w **Explore** (`| json | event="narrative_turn" | ui_trace_id="…"`).
 
 ## Game host log shipping
 

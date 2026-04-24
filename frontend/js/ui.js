@@ -21,6 +21,8 @@ window.getEls = function () {
     contextualRollBtn: document.getElementById('contextual-roll-btn'),
     createCampaignBtn: document.getElementById('create-campaign-btn'),
     deleteCampaignBtn: document.getElementById('delete-campaign-btn'),
+    resetCampaignBtn: document.getElementById('reset-campaign-btn'),
+    resetCharacterBtn: document.getElementById('reset-character-btn'),
     statusBackendDotEl: document.getElementById('status-backend-dot'),
     statusOllamaDotEl: document.getElementById('status-ollama-dot'),
     statusLokiDotEl: document.getElementById('status-loki-dot'),
@@ -107,6 +109,28 @@ window.scrollChatToBottomThrottled = function () {
   });
 };
 
+/** Short correlation chip for Loki (matches ``turn_id`` / ``X-UI-Trace-Id`` in backend logs). */
+window.formatChatTraceHtml = function (traceId, tag) {
+  const t = (traceId || '').trim();
+  if (!t) return '';
+  const compact = t.replace(/-/g, '');
+  const short = compact.slice(0, 8);
+  const label = tag ? `${tag}·${short}` : short;
+  const title = t.length > 36 ? `${t.slice(0, 36)}…` : t;
+  return `<span class="chat-trace-chip" title="${window.escapeHtml(title)}">${window.escapeHtml(label)}</span>`;
+};
+
+window.patchThinkingBubbleTrace = function (turnId) {
+  const wrap = document.querySelector('#thinking-bubble');
+  if (!wrap || !turnId) return;
+  const meta = wrap.querySelector('.meta');
+  if (!meta || meta.children.length < 2) return;
+  const right = meta.children[1];
+  if (right.querySelector('.chat-trace-chip')) return;
+  const chip = window.formatChatTraceHtml(turnId, 'srv');
+  if (chip) right.insertAdjacentHTML('beforeend', ` ${chip}`);
+};
+
 window.removeThinkingBubble = function () {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
@@ -117,7 +141,9 @@ window.removeThinkingBubble = function () {
 window.showThinkingBubble = function ({
   speaker = null,
   route = 'narrative',
-  turn = null
+  turn = null,
+  traceId = null,
+  traceTag = null
 } = {}) {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
@@ -149,9 +175,13 @@ window.showThinkingBubble = function ({
     `${turn ? ` \u2022 ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
 
   const right = document.createElement('div');
-  right.innerHTML = route
+  const traceHtml =
+    traceId && typeof window.formatChatTraceHtml === 'function'
+      ? ` ${window.formatChatTraceHtml(traceId, traceTag)}`
+      : '';
+  right.innerHTML = (route
     ? `<span class="route-badge">${window.escapeHtml(route)}</span>`
-    : '';
+    : '') + traceHtml;
 
   meta.appendChild(left);
   meta.appendChild(right);
@@ -188,7 +218,9 @@ window.showThinkingBubble = function ({
 window.createStreamingBubble = function ({
   speaker = null,
   route = 'narrative',
-  turn = null
+  turn = null,
+  traceId = null,
+  traceTag = null
 } = {}) {
   const { chatEl } = window.getEls();
   if (!chatEl) return null;
@@ -198,6 +230,9 @@ window.createStreamingBubble = function ({
   const wrap = document.createElement('div');
   wrap.className = 'message assistant streaming';
   wrap.id = 'streaming-bubble';
+  if (traceId) {
+    wrap.setAttribute('data-turn-id', traceId);
+  }
 
   const meta = document.createElement('div');
   meta.className = 'meta';
@@ -208,9 +243,13 @@ window.createStreamingBubble = function ({
     `${turn ? ` \u2022 ${window.escapeHtml(window.t('chat.turn'))} ${turn}` : ''}`;
 
   const right = document.createElement('div');
-  right.innerHTML = route
+  const streamTrace =
+    traceId && typeof window.formatChatTraceHtml === 'function'
+      ? ` ${window.formatChatTraceHtml(traceId, traceTag)}`
+      : '';
+  right.innerHTML = (route
     ? `<span class="route-badge">${window.escapeHtml(route)}</span>`
-    : '';
+    : '') + streamTrace;
 
   meta.appendChild(left);
   meta.appendChild(right);
@@ -276,52 +315,62 @@ window.consumeCombatJustEndedGuard = function () {
 window.finalizeStreamingBubble = function (bubbleEl, fullText) {
   if (!bubbleEl) return;
 
-  if (typeof window.suppressCombatEndedAutoUi === 'function' && window.suppressCombatEndedAutoUi()) {
-    bubbleEl.classList.remove('streaming');
-    bubbleEl.removeAttribute('id');
-    const preEarly = bubbleEl.querySelector('pre.streaming-text');
-    if (preEarly) preEarly.style.cssText = '';
-    window.scrollChatToBottom();
-    return;
-  }
+  const suppressRollAfterCombatEnd = !!window.state?._combatJustEnded;
 
   bubbleEl.classList.remove('streaming');
   bubbleEl.removeAttribute('id');
 
-  // Remove inline min-height lock — let the bubble size to its content
+  const bodyEl = bubbleEl.querySelector('.message-body');
   const pre = bubbleEl.querySelector('pre.streaming-text');
   if (pre) pre.style.cssText = '';
 
   const route = bubbleEl.querySelector('.route-badge')?.textContent || '';
-  let renderedText = fullText;
-  if (route === 'narrative' && typeof window.parsePendingRoll === 'function') {
-    renderedText = window.parsePendingRoll(fullText);
-    if (pre) pre.textContent = renderedText;
-  } else if (typeof window.parsePendingRoll === 'function') {
-    window.parsePendingRoll('');
+  const pfx = window.COMBAT_ROLL_PREFIX;
+  const hasCombatEmbed = route === 'narrative' && String(fullText || '').includes(pfx);
+
+  if (route === 'narrative' && hasCombatEmbed && bodyEl && typeof window.buildInterleavedNarrativeAndCombatHtml === 'function') {
+    const html = window.buildInterleavedNarrativeAndCombatHtml(fullText);
+    bodyEl.innerHTML = html || '';
+    if (pre && pre.parentNode === bodyEl) {
+      pre.remove();
+    }
+  } else {
+    let renderedText = fullText;
+    if (route === 'narrative' && typeof window.parsePendingRoll === 'function') {
+      renderedText = window.parsePendingRoll(fullText);
+      if (pre) pre.textContent = renderedText;
+    } else if (typeof window.parsePendingRoll === 'function') {
+      window.parsePendingRoll('');
+    }
   }
 
   if (route === 'narrative') {
-    const pending = window.state.pendingRoll;
-    if (pending) {
-      const canonicalSkill = pending.canonical_skill || pending.skill;
-      window.state.activeRollRequest = {
-        skill: canonicalSkill,
-        display_name: pending.skill,
-        dice: pending.dice,
-        description: pending.description || '',
-        label: `Roll ${canonicalSkill} ${pending.dice}`,
-      };
+    if (suppressRollAfterCombatEnd) {
+      window.state.pendingRoll = null;
+      window.state.activeRollRequest = null;
+      window.updateActionTriggerBtn(false);
     } else {
-      window.state.activeRollRequest = null;
+      const pending = window.state.pendingRoll;
+      if (pending) {
+        const canonicalSkill = pending.canonical_skill || pending.skill;
+        window.state.activeRollRequest = {
+          skill: canonicalSkill,
+          display_name: pending.skill,
+          dice: pending.dice,
+          description: pending.description || '',
+          label: `Roll ${canonicalSkill} ${pending.dice}`,
+        };
+      } else {
+        window.state.activeRollRequest = null;
+      }
+      if (
+        typeof window.isActiveRollRequestAllowed === 'function' &&
+        !window.isActiveRollRequestAllowed(window.state.activeRollRequest)
+      ) {
+        window.state.activeRollRequest = null;
+      }
+      window.updateActionTriggerBtn(!!window.state.activeRollRequest);
     }
-    if (
-      typeof window.isActiveRollRequestAllowed === 'function' &&
-      !window.isActiveRollRequestAllowed(window.state.activeRollRequest)
-    ) {
-      window.state.activeRollRequest = null;
-    }
-    window.updateActionTriggerBtn(!!window.state.activeRollRequest);
   }
 
   window.scrollChatToBottom();
@@ -552,16 +601,119 @@ window.tryParseRollCardFromText = function (text) {
 /** Rich combat attack / enemy attack bubble — must match backend COMBAT_ROLL_CTX_PREFIX. */
 window.COMBAT_ROLL_PREFIX = '__AI_GM_COMBAT_ROLL_V1__';
 
-window.tryParseCombatRollCardFromText = function (text) {
-  const s = String(text || '').trim();
+/**
+ * @param {string} text
+ * @param {number} [fromIndex]
+ * @returns {{ start: number, end: number, data: object } | null}
+ */
+window._extractNextCombatRollPayload = function (text, fromIndex) {
+  const s = String(text || '');
   const p = window.COMBAT_ROLL_PREFIX;
-  if (!s.startsWith(p)) return null;
-  try {
-    const tail = s.slice(p.length).replace(/^\s+/, '').replace(/^\uFEFF/, '');
-    return JSON.parse(tail);
-  } catch (_e) {
-    return null;
+  const idx = s.indexOf(p, fromIndex || 0);
+  if (idx < 0) return null;
+  let pos = idx + p.length;
+  while (pos < s.length && /\s/.test(s[pos])) pos += 1;
+  if (s[pos] !== '{') return null;
+  let depth = 0;
+  const start = pos;
+  for (; pos < s.length; pos += 1) {
+    const ch = s[pos];
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const data = JSON.parse(s.slice(start, pos + 1));
+          if (data && typeof data === 'object') {
+            return { start: idx, end: pos + 1, data };
+          }
+        } catch (_e) {
+          return null;
+        }
+      }
+    }
   }
+  return null;
+};
+
+window.tryParseCombatRollCardFromText = function (text) {
+  const s = String(text || '');
+  const p = window.COMBAT_ROLL_PREFIX;
+  const t = s.trim();
+  if (t.startsWith(p)) {
+    try {
+      const tail = t.slice(p.length).replace(/^\s+/, '').replace(/^\uFEFF/, '');
+      return JSON.parse(tail);
+    } catch (_e) {
+      return null;
+    }
+  }
+  return null;
+};
+
+/** Usuwa bloki JSON walki, żeby `parsePendingRoll` widział końcówkę „Roll … d20”. */
+window.stripCombatRollBlocksForRollCue = function (text) {
+  const s = String(text || '');
+  const p = window.COMBAT_ROLL_PREFIX;
+  if (!s.includes(p)) return s;
+  let out = '';
+  let i = 0;
+  while (i < s.length) {
+    const ex = window._extractNextCombatRollPayload(s, i);
+    if (!ex) {
+      out += s.slice(i);
+      break;
+    }
+    out += s.slice(i, ex.start);
+    i = ex.end;
+  }
+  return out.trimEnd();
+};
+
+/**
+ * Narracja GM z osadzonymi kartami `__AI_GM_COMBAT_ROLL_V1__`; ostatni fragment tekstu
+ * przechodzi przez `parsePendingRoll` (cue „Roll … d20”).
+ */
+window.buildInterleavedNarrativeAndCombatHtml = function (fullText) {
+  const s = String(fullText || '');
+  const chunks = [];
+  let i = 0;
+  while (i < s.length) {
+    const ex = window._extractNextCombatRollPayload(s, i);
+    if (!ex) {
+      chunks.push({ type: 'txt', value: s.slice(i) });
+      break;
+    }
+    if (ex.start > i) {
+      chunks.push({ type: 'txt', value: s.slice(i, ex.start) });
+    }
+    chunks.push({ type: 'card', value: ex.data });
+    i = ex.end;
+  }
+  let lastTextIdx = -1;
+  for (let k = chunks.length - 1; k >= 0; k -= 1) {
+    if (chunks[k].type === 'txt') {
+      lastTextIdx = k;
+      break;
+    }
+  }
+  let html = '';
+  chunks.forEach((ch, idx) => {
+    if (ch.type === 'card') {
+      if (typeof window.buildCombatRollCardHtml === 'function') {
+        html += window.buildCombatRollCardHtml(ch.value);
+      }
+      return;
+    }
+    let t = ch.value;
+    if (idx === lastTextIdx && typeof window.parsePendingRoll === 'function') {
+      t = window.parsePendingRoll(t);
+    }
+    if (String(t || '').trim()) {
+      html += `<pre class="narrative-pre">${window.escapeHtml(t)}</pre>`;
+    }
+  });
+  return html;
 };
 
 window.formatCombatRollNum = function (n) {
@@ -604,7 +756,8 @@ window.buildCombatRollCardHtml = function (data) {
   const total = window.formatCombatRollNum(Number(data.total));
   const hit = !!data.hit;
   const dmg = data.damage != null ? String(data.damage) : '?';
-  const ac = data.target_ac != null ? window.formatCombatRollNum(Number(data.target_ac)) : null;
+  const acNum = data.target_ac != null ? Number(data.target_ac) : NaN;
+  const ac = Number.isFinite(acNum) ? window.formatCombatRollNum(acNum) : null;
 
   let cardMod = 'roll-card--neutral';
   if (kind === 'enemy_attack') {
@@ -616,13 +769,29 @@ window.buildCombatRollCardHtml = function (data) {
   let line5 = '';
   if (kind === 'enemy_attack') {
     line5 = hit
-      ? `Cel: obrona ${ac != null ? ac : '—'} — ✅ TRAFIENIE — ${dmg} obrażeń!`
-      : `Cel: obrona ${ac != null ? ac : '—'} — ❌ PUDŁO`;
+      ? `Rzut vs AC gracza ${ac != null ? ac : '—'} — ✅ TRAFIENIE — obrażenia: ${dmg}`
+      : `Rzut vs AC gracza ${ac != null ? ac : '—'} — ❌ PUDŁO`;
+  } else if (kind === 'player_attack') {
+    const vsAc = Number.isFinite(acNum) ? ` vs AC ${ac}` : '';
+    if (data.player_nat1) {
+      line5 = `Rzut: ${total}${vsAc} — 💀 fatalne pudło`;
+    } else if (data.dodged) {
+      line5 = `Rzut: ${total}${vsAc} — przeciwnik unika`;
+    } else if (hit) {
+      line5 = `Rzut: ${total}${vsAc} — ✅ TRAFIENIE — obrażenia: ${dmg}`;
+    } else {
+      line5 = `Rzut: ${total}${vsAc} — ❌ PUDŁO`;
+    }
   } else {
     line5 = hit
       ? `Atakuję z wynikiem ${total} — ✅ SUKCES — trafiam za ${dmg} obrażeń!`
       : `Atakuję z wynikiem ${total} — ❌ PUDŁO`;
   }
+
+  const enemyDeadFoot =
+    kind === 'player_attack' && data.enemy_dead
+      ? `<div class="roll-card__line roll-card__line--detail">💀 Wróg pokonany</div>`
+      : '';
 
   const intentBlock = intent
     ? `<div class="combat-roll-card__intent">${window.escapeHtml(intent)}</div><div class="roll-card__sep" role="separator"></div>`
@@ -639,6 +808,7 @@ window.buildCombatRollCardHtml = function (data) {
       : `&nbsp;&nbsp;|&nbsp;&nbsp; Wynik: <strong>${total}</strong>`) +
     `</div>` +
     `<div class="roll-card__line roll-card__line--wynik">${window.escapeHtml(line5)}</div>` +
+    enemyDeadFoot +
     `</div>`
   );
 };
@@ -790,7 +960,9 @@ window.addMessage = function ({
   createdAt = null,
   memoryTurn = false,
   helpmeTurn = false,
-  oocTurn = false
+  oocTurn = false,
+  traceId = null,
+  traceTag = null
 }) {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
@@ -807,6 +979,9 @@ window.addMessage = function ({
 
   const wrap = document.createElement('div');
   wrap.className = `message ${role}`;
+  if (traceId) {
+    wrap.setAttribute('data-turn-id', traceId);
+  }
   if (
     combatRollPayload &&
     String(combatRollPayload.kind || '') === 'enemy_attack' &&
@@ -845,6 +1020,10 @@ window.addMessage = function ({
 
   if (createdAt) {
     parts.push(`<span>${window.escapeHtml(window.formatTimestamp(createdAt))}</span>`);
+  }
+
+  if (traceId && typeof window.formatChatTraceHtml === 'function') {
+    parts.push(window.formatChatTraceHtml(traceId, traceTag));
   }
 
   right.innerHTML = parts.join(' ');
@@ -1044,6 +1223,8 @@ window.updateUiState = function () {
   const characterCreationBusy = !!window.state._characterCreationInFlight;
 
   if (els.deleteCampaignBtn) els.deleteCampaignBtn.disabled = !hasCampaign;
+  if (els.resetCampaignBtn) els.resetCampaignBtn.disabled = !hasCampaign;
+  if (els.resetCharacterBtn) els.resetCharacterBtn.disabled = !hasCampaign || !hasCharacter;
   if (els.createCampaignBtn) els.createCampaignBtn.disabled = llmBlocked || campaignCreationBusy;
   if (els.campaignCreateSubmitEl) els.campaignCreateSubmitEl.disabled = llmBlocked || campaignCreationBusy;
   if (els.characterCreateSubmitEl) els.characterCreateSubmitEl.disabled = llmBlocked || characterCreationBusy;
@@ -1205,6 +1386,10 @@ window.renderHistoryPanel = function () {
     `;
 
     const ut = turn.user_text || '';
+    const combatHist =
+      typeof window.tryParseCombatRollCardFromText === 'function'
+        ? window.tryParseCombatRollCardFromText(ut)
+        : null;
     const rollP =
       typeof window.tryParseRollCardFromText === 'function'
         ? window.tryParseRollCardFromText(ut)
@@ -1212,9 +1397,11 @@ window.renderHistoryPanel = function () {
     const replayText =
       rollP && rollP.replay_command ? String(rollP.replay_command) : ut;
     const bodyHtml =
-      rollP && typeof window.buildRollCardHtml === 'function'
-        ? window.buildRollCardHtml(rollP)
-        : `<pre>${window.escapeHtml(ut)}</pre>`;
+      combatHist && typeof window.buildCombatRollCardHtml === 'function'
+        ? window.buildCombatRollCardHtml(combatHist)
+        : rollP && typeof window.buildRollCardHtml === 'function'
+          ? window.buildRollCardHtml(rollP)
+          : `<pre>${window.escapeHtml(ut)}</pre>`;
 
     const body = document.createElement('div');
     body.className = 'message-body';
@@ -1328,12 +1515,25 @@ window.renderTurnsToChat = function () {
 
         const body = document.createElement('div');
         body.className = 'message-body';
-        body.innerHTML = `<pre>${window.escapeHtml(assistantText)}</pre>`;
+        const pfx = window.COMBAT_ROLL_PREFIX;
+        if (
+          pfx &&
+          assistantText.includes(pfx) &&
+          typeof window.buildInterleavedNarrativeAndCombatHtml === 'function'
+        ) {
+          body.innerHTML = window.buildInterleavedNarrativeAndCombatHtml(assistantText);
+        } else {
+          body.innerHTML = `<pre>${window.escapeHtml(assistantText)}</pre>`;
+        }
 
         msgWrap.appendChild(meta);
         msgWrap.appendChild(body);
 
-        const lines = assistantText.split('\n');
+        const cueSource =
+          typeof window.stripCombatRollBlocksForRollCue === 'function'
+            ? window.stripCombatRollBlocksForRollCue(assistantText)
+            : assistantText;
+        const lines = cueSource.split('\n');
         const lastLineRaw = (lines[lines.length - 1] || '').trim();
         const cueMatch = lastLineRaw.match(/^Roll (.+?) (d\d+)$/i);
         if (cueMatch) {

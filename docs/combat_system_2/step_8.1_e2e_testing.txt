@@ -1,66 +1,137 @@
-SAFETY CHECK FIRST:
+PHASE 8A — FINAL INTEGRATION TEST (manual + automated)
 
-Before declaring Phase 8A complete, please verify:
-1. Run through FULL combat scenario: initiation → initiative → player attack → enemy attack → victory
-2. Check logs for any errors during combat flow
-3. Verify DB state after combat ends (active_combat cleaned up?)
-4. Check if F5 (page refresh) during combat preserves state correctly
-5. Verify roll cards display correctly for all combat rolls
-
-If ANY ISSUES found, list them with steps to reproduce.
+Goal: Verify full combat loop works end-to-end before closing Phase 8A.
+This is NOT a feature implementation step — only testing and bug fixing.
 
 ---
 
-TESTING TASK:
+KNOWN SCOPE BOUNDARIES (do NOT test / do NOT implement):
 
-Execute full combat test suite.
+- inventory system: NOT implemented (Phase 9+) → skip "Verify inventory updated"
+- multiple enemies: verify IF combatants JSON supports >1 enemy in current code,
+  do NOT implement multi-enemy logic if missing — log as Phase 8B gap
+- "invalid enemy key" test: verify error handling exists, do NOT add new feature
 
-Test scenarios:
-1. **Happy path — player wins:**
-   - Start combat with weak enemy (bandit)
-   - Player attacks and hits
-   - Enemy attacks and misses
-   - Player kills enemy
-   - Verify loot popup
-   - Collect loot
-   - Verify inventory updated
+---
 
-2. **Player death:**
-   - Start combat with strong enemy (assassin)
-   - Let enemy attack multiple times
-   - Verify death screen triggers when HP <= 0
-   - Verify character marked as dead in DB
+STEP 1 — AUTOMATED TESTS FIRST:
 
-3. **F5 resilience:**
-   - Start combat
-   - Complete initiative
-   - Before first attack: F5 page
-   - Verify combat state restored (turn order, HP, etc.)
-   - Continue combat normally
+python -m pytest tests/test_phase8_combat.py -v
+python -m pytest tests/ -v --tb=short 2>&1 | tail -40
 
-4. **Multiple enemies (if implemented):**
-   - Start combat with 2+ enemies
-   - Verify turn order includes all
-   - Kill enemies one by one
-   - Verify victory only after ALL dead
+If ANY test fails → fix before manual testing.
+Do NOT proceed to manual if tests are red.
 
-5. **Edge cases:**
-   - Invalid enemy key in [COMBAT_START:invalid]
-   - Double-click enemy turn button
-   - Zero damage (perfect defense roll)
-   - Exact HP = 0 (not negative)
+---
 
-Acceptance criteria:
-- [ ] All test scenarios pass
-- [ ] No errors in backend logs
-- [ ] No errors in browser console
-- [ ] DB state consistent after each scenario
-- [ ] Roll cards display correctly
-- [ ] Death screen works
-- [ ] Loot system works
-- [ ] Inventory updates correctly
+STEP 2 — BACKEND HEALTH CHECK:
 
-Files to check:
-- Backend logs (docker logs or console)
-- Browser console (F12)
-- Database: active_combat, characters, inventory tables
+grep -rn "TODO\|FIXME\|raise NotImplementedError" backend/app/services/combat_service.py
+docker logs ai-gm-backend --tail=50 2>&1 | grep -i "error\|exception\|traceback"
+
+---
+
+STEP 3 — MANUAL SCENARIOS (on 192.168.1.61):
+
+[SC-1] Happy path — player wins:
+  1. Start new campaign, trigger combat via GM narrative
+  2. Complete initiative roll (Roll Initiative d20)
+  3. Player attacks: Roll Attack d20 → verify hit/miss logic
+  4. Enemy attacks: verify enemy-turn fires automatically after player turn
+  5. Kill enemy (use high roll or repeat)
+  6. Verify: loot popup appears ("Łupy z pokonanych")
+  7. Verify: victory screen shown
+  ✅ PASS / ❌ FAIL + steps to reproduce
+
+  SKIP: inventory update (not implemented yet)
+
+[SC-2] Player death:
+  1. Start combat with strong enemy (highest ATK enemy in game_config_enemies)
+  2. Let enemy attack — if damage system works, HP drops
+  3. When HP <= 0: verify death screen appears with enemy name
+  4. Verify in DB: campaigns.status='ended', campaigns.death_reason LIKE 'Poległ w walce z%'
+  5. Verify: character secret shown on death screen
+  ✅ PASS / ❌ FAIL + steps to reproduce
+
+[SC-3] F5 resilience (page refresh):
+  1. Start combat, complete initiative
+  2. Confirm it is player turn (combat panel visible)
+  3. Press F5
+  4. Verify: combat panel reappears, HP/turn order restored
+  5. Verify: no duplicate turns or ghost state
+  ✅ PASS / ❌ FAIL + steps to reproduce
+
+[SC-4] Edge cases:
+  A. Double-click enemy turn: verify _enemyTurnInFlight debounce works
+     (no duplicate API calls visible in Network tab)
+  B. HP exactly = 0: verify treated as dead (not negative needed)
+  C. Enemy with no loot_table_key: verify loot_pool stays [] (no crash)
+
+  SKIP: [COMBAT_START:invalid_key] test — only if error handling
+  already exists; log gap if missing, do NOT implement now.
+
+---
+
+STEP 4 — DB STATE AUDIT (after each scenario):
+
+SELECT status, ended_reason, loot_pool FROM active_combat WHERE campaign_id=?;
+SELECT status, death_reason FROM campaigns WHERE id=?;
+SELECT hp_current, sheet_json FROM characters WHERE campaign_id=?;
+
+Expected after victory:  active_combat.status='ended', ended_reason='victory'
+Expected after death:    active_combat.status='ended', ended_reason='player_dead'
+                         campaigns.status='ended', death_reason='Poległ w walce z: X'
+
+---
+
+STEP 5 — BROWSER CONSOLE CHECK:
+
+Open F12 → Console tab during combat.
+Flag any: TypeError, undefined, 404, 500 errors.
+Do NOT fix cosmetic warnings (CSS, deprecation).
+
+---
+
+KNOWN GAPS TO LOG (not fix here):
+
+- Inventory system: loot collected but nowhere stored (Phase 9)
+- Multiple enemies: if combatants JSON supports >1, test; if not — log as 8B
+- [COMBAT_START:invalid_key] error screen: log if missing
+
+---
+
+ACCEPTANCE CRITERIA (Phase 8A close):
+
+- [ ] All pytest tests pass (test_phase8_combat.py)
+- [ ] SC-1 happy path: combat → loot popup → victory screen
+- [ ] SC-2 player death: death screen + enemy name + secret
+- [ ] SC-3 F5 resilience: combat state restored after refresh
+- [ ] SC-4 edge cases: no crash on double-click, HP=0, no loot_table_key
+- [ ] No 500 errors in backend logs during any scenario
+- [ ] No TypeErrors in browser console during combat
+- [ ] DB state correct after each scenario (SQL verified)
+
+Phase 8A is DONE when all criteria above checked.
+Next: Phase 8B — Combat Frontend polish.
+
+
+
+
+======= AFTER REPORT=============
+Oto co zostało dodane w **`tests/test_phase8_combat.py`** jako automatyczna część **`step_8.1_e2e_testing.txt`** (punkt STEP 1 + fragmenty STEP 4 / SC-4 — bez Playwrighta i bez scenariuszy przeglądarkowych):
+
+| Test | Odpowiednik w dokumencie |
+|------|---------------------------|
+| **`test_step81_victory_sql_active_combat_matches_doc`** | STEP 4: `active_combat` — `status`, `ended_reason`, `loot_pool` po zwycięstwie |
+| **`test_step81_enemy_hp_exactly_zero_counts_as_dead_victory`** | SC-4B: HP spada dokładnie do 0 → `enemy_dead`, `dead`, victory |
+| **`test_step81_two_enemies_victory_loot_pool_accumulates`** | Dwóch wrogów w `combatants` → dwa ataki, `victory`, `loot_pool` ma 2 wpisy (mock `resolve_enemy_loot` z `enemy_key`) |
+| **`test_step81_player_death_sql_matches_doc`** | STEP 4 po śmierci: `ended_reason=player_dead`, kampania `ended` + `death_reason` z „Poległ w walce z” |
+| **`test_step81_unknown_enemy_keys_all_invalid_raises_value_error`** | SC-4 / invalid keys: `ValueError` gdy wszystkie klucze są nieznane |
+
+Pomocniczo na poziomie modułu: **`_step81_loot_by_enemy_key`** — `side_effect` dla `resolve_enemy_loot`.
+
+**Pytest na 192.168.1.61:** `35 passed` (wcześniej 30 + 5 nowych).
+
+Scenariusze **SC-1/3/4A/5** (UI, F5, Network, konsola) z dokumentu nadal są **manualne** — tego pytest nie zastąpi bez E2E w przeglądarce.
+
+**Docker:** brak — zmienione są tylko testy; po deployu nic nie trzeba restartować z powodu tego commita.

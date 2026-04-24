@@ -1,44 +1,121 @@
-SAFETY CHECK FIRST:
+SAFETY CHECK RESULT: ✅ NO BLOCKERS — proceed with implementation
 
-Before implementing, please analyze:
-1. Check how current system prompt is loaded (file: `backend/prompts/system_prompt.txt`)
-2. Verify if there's already enemy data injected anywhere in the prompt
-3. Check if `game_config_enemies` table is accessible from where system prompt is built
-4. Identify where system prompt is constructed for LLM calls (likely `gm.py` or `llm_service.py`)
-5. Verify current system prompt length — adding enemy catalog must not exceed LLM context limits
-
-If NO BLOCKERS found, proceed with implementation:
+Findings from repo scan (2026-04-24):
+- System prompt file: backend/prompts/system_prompt.txt (201 lines, 11 703 bytes ~2.9k tokens)
+- Loader: backend/app/system_prompt_loader.py → SYSTEM_PROMPT_TEXT constant
+- Messages assembled in: build_narrative_messages() in game_engine.py
+  + buildmessages() in backend/app/core/turn_engine.py
+- [COMBAT_START:key] already parsed by: _maybe_start_combat_from_gm_tag() in turns.py
+- game_config_enemies used in: combat_service.py, game_engine.py, migrations_admin.py
+- Dynamic enemy catalog from DB: NOT YET IMPLEMENTED
+  (system_prompt.txt has static example keys like "bandit, goblin" — NOT a DB query)
+- get_enemy_catalog_for_prompt: does NOT exist yet → safe to add
+- Injection point confirmed: build_narrative_messages() in game_engine.py
+  alongside existing combat_context_block and _inactive_combat_tag_reminder
 
 ---
 
 IMPLEMENTATION TASK:
 
-Inject active enemy catalog into system prompt when session starts.
+Add get_enemy_catalog_for_prompt(conn, campaign_id) to combat_service.py
+and inject it in build_narrative_messages() in game_engine.py.
 
-Requirements:
-- Query `game_config_enemies` WHERE `is_active = 1` at session start
-- Format as readable list for GM (key, label, tier, HP, damage_die)
-- Inject into system prompt BEFORE sending to LLM
-- Format example:
+STEP 1 — Add function to combat_service.py:
 
-```
-Available enemies in this world:
-- bandit (Bandyta) — tier: weak, HP: 8, damage: d6+0
-- arena_fighter (Gladiator Areny) — tier: standard, HP: 30, damage: d8+3
-- assassin (Skrytobójca) — tier: elite, HP: 34, damage: d6+3
-[...continue for all active enemies]
+  def get_enemy_catalog_for_prompt(conn) -> str:
+      """Returns plain-text enemy catalog for LLM system prompt injection.
+      Returns empty string if no active enemies found (safe fallback).
+      """
+      rows = conn.execute(
+          """SELECT key, label, hp_base, damage_die, attack_bonus
+             FROM game_config_enemies
+             WHERE is_active = 1
+             ORDER BY hp_base ASC"""
+      ).fetchall()
+      if not rows:
+          return ""
+      lines = ["Dostepni wrogowie w tym swiecie (uzywaj ich kluczy w [COMBAT_START:]):"]
+      for row in rows:
+          key, label, hp, die, atk = row
+          sign = "+" if atk >= 0 else ""
+          lines.append(f"- {key} ({label}) — HP: {hp}, atak: {die}{sign}{atk}")
+      return "\n".join(lines)
 
-When combat starts, you must choose ONE enemy key from this list.
-Emit: [COMBAT_START:enemy_key]
-```
+STEP 2 — Inject in build_narrative_messages() in game_engine.py:
 
-Files to modify:
-- `backend/app/services/llm_service.py` OR `gm.py` (wherever system prompt is built)
-- Possibly `backend/app/system_prompt_loader.py`
+  - Call get_enemy_catalog_for_prompt(conn) only when combat is NOT active
+    (i.e. when combat_context_block is empty / None)
+  - Append result to system_content AFTER existing _inactive_combat_tag_reminder
+  - If catalog is empty string → do not append (safe fallback already built in)
 
-Acceptance criteria:
-- [ ] Enemy list loaded from DB on session start
-- [ ] Injected into system prompt before LLM call
-- [ ] System prompt length checked (must fit in context window)
-- [ ] Test: start new session, verify prompt includes enemy list
-- [ ] GM can see enemy options when narrating combat scenarios
+  Pseudocode location in build_narrative_messages():
+    if not combat_context_block:
+        enemy_catalog = combat_svc.get_enemy_catalog_for_prompt(conn)
+        if enemy_catalog:
+            system_content += "\n\n" + enemy_catalog
+
+DO NOT modify:
+- backend/prompts/system_prompt.txt (static file — do not add DB data here)
+- backend/app/system_prompt_loader.py
+- backend/app/services/llm_service.py
+
+---
+
+BEFORE IMPLEMENTING, verify:
+
+1. Confirm get_enemy_catalog_for_prompt does NOT already exist:
+   grep -rn "get_enemy_catalog_for_prompt" backend/
+
+2. Confirm game_config_enemies has is_active column:
+   grep -n "is_active" backend/app/db/migrations_admin.py
+
+3. Confirm exact location where _inactive_combat_tag_reminder is appended
+   in build_narrative_messages() — inject catalog immediately after it:
+   grep -n "_inactive_combat_tag_reminder\|combat_context_block" backend/app/services/game_engine.py
+
+If NO BLOCKERS → implement Steps 1 and 2 above.
+
+---
+
+ACCEPTANCE CRITERIA:
+
+- [ ] get_enemy_catalog_for_prompt() added to combat_service.py
+- [ ] Returns empty string when no active enemies (no crash on empty table)
+- [ ] Injected in build_narrative_messages() only when combat_context_block is empty
+- [ ] Catalog NOT appended when combat is active (combat_context_block present)
+- [ ] No existing tests broken: python -m pytest tests/test_phase8_combat.py -v
+- [ ] Manual check: start new campaign on 192.168.1.61, confirm enemy catalog
+      appears in Loki logs under system message content
+- [ ] Catalog size: get_enemy_catalog_for_prompt() output < 1500 chars
+      (system_prompt.txt is already ~11 700 bytes; catalog adds ~1 400 bytes max
+       for 33 enemies — full system message stays under ~13 200 bytes / ~3 300 tokens,
+       well within gemma4:e4b and llama3.1:8b context limits)
+
+FILES TO MODIFY:
+- backend/app/services/combat_service.py  (add get_enemy_catalog_for_prompt)
+- backend/app/services/game_engine.py     (inject catalog in build_narrative_messages)
+
+
+================= AFTER REPORT ==============
+
+### Zrobione (krok 1.2, bez blockerów)
+
+**`combat_service.py`** — dodana funkcja `get_enemy_catalog_for_prompt(conn)`:
+- `SELECT key, label, hp_base, damage_die, attack_bonus FROM game_config_enemies WHERE is_active = 1 ORDER BY hp_base ASC, key ASC`
+- nagłówek po polsku + linie `- key (label) — HP: …, atak: die±bonus`
+- pusty string przy braku wierszy lub `sqlite3.OperationalError`
+- obcięcie do **≤ 1500** znaków (zgodnie z acceptance)
+
+**`game_engine.py`** — w `build_narrative_messages()`:
+- gdy **`combat_block`** jest pusty (`get_combat_context_for_prompt` zwraca `None`), doklejany jest katalog (jeśli niepusty)
+- **po** bloku z `_inactive_combat_tag_reminder` / snapshot zakończonej walki, **przed** dopiskiem śmierci (`death_append`)
+
+**`tests/test_phase8_combat.py`** — trzy testy: katalog, narracja z katalogiem bez walki, narracja **bez** katalogu przy aktywnej walce.
+
+### Pytest (192.168.1.61)
+
+`tests/test_phase8_combat.py` + `tests/test_game_engine_death.py`: **29 passed**.
+
+### Docker
+
+Przy deployu backendu w kontenerze: **zrestartuj kontener** (albo przebuduj obraz, jeśli kod nie jest na volume), żeby załadować zmienione moduły.

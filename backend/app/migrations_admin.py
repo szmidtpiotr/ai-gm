@@ -605,6 +605,20 @@ def _ensure_active_combat_location_tag(conn: sqlite3.Connection) -> None:
         logger.info("admin_migration_applied", sql_preview="active_combat ADD COLUMN location_tag")
 
 
+def _ensure_active_combat_loot_pool(conn: sqlite3.Connection) -> None:
+    """Add loot_pool to active_combat if missing (idempotent)."""
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='active_combat'"
+    ).fetchone()
+    if not row:
+        return
+    existing = [r[1] for r in conn.execute("PRAGMA table_info(active_combat)").fetchall()]
+    if "loot_pool" not in existing:
+        conn.execute("ALTER TABLE active_combat ADD COLUMN loot_pool TEXT DEFAULT NULL")
+        conn.commit()
+        logger.info("admin_migration_applied", sql_preview="active_combat ADD COLUMN loot_pool")
+
+
 def _ensure_enemy_loot_table_and_drop_chance(conn: sqlite3.Connection) -> None:
     """Add loot_table_key / drop_chance on game_config_enemies if missing (idempotent)."""
     cur = conn.cursor()
@@ -657,6 +671,7 @@ def run_admin_migrations() -> None:
                     )
 
         _ensure_active_combat_location_tag(conn)
+        _ensure_active_combat_loot_pool(conn)
 
         _rebuild_loot_entries_for_consumable_support(conn)
         _upgrade_loot_entries_three_way_xor(conn)

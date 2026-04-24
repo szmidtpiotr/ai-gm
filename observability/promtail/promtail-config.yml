@@ -45,6 +45,7 @@ scrape_configs:
             campaign_id: campaign_id
             character_id: character_id
             turn_id: turn_id
+            ui_trace_id: ui_trace_id
             llm_provider: llm_provider
             llm_model: llm_model
             error_type: error_type

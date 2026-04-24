@@ -1,42 +1,105 @@
-SAFETY CHECK FIRST:
+SAFETY CHECK RESULT: ✅ CORE ALREADY WORKS — minimal gap to fill
 
-Before implementing, please analyze:
-1. Check if dice rolling function exists (likely in utils or dice module)
-2. Verify dice roll result is stored somewhere for roll cards (check Phase 7 roll system)
-3. Check if initiative skill exists in `game_config_skills` table
-4. Identify where to trigger initiative rolls (immediately after combat starts?)
-5. Verify if roll results need to be displayed to player (roll card UI from Phase 7)
+Verified in combat_service.py (2026-04-24):
+- Initiative rolls: roll_d20() + DEX mod (player) / dex_modifier (enemy) — EXISTS
+- turn_order: built, sorted descending by roll result — EXISTS
+- current_turn set to turn_order[0] — EXISTS
+- initiative_roll stored in combatants JSON per actor — EXISTS
+- Tiebreaker: player always wins tie (deterministic, intentional UX choice) — EXISTS
+- resolve_initiative() as separate function: NOT extracted (inline in initiate_combat) — ACCEPTABLE, no refactor needed
 
-If NO BLOCKERS found, proceed with implementation:
+ONE GAP: initiative rolls are NOT logged individually in combat_turns.
+  On combat start only event_type="start" is inserted.
+  Acceptance requires per-actor initiative log for Loki/debug traceability.
 
 ---
 
-IMPLEMENTATION TASK:
+IMPLEMENTATION TASK (one targeted change only):
 
-Roll initiative for all combatants and establish turn order.
+In initiate_combat() in combat_service.py, after the INSERT into active_combat,
+add one log_combat_turn() call per combatant with their initiative roll result.
 
-Reference: combat_resolver_example.py (see resolve_attack function for dice rolling)
+Follow the existing log_combat_turn() pattern already used in the file.
+Log entry should contain:
+  - actor: combatant id ("player" or enemy key e.g. "wolf_1")
+  - action: "initiative"
+  - roll: the d20 result + modifier (total initiative score)
+  - narrative: e.g. "Inicjatywa: {actor_id} wyrzucił {roll}" (Polish, language: pl)
 
-Requirements:
-- Immediately after combat state created (phase='initiative'):
-  1. Roll d20 for player: d20 + DEX modifier + initiative skill rank
-  2. Roll d20 for each enemy: d20 + dex_modifier (from enemy record)
-  3. Sort results descending (highest goes first)
-  4. Create turn_order array: ["enemy_1", "player"] or ["player", "enemy_1"] etc.
-  5. UPDATE active_combat SET turn_order=JSON, current_actor_id=turn_order[0], current_actor_index=0, phase='in_progress'
+Example (adjust to match exact log_combat_turn() signature in your code):
 
-- Store initiative rolls in roll_history for display
+  for slot in turn_slots:
+      log_combat_turn(
+          conn=conn,
+          campaign_id=campaign_id,
+          actor=slot["id"],
+          action="initiative",
+          roll=slot["initiative_roll"],
+          narrative=f"Inicjatywa: {slot['id']} → {slot['initiative_roll']}"
+      )
 
-Files to modify:
-- `backend/app/services/combat_service.py` (add initiative_roll function)
-- Integration point: after combat start detection
+Check exact signature first:
+  grep -n "def log_combat_turn" backend/app/services/combat_service.py
 
-Acceptance criteria:
-- [ ] Initiative rolled for all combatants
-- [ ] Turn order sorted correctly (highest first)
-- [ ] active_combat.turn_order updated
-- [ ] active_combat.current_actor_id set to first actor
-- [ ] Roll results stored in roll_history
-- [ ] Test: start combat, verify turn order makes sense
-- [ ] Test: player with high DEX goes first
-- [ ] Test: ties handled (random or DEX stat as tiebreaker)
+---
+
+DO NOT change:
+- Initiative calculation logic (roll_d20 + modifier)
+- turn_order sort order (descending, player wins tie — this is intentional)
+- combatants JSON structure
+- Any other function in combat_service.py
+
+---
+
+ACCEPTANCE CRITERIA (updated 2026-04-24):
+
+- [ ] log_combat_turn called for each combatant with action="initiative" after combat start
+- [ ] Roll value logged = total initiative score (d20 + modifier)
+- [ ] Narrative in Polish
+- [ ] Tiebreaker = player priority (NOT random — intentional, no change needed)
+- [ ] resolve_initiative() as separate function: NOT required (inline is acceptable)
+- [ ] No existing tests broken: python -m pytest tests/test_phase8_combat.py -v
+- [ ] Loki check on 192.168.1.61: combat start shows initiative entries per actor
+      in combat_turns table (SELECT actor, action, roll FROM combat_turns
+      WHERE action='initiative' ORDER BY id DESC LIMIT 10)
+
+FILES TO MODIFY:
+- backend/app/services/combat_service.py  (add initiative log loop in initiate_combat)
+
+DO NOT modify:
+- backend/app/api/turns.py
+- backend/prompts/system_prompt.txt
+- tests/test_phase8_combat.py (unless you want to assert initiative log entries exist)
+
+
+
+
+
+===========AFTER REPORT ==========
+
+### Zrobione (krok 3.1 — jedna luka z dokumentu)
+
+Zgodnie z **`step_3.1_initiative_system.txt`**: rdzeń inicjatywy był już OK; brakowało **osobnych wpisów w `combat_turns`**.
+
+W **`initiate_combat()`**, zaraz po logu `event_type="start"`:
+
+- dla każdego elementu **`turn_slots`** (już posortowane malejąco po inicjatywie),
+- **`log_combat_turn`** z:
+  - `event_type="initiative"` (w schemacie jest `event_type`, nie kolumna `action`),
+  - `actor` = id uczestnika (`"player"` lub slug wroga),
+  - `roll_value` = **łączny wynik** (d20 + modyfikator),
+  - `turn_number` z **`_next_combat_log_sequence`**,
+  - `narrative` po polsku: `Inicjatywa: {actor_id} → wynik {…}`.
+
+Nie zmieniano: wzoru rzutów, sortowania, remisów (priorytet gracza), JSON `combatants`.
+
+### Testy
+
+`tests/test_phase8_combat.py` na **.61**: **26 passed** (w `test_combat_turns_logged_start_and_player_attack` jest assert na ≥2 wpisy `initiative`).
+
+**Uwaga do ręcznego SQL z dokumentu:** w tabeli jest **`event_type`**, więc np.  
+`… WHERE event_type = 'initiative' …`, nie `action`.
+
+### Docker
+
+Po wdrożeniu backendu w kontenerze: **restart / rebuild**, żeby wczytać `combat_service.py`.

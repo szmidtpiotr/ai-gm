@@ -68,6 +68,7 @@
             <h2 class="combat-panel-title">Walka</h2>
             <span class="combat-panel-meta" id="combat-panel-meta"></span>
           </div>
+          <div class="combat-engine-turns" id="combat-engine-turns" hidden></div>
           <div class="combat-panel-body" id="combat-panel-body"></div>
           <div class="combat-msg" id="combat-panel-msg" style="display:none;"></div>
           <div class="combat-actions" id="combat-panel-actions">
@@ -124,16 +125,19 @@
     }
 
     /**
-     * After combat-kill SSE narration: merge pending loot into accumulated list and show victory UI.
+     * After combat-kill SSE narration: optional loot modal, then merge into accumulated list and victory UI.
      * @param {object|null} _killedData payload from [COMBAT_ENDED] (optional; victory uses `this._state`)
      */
-    showVictoryAfterNarration(_killedData) {
+    async showVictoryAfterNarration(_killedData) {
       this._deferVictoryOverlay = false;
-      const loot = this._pendingLoot;
-      if (Array.isArray(loot) && loot.length) {
-        this._pushLoot(loot);
-      }
+      const pending = Array.isArray(this._pendingLoot) ? this._pendingLoot.slice() : [];
       this._pendingLoot = null;
+      const fromState = Array.isArray(this._state?.loot_pool) ? this._state.loot_pool.slice() : [];
+      const drop = pending.length > 0 ? pending : fromState;
+      if (drop.length > 0) {
+        await this._showLootPopupAsync(drop);
+        this._pushLoot(drop);
+      }
       if (this._state) {
         this.showVictory(this._state);
       }
@@ -156,6 +160,10 @@
             : (data.dodged
             ? `Atakuję z wynikiem ${total} — przeciwnik uskakuje i unika ciosu!`
             : `Atakuję z wynikiem ${total} — pudło!`));
+      const tac =
+        data.target_ac != null && Number.isFinite(Number(data.target_ac))
+          ? Number(data.target_ac)
+          : null;
       const payload = {
         kind: "player_attack",
         intent: (intent || "").trim(),
@@ -171,6 +179,9 @@
         target_id: data.target_id != null ? String(data.target_id) : "",
         target_name:
           data.target_name != null ? String(data.target_name) : "",
+        target_ac: tac,
+        dodged: !!data.dodged,
+        player_nat1: !!data.player_nat1,
         enemy_dead: !!data.enemy_dead,
         combat_victory: !!combatVictory,
       };
@@ -282,8 +293,15 @@
       const st = combatState;
       if (!st) {
         this._bodyEl.innerHTML = "";
+        const turnsEl = this._host?.querySelector("#combat-engine-turns");
+        if (turnsEl) {
+          turnsEl.innerHTML = "";
+          turnsEl.hidden = true;
+        }
         return;
       }
+
+      this._syncCombatDebugEnemyHintFromState(st);
 
       const round = Number(st.round || 1);
       const cur = String(st.current_turn || "");
@@ -362,6 +380,8 @@
       } else {
         this._hideEnd();
       }
+
+      void this._refreshCombatEngineTurnsPanel();
     }
 
     _showEndScreen(st) {
@@ -446,7 +466,7 @@
               .join("")}</ul>`;
       this._lootLayer.innerHTML = `
         <div class="combat-loot-inner">
-          <h3 style="margin:0 0 10px;font-size:16px;">Łup</h3>
+          <h3 style="margin:0 0 10px;font-size:16px;">Łupy z pokonanych</h3>
           ${inner}
           <button type="button" class="combat-primary-btn" id="combat-loot-dismiss">Zamknij</button>
         </div>`;
@@ -610,7 +630,125 @@
       if (!e) return null;
       const enemy_key = e.enemy_key != null ? String(e.enemy_key).trim() : "";
       const target_name = e.name != null ? String(e.name).trim() : "";
-      return { target_id: tid, enemy_key, target_name };
+      const defenseRaw = e.defense != null ? Number(e.defense) : null;
+      const defense = Number.isFinite(defenseRaw) ? defenseRaw : null;
+      return { target_id: tid, enemy_key, target_name, defense };
+    }
+
+    _syncCombatDebugEnemyHintFromState(st) {
+      if (typeof window === "undefined" || !window.state) return;
+      const combatants = Array.isArray(st?.combatants) ? st.combatants : [];
+      const enemies = combatants.filter((c) => c && c.type === "enemy");
+      if (!enemies.length) return;
+      const hint = enemies
+        .map((e) => {
+          const k = String(e.enemy_key || e.id || "?").trim() || "?";
+          const lab = String(e.name || e.label || k).trim() || k;
+          return `${k} — ${lab}`;
+        })
+        .join("; ");
+      window.state._combatDebugEnemyHint = hint;
+    }
+
+    _defenseForCombatLogRow(row) {
+      const combatants = Array.isArray(this._state?.combatants) ? this._state.combatants : [];
+      const tid = row.target_id != null ? String(row.target_id) : "";
+      if (!tid) return null;
+      const e = combatants.find((c) => c && String(c.id) === tid);
+      if (!e || e.type !== "enemy") return null;
+      const d = e.defense != null ? Number(e.defense) : null;
+      return Number.isFinite(d) ? d : null;
+    }
+
+    _formatCombatEngineRow(row) {
+      if (!row) return "";
+      const evt = String(row.event_type || "");
+      const actor = String(row.actor || "");
+      if (evt === "death") {
+        const nar = String(row.narrative || "").trim() || "Wróg eliminowany.";
+        return `<div class="combat-engine-turn">
+          <div class="combat-engine-turn__head">💀 ${esc(nar)}</div>
+        </div>`;
+      }
+      if (evt !== "attack") return "";
+      const hit = row.hit === 1 || row.hit === true;
+      const rv = row.roll_value != null ? Number(row.roll_value) : null;
+      const dmg = row.damage != null ? Number(row.damage) : null;
+      const tgt = String(row.target_name || "").trim() || "—";
+      if (actor === "player") {
+        const ac = this._defenseForCombatLogRow(row);
+        const acBit = ac != null ? ` vs AC ${ac}` : "";
+        const hitLine = hit
+          ? `✅ TRAFIENIE · obrażenia: ${dmg != null ? dmg : "?"}`
+          : "❌ PUDŁO";
+        return `<div class="combat-engine-turn combat-engine-turn--player">
+          <div class="combat-engine-turn__head">⚔️ ATAK GRACZA → ${esc(tgt)}</div>
+          <div class="combat-engine-turn__detail">Rzut: ${Number.isFinite(rv) ? rv : "—"}${acBit} → ${hitLine}</div>
+        </div>`;
+      }
+      if (actor === "enemy") {
+        let rawD20 = null;
+        let pac = null;
+        let enemyName = "";
+        try {
+          const meta =
+            typeof row.narrative === "string" && row.narrative.trim()
+              ? JSON.parse(row.narrative)
+              : {};
+          rawD20 = meta.raw_d20 != null ? Number(meta.raw_d20) : null;
+          pac = meta.target_ac != null ? Number(meta.target_ac) : null;
+          enemyName = String(meta.enemy_name || "").trim();
+        } catch (_e) {
+          /* ignore */
+        }
+        const d20s = Number.isFinite(rawD20) ? String(rawD20) : "—";
+        const acs = Number.isFinite(pac) ? String(pac) : "—";
+        const hitLine = hit
+          ? `✅ TRAFIENIE · obrażenia: ${dmg != null ? dmg : "?"}`
+          : "❌ PUDŁO";
+        const label = enemyName || (tgt && tgt !== "Gracz" ? tgt : "Wróg");
+        return `<div class="combat-engine-turn combat-engine-turn--enemy">
+          <div class="combat-engine-turn__head">🗡️ ATAK WROGA — ${esc(label)}</div>
+          <div class="combat-engine-turn__detail">Rzut: ${d20s} vs AC gracza ${acs} → ${hitLine}</div>
+        </div>`;
+      }
+      return "";
+    }
+
+    async _refreshCombatEngineTurnsPanel() {
+      const el = this._host?.querySelector("#combat-engine-turns");
+      if (!el) return;
+      const cid = this._campaignId();
+      if (!cid || !this._state || String(this._state.status) !== "active") {
+        el.innerHTML = "";
+        el.hidden = true;
+        return;
+      }
+      try {
+        const res = await fetch(`/api/campaigns/${cid}/combat/turns`, {
+          headers: window.getApiHeaders ? window.getApiHeaders() : {},
+        });
+        if (!res.ok) {
+          el.hidden = true;
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        const rows = Array.isArray(data.turns) ? data.turns : [];
+        const interesting = rows.filter(
+          (r) => r && (String(r.event_type) === "attack" || String(r.event_type) === "death")
+        );
+        if (!interesting.length) {
+          el.innerHTML = "";
+          el.hidden = true;
+          return;
+        }
+        el.hidden = false;
+        el.innerHTML =
+          '<div class="combat-engine-turns-title">Tury silnika</div>' +
+          interesting.map((r) => this._formatCombatEngineRow(r)).join("");
+      } catch (_e) {
+        el.hidden = true;
+      }
     }
 
     async _onAttack() {
@@ -696,13 +834,24 @@
           typeof window.currentCharacterName === "function"
             ? window.currentCharacterName()
             : String(sheet.name || "Bohater");
+        const enemyAc =
+          atkTarget && atkTarget.defense != null ? Number(atkTarget.defense) : null;
+        const dataForCard = {
+          ...data,
+          target_ac:
+            data.target_ac != null && Number.isFinite(Number(data.target_ac))
+              ? Number(data.target_ac)
+              : Number.isFinite(enemyAc)
+                ? enemyAc
+                : null,
+        };
         const dbLine = this._playerAttackRollDbLine(
           intentRaw,
           charName,
           d20,
           mod,
           total,
-          data,
+          dataForCard,
           endedNow
         );
         const turnNum =
@@ -724,6 +873,16 @@
             window.combatInput.syncWithCombat(null);
           }
           if (!victoryNarrationFirst) {
+            const pool =
+              Array.isArray(cs?.loot_pool) && cs.loot_pool.length
+                ? cs.loot_pool.slice()
+                : Array.isArray(data.loot)
+                  ? data.loot.slice()
+                  : [];
+            if (pool.length > 0) {
+              await this._showLootPopupAsync(pool);
+              this._accumulatedLoot = pool.slice();
+            }
             this.showVictory(cs);
           }
           return;

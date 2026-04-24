@@ -10,6 +10,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.core.logging import bind_context, get_logger
+
+try:
+    from structlog.contextvars import get_contextvars as _structlog_get_contextvars
+except Exception:  # pragma: no cover
+    _structlog_get_contextvars = None
+
 from app.core.turn_engine import COMBAT_ROLL_CTX_PREFIX
 from app.services.dice import (
     ROLL_CARD_PREFIX,
@@ -80,6 +86,13 @@ def _maybe_start_combat_from_gm_tag(
             combat_id=combat_state.get("id"),
         )
         return combat_state
+    except ValueError as e:
+        logger.warning(
+            "combat_gm_tag_rejected",
+            campaign_id=campaign_id,
+            error_message=str(e),
+        )
+        return None
     except Exception as e:
         logger.error("combat_gm_tag_error", campaign_id=campaign_id, error_message=str(e))
         return None
@@ -128,6 +141,16 @@ def _maybe_advance_combat_after_player_narrative(campaign_id: int) -> dict | Non
     return {"combat_advanced": True, "new_combat_turn": new_turn}
 
 
+def _trace_ids_for_story_log() -> tuple[str, str]:
+    if _structlog_get_contextvars is None:
+        return "", ""
+    try:
+        ctx = _structlog_get_contextvars() or {}
+        return str(ctx.get("turn_id") or ""), str(ctx.get("ui_trace_id") or "")
+    except Exception:
+        return "", ""
+
+
 def log_narrative_turn_structured(
     *,
     route: str,
@@ -151,6 +174,7 @@ def log_narrative_turn_structured(
         max_chars = int(os.getenv("NARRATIVE_LOG_MAX_CHARS", "0") or "0")
     except ValueError:
         max_chars = 0
+    tid, ui_tid = _trace_ids_for_story_log()
     try:
         logger.info(
             "narrative_turn",
@@ -159,6 +183,8 @@ def log_narrative_turn_structured(
             db_turn_id="" if turn_row.get("id") is None else str(turn_row.get("id")),
             turn_number="" if turn_row.get("turn_number") is None else str(turn_row.get("turn_number")),
             created_at=turn_row.get("created_at"),
+            turn_id=tid,
+            ui_trace_id=ui_tid,
             user_text=_truncate_for_story_log(user_text or "", max_chars),
             assistant_text=_truncate_for_story_log(assistant_text or "", max_chars),
         )
@@ -182,6 +208,7 @@ def log_memory_turn_structured(
         max_chars = int(os.getenv("NARRATIVE_LOG_MAX_CHARS", "0") or "0")
     except ValueError:
         max_chars = 0
+    tid, ui_tid = _trace_ids_for_story_log()
     try:
         logger.info(
             "memory_turn",
@@ -190,6 +217,8 @@ def log_memory_turn_structured(
             db_turn_id="" if turn_row.get("id") is None else str(turn_row.get("id")),
             turn_number="" if turn_row.get("turn_number") is None else str(turn_row.get("turn_number")),
             created_at=turn_row.get("created_at"),
+            turn_id=tid,
+            ui_trace_id=ui_tid,
             user_text=_truncate_for_story_log(user_text or "", max_chars),
             assistant_text=_truncate_for_story_log(assistant_text or "", max_chars),
         )
@@ -1149,6 +1178,7 @@ def create_turn_stream(
     campaign_id: int,
     payload: TurnCreate,
     x_ollama_base_url: str | None = Header(default=None),
+    ui_trace_id: str | None = Header(default=None, alias="X-UI-Trace-Id"),
 ):
     """
     Streaming version of the turn endpoint.
@@ -1159,6 +1189,14 @@ def create_turn_stream(
     """
     conn = get_db()
     turn_id = _start_turn_trace(campaign_id, payload.character_id, "turn_stream")
+    ui_tid = (ui_trace_id or "").strip()[:128]
+    if ui_tid:
+        bind_context(ui_trace_id=ui_tid)
+    logger.info(
+        "turn_stream_open",
+        campaign_id=campaign_id,
+        character_id=payload.character_id,
+    )
     stream_headers = {
         "Cache-Control": "no-cache",
         "X-Accel-Buffering": "no",
@@ -1441,12 +1479,15 @@ def create_turn_stream(
             """
             from app.services import combat_service as cs_snap
 
-            bind_context(
-                turn_id=turn_id,
-                campaign_id=str(campaign_id_val),
-                character_id=str(character_id_val),
-                turn_route="turn_stream",
-            )
+            _stream_ctx = {
+                "turn_id": turn_id,
+                "campaign_id": str(campaign_id_val),
+                "character_id": str(character_id_val),
+                "turn_route": "turn_stream",
+            }
+            if ui_tid:
+                _stream_ctx["ui_trace_id"] = ui_tid
+            bind_context(**_stream_ctx)
 
             combat_before = cs_snap.get_active_combat(campaign_id_val)
             combat_was_active = bool(combat_before) and str(
@@ -1508,6 +1549,13 @@ def create_turn_stream(
 
             collected: list[str] = []
             saw_done = False
+            _sse_log = os.getenv("SSE_NARRATIVE_PROGRESS_LOG", "").strip().lower() in (
+                "1",
+                "true",
+                "yes",
+            )
+            _sse_chunks = 0
+            _sse_chars = 0
             for chunk in generate_chat_stream(
                 messages=messages,
                 model=model,
@@ -1521,6 +1569,17 @@ def create_turn_stream(
                     break
                 token = chunk[6:].rstrip("\n")
                 collected.append(token)
+                if _sse_log:
+                    _sse_chunks += 1
+                    _sse_chars += len(token)
+                    if _sse_chunks == 1 or _sse_chunks % 25 == 0:
+                        logger.info(
+                            "sse_narrative_progress",
+                            campaign_id=campaign_id_val,
+                            character_id=character_id_val,
+                            token_chunks=_sse_chunks,
+                            approx_chars=_sse_chars,
+                        )
                 yield chunk
 
             if not saw_done:

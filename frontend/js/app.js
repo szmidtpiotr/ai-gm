@@ -537,13 +537,20 @@ window.updateCombatDebugStatusLabel = function (payload) {
   const el = document.getElementById("combat-debug-status");
   if (!el) return;
 
+  const hint =
+    window.state && String(window.state._combatDebugEnemyHint || "").trim()
+      ? String(window.state._combatDebugEnemyHint).trim()
+      : "";
+
   let cs = null;
   let via = "sync ";
 
   if (payload && typeof payload === "object" && "active" in payload && "combat" in payload) {
     via = "GET ";
     if (!payload.active || payload.combat == null) {
-      el.textContent = "COMBAT: " + via + "(brak — active=false)";
+      let line = "COMBAT: " + via + "(brak — active=false)";
+      if (hint) line += "\nWróg: " + hint;
+      el.textContent = line;
       return;
     }
     cs = payload.combat;
@@ -555,8 +562,22 @@ window.updateCombatDebugStatusLabel = function (payload) {
   }
 
   if (!cs) {
-    el.textContent = "COMBAT: " + via + "brak aktywnej walki";
+    let line = "COMBAT: " + via + "brak aktywnej walki";
+    if (hint) line += "\nWróg: " + hint;
+    el.textContent = line;
     return;
+  }
+
+  const combatants = Array.isArray(cs.combatants) ? cs.combatants : [];
+  const enemies = combatants.filter((c) => c && c.type === "enemy");
+  if (window.state && enemies.length) {
+    window.state._combatDebugEnemyHint = enemies
+      .map((e) => {
+        const k = String(e.enemy_key || e.id || "?").trim() || "?";
+        const lab = String(e.name || e.label || k).trim() || k;
+        return `${k} — ${lab}`;
+      })
+      .join("; ");
   }
 
   const st = String(cs.status ?? "?");
@@ -566,7 +587,22 @@ window.updateCombatDebugStatusLabel = function (payload) {
   const parts = ["status=" + st, "tura=" + cur];
   if (er) parts.push("reason=" + er);
   if (id) parts.push("#" + id);
-  el.textContent = "COMBAT: " + via + parts.join(" · ");
+
+  let targetLine = "";
+  if (st === "active" && cur && cur !== "player") {
+    const e = combatants.find((c) => c && String(c.id) === cur);
+    if (e && e.type === "enemy") {
+      const k = String(e.enemy_key || e.id || "?");
+      const nm = String(e.name || e.label || k);
+      const hp = Number(e.hp_current ?? 0);
+      const mx = Math.max(1, Number(e.hp_max ?? 1));
+      targetLine = `Przeciwnik: ${k} — ${nm} HP ${hp}/${mx}`;
+    }
+  }
+
+  let main = "COMBAT: " + via + parts.join(" · ");
+  if (targetLine) main += "\n" + targetLine;
+  el.textContent = main;
 };
 
 window.closeHistorySummaryModal = function () {

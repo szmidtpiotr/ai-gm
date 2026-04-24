@@ -1008,3 +1008,120 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     item["opening_message"] = opening_message
 
     return item
+
+
+def _default_playtest_sheet(name: str, archetype: str, old_sheet: dict) -> dict:
+    """Minimal combat-ready sheet aligned with solo character wizard defaults."""
+    arc = str(archetype or "").lower()
+    if arc not in ("warrior", "scholar"):
+        arc = "warrior"
+    if arc == "warrior":
+        stats = {"STR": 12, "DEX": 12, "CON": 12, "INT": 10, "WIS": 11, "CHA": 10, "LCK": 10}
+        skills = {
+            "athletics": 2,
+            "stealth": 1,
+            "sleight_of_hand": 0,
+            "endurance": 1,
+            "arcana": 0,
+            "investigation": 0,
+            "lore": 0,
+            "awareness": 1,
+            "survival": 1,
+            "medicine": 0,
+            "persuasion": 1,
+            "intimidation": 1,
+        }
+    else:
+        stats = {"STR": 10, "DEX": 11, "CON": 10, "INT": 12, "WIS": 11, "CHA": 10, "LCK": 10}
+        skills = {
+            "athletics": 1,
+            "stealth": 1,
+            "sleight_of_hand": 0,
+            "endurance": 1,
+            "arcana": 2,
+            "investigation": 0,
+            "lore": 1,
+            "awareness": 1,
+            "survival": 1,
+            "medicine": 0,
+            "persuasion": 1,
+            "intimidation": 0,
+        }
+    dex_mod = _stat_modifier(int(stats.get("DEX", 10) or 10))
+    defense_base = 10 + dex_mod
+    bg = old_sheet.get("background") if isinstance(old_sheet.get("background"), str) else ""
+    return {
+        "archetype": arc,
+        "background": bg,
+        "level": 1,
+        "current_hp": 10,
+        "max_hp": 10,
+        "current_mana": 0,
+        "max_mana": 0,
+        "stats": stats,
+        "skills": skills,
+        "inventory": [],
+        "defense": {"base": defense_base},
+        "equipped_weapon": "sword",
+        "name": name,
+    }
+
+
+@router.post("/characters/{character_id}/reset-progress")
+def reset_character_progress(character_id: int):
+    """
+    Dev / playtest: clear inventory and restore sheet to wizard-style defaults
+    (keeps name, archetype, background text, hidden identity secret).
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT id, campaign_id, name, sheet_json FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Character not found")
+        try:
+            old = json.loads(row["sheet_json"] or "{}") if row["sheet_json"] else {}
+        except Exception:
+            old = {}
+        if not isinstance(old, dict):
+            old = {}
+        archetype = str(old.get("archetype") or "warrior").lower()
+        name = str(row["name"] or "Hero").strip() or "Hero"
+        new_sheet = _default_playtest_sheet(name, archetype, old)
+        _ensure_identity_block(new_sheet)
+        if isinstance(old.get("identity"), dict) and old["identity"].get("secret"):
+            new_sheet.setdefault("identity", _default_identity_block())
+            new_sheet["identity"]["secret"] = str(old["identity"]["secret"])
+
+        try:
+            conn.execute("DELETE FROM inventory_items WHERE character_id = ?", (character_id,))
+        except sqlite3.OperationalError:
+            pass
+
+        conn.execute(
+            "UPDATE characters SET sheet_json = ?, location = ? WHERE id = ?",
+            (json.dumps(new_sheet, ensure_ascii=False), "Start", character_id),
+        )
+        conn.commit()
+        logger.info(
+            "character_progress_reset",
+            character_id=character_id,
+            campaign_id=int(row["campaign_id"]),
+        )
+        return {
+            "ok": True,
+            "character_id": character_id,
+            "campaign_id": int(row["campaign_id"]),
+            "sheet_json": _strip_hidden_fields(new_sheet),
+        }
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Character reset failed: {e}") from None
+    finally:
+        conn.close()

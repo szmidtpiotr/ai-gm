@@ -1,39 +1,184 @@
 SAFETY CHECK FIRST:
 
-Before implementing, please analyze:
-1. Check if loot table system exists (table: game_config_loot_tables, game_config_loot_entries)
-2. Verify if enemy records have loot_table_key and drop_chance fields
-3. Check if there's existing inventory system to add loot to
-4. Identify where to store generated loot before player collects it
+Before implementing, please analyze and report findings:
 
-If NO BLOCKERS found, proceed with implementation:
+1. Is enemy death detection already in combat_service.py?
+   grep -n "hp_current.*<=.*0\|dead\|enemy_dead\|_persist_combatants_and_maybe_end\|victory" backend/app/services/combat_service.py
+   (Phase 8A: _persist_combatants_and_maybe_end() already handles enemy HP <= 0 and end_combat)
+
+2. Does loot table system exist in DB?
+   grep -rn "loot_table\|loot_pool\|loot_entries\|game_config_loot" backend/app/services/ backend/app/api/
+   Check also: .schema in data/ai_gm.db for tables starting with "loot" or "game_config_loot"
+
+3. Do enemy records have loot_table_key / drop_chance fields?
+   SELECT name, loot_table_key, drop_chance FROM game_config_enemies LIMIT 5;
+   (Check if columns exist — if not, loot system is not yet scaffolded)
+
+4. Is there an inventory system to receive loot?
+   grep -rn "inventory\|add_item\|player_inventory" backend/app/services/ backend/app/api/
+
+5. Is loot_pool column in active_combat?
+   grep -n "loot_pool" backend/app/services/combat_service.py
+   pragma table_info(active_combat);  ← run in sqlite3 data/ai_gm.db
+
+STOP — report findings before implementing.
+If loot tables / drop_chance / loot_pool do NOT exist → loot system needs to be designed first.
+Do not implement loot generation without DB schema in place.
 
 ---
 
+IMPORTANT context from repo (Phase 8A, verified):
+
+What already exists:
+- _persist_combatants_and_maybe_end() in combat_service.py:
+  checks if all enemies hp_current <= 0 → calls end_combat(campaign_id, "victory")
+- end_combat() sets active_combat.status = "victory" / "player_dead"
+- Enemy death flag: likely already set in combatants JSON (check "dead" or "alive" field)
+
+Column / term mapping (use EXISTING names):
+  phase='victory'  → status='victory'  (active_combat.status, NOT phase)
+  combat_status    → status in active_combat
+  loot_pool        → may not exist yet as column (verify step 2/5 above)
+
+DO NOT add "phase" column to active_combat — use existing "status" column.
+DO NOT create loot_service.py as separate module unless loot tables exist in DB.
+
+---
+
+IF SAFETY CHECK CONFIRMS loot tables DO NOT exist yet:
+
+DESIGN REQUIRED BEFORE CODING:
+
+  D-LOOT-01 — loot_table_key and drop_chance columns in game_config_enemies:
+    ALTER TABLE game_config_enemies ADD COLUMN loot_table_key TEXT;
+    ALTER TABLE game_config_enemies ADD COLUMN drop_chance REAL DEFAULT 0.5;
+
+  D-LOOT-02 — game_config_loot_tables table:
+    CREATE TABLE game_config_loot_tables (
+        loot_table_key TEXT PRIMARY KEY,
+        label TEXT
+    );
+
+  D-LOOT-03 — game_config_loot_entries table:
+    CREATE TABLE game_config_loot_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        loot_table_key TEXT,
+        item_key TEXT,
+        item_label TEXT,
+        weight INTEGER DEFAULT 1,  -- for weighted random
+        quantity_min INTEGER DEFAULT 1,
+        quantity_max INTEGER DEFAULT 1
+    );
+
+  D-LOOT-04 — loot_pool column in active_combat:
+    ALTER TABLE active_combat ADD COLUMN loot_pool TEXT DEFAULT '[]';
+
+  D-LOOT-05 — starter loot data for existing enemies (bandit, wolf, skeleton, etc.)
+    INSERT into game_config_loot_tables + game_config_loot_entries
+
+  DECISION NEEDED: who runs the schema migration?
+  Option A — migration script in scripts/
+  Option B — auto-migrate in combat_service.py on startup (like existing DB init)
+
+  STOP — get schema decision before writing loot generation code.
+
+---
+
+IF loot tables DO exist (step 2/5 confirms):
+
 IMPLEMENTATION TASK:
 
-Detect enemy death, generate loot, update combat state.
+In combat_service.py, extend _persist_combatants_and_maybe_end() or
+add check_enemy_death(conn, campaign_id, combatants) helper:
 
-Requirements:
-- After any attack, check all enemies in combatants:
-  1. If enemy.hp_current <= 0:
-     - Mark enemy as dead (set flag in combatants JSON)
-     - Roll drop chance (random 0-1 vs enemy.drop_chance)
-     - If dropped: query loot table, roll weighted items
-     - Add rolled loot to active_combat.loot_pool JSON
-     - Short GM narration: "Gladiator pada..."
-  2. If ALL enemies dead:
-     - UPDATE active_combat SET phase='victory'
-     - Return {combat_status: 'victory', loot_available: true}
+STEP 1 — Mark dead enemies:
+  for enemy in combatants where type != "player":
+      if enemy["hp_current"] <= 0 and not enemy.get("dead"):
+          enemy["dead"] = True
+          log_combat_turn(actor=enemy["id"], action="death", narrative=f"{enemy['label']} pada...")
 
-Files to modify:
-- `backend/app/services/combat_service.py` (add check_enemy_death function)
-- `backend/app/services/loot_service.py` (if loot system needs separate module)
+STEP 2 — Roll loot for newly dead enemies:
+  for enemy in newly_dead:
+      if random.random() <= enemy.get("drop_chance", 0.5):
+          loot_items = roll_loot_table(conn, enemy["loot_table_key"])
+          loot_pool.extend(loot_items)
 
-Acceptance criteria:
-- [ ] Enemy death detected when HP <= 0
-- [ ] Loot rolled based on drop_chance
-- [ ] Loot stored in loot_pool JSON
-- [ ] Combat phase changes to 'victory' when all enemies dead
-- [ ] Test: kill enemy, verify loot generated
-- [ ] Test: multiple enemies, verify all deaths detected
+STEP 3 — If all non-player combatants dead:
+  UPDATE active_combat SET status='victory', loot_pool=json.dumps(loot_pool)
+  (use status, NOT phase)
+
+def roll_loot_table(conn, loot_table_key) -> list:
+    rows = SELECT * FROM game_config_loot_entries WHERE loot_table_key = ?
+    Use random.choices(rows, weights=[r["weight"] for r in rows], k=1)
+    Return [{"item_key": ..., "item_label": ..., "quantity": random.randint(min, max)}]
+
+---
+
+ACCEPTANCE CRITERIA:
+
+- [ ] Enemy death detected when hp_current <= 0 (may already exist via _persist_combatants_and_maybe_end)
+- [ ] Dead enemies marked with "dead": true in combatants JSON
+- [ ] Loot rolled per dead enemy using drop_chance and weighted loot table
+- [ ] Loot stored in active_combat.loot_pool (JSON array)
+- [ ] All enemies dead → active_combat.status = 'victory' (NOT phase='victory')
+- [ ] Death narrated in combat_turns (Polish: "{enemy_label} pada...")
+- [ ] No existing tests broken: python -m pytest tests/test_phase8_combat.py -v
+- [ ] Test: kill enemy → loot_pool populated in active_combat
+- [ ] Test: all enemies dead → status = 'victory'
+- [ ] Test: drop_chance=0.0 → loot_pool empty
+
+FILES TO MODIFY (only if loot schema confirmed):
+- backend/app/services/combat_service.py  (check_enemy_death, roll_loot_table)
+- data/ai_gm.db schema migration (loot tables + loot_pool column)
+
+DO NOT modify:
+- active_combat.status → 'victory' path (already exists, extend only)
+- backend/prompts/system_prompt.txt
+- Phase 7 roll card system
+
+
+
+
+===================AFTER REPORT===============
+
+=============== AFTER REPORT ===============
+Przeczytałem **`step_5.1_enemy_turn_button.txt`** i sprawdziłem **`combat.py`**, **`combat_input.js`**, **`combat_panel.js`**.
+
+## Czy są **blockery** (czyli: nie da się domknąć kroku bez decyzji / dużej pracy)?
+
+**Na działającą turę wroga i request — nie.** Endpoint i front już to obsługują.
+
+**Na 100% zgodność z checklistą w pliku (słowa + kształt JSON) — tak, to są „miękkie” blockery / rozjazdy specyfikacji**, nie awaria.
+
+---
+
+### Co jest w repo (zgodne z celem kroku)
+
+| Punkt z dokumentu | Stan |
+|-------------------|------|
+| **`POST .../combat/enemy-turn`** | Jest w **`combat.py`** — woła `resolve_attack(..., attacker="enemy")`, potem `advance_turn` / `combat_state`. |
+| **Wywołanie z frontu** | **`combat_input.js`**: przy `status === "active"` i **`current_turn !== "player"`** blokuje composer i woła **`fetch(.../enemy-turn)`**; **`_enemyTurnInFlight`** = ochrona przed podwójnym odpaleniem (rodzaj debounce). |
+| **Panel** | **`combat_panel.js`**: overlay **„ENEMY TURN”** (`#combat-enemy-overlay`), pokazywany gdy tura nie gracza; **`_busy`** przy akcjach z panelu. |
+
+---
+
+### Rozjazdy względem dokumentu (tu „blocker” = spec vs kod)
+
+1. **GAP B / acceptance:** dokument chce w odpowiedzi m.in. **`rolls`**, **`narrative`**, **`combat_status`**.  
+   Backend zwraca **bezpośrednio wynik `resolve_attack`** + **`advance_turn`** + **`combat_state`** — **nie ma** tego ułożonego obiektu.  
+   Front **i tak** opiera się na **`combat_state`**, **`player_incapacitated`**, itd. → **brak blokeru na działanie**, o ile nie traktujemy acceptance dosłownie.
+
+2. **GAP A:** dokument opisuje **osobny przycisk** „⚔️ Tura wroga (kliknij…)”.  
+   W UI jest **overlay** „ENEMY TURN” i **automatyczne** wywołanie enemy-turn z **`combat_input`** (nie ten sam UX co w tekście kroku 5.1). → **rozjazd opisowy**, nie brak mechaniki.
+
+3. **Śmierć / zwycięstwo / loot** z pola `combat_status` — w praktyce steruje **`combat_state`** i istniejące callbacki (`render`, `player_incapacitated`, victory flow w panelu). Pełna zgodność z linijkami 94–95 acceptance wymaga **osobnej weryfikacji ścieżek** w `death_screen.js` / loot — z pliku nie wynika twardy błąd w kodzie walki.
+
+---
+
+### Werdykt
+
+- **Bloker „nie da się zrobić enemy turn w grze”:** **nie.**  
+- **Bloker „trzeba koniecznie zmienić kod zanim przejdziemy dalej”:** **nie**, o ile akceptujecie obecny kontrakt API i UX (auto + overlay zamiast dokładnego przycisku z tekstu).  
+- **Bloker „acceptance z `step_5.1` jest w 100% odhaczalna bez zmian”:** **tak**, jeśli ktoś trzyma się **dosłownego** JSON-a i polskiego przycisku — wtedy to **luki do dopisania** (API wrapper + kopia przycisku / kopia tekstu), a nie że coś „nie działa”.
+
+Jeśli chcesz, mogę w kolejnym kroku **wdrożyć tylko dopasowanie do acceptance** (np. `combat_status` + `rolls` w odpowiedzi `enemy-turn`) **albo** zaktualizować **`step_5.1`** do realiów repo — napisz którą stronę wybierasz.

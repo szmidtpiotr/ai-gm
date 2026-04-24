@@ -1,0 +1,252 @@
+{
+  "id": null,
+  "uid": "ai-gm-chat-stream-combat-trace",
+  "title": "AI GM - Chat trace, SSE, walka (Loki)",
+  "tags": ["ai-gm", "loki", "turn_id", "ui_trace_id", "sse", "combat", "observability"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": "label_values(service)",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "current": { "selected": true, "text": "backend", "value": "backend" }
+      },
+      {
+        "name": "campaign_id",
+        "label": "Campaign ID (regex)",
+        "description": "Np. 1052 lub .+ dla wszystkich.",
+        "type": "textbox",
+        "query": ".+",
+        "current": { "value": ".+", "text": ".+" },
+        "hide": 0,
+        "skipUrlSync": false
+      },
+      {
+        "name": "turn_id",
+        "label": "turn_id (regex)",
+        "description": "UUID z nagłówka X-Turn-Id / chip srv·… — .+ = wszystkie.",
+        "type": "textbox",
+        "query": ".+",
+        "current": { "value": ".+", "text": ".+" },
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Jak czytać ten dashboard",
+      "datasource": null,
+      "gridPos": { "h": 5, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "**Korelacja UI ↔ Loki**\n- Gracz wysyła nagłówek `X-UI-Trace-Id` (chip **cli·** w czacie).\n- Backend zwraca `X-Turn-Id` i loguje je jako `turn_id` (chip **srv·** na dymku „myśli”).\n- Zapis tury: `narrative_turn` ma **`turn_id`** i **`ui_trace_id`** (w treści panelu poniżej).\n- **Explore — filtr po kliencie:**\n```\n{service=\"backend\"} | json | event=\"narrative_turn\" | ui_trace_id=\"<wklej-uuid>\"\n```\n\n**SSE (postęp przed finalnym tekstem)**\n- Na backendzie: **`SSE_NARRATIVE_PROGRESS_LOG=1`** → logi `sse_narrative_progress` (co ~25 chunków).\n\n**Walka**\n- `dice_roll` z `source` = `combat_attack` / `combat_enemy`, pola `dc`, `outcome`.\n\n**Resety (dev)**\n- `campaign_progress_reset`, `character_progress_reset` (przyciski Reset kamp. / Reset post.)."
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "type": "logs",
+      "title": "Start streamu narracji (turn_stream_open)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service=~\"$service\"} | json | event=\"turn_stream_open\" | campaign_id=~\"${campaign_id}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "Postęp tokenów SSE (sse_narrative_progress — wymaga SSE_NARRATIVE_PROGRESS_LOG=1)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service=~\"$service\"} | json | event=\"sse_narrative_progress\" | campaign_id=~\"${campaign_id}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Liczba chunków SSE na minutę (kampania)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 13 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by () (count_over_time({service=~\"$service\"} | json | event=\"sse_narrative_progress\" | campaign_id=~\"${campaign_id}\" [$__interval]))",
+          "queryType": "range",
+          "legendFormat": "chunks/min"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Narrative turns / h (kampania)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 13 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "sum by () (count_over_time({service=~\"$service\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\" [$__interval]))",
+          "queryType": "range",
+          "legendFormat": "narrative/h"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "logs",
+      "title": "narrative_turn — turn_id + ui_trace_id + treść",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 20 },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service=~\"$service\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\" | turn_id=~\"${turn_id}\" | line_format \"[Kampania {{.campaign_id}} | db_turn {{.db_turn_id}} | tura {{.turn_number}}]\\nturn_id={{.turn_id}}\\nui_trace_id={{.ui_trace_id}}\\n\\nGRACZ:\\n{{.user_text}}\\n\\nGM:\\n{{.assistant_text}}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "logs",
+      "title": "dice_roll — tylko walka (combat_attack / combat_enemy)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 32 },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service=~\"$service\"} | json | event=\"dice_roll\" | source=~\"combat_attack|combat_enemy\" | campaign_id=~\"${campaign_id}\" | line_format \"{{.source}} | DC={{.dc}} | outcome={{.outcome}} | roll={{.result}} | campaign={{.campaign_id}}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "logs",
+      "title": "Resety (campaign_progress_reset / character_progress_reset)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 32 },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service=~\"$service\"} | json | event=~\"campaign_progress_reset|character_progress_reset\" | campaign_id=~\"${campaign_id}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "logs",
+      "title": "Surowy ślad: wszystkie zdarzenia z tym turn_id (regex)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 41 },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{service=~\"$service\"} | json | turn_id=~\"${turn_id}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    }
+  ]
+}

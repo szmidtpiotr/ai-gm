@@ -1,41 +1,153 @@
 SAFETY CHECK FIRST:
 
-Before implementing, please analyze:
-1. Check how solo_death_service.py currently works
-2. Verify if death screen UI exists (from Phase 7.6)
-3. Check if player death during combat needs different handling than narrative death
-4. Identify if character.is_dead flag is set correctly
+Before implementing, please analyze and report findings:
 
-If NO BLOCKERS found, proceed with implementation:
+1. Is player death from combat already triggering solo_death_service?
+   grep -n "solo_death\|trigger_death\|player_dead\|player_incapacitated" backend/app/services/combat_service.py
+   grep -n "solo_death\|trigger_death\|player_dead" backend/app/api/combat.py backend/app/api/turns.py
+   (Phase 8A: end_combat(campaign_id, "player_dead") already called — does it invoke solo_death_service?)
+
+2. How does solo_death_service.py currently work?
+   cat backend/app/services/solo_death_service.py
+   grep -n "def trigger_death\|def handle_death\|cause\|enemy" backend/app/services/solo_death_service.py
+   (Phase 7.6: already handles narrative death — check if it accepts cause= and enemy_name= params)
+
+3. Does death screen UI exist and what triggers it?
+   grep -rn "death_screen\|deathScreen\|showDeathScreen\|player_dead" frontend/js/
+   grep -rn "defeated_by\|death_screen" frontend/js/death_screen.js
+   (Phase 7.6: death_screen.js exists — check if it reads defeated_by / enemy name)
+
+4. Is character.is_dead flag set correctly on combat death?
+   grep -n "is_dead\|character.*dead" backend/app/services/combat_service.py backend/app/services/solo_death_service.py
+
+5. What is active_combat.status set to on player death?
+   grep -n "player_dead\|defeat\|end_combat" backend/app/services/combat_service.py
+   (use "player_dead" — NOT "defeat" / NOT "phase" column — verify existing value)
+
+STOP — report findings before implementing.
+If end_combat("player_dead") already calls solo_death_service and death_screen already
+reads combat context → audit only, fill gaps.
 
 ---
 
-IMPLEMENTATION TASK:
+IMPORTANT context from repo (Phase 7.6 + 8A, verified):
 
-Integrate combat death with existing death system.
+Phase 7.6 already delivered:
+- solo_death_service.py: handles campaign death (sets is_dead, generates death narrative)
+- death_screen.js: shows on player death, reveals character secret from sheet_json.identity.secret
+- Death triggered from turns.py narrative path
 
-Requirements:
-- After enemy attack, check player HP:
-  1. If player.hp_current <= 0:
-     - Call solo_death_service.trigger_death(campaign_id, cause="combat", enemy_name=enemy.label)
-     - UPDATE active_combat SET phase='defeat'
-     - Return: {combat_status: 'defeat', death_screen: true, defeated_by: enemy.label}
+Phase 8A already delivered:
+- end_combat(campaign_id, "player_dead") called when player hp_current <= 0
+- active_combat.status = "player_dead" (NOT "defeat" — do NOT add new status value)
 
-**Frontend:**
-- If response.death_screen == true:
-  - Show death screen (existing UI from Phase 7.6)
-  - Display: "Poległeś w walce z: [enemy.label]"
-  - Show character secret (from sheet_json.identity.secret)
-  - Button: "Start New Character"
+Column / term mapping (use EXISTING):
+  phase='defeat'   → status='player_dead'  (active_combat.status)
+  combat_status    → status field in combat_state response
+  check_player_death() → may already be inline in _persist_combatants_and_maybe_end()
 
-Files to modify:
-- `backend/app/services/combat_service.py` (check_player_death function)
-- `frontend/js/death_screen.js` (extend to show defeated_by info)
+DO NOT add "defeat" or "phase" column to active_combat.
+DO NOT add new status values — use existing "player_dead".
 
-Acceptance criteria:
-- [ ] Player death detected when HP <= 0
-- [ ] solo_death_service called correctly
-- [ ] Death screen shows with enemy name
-- [ ] Character secret revealed
-- [ ] Combat state cleaned up (DELETE or mark phase='defeat')
-- [ ] Test: let enemy kill player, verify death screen appears
+---
+
+IF GAPS FOUND, implement only what is missing:
+
+GAP A — solo_death_service not called from combat path:
+  In end_combat(campaign_id, "player_dead") or in combat.py POST enemy-turn handler:
+  from backend.app.services.solo_death_service import trigger_death (or equivalent import)
+  trigger_death(campaign_id, cause="combat", enemy_name=defeated_by_label)
+
+  Check exact function signature first:
+    grep -n "def trigger_death\|def handle_death" backend/app/services/solo_death_service.py
+  If solo_death_service doesn't accept cause= / enemy_name= → add optional kwargs.
+
+GAP B — death_screen.js not showing enemy name ("Poległeś w walce z: X"):
+  Check if death_screen.js already has a defeated_by / cause display.
+  If missing: extend death_screen.js to read defeated_by from death payload or
+  from active_combat state when cause="combat".
+  Keep existing secret reveal logic — DO NOT remove it.
+
+GAP C — combat state not cleaned up after player death:
+  Verify: after end_combat("player_dead") is active_combat row left as-is or deleted?
+  Correct behavior: SET status='player_dead' (keep row for post-death inspection),
+  do NOT DELETE — frontend reads it to show defeat context.
+
+---
+
+BEFORE IMPLEMENTING, verify:
+
+1. Does end_combat() already call solo_death_service?
+   Read end_combat() body in combat_service.py fully.
+
+2. What payload does the enemy-turn endpoint return on player death?
+   Does it include defeated_by / enemy label?
+   Frontend needs this to show "Poległeś w walce z: [enemy.label]".
+
+3. Does death_screen.js already handle cause="combat" differently than narrative death?
+   grep -n "cause\|combat\|enemy" frontend/js/death_screen.js
+
+If all already correct → report DONE.
+
+---
+
+ACCEPTANCE CRITERIA (updated to match repo):
+
+- [ ] end_combat(campaign_id, "player_dead") triggers solo_death_service (verify or add GAP A)
+- [ ] solo_death_service sets character is_dead flag and generates death narrative
+- [ ] active_combat.status = "player_dead" (NOT "defeat") after player death
+- [ ] Enemy-turn response includes defeated_by = enemy label when player dies
+- [ ] death_screen.js shows "Poległeś w walce z: [enemy.label]" (verify or add GAP B)
+- [ ] Character secret from sheet_json.identity.secret revealed on death screen (Phase 7.6 — verify unchanged)
+- [ ] active_combat row kept with status="player_dead" (not deleted) — GAP C
+- [ ] No existing tests broken: python -m pytest tests/test_phase8_combat.py -v
+- [ ] Test: player HP <= 0 → solo_death_service called with cause="combat"
+- [ ] Test: combat status = "player_dead" after player death
+- [ ] Manual: let enemy kill player on 192.168.1.61 → verify death screen + enemy name shown
+
+FILES TO MODIFY (only if gaps confirmed):
+- backend/app/services/combat_service.py    (GAP A: solo_death call in end_combat)
+- backend/app/services/solo_death_service.py (GAP A: add cause/enemy_name params if missing)
+- backend/app/api/combat.py                 (GAP B: include defeated_by in response)
+- frontend/js/death_screen.js               (GAP B: show enemy name on combat death)
+
+DO NOT modify:
+- active_combat schema (no new columns, no "defeat" status)
+- Character secret reveal logic (Phase 7.6)
+- backend/prompts/system_prompt.txt
+
+
+
+============AFTER REPORT=============
+
+Oto podsumowanie wdrożenia **kroku 6.2** (bez blokera: `end_solo_campaign_on_death` już istniał, brakowało tylko powiązania ze ścieżką walki).
+
+### Co było nie tak (audyt)
+- `end_combat(campaign_id, "player_dead")` **nie** wywoływał `solo_death_service` — kampania zostawała `active`.
+- Ekran śmierci (`death_screen.js`) i tak pokazuje **`death_reason`** z `/api/campaigns/.../death-summary` — wystarczy ustawić sensowny `death_reason` z nazwą wroga (bez zmian w JS).
+- W repo nadal obowiązuje **`active_combat.status = 'ended'`** + **`ended_reason = 'player_dead'`** (zgodnie z istniejącymi testami), a nie osobny `status='player_dead'` z opisu docs.
+
+### Zmiany w kodzie
+
+**`combat_service.py`**
+- `end_combat(campaign_id, reason, *, defeated_by=None)` — po zakończeniu walki w DB combatu, gdy `reason == "player_dead"` i znany jest `character_id` z aktywnego wiersza:
+  - otwiera **`admin_config.DB_PATH`** (ta sama baza co kampanie/postacie),
+  - pomija wywołanie, jeśli kampania jest już `ended` (idempotencja),
+  - woła **`end_solo_campaign_on_death(..., death_reason="Poległ w walce z: {label}")`** z `label` z `defeated_by` lub `"wróg"`,
+  - błędy LLM/DB loguje przez `logger.error` z `exc_info`.
+- Po śmierci gracza w `resolve_attack`:  
+  `end_combat(campaign_id, "player_dead", defeated_by=out.get("enemy_name"))` oraz **`out["defeated_by"]`** dla klienta (w tym `POST …/combat/enemy-turn` — `combat.py` i tak zwraca cały `res`).
+
+**`test_phase8_combat.py`**
+- W schemacie **`campaigns`**: kolumny `death_reason`, `ended_at`, `epitaph` (zgodnie z produkcyjnymi migracjami).
+- `test_player_hit_updates_sheet_json`: mock **`get_user_llm_settings_full`** + **`generate_epitaph_llm`** (unik otwierania `/data/ai_gm.db` i LLM w CI), asercje na **`defeated_by`**, **`death_reason`**, **`epitaph`**, **`campaigns.status`**.
+- `test_flee`: **`conn.row_factory = sqlite3.Row`** + asercja, że **kampania pozostaje `active`** po ucieczce.
+
+### Testy
+Na **192.168.1.61**: `tests/test_phase8_combat.py` — **30 passed**.
+
+### Notion
+Na stronie **Combat System 2.0** dopisany jest blok **krok 6.2** obok 6.1.
+
+### Docker
+Po wdrożeniu backendu wystarczy **restart kontenera / procesu API** (zmiana w `combat_service.py`); **bez migracji** — kolumny `death_reason` / `ended_at` / `epitaph` na `campaigns` zakładamy, że już są (jak w `main.py`).

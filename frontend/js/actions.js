@@ -25,6 +25,8 @@ window.state._wizardPendingCharacter = window.state._wizardPendingCharacter || n
 window.state._combatJustEnded = window.state._combatJustEnded || false;
 window.state._lastKilledEnemy = window.state._lastKilledEnemy || null;
 window.state._combatVictoryUiPending = window.state._combatVictoryUiPending || false;
+/** Ostatni znany opis wroga (key — label) gdy GET /combat zwraca active=false — do linii COMBAT: debug. */
+window.state._combatDebugEnemyHint = window.state._combatDebugEnemyHint || '';
 window.state.gmRollClientTurns = window.state.gmRollClientTurns || [];
 
 /**
@@ -211,7 +213,18 @@ window._updateRollButtonsState = function () {
 };
 
 window.parsePendingRoll = function (text) {
-  const sourceText = String(text || '');
+  let sourceText = String(text || '');
+  const rollV1 = '__AI_GM_ROLL_V1__';
+  const combatV1 = '__AI_GM_COMBAT_ROLL_V1__';
+  if (sourceText.includes(rollV1) || sourceText.includes(combatV1)) {
+    if (typeof window.stripCombatRollBlocksForRollCue === 'function') {
+      sourceText = window.stripCombatRollBlocksForRollCue(sourceText);
+    } else {
+      sourceText = sourceText
+        .split(combatV1)[0]
+        .split(rollV1)[0];
+    }
+  }
   const lines = sourceText.split('\n');
   const lastLineRaw = (lines[lines.length - 1] || '').trim();
   const match = lastLineRaw.match(/^Roll (.+?) (d\d+)$/i);
@@ -420,6 +433,97 @@ window.createCampaignFromForm = async function () {
     });
   } finally {
     window._setCampaignCreationBusy(false);
+  }
+};
+
+window.resetCampaignProgress = async function () {
+  if (!window.state.selectedCampaignId) {
+    alert('Najpierw wybierz kampanię');
+    return;
+  }
+  const campaign = window.currentCampaign();
+  const label = campaign?.title || `#${window.state.selectedCampaignId}`;
+  if (
+    !confirm(
+      `Zresetować kampanię „${label}”?\n\nUsunięte: historia czatu (SQLite), aktywna walka, logi combat_turns, podsumowania AI.\nKampania i postacie zostają; status kampanii = aktywna.`
+    )
+  ) {
+    return;
+  }
+  try {
+    const resp = await fetch(`/api/campaigns/${window.state.selectedCampaignId}/reset`, {
+      method: 'POST'
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const data = await resp.json();
+        detail = data.detail || detail;
+      } catch (_) {}
+      throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    }
+    const { chatEl } = window.getEls();
+    if (chatEl) chatEl.innerHTML = '';
+    if (typeof window.loadTurns === 'function') {
+      await window.loadTurns(window.state.selectedCampaignId);
+    }
+    if (typeof window.loadCharacters === 'function') {
+      await window.loadCharacters(window.state.selectedCampaignId);
+    }
+    window.addMessage({
+      speaker: 'System',
+      text: `Zresetowano stan kampanii: ${label}`,
+      role: 'system',
+      route: 'campaign'
+    });
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Reset kampanii: ${e.message}`,
+      role: 'error'
+    });
+  }
+};
+
+window.resetCharacterProgress = async function () {
+  if (!window.state.selectedCharacterId) {
+    alert('Najpierw wybierz postać');
+    return;
+  }
+  if (
+    !confirm(
+      'Zresetować postać do domyślnego arkusza (jak po kreatorze)?\n\nEkwipunek zostanie usunięty; imię, archetyp, treść historii i ukryty secret zostają.'
+    )
+  ) {
+    return;
+  }
+  try {
+    const resp = await fetch(`/api/characters/${window.state.selectedCharacterId}/reset-progress`, {
+      method: 'POST'
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const data = await resp.json();
+        detail = data.detail || detail;
+      } catch (_) {}
+      throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail));
+    }
+    if (typeof window.loadCharacters === 'function') {
+      await window.loadCharacters(window.state.selectedCampaignId);
+    }
+    window.addMessage({
+      speaker: 'System',
+      text: 'Zresetowano postać (arkusz + ekwipunek).',
+      role: 'system',
+      route: 'campaign'
+    });
+  } catch (e) {
+    window.addMessage({
+      speaker: 'Błąd',
+      text: `Reset postaci: ${e.message}`,
+      role: 'error'
+    });
   }
 };
 
@@ -1242,6 +1346,11 @@ window.sendMessage = async function () {
 
   let turnNumber = window.nextTurnNumber();
 
+  const uiTrace =
+    window.crypto && typeof window.crypto.randomUUID === 'function'
+      ? window.crypto.randomUUID()
+      : `cli-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
   let textToSend = text;
   if (/^\/roll\b/i.test(textToSend)) {
     const hasExplicitDc = /\bdc\s+\d+\s*$/i.test(textToSend);
@@ -1264,7 +1373,9 @@ window.sendMessage = async function () {
       role: 'user',
       route: 'input',
       turn: turnNumber,
-      createdAt: clientCreatedAt
+      createdAt: clientCreatedAt,
+      traceId: uiTrace,
+      traceTag: 'cli'
     });
   }
 
@@ -1275,8 +1386,12 @@ window.sendMessage = async function () {
   window.showThinkingBubble({
     speaker: window.t('chat.gm'),
     route: 'narrative',
-    turn: turnNumber
+    turn: turnNumber,
+    traceId: uiTrace,
+    traceTag: 'cli'
   });
+
+  let serverTurnId = '';
 
   try {
     const payload = {
@@ -1287,13 +1402,18 @@ window.sendMessage = async function () {
       game_id: window.state.selectedCampaignId
     };
 
+    const streamHeaders = {
+      ...(typeof window.getApiHeaders === 'function' ? window.getApiHeaders() : {}),
+      'X-UI-Trace-Id': uiTrace
+    };
+
     // Thinking bubble stays visible while waiting for response headers.
     // On first real token it swaps to the streaming bubble.
     const resp = await fetch(
       `/api/campaigns/${window.state.selectedCampaignId}/turns/stream`,
       {
         method: 'POST',
-        headers: window.getApiHeaders(),
+        headers: streamHeaders,
         body: JSON.stringify(payload)
       }
     );
@@ -1316,6 +1436,11 @@ window.sendMessage = async function () {
     }
 
     if (requestId !== window.chatRequestState.requestId) return;
+
+    serverTurnId = (resp.headers.get('X-Turn-Id') || '').trim();
+    if (serverTurnId && typeof window.patchThinkingBubbleTrace === 'function') {
+      window.patchThinkingBubbleTrace(serverTurnId);
+    }
 
     // Read SSE stream.
     // IMPORTANT: SSE lines are separated by real newline characters (\n).
@@ -1401,6 +1526,15 @@ window.sendMessage = async function () {
         window.state._combatJustEnded = true;
         window.state._lastKilledEnemy = data;
         window.state._combatVictoryUiPending = true;
+        if (
+          data &&
+          Array.isArray(data.loot_pool) &&
+          data.loot_pool.length &&
+          window.combatPanel &&
+          typeof window.combatPanel === 'object'
+        ) {
+          window.combatPanel._pendingLoot = data.loot_pool.slice();
+        }
       } catch (_e) {
         /* ignore */
       }
@@ -1471,7 +1605,9 @@ window.sendMessage = async function () {
                 streamBubble = window.createStreamingBubble({
                   speaker: window.t('chat.gm'),
                   route: 'narrative',
-                  turn: turnNumber
+                  turn: turnNumber,
+                  traceId: serverTurnId || uiTrace,
+                  traceTag: serverTurnId ? 'srv' : 'cli'
                 });
               }
               window.appendToStreamingBubble(streamBubble, realToken);
@@ -1525,16 +1661,7 @@ window.sendMessage = async function () {
             typeof window.combatPanel?.showVictoryAfterNarration === 'function'
           ) {
             window.state._combatVictoryUiPending = false;
-            if (
-              typeof window.consumeCombatJustEndedGuard === 'function' &&
-              window.consumeCombatJustEndedGuard()
-            ) {
-              if (typeof window.combatPanel?.cancelDeferredVictoryUi === 'function') {
-                window.combatPanel.cancelDeferredVictoryUi();
-              }
-            } else {
-              window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
-            }
+            await window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
           }
           await window.loadTurns(window.state.selectedCampaignId);
           streamDone = true;
@@ -1570,7 +1697,9 @@ window.sendMessage = async function () {
           streamBubble = window.createStreamingBubble({
             speaker: window.t('chat.gm'),
             route: 'narrative',
-            turn: turnNumber
+            turn: turnNumber,
+            traceId: serverTurnId || uiTrace,
+            traceTag: serverTurnId ? 'srv' : 'cli'
           });
         }
 
@@ -1589,16 +1718,7 @@ window.sendMessage = async function () {
           typeof window.combatPanel?.showVictoryAfterNarration === 'function'
         ) {
           window.state._combatVictoryUiPending = false;
-          if (
-            typeof window.consumeCombatJustEndedGuard === 'function' &&
-            window.consumeCombatJustEndedGuard()
-          ) {
-            if (typeof window.combatPanel?.cancelDeferredVictoryUi === 'function') {
-              window.combatPanel.cancelDeferredVictoryUi();
-            }
-          } else {
-            window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
-          }
+          await window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
         }
         await window.loadTurns(window.state.selectedCampaignId);
       } else {

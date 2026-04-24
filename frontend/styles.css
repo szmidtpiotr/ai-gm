@@ -249,6 +249,19 @@ body {
   grid-template-columns: 1fr auto;
 }
 
+.field-row.campaign-select-row {
+  grid-template-columns: minmax(140px, 1fr) auto;
+  align-items: center;
+}
+
+.campaign-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  max-width: min(100%, 420px);
+}
+
 .ollama-host-row {
   max-width: 100%;
   grid-template-columns: minmax(240px, 1fr) auto;
@@ -353,7 +366,8 @@ input:disabled {
 }
 
 .play-area.sheet-open .sheet-panel {
-  display: block;
+  display: flex;
+  flex-direction: column;
 }
 
 .sheet-panel-body {
@@ -361,6 +375,19 @@ input:disabled {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.combat-panel-slot {
+  flex: 0 0 auto;
+}
+
+pre.narrative-pre {
+  display: block;
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font: inherit;
 }
 
 .sheet-heading {
@@ -780,6 +807,17 @@ input:disabled {
   background: rgba(155, 28, 28, 0.12);
   color: #7a1515;
   border-color: rgba(155, 28, 28, 0.25);
+}
+
+/* Loki correlation: same values as backend ``turn_id`` / ``ui_trace_id`` in structured logs */
+.chat-trace-chip {
+  display: inline-block;
+  font-size: 10px;
+  font-family: ui-monospace, Menlo, monospace;
+  color: var(--muted);
+  margin-left: 4px;
+  vertical-align: baseline;
+  letter-spacing: -0.02em;
 }
 
 .message.assistant {

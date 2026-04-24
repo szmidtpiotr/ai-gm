@@ -18,6 +18,20 @@ from app.services import admin_config
 from app.services import combat_service as cs
 
 
+def _last_structlog_event_kw(mock_info, event_name: str) -> dict | None:
+    """Last kwargs passed to structlog ``logger.info(event_name, **kw)``."""
+    for call in reversed(mock_info.call_args_list):
+        args, kwargs = call
+        if args and args[0] == event_name:
+            return dict(kwargs)
+    return None
+
+
+def _step81_loot_by_enemy_key(ek: str) -> list[dict]:
+    """Side-effect for resolve_enemy_loot in two-enemy victory test."""
+    return [{"source_type": "item", "source_key": f"loot_{ek}", "qty": 1}]
+
+
 def _schema_sql() -> str:
     return """
     CREATE TABLE users (
@@ -38,6 +52,9 @@ def _schema_sql() -> str:
       language TEXT NOT NULL DEFAULT 'pl',
       mode TEXT NOT NULL DEFAULT 'solo',
       status TEXT NOT NULL DEFAULT 'active',
+      death_reason TEXT,
+      ended_at TEXT,
+      epitaph TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (owner_user_id) REFERENCES users(id)
     );
@@ -113,6 +130,7 @@ def _schema_sql() -> str:
       status TEXT NOT NULL DEFAULT 'active',
       ended_reason TEXT,
       location_tag TEXT DEFAULT NULL,
+      loot_pool TEXT DEFAULT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
@@ -185,6 +203,23 @@ class TestPhase8Combat(unittest.TestCase):
         self.assertIn("bandit_02", order)
         ids = [c["id"] for c in st["combatants"]]
         self.assertEqual(len(ids), 3)
+        player = next(c for c in st["combatants"] if c.get("type") == "player")
+        self.assertIn("stats", player)
+        self.assertEqual(player["stats"].get("STR"), 14)
+        self.assertIn("speed", player["stats"])
+        enemy = next(c for c in st["combatants"] if c.get("id") == "bandit_01")
+        self.assertIn("dex_modifier", enemy)
+
+    def test_initiate_combat_skips_unknown_enemy_keys(self):
+        st = cs.initiate_combat(1, 1, ["not_a_real_enemy_zz", "bandit"])
+        self.assertEqual(st["status"], "active")
+        enemies = [c for c in st["combatants"] if c.get("type") == "enemy"]
+        self.assertEqual(len(enemies), 1)
+        self.assertEqual(enemies[0].get("enemy_key"), "bandit")
+
+    def test_initiate_combat_raises_when_all_enemy_keys_unknown(self):
+        with self.assertRaises(ValueError):
+            cs.initiate_combat(1, 1, ["fake_one", "fake_two"])
 
     @patch("app.services.combat_service.roll_d20", return_value=2)
     @patch("app.services.combat_service.roll_damage_dice", return_value=5)
@@ -208,6 +243,23 @@ class TestPhase8Combat(unittest.TestCase):
         self.assertEqual(r["damage"], 0)
         self.assertEqual(r["target_hp_remaining"], 12)
 
+    @patch("app.services.combat_service.roll_d20", return_value=2)
+    @patch("app.services.combat_service.roll_damage_dice", return_value=5)
+    def test_resolve_player_attack_alias_matches_resolve_attack(self, _dmg, _d20):
+        cs.initiate_combat(1, 1, ["bandit"])
+        a = cs.resolve_attack(1, 5, attacker="player")
+        b = cs.resolve_player_attack(1, 5)
+        self.assertEqual(a.get("hit"), b.get("hit"))
+        self.assertEqual(a.get("dodged"), b.get("dodged"))
+        self.assertEqual(a.get("damage"), b.get("damage"))
+
+    @patch("app.services.combat_service.resolve_attack")
+    def test_resolve_enemy_attack_alias_calls_resolve_attack(self, mock_ra):
+        mock_ra.return_value = {"hit": True}
+        out = cs.resolve_enemy_attack(42, roll_result=99, raw_d20=8)
+        mock_ra.assert_called_once_with(42, 0, attacker="enemy", raw_d20=None)
+        self.assertEqual(out, {"hit": True})
+
     @patch("app.services.combat_service.roll_d20", return_value=1)
     @patch("app.services.combat_service.roll_damage_dice", return_value=50)
     @patch("app.services.game_engine.resolve_enemy_loot", return_value=[{"source_type": "item", "source_key": "gold", "qty": 1}])
@@ -219,6 +271,21 @@ class TestPhase8Combat(unittest.TestCase):
         st = r["combat_state"]
         self.assertEqual(st["status"], "ended")
         self.assertEqual(st["ended_reason"], "victory")
+        self.assertEqual(len(st.get("loot_pool") or []), 1)
+        self.assertEqual(st["loot_pool"][0].get("source_key"), "gold")
+        enemies = [c for c in (st.get("combatants") or []) if c.get("type") == "enemy"]
+        self.assertEqual(len(enemies), 1)
+        self.assertTrue(enemies[0].get("dead"))
+
+    @patch("app.services.combat_service.roll_d20", return_value=1)
+    @patch("app.services.combat_service.roll_damage_dice", return_value=50)
+    @patch("app.services.game_engine.resolve_enemy_loot", return_value=[])
+    def test_enemy_death_victory_empty_loot_pool_when_no_drops(self, _loot, _dmg, _d20):
+        cs.initiate_combat(1, 1, ["bandit"])
+        r = cs.resolve_attack(1, 20, attacker="player")
+        self.assertTrue(r.get("enemy_dead"))
+        st = r["combat_state"]
+        self.assertEqual(st.get("loot_pool") or [], [])
 
     @patch("app.services.combat_service.roll_d20", return_value=20)
     @patch("app.services.combat_service.roll_damage_dice", return_value=6)
@@ -240,9 +307,70 @@ class TestPhase8Combat(unittest.TestCase):
         self.assertEqual(r["damage"], 0)
         self.assertNotIn("dodge_roll", r)
 
+    @patch("app.services.combat_service.logger.info")
+    @patch("app.services.combat_service.roll_d20", return_value=2)
+    @patch("app.services.combat_service.roll_damage_dice", return_value=5)
+    def test_step82_dice_roll_player_attack_logs_dc_outcome_and_source(self, _dmg, _d20, mock_info):
+        cs.initiate_combat(1, 1, ["bandit"])
+        mock_info.reset_mock()
+        cs.resolve_attack(1, 20, attacker="player", raw_d20=14)
+        kw = _last_structlog_event_kw(mock_info, "dice_roll")
+        self.assertIsNotNone(kw)
+        self.assertEqual(kw.get("source"), "combat_attack")
+        self.assertEqual(kw.get("dc"), 13)
+        self.assertEqual(kw.get("outcome"), "hit")
+        self.assertEqual(kw.get("roll_type"), "1d20")
+        self.assertEqual(kw.get("result"), 20)
+        self.assertEqual(kw.get("campaign_id"), 1)
+
+    @patch("app.services.combat_service.logger.info")
+    @patch("app.services.combat_service.roll_d20", return_value=2)
+    @patch("app.services.combat_service.roll_damage_dice", return_value=1)
+    def test_step82_dice_roll_player_nat20_is_critical_hit(self, _dmg, _d20, mock_info):
+        cs.initiate_combat(1, 1, ["bandit"])
+        mock_info.reset_mock()
+        cs.resolve_attack(1, 4, attacker="player", raw_d20=20)
+        kw = _last_structlog_event_kw(mock_info, "dice_roll")
+        self.assertEqual(kw.get("outcome"), "critical_hit")
+        self.assertEqual(kw.get("dc"), 13)
+
+    @patch("app.services.combat_service.logger.info")
+    @patch("app.services.combat_service.roll_d20", return_value=2)
+    @patch("app.services.combat_service.roll_damage_dice", return_value=0)
+    def test_step82_dice_roll_player_nat1_is_critical_miss(self, _dmg, _d20, mock_info):
+        cs.initiate_combat(1, 1, ["bandit"])
+        mock_info.reset_mock()
+        cs.resolve_attack(1, 25, attacker="player", raw_d20=1)
+        kw = _last_structlog_event_kw(mock_info, "dice_roll")
+        self.assertEqual(kw.get("outcome"), "critical_miss")
+        self.assertEqual(kw.get("dc"), 13)
+
+    @patch("app.services.combat_service.logger.info")
+    @patch("app.services.combat_service.roll_d20")
+    @patch("app.services.combat_service.roll_damage_dice", return_value=0)
+    def test_step82_dice_roll_enemy_attack_logs_dc_outcome_and_source(self, _dmg, mock_r20, mock_info):
+        mock_r20.side_effect = [2, 19]
+        cs.initiate_combat(1, 1, ["bandit"])
+        mock_info.reset_mock()
+        mock_r20.return_value = 10
+        mock_r20.side_effect = None
+        r = cs.resolve_attack(1, 0, attacker="enemy")
+        self.assertFalse(r["hit"])
+        kw = _last_structlog_event_kw(mock_info, "dice_roll")
+        self.assertIsNotNone(kw)
+        self.assertEqual(kw.get("source"), "combat_enemy")
+        self.assertEqual(kw.get("dc"), 15)
+        self.assertEqual(kw.get("outcome"), "miss")
+        self.assertEqual(kw.get("result"), 13)
+
+    @patch(
+        "app.services.solo_death_service.get_user_llm_settings_full",
+        return_value={"provider": "ollama", "base_url": "http://127.0.0.1", "model": "m", "api_key": ""},
+    )
+    @patch("app.services.solo_death_service.generate_epitaph_llm", return_value="Test epitaph combat.")
     @patch("app.services.combat_service.roll_d20", return_value=20)
     @patch("app.services.combat_service.roll_damage_dice", return_value=25)
-    def test_player_hit_updates_sheet_json(self, _dmg, _r20):
+    def test_player_hit_updates_sheet_json(self, _dmg, _r20, _epi, _llm):
         cs.initiate_combat(1, 1, ["bandit"])
         conn = sqlite3.connect(str(self._tmp))
         conn.row_factory = sqlite3.Row
@@ -253,12 +381,20 @@ class TestPhase8Combat(unittest.TestCase):
         r = cs.resolve_attack(1, 0, attacker="enemy")
         self.assertTrue(r["hit"])
         sh = conn.execute("SELECT sheet_json FROM characters WHERE id=1").fetchone()
-        conn.close()
         sheet = json.loads(sh["sheet_json"])
         self.assertEqual(sheet.get("current_hp"), 0)
         self.assertTrue(r.get("player_incapacitated"))
         self.assertEqual(r["combat_state"]["status"], "ended")
         self.assertEqual(r["combat_state"]["ended_reason"], "player_dead")
+        self.assertEqual(r.get("defeated_by"), "Bandit")
+        camp = conn.execute(
+            "SELECT status, death_reason, epitaph FROM campaigns WHERE id=1"
+        ).fetchone()
+        self.assertEqual(str(camp["status"]), "ended")
+        self.assertIn("Bandit", str(camp["death_reason"] or ""))
+        self.assertIn("walce", str(camp["death_reason"] or "").lower())
+        self.assertEqual(str(camp["epitaph"] or "").strip(), "Test epitaph combat.")
+        conn.close()
 
     @patch("app.services.combat_service.roll_d20")
     def test_advance_turn_round_increment(self, mock_r20):
@@ -280,6 +416,23 @@ class TestPhase8Combat(unittest.TestCase):
         st = cs.load_combat_snapshot(1)
         self.assertEqual(st["status"], "ended")
         self.assertEqual(st["ended_reason"], "fled")
+        conn = sqlite3.connect(str(self._tmp))
+        conn.row_factory = sqlite3.Row
+        camp = conn.execute("SELECT status FROM campaigns WHERE id=1").fetchone()
+        conn.close()
+        self.assertEqual(str(camp["status"]), "active")
+
+    def test_step_32_turn_helpers(self):
+        self.assertFalse(cs.is_combat_active(None, 1))
+        self.assertIsNone(cs.get_current_actor(None, 1))
+        self.assertIsNone(cs.advance_turn(None, 1))
+        cs.initiate_combat(1, 1, ["bandit"])
+        self.assertTrue(cs.is_combat_active(None, 1))
+        cur = cs.get_current_actor(None, 1)
+        self.assertIsNotNone(cur)
+        nxt = cs.advance_turn(None, 1)
+        self.assertIsNotNone(nxt)
+        self.assertNotEqual(cur, nxt)
 
     def test_get_combat_context_for_prompt(self):
         cs.initiate_combat(1, 1, ["bandit"])
@@ -287,6 +440,52 @@ class TestPhase8Combat(unittest.TestCase):
         self.assertIsNotNone(txt)
         self.assertIn("ACTIVE COMBAT", txt)
         self.assertIn("Aldric", txt)
+
+    def test_get_enemy_catalog_for_prompt(self):
+        conn = sqlite3.connect(str(self._tmp))
+        conn.row_factory = sqlite3.Row
+        try:
+            txt = cs.get_enemy_catalog_for_prompt(conn)
+        finally:
+            conn.close()
+        self.assertIn("bandit", txt)
+        self.assertIn("Dostępni wrogowie", txt)
+        self.assertLessEqual(len(txt), 1500)
+
+    @patch("app.services.game_engine.build_runtime_config_block", return_value="")
+    @patch("app.services.game_engine.loadrecentturns", return_value=[])
+    def test_build_narrative_messages_includes_enemy_catalog_when_no_combat(self, _, __):
+        from app.services.game_engine import build_narrative_messages
+
+        conn = sqlite3.connect(str(self._tmp))
+        conn.row_factory = sqlite3.Row
+        try:
+            camp = conn.execute("SELECT * FROM campaigns WHERE id=1").fetchone()
+            char = conn.execute("SELECT * FROM characters WHERE id=1").fetchone()
+            msgs = build_narrative_messages(conn, camp, char, "Idziemy dalej", None, None)
+        finally:
+            conn.close()
+        body = msgs[0]["content"]
+        self.assertIn("Dostępni wrogowie", body)
+        self.assertIn("bandit", body)
+
+    @patch("app.services.game_engine.build_runtime_config_block", return_value="")
+    @patch("app.services.game_engine.loadrecentturns", return_value=[])
+    def test_build_narrative_messages_omits_enemy_catalog_when_combat_active(self, _, __):
+        from app.services.game_engine import build_narrative_messages
+
+        cs.initiate_combat(1, 1, ["bandit"])
+        conn = sqlite3.connect(str(self._tmp))
+        conn.row_factory = sqlite3.Row
+        try:
+            camp = conn.execute("SELECT * FROM campaigns WHERE id=1").fetchone()
+            char = conn.execute("SELECT * FROM characters WHERE id=1").fetchone()
+            msgs = build_narrative_messages(conn, camp, char, "Atakuję", None, None)
+        finally:
+            conn.close()
+        body = msgs[0]["content"]
+        self.assertIn("ACTIVE COMBAT", body)
+        self.assertNotIn("Dostępni wrogowie", body)
 
     @patch("app.services.combat_service.roll_d20", return_value=2)
     @patch("app.services.combat_service.roll_damage_dice", return_value=5)
@@ -364,9 +563,10 @@ class TestPhase8Combat(unittest.TestCase):
         conn = sqlite3.connect(str(self._tmp))
         conn.row_factory = sqlite3.Row
         n = conn.execute("SELECT COUNT(*) AS c FROM combat_turns").fetchone()["c"]
-        self.assertGreaterEqual(n, 1)
+        self.assertGreaterEqual(n, 3)
         types = [r["event_type"] for r in conn.execute("SELECT event_type FROM combat_turns").fetchall()]
         self.assertIn("start", types)
+        self.assertGreaterEqual(types.count("initiative"), 2)
         cs.resolve_attack(1, 20, attacker="player")
         rows = conn.execute("SELECT actor, event_type FROM combat_turns ORDER BY id").fetchall()
         conn.close()
@@ -379,6 +579,91 @@ class TestPhase8Combat(unittest.TestCase):
         cs.resolve_attack(1, 20, attacker="player")
         rows = cs.list_combat_turns_for_campaign(1, limit=20)
         self.assertGreaterEqual(len(rows), 2)
+
+    # --- docs/combat_system_2/step_8.1_e2e_testing.txt — automated slice (pytest) ---
+
+    @patch("app.services.game_engine.resolve_enemy_loot", return_value=[{"source_type": "item", "source_key": "gem", "qty": 2}])
+    @patch("app.services.combat_service.roll_d20", return_value=1)
+    @patch("app.services.combat_service.roll_damage_dice", return_value=50)
+    def test_step81_victory_sql_active_combat_matches_doc(self, _dmg, _d20, _loot):
+        """STEP 4 (doc): SELECT status, ended_reason, loot_pool after victory."""
+        cs.initiate_combat(1, 1, ["bandit"])
+        cs.resolve_attack(1, 20, attacker="player")
+        conn = sqlite3.connect(str(self._tmp))
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT status, ended_reason, loot_pool FROM active_combat WHERE campaign_id = 1"
+        ).fetchone()
+        conn.close()
+        self.assertEqual(str(row["status"]), "ended")
+        self.assertEqual(str(row["ended_reason"]), "victory")
+        pool = json.loads(row["loot_pool"] or "[]")
+        self.assertEqual(len(pool), 1)
+        self.assertEqual(pool[0].get("source_key"), "gem")
+        self.assertEqual(int(pool[0].get("qty") or 0), 2)
+
+    @patch("app.services.game_engine.resolve_enemy_loot", return_value=[])
+    @patch("app.services.combat_service.roll_d20", return_value=1)
+    @patch("app.services.combat_service.roll_damage_dice", return_value=12)
+    def test_step81_enemy_hp_exactly_zero_counts_as_dead_victory(self, _dmg, _d20, _loot):
+        """SC-4B: obrażenia równe HP → hp_current 0, enemy_dead, zwycięstwo (jeden wróg)."""
+        cs.initiate_combat(1, 1, ["bandit"])
+        r = cs.resolve_attack(1, 20, attacker="player")
+        self.assertEqual(r.get("target_hp_remaining"), 0)
+        self.assertTrue(r.get("enemy_dead"))
+        self.assertEqual(r["combat_state"]["status"], "ended")
+        self.assertEqual(r["combat_state"]["ended_reason"], "victory")
+        enemies = [c for c in (r["combat_state"].get("combatants") or []) if c.get("type") == "enemy"]
+        self.assertTrue(enemies[0].get("dead"))
+
+    @patch("app.services.game_engine.resolve_enemy_loot", side_effect=_step81_loot_by_enemy_key)
+    @patch("app.services.combat_service.roll_damage_dice", return_value=50)
+    @patch("app.services.combat_service.roll_d20")
+    def test_step81_two_enemies_victory_loot_pool_accumulates(self, mock_r20, _dmg, _loot):
+        """Dwóch wrogów w JSON → dwa ciosy, victory, loot_pool z dwóch resolve_enemy_loot."""
+        mock_r20.side_effect = [18, 10, 12, 1, 1]
+        cs.initiate_combat(1, 1, ["bandit", "bandit"])
+        r1 = cs.resolve_attack(1, 20, attacker="player")
+        self.assertEqual(r1["combat_state"]["status"], "active")
+        r2 = cs.resolve_attack(1, 20, attacker="player")
+        self.assertEqual(r2["combat_state"]["status"], "ended")
+        self.assertEqual(r2["combat_state"]["ended_reason"], "victory")
+        pool = r2["combat_state"].get("loot_pool") or []
+        self.assertEqual(len(pool), 2)
+        # Oba wrogowie mają ten sam enemy_key „bandit” — resolve_enemy_loot wołany 2× z tym samym kluczem.
+        self.assertEqual(str(pool[0].get("source_key")), "loot_bandit")
+        self.assertEqual(str(pool[1].get("source_key")), "loot_bandit")
+
+    @patch(
+        "app.services.solo_death_service.get_user_llm_settings_full",
+        return_value={"provider": "ollama", "base_url": "http://127.0.0.1", "model": "m", "api_key": ""},
+    )
+    @patch("app.services.solo_death_service.generate_epitaph_llm", return_value="Step81 epitaph.")
+    @patch("app.services.combat_service.roll_d20", return_value=20)
+    @patch("app.services.combat_service.roll_damage_dice", return_value=25)
+    def test_step81_player_death_sql_matches_doc(self, _dmg, _r20, _epi, _llm):
+        """STEP 4: active_combat ended_reason player_dead; campaigns death_reason PL combat."""
+        cs.initiate_combat(1, 1, ["bandit"])
+        conn = sqlite3.connect(str(self._tmp))
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT current_turn FROM active_combat WHERE campaign_id=1").fetchone()
+        if row["current_turn"] == "player":
+            cs.advance_turn(1)
+        cs.resolve_attack(1, 0, attacker="enemy")
+        ac = conn.execute(
+            "SELECT status, ended_reason FROM active_combat WHERE campaign_id=1"
+        ).fetchone()
+        camp = conn.execute("SELECT status, death_reason FROM campaigns WHERE id=1").fetchone()
+        conn.close()
+        self.assertEqual(str(ac["status"]), "ended")
+        self.assertEqual(str(ac["ended_reason"]), "player_dead")
+        self.assertEqual(str(camp["status"]), "ended")
+        self.assertIn("Poległ w walce z", str(camp["death_reason"] or ""))
+
+    def test_step81_unknown_enemy_keys_all_invalid_raises_value_error(self):
+        """SC-4 / doc: brak poprawnych kluczy → ValueError (bez nowej logiki)."""
+        with self.assertRaises(ValueError):
+            cs.initiate_combat(1, 1, ["totally_fake_x", "also_fake_y"])
 
 
 class TestAtakCommandTurn(unittest.TestCase):

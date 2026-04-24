@@ -170,6 +170,13 @@ def build_narrative_messages(
                 )
             first["content"] = f"{first.get('content', '').rstrip()}\n\n{extra}"
 
+    if not combat_block and messages:
+        first = messages[0]
+        if isinstance(first, dict) and first.get("role") == "system":
+            enemy_catalog = combat_svc.get_enemy_catalog_for_prompt(conn)
+            if enemy_catalog:
+                first["content"] = f"{first.get('content', '').rstrip()}\n\n{enemy_catalog}"
+
     if death_append and messages:
         first = messages[0]
         if isinstance(first, dict) and first.get("role") == "system":

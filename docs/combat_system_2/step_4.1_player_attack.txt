@@ -1,48 +1,71 @@
 SAFETY CHECK FIRST:
 
-Before implementing, please analyze:
-1. Check if player input during combat needs special routing (combat mode vs narrative mode)
-2. Verify if weapon data is available (player's equipped weapon from inventory or character sheet)
-3. Check if existing dice roll system (Phase 7) can be reused for attack rolls
-4. Identify where to inject attack results for GM narration
-5. Check if roll cards UI from Phase 7.8 can display combat rolls
+Before implementing, please analyze and report findings:
 
-If NO BLOCKERS found, proceed with implementation:
+1. Does resolve_attack / resolve_player_attack already exist?
+   grep -n "def resolve_attack\|def resolve_player_attack\|def _resolve_gm_dodge" backend/app/services/combat_service.py
+   grep -n "resolve_attack\|player_attack" backend/app/api/turns.py
+
+2. Is dodge mechanic already implemented? (Phase 8B added _resolve_gm_dodge_roll)
+   grep -n "_resolve_gm_dodge_roll\|dodge_roll\|PERFEKCYJNY\|UNIK" backend/app/api/turns.py
+   grep -n "dodge" backend/app/services/combat_service.py
+
+3. Is weapon lookup already implemented?
+   grep -n "game_config_weapons\|weapon\|linked_stat" backend/app/services/combat_service.py
+
+4. How is roll card displayed? (Phase 7.8 + Phase 8B already handle combat rolls)
+   grep -n "__AI_GM_ROLL_V1__\|combat_roll\|roll_card" backend/app/api/turns.py
+
+5. Where is enemy HP updated after damage?
+   grep -n "hp_current\|combatants\|json.dumps" backend/app/services/combat_service.py
+   grep -n "hp_current" backend/app/api/turns.py
+
+STOP — report findings before implementing.
+If resolve_attack already handles player turn + dodge + damage → audit only, fill gaps.
 
 ---
 
-IMPLEMENTATION TASK:
+IMPORTANT context from repo (Phase 8A + 8B, verified):
 
-Implement player attack resolution with extensible damage/defense formulas.
+Phase 8A v1 already implemented:
+- resolve_attack() in combat_service.py: player turn, roll vs AC (hit/miss)
+- roll_damage_dice(), weapon lookup from game_config_weapons, linked_stat mod (STR/DEX)
+- enemy HP update in combatants JSON after damage
+- advance_turn() called after resolution
 
-Reference: combat_resolver_example.py — functions calculate_damage() and calculate_defense()
+Phase 8B v1 already implemented:
+- Mechanic changed to OPTION B: dodge roll instead of static AC
+  _resolve_gm_dodge_roll() in turns.py — separate path for player_attack
+- dodge_roll = d20 + dex_modifier (from enemy combatant)
+- Nat20 player → auto-hit (bypass dodge)
+- Nat1 player → auto-miss (bypass dodge)
+- UI labels: PERFEKCYJNY UNIK, FATALNE POTKNIĘCIE, UNIK, TRAFIENIE
+- combat_panel.js distinguishes: pudło / unik / nat1 in messages
+- tests/test_phase8_combat.py — m.in. trafienie / pudło / unik, nat1/nat20 gracza, śmierć wroga
 
-Requirements:
-- When player turn and player inputs attack action:
-  1. Hit check: d20 + attack_bonus (from weapon/stats) vs enemy AC
-  2. If miss → return outcome, advance turn
-  3. Dodge check: enemy rolls d20 + DEX mod vs DC
-  4. If dodge → return outcome, advance turn
-  5. Damage roll: use calculate_damage() with PLACEHOLDERS (from .py example)
-  6. Defense roll: use calculate_defense() for enemy
-  7. Final damage: max(0, damage_total - defense_total)
-  8. Update enemy hp_current in combatants JSON
-  9. Store all rolls in roll_history
-  10. Pass roll results to GM for narration
-  11. Advance turn if enemy still alive
+---
 
-Files to modify:
-- `backend/app/services/combat_service.py` (add resolve_player_attack function)
-- Copy formula structure from combat_resolver_example.py
+STEP 4.1 STATUS: **DONE in code** (`resolve_attack` + optional alias `resolve_player_attack`).
+No further backend work required unless acceptance adds new formulas (e.g. defense placeholders).
 
-Acceptance criteria:
-- [ ] Hit/miss detection works
-- [ ] Dodge mechanic works
-- [ ] Damage calculated with placeholder structure
-- [ ] Defense calculated with placeholder structure
-- [ ] Enemy HP updated in combatants JSON
-- [ ] Roll history updated
-- [ ] Test: player attacks, enemy HP decreases
-- [ ] Test: enemy dodges, HP unchanged
-- [ ] Test: miss, HP unchanged
-- [ ] Placeholders all set to 0 initially (skill_bonus, armor_value, etc.)
+=================AFTER REPORT=================
+
+### Stan kroku 4.1
+
+Zgodnie z dokumentem **logika gracza jest już w `resolve_attack`** (unik, nat1/nat20, broń z `game_config_weapons`, obrażenia, HP w `combatants`, log `combat_turns`). **Nie było blokeru** na kolejny duży refactor.
+
+### Co zrobiłem (minimalnie)
+
+1. **`combat_service.resolve_player_attack(campaign_id, roll_result, raw_d20=None)`** — cienki alias do **`resolve_attack(..., attacker="player")`**, żeby spełnić nazwę z checklisty / grepów w `step_4.1`.
+
+2. **`tests/test_phase8_combat.py`** — **`test_resolve_player_attack_alias_matches_resolve_attack`**.
+
+3. **`docs/combat_system_2/step_4.1_player_attack.txt`** — skończony urwany wiersz + krótka sekcja **STATUS: DONE**, żeby nie sugerować otwartej pracy backendu.
+
+### Testy
+
+`tests/test_phase8_combat.py` na **.61**: **28 passed**.
+
+### Docker
+
+Po wdrożeniu backendu w kontenerze: **restart / rebuild** (zmiana `combat_service.py`).

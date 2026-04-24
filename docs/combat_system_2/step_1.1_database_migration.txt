@@ -1,53 +1,124 @@
-SAFETY CHECK FIRST:
+SAFETY CHECK RESULT: ⚠️ TABLE ALREADY EXISTS — STEP REDEFINED
 
-Before implementing, please analyze:
-1. Check if table `active_combat` already exists in the database schema
-2. Verify there are no existing combat-related tables that might conflict
-3. Check if any existing code references "active_combat" table
-4. List any potential migration conflicts with existing schema
+active_combat table confirmed in: backend/app/db/migrations/014_active_combat.sql
+Additional column: location_tag (added via migrations_admin.py _ensure_active_combat_location_tag)
+Extensive code references confirmed: combat_service.py, turns.py, combat.py, test_phase8_combat.py
 
-If NO BLOCKERS found, proceed with implementation:
+SCHEMA DELTA — Doc vs Repo:
 
----
-
-IMPLEMENTATION TASK:
-
-Create database migration for `active_combat` table.
-
-Reference file: `active_combat_ddl.sql` (generated, check output folder)
-
-Requirements:
-- Add new table `active_combat` with all columns from DDL
-- Create index on `campaign_id` for fast lookup
-- Add migration script to `backend/migrations/` or equivalent
-- Ensure migration is reversible (include DROP TABLE in rollback)
-
-Files to modify:
-- `backend/migrations/XXXX_add_active_combat.sql` (new file)
-- OR equivalent migration system file
-
-Acceptance criteria:
-- [ ] Table created successfully
-- [ ] Can INSERT sample combat state
-- [ ] Can UPDATE turn state
-- [ ] Can DELETE combat state
-- [ ] Foreign key constraint works (campaign_id)
-- [ ] Migration script includes rollback
-
-Run migration and verify with: SELECT * FROM active_combat LIMIT 1;
+| Plan column        | Repo column        | Status          |
+|--------------------|--------------------|--------------------|
+| phase              | status             | ⚠️ Name differs  |
+| loot_pool          | (missing)          | ❌ Not in repo   |
+| current_actor_id   | current_turn       | ⚠️ Name differs  |
+| turn_number        | round              | ⚠️ Name differs  |
+| combatants JSON    | combatants TEXT    | ✅ Same          |
+| turn_order         | turn_order TEXT    | ✅ Same          |
+| campaign_id UNIQUE | campaign_id UNIQUE | ✅ Same          |
 
 ---
 
-## Research thread (legend: Cursor = red, Perplexity = green)
+REDEFINED TASK (replaces "create migration from scratch"):
 
-<span style="color:red"><b>[Cursor]</b> Q1 (for Perplexity): The brief references <code>active_combat_ddl.sql</code> and <code>backend/migrations/XXXX_add_active_combat.sql</code>, while this repo already has <code>backend/app/db/migrations/014_active_combat.sql</code> plus runtime column patches (e.g. in admin migrations). What is a sound pattern to version and ship “Combat System 2.0” schema work when the table may already exist on player DBs—net-new numbered SQL vs. additive ALTER-only files vs. consolidating into one canonical DDL?</span>
+Step 1.1 is NOT "create active_combat" — it is "audit + align existing schema".
 
-<span style="color:green"><b>[Perplexity]</b> (paste answer here — waiting for response)</span>
+TASK A — Verify current schema is complete:
+Run this query against your DB:
+  PRAGMA table_info(active_combat);
+  SELECT * FROM active_combat LIMIT 1;
 
-<span style="color:red"><b>[Cursor]</b> Q2 (for Perplexity): For SQLite production DBs, how should “reversible” rollback be defined when the forward path used <code>CREATE TABLE IF NOT EXISTS</code> and later <code>ALTER TABLE</code> adds columns—without risking accidental data loss on rollback?</span>
+Confirm all columns exist:
+  id, campaign_id, character_id, round, turn_order, current_turn,
+  combatants, status, ended_reason, location_tag, created_at, updated_at
 
-<span style="color:green"><b>[Perplexity]</b> (paste answer here — waiting for response)</span>
+TASK B — Add loot_pool column using the IDEMPOTENT pattern:
 
-<span style="color:red"><b>[Cursor]</b> Q3 (for Perplexity): Step 1.1 requires FK on <code>campaign_id</code>. SQLite enforces foreign keys only with <code>PRAGMA foreign_keys=ON</code> per connection. Should the design mandate PRAGMA at pool/connection open, or rely on app-level integrity—and what are common pitfalls with Python <code>sqlite3</code> defaults?</span>
+⚠️ CRITICAL: run_app_sql_migrations() uses executescript() with NO error handling.
+A standalone ALTER TABLE ADD COLUMN in a .sql file will CRASH every startup after
+the first run with "duplicate column name: loot_pool". DO NOT use a raw .sql file.
 
-<span style="color:green"><b>[Perplexity]</b> (paste answer here — waiting for response)</span>
+CORRECT APPROACH — follow the existing location_tag pattern in migrations_admin.py:
+
+  def _ensure_active_combat_loot_pool(conn):
+      """Idempotent: add loot_pool column to active_combat if missing."""
+      cursor = conn.execute("PRAGMA table_info(active_combat)")
+      columns = [row[1] for row in cursor.fetchall()]
+      if "loot_pool" not in columns:
+          conn.execute(
+              "ALTER TABLE active_combat ADD COLUMN loot_pool TEXT DEFAULT NULL"
+          )
+          conn.commit()
+
+Then call _ensure_active_combat_loot_pool(conn) in the same place as
+_ensure_active_combat_location_tag is called.
+
+DO NOT create backend/app/db/migrations/020_active_combat_loot_pool.sql
+
+TASK C — Update internal terminology mapping:
+In all new code for Phase 8A v2, use EXISTING column names:
+  - Use "status" (not "phase")
+  - Use "current_turn" (not "current_actor_id")
+  - Use "round" (not "turn_number")
+  - New: "loot_pool" (add via Task B above)
+
+TASK D — No rollback migration needed:
+Rollback is backup/restore (existing project convention).
+Do NOT add DROP TABLE scripts.
+
+---
+
+BEFORE IMPLEMENTING, please verify:
+
+1. Does _ensure_active_combat_location_tag exist and is called?
+   grep -n "_ensure_active_combat_location_tag" backend/app/db/migrations_admin.py
+
+2. Does any existing code already reference loot_pool?
+   grep -rn "loot_pool" backend/
+
+3. Confirm run_app_sql_migrations() has no error handling on executescript():
+   grep -A 10 "run_app_sql_migrations" backend/app/main.py
+   (If bare executescript → use _ensure pattern. If runner tolerates duplicate-column
+   errors → .sql file also acceptable, but _ensure is still safer.)
+
+If NO BLOCKERS from checks above → proceed with Task B only.
+
+---
+
+ACCEPTANCE CRITERIA (revised):
+
+- [ ] PRAGMA table_info(active_combat) shows all expected columns including loot_pool
+- [ ] loot_pool added via _ensure_active_combat_loot_pool() in migrations_admin.py (NOT a .sql file)
+- [ ] _ensure called alongside _ensure_active_combat_location_tag (same call site)
+- [ ] app startup applies the helper automatically on every boot (idempotent)
+- [ ] No existing tests broken: python -m pytest tests/test_phase8_combat.py -v
+- [ ] Confirm: SELECT loot_pool FROM active_combat LIMIT 1; returns NULL (not error)
+
+FILES TO MODIFY:
+- backend/app/db/migrations_admin.py  (add _ensure_active_combat_loot_pool, call alongside _ensure_active_combat_location_tag)
+
+DO NOT TOUCH:
+- backend/app/db/migrations/014_active_combat.sql (existing migration — do not modify)
+- combat_service.py column references (update in later steps, not here)
+
+
+
+
+
+
+======== AFTER REPORT ========
+
+### Done (Task B, idempotent)
+
+1. **`_ensure_active_combat_loot_pool`** in `migrations_admin.py` — same pattern as `_ensure_active_combat_location_tag`: table exists → `PRAGMA table_info` → `ALTER TABLE ... ADD COLUMN loot_pool` only if missing → `commit` + log.
+
+2. **Call site** — invoked immediately after `_ensure_active_combat_location_tag(conn)` inside `run_admin_migrations()` (already run from `main.py` lifespan and admin router).
+
+3. **`tests/test_phase8_combat.py`** — inline `CREATE TABLE active_combat` now includes `loot_pool TEXT DEFAULT NULL` so the test DB matches production shape.
+
+### Tests
+
+`python3 -m pytest tests/test_phase8_combat.py -v` on **piotrszmidt@192.168.1.61**: **21 passed**.
+
+### Docker
+
+If the API runs **inside Docker** with a baked image, **rebuild the backend image and restart the container** so `migrations_admin.py` is updated. On the next start, `run_admin_migrations()` will add `loot_pool` once. **No DB manual step** beyond normal app restart if you deploy code only (bind-mount dev tree already picks up the change on restart).

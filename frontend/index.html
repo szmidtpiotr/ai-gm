@@ -101,10 +101,14 @@
           <div class="campaign-character-in-llm">
             <div class="field">
               <label for="campaign-select" id="label-campaign">Kampania</label>
-              <div class="field-row">
+              <div class="field-row campaign-select-row">
                 <select id="campaign-select"></select>
-                <button type="button" class="secondary" id="create-campaign-btn">Nowa</button>
-                <button type="button" class="danger" id="delete-campaign-btn">Usuń</button>
+                <div class="campaign-action-buttons">
+                  <button type="button" class="secondary" id="create-campaign-btn">Nowa</button>
+                  <button type="button" class="secondary" id="reset-campaign-btn" title="Czyści historię czatu, walkę i podsumowania AI; postaci zostają">Reset kamp.</button>
+                  <button type="button" class="secondary" id="reset-character-btn" title="Arkusz jak po kreatorze; czyści ekwipunek; zachowuje imię i ukryty secret">Reset post.</button>
+                  <button type="button" class="danger" id="delete-campaign-btn">Usuń</button>
+                </div>
               </div>
             </div>
           </div>
@@ -163,6 +167,12 @@
       </div>
 
       <aside class="sheet-panel" id="sheet-panel">
+        <div
+          id="combat-panel-slot"
+          class="combat-panel-slot"
+          style="display: none"
+          aria-hidden="true"
+        ></div>
         <div class="sheet-panel-body" id="sheet-panel-body">
           <div class="muted">Wybierz postać</div>
         </div>
@@ -193,12 +203,6 @@
             COMBAT: —
           </div>
         </div>
-        <div
-          id="combat-panel-slot"
-          class="combat-panel-slot"
-          style="display: none"
-          aria-hidden="true"
-        ></div>
       </aside>
     </div>
   </div>
