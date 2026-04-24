@@ -1,0 +1,42 @@
+SAFETY CHECK FIRST:
+
+Before implementing, please analyze:
+1. Check if dice rolling function exists (likely in utils or dice module)
+2. Verify dice roll result is stored somewhere for roll cards (check Phase 7 roll system)
+3. Check if initiative skill exists in `game_config_skills` table
+4. Identify where to trigger initiative rolls (immediately after combat starts?)
+5. Verify if roll results need to be displayed to player (roll card UI from Phase 7)
+
+If NO BLOCKERS found, proceed with implementation:
+
+---
+
+IMPLEMENTATION TASK:
+
+Roll initiative for all combatants and establish turn order.
+
+Reference: combat_resolver_example.py (see resolve_attack function for dice rolling)
+
+Requirements:
+- Immediately after combat state created (phase='initiative'):
+  1. Roll d20 for player: d20 + DEX modifier + initiative skill rank
+  2. Roll d20 for each enemy: d20 + dex_modifier (from enemy record)
+  3. Sort results descending (highest goes first)
+  4. Create turn_order array: ["enemy_1", "player"] or ["player", "enemy_1"] etc.
+  5. UPDATE active_combat SET turn_order=JSON, current_actor_id=turn_order[0], current_actor_index=0, phase='in_progress'
+
+- Store initiative rolls in roll_history for display
+
+Files to modify:
+- `backend/app/services/combat_service.py` (add initiative_roll function)
+- Integration point: after combat start detection
+
+Acceptance criteria:
+- [ ] Initiative rolled for all combatants
+- [ ] Turn order sorted correctly (highest first)
+- [ ] active_combat.turn_order updated
+- [ ] active_combat.current_actor_id set to first actor
+- [ ] Roll results stored in roll_history
+- [ ] Test: start combat, verify turn order makes sense
+- [ ] Test: player with high DEX goes first
+- [ ] Test: ties handled (random or DEX stat as tiebreaker)

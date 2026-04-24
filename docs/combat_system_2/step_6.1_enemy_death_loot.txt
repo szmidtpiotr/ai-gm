@@ -1,0 +1,39 @@
+SAFETY CHECK FIRST:
+
+Before implementing, please analyze:
+1. Check if loot table system exists (table: game_config_loot_tables, game_config_loot_entries)
+2. Verify if enemy records have loot_table_key and drop_chance fields
+3. Check if there's existing inventory system to add loot to
+4. Identify where to store generated loot before player collects it
+
+If NO BLOCKERS found, proceed with implementation:
+
+---
+
+IMPLEMENTATION TASK:
+
+Detect enemy death, generate loot, update combat state.
+
+Requirements:
+- After any attack, check all enemies in combatants:
+  1. If enemy.hp_current <= 0:
+     - Mark enemy as dead (set flag in combatants JSON)
+     - Roll drop chance (random 0-1 vs enemy.drop_chance)
+     - If dropped: query loot table, roll weighted items
+     - Add rolled loot to active_combat.loot_pool JSON
+     - Short GM narration: "Gladiator pada..."
+  2. If ALL enemies dead:
+     - UPDATE active_combat SET phase='victory'
+     - Return {combat_status: 'victory', loot_available: true}
+
+Files to modify:
+- `backend/app/services/combat_service.py` (add check_enemy_death function)
+- `backend/app/services/loot_service.py` (if loot system needs separate module)
+
+Acceptance criteria:
+- [ ] Enemy death detected when HP <= 0
+- [ ] Loot rolled based on drop_chance
+- [ ] Loot stored in loot_pool JSON
+- [ ] Combat phase changes to 'victory' when all enemies dead
+- [ ] Test: kill enemy, verify loot generated
+- [ ] Test: multiple enemies, verify all deaths detected

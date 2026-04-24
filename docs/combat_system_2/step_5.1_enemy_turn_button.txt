@@ -1,0 +1,43 @@
+SAFETY CHECK FIRST:
+
+Before implementing, please analyze:
+1. Check where chat messages are appended in frontend (likely ui.js or similar)
+2. Verify if there's an API endpoint to trigger enemy turn (/api/combat/enemy-turn ?)
+3. Check if button styling matches existing UI design
+4. Identify if there's risk of multiple button clicks (debounce needed?)
+
+If NO BLOCKERS found, proceed with implementation:
+
+---
+
+IMPLEMENTATION TASK:
+
+Add "Enemy Turn" button in chat after player's turn ends.
+
+Requirements:
+
+**Backend:**
+- Create endpoint: POST /api/combat/enemy-turn
+  - Verify combat is active
+  - Verify current actor is enemy
+  - Call resolve_enemy_attack()
+  - Return: {rolls: [...], narration: "...", combat_status: "ongoing"|"ended"}
+
+**Frontend:**
+- After player action completes:
+  1. Check if combat_active AND current_actor != "player"
+  2. Show button: "⚔️ Tura wroga (kliknij aby kontynuować)"
+  3. On click: POST /api/combat/enemy-turn
+  4. Remove button, show loading indicator
+  5. Display enemy attack results (roll cards + GM narration)
+
+Files to modify:
+- `backend/app/api/routes.py` (add /api/combat/enemy-turn endpoint)
+- `frontend/js/ui.js` or `actions.js` (add button rendering logic)
+
+Acceptance criteria:
+- [ ] Button appears after player turn
+- [ ] Button disappears after enemy turn completes
+- [ ] Only one button shown at a time (no duplicates)
+- [ ] Debounce prevents double-clicks
+- [ ] Test: complete full combat round (player → button → enemy → player)

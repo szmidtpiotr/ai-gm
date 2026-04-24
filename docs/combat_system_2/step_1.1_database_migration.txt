@@ -1,0 +1,53 @@
+SAFETY CHECK FIRST:
+
+Before implementing, please analyze:
+1. Check if table `active_combat` already exists in the database schema
+2. Verify there are no existing combat-related tables that might conflict
+3. Check if any existing code references "active_combat" table
+4. List any potential migration conflicts with existing schema
+
+If NO BLOCKERS found, proceed with implementation:
+
+---
+
+IMPLEMENTATION TASK:
+
+Create database migration for `active_combat` table.
+
+Reference file: `active_combat_ddl.sql` (generated, check output folder)
+
+Requirements:
+- Add new table `active_combat` with all columns from DDL
+- Create index on `campaign_id` for fast lookup
+- Add migration script to `backend/migrations/` or equivalent
+- Ensure migration is reversible (include DROP TABLE in rollback)
+
+Files to modify:
+- `backend/migrations/XXXX_add_active_combat.sql` (new file)
+- OR equivalent migration system file
+
+Acceptance criteria:
+- [ ] Table created successfully
+- [ ] Can INSERT sample combat state
+- [ ] Can UPDATE turn state
+- [ ] Can DELETE combat state
+- [ ] Foreign key constraint works (campaign_id)
+- [ ] Migration script includes rollback
+
+Run migration and verify with: SELECT * FROM active_combat LIMIT 1;
+
+---
+
+## Research thread (legend: Cursor = red, Perplexity = green)
+
+<span style="color:red"><b>[Cursor]</b> Q1 (for Perplexity): The brief references <code>active_combat_ddl.sql</code> and <code>backend/migrations/XXXX_add_active_combat.sql</code>, while this repo already has <code>backend/app/db/migrations/014_active_combat.sql</code> plus runtime column patches (e.g. in admin migrations). What is a sound pattern to version and ship “Combat System 2.0” schema work when the table may already exist on player DBs—net-new numbered SQL vs. additive ALTER-only files vs. consolidating into one canonical DDL?</span>
+
+<span style="color:green"><b>[Perplexity]</b> (paste answer here — waiting for response)</span>
+
+<span style="color:red"><b>[Cursor]</b> Q2 (for Perplexity): For SQLite production DBs, how should “reversible” rollback be defined when the forward path used <code>CREATE TABLE IF NOT EXISTS</code> and later <code>ALTER TABLE</code> adds columns—without risking accidental data loss on rollback?</span>
+
+<span style="color:green"><b>[Perplexity]</b> (paste answer here — waiting for response)</span>
+
+<span style="color:red"><b>[Cursor]</b> Q3 (for Perplexity): Step 1.1 requires FK on <code>campaign_id</code>. SQLite enforces foreign keys only with <code>PRAGMA foreign_keys=ON</code> per connection. Should the design mandate PRAGMA at pool/connection open, or rely on app-level integrity—and what are common pitfalls with Python <code>sqlite3</code> defaults?</span>
+
+<span style="color:green"><b>[Perplexity]</b> (paste answer here — waiting for response)</span>

@@ -1,0 +1,160 @@
+# AI GM Project - Cursor AI Instructions
+
+## Context Sources (Read BEFORE every change)
+
+1. **Project Plan:** https://coda.io/d/AI-GM-Recovery-Plan (Coda Source of Truth)
+2. **Mechanics Contract:** backend/prompts/system_prompt.txt
+3. **Test Requirements:** All changes must pass existing tests
+4. **Notion Roadmap:** https://www.notion.so/3428842467a881b594abf85aabfb3a2b
+
+## Critical Constraints
+
+### NEVER Modify Without Approval
+- Locked game mechanics (stats, roll formula, DC scale)
+- Database schema (requires migration script)
+- Test assertions (fix code, not tests)
+- system_prompt.txt core rules
+
+### ALWAYS Do
+- Run tests after every change: `python3 backend/tests/test_*.py`
+- Update Coda "Change Log" with what you did
+- Create git commit with phase number in message
+- Ask human if unsure about mechanics interpretation
+
+### File Modification Rules
+- Backend changes → update corresponding test
+- Frontend changes → test manually in browser
+- Database changes → write migration in migrations_admin.py
+- New feature → add to Coda "Implementation Status"
+
+## Working Method
+
+1. **Before coding:** Read current task from Coda "Action Plan"
+2. **During coding:** Follow locked mechanics exactly
+3. **After coding:** 
+   - Run: `python3 backend/tests/[relevant_test].py`
+   - Update Coda with status
+   - Git commit: `git commit -m "phase-X: [description]"`
+
+## Emergency Rules
+
+❌ **STOP if:**
+- Test fails (report to human, don't patch)
+- Unsure about mechanics (ask human)
+- Database migration needed (create script, don't touch DB directly)
+- Breaking change required (create design proposal first)
+
+## Current Phase
+
+**Phase:** Recovery Audit (as of 2026-04-24)
+**Goal:** Restore sync between code, tests, and documentation
+**Next:** TBD after audit complete
+
+## Project Context
+
+- **Repo:** https://github.com/szmidtpiotr/ai-gm
+- **Live site:** https://aigm-prod.studio-colorbox.com/
+- **Admin panel:** https://aigm-prod.studio-colorbox.com/panel/
+- **Language:** Polish (game narration) + English (code/docs)
+- **LLM Model:** gemma4:e4b (primary) / llama3.1:8b (fallback)
+
+## Locked Game Mechanics (Phase 5.5)
+
+### Stats (7)
+STR, DEX, CON, INT, WIS, CHA, LCK
+
+### Roll Formula
+```
+d20 + stat_modifier + skill_rank + proficiency_bonus ≥ DC
+```
+- Proficiency bonus: +2 (when skill_rank ≥ 3)
+- Nat 20 = auto-success + double damage
+- Nat 1 = auto-fail + complication
+
+### DC Scale
+- Easy: 8
+- Medium: 12
+- Hard: 16
+- Extreme: 20
+- Legendary: 24+
+
+### HP/Mana Formulas
+- HP: base (archetype) + CON_mod × level
+- Mana: 8 + INT_mod × level (Mage only)
+
+## Test Requirements
+
+### Must Pass Before Any Commit
+```bash
+cd backend
+
+# Phase 7 - Dice rolls (expected: 25/25)
+python3 tests/run_dice_full_wiring_checks.py
+
+# Phase 8 - Combat system (expected: 12/12)
+python3 tests/test_phase8_combat.py
+
+# Death system (expected: 5/5)
+python3 tests/test_game_engine_death.py
+
+# Solo death (expected: 48/48)
+python3 tests/test_solo_death.py
+```
+
+## Common Patterns
+
+### Adding New API Endpoint
+1. Create route in `backend/app/api/[module].py`
+2. Add to router in `backend/app/main.py`
+3. Write test in `backend/tests/test_[module].py`
+4. Test manually via curl or frontend
+5. Update Coda documentation
+
+### Modifying Database
+1. Write migration in `backend/app/migrations_admin.py`
+2. Test migration on copy of DB first
+3. Update models if needed
+4. Write test that verifies schema
+5. Document in Coda Architecture Map
+
+### Frontend Changes
+1. Modify HTML/CSS/JS in `frontend/`
+2. Test in browser at https://aigm-prod.studio-colorbox.com/
+3. Check browser console for errors
+4. Verify mobile responsiveness
+5. Update Coda if UI flow changed
+
+## Debugging Checklist
+
+- [ ] Read full error message (don't skim)
+- [ ] Check Loki logs (if observability running)
+- [ ] Verify DB state with sqlite3
+- [ ] Test LLM connectivity separately
+- [ ] Check git diff for unexpected changes
+- [ ] Ask human before making assumptions
+
+## Reference Files
+
+### Backend Core
+- Entry point: `backend/app/main.py`
+- LLM service: `backend/app/services/llm_service.py`
+- Combat logic: `backend/app/services/combat_service.py`
+- Dice resolution: `backend/app/services/dice.py`
+- System prompt: `backend/prompts/system_prompt.txt`
+
+### Frontend Core
+- Main UI: `frontend/index.html`
+- Admin panel: `frontend/admin.html`
+- UI logic: `frontend/js/ui.js`
+- API client: `frontend/js/api.js`
+- Combat UI: `frontend/js/combat_panel.js`
+
+### Database
+- SQLite file: `data/ai_gm.db`
+- Backup script: `scripts/backup.sh`
+- Restore script: `scripts/restore.sh`
+
+---
+
+**Last Updated:** 2026-04-24
+**Status:** Active - Recovery Phase

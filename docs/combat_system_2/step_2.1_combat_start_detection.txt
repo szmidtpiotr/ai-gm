@@ -1,0 +1,41 @@
+SAFETY CHECK FIRST:
+
+Before implementing, please analyze:
+1. Check where player input is currently processed (likely `main.py` or `gm.py`)
+2. Verify if there's already a combat detection mechanism in place
+3. Check if GM response parsing exists (looking for special markers like [COMBAT_START:...])
+4. Identify where to hook into the response processing pipeline
+5. Check if `game_config_enemies` table has all required fields (key, label, hp_base, ac_base, attack_bonus, damage_die, damage_bonus, dex_modifier)
+
+If NO BLOCKERS found, proceed with implementation:
+
+---
+
+IMPLEMENTATION TASK:
+
+Detect [COMBAT_START:enemy_key] marker in GM response and create combat state.
+
+Reference file: `combat_resolver_example.py` (check combatants JSON structure)
+
+Requirements:
+- Parse GM response for pattern: `[COMBAT_START:enemy_key]`
+- When detected:
+  1. Query `game_config_enemies` WHERE `key = enemy_key` AND `is_active = 1`
+  2. Create enemy snapshot with unique ID (e.g., "enemy_1")
+  3. Load player stats from `characters` table (HP, stats from sheet_json)
+  4. Create combatants JSON array: [player_object, enemy_object]
+  5. INSERT into `active_combat` with phase='initiative', combatants, turn_order=[]
+
+Files to modify:
+- `backend/app/services/combat_service.py` (new file)
+- `main.py` or `gm.py` (add combat detection hook)
+- Possibly `backend/app/api/routes.py` (if endpoint-based)
+
+Acceptance criteria:
+- [ ] Marker detected correctly in GM response
+- [ ] Enemy record fetched from DB
+- [ ] Player stats loaded from character sheet
+- [ ] Combatants JSON created with correct structure
+- [ ] active_combat row inserted successfully
+- [ ] Test: trigger combat, verify DB row created
+- [ ] Test: invalid enemy_key handled gracefully (error message)

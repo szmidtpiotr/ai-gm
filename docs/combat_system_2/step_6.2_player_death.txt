@@ -1,0 +1,41 @@
+SAFETY CHECK FIRST:
+
+Before implementing, please analyze:
+1. Check how solo_death_service.py currently works
+2. Verify if death screen UI exists (from Phase 7.6)
+3. Check if player death during combat needs different handling than narrative death
+4. Identify if character.is_dead flag is set correctly
+
+If NO BLOCKERS found, proceed with implementation:
+
+---
+
+IMPLEMENTATION TASK:
+
+Integrate combat death with existing death system.
+
+Requirements:
+- After enemy attack, check player HP:
+  1. If player.hp_current <= 0:
+     - Call solo_death_service.trigger_death(campaign_id, cause="combat", enemy_name=enemy.label)
+     - UPDATE active_combat SET phase='defeat'
+     - Return: {combat_status: 'defeat', death_screen: true, defeated_by: enemy.label}
+
+**Frontend:**
+- If response.death_screen == true:
+  - Show death screen (existing UI from Phase 7.6)
+  - Display: "Poległeś w walce z: [enemy.label]"
+  - Show character secret (from sheet_json.identity.secret)
+  - Button: "Start New Character"
+
+Files to modify:
+- `backend/app/services/combat_service.py` (check_player_death function)
+- `frontend/js/death_screen.js` (extend to show defeated_by info)
+
+Acceptance criteria:
+- [ ] Player death detected when HP <= 0
+- [ ] solo_death_service called correctly
+- [ ] Death screen shows with enemy name
+- [ ] Character secret revealed
+- [ ] Combat state cleaned up (DELETE or mark phase='defeat')
+- [ ] Test: let enemy kill player, verify death screen appears

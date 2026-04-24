@@ -1,0 +1,44 @@
+SAFETY CHECK FIRST:
+
+Before implementing, please analyze:
+1. Check how current system prompt is loaded (file: `backend/prompts/system_prompt.txt`)
+2. Verify if there's already enemy data injected anywhere in the prompt
+3. Check if `game_config_enemies` table is accessible from where system prompt is built
+4. Identify where system prompt is constructed for LLM calls (likely `gm.py` or `llm_service.py`)
+5. Verify current system prompt length — adding enemy catalog must not exceed LLM context limits
+
+If NO BLOCKERS found, proceed with implementation:
+
+---
+
+IMPLEMENTATION TASK:
+
+Inject active enemy catalog into system prompt when session starts.
+
+Requirements:
+- Query `game_config_enemies` WHERE `is_active = 1` at session start
+- Format as readable list for GM (key, label, tier, HP, damage_die)
+- Inject into system prompt BEFORE sending to LLM
+- Format example:
+
+```
+Available enemies in this world:
+- bandit (Bandyta) — tier: weak, HP: 8, damage: d6+0
+- arena_fighter (Gladiator Areny) — tier: standard, HP: 30, damage: d8+3
+- assassin (Skrytobójca) — tier: elite, HP: 34, damage: d6+3
+[...continue for all active enemies]
+
+When combat starts, you must choose ONE enemy key from this list.
+Emit: [COMBAT_START:enemy_key]
+```
+
+Files to modify:
+- `backend/app/services/llm_service.py` OR `gm.py` (wherever system prompt is built)
+- Possibly `backend/app/system_prompt_loader.py`
+
+Acceptance criteria:
+- [ ] Enemy list loaded from DB on session start
+- [ ] Injected into system prompt before LLM call
+- [ ] System prompt length checked (must fit in context window)
+- [ ] Test: start new session, verify prompt includes enemy list
+- [ ] GM can see enemy options when narrating combat scenarios

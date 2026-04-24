@@ -1,0 +1,37 @@
+SAFETY CHECK FIRST:
+
+Before implementing, please analyze:
+1. Check where player actions are currently processed
+2. Verify if there's a way to query "whose turn is it?" from active_combat
+3. Check if turn advancement logic exists anywhere
+4. Identify potential race conditions (multiple requests during same turn)
+5. Verify how to signal "turn ended" to frontend
+
+If NO BLOCKERS found, proceed with implementation:
+
+---
+
+IMPLEMENTATION TASK:
+
+Manage turn state progression and actor switching.
+
+Requirements:
+- Add function `get_current_actor(campaign_id)` → returns current_actor_id from active_combat
+- Add function `advance_turn(campaign_id)`:
+  1. Increment current_actor_index
+  2. If index >= len(turn_order): reset to 0, increment turn_number
+  3. UPDATE active_combat SET current_actor_id=turn_order[current_actor_index], current_actor_index, turn_number
+  4. Return new current_actor_id
+
+- Add function `is_combat_active(campaign_id)` → checks if active_combat row exists
+
+Files to modify:
+- `backend/app/services/combat_service.py` (add turn management functions)
+
+Acceptance criteria:
+- [ ] Can query current actor
+- [ ] Turn advances correctly
+- [ ] Turn wraps around to start of turn_order
+- [ ] Turn number increments when full round completes
+- [ ] Test: simulate 3 turns, verify turn_number and current_actor_id
+- [ ] No race conditions (use DB transaction if needed)

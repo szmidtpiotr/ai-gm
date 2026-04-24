@@ -1,0 +1,50 @@
+SAFETY CHECK FIRST:
+
+Before implementing, please analyze:
+1. Check if there's existing modal/popup system in frontend
+2. Verify if inventory system can accept new items
+3. Check how items are stored in character inventory (DB structure)
+4. Identify if loot can be partially collected (or must take all at once)
+
+If NO BLOCKERS found, proceed with implementation:
+
+---
+
+IMPLEMENTATION TASK:
+
+Create loot collection UI after victory.
+
+Requirements:
+
+**Backend:**
+- Endpoint: GET /api/combat/loot
+  - Return: {items: [...], weapons: [...], consumables: [...]} from active_combat.loot_pool
+- Endpoint: POST /api/combat/loot/collect
+  - Body: {selected_items: [item_ids]}
+  - Add selected items to character inventory
+  - Mark items as collected in loot_pool OR remove from pool
+  - UPDATE active_combat SET loot_collected=1 if all collected
+
+**Frontend:**
+- After combat_status='victory':
+  1. Show central button/card: "🔍 Przeszukaj pokonanych"
+  2. On click: open modal with loot list
+  3. Player selects items (checkboxes)
+  4. Button: "Zabierz wybrane"
+  5. POST /api/combat/loot/collect with selected items
+  6. Update inventory UI
+  7. Allow re-opening modal until location changes (tracked separately)
+
+Files to modify:
+- `backend/app/api/routes.py` (add loot endpoints)
+- `frontend/js/loot_popup.js` (new file or extend existing modal system)
+- `frontend/css/` (style loot popup)
+
+Acceptance criteria:
+- [ ] Loot button appears after victory
+- [ ] Modal shows all available loot
+- [ ] Can select items individually
+- [ ] Selected items added to inventory
+- [ ] Can re-open modal to collect more
+- [ ] Test: kill enemy, collect loot, verify inventory updated
+- [ ] Test: partial collection works (leave some items)

@@ -1,0 +1,66 @@
+SAFETY CHECK FIRST:
+
+Before declaring Phase 8A complete, please verify:
+1. Run through FULL combat scenario: initiation → initiative → player attack → enemy attack → victory
+2. Check logs for any errors during combat flow
+3. Verify DB state after combat ends (active_combat cleaned up?)
+4. Check if F5 (page refresh) during combat preserves state correctly
+5. Verify roll cards display correctly for all combat rolls
+
+If ANY ISSUES found, list them with steps to reproduce.
+
+---
+
+TESTING TASK:
+
+Execute full combat test suite.
+
+Test scenarios:
+1. **Happy path — player wins:**
+   - Start combat with weak enemy (bandit)
+   - Player attacks and hits
+   - Enemy attacks and misses
+   - Player kills enemy
+   - Verify loot popup
+   - Collect loot
+   - Verify inventory updated
+
+2. **Player death:**
+   - Start combat with strong enemy (assassin)
+   - Let enemy attack multiple times
+   - Verify death screen triggers when HP <= 0
+   - Verify character marked as dead in DB
+
+3. **F5 resilience:**
+   - Start combat
+   - Complete initiative
+   - Before first attack: F5 page
+   - Verify combat state restored (turn order, HP, etc.)
+   - Continue combat normally
+
+4. **Multiple enemies (if implemented):**
+   - Start combat with 2+ enemies
+   - Verify turn order includes all
+   - Kill enemies one by one
+   - Verify victory only after ALL dead
+
+5. **Edge cases:**
+   - Invalid enemy key in [COMBAT_START:invalid]
+   - Double-click enemy turn button
+   - Zero damage (perfect defense roll)
+   - Exact HP = 0 (not negative)
+
+Acceptance criteria:
+- [ ] All test scenarios pass
+- [ ] No errors in backend logs
+- [ ] No errors in browser console
+- [ ] DB state consistent after each scenario
+- [ ] Roll cards display correctly
+- [ ] Death screen works
+- [ ] Loot system works
+- [ ] Inventory updates correctly
+
+Files to check:
+- Backend logs (docker logs or console)
+- Browser console (F12)
+- Database: active_combat, characters, inventory tables

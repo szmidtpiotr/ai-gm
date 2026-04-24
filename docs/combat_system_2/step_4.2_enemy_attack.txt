@@ -1,0 +1,42 @@
+SAFETY CHECK FIRST:
+
+Before implementing, please analyze:
+1. Check if enemy turn should auto-trigger or require user input (Design: Opcja B = button)
+2. Verify if GM should narrate enemy attack or just show mechanics
+3. Check if player HP update affects any other systems (death detection?)
+4. Identify where to check for player death (HP <= 0)
+
+If NO BLOCKERS found, proceed with implementation:
+
+---
+
+IMPLEMENTATION TASK:
+
+Implement enemy attack resolution (mirror of player attack).
+
+Requirements:
+- When enemy turn (current_actor_id starts with "enemy_"):
+  1. Use same flow as player attack BUT reversed:
+     - Attacker = enemy from combatants JSON
+     - Defender = player from combatants JSON
+  2. Hit check: d20 + enemy.attack_bonus vs player AC
+  3. Dodge check: player d20 + DEX mod vs DC
+  4. Damage: enemy damage_die + damage_bonus + stat_modifier (use placeholder formula)
+  5. Defense: player d20 + CON mod + armor_value (placeholder)
+  6. Final damage → update player hp_current
+  7. Store rolls in roll_history
+  8. Pass to GM for narration
+  9. Check if player HP <= 0 → trigger death flow (Step 6.2)
+  10. Advance turn if player alive
+
+Files to modify:
+- `backend/app/services/combat_service.py` (add resolve_enemy_attack function)
+- Reuse calculate_damage/defense from Step 4.1
+
+Acceptance criteria:
+- [ ] Enemy attacks player correctly
+- [ ] Player HP decreases
+- [ ] Death detected when HP <= 0
+- [ ] Roll history updated
+- [ ] Test: enemy attacks, player HP decreases
+- [ ] Test: player death triggers correctly (HP <= 0)
