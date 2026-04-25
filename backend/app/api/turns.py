@@ -559,8 +559,6 @@ def _apply_location_integrity_from_response(
     gm_response: str,
     llm_config: dict[str, str] | None = None,
 ) -> None:
-    if not get_effective_flag("location_integrity_enabled", campaign_id):
-        return
     try:
         intent = parse_location_intent(gm_response, campaign_id=campaign_id, llm_config=llm_config)
         if not intent:

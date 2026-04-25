@@ -2,6 +2,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from app.services.llm_service import generate_chat
+from app.services.location_integrity_config import get_effective_flag
 
 DB_PATH = "/data/ai_gm.db"
 
@@ -126,6 +127,8 @@ def validate_move(
             matched = False
 
     if matched and best is not None:
+        if not get_effective_flag("location_integrity_enabled", campaign_id):
+            return ValidationResult(True, best.id, False, None)
         # Sub -> sub same parent always allowed.
         if current and current.location_type == "sub" and best.location_type == "sub":
             if current.parent_id == best.parent_id:
