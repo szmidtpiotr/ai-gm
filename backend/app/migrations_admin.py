@@ -637,6 +637,83 @@ def _ensure_enemy_loot_table_and_drop_chance(conn: sqlite3.Connection) -> None:
             raise
 
 
+def _ensure_location_integrity_schema(conn: sqlite3.Connection) -> None:
+    """Phase 8D (8D-1..8D-4): global locations + campaign location state + block log."""
+    stmts = [
+        (
+            "create_game_locations",
+            """
+            CREATE TABLE IF NOT EXISTS game_locations (
+              id            INTEGER PRIMARY KEY,
+              key           TEXT UNIQUE NOT NULL,
+              label         TEXT NOT NULL,
+              description   TEXT,
+              parent_id     INTEGER REFERENCES game_locations(id),
+              location_type TEXT DEFAULT 'macro' CHECK(location_type IN ('macro', 'sub')),
+              rules         TEXT,
+              enemy_keys    TEXT DEFAULT '[]',
+              npc_keys      TEXT DEFAULT '[]',
+              is_active     INTEGER DEFAULT 1,
+              created_at    TEXT DEFAULT (datetime('now')),
+              updated_at    TEXT DEFAULT (datetime('now'))
+            )
+            """,
+        ),
+        (
+            "add_campaign_current_location_id",
+            """
+            ALTER TABLE campaigns ADD COLUMN current_location_id INTEGER
+              REFERENCES game_locations(id)
+            """,
+        ),
+        (
+            "add_campaign_session_flags",
+            """
+            ALTER TABLE campaigns ADD COLUMN session_flags TEXT DEFAULT '{}'
+            """,
+        ),
+        (
+            "seed_location_integrity_meta_flags",
+            """
+            INSERT OR IGNORE INTO game_config_meta (key, value) VALUES
+              ('location_integrity_enabled', '1'),
+              ('location_parser_json_enabled', '1'),
+              ('location_parser_fallback_enabled', '1')
+            """,
+        ),
+        (
+            "create_location_integrity_log",
+            """
+            CREATE TABLE IF NOT EXISTS location_integrity_log (
+              id                   INTEGER PRIMARY KEY,
+              campaign_id          INTEGER NOT NULL REFERENCES campaigns(id),
+              character_id         INTEGER REFERENCES characters(id),
+              attempted_move       TEXT NOT NULL,
+              current_location_key TEXT,
+              reason_blocked       TEXT,
+              created_at           TEXT DEFAULT (datetime('now'))
+            )
+            """,
+        ),
+    ]
+    for key, sql in stmts:
+        try:
+            conn.execute(sql)
+            conn.commit()
+            logger.info("phase8d_migration_applied", migration=key)
+        except sqlite3.OperationalError as e:
+            msg = str(e).lower()
+            if (
+                "already exists" in msg
+                or "duplicate column" in msg
+                or "no such table" in msg
+            ):
+                logger.info("phase8d_migration_skipped", migration=key, reason=str(e))
+                continue
+            logger.error("phase8d_migration_error", migration=key, error_message=str(e))
+            raise
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -686,6 +763,7 @@ def run_admin_migrations() -> None:
 
         _migrate_legacy_archetype_json(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)
+        _ensure_location_integrity_schema(conn)
     finally:
         conn.close()
 

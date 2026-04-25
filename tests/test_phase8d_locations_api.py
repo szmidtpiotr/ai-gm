@@ -153,3 +153,33 @@ def test_get_location_detail_happy_and_not_found(monkeypatch):
         assert hidden.status_code == 404
     finally:
         keeper.close()
+
+
+def test_patch_and_delete_location(monkeypatch):
+    client, keeper = _build_client(monkeypatch)
+    try:
+        patch_resp = client.patch(
+            "/api/locations/tavern_hanged_man",
+            headers={"Authorization": "Bearer ok-admin"},
+            json={
+                "label": "Karczma Pod Wisielcem+",
+                "enemy_keys": ["wolf_alpha"],
+                "rules": {"fog_of_war": True},
+            },
+        )
+        assert patch_resp.status_code == 200
+        payload = patch_resp.json()
+        assert payload["label"] == "Karczma Pod Wisielcem+"
+        assert payload["enemy_keys"] == ["wolf_alpha"]
+
+        del_resp = client.delete(
+            "/api/locations/tavern_hanged_man",
+            headers={"X-Internal-Role": "gm"},
+        )
+        assert del_resp.status_code == 200
+        assert del_resp.json()["ok"] is True
+
+        hidden = client.get("/api/locations/tavern_hanged_man")
+        assert hidden.status_code == 404
+    finally:
+        keeper.close()

@@ -8,6 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+import json
 
 from app.services.admin_accounts import (
     create_account_admin,
@@ -214,6 +215,19 @@ class LokiUrlSettingsReq(BaseModel):
     """Empty string clears DB row (health then uses LOKI_URL env only)."""
 
     loki_url: str = ""
+
+
+LOCATION_FLAG_KEYS = (
+    "location_integrity_enabled",
+    "location_parser_json_enabled",
+    "location_parser_fallback_enabled",
+)
+
+
+class CampaignFlagsPatchReq(BaseModel):
+    location_integrity_enabled: int | None = Field(default=None, ge=0, le=1)
+    location_parser_json_enabled: int | None = Field(default=None, ge=0, le=1)
+    location_parser_fallback_enabled: int | None = Field(default=None, ge=0, le=1)
 
 
 class WeaponCreateReq(BaseModel):
@@ -475,6 +489,56 @@ def require_admin_token(
     token = authorization.removeprefix("Bearer ").strip()
     if not verify_admin_token(token):
         raise HTTPException(status_code=401, detail="Invalid admin token")
+
+
+def _admin_db_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH, uri=ADMIN_SQLITE_PATH.startswith("file:"))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _parse_session_flags(raw: str | None) -> dict:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(str(raw))
+        return data if isinstance(data, dict) else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def _read_global_defaults(conn: sqlite3.Connection) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for key in LOCATION_FLAG_KEYS:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = ? LIMIT 1",
+            (key,),
+        ).fetchone()
+        val = str(row["value"]).strip().lower() if row and row["value"] is not None else "0"
+        out[key] = 1 if val in {"1", "true", "yes", "on"} else 0
+    return out
+
+
+def _compose_flag_state(conn: sqlite3.Connection, campaign_id: int) -> dict:
+    camp = conn.execute(
+        "SELECT id, session_flags FROM campaigns WHERE id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if not camp:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    overrides = _parse_session_flags(camp["session_flags"])
+    filtered_overrides = {k: int(bool(overrides[k])) for k in LOCATION_FLAG_KEYS if k in overrides}
+    global_defaults = _read_global_defaults(conn)
+    effective_flags = {
+        k: filtered_overrides[k] if k in filtered_overrides else global_defaults.get(k, 0)
+        for k in LOCATION_FLAG_KEYS
+    }
+    return {
+        "campaign_id": campaign_id,
+        "effective_flags": effective_flags,
+        "session_overrides": filtered_overrides,
+        "global_defaults": global_defaults,
+    }
 
 
 @router.post("/admin/auth")
@@ -1436,6 +1500,123 @@ def admin_regenerate_campaign_summary(
         raise HTTPException(status_code=404, detail="Campaign not found") from None
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from None
+
+
+@router.get("/admin/campaigns/{campaign_id}/flags")
+def admin_get_campaign_flags(campaign_id: int, _: None = Depends(require_admin_token)):
+    with _admin_db_conn() as conn:
+        return _compose_flag_state(conn, campaign_id)
+
+
+@router.patch("/admin/campaigns/{campaign_id}/flags")
+def admin_patch_campaign_flags(
+    campaign_id: int,
+    req: CampaignFlagsPatchReq,
+    _: None = Depends(require_admin_token),
+):
+    updates = {
+        "location_integrity_enabled": req.location_integrity_enabled,
+        "location_parser_json_enabled": req.location_parser_json_enabled,
+        "location_parser_fallback_enabled": req.location_parser_fallback_enabled,
+    }
+    patch = {k: int(v) for k, v in updates.items() if v is not None}
+    if not patch:
+        raise HTTPException(status_code=422, detail="At least one flag value is required")
+
+    with _admin_db_conn() as conn:
+        camp = conn.execute(
+            "SELECT id, session_flags FROM campaigns WHERE id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        current = _parse_session_flags(camp["session_flags"])
+        current.update(patch)
+        conn.execute(
+            "UPDATE campaigns SET session_flags = ? WHERE id = ?",
+            (json.dumps(current, ensure_ascii=False), campaign_id),
+        )
+        conn.commit()
+        return _compose_flag_state(conn, campaign_id)
+
+
+@router.delete("/admin/campaigns/{campaign_id}/flags/{flag_key}")
+def admin_delete_campaign_flag_override(
+    campaign_id: int,
+    flag_key: str,
+    _: None = Depends(require_admin_token),
+):
+    if flag_key not in LOCATION_FLAG_KEYS:
+        raise HTTPException(status_code=404, detail="Unknown flag key")
+
+    with _admin_db_conn() as conn:
+        camp = conn.execute(
+            "SELECT id, session_flags FROM campaigns WHERE id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        current = _parse_session_flags(camp["session_flags"])
+        if flag_key in current:
+            del current[flag_key]
+            conn.execute(
+                "UPDATE campaigns SET session_flags = ? WHERE id = ?",
+                (json.dumps(current, ensure_ascii=False), campaign_id),
+            )
+            conn.commit()
+        return _compose_flag_state(conn, campaign_id)
+
+
+@router.get("/admin/campaigns/{campaign_id}/location-log")
+def admin_get_campaign_location_log(
+    campaign_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    since: str | None = Query(None),
+    _: None = Depends(require_admin_token),
+):
+    with _admin_db_conn() as conn:
+        camp = conn.execute("SELECT id FROM campaigns WHERE id = ? LIMIT 1", (campaign_id,)).fetchone()
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        sql = """
+            SELECT id, campaign_id, character_id, attempted_move, current_location_key, reason_blocked, created_at
+            FROM location_integrity_log
+            WHERE campaign_id = ?
+        """
+        params: list = [campaign_id]
+        if since:
+            sql += " AND created_at >= ?"
+            params.append(since)
+        sql += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        rows = conn.execute(sql, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+
+@router.get("/admin/location-log")
+def admin_get_all_location_log(
+    campaign_id: int | None = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+    since: str | None = Query(None),
+    _: None = Depends(require_admin_token),
+):
+    with _admin_db_conn() as conn:
+        sql = """
+            SELECT id, campaign_id, character_id, attempted_move, current_location_key, reason_blocked, created_at
+            FROM location_integrity_log
+            WHERE 1 = 1
+        """
+        params: list = []
+        if campaign_id is not None:
+            sql += " AND campaign_id = ?"
+            params.append(campaign_id)
+        if since:
+            sql += " AND created_at >= ?"
+            params.append(since)
+        sql += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+        rows = conn.execute(sql, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
 
 
 @router.get("/admin/characters")

@@ -23,6 +23,17 @@ class LocationCreateRequest(BaseModel):
     npc_keys: list[str] = Field(default_factory=list)
 
 
+class LocationPatchRequest(BaseModel):
+    key: str | None = None
+    label: str | None = None
+    description: str | None = None
+    parent_id: int | None = None
+    location_type: str | None = Field(default=None, pattern="^(macro|sub)$")
+    rules: dict[str, Any] | list[Any] | str | None = None
+    enemy_keys: list[str] | None = None
+    npc_keys: list[str] | None = None
+
+
 def _db_connect() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH, uri=DB_PATH.startswith("file:"))
     conn.row_factory = sqlite3.Row
@@ -261,5 +272,111 @@ def get_location_detail(
                 parent = {"key": parent_row["key"], "label": parent_row["label"]}
         location["parent"] = parent
         return location
+    finally:
+        conn.close()
+
+
+@router.patch("/locations/{key}")
+def patch_location(
+    key: str,
+    req: LocationPatchRequest,
+    _: None = Depends(_require_internal_gm_or_admin),
+):
+    conn = _db_connect()
+    try:
+        row = conn.execute(
+            "SELECT id, key FROM game_locations WHERE key = ? LIMIT 1",
+            (key,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Location not found")
+        current_id = int(row["id"])
+
+        updates: list[str] = []
+        params: list[Any] = []
+
+        if req.key is not None:
+            new_key = req.key.strip()
+            if not new_key:
+                raise HTTPException(status_code=422, detail="key cannot be empty")
+            exists = conn.execute(
+                "SELECT id FROM game_locations WHERE key = ? AND id != ? LIMIT 1",
+                (new_key, current_id),
+            ).fetchone()
+            if exists:
+                raise HTTPException(status_code=422, detail="Location key already exists")
+            updates.append("key = ?")
+            params.append(new_key)
+        if req.label is not None:
+            lbl = req.label.strip()
+            if not lbl:
+                raise HTTPException(status_code=422, detail="label cannot be empty")
+            updates.append("label = ?")
+            params.append(lbl)
+        if req.description is not None:
+            updates.append("description = ?")
+            params.append(req.description)
+        if req.location_type is not None:
+            updates.append("location_type = ?")
+            params.append(req.location_type)
+        if req.parent_id is not None:
+            parent = conn.execute("SELECT id FROM game_locations WHERE id = ? LIMIT 1", (req.parent_id,)).fetchone()
+            if not parent:
+                raise HTTPException(status_code=404, detail="Parent location not found")
+            updates.append("parent_id = ?")
+            params.append(req.parent_id)
+        if req.rules is not None:
+            updates.append("rules = ?")
+            params.append(_to_json_text(req.rules, fallback="{}"))
+        if req.enemy_keys is not None:
+            updates.append("enemy_keys = ?")
+            params.append(json.dumps(req.enemy_keys, ensure_ascii=False))
+        if req.npc_keys is not None:
+            updates.append("npc_keys = ?")
+            params.append(json.dumps(req.npc_keys, ensure_ascii=False))
+
+        if updates:
+            updates.append("updated_at = datetime('now')")
+            params.append(current_id)
+            conn.execute(
+                f"UPDATE game_locations SET {', '.join(updates)} WHERE id = ?",
+                tuple(params),
+            )
+            conn.commit()
+
+        updated = conn.execute(
+            """
+            SELECT id, key, label, description, parent_id, location_type, rules, enemy_keys, npc_keys, is_active
+            FROM game_locations
+            WHERE id = ?
+            """,
+            (current_id,),
+        ).fetchone()
+        if not updated:
+            raise HTTPException(status_code=500, detail="Location updated but could not be loaded")
+        return _row_to_location(updated)
+    finally:
+        conn.close()
+
+
+@router.delete("/locations/{key}")
+def delete_location(
+    key: str,
+    _: None = Depends(_require_internal_gm_or_admin),
+):
+    conn = _db_connect()
+    try:
+        row = conn.execute(
+            "SELECT id FROM game_locations WHERE key = ? LIMIT 1",
+            (key,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Location not found")
+        conn.execute(
+            "UPDATE game_locations SET is_active = 0, updated_at = datetime('now') WHERE id = ?",
+            (int(row["id"]),),
+        )
+        conn.commit()
+        return {"ok": True}
     finally:
         conn.close()
