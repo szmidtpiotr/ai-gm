@@ -3426,7 +3426,7 @@ async function refreshLocations(host) {
   renderTable(tableHost, [], null, {});
   try {
     const [treeData, enemyData] = await Promise.all([
-      adminFetch("/api/locations?type=all&active_only=0"),
+      adminFetch("/api/locations?type=all&active_only=1"),
       adminFetch("/api/admin/enemies"),
     ]);
     const flat = flattenLocationTree(Array.isArray(treeData) ? treeData : []);
