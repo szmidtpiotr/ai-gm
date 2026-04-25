@@ -661,8 +661,49 @@ def _atak_command_result(campaign_id: int) -> dict:
     }
 
 
+def _assistant_text_for_roll_cue(assistant_text: str) -> str:
+    """
+    Roll cues must be validated on the same surface the GM used for prose cues.
+    When the assistant returns a JSON envelope, cues live in `narrative` (last line).
+    Otherwise use the raw string (legacy).
+    """
+    raw = (assistant_text or "").strip()
+    if not raw:
+        return ""
+
+    def _narrative_from_obj(data: object) -> str | None:
+        if not isinstance(data, dict):
+            return None
+        n = data.get("narrative")
+        if isinstance(n, str) and n.strip():
+            return n.strip()
+        return None
+
+    try:
+        parsed = json.loads(raw)
+        n = _narrative_from_obj(parsed)
+        if n is not None:
+            return n
+    except (json.JSONDecodeError, TypeError, ValueError):
+        pass
+
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            parsed = json.loads(raw[start : end + 1])
+            n = _narrative_from_obj(parsed)
+            if n is not None:
+                return n
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    return raw
+
+
 def validate_roll_cue_name(assistant_text: str) -> str | None:
-    lines = (assistant_text or "").splitlines()
+    text = _assistant_text_for_roll_cue(assistant_text)
+    lines = text.splitlines()
     if not lines:
         return None
     last_line = (lines[-1] or "").strip()
