@@ -9,7 +9,7 @@ const SUB_TABS = [
   { id: "weapons", label: "Weapons" },
   { id: "enemies", label: "Enemies" },
   { id: "conditions", label: "Conditions" },
-  { id: "items", label: "Items" },
+  { id: "items", label: "Przedmioty" },
   { id: "consumables", label: "Consumables" },
   { id: "loot-tables", label: "Loot Tables" },
   { id: "archetypes", label: "Archetypes" },
@@ -2068,19 +2068,19 @@ async function refreshItems(host) {
           editable: true,
           editType: "select",
           editOptions: ["weapon", "armor", "consumable", "misc", "quest"],
+          filterable: true,
+          filterOptions: ["weapon", "armor", "consumable", "misc", "quest"],
         },
-        { key: "description", label: "Description", editable: true },
-        { key: "value_gp", label: "GP", type: "number", editable: true },
-        { key: "weight", label: "Weight (legacy)", type: "number", editable: true },
         { key: "weight_kg", label: "Weight kg", type: "number", editable: true },
-        { key: "_proficiency_json", label: "Proficiency classes (JSON)", type: "textarea", editable: true },
-        { key: "note", label: "Note", editable: true },
+        { key: "value_gp", label: "GP", type: "number", editable: true },
+        { key: "description", label: "Description", type: "textarea", editable: true },
         { key: "effect_json", label: "Effect JSON", type: "textarea", editable: true },
         { key: "is_active", label: "Active", type: "boolean", editable: true },
         { key: "locked_at", label: "Lock", type: "locked" },
       ],
       rows,
       {
+        searchPlaceholder: "Search items (key, label, type)…",
         exportRow: (row) => {
           const copy = { ...row };
           delete copy._proficiency_json;
@@ -2105,28 +2105,8 @@ async function refreshItems(host) {
           if (key === "value_gp") {
             body.value_gp = Number(newValue);
           }
-          if (key === "weight") {
-            body.weight = Number(newValue);
-          }
           if (key === "weight_kg") {
             body.weight_kg = Number(newValue);
-          }
-          if (key === "_proficiency_json") {
-            let parsed;
-            try {
-              parsed = JSON.parse(String(newValue || "[]"));
-            } catch (_e) {
-              showToast("proficiency_classes must be valid JSON array.", "error");
-              throw new Error("invalid_json");
-            }
-            if (!Array.isArray(parsed)) {
-              showToast("proficiency_classes must be a JSON array.", "error");
-              throw new Error("invalid_json");
-            }
-            body.proficiency_classes = parsed;
-          }
-          if (key === "note") {
-            body.note = newValue;
           }
           if (key === "effect_json") {
             body.effect_json = newValue;
@@ -2184,10 +2164,12 @@ function mountItems(host) {
           <option value="quest">quest</option>
         </select>
       </label>
-      <label class="field add-form-span-2"><span>Description</span><input data-field="description" type="text" /></label>
+      <label class="field add-form-span-2"><span>Description</span>
+        <textarea data-field="description" rows="3" placeholder="Short player-facing description"></textarea>
+      </label>
       <label class="field"><span>Value (GP)</span><input data-field="value_gp" type="number" value="0" /></label>
-      <label class="field"><span>Weight (legacy)</span><input data-field="weight" type="number" step="any" value="0" /></label>
       <label class="field"><span>Weight (kg)</span><input data-field="weight_kg" type="number" step="any" value="0" /></label>
+      <input type="hidden" data-field="weight" value="0" />
       <label class="field add-form-span-2"><span>Proficiency classes</span>
         <span class="checkbox-inline"><label><input type="checkbox" data-pclass="warrior" /> warrior</label>
         <label><input type="checkbox" data-pclass="scholar" /> scholar</label>
