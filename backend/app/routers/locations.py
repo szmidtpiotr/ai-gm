@@ -32,6 +32,7 @@ class LocationPatchRequest(BaseModel):
     rules: dict[str, Any] | list[Any] | str | None = None
     enemy_keys: list[str] | None = None
     npc_keys: list[str] | None = None
+    is_active: int | None = Field(default=None, ge=0, le=1)
 
 
 def _db_connect() -> sqlite3.Connection:
@@ -334,6 +335,9 @@ def patch_location(
         if req.npc_keys is not None:
             updates.append("npc_keys = ?")
             params.append(json.dumps(req.npc_keys, ensure_ascii=False))
+        if req.is_active is not None:
+            updates.append("is_active = ?")
+            params.append(int(req.is_active))
 
         if updates:
             updates.append("updated_at = datetime('now')")

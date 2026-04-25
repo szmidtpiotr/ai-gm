@@ -3620,6 +3620,7 @@ function mountLocations(host) {
       if (JSON.stringify(existing.rules ?? null) !== JSON.stringify(nextRules ?? null)) patch.rules = nextRules;
       if (JSON.stringify(existing.enemy_keys || []) !== JSON.stringify(nextEnemy)) patch.enemy_keys = nextEnemy;
       if (JSON.stringify(existing.npc_keys || []) !== JSON.stringify(nextNpc)) patch.npc_keys = nextNpc;
+      if (Number(existing.is_active || 0) !== 1) patch.is_active = 1;
       return patch;
     },
     refresh: () => refreshLocations(host),
