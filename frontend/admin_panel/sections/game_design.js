@@ -3223,44 +3223,6 @@ function flattenLocationTree(nodes, depth = 0, out = []) {
   return out;
 }
 
-function decorateLocationTreeRows(flatRows) {
-  const rows = Array.isArray(flatRows) ? flatRows : [];
-  const decorated = rows.map((r) => ({ ...r }));
-  for (let i = 0; i < decorated.length; i += 1) {
-    const depth = Math.max(0, Number(decorated[i].__depth || 0));
-    let hasChildren = false;
-    if (i + 1 < decorated.length) {
-      const nextDepth = Math.max(0, Number(decorated[i + 1].__depth || 0));
-      hasChildren = nextDepth > depth;
-    }
-    let isLastChild = true;
-    for (let j = i + 1; j < decorated.length; j += 1) {
-      const d = Math.max(0, Number(decorated[j].__depth || 0));
-      if (d < depth) {
-        break;
-      }
-      if (d === depth) {
-        isLastChild = false;
-        break;
-      }
-    }
-    decorated[i].__hasChildren = hasChildren;
-    decorated[i].__isLastChild = isLastChild;
-  }
-  return decorated;
-}
-
-function locationTreeLabel(row) {
-  const depth = Math.max(0, Number(row.__depth || 0));
-  const label = String(row.label || row.key || "");
-  if (depth === 0) {
-    return label;
-  }
-  const branch = row.__isLastChild ? "└─" : "├─";
-  const stem = depth > 1 ? `${"┆".repeat(depth - 1)} ` : "";
-  return `${stem}${branch} ${label}`;
-}
-
 function locationTypeBadgeClass(row) {
   return String(row.location_type) === "sub" ? "locations-type-badge is-sub" : "locations-type-badge is-macro";
 }
@@ -3468,11 +3430,10 @@ async function refreshLocations(host) {
       adminFetch("/api/admin/enemies"),
     ]);
     const flat = flattenLocationTree(Array.isArray(treeData) ? treeData : []);
-    const decoratedFlat = decorateLocationTreeRows(flat);
     const enemies = enemyData.items || [];
-    const macros = decoratedFlat.filter((r) => String(r.location_type) === "macro");
-    const byId = new Map(decoratedFlat.map((r) => [Number(r.id), r]));
-    const tableRows = decoratedFlat.map((r) => {
+    const macros = flat.filter((r) => String(r.location_type) === "macro");
+    const byId = new Map(flat.map((r) => [Number(r.id), r]));
+    const tableRows = flat.map((r) => {
       const parent = r.parent_id != null ? byId.get(Number(r.parent_id)) : null;
       const parent_key = parent ? String(parent.key || "") : "";
       const parent_label = parent ? String(parent.label || parent.key || "—") : "—";
@@ -3501,13 +3462,20 @@ async function refreshLocations(host) {
         {
           key: "label",
           label: "Nazwa",
+          editable: true,
           sortValue: (row) => String(row.label || row.key || ""),
-          formatDisplay: (row) => locationTreeLabel(row),
+          formatDisplay: (row) => {
+            const indent = "  ".repeat(Math.max(0, Number(row.__depth || 0)));
+            return `${indent}${String(row.label || row.key || "")}`;
+          },
         },
         {
           key: "location_type",
           label: "Typ",
           type: "badge",
+          editable: true,
+          editType: "select",
+          editOptions: ["macro", "sub"],
           badgeClass: locationTypeBadgeClass,
           badgeText: (row) => (String(row.location_type) === "sub" ? "SUB" : "MAKRO"),
           filterOptions: [
@@ -3526,8 +3494,14 @@ async function refreshLocations(host) {
           key: "is_active",
           label: "Aktywna",
           type: "boolean",
+          editable: true,
         },
-        { key: "description", label: "Opis", formatDisplay: (row) => String(row.description || "").slice(0, 80) },
+        {
+          key: "description",
+          label: "Opis",
+          editable: true,
+          formatDisplay: (row) => String(row.description || "").slice(0, 80),
+        },
       ],
       tableRows,
       {
@@ -3542,6 +3516,37 @@ async function refreshLocations(host) {
           enemy_keys: Array.isArray(row.enemy_keys) ? row.enemy_keys : [],
           npc_keys: Array.isArray(row.npc_keys) ? row.npc_keys : [],
         }),
+        onEdit: async (row, key, newValue) => {
+          const body = {};
+          if (key === "label") {
+            const next = String(newValue || "").trim();
+            if (!next) {
+              showToast("Label is required.", "error");
+              throw new Error("invalid_label");
+            }
+            body.label = next;
+          } else if (key === "location_type") {
+            const next = String(newValue || "macro").toLowerCase();
+            if (!["macro", "sub"].includes(next)) {
+              showToast("location_type must be macro|sub.", "error");
+              throw new Error("invalid_location_type");
+            }
+            body.location_type = next;
+          } else if (key === "description") {
+            body.description = String(newValue || "").trim() || null;
+          } else if (key === "is_active") {
+            body.is_active = newValue ? 1 : 0;
+          } else {
+            return;
+          }
+          const updated = await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          });
+          Object.assign(row, updated || {});
+          showToast("Location updated.", "success");
+          await refreshLocations(host);
+        },
         extraActions: (row) => [
           {
             label: "Edytuj",

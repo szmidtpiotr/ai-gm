@@ -282,7 +282,7 @@
         }
         gameDesignReady = true;
         try {
-          const { init } = await import("/admin_panel/sections/game_design.js?v=30");
+          const { init } = await import("/admin_panel/sections/game_design.js?v=31");
           await init(el);
         } catch (err) {
           gameDesignReady = false;
