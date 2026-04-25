@@ -4,7 +4,7 @@ import sqlite3
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -179,3 +179,40 @@ class TestLootService(unittest.TestCase):
         inv_id = int(ls.get_character_inventory(1)[0]["id"])
         with self.assertRaises(ValueError):
             ls.equip_item(1, inv_id, "helmet")
+
+    def test_equip_item_rejects_literal_invalid_slot_string(self):
+        """Same rule as ``helmet`` — slot must be in main_hand/off_hand/armor (doc: invalid_slot)."""
+        ls.grant_loot_to_character(1, [{"weapon_key": "shortsword", "quantity": 1}])
+        inv_id = int(ls.get_character_inventory(1)[0]["id"])
+        with self.assertRaises(ValueError) as ctx:
+            ls.equip_item(1, inv_id, "invalid_slot")
+        self.assertIn("invalid slot", str(ctx.exception).lower())
+
+    def test_xor_constraint_raises(self):
+        conn = sqlite3.connect(str(self._tmp))
+        try:
+            conn.execute("PRAGMA foreign_keys = ON")
+            try:
+                conn.execute("PRAGMA check_constraint = ON")
+            except sqlite3.OperationalError:
+                pass
+            with self.assertRaises(sqlite3.IntegrityError):
+                conn.execute(
+                    """
+                    INSERT INTO character_inventory
+                    (character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source)
+                    VALUES (1, 'rope', 'shortsword', NULL, 1, 0, NULL, 'test')
+                    """
+                )
+                conn.commit()
+        finally:
+            conn.close()
+
+    @patch("app.services.loot_service.logger")
+    def test_grant_loot_skips_unknown_key_with_warning(self, mock_logger: MagicMock):
+        granted = ls.grant_loot_to_character(1, [{"item_key": "totally_unknown_catalog_key", "quantity": 1}])
+        self.assertEqual(granted, [])
+        self.assertEqual(ls.get_character_inventory(1), [])
+        mock_logger.warning.assert_called()
+        call_kw = mock_logger.warning.call_args[1]
+        self.assertEqual(call_kw.get("character_id"), 1)

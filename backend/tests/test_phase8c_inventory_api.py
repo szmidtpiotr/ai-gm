@@ -134,3 +134,47 @@ class TestInventoryApi(unittest.TestCase):
         self.assertEqual(r.json()["data"]["key"], "rope")
         r2 = self.client.get("/api/items/missing_key")
         self.assertEqual(r2.status_code, 404)
+
+    def test_delete_inventory_item_200(self):
+        r = self.client.delete("/api/inventory/1/2")
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertTrue(body["ok"])
+        inv = self.client.get("/api/inventory/1").json()["data"]
+        self.assertEqual(len(inv), 1)
+
+    def test_delete_equipped_item_blocked(self):
+        r = self.client.delete("/api/inventory/1/1")
+        self.assertEqual(r.status_code, 400)
+
+    def test_delete_equipped_item_with_force(self):
+        r = self.client.delete("/api/inventory/1/1?force=true")
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()["ok"])
+
+    def test_equip_invalid_slot_returns_400(self):
+        r = self.client.post(
+            "/api/inventory/1/equip",
+            json={"inventory_id": 1, "slot": "invalid_slot"},
+        )
+        self.assertEqual(r.status_code, 400)
+
+    def test_get_items_filter_by_type(self):
+        conn = sqlite3.connect(str(self._tmp))
+        try:
+            conn.execute(
+                """
+                INSERT INTO game_config_items
+                (key, label, item_type, description, value_gp, weight, weight_kg, is_active)
+                VALUES ('armor_test_plate', 'Test Plate', 'armor', 'heavy', 100, 0, 15.0, 1)
+                """
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        r = self.client.get("/api/items?item_type=armor")
+        self.assertEqual(r.status_code, 200)
+        data = r.json()["data"]
+        self.assertGreaterEqual(len(data), 1)
+        for row in data:
+            self.assertEqual(str(row.get("item_type")).lower(), "armor")
