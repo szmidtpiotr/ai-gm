@@ -239,6 +239,9 @@ def get_character_inventory(character_id: int) -> list[dict]:
     """Return unified inventory rows for a character."""
     cid = int(character_id)
     with _conn() as conn:
+        ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
+        if not ch:
+            raise ValueError("character not found")
         rows = conn.execute(
             """
             SELECT ci.id, ci.slot, ci.equipped, ci.quantity, ci.source, ci.acquired_at,
@@ -322,3 +325,106 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
     if not updated:
         raise ValueError("inventory entry not found")
     return updated[0]
+
+
+def delete_inventory_item(character_id: int, inventory_id: int, *, force: bool = False) -> dict:
+    """Delete a character inventory entry (guard equipped unless force=True)."""
+    cid = int(character_id)
+    iid = int(inventory_id)
+    with _conn() as conn:
+        ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
+        if not ch:
+            raise ValueError("character not found")
+        row = conn.execute(
+            """
+            SELECT id, character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source, acquired_at
+            FROM character_inventory
+            WHERE id = ? AND character_id = ?
+            """,
+            (iid, cid),
+        ).fetchone()
+        if not row:
+            raise ValueError("inventory entry not found")
+        if int(row["equipped"] or 0) == 1 and not force:
+            raise ValueError("equipped item requires force")
+        conn.execute("DELETE FROM character_inventory WHERE id = ? AND character_id = ?", (iid, cid))
+        conn.commit()
+    return {
+        "id": int(row["id"]),
+        "character_id": int(row["character_id"]),
+        "item_key": row["item_key"],
+        "weapon_key": row["weapon_key"],
+        "consumable_key": row["consumable_key"],
+        "quantity": int(row["quantity"] or 0),
+        "equipped": int(row["equipped"] or 0),
+        "slot": row["slot"],
+        "source": row["source"],
+        "acquired_at": row["acquired_at"],
+    }
+
+
+def list_config_items(item_type: str | None = None) -> list[dict]:
+    """List game_config_items, optionally filtered by item_type."""
+    t = str(item_type or "").strip().lower()
+    with _conn() as conn:
+        if t:
+            rows = conn.execute(
+                """
+                SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active
+                FROM game_config_items
+                WHERE item_type = ?
+                ORDER BY label COLLATE NOCASE ASC, key ASC
+                """,
+                (t,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active
+                FROM game_config_items
+                ORDER BY label COLLATE NOCASE ASC, key ASC
+                """
+            ).fetchall()
+    return [
+        {
+            "key": r["key"],
+            "label": r["label"],
+            "item_type": r["item_type"],
+            "description": r["description"],
+            "value_gp": int(r["value_gp"] or 0),
+            "weight": float(r["weight"] or 0.0),
+            "weight_kg": float(r["weight_kg"] or 0.0),
+            "effect_json": r["effect_json"],
+            "is_active": bool(r["is_active"]),
+        }
+        for r in rows
+    ]
+
+
+def get_config_item(key: str) -> dict | None:
+    """Get one game_config_item by key."""
+    k = str(key or "").strip()
+    if not k:
+        return None
+    with _conn() as conn:
+        row = conn.execute(
+            """
+            SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active
+            FROM game_config_items
+            WHERE key = ?
+            """,
+            (k,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "key": row["key"],
+        "label": row["label"],
+        "item_type": row["item_type"],
+        "description": row["description"],
+        "value_gp": int(row["value_gp"] or 0),
+        "weight": float(row["weight"] or 0.0),
+        "weight_kg": float(row["weight_kg"] or 0.0),
+        "effect_json": row["effect_json"],
+        "is_active": bool(row["is_active"]),
+    }

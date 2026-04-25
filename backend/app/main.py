@@ -19,7 +19,7 @@ from app.services.dice import build_gm_dice_breakdown, parse_character_sheet
 from app.services.llm_service import generate_chat
 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
 
-from app.api import auth, campaign_helpme, campaign_history, campaign_memory, campaigns, characters, combat, commands, turns, mechanics
+from app.api import auth, campaign_helpme, campaign_history, campaign_memory, campaigns, characters, combat, commands, turns, mechanics, inventory
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.migrations_admin import run_admin_migrations
@@ -197,6 +197,7 @@ app.include_router(campaign_helpme.router, prefix="/api")
 app.include_router(campaigns.router, prefix="/api")
 app.include_router(combat.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
+app.include_router(inventory.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")
 # Keep non-prefixed character endpoints available for direct local calls
