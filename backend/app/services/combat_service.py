@@ -861,10 +861,24 @@ def resolve_attack(
                 if dead:
                     enemy["dead"] = True
                     ek = str(enemy.get("enemy_key") or "")
-                    if ek:
-                        from app.services.game_engine import resolve_enemy_loot
+                    if ek and ch_id:
+                        try:
+                            from app.services.loot_service import grant_loot_to_character, roll_loot
 
-                        loot = resolve_enemy_loot(ek)
+                            loot_items = roll_loot(ek)
+                            if loot_items:
+                                loot = grant_loot_to_character(ch_id, loot_items, source="loot")
+                            else:
+                                loot = []
+                        except Exception as e:
+                            logger.warning(
+                                "combat_loot_grant_failed",
+                                campaign_id=campaign_id,
+                                character_id=ch_id,
+                                enemy_key=ek,
+                                error_message=str(e),
+                            )
+                            loot = []
                     else:
                         loot = []
                     out["loot"] = loot

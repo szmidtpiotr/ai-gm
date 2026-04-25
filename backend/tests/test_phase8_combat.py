@@ -28,8 +28,18 @@ def _last_structlog_event_kw(mock_info, event_name: str) -> dict | None:
 
 
 def _step81_loot_by_enemy_key(ek: str) -> list[dict]:
-    """Side-effect for resolve_enemy_loot in two-enemy victory test."""
-    return [{"source_type": "item", "source_key": f"loot_{ek}", "qty": 1}]
+    """Side-effect for roll_loot in two-enemy victory test."""
+    return [{"item_key": f"loot_{ek}", "quantity": 1}]
+
+
+def _grant_passthrough(_character_id: int, loot_items: list[dict], source: str = "loot") -> list[dict]:
+    """Test helper: mimic grant output from incoming roll payload."""
+    out = []
+    for it in loot_items or []:
+        key = it.get("item_key") or it.get("weapon_key") or it.get("consumable_key")
+        qty = int(it.get("quantity") or 1)
+        out.append({"key": key, "label": str(key), "item_type": "item", "quantity": qty, "source": source})
+    return out
 
 
 def _schema_sql() -> str:
@@ -223,7 +233,7 @@ class TestPhase8Combat(unittest.TestCase):
 
     @patch("app.services.combat_service.roll_d20", return_value=2)
     @patch("app.services.combat_service.roll_damage_dice", return_value=5)
-    @patch("app.services.game_engine.resolve_enemy_loot", return_value=[])
+    @patch("app.services.loot_service.roll_loot", return_value=[])
     def test_resolve_attack_hit_reduces_hp(self, _loot, _dmg, _d20):
         cs.initiate_combat(1, 1, ["bandit"])
         r = cs.resolve_attack(1, 20, attacker="player")
@@ -262,8 +272,9 @@ class TestPhase8Combat(unittest.TestCase):
 
     @patch("app.services.combat_service.roll_d20", return_value=1)
     @patch("app.services.combat_service.roll_damage_dice", return_value=50)
-    @patch("app.services.game_engine.resolve_enemy_loot", return_value=[{"source_type": "item", "source_key": "gold", "qty": 1}])
-    def test_enemy_death_victory_and_loot(self, _loot, _dmg, _d20):
+    @patch("app.services.loot_service.grant_loot_to_character", side_effect=_grant_passthrough)
+    @patch("app.services.loot_service.roll_loot", return_value=[{"item_key": "gold", "quantity": 1}])
+    def test_enemy_death_victory_and_loot(self, _loot, _grant, _dmg, _d20):
         cs.initiate_combat(1, 1, ["bandit"])
         r = cs.resolve_attack(1, 20, attacker="player")
         self.assertTrue(r.get("enemy_dead"))
@@ -272,14 +283,14 @@ class TestPhase8Combat(unittest.TestCase):
         self.assertEqual(st["status"], "ended")
         self.assertEqual(st["ended_reason"], "victory")
         self.assertEqual(len(st.get("loot_pool") or []), 1)
-        self.assertEqual(st["loot_pool"][0].get("source_key"), "gold")
+        self.assertEqual(st["loot_pool"][0].get("key"), "gold")
         enemies = [c for c in (st.get("combatants") or []) if c.get("type") == "enemy"]
         self.assertEqual(len(enemies), 1)
         self.assertTrue(enemies[0].get("dead"))
 
     @patch("app.services.combat_service.roll_d20", return_value=1)
     @patch("app.services.combat_service.roll_damage_dice", return_value=50)
-    @patch("app.services.game_engine.resolve_enemy_loot", return_value=[])
+    @patch("app.services.loot_service.roll_loot", return_value=[])
     def test_enemy_death_victory_empty_loot_pool_when_no_drops(self, _loot, _dmg, _d20):
         cs.initiate_combat(1, 1, ["bandit"])
         r = cs.resolve_attack(1, 20, attacker="player")
@@ -489,7 +500,7 @@ class TestPhase8Combat(unittest.TestCase):
 
     @patch("app.services.combat_service.roll_d20", return_value=2)
     @patch("app.services.combat_service.roll_damage_dice", return_value=5)
-    @patch("app.services.game_engine.resolve_enemy_loot", return_value=[])
+    @patch("app.services.loot_service.roll_loot", return_value=[])
     def test_resolve_attack_normalizes_generic_enemy_key_for_roll_card(
         self, _loot, _dmg, _d20
     ):
@@ -582,10 +593,11 @@ class TestPhase8Combat(unittest.TestCase):
 
     # --- docs/combat_system_2/step_8.1_e2e_testing.txt — automated slice (pytest) ---
 
-    @patch("app.services.game_engine.resolve_enemy_loot", return_value=[{"source_type": "item", "source_key": "gem", "qty": 2}])
+    @patch("app.services.loot_service.grant_loot_to_character", side_effect=_grant_passthrough)
+    @patch("app.services.loot_service.roll_loot", return_value=[{"item_key": "gem", "quantity": 2}])
     @patch("app.services.combat_service.roll_d20", return_value=1)
     @patch("app.services.combat_service.roll_damage_dice", return_value=50)
-    def test_step81_victory_sql_active_combat_matches_doc(self, _dmg, _d20, _loot):
+    def test_step81_victory_sql_active_combat_matches_doc(self, _dmg, _d20, _loot, _grant):
         """STEP 4 (doc): SELECT status, ended_reason, loot_pool after victory."""
         cs.initiate_combat(1, 1, ["bandit"])
         cs.resolve_attack(1, 20, attacker="player")
@@ -599,10 +611,10 @@ class TestPhase8Combat(unittest.TestCase):
         self.assertEqual(str(row["ended_reason"]), "victory")
         pool = json.loads(row["loot_pool"] or "[]")
         self.assertEqual(len(pool), 1)
-        self.assertEqual(pool[0].get("source_key"), "gem")
-        self.assertEqual(int(pool[0].get("qty") or 0), 2)
+        self.assertEqual(pool[0].get("key"), "gem")
+        self.assertEqual(int(pool[0].get("quantity") or 0), 2)
 
-    @patch("app.services.game_engine.resolve_enemy_loot", return_value=[])
+    @patch("app.services.loot_service.roll_loot", return_value=[])
     @patch("app.services.combat_service.roll_d20", return_value=1)
     @patch("app.services.combat_service.roll_damage_dice", return_value=12)
     def test_step81_enemy_hp_exactly_zero_counts_as_dead_victory(self, _dmg, _d20, _loot):
@@ -616,11 +628,12 @@ class TestPhase8Combat(unittest.TestCase):
         enemies = [c for c in (r["combat_state"].get("combatants") or []) if c.get("type") == "enemy"]
         self.assertTrue(enemies[0].get("dead"))
 
-    @patch("app.services.game_engine.resolve_enemy_loot", side_effect=_step81_loot_by_enemy_key)
+    @patch("app.services.loot_service.grant_loot_to_character", side_effect=_grant_passthrough)
+    @patch("app.services.loot_service.roll_loot", side_effect=_step81_loot_by_enemy_key)
     @patch("app.services.combat_service.roll_damage_dice", return_value=50)
     @patch("app.services.combat_service.roll_d20")
-    def test_step81_two_enemies_victory_loot_pool_accumulates(self, mock_r20, _dmg, _loot):
-        """Dwóch wrogów w JSON → dwa ciosy, victory, loot_pool z dwóch resolve_enemy_loot."""
+    def test_step81_two_enemies_victory_loot_pool_accumulates(self, mock_r20, _dmg, _loot, _grant):
+        """Dwóch wrogów w JSON → dwa ciosy, victory, loot_pool z dwóch roll_loot."""
         mock_r20.side_effect = [18, 10, 12, 1, 1]
         cs.initiate_combat(1, 1, ["bandit", "bandit"])
         r1 = cs.resolve_attack(1, 20, attacker="player")
@@ -630,9 +643,9 @@ class TestPhase8Combat(unittest.TestCase):
         self.assertEqual(r2["combat_state"]["ended_reason"], "victory")
         pool = r2["combat_state"].get("loot_pool") or []
         self.assertEqual(len(pool), 2)
-        # Oba wrogowie mają ten sam enemy_key „bandit” — resolve_enemy_loot wołany 2× z tym samym kluczem.
-        self.assertEqual(str(pool[0].get("source_key")), "loot_bandit")
-        self.assertEqual(str(pool[1].get("source_key")), "loot_bandit")
+        # Oba wrogowie mają ten sam enemy_key „bandit” — roll_loot wołany 2× z tym samym kluczem.
+        self.assertEqual(str(pool[0].get("key")), "loot_bandit")
+        self.assertEqual(str(pool[1].get("key")), "loot_bandit")
 
     @patch(
         "app.services.solo_death_service.get_user_llm_settings_full",
