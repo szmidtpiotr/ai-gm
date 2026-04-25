@@ -549,6 +549,14 @@ def _create_location_from_intent(
     )
     conn.commit()
     row = conn.execute("SELECT id FROM game_locations WHERE key = ? LIMIT 1", (key,)).fetchone()
+    logger.info(
+        "location_integrity_dynamic_location_created",
+        campaign_id=campaign_id,
+        key=key,
+        label=label,
+        parent_id=parent_id,
+        location_type="sub" if parent_id else "macro",
+    )
     return int(row["id"]) if row else None
 
 
@@ -560,8 +568,18 @@ def _apply_location_integrity_from_response(
     llm_config: dict[str, str] | None = None,
 ) -> None:
     try:
+        logger.info(
+            "location_integrity_apply_started",
+            campaign_id=campaign_id,
+            character_id=character_id,
+        )
         intent = parse_location_intent(gm_response, campaign_id=campaign_id, llm_config=llm_config)
         if not intent:
+            logger.info(
+                "location_integrity_apply_no_intent",
+                campaign_id=campaign_id,
+                character_id=character_id,
+            )
             return
         result = validate_move(campaign_id, intent, llm_config=llm_config)
         if result.allowed:
@@ -570,6 +588,20 @@ def _apply_location_integrity_from_response(
                 resolved_id = _create_location_from_intent(conn, intent, campaign_id)
             if resolved_id is not None:
                 update_campaign_location(campaign_id, resolved_id)
+                logger.info(
+                    "location_integrity_apply_location_updated",
+                    campaign_id=campaign_id,
+                    character_id=character_id,
+                    resolved_location_id=resolved_id,
+                    action=intent.action or "",
+                )
+            else:
+                logger.info(
+                    "location_integrity_apply_allowed_no_resolved_location",
+                    campaign_id=campaign_id,
+                    character_id=character_id,
+                    action=intent.action or "",
+                )
             return
         log_integrity_violation(
             campaign_id=campaign_id,
@@ -577,6 +609,13 @@ def _apply_location_integrity_from_response(
             attempted_move=intent.target_label,
             current_location_key=_current_location_key(conn, campaign_id),
             reason_blocked=result.block_reason,
+        )
+        logger.info(
+            "location_integrity_apply_blocked",
+            campaign_id=campaign_id,
+            character_id=character_id,
+            attempted_move=intent.target_label,
+            reason_blocked=result.block_reason or "",
         )
     except Exception as e:
         logger.warning(

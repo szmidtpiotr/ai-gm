@@ -1,8 +1,11 @@
 import json
 from dataclasses import dataclass
 
+from app.core.logging import get_logger
 from app.services.llm_service import generate_chat
 from app.services.location_integrity_config import get_effective_flag
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -89,10 +92,17 @@ def parse_location_intent(
     llm_config: dict[str, str] | None = None,
 ) -> LocationIntent | None:
     if not gm_response:
+        logger.info("location_integrity_intent_empty_response", campaign_id=campaign_id)
         return None
 
     json_enabled = get_effective_flag("location_parser_json_enabled", campaign_id)
     fallback_enabled = get_effective_flag("location_parser_fallback_enabled", campaign_id)
+    logger.info(
+        "location_integrity_intent_parse_started",
+        campaign_id=campaign_id,
+        json_enabled=bool(json_enabled),
+        fallback_enabled=bool(fallback_enabled),
+    )
 
     if json_enabled:
         try:
@@ -100,14 +110,34 @@ def parse_location_intent(
             if isinstance(payload, dict):
                 intent = _intent_from_payload(payload)
                 if intent:
+                    logger.info(
+                        "location_integrity_intent_parsed_json",
+                        campaign_id=campaign_id,
+                        action=intent.action or "",
+                        target_label=intent.target_label,
+                        target_key=intent.target_key or "",
+                    )
                     return intent
         except Exception:
             # Parser errors must not stop gameplay.
+            logger.warning("location_integrity_intent_json_parse_failed", campaign_id=campaign_id)
             pass
 
     if fallback_enabled:
         try:
-            return _fallback_prompt_parse(gm_response, llm_config=llm_config)
+            intent = _fallback_prompt_parse(gm_response, llm_config=llm_config)
+            if intent:
+                logger.info(
+                    "location_integrity_intent_parsed_fallback",
+                    campaign_id=campaign_id,
+                    action=intent.action or "",
+                    target_label=intent.target_label,
+                )
+            else:
+                logger.info("location_integrity_intent_fallback_no_match", campaign_id=campaign_id)
+            return intent
         except Exception:
+            logger.warning("location_integrity_intent_fallback_failed", campaign_id=campaign_id)
             return None
+    logger.info("location_integrity_intent_not_detected", campaign_id=campaign_id)
     return None

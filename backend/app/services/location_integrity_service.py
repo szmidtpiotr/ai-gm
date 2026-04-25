@@ -1,6 +1,9 @@
 import sqlite3
 
+from app.core.logging import get_logger
+
 DB_PATH = "/data/ai_gm.db"
+logger = get_logger(__name__)
 
 
 def _conn() -> sqlite3.Connection:
@@ -25,6 +28,12 @@ def update_campaign_location(campaign_id: int, location_id: int) -> dict:
             (int(loc["id"]), campaign_id),
         )
         conn.commit()
+        logger.info(
+            "location_integrity_campaign_location_updated",
+            campaign_id=campaign_id,
+            location_id=int(loc["id"]),
+            location_key=str(loc["key"]),
+        )
         return {
             "campaign_id": campaign_id,
             "current_location_id": int(loc["id"]),
@@ -61,3 +70,11 @@ def log_integrity_violation(
             (campaign_id, character_id, attempted_move, current_location_key, reason_blocked),
         )
         conn.commit()
+        logger.info(
+            "location_integrity_violation_logged",
+            campaign_id=campaign_id,
+            character_id=character_id,
+            attempted_move=attempted_move,
+            current_location_key=current_location_key or "",
+            reason_blocked=reason_blocked or "",
+        )
