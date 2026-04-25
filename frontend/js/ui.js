@@ -545,6 +545,12 @@ window.extractPersistedGmRollNarrative = function (text) {
 };
 
 window.addGmRollBubble = function (rollData, turn) {
+  if (
+    typeof window.shouldShowCombatChatDetails === 'function' &&
+    !window.shouldShowCombatChatDetails()
+  ) {
+    return;
+  }
   const { chatEl } = window.getEls();
   if (!chatEl) return;
 
@@ -567,6 +573,15 @@ window.addBackInGameSeparator = function () {
   chatEl.appendChild(row);
   window.scrollChatToBottom();
   window.updateArchiveToggleUi?.();
+};
+
+window.shouldShowCombatChatDetails = function () {
+  try {
+    const raw = localStorage.getItem('ai-gm:chatShowCombatDetails');
+    return raw === '1' || raw === 'true';
+  } catch (_e) {
+    return false;
+  }
 };
 
 // Decyduje, czy dany dymek ma być "archiwalny" (ukrywany domyślnie).
@@ -971,6 +986,13 @@ window.addMessage = function ({
     text && typeof window.tryParseCombatRollCardFromText === 'function'
       ? window.tryParseCombatRollCardFromText(text)
       : null;
+  if (
+    combatRollPayload &&
+    typeof window.shouldShowCombatChatDetails === 'function' &&
+    !window.shouldShowCombatChatDetails()
+  ) {
+    return;
+  }
   const rollPayload =
     role === 'user' && text && typeof window.tryParseRollCardFromText === 'function'
       ? window.tryParseRollCardFromText(text)
@@ -1444,6 +1466,12 @@ window.renderTurnsToChat = function () {
         typeof window.tryParseCombatRollCardFromText === 'function'
           ? window.tryParseCombatRollCardFromText(turn.user_text)
           : null;
+      const showCombatDetails =
+        typeof window.shouldShowCombatChatDetails !== 'function' ||
+        window.shouldShowCombatChatDetails();
+      if (cpMsg && !showCombatDetails) {
+        // Domyślnie czat pokazuje tylko narrację; szczegóły tury są w panelu walki.
+      } else {
       const isEnemyCard = !!(cpMsg && String(cpMsg.kind || '') === 'enemy_attack');
       window.addMessage({
         speaker: isEnemyCard
@@ -1457,6 +1485,7 @@ window.renderTurnsToChat = function () {
         memoryTurn: isMemory,
         helpmeTurn: isHelpme
       });
+      }
     }
 
     if (turn.assistant_text) {
