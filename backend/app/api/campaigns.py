@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from app.core.config import DEFAULT_CAMPAIGN_LANGUAGE
 from app.core.logging import get_logger
 from app.services.solo_death_service import death_summary_payload
+from app.services.location_integrity_service import update_campaign_location_by_key
 
 DB_PATH = "/data/ai_gm.db"
 logger = get_logger(__name__)
@@ -21,6 +22,10 @@ class CampaignCreateRequest(BaseModel):
     language: str = DEFAULT_CAMPAIGN_LANGUAGE
     mode: str = "solo"
     status: str = "active"
+
+
+class CampaignLocationPatchRequest(BaseModel):
+    location_key: str
 
 
 @router.get("/campaigns")
@@ -138,6 +143,21 @@ def create_campaign(req: CampaignCreateRequest):
     # clears the UI automatically because the campaign_id changes.
     # The backend does not maintain an in-memory chat state.
     return dict(row)
+
+
+@router.patch("/campaigns/{campaign_id}/location")
+def patch_campaign_location(campaign_id: int, req: CampaignLocationPatchRequest):
+    key = (req.location_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=422, detail="location_key is required")
+    try:
+        return update_campaign_location_by_key(campaign_id, key)
+    except LookupError as e:
+        if str(e) == "campaign_not_found":
+            raise HTTPException(status_code=404, detail="Campaign not found") from None
+        if str(e) == "location_not_found":
+            raise HTTPException(status_code=404, detail="Location not found") from None
+        raise
 
 
 @router.post("/campaigns/{campaign_id}/reset")

@@ -6,6 +6,7 @@ from app.core.turn_engine import buildmessages, loadrecentturns
 from app.services.config_service import build_runtime_config_block
 from app.services.dice import infer_roll_type, parse_character_sheet
 from app.services.llm_service import generate_chat
+from app.services.location_context_injector import build_location_context
 from app.services.solo_death_service import DEATH_SAVE_FAILURE_THRESHOLD
 
 
@@ -139,6 +140,11 @@ def build_narrative_messages(
         runtime_config_block=build_runtime_config_block(),
         combat_context_block=combat_block,
     )
+    loc_block = build_location_context(int(campaign["id"]))
+    if loc_block and messages:
+        first = messages[0]
+        if isinstance(first, dict) and first.get("role") == "system":
+            first["content"] = f"{first.get('content', '').rstrip()}\n\n{loc_block}"
 
     combat_log_block = combat_svc.get_combat_turns_context_for_prompt(int(campaign["id"]))
     if combat_log_block and messages:

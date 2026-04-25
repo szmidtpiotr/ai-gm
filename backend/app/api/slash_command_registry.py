@@ -10,5 +10,6 @@ COMMAND_REGISTRY: dict[str, str] = {
     "/atak": "Stan aktywnej walki (wrogowie, HP, czyja tura) albo informacja, że walka nie trwa",
     "/mem [pytanie]": "Pytanie o przeszłość z podsumowań — bez wpływu na narrację (żółte dymki)",
     "/helpme [pytanie]": "Doradca OOC — wskazówki bez zmiany fabuły (czerwone dymki); nie wpływa na kontekst narracji",
+    "/move [lokacja]": "Próba przejścia do wskazanej lokalizacji z walidacją integralności świata",
     "/export": "Export the full session to a text file on the server (/data/exports/)",
 }

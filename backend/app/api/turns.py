@@ -34,6 +34,14 @@ from app.services.llm_service import (
     get_effective_config,
     get_health,
 )
+from app.services.location_integrity_config import get_effective_flag
+from app.services.location_intent_parser import LocationIntent, parse_location_intent
+from app.services.location_integrity_service import (
+    log_integrity_violation,
+    update_campaign_location,
+    update_campaign_location_by_key,
+)
+from app.services.location_validator import validate_move
 from app.api.slash_command_registry import COMMAND_REGISTRY
 from app.services.client_ui_config import (
     get_public_help_command_texts,
@@ -495,6 +503,90 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _current_location_key(conn: sqlite3.Connection, campaign_id: int) -> str | None:
+    row = conn.execute(
+        """
+        SELECT gl.key
+        FROM campaigns c
+        LEFT JOIN game_locations gl ON gl.id = c.current_location_id
+        WHERE c.id = ?
+        LIMIT 1
+        """,
+        (campaign_id,),
+    ).fetchone()
+    if not row:
+        return None
+    return row["key"] if "key" in row.keys() else None
+
+
+def _create_location_from_intent(
+    conn: sqlite3.Connection,
+    intent: LocationIntent,
+    campaign_id: int,
+) -> int | None:
+    label = (intent.target_label or "").strip()
+    if not label:
+        return None
+    key = (intent.target_key or "").strip().lower()
+    if not key:
+        key = re.sub(r"[^a-z0-9]+", "_", label.lower()).strip("_") or f"loc_{campaign_id}"
+    parent_id = None
+    if intent.parent_key:
+        p = conn.execute(
+            "SELECT id FROM game_locations WHERE key = ? LIMIT 1",
+            (intent.parent_key,),
+        ).fetchone()
+        if p:
+            parent_id = int(p["id"])
+    conn.execute(
+        """
+        INSERT INTO game_locations (key, label, description, parent_id, location_type, rules, enemy_keys, npc_keys, is_active)
+        VALUES (?, ?, ?, ?, ?, '{}', '[]', '[]', 1)
+        """,
+        (key, label, intent.description, parent_id, "sub" if parent_id else "macro"),
+    )
+    conn.commit()
+    row = conn.execute("SELECT id FROM game_locations WHERE key = ? LIMIT 1", (key,)).fetchone()
+    return int(row["id"]) if row else None
+
+
+def _apply_location_integrity_from_response(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    character_id: int,
+    gm_response: str,
+    llm_config: dict[str, str] | None = None,
+) -> None:
+    if not get_effective_flag("location_integrity_enabled", campaign_id):
+        return
+    try:
+        intent = parse_location_intent(gm_response, campaign_id=campaign_id, llm_config=llm_config)
+        if not intent:
+            return
+        result = validate_move(campaign_id, intent, llm_config=llm_config)
+        if result.allowed:
+            resolved_id = result.resolved_location_id
+            if resolved_id is None and result.is_new_location and intent.action == "create":
+                resolved_id = _create_location_from_intent(conn, intent, campaign_id)
+            if resolved_id is not None:
+                update_campaign_location(campaign_id, resolved_id)
+            return
+        log_integrity_violation(
+            campaign_id=campaign_id,
+            character_id=character_id,
+            attempted_move=intent.target_label,
+            current_location_key=_current_location_key(conn, campaign_id),
+            reason_blocked=result.block_reason,
+        )
+    except Exception as e:
+        logger.warning(
+            "location_integrity_processing_failed",
+            campaign_id=campaign_id,
+            character_id=character_id,
+            error_message=str(e),
+        )
 
 
 def _atak_command_response_for_api(campaign_id: int) -> dict:
@@ -1056,6 +1148,51 @@ def create_turn(
                     "turn_id": turn_id,
                 }
 
+            # /move [target]
+            if cmd == "/move":
+                target = re.sub(r"^/move\s*", "", text, count=1, flags=re.I).strip()
+                if not target:
+                    raise HTTPException(status_code=400, detail="Usage: /move [nazwa lokalizacji]")
+                intent = LocationIntent(
+                    action="move",
+                    target_label=target,
+                    target_key=None,
+                    parent_key=None,
+                    description=None,
+                )
+                vr = validate_move(campaign_id, intent, llm_config=llm_config)
+                if vr.allowed and vr.resolved_location_id is not None:
+                    upd = update_campaign_location(campaign_id, vr.resolved_location_id)
+                    result = {
+                        "command": "move",
+                        "allowed": True,
+                        "message": f"Przenosisz się do: {upd['location_label']}.",
+                        **upd,
+                    }
+                else:
+                    result = {
+                        "command": "move",
+                        "allowed": False,
+                        "message": "Nie możesz teraz przejść do tej lokalizacji.",
+                        "reason": vr.block_reason,
+                    }
+                    log_integrity_violation(
+                        campaign_id=campaign_id,
+                        character_id=payload.character_id,
+                        attempted_move=target,
+                        current_location_key=_current_location_key(conn, campaign_id),
+                        reason_blocked=vr.block_reason,
+                    )
+                log = create_turn_log(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    user_text=text,
+                    assistant_text=json.dumps(result, ensure_ascii=False),
+                    route=route,
+                )
+                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
             # /export
             if cmd == "/export":
                 filepath = _export_session_to_file(conn, campaign_id)
@@ -1119,6 +1256,13 @@ def create_turn(
 
         clean_assistant = COMBAT_START_RE.sub("", assistant_text).rstrip()
         validate_roll_cue_name(clean_assistant.strip())
+        _apply_location_integrity_from_response(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            gm_response=clean_assistant,
+            llm_config=llm_config,
+        )
 
         log = create_turn_log(
             conn=conn,
@@ -1439,6 +1583,62 @@ def create_turn_stream(
                     headers=stream_headers,
                 )
 
+            if cmd == "/move":
+                target = re.sub(r"^/move\s*", "", text, count=1, flags=re.I).strip()
+                if not target:
+                    raise HTTPException(status_code=400, detail="Usage: /move [nazwa lokalizacji]")
+                intent = LocationIntent(
+                    action="move",
+                    target_label=target,
+                    target_key=None,
+                    parent_key=None,
+                    description=None,
+                )
+                vr = validate_move(campaign_id, intent, llm_config=llm_config)
+                if vr.allowed and vr.resolved_location_id is not None:
+                    upd = update_campaign_location(campaign_id, vr.resolved_location_id)
+                    result = {
+                        "command": "move",
+                        "allowed": True,
+                        "message": f"Przenosisz się do: {upd['location_label']}.",
+                        **upd,
+                    }
+                else:
+                    result = {
+                        "command": "move",
+                        "allowed": False,
+                        "message": "Nie możesz teraz przejść do tej lokalizacji.",
+                        "reason": vr.block_reason,
+                    }
+                    log_integrity_violation(
+                        campaign_id=campaign_id,
+                        character_id=payload.character_id,
+                        attempted_move=target,
+                        current_location_key=_current_location_key(conn, campaign_id),
+                        reason_blocked=vr.block_reason,
+                    )
+                route_cmd = "command"
+                log = create_turn_log(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    user_text=text,
+                    assistant_text=json.dumps(result, ensure_ascii=False),
+                    route=route_cmd,
+                )
+                outer = _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+                outer_json = json.dumps(outer, ensure_ascii=False)
+
+                def move_cmd_stream():
+                    yield f"data: [CMD_JSON]{outer_json}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    move_cmd_stream(),
+                    media_type="text/event-stream",
+                    headers=stream_headers,
+                )
+
             def command_stream():
                 yield f"data: [CMD] {text}\n\n"
                 yield "data: [DONE]\n\n"
@@ -1504,6 +1704,17 @@ def create_turn_stream(
             if combat_ended_pre_payload:
                 clean_text = COMBAT_VICTORY_STREAM_STUB
                 validate_roll_cue_name(clean_text.strip())
+                save_conn = get_db()
+                try:
+                    _apply_location_integrity_from_response(
+                        conn=save_conn,
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        gm_response=clean_text,
+                        llm_config=llm_config,
+                    )
+                finally:
+                    save_conn.close()
                 persisted_assistant_text = clean_text
                 if gm_roll_pre_payload:
                     persisted_assistant_text = (
@@ -1595,6 +1806,17 @@ def create_turn_stream(
             if full_raw.strip():
                 clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
                 validate_roll_cue_name(clean_text.strip())
+                save_conn = get_db()
+                try:
+                    _apply_location_integrity_from_response(
+                        conn=save_conn,
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        gm_response=clean_text,
+                        llm_config=llm_config,
+                    )
+                finally:
+                    save_conn.close()
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(
                         rf"{re.escape(GM_ROLL_CARD_PREFIX)}\n.*?\n\n",
