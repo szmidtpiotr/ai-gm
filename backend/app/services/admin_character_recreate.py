@@ -76,7 +76,7 @@ def _audit_character(conn: sqlite3.Connection, character_id: int, operation: str
 
 def _clear_inventory_if_exists(conn: sqlite3.Connection, character_id: int) -> None:
     try:
-        conn.execute("DELETE FROM inventory_items WHERE character_id = ?", (character_id,))
+        conn.execute("DELETE FROM character_inventory WHERE character_id = ?", (character_id,))
     except sqlite3.OperationalError:
         pass
 
@@ -84,7 +84,7 @@ def _clear_inventory_if_exists(conn: sqlite3.Connection, character_id: int) -> N
 def delete_character_admin(character_id: int) -> dict:
     """
     Remove a hero row and all dependent data for this character_id.
-    Deletes campaign_turns and inventory_items for this character, then the characters row.
+    Deletes campaign_turns and character_inventory for this character, then the characters row.
     Campaign and campaign_ai_summaries rows are left intact (campaign may become character-less).
     """
     conn = sqlite3.connect(DB_PATH)

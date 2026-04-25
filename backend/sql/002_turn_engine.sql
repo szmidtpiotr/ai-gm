@@ -43,16 +43,31 @@ CREATE TABLE IF NOT EXISTS characters (
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
-CREATE TABLE IF NOT EXISTS inventory_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    character_id INTEGER NOT NULL,
-    item_key TEXT NOT NULL,
-    item_name TEXT NOT NULL,
-    qty INTEGER NOT NULL DEFAULT 1,
-    equipped INTEGER NOT NULL DEFAULT 0,
-    meta_json TEXT,
-    FOREIGN KEY (character_id) REFERENCES characters(id)
+-- Inventory: catalog tables (game_config_*) are applied later via admin migrations.
+-- Keys are validated in application; XOR CHECK enforces exactly one line type.
+CREATE TABLE IF NOT EXISTS character_inventory (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    character_id   INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    item_key       TEXT,
+    weapon_key     TEXT,
+    consumable_key TEXT,
+    quantity       INTEGER NOT NULL DEFAULT 1,
+    equipped       INTEGER NOT NULL DEFAULT 0,
+    slot           TEXT,
+    acquired_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+    source         TEXT,
+    meta_json      TEXT,
+    CONSTRAINT inv_xor CHECK (
+        (CASE WHEN item_key       IS NOT NULL THEN 1 ELSE 0 END +
+         CASE WHEN weapon_key     IS NOT NULL THEN 1 ELSE 0 END +
+         CASE WHEN consumable_key IS NOT NULL THEN 1 ELSE 0 END) = 1
+    )
 );
+
+CREATE INDEX IF NOT EXISTS idx_inv_character
+    ON character_inventory(character_id);
+CREATE INDEX IF NOT EXISTS idx_inv_equipped
+    ON character_inventory(character_id, equipped);
 
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
