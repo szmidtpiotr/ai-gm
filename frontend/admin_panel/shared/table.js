@@ -57,6 +57,13 @@ export function showConfirm(message, options = {}) {
   });
 }
 
+function badgeCellText(row, col) {
+  if (typeof col.badgeText === "function") {
+    return String(col.badgeText(row));
+  }
+  return String(row[col.key] ?? "");
+}
+
 function cellDisplayValue(row, col) {
   const raw = row[col.key];
   if (col.type === "boolean") {
@@ -736,11 +743,11 @@ export function renderTable(container, columns, rows, options = {}) {
             }
           }
           pill.className = cls;
-          pill.textContent = String(row[col.key] ?? "");
+          pill.textContent = badgeCellText(row, col);
           display.appendChild(pill);
 
           const applyBadge = () => {
-            pill.textContent = String(row[col.key] ?? "");
+            pill.textContent = badgeCellText(row, col);
             let c = "admin-badge";
             if (col.badgeClass) {
               const ex = typeof col.badgeClass === "function" ? col.badgeClass(row) : col.badgeClass;
@@ -1180,7 +1187,7 @@ export function renderTable(container, columns, rows, options = {}) {
               }
             }
             pill.className = cls;
-            pill.textContent = String(row[col.key] ?? "");
+            pill.textContent = badgeCellText(row, col);
             td.appendChild(pill);
           } else if (col.type === "boolean") {
             td.textContent = cellDisplayValue(row, col) ? "✅" : "❌";

@@ -1,6 +1,7 @@
 import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
 import { showToast } from "/admin_panel/shared/toast.js?v=17";
-import { renderTable, showConfirm } from "/admin_panel/shared/table.js?v=23";
+import { renderTable, showConfirm } from "/admin_panel/shared/table.js?v=24";
+import { openModal } from "/admin_panel/shared/modal.js?v=17";
 
 const SUB_TABS = [
   { id: "stats", label: "Stats" },
@@ -12,6 +13,7 @@ const SUB_TABS = [
   { id: "items", label: "Items" },
   { id: "consumables", label: "Consumables" },
   { id: "loot-tables", label: "Loot Tables" },
+  { id: "locations", label: "Locations" },
   { id: "archetypes", label: "Archetypes" },
   { id: "prompts", label: "Prompts" },
 ];
@@ -25,6 +27,14 @@ function el(tag, cls, text) {
     n.textContent = text;
   }
   return n;
+}
+
+function slugifyKey(input) {
+  return String(input || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
 }
 
 function parseApiError(err, fallback) {
@@ -3203,6 +3213,451 @@ function mountPrompts(host) {
   void initList().catch((e) => showToast(parseApiError(e, "Failed to list prompts."), "error"));
 }
 
+function flattenLocationTree(nodes, depth = 0, out = []) {
+  (nodes || []).forEach((n) => {
+    out.push({ ...n, __depth: depth });
+    if (Array.isArray(n.children) && n.children.length) {
+      flattenLocationTree(n.children, depth + 1, out);
+    }
+  });
+  return out;
+}
+
+function locationTypeBadgeClass(row) {
+  return String(row.location_type) === "sub" ? "locations-type-badge is-sub" : "locations-type-badge is-macro";
+}
+
+async function openLocationEditorModal({ row = null, macroRows = [], enemyRows = [], onSaved }) {
+  const isEdit = !!row;
+  const wrap = el("div", "locations-modal-form");
+  wrap.innerHTML = `
+    <div class="add-form-grid">
+      <label class="field"><span>Label *</span><input data-loc-field="label" type="text" /></label>
+      <label class="field"><span>Key *</span><input data-loc-field="key" type="text" /></label>
+      <label class="field"><span>Typ</span>
+        <select data-loc-field="location_type">
+          <option value="macro">Makro</option>
+          <option value="sub">Sub</option>
+        </select>
+      </label>
+      <label class="field" data-parent-wrap hidden><span>Parent (macro)</span><select data-loc-field="parent_id"></select></label>
+      <label class="field add-form-span-2"><span>Description</span><textarea data-loc-field="description" rows="3"></textarea></label>
+      <label class="field add-form-span-2"><span>Rules</span>
+        <textarea data-loc-field="rules" rows="4" class="locations-rules-textarea"></textarea>
+        <small class="muted">JSON: {"no_rest": true, "fog_of_war": true}<br/>Free text: Strefa ciszy. Czary dzieją się podwójnie.</small>
+        <small data-rules-error class="locations-rules-error" hidden>Invalid JSON in rules.</small>
+      </label>
+      <div class="field add-form-span-2">
+        <span>Możliwi wrogowie</span>
+        <div data-enemy-tags class="locations-tags"></div>
+        <div class="locations-tag-add">
+          <select data-enemy-add>
+            <option value="">— wybierz wroga —</option>
+          </select>
+          <button type="button" class="secondary-btn" data-enemy-add-btn>Dodaj</button>
+        </div>
+      </div>
+      <div class="field add-form-span-2 locations-npc-disabled">
+        <span>NPC Keys</span>
+        <div class="muted">Dostępne w Phase 9</div>
+      </div>
+    </div>
+  `;
+
+  const labelEl = wrap.querySelector('[data-loc-field="label"]');
+  const keyEl = wrap.querySelector('[data-loc-field="key"]');
+  const typeEl = wrap.querySelector('[data-loc-field="location_type"]');
+  const parentWrap = wrap.querySelector("[data-parent-wrap]");
+  const parentEl = wrap.querySelector('[data-loc-field="parent_id"]');
+  const descEl = wrap.querySelector('[data-loc-field="description"]');
+  const rulesEl = wrap.querySelector('[data-loc-field="rules"]');
+  const rulesErrorEl = wrap.querySelector("[data-rules-error]");
+  const enemyTagsEl = wrap.querySelector("[data-enemy-tags]");
+  const enemyAddEl = wrap.querySelector("[data-enemy-add]");
+  const enemyAddBtn = wrap.querySelector("[data-enemy-add-btn]");
+
+  const macro = macroRows.filter((x) => Number(x.is_active || 0) === 1);
+  parentEl.innerHTML = '<option value="">— brak —</option>';
+  macro.forEach((m) => {
+    const opt = document.createElement("option");
+    opt.value = String(m.id);
+    opt.textContent = `${m.label} [${m.key}]`;
+    parentEl.appendChild(opt);
+  });
+
+  enemyRows.forEach((e) => {
+    const opt = document.createElement("option");
+    opt.value = String(e.key);
+    opt.textContent = `${e.label || e.key} [${e.key}]`;
+    enemyAddEl.appendChild(opt);
+  });
+
+  let enemyKeys = Array.isArray(row?.enemy_keys) ? [...row.enemy_keys] : [];
+  function renderEnemyTags() {
+    enemyTagsEl.innerHTML = "";
+    if (!enemyKeys.length) {
+      enemyTagsEl.appendChild(el("span", "muted", "Brak"));
+      return;
+    }
+    enemyKeys.forEach((k) => {
+      const tag = el("span", "locations-tag");
+      tag.textContent = k;
+      const x = el("button", "locations-tag-remove", "×");
+      x.type = "button";
+      x.addEventListener("click", () => {
+        enemyKeys = enemyKeys.filter((kk) => kk !== k);
+        renderEnemyTags();
+      });
+      tag.appendChild(x);
+      enemyTagsEl.appendChild(tag);
+    });
+  }
+  renderEnemyTags();
+
+  function syncTypeUi() {
+    const isSub = typeEl.value === "sub";
+    parentWrap.hidden = !isSub;
+    if (!isSub) parentEl.value = "";
+  }
+  typeEl.addEventListener("change", syncTypeUi);
+
+  let keyTouched = false;
+  keyEl.addEventListener("input", () => {
+    keyTouched = true;
+  });
+  labelEl.addEventListener("input", () => {
+    if (!keyTouched) keyEl.value = slugifyKey(labelEl.value);
+  });
+
+  function validateRules() {
+    const raw = String(rulesEl.value || "").trim();
+    if (!raw.startsWith("{")) {
+      rulesErrorEl.hidden = true;
+      return true;
+    }
+    try {
+      JSON.parse(raw);
+      rulesErrorEl.hidden = true;
+      return true;
+    } catch (_e) {
+      rulesErrorEl.hidden = false;
+      return false;
+    }
+  }
+  rulesEl.addEventListener("input", validateRules);
+
+  enemyAddBtn.addEventListener("click", () => {
+    const v = String(enemyAddEl.value || "").trim();
+    if (!v || enemyKeys.includes(v)) return;
+    enemyKeys.push(v);
+    renderEnemyTags();
+  });
+
+  if (row) {
+    labelEl.value = String(row.label || "");
+    keyEl.value = String(row.key || "");
+    typeEl.value = String(row.location_type || "macro");
+    descEl.value = String(row.description || "");
+    if (row.rules != null) {
+      rulesEl.value = typeof row.rules === "string" ? row.rules : JSON.stringify(row.rules, null, 2);
+    }
+    if (row.parent_id != null) {
+      parentEl.value = String(row.parent_id);
+    }
+    keyTouched = true;
+  }
+  syncTypeUi();
+  validateRules();
+
+  openModal({
+    title: isEdit ? `Edytuj lokalizację: ${row.key}` : "Dodaj lokalizację",
+    content: wrap,
+    footer: [
+      { label: "Anuluj", class: "secondary-btn", onClick: (close) => close() },
+      {
+        label: "Zapisz",
+        class: "primary-btn",
+        onClick: async (close) => {
+          try {
+            if (!validateRules()) {
+              showToast("Rules JSON jest niepoprawny.", "error");
+              return;
+            }
+            const body = {
+              label: String(labelEl.value || "").trim(),
+              key: String(keyEl.value || "").trim(),
+              location_type: String(typeEl.value || "macro"),
+              parent_id: typeEl.value === "sub" && parentEl.value ? Number(parentEl.value) : null,
+              description: String(descEl.value || "").trim() || null,
+              rules: String(rulesEl.value || "").trim() || null,
+              enemy_keys: enemyKeys,
+              npc_keys: Array.isArray(row?.npc_keys) ? row.npc_keys : [],
+            };
+            if (!body.label || !body.key) {
+              showToast("Label i key są wymagane.", "error");
+              return;
+            }
+            if (isEdit) {
+              await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, {
+                method: "PATCH",
+                body: JSON.stringify(body),
+              });
+            } else {
+              await adminFetch("/api/locations", {
+                method: "POST",
+                body: JSON.stringify(body),
+              });
+            }
+            showToast("Location saved.", "success");
+            close();
+            await onSaved?.();
+          } catch (e) {
+            showToast(parseApiError(e, "Save location failed."), "error");
+          }
+        },
+      },
+    ],
+  });
+}
+
+async function refreshLocations(host) {
+  const tableHost = host.querySelector(".admin-table-mount");
+  if (!tableHost) return;
+  renderTable(tableHost, [], null, {});
+  try {
+    const [treeData, enemyData] = await Promise.all([
+      adminFetch("/api/locations?type=all&active_only=0"),
+      adminFetch("/api/admin/enemies"),
+    ]);
+    const flat = flattenLocationTree(Array.isArray(treeData) ? treeData : []);
+    const enemies = enemyData.items || [];
+    const macros = flat.filter((r) => String(r.location_type) === "macro");
+    const byId = new Map(flat.map((r) => [Number(r.id), r]));
+    const tableRows = flat.map((r) => {
+      const parent = r.parent_id != null ? byId.get(Number(r.parent_id)) : null;
+      const parent_key = parent ? String(parent.key || "") : "";
+      const parent_label = parent ? String(parent.label || parent.key || "—") : "—";
+      return { ...r, parent_key, parent_label };
+    });
+
+    const keyToParentLabel = new Map();
+    tableRows.forEach((r) => {
+      const pk = String(r.parent_key || "");
+      if (pk && !keyToParentLabel.has(pk)) {
+        keyToParentLabel.set(pk, String(r.parent_label || pk));
+      }
+    });
+    const parentFilterOpts = [
+      { value: "", label: "— brak —" },
+      ...[...keyToParentLabel.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0], undefined, { sensitivity: "base" }))
+        .map(([k, lab]) => ({ value: k, label: `${lab} [${k}]` })),
+    ];
+
+    renderGameDesignTable(
+      tableHost,
+      "locations",
+      [
+        { key: "key", label: "Key" },
+        {
+          key: "label",
+          label: "Nazwa",
+          sortValue: (row) => String(row.label || row.key || ""),
+          formatDisplay: (row) => {
+            const indent = "  ".repeat(Math.max(0, Number(row.__depth || 0)));
+            return `${indent}${String(row.label || row.key || "")}`;
+          },
+        },
+        {
+          key: "location_type",
+          label: "Typ",
+          type: "badge",
+          badgeClass: locationTypeBadgeClass,
+          badgeText: (row) => (String(row.location_type) === "sub" ? "SUB" : "MAKRO"),
+          filterOptions: [
+            { value: "macro", label: "MAKRO" },
+            { value: "sub", label: "SUB" },
+          ],
+        },
+        {
+          key: "parent_label",
+          label: "Rodzic",
+          sortValue: (row) => String(row.parent_key || "\uffff"),
+          filterValue: (row) => row.parent_key || "",
+          filterOptions: parentFilterOpts,
+        },
+        {
+          key: "is_active",
+          label: "Aktywna",
+          type: "boolean",
+        },
+        { key: "description", label: "Opis", formatDisplay: (row) => String(row.description || "").slice(0, 80) },
+      ],
+      tableRows,
+      {
+        searchPlaceholder: "Szukaj (label, key, rodzic, rules…)…",
+        exportRow: (row) => ({
+          key: row.key,
+          label: row.label,
+          location_type: row.location_type,
+          parent_id: row.parent_id,
+          description: row.description ?? null,
+          rules: row.rules ?? null,
+          enemy_keys: Array.isArray(row.enemy_keys) ? row.enemy_keys : [],
+          npc_keys: Array.isArray(row.npc_keys) ? row.npc_keys : [],
+        }),
+        extraActions: (row) => [
+          {
+            label: "Edytuj",
+            class: "secondary-btn",
+            onClick: async () => {
+              await openLocationEditorModal({
+                row,
+                macroRows: macros,
+                enemyRows: enemies,
+                onSaved: () => refreshLocations(host),
+              });
+            },
+          },
+        ],
+        onDelete: async (row) => {
+          try {
+            await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, { method: "DELETE" });
+            showToast("Location deleted.", "success");
+            await refreshLocations(host);
+          } catch (e) {
+            showToast(parseApiError(e, "Delete location failed."), "error");
+            throw e;
+          }
+        },
+      },
+    );
+
+    host.__locationsMeta = { macros, enemies, rows: flat };
+  } catch (e) {
+    showToast(parseApiError(e, "Failed to load locations."), "error");
+    renderTable(tableHost, [], [], {});
+  }
+}
+
+function mountLocations(host) {
+  const root = el("div", "admin-subpanel-inner");
+  const toolbar = el("div", "locations-toolbar");
+  const addBtn = el("button", "primary-btn", "+ Dodaj Lokalizację");
+  addBtn.type = "button";
+  const exportBtn = el("button", "secondary-btn", "⬇ Export JSON");
+  exportBtn.type = "button";
+  const mount = el("div", "admin-table-mount");
+  toolbar.appendChild(addBtn);
+  toolbar.appendChild(exportBtn);
+  root.appendChild(toolbar);
+  root.appendChild(mount);
+  host.appendChild(root);
+
+  const normType = (v) => (String(v || "macro").toLowerCase() === "sub" ? "sub" : "macro");
+  wireBulkJsonImport(root, {
+    hint: "Import tablicy lokalizacji. Duplikaty key mogą być patchowane (zmienione pola) lub pomijane przy 409.",
+    templatesHref: "/admin_panel/templates.html#sec-locations",
+    templatesAnchor: "Szablony JSON — Locations",
+    placeholder:
+      '[{"key":"city_varen","label":"Miasto Varen","location_type":"macro","description":"...","rules":{"fog_of_war":true},"enemy_keys":["goblin"]}]',
+    validateRow: (raw, index) => {
+      if (!raw || typeof raw !== "object") return `Row ${index + 1}: expected object.`;
+      const key = String(raw.key || "").trim();
+      const label = String(raw.label || "").trim();
+      if (!key) return `Row ${index + 1}: key is required.`;
+      if (!IMPORT_KEY_RE.test(key)) return `Row ${index + 1}: invalid key format.`;
+      if (!label) return `Row ${index + 1}: label is required.`;
+      const t = normType(raw.location_type);
+      if (!["macro", "sub"].includes(t)) return `Row ${index + 1}: location_type must be macro|sub.`;
+      if (raw.enemy_keys != null && !Array.isArray(raw.enemy_keys)) return `Row ${index + 1}: enemy_keys must be array.`;
+      if (raw.npc_keys != null && !Array.isArray(raw.npc_keys)) return `Row ${index + 1}: npc_keys must be array.`;
+      if (raw.rules != null && typeof raw.rules === "string" && String(raw.rules).trim().startsWith("{")) {
+        try {
+          JSON.parse(String(raw.rules));
+        } catch (_e) {
+          return `Row ${index + 1}: rules has invalid JSON string.`;
+        }
+      }
+      return null;
+    },
+    buildPayload: (raw) => {
+      const type = normType(raw.location_type);
+      return {
+        key: String(raw.key || "").trim(),
+        label: String(raw.label || "").trim(),
+        location_type: type,
+        parent_id: type === "sub" && raw.parent_id != null && String(raw.parent_id).trim() !== "" ? Number(raw.parent_id) : null,
+        description: raw.description != null ? String(raw.description) : null,
+        rules: raw.rules != null ? raw.rules : null,
+        enemy_keys: Array.isArray(raw.enemy_keys) ? raw.enemy_keys.map((x) => String(x)) : [],
+        npc_keys: Array.isArray(raw.npc_keys) ? raw.npc_keys.map((x) => String(x)) : [],
+      };
+    },
+    postPath: "/api/locations",
+    patchPath: (key) => `/api/locations/${encodeURIComponent(key)}`,
+    existingRows: async () => {
+      const data = await adminFetch("/api/locations?type=all&active_only=0");
+      const flat = flattenLocationTree(Array.isArray(data) ? data : []);
+      const map = new Map();
+      flat.forEach((r) => map.set(String(r.key), r));
+      return map;
+    },
+    buildDuplicatePatch: (raw, existing) => {
+      const patch = {};
+      const nextLabel = String(raw.label || "").trim();
+      const nextType = normType(raw.location_type);
+      const nextParent = nextType === "sub" && raw.parent_id != null && String(raw.parent_id).trim() !== "" ? Number(raw.parent_id) : null;
+      const nextDesc = raw.description != null ? String(raw.description) : null;
+      const nextRules = raw.rules != null ? raw.rules : null;
+      const nextEnemy = Array.isArray(raw.enemy_keys) ? raw.enemy_keys.map((x) => String(x)) : [];
+      const nextNpc = Array.isArray(raw.npc_keys) ? raw.npc_keys.map((x) => String(x)) : [];
+
+      if (nextLabel && String(existing.label || "") !== nextLabel) patch.label = nextLabel;
+      if (String(existing.location_type || "macro") !== nextType) patch.location_type = nextType;
+      if (Number(existing.parent_id || 0) !== Number(nextParent || 0)) patch.parent_id = nextParent;
+      if (String(existing.description || "") !== String(nextDesc || "")) patch.description = nextDesc;
+      if (JSON.stringify(existing.rules ?? null) !== JSON.stringify(nextRules ?? null)) patch.rules = nextRules;
+      if (JSON.stringify(existing.enemy_keys || []) !== JSON.stringify(nextEnemy)) patch.enemy_keys = nextEnemy;
+      if (JSON.stringify(existing.npc_keys || []) !== JSON.stringify(nextNpc)) patch.npc_keys = nextNpc;
+      return patch;
+    },
+    refresh: () => refreshLocations(host),
+    confirmNoun: "lokalizacji",
+  });
+
+  addBtn.addEventListener("click", async () => {
+    const meta = host.__locationsMeta || {};
+    await openLocationEditorModal({
+      row: null,
+      macroRows: meta.macros || [],
+      enemyRows: meta.enemies || [],
+      onSaved: () => refreshLocations(host),
+    });
+  });
+  exportBtn.addEventListener("click", async () => {
+    try {
+      const data = await adminFetch("/api/locations?type=all&active_only=0");
+      const flat = flattenLocationTree(Array.isArray(data) ? data : []);
+      const payload = flat.map((r) => ({
+        key: r.key,
+        label: r.label,
+        location_type: r.location_type,
+        parent_id: r.parent_id,
+        description: r.description ?? null,
+        rules: r.rules ?? null,
+        enemy_keys: Array.isArray(r.enemy_keys) ? r.enemy_keys : [],
+        npc_keys: Array.isArray(r.npc_keys) ? r.npc_keys : [],
+      }));
+      downloadJsonFile(payload, "aigm_locations");
+      showToast("Locations exported.", "success");
+    } catch (e) {
+      showToast(parseApiError(e, "Export locations failed."), "error");
+    }
+  });
+  void refreshLocations(host);
+}
+
 /**
  * @param {HTMLElement} container — .section-panel[data-section="game-design"]
  */
@@ -3246,6 +3701,7 @@ export async function init(container) {
     items: () => mountItems(panels.get("items")),
     consumables: () => mountConsumables(panels.get("consumables")),
     "loot-tables": () => mountLootTables(panels.get("loot-tables")),
+    locations: () => mountLocations(panels.get("locations")),
     archetypes: () => mountArchetypes(panels.get("archetypes")),
     prompts: () => mountPrompts(panels.get("prompts")),
   };
