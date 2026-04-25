@@ -37,6 +37,10 @@
       this._actionsEl = null;
       this._msgEl = null;
       this._enemyOverlay = null;
+      /** @type {ReturnType<typeof setTimeout>|null} */
+      this._enemyOverlayHideTimer = null;
+      /** @type {Map<string, ReturnType<typeof setTimeout>>} */
+      this._flashTimers = new Map();
       this._lootLayer = null;
       this._endLayer = null;
     }
@@ -106,6 +110,61 @@
 
       this._host.querySelector("#combat-btn-attack").onclick = () => this._onAttack();
       this._host.querySelector("#combat-btn-flee").onclick = () => this._onFlee();
+    }
+
+    _showEnemyOverlay() {
+      const el = this._enemyOverlay;
+      if (!el) return;
+      if (this._enemyOverlayHideTimer != null) {
+        clearTimeout(this._enemyOverlayHideTimer);
+        this._enemyOverlayHideTimer = null;
+      }
+      el.classList.remove("combat-enemy-overlay--fade-out");
+      el.classList.remove("combat-enemy-overlay--fade-in");
+      el.style.display = "flex";
+      el.setAttribute("aria-hidden", "false");
+      void el.offsetWidth;
+      el.classList.add("combat-enemy-overlay--fade-in");
+    }
+
+    _hideEnemyOverlay() {
+      const el = this._enemyOverlay;
+      if (!el) return;
+      const disp = String(el.style.display || "");
+      if (
+        (disp === "none" || disp === "") &&
+        !el.classList.contains("combat-enemy-overlay--fade-out") &&
+        !el.classList.contains("combat-enemy-overlay--fade-in")
+      ) {
+        el.setAttribute("aria-hidden", "true");
+        return;
+      }
+      if (this._enemyOverlayHideTimer != null) {
+        clearTimeout(this._enemyOverlayHideTimer);
+        this._enemyOverlayHideTimer = null;
+      }
+      el.classList.remove("combat-enemy-overlay--fade-in");
+      el.classList.add("combat-enemy-overlay--fade-out");
+      el.setAttribute("aria-hidden", "true");
+      this._enemyOverlayHideTimer = setTimeout(() => {
+        this._enemyOverlayHideTimer = null;
+        el.classList.remove("combat-enemy-overlay--fade-out");
+        el.style.display = "none";
+      }, 300);
+    }
+
+    _flashElement(el, cls, ms) {
+      if (!el) return;
+      const prev = this._flashTimers.get(cls);
+      if (prev != null) clearTimeout(prev);
+      el.classList.remove(cls);
+      void el.offsetWidth;
+      el.classList.add(cls);
+      const t = setTimeout(() => {
+        this._flashTimers.delete(cls);
+        el.classList.remove(cls);
+      }, ms);
+      this._flashTimers.set(cls, t);
     }
 
     show() {
@@ -298,6 +357,18 @@
           turnsEl.innerHTML = "";
           turnsEl.hidden = true;
         }
+        if (this._enemyOverlay) {
+          if (this._enemyOverlayHideTimer != null) {
+            clearTimeout(this._enemyOverlayHideTimer);
+            this._enemyOverlayHideTimer = null;
+          }
+          this._enemyOverlay.classList.remove(
+            "combat-enemy-overlay--fade-in",
+            "combat-enemy-overlay--fade-out"
+          );
+          this._enemyOverlay.style.display = "none";
+          this._enemyOverlay.setAttribute("aria-hidden", "true");
+        }
         return;
       }
 
@@ -370,8 +441,11 @@
 
       if (this._enemyOverlay) {
         const showEnemy = active && cur !== "player" && cur.length > 0;
-        this._enemyOverlay.style.display = showEnemy ? "flex" : "none";
-        this._enemyOverlay.setAttribute("aria-hidden", showEnemy ? "false" : "true");
+        if (showEnemy) {
+          this._showEnemyOverlay();
+        } else {
+          this._hideEnemyOverlay();
+        }
       }
 
       const ended = String(st.status || "") === "ended";
@@ -820,6 +894,16 @@
           this._setMsg("Wróg unika ciosu!");
         } else {
           this._setMsg("Pudło!");
+        }
+
+        const natRoll = Number(d20);
+        if (natRoll === 20) {
+          this._flashElement(this._card, "combat-flash-crit", 400);
+        } else if (natRoll === 1) {
+          this._flashElement(this._card, "combat-flash-fumble", 400);
+        } else if (data.hit) {
+          // Enemy rows are rebuilt via innerHTML in render(), so flash stable panel node instead.
+          this._flashElement(this._card, "combat-flash-hit", 300);
         }
 
         if (data.enemy_dead) {

@@ -143,18 +143,21 @@
 .combat-hp-fill {
   height: 100%;
   border-radius: 999px;
-  transition: width 0.25s ease, background 0.2s ease;
+  transition: width 0.4s ease, background 0.2s ease;
 }
 
 .combat-hp-fill--high {
+  background-color: #4caf50;
   background: linear-gradient(90deg, #15803d, #22c55e);
 }
 
 .combat-hp-fill--mid {
+  background-color: #ffc107;
   background: linear-gradient(90deg, #a16207, #eab308);
 }
 
 .combat-hp-fill--low {
+  background-color: #f44336;
   background: linear-gradient(90deg, #991b1b, #ef4444);
 }
 
@@ -245,6 +248,85 @@
   letter-spacing: 0.04em;
   color: #fef3c7;
   text-shadow: 0 2px 8px #000;
+}
+
+@keyframes combatEnemyFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes combatEnemyFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes combatEnemyPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes combatFlashHit {
+  0% {
+    background-color: rgba(244, 67, 54, 0.45);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes combatFlashCrit {
+  0% {
+    background-color: rgba(255, 193, 7, 0.4);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes combatFlashFumble {
+  0% {
+    background-color: rgba(156, 39, 176, 0.4);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.combat-enemy-turn-overlay.combat-enemy-overlay--fade-in {
+  animation: combatEnemyFadeIn 0.3s ease forwards;
+}
+
+.combat-enemy-turn-overlay.combat-enemy-overlay--fade-out {
+  animation: combatEnemyFadeOut 0.3s ease forwards;
+}
+
+.combat-enemy-turn-overlay.combat-enemy-overlay--fade-in .combat-enemy-turn-label {
+  animation: combatEnemyPulse 1.2s ease-in-out infinite;
+}
+
+.combat-flash-hit {
+  animation: combatFlashHit 0.3s ease forwards;
+}
+
+.combat-flash-crit {
+  animation: combatFlashCrit 0.4s ease forwards;
+}
+
+.combat-flash-fumble {
+  animation: combatFlashFumble 0.4s ease forwards;
 }
 
 .combat-loot-modal {
@@ -367,6 +449,26 @@
 
   .combat-panel-card {
     border-radius: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .combat-panel-card {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .combat-btn {
+    min-height: 48px;
+  }
+
+  .combat-hp-fill {
+    min-height: 8px;
+  }
+
+  #combat-engine-turns {
+    max-height: 150px;
+    overflow-y: auto;
   }
 }
 

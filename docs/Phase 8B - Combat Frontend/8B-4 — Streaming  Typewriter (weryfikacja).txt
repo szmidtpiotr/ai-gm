@@ -1,0 +1,27 @@
+## TASK: 8B-4 — Streaming Narration / Typewriter (verify & fix if needed)
+Branch: main
+Status: DONE — NO CHANGES NEEDED
+
+### AUDIT RESULTS (verified — implementation correct)
+
+1. SSE handler is in sendMessage() in frontend/js/actions.js.
+   - this._busy = true: set in _onAttack() (combat_panel.js) BEFORE fetch/SSE call ✔
+   - this._busy = false: reset in finally{} of _onAttack() after full await chain ends ✔
+   - _combatVictoryUiPending -> showVictoryAfterNarration(): inside [DONE] branch +
+     safe fallback for "stream ended without [DONE]" ✔
+
+2. Button disable condition in render() (combat_panel.js):
+   atk.disabled = this._busy || !active || !playerTurn
+   flee.disabled = this._busy || !active || !playerTurn
+   Both _busy AND current_turn checked. ✔
+
+3. After [DONE]: loadTurns() -> /combat -> fetchAndMaybeShow() -> render()
+   Buttons re-enable correctly after narration ends. ✔
+
+4. Correctness verdict:
+   - busy=true before stream: ✔
+   - busy=false only after stream completion: ✔
+   - victory UI deferred to [DONE]: ✔
+
+### Result: NO CHANGES MADE TO ANY FILE
+Tests: 102 passed (baseline unchanged)
