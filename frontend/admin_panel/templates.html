@@ -871,6 +871,104 @@
 ]</pre>
         </div>
       </section>
+
+      <section class="template-section" aria-labelledby="sec-locations">
+        <h2 id="sec-locations">Locations</h2>
+        <p class="muted">
+          Lokacje kampanii (makro i sub). Import działa dla zakładki <strong>Game Design → Locations</strong> i wspiera
+          tworzenie nowych wpisów oraz patch duplikatów po <code>key</code>.
+        </p>
+        <div class="field-ref-wrap admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>key</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>lowercase_snake_case, unique</td>
+              </tr>
+              <tr>
+                <td><code>label</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Nazwa wyświetlana w panelu i narracji</td>
+              </tr>
+              <tr>
+                <td><code>location_type</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td><code>macro</code> lub <code>sub</code></td>
+              </tr>
+              <tr>
+                <td><code>parent_id</code></td>
+                <td>number|null</td>
+                <td>❌</td>
+                <td>Wymagane dla <code>sub</code> (ID lokalizacji makro)</td>
+              </tr>
+              <tr>
+                <td><code>description</code></td>
+                <td>text|null</td>
+                <td>❌</td>
+                <td>Opis lokacji</td>
+              </tr>
+              <tr>
+                <td><code>rules</code></td>
+                <td>object|string|null</td>
+                <td>❌</td>
+                <td>JSON z regułami albo tekst wolny</td>
+              </tr>
+              <tr>
+                <td><code>enemy_keys</code></td>
+                <td>array[string]</td>
+                <td>❌</td>
+                <td>Lista kluczy wrogów możliwych w lokacji</td>
+              </tr>
+              <tr>
+                <td><code>npc_keys</code></td>
+                <td>array[string]</td>
+                <td>❌</td>
+                <td>Placeholder pod Phase 9 (może być puste)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="template-example">
+          <div class="template-example-header">
+            <span class="template-example-label">Example JSON</span>
+            <button type="button" class="copy-json-btn" aria-label="Copy example JSON">📋 Copy</button>
+          </div>
+          <pre class="copy-block" data-table="locations">[
+  {
+    "key": "city_varen",
+    "label": "Miasto Varen",
+    "location_type": "macro",
+    "parent_id": null,
+    "description": "Duże miasto handlowe na trakcie północnym.",
+    "rules": { "no_rest": false, "fog_of_war": false },
+    "enemy_keys": ["bandit", "thug"],
+    "npc_keys": []
+  },
+  {
+    "key": "tavern_hanged_man",
+    "label": "Karczma Pod Wisielcem",
+    "location_type": "sub",
+    "parent_id": 1,
+    "description": "Głośna karczma przy rynku.",
+    "rules": "Plotki rozchodzą się szybciej niż zwykle.",
+    "enemy_keys": ["drunk_brawler"],
+    "npc_keys": []
+  }
+]</pre>
+        </div>
+      </section>
     </main>
 
     <script>

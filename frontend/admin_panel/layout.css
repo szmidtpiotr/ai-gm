@@ -1801,3 +1801,142 @@ pre.copy-block {
   width: 3.5rem;
   text-align: right;
 }
+
+.locations-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.locations-toolbar input {
+  min-height: 36px;
+  min-width: 260px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.locations-name-cell {
+  font-weight: 600;
+}
+
+.locations-type-badge {
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+}
+
+.locations-type-badge.is-macro {
+  background: #f5e8cf;
+  color: #7c4f1e;
+}
+
+.locations-type-badge.is-sub {
+  background: #e8f1fd;
+  color: #1e4f7c;
+}
+
+.locations-rules-textarea {
+  font-family: "Courier New", monospace;
+}
+
+.locations-rules-error {
+  color: var(--danger);
+}
+
+.locations-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.locations-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+}
+
+.locations-tag-remove {
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.locations-tag-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.locations-tag-add select {
+  min-height: 34px;
+}
+
+.locations-npc-disabled {
+  opacity: 0.7;
+}
+
+.campaign-location-integrity-modal {
+  display: grid;
+  gap: 14px;
+}
+
+.campaign-flags-card,
+.campaign-log-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 10px;
+}
+
+.campaign-flag-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px dashed var(--border);
+  padding: 8px 0;
+}
+
+.campaign-flags-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.campaign-log-filters {
+  margin-bottom: 8px;
+}
+
+.campaign-log-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.campaign-log-badge {
+  border-radius: 999px;
+  border: 1px solid #b45309;
+  color: #b45309;
+  background: #fff7ed;
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+}
