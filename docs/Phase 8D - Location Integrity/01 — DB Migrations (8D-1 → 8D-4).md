@@ -129,3 +129,43 @@ Użyj testowej bazy in-memory (nie data/ai_gm.db).
 - Branch: phase-8d-location-integrity (zakładamy DOPIERO po decyzji z KROK 0)
 - python3 -m pytest → wszystkie passed
 ```
+
+
+
+===============AFTER REPOERT==============
+
+Zrealizowane dokładnie wg kroków.
+
+- Commit `ui.js` zrobiony:
+  - `feat(ui): chat narracja-only domyślnie, combat details toggle localStorage`
+- Sprawdzenie duplikatu `ai-gm/`:
+  - katalog nie istnieje (`brak ai-gm/`), więc poza tym nic dodatkowego nie zostało usunięte z tego duplikatu
+- Commit `docs/` zrobiony:
+  - `docs: Phase 8D Location Integrity — design decisions + implementation prompts`
+- `git status` po commitach był czysty.
+- Założona nowa gałąź:
+  - `phase-8d-location-integrity`
+
+Następnie zaimplementowałem migracje 8D-1 → 8D-4 zgodnie z zatwierdzonym mapowaniem:
+
+- `game_locations` (globalna tabela)
+- `campaigns.current_location_id` + `campaigns.session_flags`
+- `game_config_meta` przez `INSERT OR IGNORE` (3 flagi)
+- `location_integrity_log` z FK do `campaigns` i `characters`
+
+Dodałem też test idempotencji migracji:
+- `tests/test_phase8d_location_integrity.py`
+
+Wynik testów (na `ssh piotrszmidt@192.168.1.61`):
+
+- Nowy test: `1 passed in 0.18s`
+- Cały suite: `103 passed, 1 warning in 36.01s`
+
+Aktualny status gałęzi (zmiany 8D jeszcze niecommitowane):
+
+- `backend/app/migrations_admin.py` (modified)
+- `tests/test_phase8d_location_integrity.py` (new)
+
+`Docker` po tych zmianach:
+- **restart backendu: potrzebny** (żeby aplikacja załadowała nowy kod i wykonała migracje przy starcie),
+- **rebuild obrazu: niekonieczny**, chyba że deployujesz z obrazu budowanego od nowa.

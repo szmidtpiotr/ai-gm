@@ -2,6 +2,19 @@ Jesteś programistą Python/FastAPI pracującym nad projektem ai-gm.
 Repozytorium: github.com/szmidtpiotr/ai-gm
 Branch: phase-8d-location-integrity
 
+## KONTEKST (przeczytaj zanim cokolwiek zrobisz)
+
+W tym projekcie NIE istnieje tabela `game_sessions`.
+Jednostką sesji jest `campaigns`. Mapowanie zatwierdzone:
+- `campaigns.current_location_id` → FK do `game_locations(id)`
+- `campaigns.session_flags` → JSON z flagami location_integrity
+- `location_integrity_log.campaign_id` → FK do `campaigns(id)`
+- `game_locations` → tabela globalna (bez FK do campaigns)
+
+Migracje 8D-1..8D-4 są już wdrożone i przetestowane (103 passed).
+
+---
+
 ## ZANIM ZACZNIESZ IMPLEMENTOWAĆ
 
 Przejrzyj istniejący kod i odpowiedz na poniższe pytania.
@@ -51,8 +64,14 @@ Logika:
 Szczegóły lokalizacji z polem "parent" (key+label) i "children".
 404 gdy nie istnieje lub is_active=0.
 
+---
+
 ## Wymagania końcowe
 - Plik: backend/app/routers/locations.py
-- Zarejestruj router w głównym app z prefix /api
+- Zarejestruj router w głównym app z prefix /api (sprawdź istniejący pattern)
 - Testy: happy path + error cases dla każdego endpointu
+- Testowa baza in-memory (nie data/ai_gm.db)
 - python3 -m pytest → wszystkie passed
+- Commit po zakończeniu:
+  git add backend/app/routers/locations.py tests/
+  git commit -m "feat(8D-5..7): Locations API — GET tree, POST create, GET detail"
