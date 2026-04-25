@@ -3223,6 +3223,44 @@ function flattenLocationTree(nodes, depth = 0, out = []) {
   return out;
 }
 
+function decorateLocationTreeRows(flatRows) {
+  const rows = Array.isArray(flatRows) ? flatRows : [];
+  const decorated = rows.map((r) => ({ ...r }));
+  for (let i = 0; i < decorated.length; i += 1) {
+    const depth = Math.max(0, Number(decorated[i].__depth || 0));
+    let hasChildren = false;
+    if (i + 1 < decorated.length) {
+      const nextDepth = Math.max(0, Number(decorated[i + 1].__depth || 0));
+      hasChildren = nextDepth > depth;
+    }
+    let isLastChild = true;
+    for (let j = i + 1; j < decorated.length; j += 1) {
+      const d = Math.max(0, Number(decorated[j].__depth || 0));
+      if (d < depth) {
+        break;
+      }
+      if (d === depth) {
+        isLastChild = false;
+        break;
+      }
+    }
+    decorated[i].__hasChildren = hasChildren;
+    decorated[i].__isLastChild = isLastChild;
+  }
+  return decorated;
+}
+
+function locationTreeLabel(row) {
+  const depth = Math.max(0, Number(row.__depth || 0));
+  const label = String(row.label || row.key || "");
+  if (depth === 0) {
+    return label;
+  }
+  const branch = row.__isLastChild ? "└─" : "├─";
+  const stem = depth > 1 ? `${"┆".repeat(depth - 1)} ` : "";
+  return `${stem}${branch} ${label}`;
+}
+
 function locationTypeBadgeClass(row) {
   return String(row.location_type) === "sub" ? "locations-type-badge is-sub" : "locations-type-badge is-macro";
 }
@@ -3430,10 +3468,11 @@ async function refreshLocations(host) {
       adminFetch("/api/admin/enemies"),
     ]);
     const flat = flattenLocationTree(Array.isArray(treeData) ? treeData : []);
+    const decoratedFlat = decorateLocationTreeRows(flat);
     const enemies = enemyData.items || [];
-    const macros = flat.filter((r) => String(r.location_type) === "macro");
-    const byId = new Map(flat.map((r) => [Number(r.id), r]));
-    const tableRows = flat.map((r) => {
+    const macros = decoratedFlat.filter((r) => String(r.location_type) === "macro");
+    const byId = new Map(decoratedFlat.map((r) => [Number(r.id), r]));
+    const tableRows = decoratedFlat.map((r) => {
       const parent = r.parent_id != null ? byId.get(Number(r.parent_id)) : null;
       const parent_key = parent ? String(parent.key || "") : "";
       const parent_label = parent ? String(parent.label || parent.key || "—") : "—";
@@ -3463,10 +3502,7 @@ async function refreshLocations(host) {
           key: "label",
           label: "Nazwa",
           sortValue: (row) => String(row.label || row.key || ""),
-          formatDisplay: (row) => {
-            const indent = "  ".repeat(Math.max(0, Number(row.__depth || 0)));
-            return `${indent}${String(row.label || row.key || "")}`;
-          },
+          formatDisplay: (row) => locationTreeLabel(row),
         },
         {
           key: "location_type",
