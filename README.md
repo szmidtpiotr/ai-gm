@@ -8,13 +8,19 @@ The project includes player gameplay UI, admin configuration UI, per-user LLM se
 ```bash
 git clone https://github.com/szmidtpiotr/ai-gm.git
 cd ai-gm
-docker compose up -d --build
+chmod +x install.sh
+./install.sh
 ```
 
 Services:
 - Frontend: `http://localhost:3001`
 - Backend API: `http://localhost:8000/api`
 - Swagger docs: `http://localhost:8000/docs`
+
+Installer notes:
+- `install.sh` now runs with interactive checkpoints before destructive/mid-configuration steps.
+- For CI/automation use non-interactive mode: `./install.sh --yes`.
+- At the end, installer prints and saves a full status summary to `install-summary.txt` (URLs, LLM mode, DB path, runtime container status).
 
 ## Current Stack
 

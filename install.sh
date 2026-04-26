@@ -47,6 +47,7 @@ FRESH_DB=true
 INSTALL_DOCKER=true
 SKIP_BUILD=false
 WITH_OBSERVABILITY=false
+INTERACTIVE=true
 
 usage() {
   sed -n '1,55p' "$0" | tail -n +2
@@ -60,6 +61,7 @@ while [[ $# -gt 0 ]]; do
     --skip-docker-install) INSTALL_DOCKER=false; shift ;;
     --skip-build) SKIP_BUILD=true; shift ;;
     --with-observability) WITH_OBSERVABILITY=true; shift ;;
+    --yes|--non-interactive) INTERACTIVE=false; shift ;;
     -h|--help) usage ;;
     *) echo "Unknown option: $1 (use --help)"; exit 1 ;;
   esac
@@ -74,6 +76,20 @@ log() { echo "[install] $*"; }
 ok() { echo "✅ $*"; }
 warn() { echo "⚠️  $*"; }
 bad() { echo "❌ $*"; exit 1; }
+
+confirm_continue() {
+  local message="${1:-Continue?}"
+  if [[ "$INTERACTIVE" != true ]]; then
+    log "Auto-confirm (--yes): ${message}"
+    return 0
+  fi
+  echo ""
+  read -r -p "[install] ${message} [y/N]: " _ans
+  case "${_ans:-}" in
+    y|Y|yes|YES) return 0 ;;
+    *) bad "Aborted by user." ;;
+  esac
+}
 
 # Prompt template must pass tests before Docker build (same check as pre-push / server deploy).
 # Requires: python3 -m pip install pytest   (skipped if pytest not importable)
@@ -195,6 +211,18 @@ fi
 if ! _docker compose version >/dev/null 2>&1; then bad "docker compose is not usable (daemon or permissions)."; fi
 ok "Docker and Docker Compose are available"
 
+echo ""
+echo "=========================================="
+echo "Install plan (preflight)"
+echo "=========================================="
+echo "  - LLM mode:            ${LLM_MODE_LABEL}"
+echo "  - Fresh DB reset:      ${FRESH_DB}"
+echo "  - Build images:        $([[ "$SKIP_BUILD" == true ]] && echo "no (skip-build)" || echo "yes")"
+echo "  - Observability stack: ${WITH_OBSERVABILITY}"
+echo "  - Interactive prompts: ${INTERACTIVE}"
+echo "=========================================="
+confirm_continue "Proceed with stack initialization and database setup?"
+
 # --- Stop stack; optional clean SQLite on host (bind-mount ./data) ---
 if [[ "$FRESH_DB" == true ]]; then
   log "Stopping stack and removing anonymous volumes…"
@@ -242,6 +270,7 @@ log "Starting frontend…"
 compose up -d frontend
 
 if [[ "$WITH_OBSERVABILITY" == true ]]; then
+  confirm_continue "Proceed with observability deployment (Grafana/Loki/Promtail/MCP)?"
   if [[ -z "${GRAFANA_ADMIN_PASSWORD:-}" ]]; then
     bad "Set GRAFANA_ADMIN_PASSWORD before using --with-observability (Grafana admin password)."
   fi
@@ -382,6 +411,22 @@ emit_install_summary() {
   echo "  docker compose -f docker-compose.yml ps"
   echo "  docker compose -f docker-compose.yml logs -f backend"
   echo "  docker compose -f docker-compose.yml down"
+  echo ""
+  echo "--- Runtime status snapshot ---"
+  if compose ps >/dev/null 2>&1; then
+    compose ps | sed 's/^/  /'
+  else
+    echo "  docker compose ps unavailable (check Docker daemon permissions)."
+  fi
+  if [[ "$WITH_OBSERVABILITY" == true ]]; then
+    echo ""
+    echo "  Observability services:"
+    if compose_obs ps >/dev/null 2>&1; then
+      compose_obs ps | sed 's/^/  /'
+    else
+      echo "  observability compose ps unavailable."
+    fi
+  fi
   echo "=========================================="
 }
 
