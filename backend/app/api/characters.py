@@ -1097,7 +1097,7 @@ def reset_character_progress(character_id: int):
             new_sheet["identity"]["secret"] = str(old["identity"]["secret"])
 
         try:
-            conn.execute("DELETE FROM inventory_items WHERE character_id = ?", (character_id,))
+            conn.execute("DELETE FROM character_inventory WHERE character_id = ?", (character_id,))
         except sqlite3.OperationalError:
             pass
 

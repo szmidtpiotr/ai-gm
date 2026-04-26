@@ -269,6 +269,35 @@ ADMIN_MIGRATIONS = [
         ('enc_boss_cultleader', 'Przywódca Kultu', 'deadly', 4, 5, 'dungeon', '[{"enemy_key":"cultleader","count":1},{"enemy_key":"cultzealot","count":2}]', 376),
         ('enc_boss_crimelord', 'Władca Podziemia', 'deadly', 5, 5, 'city', '[{"enemy_key":"crimelord","count":1},{"enemy_key":"cityenforcer","count":2}]', 450)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS character_inventory (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        character_id   INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+        item_key       TEXT,
+        weapon_key     TEXT,
+        consumable_key TEXT,
+        quantity       INTEGER NOT NULL DEFAULT 1,
+        equipped       INTEGER NOT NULL DEFAULT 0,
+        slot           TEXT,
+        acquired_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+        source         TEXT,
+        meta_json      TEXT,
+        CONSTRAINT inv_xor CHECK (
+            (CASE WHEN item_key       IS NOT NULL THEN 1 ELSE 0 END +
+             CASE WHEN weapon_key     IS NOT NULL THEN 1 ELSE 0 END +
+             CASE WHEN consumable_key IS NOT NULL THEN 1 ELSE 0 END) = 1
+        )
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_inv_character
+        ON character_inventory(character_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_inv_equipped
+        ON character_inventory(character_id, equipped)
+    """,
+    "DROP TABLE IF EXISTS inventory_items",
 ]
 
 ADMIN_SEEDS = [
