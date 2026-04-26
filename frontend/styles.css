@@ -1,32 +1,47 @@
 :root {
-  /* Dark fantasy — frontend-revamped-2 (tokens: TOKEN_MAP aliases) */
-  --font-ui: 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
-  --font-story: 'Crimson Pro', ui-serif, Georgia, 'Times New Roman', serif;
-  --bg: #070504;
-  --bg-mid: #0f0c09;
-  --panel: #12100d;
-  --panel-2: #1a1612;
-  --text: #f0e9de;
-  --muted: #94887a;
-  --accent: #c4934a;
-  --accent-light: #e4b86e;
-  --accent-dim: rgba(196, 147, 74, 0.35);
-  --danger: #e04545;
-  --warning: #e5a028;
-  --ok: #3dd16f;
-  --border: rgba(212, 175, 120, 0.18);
-  --border-strong: rgba(212, 175, 120, 0.32);
-  --user: #9ec8ff;
-  --assistant: #b8dfc0;
-  --system: #c4b89e;
-  --on-accent: #120b06;
+  /* Figma — Mobile-first dark fantasy (docs/figma-handoff) */
+  --bg: #0a0806;
+  --panel: #18120e;
+  --panel-2: #221a15;
+  --top-bar: #1f1711;
+  --bottom-bar: #1a1410;
+  --text: #f2eadc;
+  --muted: #b4a58d;
+  --accent: #b77a2b;
+  --accent-light: #d4a857;
+  --accent-dark: #8a5a1f;
+  --danger: #b91c1c;
+  --ok: #15803d;
+  --chat-player: #1e3a5f;
+  --chat-gm: #2d4a2d;
+  --chat-system: #5a5040;
+  --border: rgba(183, 122, 43, 0.2);
+  --border-strong: rgba(183, 122, 43, 0.4);
   --radius: 12px;
-  --radius-shell: 22px;
-  --radius-card: 18px;
-  --gap: 12px;
-  --shadow: 0 10px 36px rgba(0, 0, 0, 0.55);
-  --shadow-shell: 0 24px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(212, 175, 120, 0.08);
+  --radius-sm: 8px;
+  --shadow: 0 4px 16px rgba(80, 50, 20, 0.35);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Aliases — used across legacy rules in this file */
+  --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
+  --font-story: ui-serif, Georgia, 'Times New Roman', serif;
+  --bg-mid: #0c0a08;
+  --accent-dim: rgba(183, 122, 43, 0.35);
+  --warning: var(--accent-light);
+  --user: var(--chat-player);
+  --assistant: var(--chat-gm);
+  --system: var(--muted);
+  --on-accent: var(--bg);
+  --radius-shell: var(--radius);
+  --radius-card: var(--radius);
+  --gap: var(--space-3);
   --bubble-max: min(84%, 760px);
+  --shadow-shell: var(--shadow);
 }
 
 * {
@@ -34,7 +49,7 @@
 }
 
 html {
-  scrollbar-color: rgba(196, 147, 74, 0.45) var(--bg);
+  scrollbar-color: rgba(183, 122, 43, 0.45) var(--bg);
   scrollbar-width: thin;
 }
 
@@ -45,12 +60,8 @@ body {
 
 body {
   margin: 0;
-  font-family: var(--font-ui);
-  background:
-    radial-gradient(ellipse 90% 55% at 50% -8%, rgba(196, 147, 74, 0.12) 0%, transparent 52%),
-    radial-gradient(ellipse 70% 40% at 100% 0%, rgba(80, 120, 180, 0.06) 0%, transparent 45%),
-    linear-gradient(180deg, var(--bg-mid) 0%, var(--bg) 42%, #050403 100%);
-  background-color: var(--bg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', sans-serif;
+  background: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
@@ -62,8 +73,8 @@ body {
   margin: 0 auto;
   padding: 22px 20px 36px;
   border-radius: var(--radius-shell);
-  border: 1px solid rgba(212, 175, 120, 0.12);
-  background: linear-gradient(165deg, rgba(26, 22, 18, 0.55) 0%, rgba(10, 8, 6, 0.25) 45%, transparent 78%);
+  border: 1px solid var(--border);
+  background: rgba(24, 18, 14, 0.35);
   box-shadow: var(--shadow-shell);
 }
 
@@ -103,11 +114,9 @@ body {
   padding: 16px 16px 18px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-card);
-  background: linear-gradient(165deg, rgba(34, 28, 22, 0.98) 0%, rgba(18, 15, 12, 0.99) 55%, rgba(12, 10, 8, 1) 100%);
+  background: var(--top-bar);
   margin-bottom: 8px;
-  box-shadow:
-    0 18px 50px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
@@ -122,11 +131,11 @@ body {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(196, 147, 74, 0.15) 18%,
+    rgba(183, 122, 43, 0.15) 18%,
     var(--accent-light) 42%,
     var(--accent) 50%,
     var(--accent-light) 58%,
-    rgba(196, 147, 74, 0.15) 82%,
+    rgba(183, 122, 43, 0.15) 82%,
     transparent 100%
   );
   pointer-events: none;
@@ -370,13 +379,14 @@ textarea:focus {
 
 button {
   cursor: pointer;
-  background: linear-gradient(180deg, var(--accent-light) 0%, var(--accent) 48%, #8f6228 100%);
-  color: var(--on-accent);
+  background: var(--accent);
+  color: var(--bg);
   font-weight: 700;
   font-family: var(--font-ui);
   letter-spacing: 0.02em;
-  border: 1px solid rgba(0, 0, 0, 0.35);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent-dark);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
   transition: transform 0.16s ease, filter 0.16s ease, opacity 0.16s ease, box-shadow 0.16s ease;
 }
 
@@ -389,17 +399,17 @@ button:active:not(:disabled) {
 }
 
 button.secondary {
-  background: linear-gradient(180deg, rgba(40, 34, 28, 0.95) 0%, rgba(22, 18, 15, 0.98) 100%);
-  color: var(--text);
-  border: 1px solid var(--border);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 10px rgba(0, 0, 0, 0.25);
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  box-shadow: none;
 }
 
 button.danger {
-  background: linear-gradient(180deg, #f87171 0%, #b91c1c 52%, #7f1d1d 100%);
-  color: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.4);
-  box-shadow: 0 4px 18px rgba(185, 28, 28, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  box-shadow: none;
 }
 
 button:disabled,
@@ -414,9 +424,7 @@ input:disabled {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(196, 147, 74, 0.06) 0%, transparent 55%),
-    linear-gradient(185deg, #1c1814 0%, #12100d 55%, #0c0a08 100%);
+  background: var(--bg);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-card);
   padding: 18px 16px 20px;
@@ -425,11 +433,9 @@ input:disabled {
   overflow-y: auto;
   overflow-x: hidden;
   margin-bottom: 18px;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 20px 50px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow);
   scrollbar-width: thin;
-  scrollbar-color: rgba(196, 147, 74, 0.45) transparent;
+  scrollbar-color: rgba(183, 122, 43, 0.45) transparent;
 }
 
 .chat::-webkit-scrollbar {
@@ -664,7 +670,7 @@ pre.narrative-pre {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(10, 8, 6, 0.72);
+  background: rgba(10, 8, 6, 0.95);
   z-index: 1000;
   align-items: center;
   justify-content: center;
@@ -675,21 +681,29 @@ pre.narrative-pre {
   cursor: wait;
 }
 
-.auth-overlay {
+.auth-overlay,
+#auth-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(10, 8, 6, 0.78);
+  background: rgba(10, 8, 6, 0.95);
   z-index: 1400;
   align-items: center;
   justify-content: center;
   padding: 20px;
 }
 
+.modal-content,
+.panel-content {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+}
+
 .auth-overlay-panel {
   width: min(520px, 100%);
-  background: linear-gradient(165deg, #1e1a16 0%, #12100d 100%);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-shell);
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
   padding: 26px 24px;
   box-shadow: var(--shadow-shell);
   animation: bubble-in 180ms ease-out;
@@ -703,8 +717,8 @@ pre.narrative-pre {
   max-height: calc(100vh - 48px);
   overflow-y: auto;
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
   padding: 22px;
   box-shadow: var(--shadow);
   animation: bubble-in 180ms ease-out;
@@ -761,7 +775,9 @@ pre.narrative-pre {
 
 .character-modal h2 {
   margin: 0 0 8px;
-  color: var(--accent);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent-light);
   font-size: 22px;
   padding-right: 48px;
 }
@@ -826,9 +842,11 @@ pre.narrative-pre {
   width: fit-content;
   max-width: var(--bubble-max);
   min-width: 120px;
-  border-radius: 20px;
-  padding: 14px 16px 14px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
   overflow-wrap: anywhere;
@@ -840,16 +858,14 @@ pre.narrative-pre {
 
 .message.user {
   align-self: flex-end;
-  padding-left: 16px;
-  padding-right: 20px;
-  background: linear-gradient(145deg, rgba(55, 85, 130, 0.55) 0%, rgba(22, 28, 42, 0.92) 100%);
-  border-color: rgba(120, 165, 230, 0.22);
-  border-bottom-right-radius: 8px;
-  border-top-right-radius: 8px;
-  color: #e8f0ff;
-  box-shadow:
-    inset -4px 0 0 0 rgba(147, 197, 253, 0.85),
-    0 10px 32px rgba(0, 0, 0, 0.35);
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
+  background: var(--chat-player);
+  border-color: var(--border-strong);
+  border-bottom-right-radius: var(--radius-sm);
+  border-top-right-radius: var(--radius-sm);
+  color: var(--text);
+  box-shadow: var(--shadow);
 }
 
 /* /mem — przypomnienia (bez wpływu na narrację): żółte tło, czarny tekst */
@@ -945,16 +961,14 @@ pre.narrative-pre {
 
 .message.assistant {
   align-self: flex-start;
-  padding-left: 20px;
-  padding-right: 16px;
-  background: linear-gradient(145deg, rgba(42, 62, 48, 0.75) 0%, rgba(18, 24, 20, 0.95) 100%);
-  border-color: rgba(130, 175, 145, 0.2);
-  border-bottom-left-radius: 8px;
-  border-top-left-radius: 8px;
-  color: #e8f5ec;
-  box-shadow:
-    inset 4px 0 0 0 rgba(196, 147, 74, 0.9),
-    0 10px 32px rgba(0, 0, 0, 0.35);
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
+  background: var(--chat-gm);
+  border-color: var(--border-strong);
+  border-bottom-left-radius: var(--radius-sm);
+  border-top-left-radius: var(--radius-sm);
+  color: var(--text);
+  box-shadow: var(--shadow);
 }
 
 /*
@@ -1017,15 +1031,15 @@ pre.narrative-pre {
   align-self: center;
   width: 100%;
   max-width: 100%;
-  padding-left: 16px;
-  padding-right: 16px;
-  background: linear-gradient(90deg, transparent 0%, rgba(196, 184, 158, 0.08) 12%, rgba(196, 184, 158, 0.08) 88%, transparent 100%);
-  border-color: rgba(212, 175, 120, 0.15);
-  color: var(--system);
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
+  background: var(--chat-system);
+  border-color: var(--border);
+  color: var(--muted);
   font-style: italic;
   font-size: 0.95rem;
-  box-shadow: inset 0 2px 0 0 rgba(196, 147, 74, 0.35);
-  border-radius: 14px;
+  box-shadow: var(--shadow);
+  border-radius: var(--radius);
 }
 
 .message.error {
@@ -1071,10 +1085,8 @@ pre.narrative-pre {
   padding: 16px;
   border-radius: var(--radius-card);
   border: 1px solid var(--border-strong);
-  background: linear-gradient(175deg, rgba(30, 26, 22, 0.98) 0%, rgba(14, 12, 10, 0.99) 100%);
-  box-shadow:
-    0 16px 48px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: var(--bottom-bar);
+  box-shadow: var(--shadow);
 }
 
 .composer textarea#input {
@@ -1472,6 +1484,17 @@ pre {
     gap: 8px;
   }
 
+  button,
+  a[role='button'],
+  input[type='submit'] {
+    min-height: 44px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1rem);
+  }
 }
 
 /* --- Character creation wizard (Phase 7.6.9–7.6.11) --- */
@@ -2264,12 +2287,13 @@ body.campaign-death-active .campaign-death-screen {
 /* Roll result (dice) — compact 3-line block, light bubble (PL + EN stat)*/
 /* ------------------------------------------------------------------ */
 .roll-card.roll-card--light {
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
+  margin: 0.35rem 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--panel-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
   box-shadow: none;
-  color: inherit;
+  color: var(--accent-light);
   font-family: inherit;
   font-size: 15px;
   line-height: 1.45;
@@ -2298,20 +2322,20 @@ body.campaign-death-active .campaign-death-screen {
   font-size: 13px;
   color: var(--muted);
   margin-bottom: 4px;
-  font-family: Arial, sans-serif;
+  font-family: var(--font-ui);
 }
 
 .roll-card__line--detail {
   font-size: 14px;
   color: var(--text);
   margin-bottom: 6px;
-  font-family: 'Consolas', 'Menlo', 'Courier New', monospace;
+  font-family: ui-monospace, 'Consolas', 'Menlo', 'Courier New', monospace;
 }
 
 .roll-card__line--wynik {
   font-size: 15px;
   font-weight: 600;
-  font-family: Arial, sans-serif;
+  font-family: var(--font-ui);
   letter-spacing: 0.02em;
 }
 

@@ -16,7 +16,7 @@
   right: auto;
   left: auto;
   z-index: auto;
-  font-family: Arial, sans-serif;
+  font-family: var(--font-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
   font-size: 13px;
   pointer-events: auto;
   box-sizing: border-box;
@@ -26,12 +26,15 @@
   display: none !important;
 }
 
+/* #combat-ui: reserved alias if shell gains that id — same card chrome as panel */
+#combat-ui,
 .combat-panel-card {
   position: relative;
-  background: var(--panel, #1e1a14);
-  border: 1px solid var(--border, #3d3428);
-  border-radius: 8px;
-  box-shadow: var(--shadow, 0 8px 28px rgba(0, 0, 0, 0.35));
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius, 12px);
+  color: var(--text);
+  box-shadow: var(--shadow, 0 4px 16px rgba(80, 50, 20, 0.35));
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -132,11 +135,12 @@
   color: var(--muted, #a89b88);
 }
 
+.hp-bar,
 .combat-hp-bar {
   height: 10px;
   border-radius: 999px;
-  border: 1px solid var(--border, #3d3428);
-  background: #2a241c;
+  border: 1px solid var(--border);
+  background: var(--bottom-bar, #1a1410);
   overflow: hidden;
 }
 
@@ -146,9 +150,10 @@
   transition: width 0.4s ease, background 0.2s ease;
 }
 
+.hp-bar-fill,
 .combat-hp-fill--high {
-  background-color: #4caf50;
-  background: linear-gradient(90deg, #15803d, #22c55e);
+  background-color: #15803d;
+  background: linear-gradient(to right, #15803d, #22c55e);
 }
 
 .combat-hp-fill--mid {
@@ -200,16 +205,22 @@
   cursor: not-allowed;
 }
 
-.combat-btn--attack {
-  background: #15803d;
-  color: #f0fdf4;
-  border-color: #166534;
+.combat-btn--attack,
+#combat-attack-button,
+#composer-combat-attack,
+#combat-btn-attack {
+  background: var(--accent);
+  color: var(--bg);
+  border: 1px solid var(--accent-dark);
 }
 
-.combat-btn--flee {
-  background: #c2410c;
-  color: #fff7ed;
-  border-color: #9a3412;
+.combat-btn--flee,
+#combat-flee-button,
+#composer-combat-flee,
+#combat-btn-flee {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
 }
 
 .combat-btn--item {
@@ -496,19 +507,21 @@
 }
 
 .combat-input-btn--attack {
-  background: #2d7a3a;
-  color: #fff;
+  background: var(--accent);
+  color: var(--bg);
+  border: 1px solid var(--accent-dark);
 }
 
 .combat-input-btn--attack:hover:not(:disabled) {
-  background: #38a047;
+  filter: brightness(1.08);
 }
 
 .combat-input-btn--flee {
-  background: #b45309;
-  color: #fff;
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
 }
 
 .combat-input-btn--flee:hover:not(:disabled) {
-  background: #d97706;
+  filter: brightness(1.08);
 }
