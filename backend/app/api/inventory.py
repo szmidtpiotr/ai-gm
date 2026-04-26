@@ -17,6 +17,11 @@ class EquipRequest(BaseModel):
     slot: str
 
 
+class GoldDeltaRequest(BaseModel):
+    delta: int
+    reason: str = ""
+
+
 @router.get("/inventory/{character_id}")
 def get_inventory(character_id: int):
     try:
@@ -69,3 +74,31 @@ def get_item(key: str):
     if not data:
         raise HTTPException(status_code=404, detail="item not found")
     return {"ok": True, "data": data}
+
+
+@router.get("/characters/{character_id}/gold")
+def get_character_gold(character_id: int):
+    try:
+        g = loot_service.get_character_gold(character_id)
+        return {"ok": True, "data": {"gold_gp": g}}
+    except ValueError as e:
+        msg = str(e).lower()
+        if "character not found" in msg:
+            raise HTTPException(status_code=404, detail="Character not found") from e
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/characters/{character_id}/gold")
+def post_character_gold_delta(character_id: int, body: GoldDeltaRequest):
+    try:
+        if int(body.delta) == 0:
+            raise HTTPException(status_code=400, detail="delta must be non-zero")
+        g = loot_service.apply_character_gold_delta(character_id, int(body.delta), body.reason or None)
+        return {"ok": True, "data": {"gold_gp": g}}
+    except ValueError as e:
+        msg = str(e).lower()
+        if "character not found" in msg:
+            raise HTTPException(status_code=404, detail="Character not found") from e
+        if "non-zero" in msg or "negative" in msg:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        raise HTTPException(status_code=400, detail=str(e)) from e

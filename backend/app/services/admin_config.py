@@ -2063,3 +2063,94 @@ def delete_loot_entry(
         conn.commit()
     finally:
         conn.close()
+
+
+def _validate_starter_items_json(raw: str | None) -> str:
+    if raw is None or not str(raw).strip():
+        return "[]"
+    try:
+        data = json.loads(str(raw))
+    except json.JSONDecodeError as e:
+        raise ValueError("invalid_starter_items_json") from e
+    if not isinstance(data, list):
+        raise ValueError("invalid_starter_items_json")
+    for entry in data:
+        if not isinstance(entry, dict):
+            raise ValueError("invalid_starter_items_json")
+        wk = entry.get("weapon_key")
+        ik = entry.get("item_key")
+        ck = entry.get("consumable_key")
+        n = sum(1 for x in (wk, ik, ck) if x is not None and str(x).strip())
+        if n != 1:
+            raise ValueError("invalid_starter_items_json")
+        if entry.get("quantity") is not None:
+            q = int(entry["quantity"])
+            if q < 1:
+                raise ValueError("invalid_starter_items_json")
+    return json.dumps(data, ensure_ascii=False)
+
+
+def list_archetypes() -> list[dict]:
+    return _fetch_all(
+        """
+        SELECT key, label, description, starter_items_json, starter_gold_gp, is_active,
+               locked_at, created_at, updated_at
+        FROM game_config_archetypes
+        ORDER BY key ASC
+        """
+    )
+
+
+def update_archetype(
+    key: str,
+    *,
+    label: str | None = None,
+    description: str | None = None,
+    starter_items_json: str | None = None,
+    starter_gold_gp: int | None = None,
+    is_active: bool | None = None,
+    force: bool = False,
+) -> dict:
+    _ = force
+    safe_key = str(key or "").strip().lower()
+    if not KEY_RE.match(safe_key):
+        raise ValueError("invalid_key")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        old = _fetch_one(conn, "SELECT * FROM game_config_archetypes WHERE key = ?", (safe_key,))
+        if not old:
+            raise KeyError("not_found")
+        if old.get("locked_at") and not force:
+            raise PermissionError("locked")
+
+        body: dict[str, object] = {}
+        if label is not None:
+            body["label"] = str(label).strip()
+        if description is not None:
+            body["description"] = str(description)
+        if starter_items_json is not None:
+            body["starter_items_json"] = _validate_starter_items_json(starter_items_json)
+        if starter_gold_gp is not None:
+            g = int(starter_gold_gp)
+            if g < 0:
+                raise ValueError("invalid_starter_gold_gp")
+            body["starter_gold_gp"] = g
+        if is_active is not None:
+            body["is_active"] = 1 if is_active else 0
+        if not body:
+            return dict(old)
+
+        sets = ", ".join(f"{k} = ?" for k in body)
+        vals = list(body.values())
+        vals.append(safe_key)
+        conn.execute(
+            f"UPDATE game_config_archetypes SET {sets}, updated_at = datetime('now') WHERE key = ?",
+            vals,
+        )
+        new_row = _fetch_one(conn, "SELECT * FROM game_config_archetypes WHERE key = ?", (safe_key,))
+        _audit(conn, "game_config_archetypes", safe_key, "UPDATE", old, new_row)
+        conn.commit()
+        return dict(new_row or {})
+    finally:
+        conn.close()

@@ -401,6 +401,38 @@ def list_config_items(item_type: str | None = None) -> list[dict]:
     ]
 
 
+def get_character_gold(character_id: int) -> int:
+    """Return current gold_gp for a character (0 if column missing treated as 0)."""
+    cid = int(character_id)
+    with _conn() as conn:
+        row = conn.execute("SELECT gold_gp FROM characters WHERE id = ?", (cid,)).fetchone()
+        if not row:
+            raise ValueError("character not found")
+        return int(row["gold_gp"] or 0)
+
+
+def apply_character_gold_delta(character_id: int, delta: int, reason: str | None = None) -> int:
+    """
+    Atomically adjust gold_gp by delta (must not go below 0).
+    ``reason`` is accepted for API compatibility; not persisted in this phase.
+    """
+    _ = reason
+    if int(delta) == 0:
+        raise ValueError("delta must be non-zero")
+    cid = int(character_id)
+    d = int(delta)
+    with _conn() as conn:
+        row = conn.execute("SELECT gold_gp FROM characters WHERE id = ?", (cid,)).fetchone()
+        if not row:
+            raise ValueError("character not found")
+        cur = int(row["gold_gp"] or 0)
+        new_g = cur + d
+        if new_g < 0:
+            raise ValueError("gold_gp would be negative")
+        conn.execute("UPDATE characters SET gold_gp = ? WHERE id = ?", (new_g, cid))
+    return new_g
+
+
 def get_config_item(key: str) -> dict | None:
     """Get one game_config_item by key."""
     k = str(key or "").strip()

@@ -14,6 +14,7 @@ from app.character_creation_config import (
     roll_4d6_drop_lowest,
     roll_creation_skills,
 )
+from app.services.loot_service import grant_loot_to_character
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
@@ -858,9 +859,11 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         )
 
     base_sheet = dict(req.sheet_json or {})
-    archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
-    if archetype not in ("warrior", "scholar"):
-        archetype = "warrior"
+    requested_archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
+    # Starter pack + gold come only from DB rows for warrior/scholar; unknown types
+    # still create a valid sheet (defaults to warrior stats) but get no starter loot.
+    starter_archetype_key = requested_archetype if requested_archetype in ("warrior", "scholar") else None
+    archetype = starter_archetype_key or "warrior"
     base_sheet["archetype"] = archetype
     # Roll 4d6 drop-lowest, then clamp each base to [STAT_ROLL_MIN, STAT_ROLL_MAX].
     # The wizard requires every pre-bonus stat to be in that range; clamping ensures
@@ -898,6 +901,37 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     conn.commit()
 
     character_id = cur.lastrowid
+
+    try:
+        arch_row = (
+            conn.execute(
+                """
+                SELECT starter_items_json, starter_gold_gp
+                FROM game_config_archetypes
+                WHERE key = ? AND (is_active = 1 OR is_active IS NULL)
+                """,
+                (starter_archetype_key,),
+            ).fetchone()
+            if starter_archetype_key
+            else None
+        )
+        if arch_row:
+            raw_json = arch_row["starter_items_json"] or "[]"
+            try:
+                starter_items = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+            except json.JSONDecodeError:
+                starter_items = []
+            if isinstance(starter_items, list) and starter_items:
+                grant_loot_to_character(character_id, starter_items, source="start")
+            ggp = int(arch_row["starter_gold_gp"] or 0)
+            if ggp > 0:
+                conn.execute(
+                    "UPDATE characters SET gold_gp = COALESCE(gold_gp, 0) + ? WHERE id = ?",
+                    (ggp, character_id),
+                )
+                conn.commit()
+    except Exception as e:
+        logger.warning("[create_character] starter items / gold failed (non-fatal): %s", str(e))
 
     opening_message = None
     try:
@@ -987,7 +1021,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
 
     row = conn.execute(
         """
-        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at
+        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at, gold_gp
         FROM characters
         WHERE id = ?
         """,

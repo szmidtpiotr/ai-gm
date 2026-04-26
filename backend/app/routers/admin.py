@@ -60,6 +60,7 @@ from app.services.admin_config import (
     list_dc,
     list_skills,
     list_stats,
+    list_archetypes,
     update_condition,
     update_enemy,
     update_item,
@@ -69,6 +70,7 @@ from app.services.admin_config import (
     update_dc,
     update_skill,
     update_stat,
+    update_archetype,
     upsert_loot_entry,
 )
 from app.services.client_ui_config import get_merged_slash_commands, set_slash_commands_ui
@@ -439,6 +441,16 @@ class ConsumablePatchReq(BaseModel):
 
 
 class ConsumableDeleteReq(BaseModel):
+    force: bool = False
+
+
+class ArchetypePatchReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    label: str | None = None
+    description: str | None = None
+    starter_items_json: str | None = None
+    starter_gold_gp: int | None = None
+    is_active: bool | None = None
     force: bool = False
 
 
@@ -1109,6 +1121,38 @@ def admin_delete_consumable(key: str, req: ConsumableDeleteReq, _: None = Depend
                 detail="Cannot delete — used in a loot table.",
             ) from None
         raise HTTPException(status_code=422, detail="Invalid delete request") from e
+
+
+@router.get("/admin/archetypes")
+def admin_archetypes(_: None = Depends(require_admin_token)):
+    return {"items": list_archetypes()}
+
+
+@router.patch("/admin/archetypes/{key}")
+def admin_patch_archetype(key: str, req: ArchetypePatchReq, _: None = Depends(require_admin_token)):
+    try:
+        row = update_archetype(
+            key,
+            label=req.label,
+            description=req.description,
+            starter_items_json=req.starter_items_json,
+            starter_gold_gp=req.starter_gold_gp,
+            is_active=req.is_active,
+            force=req.force,
+        )
+        return {"archetype": row}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Archetype not found") from None
+    except PermissionError:
+        raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+    except ValueError as e:
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
+        if str(e) == "invalid_starter_items_json":
+            raise HTTPException(status_code=422, detail="starter_items_json must be a JSON array of objects") from None
+        if str(e) == "invalid_starter_gold_gp":
+            raise HTTPException(status_code=422, detail="starter_gold_gp must be >= 0") from None
+        raise HTTPException(status_code=422, detail="Invalid archetype payload") from None
 
 
 @router.get("/admin/loot-tables")

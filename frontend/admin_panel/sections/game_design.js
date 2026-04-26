@@ -3047,33 +3047,96 @@ function mountLootTables(host) {
   void refreshEntriesPanel();
 }
 
+async function refreshArchetypes(host) {
+  const tableHost = host.querySelector(".admin-subpanel-body");
+  renderTable(tableHost, [], null, {});
+  try {
+    const data = await adminFetch("/api/admin/archetypes");
+    const rows = (data.items || []).map((r) => ({ ...r }));
+    renderGameDesignTable(
+      tableHost,
+      "archetypes",
+      [
+        { key: "key", label: "Key" },
+        { key: "label", label: "Label", editable: true },
+        {
+          key: "starter_gold_gp",
+          label: "Złoto startowe (GP)",
+          type: "number",
+          editable: true,
+        },
+        {
+          key: "starter_items_json",
+          label: "Starter items (JSON)",
+          type: "textarea",
+          editable: true,
+        },
+        { key: "description", label: "Description", type: "textarea", editable: true },
+        { key: "is_active", label: "Active", type: "boolean", editable: true },
+        { key: "locked_at", label: "Lock", type: "locked" },
+      ],
+      rows,
+      {
+        searchPlaceholder: "Search archetypes…",
+        onEdit: async (row, key, newValue, meta) => {
+          const body = { force: !!(meta && meta.force) };
+          if (key === "label") {
+            body.label = newValue;
+          }
+          if (key === "description") {
+            body.description = newValue;
+          }
+          if (key === "starter_gold_gp") {
+            const n = Number(newValue);
+            if (!Number.isFinite(n) || n < 0) {
+              showToast("starter_gold_gp musi być liczbą ≥ 0.", "error");
+              throw new Error("invalid_starter_gold");
+            }
+            body.starter_gold_gp = Math.floor(n);
+          }
+          if (key === "starter_items_json") {
+            const raw = String(newValue ?? "").trim();
+            try {
+              JSON.parse(raw || "[]");
+            } catch (_e) {
+              showToast("Niepoprawny JSON tablicy starter_items.", "error");
+              throw new Error("invalid_starter_json");
+            }
+            body.starter_items_json = raw;
+          }
+          if (key === "is_active") {
+            body.is_active = !!newValue;
+          }
+          await adminFetch(`/api/admin/archetypes/${encodeURIComponent(row.key)}`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          });
+          Object.assign(row, { [key]: newValue });
+          showToast("Archetyp zaktualizowany.", "success");
+          await refreshArchetypes(host);
+        },
+      },
+    );
+  } catch (e) {
+    showToast(parseApiError(e, "Nie udało się wczytać archetypów."), "error");
+    renderTable(tableHost, [], [], {});
+  }
+}
+
 function mountArchetypes(host) {
   const root = el("div", "admin-subpanel-inner");
-  const banner = el("div", "admin-callout");
-  banner.textContent =
-    "⚠️ To add or remove archetypes, edit character_creation_config.py and redeploy.";
-  root.appendChild(banner);
-  const grid = el("div", "archetype-admin-grid");
-  const w = el("div", "archetype-card-admin");
-  w.innerHTML = `
-    <h3>Warrior</h3>
-    <p><strong>Skill weights (preferred at creation):</strong> athletics, melee_attack, endurance, intimidation, survival</p>
-    <p><strong>Skill budget:</strong> 8 slots, 7 active skills at creation</p>
-    <p><strong>Max skill level at creation:</strong> 2</p>
-    <p class="muted">Defined in backend/app/character_creation_config.py</p>
-  `;
-  const s = el("div", "archetype-card-admin");
-  s.innerHTML = `
-    <h3>Scholar</h3>
-    <p><strong>Skill weights (preferred at creation):</strong> arcana, lore, investigation, medicine, awareness</p>
-    <p><strong>Skill budget:</strong> 10 slots, 8 active skills at creation</p>
-    <p><strong>Max skill level at creation:</strong> 2</p>
-    <p class="muted">Defined in backend/app/character_creation_config.py</p>
-  `;
-  grid.appendChild(w);
-  grid.appendChild(s);
-  root.appendChild(grid);
+  const note = el("p", "admin-note muted");
+  note.innerHTML =
+    "Pakiet startowy i <strong>gold_gp</strong> przy tworzeniu postaci: tylko gdy w kreatorze wybrano <code>warrior</code> lub <code>scholar</code>. " +
+    "JSON to tablica obiektów; każdy element musi mieć dokładnie jedno z pól: <code>weapon_key</code>, <code>item_key</code>, <code>consumable_key</code> " +
+    "(klucze muszą istnieć w katalogu). Preferencje skilli przy kreacji nadal w <code>character_creation_config.py</code>.";
+  const body = el("div", "");
+  body.dataset.subpanel = "archetypes";
+  body.className = "admin-subpanel-body";
+  root.appendChild(note);
+  root.appendChild(body);
   host.appendChild(root);
+  void refreshArchetypes(host);
 }
 
 function mountPrompts(host) {
