@@ -222,6 +222,37 @@ def _read_loot_pool_from_row(row: sqlite3.Row) -> list[dict[str, Any]]:
     return _parse_loot_pool_column(row["loot_pool"])
 
 
+def _preview_loot_from_roll_items(loot_items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for raw in loot_items or []:
+        if not isinstance(raw, dict):
+            continue
+        qty = max(1, int(raw.get("quantity") or 1))
+        key = ""
+        item_type = "item"
+        if raw.get("weapon_key"):
+            key = str(raw.get("weapon_key") or "").strip()
+            item_type = "weapon"
+        elif raw.get("consumable_key"):
+            key = str(raw.get("consumable_key") or "").strip()
+            item_type = "consumable"
+        elif raw.get("item_key"):
+            key = str(raw.get("item_key") or "").strip()
+            item_type = "item"
+        if not key:
+            continue
+        out.append(
+            {
+                "label": key.replace("_", " "),
+                "item_type": item_type,
+                "quantity": qty,
+                "source": "loot",
+                "key": key,
+            }
+        )
+    return out
+
+
 def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
     d: dict[str, Any] = {
         "id": row["id"],
@@ -239,6 +270,10 @@ def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
     }
     if "loot_pool" in row.keys():
         d["loot_pool"] = _read_loot_pool_from_row(row)
+    if "loot_persisted" in row.keys():
+        d["loot_persisted"] = bool(int(row["loot_persisted"] or 0))
+    if "post_combat_loot_json" in row.keys():
+        d["claimed_loot"] = _parse_loot_pool_column(row["post_combat_loot_json"])
     return d
 
 
@@ -866,14 +901,13 @@ def resolve_attack(
                         try:
                             from app.services.loot_service import (
                                 apply_character_gold_delta,
-                                grant_loot_to_character,
                                 roll_gold_drop,
                                 roll_loot,
                             )
 
                             loot_items = roll_loot(ek)
                             if loot_items:
-                                loot = grant_loot_to_character(ch_id, loot_items, source="loot")
+                                loot = _preview_loot_from_roll_items(loot_items)
                             else:
                                 loot = []
                             gold_drop = int(roll_gold_drop(ek) or 0)
@@ -1336,3 +1370,76 @@ def end_combat(campaign_id: int, reason: str, *, defeated_by: str | None = None)
     finally:
         if nconn is not None:
             nconn.close()
+
+
+def claim_post_combat_loot(
+    campaign_id: int,
+    *,
+    character_id: int,
+    selected_indexes: list[int],
+) -> dict[str, Any]:
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("combat not found")
+        if int(row["character_id"] or 0) != int(character_id):
+            raise ValueError("character mismatch")
+        if str(row["status"] or "") != "ended" or str(row["ended_reason"] or "") != "victory":
+            raise ValueError("combat not in victory state")
+
+        pool = _read_loot_pool_from_row(row)
+        if not pool:
+            return {"claimed": [], "available": [], "selected_indexes": []}
+
+        selected_set = {int(i) for i in (selected_indexes or [])}
+        chosen_rows: list[dict[str, Any]] = []
+        for idx, entry in enumerate(pool):
+            if idx in selected_set:
+                chosen_rows.append(entry)
+
+        to_grant: list[dict[str, Any]] = []
+        for entry in chosen_rows:
+            e = dict(entry or {})
+            qty = max(1, int(e.get("quantity") or 1))
+            key = str(e.get("key") or "").strip()
+            t = str(e.get("item_type") or "").strip().lower()
+            if not key:
+                continue
+            if t == "weapon":
+                to_grant.append({"weapon_key": key, "quantity": qty})
+            elif t == "consumable":
+                to_grant.append({"consumable_key": key, "quantity": qty})
+            else:
+                to_grant.append({"item_key": key, "quantity": qty})
+
+        from app.services.loot_service import grant_loot_to_character
+
+        claimed = grant_loot_to_character(character_id, to_grant, source="loot") if to_grant else []
+
+        updates: list[str] = []
+        params: list[Any] = []
+        if "loot_pool" in row.keys():
+            updates.append("loot_pool = ?")
+            params.append(json.dumps([], ensure_ascii=False))
+        if "loot_persisted" in row.keys():
+            updates.append("loot_persisted = ?")
+            params.append(1)
+        if "post_combat_loot_json" in row.keys():
+            updates.append("post_combat_loot_json = ?")
+            params.append(json.dumps(claimed, ensure_ascii=False))
+        updates.append("updated_at = ?")
+        params.append(_now_iso())
+        params.append(campaign_id)
+        conn.execute(
+            f"UPDATE active_combat SET {', '.join(updates)} WHERE campaign_id = ?",
+            tuple(params),
+        )
+        conn.commit()
+        return {
+            "claimed": claimed,
+            "available": pool,
+            "selected_indexes": sorted(selected_set),
+        }

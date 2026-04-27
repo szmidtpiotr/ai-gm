@@ -262,6 +262,28 @@ def grant_loot_to_character(character_id: int, loot_items: list[dict], source: s
     return granted
 
 
+def preview_loot_items(loot_items: list[dict], source: str = "loot") -> list[dict]:
+    """
+    Validate/normalize loot payload against catalogs without writing inventory.
+    Returns the same display contract as grant_loot_to_character.
+    """
+    if not isinstance(loot_items, list):
+        return []
+    src = str(source or "loot").strip() or "loot"
+    out: list[dict] = []
+    with _conn() as conn:
+        for raw in loot_items:
+            if not isinstance(raw, dict):
+                continue
+            qty = max(1, int(raw.get("quantity") or 1))
+            cat = _catalog_entry(conn, raw)
+            if not cat:
+                continue
+            key, label, item_type = cat
+            out.append({"label": label, "item_type": item_type, "quantity": qty, "source": src, "key": key})
+    return out
+
+
 def get_character_inventory(character_id: int) -> list[dict]:
     """Return unified inventory rows for a character."""
     cid = int(character_id)

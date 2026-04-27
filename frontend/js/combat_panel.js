@@ -203,8 +203,8 @@
       const fromState = Array.isArray(this._state?.loot_pool) ? this._state.loot_pool.slice() : [];
       const drop = pending.length > 0 ? pending : fromState;
       if (drop.length > 0 || pendingGold > 0) {
-        await this._showLootPopupAsync(drop, pendingGold);
-        this._pushLoot(drop);
+        const claimed = await this._showLootPopupAsync(drop, pendingGold);
+        this._pushLoot(Array.isArray(claimed) ? claimed : []);
       }
       if (typeof window.refreshInventoryPanel === "function") {
         window.refreshInventoryPanel();
@@ -537,6 +537,28 @@
       }
     }
 
+    async _claimLootSelection(lootArr, selectedIndexes) {
+      const cid = this._campaignId();
+      const characterId = Number(window.state?.selectedCharacterId || 0);
+      if (!cid || !characterId || !Array.isArray(lootArr)) return [];
+      try {
+        const resp = await fetch(`/api/campaigns/${cid}/combat/loot/claim`, {
+          method: "POST",
+          headers: window.getApiHeaders ? window.getApiHeaders() : { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            character_id: characterId,
+            selected_indexes: Array.isArray(selectedIndexes) ? selectedIndexes : [],
+          }),
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok || !payload?.ok) return [];
+        const claimed = payload?.data?.claimed;
+        return Array.isArray(claimed) ? claimed : [];
+      } catch (_err) {
+        return [];
+      }
+    }
+
     _showLootPopup(lootArr, goldDrop, onDismiss) {
       if (!this._lootLayer) return;
       const list = Array.isArray(lootArr) ? lootArr : [];
@@ -545,11 +567,10 @@
         list.length === 0
           ? '<p class="muted">Wróg nie miał łupów.</p>'
           : `<ul class="combat-loot-list">${list
-              .map(
-                (L) =>
-                  `<li class="combat-loot-row"><span class="combat-loot-icon">${lootIcon(L)}</span><span>${esc(
+              .map((L, idx) =>
+                  `<li class="combat-loot-row"><label style="display:flex;align-items:center;gap:8px;width:100%;"><input type="checkbox" data-loot-pick="${idx}" checked /><span class="combat-loot-icon">${lootIcon(L)}</span><span>${esc(
                     lootLabel(L)
-                  )}</span><span class="combat-loot-qty">×${esc(lootQty(L))}</span></li>`
+                  )}</span><span class="combat-loot-qty">×${esc(lootQty(L))}</span></label></li>`
               )
               .join("")}</ul>`;
       this._lootLayer.innerHTML = `
@@ -557,18 +578,28 @@
           <h3 style="margin:0 0 10px;font-size:16px;">Łupy z pokonanych</h3>
           ${inner}
           ${gold > 0 ? `<div class="combat-loot-gold">💰 +${esc(gold)} GP</div>` : ""}
-          <button type="button" class="combat-primary-btn" id="combat-loot-dismiss">Zamknij</button>
+          <button type="button" class="combat-primary-btn" id="combat-loot-claim">Weź wybrane</button>
+          <button type="button" class="combat-primary-btn secondary" id="combat-loot-dismiss">Pomiń</button>
         </div>`;
       this._lootLayer.style.display = "flex";
-      this._lootLayer.querySelector("#combat-loot-dismiss").onclick = () => {
+      this._lootLayer.querySelector("#combat-loot-claim").onclick = async () => {
+        const picks = Array.from(this._lootLayer.querySelectorAll("[data-loot-pick]:checked"))
+          .map((x) => Number(x.getAttribute("data-loot-pick")))
+          .filter((n) => Number.isInteger(n) && n >= 0);
+        const claimed = await this._claimLootSelection(list, picks);
         this._hideLoot();
-        if (typeof onDismiss === "function") onDismiss();
+        if (typeof onDismiss === "function") onDismiss(claimed);
+      };
+      this._lootLayer.querySelector("#combat-loot-dismiss").onclick = async () => {
+        const claimed = await this._claimLootSelection(list, []);
+        this._hideLoot();
+        if (typeof onDismiss === "function") onDismiss(claimed);
       };
     }
 
     _showLootPopupAsync(lootArr, goldDrop = 0) {
       return new Promise((resolve) => {
-        this._showLootPopup(lootArr, goldDrop, () => resolve());
+        this._showLootPopup(lootArr, goldDrop, (claimed) => resolve(claimed));
       });
     }
 
@@ -924,11 +955,10 @@
 
         if (data.enemy_dead) {
           const goldDrop = Math.max(0, Number(data.gold_drop || 0));
+          this._pendingLoot = Array.isArray(data.loot) ? data.loot.slice() : [];
           if (victoryNarrationFirst) {
-            this._pendingLoot = Array.isArray(data.loot) ? data.loot.slice() : [];
             this._pendingGold = goldDrop;
           } else {
-            this._pushLoot(data.loot || []);
             this._pendingGold = 0;
           }
         }
@@ -983,8 +1013,11 @@
                   ? data.loot.slice()
                   : [];
             if (pool.length > 0) {
-              await this._showLootPopupAsync(pool, Math.max(0, Number(data.gold_drop || 0)));
-              this._accumulatedLoot = pool.slice();
+              const claimed = await this._showLootPopupAsync(
+                pool,
+                Math.max(0, Number(data.gold_drop || 0))
+              );
+              this._accumulatedLoot = Array.isArray(claimed) ? claimed.slice() : [];
             } else if (Math.max(0, Number(data.gold_drop || 0)) > 0) {
               await this._showLootPopupAsync([], Math.max(0, Number(data.gold_drop || 0)));
             }
