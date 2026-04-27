@@ -26,6 +26,7 @@ from app.api.models import router as models_router
 from app.migrations_admin import run_admin_migrations
 from app.routers.admin import router as admin_router
 from app.routers.settings import router as settings_router
+from app.routers.debug import router as debug_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -209,6 +210,8 @@ app.include_router(models_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(settings_router)
+if os.getenv("AI_TEST_MODE") == "1":
+    app.include_router(debug_router, prefix="/api")
 
 
 Instrumentator().instrument(app).expose(app)

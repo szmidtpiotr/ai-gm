@@ -31,6 +31,13 @@ services:
       - DEFAULT_CAMPAIGN_LANGUAGE=${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
       - GAME_LANG=${GAME_LANG:-pl-PL}
       - DATABASE_URL=${DATABASE_URL:-sqlite:////data/ai_gm_dev.db}
+      - AI_TEST_MODE=${AI_TEST_MODE:-0}
+      # Same SQLite as auth/campaigns (raw sqlite3); isolated test_ai.db breaks E2E login.
+      - AI_TEST_DB_PATH=${AI_TEST_DB_PATH:-/data/ai_gm.db}
+      # Playwright / CI: deterministic GM reply without Ollama (only when AI_TEST_MODE=1).
+      - AI_TEST_STUB_LLM=${AI_TEST_STUB_LLM:-0}
+      # Seed + Playwright: JSON z id postaci/kampanii (wolumen ./data-dev -> widoczny na hoście).
+      - AI_TEST_CONFIG_PATH=${AI_TEST_CONFIG_PATH:-/data/ai_test_config.json}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

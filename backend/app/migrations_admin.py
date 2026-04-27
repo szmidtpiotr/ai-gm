@@ -314,6 +314,31 @@ ADMIN_MIGRATIONS = [
     )
     """,
     "ALTER TABLE characters ADD COLUMN gold_gp INTEGER NOT NULL DEFAULT 0",
+    """
+    CREATE TABLE IF NOT EXISTS game_sessions (
+        id TEXT PRIMARY KEY,
+        campaign_id INTEGER,
+        test_run_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "ALTER TABLE game_sessions ADD COLUMN test_run_id TEXT",
+    """
+    CREATE TABLE IF NOT EXISTS debug_validation_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        test_run_id TEXT NOT NULL,
+        event TEXT NOT NULL,
+        is_legal INTEGER NOT NULL DEFAULT 1,
+        reason TEXT,
+        old_state TEXT,
+        new_state TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_debug_validation_log_test_run
+    ON debug_validation_log(test_run_id, created_at)
+    """,
 ]
 
 ADMIN_SEEDS = [

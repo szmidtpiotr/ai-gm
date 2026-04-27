@@ -10,6 +10,7 @@ ollama/
 __pycache__/
 *.pyc
 .env
+env.test
 .secrets/
 .DS_Store
 .venv/
@@ -36,6 +37,7 @@ scripts/.db-autosync-cron-wrap.sh
 /docs/
 /skills/
 data-dev/
+backend/ai_test_config.json
 
 # Observability DEV - dane runtime (nie commitujemy)
 observability-dev/loki/data/

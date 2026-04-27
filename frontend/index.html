@@ -6,6 +6,23 @@
   <title>AI-GM</title>
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./css/combat.css">
+  <script>
+    (function() {
+      fetch('/api/debug/settings/feature_flags')
+        .then(function(r) { return r.json(); })
+        .then(function(flags) {
+          if (flags && flags.ai_test_mode) {
+            var s = document.createElement('script');
+            s.src = '/js/otel_init.js';
+            s.defer = true;
+            document.head.appendChild(s);
+          }
+        })
+        .catch(function() {
+          // Keep normal gameplay unaffected if debug flags are unavailable.
+        });
+    })();
+  </script>
 </head>
 <body>
   <div
