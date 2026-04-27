@@ -207,7 +207,8 @@
         this._pushLoot(Array.isArray(claimed) ? claimed : []);
         await this._runPostLootNarration(
           Array.isArray(claimed) ? claimed.length : 0,
-          drop.length
+          drop.length,
+          pendingGold
         );
       }
       if (typeof window.refreshInventoryPanel === "function") {
@@ -607,14 +608,17 @@
       });
     }
 
-    async _runPostLootNarration(claimedCount, totalCount) {
+    async _runPostLootNarration(claimedCount, totalCount, goldGp = 0) {
       const total = Math.max(0, Number(totalCount || 0));
-      if (!total) return;
+      const gold = Math.max(0, Number(goldGp || 0));
+      if (!total && !gold) return;
       const claimed = Math.max(0, Number(claimedCount || 0));
       const line =
-        claimed > 0
-          ? `Po walce wybieram ${claimed} z ${total} elementów łupu i rozglądam się po okolicy.`
-          : "Po walce rezygnuję z łupów i rozglądam się po okolicy.";
+        total > 0
+          ? (claimed > 0
+            ? `Po walce wybieram ${claimed} z ${total} elementów łupu i rozglądam się po okolicy.`
+            : "Po walce rezygnuję z łupów i rozglądam się po okolicy.")
+          : `Po walce zbieram ${gold} szt. złota i rozglądam się po okolicy.`;
       await this._sendCombatNarrativeFollowUp(line);
     }
 
@@ -1035,10 +1039,13 @@
               this._accumulatedLoot = Array.isArray(claimed) ? claimed.slice() : [];
               await this._runPostLootNarration(
                 Array.isArray(claimed) ? claimed.length : 0,
-                pool.length
+                pool.length,
+                Math.max(0, Number(data.gold_drop || 0))
               );
             } else if (Math.max(0, Number(data.gold_drop || 0)) > 0) {
-              await this._showLootPopupAsync([], Math.max(0, Number(data.gold_drop || 0)));
+              const onlyGold = Math.max(0, Number(data.gold_drop || 0));
+              await this._showLootPopupAsync([], onlyGold);
+              await this._runPostLootNarration(0, 0, onlyGold);
             }
             if (typeof window.refreshInventoryPanel === "function") {
               window.refreshInventoryPanel();
