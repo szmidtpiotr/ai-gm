@@ -11,15 +11,20 @@
   }
 
   function lootIcon(entry) {
-    const t = String(entry?.source_type || "");
+    const t = String(entry?.source_type || entry?.item_type || "");
     if (t === "weapon") return "⚔️";
     if (t === "consumable") return "🧪";
     return "📦";
   }
 
   function lootLabel(entry) {
-    const k = String(entry?.source_key || "?");
+    const k = String(entry?.label || entry?.source_key || entry?.key || "?");
     return k.replace(/_/g, " ");
+  }
+
+  function lootQty(entry) {
+    const n = Number(entry?.qty ?? entry?.quantity ?? 1);
+    return Number.isFinite(n) && n > 0 ? n : 1;
   }
 
   class CombatPanel {
@@ -476,7 +481,7 @@
                 (L) =>
                   `<li class="combat-loot-row"><span class="combat-loot-icon">${lootIcon(L)}</span><span>${esc(
                     lootLabel(L)
-                  )}</span><span class="combat-loot-qty">×${esc(L.qty ?? 1)}</span></li>`
+                  )}</span><span class="combat-loot-qty">×${esc(lootQty(L))}</span></li>`
               )
               .join("")
           : '<li class="muted">Brak łupów.</li>';
@@ -544,7 +549,7 @@
                 (L) =>
                   `<li class="combat-loot-row"><span class="combat-loot-icon">${lootIcon(L)}</span><span>${esc(
                     lootLabel(L)
-                  )}</span><span class="combat-loot-qty">×${esc(L.qty ?? 1)}</span></li>`
+                  )}</span><span class="combat-loot-qty">×${esc(lootQty(L))}</span></li>`
               )
               .join("")}</ul>`;
       this._lootLayer.innerHTML = `

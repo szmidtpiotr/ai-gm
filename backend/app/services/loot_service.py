@@ -21,9 +21,10 @@ def _conn() -> sqlite3.Connection:
     return conn
 
 
-def _row_to_loot_entry(row: sqlite3.Row, total_weight: int) -> dict[str, Any]:
-    weight = max(1, int(row["weight"] or 0))
-    chance = float(weight / total_weight) if total_weight > 0 else 0.0
+def _row_to_loot_entry(row: sqlite3.Row) -> dict[str, Any]:
+    # `weight` is used as direct per-entry drop percent in range 1..100.
+    weight = max(1, min(100, int(row["weight"] or 0)))
+    chance = float(weight / 100.0)
     return {
         "item_key": row["item_key"],
         "weapon_key": row["weapon_key"],
@@ -99,53 +100,45 @@ def get_loot_table(enemy_key: str) -> list[dict]:
         ).fetchall()
     if not rows:
         return []
-    total_weight = sum(max(1, int(r["weight"] or 0)) for r in rows)
-    return [_row_to_loot_entry(r, total_weight) for r in rows]
+    return [_row_to_loot_entry(r) for r in rows]
 
 
 def roll_loot(enemy_key: str) -> list[dict]:
     """
-    Roll one weighted loot entry for enemy_key.
-    Returns [] if enemy has no loot table or drop chance fails.
+    Roll each loot-table entry independently for enemy_key.
+    Returns [] when enemy or loot table is missing, or no entry roll succeeds.
     """
     ek = str(enemy_key or "").strip()
     if not ek:
         return []
     with _conn() as conn:
         enemy = conn.execute(
-            "SELECT loot_table_key, drop_chance FROM game_config_enemies WHERE key = ?",
+            "SELECT loot_table_key FROM game_config_enemies WHERE key = ?",
             (ek,),
         ).fetchone()
     if not enemy or not enemy["loot_table_key"]:
-        return []
-
-    drop_chance = float(enemy["drop_chance"] if enemy["drop_chance"] is not None else 1.0)
-    if random.random() > drop_chance:
         return []
 
     entries = get_loot_table(ek)
     if not entries:
         return []
 
-    r = random.random()
-    acc = 0.0
-    chosen = entries[-1]
+    rolled: list[dict] = []
     for entry in entries:
-        acc += float(entry.get("chance") or 0.0)
-        if r <= acc:
-            chosen = entry
-            break
-    qmin = max(1, int(chosen.get("quantity_min") or 1))
-    qmax = max(qmin, int(chosen.get("quantity_max") or qmin))
-    qty = random.randint(qmin, qmax)
-    return [
-        {
-            "item_key": chosen.get("item_key"),
-            "weapon_key": chosen.get("weapon_key"),
-            "consumable_key": chosen.get("consumable_key"),
-            "quantity": qty,
-        }
-    ]
+        if random.random() > float(entry.get("chance") or 0.0):
+            continue
+        qmin = max(1, int(entry.get("quantity_min") or 1))
+        qmax = max(qmin, int(entry.get("quantity_max") or qmin))
+        qty = random.randint(qmin, qmax)
+        rolled.append(
+            {
+                "item_key": entry.get("item_key"),
+                "weapon_key": entry.get("weapon_key"),
+                "consumable_key": entry.get("consumable_key"),
+                "quantity": qty,
+            }
+        )
+    return rolled
 
 
 def roll_gold_drop(enemy_key: str) -> int:

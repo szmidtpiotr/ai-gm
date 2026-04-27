@@ -1545,8 +1545,8 @@ function validateLootEntryImportSpec(en, label) {
   const weight = en.weight != null ? Number(en.weight) : 10;
   const qty_min = en.qty_min != null ? Number(en.qty_min) : 1;
   const qty_max = en.qty_max != null ? Number(en.qty_max) : 1;
-  if (!Number.isFinite(weight) || weight < 1) {
-    return `${label}: weight must be a number >= 1`;
+  if (!Number.isFinite(weight) || weight < 1 || weight > 100) {
+    return `${label}: weight must be a number in range 1..100`;
   }
   if (!Number.isFinite(qty_min) || qty_min < 1) {
     return `${label}: qty_min must be a number >= 1`;
@@ -2538,7 +2538,7 @@ function mountLootTables(host) {
           </select>
         </label>
         <label class="field add-form-span-2"><span>Source</span><select data-loot-source-select></select></label>
-        <label class="field"><span>Weight</span><input data-loot-weight type="number" value="10" min="1" /></label>
+        <label class="field"><span>Drop chance (%)</span><input data-loot-weight type="number" value="10" min="1" max="100" /></label>
         <label class="field"><span>Qty min</span><input data-loot-qty-min type="number" value="1" min="1" /></label>
         <label class="field"><span>Qty max</span><input data-loot-qty-max type="number" value="1" min="1" /></label>
         <button type="button" class="primary-btn" data-loot-add-entry>+ Add</button>
@@ -2604,10 +2604,8 @@ function mountLootTables(host) {
       viz.appendChild(el("p", "muted", "No entries yet."));
       return;
     }
-    const sum = entries.reduce((s, e) => s + Math.max(1, Number(e.weight) || 0), 0);
     entries.forEach((e) => {
-      const w = Math.max(1, Number(e.weight) || 0);
-      const pct = sum > 0 ? Math.round((w / sum) * 1000) / 10 : 0;
+      const pct = Math.max(1, Math.min(100, Number(e.weight) || 0));
       const row = el("div", "loot-weight-row");
       const lab = el(
         "span",
@@ -2713,7 +2711,7 @@ function mountLootTables(host) {
     const tbl = el("table", "admin-table");
     const thead = el("thead");
     const hr = el("tr");
-    ["Source (type · label · key)", "Weight", "Qty min", "Qty max", ""].forEach((h) => {
+    ["Source (type · label · key)", "Drop chance %", "Qty min", "Qty max", ""].forEach((h) => {
       const th = el("th", "", h);
       hr.appendChild(th);
     });
@@ -2762,6 +2760,7 @@ function mountLootTables(host) {
       const inW = el("input", "");
       inW.type = "number";
       inW.min = "1";
+      inW.max = "100";
       inW.value = String(en.weight);
       inW.dataset.field = "weight";
       const td3 = el("td");
@@ -3026,11 +3025,11 @@ function mountLootTables(host) {
 
   wireBulkJsonImport(left, {
     hint:
-      "Każdy element: key, label, opcjonalnie description i is_active, opcjonalnie entries. W entries: dokładnie jedno z item_key | weapon_key | consumable_key (musi istnieć w katalogu), weight ≥ 1, qty_min / qty_max ≥ 1 i min ≤ max. Pusta lub brak entries = tabela bez wierszy. Przy 409 na tabeli z „Pomiń 409” wpisy i tak są wysyłane (upsert na istniejącą tabelę).",
+      "Każdy element: key, label, opcjonalnie description i is_active, opcjonalnie entries. W entries: dokładnie jedno z item_key | weapon_key | consumable_key (musi istnieć w katalogu), weight (drop chance %) w zakresie 1..100, qty_min / qty_max ≥ 1 i min ≤ max. Pusta lub brak entries = tabela bez wierszy. Przy 409 na tabeli z „Pomiń 409” wpisy i tak są wysyłane (upsert na istniejącą tabelę).",
     templatesHref: "/admin_panel/templates.html#sec-loot-tables",
     templatesAnchor: "Szablony JSON — Loot tables",
     placeholder:
-      '[{"key":"example_loot","label":"Example","description":"","is_active":true,"entries":[{"item_key":"rope","weight":10,"qty_min":1,"qty_max":1}]}]',
+      '[{"key":"example_loot","label":"Example","description":"","is_active":true,"entries":[{"item_key":"rope","weight":35,"qty_min":1,"qty_max":1}]}]',
     validateRow: validateLootTableBulkRow,
     existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/loot-tables"),
     refresh: async () => {

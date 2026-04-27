@@ -1876,7 +1876,7 @@ def upsert_loot_entry(
 ) -> dict:
     lt = _validate_key(loot_table_key)
     ik, ck, wk = _loot_entry_source_keys(item_key, consumable_key, weapon_key)
-    if weight < 1:
+    if weight < 1 or weight > 100:
         raise ValueError("invalid_weight")
     if qty_min < 1 or qty_max < 1 or qty_min > qty_max:
         raise ValueError("invalid_qty_range")

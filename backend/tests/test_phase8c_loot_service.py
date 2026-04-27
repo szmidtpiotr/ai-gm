@@ -132,13 +132,15 @@ class TestLootService(unittest.TestCase):
         self.assertGreaterEqual(g, 5)
         self.assertLessEqual(g, 15)
 
-    @patch("app.services.loot_service.random.random", side_effect=[0.0, 0.0])
-    @patch("app.services.loot_service.random.randint", return_value=2)
-    def test_roll_loot_returns_weighted_row(self, _randint, _random):
+    @patch("app.services.loot_service.random.random", side_effect=[0.10, 0.90, 0.04])
+    @patch("app.services.loot_service.random.randint", side_effect=[2, 1])
+    def test_roll_loot_rolls_each_entry_independently(self, _randint, _random):
         rolled = ls.roll_loot("bandit")
-        self.assertEqual(len(rolled), 1)
+        self.assertEqual(len(rolled), 2)
         self.assertEqual(rolled[0].get("item_key"), "rope")
         self.assertEqual(int(rolled[0].get("quantity") or 0), 2)
+        self.assertEqual(rolled[1].get("weapon_key"), "shortsword")
+        self.assertEqual(int(rolled[1].get("quantity") or 0), 1)
 
     def test_grant_loot_stacks_item_and_consumable(self):
         granted = ls.grant_loot_to_character(
