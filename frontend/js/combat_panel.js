@@ -205,11 +205,7 @@
       if (drop.length > 0 || pendingGold > 0) {
         const claimed = await this._showLootPopupAsync(drop, pendingGold);
         this._pushLoot(Array.isArray(claimed) ? claimed : []);
-        await this._runPostLootNarration(
-          Array.isArray(claimed) ? claimed.length : 0,
-          drop.length,
-          pendingGold
-        );
+        await this._runPostLootNarration(Array.isArray(claimed) ? claimed : [], pendingGold);
       }
       if (typeof window.refreshInventoryPanel === "function") {
         window.refreshInventoryPanel();
@@ -641,17 +637,34 @@
       });
     }
 
-    async _runPostLootNarration(claimedCount, totalCount, goldGp = 0) {
-      const total = Math.max(0, Number(totalCount || 0));
+    _postLootNarrationDbLine(claimedItems, goldGp = 0) {
+      const list = Array.isArray(claimedItems) ? claimedItems : [];
+      const normalized = list
+        .map((it) => {
+          if (!it || typeof it !== "object") return null;
+          const label = String(it.label || it.source_key || it.key || "").trim();
+          if (!label) return null;
+          const quantity = Math.max(1, Number(it.quantity || it.qty || 1) || 1);
+          return {
+            label,
+            quantity,
+            item_type: String(it.item_type || it.source_type || "item"),
+            key: String(it.key || it.source_key || ""),
+          };
+        })
+        .filter(Boolean);
+      return `${window.COMBAT_ROLL_PREFIX}\n${JSON.stringify({
+        kind: "post_loot_summary",
+        claimed_items: normalized,
+        gold_gp: Math.max(0, Number(goldGp || 0)),
+      })}`;
+    }
+
+    async _runPostLootNarration(claimedItems, goldGp = 0) {
+      const total = Array.isArray(claimedItems) ? claimedItems.length : 0;
       const gold = Math.max(0, Number(goldGp || 0));
       if (!total && !gold) return;
-      const claimed = Math.max(0, Number(claimedCount || 0));
-      const line =
-        total > 0
-          ? (claimed > 0
-            ? `Po walce wybieram ${claimed} z ${total} elementów łupu i rozglądam się po okolicy.`
-            : "Po walce rezygnuję z łupów i rozglądam się po okolicy.")
-          : `Po walce zbieram ${gold} szt. złota i rozglądam się po okolicy.`;
+      const line = this._postLootNarrationDbLine(claimedItems, gold);
       await this._sendCombatNarrativeFollowUp(line);
     }
 
@@ -1071,14 +1084,13 @@
               );
               this._accumulatedLoot = Array.isArray(claimed) ? claimed.slice() : [];
               await this._runPostLootNarration(
-                Array.isArray(claimed) ? claimed.length : 0,
-                pool.length,
+                Array.isArray(claimed) ? claimed : [],
                 Math.max(0, Number(data.gold_drop || 0))
               );
             } else if (Math.max(0, Number(data.gold_drop || 0)) > 0) {
               const onlyGold = Math.max(0, Number(data.gold_drop || 0));
               await this._showLootPopupAsync([], onlyGold);
-              await this._runPostLootNarration(0, 0, onlyGold);
+              await this._runPostLootNarration([], onlyGold);
             }
             if (typeof window.refreshInventoryPanel === "function") {
               window.refreshInventoryPanel();

@@ -492,6 +492,61 @@ def _stream_combat_roll_extras(campaign_id: int, user_text_val: str) -> tuple[di
     return gm_roll, combat_ended
 
 
+def _parse_post_loot_summary_payload(user_text_val: str) -> dict | None:
+    s = (user_text_val or "").strip()
+    if not s.startswith(COMBAT_ROLL_CTX_PREFIX):
+        return None
+    tail = s[len(COMBAT_ROLL_CTX_PREFIX) :].lstrip("\r\n \t")
+    try:
+        payload = json.loads(tail)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if not isinstance(payload, dict) or payload.get("kind") != "post_loot_summary":
+        return None
+    return payload
+
+
+def _render_post_loot_summary_text(payload: dict) -> str:
+    items_raw = payload.get("claimed_items")
+    items = items_raw if isinstance(items_raw, list) else []
+    normalized: list[str] = []
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        label = str(raw.get("label") or "").strip()
+        if not label:
+            continue
+        qty = _safe_int(raw.get("quantity"), 1)
+        qty = qty if qty > 0 else 1
+        if qty > 1:
+            normalized.append(f"{label} ×{qty}")
+        else:
+            normalized.append(label)
+    gold_gp = _safe_int(payload.get("gold_gp"), 0)
+    if gold_gp < 0:
+        gold_gp = 0
+
+    if normalized and gold_gp > 0:
+        return (
+            "Przeglądasz pobojowisko i zabezpieczasz zdobycz: "
+            + ", ".join(normalized)
+            + f" oraz {gold_gp} GP. "
+            "Po chwili ciszy rozglądasz się po okolicy, gotów na kolejny ruch."
+        )
+    if normalized:
+        return (
+            "Przeglądasz pobojowisko i zabezpieczasz zdobycz: "
+            + ", ".join(normalized)
+            + ". Po chwili ciszy rozglądasz się po okolicy, gotów na kolejny ruch."
+        )
+    if gold_gp > 0:
+        return (
+            f"Przeglądasz pobojowisko i zbierasz {gold_gp} GP. "
+            "Po chwili ciszy rozglądasz się po okolicy, gotów na kolejny ruch."
+        )
+    return "Po walce rozglądasz się po okolicy."
+
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1538,6 +1593,7 @@ def create_turn_stream(
         gm_roll_pre_payload, combat_ended_pre_payload = _stream_combat_roll_extras(
             campaign_id_val, user_text_val
         )
+        post_loot_summary_payload = _parse_post_loot_summary_payload(user_text_val)
 
         def token_generator():
             """
@@ -1612,6 +1668,32 @@ def create_turn_stream(
                     yield f"data: [COMBAT_STARTED]{json.dumps(new_combat)}\n\n"
                 if combat_extra:
                     yield f"data: [COMBAT]{json.dumps(combat_extra)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            if post_loot_summary_payload:
+                clean_text = _render_post_loot_summary_text(post_loot_summary_payload)
+                save_conn = get_db()
+                try:
+                    stream_log = create_turn_log(
+                        conn=save_conn,
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        user_text=user_text_val,
+                        assistant_text=clean_text,
+                        route="narrative",
+                    )
+                    log_narrative_turn_structured(
+                        route="narrative",
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        turn_row=stream_log,
+                        user_text=user_text_val,
+                        assistant_text=clean_text,
+                    )
+                finally:
+                    save_conn.close()
+                yield f"data: {clean_text}\n\n"
                 yield "data: [DONE]\n\n"
                 return
 
