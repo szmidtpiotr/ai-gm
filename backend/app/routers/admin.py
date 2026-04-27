@@ -370,6 +370,8 @@ class LootTableCreateReq(BaseModel):
     label: str
     description: str = ""
     is_active: bool = True
+    gold_min: int = 0
+    gold_max: int = 0
 
 
 class LootTablePatchReq(BaseModel):
@@ -378,6 +380,8 @@ class LootTablePatchReq(BaseModel):
     label: str | None = None
     description: str | None = None
     is_active: bool | None = None
+    gold_min: int | None = None
+    gold_max: int | None = None
     force: bool = False
 
 
@@ -1168,6 +1172,8 @@ def admin_create_loot_table(req: LootTableCreateReq, _: None = Depends(require_a
             label=req.label.strip(),
             description=req.description or "",
             is_active=req.is_active,
+            gold_min=req.gold_min,
+            gold_max=req.gold_max,
         )
         return {"item": item}
     except ValueError as e:
@@ -1175,6 +1181,8 @@ def admin_create_loot_table(req: LootTableCreateReq, _: None = Depends(require_a
             raise HTTPException(status_code=409, detail="Loot table key already exists") from None
         if str(e) == "invalid_key":
             raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
+        if str(e) == "invalid_gold_range":
+            raise HTTPException(status_code=422, detail="gold_min/gold_max must be >= 0 and gold_min <= gold_max") from None
         raise HTTPException(status_code=422, detail="Invalid loot table payload") from None
 
 
@@ -1187,6 +1195,8 @@ def admin_patch_loot_table(key: str, req: LootTablePatchReq, _: None = Depends(r
             label=req.label,
             description=req.description,
             is_active=req.is_active,
+            gold_min=req.gold_min,
+            gold_max=req.gold_max,
             force=req.force,
         )
         return {"item": item}
@@ -1199,6 +1209,8 @@ def admin_patch_loot_table(key: str, req: LootTablePatchReq, _: None = Depends(r
             raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
         if str(e) == "loot_table_exists":
             raise HTTPException(status_code=409, detail="Loot table key already exists") from None
+        if str(e) == "invalid_gold_range":
+            raise HTTPException(status_code=422, detail="gold_min/gold_max must be >= 0 and gold_min <= gold_max") from None
         raise HTTPException(status_code=422, detail="Invalid loot table payload") from None
 
 

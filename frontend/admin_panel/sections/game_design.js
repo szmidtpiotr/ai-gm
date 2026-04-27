@@ -2527,6 +2527,10 @@ function mountLootTables(host) {
         <button type="button" class="secondary-btn" data-loot-rename-key-save>Save new key</button>
       </div>
       <label class="field loot-desc-field"><span>Description</span><textarea data-loot-desc-edit rows="2"></textarea></label>
+      <div class="add-form-grid">
+        <label class="field"><span>Gold min (GP)</span><input data-loot-gold-min type="number" min="0" step="1" value="0" /></label>
+        <label class="field"><span>Gold max (GP)</span><input data-loot-gold-max type="number" min="0" step="1" value="0" /></label>
+      </div>
       <h4 class="loot-entries-title">Entries</h4>
       <div class="loot-entries-table-wrap" data-loot-entries-wrap></div>
       <div class="loot-add-entry add-form-grid">
@@ -2847,12 +2851,37 @@ function mountLootTables(host) {
     });
     renderWeightViz(entries);
     const descTa = right.querySelector("[data-loot-desc-edit]");
+    const goldMinInp = right.querySelector("[data-loot-gold-min]");
+    const goldMaxInp = right.querySelector("[data-loot-gold-max]");
+    const saveGoldRange = async () => {
+      if (!selectedKey || !goldMinInp || !goldMaxInp) return;
+      const gmin = Number.parseInt(String(goldMinInp.value || "0"), 10);
+      const gmax = Number.parseInt(String(goldMaxInp.value || "0"), 10);
+      if (!Number.isFinite(gmin) || !Number.isFinite(gmax) || gmin < 0 || gmax < 0 || gmin > gmax) {
+        showToast("Gold min/max: wymagane liczby >= 0 i min <= max.", "error");
+        return;
+      }
+      try {
+        await adminFetch(`/api/admin/loot-tables/${encodeURIComponent(selectedKey)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ gold_min: gmin, gold_max: gmax, force: false }),
+        });
+        showToast("Loot table gold range saved.", "success");
+        await refreshLootList();
+      } catch (e) {
+        showToast(parseApiError(e, "Save gold range failed."), "error");
+      }
+    };
     try {
       const tables = await adminFetch("/api/admin/loot-tables");
       const meta = (tables.items || []).find((t) => t.key === selectedKey);
       descTa.value = meta ? meta.description || "" : "";
+      if (goldMinInp) goldMinInp.value = String(Math.max(0, Number(meta?.gold_min || 0)));
+      if (goldMaxInp) goldMaxInp.value = String(Math.max(0, Number(meta?.gold_max || 0)));
     } catch (_e) {
       descTa.value = "";
+      if (goldMinInp) goldMinInp.value = "0";
+      if (goldMaxInp) goldMaxInp.value = "0";
     }
     descTa.onblur = async () => {
       try {
@@ -2865,6 +2894,12 @@ function mountLootTables(host) {
       } catch (e) {
         showToast(parseApiError(e, "Save failed."), "error");
       }
+    };
+    if (goldMinInp) goldMinInp.onblur = () => {
+      void saveGoldRange();
+    };
+    if (goldMaxInp) goldMaxInp.onblur = () => {
+      void saveGoldRange();
     };
   }
 
