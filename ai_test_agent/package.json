@@ -3,9 +3,16 @@
   "private": true,
   "scripts": {
     "test:poc": "playwright test --config=playwright/playwright.config.js playwright/poc_manual_flow.spec.js",
-    "test:all": "playwright test --config=playwright/playwright.config.js"
+    "test:all": "playwright test --config=playwright/playwright.config.js",
+    "test:agent": "node --test tests/test_validator.js tests/test_snapshot.js",
+    "agent:run": "node agent/run.js",
+    "agent:server": "node agent/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
   },
   "devDependencies": {
-    "@playwright/test": "^1.44.0"
+    "@playwright/test": "^1.44.0",
+    "playwright": "^1.44.0"
   }
 }
