@@ -1,0 +1,58 @@
+# DEV environment — frontend: :3002, backend: :8100
+# DO NOT use on production. Use docker-compose.yml for prod.
+name: ai-gm-dev
+
+services:
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request as u; u.urlopen(http://127.0.0.1:8000/api/healthz, timeout=5).read()",
+        ]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 90s
+    ports:
+      - "8100:8000"
+    environment:
+      - OLLAMA_LOAD_TIMEOUT=300s
+      - OLLAMA_TIMEOUT=240
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://host.docker.internal:11434}
+      - LLM_MODEL=${LLM_MODEL:-gemma4:e4b}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - DEFAULT_CAMPAIGN_LANGUAGE=${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
+      - GAME_LANG=${GAME_LANG:-pl-PL}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/ai_gm_dev.db}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data-dev:/data
+    labels:
+      - service=backend-dev
+    networks:
+      - ai-gm-dev
+
+  frontend:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "3002:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - ai-gm-dev
+
+networks:
+  ai-gm-dev:
+    driver: bridge

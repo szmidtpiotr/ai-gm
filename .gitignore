@@ -34,3 +34,4 @@ scripts/.db-autosync-cron-wrap.sh
 
 # Internal local-only documentation
 /docs/
+data-dev/
