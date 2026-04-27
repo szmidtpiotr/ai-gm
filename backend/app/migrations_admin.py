@@ -169,6 +169,8 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_loot_entries_table
     ON game_config_loot_entries(loot_table_key)
     """,
+    "ALTER TABLE game_config_loot_tables ADD COLUMN gold_min INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_loot_tables ADD COLUMN gold_max INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE game_config_weapons ADD COLUMN description TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE game_config_weapons ADD COLUMN weapon_type TEXT NOT NULL DEFAULT 'melee'",
     "ALTER TABLE game_config_weapons ADD COLUMN two_handed INTEGER NOT NULL DEFAULT 0",

@@ -148,6 +148,40 @@ def roll_loot(enemy_key: str) -> list[dict]:
     ]
 
 
+def roll_gold_drop(enemy_key: str) -> int:
+    """
+    Roll gold reward for an enemy from its loot table range.
+    Returns 0 when enemy/table missing or range is empty.
+    """
+    ek = str(enemy_key or "").strip()
+    if not ek:
+        return 0
+    try:
+        with _conn() as conn:
+            row = conn.execute(
+                """
+                SELECT t.gold_min, t.gold_max
+                FROM game_config_enemies e
+                JOIN game_config_loot_tables t ON t.key = e.loot_table_key
+                WHERE e.key = ? AND t.is_active = 1
+                LIMIT 1
+                """,
+                (ek,),
+            ).fetchone()
+    except sqlite3.Error:
+        # Backward compatibility with DBs created before gold columns existed.
+        return 0
+    if not row:
+        return 0
+    gmin = max(0, int(row["gold_min"] or 0))
+    gmax = max(0, int(row["gold_max"] or 0))
+    if gmax <= 0:
+        return 0
+    if gmax < gmin:
+        gmax = gmin
+    return random.randint(gmin, gmax)
+
+
 def grant_loot_to_character(character_id: int, loot_items: list[dict], source: str = "loot") -> list[dict]:
     """
     Grant rolled loot to character inventory with catalog validation.

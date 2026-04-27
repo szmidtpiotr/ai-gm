@@ -38,6 +38,8 @@ def _schema_sql() -> str:
     CREATE TABLE game_config_loot_tables (
       key TEXT PRIMARY KEY,
       label TEXT NOT NULL,
+      gold_min INTEGER NOT NULL DEFAULT 0,
+      gold_max INTEGER NOT NULL DEFAULT 0,
       is_active INTEGER NOT NULL DEFAULT 1
     );
     CREATE TABLE game_config_loot_entries (
@@ -81,7 +83,7 @@ def _schema_sql() -> str:
     INSERT INTO game_config_consumables (key, label, is_active)
     VALUES ('potion_small', 'Small Potion', 1);
 
-    INSERT INTO game_config_loot_tables (key, label, is_active) VALUES ('bandit_loot', 'Bandit Loot', 1);
+    INSERT INTO game_config_loot_tables (key, label, gold_min, gold_max, is_active) VALUES ('bandit_loot', 'Bandit Loot', 5, 15, 1);
     INSERT INTO game_config_loot_entries (loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
     VALUES
       ('bandit_loot', 'rope', NULL, NULL, 80, 1, 2),
@@ -119,6 +121,16 @@ class TestLootService(unittest.TestCase):
     def test_roll_loot_missing_table_returns_empty(self):
         self.assertEqual(ls.roll_loot("ghost"), [])
         self.assertEqual(ls.roll_loot("unknown_enemy"), [])
+
+    def test_roll_gold_drop_returns_zero_when_no_table(self):
+        self.assertEqual(ls.roll_gold_drop("ghost"), 0)
+        self.assertEqual(ls.roll_gold_drop("unknown_enemy"), 0)
+
+    @patch("app.services.loot_service.random.randint", return_value=11)
+    def test_roll_gold_drop_within_range(self, _randint):
+        g = ls.roll_gold_drop("bandit")
+        self.assertGreaterEqual(g, 5)
+        self.assertLessEqual(g, 15)
 
     @patch("app.services.loot_service.random.random", side_effect=[0.0, 0.0])
     @patch("app.services.loot_service.random.randint", return_value=2)

@@ -28,6 +28,8 @@
       this._accumulatedLoot = [];
       /** Loot from killing blow — applied after GM SSE narration (victory). */
       this._pendingLoot = null;
+      /** Gold reward from killing blow (8E-4). */
+      this._pendingGold = 0;
       /** When true, victory overlay is deferred until `showVictoryAfterNarration`. */
       this._deferVictoryOverlay = false;
       this._busy = false;
@@ -190,11 +192,13 @@
     async showVictoryAfterNarration(_killedData) {
       this._deferVictoryOverlay = false;
       const pending = Array.isArray(this._pendingLoot) ? this._pendingLoot.slice() : [];
+      const pendingGold = Math.max(0, Number(this._pendingGold || 0));
       this._pendingLoot = null;
+      this._pendingGold = 0;
       const fromState = Array.isArray(this._state?.loot_pool) ? this._state.loot_pool.slice() : [];
       const drop = pending.length > 0 ? pending : fromState;
-      if (drop.length > 0) {
-        await this._showLootPopupAsync(drop);
+      if (drop.length > 0 || pendingGold > 0) {
+        await this._showLootPopupAsync(drop, pendingGold);
         this._pushLoot(drop);
       }
       if (typeof window.refreshInventoryPanel === "function") {
@@ -208,6 +212,7 @@
     cancelDeferredVictoryUi() {
       this._deferVictoryOverlay = false;
       this._pendingLoot = null;
+      this._pendingGold = 0;
       this._hideLoot();
       this._hideEnd();
     }
@@ -527,9 +532,10 @@
       }
     }
 
-    _showLootPopup(lootArr, onDismiss) {
+    _showLootPopup(lootArr, goldDrop, onDismiss) {
       if (!this._lootLayer) return;
       const list = Array.isArray(lootArr) ? lootArr : [];
+      const gold = Math.max(0, Number(goldDrop || 0));
       const inner =
         list.length === 0
           ? '<p class="muted">Wróg nie miał łupów.</p>'
@@ -545,6 +551,7 @@
         <div class="combat-loot-inner">
           <h3 style="margin:0 0 10px;font-size:16px;">Łupy z pokonanych</h3>
           ${inner}
+          ${gold > 0 ? `<div class="combat-loot-gold">💰 +${esc(gold)} GP</div>` : ""}
           <button type="button" class="combat-primary-btn" id="combat-loot-dismiss">Zamknij</button>
         </div>`;
       this._lootLayer.style.display = "flex";
@@ -554,9 +561,9 @@
       };
     }
 
-    _showLootPopupAsync(lootArr) {
+    _showLootPopupAsync(lootArr, goldDrop = 0) {
       return new Promise((resolve) => {
-        this._showLootPopup(lootArr, () => resolve());
+        this._showLootPopup(lootArr, goldDrop, () => resolve());
       });
     }
 
@@ -615,6 +622,7 @@
       if (!combatState) return;
       this._accumulatedLoot = [];
       this._pendingLoot = null;
+      this._pendingGold = 0;
       this._deferVictoryOverlay = false;
       if (typeof window !== "undefined" && window.state) {
         window.state._combatVictoryUiPending = false;
@@ -910,10 +918,13 @@
         }
 
         if (data.enemy_dead) {
+          const goldDrop = Math.max(0, Number(data.gold_drop || 0));
           if (victoryNarrationFirst) {
             this._pendingLoot = Array.isArray(data.loot) ? data.loot.slice() : [];
+            this._pendingGold = goldDrop;
           } else {
             this._pushLoot(data.loot || []);
+            this._pendingGold = 0;
           }
         }
 
@@ -967,8 +978,10 @@
                   ? data.loot.slice()
                   : [];
             if (pool.length > 0) {
-              await this._showLootPopupAsync(pool);
+              await this._showLootPopupAsync(pool, Math.max(0, Number(data.gold_drop || 0)));
               this._accumulatedLoot = pool.slice();
+            } else if (Math.max(0, Number(data.gold_drop || 0)) > 0) {
+              await this._showLootPopupAsync([], Math.max(0, Number(data.gold_drop || 0)));
             }
             if (typeof window.refreshInventoryPanel === "function") {
               window.refreshInventoryPanel();

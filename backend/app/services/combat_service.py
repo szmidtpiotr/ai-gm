@@ -840,6 +840,7 @@ def resolve_attack(
             )
 
             loot: list[dict] = []
+            out["gold_drop"] = 0
             dmg = 0
             if hit:
                 wkey = _weapon_key_from_sheet(sheet) or _default_weapon_key(conn)
@@ -863,13 +864,22 @@ def resolve_attack(
                     ek = str(enemy.get("enemy_key") or "")
                     if ek and ch_id:
                         try:
-                            from app.services.loot_service import grant_loot_to_character, roll_loot
+                            from app.services.loot_service import (
+                                apply_character_gold_delta,
+                                grant_loot_to_character,
+                                roll_gold_drop,
+                                roll_loot,
+                            )
 
                             loot_items = roll_loot(ek)
                             if loot_items:
                                 loot = grant_loot_to_character(ch_id, loot_items, source="loot")
                             else:
                                 loot = []
+                            gold_drop = int(roll_gold_drop(ek) or 0)
+                            if gold_drop > 0:
+                                apply_character_gold_delta(ch_id, gold_drop, reason="combat_loot")
+                            out["gold_drop"] = max(0, gold_drop)
                         except Exception as e:
                             logger.warning(
                                 "combat_loot_grant_failed",
@@ -879,8 +889,10 @@ def resolve_attack(
                                 error_message=str(e),
                             )
                             loot = []
+                            out["gold_drop"] = 0
                     else:
                         loot = []
+                        out["gold_drop"] = 0
                     out["loot"] = loot
                     loot_pool_accum.extend(loot)
                     cid_death = int(row["id"])
@@ -935,6 +947,7 @@ def resolve_attack(
                 out["target_hp_remaining"] = int(enemy.get("hp_current", 0) or 0)
                 out["enemy_dead"] = False
                 out["loot"] = []
+                out["gold_drop"] = 0
 
             cid = int(row["id"])
             tn = _next_combat_log_sequence(conn, cid)
