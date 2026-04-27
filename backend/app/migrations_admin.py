@@ -169,6 +169,8 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_loot_entries_table
     ON game_config_loot_entries(loot_table_key)
     """,
+    "ALTER TABLE game_config_loot_tables ADD COLUMN gold_min INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_loot_tables ADD COLUMN gold_max INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE game_config_weapons ADD COLUMN description TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE game_config_weapons ADD COLUMN weapon_type TEXT NOT NULL DEFAULT 'melee'",
     "ALTER TABLE game_config_weapons ADD COLUMN two_handed INTEGER NOT NULL DEFAULT 0",
@@ -298,6 +300,20 @@ ADMIN_MIGRATIONS = [
         ON character_inventory(character_id, equipped)
     """,
     "DROP TABLE IF EXISTS inventory_items",
+    """
+    CREATE TABLE IF NOT EXISTS game_config_archetypes (
+        key                  TEXT PRIMARY KEY,
+        label                TEXT NOT NULL,
+        description          TEXT,
+        starter_items_json   TEXT NOT NULL DEFAULT '[]',
+        starter_gold_gp      INTEGER NOT NULL DEFAULT 0,
+        is_active            INTEGER NOT NULL DEFAULT 1,
+        locked_at            TEXT,
+        created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "ALTER TABLE characters ADD COLUMN gold_gp INTEGER NOT NULL DEFAULT 0",
 ]
 
 ADMIN_SEEDS = [
@@ -337,7 +353,11 @@ ADMIN_SEEDS = [
     INSERT OR IGNORE INTO game_config_weapons
     (key, label, damage_die, linked_stat, allowed_classes, is_active, locked_at, created_at, updated_at)
     VALUES
-    ('shortsword', 'Short Sword', 'd6', 'STR', '["warrior","ranger"]', 1, NULL, datetime('now'), datetime('now'))
+    ('shortsword', 'Short Sword', 'd6', 'STR', '["warrior","ranger"]', 1, NULL, datetime('now'), datetime('now')),
+    ('sword', 'Sword', 'd8', 'STR', '["warrior","ranger"]', 1, NULL, datetime('now'), datetime('now')),
+    ('shield', 'Shield', 'd4', 'STR', '["warrior","ranger"]', 1, NULL, datetime('now'), datetime('now')),
+    ('shortbow', 'Shortbow', 'd6', 'DEX', '["warrior","ranger"]', 1, NULL, datetime('now'), datetime('now')),
+    ('staff', 'Staff', 'd6', 'INT', '["scholar"]', 1, NULL, datetime('now'), datetime('now'))
     """,
     """
     INSERT OR IGNORE INTO game_config_enemies
@@ -406,6 +426,64 @@ ADMIN_SEEDS = [
         ELSE COALESCE(dex_modifier, 0)
     END
     WHERE key IN ('bandit', 'wolf', 'skeleton', 'orc', 'troll', 'unknown_attacker', 'enemy')
+    """,
+    """
+    UPDATE game_config_weapons SET weapon_type = 'ranged', range_m = 90, finesse = 1, two_handed = 0
+    WHERE key = 'shortbow'
+    """,
+    """
+    UPDATE game_config_weapons SET weapon_type = 'spell', two_handed = 0, finesse = 0
+    WHERE key = 'staff'
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_items (
+        key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active,
+        proficiency_classes, note, locked_at, created_at, updated_at
+    ) VALUES
+    ('leatherarmor', 'Leather Armor', 'armor', 'Light body armor.', 20, 0, 8.0, NULL, 1,
+     '["warrior","ranger"]', NULL, NULL, datetime('now'), datetime('now'))
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_consumables (
+        key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
+        weight_kg, charges, base_price, note, is_active, locked_at, created_at, updated_at
+    ) VALUES
+    ('health_potion_small', 'Small Health Potion', 'Restores a little HP.', 'heal_hp', '1d4', 0, 'self',
+     0.2, 1, 5, NULL, 1, NULL, datetime('now'), datetime('now')),
+    ('mana_potion', 'Mana Potion', 'Restores a little mana.', 'restore_mana', NULL, 0, 'self',
+     0.2, 1, 8, NULL, 1, NULL, datetime('now'), datetime('now'))
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_archetypes
+    (key, label, description, starter_items_json, starter_gold_gp, is_active, locked_at, created_at, updated_at)
+    VALUES
+    ('warrior', 'Wojownik', 'Mistrz walki wręcz i broni.',
+     '[{"weapon_key":"shortsword"},{"weapon_key":"wooden_shield"},{"weapon_key":"shortbow"},{"item_key":"leatherarmor"}]',
+     10, 1, NULL, datetime('now'), datetime('now')),
+    ('scholar', 'Uczony', 'Mag i znawca tajemnej wiedzy.',
+     '[{"weapon_key":"quarterstaff"},{"consumable_key":"health_potion_small"},{"consumable_key":"mana_potion"}]',
+     15, 1, NULL, datetime('now'), datetime('now'))
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_weapons
+    (key, label, damage_die, linked_stat, allowed_classes, is_active, locked_at, created_at, updated_at)
+    VALUES
+    ('wooden_shield', 'Drewniana Tarcza', 'd4', 'STR', '["warrior"]', 1, NULL, datetime('now'), datetime('now')),
+    ('quarterstaff', 'Laska', 'd6', 'STR', '["scholar","warrior"]', 1, NULL, datetime('now'), datetime('now'))
+    """,
+    """
+    UPDATE game_config_archetypes
+    SET starter_items_json =
+      '[{"weapon_key":"shortsword"},{"weapon_key":"wooden_shield"},{"weapon_key":"shortbow"},{"item_key":"leatherarmor"}]',
+        updated_at = datetime('now')
+    WHERE key = 'warrior'
+    """,
+    """
+    UPDATE game_config_archetypes
+    SET starter_items_json =
+      '[{"weapon_key":"quarterstaff"},{"consumable_key":"health_potion_small"},{"consumable_key":"mana_potion"}]',
+        updated_at = datetime('now')
+    WHERE key = 'scholar'
     """,
 ]
 

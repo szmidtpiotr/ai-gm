@@ -198,12 +198,16 @@ class TestCombatLootIntegration(unittest.TestCase):
     @patch("app.services.loot_service.roll_loot", return_value=[{"weapon_key": "sword_iron", "quantity": 1}])
     @patch("app.services.combat_service.roll_damage_dice", return_value=50)
     @patch("app.services.combat_service.roll_d20", return_value=1)
-    def test_enemy_death_grants_loot_to_inventory(self, _d20, _dmg, _roll):
+    def test_enemy_death_pending_loot_claim_grants_selected_to_inventory(self, _d20, _dmg, _roll):
         cs.initiate_combat(1, 1, ["bandit"])
         out = cs.resolve_attack(1, 20, attacker="player")
         self.assertTrue(out.get("enemy_dead"))
         self.assertEqual(len(out.get("loot") or []), 1)
         self.assertEqual(str((out.get("loot") or [])[0].get("key")), "sword_iron")
+
+        claimed = cs.claim_post_combat_loot(1, character_id=1, selected_indexes=[0])
+        self.assertEqual(len(claimed.get("claimed") or []), 1)
+        self.assertEqual(str((claimed.get("claimed") or [])[0].get("key")), "sword_iron")
 
         conn = sqlite3.connect(str(self._tmp))
         conn.row_factory = sqlite3.Row

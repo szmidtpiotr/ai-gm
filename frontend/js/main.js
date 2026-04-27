@@ -1,5 +1,11 @@
 window.bootstrap = async function () {
   try {
+    if (typeof window.loadUiPanelDefaults === "function") {
+      await window.loadUiPanelDefaults();
+    }
+    if (typeof window.applyFoldState === "function") {
+      window.applyFoldState();
+    }
     if (typeof window.applyPlayerLlmSettingsAccessUi === "function") {
       window.applyPlayerLlmSettingsAccessUi();
     }

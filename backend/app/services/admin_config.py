@@ -1663,13 +1663,15 @@ def delete_consumable(key: str, *, force: bool) -> None:
 def list_loot_tables() -> list[dict]:
     rows = _fetch_all(
         """
-        SELECT key, label, description, is_active, locked_at, created_at, updated_at
+        SELECT key, label, description, is_active, gold_min, gold_max, locked_at, created_at, updated_at
         FROM game_config_loot_tables
         ORDER BY label COLLATE NOCASE ASC, key ASC
         """
     )
     for row in rows:
         row["is_active"] = bool(row.get("is_active", 1))
+        row["gold_min"] = int(row.get("gold_min") or 0)
+        row["gold_max"] = int(row.get("gold_max") or 0)
     return rows
 
 
@@ -1679,6 +1681,8 @@ def create_loot_table(
     label: str,
     description: str = "",
     is_active: bool = True,
+    gold_min: int = 0,
+    gold_max: int = 0,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1687,24 +1691,32 @@ def create_loot_table(
         existing = _fetch_one(conn, "SELECT key FROM game_config_loot_tables WHERE key = ?", (safe_key,))
         if existing:
             raise ValueError("loot_table_exists")
+        gmin = int(gold_min or 0)
+        gmax = int(gold_max or 0)
+        if gmin < 0 or gmax < 0:
+            raise ValueError("invalid_gold_range")
+        if gmin > gmax:
+            raise ValueError("invalid_gold_range")
         conn.execute(
             """
             INSERT INTO game_config_loot_tables (
-                key, label, description, is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+                key, label, description, is_active, gold_min, gold_max, locked_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
-            (safe_key, label, description or "", 1 if is_active else 0),
+            (safe_key, label, description or "", 1 if is_active else 0, gmin, gmax),
         )
         new_row = _fetch_one(
             conn,
             """
-            SELECT key, label, description, is_active, locked_at, created_at, updated_at
+            SELECT key, label, description, is_active, gold_min, gold_max, locked_at, created_at, updated_at
             FROM game_config_loot_tables WHERE key = ?
             """,
             (safe_key,),
         )
         if new_row:
             new_row["is_active"] = bool(new_row.get("is_active", 1))
+            new_row["gold_min"] = int(new_row.get("gold_min") or 0)
+            new_row["gold_max"] = int(new_row.get("gold_max") or 0)
         _audit(conn, "game_config_loot_tables", safe_key, "CREATE", None, new_row)
         conn.commit()
         return new_row or {}
@@ -1718,6 +1730,8 @@ def update_loot_table(
     label: str | None,
     description: str | None,
     is_active: bool | None,
+    gold_min: int | None = None,
+    gold_max: int | None = None,
     new_key: str | None = None,
     force: bool,
 ) -> dict:
@@ -1728,7 +1742,7 @@ def update_loot_table(
         current = _fetch_one(
             conn,
             """
-            SELECT key, label, description, is_active, locked_at, created_at, updated_at
+            SELECT key, label, description, is_active, gold_min, gold_max, locked_at, created_at, updated_at
             FROM game_config_loot_tables WHERE key = ?
             """,
             (safe_key,),
@@ -1757,29 +1771,37 @@ def update_loot_table(
                     (nk, safe_key),
                 )
                 safe_key = nk
+        final_gold_min = int(current.get("gold_min") or 0) if gold_min is None else int(gold_min)
+        final_gold_max = int(current.get("gold_max") or 0) if gold_max is None else int(gold_max)
+        if final_gold_min < 0 or final_gold_max < 0 or final_gold_min > final_gold_max:
+            raise ValueError("invalid_gold_range")
         conn.execute(
             """
             UPDATE game_config_loot_tables
-            SET label = ?, description = ?, is_active = ?, updated_at = datetime('now')
+            SET label = ?, description = ?, is_active = ?, gold_min = ?, gold_max = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
             (
                 label if label is not None else current["label"],
                 description if description is not None else current.get("description") or "",
                 (1 if is_active else 0) if is_active is not None else int(current.get("is_active", 1)),
+                final_gold_min,
+                final_gold_max,
                 safe_key,
             ),
         )
         new_row = _fetch_one(
             conn,
             """
-            SELECT key, label, description, is_active, locked_at, created_at, updated_at
+            SELECT key, label, description, is_active, gold_min, gold_max, locked_at, created_at, updated_at
             FROM game_config_loot_tables WHERE key = ?
             """,
             (safe_key,),
         )
         if new_row:
             new_row["is_active"] = bool(new_row.get("is_active", 1))
+            new_row["gold_min"] = int(new_row.get("gold_min") or 0)
+            new_row["gold_max"] = int(new_row.get("gold_max") or 0)
         audit_row_key = str(new_row["key"]) if new_row else safe_key
         _audit(conn, "game_config_loot_tables", audit_row_key, "UPDATE", old_for_audit, new_row)
         conn.commit()
@@ -1876,7 +1898,7 @@ def upsert_loot_entry(
 ) -> dict:
     lt = _validate_key(loot_table_key)
     ik, ck, wk = _loot_entry_source_keys(item_key, consumable_key, weapon_key)
-    if weight < 1:
+    if weight < 1 or weight > 100:
         raise ValueError("invalid_weight")
     if qty_min < 1 or qty_max < 1 or qty_min > qty_max:
         raise ValueError("invalid_qty_range")
@@ -2061,5 +2083,96 @@ def delete_loot_entry(
             )
         _audit(conn, "game_config_loot_entries", audit_id, "DELETE", dict(cur), None)
         conn.commit()
+    finally:
+        conn.close()
+
+
+def _validate_starter_items_json(raw: str | None) -> str:
+    if raw is None or not str(raw).strip():
+        return "[]"
+    try:
+        data = json.loads(str(raw))
+    except json.JSONDecodeError as e:
+        raise ValueError("invalid_starter_items_json") from e
+    if not isinstance(data, list):
+        raise ValueError("invalid_starter_items_json")
+    for entry in data:
+        if not isinstance(entry, dict):
+            raise ValueError("invalid_starter_items_json")
+        wk = entry.get("weapon_key")
+        ik = entry.get("item_key")
+        ck = entry.get("consumable_key")
+        n = sum(1 for x in (wk, ik, ck) if x is not None and str(x).strip())
+        if n != 1:
+            raise ValueError("invalid_starter_items_json")
+        if entry.get("quantity") is not None:
+            q = int(entry["quantity"])
+            if q < 1:
+                raise ValueError("invalid_starter_items_json")
+    return json.dumps(data, ensure_ascii=False)
+
+
+def list_archetypes() -> list[dict]:
+    return _fetch_all(
+        """
+        SELECT key, label, description, starter_items_json, starter_gold_gp, is_active,
+               locked_at, created_at, updated_at
+        FROM game_config_archetypes
+        ORDER BY key ASC
+        """
+    )
+
+
+def update_archetype(
+    key: str,
+    *,
+    label: str | None = None,
+    description: str | None = None,
+    starter_items_json: str | None = None,
+    starter_gold_gp: int | None = None,
+    is_active: bool | None = None,
+    force: bool = False,
+) -> dict:
+    _ = force
+    safe_key = str(key or "").strip().lower()
+    if not KEY_RE.match(safe_key):
+        raise ValueError("invalid_key")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        old = _fetch_one(conn, "SELECT * FROM game_config_archetypes WHERE key = ?", (safe_key,))
+        if not old:
+            raise KeyError("not_found")
+        if old.get("locked_at") and not force:
+            raise PermissionError("locked")
+
+        body: dict[str, object] = {}
+        if label is not None:
+            body["label"] = str(label).strip()
+        if description is not None:
+            body["description"] = str(description)
+        if starter_items_json is not None:
+            body["starter_items_json"] = _validate_starter_items_json(starter_items_json)
+        if starter_gold_gp is not None:
+            g = int(starter_gold_gp)
+            if g < 0:
+                raise ValueError("invalid_starter_gold_gp")
+            body["starter_gold_gp"] = g
+        if is_active is not None:
+            body["is_active"] = 1 if is_active else 0
+        if not body:
+            return dict(old)
+
+        sets = ", ".join(f"{k} = ?" for k in body)
+        vals = list(body.values())
+        vals.append(safe_key)
+        conn.execute(
+            f"UPDATE game_config_archetypes SET {sets}, updated_at = datetime('now') WHERE key = ?",
+            vals,
+        )
+        new_row = _fetch_one(conn, "SELECT * FROM game_config_archetypes WHERE key = ?", (safe_key,))
+        _audit(conn, "game_config_archetypes", safe_key, "UPDATE", old, new_row)
+        conn.commit()
+        return dict(new_row or {})
     finally:
         conn.close()

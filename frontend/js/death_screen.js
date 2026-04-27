@@ -90,7 +90,16 @@
       const r = await fetch(`/api/campaigns/${campaignId}/death-summary`);
       if (!r.ok) {
         const err = await r.json().catch(() => ({}));
-        throw new Error(err.detail || `HTTP ${r.status}`);
+        const detail = String(err.detail || `HTTP ${r.status}`);
+        // Defensive UX: if campaign is active, hide tombstone and continue normal flow.
+        if (
+          r.status === 404 &&
+          detail.toLowerCase().includes('campaign not ended or not found')
+        ) {
+          window.dismissCampaignDeathScreen();
+          return;
+        }
+        throw new Error(detail);
       }
       const d = await r.json();
       inner.innerHTML = buildTombstoneHtml(d);

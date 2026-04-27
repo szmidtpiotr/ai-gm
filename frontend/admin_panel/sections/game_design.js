@@ -1545,8 +1545,8 @@ function validateLootEntryImportSpec(en, label) {
   const weight = en.weight != null ? Number(en.weight) : 10;
   const qty_min = en.qty_min != null ? Number(en.qty_min) : 1;
   const qty_max = en.qty_max != null ? Number(en.qty_max) : 1;
-  if (!Number.isFinite(weight) || weight < 1) {
-    return `${label}: weight must be a number >= 1`;
+  if (!Number.isFinite(weight) || weight < 1 || weight > 100) {
+    return `${label}: weight must be a number in range 1..100`;
   }
   if (!Number.isFinite(qty_min) || qty_min < 1) {
     return `${label}: qty_min must be a number >= 1`;
@@ -2527,6 +2527,10 @@ function mountLootTables(host) {
         <button type="button" class="secondary-btn" data-loot-rename-key-save>Save new key</button>
       </div>
       <label class="field loot-desc-field"><span>Description</span><textarea data-loot-desc-edit rows="2"></textarea></label>
+      <div class="add-form-grid">
+        <label class="field"><span>Gold min (GP)</span><input data-loot-gold-min type="number" min="0" step="1" value="0" /></label>
+        <label class="field"><span>Gold max (GP)</span><input data-loot-gold-max type="number" min="0" step="1" value="0" /></label>
+      </div>
       <h4 class="loot-entries-title">Entries</h4>
       <div class="loot-entries-table-wrap" data-loot-entries-wrap></div>
       <div class="loot-add-entry add-form-grid">
@@ -2538,7 +2542,7 @@ function mountLootTables(host) {
           </select>
         </label>
         <label class="field add-form-span-2"><span>Source</span><select data-loot-source-select></select></label>
-        <label class="field"><span>Weight</span><input data-loot-weight type="number" value="10" min="1" /></label>
+        <label class="field"><span>Drop chance (%)</span><input data-loot-weight type="number" value="10" min="1" max="100" /></label>
         <label class="field"><span>Qty min</span><input data-loot-qty-min type="number" value="1" min="1" /></label>
         <label class="field"><span>Qty max</span><input data-loot-qty-max type="number" value="1" min="1" /></label>
         <button type="button" class="primary-btn" data-loot-add-entry>+ Add</button>
@@ -2604,10 +2608,8 @@ function mountLootTables(host) {
       viz.appendChild(el("p", "muted", "No entries yet."));
       return;
     }
-    const sum = entries.reduce((s, e) => s + Math.max(1, Number(e.weight) || 0), 0);
     entries.forEach((e) => {
-      const w = Math.max(1, Number(e.weight) || 0);
-      const pct = sum > 0 ? Math.round((w / sum) * 1000) / 10 : 0;
+      const pct = Math.max(1, Math.min(100, Number(e.weight) || 0));
       const row = el("div", "loot-weight-row");
       const lab = el(
         "span",
@@ -2713,7 +2715,7 @@ function mountLootTables(host) {
     const tbl = el("table", "admin-table");
     const thead = el("thead");
     const hr = el("tr");
-    ["Source (type · label · key)", "Weight", "Qty min", "Qty max", ""].forEach((h) => {
+    ["Source (type · label · key)", "Drop chance %", "Qty min", "Qty max", ""].forEach((h) => {
       const th = el("th", "", h);
       hr.appendChild(th);
     });
@@ -2762,6 +2764,7 @@ function mountLootTables(host) {
       const inW = el("input", "");
       inW.type = "number";
       inW.min = "1";
+      inW.max = "100";
       inW.value = String(en.weight);
       inW.dataset.field = "weight";
       const td3 = el("td");
@@ -2848,12 +2851,37 @@ function mountLootTables(host) {
     });
     renderWeightViz(entries);
     const descTa = right.querySelector("[data-loot-desc-edit]");
+    const goldMinInp = right.querySelector("[data-loot-gold-min]");
+    const goldMaxInp = right.querySelector("[data-loot-gold-max]");
+    const saveGoldRange = async () => {
+      if (!selectedKey || !goldMinInp || !goldMaxInp) return;
+      const gmin = Number.parseInt(String(goldMinInp.value || "0"), 10);
+      const gmax = Number.parseInt(String(goldMaxInp.value || "0"), 10);
+      if (!Number.isFinite(gmin) || !Number.isFinite(gmax) || gmin < 0 || gmax < 0 || gmin > gmax) {
+        showToast("Gold min/max: wymagane liczby >= 0 i min <= max.", "error");
+        return;
+      }
+      try {
+        await adminFetch(`/api/admin/loot-tables/${encodeURIComponent(selectedKey)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ gold_min: gmin, gold_max: gmax, force: false }),
+        });
+        showToast("Loot table gold range saved.", "success");
+        await refreshLootList();
+      } catch (e) {
+        showToast(parseApiError(e, "Save gold range failed."), "error");
+      }
+    };
     try {
       const tables = await adminFetch("/api/admin/loot-tables");
       const meta = (tables.items || []).find((t) => t.key === selectedKey);
       descTa.value = meta ? meta.description || "" : "";
+      if (goldMinInp) goldMinInp.value = String(Math.max(0, Number(meta?.gold_min || 0)));
+      if (goldMaxInp) goldMaxInp.value = String(Math.max(0, Number(meta?.gold_max || 0)));
     } catch (_e) {
       descTa.value = "";
+      if (goldMinInp) goldMinInp.value = "0";
+      if (goldMaxInp) goldMaxInp.value = "0";
     }
     descTa.onblur = async () => {
       try {
@@ -2866,6 +2894,12 @@ function mountLootTables(host) {
       } catch (e) {
         showToast(parseApiError(e, "Save failed."), "error");
       }
+    };
+    if (goldMinInp) goldMinInp.onblur = () => {
+      void saveGoldRange();
+    };
+    if (goldMaxInp) goldMaxInp.onblur = () => {
+      void saveGoldRange();
     };
   }
 
@@ -3026,11 +3060,11 @@ function mountLootTables(host) {
 
   wireBulkJsonImport(left, {
     hint:
-      "Każdy element: key, label, opcjonalnie description i is_active, opcjonalnie entries. W entries: dokładnie jedno z item_key | weapon_key | consumable_key (musi istnieć w katalogu), weight ≥ 1, qty_min / qty_max ≥ 1 i min ≤ max. Pusta lub brak entries = tabela bez wierszy. Przy 409 na tabeli z „Pomiń 409” wpisy i tak są wysyłane (upsert na istniejącą tabelę).",
+      "Każdy element: key, label, opcjonalnie description i is_active, opcjonalnie entries. W entries: dokładnie jedno z item_key | weapon_key | consumable_key (musi istnieć w katalogu), weight (drop chance %) w zakresie 1..100, qty_min / qty_max ≥ 1 i min ≤ max. Pusta lub brak entries = tabela bez wierszy. Przy 409 na tabeli z „Pomiń 409” wpisy i tak są wysyłane (upsert na istniejącą tabelę).",
     templatesHref: "/admin_panel/templates.html#sec-loot-tables",
     templatesAnchor: "Szablony JSON — Loot tables",
     placeholder:
-      '[{"key":"example_loot","label":"Example","description":"","is_active":true,"entries":[{"item_key":"rope","weight":10,"qty_min":1,"qty_max":1}]}]',
+      '[{"key":"example_loot","label":"Example","description":"","is_active":true,"entries":[{"item_key":"rope","weight":35,"qty_min":1,"qty_max":1}]}]',
     validateRow: validateLootTableBulkRow,
     existingKeys: () => fetchExistingKeysFromAdminList("/api/admin/loot-tables"),
     refresh: async () => {
@@ -3047,33 +3081,96 @@ function mountLootTables(host) {
   void refreshEntriesPanel();
 }
 
+async function refreshArchetypes(host) {
+  const tableHost = host.querySelector(".admin-subpanel-body");
+  renderTable(tableHost, [], null, {});
+  try {
+    const data = await adminFetch("/api/admin/archetypes");
+    const rows = (data.items || []).map((r) => ({ ...r }));
+    renderGameDesignTable(
+      tableHost,
+      "archetypes",
+      [
+        { key: "key", label: "Key" },
+        { key: "label", label: "Label", editable: true },
+        {
+          key: "starter_gold_gp",
+          label: "Złoto startowe (GP)",
+          type: "number",
+          editable: true,
+        },
+        {
+          key: "starter_items_json",
+          label: "Starter items (JSON)",
+          type: "textarea",
+          editable: true,
+        },
+        { key: "description", label: "Description", type: "textarea", editable: true },
+        { key: "is_active", label: "Active", type: "boolean", editable: true },
+        { key: "locked_at", label: "Lock", type: "locked" },
+      ],
+      rows,
+      {
+        searchPlaceholder: "Search archetypes…",
+        onEdit: async (row, key, newValue, meta) => {
+          const body = { force: !!(meta && meta.force) };
+          if (key === "label") {
+            body.label = newValue;
+          }
+          if (key === "description") {
+            body.description = newValue;
+          }
+          if (key === "starter_gold_gp") {
+            const n = Number(newValue);
+            if (!Number.isFinite(n) || n < 0) {
+              showToast("starter_gold_gp musi być liczbą ≥ 0.", "error");
+              throw new Error("invalid_starter_gold");
+            }
+            body.starter_gold_gp = Math.floor(n);
+          }
+          if (key === "starter_items_json") {
+            const raw = String(newValue ?? "").trim();
+            try {
+              JSON.parse(raw || "[]");
+            } catch (_e) {
+              showToast("Niepoprawny JSON tablicy starter_items.", "error");
+              throw new Error("invalid_starter_json");
+            }
+            body.starter_items_json = raw;
+          }
+          if (key === "is_active") {
+            body.is_active = !!newValue;
+          }
+          await adminFetch(`/api/admin/archetypes/${encodeURIComponent(row.key)}`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          });
+          Object.assign(row, { [key]: newValue });
+          showToast("Archetyp zaktualizowany.", "success");
+          await refreshArchetypes(host);
+        },
+      },
+    );
+  } catch (e) {
+    showToast(parseApiError(e, "Nie udało się wczytać archetypów."), "error");
+    renderTable(tableHost, [], [], {});
+  }
+}
+
 function mountArchetypes(host) {
   const root = el("div", "admin-subpanel-inner");
-  const banner = el("div", "admin-callout");
-  banner.textContent =
-    "⚠️ To add or remove archetypes, edit character_creation_config.py and redeploy.";
-  root.appendChild(banner);
-  const grid = el("div", "archetype-admin-grid");
-  const w = el("div", "archetype-card-admin");
-  w.innerHTML = `
-    <h3>Warrior</h3>
-    <p><strong>Skill weights (preferred at creation):</strong> athletics, melee_attack, endurance, intimidation, survival</p>
-    <p><strong>Skill budget:</strong> 8 slots, 7 active skills at creation</p>
-    <p><strong>Max skill level at creation:</strong> 2</p>
-    <p class="muted">Defined in backend/app/character_creation_config.py</p>
-  `;
-  const s = el("div", "archetype-card-admin");
-  s.innerHTML = `
-    <h3>Scholar</h3>
-    <p><strong>Skill weights (preferred at creation):</strong> arcana, lore, investigation, medicine, awareness</p>
-    <p><strong>Skill budget:</strong> 10 slots, 8 active skills at creation</p>
-    <p><strong>Max skill level at creation:</strong> 2</p>
-    <p class="muted">Defined in backend/app/character_creation_config.py</p>
-  `;
-  grid.appendChild(w);
-  grid.appendChild(s);
-  root.appendChild(grid);
+  const note = el("p", "admin-note muted");
+  note.innerHTML =
+    "Pakiet startowy i <strong>gold_gp</strong> przy tworzeniu postaci: tylko gdy w kreatorze wybrano <code>warrior</code> lub <code>scholar</code>. " +
+    "JSON to tablica obiektów; każdy element musi mieć dokładnie jedno z pól: <code>weapon_key</code>, <code>item_key</code>, <code>consumable_key</code> " +
+    "(klucze muszą istnieć w katalogu). Preferencje skilli przy kreacji nadal w <code>character_creation_config.py</code>.";
+  const body = el("div", "");
+  body.dataset.subpanel = "archetypes";
+  body.className = "admin-subpanel-body";
+  root.appendChild(note);
+  root.appendChild(body);
   host.appendChild(root);
+  void refreshArchetypes(host);
 }
 
 function mountPrompts(host) {

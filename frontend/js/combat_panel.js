@@ -11,15 +11,20 @@
   }
 
   function lootIcon(entry) {
-    const t = String(entry?.source_type || "");
+    const t = String(entry?.source_type || entry?.item_type || "");
     if (t === "weapon") return "⚔️";
     if (t === "consumable") return "🧪";
     return "📦";
   }
 
   function lootLabel(entry) {
-    const k = String(entry?.source_key || "?");
+    const k = String(entry?.label || entry?.source_key || entry?.key || "?");
     return k.replace(/_/g, " ");
+  }
+
+  function lootQty(entry) {
+    const n = Number(entry?.qty ?? entry?.quantity ?? 1);
+    return Number.isFinite(n) && n > 0 ? n : 1;
   }
 
   class CombatPanel {
@@ -28,6 +33,8 @@
       this._accumulatedLoot = [];
       /** Loot from killing blow — applied after GM SSE narration (victory). */
       this._pendingLoot = null;
+      /** Gold reward from killing blow (8E-4). */
+      this._pendingGold = 0;
       /** When true, victory overlay is deferred until `showVictoryAfterNarration`. */
       this._deferVictoryOverlay = false;
       this._busy = false;
@@ -190,12 +197,18 @@
     async showVictoryAfterNarration(_killedData) {
       this._deferVictoryOverlay = false;
       const pending = Array.isArray(this._pendingLoot) ? this._pendingLoot.slice() : [];
+      const pendingGold = Math.max(0, Number(this._pendingGold || 0));
       this._pendingLoot = null;
+      this._pendingGold = 0;
       const fromState = Array.isArray(this._state?.loot_pool) ? this._state.loot_pool.slice() : [];
       const drop = pending.length > 0 ? pending : fromState;
-      if (drop.length > 0) {
-        await this._showLootPopupAsync(drop);
-        this._pushLoot(drop);
+      if (drop.length > 0 || pendingGold > 0) {
+        const claimed = await this._showLootPopupAsync(drop, pendingGold);
+        this._pushLoot(Array.isArray(claimed) ? claimed : []);
+        await this._runPostLootNarration(Array.isArray(claimed) ? claimed : [], pendingGold);
+      }
+      if (typeof window.refreshInventoryPanel === "function") {
+        window.refreshInventoryPanel();
       }
       if (this._state) {
         this.showVictory(this._state);
@@ -205,6 +218,7 @@
     cancelDeferredVictoryUi() {
       this._deferVictoryOverlay = false;
       this._pendingLoot = null;
+      this._pendingGold = 0;
       this._hideLoot();
       this._hideEnd();
     }
@@ -252,6 +266,39 @@
      * Nie wywołuj `window.triggerCombatNarration` ani `sendMessage` z panelu poza tą metodą.
      */
     async _sendCombatNarrativeFollowUp(dbUserLine) {
+      const queueNarrationAfterCurrentRequest = () => {
+        const line = String(dbUserLine || "").trim();
+        if (!line) return;
+        window.__queuedCombatNarrationLine = line;
+        if (window.__queuedCombatNarrationTimer) return;
+        const flush = async () => {
+          if (window.chatRequestState?.inFlight) {
+            window.__queuedCombatNarrationTimer = window.setTimeout(flush, 80);
+            return;
+          }
+          window.__queuedCombatNarrationTimer = null;
+          const queued = String(window.__queuedCombatNarrationLine || "").trim();
+          window.__queuedCombatNarrationLine = null;
+          if (!queued) return;
+          if (typeof window.triggerCombatNarration === "function") {
+            await window.triggerCombatNarration(queued);
+            return;
+          }
+          if (typeof window.sendMessage !== "function") return;
+          const { inputEl } = window.getEls ? window.getEls() : {};
+          if (inputEl) inputEl.value = "";
+          window.__pendingNarrativeUserTextForApi = queued;
+          window.__suppressNextUserBubbleForGm = true;
+          await window.sendMessage();
+        };
+        window.__queuedCombatNarrationTimer = window.setTimeout(flush, 80);
+      };
+
+      if (window.chatRequestState?.inFlight) {
+        queueNarrationAfterCurrentRequest();
+        return;
+      }
+
       if (typeof window.triggerCombatNarration === "function") {
         await window.triggerCombatNarration(dbUserLine);
         return;
@@ -468,7 +515,7 @@
                 (L) =>
                   `<li class="combat-loot-row"><span class="combat-loot-icon">${lootIcon(L)}</span><span>${esc(
                     lootLabel(L)
-                  )}</span><span class="combat-loot-qty">×${esc(L.qty ?? 1)}</span></li>`
+                  )}</span><span class="combat-loot-qty">×${esc(lootQty(L))}</span></li>`
               )
               .join("")
           : '<li class="muted">Brak łupów.</li>';
@@ -524,37 +571,101 @@
       }
     }
 
-    _showLootPopup(lootArr, onDismiss) {
+    async _claimLootSelection(lootArr, selectedIndexes) {
+      const cid = this._campaignId();
+      const characterId = Number(window.state?.selectedCharacterId || 0);
+      if (!cid || !characterId || !Array.isArray(lootArr)) return [];
+      try {
+        const resp = await fetch(`/api/campaigns/${cid}/combat/loot/claim`, {
+          method: "POST",
+          headers: window.getApiHeaders ? window.getApiHeaders() : { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            character_id: characterId,
+            selected_indexes: Array.isArray(selectedIndexes) ? selectedIndexes : [],
+          }),
+        });
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok || !payload?.ok) return [];
+        const claimed = payload?.data?.claimed;
+        return Array.isArray(claimed) ? claimed : [];
+      } catch (_err) {
+        return [];
+      }
+    }
+
+    _showLootPopup(lootArr, goldDrop, onDismiss) {
       if (!this._lootLayer) return;
       const list = Array.isArray(lootArr) ? lootArr : [];
+      const gold = Math.max(0, Number(goldDrop || 0));
       const inner =
         list.length === 0
           ? '<p class="muted">Wróg nie miał łupów.</p>'
           : `<ul class="combat-loot-list">${list
-              .map(
-                (L) =>
-                  `<li class="combat-loot-row"><span class="combat-loot-icon">${lootIcon(L)}</span><span>${esc(
+              .map((L, idx) =>
+                  `<li class="combat-loot-row"><label style="display:flex;align-items:center;gap:8px;width:100%;"><input type="checkbox" data-loot-pick="${idx}" checked /><span class="combat-loot-icon">${lootIcon(L)}</span><span>${esc(
                     lootLabel(L)
-                  )}</span><span class="combat-loot-qty">×${esc(L.qty ?? 1)}</span></li>`
+                  )}</span><span class="combat-loot-qty">×${esc(lootQty(L))}</span></label></li>`
               )
               .join("")}</ul>`;
       this._lootLayer.innerHTML = `
         <div class="combat-loot-inner">
           <h3 style="margin:0 0 10px;font-size:16px;">Łupy z pokonanych</h3>
           ${inner}
-          <button type="button" class="combat-primary-btn" id="combat-loot-dismiss">Zamknij</button>
+          ${gold > 0 ? `<div class="combat-loot-gold">💰 +${esc(gold)} GP</div>` : ""}
+          <button type="button" class="combat-primary-btn" id="combat-loot-claim">Weź wybrane</button>
+          <button type="button" class="combat-primary-btn secondary" id="combat-loot-dismiss">Pomiń</button>
         </div>`;
       this._lootLayer.style.display = "flex";
-      this._lootLayer.querySelector("#combat-loot-dismiss").onclick = () => {
+      this._lootLayer.querySelector("#combat-loot-claim").onclick = async () => {
+        const picks = Array.from(this._lootLayer.querySelectorAll("[data-loot-pick]:checked"))
+          .map((x) => Number(x.getAttribute("data-loot-pick")))
+          .filter((n) => Number.isInteger(n) && n >= 0);
+        const claimed = await this._claimLootSelection(list, picks);
         this._hideLoot();
-        if (typeof onDismiss === "function") onDismiss();
+        if (typeof onDismiss === "function") onDismiss(claimed);
+      };
+      this._lootLayer.querySelector("#combat-loot-dismiss").onclick = async () => {
+        const claimed = await this._claimLootSelection(list, []);
+        this._hideLoot();
+        if (typeof onDismiss === "function") onDismiss(claimed);
       };
     }
 
-    _showLootPopupAsync(lootArr) {
+    _showLootPopupAsync(lootArr, goldDrop = 0) {
       return new Promise((resolve) => {
-        this._showLootPopup(lootArr, () => resolve());
+        this._showLootPopup(lootArr, goldDrop, (claimed) => resolve(claimed));
       });
+    }
+
+    _postLootNarrationDbLine(claimedItems, goldGp = 0) {
+      const list = Array.isArray(claimedItems) ? claimedItems : [];
+      const normalized = list
+        .map((it) => {
+          if (!it || typeof it !== "object") return null;
+          const label = String(it.label || it.source_key || it.key || "").trim();
+          if (!label) return null;
+          const quantity = Math.max(1, Number(it.quantity || it.qty || 1) || 1);
+          return {
+            label,
+            quantity,
+            item_type: String(it.item_type || it.source_type || "item"),
+            key: String(it.key || it.source_key || ""),
+          };
+        })
+        .filter(Boolean);
+      return `${window.COMBAT_ROLL_PREFIX}\n${JSON.stringify({
+        kind: "post_loot_summary",
+        claimed_items: normalized,
+        gold_gp: Math.max(0, Number(goldGp || 0)),
+      })}`;
+    }
+
+    async _runPostLootNarration(claimedItems, goldGp = 0) {
+      const total = Array.isArray(claimedItems) ? claimedItems.length : 0;
+      const gold = Math.max(0, Number(goldGp || 0));
+      if (!total && !gold) return;
+      const line = this._postLootNarrationDbLine(claimedItems, gold);
+      await this._sendCombatNarrativeFollowUp(line);
     }
 
     _triggerDeathSavePrompt() {
@@ -612,6 +723,7 @@
       if (!combatState) return;
       this._accumulatedLoot = [];
       this._pendingLoot = null;
+      this._pendingGold = 0;
       this._deferVictoryOverlay = false;
       if (typeof window !== "undefined" && window.state) {
         window.state._combatVictoryUiPending = false;
@@ -907,10 +1019,12 @@
         }
 
         if (data.enemy_dead) {
+          const goldDrop = Math.max(0, Number(data.gold_drop || 0));
+          this._pendingLoot = Array.isArray(data.loot) ? data.loot.slice() : [];
           if (victoryNarrationFirst) {
-            this._pendingLoot = Array.isArray(data.loot) ? data.loot.slice() : [];
+            this._pendingGold = goldDrop;
           } else {
-            this._pushLoot(data.loot || []);
+            this._pendingGold = 0;
           }
         }
 
@@ -964,8 +1078,22 @@
                   ? data.loot.slice()
                   : [];
             if (pool.length > 0) {
-              await this._showLootPopupAsync(pool);
-              this._accumulatedLoot = pool.slice();
+              const claimed = await this._showLootPopupAsync(
+                pool,
+                Math.max(0, Number(data.gold_drop || 0))
+              );
+              this._accumulatedLoot = Array.isArray(claimed) ? claimed.slice() : [];
+              await this._runPostLootNarration(
+                Array.isArray(claimed) ? claimed : [],
+                Math.max(0, Number(data.gold_drop || 0))
+              );
+            } else if (Math.max(0, Number(data.gold_drop || 0)) > 0) {
+              const onlyGold = Math.max(0, Number(data.gold_drop || 0));
+              await this._showLootPopupAsync([], onlyGold);
+              await this._runPostLootNarration([], onlyGold);
+            }
+            if (typeof window.refreshInventoryPanel === "function") {
+              window.refreshInventoryPanel();
             }
             this.showVictory(cs);
           }

@@ -1801,3 +1801,40 @@ pre.copy-block {
   width: 3.5rem;
   text-align: right;
 }
+
+/* Phase 8E-2 — Admin „Ustawienia UI” */
+.ui-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 36rem;
+}
+
+.ui-settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+}
+
+.ui-settings-label {
+  min-width: 9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ui-settings-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.ui-settings-choice input {
+  margin: 0;
+}
