@@ -1,0 +1,153 @@
+{
+  "id": null,
+  "uid": "ai-gm-top-errors-dev",
+  "title": "AI GM - Top Error Signatures (24h) [DEV]",
+  "tags": [
+    "ai-gm",
+    "errors",
+    "triage"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "PD5A68A3BD6F8BA56"
+        },
+        "query": "label_values(service)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 99,
+      "type": "stat",
+      "title": "Backend requests (24h)",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\"$service\"} |= \"request_complete\" [24h]))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 1,
+      "type": "bargauge",
+      "title": "Top error_type (24h)",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (error_type) (count_over_time({service=~\"$service\", error_type!=\"\"}[24h])))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      }
+    },
+    {
+      "id": 2,
+      "type": "bargauge",
+      "title": "Top providers by errors (24h)",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "topk(10, sum by (llm_provider) (count_over_time({service=~\"$service\", level=~\"error|warn\"}[24h])))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 4
+      }
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "Latest Error Events",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "{service=~\"$service\"} | json | level=~\"error|warn\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "wrapLogMessage": true
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      }
+    }
+  ]
+}

@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -209,6 +210,8 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(settings_router)
 
+
+Instrumentator().instrument(app).expose(app)
 
 @app.get("/")
 async def root():

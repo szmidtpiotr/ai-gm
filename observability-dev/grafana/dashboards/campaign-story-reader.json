@@ -1,0 +1,303 @@
+{
+  "id": null,
+  "uid": "ai-gm-campaign-story-reader-dev",
+  "title": "AI GM - Campaign Story Reader v2 (SQL) [DEV]",
+  "tags": [
+    "ai-gm",
+    "story",
+    "sqlite"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 5,
+  "refresh": "30s",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "campaign_id",
+        "type": "query",
+        "datasource": {
+          "type": "frser-sqlite-datasource",
+          "uid": "ai_gm_sqlite_story"
+        },
+        "query": "SELECT CAST(id AS TEXT) AS __value, CAST(id AS TEXT) AS __text FROM campaigns ORDER BY id DESC;",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 5,
+      "type": "text",
+      "datasource": null,
+      "title": "Story DB — not live",
+      "description": "Grafana reads a SQLite file copied to the observability VM. Re-querying does not pull from the running game.",
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "## Campaign story in Grafana is a **snapshot**, not live play\n\n- Inside Grafana the file is always mounted at **`/var/lib/ai-gm-db/ai_gm.db`** (`sqlite-story.yml`). On the host that is usually `AI_GM_STORY_DB_DIR` (e.g. `…/observability-data/story-db`).\n- **Cron `scripts/db-autosync.sh`** copies `docker cp …/ai_gm.db` there (atomic `mv`). If turn counts look stale: check `/tmp/ai-gm-db-sync.log`, run sync once by hand, then **hard-refresh** this dashboard (or restart Grafana if the SQLite plugin still shows an old snapshot).\n\n**One-shot sync (same host as backend):**\n\n```bash\nSYNC_TRANSPORT=local REMOTE_DB_DIR=/home/YOU/ai-gm/observability-data/story-db ./scripts/db-autosync.sh\n```\n\n**Remote observability VM:** use `observability/sync_story_db_to_observability.sh` or `OBS_HOST=… ./scripts/db-autosync.sh` with SSH."
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "pluginVersion": "11.0.0"
+    },
+    {
+      "id": 100,
+      "type": "table",
+      "title": "DB smoke test (no variables)",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ai_gm_sqlite_story"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT (SELECT COUNT(*) FROM campaigns) AS campaigns_count, (SELECT COUNT(*) FROM campaign_turns) AS turns_count;",
+          "queryText": "SELECT (SELECT COUNT(*) FROM campaigns) AS campaigns_count, (SELECT COUNT(*) FROM campaign_turns) AS turns_count;"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      }
+    },
+    {
+      "id": 3,
+      "type": "table",
+      "title": "Selected campaign metadata",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ai_gm_sqlite_story"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT id AS campaign_id, title, system_id, model_id, language, mode, status, created_at FROM campaigns WHERE id = CAST(${campaign_id:raw} AS INTEGER);",
+          "queryText": "SELECT id AS campaign_id, title, system_id, model_id, language, mode, status, created_at FROM campaigns WHERE id = CAST(${campaign_id:raw} AS INTEGER);"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 18,
+        "x": 6,
+        "y": 9
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Turns in selected campaign",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ai_gm_sqlite_story"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT COUNT(*) AS turns FROM campaign_turns WHERE campaign_id = CAST(${campaign_id:raw} AS INTEGER);",
+          "queryText": "SELECT COUNT(*) AS turns FROM campaign_turns WHERE campaign_id = CAST(${campaign_id:raw} AS INTEGER);"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 9
+      }
+    },
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Fabuła — czytelny widok (jak panel Loki)",
+      "description": "Jedna kolumna na turę: meta (trasa + czas), potem GRACZ / MG. Surowe kolumny są w drugiej tabeli niżej.",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ai_gm_sqlite_story"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT t.turn_number AS tura, (COALESCE(c.title, '') || ' — trasa: ' || COALESCE(t.route, '') || ' · ' || COALESCE(t.created_at, '')) AS meta, ( 'GRACZ (' || COALESCE(ch.name, '?') || ')' || char(10) || char(10) || COALESCE(t.user_text, '') || char(10) || char(10) || 'MG:' || char(10) || char(10) || COALESCE(t.assistant_text, '') ) AS rozmowa FROM campaign_turns t LEFT JOIN campaigns c ON c.id = t.campaign_id LEFT JOIN characters ch ON ch.id = t.character_id WHERE t.campaign_id = CAST(${campaign_id:raw} AS INTEGER) ORDER BY t.turn_number ASC;",
+          "queryText": "SELECT t.turn_number AS tura, (COALESCE(c.title, '') || ' — trasa: ' || COALESCE(t.route, '') || ' · ' || COALESCE(t.created_at, '')) AS meta, ( 'GRACZ (' || COALESCE(ch.name, '?') || ')' || char(10) || char(10) || COALESCE(t.user_text, '') || char(10) || char(10) || 'MG:' || char(10) || char(10) || COALESCE(t.assistant_text, '') ) AS rozmowa FROM campaign_turns t LEFT JOIN campaigns c ON c.id = t.campaign_id LEFT JOIN characters ch ON ch.id = t.character_id WHERE t.campaign_id = CAST(${campaign_id:raw} AS INTEGER) ORDER BY t.turn_number ASC;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false,
+            "wrapText": true
+          },
+          "minWidth": 48
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "tura"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 72
+              },
+              {
+                "id": "custom.minWidth",
+                "value": 56
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "meta"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 280
+              },
+              {
+                "id": "custom.minWidth",
+                "value": 200
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "rozmowa"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 900
+              },
+              {
+                "id": "custom.minWidth",
+                "value": 320
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false
+        }
+      },
+      "gridPos": {
+        "h": 18,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Surowe kolumny (eksport / debug)",
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "ai_gm_sqlite_story"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "rawQueryText": "SELECT t.turn_number, ch.name AS character_name, t.route, t.created_at, t.user_text, t.assistant_text FROM campaign_turns t LEFT JOIN characters ch ON ch.id = t.character_id WHERE t.campaign_id = CAST(${campaign_id:raw} AS INTEGER) ORDER BY t.turn_number ASC;",
+          "queryText": "SELECT t.turn_number, ch.name AS character_name, t.route, t.created_at, t.user_text, t.assistant_text FROM campaign_turns t LEFT JOIN characters ch ON ch.id = t.character_id WHERE t.campaign_id = CAST(${campaign_id:raw} AS INTEGER) ORDER BY t.turn_number ASC;"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "wrapText": true
+          },
+          "minWidth": 56
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "user_text"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 320
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "assistant_text"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 420
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 31
+      }
+    }
+  ]
+}

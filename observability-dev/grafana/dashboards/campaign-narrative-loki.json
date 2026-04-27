@@ -1,0 +1,170 @@
+{
+  "id": null,
+  "uid": "ai-gm-campaign-narrative-loki-dev",
+  "title": "AI GM - Campaign narrative (Loki, near-live) [DEV]",
+  "tags": [
+    "ai-gm",
+    "story",
+    "loki",
+    "narrative_turn",
+    "memory_turn"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 9,
+  "refresh": "30s",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "campaign_id",
+        "label": "Campaign ID",
+        "description": "Numer kampanii (np. 12). Zostaw .+ aby zobaczyć wszystkie.",
+        "type": "textbox",
+        "query": ".+",
+        "current": {
+          "value": ".+",
+          "text": ".+"
+        },
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "datasource": null,
+      "title": "Filtr",
+      "gridPos": {
+        "h": 2,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Wpisz ID kampanii w polu **Campaign ID** (np. `1033`). Zostaw `.+` żeby wyświetlić wszystkie.\n\n**Uwaga:** ten panel pokazuje tylko logi z **ostatnich 7 dni** (retencja Loki). Panel SQL może pokazywać starsze tury z bazy — jeśli tu jest pusto, sprawdź zakres czasu (prawy górny róg) albo czy po **streamingu** SSE doszło do `data: [DONE]` (bez tego tura nie zapisuje się i nie ma logu `narrative_turn`).\n\nPanel **Debug** niżej: surowe linie z `narrative_turn` bez parsowania `| json`."
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "logs",
+      "title": "Narrative turns — Gracz / GM",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 2
+      },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "PD5A68A3BD6F8BA56"
+          },
+          "expr": "{service=\"backend\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nGRACZ:\\n{{.user_text}}\\n\\nGM:\\n{{.assistant_text}}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "logs",
+      "title": "Debug — narrative_turn przez | json",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": true,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "PD5A68A3BD6F8BA56"
+          },
+          "expr": "{service=\"backend\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "/mem turns — Pytanie / Odpowiedź",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 19
+      },
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "loki",
+            "uid": "PD5A68A3BD6F8BA56"
+          },
+          "expr": "{service=\"backend\"} | json | event=\"memory_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nPYTANIE:\\n{{.user_text}}\\n\\nOdpowiedz:\\n{{.assistant_text}}\"",
+          "queryType": "range",
+          "legendFormat": ""
+        }
+      ]
+    }
+  ]
+}
