@@ -35,3 +35,7 @@ scripts/.db-autosync-cron-wrap.sh
 # Internal local-only documentation
 /docs/
 data-dev/
+
+# Observability DEV - dane runtime (nie commitujemy)
+observability-dev/loki/data/
+observability-dev/grafana/data/
