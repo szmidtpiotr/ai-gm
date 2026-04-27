@@ -13,6 +13,67 @@ window.state.showAllProviderModels = window.state.showAllProviderModels ?? false
 
 window.LLM_SETTINGS_COLLAPSE_PREF_KEY = "ai-gm:llmSettingsCollapsedPref";
 
+/** Phase 8E-2 — server defaults for sheet fold (from GET /api/settings/ui). */
+window._uiPanelDefaults = window._uiPanelDefaults || null;
+
+window.loadUiPanelDefaults = async function () {
+  try {
+    const base = (window.API_BASE_URL || "/api").replace(/\/+$/, "");
+    const r = await fetch(`${base}/settings/ui`);
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data && data.ok && data.data && data.data.panels && typeof data.data.panels === "object") {
+      window._uiPanelDefaults = data.data.panels;
+    }
+  } catch (_e) {
+    /* applyFoldState uses mobile / expanded fallback */
+  }
+};
+
+window.applyFoldState = function () {
+  const sections = ["stats", "skills", "inventory", "identity"];
+  const isMobile = typeof window.innerWidth === "number" && window.innerWidth < 768;
+
+  sections.forEach((section) => {
+    const el = document.querySelector(`[data-section="${section}"]`);
+    if (!el) return;
+
+    const stored = localStorage.getItem(`ui_fold_${section}`);
+    let state;
+    if (stored) {
+      state = stored;
+    } else if (window._uiPanelDefaults && typeof window._uiPanelDefaults === "object") {
+      state = window._uiPanelDefaults[section] || "expanded";
+    } else if (isMobile && section !== "stats") {
+      state = "collapsed";
+    } else {
+      state = "expanded";
+    }
+
+    const collapsed = state === "collapsed";
+    el.classList.toggle("fold-collapsed", collapsed);
+    const icon = el.querySelector(".fold-icon");
+    if (icon) icon.textContent = collapsed ? "\u25b8" : "\u25be";
+  });
+};
+
+(function initSheetFoldClickDelegation() {
+  if (window.__sheetFoldClickDelegationWired) return;
+  window.__sheetFoldClickDelegationWired = true;
+  document.addEventListener("click", (e) => {
+    const toggle = e.target.closest("[data-fold-toggle]");
+    if (!toggle) return;
+    const section = toggle.getAttribute("data-fold-toggle");
+    if (!section) return;
+    const wrapper = document.querySelector(`[data-section="${section}"]`);
+    if (!wrapper) return;
+    const isCollapsed = wrapper.classList.toggle("fold-collapsed");
+    const icon = wrapper.querySelector(".fold-icon");
+    if (icon) icon.textContent = isCollapsed ? "\u25b8" : "\u25be";
+    localStorage.setItem(`ui_fold_${section}`, isCollapsed ? "collapsed" : "expanded");
+  });
+})();
+
 window.playerMayEditLlmConnectionUi = function () {
   if (window.state.playerIsAdmin === false) return false;
   return true;
@@ -1063,8 +1124,13 @@ window.renderCharacterSheetPanel = function () {
   const identityHtml =
     appearance || personality || flaw
       ? `
-    <div class="sheet-identity-block sheet-fluff">
-      <h4 class="sheet-section-title">Postać</h4>
+    <div class="sheet-foldable-section" data-section="identity">
+      <div class="sheet-section-header" data-fold-toggle="identity" role="button" tabindex="0">
+        <h4 class="sheet-section-title">Postać</h4>
+        <span class="fold-icon" aria-hidden="true">▾</span>
+      </div>
+      <div class="sheet-section-body">
+        <div class="sheet-identity-block sheet-fluff">
       ${
         appearance
           ? `<div class="sheet-identity-field"><span class="sheet-identity-label">Wygląd</span><p class="sheet-identity-text">${window.escapeHtml(appearance)}</p></div>`
@@ -1080,6 +1146,8 @@ window.renderCharacterSheetPanel = function () {
           ? `<div class="sheet-identity-field"><span class="sheet-identity-label">Wada</span><p class="sheet-identity-text">${window.escapeHtml(flaw)}</p></div>`
           : ""
       }
+        </div>
+      </div>
     </div>`
       : "";
 
@@ -1107,18 +1175,69 @@ window.renderCharacterSheetPanel = function () {
       </div>
     ` : ""}
 
-    <div>
-      <h4 class="sheet-section-title">Statystyki</h4>
-      <div class="sheet-stats-grid">${statsHtml}</div>
+    <div class="sheet-foldable-section" data-section="stats">
+      <div class="sheet-section-header" data-fold-toggle="stats" role="button" tabindex="0">
+        <h4 class="sheet-section-title">Statystyki</h4>
+        <span class="fold-icon" aria-hidden="true">▾</span>
+      </div>
+      <div class="sheet-section-body">
+        <div class="sheet-stats-grid">${statsHtml}</div>
+      </div>
     </div>
 
-    <div>
-      <h4 class="sheet-section-title">Umiejętności</h4>
-      <div class="sheet-skills-grid">${skillsHtml}</div>
+    <div class="sheet-foldable-section" data-section="skills">
+      <div class="sheet-section-header" data-fold-toggle="skills" role="button" tabindex="0">
+        <h4 class="sheet-section-title">Umiejętności</h4>
+        <span class="fold-icon" aria-hidden="true">▾</span>
+      </div>
+      <div class="sheet-section-body">
+        <div class="sheet-skills-grid">${skillsHtml}</div>
+      </div>
+    </div>
+
+    <div class="sheet-foldable-section" data-section="inventory">
+      <div class="sheet-section-header" data-fold-toggle="inventory" role="button" tabindex="0">
+        <h4 class="sheet-section-title">Ekwipunek</h4>
+        <span class="fold-icon" aria-hidden="true">▾</span>
+      </div>
+      <div class="sheet-section-body">
+        <div class="gold-display">
+          💰 <span id="gold-amount">—</span> GP
+        </div>
+        <div class="equipment-slots">
+          <div class="equip-slot" data-slot="main_hand">
+            <span class="slot-label">Główna ręka</span>
+            <div class="slot-item" id="slot-main_hand">—</div>
+          </div>
+          <div class="equip-slot" data-slot="off_hand">
+            <span class="slot-label">Pomocnicza ręka</span>
+            <div class="slot-item" id="slot-off_hand">—</div>
+          </div>
+          <div class="equip-slot" data-slot="armor">
+            <span class="slot-label">Zbroja</span>
+            <div class="slot-item" id="slot-armor">—</div>
+          </div>
+        </div>
+        <div class="backpack">
+          <div class="sheet-backpack-heading">Plecak</div>
+          <ul id="backpack-list" class="backpack-list"></ul>
+        </div>
+        <div class="narrative-items hidden" id="narrative-items-section">
+          <div class="sheet-backpack-heading">Przedmioty fabularne</div>
+          <ul id="narrative-items-list" class="narrative-items-list"></ul>
+        </div>
+      </div>
     </div>
 
     ${identityHtml}
   `;
+
+  window.applyFoldState();
+
+  const cid = character && character.id != null ? Number(character.id) : 0;
+  if (cid && typeof window.loadInventory === "function") {
+    void window.loadInventory(cid);
+  }
 };
 
 window.loadCharacterSheet = async function (characterId) {

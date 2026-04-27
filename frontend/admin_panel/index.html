@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=24" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=25" />
   </head>
   <body>
     <div class="admin-shell">
@@ -26,6 +26,10 @@
           <button type="button" data-section="config">
             <span class="nav-icon">💾</span>
             <span class="nav-label">Config</span>
+          </button>
+          <button type="button" data-section="ui-settings">
+            <span class="nav-icon">📐</span>
+            <span class="nav-label">Ustawienia UI</span>
           </button>
         </nav>
         <a
@@ -53,6 +57,7 @@
           <div class="section-panel" data-section="accounts" aria-busy="true"></div>
           <div class="section-panel" data-section="technical" aria-busy="true"></div>
           <div class="section-panel" data-section="config" aria-busy="true"></div>
+          <div class="section-panel" data-section="ui-settings" aria-busy="true"></div>
         </section>
 
         <div class="activity-log-wrap">
@@ -271,6 +276,7 @@
       let accountsReady = false;
       let technicalReady = false;
       let configReady = false;
+      let uiSettingsReady = false;
 
       async function maybeInitGameDesign(section) {
         if (section !== "game-design" || gameDesignReady) {
@@ -326,6 +332,24 @@
         }
       }
 
+      async function maybeInitUiSettings(section) {
+        if (section !== "ui-settings" || uiSettingsReady) {
+          return;
+        }
+        const el = document.querySelector('.section-panel[data-section="ui-settings"]');
+        if (!el) {
+          return;
+        }
+        uiSettingsReady = true;
+        try {
+          const { init } = await import("/admin_panel/sections/ui_settings.js?v=1");
+          await init(el);
+        } catch (err) {
+          uiSettingsReady = false;
+          showToast(err.message || "Ustawienia UI nie załadowały się.", "error");
+        }
+      }
+
       async function maybeInitConfig(section) {
         if (section !== "config") {
           return;
@@ -374,6 +398,7 @@
             void maybeInitAccounts(selected);
             void maybeInitTechnical(selected);
             void maybeInitConfig(selected);
+            void maybeInitUiSettings(selected);
           });
         });
       }

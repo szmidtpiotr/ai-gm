@@ -1,7 +1,9 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header, HTTPException
+from pydantic import BaseModel, Field
 
+from app.services.admin_auth import verify_admin_token
 from app.services.llm_service import get_runtime_config, set_runtime_config
+from app.services.ui_panel_settings import get_ui_panels_merged, merge_ui_panels_patch
 from app.services.user_llm_settings import (
     get_user_llm_settings_full,
     get_user_llm_settings_masked,
@@ -9,6 +11,34 @@ from app.services.user_llm_settings import (
 )
 
 router = APIRouter()
+
+
+def _require_admin_bearer(
+    authorization: str | None = Header(default=None),
+) -> None:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    token = authorization.removeprefix("Bearer ").strip()
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+
+@router.get("/settings/ui")
+def get_ui_settings():
+    """Public read-only defaults for player sheet fold sections (8E-2)."""
+    panels = get_ui_panels_merged()
+    return {"ok": True, "data": {"panels": panels}}
+
+
+class UiPanelsPatchReq(BaseModel):
+    panels: dict[str, str] = Field(default_factory=dict)
+
+
+@router.patch("/settings/ui")
+def patch_ui_settings(req: UiPanelsPatchReq, _: None = Depends(_require_admin_bearer)):
+    """Admin-only — merge panel defaults into game_config_meta (ui_panel_defaults)."""
+    merged = merge_ui_panels_patch(req.panels or {})
+    return {"ok": True, "data": {"panels": merged}}
 
 
 class LlmSettingsReq(BaseModel):

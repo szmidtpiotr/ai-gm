@@ -111,6 +111,14 @@ class TestInventoryApi(unittest.TestCase):
         r = self.client.post("/api/inventory/1/equip", json={"inventory_id": 1, "slot": "head"})
         self.assertEqual(r.status_code, 400)
 
+    def test_post_equip_null_slot_unequips(self):
+        r = self.client.post("/api/inventory/1/equip", json={"inventory_id": 1, "slot": None})
+        self.assertEqual(r.status_code, 200, r.text)
+        inv = self.client.get("/api/inventory/1").json()["data"]
+        row1 = next(x for x in inv if int(x["id"]) == 1)
+        self.assertEqual(int(row1["equipped"]), 0)
+        self.assertIsNone(row1.get("slot"))
+
     def test_delete_equipped_requires_force(self):
         r = self.client.delete("/api/inventory/1/1")
         self.assertEqual(r.status_code, 400)

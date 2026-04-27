@@ -21,9 +21,10 @@ def _conn() -> sqlite3.Connection:
     return conn
 
 
-def _row_to_loot_entry(row: sqlite3.Row, total_weight: int) -> dict[str, Any]:
-    weight = max(1, int(row["weight"] or 0))
-    chance = float(weight / total_weight) if total_weight > 0 else 0.0
+def _row_to_loot_entry(row: sqlite3.Row) -> dict[str, Any]:
+    # `weight` is used as direct per-entry drop percent in range 1..100.
+    weight = max(1, min(100, int(row["weight"] or 0)))
+    chance = float(weight / 100.0)
     return {
         "item_key": row["item_key"],
         "weapon_key": row["weapon_key"],
@@ -99,53 +100,79 @@ def get_loot_table(enemy_key: str) -> list[dict]:
         ).fetchall()
     if not rows:
         return []
-    total_weight = sum(max(1, int(r["weight"] or 0)) for r in rows)
-    return [_row_to_loot_entry(r, total_weight) for r in rows]
+    return [_row_to_loot_entry(r) for r in rows]
 
 
 def roll_loot(enemy_key: str) -> list[dict]:
     """
-    Roll one weighted loot entry for enemy_key.
-    Returns [] if enemy has no loot table or drop chance fails.
+    Roll each loot-table entry independently for enemy_key.
+    Returns [] when enemy or loot table is missing, or no entry roll succeeds.
     """
     ek = str(enemy_key or "").strip()
     if not ek:
         return []
     with _conn() as conn:
         enemy = conn.execute(
-            "SELECT loot_table_key, drop_chance FROM game_config_enemies WHERE key = ?",
+            "SELECT loot_table_key FROM game_config_enemies WHERE key = ?",
             (ek,),
         ).fetchone()
     if not enemy or not enemy["loot_table_key"]:
-        return []
-
-    drop_chance = float(enemy["drop_chance"] if enemy["drop_chance"] is not None else 1.0)
-    if random.random() > drop_chance:
         return []
 
     entries = get_loot_table(ek)
     if not entries:
         return []
 
-    r = random.random()
-    acc = 0.0
-    chosen = entries[-1]
+    rolled: list[dict] = []
     for entry in entries:
-        acc += float(entry.get("chance") or 0.0)
-        if r <= acc:
-            chosen = entry
-            break
-    qmin = max(1, int(chosen.get("quantity_min") or 1))
-    qmax = max(qmin, int(chosen.get("quantity_max") or qmin))
-    qty = random.randint(qmin, qmax)
-    return [
-        {
-            "item_key": chosen.get("item_key"),
-            "weapon_key": chosen.get("weapon_key"),
-            "consumable_key": chosen.get("consumable_key"),
-            "quantity": qty,
-        }
-    ]
+        if random.random() > float(entry.get("chance") or 0.0):
+            continue
+        qmin = max(1, int(entry.get("quantity_min") or 1))
+        qmax = max(qmin, int(entry.get("quantity_max") or qmin))
+        qty = random.randint(qmin, qmax)
+        rolled.append(
+            {
+                "item_key": entry.get("item_key"),
+                "weapon_key": entry.get("weapon_key"),
+                "consumable_key": entry.get("consumable_key"),
+                "quantity": qty,
+            }
+        )
+    return rolled
+
+
+def roll_gold_drop(enemy_key: str) -> int:
+    """
+    Roll gold reward for an enemy from its loot table range.
+    Returns 0 when enemy/table missing or range is empty.
+    """
+    ek = str(enemy_key or "").strip()
+    if not ek:
+        return 0
+    try:
+        with _conn() as conn:
+            row = conn.execute(
+                """
+                SELECT t.gold_min, t.gold_max
+                FROM game_config_enemies e
+                JOIN game_config_loot_tables t ON t.key = e.loot_table_key
+                WHERE e.key = ? AND t.is_active = 1
+                LIMIT 1
+                """,
+                (ek,),
+            ).fetchone()
+    except sqlite3.Error:
+        # Backward compatibility with DBs created before gold columns existed.
+        return 0
+    if not row:
+        return 0
+    gmin = max(0, int(row["gold_min"] or 0))
+    gmax = max(0, int(row["gold_max"] or 0))
+    if gmax <= 0:
+        return 0
+    if gmax < gmin:
+        gmax = gmin
+    return random.randint(gmin, gmax)
 
 
 def grant_loot_to_character(character_id: int, loot_items: list[dict], source: str = "loot") -> list[dict]:
@@ -235,6 +262,28 @@ def grant_loot_to_character(character_id: int, loot_items: list[dict], source: s
     return granted
 
 
+def preview_loot_items(loot_items: list[dict], source: str = "loot") -> list[dict]:
+    """
+    Validate/normalize loot payload against catalogs without writing inventory.
+    Returns the same display contract as grant_loot_to_character.
+    """
+    if not isinstance(loot_items, list):
+        return []
+    src = str(source or "loot").strip() or "loot"
+    out: list[dict] = []
+    with _conn() as conn:
+        for raw in loot_items:
+            if not isinstance(raw, dict):
+                continue
+            qty = max(1, int(raw.get("quantity") or 1))
+            cat = _catalog_entry(conn, raw)
+            if not cat:
+                continue
+            key, label, item_type = cat
+            out.append({"label": label, "item_type": item_type, "quantity": qty, "source": src, "key": key})
+    return out
+
+
 def get_character_inventory(character_id: int) -> list[dict]:
     """Return unified inventory rows for a character."""
     cid = int(character_id)
@@ -312,12 +361,40 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
             raise ValueError("inventory entry not found")
 
         conn.execute(
-            "UPDATE character_inventory SET equipped = 0 WHERE character_id = ? AND slot = ?",
+            "UPDATE character_inventory SET equipped = 0, slot = NULL WHERE character_id = ? AND slot = ?",
             (cid, s),
         )
         conn.execute(
             "UPDATE character_inventory SET equipped = 1, slot = ? WHERE id = ?",
             (s, iid),
+        )
+        conn.commit()
+
+    updated = [x for x in get_character_inventory(cid) if int(x["id"]) == iid]
+    if not updated:
+        raise ValueError("inventory entry not found")
+    return updated[0]
+
+
+def unequip_item(character_id: int, inventory_id: int) -> dict:
+    """Clear equipped flag and slot for one inventory row (8E-3)."""
+    cid = int(character_id)
+    iid = int(inventory_id)
+    with _conn() as conn:
+        ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
+        if not ch:
+            raise ValueError("character not found")
+
+        row = conn.execute(
+            "SELECT id FROM character_inventory WHERE id = ? AND character_id = ?",
+            (iid, cid),
+        ).fetchone()
+        if not row:
+            raise ValueError("inventory entry not found")
+
+        conn.execute(
+            "UPDATE character_inventory SET equipped = 0, slot = NULL WHERE id = ? AND character_id = ?",
+            (iid, cid),
         )
         conn.commit()
 
@@ -399,6 +476,38 @@ def list_config_items(item_type: str | None = None) -> list[dict]:
         }
         for r in rows
     ]
+
+
+def get_character_gold(character_id: int) -> int:
+    """Return current gold_gp for a character (0 if column missing treated as 0)."""
+    cid = int(character_id)
+    with _conn() as conn:
+        row = conn.execute("SELECT gold_gp FROM characters WHERE id = ?", (cid,)).fetchone()
+        if not row:
+            raise ValueError("character not found")
+        return int(row["gold_gp"] or 0)
+
+
+def apply_character_gold_delta(character_id: int, delta: int, reason: str | None = None) -> int:
+    """
+    Atomically adjust gold_gp by delta (must not go below 0).
+    ``reason`` is accepted for API compatibility; not persisted in this phase.
+    """
+    _ = reason
+    if int(delta) == 0:
+        raise ValueError("delta must be non-zero")
+    cid = int(character_id)
+    d = int(delta)
+    with _conn() as conn:
+        row = conn.execute("SELECT gold_gp FROM characters WHERE id = ?", (cid,)).fetchone()
+        if not row:
+            raise ValueError("character not found")
+        cur = int(row["gold_gp"] or 0)
+        new_g = cur + d
+        if new_g < 0:
+            raise ValueError("gold_gp would be negative")
+        conn.execute("UPDATE characters SET gold_gp = ? WHERE id = ?", (new_g, cid))
+    return new_g
 
 
 def get_config_item(key: str) -> dict | None:

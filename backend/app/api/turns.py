@@ -49,6 +49,7 @@ logger = get_logger(__name__)
 
 
 COMBAT_START_RE = re.compile(r"\[COMBAT_START:([^\]]+)\]", re.IGNORECASE)
+GRANT_ITEM_RE = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
 GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
 # Short assistant line when combat victory follow-up skips the LLM (see create_turn_stream).
 COMBAT_VICTORY_STREAM_STUB = "Walka dobiegła końca."
@@ -491,6 +492,61 @@ def _stream_combat_roll_extras(campaign_id: int, user_text_val: str) -> tuple[di
     return gm_roll, combat_ended
 
 
+def _parse_post_loot_summary_payload(user_text_val: str) -> dict | None:
+    s = (user_text_val or "").strip()
+    if not s.startswith(COMBAT_ROLL_CTX_PREFIX):
+        return None
+    tail = s[len(COMBAT_ROLL_CTX_PREFIX) :].lstrip("\r\n \t")
+    try:
+        payload = json.loads(tail)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if not isinstance(payload, dict) or payload.get("kind") != "post_loot_summary":
+        return None
+    return payload
+
+
+def _render_post_loot_summary_text(payload: dict) -> str:
+    items_raw = payload.get("claimed_items")
+    items = items_raw if isinstance(items_raw, list) else []
+    normalized: list[str] = []
+    for raw in items:
+        if not isinstance(raw, dict):
+            continue
+        label = str(raw.get("label") or "").strip()
+        if not label:
+            continue
+        qty = _safe_int(raw.get("quantity"), 1)
+        qty = qty if qty > 0 else 1
+        if qty > 1:
+            normalized.append(f"{label} ×{qty}")
+        else:
+            normalized.append(label)
+    gold_gp = _safe_int(payload.get("gold_gp"), 0)
+    if gold_gp < 0:
+        gold_gp = 0
+
+    if normalized and gold_gp > 0:
+        return (
+            "Przeglądasz pobojowisko i zabezpieczasz zdobycz: "
+            + ", ".join(normalized)
+            + f" oraz {gold_gp} GP. "
+            "Po chwili ciszy rozglądasz się po okolicy, gotów na kolejny ruch."
+        )
+    if normalized:
+        return (
+            "Przeglądasz pobojowisko i zabezpieczasz zdobycz: "
+            + ", ".join(normalized)
+            + ". Po chwili ciszy rozglądasz się po okolicy, gotów na kolejny ruch."
+        )
+    if gold_gp > 0:
+        return (
+            f"Przeglądasz pobojowisko i zbierasz {gold_gp} GP. "
+            "Po chwili ciszy rozglądasz się po okolicy, gotów na kolejny ruch."
+        )
+    return "Po walce rozglądasz się po okolicy."
+
+
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -545,6 +601,61 @@ def validate_roll_cue_name(assistant_text: str) -> str | None:
     if canonical is None:
         logger.warning("unknown_llm_roll_cue_ignored", raw_test_name=raw_test_name)
     return canonical
+
+
+def parse_grant_item_cue(assistant_text: str) -> str | None:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return None
+    last_line = (lines[-1] or "").strip()
+    cue_match = GRANT_ITEM_RE.match(last_line)
+    if not cue_match:
+        return None
+    label = (cue_match.group(1) or "").strip()
+    return label or None
+
+
+def strip_last_grant_item_cue(assistant_text: str) -> str:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return assistant_text or ""
+    if not GRANT_ITEM_RE.match((lines[-1] or "").strip()):
+        return assistant_text or ""
+    return "\n".join(lines[:-1]).rstrip()
+
+
+def append_narrative_item_to_sheet(
+    conn: sqlite3.Connection,
+    *,
+    character_id: int,
+    label: str,
+    source: str = "gm",
+    given_at: str | None = None,
+) -> None:
+    row = conn.execute(
+        "SELECT sheet_json FROM characters WHERE id = ?",
+        (character_id,),
+    ).fetchone()
+    if not row:
+        return
+    try:
+        sheet = json.loads(row["sheet_json"] or "{}") if row["sheet_json"] else {}
+    except Exception:
+        sheet = {}
+    if not isinstance(sheet, dict):
+        sheet = {}
+    items = sheet.get("narrative_items")
+    if not isinstance(items, list):
+        items = []
+    entry = {"label": str(label).strip(), "source": str(source or "gm").strip() or "gm"}
+    if given_at:
+        entry["given_at"] = str(given_at).strip()
+    items.append(entry)
+    sheet["narrative_items"] = items
+    conn.execute(
+        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+        (json.dumps(sheet, ensure_ascii=False), character_id),
+    )
 
 
 def _sheet_current_hp(sheet: dict) -> int | None:
@@ -1118,6 +1229,9 @@ def create_turn(
         ) == "player"
 
         clean_assistant = COMBAT_START_RE.sub("", assistant_text).rstrip()
+        grant_item_label = parse_grant_item_cue(clean_assistant.strip())
+        if grant_item_label:
+            clean_assistant = strip_last_grant_item_cue(clean_assistant)
         validate_roll_cue_name(clean_assistant.strip())
 
         log = create_turn_log(
@@ -1136,6 +1250,15 @@ def create_turn(
             user_text=user_text_stored if roll_request else text,
             assistant_text=clean_assistant,
         )
+        if grant_item_label:
+            append_narrative_item_to_sheet(
+                conn,
+                character_id=payload.character_id,
+                label=grant_item_label,
+                source="gm",
+                given_at=f"turn:{log['turn_number']}",
+            )
+            conn.commit()
 
         new_combat = _maybe_start_combat_from_gm_tag(
             campaign_id, payload.character_id, assistant_text
@@ -1470,6 +1593,7 @@ def create_turn_stream(
         gm_roll_pre_payload, combat_ended_pre_payload = _stream_combat_roll_extras(
             campaign_id_val, user_text_val
         )
+        post_loot_summary_payload = _parse_post_loot_summary_payload(user_text_val)
 
         def token_generator():
             """
@@ -1547,6 +1671,32 @@ def create_turn_stream(
                 yield "data: [DONE]\n\n"
                 return
 
+            if post_loot_summary_payload:
+                clean_text = _render_post_loot_summary_text(post_loot_summary_payload)
+                save_conn = get_db()
+                try:
+                    stream_log = create_turn_log(
+                        conn=save_conn,
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        user_text=user_text_val,
+                        assistant_text=clean_text,
+                        route="narrative",
+                    )
+                    log_narrative_turn_structured(
+                        route="narrative",
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        turn_row=stream_log,
+                        user_text=user_text_val,
+                        assistant_text=clean_text,
+                    )
+                finally:
+                    save_conn.close()
+                yield f"data: {clean_text}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
             collected: list[str] = []
             saw_done = False
             _sse_log = os.getenv("SSE_NARRATIVE_PROGRESS_LOG", "").strip().lower() in (
@@ -1594,6 +1744,9 @@ def create_turn_stream(
             combat_extra = None
             if full_raw.strip():
                 clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
+                grant_item_label = parse_grant_item_cue(clean_text.strip())
+                if grant_item_label:
+                    clean_text = strip_last_grant_item_cue(clean_text)
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(
@@ -1627,6 +1780,15 @@ def create_turn_stream(
                         user_text=user_text_val,
                         assistant_text=clean_text,
                     )
+                    if grant_item_label:
+                        append_narrative_item_to_sheet(
+                            save_conn,
+                            character_id=character_id_val,
+                            label=grant_item_label,
+                            source="gm",
+                            given_at=f"turn:{stream_log['turn_number']}",
+                        )
+                        save_conn.commit()
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, full_raw
                     )

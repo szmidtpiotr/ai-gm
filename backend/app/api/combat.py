@@ -27,6 +27,11 @@ class ResolveAttackRequest(BaseModel):
     target_id: str | None = None
 
 
+class ClaimLootRequest(BaseModel):
+    character_id: int
+    selected_indexes: list[int] = Field(default_factory=list)
+
+
 def _first_character_id(campaign_id: int) -> int:
     conn = sqlite3.connect(combat.COMBAT_DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -142,3 +147,16 @@ def post_flee(campaign_id: int):
             "(status active). Jeśli panel jest nieaktualny, odśwież stronę."
         ),
     )
+
+
+@router.post("/campaigns/{campaign_id}/combat/loot/claim")
+def post_claim_loot(campaign_id: int, body: ClaimLootRequest):
+    try:
+        out = combat.claim_post_combat_loot(
+            campaign_id,
+            character_id=body.character_id,
+            selected_indexes=body.selected_indexes or [],
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"ok": True, "data": out}

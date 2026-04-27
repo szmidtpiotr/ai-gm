@@ -431,7 +431,7 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
 
   const data = await resp.json();
   const turns = Array.isArray(data.turns) ? data.turns : [];
-  const serverList = uid
+  let serverList = uid
     ? turns.filter((t) => {
         const cuid = t?.character_user_id ?? null;
         // Keep command/system turns even if character_user_id is missing.
@@ -439,6 +439,12 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
         return Number(cuid) === Number(uid);
       })
     : turns;
+
+  // If filtering by user_id hides the entire archive, fall back to full campaign history.
+  // This prevents empty chat when viewing older campaigns tied to another account.
+  if (uid && turns.length > 0 && serverList.length === 0) {
+    serverList = turns;
+  }
 
   window.state.serverTurns = serverList;
   window.state.combatClientTurns = [];

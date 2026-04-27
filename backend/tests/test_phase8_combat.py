@@ -272,13 +272,16 @@ class TestPhase8Combat(unittest.TestCase):
 
     @patch("app.services.combat_service.roll_d20", return_value=1)
     @patch("app.services.combat_service.roll_damage_dice", return_value=50)
+    @patch("app.services.loot_service.apply_character_gold_delta", return_value=7)
+    @patch("app.services.loot_service.roll_gold_drop", return_value=7)
     @patch("app.services.loot_service.grant_loot_to_character", side_effect=_grant_passthrough)
     @patch("app.services.loot_service.roll_loot", return_value=[{"item_key": "gold", "quantity": 1}])
-    def test_enemy_death_victory_and_loot(self, _loot, _grant, _dmg, _d20):
+    def test_enemy_death_victory_and_loot(self, _loot, _grant, _roll_gold, _apply_gold, _dmg, _d20):
         cs.initiate_combat(1, 1, ["bandit"])
         r = cs.resolve_attack(1, 20, attacker="player")
         self.assertTrue(r.get("enemy_dead"))
         self.assertEqual(len(r.get("loot") or []), 1)
+        self.assertEqual(int(r.get("gold_drop") or 0), 7)
         st = r["combat_state"]
         self.assertEqual(st["status"], "ended")
         self.assertEqual(st["ended_reason"], "victory")

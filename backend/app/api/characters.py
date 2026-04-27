@@ -14,6 +14,7 @@ from app.character_creation_config import (
     roll_4d6_drop_lowest,
     roll_creation_skills,
 )
+from app.services.loot_service import grant_loot_to_character
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
@@ -36,6 +37,13 @@ class CharacterCreateRequest(BaseModel):
 
 class CharacterSheetPatchRequest(BaseModel):
     sheet_json: dict
+
+
+class NarrativeItemCreateRequest(BaseModel):
+    label: str
+    description: str | None = None
+    source: str = "gm"
+    given_at: str | None = None
 
 
 def _deep_merge_dicts(base: dict, incoming: dict) -> dict:
@@ -85,6 +93,12 @@ def _ensure_identity_block(sheet: dict) -> None:
                 b.setdefault("text", "")
                 b.setdefault("strength", "strong")
                 b.setdefault("origin", "creation")
+
+
+def _ensure_narrative_items_block(sheet: dict) -> None:
+    items = sheet.get("narrative_items")
+    if not isinstance(items, list):
+        sheet["narrative_items"] = []
 
 
 def _build_character_sheet(
@@ -164,6 +178,7 @@ def _build_character_sheet(
     sheet["defense"] = {"base": 10 + dex_mod}
 
     _ensure_identity_block(sheet)
+    _ensure_narrative_items_block(sheet)
     sheet.update(_preserved_runtime)
     return sheet
 
@@ -784,6 +799,7 @@ def patch_character_sheet(character_id: int, req: CharacterSheetPatchRequest):
         existing_sheet_json = {}
 
     merged_sheet_json = _deep_merge_dicts(existing_sheet_json, req.sheet_json)
+    _ensure_narrative_items_block(merged_sheet_json)
 
     conn.execute(
         """
@@ -817,6 +833,50 @@ def patch_character_sheet(character_id: int, req: CharacterSheetPatchRequest):
     item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
 
     return item
+
+
+@router.post("/characters/{character_id}/narrative-item")
+def add_character_narrative_item(character_id: int, req: NarrativeItemCreateRequest):
+    label = str(req.label or "").strip()
+    if not label:
+        raise HTTPException(status_code=422, detail="label is required")
+
+    source = str(req.source or "gm").strip() or "gm"
+    given_at = str(req.given_at or "").strip() or None
+    description = str(req.description or "").strip() or None
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT id, sheet_json FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Character not found")
+        try:
+            sheet = json.loads(row["sheet_json"] or "{}") if row["sheet_json"] else {}
+        except Exception:
+            sheet = {}
+        if not isinstance(sheet, dict):
+            sheet = {}
+
+        _ensure_narrative_items_block(sheet)
+        new_item = {"label": label, "source": source}
+        if description:
+            new_item["description"] = description
+        if given_at:
+            new_item["given_at"] = given_at
+        sheet["narrative_items"].append(new_item)
+
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), character_id),
+        )
+        conn.commit()
+        return {"ok": True, "item": new_item, "narrative_items": sheet["narrative_items"]}
+    finally:
+        conn.close()
 
 
 @router.post("/campaigns/{campaign_id}/characters")
@@ -858,9 +918,11 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         )
 
     base_sheet = dict(req.sheet_json or {})
-    archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
-    if archetype not in ("warrior", "scholar"):
-        archetype = "warrior"
+    requested_archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
+    # Starter pack + gold come only from DB rows for warrior/scholar; unknown types
+    # still create a valid sheet (defaults to warrior stats) but get no starter loot.
+    starter_archetype_key = requested_archetype if requested_archetype in ("warrior", "scholar") else None
+    archetype = starter_archetype_key or "warrior"
     base_sheet["archetype"] = archetype
     # Roll 4d6 drop-lowest, then clamp each base to [STAT_ROLL_MIN, STAT_ROLL_MAX].
     # The wizard requires every pre-bonus stat to be in that range; clamping ensures
@@ -879,6 +941,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         apply_archetype_skill_minimums=False,
     )
     created_sheet["skills_at_creation"] = dict(skills_rolled)
+    created_sheet.setdefault("narrative_items", [])
 
     cur.execute(
         """
@@ -898,6 +961,37 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     conn.commit()
 
     character_id = cur.lastrowid
+
+    try:
+        arch_row = (
+            conn.execute(
+                """
+                SELECT starter_items_json, starter_gold_gp
+                FROM game_config_archetypes
+                WHERE key = ? AND (is_active = 1 OR is_active IS NULL)
+                """,
+                (starter_archetype_key,),
+            ).fetchone()
+            if starter_archetype_key
+            else None
+        )
+        if arch_row:
+            raw_json = arch_row["starter_items_json"] or "[]"
+            try:
+                starter_items = json.loads(raw_json) if isinstance(raw_json, str) else raw_json
+            except json.JSONDecodeError:
+                starter_items = []
+            if isinstance(starter_items, list) and starter_items:
+                grant_loot_to_character(character_id, starter_items, source="start")
+            ggp = int(arch_row["starter_gold_gp"] or 0)
+            if ggp > 0:
+                conn.execute(
+                    "UPDATE characters SET gold_gp = COALESCE(gold_gp, 0) + ? WHERE id = ?",
+                    (ggp, character_id),
+                )
+                conn.commit()
+    except Exception as e:
+        logger.warning("[create_character] starter items / gold failed (non-fatal): %s", str(e))
 
     opening_message = None
     try:
@@ -987,7 +1081,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
 
     row = conn.execute(
         """
-        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at
+        SELECT id, campaign_id, user_id, name, system_id, sheet_json, location, is_active, created_at, gold_gp
         FROM characters
         WHERE id = ?
         """,
@@ -1061,6 +1155,7 @@ def _default_playtest_sheet(name: str, archetype: str, old_sheet: dict) -> dict:
         "stats": stats,
         "skills": skills,
         "inventory": [],
+        "narrative_items": [],
         "defense": {"base": defense_base},
         "equipped_weapon": "sword",
         "name": name,
