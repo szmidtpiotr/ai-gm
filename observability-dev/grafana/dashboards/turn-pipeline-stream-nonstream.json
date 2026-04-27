@@ -1,0 +1,156 @@
+{
+  "id": null,
+  "uid": "ai-gm-turn-pipeline-dev",
+  "title": "AI GM - Turn Pipeline (Stream + Non-stream) [DEV]",
+  "tags": [
+    "ai-gm",
+    "turns",
+    "stream"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "PD5A68A3BD6F8BA56"
+        },
+        "query": "label_values(service)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Turn Requests / min",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\"$service\"} | json | event=\"request_complete\" | route=~\".*/turns.*\" [1m]))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Stream Errors / min",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\"$service\"} | json | event=~\"llm_error|llm_timeout\" | route=~\".*/turns.*\" [1m]))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "HTTP 5xx / min",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\"$service\"} | json | status_code=~\"5..\" [1m]))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "HTTP 4xx / min",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\"$service\"} | json | status_code=~\"4..\" [1m]))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      }
+    },
+    {
+      "id": 5,
+      "type": "logs",
+      "title": "Turn Pipeline Logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "{service=~\"$service\"} | json | route=~\".*/turns.*\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "wrapLogMessage": true
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      }
+    }
+  ]
+}

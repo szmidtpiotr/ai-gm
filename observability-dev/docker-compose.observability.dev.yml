@@ -26,6 +26,8 @@ services:
       - observability-dev
 
   prometheus:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     image: prom/prometheus:v2.51.2
     restart: unless-stopped
     ports:

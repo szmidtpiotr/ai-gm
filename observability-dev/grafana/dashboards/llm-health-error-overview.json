@@ -1,0 +1,222 @@
+{
+  "id": null,
+  "uid": "ai-gm-structured-observability-dev",
+  "title": "AI GM - Structured Logging Overview [DEV]",
+  "tags": [
+    "ai-gm",
+    "loki",
+    "structured",
+    "turn-id"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": {
+          "type": "loki",
+          "uid": "PD5A68A3BD6F8BA56"
+        },
+        "query": "label_values(service)",
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "current": {
+          "selected": true,
+          "text": "backend",
+          "value": "backend"
+        }
+      },
+      {
+        "name": "turn_id",
+        "label": "Turn ID",
+        "type": "textbox",
+        "query": ".+",
+        "current": {
+          "text": ".+",
+          "value": ".+"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Ostatnie błędy LLM",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "{service=~\"$service\"} | json | event=\"llm_error\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Rzuty kością — wyniki",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "100 * sum(count_over_time({service=~\"$service\"} | json | event=\"dice_roll\" | outcome=~\"success|hit\" [$__range])) / sum(count_over_time({service=~\"$service\"} | json | event=\"dice_roll\" [$__range]))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 10
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Aktywne walki",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\"$service\"} | json | event=\"combat_start\" [24h]))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 10
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Heartbeat status",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\"$service\"} | json | event=\"heartbeat\" [2m]))",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 10
+      }
+    },
+    {
+      "id": 5,
+      "type": "logs",
+      "title": "Trace viewer",
+      "datasource": {
+        "type": "loki",
+        "uid": "PD5A68A3BD6F8BA56"
+      },
+      "targets": [
+        {
+          "expr": "{service=~\"$service\"} | json | turn_id=~\"${turn_id}\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showLabels": true,
+        "showTime": true,
+        "wrapLogMessage": true
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      }
+    }
+  ]
+}
