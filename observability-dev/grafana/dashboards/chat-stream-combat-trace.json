@@ -13,7 +13,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 11,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -29,15 +29,19 @@
           "type": "loki",
           "uid": "PD5A68A3BD6F8BA56"
         },
-        "query": "label_values(service)",
+        "query": {
+          "query": "label_values(service)",
+          "refId": "StandardVariableQuery"
+        },
         "refresh": 2,
-        "includeAll": false,
-        "multi": false,
+        "includeAll": true,
+        "multi": true,
         "current": {
           "selected": true,
-          "text": "backend",
-          "value": "backend"
-        }
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".+"
       },
       {
         "name": "campaign_id",
@@ -81,7 +85,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Korelacja UI ↔ Loki**\n- Gracz wysyła nagłówek `X-UI-Trace-Id` (chip **cli·** w czacie).\n- Backend zwraca `X-Turn-Id` i loguje je jako `turn_id` (chip **srv·** na dymku „myśli”).\n- Zapis tury: `narrative_turn` ma **`turn_id`** i **`ui_trace_id`** (w treści panelu poniżej).\n- **Explore — filtr po kliencie:**\n```\n{service=\"backend\"} | json | event=\"narrative_turn\" | ui_trace_id=\"<wklej-uuid>\"\n```\n\n**SSE (postęp przed finalnym tekstem)**\n- Na backendzie: **`SSE_NARRATIVE_PROGRESS_LOG=1`** → logi `sse_narrative_progress` (co ~25 chunków).\n\n**Walka**\n- `dice_roll` z `source` = `combat_attack` / `combat_enemy`, pola `dc`, `outcome`.\n\n**Resety (dev)**\n- `campaign_progress_reset`, `character_progress_reset` (przyciski Reset kamp. / Reset post.)."
+        "content": "**Korelacja UI ↔ Loki**\n- Gracz wysyła nagłówek `X-UI-Trace-Id` (chip **cli·** w czacie).\n- Backend zwraca `X-Turn-Id` i loguje je jako `turn_id` (chip **srv·** na dymku „myśli”).\n- Zapis tury: `narrative_turn` ma **`turn_id`** i **`ui_trace_id`** (w treści panelu poniżej).\n- **Explore — filtr po kliencie:**\n```\n{service=~\"backend|backend-dev\"} | json | event=\"narrative_turn\" | ui_trace_id=\"<wklej-uuid>\"\n```\n\n**SSE (postęp przed finalnym tekstem)**\n- Na backendzie: **`SSE_NARRATIVE_PROGRESS_LOG=1`** → logi `sse_narrative_progress` (co ~25 chunków).\n\n**Walka**\n- `dice_roll` z `source` = `combat_attack` / `combat_enemy`, pola `dc`, `outcome`.\n\n**Resety (dev)**\n- `campaign_progress_reset`, `character_progress_reset` (przyciski Reset kamp. / Reset post.)."
       },
       "fieldConfig": {
         "defaults": {},
