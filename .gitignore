@@ -34,6 +34,7 @@ scripts/.db-autosync-cron-wrap.sh
 
 # Internal local-only documentation
 /docs/
+/skills/
 data-dev/
 
 # Observability DEV - dane runtime (nie commitujemy)
