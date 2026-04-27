@@ -1,10 +1,10 @@
 """SQLModel engine, session helpers; SQL migrations live under db/migrations/."""
 
-import os
-
 from sqlmodel import Session, SQLModel, create_engine
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////data/ai_gm.db")
+from app.core.db_runtime import resolve_database_url
+
+DATABASE_URL = resolve_database_url()
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
