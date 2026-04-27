@@ -4,39 +4,46 @@ window.state.sheetPanelOpen = window.state.sheetPanelOpen ?? false;
 /** `null` = unknown (legacy session without flag): keep LLM controls visible. `false` = non-admin. */
 window.state.playerIsAdmin = window.state.playerIsAdmin ?? null;
 window.API_BASE_URL = window.API_BASE_URL || "/api";
+window.SHEET_PANEL_STORAGE_KEY = "ai-gm:sheetPanelOpen";
 
-/** Phase 8E-2 — server defaults for foldable sheet sections (filled by loadUiPanelDefaults). */
-window._uiPanelDefaults = null;
+window.SHEET_STATS = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"];
+window.state.lastApiCall = window.state.lastApiCall || null;
+window.state.llmSettings = window.state.llmSettings || null;
+window.state.showAllProviderModels = window.state.showAllProviderModels ?? false;
 
-window.loadUiPanelDefaults = async function loadUiPanelDefaults() {
+window.LLM_SETTINGS_COLLAPSE_PREF_KEY = "ai-gm:llmSettingsCollapsedPref";
+
+/** Phase 8E-2 — server defaults for sheet fold (from GET /api/settings/ui). */
+window._uiPanelDefaults = window._uiPanelDefaults || null;
+
+window.loadUiPanelDefaults = async function () {
   try {
-    const base = String(window.API_BASE_URL || "/api").replace(/\/+$/, "");
+    const base = (window.API_BASE_URL || "/api").replace(/\/+$/, "");
     const r = await fetch(`${base}/settings/ui`);
+    if (!r.ok) return;
     const data = await r.json();
     if (data && data.ok && data.data && data.data.panels && typeof data.data.panels === "object") {
       window._uiPanelDefaults = data.data.panels;
     }
   } catch (_e) {
-    window._uiPanelDefaults = null;
+    /* applyFoldState uses mobile / expanded fallback */
   }
 };
 
-function applyFoldState() {
+window.applyFoldState = function () {
   const sections = ["stats", "skills", "identity"];
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+  const isMobile = typeof window.innerWidth === "number" && window.innerWidth < 768;
 
   sections.forEach((section) => {
-    const el = document.querySelector(`#sheet-panel [data-section="${section}"]`);
-    if (!el) {
-      return;
-    }
+    const el = document.querySelector(`[data-section="${section}"]`);
+    if (!el) return;
 
     const stored = localStorage.getItem(`ui_fold_${section}`);
     let state;
     if (stored) {
       state = stored;
-    } else if (window._uiPanelDefaults && window._uiPanelDefaults[section]) {
-      state = window._uiPanelDefaults[section];
+    } else if (window._uiPanelDefaults && typeof window._uiPanelDefaults === "object") {
+      state = window._uiPanelDefaults[section] || "expanded";
     } else if (isMobile && section !== "stats") {
       state = "collapsed";
     } else {
@@ -46,45 +53,26 @@ function applyFoldState() {
     const collapsed = state === "collapsed";
     el.classList.toggle("fold-collapsed", collapsed);
     const icon = el.querySelector(".fold-icon");
-    if (icon) {
-      icon.textContent = collapsed ? "\u25b8" : "\u25be";
-    }
+    if (icon) icon.textContent = collapsed ? "\u25b8" : "\u25be";
   });
-}
+};
 
-window.applyFoldState = applyFoldState;
-
-if (!window._sheetFoldClickBound) {
-  window._sheetFoldClickBound = true;
+(function initSheetFoldClickDelegation() {
+  if (window.__sheetFoldClickDelegationWired) return;
+  window.__sheetFoldClickDelegationWired = true;
   document.addEventListener("click", (e) => {
     const toggle = e.target.closest("[data-fold-toggle]");
-    if (!toggle || !toggle.closest("#sheet-panel")) {
-      return;
-    }
+    if (!toggle) return;
     const section = toggle.getAttribute("data-fold-toggle");
-    if (!section) {
-      return;
-    }
-    const wrapper = document.querySelector(`#sheet-panel [data-section="${section}"]`);
-    if (!wrapper) {
-      return;
-    }
+    if (!section) return;
+    const wrapper = document.querySelector(`[data-section="${section}"]`);
+    if (!wrapper) return;
     const isCollapsed = wrapper.classList.toggle("fold-collapsed");
     const icon = wrapper.querySelector(".fold-icon");
-    if (icon) {
-      icon.textContent = isCollapsed ? "\u25b8" : "\u25be";
-    }
+    if (icon) icon.textContent = isCollapsed ? "\u25b8" : "\u25be";
     localStorage.setItem(`ui_fold_${section}`, isCollapsed ? "collapsed" : "expanded");
   });
-}
-window.SHEET_PANEL_STORAGE_KEY = "ai-gm:sheetPanelOpen";
-
-window.SHEET_STATS = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"];
-window.state.lastApiCall = window.state.lastApiCall || null;
-window.state.llmSettings = window.state.llmSettings || null;
-window.state.showAllProviderModels = window.state.showAllProviderModels ?? false;
-
-window.LLM_SETTINGS_COLLAPSE_PREF_KEY = "ai-gm:llmSettingsCollapsedPref";
+})();
 
 window.playerMayEditLlmConnectionUi = function () {
   if (window.state.playerIsAdmin === false) return false;
@@ -1210,7 +1198,7 @@ window.renderCharacterSheetPanel = function () {
     ${identityHtml}
   `;
 
-  applyFoldState();
+  window.applyFoldState();
 };
 
 window.loadCharacterSheet = async function (characterId) {
@@ -1241,10 +1229,6 @@ window.bindCharacterSheetPanel = function () {
 };
 
 window.initCharacterSheetPanel = async function () {
-  if (typeof window.loadUiPanelDefaults === "function") {
-    await window.loadUiPanelDefaults();
-  }
-
   window.installApiDebugTracker();
   window.bindHistorySummaryButton();
   window.bindDebugSnapshotButton();
@@ -1275,6 +1259,6 @@ if (typeof window.loadCharacters === "function") {
 
 document.addEventListener("DOMContentLoaded", () => {
   setTimeout(() => {
-    void window.initCharacterSheetPanel();
+    window.initCharacterSheetPanel();
   }, 0);
 });

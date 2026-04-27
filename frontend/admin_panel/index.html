@@ -342,11 +342,11 @@
         }
         uiSettingsReady = true;
         try {
-          const { init } = await import("/admin_panel/sections/ui_settings.js?v=2");
+          const { init } = await import("/admin_panel/sections/ui_settings.js?v=1");
           await init(el);
         } catch (err) {
           uiSettingsReady = false;
-          showToast(err.message || "Ustawienia UI nie wczytały się.", "error");
+          showToast(err.message || "Ustawienia UI nie załadowały się.", "error");
         }
       }
 

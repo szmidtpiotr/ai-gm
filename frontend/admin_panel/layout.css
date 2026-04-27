@@ -1802,10 +1802,12 @@ pre.copy-block {
   text-align: right;
 }
 
-/* Phase 8E-2 — Admin: UI panel defaults */
+/* Phase 8E-2 — Admin „Ustawienia UI” */
 .ui-settings-form {
-  max-width: 520px;
-  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 36rem;
 }
 
 .ui-settings-row {
@@ -1813,20 +1815,26 @@ pre.copy-block {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 16px;
-  margin-bottom: 14px;
-  padding-bottom: 10px;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border);
+  font-family: Arial, sans-serif;
+  font-size: 14px;
 }
 
 .ui-settings-label {
-  min-width: 130px;
+  min-width: 9rem;
   font-weight: 600;
+  color: var(--text);
 }
 
 .ui-settings-choice {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 14px;
   cursor: pointer;
+  color: var(--muted);
+}
+
+.ui-settings-choice input {
+  margin: 0;
 }
