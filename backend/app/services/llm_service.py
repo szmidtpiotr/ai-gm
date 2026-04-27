@@ -373,6 +373,14 @@ def generate_chat_stream(
 ) -> Generator[str, None, None]:
     effective = get_effective_config(llm_config)
     resolved_model = _resolve_model(model, effective)
+    if os.getenv("AI_TEST_MODE") == "1" and os.getenv("AI_TEST_STUB_LLM") == "1":
+        stub = (os.getenv("AI_TEST_STUB_LLM_TEXT") or "").strip() or (
+            "Krótki opis otoczenia (odpowiedź testowa, bez wywołania LLM)."
+        )
+        logger.info("llm_stub_stream", model=resolved_model, reason="AI_TEST_STUB_LLM")
+        yield f"data: {stub.replace('\n', '\\n')}\n\n"
+        yield "data: [DONE]\n\n"
+        return
     provider = effective["provider"]
     logger.info("llm_called", model=resolved_model, llm_provider=provider, stream=True)
     if provider == "openai" and not (effective.get("api_key") or "").strip():

@@ -1,0 +1,11 @@
+{
+  "name": "ai-test-agent",
+  "private": true,
+  "scripts": {
+    "test:poc": "playwright test --config=playwright/playwright.config.js playwright/poc_manual_flow.spec.js",
+    "test:all": "playwright test --config=playwright/playwright.config.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.44.0"
+  }
+}
