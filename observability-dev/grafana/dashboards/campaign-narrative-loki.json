@@ -11,7 +11,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 9,
+  "version": 19,
   "refresh": "30s",
   "time": {
     "from": "now-7d",
@@ -86,7 +86,7 @@
             "type": "loki",
             "uid": "PD5A68A3BD6F8BA56"
           },
-          "expr": "{service=\"backend\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nGRACZ:\\n{{.user_text}}\\n\\nGM:\\n{{.assistant_text}}\"",
+          "expr": "{service=~\"backend|backend-dev\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nGRACZ:\\n{{.user_text}}\\n\\nGM:\\n{{.assistant_text}}\"",
           "queryType": "range",
           "legendFormat": ""
         }
@@ -123,7 +123,7 @@
             "type": "loki",
             "uid": "PD5A68A3BD6F8BA56"
           },
-          "expr": "{service=\"backend\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\"",
+          "expr": "{service=~\"backend|backend-dev\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\"",
           "queryType": "range",
           "legendFormat": ""
         }
@@ -160,7 +160,7 @@
             "type": "loki",
             "uid": "PD5A68A3BD6F8BA56"
           },
-          "expr": "{service=\"backend\"} | json | event=\"memory_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nPYTANIE:\\n{{.user_text}}\\n\\nOdpowiedz:\\n{{.assistant_text}}\"",
+          "expr": "{service=~\"backend|backend-dev\"} | json | event=\"memory_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nPYTANIE:\\n{{.user_text}}\\n\\nOdpowiedz:\\n{{.assistant_text}}\"",
           "queryType": "range",
           "legendFormat": ""
         }

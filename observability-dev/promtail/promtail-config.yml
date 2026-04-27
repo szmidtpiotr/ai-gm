@@ -13,10 +13,10 @@ scrape_configs:
     docker_sd_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 5s
-        filters:
-          - name: label
-            values: ["service=backend-dev", "service=frontend-dev"]
     relabel_configs:
+      - source_labels: ["__meta_docker_container_label_service"]
+        regex: "(backend-dev|frontend-dev)"
+        action: keep
       - source_labels: ["__meta_docker_container_name"]
         target_label: container
       - source_labels: ["__meta_docker_container_label_service"]

@@ -9,7 +9,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 5,
+  "version": 15,
   "refresh": "30s",
   "time": {
     "from": "now-30d",
@@ -19,15 +19,12 @@
     "list": [
       {
         "name": "campaign_id",
-        "type": "query",
-        "datasource": {
-          "type": "frser-sqlite-datasource",
-          "uid": "ai_gm_sqlite_story"
-        },
-        "query": "SELECT CAST(id AS TEXT) AS __value, CAST(id AS TEXT) AS __text FROM campaigns ORDER BY id DESC;",
-        "refresh": 2,
-        "includeAll": false,
-        "multi": false
+        "type": "textbox",
+        "query": ".+",
+        "current": {
+          "text": ".+",
+          "value": ".+"
+        }
       }
     ]
   },

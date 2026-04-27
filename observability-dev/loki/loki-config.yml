@@ -46,3 +46,6 @@ ruler:
 
 analytics:
   reporting_enabled: false
+
+frontend:
+  max_outstanding_per_tenant: 8192

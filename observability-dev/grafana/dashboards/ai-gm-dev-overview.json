@@ -2,19 +2,32 @@
   "title": "AI-GM DEV Overview",
   "uid": "ai-gm-dev-overview",
   "schemaVersion": 38,
-  "version": 1,
-  "refresh": "10s",
-  "time": { "from": "now-1h", "to": "now" },
+  "version": 11,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "panels": [
     {
       "id": 1,
       "title": "Backend DEV - Logi",
       "type": "logs",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 12 },
-      "datasource": { "type": "loki", "uid": "" },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
       "targets": [
         {
-          "datasource": { "type": "loki" },
+          "datasource": {
+            "type": "loki"
+          },
           "expr": "{job=\"ai-gm-dev\", service=\"backend-dev\"}",
           "refId": "A"
         }
@@ -30,11 +43,21 @@
       "id": 2,
       "title": "Frontend DEV - Logi nginx",
       "type": "logs",
-      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
-      "datasource": { "type": "loki", "uid": "" },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
       "targets": [
         {
-          "datasource": { "type": "loki" },
+          "datasource": {
+            "type": "loki"
+          },
           "expr": "{job=\"ai-gm-dev\", service=\"frontend-dev\"}",
           "refId": "A"
         }

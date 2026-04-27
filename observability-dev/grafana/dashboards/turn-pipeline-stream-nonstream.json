@@ -9,8 +9,8 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
-  "refresh": "10s",
+  "version": 11,
+  "refresh": "30s",
   "time": {
     "from": "now-6h",
     "to": "now"
@@ -24,7 +24,10 @@
           "type": "loki",
           "uid": "PD5A68A3BD6F8BA56"
         },
-        "query": "label_values(service)",
+        "query": {
+          "query": "label_values(service)",
+          "refId": "StandardVariableQuery"
+        },
         "refresh": 2,
         "includeAll": true,
         "multi": true,
@@ -32,7 +35,8 @@
           "selected": true,
           "text": "All",
           "value": "$__all"
-        }
+        },
+        "allValue": ".+"
       }
     ]
   },
