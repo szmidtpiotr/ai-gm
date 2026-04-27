@@ -1222,6 +1222,10 @@ window.renderCharacterSheetPanel = function () {
           <div class="sheet-backpack-heading">Plecak</div>
           <ul id="backpack-list" class="backpack-list"></ul>
         </div>
+        <div class="narrative-items hidden" id="narrative-items-section">
+          <div class="sheet-backpack-heading">Przedmioty fabularne</div>
+          <ul id="narrative-items-list" class="narrative-items-list"></ul>
+        </div>
       </div>
     </div>
 

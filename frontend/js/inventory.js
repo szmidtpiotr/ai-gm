@@ -106,6 +106,31 @@
         backpack.appendChild(li);
       }
     });
+
+    const narrativeSection = document.getElementById("narrative-items-section");
+    const narrativeList = document.getElementById("narrative-items-list");
+    if (narrativeSection && narrativeList) {
+      const narrativeItems = Array.isArray(window.state?.characterSheet?.narrative_items)
+        ? window.state.characterSheet.narrative_items
+        : [];
+      narrativeList.innerHTML = "";
+      if (narrativeItems.length > 0) {
+        narrativeItems.forEach((item) => {
+          if (!item || typeof item !== "object") return;
+          const li = document.createElement("li");
+          li.className = "narrative-item";
+          const label = esc(item.label || "Przedmiot");
+          const desc = item.description
+            ? `<span class="narrative-item-desc">${esc(item.description)}</span>`
+            : "";
+          li.innerHTML = `<span class="narrative-item-label">${label}</span>${desc}`;
+          narrativeList.appendChild(li);
+        });
+        narrativeSection.classList.remove("hidden");
+      } else {
+        narrativeSection.classList.add("hidden");
+      }
+    }
   };
 
   if (window.__inventoryEquipDelegationWired) return;

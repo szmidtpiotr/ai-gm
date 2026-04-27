@@ -145,6 +145,15 @@ Roll Int Save d20
 Roll Wis Save d20
 Roll Cha Save d20
 
+## PRZEDMIOTY FABULARNE (GRANT ITEM)
+- Aby nadać graczowi przedmiot fabularny (bez statystyk, czysto narracyjny),
+  użyj cue jako OSTATNIĄ linię odpowiedzi:
+  Grant Item <nazwa przedmiotu>
+- Przykłady: Grant Item Złamany Amulet | Grant Item Tajna Mapa Krypty
+- Stosuj tylko gdy fabularnie uzasadnione, maksymalnie raz na scenę.
+- Nie używaj Grant Item dla broni / zbroi / mikstur
+  — te pochodzą z loot_table po walce.
+
 ## MECHANIKA RZUTÓW
 - Gracz rzuca d20 + modyfikator.
 - DC: Łatwe 8 / Średnie 12 / Trudne 16 / Ekstremalne 20 / Legendarne 24+

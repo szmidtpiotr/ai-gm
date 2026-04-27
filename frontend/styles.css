@@ -2352,3 +2352,28 @@ body.campaign-death-active .campaign-death-screen {
 .btn-unequip:hover {
   background: var(--panel-2);
 }
+
+/* === 8E-5 Narrative items === */
+.narrative-items-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.narrative-item {
+  padding: 0.2rem 0;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--border, #eee);
+}
+
+.narrative-item-label {
+  font-weight: 500;
+  display: block;
+}
+
+.narrative-item-desc {
+  display: block;
+  color: var(--muted, #999);
+  font-size: 0.72rem;
+  font-style: italic;
+}
