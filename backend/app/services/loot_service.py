@@ -312,12 +312,40 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
             raise ValueError("inventory entry not found")
 
         conn.execute(
-            "UPDATE character_inventory SET equipped = 0 WHERE character_id = ? AND slot = ?",
+            "UPDATE character_inventory SET equipped = 0, slot = NULL WHERE character_id = ? AND slot = ?",
             (cid, s),
         )
         conn.execute(
             "UPDATE character_inventory SET equipped = 1, slot = ? WHERE id = ?",
             (s, iid),
+        )
+        conn.commit()
+
+    updated = [x for x in get_character_inventory(cid) if int(x["id"]) == iid]
+    if not updated:
+        raise ValueError("inventory entry not found")
+    return updated[0]
+
+
+def unequip_item(character_id: int, inventory_id: int) -> dict:
+    """Clear equipped flag and slot for one inventory row (8E-3)."""
+    cid = int(character_id)
+    iid = int(inventory_id)
+    with _conn() as conn:
+        ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
+        if not ch:
+            raise ValueError("character not found")
+
+        row = conn.execute(
+            "SELECT id FROM character_inventory WHERE id = ? AND character_id = ?",
+            (iid, cid),
+        ).fetchone()
+        if not row:
+            raise ValueError("inventory entry not found")
+
+        conn.execute(
+            "UPDATE character_inventory SET equipped = 0, slot = NULL WHERE id = ? AND character_id = ?",
+            (iid, cid),
         )
         conn.commit()
 

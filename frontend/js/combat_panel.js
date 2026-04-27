@@ -197,6 +197,9 @@
         await this._showLootPopupAsync(drop);
         this._pushLoot(drop);
       }
+      if (typeof window.refreshInventoryPanel === "function") {
+        window.refreshInventoryPanel();
+      }
       if (this._state) {
         this.showVictory(this._state);
       }
@@ -966,6 +969,9 @@
             if (pool.length > 0) {
               await this._showLootPopupAsync(pool);
               this._accumulatedLoot = pool.slice();
+            }
+            if (typeof window.refreshInventoryPanel === "function") {
+              window.refreshInventoryPanel();
             }
             this.showVictory(cs);
           }

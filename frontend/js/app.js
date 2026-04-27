@@ -31,7 +31,7 @@ window.loadUiPanelDefaults = async function () {
 };
 
 window.applyFoldState = function () {
-  const sections = ["stats", "skills", "identity"];
+  const sections = ["stats", "skills", "inventory", "identity"];
   const isMobile = typeof window.innerWidth === "number" && window.innerWidth < 768;
 
   sections.forEach((section) => {
@@ -1195,10 +1195,45 @@ window.renderCharacterSheetPanel = function () {
       </div>
     </div>
 
+    <div class="sheet-foldable-section" data-section="inventory">
+      <div class="sheet-section-header" data-fold-toggle="inventory" role="button" tabindex="0">
+        <h4 class="sheet-section-title">Ekwipunek</h4>
+        <span class="fold-icon" aria-hidden="true">▾</span>
+      </div>
+      <div class="sheet-section-body">
+        <div class="gold-display">
+          💰 <span id="gold-amount">—</span> GP
+        </div>
+        <div class="equipment-slots">
+          <div class="equip-slot" data-slot="main_hand">
+            <span class="slot-label">Główna ręka</span>
+            <div class="slot-item" id="slot-main_hand">—</div>
+          </div>
+          <div class="equip-slot" data-slot="off_hand">
+            <span class="slot-label">Pomocnicza ręka</span>
+            <div class="slot-item" id="slot-off_hand">—</div>
+          </div>
+          <div class="equip-slot" data-slot="armor">
+            <span class="slot-label">Zbroja</span>
+            <div class="slot-item" id="slot-armor">—</div>
+          </div>
+        </div>
+        <div class="backpack">
+          <div class="sheet-backpack-heading">Plecak</div>
+          <ul id="backpack-list" class="backpack-list"></ul>
+        </div>
+      </div>
+    </div>
+
     ${identityHtml}
   `;
 
   window.applyFoldState();
+
+  const cid = character && character.id != null ? Number(character.id) : 0;
+  if (cid && typeof window.loadInventory === "function") {
+    void window.loadInventory(cid);
+  }
 };
 
 window.loadCharacterSheet = async function (characterId) {

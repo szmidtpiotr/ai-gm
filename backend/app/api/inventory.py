@@ -13,8 +13,10 @@ _ITEM_TYPES = {"armor", "weapon", "consumable", "misc", "quest"}
 
 
 class EquipRequest(BaseModel):
+    """slot null/omit = unequip this row (8E-3)."""
+
     inventory_id: int
-    slot: str
+    slot: str | None = None
 
 
 class GoldDeltaRequest(BaseModel):
@@ -37,7 +39,11 @@ def get_inventory(character_id: int):
 @router.post("/inventory/{character_id}/equip")
 def post_inventory_equip(character_id: int, body: EquipRequest):
     try:
-        data = loot_service.equip_item(character_id, body.inventory_id, body.slot)
+        slot_raw = body.slot
+        if slot_raw is None or (isinstance(slot_raw, str) and not str(slot_raw).strip()):
+            data = loot_service.unequip_item(character_id, body.inventory_id)
+        else:
+            data = loot_service.equip_item(character_id, body.inventory_id, str(slot_raw))
         return {"ok": True, "data": data}
     except ValueError as e:
         msg = str(e).lower()

@@ -2264,3 +2264,91 @@ body.campaign-death-active .campaign-death-screen {
   opacity: 0;
   pointer-events: none;
 }
+
+/* === 8E-3 Inventory panel (player sheet) === */
+.gold-display {
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.35rem 0;
+  color: var(--text);
+}
+
+.equipment-slots {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+@media (max-width: 420px) {
+  .equipment-slots {
+    grid-template-columns: 1fr;
+  }
+}
+
+.equip-slot {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.3rem;
+  min-height: 48px;
+  font-size: 0.7rem;
+}
+
+.slot-label {
+  display: block;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.slot-item-name {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.sheet-backpack-heading {
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin: 0.35rem 0 0.2rem;
+  color: var(--text);
+}
+
+.backpack-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.backpack-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.item-qty {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.btn-equip,
+.btn-unequip {
+  margin-left: auto;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text);
+}
+
+.btn-equip:hover,
+.btn-unequip:hover {
+  background: var(--panel-2);
+}
