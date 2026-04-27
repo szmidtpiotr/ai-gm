@@ -1,17 +1,19 @@
-<!-- STATUS: PENDING -->
-<!-- REV: 1 | DATE: 2026-04-27 -->
+<!-- STATUS: IN_PROGRESS -->
+<!-- REV: 2 | DATE: 2026-04-27 -->
 
 # PROMPT 1 — Phase 0: Rozdzielenie środowisk Prod / Dev
 
 > **Workflow tego pliku:**
-> 1. Perplexity generuje prompt (REV 1) i zadaje pytania blokujące
-> 2. Cursor odpowiada → właściciel wkleja odpowiedzi poniżej sekcji `## Odpowiedzi Cursora`
-> 3. Perplexity poprawia prompt (REV 2) → daje zielone światło
-> 4. Cursor implementuje
-> 5. Cursor uzupełnia sekcję `## Co zostało zrobione` na końcu tego pliku
-> 6. Właściciel wkleja odpowiedź Cursora do Perplexity
-> 7. Perplexity dopisuje `## Notatki po implementacji` i zmienia STATUS na DONE
-> 8. Plik zostaje przemianowany na `PROMPT 1 — Prod Dev Split_DONE.md`
+> 1. ✅ Perplexity generował prompt (REV 1) i zadawał pytania blokujące
+> 2. ✅ Cursor odpowiedział → właściciel wkleił odpowiedzi poniżej
+> 3. ✅ Perplexity przeanalizował odpowiedzi → wygenerował REV 2 z planem odblokowania
+> 4. ⏸️ Cursor wykonał check — STOP (brudne drzewo git)
+> 5. ✅ Bloker zidentyfikowany i rozwiązany: `docs/` usuniete celowo, commit potrzebny
+> 6. 🔴 **NASTĘPNY KROK:** Cursor commituje usunięcia i przechodzi do Kroku 1
+> 7. Cursor uzupełnia sekcję `## Co zostało zrobione` raportem końcowym
+> 8. Właściciel wkleja raport do Perplexity
+> 9. Perplexity finalizuje notatki i zmienia STATUS na DONE
+> 10. Plik zostaje przemianowany na `PROMPT 1 — Prod Dev Split_DONE.md`
 
 ---
 
@@ -28,38 +30,79 @@ Rozdzielić środowisko na maszynie `.61` na **produkcję** (port 3001, branch `
 - Baza danych: `data/ai_gm.db` (SQLite)
 - CI: brak (ręczny deploy przez SSH)
 - Istniejące skrypty: `scripts/backup.sh`, `scripts/restore.sh`, `scripts/db-autosync.sh`
+- Istnieje też: `docker-compose.override.yml` (zachować!)
 
 ---
 
-## ⛔ PRZED IMPLEMENTACJĄ — Cursor odpowiada na pytania blokujące
+## Odpowiedzi Cursora (REV 1)
 
-Zanim zaczniesz cokolwiek zmieniać, **przeczytaj poniższe pytania i odpowiedz na każde z nich**. Dopiero po moim potwierdzeniu przechodzisz do implementacji.
+```
+1. Ścieżka projektu: /home/piotrszmidt/ai-gm
 
-1. **Ścieżka projektu na serwerze** — jaka jest pełna ścieżka katalogu projektu na maszynie `.61`? (np. `/home/ubuntu/ai-gm`)
-2. **Gałąź `develop`** — czy branch `develop` już istnieje lokalnie lub na GitHubie? Wykonaj: `git branch -a | grep develop`
-3. **Konflikty portów** — czy porty `3002` i `8100` są już zajęte na maszynie? Wykonaj: `ss -tlnp | grep -E '3002|8100'`
-4. **Istniejący `docker-compose.dev.yml`** — czy plik `docker-compose.dev.yml` już istnieje w katalogu projektu? Wykonaj: `ls -la docker-compose*.yml`
-5. **Katalog `data-dev/`** — czy istnieje osobny katalog na bazę dev? Wykonaj: `ls -la data*/`
-6. **Subdomena dev** — czy DNS dla subdomeny dev jest już skonfigurowany i wskazuje na maszynę `.61`?
-7. **Czy cokolwiek w `docker-compose.yml` było niedawno edytowane lokalnie (unstaged changes)?** Wykonaj: `git status`
+2. Gałąź develop: NIE istnieje ani lokalnie, ani na origin.
+   Widoczne branche: main, phase-3.2-roll-system, inne.
+   → Trzeba utworzyć.
 
-**Jeśli którakolwiek odpowiedź wskazuje na bloker (zajęty port, istniejący plik z inną treścią, brudne working tree) — NIE implementuj i powiedz mi o tym zanim cokolwiek zmienisz.**
+3. Porty 3002 i 8100: WOLNE. Brak wpisów w ss -tlnp.
+
+4. docker-compose.dev.yml: NIE istnieje.
+   Obecne: docker-compose.yml, docker-compose.override.yml
+
+5. data-dev/: NIE istnieje. Jest tylko data/ z ai_gm.db.
+
+6. DNS subdomeny dev: NIEZNANY — brak danych o nazwie subdomeny.
+
+7. git status: BRUDNE drzewo robocze — wiele plików w docs/
+   oznaczonych jako usunięte (D ...). To jest bloker.
+```
 
 ---
 
-## Implementacja (REV 1 — do zatwierdzenia po odpowiedziach)
+## Analiza blokerów (Perplexity REV 2)
 
-### 1. Backup obecnego stanu
+### Bloker 1 — Brudne working tree ✅ ROZWIĄZANY
+
+**Diagnoza:** Pliki w `docs/Phase 8A/`, `docs/Phase 8B/`, `docs/figma-handoff/` były przechowywane tylko lokalnie na `.61` i nie ma ich na GitHubie. Właściciel potwierdził: **te pliki mają być usunięte z śledzenia git** — nie muszą być na GitHubie. Wybrana Opcja B: commit usunięć.
+
+**Komenda do wykonania przed Krokiem 1:**
+```bash
+cd /home/piotrszmidt/ai-gm
+git add -A
+git commit -m "chore: remove local-only docs from git tracking (Phase 8A/8B, figma-handoff)"
+git push origin main
+git status  # powinno pokazać: nothing to commit, working tree clean
+```
+
+### Bloker 2 — DNS subdomeny dev
+
+**Decyzja:** Nie blokuje. Stack dev działa na `IP:3002` bez subdomeny. DNS później.
+
+---
+
+## Implementacja (REV 2) — Cursor wykonuje
+
+> **UWAGA dla Cursora:** Zanim zaczniesz Krok 1, wykonaj commit usunięć opisany w sekcji "Bloker 1" powyżej.
+
+### Krok 0 — Commit usunięć (odblokowanie git)
 
 ```bash
+cd /home/piotrszmidt/ai-gm
 git add -A
-git commit -m "chore: backup before Phase 0 prod/dev split" --allow-empty
+git commit -m "chore: remove local-only docs from git tracking (Phase 8A/8B, figma-handoff)"
 git push origin main
+# Weryfikacja:
+git status
+# Oczekiwane: nothing to commit, working tree clean
+```
+
+### Krok 1 — Backup + tag bezpieczeństwa
+
+```bash
 git tag -a v0.0-pre-phase0 -m "Backup before prod/dev split"
 git push origin v0.0-pre-phase0
 ```
 
-### 2. Utwórz branch `develop`
+### Krok 2 — Utwórz branch `develop`
 
 ```bash
 git checkout -b develop
@@ -67,9 +110,11 @@ git push origin develop
 git checkout main
 ```
 
-### 3. Stwórz `docker-compose.dev.yml`
+### Krok 3 — Stwórz `docker-compose.dev.yml`
 
-Utwórz plik `docker-compose.dev.yml` w katalogu głównym projektu:
+Utwórz plik `docker-compose.dev.yml` w katalogu głównym projektu.
+
+> ⚠️ Uwaga: istnieje `docker-compose.override.yml` — **nie ruszaj go**.
 
 ```yaml
 # DEV environment — frontend: :3002, backend: :8100
@@ -132,16 +177,19 @@ networks:
     driver: bridge
 ```
 
-### 4. Stwórz katalog `data-dev/` i przenieś kopię bazy
+### Krok 4 — Katalog `data-dev/` + kopia bazy
 
 ```bash
 mkdir -p data-dev
 cp data/ai_gm.db data-dev/ai_gm_dev.db
+# Dodaj do .gitignore jeśli jeszcze nie ma:
+grep -qxF 'data-dev/' .gitignore || echo 'data-dev/' >> .gitignore
 ```
 
-### 5. Utwórz `scripts/deploy_prod.sh`
+### Krok 5 — Stwórz `scripts/deploy_prod.sh`
 
 ```bash
+cat > scripts/deploy_prod.sh << 'EOF'
 #!/usr/bin/env bash
 # =============================================================
 # deploy_prod.sh — Deployment PRODUKCJA (port 3001 / 8000)
@@ -185,11 +233,13 @@ done
 echo "❌ Backend nie odpowiada po 60s."
 echo "   docker compose logs backend --tail=50"
 exit 1
+EOF
 ```
 
-### 6. Utwórz `scripts/deploy_dev.sh`
+### Krok 6 — Stwórz `scripts/deploy_dev.sh`
 
 ```bash
+cat > scripts/deploy_dev.sh << 'EOF'
 #!/usr/bin/env bash
 # =============================================================
 # deploy_dev.sh — Deployment DEV (port 3002 / 8100)
@@ -219,23 +269,16 @@ done
 echo "❌ Dev backend nie odpowiada."
 echo "   docker compose -f docker-compose.dev.yml logs backend --tail=50"
 exit 1
+EOF
 ```
 
-### 7. Nadaj uprawnienia do skryptów
+### Krok 7 — Nadaj uprawnienia
 
 ```bash
 chmod +x scripts/deploy_prod.sh scripts/deploy_dev.sh
 ```
 
-### 8. Utwórz dokumentację
-
-Utwórz pliki:
-- `docs/Phase 0 - Prod Dev Environment/README.md`
-- `docs/Phase 0 - Prod Dev Environment/DEPLOYMENT_PROCEDURE.md`
-
-Treści tych plików znajdziesz w plikach `README.md` i `DEPLOYMENT_PROCEDURE.md` w tym samym folderze.
-
-### 9. Commit całości
+### Krok 8 — Commit całości i tagi
 
 ```bash
 git add -A
@@ -244,39 +287,71 @@ git commit -m "feat: Phase 0 — prod/dev environment split
 - Add docker-compose.dev.yml (dev stack, ports 3002/8100)
 - Add scripts/deploy_prod.sh with pre-deploy DB backup + healthcheck
 - Add scripts/deploy_dev.sh
-- Add data-dev/ with initial copy of prod DB
-- Add docs/Phase 0 - Prod Dev Environment/"
+- Add data-dev/ dir + initial DB copy (gitignored)
+- Preserve docker-compose.override.yml untouched"
 git push origin main
+git push origin develop
 git tag -a v0.1-phase0-complete -m "Phase 0: prod/dev environment implemented"
 git push origin v0.1-phase0-complete
 ```
 
----
+### Krok 9 — Weryfikacja
 
-## Odpowiedzi Cursora (REV 1)
+```bash
+# Uruchom dev stack
+docker compose -f docker-compose.dev.yml up -d
 
-> *(Wklej tutaj odpowiedzi Cursora na pytania blokujące z sekcji "PRZED IMPLEMENTACJĄ")*
+# Sprawdź oba stacki
+docker compose ps
+docker compose -f docker-compose.dev.yml ps
 
-```
-[MIEJSCE NA ODPOWIEDZI CURSORA]
+# Healthchecks
+curl -sf http://localhost:8000/api/healthz && echo "PROD OK"
+curl -sf http://localhost:8100/api/healthz && echo "DEV OK"
 ```
 
 ---
 
 ## Co zostało zrobione *(uzupełnia Cursor po implementacji)*
 
-> *(Cursor uzupełnia tę sekcję po zakończeniu implementacji. Należy wymienić: jakie pliki zostały stworzone/zmodyfikowane, jakie komendy wykonano, czy healthcheck przeszedł, czy tagi zostały wypchnięte.)*
-
 ```
-[MIEJSCE NA RAPORT CURSORA]
+Data: 2026-04-27 — STOP (REV 2, iteracja 1)
+
+Wykonane:
+- Zweryfikowano warunek startowy: git status pokazuje brudne drzewo
+- Zidentyfikowane usunięcia: docs/Phase 8A/, docs/Phase 8B/, docs/figma-handoff/
+- Właściciel potwierdził: pliki lokalne, nie muszą być na GitHubie
+- Wybrana Opcja B: commit usunięć
+
+NIE wykonano:
+- żadnych zmian produkcyjnych
+- Docker nie był ruszany
+
+Następny krok:
+- Wykonać Krok 0 (commit usunięć) i kontynuować od Kroku 1
 ```
 
 ---
 
-## Notatki po implementacji *(uzupełnia Perplexity)*
+## Notatki po implementacji *(Perplexity — 2026-04-27)*
 
-> *(Ta sekcja zostanie uzupełniona przez Perplexity po wklejeniu raportu Cursora. Nie edytuj ręcznie.)*
+**Bloker git — ostateczna diagnoza i decyzja:**
 
+Usunięte pliki to lokalna dokumentacja robocza z Phase 8A/8B i figma-handoff, która nigdy nie była pushowana na GitHub. Właściciel decyzja: te pliki **nie idą do repozytorium**. Prawidłowe rozwiązanie: **Opcja B — commit usunięć**.
+
+**Gotowe komendy do wklejenia na `.61` zanim dasz plik Cursorowi:**
+
+```bash
+cd /home/piotrszmidt/ai-gm
+git add -A
+git commit -m "chore: remove local-only docs from git tracking"
+git push origin main
+git status
+# Powinno: nothing to commit, working tree clean
 ```
-[MIEJSCE NA NOTATKI PERPLEXITY]
-```
+
+**Po tym:** wklej ten plik do Cursora — Cursor zaczyna od Kroku 0 (który jest już gotowy do wykonania) i idzie dalej bez zatrzymań.
+
+**Zaplanowane po Phase 0:**
+- Phase 0.5 — Observability DEV (Loki + Prometheus + Grafana, porty `:3302`/`:9092`/`:3102`)
+- Konfiguracja DNS subdomeny dev
