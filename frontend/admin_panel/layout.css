@@ -1801,3 +1801,32 @@ pre.copy-block {
   width: 3.5rem;
   text-align: right;
 }
+
+/* Phase 8E-2 — Admin: UI panel defaults */
+.ui-settings-form {
+  max-width: 520px;
+  margin-top: 12px;
+}
+
+.ui-settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ui-settings-label {
+  min-width: 130px;
+  font-weight: 600;
+}
+
+.ui-settings-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}

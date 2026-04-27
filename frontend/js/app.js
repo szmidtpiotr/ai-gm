@@ -4,6 +4,79 @@ window.state.sheetPanelOpen = window.state.sheetPanelOpen ?? false;
 /** `null` = unknown (legacy session without flag): keep LLM controls visible. `false` = non-admin. */
 window.state.playerIsAdmin = window.state.playerIsAdmin ?? null;
 window.API_BASE_URL = window.API_BASE_URL || "/api";
+
+/** Phase 8E-2 — server defaults for foldable sheet sections (filled by loadUiPanelDefaults). */
+window._uiPanelDefaults = null;
+
+window.loadUiPanelDefaults = async function loadUiPanelDefaults() {
+  try {
+    const base = String(window.API_BASE_URL || "/api").replace(/\/+$/, "");
+    const r = await fetch(`${base}/settings/ui`);
+    const data = await r.json();
+    if (data && data.ok && data.data && data.data.panels && typeof data.data.panels === "object") {
+      window._uiPanelDefaults = data.data.panels;
+    }
+  } catch (_e) {
+    window._uiPanelDefaults = null;
+  }
+};
+
+function applyFoldState() {
+  const sections = ["stats", "skills", "identity"];
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
+  sections.forEach((section) => {
+    const el = document.querySelector(`#sheet-panel [data-section="${section}"]`);
+    if (!el) {
+      return;
+    }
+
+    const stored = localStorage.getItem(`ui_fold_${section}`);
+    let state;
+    if (stored) {
+      state = stored;
+    } else if (window._uiPanelDefaults && window._uiPanelDefaults[section]) {
+      state = window._uiPanelDefaults[section];
+    } else if (isMobile && section !== "stats") {
+      state = "collapsed";
+    } else {
+      state = "expanded";
+    }
+
+    const collapsed = state === "collapsed";
+    el.classList.toggle("fold-collapsed", collapsed);
+    const icon = el.querySelector(".fold-icon");
+    if (icon) {
+      icon.textContent = collapsed ? "\u25b8" : "\u25be";
+    }
+  });
+}
+
+window.applyFoldState = applyFoldState;
+
+if (!window._sheetFoldClickBound) {
+  window._sheetFoldClickBound = true;
+  document.addEventListener("click", (e) => {
+    const toggle = e.target.closest("[data-fold-toggle]");
+    if (!toggle || !toggle.closest("#sheet-panel")) {
+      return;
+    }
+    const section = toggle.getAttribute("data-fold-toggle");
+    if (!section) {
+      return;
+    }
+    const wrapper = document.querySelector(`#sheet-panel [data-section="${section}"]`);
+    if (!wrapper) {
+      return;
+    }
+    const isCollapsed = wrapper.classList.toggle("fold-collapsed");
+    const icon = wrapper.querySelector(".fold-icon");
+    if (icon) {
+      icon.textContent = isCollapsed ? "\u25b8" : "\u25be";
+    }
+    localStorage.setItem(`ui_fold_${section}`, isCollapsed ? "collapsed" : "expanded");
+  });
+}
 window.SHEET_PANEL_STORAGE_KEY = "ai-gm:sheetPanelOpen";
 
 window.SHEET_STATS = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"];
@@ -1063,8 +1136,13 @@ window.renderCharacterSheetPanel = function () {
   const identityHtml =
     appearance || personality || flaw
       ? `
-    <div class="sheet-identity-block sheet-fluff">
-      <h4 class="sheet-section-title">Postać</h4>
+    <div class="sheet-foldable-section" data-section="identity">
+      <div class="sheet-section-header" data-fold-toggle="identity" role="button" tabindex="0">
+        <h4 class="sheet-section-title">Postać</h4>
+        <span class="fold-icon" aria-hidden="true">▾</span>
+      </div>
+      <div class="sheet-section-body">
+        <div class="sheet-identity-block sheet-fluff">
       ${
         appearance
           ? `<div class="sheet-identity-field"><span class="sheet-identity-label">Wygląd</span><p class="sheet-identity-text">${window.escapeHtml(appearance)}</p></div>`
@@ -1080,6 +1158,8 @@ window.renderCharacterSheetPanel = function () {
           ? `<div class="sheet-identity-field"><span class="sheet-identity-label">Wada</span><p class="sheet-identity-text">${window.escapeHtml(flaw)}</p></div>`
           : ""
       }
+        </div>
+      </div>
     </div>`
       : "";
 
@@ -1107,18 +1187,30 @@ window.renderCharacterSheetPanel = function () {
       </div>
     ` : ""}
 
-    <div>
-      <h4 class="sheet-section-title">Statystyki</h4>
-      <div class="sheet-stats-grid">${statsHtml}</div>
+    <div class="sheet-foldable-section" data-section="stats">
+      <div class="sheet-section-header" data-fold-toggle="stats" role="button" tabindex="0">
+        <h4 class="sheet-section-title">Statystyki</h4>
+        <span class="fold-icon" aria-hidden="true">▾</span>
+      </div>
+      <div class="sheet-section-body">
+        <div class="sheet-stats-grid">${statsHtml}</div>
+      </div>
     </div>
 
-    <div>
-      <h4 class="sheet-section-title">Umiejętności</h4>
-      <div class="sheet-skills-grid">${skillsHtml}</div>
+    <div class="sheet-foldable-section" data-section="skills">
+      <div class="sheet-section-header" data-fold-toggle="skills" role="button" tabindex="0">
+        <h4 class="sheet-section-title">Umiejętności</h4>
+        <span class="fold-icon" aria-hidden="true">▾</span>
+      </div>
+      <div class="sheet-section-body">
+        <div class="sheet-skills-grid">${skillsHtml}</div>
+      </div>
     </div>
 
     ${identityHtml}
   `;
+
+  applyFoldState();
 };
 
 window.loadCharacterSheet = async function (characterId) {
@@ -1149,6 +1241,10 @@ window.bindCharacterSheetPanel = function () {
 };
 
 window.initCharacterSheetPanel = async function () {
+  if (typeof window.loadUiPanelDefaults === "function") {
+    await window.loadUiPanelDefaults();
+  }
+
   window.installApiDebugTracker();
   window.bindHistorySummaryButton();
   window.bindDebugSnapshotButton();
@@ -1179,6 +1275,6 @@ if (typeof window.loadCharacters === "function") {
 
 document.addEventListener("DOMContentLoaded", () => {
   setTimeout(() => {
-    window.initCharacterSheetPanel();
+    void window.initCharacterSheetPanel();
   }, 0);
 });

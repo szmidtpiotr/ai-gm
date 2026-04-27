@@ -2229,3 +2229,38 @@ body.campaign-death-active .campaign-death-screen {
   align-self: flex-start;
   max-width: min(100%, 640px);
 }
+
+/* === Phase 8E-2: foldable sheet sections (#sheet-panel) === */
+#sheet-panel .sheet-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding: 0.25rem 0;
+  border-radius: 4px;
+}
+
+#sheet-panel .sheet-section-header:hover .sheet-section-title {
+  opacity: 0.75;
+}
+
+#sheet-panel .fold-icon {
+  font-size: 0.7rem;
+  color: var(--muted, #6b6050);
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}
+
+#sheet-panel .sheet-section-body {
+  overflow: hidden;
+  max-height: 800px;
+  opacity: 1;
+  transition: max-height 280ms ease, opacity 200ms ease;
+}
+
+#sheet-panel .sheet-foldable-section.fold-collapsed .sheet-section-body {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
