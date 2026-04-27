@@ -10,8 +10,14 @@ cd "$REPO_DIR"
 echo "🔍 [1/5] Sprawdzanie gałęzi..."
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 if [ "$CURRENT_BRANCH" != "main" ]; then
-  echo "❌ BŁĄD: Jesteś na , a nie main."
+  echo "❌ BŁĄD: Jesteś na '$CURRENT_BRANCH', a nie 'main'."
   echo "   Wykonaj: git checkout main && git pull origin main"
+  exit 1
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "❌ BŁĄD: Masz niezacommitowane zmiany."
+  echo "   Zacommituj/stashuj je przed deployem."
   exit 1
 fi
 
