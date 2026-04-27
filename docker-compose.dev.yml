@@ -41,6 +41,8 @@ services:
       - ai-gm-dev
 
   frontend:
+    labels:
+      - service=frontend-dev
     image: nginx:alpine
     restart: unless-stopped
     ports:
