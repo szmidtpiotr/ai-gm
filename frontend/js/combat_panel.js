@@ -270,6 +270,39 @@
      * Nie wywołuj `window.triggerCombatNarration` ani `sendMessage` z panelu poza tą metodą.
      */
     async _sendCombatNarrativeFollowUp(dbUserLine) {
+      const queueNarrationAfterCurrentRequest = () => {
+        const line = String(dbUserLine || "").trim();
+        if (!line) return;
+        window.__queuedCombatNarrationLine = line;
+        if (window.__queuedCombatNarrationTimer) return;
+        const flush = async () => {
+          if (window.chatRequestState?.inFlight) {
+            window.__queuedCombatNarrationTimer = window.setTimeout(flush, 80);
+            return;
+          }
+          window.__queuedCombatNarrationTimer = null;
+          const queued = String(window.__queuedCombatNarrationLine || "").trim();
+          window.__queuedCombatNarrationLine = null;
+          if (!queued) return;
+          if (typeof window.triggerCombatNarration === "function") {
+            await window.triggerCombatNarration(queued);
+            return;
+          }
+          if (typeof window.sendMessage !== "function") return;
+          const { inputEl } = window.getEls ? window.getEls() : {};
+          if (inputEl) inputEl.value = "";
+          window.__pendingNarrativeUserTextForApi = queued;
+          window.__suppressNextUserBubbleForGm = true;
+          await window.sendMessage();
+        };
+        window.__queuedCombatNarrationTimer = window.setTimeout(flush, 80);
+      };
+
+      if (window.chatRequestState?.inFlight) {
+        queueNarrationAfterCurrentRequest();
+        return;
+      }
+
       if (typeof window.triggerCombatNarration === "function") {
         await window.triggerCombatNarration(dbUserLine);
         return;
