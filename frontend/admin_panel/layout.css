@@ -2249,6 +2249,59 @@ pre.copy-block {
 .rules-panel-section h4 {
   color: var(--accent);
 }
+
+/* Multi-select dropdown styling */
+select[multiple] {
+  min-height: 120px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 14px;
+}
+
+select[multiple] option {
+  padding: 6px 8px;
+  margin: 2px 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+select[multiple] option:hover {
+  background: var(--panel-2);
+}
+
+select[multiple] option:checked {
+  background: var(--accent-light);
+  color: var(--text);
+}
+
+select[multiple] option:checked::before {
+  content: "✓ ";
+}
+
+/* Custom rule rows */
+.custom-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.custom-rule-row input {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* Rules values container */
+#add-rules-values,
+#edit-rules-values {
+  padding: 8px;
+  background: var(--panel-2);
+  border-radius: 6px;
+  margin-top: 8px;
+}
 .badge-blue {
   background: #dbeafe;
   color: #1e40af;
