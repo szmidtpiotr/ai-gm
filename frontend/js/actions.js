@@ -1173,6 +1173,9 @@ window.sendMessage = async function () {
         memoryTurn: true
       });
       await window.loadTurns(window.state.selectedCampaignId);
+      if (typeof window.setShowArchiveBubbles === 'function') {
+        window.setShowArchiveBubbles(true);
+      }
     } catch (e) {
       if (requestId !== window.chatRequestState.requestId) return;
       window.removeThinkingBubble();
@@ -1276,6 +1279,11 @@ window.sendMessage = async function () {
         created_at: data.created_at || clientCreatedAt
       });
       await window.loadTurns(window.state.selectedCampaignId);
+      // Po odświeżeniu czatu helpme znów ma klasę „archiwum” — pokaż dymki aż do
+      // kolejnego wysłania narracji (setShowArchiveBubbles(false) w głównym sendTurn).
+      if (typeof window.setShowArchiveBubbles === 'function') {
+        window.setShowArchiveBubbles(true);
+      }
     } catch (e) {
       if (requestId !== window.chatRequestState.requestId) return;
       window.removeThinkingBubble();
