@@ -1325,8 +1325,11 @@ function openLocationEditModal(host, row, allLocations) {
       <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea id="edit-desc" rows="2">${row.description || ""}</textarea></label>
       
       <div class="field" style="grid-column:1/-1;">
-        <span>Rules <em class="muted">(multi-select)</em></span>
-        <select id="edit-rules" multiple style="width:100%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+        <span>Rules</span>
+        <div class="multi-select-help" style="font-size:0.85em;color:var(--muted);margin-bottom:4px;">
+          💡 <strong>Ctrl+Click</strong> (Win) or <strong>Cmd+Click</strong> (Mac) to select multiple
+        </div>
+        <select id="edit-rules" multiple size="6" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
           ${LOCATION_RULES_DEFINITION.map(def => `
             <option value="${def.key}" ${currentRules[def.key] !== undefined ? "selected" : ""}>
               ${def.label} ${def.type !== "boolean" && currentRules[def.key] !== undefined ? `(${currentRules[def.key]})` : ""}
@@ -1359,8 +1362,11 @@ function openLocationEditModal(host, row, allLocations) {
       </div>
 
       <div class="field" style="grid-column:1/-1;">
-        <span>Enemies <em class="muted">(multi-select)</em></span>
-        <select id="edit-enemies" multiple style="width:100%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+        <span>Enemies</span>
+        <div class="multi-select-help" style="font-size:0.85em;color:var(--muted);margin-bottom:4px;">
+          💡 <strong>Ctrl+Click</strong> (Win) or <strong>Cmd+Click</strong> (Mac) to select multiple
+        </div>
+        <select id="edit-enemies" multiple size="6" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
           ${enemiesList.length === 0 ? '<option disabled>No enemies available</option>' : 
             enemiesList.map(e => `<option value="${e.key}" ${selectedEnemies.has(e.key) ? "selected" : ""}>${e.label} (${e.key})</option>`).join("")}
         </select>
@@ -1536,8 +1542,11 @@ function mountLocations(host) {
       <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea data-field="description" rows="2"></textarea></label>
       
       <div class="field" style="grid-column:1/-1;">
-        <span>Rules <em class="muted">(hold Ctrl/Cmd to select multiple)</em></span>
-        <select id="add-rules" multiple style="width:100%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+        <span>Rules</span>
+        <div class="multi-select-help" style="font-size:0.85em;color:var(--muted);margin-bottom:4px;">
+          💡 <strong>Ctrl+Click</strong> (Win) or <strong>Cmd+Click</strong> (Mac) to select multiple. Click again to deselect.
+        </div>
+        <select id="add-rules" multiple size="6" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
           ${LOCATION_RULES_DEFINITION.map(def => `<option value="${def.key}">${def.label} ${def.type !== "boolean" ? `(default: ${def.default})` : ""} — ${def.description}</option>`).join("")}
         </select>
         <div id="add-rules-values" style="margin-top:8px;"></div>
@@ -1556,8 +1565,11 @@ function mountLocations(host) {
       </div>
 
       <div class="field" style="grid-column:1/-1;">
-        <span>Enemies <em class="muted">(hold Ctrl/Cmd to select multiple)</em></span>
-        <select id="add-enemies" multiple style="width:100%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+        <span>Enemies</span>
+        <div class="multi-select-help" style="font-size:0.85em;color:var(--muted);margin-bottom:4px;">
+          💡 <strong>Ctrl+Click</strong> (Win) or <strong>Cmd+Click</strong> (Mac) to select multiple enemies
+        </div>
+        <select id="add-enemies" multiple size="6" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
           <option disabled>Loading enemies...</option>
         </select>
       </div>
