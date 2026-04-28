@@ -8,8 +8,15 @@ const FALLBACK = {
 };
 
 function validate(raw, history = []) {
-  if (raw == null || raw === undefined) {
-    console.warn("[validator] null/undefined action — fallback");
+  /* LLM może zwrócić: null, undefined, pusty string, lub pusty obiekt przy błędzie. */
+  const isEmptyLike =
+    raw == null ||
+    raw === undefined ||
+    (typeof raw === "string" && !raw.trim()) ||
+    (typeof raw === "object" && !Array.isArray(raw) && Object.keys(raw).length === 0);
+
+  if (isEmptyLike) {
+    console.warn("[validator] null/undefined/empty action — fallback", { type: typeof raw });
     /* Przy pustym planie (np. brak LLM_API_URL) wait_for_gm_response zabija run (pusty #chat). */
     if (!history.length) {
       return {
