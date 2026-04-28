@@ -1368,7 +1368,7 @@ function openLocationEditModal(host, row, allLocations) {
         </div>
         <select id="edit-enemies" multiple size="6" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
           ${enemiesList.length === 0 ? '<option disabled>No enemies available</option>' : 
-            enemiesList.map(e => `<option value="${e.key}" ${selectedEnemies.has(e.key) ? "selected" : ""}>${e.label} (${e.key})</option>`).join("")}
+            enemiesList.slice().sort((a, b) => a.label.localeCompare(b.label)).map(e => `<option value="${e.key}" ${selectedEnemies.has(e.key) ? "selected" : ""}>${e.label} (${e.key})</option>`).join("")}
         </select>
       </div>
 
@@ -1627,7 +1627,7 @@ function mountLocations(host) {
     if (enemiesListCache.length === 0) {
       enemiesSelect.innerHTML = "<option disabled>No active enemies. Create enemies in Enemies tab first.</option>";
     } else {
-      enemiesSelect.innerHTML = enemiesListCache.map(e => `<option value="${e.key}">${e.label} (${e.key})</option>`).join("");
+      enemiesSelect.innerHTML = enemiesListCache.slice().sort((a, b) => a.label.localeCompare(b.label)).map(e => `<option value="${e.key}">${e.label} (${e.key})</option>`).join("");
     }
   }, 100);
 
