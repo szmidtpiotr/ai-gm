@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.api import turns as turns_api
 from app.main import app
-from app.services.location_intent_parser import LocationIntent
+from app.services.location_intent_parser import FALLBACK_PARSER_PROMPT, LocationIntent
 from app.services.location_validator import validate_move
 
 
@@ -73,6 +73,10 @@ def _gm_json(label: str, key: str | None = None) -> str:
     return json.dumps({"narrative": f"Idziesz do {label}.", "location_intent": intent}, ensure_ascii=False)
 
 
+def _gm_fenced_json(label: str, key: str | None = None) -> str:
+    return f"```json\n{_gm_json(label, key)}\n```"
+
+
 def test_hook_skips_validation_when_integrity_disabled():
     conn = _conn()
     try:
@@ -113,16 +117,43 @@ def test_hook_updates_current_location_on_fuzzy_match():
         conn.close()
 
 
+def test_hook_accepts_markdown_fenced_json_response():
+    conn = _conn()
+    try:
+        campaign_id = 88109
+        session_id = _session(conn, campaign_id)
+        loc_id = _location(conn, "hook_fenced_karczma", "Karczma Fenced")
+        _set_flag(conn, "location_integrity_enabled", "1")
+
+        out = turns_api._process_location_intent(
+            conn,
+            campaign_id,
+            _gm_fenced_json("Karczma Fenced", "hook_fenced_karczma"),
+        )
+
+        assert "LOCATION_BLOCKED" not in out
+        row = conn.execute(
+            "SELECT current_location_id FROM game_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        assert row["current_location_id"] == loc_id
+    finally:
+        conn.close()
+
+
 def test_validate_move_auto_create_unknown_location():
+    import time
+
     conn = _conn()
     try:
         campaign_id = 88103
         session_id = _session(conn, campaign_id)
         _set_flag(conn, "location_auto_create_enabled", "1")
+        target_label = f"Nowa Wieza Auto Create {time.time_ns()}"
 
         result = validate_move(
             session_id,
-            LocationIntent(action="move", target_label="Nowa Wieza Auto Create"),
+            LocationIntent(action="move", target_label=target_label),
             campaign_id=campaign_id,
         )
 
@@ -238,3 +269,10 @@ def test_location_integrity_log_records_successful_moves():
         assert after == before + 1
     finally:
         conn.close()
+
+
+def test_fallback_parser_prompt_escapes_json_braces():
+    prompt = FALLBACK_PARSER_PROMPT.format(text="Wchodzę do karczmy")
+
+    assert '"moved"' in prompt
+    assert "Wchodzę do karczmy" in prompt
