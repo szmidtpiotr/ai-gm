@@ -8,6 +8,7 @@ const SUB_TABS = [
   { id: "dc", label: "DC" },
   { id: "weapons", label: "Weapons" },
   { id: "enemies", label: "Enemies" },
+  { id: "locations", label: "Locations" },
   { id: "conditions", label: "Conditions" },
   { id: "items", label: "Przedmioty" },
   { id: "consumables", label: "Consumables" },
@@ -1137,6 +1138,341 @@ async function refreshConditions(host) {
     showToast(parseApiError(e, "Failed to load conditions."), "error");
     renderTable(tableHost, [], [], {});
   }
+}
+
+// ============ LOCATIONS ============
+function mountLocations(host) {
+  const root = el("div", "admin-subpanel-inner");
+  let locationsData = [];
+  let enemiesList = [];
+  let editingId = null;
+  let selectedEnemyKeys = [];
+
+  // Header
+  const header = el("div", "section-header");
+  header.innerHTML = `<h3>Locations</h3><p class="muted">Manage game locations (macro/sub) with enemies and rules.</p>`;
+  root.appendChild(header);
+
+  // Tree view
+  const treeSection = el("div", "locations-tree-section");
+  treeSection.innerHTML = `<h4>Location Tree</h4><div id="loc-tree"></div>`;
+  root.appendChild(treeSection);
+
+  // Form section
+  const formSection = el("div", "locations-form-section");
+  formSection.innerHTML = `
+    <h4 id="loc-form-title">Add Location</h4>
+    <div class="add-form-grid">
+      <label class="field"><span>Key (auto)</span><input id="loc-key" type="text" placeholder="auto-from-label" /></label>
+      <label class="field"><span>Label *</span><input id="loc-label" type="text" /></label>
+      <label class="field"><span>Type</span>
+        <select id="loc-type">
+          <option value="macro">Macro (top-level)</option>
+          <option value="sub">Sub (under macro)</option>
+        </select>
+      </label>
+      <label class="field"><span>Parent (for sub)</span>
+        <select id="loc-parent"><option value="">— None (macro) —</option></select></label>
+      <label class="field add-form-span-2"><span>Description</span><textarea id="loc-desc" rows="2"></textarea></label>
+      <label class="field add-form-span-2"><span>Rules (JSON or text)</span>
+        <textarea id="loc-rules" rows="2" placeholder='{"no_combat": true}'></textarea></label>
+      <div id="loc-rules-error" class="field-error add-form-span-2" style="display:none;color:#dc2626;"></div>
+      <label class="field"><span>Active</span><input id="loc-active" type="checkbox" checked /></label>
+    </div>
+    <div class="enemy-assignment" style="margin:12px 0;padding:12px;background:#f8fafc;border-radius:6px;">
+      <strong>Enemies in this location:</strong>
+      <div id="loc-enemy-tags" style="margin:8px 0;display:flex;flex-wrap:wrap;gap:4px;"></div>
+      <div style="display:flex;gap:8px;">
+        <select id="loc-enemy-select" style="flex:1;"><option value="">— Select enemy —</option></select>
+        <button type="button" class="secondary-btn" id="loc-add-enemy">+ Add</button>
+      </div>
+      <div class="muted" style="margin-top:4px;font-size:0.85em;">NPC: assigning available in Phase 9</div>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="primary-btn" id="loc-save">Save</button>
+      <button type="button" class="secondary-btn" id="loc-cancel">Cancel</button>
+      <button type="button" class="danger-btn" id="loc-delete" style="display:none;margin-left:auto;">Delete</button>
+    </div>
+  `;
+  root.appendChild(formSection);
+
+  // Flags section
+  const flagsSection = el("div", "locations-flags-section");
+  flagsSection.style.cssText = "background:#f8fafc;padding:12px;border-radius:6px;margin:16px 0;";
+  flagsSection.innerHTML = `
+    <h4>Location Integrity Flags</h4>
+    <div style="display:grid;gap:8px;margin:8px 0;">
+      <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+        <span>Location Integrity enabled</span><input type="checkbox" id="flag-integrity" checked />
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+        <span>Parser JSON (Option A)</span><input type="checkbox" id="flag-parser-json" checked />
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+        <span>Fallback Parser (Option B)</span><input type="checkbox" id="flag-parser-fallback" checked />
+      </label>
+    </div>
+    <div id="flags-info" class="muted" style="font-size:0.85em;margin:8px 0;">Global defaults: ON / ON / ON</div>
+    <div style="display:flex;gap:8px;">
+      <button type="button" class="secondary-btn" id="flags-reset">Reset to global</button>
+      <button type="button" class="primary-btn" id="flags-save">Save</button>
+    </div>
+  `;
+  root.appendChild(flagsSection);
+
+  // Log section
+  const logSection = el("div", "locations-log-section");
+  logSection.innerHTML = `
+    <h4>Location Integrity Log</h4>
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+      <input type="date" id="log-since" /><input type="date" id="log-until" />
+      <button type="button" class="secondary-btn" id="log-refresh">Refresh</button>
+    </div>
+    <div id="loc-log-table" class="table-wrap"><p class="muted">Select date range and click Refresh to view logs.</p></div>
+  `;
+  root.appendChild(logSection);
+
+  host.appendChild(root);
+
+  // Elements
+  const treeHost = treeSection.querySelector("#loc-tree");
+  const formTitle = formSection.querySelector("#loc-form-title");
+  const keyInput = formSection.querySelector("#loc-key");
+  const labelInput = formSection.querySelector("#loc-label");
+  const typeSelect = formSection.querySelector("#loc-type");
+  const parentSelect = formSection.querySelector("#loc-parent");
+  const descInput = formSection.querySelector("#loc-desc");
+  const rulesInput = formSection.querySelector("#loc-rules");
+  const rulesError = formSection.querySelector("#loc-rules-error");
+  const activeCheck = formSection.querySelector("#loc-active");
+  const enemyTags = formSection.querySelector("#loc-enemy-tags");
+  const enemySelect = formSection.querySelector("#loc-enemy-select");
+  const saveBtn = formSection.querySelector("#loc-save");
+  const cancelBtn = formSection.querySelector("#loc-cancel");
+  const deleteBtn = formSection.querySelector("#loc-delete");
+  const flagsInfo = flagsSection.querySelector("#flags-info");
+  const logTable = logSection.querySelector("#loc-log-table");
+
+  // Helpers
+  function slugify(text) {
+    if (!text) return "";
+    return text.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "_").substring(0, 50);
+  }
+  function validateJson(value) {
+    if (!value || !value.trim()) return { valid: true };
+    try { JSON.parse(value); return { valid: true }; }
+    catch (e) { return { valid: false, error: e.message }; }
+  }
+  function renderEnemyTags() {
+    if (!selectedEnemyKeys.length) { enemyTags.innerHTML = "<em class='muted'>No enemies assigned</em>"; return; }
+    enemyTags.innerHTML = selectedEnemyKeys.map(k => `<span class="enemy-tag">${k}<span class="remove-enemy" data-key="${k}">×</span></span>`).join("");
+  }
+  function updateParentSelect() {
+    const macros = locationsData.filter(l => l.location_type === "macro" || !l.parent_id);
+    parentSelect.innerHTML = '<option value="">— None (macro) —</option>' + macros.map(m => `<option value="${m.id}">${m.label} (${m.key})</option>`).join("");
+  }
+  function buildTree() {
+    const macros = locationsData.filter(l => l.location_type === "macro" || !l.parent_id);
+    const subs = locationsData.filter(l => l.location_type === "sub" && l.parent_id);
+    if (!macros.length) { treeHost.innerHTML = "<p class='muted'>No locations. Use the form below to add the first one.</p>"; return; }
+    let html = "<div class='location-tree'><ul>";
+    for (const m of macros) {
+      const children = subs.filter(s => s.parent_id === m.id);
+      const cls = m.is_active ? "" : "inactive";
+      html += `<li><div class="loc-node ${cls}" data-id="${m.id}">🏛️ <strong>${m.label}</strong> <code>${m.key}</code> <span class="badge">macro</span>` +
+              `<button class="edit-loc" data-id="${m.id}">Edit</button></div>`;
+      if (children.length) {
+        html += "<ul class='sub-locs'>";
+        for (const c of children) {
+          const ccls = c.is_active ? "" : "inactive";
+          html += `<li><div class="loc-node ${ccls}" data-id="${c.id}">📍 ${c.label} <code>${c.key}</code> <span class="badge sub">sub</span>` +
+                  `<button class="edit-loc" data-id="${c.id}">Edit</button></div></li>`;
+        }
+        html += "</ul>";
+      }
+      html += "</li>";
+    }
+    const orphans = subs.filter(s => !macros.some(m => m.id === s.parent_id));
+    if (orphans.length) {
+      html += `<li style="margin-top:8px;border-top:1px dashed #475569;padding-top:8px;"><em class="muted">Orphan sub-locations:</em><ul class="sub-locs">`;
+      for (const o of orphans) {
+        html += `<li><div class="loc-node" data-id="${o.id}">📍 ${o.label} <code>${o.key}</code> <span class="badge sub">orphan sub</span>` +
+                `<button class="edit-loc" data-id="${o.id}">Edit</button></div></li>`;
+      }
+      html += "</ul></li>";
+    }
+    html += "</ul></div>";
+    treeHost.innerHTML = html;
+  }
+  function resetForm() {
+    editingId = null;
+    formTitle.textContent = "Add Location";
+    keyInput.value = "";
+    labelInput.value = "";
+    typeSelect.value = "macro";
+    parentSelect.value = "";
+    descInput.value = "";
+    rulesInput.value = "";
+    rulesInput.classList.remove("json-invalid", "json-valid");
+    rulesError.style.display = "none";
+    activeCheck.checked = true;
+    selectedEnemyKeys = [];
+    renderEnemyTags();
+    deleteBtn.style.display = "none";
+    parentSelect.disabled = false;
+  }
+  function editLocation(id) {
+    const loc = locationsData.find(l => String(l.id) === String(id));
+    if (!loc) return;
+    editingId = id;
+    formTitle.textContent = "Edit Location";
+    keyInput.value = loc.key || "";
+    labelInput.value = loc.label || "";
+    typeSelect.value = loc.location_type || "macro";
+    parentSelect.value = loc.parent_id || "";
+    descInput.value = loc.description || "";
+    rulesInput.value = loc.rules ? (typeof loc.rules === "object" ? JSON.stringify(loc.rules, null, 2) : String(loc.rules)) : "";
+    validateRules();
+    activeCheck.checked = loc.is_active !== 0;
+    selectedEnemyKeys = Array.isArray(loc.enemy_keys) ? [...loc.enemy_keys] : [];
+    renderEnemyTags();
+    deleteBtn.style.display = "inline-block";
+    parentSelect.disabled = true;
+  }
+  function validateRules() {
+    const r = validateJson(rulesInput.value);
+    rulesInput.classList.toggle("json-invalid", !r.valid);
+    rulesInput.classList.toggle("json-valid", r.valid && rulesInput.value.trim());
+    rulesError.style.display = r.valid ? "none" : "block";
+    rulesError.textContent = r.valid ? "" : "JSON error: " + r.error;
+    return r.valid;
+  }
+
+  // Events
+  labelInput.addEventListener("input", () => { if (!editingId) keyInput.value = slugify(labelInput.value); });
+  rulesInput.addEventListener("input", validateRules);
+  typeSelect.addEventListener("change", () => { parentSelect.disabled = typeSelect.value === "macro"; if (typeSelect.value === "macro") parentSelect.value = ""; });
+  enemyTags.addEventListener("click", (e) => { const btn = e.target.closest(".remove-enemy"); if (btn) { selectedEnemyKeys = selectedEnemyKeys.filter(k => k !== btn.dataset.key); renderEnemyTags(); } });
+  formSection.querySelector("#loc-add-enemy").addEventListener("click", () => { const v = enemySelect.value; if (v && !selectedEnemyKeys.includes(v)) { selectedEnemyKeys.push(v); renderEnemyTags(); } enemySelect.value = ""; });
+  cancelBtn.addEventListener("click", resetForm);
+  saveBtn.addEventListener("click", async () => {
+    const payload = {
+      key: keyInput.value.trim() || slugify(labelInput.value),
+      label: labelInput.value.trim(),
+      location_type: typeSelect.value,
+      parent_id: parentSelect.value ? parseInt(parentSelect.value, 10) : null,
+      description: descInput.value.trim(),
+      rules: (() => { const v = rulesInput.value.trim(); if (!v) return {}; try { return JSON.parse(v); } catch { return { text: v }; } })(),
+      enemy_keys: selectedEnemyKeys,
+      is_active: activeCheck.checked ? 1 : 0,
+    };
+    if (!payload.label) { showToast("Label is required", "error"); return; }
+    if (!payload.key) { showToast("Key is required", "error"); return; }
+    if (!validateRules()) { showToast("Fix JSON errors in Rules", "error"); return; }
+    try {
+      if (editingId) {
+        await adminFetch(`/api/locations/${encodeURIComponent(payload.key)}`, { method: "PUT", body: JSON.stringify(payload) });
+        showToast("Location updated", "success");
+      } else {
+        await adminFetch("/api/locations", { method: "POST", body: JSON.stringify(payload) });
+        showToast("Location created", "success");
+      }
+      resetForm();
+      await loadLocations();
+    } catch (e) { showToast(parseApiError(e, "Save failed"), "error"); }
+  });
+  deleteBtn.addEventListener("click", async () => {
+    if (!editingId) return;
+    const loc = locationsData.find(l => String(l.id) === String(editingId));
+    if (!loc) return;
+    if (!confirm(`Delete location "${loc.label}" (${loc.key})?`)) return;
+    try {
+      await adminFetch(`/api/locations/${encodeURIComponent(loc.key)}`, { method: "DELETE" });
+      showToast("Location deleted", "success");
+      resetForm();
+      await loadLocations();
+    } catch (e) { showToast(parseApiError(e, "Delete failed"), "error"); }
+  });
+  treeHost.addEventListener("click", (e) => { const btn = e.target.closest(".edit-loc"); if (btn) editLocation(btn.dataset.id); });
+
+  // Flags
+  flagsSection.querySelector("#flags-reset").addEventListener("click", async () => {
+    if (!confirm("Reset flags to global defaults?")) return;
+    try {
+      await adminFetch("/api/admin/config/location-flags", { method: "DELETE" });
+      showToast("Flags reset", "success");
+      await loadFlags();
+    } catch (e) { showToast(parseApiError(e, "Reset failed"), "error"); }
+  });
+  flagsSection.querySelector("#flags-save").addEventListener("click", async () => {
+    const flags = {
+      location_integrity_enabled: flagsSection.querySelector("#flag-integrity").checked ? 1 : 0,
+      location_parser_json_enabled: flagsSection.querySelector("#flag-parser-json").checked ? 1 : 0,
+      location_parser_fallback_enabled: flagsSection.querySelector("#flag-parser-fallback").checked ? 1 : 0,
+    };
+    try {
+      await adminFetch("/api/admin/config/location-flags", { method: "PUT", body: JSON.stringify(flags) });
+      showToast("Flags saved", "success");
+      await loadFlags();
+    } catch (e) { showToast(parseApiError(e, "Save failed"), "error"); }
+  });
+
+  // Log
+  logSection.querySelector("#log-refresh").addEventListener("click", async () => {
+    const since = logSection.querySelector("#log-since").value;
+    const until = logSection.querySelector("#log-until").value;
+    const params = new URLSearchParams(); if (since) params.append("since", since); if (until) params.append("until", until); params.append("limit", "50");
+    try {
+      const data = await adminFetch(`/api/admin/location-log?${params.toString()}`);
+      const logs = data.entries || [];
+      if (!logs.length) { logTable.innerHTML = "<p class='muted'>No log entries for selected range.</p>"; return; }
+      let html = "";
+      for (const log of logs) {
+        const time = new Date(log.created_at).toLocaleString("pl-PL");
+        const blocked = log.reason_blocked && log.reason_blocked !== "allowed";
+        const cls = blocked ? "blocked" : "allowed";
+        const icon = blocked ? "🚫" : "✅";
+        html += `<div class="log-entry ${cls}"><span class="log-time">${time}</span> ${icon} ${log.attempted_move || "move"} ` +
+                `<span class="log-loc">${log.current_location_key || "?"}</span>${blocked ? ` <span class="log-reason">(${log.reason_blocked})</span>` : ""}</div>`;
+      }
+      logTable.innerHTML = html;
+    } catch (e) { showToast(parseApiError(e, "Load log failed"), "error"); logTable.innerHTML = "<p class='muted'>Error loading logs.</p>"; }
+  });
+
+  // Loaders
+  async function loadLocations() {
+    try {
+      locationsData = await adminFetch("/api/locations?active_only=0");
+      locationsData = locationsData.locations || locationsData;
+      buildTree();
+      updateParentSelect();
+    } catch (e) { showToast(parseApiError(e, "Failed to load locations"), "error"); treeHost.innerHTML = "<p class='muted'>Error loading locations.</p>"; }
+  }
+  async function loadEnemiesForSelect() {
+    try {
+      const d = await adminFetch("/api/admin/enemies");
+      enemiesList = (d.items || []).filter(e => e.is_active);
+      enemySelect.innerHTML = '<option value="">— Select enemy —</option>' + enemiesList.map(e => `<option value="${e.key}">${e.label} (${e.key})</option>`).join("");
+    } catch (e) { /* ignore */ }
+  }
+  async function loadFlags() {
+    try {
+      const flags = await adminFetch("/api/admin/config/location-flags");
+      flagsSection.querySelector("#flag-integrity").checked = flags.location_integrity_enabled;
+      flagsSection.querySelector("#flag-parser-json").checked = flags.location_parser_json_enabled;
+      flagsSection.querySelector("#flag-parser-fallback").checked = flags.location_parser_fallback_enabled;
+      const gi = flags.location_integrity_enabled ? "ON" : "OFF";
+      const gj = flags.location_parser_json_enabled ? "ON" : "OFF";
+      const gf = flags.location_parser_fallback_enabled ? "ON" : "OFF";
+      flagsInfo.textContent = `Global defaults: ${gi} / ${gj} / ${gf}`;
+    } catch (e) { flagsInfo.textContent = "Global defaults: ON / ON / ON (error loading)"; }
+  }
+
+  // Init
+  loadLocations();
+  loadEnemiesForSelect();
+  loadFlags();
+  renderEnemyTags();
 }
 
 function mountConditions(host) {
@@ -3321,6 +3657,7 @@ export async function init(container) {
     dc: () => mountDc(panels.get("dc")),
     weapons: () => mountWeapons(panels.get("weapons"), statKeys),
     enemies: () => mountEnemies(panels.get("enemies")),
+    locations: () => mountLocations(panels.get("locations")),
     conditions: () => mountConditions(panels.get("conditions")),
     items: () => mountItems(panels.get("items")),
     consumables: () => mountConsumables(panels.get("consumables")),
