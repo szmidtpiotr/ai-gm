@@ -196,7 +196,9 @@ async function run(scenario, options = {}) {
       }
       logStructured("debug", "llm_decide_complete", { step, response_length: raw?.length || 0 });
 
-      const action = validate(raw, actionHistory);
+      // validate() potrzebuje długości historii rozmowy (a nie samej listy typów akcji),
+      // bo logika "pierwszy krok" ma wymusić wysłanie wiadomości zamiast czekania na GM.
+      const action = validate(raw, history);
       logStructured("info", "step_action", { step, action_type: action.type, reasoning: action.reasoning?.slice(0, 100) });
 
       await page.evaluate(
