@@ -431,6 +431,123 @@
         </div>
       </section>
 
+      <section class="template-section" aria-labelledby="sec-locations">
+        <h2 id="sec-locations">Locations</h2>
+        <p class="muted">
+          Game locations define the world geography and encounter rules. Macro locations are top-level zones; sub locations are nested under a macro.
+          Each location can have special rules (e.g., no combat in sacred areas) and assigned enemies for random encounters.
+        </p>
+        <div class="field-ref-wrap admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>key</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>lowercase_snake_case, unique. Auto-generated from label if omitted.</td>
+              </tr>
+              <tr>
+                <td><code>label</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Display name shown to players and GM</td>
+              </tr>
+              <tr>
+                <td><code>location_type</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>macro (top-level) or sub (nested under macro)</td>
+              </tr>
+              <tr>
+                <td><code>parent_id</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Required for sub-locations: ID of the parent macro location</td>
+              </tr>
+              <tr>
+                <td><code>description</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Flavour text describing the location</td>
+              </tr>
+              <tr>
+                <td><code>rules</code></td>
+                <td>object</td>
+                <td>❌</td>
+                <td>JSON object with special rules (e.g., {"no_combat": true, "reason": "Sacred ground"})</td>
+              </tr>
+              <tr>
+                <td><code>enemy_keys</code></td>
+                <td>array[string]</td>
+                <td>❌</td>
+                <td>Array of enemy keys that can spawn here. Enemies must exist in the Enemies catalogue.</td>
+              </tr>
+              <tr>
+                <td><code>npc_keys</code></td>
+                <td>array[string]</td>
+                <td>❌</td>
+                <td>Array of NPC keys. Currently placeholder for Phase 9.</td>
+              </tr>
+              <tr>
+                <td><code>is_active</code></td>
+                <td>boolean</td>
+                <td>❌</td>
+                <td>Default true. Inactive locations are hidden from the game.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="template-example">
+          <div class="template-example-header">
+            <span class="template-example-label">Example JSON</span>
+            <button type="button" class="copy-json-btn" aria-label="Copy example JSON">📋 Copy</button>
+          </div>
+          <pre class="copy-block" data-table="locations">[
+  {
+    "key": "dark_forest",
+    "label": "Dark Forest",
+    "location_type": "macro",
+    "parent_id": null,
+    "description": "A dense, ominous forest where sunlight barely reaches the ground.",
+    "rules": {},
+    "enemy_keys": ["goblin", "wolf", "bandit"],
+    "npc_keys": [],
+    "is_active": true
+  },
+  {
+    "key": "old_ruins",
+    "label": "Old Ruins",
+    "location_type": "sub",
+    "parent_id": 1,
+    "description": "Ancient ruins deep within the Dark Forest.",
+    "rules": {"no_combat": false, "loot_bonus": 1.5},
+    "enemy_keys": ["skeleton_warrior", "ghost"],
+    "npc_keys": [],
+    "is_active": true
+  },
+  {
+    "key": "temple_of_light",
+    "label": "Temple of Light",
+    "location_type": "sub",
+    "parent_id": 1,
+    "description": "A sacred sanctuary where violence is forbidden.",
+    "rules": {"no_combat": true, "reason": "Sacred ground"},
+    "enemy_keys": [],
+    "npc_keys": [],
+    "is_active": true
+  }
+]</pre>
+        </div>
+      </section>
+
       <section class="template-section" aria-labelledby="sec-conditions">
         <h2 id="sec-conditions">Conditions</h2>
         <p class="muted">
