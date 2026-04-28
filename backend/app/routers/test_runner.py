@@ -1,0 +1,566 @@
+"""
+Admin Test Runner API (Phase 9A-5). Active only when AI_TEST_MODE=1 (see main.py).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import queue
+import re
+import threading
+import uuid
+from pathlib import Path
+from typing import Any
+
+import httpx
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+from app.api.models import _curate_narration_models
+from app.core.logging import get_logger
+from app.services.admin_auth import verify_admin_token
+from app.services.llm_service import generate_chat, get_health
+
+logger = get_logger(__name__)
+
+router = APIRouter(prefix="/test_runner", tags=["test_runner"])
+
+_AI_GM_ROOT = Path(__file__).resolve().parents[3]
+_DEFAULT_SCENARIOS = _AI_GM_ROOT / "ai_test_agent" / "scenarios"
+
+
+def _scenarios_dir() -> Path:
+    raw = (os.getenv("AI_TEST_SCENARIOS_DIR") or "").strip()
+    return Path(raw) if raw else _DEFAULT_SCENARIOS
+
+
+def _agent_url() -> str:
+    return (os.getenv("AI_TEST_AGENT_URL") or "http://127.0.0.1:4000").rstrip("/")
+
+
+def _is_test_agent_unreachable(exc: BaseException) -> bool:
+    s = f"{type(exc).__name__}: {exc!s}"
+    if any(
+        x in s
+        for x in (
+            "Connection refused",
+            "Errno 111",
+            "Name or service not known",
+            "getaddrinfo failed",
+        )
+    ):
+        return True
+    if isinstance(exc, (httpx.ConnectError, httpx.ConnectTimeout)):
+        return True
+    if isinstance(exc, OSError) and getattr(exc, "errno", None) in (111, 99, 101, -2):
+        return True
+    c = exc.__cause__
+    if c is not None and c is not exc:
+        return _is_test_agent_unreachable(c)
+    return False
+
+
+def _format_test_agent_error(agent_base: str, exc: BaseException) -> str:
+    base = (agent_base or "http://127.0.0.1:4000").rstrip("/")
+    raw = f"{type(exc).__name__}: {exc!s}"
+    if not _is_test_agent_unreachable(exc):
+        return raw
+    out = [
+        f"{raw} — brak usługi agenta testowego (Node/Playwright) pod {base}.",
+        "Docker dev (zalecane): `docker compose -f docker-compose.dev.yml up -d --build test-agent` — backend łączy się z usługą `test-agent:4000.",
+        "Bez agenta w kontenerze, na hoście: `cd ai_test_agent && AGENT_PORT=4000 npm run agent:server`.",
+    ]
+    if "test-agent" not in base and (
+        "host.docker.internal" in base
+        or "127.0.0.1" in base
+    ):
+        out.append(
+            "Prawdopodobne nadpisanie `AI_TEST_AGENT_URL` w pliku `.env` (lub w shellu). Usuń tę linię albo ustaw "
+            "`AI_TEST_AGENT_URL=http://test-agent:4000` gdy używasz usługi `test-agent` z docker-compose; "
+            "`http://host.docker.internal:4000` tylko gdy `npm run agent:server` jest uruchomiony na maszynie hosta."
+        )
+    return " ".join(out)
+
+
+def require_admin_bearer_or_query(
+    authorization: str | None = Header(default=None),
+    token: str | None = Query(default=None),
+) -> None:
+    raw: str | None = None
+    if authorization and authorization.startswith("Bearer "):
+        raw = authorization.removeprefix("Bearer ").strip()
+    elif token:
+        raw = token.strip()
+    if not raw or not verify_admin_token(raw):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+
+SCENARIO_SYSTEM_PROMPT = """Jesteś asystentem do pisania testów AI dla gry RPG.
+Kiedy użytkownik opisze test, generujesz YAML w formacie:
+  name, goal, persona, constraints[], success_criteria{}, max_steps, timeouts.
+Najpierw zadaj pytania precyzujące (persona, agresywność, oczekiwany wynik).
+Gdy masz kompletne dane, zwróć YAML w bloku ```yaml ... ``` i ustaw ready: true w JSON response.
+Format odpowiedzi JSON: {"reply": str, "yaml": str|null, "ready": bool}
+Odpowiedz TYLKO jednym obiektem JSON (bez markdown wokół), chyba że użytkownik prosi o wyjaśnienie — wtedy reply może być dłuższe, ale JSON musi być parsowalny na końcu."""
+
+
+class LlmOverrideBody(BaseModel):
+    """Opcjonalna konfiguracja LLM dla planera (nadpisuje env / runtime na czas tego requestu)."""
+
+    provider: str | None = None
+    base_url: str | None = None
+    model: str | None = None
+    api_key: str | None = None
+
+
+class GenerateScenarioReq(BaseModel):
+    message: str
+    history: list[dict[str, Any]] = Field(default_factory=list)
+    llm: LlmOverrideBody | None = None
+
+
+class TestRunnerLlmModelsReq(BaseModel):
+    """Lista modeli z podanego hosta (Ollama / OpenAI-compatible) — do panelu Test Runner."""
+
+    provider: str = Field(default="ollama")
+    base_url: str = Field(default="")
+    api_key: str = Field(default="")
+    show_all: bool = Field(default=False)
+
+
+class StartReq(BaseModel):
+    yaml: str = Field(..., description="JSON lub YAML scenariusza testowego")
+
+
+class SaveScenarioReq(BaseModel):
+    filename: str
+    content: str
+
+
+_runs: dict[str, dict[str, Any]] = {}
+_runs_lock = threading.Lock()
+
+
+def _any_running() -> bool:
+    with _runs_lock:
+        for s in _runs.values():
+            if s.get("status") == "RUNNING":
+                return True
+    return False
+
+
+def _parse_scenario_text(text: str) -> dict[str, Any]:
+    raw = (text or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="empty scenario")
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+    try:
+        import yaml  # type: ignore
+
+        loaded = yaml.safe_load(raw)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Niepoprawny JSON/YAML: {e}") from e
+    if not isinstance(loaded, dict):
+        raise HTTPException(status_code=400, detail="Scenariusz musi być obiektem (JSON/YAML map)")
+    return loaded
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    s = (text or "").strip()
+    start = s.find("{")
+    if start < 0:
+        raise ValueError("brak poprawnego JSON w odpowiedzi LLM")
+    decoder = json.JSONDecoder()
+    try:
+        obj, _ = decoder.raw_decode(s, start)
+    except json.JSONDecodeError as e:
+        raise ValueError("brak poprawnego JSON w odpowiedzi LLM") from e
+    if not isinstance(obj, dict):
+        raise ValueError("odpowiedź LLM musi być obiektem JSON")
+    return obj
+
+
+def _stub_scenario_response(
+    message: str, history: list, *, reply_prefix: str = ""
+) -> dict[str, Any]:
+    n_user = sum(1 for h in history if h.get("role") == "user")
+    if n_user < 1:
+        return {
+            "reply": f'{reply_prefix}Opisz proszę cel testu, oczekiwany wynik oraz ograniczenia (persona, maks. kroki).',
+            "yaml": None,
+            "ready": False,
+        }
+    yaml_blob = "\n".join(
+        [
+            'name: "admin_stub_scenario"',
+            'goal: "Weryfikacja ścieżki użytkownika"',
+            "max_steps: 8",
+            "total_timeout_ms: 120000",
+        ]
+    )
+    return {
+        "reply": f'{reply_prefix}Oto szkic scenariusza w YAML — możesz go edytować przed uruchomieniem.',
+        "yaml": yaml_blob,
+        "ready": True,
+    }
+
+
+def _llm_dict_from_body(llm: LlmOverrideBody | None) -> dict[str, str] | None:
+    if llm is None:
+        return None
+    d: dict[str, str] = {}
+    for key in ("provider", "base_url", "model", "api_key"):
+        v = getattr(llm, key, None)
+        if v is not None and str(v).strip() != "":
+            d[key] = str(v).strip()
+    return d if d else None
+
+
+def _is_llm_network_error(exc: BaseException) -> bool:
+    """Brak Ollamy / zły host / timeout połączenia z LLM."""
+    msg = f"{type(exc).__name__}: {exc!s}"
+    needles = (
+        "Connection refused",
+        "Errno 111",
+        "Name or service not known",
+        "ConnectError",
+        "ReadTimeout",
+        "ConnectTimeout",
+        "timed out",
+        "Connection reset",
+        "Temporary failure in name resolution",
+    )
+    if any(n in msg for n in needles):
+        return True
+    if isinstance(exc, OSError) and getattr(exc, "errno", None) == 111:
+        return True
+    if isinstance(exc, (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout)):
+        return True
+    c = exc.__cause__
+    if c is not None and c is not exc:
+        return _is_llm_network_error(c)
+    return False
+
+
+@router.post("/generate_scenario", dependencies=[Depends(require_admin_bearer_or_query)])
+def post_generate_scenario(req: GenerateScenarioReq) -> dict[str, Any]:
+    if os.getenv("AI_TEST_STUB_SCENARIO") == "1":
+        return _stub_scenario_response(req.message, req.history)
+    llm_cfg = _llm_dict_from_body(req.llm)
+    # Szkic (env) — chyba że klient poda własne `llm` w body (Ollama / OpenAI w panelu).
+    if llm_cfg is None and os.getenv("AI_TEST_STUB_LLM") == "1":
+        return _stub_scenario_response(req.message, req.history)
+
+    messages: list[dict] = [{"role": "system", "content": SCENARIO_SYSTEM_PROMPT}]
+    for h in req.history:
+        role = h.get("role", "user")
+        content = h.get("content", "")
+        if role in ("user", "assistant") and content:
+            messages.append({"role": role, "content": str(content)})
+    messages.append({"role": "user", "content": req.message})
+
+    try:
+        raw = generate_chat(messages, model=None, llm_config=llm_cfg)
+    except Exception as e:
+        if _is_llm_network_error(e):
+            logger.warning("test_runner_generate_llm_unavailable", error=str(e))
+            return _stub_scenario_response(
+                req.message,
+                req.history,
+                reply_prefix="[Ollama/LLM niedostępna — tryb szkicu] ",
+            )
+        logger.error("test_runner_generate_failed", error=str(e))
+        raise HTTPException(
+            status_code=502, detail=f"LLM: {e!s}"[:2000]
+        ) from e
+
+    try:
+        out = _extract_json_object(raw)
+    except ValueError:
+        return {"reply": raw, "yaml": None, "ready": False}
+
+    return {
+        "reply": str(out.get("reply", "")),
+        "yaml": out.get("yaml") if "yaml" in out else None,
+        "ready": bool(out.get("ready", False)),
+    }
+
+
+@router.post("/llm_models", dependencies=[Depends(require_admin_bearer_or_query)])
+def post_llm_models(req: TestRunnerLlmModelsReq) -> dict[str, Any]:
+    provider = (req.provider or "ollama").strip().lower() or "ollama"
+    cfg: dict[str, str] = {"provider": provider}
+    b = (req.base_url or "").strip()
+    if b:
+        cfg["base_url"] = b
+    a = (req.api_key or "").strip()
+    if a:
+        cfg["api_key"] = a
+    h = get_health(cfg)
+    models: list[str] = list(h.get("models") or [])
+    if provider == "openai" and not req.show_all:
+        models = _curate_narration_models("openai", models)
+    return {
+        "reachable": bool(h.get("reachable")),
+        "models": models,
+        "error": h.get("error"),
+        "provider": h.get("provider", provider),
+        "base_url": h.get("base_url"),
+    }
+
+
+def _httpx_serve_agent_stream(run_id: str, scenario: dict[str, Any], q: "queue.Queue[Any]", agent: str) -> None:
+    status_set = "DONE"
+    try:
+        with httpx.Client(timeout=httpx.Timeout(connect=15.0, read=None, write=30.0, pool=5.0)) as client:
+            with client.stream(
+                "POST",
+                f"{agent}/agent/run",
+                json={"scenario": scenario, "headed": False},
+            ) as resp:
+                if resp.status_code != 200:
+                    try:
+                        body = (resp.read() or b"")[:2000]
+                    except Exception:
+                        body = b""
+                    err_text = body.decode("utf-8", errors="replace")
+                    q.put(
+                        {
+                            "done": True,
+                            "success": False,
+                            "reason": "agent_http",
+                            "error": f"HTTP {resp.status_code}: {err_text}",
+                        }
+                    )
+                    status_set = "ERROR"
+                    return
+                for line in resp.iter_lines():
+                    if line is None:
+                        continue
+                    if isinstance(line, bytes):
+                        line = line.decode("utf-8", errors="replace")
+                    line = line.strip()
+                    if not line.startswith("data: "):
+                        continue
+                    try:
+                        obj: Any = json.loads(line[6:])
+                    except json.JSONDecodeError:
+                        continue
+                    q.put(obj)
+                    if isinstance(obj, dict) and obj.get("done"):
+                        with _runs_lock:
+                            st = _runs.get(run_id)
+                            if st is not None:
+                                st["result"] = obj
+    except Exception as e:
+        logger.error("test_runner_agent_stream_error", run_id=run_id, error=str(e))
+        q.put(
+            {
+                "done": True,
+                "success": False,
+                "reason": "error",
+                "error": _format_test_agent_error(agent, e),
+            }
+        )
+        status_set = "ERROR"
+    finally:
+        with _runs_lock:
+            st = _runs.get(run_id)
+            if st is not None and st.get("status") == "RUNNING":
+                st["status"] = status_set
+        q.put(None)
+
+
+@router.get("/agent_health", dependencies=[Depends(require_admin_bearer_or_query)])
+def get_agent_health() -> dict[str, Any]:
+    """Czy HTTP agent testowy (Node) odpowiada pod AI_TEST_AGENT_URL — przed Uruchom ▶."""
+    agent = _agent_url()
+    try:
+        with httpx.Client(timeout=httpx.Timeout(3.0, connect=2.0)) as client:
+            r = client.get(f"{agent}/agent/scenarios")
+    except Exception as e:
+        return {
+            "agent_url": agent,
+            "reachable": False,
+            "error": _format_test_agent_error(agent, e),
+        }
+    if r.status_code != 200:
+        text = (r.text or "")[:400].strip()
+        return {
+            "agent_url": agent,
+            "reachable": False,
+            "error": f"Agent HTTP {r.status_code}: {text or 'brak treści'}",
+        }
+    try:
+        data = r.json()
+    except Exception:
+        data = {}
+    scenarios = data.get("scenarios") if isinstance(data, dict) else None
+    n = len(scenarios) if isinstance(scenarios, list) else None
+    return {"agent_url": agent, "reachable": True, "scenario_count": n}
+
+
+@router.post("/start", dependencies=[Depends(require_admin_bearer_or_query)])
+def post_start(req: StartReq) -> dict[str, str]:
+    if _any_running():
+        raise HTTPException(status_code=409, detail="Test już trwa (jedna sesja agenta).")
+
+    scenario = _parse_scenario_text(req.yaml)
+    run_id = str(uuid.uuid4())
+    q: queue.Queue[Any] = queue.Queue()
+    with _runs_lock:
+        _runs[run_id] = {
+            "status": "RUNNING",
+            "queue": q,
+        }
+
+    agent = _agent_url()
+    t = threading.Thread(
+        target=_httpx_serve_agent_stream,
+        args=(run_id, scenario, q, agent),
+        name=f"test-runner-{run_id[:8]}",
+        daemon=True,
+    )
+    t.start()
+    return {"run_id": run_id}
+
+
+@router.get("/status/{run_id}", dependencies=[Depends(require_admin_bearer_or_query)])
+def get_status(run_id: str) -> dict[str, Any]:
+    with _runs_lock:
+        st = _runs.get(run_id)
+    if not st:
+        raise HTTPException(status_code=404, detail="Nieznany run_id")
+    return {"status": st.get("status", "UNKNOWN"), "result": st.get("result")}
+
+
+@router.get("/stream/{run_id}", dependencies=[Depends(require_admin_bearer_or_query)])
+def get_stream(run_id: str) -> StreamingResponse:
+    with _runs_lock:
+        st = _runs.get(run_id)
+    if not st:
+        raise HTTPException(status_code=404, detail="Nieznany run_id")
+    q = st.get("queue")
+    if not isinstance(q, queue.Queue):
+        raise HTTPException(status_code=500, detail="internal queue error")
+
+    def event_gen():
+        while True:
+            try:
+                item: Any = q.get(timeout=600.0)
+            except queue.Empty:
+                yield f"data: {json.dumps({'done': True, 'error': 'timeout waiting for agent'})}\n\n"
+                break
+            if item is None:
+                break
+            yield f"data: {json.dumps(item, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream; charset=utf-8",
+    )
+
+
+@router.get("/screenshot/{run_id}", dependencies=[Depends(require_admin_bearer_or_query)])
+def get_screenshot_proxy(run_id: str) -> dict[str, str]:
+    with _runs_lock:
+        st = _runs.get(run_id)
+    if not st or st.get("status") != "RUNNING":
+        raise HTTPException(status_code=404, detail="Brak aktywnego testu dla tego run_id")
+    try:
+        r = httpx.get(
+            f"{_agent_url()}/agent/screenshot",
+            timeout=10.0,
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=502, detail=f"Agent: {e!s}") from e
+    if r.status_code == 404:
+        raise HTTPException(status_code=404, detail="Agent: brak aktywnej sesji przeglądarki")
+    if r.status_code != 200:
+        raise HTTPException(
+            status_code=502, detail=(r.text or f"HTTP {r.status_code}")[:2000]
+        )
+    return r.json()
+
+
+@router.post("/save_scenario", dependencies=[Depends(require_admin_bearer_or_query)])
+def post_save_scenario(req: SaveScenarioReq) -> dict[str, Any]:
+    if not re.match(r"^[a-zA-Z0-9._-]+\.json$", req.filename):
+        raise HTTPException(
+            status_code=400, detail="Dozwolone tylko pliki .json, nazwa: litery, cyfry, ._-"
+        )
+    sdir = _scenarios_dir()
+    sdir.mkdir(parents=True, exist_ok=True)
+    path = (sdir / req.filename).resolve()
+    if not str(path).startswith(str(sdir.resolve())):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    # Validate that content is JSON object
+    _parse_scenario_text(req.content)
+    path.write_text(req.content.strip() + "\n", encoding="utf-8")
+    return {"ok": True, "path": str(path)}
+
+
+@router.get("/scenarios", dependencies=[Depends(require_admin_bearer_or_query)])
+def get_scenarios() -> dict[str, Any]:
+    sdir = _scenarios_dir()
+    if not sdir.is_dir():
+        return {"scenarios": []}
+    files = sorted([f for f in sdir.iterdir() if f.suffix == ".json" and f.is_file()])
+    return {"scenarios": [f.name for f in files]}
+
+
+@router.get("/scenario/{filename}", dependencies=[Depends(require_admin_bearer_or_query)])
+def get_scenario_file(filename: str) -> dict[str, str]:
+    if not re.match(r"^[a-zA-Z0-9._-]+\.json$", filename):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    sdir = _scenarios_dir().resolve()
+    path = (sdir / filename).resolve()
+    if not str(path).startswith(str(sdir)):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    return {"content": path.read_text(encoding="utf-8")}
+
+
+def _load_ai_test_config_file() -> dict[str, Any]:
+    """
+    Same path semantics as refresh_test_env (`AI_TEST_CONFIG_PATH` or `/data/ai_test_config.json`).
+    Used so the admin panel can apply Test Runner LLM overrides to `player_id` from seed.
+    """
+    path_str = (os.getenv("AI_TEST_CONFIG_PATH") or "/data/ai_test_config.json").strip()
+    if not path_str:
+        raise HTTPException(status_code=404, detail="Brak ścieżki AI_TEST_CONFIG_PATH.")
+    path = Path(path_str)
+    if not path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Brak pliku ai_test_config: {path_str} — uruchom seed_ai_test_env lub ustaw AI_TEST_CONFIG_PATH.",
+        )
+    try:
+        raw = path.read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"ai_test_config: niepoprawny JSON ({path_str}): {exc}",
+        ) from exc
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=500, detail="ai_test_config: oczekiwano obiektu JSON")
+    return {"config_path": path_str, **data}
+
+
+@router.get("/ai_test_config", dependencies=[Depends(require_admin_bearer_or_query)])
+def get_ai_test_config() -> dict[str, Any]:
+    """
+    Exposes seeded test env ids (especially `player_id`) so the UI can PUT the same LLM settings
+    the game iframe uses (`/api/health?user_id=…`, `user_llm_settings`).
+    """
+    out = _load_ai_test_config_file()
+    if out.get("player_id") is None:
+        raise HTTPException(status_code=500, detail="ai_test_config: brak pola player_id")
+    return out
