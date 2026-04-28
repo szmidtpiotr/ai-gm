@@ -1294,6 +1294,15 @@ function openLocationEditModal(host, row, allLocations) {
   const enemiesList = window._cachedEnemiesList || [];
   const selectedEnemies = new Set(Array.isArray(row.enemy_keys) ? row.enemy_keys : []);
 
+  // Build selected rules for multi-select
+  const currentRules = row._rules || {};
+  const selectedRules = Object.keys(currentRules).filter(k => {
+    const def = LOCATION_RULES_DEFINITION.find(d => d.key === k);
+    if (def) return true;
+    return false; // custom rules handled separately
+  });
+  const customRules = Object.entries(currentRules).filter(([k]) => !LOCATION_RULES_DEFINITION.find(d => d.key === k));
+
   content.innerHTML = `
     <h3>Edit Location: ${row.label}</h3>
     <div class="edit-form-grid" style="display:grid;gap:12px;margin:16px 0;">
@@ -1316,35 +1325,45 @@ function openLocationEditModal(host, row, allLocations) {
       <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea id="edit-desc" rows="2">${row.description || ""}</textarea></label>
       
       <div class="field" style="grid-column:1/-1;">
-        <span>Rules Builder</span>
-        <div id="edit-rules-builder" class="rules-builder" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;">
+        <span>Rules <em class="muted">(multi-select)</em></span>
+        <select id="edit-rules" multiple style="width:100%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
           ${LOCATION_RULES_DEFINITION.map(def => `
+            <option value="${def.key}" ${currentRules[def.key] !== undefined ? "selected" : ""}>
+              ${def.label} ${def.type !== "boolean" && currentRules[def.key] !== undefined ? `(${currentRules[def.key]})` : ""}
+            </option>
+          `).join("")}
+        </select>
+        <div id="edit-rules-values" style="margin-top:8px;">
+          ${LOCATION_RULES_DEFINITION.filter(def => def.type !== "boolean" && currentRules[def.key] !== undefined).map(def => `
             <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
-              <input type="${def.type === "boolean" ? "checkbox" : "text"}" 
-                     data-rule-key="${def.key}" 
-                     ${def.type === "boolean" ? "" : `placeholder="${def.default || ""}" style="width:120px;"`}
-                     ${def.type === "boolean" && row._rules?.[def.key] ? "checked" : ""}
-                     value="${def.type !== "boolean" ? (row._rules?.[def.key] || def.default || "") : ""}"
-              />
-              <span>${def.label}</span>
-              <em class="muted" style="font-size:0.85em;">${def.description}</em>
+              <span>${def.label}:</span>
+              <input type="text" data-rule-value="${def.key}" value="${currentRules[def.key] || def.default || ""}" style="width:120px;padding:4px 8px;" />
             </label>
           `).join("")}
         </div>
       </div>
 
       <div class="field" style="grid-column:1/-1;">
-        <span>Enemies</span>
-        <div id="edit-enemies" class="enemies-selector" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;max-height:200px;overflow:auto;">
-          ${enemiesList.length === 0 ? "<em class='muted'>No enemies loaded. Create enemies first.</em>" : 
-            enemiesList.map(e => `
-              <label style="display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer;">
-                <input type="checkbox" data-enemy-key="${e.key}" ${selectedEnemies.has(e.key) ? "checked" : ""} />
-                <span>${e.label}</span>
-                <code class="muted">${e.key}</code>
-              </label>
+        <span>Custom Rules <em class="muted">(JSON key:value pairs)</em></span>
+        <div id="edit-custom-rules" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;">
+          ${customRules.length === 0 ? '<div class="custom-rule-row" style="display:flex;gap:8px;margin:4px 0;"><input type="text" placeholder="key" class="custom-rule-key" style="width:150px;padding:4px 8px;" /><input type="text" placeholder="value" class="custom-rule-value" style="flex:1;padding:4px 8px;" /><button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button></div>' : 
+            customRules.map(([k, v]) => `
+              <div class="custom-rule-row" style="display:flex;gap:8px;margin:4px 0;">
+                <input type="text" value="${k}" class="custom-rule-key" style="width:150px;padding:4px 8px;" />
+                <input type="text" value="${typeof v === 'object' ? JSON.stringify(v) : v}" class="custom-rule-value" style="flex:1;padding:4px 8px;" />
+                <button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button>
+              </div>
             `).join("")}
         </div>
+        <button type="button" id="edit-add-custom-rule" class="secondary-btn" style="margin-top:8px;">+ Add Custom Rule</button>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <span>Enemies <em class="muted">(multi-select)</em></span>
+        <select id="edit-enemies" multiple style="width:100%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+          ${enemiesList.length === 0 ? '<option disabled>No enemies available</option>' : 
+            enemiesList.map(e => `<option value="${e.key}" ${selectedEnemies.has(e.key) ? "selected" : ""}>${e.label} (${e.key})</option>`).join("")}
+        </select>
       </div>
 
       <label class="field"><span>Active</span><input id="edit-active" type="checkbox" ${row.is_active !== 0 ? "checked" : ""} /></label>
@@ -1355,6 +1374,50 @@ function openLocationEditModal(host, row, allLocations) {
       <button type="button" class="primary-btn" id="edit-save">Save</button>
     </div>
   `;
+
+  // Add event listeners for rules select
+  const rulesSelect = content.querySelector("#edit-rules");
+  const rulesValuesContainer = content.querySelector("#edit-rules-values");
+  
+  rulesSelect.addEventListener("change", () => {
+    const selected = Array.from(rulesSelect.selectedOptions).map(o => o.value);
+    // Show value inputs for selected non-boolean rules
+    let valuesHtml = "";
+    selected.forEach(key => {
+      const def = LOCATION_RULES_DEFINITION.find(d => d.key === key);
+      if (def && def.type !== "boolean") {
+        const currentVal = currentRules[key] || def.default || "";
+        valuesHtml += `
+          <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+            <span>${def.label}:</span>
+            <input type="text" data-rule-value="${def.key}" value="${currentVal}" style="width:120px;padding:4px 8px;" />
+          </label>
+        `;
+      }
+    });
+    rulesValuesContainer.innerHTML = valuesHtml;
+  });
+
+  // Add custom rule
+  content.querySelector("#edit-add-custom-rule").addEventListener("click", () => {
+    const container = content.querySelector("#edit-custom-rules");
+    const row = document.createElement("div");
+    row.className = "custom-rule-row";
+    row.style.cssText = "display:flex;gap:8px;margin:4px 0;";
+    row.innerHTML = `
+      <input type="text" placeholder="key" class="custom-rule-key" style="width:150px;padding:4px 8px;" />
+      <input type="text" placeholder="value" class="custom-rule-value" style="flex:1;padding:4px 8px;" />
+      <button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button>
+    `;
+    container.appendChild(row);
+  });
+
+  // Remove custom rule
+  content.querySelector("#edit-custom-rules").addEventListener("click", (e) => {
+    if (e.target.classList.contains("remove-custom-rule")) {
+      e.target.closest(".custom-rule-row").remove();
+    }
+  });
 
   modal.appendChild(content);
   document.body.appendChild(modal);
@@ -1371,8 +1434,52 @@ function openLocationEditModal(host, row, allLocations) {
     } catch (e) { showToast(parseApiError(e, "Delete failed"), "error"); }
   });
   content.querySelector("#edit-save").addEventListener("click", async () => {
-    const rules = buildRulesFromCheckboxes(content.querySelector("#edit-rules-builder"));
-    const enemyKeys = Array.from(content.querySelectorAll("#edit-enemies [data-enemy-key]:checked")).map(el => el.dataset.enemyKey);
+    // Build rules from multi-select
+    const rules = {};
+    const selectedRules = Array.from(content.querySelector("#edit-rules").selectedOptions).map(o => o.value);
+    selectedRules.forEach(key => {
+      const def = LOCATION_RULES_DEFINITION.find(d => d.key === key);
+      if (def) {
+        if (def.type === "boolean") {
+          rules[key] = true;
+        } else {
+          // Get value from input
+          const valueInput = content.querySelector(`[data-rule-value="${key}"]`);
+          if (valueInput) {
+            if (def.type === "number") {
+              const numVal = parseFloat(valueInput.value);
+              if (!isNaN(numVal)) rules[key] = numVal;
+            } else {
+              rules[key] = valueInput.value.trim();
+            }
+          }
+        }
+      }
+    });
+    
+    // Add custom rules
+    content.querySelectorAll("#edit-custom-rules .custom-rule-row").forEach(rowEl => {
+      const keyInput = rowEl.querySelector(".custom-rule-key");
+      const valueInput = rowEl.querySelector(".custom-rule-value");
+      if (keyInput && valueInput && keyInput.value.trim()) {
+        const key = keyInput.value.trim();
+        const val = valueInput.value.trim();
+        // Try to parse as number or JSON, otherwise store as string
+        if (!isNaN(parseFloat(val)) && val !== "") {
+          rules[key] = parseFloat(val);
+        } else if (val === "true") {
+          rules[key] = true;
+        } else if (val === "false") {
+          rules[key] = false;
+        } else if (val.startsWith("{") || val.startsWith("[")) {
+          try { rules[key] = JSON.parse(val); } catch { rules[key] = val; }
+        } else {
+          rules[key] = val;
+        }
+      }
+    });
+    
+    const enemyKeys = Array.from(content.querySelector("#edit-enemies").selectedOptions).map(o => o.value);
     const body = {
       label: content.querySelector("#edit-label").value.trim(),
       location_type: content.querySelector("#edit-type").value,
@@ -1414,13 +1521,13 @@ function mountLocations(host) {
   const details = el("div", "add-form admin-add-form-collapsed");
   const fields = el("div", "admin-add-form-fields");
 
-  // Formularz dodawania z rules builder i enemies dropdown
+  // Formularz dodawania z rules dropdown i enemies dropdown (multi-select)
   fields.innerHTML = `
     <div class="add-form-grid">
       <label class="field"><span>Key</span><input data-field="key" type="text" placeholder="auto-from-label" /></label>
       <label class="field"><span>Label *</span><input data-field="label" type="text" /></label>
       <label class="field"><span>Type</span>
-        <select data-field="location_type">
+        <select data-field="location_type" id="add-type">
           <option value="macro" selected>Macro (top-level)</option>
           <option value="sub">Sub (under macro)</option>
         </select>
@@ -1429,28 +1536,30 @@ function mountLocations(host) {
       <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea data-field="description" rows="2"></textarea></label>
       
       <div class="field" style="grid-column:1/-1;">
-        <span>Rules Builder <em class="muted">(check to enable)</em></span>
-        <div id="add-rules-builder" class="rules-builder" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;">
-          ${LOCATION_RULES_DEFINITION.map(def => `
-            <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
-              <input type="${def.type === "boolean" ? "checkbox" : "text"}" 
-                     data-rule-key="${def.key}" 
-                     ${def.type === "boolean" ? "" : `placeholder="${def.default || ""}" style="width:120px;"`}
-                     ${def.type === "boolean" && def.key === "no_combat" ? "" : ""}
-                     value="${def.type !== "boolean" && def.default ? def.default : ""}"
-              />
-              <span>${def.label}</span>
-              <em class="muted" style="font-size:0.85em;">${def.description}</em>
-            </label>
-          `).join("")}
-        </div>
+        <span>Rules <em class="muted">(hold Ctrl/Cmd to select multiple)</em></span>
+        <select id="add-rules" multiple style="width:100%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+          ${LOCATION_RULES_DEFINITION.map(def => `<option value="${def.key}">${def.label} ${def.type !== "boolean" ? `(default: ${def.default})` : ""} — ${def.description}</option>`).join("")}
+        </select>
+        <div id="add-rules-values" style="margin-top:8px;"></div>
       </div>
 
       <div class="field" style="grid-column:1/-1;">
-        <span>Enemies <em class="muted">(multi-select)</em></span>
-        <div id="add-enemies" class="enemies-selector" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;max-height:200px;overflow:auto;">
-          <em class="muted">Loading enemies...</em>
+        <span>Custom Rules <em class="muted">(create your own)</em></span>
+        <div id="add-custom-rules" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;">
+          <div class="custom-rule-row" style="display:flex;gap:8px;margin:4px 0;">
+            <input type="text" placeholder="rule_key" class="custom-rule-key" style="width:150px;padding:4px 8px;" />
+            <input type="text" placeholder="value (text/number/true/false/JSON)" class="custom-rule-value" style="flex:1;padding:4px 8px;" />
+            <button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button>
+          </div>
         </div>
+        <button type="button" id="add-custom-rule-btn" class="secondary-btn" style="margin-top:8px;">+ Add Custom Rule</button>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <span>Enemies <em class="muted">(hold Ctrl/Cmd to select multiple)</em></span>
+        <select id="add-enemies" multiple style="width:100%;min-height:120px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+          <option disabled>Loading enemies...</option>
+        </select>
       </div>
 
       <label class="field"><span>Active</span><input data-field="is_active" type="checkbox" checked /></label>
@@ -1458,20 +1567,55 @@ function mountLocations(host) {
     <button type="button" class="primary-btn admin-add-form-submit" data-action="create-location">Create</button>
   `;
 
+  // Rules select change handler
+  const rulesSelect = fields.querySelector("#add-rules");
+  const rulesValuesContainer = fields.querySelector("#add-rules-values");
+  rulesSelect.addEventListener("change", () => {
+    const selected = Array.from(rulesSelect.selectedOptions).map(o => o.value);
+    let valuesHtml = "";
+    selected.forEach(key => {
+      const def = LOCATION_RULES_DEFINITION.find(d => d.key === key);
+      if (def && def.type !== "boolean") {
+        valuesHtml += `
+          <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+            <span>${def.label}:</span>
+            <input type="text" data-rule-value="${def.key}" placeholder="${def.default || "value"}" style="width:120px;padding:4px 8px;" />
+          </label>
+        `;
+      }
+    });
+    rulesValuesContainer.innerHTML = valuesHtml;
+  });
+
+  // Add custom rule
+  fields.querySelector("#add-custom-rule-btn").addEventListener("click", () => {
+    const container = fields.querySelector("#add-custom-rules");
+    const row = document.createElement("div");
+    row.className = "custom-rule-row";
+    row.style.cssText = "display:flex;gap:8px;margin:4px 0;";
+    row.innerHTML = `
+      <input type="text" placeholder="rule_key" class="custom-rule-key" style="width:150px;padding:4px 8px;" />
+      <input type="text" placeholder="value" class="custom-rule-value" style="flex:1;padding:4px 8px;" />
+      <button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button>
+    `;
+    container.appendChild(row);
+  });
+
+  // Remove custom rule
+  fields.querySelector("#add-custom-rules").addEventListener("click", (e) => {
+    if (e.target.classList.contains("remove-custom-rule")) {
+      e.target.closest(".custom-rule-row").remove();
+    }
+  });
+
   // Populate enemies dropdown
   setTimeout(async () => {
     await loadEnemiesCache();
-    const enemiesContainer = fields.querySelector("#add-enemies");
+    const enemiesSelect = fields.querySelector("#add-enemies");
     if (enemiesListCache.length === 0) {
-      enemiesContainer.innerHTML = "<em class='muted'>No active enemies. Create enemies in Enemies tab first.</em>";
+      enemiesSelect.innerHTML = "<option disabled>No active enemies. Create enemies in Enemies tab first.</option>";
     } else {
-      enemiesContainer.innerHTML = enemiesListCache.map(e => `
-        <label style="display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer;">
-          <input type="checkbox" data-enemy-key="${e.key}" />
-          <span>${e.label}</span>
-          <code class="muted">${e.key}</code>
-        </label>
-      `).join("");
+      enemiesSelect.innerHTML = enemiesListCache.map(e => `<option value="${e.key}">${e.label} (${e.key})</option>`).join("");
     }
   }, 100);
 
@@ -1484,41 +1628,111 @@ function mountLocations(host) {
   root.appendChild(toggleRow);
   root.appendChild(details);
 
-  // Rules panel section (expandable)
+  // Rules panel section with custom rule creation
   const rulesPanel = el("div", "rules-panel-section");
   rulesPanel.style.cssText = "background:var(--panel-2);padding:12px;border-radius:6px;margin:12px 0;";
   rulesPanel.innerHTML = `
-    <h4 style="margin:0 0 8px 0;">📋 Available Rules Reference</h4>
-    <p class="muted" style="margin:0 0 8px 0;">These rules can be applied to any location. Click to copy key.</p>
-    <div class="rules-list" style="display:grid;gap:4px;">
-      ${LOCATION_RULES_DEFINITION.map(def => `
-        <div class="rule-item" data-rule-key="${def.key}" style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--panel);border-radius:4px;cursor:pointer;" title="Click to copy key">
-          <code style="background:#e2e8f0;padding:2px 6px;border-radius:3px;">${def.key}</code>
-          <strong>${def.label}</strong>
-          <span class="muted">${def.description}</span>
-          <span class="muted" style="margin-left:auto;font-size:0.85em;">${def.type}${def.default ? ` (default: ${def.default})` : ""}</span>
+    <h4 style="margin:0 0 8px 0;">📋 Rules System</h4>
+    
+    <details style="margin-bottom:12px;">
+      <summary style="cursor:pointer;font-weight:600;color:var(--accent);">Available Rules (click to expand)</summary>
+      <div class="rules-list" style="display:grid;gap:4px;margin-top:8px;">
+        ${LOCATION_RULES_DEFINITION.map(def => `
+          <div class="rule-item" style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--panel);border-radius:4px;">
+            <code style="background:#e2e8f0;padding:2px 6px;border-radius:3px;">${def.key}</code>
+            <strong>${def.label}</strong>
+            <span class="muted">${def.description}</span>
+            <span class="muted" style="margin-left:auto;font-size:0.85em;">${def.type}${def.default ? ` (default: ${def.default})` : ""}</span>
+          </div>
+        `).join("")}
+      </div>
+    </details>
+    
+    <details open>
+      <summary style="cursor:pointer;font-weight:600;color:var(--accent);">➕ Create Custom Rule</summary>
+      <div style="margin-top:8px;padding:12px;background:var(--panel);border-radius:6px;">
+        <p class="muted" style="margin:0 0 8px 0;">Add your own rule that will be available in the dropdown above.</p>
+        <div style="display:grid;gap:8px;">
+          <label class="field">
+            <span>Rule Key <em class="muted">(lowercase_snake_case)</em></span>
+            <input id="new-rule-key" type="text" placeholder="e.g., poison_immunity" style="width:100%;padding:6px 8px;" />
+          </label>
+          <label class="field">
+            <span>Label <em class="muted">(display name)</em></span>
+            <input id="new-rule-label" type="text" placeholder="e.g., Poison Immunity" style="width:100%;padding:6px 8px;" />
+          </label>
+          <label class="field">
+            <span>Type</span>
+            <select id="new-rule-type" style="width:100%;padding:6px 8px;">
+              <option value="boolean">Boolean (on/off)</option>
+              <option value="number">Number (e.g., 2, 0.5)</option>
+              <option value="text">Text (e.g., "torch", "magic_key")</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Default Value <em class="muted">(optional)</em></span>
+            <input id="new-rule-default" type="text" placeholder="e.g., true, 2, torch" style="width:100%;padding:6px 8px;" />
+          </label>
+          <label class="field">
+            <span>Description</span>
+            <input id="new-rule-desc" type="text" placeholder="What this rule does..." style="width:100%;padding:6px 8px;" />
+          </label>
         </div>
-      `).join("")}
-    </div>
+        <button type="button" id="create-rule-btn" class="primary-btn" style="margin-top:12px;">Add Rule to System</button>
+        <div id="custom-rules-list" style="margin-top:12px;"></div>
+      </div>
+    </details>
   `;
-  // Click to copy rule key
-  rulesPanel.querySelectorAll(".rule-item").forEach(item => {
-    item.addEventListener("click", () => {
-      const key = item.dataset.ruleKey;
-      navigator.clipboard.writeText(key).then(() => {
-        showToast(`Copied: ${key}`, "success");
-      }).catch(() => {
-        // Fallback
-        const input = document.createElement("input");
-        input.value = key;
-        document.body.appendChild(input);
-        input.select();
-        document.execCommand("copy");
-        document.body.removeChild(input);
-        showToast(`Copied: ${key}`, "success");
-      });
+  
+  // Create custom rule handler
+  rulesPanel.querySelector("#create-rule-btn").addEventListener("click", () => {
+    const key = rulesPanel.querySelector("#new-rule-key").value.trim();
+    const label = rulesPanel.querySelector("#new-rule-label").value.trim();
+    const type = rulesPanel.querySelector("#new-rule-type").value;
+    const defaultVal = rulesPanel.querySelector("#new-rule-default").value.trim();
+    const desc = rulesPanel.querySelector("#new-rule-desc").value.trim();
+    
+    if (!key || !label) {
+      showToast("Key and Label are required", "error");
+      return;
+    }
+    
+    // Add to definitions
+    const newRule = { key, label, type, default: defaultVal || undefined, description: desc || `Custom rule: ${key}` };
+    LOCATION_RULES_DEFINITION.push(newRule);
+    
+    // Add to dropdowns
+    const rulesSelects = [fields.querySelector("#add-rules"), document.querySelector("#edit-rules")].filter(Boolean);
+    rulesSelects.forEach(select => {
+      if (select) {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = `${label} ${type !== "boolean" && defaultVal ? `(default: ${defaultVal})` : ""} — ${desc || "Custom rule"}`;
+        select.appendChild(option);
+      }
     });
+    
+    // Clear inputs
+    rulesPanel.querySelector("#new-rule-key").value = "";
+    rulesPanel.querySelector("#new-rule-label").value = "";
+    rulesPanel.querySelector("#new-rule-default").value = "";
+    rulesPanel.querySelector("#new-rule-desc").value = "";
+    
+    // Show in list
+    const list = rulesPanel.querySelector("#custom-rules-list");
+    const item = document.createElement("div");
+    item.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px;background:#f0ebe0;border-radius:4px;margin:4px 0;";
+    item.innerHTML = `
+      <code style="background:#e2e8f0;padding:2px 6px;border-radius:3px;">${key}</code>
+      <strong>${label}</strong>
+      <span class="muted">${type}${defaultVal ? ` (default: ${defaultVal})` : ""}</span>
+      <span class="muted" style="margin-left:auto;font-size:0.85em;">✓ Added</span>
+    `;
+    list.appendChild(item);
+    
+    showToast(`Rule "${key}" added to system`, "success");
   });
+  
   root.appendChild(rulesPanel);
 
   // Bulk Import
@@ -1555,14 +1769,58 @@ function mountLocations(host) {
 
   // Create button
   fields.querySelector('[data-action="create-location"]').addEventListener("click", async () => {
-    const rules = buildRulesFromCheckboxes(fields.querySelector("#add-rules-builder"));
-    const enemyKeys = Array.from(fields.querySelectorAll("#add-enemies [data-enemy-key]:checked")).map(el => el.dataset.enemyKey);
     const get = (k) => {
       const el = fields.querySelector(`[data-field="${k}"]`);
       if (!el) return null;
       if (el.type === "checkbox") return el.checked;
       return el.value;
     };
+    
+    // Build rules from multi-select
+    const rules = {};
+    const selectedRules = Array.from(fields.querySelector("#add-rules").selectedOptions).map(o => o.value);
+    selectedRules.forEach(key => {
+      const def = LOCATION_RULES_DEFINITION.find(d => d.key === key);
+      if (def) {
+        if (def.type === "boolean") {
+          rules[key] = true;
+        } else {
+          const valueInput = fields.querySelector(`[data-rule-value="${key}"]`);
+          if (valueInput && valueInput.value.trim()) {
+            if (def.type === "number") {
+              const numVal = parseFloat(valueInput.value);
+              if (!isNaN(numVal)) rules[key] = numVal;
+            } else {
+              rules[key] = valueInput.value.trim();
+            }
+          }
+        }
+      }
+    });
+    
+    // Add custom rules
+    fields.querySelectorAll("#add-custom-rules .custom-rule-row").forEach(rowEl => {
+      const keyInput = rowEl.querySelector(".custom-rule-key");
+      const valueInput = rowEl.querySelector(".custom-rule-value");
+      if (keyInput && valueInput && keyInput.value.trim()) {
+        const key = keyInput.value.trim();
+        const val = valueInput.value.trim();
+        if (!isNaN(parseFloat(val)) && val !== "") {
+          rules[key] = parseFloat(val);
+        } else if (val === "true") {
+          rules[key] = true;
+        } else if (val === "false") {
+          rules[key] = false;
+        } else if (val.startsWith("{") || val.startsWith("[")) {
+          try { rules[key] = JSON.parse(val); } catch { rules[key] = val; }
+        } else {
+          rules[key] = val;
+        }
+      }
+    });
+    
+    const enemyKeys = Array.from(fields.querySelector("#add-enemies").selectedOptions).map(o => o.value);
+    
     const payload = {
       key: get("key") || undefined, // auto-generate if empty
       label: get("label"),
@@ -1585,7 +1843,18 @@ function mountLocations(host) {
         if (el.type === "checkbox") el.checked = el.dataset.field === "is_active";
         else el.value = "";
       });
-      setRulesCheckboxes(fields.querySelector("#add-rules-builder"), {});
+      fields.querySelector("#add-rules").selectedIndex = -1;
+      fields.querySelector("#add-rules-values").innerHTML = "";
+      fields.querySelector("#add-enemies").selectedIndex = -1;
+      // Clear custom rules except one empty row
+      const customContainer = fields.querySelector("#add-custom-rules");
+      customContainer.innerHTML = `
+        <div class="custom-rule-row" style="display:flex;gap:8px;margin:4px 0;">
+          <input type="text" placeholder="rule_key" class="custom-rule-key" style="width:150px;padding:4px 8px;" />
+          <input type="text" placeholder="value (text/number/true/false/JSON)" class="custom-rule-value" style="flex:1;padding:4px 8px;" />
+          <button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button>
+        </div>
+      `;
       await refreshLocations(host);
     } catch (e) {
       showToast(parseApiError(e, "Create failed"), "error");
