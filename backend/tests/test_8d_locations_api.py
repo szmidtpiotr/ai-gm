@@ -283,7 +283,7 @@ class TestGetLocationDetail:
         assert data["label"] == "Szczegóły Test"
         assert data["description"] == "Opis do szczegółów"
         assert data["location_type"] == "macro"
-        assert data["rules"] == '{"no_combat": true}'
+        assert data["rules"] == {"no_combat": True}
         assert "children" in data
         assert "parent" in data
 

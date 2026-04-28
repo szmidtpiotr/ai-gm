@@ -390,6 +390,13 @@ ADMIN_MIGRATIONS = [
     # Phase 8D — Add updated_at to game_config_meta for ON CONFLICT UPDATE
     # Use constant default (epoch) because SQLite ALTER TABLE doesn't support function defaults
     "ALTER TABLE game_config_meta ADD COLUMN updated_at TEXT DEFAULT '1970-01-01T00:00:00Z'",
+    # Phase 8D-5 — Location auto-create review state and DEV default flag
+    "ALTER TABLE game_locations ADD COLUMN ai_generated INTEGER DEFAULT 0",
+    "ALTER TABLE game_locations ADD COLUMN approved INTEGER DEFAULT 1",
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value)
+    VALUES ('location_auto_create_enabled', '1')
+    """,
 ]
 
 ADMIN_SEEDS = [
