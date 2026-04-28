@@ -124,6 +124,9 @@ async function run(scenario, options = {}) {
 
   let result = { success: false, reason: "max_steps_reached", steps: 0, exploit_found: false };
   let terminal = false;
+  // Musi być zainicjalizowane zanim wejdziemy w try/finally,
+  // bo przy błędach wcześnie w logu dostajemy "step is not defined".
+  let step = 0;
 
   try {
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
@@ -148,7 +151,6 @@ async function run(scenario, options = {}) {
     const llm = new LLMClient(scenario, plannerLlm);
     const history = [];
     const actionHistory = [];
-    let step = 0;
 
     logStructured("info", "run_login_complete", { campaign_id: cfg.campaign_id, character_id: cfg.character_id });
 
@@ -273,7 +275,9 @@ async function run(scenario, options = {}) {
     logStructured("error", "run_exception", { error: err && err.message ? err.message : String(err), step });
     throw err;
   } finally {
-    logStructured("info", "run_cleanup", { duration_ms: Date.now() - startMs, final_step: step });
+    // safeStep: unikamy crasha przy błędach we wczesnej inicjalizacji
+    const safeStep = typeof step === "number" ? step : 0;
+    logStructured("info", "run_cleanup", { duration_ms: Date.now() - startMs, final_step: safeStep });
     if (sessionRef) {
       sessionRef.page = null;
     }
