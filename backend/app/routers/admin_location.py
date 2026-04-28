@@ -27,6 +27,7 @@ router = APIRouter(tags=["Admin Location Integrity"])
 class FlagsPatchRequest(BaseModel):
     """Request body dla aktualizacji flag sesji."""
     location_integrity_enabled: Optional[int] = None
+    location_auto_create_enabled: Optional[int] = None
     location_parser_json_enabled: Optional[int] = None
     location_parser_fallback_enabled: Optional[int] = None
 
@@ -89,6 +90,7 @@ async def get_global_location_flags(
             SELECT key, value FROM game_config_meta
             WHERE key IN (
                 'location_integrity_enabled',
+                'location_auto_create_enabled',
                 'location_parser_json_enabled',
                 'location_parser_fallback_enabled'
             )
@@ -97,6 +99,7 @@ async def get_global_location_flags(
         
         flags = {
             "location_integrity_enabled": True,
+            "location_auto_create_enabled": True,
             "location_parser_json_enabled": True,
             "location_parser_fallback_enabled": True,
         }
@@ -129,7 +132,12 @@ async def update_global_location_flags(
     conn = _get_db_connection()
     try:
         updated = []
-        for flag_name in ["location_integrity_enabled", "location_parser_json_enabled", "location_parser_fallback_enabled"]:
+        for flag_name in [
+            "location_integrity_enabled",
+            "location_auto_create_enabled",
+            "location_parser_json_enabled",
+            "location_parser_fallback_enabled",
+        ]:
             value = getattr(req, flag_name)
             if value is not None:
                 str_value = "1" if value else "0"

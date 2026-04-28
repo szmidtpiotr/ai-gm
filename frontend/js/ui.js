@@ -288,6 +288,58 @@ window.appendToStreamingBubble = function (bubbleEl, token) {
   window.scrollChatToBottomThrottled();
 };
 
+window.parseGMResponse = function (text) {
+  const raw = String(text || '').trim();
+  if (!raw) return String(text || '');
+
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  try {
+    const data = JSON.parse(cleaned);
+    if (data && typeof data === 'object' && typeof data.narrative === 'string') {
+      return data.narrative;
+    }
+  } catch (_e) {
+    // Plain-text fallback: older GM responses are not JSON wrappers.
+  }
+
+  const keyIndex = cleaned.indexOf('"narrative"');
+  if (keyIndex >= 0) {
+    const colonIndex = cleaned.indexOf(':', keyIndex);
+    const quoteIndex = colonIndex >= 0 ? cleaned.indexOf('"', colonIndex + 1) : -1;
+    if (quoteIndex >= 0) {
+      let out = '';
+      let escaped = false;
+      for (let i = quoteIndex + 1; i < cleaned.length; i += 1) {
+        const ch = cleaned[i];
+        if (escaped) {
+          if (ch === 'n') out += '\n';
+          else if (ch === 't') out += '\t';
+          else out += ch;
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (ch === '"') {
+          const tail = cleaned.slice(i + 1).trimStart();
+          if (tail.startsWith(',') || tail.startsWith('}')) {
+            return out;
+          }
+        }
+        out += ch;
+      }
+    }
+  }
+
+  return String(text || '');
+};
+
 window.suppressCombatEndedAutoUi = function () {
   if (!window.state?._combatJustEnded) return false;
   window.state.activeRollRequest = null;
@@ -316,6 +368,10 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
   if (!bubbleEl) return;
 
   const suppressRollAfterCombatEnd = !!window.state?._combatJustEnded;
+  const displayText =
+    typeof window.parseGMResponse === 'function'
+      ? window.parseGMResponse(fullText)
+      : fullText;
 
   bubbleEl.classList.remove('streaming');
   bubbleEl.removeAttribute('id');
@@ -326,18 +382,18 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
 
   const route = bubbleEl.querySelector('.route-badge')?.textContent || '';
   const pfx = window.COMBAT_ROLL_PREFIX;
-  const hasCombatEmbed = route === 'narrative' && String(fullText || '').includes(pfx);
+  const hasCombatEmbed = route === 'narrative' && String(displayText || '').includes(pfx);
 
   if (route === 'narrative' && hasCombatEmbed && bodyEl && typeof window.buildInterleavedNarrativeAndCombatHtml === 'function') {
-    const html = window.buildInterleavedNarrativeAndCombatHtml(fullText);
+    const html = window.buildInterleavedNarrativeAndCombatHtml(displayText);
     bodyEl.innerHTML = html || '';
     if (pre && pre.parentNode === bodyEl) {
       pre.remove();
     }
   } else {
-    let renderedText = fullText;
+    let renderedText = displayText;
     if (route === 'narrative' && typeof window.parsePendingRoll === 'function') {
-      renderedText = window.parsePendingRoll(fullText);
+      renderedText = window.parsePendingRoll(displayText);
       if (pre) pre.textContent = renderedText;
     } else if (typeof window.parsePendingRoll === 'function') {
       window.parsePendingRoll('');
@@ -967,13 +1023,20 @@ window.addMessage = function ({
   const { chatEl } = window.getEls();
   if (!chatEl) return;
 
+  const messageText =
+    role === 'assistant' &&
+    route === 'narrative' &&
+    typeof window.parseGMResponse === 'function'
+      ? window.parseGMResponse(text)
+      : text;
+
   const combatRollPayload =
-    text && typeof window.tryParseCombatRollCardFromText === 'function'
-      ? window.tryParseCombatRollCardFromText(text)
+    messageText && typeof window.tryParseCombatRollCardFromText === 'function'
+      ? window.tryParseCombatRollCardFromText(messageText)
       : null;
   const rollPayload =
-    role === 'user' && text && typeof window.tryParseRollCardFromText === 'function'
-      ? window.tryParseRollCardFromText(text)
+    role === 'user' && messageText && typeof window.tryParseRollCardFromText === 'function'
+      ? window.tryParseRollCardFromText(messageText)
       : null;
   const effRoute = combatRollPayload || rollPayload ? 'dice' : route;
 
@@ -1046,17 +1109,17 @@ window.addMessage = function ({
     body.innerHTML = window.buildRollCardHtml(rollPayload);
   } else if (
     role === 'user' &&
-    text &&
+    messageText &&
     !rollPayload &&
     !combatRollPayload &&
-    /^\s*(\/roll\b|roll\s+\S+\s+d\d+)/i.test(String(text).trim())
+    /^\s*(\/roll\b|roll\s+\S+\s+d\d+)/i.test(String(messageText).trim())
   ) {
     body.innerHTML =
       '<div class="roll-card roll-card--light roll-card--neutral roll-card--pending">' +
       '<div class="roll-card__line roll-card__line--detail">🎲 Rzut w toku…</div>' +
       '</div>';
   } else {
-    body.innerHTML = `<pre>${window.escapeHtml(text)}</pre>`;
+    body.innerHTML = `<pre>${window.escapeHtml(messageText)}</pre>`;
   }
 
   wrap.appendChild(meta);
@@ -1084,26 +1147,33 @@ window.replaceThinkingBubble = function ({
   const { chatEl } = window.getEls();
   if (!chatEl) return;
 
+  const messageText =
+    role === 'assistant' &&
+    route === 'narrative' &&
+    typeof window.parseGMResponse === 'function'
+      ? window.parseGMResponse(text)
+      : text;
+
   const existing = chatEl.querySelector('#thinking-bubble');
   if (!existing) {
     window.addMessage({ speaker, text, role, route, turn, createdAt });
     return;
   }
 
-  let renderedText = text;
+  let renderedText = messageText;
   if (route === 'narrative' && typeof window.parsePendingRoll === 'function') {
-    renderedText = window.parsePendingRoll(text);
+    renderedText = window.parsePendingRoll(messageText);
   } else if (typeof window.parsePendingRoll === 'function') {
     window.parsePendingRoll('');
   }
 
   const combatRollPayload =
-    text && typeof window.tryParseCombatRollCardFromText === 'function'
-      ? window.tryParseCombatRollCardFromText(text)
+    messageText && typeof window.tryParseCombatRollCardFromText === 'function'
+      ? window.tryParseCombatRollCardFromText(messageText)
       : null;
   const rollPayload =
-    role === 'user' && text && typeof window.tryParseRollCardFromText === 'function'
-      ? window.tryParseRollCardFromText(text)
+    role === 'user' && messageText && typeof window.tryParseRollCardFromText === 'function'
+      ? window.tryParseRollCardFromText(messageText)
       : null;
   const effRoute = combatRollPayload || rollPayload ? 'dice' : route;
 
@@ -1499,7 +1569,11 @@ window.renderTurnsToChat = function () {
           window.addGmRollBubble(persistedGmRoll, turn.turn_number || turn.id);
         }
 
-        const assistantText = String(narrativeText || '');
+        const assistantText = String(
+          typeof window.parseGMResponse === 'function'
+            ? window.parseGMResponse(narrativeText)
+            : narrativeText || ''
+        );
         if (!assistantText.trim()) return;
 
         const msgWrap = document.createElement('div');

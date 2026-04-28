@@ -28,7 +28,7 @@ FALLBACK_PARSER_PROMPT = """Przeanalizuj poniższą narrację gracza i odpowiedz
 Zadanie: Wykryj czy gracz wyraźnie wyraża intencję przemieszczenia się do innej lokalizacji.
 
 Odpowiedz w formacie:
-{"moved": true/false, "target_label": "nazwa lokalizacji lub null", "confidence": "high/medium/low"}
+{{"moved": true/false, "target_label": "nazwa lokalizacji lub null", "confidence": "high/medium/low"}}
 
 Gdzie:
 - "moved": true - gracz wyraźnie zmienia lokalizację
