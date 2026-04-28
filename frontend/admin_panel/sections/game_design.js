@@ -1141,62 +1141,201 @@ async function refreshConditions(host) {
 }
 
 // ============ LOCATIONS ============
+function locationTypeBadgeClass(type) {
+  if (type === "macro") return "badge-blue";
+  if (type === "sub") return "badge-green";
+  return "badge";
+}
+
+async function fetchLocationParentLabel(parentId, allLocations) {
+  const parent = allLocations.find(l => l.id === parentId);
+  return parent ? `${parent.label} (${parent.key})` : `ID:${parentId}`;
+}
+
+function validateLocationImportRow(row, i) {
+  const errs = [];
+  if (!row.key || String(row.key).trim() === "") errs.push(`[${i}] key is required`);
+  if (!row.label || String(row.label).trim() === "") errs.push(`[${i}] label is required`);
+  const t = String(row.location_type || "macro").toLowerCase();
+  if (!["macro", "sub"].includes(t)) errs.push(`[${i}] location_type must be macro or sub`);
+  if (t === "sub" && (row.parent_id == null || Number(row.parent_id) <= 0)) errs.push(`[${i}] parent_id is required for sub locations`);
+  return errs;
+}
+
+function locationImportRowToPayload(row) {
+  return {
+    key: String(row.key).trim(),
+    label: String(row.label).trim(),
+    location_type: String(row.location_type || "macro").toLowerCase(),
+    parent_id: row.parent_id != null ? Number(row.parent_id) || null : null,
+    description: row.description == null ? null : String(row.description),
+    rules: (() => {
+      if (row.rules == null) return {};
+      if (typeof row.rules === "object") return row.rules;
+      try { return JSON.parse(String(row.rules)); } catch { return { text: String(row.rules) }; }
+    })(),
+    enemy_keys: Array.isArray(row.enemy_keys) ? row.enemy_keys : [],
+    npc_keys: Array.isArray(row.npc_keys) ? row.npc_keys : [],
+    is_active: row.is_active !== false && row.is_active !== 0,
+  };
+}
+
+async function refreshLocations(host, statKeys) {
+  const mount = host.querySelector(".admin-table-mount");
+  if (!mount) return;
+  try {
+    const data = await adminFetch("/api/locations/admin/locations?active_only=0");
+    const allLocations = data || [];
+    const rows = await Promise.all(
+      allLocations.map(async (r) => ({
+        ...r,
+        _parent_label: r.parent_id ? await fetchLocationParentLabel(r.parent_id, allLocations) : "—",
+        _enemy_count: Array.isArray(r.enemy_keys) ? r.enemy_keys.length : 0,
+        _rules_preview: r.rules ? (typeof r.rules === "object" ? JSON.stringify(r.rules).slice(0, 40) : String(r.rules).slice(0, 40)) : "",
+      })),
+    );
+    renderGameDesignTable(
+      mount,
+      "locations",
+      [
+        { key: "key", label: "Key" },
+        { key: "label", label: "Label", editable: true },
+        { key: "location_type", label: "Type", type: "badge", badgeClass: locationTypeBadgeClass, editable: true, editType: "select", editOptions: ["macro", "sub"] },
+        { key: "_parent_label", label: "Parent" },
+        { key: "_enemy_count", label: "Enemies", type: "number" },
+        { key: "_rules_preview", label: "Rules" },
+        { key: "is_active", label: "Active", type: "boolean", editable: true },
+      ],
+      rows,
+      {
+        onEdit: async (row, key, newValue, meta) => {
+          const body = { force: !!(meta && meta.force) };
+          if (key === "label") body.label = newValue;
+          if (key === "is_active") body.is_active = !!newValue;
+          if (key === "location_type") body.location_type = String(newValue).trim().toLowerCase();
+          const pathKey = row.key;
+          const res = await adminFetch(`/api/locations/admin/locations/${encodeURIComponent(pathKey)}`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          });
+          return res;
+        },
+        onDelete: async (row) => {
+          await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, { method: "DELETE" });
+        },
+      },
+    );
+  } catch (e) {
+    showToast(parseApiError(e, "Failed to load locations."), "error");
+    renderTable(mount, [], [], {});
+  }
+}
+
 function mountLocations(host) {
   const root = el("div", "admin-subpanel-inner");
-  let locationsData = [];
-  let enemiesList = [];
-  let editingId = null;
-  let selectedEnemyKeys = [];
+  const toggleRow = el("div", "admin-add-form-toggle");
+  const toggle = el("button", "secondary-btn", "Add location ▾");
+  toggle.type = "button";
+  const details = el("div", "add-form admin-add-form-collapsed");
+  const fields = el("div", "admin-add-form-fields");
 
-  // Header
-  const header = el("div", "section-header");
-  header.innerHTML = `<h3>Locations</h3><p class="muted">Manage game locations (macro/sub) with enemies and rules.</p>`;
-  root.appendChild(header);
-
-  // Tree view
-  const treeSection = el("div", "locations-tree-section");
-  treeSection.innerHTML = `<h4>Location Tree</h4><div id="loc-tree"></div>`;
-  root.appendChild(treeSection);
-
-  // Form section
-  const formSection = el("div", "locations-form-section");
-  formSection.innerHTML = `
-    <h4 id="loc-form-title">Add Location</h4>
+  // Formularz dodawania
+  fields.innerHTML = `
     <div class="add-form-grid">
-      <label class="field"><span>Key (auto)</span><input id="loc-key" type="text" placeholder="auto-from-label" /></label>
-      <label class="field"><span>Label *</span><input id="loc-label" type="text" /></label>
+      <label class="field"><span>Key</span><input data-field="key" type="text" /></label>
+      <label class="field"><span>Label</span><input data-field="label" type="text" /></label>
       <label class="field"><span>Type</span>
-        <select id="loc-type">
-          <option value="macro">Macro (top-level)</option>
+        <select data-field="location_type">
+          <option value="macro" selected>Macro (top-level)</option>
           <option value="sub">Sub (under macro)</option>
         </select>
       </label>
-      <label class="field"><span>Parent (for sub)</span>
-        <select id="loc-parent"><option value="">— None (macro) —</option></select></label>
-      <label class="field add-form-span-2"><span>Description</span><textarea id="loc-desc" rows="2"></textarea></label>
-      <label class="field add-form-span-2"><span>Rules (JSON or text)</span>
-        <textarea id="loc-rules" rows="2" placeholder='{"no_combat": true}'></textarea></label>
-      <div id="loc-rules-error" class="field-error add-form-span-2" style="display:none;color:#dc2626;"></div>
-      <label class="field"><span>Active</span><input id="loc-active" type="checkbox" checked /></label>
+      <label class="field"><span>Parent ID (for sub)</span><input data-field="parent_id" type="number" placeholder="ID of parent macro" /></label>
+      <label class="field add-form-span-2"><span>Description</span><input data-field="description" type="text" /></label>
+      <label class="field add-form-span-2"><span>Rules (JSON)</span><input data-field="rules" type="text" placeholder='{"no_combat": true}' /></label>
+      <label class="field add-form-span-2"><span>Enemy keys (JSON array)</span><input data-field="enemy_keys" type="text" placeholder='["goblin","wolf"]' /></label>
+      <label class="field"><span>Active</span><input data-field="is_active" type="checkbox" checked /></label>
     </div>
-    <div class="enemy-assignment" style="margin:12px 0;padding:12px;background:#f8fafc;border-radius:6px;">
-      <strong>Enemies in this location:</strong>
-      <div id="loc-enemy-tags" style="margin:8px 0;display:flex;flex-wrap:wrap;gap:4px;"></div>
-      <div style="display:flex;gap:8px;">
-        <select id="loc-enemy-select" style="flex:1;"><option value="">— Select enemy —</option></select>
-        <button type="button" class="secondary-btn" id="loc-add-enemy">+ Add</button>
-      </div>
-      <div class="muted" style="margin-top:4px;font-size:0.85em;">NPC: assigning available in Phase 9</div>
-    </div>
-    <div class="form-actions">
-      <button type="button" class="primary-btn" id="loc-save">Save</button>
-      <button type="button" class="secondary-btn" id="loc-cancel">Cancel</button>
-      <button type="button" class="danger-btn" id="loc-delete" style="display:none;margin-left:auto;">Delete</button>
-    </div>
+    <button type="button" class="primary-btn admin-add-form-submit" data-action="create-location">Create</button>
   `;
-  root.appendChild(formSection);
+  details.appendChild(fields);
+  toggle.addEventListener("click", () => {
+    details.classList.toggle("admin-add-form-collapsed");
+    toggle.textContent = details.classList.contains("admin-add-form-collapsed") ? "Add location ▾" : "Add location ▴";
+  });
+  toggleRow.appendChild(toggle);
+  root.appendChild(toggleRow);
+  root.appendChild(details);
 
-  // Flags section
+  // Bulk Import
+  wireBulkJsonImport(root, {
+    hint: "Wklej tablicę lokalizacji. Macro locations nie wymagają parent_id. Sub locations wymagają istniejącego parent_id.",
+    templatesHref: "/admin_panel/templates.html#sec-locations",
+    templatesAnchor: "Szablony JSON — Locations",
+    placeholder: '[{ "key": "dark_forest", "label": "Dark Forest", "location_type": "macro", ... }]',
+    validateRow: (row, i) => validateLocationImportRow(row, i),
+    buildPayload: (row) => locationImportRowToPayload(row),
+    postPath: "/api/locations",
+    existingKeys: () => fetchExistingKeysFromAdminList("/api/locations/admin/locations?active_only=0"),
+    existingRows: () => fetchExistingRowsByKeyFromAdminList("/api/locations/admin/locations?active_only=0"),
+    patchPath: (key) => `/api/locations/admin/locations/${encodeURIComponent(key)}`,
+    buildDuplicatePatch: (raw, existing) =>
+      buildPatchFromExplicitFields(raw, existing, [
+        { rawKey: "label", patchKey: "label", getValue: (r) => String(r.label).trim() },
+        { rawKey: "description", patchKey: "description", getValue: (r) => (r.description == null ? null : String(r.description)) },
+        { rawKey: "rules", patchKey: "rules", getValue: (r) => {
+          if (r.rules == null) return {};
+          if (typeof r.rules === "object") return r.rules;
+          try { return JSON.parse(String(r.rules)); } catch { return { text: String(r.rules) }; }
+        }},
+        { rawKey: "enemy_keys", patchKey: "enemy_keys", getValue: (r) => (Array.isArray(r.enemy_keys) ? r.enemy_keys : []) },
+        { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
+      ]),
+    refresh: () => refreshLocations(host),
+    confirmNoun: "lokalizacji",
+  });
+
+  // Table mount
+  const mount = el("div", "admin-table-mount");
+  root.appendChild(mount);
+
+  // Create button
+  fields.querySelector('[data-action="create-location"]').addEventListener("click", async () => {
+    const get = (k) => {
+      const el = fields.querySelector(`[data-field="${k}"]`);
+      if (!el) return null;
+      if (el.type === "checkbox") return el.checked;
+      return el.value;
+    };
+    const payload = locationImportRowToPayload({
+      key: get("key"),
+      label: get("label"),
+      location_type: get("location_type"),
+      parent_id: get("parent_id") ? Number(get("parent_id")) : null,
+      description: get("description"),
+      rules: get("rules"),
+      enemy_keys: (() => { try { return JSON.parse(get("enemy_keys") || "[]"); } catch { return []; } })(),
+      is_active: get("is_active"),
+    });
+    if (!payload.key || !payload.label) {
+      showToast("Key and Label are required", "error");
+      return;
+    }
+    try {
+      await adminFetch("/api/locations", { method: "POST", body: JSON.stringify(payload) });
+      showToast("Location created", "success");
+      // Clear form
+      fields.querySelectorAll("[data-field]").forEach((el) => {
+        if (el.type === "checkbox") el.checked = true;
+        else el.value = "";
+      });
+      await refreshLocations(host);
+    } catch (e) {
+      showToast(parseApiError(e, "Create failed"), "error");
+    }
+  });
+
+  // Location Integrity Flags section
   const flagsSection = el("div", "locations-flags-section");
   flagsSection.style.cssText = "background:#f8fafc;padding:12px;border-radius:6px;margin:16px 0;";
   flagsSection.innerHTML = `
@@ -1234,174 +1373,14 @@ function mountLocations(host) {
 
   host.appendChild(root);
 
-  // Elements
-  const treeHost = treeSection.querySelector("#loc-tree");
-  const formTitle = formSection.querySelector("#loc-form-title");
-  const keyInput = formSection.querySelector("#loc-key");
-  const labelInput = formSection.querySelector("#loc-label");
-  const typeSelect = formSection.querySelector("#loc-type");
-  const parentSelect = formSection.querySelector("#loc-parent");
-  const descInput = formSection.querySelector("#loc-desc");
-  const rulesInput = formSection.querySelector("#loc-rules");
-  const rulesError = formSection.querySelector("#loc-rules-error");
-  const activeCheck = formSection.querySelector("#loc-active");
-  const enemyTags = formSection.querySelector("#loc-enemy-tags");
-  const enemySelect = formSection.querySelector("#loc-enemy-select");
-  const saveBtn = formSection.querySelector("#loc-save");
-  const cancelBtn = formSection.querySelector("#loc-cancel");
-  const deleteBtn = formSection.querySelector("#loc-delete");
+  // Flags events
   const flagsInfo = flagsSection.querySelector("#flags-info");
-  const logTable = logSection.querySelector("#loc-log-table");
-
-  // Helpers
-  function slugify(text) {
-    if (!text) return "";
-    return text.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "_").substring(0, 50);
-  }
-  function validateJson(value) {
-    if (!value || !value.trim()) return { valid: true };
-    try { JSON.parse(value); return { valid: true }; }
-    catch (e) { return { valid: false, error: e.message }; }
-  }
-  function renderEnemyTags() {
-    if (!selectedEnemyKeys.length) { enemyTags.innerHTML = "<em class='muted'>No enemies assigned</em>"; return; }
-    enemyTags.innerHTML = selectedEnemyKeys.map(k => `<span class="enemy-tag">${k}<span class="remove-enemy" data-key="${k}">×</span></span>`).join("");
-  }
-  function updateParentSelect() {
-    const macros = locationsData.filter(l => l.location_type === "macro" || !l.parent_id);
-    parentSelect.innerHTML = '<option value="">— None (macro) —</option>' + macros.map(m => `<option value="${m.id}">${m.label} (${m.key})</option>`).join("");
-  }
-  function buildTree() {
-    const macros = locationsData.filter(l => l.location_type === "macro" || !l.parent_id);
-    const subs = locationsData.filter(l => l.location_type === "sub" && l.parent_id);
-    if (!macros.length) { treeHost.innerHTML = "<p class='muted'>No locations. Use the form below to add the first one.</p>"; return; }
-    let html = "<div class='location-tree'><ul>";
-    for (const m of macros) {
-      const children = subs.filter(s => s.parent_id === m.id);
-      const cls = m.is_active ? "" : "inactive";
-      html += `<li><div class="loc-node ${cls}" data-id="${m.id}">🏛️ <strong>${m.label}</strong> <code>${m.key}</code> <span class="badge">macro</span>` +
-              `<button class="edit-loc" data-id="${m.id}">Edit</button></div>`;
-      if (children.length) {
-        html += "<ul class='sub-locs'>";
-        for (const c of children) {
-          const ccls = c.is_active ? "" : "inactive";
-          html += `<li><div class="loc-node ${ccls}" data-id="${c.id}">📍 ${c.label} <code>${c.key}</code> <span class="badge sub">sub</span>` +
-                  `<button class="edit-loc" data-id="${c.id}">Edit</button></div></li>`;
-        }
-        html += "</ul>";
-      }
-      html += "</li>";
-    }
-    const orphans = subs.filter(s => !macros.some(m => m.id === s.parent_id));
-    if (orphans.length) {
-      html += `<li style="margin-top:8px;border-top:1px dashed #475569;padding-top:8px;"><em class="muted">Orphan sub-locations:</em><ul class="sub-locs">`;
-      for (const o of orphans) {
-        html += `<li><div class="loc-node" data-id="${o.id}">📍 ${o.label} <code>${o.key}</code> <span class="badge sub">orphan sub</span>` +
-                `<button class="edit-loc" data-id="${o.id}">Edit</button></div></li>`;
-      }
-      html += "</ul></li>";
-    }
-    html += "</ul></div>";
-    treeHost.innerHTML = html;
-  }
-  function resetForm() {
-    editingId = null;
-    formTitle.textContent = "Add Location";
-    keyInput.value = "";
-    labelInput.value = "";
-    typeSelect.value = "macro";
-    parentSelect.value = "";
-    descInput.value = "";
-    rulesInput.value = "";
-    rulesInput.classList.remove("json-invalid", "json-valid");
-    rulesError.style.display = "none";
-    activeCheck.checked = true;
-    selectedEnemyKeys = [];
-    renderEnemyTags();
-    deleteBtn.style.display = "none";
-    parentSelect.disabled = false;
-  }
-  function editLocation(id) {
-    const loc = locationsData.find(l => String(l.id) === String(id));
-    if (!loc) return;
-    editingId = id;
-    formTitle.textContent = "Edit Location";
-    keyInput.value = loc.key || "";
-    labelInput.value = loc.label || "";
-    typeSelect.value = loc.location_type || "macro";
-    parentSelect.value = loc.parent_id || "";
-    descInput.value = loc.description || "";
-    rulesInput.value = loc.rules ? (typeof loc.rules === "object" ? JSON.stringify(loc.rules, null, 2) : String(loc.rules)) : "";
-    validateRules();
-    activeCheck.checked = loc.is_active !== 0;
-    selectedEnemyKeys = Array.isArray(loc.enemy_keys) ? [...loc.enemy_keys] : [];
-    renderEnemyTags();
-    deleteBtn.style.display = "inline-block";
-    parentSelect.disabled = true;
-  }
-  function validateRules() {
-    const r = validateJson(rulesInput.value);
-    rulesInput.classList.toggle("json-invalid", !r.valid);
-    rulesInput.classList.toggle("json-valid", r.valid && rulesInput.value.trim());
-    rulesError.style.display = r.valid ? "none" : "block";
-    rulesError.textContent = r.valid ? "" : "JSON error: " + r.error;
-    return r.valid;
-  }
-
-  // Events
-  labelInput.addEventListener("input", () => { if (!editingId) keyInput.value = slugify(labelInput.value); });
-  rulesInput.addEventListener("input", validateRules);
-  typeSelect.addEventListener("change", () => { parentSelect.disabled = typeSelect.value === "macro"; if (typeSelect.value === "macro") parentSelect.value = ""; });
-  enemyTags.addEventListener("click", (e) => { const btn = e.target.closest(".remove-enemy"); if (btn) { selectedEnemyKeys = selectedEnemyKeys.filter(k => k !== btn.dataset.key); renderEnemyTags(); } });
-  formSection.querySelector("#loc-add-enemy").addEventListener("click", () => { const v = enemySelect.value; if (v && !selectedEnemyKeys.includes(v)) { selectedEnemyKeys.push(v); renderEnemyTags(); } enemySelect.value = ""; });
-  cancelBtn.addEventListener("click", resetForm);
-  saveBtn.addEventListener("click", async () => {
-    const payload = {
-      key: keyInput.value.trim() || slugify(labelInput.value),
-      label: labelInput.value.trim(),
-      location_type: typeSelect.value,
-      parent_id: parentSelect.value ? parseInt(parentSelect.value, 10) : null,
-      description: descInput.value.trim(),
-      rules: (() => { const v = rulesInput.value.trim(); if (!v) return {}; try { return JSON.parse(v); } catch { return { text: v }; } })(),
-      enemy_keys: selectedEnemyKeys,
-      is_active: activeCheck.checked ? 1 : 0,
-    };
-    if (!payload.label) { showToast("Label is required", "error"); return; }
-    if (!payload.key) { showToast("Key is required", "error"); return; }
-    if (!validateRules()) { showToast("Fix JSON errors in Rules", "error"); return; }
-    try {
-      if (editingId) {
-        await adminFetch(`/api/locations/${encodeURIComponent(payload.key)}`, { method: "PUT", body: JSON.stringify(payload) });
-        showToast("Location updated", "success");
-      } else {
-        await adminFetch("/api/locations", { method: "POST", body: JSON.stringify(payload) });
-        showToast("Location created", "success");
-      }
-      resetForm();
-      await loadLocations();
-    } catch (e) { showToast(parseApiError(e, "Save failed"), "error"); }
-  });
-  deleteBtn.addEventListener("click", async () => {
-    if (!editingId) return;
-    const loc = locationsData.find(l => String(l.id) === String(editingId));
-    if (!loc) return;
-    if (!confirm(`Delete location "${loc.label}" (${loc.key})?`)) return;
-    try {
-      await adminFetch(`/api/locations/${encodeURIComponent(loc.key)}`, { method: "DELETE" });
-      showToast("Location deleted", "success");
-      resetForm();
-      await loadLocations();
-    } catch (e) { showToast(parseApiError(e, "Delete failed"), "error"); }
-  });
-  treeHost.addEventListener("click", (e) => { const btn = e.target.closest(".edit-loc"); if (btn) editLocation(btn.dataset.id); });
-
-  // Flags
   flagsSection.querySelector("#flags-reset").addEventListener("click", async () => {
     if (!confirm("Reset flags to global defaults?")) return;
     try {
       await adminFetch("/api/admin/config/location-flags", { method: "DELETE" });
       showToast("Flags reset", "success");
-      await loadFlags();
+      loadFlags();
     } catch (e) { showToast(parseApiError(e, "Reset failed"), "error"); }
   });
   flagsSection.querySelector("#flags-save").addEventListener("click", async () => {
@@ -1413,15 +1392,19 @@ function mountLocations(host) {
     try {
       await adminFetch("/api/admin/config/location-flags", { method: "PUT", body: JSON.stringify(flags) });
       showToast("Flags saved", "success");
-      await loadFlags();
+      loadFlags();
     } catch (e) { showToast(parseApiError(e, "Save failed"), "error"); }
   });
 
-  // Log
+  // Log events
+  const logTable = logSection.querySelector("#loc-log-table");
   logSection.querySelector("#log-refresh").addEventListener("click", async () => {
     const since = logSection.querySelector("#log-since").value;
     const until = logSection.querySelector("#log-until").value;
-    const params = new URLSearchParams(); if (since) params.append("since", since); if (until) params.append("until", until); params.append("limit", "50");
+    const params = new URLSearchParams();
+    if (since) params.append("since", since);
+    if (until) params.append("until", until);
+    params.append("limit", "50");
     try {
       const data = await adminFetch(`/api/admin/location-log?${params.toString()}`);
       const logs = data.entries || [];
@@ -1432,29 +1415,13 @@ function mountLocations(host) {
         const blocked = log.reason_blocked && log.reason_blocked !== "allowed";
         const cls = blocked ? "blocked" : "allowed";
         const icon = blocked ? "🚫" : "✅";
-        html += `<div class="log-entry ${cls}"><span class="log-time">${time}</span> ${icon} ${log.attempted_move || "move"} ` +
-                `<span class="log-loc">${log.current_location_key || "?"}</span>${blocked ? ` <span class="log-reason">(${log.reason_blocked})</span>` : ""}</div>`;
+        html += `<div class="log-entry ${cls}"><span class="log-time">${time}</span> ${icon} ${log.attempted_move || "move"} <span class="log-loc">${log.current_location_key || "?"}</span>${blocked ? ` <span class="log-reason">(${log.reason_blocked})</span>` : ""}</div>`;
       }
       logTable.innerHTML = html;
     } catch (e) { showToast(parseApiError(e, "Load log failed"), "error"); logTable.innerHTML = "<p class='muted'>Error loading logs.</p>"; }
   });
 
-  // Loaders
-  async function loadLocations() {
-    try {
-      locationsData = await adminFetch("/api/locations?active_only=0");
-      locationsData = locationsData.locations || locationsData;
-      buildTree();
-      updateParentSelect();
-    } catch (e) { showToast(parseApiError(e, "Failed to load locations"), "error"); treeHost.innerHTML = "<p class='muted'>Error loading locations.</p>"; }
-  }
-  async function loadEnemiesForSelect() {
-    try {
-      const d = await adminFetch("/api/admin/enemies");
-      enemiesList = (d.items || []).filter(e => e.is_active);
-      enemySelect.innerHTML = '<option value="">— Select enemy —</option>' + enemiesList.map(e => `<option value="${e.key}">${e.label} (${e.key})</option>`).join("");
-    } catch (e) { /* ignore */ }
-  }
+  // Load flags
   async function loadFlags() {
     try {
       const flags = await adminFetch("/api/admin/config/location-flags");
@@ -1469,10 +1436,8 @@ function mountLocations(host) {
   }
 
   // Init
-  loadLocations();
-  loadEnemiesForSelect();
+  refreshLocations(host);
   loadFlags();
-  renderEnemyTags();
 }
 
 function mountConditions(host) {

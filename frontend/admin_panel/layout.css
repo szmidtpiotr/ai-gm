@@ -2162,6 +2162,69 @@ pre.copy-block {
 .test-runner-log-err {
   color: var(--danger);
 }
+
+/* ============ LOCATIONS ============ */
+.badge-blue {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge-green {
+  background: #d1fae5;
+  color: #065f46;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.locations-flags-section {
+  background: var(--panel-2);
+  padding: 12px;
+  border-radius: var(--radius);
+  margin: 16px 0;
+}
+
+.locations-log-section {
+  margin: 16px 0;
+}
+
+.log-entry {
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  font-size: 13px;
+  border-left: 3px solid;
+  background: var(--panel-2);
+}
+
+.log-entry.blocked {
+  border-color: var(--danger);
+  background: rgba(185, 28, 28, 0.05);
+}
+
+.log-entry.allowed {
+  border-color: var(--ok);
+  background: rgba(21, 128, 61, 0.05);
+}
+
+.log-time {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.log-loc {
+  font-weight: 500;
+}
+
+.log-reason {
+  font-style: italic;
+  color: var(--muted);
+}
 .test-runner-log-info {
   color: var(--muted);
 }

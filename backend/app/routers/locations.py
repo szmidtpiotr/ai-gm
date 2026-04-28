@@ -415,3 +415,106 @@ async def delete_location(
         return None
     finally:
         conn.close()
+
+
+@router.get("/admin/locations", response_model=List[LocationResponse])
+async def list_locations_admin(
+    active_only: int = Query(default=0, ge=0, le=1, description="Tylko aktywne (0 = wszystkie, 1 = tylko active)"),
+    _admin: None = Depends(require_admin_token),
+):
+    """
+    Zwraca płaską listę wszystkich lokalizacji dla admin panelu (nie drzewo).
+    
+    Używane przez tabelę admina do bulk operacji.
+    """
+    conn = get_db_connection()
+    try:
+        where_sql = ""
+        params = []
+        if active_only == 1:
+            where_sql = "WHERE is_active = 1"
+        
+        cursor = conn.execute(
+            f"""
+            SELECT * FROM game_locations
+            {where_sql}
+            ORDER BY location_type DESC, label ASC
+            """,
+            params
+        )
+        rows = cursor.fetchall()
+        
+        locations = [row_to_location_dict(row) for row in rows]
+        return locations
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/locations/{key}")
+async def patch_location(
+    key: str,
+    data: dict,
+    _admin: None = Depends(require_admin_token),
+):
+    """
+    Częściowa aktualizacja lokalizacji (dla inline edit w tabeli).
+    
+    Obsługuje pola: label, description, is_active, rules, enemy_keys
+    """
+    conn = get_db_connection()
+    try:
+        # Sprawdź czy lokalizacja istnieje
+        existing = conn.execute(
+            "SELECT * FROM game_locations WHERE key = ?",
+            (key,)
+        ).fetchone()
+        
+        if not existing:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Lokalizacja '{key}' nie istnieje"
+            )
+        
+        location = row_to_location_dict(existing)
+        
+        # Buduj update
+        updates = []
+        params = []
+        
+        if "label" in data:
+            updates.append("label = ?")
+            params.append(data["label"])
+        if "description" in data:
+            updates.append("description = ?")
+            params.append(data["description"])
+        if "is_active" in data:
+            updates.append("is_active = ?")
+            params.append(1 if data["is_active"] else 0)
+        if "rules" in data:
+            if isinstance(data["rules"], dict):
+                updates.append("rules = ?")
+                params.append(json.dumps(data["rules"]))
+            else:
+                updates.append("rules = ?")
+                params.append(str(data["rules"]))
+        if "enemy_keys" in data and isinstance(data["enemy_keys"], list):
+            updates.append("enemy_keys = ?")
+            params.append(json.dumps(data["enemy_keys"]))
+        
+        if not updates:
+            return location
+        
+        updates.append("updated_at = CURRENT_TIMESTAMP")
+        params.append(key)
+        
+        conn.execute(
+            f"UPDATE game_locations SET {', '.join(updates)} WHERE key = ?",
+            params
+        )
+        conn.commit()
+        
+        # Pobierz zaktualizowaną
+        row = conn.execute("SELECT * FROM game_locations WHERE key = ?", (key,)).fetchone()
+        return row_to_location_dict(row)
+    finally:
+        conn.close()
