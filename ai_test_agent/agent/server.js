@@ -63,11 +63,30 @@ function loadScenarioFromFile(scenarioFile) {
   return { scenario: JSON.parse(fs.readFileSync(scenarioPath, "utf8")) };
 }
 
+function normalizePlannerLlmForNode(plannerLlm) {
+  if (!plannerLlm) return null;
+  if (typeof plannerLlm !== "object") return null;
+  // Format backendowy (internal): { llm_api_url, llm_model, llm_api_key? }
+  if (plannerLlm.llm_api_url) {
+    return plannerLlm;
+  }
+  // Format z panelu (jak /api/test_runner/start): { provider, base_url, model, api_key? }
+  const baseUrl = plannerLlm.base_url || plannerLlm.baseUrl;
+  const model = plannerLlm.model;
+  const apiKey = plannerLlm.api_key ?? plannerLlm.apiKey;
+  if (baseUrl && model) {
+    const out = { llm_api_url: baseUrl, llm_model: model };
+    if (apiKey !== undefined) out.llm_api_key = apiKey;
+    return out;
+  }
+  return null;
+}
+
 app.post("/agent/planner_ping", async (req, res) => {
   const planner_llm = req.body && req.body.planner_llm != null ? req.body.planner_llm : null;
   logStructured("info", "planner_ping", { has_custom_llm: !!planner_llm });
   try {
-    const out = await probePlannerConnectivity(planner_llm);
+    const out = await probePlannerConnectivity(normalizePlannerLlmForNode(planner_llm));
     logStructured("info", "planner_ping_result", { reachable: out.reachable, error: out.error });
     return res.json(out);
   } catch (err) {
@@ -137,7 +156,7 @@ app.post("/agent/run", async (req, res) => {
         send(stepData);
       },
       sessionRef,
-      plannerLlm,
+      plannerLlm: normalizePlannerLlmForNode(plannerLlm),
       isCancelled: isRunCancelled,
     });
     logStructured("info", "run_completed", { run_id: runId, success: result.success, reason: result.reason, steps: result.steps });
