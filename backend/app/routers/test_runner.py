@@ -477,7 +477,7 @@ def post_agent_planner_ping(req_body: AgentPlannerPingReq) -> dict[str, Any]:
     agent = _agent_url()
     internal = _agent_planner_llm_to_internal(req_body.agent_planner_llm)
     try:
-        with httpx.Client(timeout=httpx.Timeout(connect=8.0, read=12.0)) as client:
+        with httpx.Client(timeout=httpx.Timeout(8.0)) as client:
             r = client.post(f"{agent}/agent/planner_ping", json={"planner_llm": internal})
     except Exception as e:
         return {
