@@ -1265,8 +1265,19 @@ async function refreshLocations(host, statKeys) {
           });
           return res;
         },
-        onDelete: async (row) => {
-          await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, { method: "DELETE" });
+        onDelete: async (row, meta = {}) => {
+          try {
+            await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, { 
+              method: "DELETE",
+              body: JSON.stringify({ force: !!meta.force })
+            });
+          } catch (err) {
+            // If 204 No Content or 404, treat as success for soft-delete
+            if (err.status === 204 || err.status === 404) {
+              return;
+            }
+            throw err;
+          }
         },
         extraActions: (row) => [
           { label: "Edit", class: "secondary-btn", onClick: () => openLocationEditModal(host, row, allLocations) },

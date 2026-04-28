@@ -366,19 +366,26 @@ async def update_location(
         conn.close()
 
 
+class DeleteLocationReq(BaseModel):
+    force: bool = False
+
+
 @router.delete("/{key}", status_code=204)
 async def delete_location(
     key: str,
+    req: DeleteLocationReq | None = None,
     _admin: None = Depends(require_admin_token),
 ):
     """
     Soft-delete lokalizacji (is_active = 0).
     
     Nie usuwa fizycznie - tylko deaktywuje.
-    Blokowane jeśli lokalizacja ma aktywne dzieci.
+    Blokowane jeśli lokalizacja ma aktywne dzieci (chyba że force=true, wtedy deaktywujemy też dzieci).
     """
     conn = get_db_connection()
     try:
+        force = req.force if req else False
+        
         # Sprawdź czy lokalizacja istnieje
         location = conn.execute(
             "SELECT id FROM game_locations WHERE key = ? AND is_active = 1",
@@ -395,15 +402,22 @@ async def delete_location(
         
         # Sprawdź czy ma aktywne dzieci
         children = conn.execute(
-            "SELECT 1 FROM game_locations WHERE parent_id = ? AND is_active = 1",
+            "SELECT key FROM game_locations WHERE parent_id = ? AND is_active = 1",
             (location_id,)
-        ).fetchone()
+        ).fetchall()
         
         if children:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Nie można usunąć lokalizacji '{key}' - ma aktywne podlokalizacje. Najpierw usuń dzieci."
-            )
+            if not force:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Nie można usunąć lokalizacji '{key}' - ma aktywne podlokalizacje: {[c['key'] for c in children]}. Użyj force=true aby usunąć razem z dziećmi."
+                )
+            # Force=true: deaktywujemy też wszystkie dzieci
+            for child in children:
+                conn.execute(
+                    "UPDATE game_locations SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
+                    (child["key"],)
+                )
         
         # Soft delete
         conn.execute(
