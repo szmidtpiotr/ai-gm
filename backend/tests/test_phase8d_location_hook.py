@@ -276,3 +276,49 @@ def test_fallback_parser_prompt_escapes_json_braces():
 
     assert '"moved"' in prompt
     assert "Wchodzę do karczmy" in prompt
+
+
+def test_pre_llm_unknown_injection_sets_system_block_and_skips_post_hook(monkeypatch):
+    conn = _conn()
+    try:
+        campaign_id = 88120
+        session_id = _session(conn, campaign_id)
+        _set_flag(conn, "location_integrity_enabled", "1")
+        _set_flag(conn, "location_auto_create_enabled", "0")
+        start_id = _location(conn, "pre_llm_here", "Tu Jestem")
+        conn.execute(
+            "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+            (start_id, session_id),
+        )
+        conn.commit()
+
+        def _fake_parse(user_text, sid):
+            return LocationIntent(action="move", target_label="Miasto Ktorego Nie Ma")
+
+        monkeypatch.setattr(turns_api, "parse_location_intent", _fake_parse)
+
+        messages = [{"role": "system", "content": "GM rules"}]
+        did = turns_api._inject_pre_llm_unknown_location_denial(conn, campaign_id, "idę tam", messages)
+        assert did is True
+        assert "[SYSTEM:" in messages[0]["content"]
+        assert "Miasto Ktorego Nie Ma" in messages[0]["content"]
+
+        gm_out = json.dumps(
+            {"narrative": "Rdza zamyka bramę.", "location_intent": {"action": "move", "target_label": "X"}},
+            ensure_ascii=False,
+        )
+        out = turns_api._process_location_intent(
+            conn,
+            campaign_id,
+            gm_out,
+            skip_post_process=True,
+        )
+        assert out == gm_out
+        loc = conn.execute(
+            "SELECT current_location_id FROM game_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()["current_location_id"]
+        assert loc == start_id
+    finally:
+        _set_flag(conn, "location_auto_create_enabled", "1")
+        conn.close()
