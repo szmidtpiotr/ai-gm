@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=25" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=26" />
   </head>
   <body>
     <div class="admin-shell">
@@ -30,6 +30,10 @@
           <button type="button" data-section="ui-settings">
             <span class="nav-icon">📐</span>
             <span class="nav-label">Ustawienia UI</span>
+          </button>
+          <button type="button" data-section="test-runner">
+            <span class="nav-icon">🧪</span>
+            <span class="nav-label">Test Runner</span>
           </button>
         </nav>
         <a
@@ -58,6 +62,7 @@
           <div class="section-panel" data-section="technical" aria-busy="true"></div>
           <div class="section-panel" data-section="config" aria-busy="true"></div>
           <div class="section-panel" data-section="ui-settings" aria-busy="true"></div>
+          <div class="section-panel" data-section="test-runner" aria-busy="true"></div>
         </section>
 
         <div class="activity-log-wrap">
@@ -116,7 +121,7 @@
 
     <script type="module">
       /* Bump ?v= when changing admin JS/CSS so browsers do not serve stale ES modules. */
-      import { adminFetch } from "/admin_panel/shared/api.js?v=17";
+      import { adminFetch } from "/admin_panel/shared/api.js?v=18";
       import { autoConnect, connect, getBaseUrl, isConnected, logout } from "/admin_panel/shared/auth.js?v=18";
       import { showToast } from "/admin_panel/shared/toast.js?v=17";
 
@@ -277,6 +282,7 @@
       let technicalReady = false;
       let configReady = false;
       let uiSettingsReady = false;
+      let testRunnerReady = false;
 
       async function maybeInitGameDesign(section) {
         if (section !== "game-design" || gameDesignReady) {
@@ -350,6 +356,24 @@
         }
       }
 
+      async function maybeInitTestRunner(section) {
+        if (section !== "test-runner" || testRunnerReady) {
+          return;
+        }
+        const el = document.querySelector('.section-panel[data-section="test-runner"]');
+        if (!el) {
+          return;
+        }
+        testRunnerReady = true;
+        try {
+          const { init } = await import("/admin_panel/sections/test_runner.js?v=9");
+          await init(el);
+        } catch (err) {
+          testRunnerReady = false;
+          showToast(err.message || "Test Runner nie załadował się.", "error");
+        }
+      }
+
       async function maybeInitConfig(section) {
         if (section !== "config") {
           return;
@@ -399,6 +423,7 @@
             void maybeInitTechnical(selected);
             void maybeInitConfig(selected);
             void maybeInitUiSettings(selected);
+            void maybeInitTestRunner(selected);
           });
         });
       }
