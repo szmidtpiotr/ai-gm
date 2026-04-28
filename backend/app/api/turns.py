@@ -59,12 +59,20 @@ GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
 COMBAT_VICTORY_STREAM_STUB = "Walka dobiegła końca."
 
 
+def _strip_json_code_fence(text: str) -> str:
+    """Remove markdown ```json fences that some LLMs add around JSON."""
+    value = (text or "").strip()
+    value = re.sub(r"^```(?:json)?\s*\n?", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"\n?```\s*$", "", value)
+    return value.strip()
+
+
 def _get_session_id_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> int | str | None:
     row = conn.execute(
         """
         SELECT id FROM game_sessions
         WHERE campaign_id = ?
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT 1
         """,
         (campaign_id,),
@@ -75,7 +83,7 @@ def _get_session_id_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> 
 
 
 def _inject_location_blocked(assistant_response: str, reason: str) -> str:
-    data = json.loads(assistant_response)
+    data = json.loads(_strip_json_code_fence(assistant_response))
     narrative = str(data.get("narrative") or "").rstrip()
     data["narrative"] = f"{narrative}\n\n[LOCATION_BLOCKED: {reason}]".strip()
     data["location_intent"] = None
@@ -95,8 +103,9 @@ def _process_location_intent(
     if not get_bool_flag("location_integrity_enabled", session_id, default=True):
         return assistant_response
 
+    clean_response = _strip_json_code_fence(assistant_response)
     try:
-        intent = parse_location_intent(assistant_response, session_id)
+        intent = parse_location_intent(clean_response, session_id)
     except Exception as exc:
         logger.error("location_intent_parse_hook_error", error=str(exc), campaign_id=campaign_id)
         return assistant_response
@@ -129,7 +138,7 @@ def _process_location_intent(
             )
             try:
                 return _inject_location_blocked(
-                    assistant_response,
+                    clean_response,
                     result.block_reason or "Walidacja lokalizacji nie powiodła się",
                 )
             except Exception:

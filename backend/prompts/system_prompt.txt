@@ -157,6 +157,7 @@ Aby przemieścić się między różnymi makro-lokalizacjami — czas podróży 
 ### FORMAT JSON ODPOWIEDZI
 
 Każda Twoja odpowiedź MUSI być obiektem JSON z polami `narrative` i `location_intent`.
+Zwracaj WYŁĄCZNIE czysty JSON bez markdown code fence, bez ```json, bez ``` na początku i końcu.
 
 Pole `narrative` zawiera pełną narrację (jak dotychczas).
 Pole `location_intent` zawiera intencję ruchu — lub `null` gdy gracz nie zmienia miejsca.
