@@ -130,8 +130,25 @@ class TestRunnerLlmModelsReq(BaseModel):
     show_all: bool = Field(default=False)
 
 
+class AgentPlannerLlm(BaseModel):
+    """Ten sam kształt co `getLlmPayloadForRequest()` — planer kroków ai_test_agent (Ollama/OpenAI)."""
+
+    provider: str = Field(default="ollama")
+    base_url: str = Field(default="")
+    model: str = Field(default="")
+    api_key: str | None = Field(default=None)
+
+
+class AgentPlannerPingReq(BaseModel):
+    agent_planner_llm: AgentPlannerLlm | None = None
+
+
 class StartReq(BaseModel):
     yaml: str = Field(..., description="JSON lub YAML scenariusza testowego")
+    agent_planner_llm: AgentPlannerLlm | None = Field(
+        default=None,
+        description="Opcjonalnie: nadpisanie LLM planera (jak w panelu); brak = env w kontenerze agenta",
+    )
 
 
 class SaveScenarioReq(BaseModel):
@@ -168,6 +185,47 @@ def _parse_scenario_text(text: str) -> dict[str, Any]:
     if not isinstance(loaded, dict):
         raise HTTPException(status_code=400, detail="Scenariusz musi być obiektem (JSON/YAML map)")
     return loaded
+
+
+def _normalize_agent_runner_base_url(raw: str, provider: str) -> str:
+    """Jak normalizeLlmBaseUrlInput w admin test_runner.js — baza przed /v1/chat/completions."""
+    value = (raw or "").strip().rstrip("/")
+    pl = (provider or "ollama").strip().lower()
+    low = value.lower()
+    if pl == "openai":
+        for suffix in ("/v1/chat/completions", "/chat/completions", "/v1/models", "/v1"):
+            if low.endswith(suffix):
+                value = value[: -len(suffix)].rstrip("/")
+                low = value.lower()
+                break
+    else:
+        for suffix in ("/api/chat", "/api/tags", "/api"):
+            if low.endswith(suffix):
+                value = value[: -len(suffix)].rstrip("/")
+                low = value.lower()
+                break
+    return value.rstrip("/")
+
+
+def _agent_planner_llm_to_internal(req: AgentPlannerLlm | None) -> dict[str, Any] | None:
+    """
+    JSON dla Node: llm_api_url (OpenAI-compat), model, opcjonalnie klucz.
+    None = agent używa wyłącznie LLM_* z env kontenera (np. LLM_API_URL do zewn. API produkcyjnego).
+    """
+    if req is None:
+        return None
+    provider = (req.provider or "ollama").strip().lower()
+    base = _normalize_agent_runner_base_url(req.base_url or "", provider)
+    if not base:
+        base = "http://127.0.0.1:11434" if provider == "ollama" else ""
+    if not base:
+        return None
+    chat_url = f"{base}/v1/chat/completions"
+    model = (req.model or "").strip() or "gemma4:e4b"
+    out: dict[str, Any] = {"llm_api_url": chat_url, "llm_model": model}
+    if req.api_key is not None:
+        out["llm_api_key"] = str(req.api_key)
+    return out
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
@@ -314,15 +372,20 @@ def post_llm_models(req: TestRunnerLlmModelsReq) -> dict[str, Any]:
     }
 
 
-def _httpx_serve_agent_stream(run_id: str, scenario: dict[str, Any], q: "queue.Queue[Any]", agent: str) -> None:
+def _httpx_serve_agent_stream(
+    run_id: str,
+    scenario: dict[str, Any],
+    q: "queue.Queue[Any]",
+    agent: str,
+    planner_internal: dict[str, Any] | None,
+) -> None:
     status_set = "DONE"
     try:
         with httpx.Client(timeout=httpx.Timeout(connect=15.0, read=None, write=30.0, pool=5.0)) as client:
-            with client.stream(
-                "POST",
-                f"{agent}/agent/run",
-                json={"scenario": scenario, "headed": False},
-            ) as resp:
+            body: dict[str, Any] = {"scenario": scenario, "headed": False}
+            if planner_internal is not None:
+                body["planner_llm"] = planner_internal
+            with client.stream("POST", f"{agent}/agent/run", json=body) as resp:
                 if resp.status_code != 200:
                     try:
                         body = (resp.read() or b"")[:2000]
@@ -405,6 +468,41 @@ def get_agent_health() -> dict[str, Any]:
     return {"agent_url": agent, "reachable": True, "scenario_count": n}
 
 
+@router.post("/agent_planner_ping", dependencies=[Depends(require_admin_bearer_or_query)])
+def post_agent_planner_ping(req_body: AgentPlannerPingReq) -> dict[str, Any]:
+    """
+    Sprawdza dostępność LLM planera (GET /api/tags Ollama lub /v1/models OpenAI-compat) z perspektywy agenta.
+    Body opcjonalnie z tymi samymi polami co przy starcie testu (jak sekcja LLM w panelu).
+    """
+    agent = _agent_url()
+    internal = _agent_planner_llm_to_internal(req_body.agent_planner_llm)
+    try:
+        with httpx.Client(timeout=httpx.Timeout(connect=8.0, read=12.0)) as client:
+            r = client.post(f"{agent}/agent/planner_ping", json={"planner_llm": internal})
+    except Exception as e:
+        return {
+            "agent_url": agent,
+            "reachable": False,
+            "error": _format_test_agent_error(agent, e),
+            "planner": None,
+        }
+    if r.status_code != 200:
+        text = (r.text or "")[:500].strip()
+        return {
+            "agent_url": agent,
+            "reachable": True,
+            "planner": {"reachable": False, "error": f"HTTP {r.status_code}: {text or 'planner_ping'}"},
+        }
+    try:
+        return {
+            "agent_url": agent,
+            "reachable": True,
+            "planner": r.json(),
+        }
+    except Exception:
+        return {"agent_url": agent, "reachable": True, "planner": {"reachable": False, "error": r.text[:300]}}
+
+
 @router.post("/start", dependencies=[Depends(require_admin_bearer_or_query)])
 def post_start(req: StartReq) -> dict[str, str]:
     if _any_running():
@@ -419,10 +517,11 @@ def post_start(req: StartReq) -> dict[str, str]:
             "queue": q,
         }
 
+    planner_internal = _agent_planner_llm_to_internal(req.agent_planner_llm)
     agent = _agent_url()
     t = threading.Thread(
         target=_httpx_serve_agent_stream,
-        args=(run_id, scenario, q, agent),
+        args=(run_id, scenario, q, agent, planner_internal),
         name=f"test-runner-{run_id[:8]}",
         daemon=True,
     )

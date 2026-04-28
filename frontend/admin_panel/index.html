@@ -366,7 +366,7 @@
         }
         testRunnerReady = true;
         try {
-          const { init } = await import("/admin_panel/sections/test_runner.js?v=9");
+          const { init } = await import("/admin_panel/sections/test_runner.js?v=10");
           await init(el);
         } catch (err) {
           testRunnerReady = false;

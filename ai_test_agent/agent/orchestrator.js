@@ -6,6 +6,8 @@ const { LLMClient } = require("./llm_client");
 const { validate } = require("./action_validator");
 const { execute } = require("./action_executor");
 const { DEFAULTS } = require("./models");
+const { validateScenario } = require("./scenario_validator");
+const { SELECTORS } = require("./ui_actions");
 const { loadConfig, resetTestEnv, getPlayerState } = require("../playwright/helpers/game_state");
 const { login } = require("../playwright/helpers/auth");
 
@@ -14,13 +16,72 @@ function ensureDir(dir) {
 }
 
 /**
+ * UI ładuje tytuły z API; opcja może być "Tytuł" albo "Tytuł (brak bohatera)" — dokładne label
+ * często nie pasuje. Preferujemy value = campaign_id z cfg JSON lub scenariusza.
+ * @param {import('playwright').Page} page
+ * @param {object} scenario
+ * @param {object} cfg
+ */
+async function selectCampaignForTest(page, scenario, cfg) {
+  const wantLabel = (scenario.campaign_label || "AI Test Campaign").trim();
+  const idRaw =
+    scenario.campaign_id != null && scenario.campaign_id !== ""
+      ? scenario.campaign_id
+      : cfg.campaign_id != null && cfg.campaign_id !== ""
+        ? cfg.campaign_id
+        : null;
+  const wantId = idRaw == null ? null : String(idRaw);
+
+  await page.waitForSelector("#campaign-select", { state: "visible", timeout: 20_000 });
+  await page.waitForFunction(
+    () => {
+      const sel = document.getElementById("campaign-select");
+      if (!sel) return false;
+      if (sel.disabled) return false;
+      return sel.options && sel.options.length > 0;
+    },
+    null,
+    { timeout: 45_000 }
+  );
+
+  if (wantId) {
+    const exists = await page.evaluate((id) => {
+      const sel = document.getElementById("campaign-select");
+      if (!sel || !sel.options) return false;
+      return Array.from(sel.options).some((o) => String(o.value) === String(id));
+    }, wantId);
+    if (exists) {
+      await page.selectOption("#campaign-select", { value: wantId });
+      return;
+    }
+  }
+
+  const esc = wantLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  try {
+    await page.selectOption("#campaign-select", { label: new RegExp(`^${esc}`) });
+  } catch (e) {
+    await page.selectOption("#campaign-select", { label: wantLabel });
+  }
+}
+
+/**
  * @param {object} scenario
  * @param {object} [options]
  * @param {boolean} [options.headed]
  * @param {function} [options.onStep]
+ * @param {{ page: import('playwright').Page | null }} [options.sessionRef] module-level ref for live screenshots
  */
 async function run(scenario, options = {}) {
-  const { headed = false, onStep = null } = options;
+  const {
+    headed = false,
+    onStep = null,
+    sessionRef = null,
+    plannerLlm = null,
+  } = options;
+  const scenarioErrors = validateScenario(scenario);
+  if (scenarioErrors.length) {
+    throw new Error(`Nieprawidłowy scenariusz: ${scenarioErrors.join("; ")}`);
+  }
   const cfg = loadConfig();
   const backendUrl = process.env.BACKEND_URL || "http://192.168.1.61:8100";
   const baseUrl = process.env.BASE_URL || "http://192.168.1.61:3002";
@@ -40,6 +101,9 @@ async function run(scenario, options = {}) {
     recordVideo: { dir: videoDir },
   });
   const page = await context.newPage();
+  if (sessionRef) {
+    sessionRef.page = page;
+  }
 
   let result = { success: false, reason: "max_steps_reached", steps: 0, exploit_found: false };
   let terminal = false;
@@ -48,25 +112,23 @@ async function run(scenario, options = {}) {
     await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
     await login(page);
 
-    const label = (scenario.campaign_label || "AI Test Campaign").trim();
-    await page.waitForSelector("#campaign-select", { state: "visible", timeout: 15_000 });
-    await page.selectOption("#campaign-select", { label });
+    await selectCampaignForTest(page, scenario, cfg);
     const createName = page.locator("#character-create-name");
     if (await createName.isVisible().catch(() => false)) {
       await createName.fill("TestPlayer");
       await page.click("#character-create-submit");
     }
-    await page.waitForSelector("textarea#input", { timeout: 20_000 });
+    await page.waitForSelector(SELECTORS.chatInput, { timeout: 20_000 });
     await page.waitForFunction(
-      () => {
-        const b = document.querySelector("#send-btn");
+      (sel) => {
+        const b = document.querySelector(sel);
         return b && !b.disabled;
       },
-      null,
+      SELECTORS.sendBtn,
       { timeout: 30_000 }
     );
 
-    const llm = new LLMClient(scenario);
+    const llm = new LLMClient(scenario, plannerLlm);
     const history = [];
     const actionHistory = [];
     let step = 0;
@@ -158,6 +220,9 @@ async function run(scenario, options = {}) {
       result = { success: false, reason: "max_steps_reached", steps, exploit_found: false };
     }
   } finally {
+    if (sessionRef) {
+      sessionRef.page = null;
+    }
     await context.close();
     await browser.close();
   }

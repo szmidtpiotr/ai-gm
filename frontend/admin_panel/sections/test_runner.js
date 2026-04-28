@@ -1,4 +1,4 @@
-import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=20";
+import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=21";
 import { getBaseUrl, getToken } from "/admin_panel/shared/auth.js?v=19";
 import { showToast } from "/admin_panel/shared/toast.js?v=18";
 
@@ -234,6 +234,33 @@ export async function init(container) {
   }
 
   /**
+   * Payload dla planera kroków agenta (jak GM: zewn. API / ten sam host).
+   * Bez api_key w body, jeśli pole puste → agent bierze LLM_API_KEY z env na serwerze.
+   * @returns {{ provider: string, base_url: string, model: string, api_key?: string } | null}
+   */
+  function buildAgentPlannerLlBodyForApi() {
+    if (!useCustomLlm.checked) return null;
+    const pl = buildLlmPayload(provSelect.value, baseInp.value, keyInp.value, getCurrentModelValue());
+    const body = {
+      provider: pl.provider,
+      base_url: pl.base_url,
+      model: pl.model,
+    };
+    const keyTrim = String(keyInp.value || "").trim();
+    if (keyTrim) {
+      body.api_key = keyTrim;
+    }
+    return body;
+  }
+
+  function shortenUrlHint(u, max) {
+    const m = max != null ? max : 96;
+    const s = String(u || "");
+    if (s.length <= m) return s;
+    return `${s.slice(0, m)}…`;
+  }
+
+  /**
    * @param {boolean} [silent] — true: bez toastu przy sukcesie (np. start panelu)
    */
   async function loadLlmModelList(silent) {
@@ -421,11 +448,20 @@ export async function init(container) {
   left.appendChild(chatForm);
 
   const agentRow = el("div", "test-runner-agent-row");
-  const agentStatus = el("p", "test-runner-agent-hint", "Agent testowy (Node): …");
+  const agentLinesWrap = el("div", "test-runner-agent-lines");
+  const agentStatusNode = el("p", "test-runner-agent-hint test-runner-agent-line", "Agent (Node / Playwright): …");
+  const agentStatusPlanner = el(
+    "p",
+    "test-runner-agent-hint test-runner-agent-line test-runner-planer-line",
+    "Planer LLM agenta: —",
+  );
   const agentRefreshBtn = el("button", "secondary-btn", "Sprawdź agenta");
   agentRefreshBtn.type = "button";
-  agentRefreshBtn.title = "Czy usługa ai_test_agent nasłuchuje (AI_TEST_AGENT_URL, zwykle port 4000)";
-  agentRow.appendChild(agentStatus);
+  agentRefreshBtn.title =
+    "Node (GET /agent/scenarios) oraz reachability planera (GET /api/tags Ollamy lub /v1/models OpenAI). Zaznacz «Własne połączenie LLM», żeby sprawdzić ten sam URL co dla GM.";
+  agentLinesWrap.appendChild(agentStatusNode);
+  agentLinesWrap.appendChild(agentStatusPlanner);
+  agentRow.appendChild(agentLinesWrap);
   agentRow.appendChild(agentRefreshBtn);
 
   const yamlLabel = el("h2", "test-runner-heading", "Scenariusz (JSON / YAML) — edycja przed startem");
@@ -502,28 +538,60 @@ export async function init(container) {
   }
 
   async function refreshAgentHealth() {
-    agentStatus.classList.remove("test-runner-agent-ok", "test-runner-agent-err");
-    agentStatus.textContent = "Agent testowy (Node): sprawdzam…";
+    agentStatusNode.classList.remove("test-runner-agent-ok", "test-runner-agent-err");
+    agentStatusPlanner.classList.remove("test-runner-agent-ok", "test-runner-agent-err");
+    agentStatusNode.textContent = "Agent (Node / Playwright): sprawdzam…";
+    agentStatusPlanner.textContent = "Planer LLM agenta: …";
     try {
       const h = await adminFetch("/api/test_runner/agent_health");
-      if (h && h.reachable) {
-        agentStatus.classList.add("test-runner-agent-ok");
-        const n = h.scenario_count != null ? `, scenariusze: ${h.scenario_count}` : "";
-        agentStatus.textContent = `Agent testowy: OK (${h.agent_url || "?"})${n}`;
+      if (!(h && h.reachable)) {
+        agentStatusNode.classList.add("test-runner-agent-err");
+        agentStatusNode.textContent = `Agent (Node): NIEDOSTĘPNY — ${String(h && h.error ? h.error : "unknown").slice(0, 360)}`;
+        agentStatusPlanner.textContent =
+          "Planer LLM: — (najpierw musi działać proces agenta AI_TEST_AGENT_URL → test-agent:4000)";
+        agentStatusPlanner.classList.add("test-runner-agent-err");
         return h;
       }
-      agentStatus.classList.add("test-runner-agent-err");
-      agentStatus.textContent = `Agent testowy: NIEDOSTĘPNY — ${String(h.error || "unknown").slice(0, 360)}`;
-      return h;
+      agentStatusNode.classList.add("test-runner-agent-ok");
+      const n = h.scenario_count != null ? `, scenariusze: ${h.scenario_count}` : "";
+      agentStatusNode.textContent = `Agent (Node): OK (${h.agent_url || "?"})${n}`;
+
+      const pingBody = { agent_planner_llm: buildAgentPlannerLlBodyForApi() };
+      let ping;
+      try {
+        ping = await adminFetch("/api/test_runner/agent_planner_ping", {
+          method: "POST",
+          body: JSON.stringify(pingBody),
+        });
+      } catch (pe) {
+        agentStatusPlanner.classList.add("test-runner-agent-err");
+        agentStatusPlanner.textContent = `Planer LLM: brak endpointu (zaktualizuj agenta) — ${errText(pe, pe.message)}`;
+        return { ...h, planner: { reachable: false, error: String(pe) } };
+      }
+      const p = ping && ping.planner;
+      if (p && p.reachable) {
+        agentStatusPlanner.classList.add("test-runner-agent-ok");
+        const hint = p.api_url_hint ? shortenUrlHint(p.api_url_hint) : "";
+        agentStatusPlanner.textContent = hint
+          ? `Planer LLM: OK — ${hint}`
+          : "Planer LLM: OK (probe /api/tags lub /v1/models)";
+      } else {
+        agentStatusPlanner.classList.add("test-runner-agent-err");
+        const detail = (p && p.error) || (ping && ping.error) || "unknown";
+        agentStatusPlanner.textContent = `Planer LLM: BŁĄD — ${String(detail).slice(0, 420)} (sprawdź URL/klucz lub env LLM_* w kontenerze test-agent)`;
+      }
+      return { ...h, planner: p, planner_ping: ping };
     } catch (e) {
-      agentStatus.classList.add("test-runner-agent-err");
+      agentStatusNode.classList.add("test-runner-agent-err");
+      agentStatusPlanner.classList.add("test-runner-agent-err");
+      agentStatusPlanner.textContent = "Planer LLM: —";
       if (e instanceof APIError && e.status === 404) {
-        agentStatus.textContent =
-          "Agent: brak /agent_health w backendzie (zaktualizuj). Przed ▶ upewnij się: npm run agent:server w ai_test_agent.";
+        agentStatusNode.textContent =
+          "Agent: brak /agent_health w backendzie (zaktualizuj). Przed ▶ uruchom ai_test_agent (port 4000).";
         return { skipHealth: true };
       }
-      agentStatus.textContent = `Agent: błąd — ${errText(e, e.message) || e.message || String(e)}`;
-      return { reachable: false, error: agentStatus.textContent };
+      agentStatusNode.textContent = `Agent: błąd — ${errText(e, e.message) || e.message || String(e)}`;
+      return { reachable: false, error: agentStatusNode.textContent };
     }
   }
 
@@ -642,16 +710,21 @@ export async function init(container) {
       const msg = String(ah.error || "").trim() || "Uruchom na hoście: cd ai_test_agent && npm run agent:server (port 4000).";
       showToast(msg.slice(0, 500), "error");
       appendLogLine(
-        "KONIEC: agent testowy niedostępny. Docker DEV: docker compose -f docker-compose.dev.yml up -d --build test-agent (domyślnie backend → http://test-agent:4000). Bez Dockera: cd ai_test_agent && npm run agent:server ; ustaw AI_TEST_AGENT_URL.",
+        "KONIEC: agent testowy niedostępny. Docker: `docker compose -f docker-compose.dev.yml up -d --build test-agent`. Planer LLM: env LLM_API_URL/LLM_API_KEY w test-agent albo «Własne połączenie LLM» w panelu (jak dla GM).",
         "err",
       );
       return;
     }
     runMeta.textContent = "Status: STARTING…";
     try {
+      const startBody = { yaml };
+      const apl = buildAgentPlannerLlBodyForApi();
+      if (apl) {
+        startBody.agent_planner_llm = apl;
+      }
       const { run_id: runId } = await adminFetch("/api/test_runner/start", {
         method: "POST",
-        body: JSON.stringify({ yaml }),
+        body: JSON.stringify(startBody),
       });
       runMeta.textContent = `Status: RUNNING  |  run_id: ${runId}`;
       appendLogLine("Uruchomiono agenta…", "info");
