@@ -482,7 +482,17 @@
                 <td><code>rules</code></td>
                 <td>object</td>
                 <td>❌</td>
-                <td>JSON object with special rules (e.g., {"no_combat": true, "reason": "Sacred ground"})</td>
+                <td>
+                  <strong>Supported rules (extensible JSON):</strong><br/>
+                  <code>{"no_combat": true, "reason": "Sacred ground"}</code> — combat is forbidden, GM will explain why<br/>
+                  <code>{"no_loot": true}</code> — enemies here don't drop loot<br/>
+                  <code>{"teleport_blocked": true}</code> — teleportation spells don't work<br/>
+                  <code>{"rest_bonus": 2}</code> — resting restores 2x HP<br/>
+                  <code>{"mana_regen": 0}</code> — no natural mana regeneration<br/>
+                  <code>{"stealth_check": true}</code> — entering requires stealth roll<br/>
+                  <code>{"required_item": "torch"}</code> — need specific item to enter<br/>
+                  <em>Add custom rules as needed — GM will see them in context.</em>
+                </td>
               </tr>
               <tr>
                 <td><code>enemy_keys</code></td>
