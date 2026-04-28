@@ -2,7 +2,7 @@ const { ACTION_TYPES, ALLOWED_SCREENS, ALLOWED_CLICK_SELECTORS } = require("./mo
 
 const FALLBACK = {
   type: "wait_for_gm_response",
-  params: { timeout_ms: 3000 },
+  params: {},
   reasoning: "validator_fallback",
   done: false,
 };
@@ -10,6 +10,15 @@ const FALLBACK = {
 function validate(raw, history = []) {
   if (raw == null || raw === undefined) {
     console.warn("[validator] null/undefined action — fallback");
+    /* Przy pustym planie (np. brak LLM_API_URL) wait_for_gm_response zabija run (pusty #chat). */
+    if (!history.length) {
+      return {
+        type: "send_chat_message",
+        params: { text: "Patrzę wokół siebie i czekam na opis sceny od Mistrza Gry." },
+        reasoning: "validator_fallback_first_step_needs_turn",
+        done: false,
+      };
+    }
     return FALLBACK;
   }
 

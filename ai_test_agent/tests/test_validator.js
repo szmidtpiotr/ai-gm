@@ -43,3 +43,9 @@ test("loop detection forces finish", () => {
   assert.equal(a.type, "finish");
   assert.equal(a.params.reason, "loop_detected");
 });
+
+test("null action on empty history sends chat instead of wait", () => {
+  const a = validate(null, []);
+  assert.equal(a.type, "send_chat_message");
+  assert.ok(String(a.params?.text || "").length > 0);
+});

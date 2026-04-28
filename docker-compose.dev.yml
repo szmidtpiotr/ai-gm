@@ -7,6 +7,10 @@ services:
     build:
       context: ./backend
     restart: unless-stopped
+    # Agent musi być zdrowy zanim backend przyjmie ruch Test Runner (unika race przy starcie).
+    depends_on:
+      test-agent:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -31,17 +35,26 @@ services:
       - DEFAULT_CAMPAIGN_LANGUAGE=${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
       - GAME_LANG=${GAME_LANG:-pl-PL}
       - DATABASE_URL=${DATABASE_URL:-sqlite:////data/ai_gm_dev.db}
-      - AI_TEST_MODE=${AI_TEST_MODE:-0}
+      # Test Runner + /api/debug/* — w DEV domyślnie włączone; wyłącz: AI_TEST_MODE=0 w .env lub override.
+      - AI_TEST_MODE=${AI_TEST_MODE:-1}
       # Same SQLite as auth/campaigns (raw sqlite3); isolated test_ai.db breaks E2E login.
       - AI_TEST_DB_PATH=${AI_TEST_DB_PATH:-/data/ai_gm.db}
-      # Playwright / CI: deterministic GM reply without Ollama (only when AI_TEST_MODE=1).
-      - AI_TEST_STUB_LLM=${AI_TEST_STUB_LLM:-0}
+      # Playwright: stub GM — NIE ustawiaj tutaj na 0 (blokuje env.test). Użyj pliku env.test lub override.
+      # - AI_TEST_STUB_LLM=...  (usunięte: domyślne 0 w kontenerze blokowało mount env.test)
       # Seed + Playwright: JSON z id postaci/kampanii (wolumen ./data-dev -> widoczny na hoście).
       - AI_TEST_CONFIG_PATH=${AI_TEST_CONFIG_PATH:-/data/ai_test_config.json}
+      # Stały URL — NIE ${AI_TEST_AGENT_URL:-…}: plik .env przy `docker compose` nadpisywał wartość
+      # (np. host.docker.internal:4000) i psuł połączenie, bo bootstrap_env nie nadpisuje „zasealowanych” kluczy.
+      # Inny agent: docker-compose.override.yml albo zmienna tylko w override (patrz README w komentarzu niżej).
+      - AI_TEST_AGENT_URL=http://test-agent:4000
+      - AI_TEST_SCENARIOS_DIR=${AI_TEST_SCENARIOS_DIR:-/data/ai_test_scenarios}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./data-dev:/data
+      - ./ai_test_agent/scenarios:/data/ai_test_scenarios:rw
+      # W obrazie jest tylko katalog backend/ (/app) — monorepo env.test trafia do /app/env.test (load_repo_env).
+      - ./env.test:/app/env.test:ro
     labels:
       - service=backend-dev
     networks:
@@ -61,6 +74,47 @@ services:
       - backend
     networks:
       - ai-gm-dev
+
+  # Playwright + Express — Test Runner w panelu admin; backend łączy się po http://test-agent:4000
+  test-agent:
+    build:
+      context: ./ai_test_agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      - AGENT_PORT=4000
+      - BASE_URL=http://frontend:80
+      - BACKEND_URL=http://backend:8000
+      - AI_TEST_CONFIG_PATH=/data/ai_test_config.json
+      # Planer kroków (LLMClient) — musi gadać z Ollamą jak backend; bez tego decide()=null → wait przy pustym chacie.
+      - LLM_API_URL=${LLM_API_URL:-http://host.docker.internal:11434/v1/chat/completions}
+      - LLM_MODEL=${LLM_MODEL:-gemma4:e4b}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      # Oczekiwanie na .message.assistant w #chat po /turns/stream (wolna Ollama / pierwsze cold start).
+      - WAIT_GM_TIMEOUT_MS=90000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data-dev:/data:ro
+      - ./ai_test_agent/scenarios:/app/scenarios:rw
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:4000/agent/scenarios').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 20s
+      timeout: 8s
+      retries: 4
+      start_period: 45s
+    networks:
+      - ai-gm-dev
+    labels:
+      - service=test-agent-dev
 
 networks:
   ai-gm-dev:
