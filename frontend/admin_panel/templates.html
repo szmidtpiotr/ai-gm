@@ -556,6 +556,123 @@
   }
 ]</pre>
         </div>
+
+        <details class="template-details" style="margin-top:20px;padding:12px;background:var(--panel-2);border-radius:8px;">
+          <summary style="cursor:pointer;font-weight:600;color:var(--accent);font-size:16px;">📖 How to Create Custom Rules (click to expand)</summary>
+          <div style="margin-top:12px;">
+            <p class="muted">
+              The <code>rules</code> field accepts any valid JSON object. You can use predefined rules (shown in the table above) or create your own custom rules that the GM will see in the location context.
+            </p>
+            
+            <h4 style="margin:16px 0 8px 0;color:var(--accent);">Creating Custom Rules in Admin Panel</h4>
+            <ol style="margin:8px 0;padding-left:20px;">
+              <li>Go to <strong>Game Design → Locations</strong></li>
+              <li>Expand <strong>"➕ Create Custom Rule"</strong> section</li>
+              <li>Fill in the form:
+                <ul style="margin:4px 0;">
+                  <li><strong>Rule Key:</strong> lowercase with underscores (e.g., <code>poison_immunity</code>)</li>
+                  <li><strong>Label:</strong> Display name (e.g., "Poison Immunity")</li>
+                  <li><strong>Type:</strong> boolean (on/off), number, or text</li>
+                  <li><strong>Default:</strong> Optional default value</li>
+                  <li><strong>Description:</strong> What this rule does</li>
+                </ul>
+              </li>
+              <li>Click <strong>"Add Rule to System"</strong></li>
+              <li>New rule appears immediately in the Rules dropdown!</li>
+            </ol>
+
+            <h4 style="margin:16px 0 8px 0;color:var(--accent);">Examples</h4>
+            <table class="admin-table" style="font-size:14px;">
+              <thead>
+                <tr>
+                  <th>Rule Key</th>
+                  <th>Type</th>
+                  <th>Default</th>
+                  <th>Description</th>
+                  <th>Effect</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>poison_immunity</code></td>
+                  <td>boolean</td>
+                  <td>true</td>
+                  <td>Characters in this area are immune to poison</td>
+                  <td>Poison conditions won't apply</td>
+                </tr>
+                <tr>
+                  <td><code>magic_blocked</code></td>
+                  <td>boolean</td>
+                  <td>true</td>
+                  <td>Magic doesn't work in this zone</td>
+                  <td>Spell attacks fail</td>
+                </tr>
+                <tr>
+                  <td><code>healing_bonus</code></td>
+                  <td>number</td>
+                  <td>2</td>
+                  <td>Healing spells restore 2x HP</td>
+                  <td>heal_hp × 2</td>
+                </tr>
+                <tr>
+                  <td><code>time_limit</code></td>
+                  <td>number</td>
+                  <td>10</td>
+                  <td>Players have 10 turns before collapse</td>
+                  <td>Countdown mechanic</td>
+                </tr>
+                <tr>
+                  <td><code>required_stat</code></td>
+                  <td>text</td>
+                  <td>STR≥15</td>
+                  <td>Need high STR to enter</td>
+                  <td>Entry requirement</td>
+                </tr>
+                <tr>
+                  <td><code>weather</code></td>
+                  <td>text</td>
+                  <td>storm</td>
+                  <td>Current weather condition</td>
+                  <td>Affects visibility/combat</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h4 style="margin:16px 0 8px 0;color:var(--accent);">JSON Examples for Bulk Import</h4>
+            <pre class="copy-block" style="background:#f5f0e8;padding:12px;border-radius:6px;overflow:auto;">// Simple boolean rule
+{
+  "key": "cursed_crypt",
+  "label": "Cursed Crypt",
+  "location_type": "sub",
+  "parent_id": 1,
+  "rules": {
+    "no_combat": false,
+    "magic_blocked": true,
+    "healing_bonus": 0.5,
+    "reason": "Dark magic suppresses healing"
+  }
+}
+
+// Complex custom rules
+{
+  "key": "elemental_forge",
+  "label": "Elemental Forge",
+  "location_type": "macro",
+  "rules": {
+    "fire_immunity": true,
+    "ice_damage_bonus": 2,
+    "required_item": "fire_resistance_ring",
+    "max_party_size": 4,
+    "respawn_rate": 0.5,
+    "weather": "extreme_heat"
+  },
+  "enemy_keys": ["fire_elemental", "magma_golem"]
+}</pre>
+            <p class="muted" style="margin-top:8px;">
+              <strong>Tip:</strong> Use the <strong>"Custom Rules"</strong> section in the Add Location form to add one-off rules without adding them to the system.
+            </p>
+          </div>
+        </details>
       </section>
 
       <section class="template-section" aria-labelledby="sec-conditions">
