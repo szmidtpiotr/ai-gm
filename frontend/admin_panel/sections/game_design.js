@@ -2071,25 +2071,24 @@ function mountLocations(host) {
     }
   });
 
-  // Location Integrity Flags section
+  // Location Integrity System section
   const flagsSection = el("div", "locations-flags-section");
   flagsSection.style.cssText = "background:#f8fafc;padding:12px;border-radius:6px;margin:16px 0;";
   flagsSection.innerHTML = `
-    <h4>Location Integrity Flags</h4>
+    <h4>Location Integrity System</h4>
     <div style="display:grid;gap:8px;margin:8px 0;">
       <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
         <span>Location Integrity enabled</span><input type="checkbox" id="flag-integrity" checked />
       </label>
       <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
-        <span>Parser JSON (Option A)</span><input type="checkbox" id="flag-parser-json" checked />
+        <span>Auto-create unknown locations</span><input type="checkbox" id="flag-auto-create" checked />
       </label>
       <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
-        <span>Fallback Parser (Option B)</span><input type="checkbox" id="flag-parser-fallback" checked />
+        <span>Parser JSON (Option A)</span><input type="checkbox" id="flag-parser-json" checked />
       </label>
     </div>
-    <div id="flags-info" class="muted" style="font-size:0.85em;margin:8px 0;">Global defaults: ON / ON / ON</div>
+    <div id="flags-info" class="muted" style="font-size:0.85em;margin:8px 0;">Global defaults: integrity ON / auto-create ON / parser JSON ON</div>
     <div style="display:flex;gap:8px;">
-      <button type="button" class="secondary-btn" id="flags-reset">Reset to global</button>
       <button type="button" class="primary-btn" id="flags-save">Save</button>
     </div>
   `;
@@ -2111,19 +2110,11 @@ function mountLocations(host) {
 
   // Flags events
   const flagsInfo = flagsSection.querySelector("#flags-info");
-  flagsSection.querySelector("#flags-reset").addEventListener("click", async () => {
-    if (!confirm("Reset flags to global defaults?")) return;
-    try {
-      await adminFetch("/api/admin/config/location-flags", { method: "DELETE" });
-      showToast("Flags reset", "success");
-      loadFlags();
-    } catch (e) { showToast(parseApiError(e, "Reset failed"), "error"); }
-  });
   flagsSection.querySelector("#flags-save").addEventListener("click", async () => {
     const flags = {
       location_integrity_enabled: flagsSection.querySelector("#flag-integrity").checked ? 1 : 0,
+      location_auto_create_enabled: flagsSection.querySelector("#flag-auto-create").checked ? 1 : 0,
       location_parser_json_enabled: flagsSection.querySelector("#flag-parser-json").checked ? 1 : 0,
-      location_parser_fallback_enabled: flagsSection.querySelector("#flag-parser-fallback").checked ? 1 : 0,
     };
     try {
       await adminFetch("/api/admin/config/location-flags", { method: "PUT", body: JSON.stringify(flags) });
@@ -2162,13 +2153,13 @@ function mountLocations(host) {
     try {
       const flags = await adminFetch("/api/admin/config/location-flags");
       flagsSection.querySelector("#flag-integrity").checked = flags.location_integrity_enabled;
+      flagsSection.querySelector("#flag-auto-create").checked = flags.location_auto_create_enabled;
       flagsSection.querySelector("#flag-parser-json").checked = flags.location_parser_json_enabled;
-      flagsSection.querySelector("#flag-parser-fallback").checked = flags.location_parser_fallback_enabled;
       const gi = flags.location_integrity_enabled ? "ON" : "OFF";
+      const ga = flags.location_auto_create_enabled ? "ON" : "OFF";
       const gj = flags.location_parser_json_enabled ? "ON" : "OFF";
-      const gf = flags.location_parser_fallback_enabled ? "ON" : "OFF";
-      flagsInfo.textContent = `Global defaults: ${gi} / ${gj} / ${gf}`;
-    } catch (e) { flagsInfo.textContent = "Global defaults: ON / ON / ON (error loading)"; }
+      flagsInfo.textContent = `Global defaults: integrity ${gi} / auto-create ${ga} / parser JSON ${gj}`;
+    } catch (e) { flagsInfo.textContent = "Global defaults: integrity ON / auto-create ON / parser JSON ON (error loading)"; }
   }
 
   // Init
