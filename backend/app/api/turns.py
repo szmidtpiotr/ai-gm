@@ -90,15 +90,88 @@ def _inject_location_blocked(assistant_response: str, reason: str) -> str:
     return json.dumps(data, ensure_ascii=False)
 
 
+def _inject_pre_llm_unknown_location_denial(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    user_text: str,
+    messages: list[dict],
+) -> bool:
+    """
+    Tryb bez auto-create: jeśli ruch zostałby zablokowany jako nieznana lokalizacja,
+    wstrzykuj instrukcję do system promptu PRZED LLM zamiast doklejać [LOCATION_BLOCKED]
+    po wygenerowanej narracji.
+
+    Returns:
+        True gdy dodano blok [SYSTEM] i należy pominąć późniejszy post-processing
+        `_process_location_intent` dla tej tury stream.
+    """
+    if not user_text.strip() or not messages:
+        return False
+    session_id = _get_session_id_for_campaign(conn, campaign_id)
+    if session_id is None:
+        return False
+    if not get_bool_flag("location_integrity_enabled", session_id, default=True):
+        return False
+    # Tryb B: auto-create — zostawiamy dotychczasowy post-hook na odpowiedzi GM
+    if get_bool_flag("location_auto_create_enabled", session_id, default=True):
+        return False
+
+    try:
+        intent = parse_location_intent(user_text, session_id)
+    except Exception as exc:
+        logger.error("pre_llm_location_intent_parse_error", error=str(exc), campaign_id=campaign_id)
+        return False
+
+    if not intent or intent.action not in ("move", "create"):
+        return False
+
+    try:
+        vr = validate_move(session_id, intent, campaign_id=campaign_id, auto_create_enabled=False)
+    except Exception as exc:
+        logger.error("pre_llm_location_validate_error", error=str(exc), campaign_id=campaign_id)
+        return False
+
+    if vr.allowed:
+        return False
+
+    reason = (vr.block_reason or "").lower()
+    if "nieznana" not in reason:
+        return False
+
+    block = (
+        f"\n[SYSTEM: Gracz próbuje przemieścić się do lokalizacji '{intent.target_label}', "
+        "która nie istnieje w bazie lokalizacji. Odmów mu narracyjnie — "
+        "opisz przeszkodę, mur, mgłę, strażnika lub inną fabularną blokadę. "
+        "NIE opisuj dotarcia do celu.]"
+    )
+    first = messages[0]
+    if isinstance(first, dict) and first.get("role") == "system":
+        first["content"] = f"{first.get('content', '').rstrip()}{block}"
+    else:
+        messages.insert(0, {"role": "system", "content": block.strip()})
+    logger.info(
+        "pre_llm_unknown_location_injection",
+        campaign_id=campaign_id,
+        session_id=session_id,
+        target_label=intent.target_label,
+    )
+    return True
+
+
 def _process_location_intent(
     conn: sqlite3.Connection,
     campaign_id: int,
     assistant_response: str,
+    *,
+    skip_post_process: bool = False,
 ) -> str:
     """
     Parse GM location_intent, validate it, update current_location_id, and inject
     [LOCATION_BLOCKED] into JSON narrative when movement is rejected.
     """
+    if skip_post_process:
+        return assistant_response
+
     session_id = _get_session_id_for_campaign(conn, campaign_id)
     if not get_bool_flag("location_integrity_enabled", session_id, default=True):
         return assistant_response
@@ -1754,6 +1827,10 @@ def create_turn_stream(
             roll_result_data=roll_result_data,
         )
 
+        location_skip_post_location_hook = _inject_pre_llm_unknown_location_denial(
+            conn, campaign_id, text, messages
+        )
+
         campaign_id_val = campaign_id
         character_id_val = payload.character_id
         user_text_val = user_text_stored if roll_request else llm_user_text
@@ -1913,6 +1990,7 @@ def create_turn_stream(
                     conn=hook_conn,
                     campaign_id=campaign_id_val,
                     assistant_response=full_raw,
+                    skip_post_process=location_skip_post_location_hook,
                 )
             finally:
                 hook_conn.close()

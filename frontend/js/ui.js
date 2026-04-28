@@ -289,8 +289,14 @@ window.appendToStreamingBubble = function (bubbleEl, token) {
 };
 
 window.parseGMResponse = function (text) {
+  const stripLocationBlocked = function (s) {
+    return String(s || '')
+      .replace(/\s*\[LOCATION_BLOCKED:[^\]]*\]/g, '')
+      .trim();
+  };
+
   const raw = String(text || '').trim();
-  if (!raw) return String(text || '');
+  if (!raw) return stripLocationBlocked(String(text || ''));
 
   const cleaned = raw
     .replace(/^```(?:json)?\s*/i, '')
@@ -300,7 +306,7 @@ window.parseGMResponse = function (text) {
   try {
     const data = JSON.parse(cleaned);
     if (data && typeof data === 'object' && typeof data.narrative === 'string') {
-      return data.narrative;
+      return stripLocationBlocked(data.narrative);
     }
   } catch (_e) {
     // Plain-text fallback: older GM responses are not JSON wrappers.
@@ -329,7 +335,7 @@ window.parseGMResponse = function (text) {
         if (ch === '"') {
           const tail = cleaned.slice(i + 1).trimStart();
           if (tail.startsWith(',') || tail.startsWith('}')) {
-            return out;
+            return stripLocationBlocked(out);
           }
         }
         out += ch;
@@ -337,7 +343,7 @@ window.parseGMResponse = function (text) {
     }
   }
 
-  return String(text || '');
+  return stripLocationBlocked(String(text || ''));
 };
 
 window.suppressCombatEndedAutoUi = function () {
