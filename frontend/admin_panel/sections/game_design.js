@@ -1141,6 +1141,17 @@ async function refreshConditions(host) {
 }
 
 // ============ LOCATIONS ============
+const LOCATION_RULES_DEFINITION = [
+  { key: "no_combat", label: "No Combat", type: "boolean", description: "Combat is forbidden (e.g., temples, safe zones)" },
+  { key: "no_loot", label: "No Loot", type: "boolean", description: "Enemies don't drop loot" },
+  { key: "teleport_blocked", label: "Teleport Blocked", type: "boolean", description: "Teleportation spells don't work" },
+  { key: "stealth_check", label: "Stealth Check", type: "boolean", description: "Entry requires successful stealth roll" },
+  { key: "rest_bonus", label: "Rest Bonus", type: "number", default: 2, description: "HP regen multiplier (e.g., 2 = 2x HP)" },
+  { key: "mana_regen", label: "Mana Regen", type: "number", default: 0, description: "Natural mana regen (0 = none, 1 = normal)" },
+  { key: "required_item", label: "Required Item", type: "text", default: "torch", description: "Item required in inventory to enter" },
+  { key: "reason", label: "Reason", type: "text", default: "Sacred ground", description: "Explanation shown to player (e.g., why combat is blocked)" },
+];
+
 function locationTypeBadgeClass(type) {
   if (type === "macro") return "badge-blue";
   if (type === "sub") return "badge-green";
@@ -1180,6 +1191,39 @@ function locationImportRowToPayload(row) {
   };
 }
 
+// Rules builder helper - converts rules object to/from UI
+function buildRulesFromCheckboxes(container) {
+  const rules = {};
+  container.querySelectorAll("[data-rule-key]").forEach(el => {
+    const key = el.dataset.ruleKey;
+    const def = LOCATION_RULES_DEFINITION.find(r => r.key === key);
+    if (!def) return;
+    if (def.type === "boolean") {
+      if (el.checked) rules[key] = true;
+    } else if (def.type === "number") {
+      const val = parseFloat(el.value);
+      if (!isNaN(val)) rules[key] = val;
+    } else {
+      if (el.value.trim()) rules[key] = el.value.trim();
+    }
+  });
+  return rules;
+}
+
+function setRulesCheckboxes(container, rules) {
+  container.querySelectorAll("[data-rule-key]").forEach(el => {
+    const key = el.dataset.ruleKey;
+    const def = LOCATION_RULES_DEFINITION.find(r => r.key === key);
+    if (!def) return;
+    const val = rules?.[key];
+    if (def.type === "boolean") {
+      el.checked = !!val;
+    } else {
+      el.value = val != null ? String(val) : (def.default || "");
+    }
+  });
+}
+
 async function refreshLocations(host, statKeys) {
   const mount = host.querySelector(".admin-table-mount");
   if (!mount) return;
@@ -1192,6 +1236,7 @@ async function refreshLocations(host, statKeys) {
         _parent_label: r.parent_id ? await fetchLocationParentLabel(r.parent_id, allLocations) : "—",
         _enemy_count: Array.isArray(r.enemy_keys) ? r.enemy_keys.length : 0,
         _rules_preview: r.rules ? (typeof r.rules === "object" ? JSON.stringify(r.rules).slice(0, 40) : String(r.rules).slice(0, 40)) : "",
+        _rules: r.rules || {}, // keep full rules object for editing
       })),
     );
     renderGameDesignTable(
@@ -1223,6 +1268,9 @@ async function refreshLocations(host, statKeys) {
         onDelete: async (row) => {
           await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, { method: "DELETE" });
         },
+        extraActions: (row) => [
+          { label: "Edit", class: "secondary-btn", onClick: () => openLocationEditModal(host, row, allLocations) },
+        ],
       },
     );
   } catch (e) {
@@ -1231,19 +1279,146 @@ async function refreshLocations(host, statKeys) {
   }
 }
 
+// Full edit modal for locations
+function openLocationEditModal(host, row, allLocations) {
+  const existing = document.getElementById("location-edit-modal");
+  if (existing) existing.remove();
+
+  const modal = el("div", "admin-modal");
+  modal.id = "location-edit-modal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;";
+
+  const content = el("div", "admin-modal-content");
+  content.style.cssText = "background:var(--panel);padding:20px;border-radius:var(--radius);max-width:700px;width:90%;max-height:80vh;overflow:auto;";
+
+  const enemiesList = window._cachedEnemiesList || [];
+  const selectedEnemies = new Set(Array.isArray(row.enemy_keys) ? row.enemy_keys : []);
+
+  content.innerHTML = `
+    <h3>Edit Location: ${row.label}</h3>
+    <div class="edit-form-grid" style="display:grid;gap:12px;margin:16px 0;">
+      <label class="field"><span>Key</span><input id="edit-key" type="text" value="${row.key}" disabled /></label>
+      <label class="field"><span>Label</span><input id="edit-label" type="text" value="${row.label || ""}" /></label>
+      <label class="field"><span>Type</span>
+        <select id="edit-type">
+          <option value="macro" ${row.location_type === "macro" ? "selected" : ""}>Macro</option>
+          <option value="sub" ${row.location_type === "sub" ? "selected" : ""}>Sub</option>
+        </select>
+      </label>
+      <label class="field"><span>Parent</span>
+        <select id="edit-parent">
+          <option value="">— None —</option>
+          ${allLocations.filter(l => l.id !== row.id && l.location_type === "macro").map(p => 
+            `<option value="${p.id}" ${p.id === row.parent_id ? "selected" : ""}>${p.label} (${p.key})</option>`
+          ).join("")}
+        </select>
+      </label>
+      <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea id="edit-desc" rows="2">${row.description || ""}</textarea></label>
+      
+      <div class="field" style="grid-column:1/-1;">
+        <span>Rules Builder</span>
+        <div id="edit-rules-builder" class="rules-builder" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;">
+          ${LOCATION_RULES_DEFINITION.map(def => `
+            <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+              <input type="${def.type === "boolean" ? "checkbox" : "text"}" 
+                     data-rule-key="${def.key}" 
+                     ${def.type === "boolean" ? "" : `placeholder="${def.default || ""}" style="width:120px;"`}
+                     ${def.type === "boolean" && row._rules?.[def.key] ? "checked" : ""}
+                     value="${def.type !== "boolean" ? (row._rules?.[def.key] || def.default || "") : ""}"
+              />
+              <span>${def.label}</span>
+              <em class="muted" style="font-size:0.85em;">${def.description}</em>
+            </label>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <span>Enemies</span>
+        <div id="edit-enemies" class="enemies-selector" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;max-height:200px;overflow:auto;">
+          ${enemiesList.length === 0 ? "<em class='muted'>No enemies loaded. Create enemies first.</em>" : 
+            enemiesList.map(e => `
+              <label style="display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer;">
+                <input type="checkbox" data-enemy-key="${e.key}" ${selectedEnemies.has(e.key) ? "checked" : ""} />
+                <span>${e.label}</span>
+                <code class="muted">${e.key}</code>
+              </label>
+            `).join("")}
+        </div>
+      </div>
+
+      <label class="field"><span>Active</span><input id="edit-active" type="checkbox" ${row.is_active !== 0 ? "checked" : ""} /></label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="secondary-btn" id="edit-cancel">Cancel</button>
+      <button type="button" class="danger-btn" id="edit-delete">Delete</button>
+      <button type="button" class="primary-btn" id="edit-save">Save</button>
+    </div>
+  `;
+
+  modal.appendChild(content);
+  document.body.appendChild(modal);
+
+  // Events
+  content.querySelector("#edit-cancel").addEventListener("click", () => modal.remove());
+  content.querySelector("#edit-delete").addEventListener("click", async () => {
+    if (!confirm(`Delete location "${row.label}" (${row.key})?`)) return;
+    try {
+      await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, { method: "DELETE" });
+      showToast("Location deleted", "success");
+      modal.remove();
+      refreshLocations(host);
+    } catch (e) { showToast(parseApiError(e, "Delete failed"), "error"); }
+  });
+  content.querySelector("#edit-save").addEventListener("click", async () => {
+    const rules = buildRulesFromCheckboxes(content.querySelector("#edit-rules-builder"));
+    const enemyKeys = Array.from(content.querySelectorAll("#edit-enemies [data-enemy-key]:checked")).map(el => el.dataset.enemyKey);
+    const body = {
+      label: content.querySelector("#edit-label").value.trim(),
+      location_type: content.querySelector("#edit-type").value,
+      parent_id: content.querySelector("#edit-parent").value ? Number(content.querySelector("#edit-parent").value) : null,
+      description: content.querySelector("#edit-desc").value.trim(),
+      rules,
+      enemy_keys: enemyKeys,
+      is_active: content.querySelector("#edit-active").checked ? 1 : 0,
+    };
+    try {
+      await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, { method: "PUT", body: JSON.stringify(body) });
+      showToast("Location updated", "success");
+      modal.remove();
+      refreshLocations(host);
+    } catch (e) { showToast(parseApiError(e, "Save failed"), "error"); }
+  });
+
+  // Close on backdrop click
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+}
+
 function mountLocations(host) {
   const root = el("div", "admin-subpanel-inner");
+  
+  // Cache enemies for dropdowns
+  let enemiesListCache = [];
+  async function loadEnemiesCache() {
+    try {
+      const d = await adminFetch("/api/admin/enemies");
+      enemiesListCache = (d.items || []).filter(e => e.is_active);
+      window._cachedEnemiesList = enemiesListCache;
+    } catch (e) { /* ignore */ }
+  }
+  loadEnemiesCache();
+
   const toggleRow = el("div", "admin-add-form-toggle");
   const toggle = el("button", "secondary-btn", "Add location ▾");
   toggle.type = "button";
   const details = el("div", "add-form admin-add-form-collapsed");
   const fields = el("div", "admin-add-form-fields");
 
-  // Formularz dodawania
+  // Formularz dodawania z rules builder i enemies dropdown
   fields.innerHTML = `
     <div class="add-form-grid">
-      <label class="field"><span>Key</span><input data-field="key" type="text" /></label>
-      <label class="field"><span>Label</span><input data-field="label" type="text" /></label>
+      <label class="field"><span>Key</span><input data-field="key" type="text" placeholder="auto-from-label" /></label>
+      <label class="field"><span>Label *</span><input data-field="label" type="text" /></label>
       <label class="field"><span>Type</span>
         <select data-field="location_type">
           <option value="macro" selected>Macro (top-level)</option>
@@ -1251,13 +1426,55 @@ function mountLocations(host) {
         </select>
       </label>
       <label class="field"><span>Parent ID (for sub)</span><input data-field="parent_id" type="number" placeholder="ID of parent macro" /></label>
-      <label class="field add-form-span-2"><span>Description</span><input data-field="description" type="text" /></label>
-      <label class="field add-form-span-2"><span>Rules (JSON)</span><input data-field="rules" type="text" placeholder='{"no_combat": true}' /></label>
-      <label class="field add-form-span-2"><span>Enemy keys (JSON array)</span><input data-field="enemy_keys" type="text" placeholder='["goblin","wolf"]' /></label>
+      <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea data-field="description" rows="2"></textarea></label>
+      
+      <div class="field" style="grid-column:1/-1;">
+        <span>Rules Builder <em class="muted">(check to enable)</em></span>
+        <div id="add-rules-builder" class="rules-builder" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;">
+          ${LOCATION_RULES_DEFINITION.map(def => `
+            <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+              <input type="${def.type === "boolean" ? "checkbox" : "text"}" 
+                     data-rule-key="${def.key}" 
+                     ${def.type === "boolean" ? "" : `placeholder="${def.default || ""}" style="width:120px;"`}
+                     ${def.type === "boolean" && def.key === "no_combat" ? "" : ""}
+                     value="${def.type !== "boolean" && def.default ? def.default : ""}"
+              />
+              <span>${def.label}</span>
+              <em class="muted" style="font-size:0.85em;">${def.description}</em>
+            </label>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <span>Enemies <em class="muted">(multi-select)</em></span>
+        <div id="add-enemies" class="enemies-selector" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;max-height:200px;overflow:auto;">
+          <em class="muted">Loading enemies...</em>
+        </div>
+      </div>
+
       <label class="field"><span>Active</span><input data-field="is_active" type="checkbox" checked /></label>
     </div>
     <button type="button" class="primary-btn admin-add-form-submit" data-action="create-location">Create</button>
   `;
+
+  // Populate enemies dropdown
+  setTimeout(async () => {
+    await loadEnemiesCache();
+    const enemiesContainer = fields.querySelector("#add-enemies");
+    if (enemiesListCache.length === 0) {
+      enemiesContainer.innerHTML = "<em class='muted'>No active enemies. Create enemies in Enemies tab first.</em>";
+    } else {
+      enemiesContainer.innerHTML = enemiesListCache.map(e => `
+        <label style="display:flex;align-items:center;gap:8px;margin:4px 0;cursor:pointer;">
+          <input type="checkbox" data-enemy-key="${e.key}" />
+          <span>${e.label}</span>
+          <code class="muted">${e.key}</code>
+        </label>
+      `).join("");
+    }
+  }, 100);
+
   details.appendChild(fields);
   toggle.addEventListener("click", () => {
     details.classList.toggle("admin-add-form-collapsed");
@@ -1266,6 +1483,43 @@ function mountLocations(host) {
   toggleRow.appendChild(toggle);
   root.appendChild(toggleRow);
   root.appendChild(details);
+
+  // Rules panel section (expandable)
+  const rulesPanel = el("div", "rules-panel-section");
+  rulesPanel.style.cssText = "background:var(--panel-2);padding:12px;border-radius:6px;margin:12px 0;";
+  rulesPanel.innerHTML = `
+    <h4 style="margin:0 0 8px 0;">📋 Available Rules Reference</h4>
+    <p class="muted" style="margin:0 0 8px 0;">These rules can be applied to any location. Click to copy key.</p>
+    <div class="rules-list" style="display:grid;gap:4px;">
+      ${LOCATION_RULES_DEFINITION.map(def => `
+        <div class="rule-item" data-rule-key="${def.key}" style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--panel);border-radius:4px;cursor:pointer;" title="Click to copy key">
+          <code style="background:#e2e8f0;padding:2px 6px;border-radius:3px;">${def.key}</code>
+          <strong>${def.label}</strong>
+          <span class="muted">${def.description}</span>
+          <span class="muted" style="margin-left:auto;font-size:0.85em;">${def.type}${def.default ? ` (default: ${def.default})` : ""}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+  // Click to copy rule key
+  rulesPanel.querySelectorAll(".rule-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const key = item.dataset.ruleKey;
+      navigator.clipboard.writeText(key).then(() => {
+        showToast(`Copied: ${key}`, "success");
+      }).catch(() => {
+        // Fallback
+        const input = document.createElement("input");
+        input.value = key;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
+        showToast(`Copied: ${key}`, "success");
+      });
+    });
+  });
+  root.appendChild(rulesPanel);
 
   // Bulk Import
   wireBulkJsonImport(root, {
@@ -1301,24 +1555,26 @@ function mountLocations(host) {
 
   // Create button
   fields.querySelector('[data-action="create-location"]').addEventListener("click", async () => {
+    const rules = buildRulesFromCheckboxes(fields.querySelector("#add-rules-builder"));
+    const enemyKeys = Array.from(fields.querySelectorAll("#add-enemies [data-enemy-key]:checked")).map(el => el.dataset.enemyKey);
     const get = (k) => {
       const el = fields.querySelector(`[data-field="${k}"]`);
       if (!el) return null;
       if (el.type === "checkbox") return el.checked;
       return el.value;
     };
-    const payload = locationImportRowToPayload({
-      key: get("key"),
+    const payload = {
+      key: get("key") || undefined, // auto-generate if empty
       label: get("label"),
       location_type: get("location_type"),
       parent_id: get("parent_id") ? Number(get("parent_id")) : null,
       description: get("description"),
-      rules: get("rules"),
-      enemy_keys: (() => { try { return JSON.parse(get("enemy_keys") || "[]"); } catch { return []; } })(),
-      is_active: get("is_active"),
-    });
-    if (!payload.key || !payload.label) {
-      showToast("Key and Label are required", "error");
+      rules,
+      enemy_keys: enemyKeys,
+      is_active: get("is_active") ? 1 : 0,
+    };
+    if (!payload.label) {
+      showToast("Label is required", "error");
       return;
     }
     try {
@@ -1326,9 +1582,10 @@ function mountLocations(host) {
       showToast("Location created", "success");
       // Clear form
       fields.querySelectorAll("[data-field]").forEach((el) => {
-        if (el.type === "checkbox") el.checked = true;
+        if (el.type === "checkbox") el.checked = el.dataset.field === "is_active";
         else el.value = "";
       });
+      setRulesCheckboxes(fields.querySelector("#add-rules-builder"), {});
       await refreshLocations(host);
     } catch (e) {
       showToast(parseApiError(e, "Create failed"), "error");

@@ -2164,6 +2164,91 @@ pre.copy-block {
 }
 
 /* ============ LOCATIONS ============ */
+.admin-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.admin-modal-content {
+  background: var(--panel);
+  padding: 20px;
+  border-radius: var(--radius);
+  max-width: 700px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: auto;
+  box-shadow: var(--shadow);
+}
+
+.admin-modal-content h3 {
+  margin: 0 0 16px 0;
+  color: var(--accent);
+}
+
+.edit-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.edit-form-grid .field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.edit-form-grid .field span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.edit-form-grid input,
+.edit-form-grid select,
+.edit-form-grid textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.rules-builder label {
+  padding: 4px 0;
+}
+
+.rules-builder input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.enemies-selector label {
+  padding: 2px 0;
+}
+
+.enemies-selector input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.rule-item {
+  transition: background 0.15s;
+}
+
+.rule-item:hover {
+  background: var(--panel-2) !important;
+}
+
+.rules-panel-section h4 {
+  color: var(--accent);
+}
 .badge-blue {
   background: #dbeafe;
   color: #1e40af;
