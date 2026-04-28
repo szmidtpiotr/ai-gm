@@ -339,6 +339,48 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_debug_validation_log_test_run
     ON debug_validation_log(test_run_id, created_at)
     """,
+    # Phase 8D — Location Integrity migrations (8D-1 to 8D-4)
+    """
+    CREATE TABLE IF NOT EXISTS game_locations (
+        id INTEGER PRIMARY KEY,
+        key TEXT UNIQUE NOT NULL,
+        label TEXT NOT NULL,
+        description TEXT,
+        parent_id INTEGER REFERENCES game_locations(id),
+        location_type TEXT DEFAULT 'macro' CHECK(location_type IN ('macro', 'sub')),
+        rules TEXT,
+        enemy_keys TEXT DEFAULT '[]',
+        npc_keys TEXT DEFAULT '[]',
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_game_locations_parent
+    ON game_locations(parent_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_game_locations_key
+    ON game_locations(key)
+    """,
+    "ALTER TABLE game_sessions ADD COLUMN current_location_id INTEGER REFERENCES game_locations(id)",
+    "ALTER TABLE game_sessions ADD COLUMN session_flags TEXT DEFAULT '{}'",
+    """
+    CREATE TABLE IF NOT EXISTS location_integrity_log (
+        id INTEGER PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES game_sessions(id),
+        character_id INTEGER,
+        attempted_move TEXT NOT NULL,
+        current_location_key TEXT,
+        reason_blocked TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_location_integrity_log_session
+    ON location_integrity_log(session_id, created_at)
+    """,
 ]
 
 ADMIN_SEEDS = [
@@ -509,6 +551,13 @@ ADMIN_SEEDS = [
       '[{"weapon_key":"quarterstaff"},{"consumable_key":"health_potion_small"},{"consumable_key":"mana_potion"}]',
         updated_at = datetime('now')
     WHERE key = 'scholar'
+    """,
+    # Phase 8D — Location Integrity default flags (8D-3)
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value) VALUES
+        ('location_integrity_enabled', '1'),
+        ('location_parser_json_enabled', '1'),
+        ('location_parser_fallback_enabled', '1')
     """,
 ]
 

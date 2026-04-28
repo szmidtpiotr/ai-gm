@@ -33,6 +33,9 @@ from app.routers.admin import router as admin_router
 from app.routers.settings import router as settings_router
 from app.routers.debug import router as debug_router
 from app.routers.test_runner import router as test_runner_router
+from app.routers.locations import router as locations_router
+from app.routers.session_location import router as session_location_router
+from app.routers.admin_location import router as admin_location_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -215,6 +218,9 @@ app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
+app.include_router(locations_router, prefix="/api")
+app.include_router(session_location_router)
+app.include_router(admin_location_router)
 app.include_router(settings_router)
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")

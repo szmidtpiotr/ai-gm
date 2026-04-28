@@ -42,6 +42,10 @@ from app.services.client_ui_config import (
 )
 from app.services.solo_death_service import apply_death_save_outcome, end_solo_campaign_on_death
 from app.services.user_llm_settings import get_user_llm_settings_full
+from app.services.location_config_service import get_bool_flag
+from app.services.location_intent_parser import LocationIntent, parse as parse_location_intent
+from app.services.location_validator import validate_move, log_integrity_violation
+from app.services.location_context_injector import build_location_context
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
@@ -1177,6 +1181,74 @@ def create_turn(
                 )
                 return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
+            # /move — zmiana lokalizacji (Phase 8D)
+            if cmd == "/move":
+                target_location = text[5:].strip()  # Usuń "/move "
+                if not target_location:
+                    raise HTTPException(status_code=400, detail="Podaj nazwę lokalizacji: /move [nazwa]")
+                
+                # Sprawdź czy Location Integrity jest włączone
+                if not get_bool_flag("location_integrity_enabled", campaign_id, default=True):
+                    # System wyłączony — prosta zmiana bez walidacji
+                    result = {"command": "move", "location": target_location, "mode": "bypass"}
+                    log = create_turn_log(
+                        conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                        user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+                    )
+                    return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+                
+                # Walidacja przez Location Validator
+                from dataclasses import dataclass
+                
+                intent = LocationIntent(action="move", target_label=target_location)
+                result = validate_move(campaign_id, intent)
+                
+                if result.allowed:
+                    # Aktualizuj lokalizację w sesji
+                    if result.resolved_location_id:
+                        conn.execute(
+                            "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+                            (result.resolved_location_id, campaign_id)
+                        )
+                        conn.commit()
+                        
+                        # Pobierz nazwę nowej lokalizacji
+                        loc_row = conn.execute(
+                            "SELECT label FROM game_locations WHERE id = ?",
+                            (result.resolved_location_id,)
+                        ).fetchone()
+                        loc_name = loc_row["label"] if loc_row else target_location
+                    else:
+                        loc_name = target_location
+                    
+                    response_msg = f"Przenosisz się do: {loc_name}"
+                    if result.is_new_location:
+                        response_msg += " (nowa lokalizacja utworzona)"
+                    
+                    result_data = {
+                        "command": "move",
+                        "location": loc_name,
+                        "allowed": True,
+                        "is_new": result.is_new_location
+                    }
+                else:
+                    # Blokada — loguj próbę
+                    log_integrity_violation(campaign_id, intent, result.block_reason or "Nieznany powód")
+                    
+                    response_msg = f"Nie możesz się tam przenieść: {result.block_reason}"
+                    result_data = {
+                        "command": "move",
+                        "location": target_location,
+                        "allowed": False,
+                        "reason": result.block_reason
+                    }
+                
+                log = create_turn_log(
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=response_msg, route=route,
+                )
+                return _with_turn_trace({**log, "route": "command", "result": result_data}, turn_id)
+
             # /atak — stan silnika walki; /walka pozostaje aliasem (to samo zachowanie)
             if cmd in ("/atak", "/walka"):
                 result = _atak_command_response_for_api(campaign_id)
@@ -1780,6 +1852,34 @@ def create_turn_stream(
                         user_text=user_text_val,
                         assistant_text=clean_text,
                     )
+                    
+                    # Phase 8D: Location Integrity — parsowanie intencji ruchu z odpowiedzi GM
+                    try:
+                        if get_bool_flag("location_integrity_enabled", campaign_id_val, default=True):
+                            intent = parse_location_intent(full_raw, campaign_id_val)
+                            if intent:
+                                result = validate_move(campaign_id_val, intent)
+                                if result.allowed and result.resolved_location_id:
+                                    # Aktualizuj lokalizację sesji
+                                    save_conn.execute(
+                                        "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
+                                        (result.resolved_location_id, campaign_id_val)
+                                    )
+                                    logger.info("location_updated_from_gm_response",
+                                               campaign_id=campaign_id_val,
+                                               location_id=result.resolved_location_id,
+                                               is_new=result.is_new_location)
+                                elif not result.allowed:
+                                    # Loguj blokadę
+                                    log_integrity_violation(campaign_id_val, intent, result.block_reason or "Walidacja nie powiodła się")
+                                    logger.warning("location_move_blocked",
+                                                 campaign_id=campaign_id_val,
+                                                 attempted=intent.target_label,
+                                                 reason=result.block_reason)
+                    except Exception as e:
+                        # Błąd w parserze/walidatorze nie powinien blokować gry
+                        logger.error("location_integrity_processing_error", error=str(e), campaign_id=campaign_id_val)
+                    
                     if grant_item_label:
                         append_narrative_item_to_sheet(
                             save_conn,
