@@ -560,7 +560,8 @@ ADMIN_SEEDS = [
         ('location_parser_fallback_enabled', '1')
     """,
     # Phase 8D — Add updated_at to game_config_meta for ON CONFLICT UPDATE
-    "ALTER TABLE game_config_meta ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))",
+    # Use constant default (epoch) because SQLite ALTER TABLE doesn't support function defaults
+    "ALTER TABLE game_config_meta ADD COLUMN updated_at TEXT DEFAULT '1970-01-01T00:00:00Z'",
 ]
 
 
