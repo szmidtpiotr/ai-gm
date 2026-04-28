@@ -381,6 +381,15 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_location_integrity_log_session
     ON location_integrity_log(session_id, created_at)
     """,
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value) VALUES
+        ('location_integrity_enabled', '1'),
+        ('location_parser_json_enabled', '1'),
+        ('location_parser_fallback_enabled', '1')
+    """,
+    # Phase 8D — Add updated_at to game_config_meta for ON CONFLICT UPDATE
+    # Use constant default (epoch) because SQLite ALTER TABLE doesn't support function defaults
+    "ALTER TABLE game_config_meta ADD COLUMN updated_at TEXT DEFAULT '1970-01-01T00:00:00Z'",
 ]
 
 ADMIN_SEEDS = [
@@ -553,15 +562,6 @@ ADMIN_SEEDS = [
     WHERE key = 'scholar'
     """,
     # Phase 8D — Location Integrity default flags (8D-3)
-    """
-    INSERT OR IGNORE INTO game_config_meta (key, value) VALUES
-        ('location_integrity_enabled', '1'),
-        ('location_parser_json_enabled', '1'),
-        ('location_parser_fallback_enabled', '1')
-    """,
-    # Phase 8D — Add updated_at to game_config_meta for ON CONFLICT UPDATE
-    # Use constant default (epoch) because SQLite ALTER TABLE doesn't support function defaults
-    "ALTER TABLE game_config_meta ADD COLUMN updated_at TEXT DEFAULT '1970-01-01T00:00:00Z'",
 ]
 
 
@@ -720,6 +720,13 @@ def _upgrade_loot_entries_three_way_xor(conn: sqlite3.Connection) -> None:
 
 def _migrate_legacy_archetype_json(conn: sqlite3.Connection) -> None:
     """One-time: normalize legacy archetype / allowed_classes JSON tokens to scholar."""
+    # Check if required tables exist (for fresh/test databases)
+    tables_exist = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name IN ('game_config_weapons', 'characters')"
+    ).fetchall()
+    if len(tables_exist) < 2:
+        return  # Tables don't exist yet, skip migration
+    
     _m = "ma" + "ge"
     _s = "scho" + "lar"
     q = chr(34)
@@ -861,12 +868,23 @@ def run_admin_migrations() -> None:
         _upgrade_loot_entries_three_way_xor(conn)
 
         for sql in ADMIN_SEEDS:
-            conn.execute(sql)
-            conn.commit()
-            logger.info(
-                "admin_migration_seeded",
-                sql_preview=sql.strip().splitlines()[0],
-            )
+            try:
+                conn.execute(sql)
+                conn.commit()
+                logger.info(
+                    "admin_migration_seeded",
+                    sql_preview=sql.strip().splitlines()[0],
+                )
+            except sqlite3.OperationalError as e:
+                msg = str(e).lower()
+                if "already exists" in msg or "duplicate column" in msg:
+                    logger.info(
+                        "admin_migration_seeded_skipped",
+                        sql_preview=sql.strip().splitlines()[0],
+                        reason=str(e),
+                    )
+                else:
+                    raise
 
         _migrate_legacy_archetype_json(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)
