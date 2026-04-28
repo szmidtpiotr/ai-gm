@@ -1,6 +1,6 @@
 import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
-import { showToast } from "/admin_panel/shared/toast.js?v=17";
-import { renderTable, showConfirm } from "/admin_panel/shared/table.js?v=23";
+import { showToast } from "/admin_panel/shared/toast.js?v=18";
+import { renderTable, showConfirm } from "/admin_panel/shared/table.js?v=24";
 
 const SUB_TABS = [
   { id: "stats", label: "Stats" },
@@ -1158,6 +1158,16 @@ function locationTypeBadgeClass(type) {
   return "badge";
 }
 
+function slugifyLocationKey(label) {
+  return String(label || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 100);
+}
+
 async function fetchLocationParentLabel(parentId, allLocations) {
   const parent = allLocations.find(l => l.id === parentId);
   return parent ? `${parent.label} (${parent.key})` : `ID:${parentId}`;
@@ -1165,20 +1175,27 @@ async function fetchLocationParentLabel(parentId, allLocations) {
 
 function validateLocationImportRow(row, i) {
   const errs = [];
-  if (!row.key || String(row.key).trim() === "") errs.push(`[${i}] key is required`);
   if (!row.label || String(row.label).trim() === "") errs.push(`[${i}] label is required`);
+  if (row.key != null && String(row.key).trim() === "") errs.push(`[${i}] key must be non-empty when provided`);
+  const resolvedKey = row.key != null && String(row.key).trim() !== "" ? String(row.key).trim() : slugifyLocationKey(row.label);
+  if (!resolvedKey) errs.push(`[${i}] key could not be generated from label`);
   const t = String(row.location_type || "macro").toLowerCase();
   if (!["macro", "sub"].includes(t)) errs.push(`[${i}] location_type must be macro or sub`);
-  if (t === "sub" && (row.parent_id == null || Number(row.parent_id) <= 0)) errs.push(`[${i}] parent_id is required for sub locations`);
-  return errs;
+  if (t === "sub" && !((row.parent_id != null && Number(row.parent_id) > 0) || (row.parent_key != null && String(row.parent_key).trim() !== ""))) {
+    errs.push(`[${i}] parent_id or parent_key is required for sub locations`);
+  }
+  return errs.length ? errs.join("; ") : null;
 }
 
 function locationImportRowToPayload(row) {
+  const label = String(row.label || "").trim();
+  const key = row.key != null && String(row.key).trim() !== "" ? String(row.key).trim() : slugifyLocationKey(label);
   return {
-    key: String(row.key).trim(),
-    label: String(row.label).trim(),
+    key,
+    label,
     location_type: String(row.location_type || "macro").toLowerCase(),
     parent_id: row.parent_id != null ? Number(row.parent_id) || null : null,
+    parent_key: row.parent_key != null && String(row.parent_key).trim() ? String(row.parent_key).trim() : null,
     description: row.description == null ? null : String(row.description),
     rules: (() => {
       if (row.rules == null) return {};
@@ -1228,7 +1245,7 @@ async function refreshLocations(host, statKeys) {
   const mount = host.querySelector(".admin-table-mount");
   if (!mount) return;
   try {
-    const data = await adminFetch("/api/locations/admin/locations?active_only=0");
+    const data = await adminFetch("/api/locations/admin/locations?active_only=1");
     const allLocations = data || [];
     const rows = await Promise.all(
       allLocations.map(async (r) => ({
@@ -1266,14 +1283,34 @@ async function refreshLocations(host, statKeys) {
           return res;
         },
         onDelete: async (row, meta = {}) => {
-          try {
-            await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, { 
+          const doDelete = async (force) => {
+            await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, {
               method: "DELETE",
-              body: JSON.stringify({ force: !!meta.force })
+              body: JSON.stringify({ force: !!force }),
             });
+          };
+          try {
+            await doDelete(!!meta.force);
           } catch (err) {
             // If 204 No Content or 404, treat as success for soft-delete
             if (err.status === 204 || err.status === 404) {
+              return;
+            }
+            const detail = String(err?.body?.detail || "");
+            // Location has active children and backend asks for force=true
+            if (err.status === 422 && detail.toLowerCase().includes("force=true")) {
+              if (meta && meta.bulk) {
+                await doDelete(true);
+                return;
+              }
+              const okForce = await showConfirm(
+                "This location has active child locations. Delete location with children?",
+                { dangerous: true, showForceCheckbox: true, forceCheckboxLabel: "Force delete with children" },
+              );
+              if (!okForce || !okForce.ok || !okForce.force) {
+                return;
+              }
+              await doDelete(true);
               return;
             }
             throw err;
@@ -1443,12 +1480,37 @@ function openLocationEditModal(host, row, allLocations) {
   content.querySelector("#edit-cancel").addEventListener("click", () => modal.remove());
   content.querySelector("#edit-delete").addEventListener("click", async () => {
     if (!confirm(`Delete location "${row.label}" (${row.key})?`)) return;
+    const doDelete = async (force) => {
+      await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, {
+        method: "DELETE",
+        body: JSON.stringify({ force: !!force }),
+      });
+    };
     try {
-      await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, { method: "DELETE" });
+      await doDelete(false);
       showToast("Location deleted", "success");
       modal.remove();
       refreshLocations(host);
-    } catch (e) { showToast(parseApiError(e, "Delete failed"), "error"); }
+    } catch (e) {
+      const detail = String(e?.body?.detail || "");
+      if (e?.status === 422 && detail.toLowerCase().includes("force=true")) {
+        const okForce = confirm(
+          `Location "${row.label}" has active child locations. Delete with children?`,
+        );
+        if (!okForce) return;
+        try {
+          await doDelete(true);
+          showToast("Location and child locations deleted", "success");
+          modal.remove();
+          refreshLocations(host);
+          return;
+        } catch (e2) {
+          showToast(parseApiError(e2, "Delete failed"), "error");
+          return;
+        }
+      }
+      showToast(parseApiError(e, "Delete failed"), "error");
+    }
   });
   content.querySelector("#edit-save").addEventListener("click", async () => {
     // Build rules from multi-select
@@ -1520,6 +1582,9 @@ function openLocationEditModal(host, row, allLocations) {
 
 function mountLocations(host) {
   const root = el("div", "admin-subpanel-inner");
+  const versionInfo = el("div", "muted", "Locations UI version: 8D-fix-2026-04-28-1740");
+  versionInfo.style.cssText = "font-size:12px;margin:0 0 8px 0;";
+  root.appendChild(versionInfo);
   
   // Cache enemies for dropdowns
   let enemiesListCache = [];
@@ -1549,7 +1614,12 @@ function mountLocations(host) {
           <option value="sub">Sub (under macro)</option>
         </select>
       </label>
-      <label class="field"><span>Parent ID (for sub)</span><input data-field="parent_id" type="number" placeholder="ID of parent macro" /></label>
+      <label class="field"><span>Parent (for sub)</span>
+        <select data-field="parent_key" id="add-parent-key">
+          <option value="">— Select parent macro —</option>
+        </select>
+      </label>
+      <label class="field"><span>Parent Key (for sub)</span><input data-field="parent_key" type="text" placeholder="slug of parent macro" /></label>
       <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea data-field="description" rows="2"></textarea></label>
       
       <div class="field" style="grid-column:1/-1;">
@@ -1640,6 +1710,20 @@ function mountLocations(host) {
     } else {
       enemiesSelect.innerHTML = enemiesListCache.slice().sort((a, b) => a.label.localeCompare(b.label)).map(e => `<option value="${e.key}">${e.label} (${e.key})</option>`).join("");
     }
+    try {
+      const locations = await adminFetch("/api/locations/admin/locations?active_only=1");
+      const parentSelect = fields.querySelector("#add-parent-key");
+      const macroLocations = (locations || []).filter((loc) => loc.location_type === "macro");
+      parentSelect.innerHTML = [
+        '<option value="">— Select parent macro —</option>',
+        ...macroLocations
+          .slice()
+          .sort((a, b) => String(a.label || a.key).localeCompare(String(b.label || b.key), undefined, { sensitivity: "base" }))
+          .map((loc) => `<option value="${loc.key}">${loc.label || loc.key} (${loc.key})</option>`),
+      ].join("");
+    } catch (_e) {
+      // Parent dropdown is a helper only; backend validation still catches invalid parents.
+    }
   }, 100);
 
   details.appendChild(fields);
@@ -1671,7 +1755,7 @@ function mountLocations(host) {
       </div>
     </details>
     
-    <details open>
+    <details>
       <summary style="cursor:pointer;font-weight:600;color:var(--accent);">➕ Create Custom Rule</summary>
       <div style="margin-top:8px;padding:12px;background:var(--panel);border-radius:6px;">
         <p class="muted" style="margin:0 0 8px 0;">Add your own rule that will be available in the dropdown above.</p>
@@ -1844,11 +1928,16 @@ function mountLocations(host) {
     
     const enemyKeys = Array.from(fields.querySelector("#add-enemies").selectedOptions).map(o => o.value);
     
+    const label = get("label");
+    const generatedKey = slugifyLocationKey(label);
+    const key = get("key").trim() || generatedKey;
+    const parentKey = get("parent_key").trim();
     const payload = {
-      key: get("key") || undefined, // auto-generate if empty
-      label: get("label"),
+      key,
+      label,
       location_type: get("location_type"),
-      parent_id: get("parent_id") ? Number(get("parent_id")) : null,
+      parent_id: null,
+      parent_key: parentKey || null,
       description: get("description"),
       rules,
       enemy_keys: enemyKeys,
@@ -1856,6 +1945,14 @@ function mountLocations(host) {
     };
     if (!payload.label) {
       showToast("Label is required", "error");
+      return;
+    }
+    if (!payload.key) {
+      showToast("Could not auto-generate key from label", "error");
+      return;
+    }
+    if (payload.location_type === "sub" && !payload.parent_id && !payload.parent_key) {
+      showToast("Sub location needs parent_id or parent_key", "error");
       return;
     }
     try {
@@ -2172,7 +2269,7 @@ function wireBulkJsonImport(root, opts) {
     }
     if (errors.length) {
       resultPre.textContent = errors.join("\n");
-      showToast(`Dry run: ${errors.length} issue(s).`, "info");
+      showToast(`Dry run: ${errors.length} issue(s): ${errors.slice(0, 3).join(" | ")}`, "info");
       return;
     }
     let msg = `OK — ${parsed.length} ${noun} gotowych do importu.`;
@@ -2205,7 +2302,7 @@ function wireBulkJsonImport(root, opts) {
     });
     if (errors.length) {
       resultPre.textContent = errors.join("\n");
-      showToast("Fix validation errors before commit.", "error");
+      showToast(`Fix validation errors before commit: ${errors.slice(0, 3).join(" | ")}`, "error");
       return;
     }
     const skip409 = bulk.querySelector("[data-bulk-skip-409]")?.checked ?? true;

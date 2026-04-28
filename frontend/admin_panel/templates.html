@@ -451,8 +451,8 @@
               <tr>
                 <td><code>key</code></td>
                 <td>text</td>
-                <td>✅</td>
-                <td>lowercase_snake_case, unique. Auto-generated from label if omitted.</td>
+                <td>❌</td>
+                <td>Optional. If omitted, backend auto-generates lowercase_snake_case from <code>label</code>. Must be unique when provided.</td>
               </tr>
               <tr>
                 <td><code>label</code></td>
@@ -467,10 +467,10 @@
                 <td>macro (top-level) or sub (nested under macro)</td>
               </tr>
               <tr>
-                <td><code>parent_id</code></td>
-                <td>number</td>
+                <td><code>parent_id</code> / <code>parent_key</code></td>
+                <td>number / text</td>
                 <td>❌</td>
-                <td>Required for sub-locations: ID of the parent macro location</td>
+                <td>Required for sub-locations. Prefer <code>parent_key</code> in templates/imports because it is stable and self-contained. Avoid hard-coded <code>parent_id</code> unless you know the DB ID.</td>
               </tr>
               <tr>
                 <td><code>description</code></td>
@@ -522,10 +522,8 @@
           </div>
           <pre class="copy-block" data-table="locations">[
   {
-    "key": "dark_forest",
     "label": "Dark Forest",
     "location_type": "macro",
-    "parent_id": null,
     "description": "A dense, ominous forest where sunlight barely reaches the ground.",
     "rules": {},
     "enemy_keys": ["goblin", "wolf", "bandit"],
@@ -533,10 +531,9 @@
     "is_active": true
   },
   {
-    "key": "old_ruins",
     "label": "Old Ruins",
     "location_type": "sub",
-    "parent_id": 1,
+    "parent_key": "dark_forest",
     "description": "Ancient ruins deep within the Dark Forest.",
     "rules": {"no_combat": false, "loot_bonus": 1.5},
     "enemy_keys": ["skeleton_warrior", "ghost"],
@@ -544,10 +541,9 @@
     "is_active": true
   },
   {
-    "key": "temple_of_light",
     "label": "Temple of Light",
     "location_type": "sub",
-    "parent_id": 1,
+    "parent_key": "dark_forest",
     "description": "A sacred sanctuary where violence is forbidden.",
     "rules": {"no_combat": true, "reason": "Sacred ground"},
     "enemy_keys": [],
@@ -644,7 +640,7 @@
   "key": "cursed_crypt",
   "label": "Cursed Crypt",
   "location_type": "sub",
-  "parent_id": 1,
+  "parent_key": "dark_forest",
   "rules": {
     "no_combat": false,
     "magic_blocked": true,

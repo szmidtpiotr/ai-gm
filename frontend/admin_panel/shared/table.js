@@ -528,7 +528,7 @@ export function renderTable(container, columns, rows, options = {}) {
           const row = selectedRows[i];
           const rowId = defaultRowId(row, options);
           try {
-            await onDelete(row, { force: false });
+            await onDelete(row, { force: false, bulk: true });
             selectedState.delete(rowId);
             deletedIds.add(rowId);
             success += 1;

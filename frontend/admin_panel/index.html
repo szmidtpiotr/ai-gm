@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=26" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=27" />
   </head>
   <body>
     <div class="admin-shell">
@@ -123,7 +123,7 @@
       /* Bump ?v= when changing admin JS/CSS so browsers do not serve stale ES modules. */
       import { adminFetch } from "/admin_panel/shared/api.js?v=18";
       import { autoConnect, connect, getBaseUrl, isConnected, logout } from "/admin_panel/shared/auth.js?v=18";
-      import { showToast } from "/admin_panel/shared/toast.js?v=17";
+      import { showToast } from "/admin_panel/shared/toast.js?v=18";
 
       const overlay = document.getElementById("login-overlay");
       const logoutBtn = document.getElementById("logout-btn");
@@ -294,7 +294,7 @@
         }
         gameDesignReady = true;
         try {
-          const { init } = await import("/admin_panel/sections/game_design.js?v=26");
+          const { init } = await import(`/admin_panel/sections/game_design.js?v=32&t=${Date.now()}`);
           await init(el);
         } catch (err) {
           gameDesignReady = false;

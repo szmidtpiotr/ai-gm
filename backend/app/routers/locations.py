@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import re
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
@@ -29,12 +30,13 @@ router = APIRouter(prefix="/locations", tags=["Locations"])
 
 class LocationBase(BaseModel):
     """Base model dla lokalizacji."""
-    key: str = Field(..., min_length=1, max_length=100)
+    key: Optional[str] = Field(default=None, min_length=1, max_length=100)
     label: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     parent_id: Optional[int] = None
+    parent_key: Optional[str] = Field(default=None, min_length=1, max_length=100)
     location_type: str = Field(default="macro", pattern="^(macro|sub)$")
-    rules: Optional[str] = None
+    rules: Optional[dict | str] = None
     enemy_keys: List[str] = Field(default_factory=list)
     npc_keys: List[str] = Field(default_factory=list)
 
@@ -84,7 +86,32 @@ def row_to_location_dict(row: sqlite3.Row) -> dict:
                 result[key] = []
         else:
             result[key] = result.get(key) or []
+    # Parsuj rules (JSON string -> object) dla spójności z frontendem
+    if isinstance(result.get("rules"), str) and result["rules"].strip():
+        try:
+            result["rules"] = json.loads(result["rules"])
+        except json.JSONDecodeError:
+            # Zachowaj oryginalny string, jeśli to nie jest poprawny JSON
+            pass
     return result
+
+
+def serialize_rules(value: dict | str | None) -> str | None:
+    """Normalizuje rules do formatu przechowywanego w DB (TEXT/JSON)."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    text = str(value).strip()
+    return text or None
+
+
+def slugify_location_key(label: str) -> str:
+    """Generuje lowercase_snake_case key z label."""
+    value = str(label or "").strip().lower()
+    value = re.sub(r"[^a-z0-9]+", "_", value)
+    value = re.sub(r"_+", "_", value).strip("_")
+    return value[:100]
 
 
 def build_location_tree(
@@ -183,19 +210,38 @@ async def create_location(
     """
     conn = get_db_connection()
     try:
+        key = (data.key or "").strip() if data.key else ""
+        if not key:
+            if not data.label or not str(data.label).strip():
+                raise HTTPException(status_code=422, detail="Label is required to auto-generate key")
+            key = slugify_location_key(data.label)
+        if not key:
+            raise HTTPException(status_code=422, detail="Could not auto-generate key from label")
         # Sprawdź czy key już istnieje
         existing = conn.execute(
             "SELECT 1 FROM game_locations WHERE key = ?",
-            (data.key,)
+            (key,)
         ).fetchone()
         
         if existing:
             raise HTTPException(
                 status_code=422,
-                detail=f"Lokalizacja z kluczem '{data.key}' już istnieje"
+                detail=f"Lokalizacja z kluczem '{key}' już istnieje"
             )
         
         # Sprawdź czy parent istnieje (jeśli podany)
+        if data.parent_id is None and data.parent_key:
+            parent_row = conn.execute(
+                "SELECT id FROM game_locations WHERE key = ? AND is_active = 1",
+                (data.parent_key.strip(),)
+            ).fetchone()
+            if not parent_row:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Parent lokalizacja o key '{data.parent_key}' nie istnieje lub jest nieaktywna"
+                )
+            data.parent_id = int(parent_row["id"])
+
         if data.parent_id is not None:
             parent = conn.execute(
                 "SELECT 1 FROM game_locations WHERE id = ? AND is_active = 1",
@@ -220,12 +266,12 @@ async def create_location(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                data.key,
+                key,
                 data.label,
                 data.description,
                 data.parent_id,
                 data.location_type,
-                data.rules,
+                serialize_rules(data.rules),
                 enemy_keys_json,
                 npc_keys_json,
             )
@@ -347,7 +393,7 @@ async def update_location(
             (
                 data.label,
                 data.description,
-                data.rules,
+                serialize_rules(data.rules),
                 enemy_keys_json,
                 npc_keys_json,
                 key,
