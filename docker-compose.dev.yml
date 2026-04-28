@@ -113,9 +113,13 @@ services:
       start_period: 45s
     networks:
       - ai-gm-dev
+      - observability-dev
     labels:
       - service=test-agent-dev
 
 networks:
   ai-gm-dev:
     driver: bridge
+  observability-dev:
+    external: true
+    name: ai-gm-observability-dev_observability-dev

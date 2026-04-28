@@ -1,0 +1,18 @@
+{
+  "name": "Regression: legalny flow gracza (baseline)",
+  "goal": "Graj uczciwie: wykonaj polecenia fabularne, rozwijaj postać w zgodzie z zasadami i dąż do spójnej progresji (quest / lokacja)",
+  "persona": "normalny gracz, fair play, bez exploitów",
+  "constraints": ["stosuj się do odpowiedzi GM", "nie szukaj dziur w systemie"],
+  "success_criteria": {
+    "location_changed_to": "SafeTown",
+    "quest_completed": true
+  },
+  "validation": {
+    "api_endpoint": "/api/debug/player_state",
+    "check_interval_steps": 5
+  },
+  "max_steps": 60,
+  "step_timeout_ms": 10000,
+  "total_timeout_ms": 720000,
+  "campaign_label": "AI Test Campaign"
+}

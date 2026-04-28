@@ -469,6 +469,9 @@ export async function init(container) {
   yamlTa.value = DEFAULT_YAML;
   const actions = el("div", "test-runner-actions");
   const runBtn = el("button", "primary-btn", "Uruchom ▶");
+  const stopBtn = el("button", "danger-btn", "Zatrzymaj ⏹");
+  stopBtn.disabled = true;
+  stopBtn.title = "Zatrzymaj aktualnie działający test";
   const saveBtn = el("button", "secondary-btn", "Zapisz");
   const filenameInp = el("input", "test-runner-filename");
   filenameInp.type = "text";
@@ -476,6 +479,7 @@ export async function init(container) {
   const scenarioSelect = el("select", "test-runner-scenario-select");
   const refreshListBtn = el("button", "secondary-btn", "Odśwież listę");
   actions.appendChild(runBtn);
+  actions.appendChild(stopBtn);
   actions.appendChild(saveBtn);
   actions.appendChild(filenameInp);
   actions.appendChild(scenarioSelect);
@@ -510,6 +514,17 @@ export async function init(container) {
   let planningHistory = [];
   let pollTimer = null;
   let runEs = null;
+  let currentRunId = null;
+
+  function setRunningState(isRunning, runId = null) {
+    currentRunId = runId;
+    runBtn.disabled = isRunning;
+    stopBtn.disabled = !isRunning;
+    container.setAttribute("aria-busy", String(isRunning));
+    if (isRunning) {
+      runMeta.textContent = `Status: STARTING… (run_id: ${runId || "?"})`;
+    }
+  }
 
   function clearTimers() {
     if (pollTimer) {
@@ -523,6 +538,27 @@ export async function init(container) {
         /* ignore */
       }
       runEs = null;
+    }
+  }
+
+  async function stopRunningTest() {
+    if (!currentRunId) {
+      showToast("Brak aktywnego testu do zatrzymania", "error");
+      return;
+    }
+    try {
+      stopBtn.disabled = true;
+      appendLogLine("Wysyłanie sygnału zatrzymania…", "info");
+      const result = await adminFetch(`/api/test_runner/stop/${encodeURIComponent(currentRunId)}`, {
+        method: "POST",
+      });
+      appendLogLine(`Zatrzymano: ${result.message || "ok"}`, "ok");
+      showToast(`Test zatrzymany: ${result.message || "ok"}`, "success");
+    } catch (e) {
+      stopBtn.disabled = false;
+      const msg = errText(e, e.message) || String(e);
+      appendLogLine(`Błąd zatrzymania: ${msg}`, "err");
+      showToast(`Błąd zatrzymania: ${msg}`, "error");
     }
   }
 
@@ -715,7 +751,7 @@ export async function init(container) {
       );
       return;
     }
-    runMeta.textContent = "Status: STARTING…";
+    setRunningState(true);
     try {
       const startBody = { yaml };
       const apl = buildAgentPlannerLlBodyForApi();
@@ -726,8 +762,8 @@ export async function init(container) {
         method: "POST",
         body: JSON.stringify(startBody),
       });
-      runMeta.textContent = `Status: RUNNING  |  run_id: ${runId}`;
-      appendLogLine("Uruchomiono agenta…", "info");
+      setRunningState(true, runId);
+      appendLogLine(`Uruchomiono agenta… run_id: ${runId}`, "info");
 
       const root = normApiRoot();
       const tok = encodeURIComponent(getToken() || "");
@@ -742,8 +778,12 @@ export async function init(container) {
           return;
         }
         if (data.done) {
+          setRunningState(false);
           const fail = data.error || data.reason === "error" || data.success === false;
-          if (fail) {
+          if (data.reason === "cancelled") {
+            appendLogLine("KONIEC: zatrzymano przez użytkownika", "info");
+            runMeta.textContent = "Status: CANCELLED";
+          } else if (fail) {
             appendLogLine(`KONIEC: błąd  ${data.error || data.reason || ""}`, "err");
             runMeta.textContent = "Status: ERROR (SSE)";
           } else {
@@ -797,9 +837,14 @@ export async function init(container) {
         }
       }, 1500);
     } catch (e) {
+      setRunningState(false);
       runMeta.textContent = "Status: —";
       showToast(errText(e, e.message), "error");
     }
+  });
+
+  stopBtn.addEventListener("click", () => {
+    void stopRunningTest();
   });
 
   saveBtn.addEventListener("click", async () => {

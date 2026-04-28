@@ -1,0 +1,7 @@
+node_modules
+playwright-results
+playwright/.cache
+tests
+test_scenarios.js
+**/*.md
+.git

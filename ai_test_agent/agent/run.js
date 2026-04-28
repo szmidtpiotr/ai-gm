@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require("fs");
 const { run } = require("./orchestrator");
+const { validateScenario } = require("./scenario_validator");
 
 const args = process.argv.slice(2);
 const scenarioArg = args.find((a) => a.startsWith("--scenario="))?.split("=")[1] || "cheat_location.json";
@@ -12,6 +13,11 @@ if (!fs.existsSync(scenarioPath)) {
   process.exit(2);
 }
 const scenario = JSON.parse(fs.readFileSync(scenarioPath, "utf8"));
+const verr = validateScenario(scenario);
+if (verr.length) {
+  console.error(`[run] nieprawidłowy scenariusz: ${verr.join("; ")}`);
+  process.exit(2);
+}
 
 run(scenario, {
   headed,

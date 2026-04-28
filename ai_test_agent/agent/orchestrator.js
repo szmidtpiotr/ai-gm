@@ -64,12 +64,25 @@ async function selectCampaignForTest(page, scenario, cfg) {
   }
 }
 
+function logStructured(level, event, data = {}) {
+  const ts = new Date().toISOString();
+  const logEntry = {
+    ts,
+    level,
+    service: "test-orchestrator",
+    event,
+    ...data,
+  };
+  console.log(JSON.stringify(logEntry));
+}
+
 /**
  * @param {object} scenario
  * @param {object} [options]
  * @param {boolean} [options.headed]
  * @param {function} [options.onStep]
  * @param {{ page: import('playwright').Page | null }} [options.sessionRef] module-level ref for live screenshots
+ * @param {function} [options.isCancelled] funkcja zwracająca true jeśli test ma być zatrzymany
  */
 async function run(scenario, options = {}) {
   const {
@@ -77,6 +90,7 @@ async function run(scenario, options = {}) {
     onStep = null,
     sessionRef = null,
     plannerLlm = null,
+    isCancelled = () => false,
   } = options;
   const scenarioErrors = validateScenario(scenario);
   if (scenarioErrors.length) {
@@ -88,6 +102,9 @@ async function run(scenario, options = {}) {
   const maxSteps = scenario.max_steps || DEFAULTS.MAX_STEPS;
   const totalTimeoutMs = scenario.total_timeout_ms || DEFAULTS.TOTAL_TIMEOUT_MS;
   const startMs = Date.now();
+  const scenarioName = scenario.name || "unnamed";
+
+  logStructured("info", "run_init", { scenario_name: scenarioName, max_steps: maxSteps, total_timeout_ms: totalTimeoutMs });
 
   process.env.BACKEND_URL = backendUrl;
 
@@ -133,8 +150,19 @@ async function run(scenario, options = {}) {
     const actionHistory = [];
     let step = 0;
 
+    logStructured("info", "run_login_complete", { campaign_id: cfg.campaign_id, character_id: cfg.character_id });
+
     while (step < maxSteps) {
+      // Sprawdź czy test nie został anulowany
+      if (isCancelled()) {
+        logStructured("info", "run_cancelled_by_user", { step });
+        result = { success: false, reason: "cancelled", steps: step, exploit_found: false };
+        terminal = true;
+        break;
+      }
+
       if (Date.now() - startMs > totalTimeoutMs) {
+        logStructured("warn", "run_timeout", { step, elapsed_ms: Date.now() - startMs });
         result = { success: false, reason: "total_timeout", steps: step, exploit_found: false };
         terminal = true;
         break;
@@ -148,8 +176,26 @@ async function run(scenario, options = {}) {
         step,
         backendUrl
       );
-      const raw = await llm.decide(snapshot, history);
+      logStructured("debug", "step_snapshot", { step, gm_response_length: snapshot.gm_response?.length || 0 });
+
+      if (isCancelled()) {
+        logStructured("info", "run_cancelled_before_llm", { step });
+        result = { success: false, reason: "cancelled", steps: step, exploit_found: false };
+        terminal = true;
+        break;
+      }
+
+      let raw;
+      try {
+        raw = await llm.decide(snapshot, history);
+      } catch (e) {
+        logStructured("error", "llm_decide_failed", { step, error: e && e.message ? e.message : String(e) });
+        throw e;
+      }
+      logStructured("debug", "llm_decide_complete", { step, response_length: raw?.length || 0 });
+
       const action = validate(raw, actionHistory);
+      logStructured("info", "step_action", { step, action_type: action.type, reasoning: action.reasoning?.slice(0, 100) });
 
       await page.evaluate(
         ({ s, a }) => {
@@ -182,6 +228,7 @@ async function run(scenario, options = {}) {
       });
 
       if (action.type === "finish") {
+        logStructured("info", "run_finished", { step, success: !!action.params?.success, reason: action.params?.reason });
         result = {
           success: !!action.params?.success,
           reason: String(action.params?.reason || "finished"),
@@ -201,7 +248,9 @@ async function run(scenario, options = {}) {
           c.quest_completed === false
             ? !(state.quests_completed || []).includes("EscapeDungeon")
             : true;
+        logStructured("debug", "criteria_check", { step, location_match: locationMatch, quest_ok: questOk });
         if (locationMatch && questOk && c.location_changed_to) {
+          logStructured("info", "criteria_met", { step, location: state.location });
           result = {
             success: true,
             reason: "criteria_met",
@@ -217,16 +266,22 @@ async function run(scenario, options = {}) {
     }
 
     if (!terminal) {
+      logStructured("info", "run_max_steps_reached", { steps: step });
       result = { success: false, reason: "max_steps_reached", steps, exploit_found: false };
     }
+  } catch (err) {
+    logStructured("error", "run_exception", { error: err && err.message ? err.message : String(err), step });
+    throw err;
   } finally {
+    logStructured("info", "run_cleanup", { duration_ms: Date.now() - startMs, final_step: step });
     if (sessionRef) {
       sessionRef.page = null;
     }
-    await context.close();
-    await browser.close();
+    try { await context.close(); } catch (e) { /* ignore */ }
+    try { await browser.close(); } catch (e) { /* ignore */ }
   }
 
+  logStructured("info", "run_returning", { success: result.success, reason: result.reason, steps: result.steps });
   return result;
 }
 

@@ -15,12 +15,14 @@ scrape_configs:
         refresh_interval: 5s
     relabel_configs:
       - source_labels: ["__meta_docker_container_label_service"]
-        regex: "(backend-dev|frontend-dev)"
+        regex: "(backend-dev|frontend-dev|test-agent-dev)"
         action: keep
       - source_labels: ["__meta_docker_container_name"]
         target_label: container
       - source_labels: ["__meta_docker_container_label_service"]
         target_label: service
+        replacement: "test-agent"
+        regex: "test-agent-dev"
       - replacement: ai-gm-dev
         target_label: job
       - source_labels: ["__meta_docker_container_log_stream"]
