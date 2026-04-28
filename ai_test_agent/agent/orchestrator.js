@@ -281,7 +281,7 @@ async function run(scenario, options = {}) {
 
     if (!terminal) {
       logStructured("info", "run_max_steps_reached", { steps: step });
-      result = { success: false, reason: "max_steps_reached", steps, exploit_found: false };
+      result = { success: false, reason: "max_steps_reached", steps: step, exploit_found: false };
     }
   } catch (err) {
     logStructured("error", "run_exception", { error: err && err.message ? err.message : String(err), step });
