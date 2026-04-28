@@ -289,6 +289,91 @@ async def delete_session_flag_endpoint(
 
 
 # ============================================================================
+# Endpointy zatwierdzania lokalizacji AI
+# ============================================================================
+
+@router.get("/api/admin/locations/pending")
+async def get_pending_locations(
+    _admin: None = Depends(require_admin_token),
+):
+    """Zwraca lokalizacje AI oczekujące na zatwierdzenie admina."""
+    conn = _get_db_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT child.*, parent.label AS parent_label, parent.key AS parent_key
+            FROM game_locations child
+            LEFT JOIN game_locations parent ON parent.id = child.parent_id
+            WHERE COALESCE(child.ai_generated, 0) = 1
+              AND COALESCE(child.approved, 1) = 0
+              AND child.is_active = 1
+            ORDER BY child.created_at DESC
+            """
+        ).fetchall()
+        locations = [dict(row) for row in rows]
+        return {"locations": locations, "count": len(locations)}
+    except sqlite3.Error as e:
+        logger.error("get_pending_locations_error", error=str(e))
+        raise HTTPException(status_code=500, detail=f"Błąd bazy danych: {str(e)}")
+    finally:
+        conn.close()
+
+
+@router.post("/api/admin/locations/{location_id}/approve")
+async def approve_location(
+    location_id: int,
+    _admin: None = Depends(require_admin_token),
+):
+    """Zatwierdza lokalizację utworzoną automatycznie przez AI."""
+    conn = _get_db_connection()
+    try:
+        cursor = conn.execute(
+            """
+            UPDATE game_locations
+            SET approved = 1, updated_at = datetime('now')
+            WHERE id = ? AND is_active = 1
+            """,
+            (location_id,),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Lokalizacja {location_id} nie istnieje")
+        return {"status": "approved", "id": location_id}
+    except sqlite3.Error as e:
+        logger.error("approve_location_error", error=str(e), location_id=location_id)
+        raise HTTPException(status_code=500, detail=f"Błąd bazy danych: {str(e)}")
+    finally:
+        conn.close()
+
+
+@router.post("/api/admin/locations/{location_id}/reject")
+async def reject_location(
+    location_id: int,
+    _admin: None = Depends(require_admin_token),
+):
+    """Odrzuca lokalizację AI przez soft delete."""
+    conn = _get_db_connection()
+    try:
+        cursor = conn.execute(
+            """
+            UPDATE game_locations
+            SET is_active = 0, updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (location_id,),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Lokalizacja {location_id} nie istnieje")
+        return {"status": "rejected", "id": location_id}
+    except sqlite3.Error as e:
+        logger.error("reject_location_error", error=str(e), location_id=location_id)
+        raise HTTPException(status_code=500, detail=f"Błąd bazy danych: {str(e)}")
+    finally:
+        conn.close()
+
+
+# ============================================================================
 # Endpointy logów
 # ============================================================================
 

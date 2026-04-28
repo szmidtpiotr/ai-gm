@@ -59,6 +59,87 @@ GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
 COMBAT_VICTORY_STREAM_STUB = "Walka dobiegła końca."
 
 
+def _get_session_id_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> int | str | None:
+    row = conn.execute(
+        """
+        SELECT id FROM game_sessions
+        WHERE campaign_id = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (campaign_id,),
+    ).fetchone()
+    if row:
+        return row["id"]
+    return None
+
+
+def _inject_location_blocked(assistant_response: str, reason: str) -> str:
+    data = json.loads(assistant_response)
+    narrative = str(data.get("narrative") or "").rstrip()
+    data["narrative"] = f"{narrative}\n\n[LOCATION_BLOCKED: {reason}]".strip()
+    data["location_intent"] = None
+    return json.dumps(data, ensure_ascii=False)
+
+
+def _process_location_intent(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    assistant_response: str,
+) -> str:
+    """
+    Parse GM location_intent, validate it, update current_location_id, and inject
+    [LOCATION_BLOCKED] into JSON narrative when movement is rejected.
+    """
+    session_id = _get_session_id_for_campaign(conn, campaign_id)
+    if not get_bool_flag("location_integrity_enabled", session_id, default=True):
+        return assistant_response
+
+    try:
+        intent = parse_location_intent(assistant_response, session_id)
+    except Exception as exc:
+        logger.error("location_intent_parse_hook_error", error=str(exc), campaign_id=campaign_id)
+        return assistant_response
+
+    if not intent or intent.action not in ("move", "create"):
+        return assistant_response
+
+    try:
+        result = validate_move(session_id, intent, campaign_id=campaign_id)
+        if result.allowed and result.resolved_location_id and session_id is not None:
+            conn.execute(
+                "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+                (result.resolved_location_id, session_id),
+            )
+            conn.commit()
+            logger.info(
+                "location_updated_from_gm_response",
+                campaign_id=campaign_id,
+                session_id=session_id,
+                location_id=result.resolved_location_id,
+                is_new=result.is_new_location,
+            )
+        elif not result.allowed:
+            logger.warning(
+                "location_move_blocked",
+                campaign_id=campaign_id,
+                session_id=session_id,
+                attempted=intent.target_label,
+                reason=result.block_reason,
+            )
+            try:
+                return _inject_location_blocked(
+                    assistant_response,
+                    result.block_reason or "Walidacja lokalizacji nie powiodła się",
+                )
+            except Exception:
+                return assistant_response
+    except Exception as exc:
+        logger.error("location_integrity_processing_error", error=str(exc), campaign_id=campaign_id)
+
+    return assistant_response
+
+
 def _maybe_start_combat_from_gm_tag(
     campaign_id: int, character_id: int, assistant_text: str
 ) -> dict | None:
@@ -1292,6 +1373,11 @@ def create_turn(
         assistant_text = (result.get("message") or "").strip()
         if not assistant_text:
             raise HTTPException(status_code=500, detail="Empty narrative response")
+        assistant_text = _process_location_intent(
+            conn=conn,
+            campaign_id=campaign_id,
+            assistant_response=assistant_text,
+        )
 
         from app.services import combat_service as _cs
 
@@ -1812,6 +1898,15 @@ def create_turn_stream(
                 return
 
             full_raw = "".join(collected).replace("\\n", "\n")
+            hook_conn = get_db()
+            try:
+                full_raw = _process_location_intent(
+                    conn=hook_conn,
+                    campaign_id=campaign_id_val,
+                    assistant_response=full_raw,
+                )
+            finally:
+                hook_conn.close()
             new_combat = None
             combat_extra = None
             if full_raw.strip():
@@ -1852,34 +1947,6 @@ def create_turn_stream(
                         user_text=user_text_val,
                         assistant_text=clean_text,
                     )
-                    
-                    # Phase 8D: Location Integrity — parsowanie intencji ruchu z odpowiedzi GM
-                    try:
-                        if get_bool_flag("location_integrity_enabled", campaign_id_val, default=True):
-                            intent = parse_location_intent(full_raw, campaign_id_val)
-                            if intent:
-                                result = validate_move(campaign_id_val, intent)
-                                if result.allowed and result.resolved_location_id:
-                                    # Aktualizuj lokalizację sesji
-                                    save_conn.execute(
-                                        "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
-                                        (result.resolved_location_id, campaign_id_val)
-                                    )
-                                    logger.info("location_updated_from_gm_response",
-                                               campaign_id=campaign_id_val,
-                                               location_id=result.resolved_location_id,
-                                               is_new=result.is_new_location)
-                                elif not result.allowed:
-                                    # Loguj blokadę
-                                    log_integrity_violation(campaign_id_val, intent, result.block_reason or "Walidacja nie powiodła się")
-                                    logger.warning("location_move_blocked",
-                                                 campaign_id=campaign_id_val,
-                                                 attempted=intent.target_label,
-                                                 reason=result.block_reason)
-                    except Exception as e:
-                        # Błąd w parserze/walidatorze nie powinien blokować gry
-                        logger.error("location_integrity_processing_error", error=str(e), campaign_id=campaign_id_val)
-                    
                     if grant_item_label:
                         append_narrative_item_to_sheet(
                             save_conn,

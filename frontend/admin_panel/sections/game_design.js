@@ -1158,6 +1158,15 @@ function locationTypeBadgeClass(type) {
   return "badge";
 }
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function slugifyLocationKey(label) {
   return String(label || "")
     .trim()
@@ -1870,6 +1879,87 @@ function mountLocations(host) {
     confirmNoun: "lokalizacji",
   });
 
+  // Pending AI locations approval
+  const pendingSection = el("div", "locations-pending-section");
+  pendingSection.style.cssText = "background:#f8fafc;padding:12px;border-radius:6px;margin:16px 0;";
+  pendingSection.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+      <h4 style="margin:0;">Lokalizacje do zatwierdzenia <span id="pending-locations-badge" class="badge">0</span></h4>
+      <button type="button" class="secondary-btn" id="pending-locations-refresh">Refresh</button>
+    </div>
+    <div id="pending-locations-table" class="table-wrap"><p class="muted">Loading pending locations...</p></div>
+  `;
+  root.appendChild(pendingSection);
+
+  const pendingBadge = pendingSection.querySelector("#pending-locations-badge");
+  const pendingTable = pendingSection.querySelector("#pending-locations-table");
+
+  async function loadPendingLocations() {
+    try {
+      const data = await adminFetch("/api/admin/locations/pending");
+      const rows = data.locations || [];
+      pendingBadge.textContent = String(data.count ?? rows.length);
+      if (!rows.length) {
+        pendingTable.innerHTML = "<p class='muted'>No AI-generated locations waiting for approval.</p>";
+        return;
+      }
+
+      const table = document.createElement("table");
+      table.className = "admin-table";
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>Type</th>
+            <th>Parent</th>
+            <th>Created</th>
+            <th>Akcja</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+      const tbody = table.querySelector("tbody");
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        const parent = row.parent_label ? `${row.parent_label} (${row.parent_key || "?"})` : "—";
+        tr.innerHTML = `
+          <td><strong>${escapeHtml(row.label || row.key || String(row.id))}</strong><br><code>${escapeHtml(row.key || "")}</code></td>
+          <td><span class="${locationTypeBadgeClass(row.location_type)}">${escapeHtml(row.location_type || "macro")}</span></td>
+          <td>${escapeHtml(parent)}</td>
+          <td>${escapeHtml(row.created_at || "")}</td>
+          <td style="white-space:nowrap;">
+            <button type="button" class="primary-btn" data-approve="${row.id}">Zatwierdź</button>
+            <button type="button" class="danger-btn" data-reject="${row.id}">Odrzuć</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      pendingTable.innerHTML = "";
+      pendingTable.appendChild(table);
+    } catch (e) {
+      pendingTable.innerHTML = "<p class='muted'>Error loading pending locations.</p>";
+      showToast(parseApiError(e, "Load pending locations failed"), "error");
+    }
+  }
+
+  pendingSection.querySelector("#pending-locations-refresh").addEventListener("click", loadPendingLocations);
+  pendingTable.addEventListener("click", async (event) => {
+    const approveId = event.target?.dataset?.approve;
+    const rejectId = event.target?.dataset?.reject;
+    const id = approveId || rejectId;
+    if (!id) return;
+    try {
+      await adminFetch(`/api/admin/locations/${encodeURIComponent(id)}/${approveId ? "approve" : "reject"}`, {
+        method: "POST",
+      });
+      showToast(approveId ? "Location approved" : "Location rejected", "success");
+      await loadPendingLocations();
+      await refreshLocations(host);
+    } catch (e) {
+      showToast(parseApiError(e, "Location approval action failed"), "error");
+    }
+  });
+
   // Table mount
   const mount = el("div", "admin-table-mount");
   root.appendChild(mount);
@@ -2083,6 +2173,7 @@ function mountLocations(host) {
 
   // Init
   refreshLocations(host);
+  loadPendingLocations();
   loadFlags();
 }
 
