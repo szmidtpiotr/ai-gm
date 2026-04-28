@@ -515,6 +515,65 @@ export async function init(container) {
   let pollTimer = null;
   let runEs = null;
   let currentRunId = null;
+  let shotPopupTimer = null;
+
+  // Popup powiększenia obrazu z auto-odświeżaniem.
+  const shotPopup = el("div", "test-runner-shot-popup");
+  shotPopup.setAttribute("role", "dialog");
+  shotPopup.setAttribute("aria-modal", "true");
+  shotPopup.style.display = "none";
+  const shotPopupInner = el("div", "test-runner-shot-popup-inner");
+  const shotPopupHeader = el("div", "test-runner-shot-popup-header");
+  const shotPopupTitle = el("div", "test-runner-shot-popup-title", "Podgląd (powiększenie)");
+  const shotPopupClose = el("button", "test-runner-shot-popup-close", "Zamknij");
+  shotPopupClose.type = "button";
+  shotPopupHeader.appendChild(shotPopupTitle);
+  shotPopupHeader.appendChild(shotPopupClose);
+  const shotPopupImg = el("img", "test-runner-shot-popup-img");
+  shotPopupImg.alt = "Podgląd powiększony";
+  shotPopupInner.appendChild(shotPopupHeader);
+  shotPopupInner.appendChild(shotPopupImg);
+  shotPopup.appendChild(shotPopupInner);
+  document.body.appendChild(shotPopup);
+
+  function hideShotPopup() {
+    shotPopup.style.display = "none";
+    if (shotPopupTimer) {
+      clearInterval(shotPopupTimer);
+      shotPopupTimer = null;
+    }
+  }
+
+  async function refreshShotPopupOnce() {
+    if (!currentRunId) return;
+    try {
+      const sh = await adminFetch(`/api/test_runner/screenshot/${currentRunId}`);
+      if (sh && sh.base64) {
+        shotPopupImg.src = `data:image/jpeg;base64,${sh.base64}`;
+      }
+    } catch (_e) {
+      /* ignore */
+    }
+  }
+
+  function showShotPopup() {
+    if (!currentRunId) {
+      showToast("Najpierw uruchom test, potem kliknij podgląd obrazu.", "error");
+      return;
+    }
+    shotPopup.style.display = "";
+    void refreshShotPopupOnce();
+    if (shotPopupTimer) clearInterval(shotPopupTimer);
+    shotPopupTimer = setInterval(() => {
+      void refreshShotPopupOnce();
+    }, 1200);
+  }
+
+  shot.addEventListener("click", () => showShotPopup());
+  shotPopupClose.addEventListener("click", () => hideShotPopup());
+  shotPopup.addEventListener("click", (e) => {
+    if (e.target === shotPopup) hideShotPopup();
+  });
 
   function setRunningState(isRunning, runId = null) {
     currentRunId = runId;
@@ -803,6 +862,7 @@ export async function init(container) {
           } catch (_e) {
             /* ignore */
           }
+          hideShotPopup();
           return;
         }
         const s = data.step != null ? `Krok ${data.step}` : "Krok ?";
@@ -812,6 +872,7 @@ export async function init(container) {
       };
       es.onerror = () => {
         appendLogLine("EventSource: połączenie przerwane lub błąd (sprawdź token / backend).", "err");
+        hideShotPopup();
       };
 
       pollTimer = setInterval(async () => {
