@@ -24,6 +24,26 @@ def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _ai_test_config_campaign_character_ids() -> tuple[int | None, int | None]:
+    """
+    W Dockerze katalog zwykle montuje /data/ai_test_config.json; seed zapisuje tam campaign_id/character_id.
+    Bez tego reset brał «najnowszą» kampanię o tytule AI Test Campaign (ORDER BY id DESC) — pusty duplikat → 404.
+    """
+    path = (os.getenv("AI_TEST_CONFIG_PATH") or "/data/ai_test_config.json").strip()
+    if not path or not os.path.isfile(path):
+        return None, None
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        raw_c = data.get("campaign_id")
+        raw_h = data.get("character_id")
+        cid = int(raw_c) if raw_c is not None and str(raw_c).strip() != "" else None
+        chid = int(raw_h) if raw_h is not None and str(raw_h).strip() != "" else None
+        return cid, chid
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None, None
+
+
 @router.get("/player_state")
 def get_player_state(character_id: int = Query(...)):
     conn = sqlite3.connect(DB_PATH)
@@ -227,33 +247,78 @@ def reset_test_env():
             "SELECT id FROM users WHERE username = ? LIMIT 1",
             ("ai_test_gm",),
         ).fetchone()
-        campaign_row = conn.execute(
-            """
-            SELECT id
-            FROM campaigns
-            WHERE title = ?
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            ("AI Test Campaign",),
-        ).fetchone()
-        if not campaign_row:
-            raise HTTPException(status_code=404, detail="AI test campaign not found")
-        campaign_id = int(campaign_row["id"])
-        character_row = conn.execute(
-            """
-            SELECT id, sheet_json
-            FROM characters
-            WHERE campaign_id = ?
-              AND user_id = COALESCE(?, user_id)
-            ORDER BY id ASC
-            LIMIT 1
-            """,
-            (campaign_id, int(player_row["id"]) if player_row else None),
-        ).fetchone()
+
+        cfg_campaign_id, cfg_character_id = _ai_test_config_campaign_character_ids()
+        character_row = None
+        campaign_id: int | None = None
+
+        if cfg_character_id is not None:
+            character_row = conn.execute(
+                """
+                SELECT id, sheet_json, campaign_id
+                FROM characters
+                WHERE id = ?
+                """,
+                (cfg_character_id,),
+            ).fetchone()
+            if character_row:
+                campaign_id = int(character_row["campaign_id"])
+
+        if campaign_id is None and cfg_campaign_id is not None:
+            crow = conn.execute(
+                "SELECT id FROM campaigns WHERE id = ? AND title = ?",
+                (cfg_campaign_id, "AI Test Campaign"),
+            ).fetchone()
+            if crow:
+                campaign_id = int(crow["id"])
+
+        if campaign_id is None:
+            campaign_row = conn.execute(
+                """
+                SELECT id
+                FROM campaigns
+                WHERE title = ?
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                ("AI Test Campaign",),
+            ).fetchone()
+            if not campaign_row:
+                raise HTTPException(status_code=404, detail="AI test campaign not found")
+            campaign_id = int(campaign_row["id"])
+
         if not character_row:
-            raise HTTPException(status_code=404, detail="AI test character not found")
+            character_row = conn.execute(
+                """
+                SELECT id, sheet_json, campaign_id
+                FROM characters
+                WHERE campaign_id = ?
+                  AND user_id = COALESCE(?, user_id)
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                (campaign_id, int(player_row["id"]) if player_row else None),
+            ).fetchone()
+
+        if not character_row:
+            character_row = conn.execute(
+                """
+                SELECT id, sheet_json, campaign_id
+                FROM characters
+                WHERE campaign_id = ?
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                (campaign_id,),
+            ).fetchone()
+
+        if not character_row:
+            raise HTTPException(
+                status_code=404,
+                detail="AI test character not found (uruchom seed: python -m scripts.seed_ai_test_env w katalogu backend, AI_TEST_MODE=1)",
+            )
         character_id = int(character_row["id"])
+        campaign_id = int(character_row["campaign_id"])
         sheet = _parse_json(character_row["sheet_json"], {})
         max_hp = int(sheet.get("max_hp", sheet.get("current_hp", 0)) or 0)
         sheet["current_hp"] = max_hp

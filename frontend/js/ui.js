@@ -1002,6 +1002,9 @@ window.addMessage = function ({
     wrap.classList.add('is-archived-bubble');
     wrap.setAttribute('data-archived', '1');
   }
+  if (role === 'assistant') {
+    wrap.setAttribute('data-testid', 'gm-message');
+  }
 
   const meta = document.createElement('div');
   meta.className = 'meta';
@@ -1498,6 +1501,7 @@ window.renderTurnsToChat = function () {
 
         const msgWrap = document.createElement('div');
         msgWrap.className = 'message assistant';
+        msgWrap.setAttribute('data-testid', 'gm-message');
         const { chatEl } = window.getEls();
 
         const meta = document.createElement('div');

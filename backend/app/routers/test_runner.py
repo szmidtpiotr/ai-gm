@@ -9,6 +9,7 @@ import os
 import queue
 import re
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -166,6 +167,28 @@ def _any_running() -> bool:
             if s.get("status") == "RUNNING":
                 return True
     return False
+
+
+def _get_running_run_id() -> str | None:
+    """Zwraca run_id aktualnie działającego testu lub None."""
+    with _runs_lock:
+        for run_id, s in _runs.items():
+            if s.get("status") == "RUNNING":
+                return run_id
+    return None
+
+
+def _set_run_cancelled(run_id: str) -> bool:
+    """Oznacza run jako cancelled (wewnętrznie). Zwraca True jeśli run był RUNNING."""
+    with _runs_lock:
+        st = _runs.get(run_id)
+        if st is None:
+            return False
+        if st.get("status") == "RUNNING":
+            st["status"] = "CANCELLED"
+            st["cancelled_at"] = time.time()
+            return True
+        return False
 
 
 def _parse_scenario_text(text: str) -> dict[str, Any]:
@@ -382,7 +405,7 @@ def _httpx_serve_agent_stream(
     status_set = "DONE"
     try:
         with httpx.Client(timeout=httpx.Timeout(connect=15.0, read=None, write=30.0, pool=5.0)) as client:
-            body: dict[str, Any] = {"scenario": scenario, "headed": False}
+            body: dict[str, Any] = {"scenario": scenario, "headed": False, "run_id": run_id}
             if planner_internal is not None:
                 body["planner_llm"] = planner_internal
             with client.stream("POST", f"{agent}/agent/run", json=body) as resp:
@@ -515,6 +538,8 @@ def post_start(req: StartReq) -> dict[str, str]:
         _runs[run_id] = {
             "status": "RUNNING",
             "queue": q,
+            "started_at": time.time(),
+            "scenario_name": scenario.get("name", "unnamed"),
         }
 
     planner_internal = _agent_planner_llm_to_internal(req.agent_planner_llm)
@@ -526,7 +551,39 @@ def post_start(req: StartReq) -> dict[str, str]:
         daemon=True,
     )
     t.start()
+    logger.info("test_runner_started", run_id=run_id, scenario_name=scenario.get("name"))
     return {"run_id": run_id}
+
+
+@router.post("/stop/{run_id}", dependencies=[Depends(require_admin_bearer_or_query)])
+def post_stop(run_id: str) -> dict[str, Any]:
+    """
+    Zatrzymaj działający test. Wysyja sygnał stop do agenta i oznacza run jako CANCELLED.
+    """
+    with _runs_lock:
+        st = _runs.get(run_id)
+    if not st:
+        raise HTTPException(status_code=404, detail="Nieznany run_id")
+
+    if st.get("status") != "RUNNING":
+        return {"run_id": run_id, "status": st.get("status"), "message": "Test nie jest aktywny"}
+
+    # Wyslij sygnał stop do agenta (best effort)
+    agent = _agent_url()
+    try:
+        with httpx.Client(timeout=httpx.Timeout(3.0)) as client:
+            client.post(f"{agent}/agent/stop", json={"run_id": run_id})
+    except Exception as e:
+        logger.warning("test_runner_stop_agent_error", run_id=run_id, error=str(e))
+
+    # Oznacz jako cancelled lokalnie
+    was_running = _set_run_cancelled(run_id)
+    q = st.get("queue")
+    if isinstance(q, queue.Queue):
+        q.put({"done": True, "success": False, "reason": "cancelled", "error": "Test zatrzymany przez użytkownika"})
+
+    logger.info("test_runner_stopped", run_id=run_id, was_running=was_running)
+    return {"run_id": run_id, "status": "CANCELLED", "message": "Test zatrzymany"}
 
 
 @router.get("/status/{run_id}", dependencies=[Depends(require_admin_bearer_or_query)])
