@@ -1487,6 +1487,9 @@ window.renderTurnsToChat = function () {
         window.addBackInGameSeparator();
       } else if (turn.route === 'narrative') {
         const assistantTextRaw = String(turn.assistant_text || '');
+        if (typeof window.updateLocationIntentDebugFromText === 'function') {
+          window.updateLocationIntentDebugFromText(assistantTextRaw, 'history');
+        }
         const { rollData: persistedGmRoll, narrativeText } =
           typeof window.extractPersistedGmRollNarrative === 'function'
             ? window.extractPersistedGmRollNarrative(assistantTextRaw)

@@ -1650,6 +1650,9 @@ window.sendMessage = async function () {
 
         if (token === '[DONE]') {
           const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
+          if (typeof window.updateLocationIntentDebugFromText === 'function') {
+            window.updateLocationIntentDebugFromText(fullText, 'stream');
+          }
           if (streamBubble) {
             window.finalizeStreamingBubble(streamBubble, cleanedGm);
           } else {
@@ -1711,6 +1714,9 @@ window.sendMessage = async function () {
     if (!streamDone) {
       if (streamBubble) {
         const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
+        if (typeof window.updateLocationIntentDebugFromText === 'function') {
+          window.updateLocationIntentDebugFromText(fullText, 'stream-ended');
+        }
         window.finalizeStreamingBubble(streamBubble, cleanedGm);
         if (
           window.state._combatVictoryUiPending &&

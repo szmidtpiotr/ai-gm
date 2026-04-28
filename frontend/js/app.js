@@ -666,6 +666,98 @@ window.updateCombatDebugStatusLabel = function (payload) {
   el.textContent = main;
 };
 
+function _extractBalancedJsonObject(text, startIndex) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = startIndex; i < text.length; i += 1) {
+    const ch = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === '{') depth += 1;
+    if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(startIndex, i + 1);
+      }
+    }
+  }
+  return null;
+}
+
+window.extractLocationIntentDebug = function (text) {
+  const raw = String(text || '').trim();
+  if (!raw) return null;
+
+  const unwrapped = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  try {
+    const parsed = JSON.parse(unwrapped);
+    if (parsed && typeof parsed === 'object' && parsed.location_intent) {
+      return parsed.location_intent;
+    }
+  } catch (_e) {
+    /* fall back to extracting the location_intent object only */
+  }
+
+  const keyIndex = unwrapped.indexOf('"location_intent"');
+  if (keyIndex < 0) return null;
+  const colonIndex = unwrapped.indexOf(':', keyIndex);
+  if (colonIndex < 0) return null;
+  const after = unwrapped.slice(colonIndex + 1).trimStart();
+  if (after.startsWith('null')) return null;
+  const objectStart = unwrapped.indexOf('{', colonIndex);
+  if (objectStart < 0) return null;
+  const objectText = _extractBalancedJsonObject(unwrapped, objectStart);
+  if (!objectText) return null;
+  try {
+    return JSON.parse(objectText);
+  } catch (_e) {
+    return null;
+  }
+};
+
+window.renderLocationIntentDebug = function () {
+  const panel = document.getElementById('location-debug-panel');
+  const pre = document.getElementById('location-debug-json');
+  if (!panel || !pre) return;
+
+  const intent = window.state?._locationIntentDebug || null;
+  if (!intent) {
+    panel.querySelector('summary').textContent = 'LOCATION: brak intencji';
+    pre.textContent = '—';
+    return;
+  }
+
+  const action = String(intent.action || '?');
+  const label = String(intent.target_label || intent.target_key || '?');
+  panel.querySelector('summary').textContent = `LOCATION: ${action} → ${label}`;
+  pre.textContent = JSON.stringify(intent, null, 2);
+};
+
+window.updateLocationIntentDebugFromText = function (assistantText, source = 'gm') {
+  const intent = window.extractLocationIntentDebug(assistantText);
+  void source;
+  if (!window.state) window.state = {};
+  window.state._locationIntentDebug = intent || null;
+  window.renderLocationIntentDebug();
+  return intent;
+};
+
 window.closeHistorySummaryModal = function () {
   const overlay = document.getElementById("history-summary-overlay");
   if (!overlay) return;
