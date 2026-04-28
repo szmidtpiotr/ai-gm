@@ -1,3 +1,25 @@
+/**
+ * Czy adres API nie wymaga typowego OPENAI_API_KEY (Ollama lokalnie/LAN/host.docker).
+ * Poprzednio wymuszano klucz dla każdego URL ≠ 127.0.0.1 → decide()=null → walidator
+ * daje wait_for_gm_response przy pustym chacie → timeout waitForFunction (90 s).
+ */
+function isApiKeyTypicallyOptional(apiUrlStr) {
+  const u = String(apiUrlStr || "").toLowerCase();
+  if (!u) return false;
+  if (
+    u.includes("127.0.0.1") ||
+    u.includes("localhost") ||
+    u.includes("host.docker.internal") ||
+    u.includes("172.17.") ||
+    u.includes("172.18.")
+  ) {
+    return true;
+  }
+  /* Ollama (OpenAI-compat i natywne API) */
+  if (u.includes(":11434")) return true;
+  return false;
+}
+
 const STUB_SEQUENCE = [
   {
     type: "send_chat_message",
@@ -36,9 +58,11 @@ class LLMClient {
     this.stub = process.env.AI_AGENT_STUB === "1";
     this.stubIdx = 0;
     this.scenario = scenario;
-    this.apiUrl = process.env.LLM_API_URL || "https://api.openai.com/v1/chat/completions";
+    /* Domyślnie Ollama na hoście; w Dockerze nadpisz LLM_API_URL (np. host.docker.internal:11434). */
+    this.apiUrl =
+      process.env.LLM_API_URL || "http://127.0.0.1:11434/v1/chat/completions";
     this.apiKey = process.env.LLM_API_KEY || "";
-    this.model = process.env.LLM_MODEL || "gpt-4o-mini";
+    this.model = process.env.LLM_MODEL || "gemma4:e4b";
   }
 
   buildSystemPrompt() {
@@ -61,8 +85,10 @@ class LLMClient {
       this.stubIdx += 1;
       return action;
     }
-    if (!this.apiKey.trim() && !this.apiUrl.includes("127.0.0.1")) {
-      console.warn("[llm_client] brak LLM_API_KEY — zwracam null (fallback walidatora)");
+    if (!this.apiKey.trim() && !isApiKeyTypicallyOptional(this.apiUrl)) {
+      console.warn(
+        "[llm_client] brak LLM_API_KEY dla zewnętrznego endpointu OpenAI — zwracam null (ustaw LLM_API_KEY albo LLM_API_URL/Ollama).",
+      );
       return null;
     }
     const messages = [{ role: "system", content: this.buildSystemPrompt() }];
@@ -72,17 +98,31 @@ class LLMClient {
     }
     messages.push({ role: "user", content: JSON.stringify(snapshot) });
 
+    const headers = { "Content-Type": "application/json" };
+    if (String(this.apiKey || "").trim()) {
+      headers.Authorization = `Bearer ${this.apiKey}`;
+    }
+    const body = {
+      model: this.model,
+      messages,
+      temperature: 0.7,
+      max_tokens: 300,
+    };
+    /* Ollama: response_format bywa nieobsługiwany — zostawiamy tylko dla typowego OpenAI. */
+    if (!isApiKeyTypicallyOptional(this.apiUrl) || String(this.apiUrl).includes("api.openai.com")) {
+      body.response_format = { type: "json_object" };
+    }
+
     const res = await fetch(this.apiUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${this.apiKey}` },
-      body: JSON.stringify({
-        model: this.model,
-        messages,
-        temperature: 0.7,
-        max_tokens: 300,
-        response_format: { type: "json_object" },
-      }),
+      headers,
+      body: JSON.stringify(body),
     });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.warn(`[llm_client] HTTP ${res.status} ${errText.slice(0, 800)}`);
+      return null;
+    }
     const data = await res.json();
     try {
       const text = data.choices?.[0]?.message?.content;
