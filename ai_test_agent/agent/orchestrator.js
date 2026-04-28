@@ -199,6 +199,16 @@ async function run(scenario, options = {}) {
       // validate() potrzebuje długości historii rozmowy (a nie samej listy typów akcji),
       // bo logika "pierwszy krok" ma wymusić wysłanie wiadomości zamiast czekania na GM.
       const action = validate(raw, history);
+      // Na starcie nie ma jeszcze żadnej narracji w chacie.
+      // Jeśli planner proponuje tylko wait_for_gm_response, to test nigdy nie ruszy.
+      if (step === 0 && action && action.type === "wait_for_gm_response") {
+        logStructured("warn", "force_first_step_send_chat", { step, original_reasoning: action.reasoning });
+        // Minimalna wiadomość, która uruchamia backend do generowania opening narration.
+        action.type = "send_chat_message";
+        action.params = action.params || {};
+        action.params.text = action.params.text || "Czy możesz opisać otoczenie (pierwsza narracja) ?";
+        action.reasoning = "forced_first_step_wait_to_chat";
+      }
       logStructured("info", "step_action", { step, action_type: action.type, reasoning: action.reasoning?.slice(0, 100) });
 
       await page.evaluate(
