@@ -85,6 +85,15 @@ from app.services.user_llm_settings import (
     get_user_llm_settings_masked,
     upsert_user_llm_settings,
 )
+from app.api.npcs import (
+    NpcCreateReq,
+    NpcPatchReq,
+    create_npc as create_npc_public,
+    delete_npc as delete_npc_public,
+    get_npc as get_npc_public,
+    list_npcs as list_npcs_public,
+    patch_npc as patch_npc_public,
+)
 
 router = APIRouter()
 
@@ -853,6 +862,31 @@ def admin_delete_enemy(key: str, req: EnemyDeleteReq, _: None = Depends(require_
         raise HTTPException(status_code=404, detail="Enemy not found") from None
     except PermissionError:
         raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+
+
+@router.get("/admin/npcs")
+def admin_list_npcs(active_only: bool = Query(False), _: None = Depends(require_admin_token)):
+    return list_npcs_public(active_only=active_only)
+
+
+@router.get("/admin/npcs/{npc_id}")
+def admin_get_npc(npc_id: int, _: None = Depends(require_admin_token)):
+    return get_npc_public(npc_id=npc_id)
+
+
+@router.post("/admin/npcs")
+def admin_create_npc(req: NpcCreateReq, _: None = Depends(require_admin_token)):
+    return create_npc_public(body=req)
+
+
+@router.patch("/admin/npcs/{npc_id}")
+def admin_patch_npc(npc_id: int, req: NpcPatchReq, _: None = Depends(require_admin_token)):
+    return patch_npc_public(npc_id=npc_id, body=req)
+
+
+@router.delete("/admin/npcs/{npc_id}")
+def admin_delete_npc(npc_id: int, _: None = Depends(require_admin_token)):
+    return delete_npc_public(npc_id=npc_id)
 
 
 @router.get("/admin/conditions")

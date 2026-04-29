@@ -37,6 +37,7 @@ from app.api import (
     turns,
     mechanics,
     inventory,
+    npcs,
     shop,
 )
 from app.api.health import router as health_router
@@ -222,6 +223,7 @@ app.include_router(campaigns.router, prefix="/api")
 app.include_router(combat.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
 app.include_router(inventory.router, prefix="/api")
+app.include_router(npcs.router, prefix="/api")
 app.include_router(shop.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")

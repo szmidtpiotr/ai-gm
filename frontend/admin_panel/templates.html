@@ -431,6 +431,125 @@
         </div>
       </section>
 
+      <section class="template-section" aria-labelledby="sec-npcs">
+        <h2 id="sec-npcs">NPC</h2>
+        <p class="muted">
+          NPC catalogue used in Phase 9 for dialogue context, merchants, and location-bound characters. In bulk import
+          for Game Design → NPC, each row maps to <code>npcs</code> plus optional entries in
+          <code>npc_locations</code>.
+        </p>
+        <div class="field-ref-wrap admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Type</th>
+                <th>Required</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>key</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>lowercase_snake_case, unique (e.g. <code>merchant_aldric</code>)</td>
+              </tr>
+              <tr>
+                <td><code>label</code></td>
+                <td>text</td>
+                <td>✅</td>
+                <td>Display name shown to GM/admin</td>
+              </tr>
+              <tr>
+                <td><code>npc_type</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td><code>neutral</code> | <code>merchant</code> | <code>quest_giver</code> | <code>ally</code> (default <code>neutral</code>)</td>
+              </tr>
+              <tr>
+                <td><code>description</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Short flavour/role note</td>
+              </tr>
+              <tr>
+                <td><code>personality_json</code></td>
+                <td>JSON string or object</td>
+                <td>❌</td>
+                <td>Must be valid JSON; API stores it as text. Recommended shape: <code>{"personality":"...","topics":[...],"secret":null}</code></td>
+              </tr>
+              <tr>
+                <td><code>is_shop</code></td>
+                <td>boolean / 0|1</td>
+                <td>❌</td>
+                <td>Mark merchant/shop NPC (default false)</td>
+              </tr>
+              <tr>
+                <td><code>shop_inventory_json</code></td>
+                <td>JSON string or array</td>
+                <td>❌</td>
+                <td>Valid JSON. Recommended list of entries like <code>[{"type":"weapon","key":"shortsword"}]</code></td>
+              </tr>
+              <tr>
+                <td><code>is_active</code></td>
+                <td>boolean / 0|1</td>
+                <td>❌</td>
+                <td>Default true</td>
+              </tr>
+              <tr>
+                <td><code>location_keys</code></td>
+                <td>array[string]</td>
+                <td>❌</td>
+                <td>Optional bindings to <code>game_locations.key</code>. Empty array means global NPC.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="template-example">
+          <div class="template-example-header">
+            <span class="template-example-label">Example JSON</span>
+            <button type="button" class="copy-json-btn" aria-label="Copy example JSON">📋 Copy</button>
+          </div>
+          <pre class="copy-block" data-table="npcs">[
+  {
+    "key": "merchant_aldric",
+    "label": "Aldric, kupiec",
+    "npc_type": "merchant",
+    "description": "Wędrowny kupiec z towarami pierwszej potrzeby.",
+    "personality_json": {
+      "personality": "sknerski, podejrzliwy, lubi plotki o lokalnych sprawach",
+      "topics": ["handel", "ceny", "lokalne wiadomości"],
+      "secret": null
+    },
+    "is_shop": 1,
+    "shop_inventory_json": [
+      { "type": "weapon", "key": "shortsword" },
+      { "type": "item", "key": "health_potion" },
+      { "type": "item", "key": "torch" }
+    ],
+    "is_active": 1,
+    "location_keys": []
+  },
+  {
+    "key": "innkeeper_marta",
+    "label": "Marta, karczmarka",
+    "npc_type": "neutral",
+    "description": "Gospodyni lokalnej karczmy, zna wszystkie plotki.",
+    "personality_json": {
+      "personality": "gadatliwa, serdeczna, dobra gospodyni",
+      "topics": ["plotki", "noclegi", "jedzenie", "lokalni mieszkańcy"],
+      "secret": null
+    },
+    "is_shop": 0,
+    "shop_inventory_json": [],
+    "is_active": 1,
+    "location_keys": ["inn_main"]
+  }
+]</pre>
+        </div>
+      </section>
+
       <section class="template-section" aria-labelledby="sec-locations">
         <h2 id="sec-locations">Locations</h2>
         <p class="muted">

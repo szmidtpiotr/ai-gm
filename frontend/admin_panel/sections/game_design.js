@@ -8,6 +8,7 @@ const SUB_TABS = [
   { id: "dc", label: "DC" },
   { id: "weapons", label: "Weapons" },
   { id: "enemies", label: "Enemies" },
+  { id: "npcs", label: "NPC" },
   { id: "locations", label: "Locations" },
   { id: "conditions", label: "Conditions" },
   { id: "items", label: "Przedmioty" },
@@ -1069,6 +1070,275 @@ function mountEnemies(host) {
   });
   host.appendChild(root);
   void refreshEnemies(host);
+}
+
+function npcTypeBadgeClass(row) {
+  const t = String(row.npc_type || "neutral").toLowerCase();
+  const map = {
+    neutral: "tier-standard",
+    merchant: "tier-elite",
+    quest_giver: "tier-boss",
+    ally: "tier-weak",
+  };
+  return map[t] || "tier-standard";
+}
+
+function normalizeLocationKeysInput(newValue) {
+  if (Array.isArray(newValue)) {
+    return newValue.map((v) => String(v).trim()).filter(Boolean);
+  }
+  return String(newValue || "")
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function refreshNpcs(host) {
+  const tableHost = host.querySelector(".admin-table-mount");
+  renderTable(tableHost, [], null, {});
+  try {
+    const data = await adminFetch("/api/admin/npcs");
+    const rows = (data.data || []).map((r) => ({
+      ...r,
+      _location_keys_text: Array.isArray(r.location_keys) ? r.location_keys.join(", ") : "",
+    }));
+    renderGameDesignTable(
+      tableHost,
+      "npcs",
+      [
+        { key: "id", label: "ID", type: "number" },
+        { key: "key", label: "Key" },
+        { key: "label", label: "Label", editable: true },
+        {
+          key: "npc_type",
+          label: "Type",
+          type: "badge",
+          badgeClass: npcTypeBadgeClass,
+          editable: true,
+          editType: "select",
+          editOptions: ["neutral", "merchant", "quest_giver", "ally"],
+        },
+        { key: "_location_keys_text", label: "Locations", type: "textarea", editable: true },
+        { key: "is_shop", label: "Shop", type: "boolean", editable: true },
+        { key: "is_active", label: "Active", type: "boolean", editable: true },
+        { key: "description", label: "Description", editable: true },
+        { key: "personality_json", label: "Personality JSON", type: "textarea", editable: true },
+        { key: "shop_inventory_json", label: "Shop JSON", type: "textarea", editable: true },
+      ],
+      rows,
+      {
+        exportRow: (row) => {
+          const copy = { ...row };
+          delete copy._location_keys_text;
+          return copy;
+        },
+        onEdit: async (row, key, newValue) => {
+          const body = {};
+          if (key === "label") body.label = String(newValue || "").trim();
+          if (key === "npc_type") body.npc_type = String(newValue || "").trim();
+          if (key === "description") body.description = String(newValue || "").trim() || null;
+          if (key === "is_shop") body.is_shop = newValue ? 1 : 0;
+          if (key === "is_active") body.is_active = newValue ? 1 : 0;
+          if (key === "_location_keys_text") body.location_keys = normalizeLocationKeysInput(newValue);
+          if (key === "personality_json") {
+            try {
+              JSON.parse(String(newValue || "{}"));
+            } catch (_e) {
+              showToast("personality_json must be valid JSON.", "error");
+              throw new Error("invalid_json");
+            }
+            body.personality_json = String(newValue || "{}");
+          }
+          if (key === "shop_inventory_json") {
+            try {
+              JSON.parse(String(newValue || "[]"));
+            } catch (_e) {
+              showToast("shop_inventory_json must be valid JSON.", "error");
+              throw new Error("invalid_json");
+            }
+            body.shop_inventory_json = String(newValue || "[]");
+          }
+          const res = await adminFetch(`/api/admin/npcs/${encodeURIComponent(String(row.id))}`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          });
+          if (!res || !res.ok) {
+            throw new Error("patch_failed");
+          }
+          if (key === "_location_keys_text") {
+            row.location_keys = body.location_keys || [];
+            row._location_keys_text = (body.location_keys || []).join(", ");
+          }
+          Object.assign(row, body);
+          showToast("NPC updated.", "success");
+        },
+        onDelete: async (row) => {
+          await adminFetch(`/api/admin/npcs/${encodeURIComponent(String(row.id))}`, { method: "DELETE" });
+          showToast("NPC deleted.", "success");
+          await refreshNpcs(host);
+        },
+      },
+    );
+  } catch (e) {
+    showToast(parseApiError(e, "Failed to load NPCs."), "error");
+    renderTable(tableHost, [], [], {});
+  }
+}
+
+function validateNpcImportRow(raw, index) {
+  const prefix = `Row ${index + 1}:`;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return `${prefix} must be an object`;
+  }
+  if (!raw.key || typeof raw.key !== "string") {
+    return `${prefix} key (string) is required`;
+  }
+  if (!raw.label || typeof raw.label !== "string") {
+    return `${prefix} label (string) is required`;
+  }
+  if (raw.personality_json !== undefined) {
+    if (typeof raw.personality_json === "string") {
+      try {
+        JSON.parse(String(raw.personality_json || "{}"));
+      } catch (_e) {
+        return `${prefix} personality_json must be valid JSON`;
+      }
+    } else if (
+      raw.personality_json !== null &&
+      typeof raw.personality_json !== "object"
+    ) {
+      return `${prefix} personality_json must be JSON string or object`;
+    }
+  }
+  if (raw.shop_inventory_json !== undefined) {
+    if (typeof raw.shop_inventory_json === "string") {
+      try {
+        JSON.parse(String(raw.shop_inventory_json || "[]"));
+      } catch (_e) {
+        return `${prefix} shop_inventory_json must be valid JSON`;
+      }
+    } else if (
+      raw.shop_inventory_json !== null &&
+      typeof raw.shop_inventory_json !== "object"
+    ) {
+      return `${prefix} shop_inventory_json must be JSON string or array/object`;
+    }
+  }
+  return null;
+}
+
+function npcImportRowToPayload(raw) {
+  return {
+    key: String(raw.key).trim(),
+    label: String(raw.label).trim(),
+    npc_type: String(raw.npc_type || "neutral").trim(),
+    description: raw.description == null ? null : String(raw.description),
+    personality_json:
+      raw.personality_json == null
+        ? "{}"
+        : typeof raw.personality_json === "string"
+          ? raw.personality_json
+          : JSON.stringify(raw.personality_json),
+    is_shop: raw.is_shop ? 1 : 0,
+    shop_inventory_json:
+      raw.shop_inventory_json == null
+        ? "[]"
+        : typeof raw.shop_inventory_json === "string"
+          ? raw.shop_inventory_json
+          : JSON.stringify(raw.shop_inventory_json),
+    is_active: raw.is_active === false || raw.is_active === 0 ? 0 : 1,
+    location_keys: Array.isArray(raw.location_keys) ? raw.location_keys.map((x) => String(x).trim()).filter(Boolean) : [],
+  };
+}
+
+function mountNpcs(host) {
+  const root = el("div", "admin-subpanel-inner");
+  const toggleRow = el("div", "admin-add-form-toggle");
+  const toggle = el("button", "secondary-btn", "Add NPC ▾");
+  toggle.type = "button";
+  const details = el("div", "add-form admin-add-form-collapsed");
+  const fields = el("div", "admin-add-form-fields");
+  fields.innerHTML = `
+    <div class="add-form-grid">
+      <label class="field"><span>Key</span><input data-field="key" type="text" /></label>
+      <label class="field"><span>Label</span><input data-field="label" type="text" /></label>
+      <label class="field"><span>Type</span>
+        <select data-field="npc_type">
+          <option value="neutral" selected>neutral</option>
+          <option value="merchant">merchant</option>
+          <option value="quest_giver">quest_giver</option>
+          <option value="ally">ally</option>
+        </select>
+      </label>
+      <label class="field"><span>Shop</span><input data-field="is_shop" type="checkbox" /></label>
+      <label class="field"><span>Active</span><input data-field="is_active" type="checkbox" checked /></label>
+      <label class="field add-form-span-2"><span>Description</span><input data-field="description" type="text" /></label>
+      <label class="field add-form-span-2"><span>Personality JSON</span><textarea data-field="personality_json" rows="4">{}</textarea></label>
+      <label class="field add-form-span-2"><span>Shop inventory JSON</span><textarea data-field="shop_inventory_json" rows="4">[]</textarea></label>
+      <label class="field add-form-span-2"><span>Location keys (one per line)</span><textarea data-field="location_keys" rows="4"></textarea></label>
+    </div>
+    <button type="button" class="primary-btn admin-add-form-submit" data-action="create-npc">Create</button>
+  `;
+  details.appendChild(fields);
+  toggle.addEventListener("click", () => {
+    details.classList.toggle("admin-add-form-collapsed");
+    toggle.textContent = details.classList.contains("admin-add-form-collapsed") ? "Add NPC ▾" : "Add NPC ▴";
+  });
+  toggleRow.appendChild(toggle);
+  root.appendChild(toggleRow);
+  root.appendChild(details);
+
+  wireBulkJsonImport(root, {
+    hint: "Wklej tablicę NPC. location_keys: tablica stringów. personality_json/shop_inventory_json: JSON string lub obiekt/tablica.",
+    templatesHref: "/admin_panel/templates.html#sec-npcs",
+    templatesAnchor: "Szablony JSON — NPC",
+    placeholder: '[{ "key":"merchant_aldric","label":"Aldric","npc_type":"merchant","is_shop":1 }]',
+    validateRow: (row, i) => validateNpcImportRow(row, i),
+    buildPayload: (row) => npcImportRowToPayload(row),
+    postPath: "/api/admin/npcs",
+    existingKeys: async () => {
+      const data = await adminFetch("/api/admin/npcs");
+      return new Set((data.data || []).map((r) => String(r.key)));
+    },
+    refresh: () => refreshNpcs(host),
+    confirmNoun: "NPC",
+  });
+
+  const mount = el("div", "admin-table-mount");
+  root.appendChild(mount);
+  fields.querySelector('[data-action="create-npc"]').addEventListener("click", async () => {
+    const payload = {
+      key: fields.querySelector('[data-field="key"]').value.trim(),
+      label: fields.querySelector('[data-field="label"]').value.trim(),
+      npc_type: fields.querySelector('[data-field="npc_type"]').value.trim(),
+      description: fields.querySelector('[data-field="description"]').value.trim() || null,
+      personality_json: fields.querySelector('[data-field="personality_json"]').value || "{}",
+      shop_inventory_json: fields.querySelector('[data-field="shop_inventory_json"]').value || "[]",
+      is_shop: fields.querySelector('[data-field="is_shop"]').checked ? 1 : 0,
+      is_active: fields.querySelector('[data-field="is_active"]').checked ? 1 : 0,
+      location_keys: normalizeLocationKeysInput(fields.querySelector('[data-field="location_keys"]').value),
+    };
+    if (!payload.key || !payload.label) {
+      showToast("Key i label są wymagane.", "info");
+      return;
+    }
+    try {
+      JSON.parse(payload.personality_json);
+      JSON.parse(payload.shop_inventory_json);
+    } catch (_e) {
+      showToast("Personality/Shop JSON must be valid.", "error");
+      return;
+    }
+    try {
+      await adminFetch("/api/admin/npcs", { method: "POST", body: JSON.stringify(payload) });
+      showToast("NPC created.", "success");
+      await refreshNpcs(host);
+    } catch (e) {
+      showToast(parseApiError(e, "Create failed."), "error");
+    }
+  });
+  host.appendChild(root);
+  void refreshNpcs(host);
 }
 
 async function refreshConditions(host) {
@@ -4350,6 +4620,7 @@ export async function init(container) {
     dc: () => mountDc(panels.get("dc")),
     weapons: () => mountWeapons(panels.get("weapons"), statKeys),
     enemies: () => mountEnemies(panels.get("enemies")),
+    npcs: () => mountNpcs(panels.get("npcs")),
     locations: () => mountLocations(panels.get("locations")),
     conditions: () => mountConditions(panels.get("conditions")),
     items: () => mountItems(panels.get("items")),
