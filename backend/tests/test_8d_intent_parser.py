@@ -74,6 +74,23 @@ class TestLocationIntentParser:
         assert intent.target_label == "Tajemna Jaskinia"
         assert intent.parent_key == "forest"
 
+    def test_parse_option_a_with_unescaped_newlines_in_narrative(self):
+        """Parser naprawia JSON z raw newline w narrative i nadal wyciąga location_intent."""
+        gm_response = (
+            '{\n'
+            '  "narrative": "Wilgotny chłód. \n'
+            'Druga linia opisu bez escapowania.",\n'
+            '  "location_intent": {"action": "create", "target_label": "Stara Szopa na Przedmieściach", "parent_key": "miasto_start"}\n'
+            '}'
+        )
+
+        intent = parse_option_a(gm_response)
+
+        assert intent is not None
+        assert intent.action == "create"
+        assert intent.target_label == "Stara Szopa na Przedmieściach"
+        assert intent.parent_key == "miasto_start"
+
 
 class TestLocationValidator:
     """8D-9: Walidator spójności ruchu"""

@@ -11,6 +11,7 @@ STORY_DB_PATH = os.getenv("STORY_DB_PATH", "/var/lib/ai-gm-db/ai_gm.db")
 PORT = int(os.getenv("PORT", "8001"))
 
 mcp = FastMCP("ai-gm-debug-platform")
+DEFAULT_BACKEND_SELECTOR = '{service="backend",env="production",container="ai-gm-backend-1"}'
 
 
 def _now_ns() -> int:
@@ -36,6 +37,24 @@ def _loki_query_range(query: str, start_ns: int, end_ns: int, limit: int) -> dic
     return payload["data"]
 
 
+def _validate_loki_query(query: str) -> str:
+    cleaned = (query or "").strip()
+    if not cleaned:
+        raise ValueError(
+            "Loki query is empty. Start with a label selector, e.g. "
+            + DEFAULT_BACKEND_SELECTOR
+            + ' |= "request_complete"'
+        )
+    if "{" not in cleaned or "}" not in cleaned:
+        raise ValueError(
+            "Loki query must include at least one label pair in {...}. "
+            + "Example: "
+            + DEFAULT_BACKEND_SELECTOR
+            + ' |= "/turns/stream"'
+        )
+    return cleaned
+
+
 @mcp.tool()
 def loki_query(query: str, since_minutes: int = 60, limit: int = 200) -> dict[str, Any]:
     """
@@ -44,6 +63,7 @@ def loki_query(query: str, since_minutes: int = 60, limit: int = 200) -> dict[st
     Returns parsed streams with `stream` labels and `values` (timestamp_ns, line).
     Read-only tool intended for external log analysis via Perplexity MCP connectors.
     """
+    query = _validate_loki_query(query)
     if since_minutes < 1:
         since_minutes = 1
     end_ns = _now_ns()
@@ -63,6 +83,36 @@ def loki_query(query: str, since_minutes: int = 60, limit: int = 200) -> dict[st
         streams.append({"stream": labels, "values": values})
 
     return {"streams": streams, "query": query, "since_minutes": since_minutes}
+
+
+@mcp.tool()
+def loki_query_preset(
+    preset: str,
+    since_minutes: int = 60,
+    limit: int = 200,
+    campaign_id: int | None = None,
+) -> dict[str, Any]:
+    """
+    Query Loki using safe PROD presets to avoid malformed expressions.
+
+    Available presets:
+    - backend_requests
+    - turns_stream
+    - location_integrity
+    """
+    base = DEFAULT_BACKEND_SELECTOR
+    p = (preset or "").strip().lower()
+    if p == "backend_requests":
+        query = f'{base} |= "request_complete"'
+    elif p == "turns_stream":
+        query = f'{base} |= "/turns/stream"'
+    elif p == "location_integrity":
+        query = f'{base} |~ "location_(intent|context|move|integrity|blocked)"'
+    else:
+        raise ValueError("Unknown preset. Use: backend_requests, turns_stream, location_integrity.")
+    if campaign_id is not None:
+        query = f'{query} |= "\\"campaign_id\\": {int(campaign_id)}"'
+    return loki_query(query=query, since_minutes=since_minutes, limit=limit)
 
 
 @mcp.tool()

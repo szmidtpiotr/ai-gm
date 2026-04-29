@@ -11,10 +11,10 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 19,
+  "version": 20,
   "refresh": "30s",
   "time": {
-    "from": "now-7d",
+    "from": "now-24h",
     "to": "now"
   },
   "templating": {
@@ -22,12 +22,12 @@
       {
         "name": "campaign_id",
         "label": "Campaign ID",
-        "description": "Numer kampanii (np. 12). Zostaw .+ aby zobaczyć wszystkie.",
+        "description": "Numer kampanii (np. 1065). Unikaj .+ na DEV, bo zapytanie jest bardzo ciężkie.",
         "type": "textbox",
-        "query": ".+",
+        "query": "1065",
         "current": {
-          "value": ".+",
-          "text": ".+"
+          "value": "1065",
+          "text": "1065"
         },
         "hide": 0,
         "skipUrlSync": false
@@ -48,7 +48,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "Wpisz ID kampanii w polu **Campaign ID** (np. `1033`). Zostaw `.+` żeby wyświetlić wszystkie.\n\n**Uwaga:** ten panel pokazuje tylko logi z **ostatnich 7 dni** (retencja Loki). Panel SQL może pokazywać starsze tury z bazy — jeśli tu jest pusto, sprawdź zakres czasu (prawy górny róg) albo czy po **streamingu** SSE doszło do `data: [DONE]` (bez tego tura nie zapisuje się i nie ma logu `narrative_turn`).\n\nPanel **Debug** niżej: surowe linie z `narrative_turn` bez parsowania `| json`."
+        "content": "Wpisz ID kampanii w polu **Campaign ID** (np. `1065`).\n\n**Uwaga:** na DEV nie używaj `.+` dla wszystkich kampanii — to przeciąża Loki i powoduje `too many outstanding requests`. Ten panel domyślnie pokazuje tylko ostatnie **24h**.\n\nPanel **Debug** niżej: surowe linie z `narrative_turn` bez parsowania `| json`."
       },
       "fieldConfig": {
         "defaults": {},
@@ -86,7 +86,7 @@
             "type": "loki",
             "uid": "PD5A68A3BD6F8BA56"
           },
-          "expr": "{service=~\"backend|backend-dev\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nGRACZ:\\n{{.user_text}}\\n\\nGM:\\n{{.assistant_text}}\"",
+          "expr": "{service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nGRACZ:\\n{{.user_text}}\\n\\nGM:\\n{{.assistant_text}}\"",
           "queryType": "range",
           "legendFormat": ""
         }
@@ -123,7 +123,7 @@
             "type": "loki",
             "uid": "PD5A68A3BD6F8BA56"
           },
-          "expr": "{service=~\"backend|backend-dev\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\"",
+          "expr": "{service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | event=\"narrative_turn\" | campaign_id=~\"${campaign_id}\"",
           "queryType": "range",
           "legendFormat": ""
         }
@@ -160,7 +160,7 @@
             "type": "loki",
             "uid": "PD5A68A3BD6F8BA56"
           },
-          "expr": "{service=~\"backend|backend-dev\"} | json | event=\"memory_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nPYTANIE:\\n{{.user_text}}\\n\\nOdpowiedz:\\n{{.assistant_text}}\"",
+          "expr": "{service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | event=\"memory_turn\" | campaign_id=~\"${campaign_id}\" | line_format \"[Kampania {{.campaign_id}} | Tura {{.turn_number}}]\\n\\nPYTANIE:\\n{{.user_text}}\\n\\nOdpowiedz:\\n{{.assistant_text}}\"",
           "queryType": "range",
           "legendFormat": ""
         }

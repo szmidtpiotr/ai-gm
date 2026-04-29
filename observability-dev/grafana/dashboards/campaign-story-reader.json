@@ -9,7 +9,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 15,
+  "version": 16,
   "refresh": "30s",
   "time": {
     "from": "now-30d",
@@ -20,10 +20,10 @@
       {
         "name": "campaign_id",
         "type": "textbox",
-        "query": ".+",
+        "query": "1",
         "current": {
-          "text": ".+",
-          "value": ".+"
+          "text": "1",
+          "value": "1"
         }
       }
     ]

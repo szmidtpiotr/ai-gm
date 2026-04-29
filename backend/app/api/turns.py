@@ -45,7 +45,6 @@ from app.services.user_llm_settings import get_user_llm_settings_full
 from app.services.location_config_service import get_bool_flag
 from app.services.location_intent_parser import LocationIntent, parse as parse_location_intent
 from app.services.location_validator import validate_move, log_integrity_violation
-from app.services.location_context_injector import build_location_context
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
@@ -187,7 +186,13 @@ def _process_location_intent(
         return assistant_response
 
     try:
-        result = validate_move(session_id, intent, campaign_id=campaign_id)
+        override_auto_create = intent.action == "create"
+        result = validate_move(
+            session_id,
+            intent,
+            campaign_id=campaign_id,
+            auto_create_enabled=True if override_auto_create else None,
+        )
         if result.allowed and result.resolved_location_id and session_id is not None:
             conn.execute(
                 "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",

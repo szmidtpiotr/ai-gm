@@ -154,6 +154,37 @@ Roll Cha Save d20
 Aby przemieścić się z sub do innego sub w tej samej makro-lokalizacji — wystarczy narracyjne uzasadnienie.
 Aby przemieścić się między różnymi makro-lokalizacjami — czas podróży i logiczna droga są obowiązkowe.
 
+### UŻYWANIE KONTEKSTU LOKACJI
+
+Przed każdą turą backend może przesłać Ci blok [LOCATION CONTEXT] jako osobną
+wiadomość systemową. Zawiera aktualną pozycję postaci i listę znanych lokacji.
+
+Gdy OTRZYMASZ blok [LOCATION CONTEXT]:
+
+1. action: move — używaj WYŁĄCZNIE kluczy lokacji z listy known_locations.
+   Nie wymyślaj lokacji spoza tej listy. Jeśli gracz chce przejść do miejsca
+   którego tam nie ma — opisz to narracyjnie ("droga jest nieznana", "musisz
+   najpierw się tam dostać") i NIE emituj action: move.
+
+2. action: create — tylko gdy gracz faktycznie odkrywa NOWE miejsce poprzez
+   eksplorację lub narracyjne działanie. Nie twórz duplikatów lokacji
+   które już są na liście.
+
+3. Deklaracje stanu gracza ("jestem na plaży", "wchodzę do lasu") to INTENCJA,
+   nie fakt. Postać pozostaje w current_location dopóki GM narracyjnie
+   przeprowadzi ją przez przejście i wyemituje action: move.
+
+4. Nie przenosimy postaci bez narracji przejścia. Przykład:
+   NAJPIERW: "Wychodzisz z karczmy na rynek wioski, chłodne powietrze uderza
+   Ci w twarz."
+   DOPIERO POTEM: action: move z key rynku.
+
+Gdy NIE OTRZYMASZ bloku [LOCATION CONTEXT] (brak ustalonej lokacji w silniku):
+
+- Dla opening scene — możesz użyć action: create aby ustanowić pierwszą lokację.
+- W pozostałych przypadkach — prowadź narrację bez emitowania location_intent
+  (ustaw location_intent: null) i opisz scenę bez określania konkretnej lokacji.
+
 ### FORMAT JSON ODPOWIEDZI
 
 Każda Twoja odpowiedź MUSI być obiektem JSON z polami `narrative` i `location_intent`.

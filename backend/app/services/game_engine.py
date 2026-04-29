@@ -2,11 +2,15 @@ import random
 import re
 import sqlite3
 
+from app.core.logging import get_logger
 from app.core.turn_engine import buildmessages, loadrecentturns
 from app.services.config_service import build_runtime_config_block
 from app.services.dice import infer_roll_type, parse_character_sheet
 from app.services.llm_service import generate_chat
 from app.services.solo_death_service import DEATH_SAVE_FAILURE_THRESHOLD
+
+
+logger = get_logger(__name__)
 
 
 def resolve_enemy_loot(enemy_key: str) -> list[dict]:
@@ -118,6 +122,55 @@ def _death_mechanica_system_append(
     )
 
 
+def _inject_location_llm_context(
+    conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
+) -> None:
+    """8D-LOC-1: blok [LOCATION CONTEXT] jako druga wiadomość systemowa (po głównym system prompt)."""
+    from app.services.location_config_service import get_bool_flag
+    from app.services.location_context_injector import (
+        build_location_context_block,
+        get_session_id_for_campaign,
+    )
+
+    if not messages:
+        return
+
+    sid = get_session_id_for_campaign(conn, campaign_id)
+    if sid is None:
+        logger.info("location_context_skipped", session_id=None, reason="no_session")
+        return
+    if not get_bool_flag("location_integrity_enabled", sid, default=True):
+        logger.info(
+            "location_context_skipped", session_id=str(sid), reason="flag_disabled"
+        )
+        return
+
+    try:
+        loc_block = build_location_context_block(sid, conn)
+        if loc_block:
+            known_count = sum(
+                1 for ln in loc_block.splitlines() if ln.startswith("  - { ")
+            )
+            messages.insert(1, {"role": "system", "content": loc_block})
+            logger.info(
+                "location_context_injected",
+                session_id=str(sid),
+                known_count=known_count,
+            )
+        else:
+            logger.info(
+                "location_context_skipped",
+                session_id=str(sid),
+                reason="no_current_location",
+            )
+    except Exception as exc:
+        logger.warning(
+            "location_context_injection_failed",
+            session_id=str(sid),
+            error=str(exc),
+        )
+
+
 def build_narrative_messages(
     conn: sqlite3.Connection,
     campaign: sqlite3.Row,
@@ -139,6 +192,8 @@ def build_narrative_messages(
         runtime_config_block=build_runtime_config_block(),
         combat_context_block=combat_block,
     )
+
+    _inject_location_llm_context(conn, int(campaign["id"]), messages)
 
     combat_log_block = combat_svc.get_combat_turns_context_for_prompt(int(campaign["id"]))
     if combat_log_block and messages:
