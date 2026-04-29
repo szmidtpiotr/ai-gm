@@ -53,6 +53,7 @@ logger = get_logger(__name__)
 
 COMBAT_START_RE = re.compile(r"\[COMBAT_START:([^\]]+)\]", re.IGNORECASE)
 GRANT_ITEM_RE = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
+GRANT_GOLD_RE = re.compile(r"^Grant Gold\s+([+-]?\d+)$", re.IGNORECASE)
 GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
 # Short assistant line when combat victory follow-up skips the LLM (see create_turn_stream).
 COMBAT_VICTORY_STREAM_STUB = "Walka dobiegła końca."
@@ -796,6 +797,93 @@ def strip_last_grant_item_cue(assistant_text: str) -> str:
     return "\n".join(lines[:-1]).rstrip()
 
 
+def parse_grant_gold_cue(assistant_text: str) -> int | None:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return None
+    last_line = (lines[-1] or "").strip()
+    cue_match = GRANT_GOLD_RE.match(last_line)
+    if not cue_match:
+        return None
+    amount_raw = (cue_match.group(1) or "").strip()
+    try:
+        amount = int(amount_raw)
+    except (TypeError, ValueError):
+        return None
+    return amount if amount > 0 else None
+
+
+def strip_last_grant_gold_cue(assistant_text: str) -> str:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return assistant_text or ""
+    if not GRANT_GOLD_RE.match((lines[-1] or "").strip()):
+        return assistant_text or ""
+    return "\n".join(lines[:-1]).rstrip()
+
+
+def extract_grant_cues(assistant_text: str) -> tuple[str, str | None, int | None]:
+    """
+    Collect GM grant cues from the end of assistant text.
+    Supports both cue kinds and both orders when they are in trailing lines.
+    Returns cleaned_text, grant_item_label, grant_gold_amount.
+    """
+    clean_text = (assistant_text or "").rstrip()
+    grant_item_label: str | None = None
+    grant_gold_amount: int | None = None
+
+    # JSON-mode GM response may carry Grant cue in `roll_cue` instead of last text line.
+    try:
+        payload = json.loads(_strip_json_code_fence(clean_text))
+    except Exception:
+        payload = None
+    if isinstance(payload, dict):
+        roll_cue = str(payload.get("roll_cue") or "").strip()
+        if roll_cue:
+            if grant_item_label is None:
+                grant_item_label = parse_grant_item_cue(roll_cue)
+            if grant_gold_amount is None:
+                grant_gold_amount = parse_grant_gold_cue(roll_cue)
+            if grant_item_label is not None or grant_gold_amount is not None:
+                payload["roll_cue"] = None
+                clean_text = json.dumps(payload, ensure_ascii=False)
+
+    for _ in range(4):
+        if grant_item_label is None:
+            maybe_item = parse_grant_item_cue(clean_text)
+            if maybe_item:
+                grant_item_label = maybe_item
+                clean_text = strip_last_grant_item_cue(clean_text)
+                continue
+        if grant_gold_amount is None:
+            maybe_gold = parse_grant_gold_cue(clean_text)
+            if maybe_gold is not None:
+                grant_gold_amount = maybe_gold
+                clean_text = strip_last_grant_gold_cue(clean_text)
+                continue
+        break
+    return clean_text, grant_item_label, grant_gold_amount
+
+
+def apply_grant_gold_to_character(
+    conn: sqlite3.Connection, *, character_id: int, amount: int
+) -> int | None:
+    if int(amount) <= 0:
+        return None
+    row = conn.execute(
+        """
+        UPDATE characters
+        SET gold_gp = COALESCE(gold_gp, 0) + ?
+        WHERE id = ?
+        RETURNING gold_gp
+        """,
+        (int(amount), int(character_id)),
+    ).fetchone()
+    if not row:
+        return None
+    return int(row["gold_gp"] or 0)
+
+
 def append_narrative_item_to_sheet(
     conn: sqlite3.Connection,
     *,
@@ -1474,9 +1562,7 @@ def create_turn(
         ) == "player"
 
         clean_assistant = COMBAT_START_RE.sub("", assistant_text).rstrip()
-        grant_item_label = parse_grant_item_cue(clean_assistant.strip())
-        if grant_item_label:
-            clean_assistant = strip_last_grant_item_cue(clean_assistant)
+        clean_assistant, grant_item_label, grant_gold_amount = extract_grant_cues(clean_assistant)
         validate_roll_cue_name(clean_assistant.strip())
 
         log = create_turn_log(
@@ -1504,6 +1590,20 @@ def create_turn(
                 given_at=f"turn:{log['turn_number']}",
             )
             conn.commit()
+        if grant_gold_amount is not None:
+            new_total = apply_grant_gold_to_character(
+                conn,
+                character_id=payload.character_id,
+                amount=grant_gold_amount,
+            )
+            conn.commit()
+            logger.info(
+                "grant_gold_applied",
+                campaign_id=campaign_id,
+                character_id=payload.character_id,
+                amount=grant_gold_amount,
+                new_total_gp=new_total,
+            )
 
         new_combat = _maybe_start_combat_from_gm_tag(
             campaign_id, payload.character_id, assistant_text
@@ -2003,9 +2103,7 @@ def create_turn_stream(
             combat_extra = None
             if full_raw.strip():
                 clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
-                grant_item_label = parse_grant_item_cue(clean_text.strip())
-                if grant_item_label:
-                    clean_text = strip_last_grant_item_cue(clean_text)
+                clean_text, grant_item_label, grant_gold_amount = extract_grant_cues(clean_text)
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(
@@ -2048,6 +2146,20 @@ def create_turn_stream(
                             given_at=f"turn:{stream_log['turn_number']}",
                         )
                         save_conn.commit()
+                    if grant_gold_amount is not None:
+                        new_total = apply_grant_gold_to_character(
+                            save_conn,
+                            character_id=character_id_val,
+                            amount=grant_gold_amount,
+                        )
+                        save_conn.commit()
+                        logger.info(
+                            "grant_gold_applied",
+                            campaign_id=campaign_id_val,
+                            character_id=character_id_val,
+                            amount=grant_gold_amount,
+                            new_total_gp=new_total,
+                        )
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, full_raw
                     )
