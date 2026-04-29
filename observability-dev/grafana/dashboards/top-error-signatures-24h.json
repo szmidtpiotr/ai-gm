@@ -9,36 +9,14 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 11,
+  "version": 12,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
     "to": "now"
   },
   "templating": {
-    "list": [
-      {
-        "name": "service",
-        "type": "query",
-        "datasource": {
-          "type": "loki",
-          "uid": "PD5A68A3BD6F8BA56"
-        },
-        "query": {
-          "query": "label_values(service)",
-          "refId": "StandardVariableQuery"
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
-        "allValue": ".+"
-      }
-    ]
+    "list": []
   },
   "panels": [
     {
@@ -51,7 +29,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\"} |= \"request_complete\" [24h]))",
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} |= \"request_complete\" [24h]))",
           "refId": "A",
           "queryType": "range"
         }
@@ -82,7 +60,7 @@
       },
       "targets": [
         {
-          "expr": "topk(10, sum by (error_type) (count_over_time({service=~\"$service\", error_type!=\"\"}[24h])))",
+          "expr": "topk(10, sum by (error_type) (count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\", error_type!=\"\"}[24h])))",
           "refId": "A",
           "queryType": "range"
         }
@@ -109,7 +87,7 @@
       },
       "targets": [
         {
-          "expr": "topk(10, sum by (llm_provider) (count_over_time({service=~\"$service\", level=~\"error|warn\"}[24h])))",
+          "expr": "topk(10, sum by (llm_provider) (count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\", level=~\"error|warn\"}[24h])))",
           "refId": "A",
           "queryType": "range"
         }
@@ -136,7 +114,7 @@
       },
       "targets": [
         {
-          "expr": "{service=~\"$service\"} | json | level=~\"error|warn\"",
+          "expr": "{service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | level=~\"error|warn\"",
           "refId": "A",
           "queryType": "range"
         }
