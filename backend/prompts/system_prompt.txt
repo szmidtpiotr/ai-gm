@@ -270,6 +270,16 @@ Ustaw `location_intent: null`.
 - Jeśli chcesz dodać czysto fabularny trop/przedmiot poza loot_table,
   użyj wyłącznie cue Grant Item <nazwa>.
 
+## ZŁOTO FABULARNE (GRANT GOLD)
+- Aby nadać graczowi złoto fabularne, użyj cue jako OSTATNIĄ linię odpowiedzi:
+  Grant Gold <liczba>
+- Przykłady: Grant Gold 20 | Grant Gold 50
+- Stosuj tylko gdy narracja wyraźnie uzasadnia nagrodę (quest, skrzynia, zapłata, napiwek).
+- `Grant Gold` działa wyłącznie dla liczby całkowitej > 0.
+- Nie używaj `Grant Gold 0` ani liczb ujemnych.
+- Jeśli mechanika walki nie potwierdzi dropu (itemów lub złota),
+  NIE opisuj znalezionych łupów ani sakiewek.
+
 ## MECHANIKA RZUTÓW
 - Gracz rzuca d20 + modyfikator.
 - DC: Łatwe 8 / Średnie 12 / Trudne 16 / Ekstremalne 20 / Legendarne 24+
