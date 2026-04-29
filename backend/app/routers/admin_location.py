@@ -51,6 +51,11 @@ class LocationLogEntry(BaseModel):
     created_at: str
 
 
+class CampaignSessionLocationPatch(BaseModel):
+    """PATCH body dla LOC-4 — ustawienie current_location_id sesji kampanii."""
+    location_id: Optional[int] = None
+
+
 # ============================================================================
 # Dependencies
 # ============================================================================
@@ -508,17 +513,197 @@ async def get_all_location_logs(
                 "created_at": row["created_at"]
             })
         
-        return {
-            "count": len(log_entries),
-            "filters_applied": {
-                "since": since,
-                "session_id": session_id
-            },
-            "entries": log_entries
-        }
-        
     except sqlite3.Error as e:
         logger.error("get_all_location_logs_error", error=str(e))
         raise HTTPException(status_code=500, detail=f"Błąd bazy danych: {str(e)}")
     finally:
         conn.close()
+
+
+# ----------------------------------------------------------------------------
+# LOC-4 — kampania ↔ session current_location_id (panel admin)
+# ----------------------------------------------------------------------------
+
+
+def _campaign_session_location_payload(conn: sqlite3.Connection, campaign_id: int) -> dict:
+    rows = conn.execute(
+        """
+        SELECT id, key, label, location_type,
+               COALESCE(approved, 1) AS approved,
+               COALESCE(is_active, 1) AS is_active
+        FROM game_locations
+        WHERE COALESCE(is_active, 1) = 1
+        ORDER BY COALESCE(approved, 1) DESC, label COLLATE NOCASE
+        """
+    ).fetchall()
+    locations = [
+        {
+            "id": int(r["id"]),
+            "key": r["key"],
+            "label": r["label"],
+            "location_type": r["location_type"] or "macro",
+            "approved": int(r["approved"] or 0),
+        }
+        for r in rows
+    ]
+    sess = conn.execute(
+        """
+        SELECT id, campaign_id, current_location_id FROM game_sessions
+        WHERE campaign_id = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        """,
+        (campaign_id,),
+    ).fetchone()
+
+    current: dict | None = None
+    current_location_id: int | None = None
+    session_id_val: str | int | None = None
+    if sess:
+        session_id_val = sess["id"]
+        current_location_id = (
+            int(sess["current_location_id"]) if sess["current_location_id"] is not None else None
+        )
+        if current_location_id is not None:
+            lr = conn.execute(
+                """
+                SELECT id, key, label, location_type,
+                       COALESCE(approved, 1) AS approved
+                FROM game_locations
+                WHERE id = ? AND COALESCE(is_active, 1) = 1
+                """,
+                (current_location_id,),
+            ).fetchone()
+            if lr:
+                current = {
+                    "id": int(lr["id"]),
+                    "key": lr["key"],
+                    "label": lr["label"],
+                    "location_type": lr["location_type"] or "macro",
+                    "approved": int(lr["approved"] or 0),
+                }
+    return {
+        "campaign_id": campaign_id,
+        "session_id": session_id_val,
+        "current_location_id": current_location_id,
+        "current": current,
+        "locations": locations,
+    }
+
+
+@router.get("/api/admin/campaigns/{campaign_id}/session-location")
+async def get_campaign_session_location(
+    campaign_id: int,
+    _admin: None = Depends(require_admin_token),
+):
+    """
+    LOC-4: stan sesji kampanii (current_location_id) + lista lokacji z katalogu (sort: approved).
+    """
+    conn = _get_db_connection()
+    try:
+        ok = conn.execute("SELECT id FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
+        if not ok:
+            raise HTTPException(status_code=404, detail="Kampania nie istnieje")
+        return _campaign_session_location_payload(conn, campaign_id)
+    except HTTPException:
+        raise
+    except sqlite3.Error as e:
+        logger.error("get_campaign_session_location_db_error", error=str(e), campaign_id=campaign_id)
+        raise HTTPException(status_code=500, detail=f"Błąd bazy danych: {str(e)}")
+    finally:
+        conn.close()
+
+
+@router.patch("/api/admin/campaigns/{campaign_id}/session-location")
+async def patch_campaign_session_location(
+    campaign_id: int,
+    body: CampaignSessionLocationPatch,
+    _admin: None = Depends(require_admin_token),
+):
+    """
+    LOC-4: ustawia `game_sessions.current_location_id` dla ostatniej sesji kampanii;
+    przy braku wiersza — INSERT z `id = str(campaign_id)`.
+    `location_id: null` — reset (NULL).
+    """
+    conn = _get_db_connection()
+    try:
+        ok = conn.execute("SELECT id FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
+        if not ok:
+            raise HTTPException(status_code=404, detail="Kampania nie istnieje")
+
+        old_session = conn.execute(
+            """
+            SELECT id, current_location_id FROM game_sessions
+            WHERE campaign_id = ?
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            """,
+            (campaign_id,),
+        ).fetchone()
+
+        old_key: str | None = None
+        if old_session and old_session["current_location_id"]:
+            rk = conn.execute(
+                "SELECT key FROM game_locations WHERE id = ?",
+                (int(old_session["current_location_id"]),),
+            ).fetchone()
+            old_key = str(rk["key"]) if rk and rk["key"] else None
+
+        new_loc_id: int | None = None
+        new_key: str | None = None
+
+        if body.location_id is not None:
+            loc_row = conn.execute(
+                """
+                SELECT id, key FROM game_locations
+                WHERE id = ? AND COALESCE(is_active, 1) = 1
+                """,
+                (int(body.location_id),),
+            ).fetchone()
+            if not loc_row:
+                raise HTTPException(status_code=404, detail="Lokalizacja nie istnieje lub nieaktywna")
+            new_loc_id = int(loc_row["id"])
+            new_key = str(loc_row["key"]) if loc_row["key"] else None
+
+        effective_session_for_log = str(old_session["id"]) if old_session else str(campaign_id)
+
+        if old_session:
+            conn.execute(
+                """
+                UPDATE game_sessions
+                SET current_location_id = ?
+                WHERE id = ?
+                """,
+                (new_loc_id, old_session["id"]),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO game_sessions (id, campaign_id, current_location_id, session_flags)
+                VALUES (?, ?, ?, '{}')
+                """,
+                (str(campaign_id), campaign_id, new_loc_id),
+            )
+            effective_session_for_log = str(campaign_id)
+        conn.commit()
+
+        logger.info(
+            "admin_location_override",
+            campaign_id=campaign_id,
+            session_id=effective_session_for_log,
+            old_location_key=old_key,
+            new_location_key=new_key,
+            new_location_id=new_loc_id,
+        )
+
+        return _campaign_session_location_payload(conn, campaign_id)
+    except HTTPException:
+        raise
+    except sqlite3.Error as e:
+        logger.error(
+            "patch_campaign_session_location_db_error", error=str(e), campaign_id=campaign_id
+        )
+        raise HTTPException(status_code=500, detail=f"Błąd bazy danych: {str(e)}")
+    finally:
+        conn.close()
+
