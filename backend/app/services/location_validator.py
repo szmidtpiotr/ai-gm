@@ -13,6 +13,7 @@ from app.core.logging import get_logger
 from app.migrations_admin import DB_PATH
 from app.services.llm_service import generate_chat
 from app.services.location_config_service import get_bool_flag
+from app.services.location_context_injector import _collect_related_location_ids
 from app.services.location_intent_parser import LocationIntent
 
 logger = get_logger(__name__)
@@ -62,6 +63,91 @@ def _get_location_by_key(key: str) -> Optional[dict]:
             (key,)
         ).fetchone()
         return _row_to_dict(row)
+    finally:
+        conn.close()
+
+
+def _get_available_location_keys(resolved_session_id: int | str | None) -> set[str]:
+    """
+    LOC-3: ten sam zbiór co known_locations w [LOCATION CONTEXT] (graf LOC-1).
+    Pusty zbiór → fail-open (brak current_location_id / błąd).
+    """
+    if resolved_session_id is None:
+        return set()
+    conn = _get_db_connection()
+    try:
+        row = conn.execute(
+            "SELECT current_location_id FROM game_sessions WHERE id = ?",
+            (str(resolved_session_id),),
+        ).fetchone()
+        if not row or not row["current_location_id"]:
+            return set()
+        cur_id = int(row["current_location_id"])
+        rel_ids = _collect_related_location_ids(conn, cur_id)
+        if cur_id not in rel_ids:
+            rel_ids.add(cur_id)
+        if not rel_ids:
+            return set()
+        placeholders = ",".join("?" * len(rel_ids))
+        params: list = list(rel_ids) + [cur_id]
+        rows = conn.execute(
+            f"""
+            SELECT gl.key FROM game_locations gl
+            WHERE gl.id IN ({placeholders})
+              AND COALESCE(gl.is_active, 1) = 1
+              AND (COALESCE(gl.approved, 1) = 1 OR gl.id = ?)
+            """,
+            params,
+        ).fetchall()
+        return {str(r["key"]) for r in rows if r["key"]}
+    except Exception as exc:
+        logger.warning(
+            "location_guard_keys_fetch_failed",
+            session_id=str(resolved_session_id),
+            error=str(exc),
+        )
+        return set()
+    finally:
+        conn.close()
+
+
+def _apply_create_parent_key_fallback(
+    intent: LocationIntent, resolved_session_id: int | str | None
+) -> None:
+    """LOC-3: nieistniejący parent_key → klucz bieżącej lokacji sesji lub None."""
+    if intent.action != "create" or not (intent.parent_key or "").strip():
+        return
+    conn = _get_db_connection()
+    try:
+        pk = intent.parent_key.strip()
+        parent = conn.execute(
+            "SELECT 1 FROM game_locations WHERE key = ? AND COALESCE(is_active, 1) = 1",
+            (pk,),
+        ).fetchone()
+        if parent:
+            return
+        logger.warning(
+            "location_create_parent_fallback",
+            parent_key=pk,
+            session_id=str(resolved_session_id),
+        )
+        if resolved_session_id is None:
+            intent.parent_key = None
+            return
+        log_integrity_violation(
+            resolved_session_id,
+            intent,
+            "parent_key_not_found_fallback",
+        )
+        row = conn.execute(
+            """
+            SELECT gl.key FROM game_locations gl
+            JOIN game_sessions gs ON gs.current_location_id = gl.id
+            WHERE gs.id = ? AND COALESCE(gl.is_active, 1) = 1
+            """,
+            (str(resolved_session_id),),
+        ).fetchone()
+        intent.parent_key = str(row["key"]) if row and row["key"] else None
     finally:
         conn.close()
 
@@ -268,16 +354,18 @@ def persist_ai_generated_location(
     *,
     campaign_id: int | None = None,
     session_id: int | str | None = None,
+    conn: sqlite3.Connection | None = None,
 ) -> Optional[dict]:
     """Persistuje lokalizację zgłoszoną przez GM w trybie opening scene."""
     if intent.action != "create":
         return None
 
-    conn = _get_db_connection()
+    managed_conn = conn is None
+    db = conn or _get_db_connection()
     try:
         parent_id = None
         if intent.parent_key:
-            parent = conn.execute(
+            parent = db.execute(
                 "SELECT id FROM game_locations WHERE key = ? AND is_active = 1",
                 (intent.parent_key,),
             ).fetchone()
@@ -285,7 +373,7 @@ def persist_ai_generated_location(
                 parent_id = parent["id"]
 
         key = _slugify_location_key(intent.target_key or intent.target_label)
-        existing = conn.execute(
+        existing = db.execute(
             "SELECT * FROM game_locations WHERE key = ?",
             (key,),
         ).fetchone()
@@ -293,7 +381,7 @@ def persist_ai_generated_location(
             return dict(existing)
 
         location_type = "sub" if parent_id else "macro"
-        cursor = conn.execute(
+        cursor = db.execute(
             """
             INSERT INTO game_locations (
                 key, label, description, parent_id, location_type, ai_generated, approved, is_active
@@ -308,9 +396,9 @@ def persist_ai_generated_location(
                 location_type,
             ),
         )
-        conn.commit()
+        db.commit()
 
-        new_row = conn.execute(
+        new_row = db.execute(
             "SELECT * FROM game_locations WHERE id = ?",
             (cursor.lastrowid,),
         ).fetchone()
@@ -318,14 +406,14 @@ def persist_ai_generated_location(
             return None
 
         resolved_session_id = session_id or _resolve_session_id(
-            conn, session_id=None, campaign_id=campaign_id
+            db, session_id=None, campaign_id=campaign_id
         )
         if resolved_session_id:
             _log_integrity_event(
                 session_id=resolved_session_id,
                 intent=intent,
                 action="create_ok",
-                location=dict(new_row),
+                current_location_key=new_row["key"],
             )
 
         logger.info(
@@ -340,7 +428,8 @@ def persist_ai_generated_location(
         logger.error("persist_location_error", error=str(exc))
         return None
     finally:
-        conn.close()
+        if managed_conn:
+            db.close()
 
 
 def _log_integrity_event(
@@ -440,6 +529,31 @@ def validate_move(
             if auto_create_enabled is None
             else bool(auto_create_enabled)
         )
+
+        _apply_create_parent_key_fallback(intent, resolved_session_id)
+
+        tk = (intent.target_key or "").strip()
+        if intent.action == "move" and tk:
+            available_keys = _get_available_location_keys(resolved_session_id)
+            if available_keys and tk not in available_keys:
+                logger.warning(
+                    "location_move_blocked",
+                    reason="target_key_not_in_session_graph",
+                    target_key=tk,
+                    session_id=str(resolved_session_id),
+                )
+                if resolved_session_id is not None:
+                    log_integrity_violation(
+                        resolved_session_id,
+                        intent,
+                        "target_key_not_in_session_graph",
+                    )
+                return ValidationResult(
+                    allowed=False,
+                    resolved_location_id=None,
+                    is_new_location=False,
+                    block_reason="target_key_not_in_session_graph",
+                )
 
         # Pobierz aktualną lokalizację
         current_loc = _get_session_current_location(resolved_session_id) if resolved_session_id else None

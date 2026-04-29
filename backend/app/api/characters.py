@@ -48,6 +48,71 @@ class NarrativeItemCreateRequest(BaseModel):
     given_at: str | None = None
 
 
+def _ensure_game_session(conn: sqlite3.Connection, campaign_id: int) -> str:
+    """
+    Ensure campaign has a game_sessions row so location tracking can persist.
+    """
+    session_id = str(campaign_id)
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO game_sessions (id, campaign_id, session_flags)
+        VALUES (?, ?, '{}')
+        """,
+        (session_id, campaign_id),
+    )
+    conn.commit()
+    return session_id
+
+
+def _ensure_opening_location_fallback(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    session_id: str,
+    opening_message: str | None,
+    requested_location: str | None,
+) -> int | None:
+    """
+    Create a deterministic start location when opening scene has no location_intent.
+    """
+    key = f"campaign_{campaign_id}_start"
+    row = conn.execute(
+        "SELECT id FROM game_locations WHERE key = ? LIMIT 1",
+        (key,),
+    ).fetchone()
+    if row:
+        location_id = int(row["id"])
+    else:
+        label = (requested_location or "").strip()
+        if not label or label.lower() in {"here", "start", "unknown", "nieznane miejsce"}:
+            label = f"Punkt startowy kampanii {campaign_id}"
+        description = (opening_message or "").strip()
+        if description:
+            description = description[:500]
+        conn.execute(
+            """
+            INSERT INTO game_locations
+              (key, label, description, location_type, ai_generated, approved, is_active)
+            VALUES (?, ?, ?, 'macro', 1, 1, 1)
+            """,
+            (key, label, description),
+        )
+        conn.commit()
+        location_id = int(conn.execute("SELECT id FROM game_locations WHERE key = ?", (key,)).fetchone()["id"])
+
+    conn.execute(
+        "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+        (location_id, session_id),
+    )
+    conn.commit()
+    logger.info(
+        "[opening_scene] opening_location_fallback_created campaign_id=%s session_id=%s location_id=%s",
+        campaign_id,
+        session_id,
+        location_id,
+    )
+    return location_id
+
+
 def _deep_merge_dicts(base: dict, incoming: dict) -> dict:
     merged = dict(base)
     for key, value in incoming.items():
@@ -963,6 +1028,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     conn.commit()
 
     character_id = cur.lastrowid
+    session_id = _ensure_game_session(conn, campaign_id)
 
     try:
         arch_row = (
@@ -1062,16 +1128,39 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
                 location_intent = parse_location_intent(opening_message, None)
             except Exception as exc:
                 logger.warning(
-                    "[opening_scene] location_intent_parse_failed",
-                    campaign_id=campaign_id,
-                    error=str(exc),
+                    "[opening_scene] location_intent_parse_failed campaign_id=%s error=%s",
+                    campaign_id,
+                    str(exc),
                 )
                 location_intent = None
 
             if location_intent and location_intent.action == "create":
-                persist_ai_generated_location(
+                created = persist_ai_generated_location(
                     location_intent,
                     campaign_id=campaign_id,
+                    conn=conn,
+                )
+                if created:
+                    conn.execute(
+                        "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+                        (created["id"], session_id),
+                    )
+                    conn.commit()
+                else:
+                    _ensure_opening_location_fallback(
+                        conn=conn,
+                        campaign_id=campaign_id,
+                        session_id=session_id,
+                        opening_message=opening_message,
+                        requested_location=req.location,
+                    )
+            else:
+                _ensure_opening_location_fallback(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    session_id=session_id,
+                    opening_message=opening_message,
+                    requested_location=req.location,
                 )
             next_turn_row = conn.execute(
                 """

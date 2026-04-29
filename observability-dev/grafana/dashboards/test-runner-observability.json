@@ -3,8 +3,8 @@
   "uid": "test-runner-observability",
   "description": "Dashboard for monitoring AI Test Agent runs, debugging step execution, and tracking test outcomes",
   "schemaVersion": 38,
-  "version": 1,
-  "refresh": "5s",
+  "version": 2,
+  "refresh": "30s",
   "time": {
     "from": "now-1h",
     "to": "now"
@@ -132,7 +132,7 @@
           "datasource": {
             "type": "loki"
           },
-          "expr": "avg_over_time({service=\"test-orchestrator\"} |= `run_cleanup` | json [1h])",
+          "expr": "avg_over_time(({service=\"test-orchestrator\"} |= `run_cleanup` | json | unwrap duration_ms)[1h])",
           "refId": "A"
         }
       ],
@@ -160,7 +160,7 @@
           "datasource": {
             "type": "loki"
           },
-          "expr": "{service=\"test-agent\"} ${run_id:+-=~ \"$run_id\"} | json",
+          "expr": "{service=\"test-agent\"} |= \"$run_id\" | json",
           "refId": "A"
         }
       ],
@@ -190,7 +190,7 @@
           "datasource": {
             "type": "loki"
           },
-          "expr": "{service=\"test-orchestrator\"} ${run_id:+-=~ \"$run_id\"} | json",
+          "expr": "{service=\"test-orchestrator\"} |= \"$run_id\" | json",
           "refId": "A"
         }
       ],
@@ -254,7 +254,7 @@
           "datasource": {
             "type": "loki"
           },
-          "expr": "{service=~\"test-agent|test-orchestrator|backend-dev\"} |~ \"(error|ERROR|warn|WARN)\" ${run_id:+-=~ \"$run_id\"} | json",
+          "expr": "{service=~\"test-agent|test-orchestrator|backend\"} |~ \"(error|ERROR|warn|WARN)\" |= \"$run_id\" | json",
           "refId": "A"
         }
       ],
@@ -284,7 +284,7 @@
           "datasource": {
             "type": "loki"
           },
-          "expr": "{service=\"test-agent\"} |= `run_completed` | json | unwrap steps",
+          "expr": "sum(count_over_time({service=\"test-agent\"} |= `run_completed` [1h]))",
           "refId": "A"
         }
       ]
@@ -308,7 +308,7 @@
           "datasource": {
             "type": "loki"
           },
-          "expr": "{service=~\"test-agent|backend-dev\"} |~ \"(sse|stream|EventSource|połączenie przerwane)\" | json",
+          "expr": "{service=~\"test-agent|backend\"} |~ \"(sse|stream|EventSource|połączenie przerwane)\" | json",
           "refId": "A"
         }
       ],
@@ -338,7 +338,7 @@
           "datasource": {
             "type": "loki"
           },
-          "expr": "{service=~\"test-agent|test-orchestrator|backend-dev\"} |~ \"(wait_for_gm|gm_response|Krok 0|narration|message.assistant)\" ${run_id:+-=~ \"$run_id\"} | json",
+          "expr": "{service=~\"test-agent|test-orchestrator|backend\"} |~ \"(wait_for_gm|gm_response|Krok 0|narration|message.assistant)\" |= \"$run_id\" | json",
           "refId": "A"
         }
       ],

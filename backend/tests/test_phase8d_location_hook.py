@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import time
 
 from fastapi.testclient import TestClient
 
@@ -71,6 +72,15 @@ def _gm_json(label: str, key: str | None = None) -> str:
     if key:
         intent["target_key"] = key
     return json.dumps({"narrative": f"Idziesz do {label}.", "location_intent": intent}, ensure_ascii=False)
+
+
+def _gm_create_json(label: str, parent_key: str | None = None, description: str | None = None) -> str:
+    intent = {"action": "create", "target_label": label}
+    if parent_key:
+        intent["parent_key"] = parent_key
+    if description:
+        intent["description"] = description
+    return json.dumps({"narrative": f"Opis tworzonych {label}.", "location_intent": intent}, ensure_ascii=False)
 
 
 def _gm_fenced_json(label: str, key: str | None = None) -> str:
@@ -182,6 +192,43 @@ def test_hook_blocks_unknown_location_when_auto_create_disabled():
         parsed = json.loads(out)
         assert parsed["location_intent"] is None
         assert "[LOCATION_BLOCKED:" in parsed["narrative"]
+    finally:
+        _set_flag(conn, "location_auto_create_enabled", "1")
+        conn.close()
+
+
+def test_hook_creates_pending_location_when_action_create_override_flag():
+    conn = _conn()
+    try:
+        campaign_id = 88111
+        session_id = _session(conn, campaign_id)
+        _set_flag(conn, "location_integrity_enabled", "1")
+        _set_flag(conn, "location_auto_create_enabled", "0")
+
+        label = f"Restricted Create {time.time_ns()}"
+        gm_response = _gm_create_json(
+            label,
+            parent_key="start",
+            description="Kamienna droga opuszczonej drogi.",
+        )
+
+        out = turns_api._process_location_intent(conn, campaign_id, gm_response)
+        assert out == gm_response
+
+        row = conn.execute(
+            "SELECT id, ai_generated, approved FROM game_locations WHERE label = ?",
+            (label,),
+        ).fetchone()
+        assert row is not None
+        assert row["ai_generated"] == 1
+        assert row["approved"] == 0
+
+        current = conn.execute(
+            "SELECT current_location_id FROM game_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        assert current is not None
+        assert current["current_location_id"] == row["id"]
     finally:
         _set_flag(conn, "location_auto_create_enabled", "1")
         conn.close()

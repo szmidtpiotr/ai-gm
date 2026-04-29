@@ -55,6 +55,50 @@ def _clean_json_response(text: str) -> str:
     return text.strip()
 
 
+def _escape_unescaped_control_chars_in_json_strings(text: str) -> str:
+    """
+    Escape raw control characters inside JSON string literals.
+
+    Some LLM responses embed literal newlines/tabs in `narrative`, which makes
+    `json.loads` fail with "Invalid control character". We normalize only when
+    inside quoted JSON strings.
+    """
+    out: list[str] = []
+    in_string = False
+    escaped = False
+
+    for ch in text:
+        if escaped:
+            out.append(ch)
+            escaped = False
+            continue
+
+        if ch == "\\":
+            out.append(ch)
+            escaped = True
+            continue
+
+        if ch == '"':
+            out.append(ch)
+            in_string = not in_string
+            continue
+
+        if in_string:
+            if ch == "\n":
+                out.append("\\n")
+                continue
+            if ch == "\r":
+                out.append("\\r")
+                continue
+            if ch == "\t":
+                out.append("\\t")
+                continue
+
+        out.append(ch)
+
+    return "".join(out)
+
+
 def _parse_json_safely(text: str) -> Optional[dict]:
     """Bezpiecznie parsuje JSON, zwraca None przy błędzie."""
     try:
@@ -64,7 +108,12 @@ def _parse_json_safely(text: str) -> Optional[dict]:
         end = cleaned.rfind('}')
         if start == -1 or end == -1 or end <= start:
             return None
-        return json.loads(cleaned[start:end+1])
+        candidate = cleaned[start:end+1]
+        try:
+            return json.loads(candidate)
+        except json.JSONDecodeError:
+            repaired = _escape_unescaped_control_chars_in_json_strings(candidate)
+            return json.loads(repaired)
     except (json.JSONDecodeError, ValueError) as e:
         logger.debug("json_parse_error", error=str(e), text_preview=text[:200])
         return None
