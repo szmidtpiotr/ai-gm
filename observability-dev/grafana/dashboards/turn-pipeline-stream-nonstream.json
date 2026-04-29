@@ -9,36 +9,14 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 11,
+  "version": 12,
   "refresh": "30s",
   "time": {
     "from": "now-6h",
     "to": "now"
   },
   "templating": {
-    "list": [
-      {
-        "name": "service",
-        "type": "query",
-        "datasource": {
-          "type": "loki",
-          "uid": "PD5A68A3BD6F8BA56"
-        },
-        "query": {
-          "query": "label_values(service)",
-          "refId": "StandardVariableQuery"
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
-        "allValue": ".+"
-      }
-    ]
+    "list": []
   },
   "panels": [
     {
@@ -51,7 +29,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\"} | json | event=\"request_complete\" | route=~\".*/turns.*\" [1m]))",
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | event=\"request_complete\" | route=~\".*/turns.*\" [1m]))",
           "refId": "A",
           "queryType": "range"
         }
@@ -73,7 +51,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\"} | json | event=~\"llm_error|llm_timeout\" | route=~\".*/turns.*\" [1m]))",
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | event=~\"llm_error|llm_timeout\" | route=~\".*/turns.*\" [1m]))",
           "refId": "A",
           "queryType": "range"
         }
@@ -95,7 +73,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\"} | json | status_code=~\"5..\" [1m]))",
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | status_code=~\"5..\" [1m]))",
           "refId": "A",
           "queryType": "range"
         }
@@ -117,7 +95,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\"} | json | status_code=~\"4..\" [1m]))",
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | status_code=~\"4..\" [1m]))",
           "refId": "A",
           "queryType": "range"
         }
@@ -139,7 +117,7 @@
       },
       "targets": [
         {
-          "expr": "{service=~\"$service\"} | json | route=~\".*/turns.*\"",
+          "expr": "{service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | route=~\".*/turns.*\"",
           "refId": "A",
           "queryType": "range"
         }
