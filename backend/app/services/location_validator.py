@@ -263,6 +263,86 @@ def _create_new_location(intent: LocationIntent, ai_generated: bool = False) -> 
         conn.close()
 
 
+def persist_ai_generated_location(
+    intent: LocationIntent,
+    *,
+    campaign_id: int | None = None,
+    session_id: int | str | None = None,
+) -> Optional[dict]:
+    """Persistuje lokalizację zgłoszoną przez GM w trybie opening scene."""
+    if intent.action != "create":
+        return None
+
+    conn = _get_db_connection()
+    try:
+        parent_id = None
+        if intent.parent_key:
+            parent = conn.execute(
+                "SELECT id FROM game_locations WHERE key = ? AND is_active = 1",
+                (intent.parent_key,),
+            ).fetchone()
+            if parent:
+                parent_id = parent["id"]
+
+        key = _slugify_location_key(intent.target_key or intent.target_label)
+        existing = conn.execute(
+            "SELECT * FROM game_locations WHERE key = ?",
+            (key,),
+        ).fetchone()
+        if existing:
+            return dict(existing)
+
+        location_type = "sub" if parent_id else "macro"
+        cursor = conn.execute(
+            """
+            INSERT INTO game_locations (
+                key, label, description, parent_id, location_type, ai_generated, approved, is_active
+            )
+            VALUES (?, ?, ?, ?, ?, 1, 0, 1)
+            """,
+            (
+                key,
+                intent.target_label,
+                intent.description,
+                parent_id,
+                location_type,
+            ),
+        )
+        conn.commit()
+
+        new_row = conn.execute(
+            "SELECT * FROM game_locations WHERE id = ?",
+            (cursor.lastrowid,),
+        ).fetchone()
+        if not new_row:
+            return None
+
+        resolved_session_id = session_id or _resolve_session_id(
+            conn, session_id=None, campaign_id=campaign_id
+        )
+        if resolved_session_id:
+            _log_integrity_event(
+                session_id=resolved_session_id,
+                intent=intent,
+                action="create_ok",
+                location=dict(new_row),
+            )
+
+        logger.info(
+            "location_create_persisted",
+            campaign_id=campaign_id,
+            session_id=resolved_session_id,
+            location_id=new_row["id"],
+            label=intent.target_label,
+        )
+        return dict(new_row)
+    except sqlite3.Error as exc:
+        logger.error("persist_location_error", error=str(exc))
+        return None
+    finally:
+        conn.close()
+
+
 def _log_integrity_event(
     session_id: int | str,
     intent: LocationIntent,
