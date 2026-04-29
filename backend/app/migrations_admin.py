@@ -178,6 +178,7 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_weapons ADD COLUMN range_m INTEGER",
     "ALTER TABLE game_config_weapons ADD COLUMN weight_kg REAL NOT NULL DEFAULT 0.0",
     "ALTER TABLE game_config_weapons ADD COLUMN note TEXT",
+    "ALTER TABLE game_config_weapons ADD COLUMN value_gp INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE game_config_enemies ADD COLUMN tier TEXT NOT NULL DEFAULT 'standard'",
     "ALTER TABLE game_config_enemies ADD COLUMN attacks_per_turn INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE game_config_enemies ADD COLUMN damage_bonus INTEGER NOT NULL DEFAULT 0",
@@ -364,6 +365,38 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_game_locations_key
     ON game_locations(key)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS npcs (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        key                 TEXT NOT NULL UNIQUE,
+        label               TEXT NOT NULL,
+        npc_type            TEXT NOT NULL DEFAULT 'neutral'
+                              CHECK (npc_type IN ('neutral', 'merchant', 'quest_giver', 'ally')),
+        description         TEXT,
+        personality_json    TEXT NOT NULL DEFAULT '{}',
+        is_shop             INTEGER NOT NULL DEFAULT 0,
+        shop_inventory_json TEXT NOT NULL DEFAULT '[]',
+        is_active           INTEGER NOT NULL DEFAULT 1,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS npc_locations (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        npc_id       INTEGER NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
+        location_key TEXT NOT NULL,
+        UNIQUE(npc_id, location_key)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_npc_locations_npc_id
+    ON npc_locations(npc_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_npc_locations_location_key
+    ON npc_locations(location_key)
+    """,
     "ALTER TABLE game_sessions ADD COLUMN current_location_id INTEGER REFERENCES game_locations(id)",
     "ALTER TABLE game_sessions ADD COLUMN session_flags TEXT DEFAULT '{}'",
     """
@@ -519,6 +552,20 @@ ADMIN_SEEDS = [
     WHERE key = 'staff'
     """,
     """
+    UPDATE game_config_weapons
+    SET value_gp = CASE key
+        WHEN 'shortsword' THEN 15
+        WHEN 'sword' THEN 25
+        WHEN 'shield' THEN 12
+        WHEN 'shortbow' THEN 25
+        WHEN 'staff' THEN 6
+        WHEN 'wooden_shield' THEN 8
+        WHEN 'quarterstaff' THEN 7
+        ELSE COALESCE(value_gp, 0)
+    END
+    WHERE key IN ('shortsword', 'sword', 'shield', 'shortbow', 'staff', 'wooden_shield', 'quarterstaff')
+    """,
+    """
     INSERT OR IGNORE INTO game_config_items (
         key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active,
         proficiency_classes, note, locked_at, created_at, updated_at
@@ -567,6 +614,54 @@ ADMIN_SEEDS = [
       '[{"weapon_key":"quarterstaff"},{"consumable_key":"health_potion_small"},{"consumable_key":"mana_potion"}]',
         updated_at = datetime('now')
     WHERE key = 'scholar'
+    """,
+    """
+    INSERT OR IGNORE INTO npcs
+    (key, label, npc_type, description, personality_json, is_shop, shop_inventory_json, is_active, created_at, updated_at)
+    VALUES
+    (
+        'merchant_aldric', 'Aldric, kupiec', 'merchant',
+        'Wędrowny kupiec z towarami pierwszej potrzeby.',
+        '{"personality":"sknerski, podejrzliwy, lubi plotki o lokalnych sprawach","topics":["handel","ceny","lokalne wiadomości"],"secret":null}',
+        1, '[]', 1, datetime('now'), datetime('now')
+    ),
+    (
+        'innkeeper_marta', 'Marta, karczmarka', 'neutral',
+        'Gospodyni lokalnej karczmy, zna wszystkie plotki.',
+        '{"personality":"gadatliwa, serdeczna, dobra gospodyni","topics":["plotki","noclegi","jedzenie","lokalni mieszkańcy"],"secret":null}',
+        0, '[]', 1, datetime('now'), datetime('now')
+    ),
+    (
+        'quest_giver_eldran', 'Eldran, mag', 'quest_giver',
+        'Tajemniczy mag szukający odważnych poszukiwaczy.',
+        '{"personality":"enigmatyczny, mówi zagadkami, zna starą wiedzę","topics":["magia","zadania","artefakty","historia świata"],"secret":"szuka zaginionego tomu zaklinarzy"}',
+        0, '[]', 1, datetime('now'), datetime('now')
+    ),
+    (
+        'blacksmith_goran', 'Goran, kowal', 'merchant',
+        'Kowal specjalizujący się w broni i zbroi.',
+        '{"personality":"lakoniczny, konkretny, dumny ze swojego rzemiosła","topics":["broń","zbroja","naprawa ekwipunku"],"secret":null}',
+        1, '[]', 1, datetime('now'), datetime('now')
+    )
+    """,
+    """
+    UPDATE npcs
+    SET shop_inventory_json = json('[{"type":"weapon","key":"shortsword"},{"type":"item","key":"health_potion"},{"type":"item","key":"torch"}]'),
+        updated_at = datetime('now')
+    WHERE key = 'merchant_aldric'
+    """,
+    """
+    UPDATE npcs
+    SET shop_inventory_json = json('[{"type":"weapon","key":"shortsword"},{"type":"weapon","key":"shortbow"},{"type":"armor","key":"leatherarmor"}]'),
+        updated_at = datetime('now')
+    WHERE key = 'blacksmith_goran'
+    """,
+    """
+    INSERT OR IGNORE INTO npc_locations (npc_id, location_key)
+    SELECT id, 'inn_main'
+    FROM npcs
+    WHERE key = 'innkeeper_marta'
+      AND EXISTS (SELECT 1 FROM game_locations WHERE key = 'inn_main')
     """,
     # Phase 8D — Location Integrity default flags (8D-3)
 ]

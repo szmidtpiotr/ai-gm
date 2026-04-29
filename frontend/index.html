@@ -354,6 +354,24 @@
     </section>
   </div>
 
+  <div class="character-modal-overlay" id="shop-modal" aria-hidden="true" hidden>
+    <section class="character-modal campaign-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title">
+      <button type="button" class="character-modal-close secondary" id="shop-close-btn" aria-label="Zamknij">×</button>
+      <h2 id="shop-title">🏪 Sklep</h2>
+      <p class="muted">Twoje złoto: <strong><span id="shop-gold">0</span> GP</strong></p>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <h3 style="margin: 8px 0;">Kup</h3>
+          <ul id="shop-buy-list" style="list-style: none; padding-left: 0; margin: 0;"></ul>
+        </div>
+        <div>
+          <h3 style="margin: 8px 0;">Sprzedaj</h3>
+          <ul id="shop-sell-list" style="list-style: none; padding-left: 0; margin: 0;"></ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
   <script src="./js/config.js"></script>
   <script src="./js/state.js"></script>
   <script src="./js/utils.js"></script>
@@ -366,6 +384,7 @@
   <script src="./js/main.js"></script>
   <script src="./js/app.js?v=8d-location-debug-1"></script>
   <script src="./js/inventory.js"></script>
+  <script src="./js/shop.js?v=9a4-open-shop-fallback"></script>
   <script src="./js/combat_panel.js"></script>
   <script src="./js/combat_input.js"></script>
   <script type="module">

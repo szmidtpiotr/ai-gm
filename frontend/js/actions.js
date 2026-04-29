@@ -1459,6 +1459,7 @@ window.sendMessage = async function () {
     let fullText = '';
     let streamBubble = null; // created lazily on first real token
     let streamDone = false;
+    let pendingOpenShopNpcKey = null;
 
     const applyCombatStartedSseToken = (token) => {
       if (!token || !token.startsWith('[COMBAT_STARTED]')) return false;
@@ -1586,6 +1587,18 @@ window.sendMessage = async function () {
       return true;
     };
 
+    const applyOpenShopSseToken = (token) => {
+      if (!token || !token.startsWith('[OPEN_SHOP]')) return false;
+      try {
+        const payload = JSON.parse(token.slice('[OPEN_SHOP]'.length));
+        const npcKey = String(payload?.npc_key || '').trim();
+        if (npcKey) pendingOpenShopNpcKey = npcKey;
+      } catch (_e) {
+        /* ignore malformed payload */
+      }
+      return true;
+    };
+
     while (!streamDone) {
       const { done, value } = await reader.read();
 
@@ -1604,6 +1617,8 @@ window.sendMessage = async function () {
             } else if (applyCombatEndedSseToken(token)) {
               /* skip */
             } else if (applyCmdJsonToken(token)) {
+              /* skip */
+            } else if (applyOpenShopSseToken(token)) {
               /* skip */
             } else if (token !== '[DONE]' && !token.startsWith('[ERROR]')) {
               // Unescape literal \n sequences the server may have encoded
@@ -1656,8 +1671,15 @@ window.sendMessage = async function () {
           continue;
         }
 
+        if (applyOpenShopSseToken(token)) {
+          continue;
+        }
+
         if (token === '[DONE]') {
-          const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
+          const cleanedGm = fullText
+            .replace(/\[COMBAT_START:[^\]]*\]/gi, '')
+            .replace(/\n?\s*Open Shop\s+\S+\s*$/i, '')
+            .trimEnd();
           if (typeof window.updateLocationIntentDebugFromText === 'function') {
             window.updateLocationIntentDebugFromText(fullText, 'stream');
           }
@@ -1673,6 +1695,9 @@ window.sendMessage = async function () {
           ) {
             window.state._combatVictoryUiPending = false;
             await window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
+          }
+          if (pendingOpenShopNpcKey && typeof window.openShopByNpcKey === 'function') {
+            void window.openShopByNpcKey(pendingOpenShopNpcKey, window.state.selectedCharacterId);
           }
           await window.loadTurns(window.state.selectedCampaignId);
           streamDone = true;
@@ -1721,7 +1746,10 @@ window.sendMessage = async function () {
     // Stream ended without [DONE] — finalize gracefully
     if (!streamDone) {
       if (streamBubble) {
-        const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
+        const cleanedGm = fullText
+          .replace(/\[COMBAT_START:[^\]]*\]/gi, '')
+          .replace(/\n?\s*Open Shop\s+\S+\s*$/i, '')
+          .trimEnd();
         if (typeof window.updateLocationIntentDebugFromText === 'function') {
           window.updateLocationIntentDebugFromText(fullText, 'stream-ended');
         }
@@ -1733,6 +1761,9 @@ window.sendMessage = async function () {
         ) {
           window.state._combatVictoryUiPending = false;
           await window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
+        }
+        if (pendingOpenShopNpcKey && typeof window.openShopByNpcKey === 'function') {
+          void window.openShopByNpcKey(pendingOpenShopNpcKey, window.state.selectedCharacterId);
         }
         await window.loadTurns(window.state.selectedCampaignId);
       } else {

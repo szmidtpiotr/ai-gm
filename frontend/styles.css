@@ -663,6 +663,22 @@ pre.narrative-pre {
   padding-right: 0;
 }
 
+.shop-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 0;
+}
+
+.shop-row-main {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .character-modal textarea {
   min-height: 120px;
 }

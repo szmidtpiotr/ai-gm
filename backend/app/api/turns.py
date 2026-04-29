@@ -54,6 +54,13 @@ logger = get_logger(__name__)
 COMBAT_START_RE = re.compile(r"\[COMBAT_START:([^\]]+)\]", re.IGNORECASE)
 GRANT_ITEM_RE = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
 GRANT_GOLD_RE = re.compile(r"^Grant Gold\s+([+-]?\d+)$", re.IGNORECASE)
+OPEN_SHOP_RE = re.compile(r"^Open Shop\s+(\S+)$", re.IGNORECASE)
+# 9A-4c+ — gdy model nie generuje cue, dołącz „Open Shop” na podstawie intencji gracza i NPC w scenie.
+_TRADE_USER_INTENT_RE = re.compile(
+    r"(kup|sprzed|towar|towary|towarem|handl|handel|sklep|poka|pokaz"
+    r"|masz\s+do|cen|koszt|zapła|zapla|cennik|asorty|ofert|kram|lad|ladę|ladą|kupiec|merch)",
+    re.IGNORECASE,
+)
 GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
 # Short assistant line when combat victory follow-up skips the LLM (see create_turn_stream).
 COMBAT_VICTORY_STREAM_STUB = "Walka dobiegła końca."
@@ -822,15 +829,174 @@ def strip_last_grant_gold_cue(assistant_text: str) -> str:
     return "\n".join(lines[:-1]).rstrip()
 
 
-def extract_grant_cues(assistant_text: str) -> tuple[str, str | None, int | None]:
+def parse_open_shop_cue(assistant_text: str) -> str | None:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return None
+    last_line = (lines[-1] or "").strip()
+    cue_match = OPEN_SHOP_RE.match(last_line)
+    if not cue_match:
+        return None
+    npc_key = str(cue_match.group(1) or "").strip()
+    return npc_key or None
+
+
+def strip_last_open_shop_cue(assistant_text: str) -> str:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return assistant_text or ""
+    if not OPEN_SHOP_RE.match((lines[-1] or "").strip()):
+        return assistant_text or ""
+    return "\n".join(lines[:-1]).rstrip()
+
+
+def _extract_narrative_for_cues(text: str) -> tuple[str, dict | None]:
+    """
+    If text is JSON containing `narrative`, return (narrative, parsed_dict).
+    Otherwise return (text, None) as plain-text fallback.
+    """
+    try:
+        parsed = json.loads(_strip_json_code_fence(text))
+        if isinstance(parsed, dict) and "narrative" in parsed:
+            return str(parsed.get("narrative") or ""), parsed
+    except (ValueError, TypeError):
+        pass
+    return text, None
+
+
+def _repack_narrative(_original_text: str, narrative: str, parsed: dict | None) -> str:
+    """
+    Put cleaned narrative back into JSON if input was JSON; otherwise return narrative.
+    """
+    if parsed is None:
+        return narrative
+    try:
+        parsed["narrative"] = narrative
+        return json.dumps(parsed, ensure_ascii=False)
+    except Exception:
+        return narrative
+
+
+def _current_location_key(conn: sqlite3.Connection, campaign_id: int) -> str | None:
+    sid = _get_session_id_for_campaign(conn, campaign_id)
+    if sid is None:
+        return None
+    row = conn.execute(
+        """
+        SELECT gl.key
+        FROM game_sessions gs
+        LEFT JOIN game_locations gl ON gl.id = gs.current_location_id
+        WHERE gs.id = ?
+        """,
+        (sid,),
+    ).fetchone()
+    if row and row["key"]:
+        return str(row["key"])
+    return None
+
+
+def _shop_npc_keys_in_scene(conn: sqlite3.Connection, current_key: str | None) -> list[str]:
+    """Active NPCs with is_shop=1 at current location (+ globals), same filter as [NPC CONTEXT]."""
+    if current_key:
+        rows = conn.execute(
+            """
+            SELECT n.key
+            FROM npcs n
+            WHERE COALESCE(n.is_active, 1) = 1
+              AND COALESCE(n.is_shop, 0) = 1
+              AND (
+                EXISTS (
+                    SELECT 1 FROM npc_locations nl
+                    WHERE nl.npc_id = n.id AND nl.location_key = ?
+                )
+                OR NOT EXISTS (
+                    SELECT 1 FROM npc_locations nl2 WHERE nl2.npc_id = n.id
+                )
+              )
+            ORDER BY n.key COLLATE NOCASE
+            """,
+            (current_key,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT n.key
+            FROM npcs n
+            WHERE COALESCE(n.is_active, 1) = 1
+              AND COALESCE(n.is_shop, 0) = 1
+              AND NOT EXISTS (
+                  SELECT 1 FROM npc_locations nl WHERE nl.npc_id = n.id
+              )
+            ORDER BY n.key COLLATE NOCASE
+            """
+        ).fetchall()
+    return [str(r["key"]) for r in rows]
+
+
+def _pick_shop_npc_key(narrative: str, keys: list[str]) -> str | None:
+    if not keys:
+        return None
+    nlow = (narrative or "").lower()
+    for key in keys:
+        short = key.split("_")[-1]
+        if short and short in nlow:
+            return key
+    for key in keys:
+        if key.replace("_", "") in nlow.replace("_", ""):
+            return key
+    return keys[0]
+
+
+def maybe_append_open_shop_fallback(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    user_text: str,
+    assistant_after_combat_strip: str,
+) -> str:
+    """
+    If the model omits `Open Shop`, but the player's line is a trade intent and a shop NPC
+    is in scene, append `Open Shop <npc_key>` as the last line of `narrative` (JSON or plain).
+    """
+    raw = (assistant_after_combat_strip or "").strip()
+    ut = (user_text or "").strip()
+    if not raw or not ut:
+        return assistant_after_combat_strip
+    if not _TRADE_USER_INTENT_RE.search(ut):
+        return assistant_after_combat_strip
+
+    narrative, parsed = _extract_narrative_for_cues(raw)
+    if parse_open_shop_cue((narrative or "").strip()):
+        return assistant_after_combat_strip
+
+    loc_key = _current_location_key(conn, campaign_id)
+    keys = _shop_npc_keys_in_scene(conn, loc_key)
+    if not keys:
+        return assistant_after_combat_strip
+
+    chosen = _pick_shop_npc_key(narrative or "", keys)
+    if not chosen:
+        return assistant_after_combat_strip
+
+    new_narr = (narrative or "").rstrip() + f"\nOpen Shop {chosen}"
+    logger.info(
+        "open_shop_fallback_injected",
+        campaign_id=campaign_id,
+        npc_key=chosen,
+        location_key=loc_key,
+    )
+    return _repack_narrative(raw, new_narr.strip(), parsed)
+
+
+def extract_grant_cues(assistant_text: str) -> tuple[str, str | None, int | None, str | None]:
     """
     Collect GM grant cues from the end of assistant text.
     Supports both cue kinds and both orders when they are in trailing lines.
-    Returns cleaned_text, grant_item_label, grant_gold_amount.
+    Returns cleaned_text, grant_item_label, grant_gold_amount, open_shop_npc_key.
     """
     clean_text = (assistant_text or "").rstrip()
     grant_item_label: str | None = None
     grant_gold_amount: int | None = None
+    open_shop_npc_key: str | None = None
 
     # JSON-mode GM response may carry Grant cue in `roll_cue` instead of last text line.
     try:
@@ -844,7 +1010,15 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, str | None, int | None
                 grant_item_label = parse_grant_item_cue(roll_cue)
             if grant_gold_amount is None:
                 grant_gold_amount = parse_grant_gold_cue(roll_cue)
-            if grant_item_label is not None or grant_gold_amount is not None:
+            if open_shop_npc_key is None:
+                open_shop_npc_key = parse_open_shop_cue(roll_cue)
+            if open_shop_npc_key is None:
+                open_shop_npc_key = parse_open_shop_cue(roll_cue)
+            if (
+                grant_item_label is not None
+                or grant_gold_amount is not None
+                or open_shop_npc_key is not None
+            ):
                 payload["roll_cue"] = None
                 clean_text = json.dumps(payload, ensure_ascii=False)
 
@@ -861,8 +1035,14 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, str | None, int | None
                 grant_gold_amount = maybe_gold
                 clean_text = strip_last_grant_gold_cue(clean_text)
                 continue
+        if open_shop_npc_key is None:
+            maybe_shop = parse_open_shop_cue(clean_text)
+            if maybe_shop:
+                open_shop_npc_key = maybe_shop
+                clean_text = strip_last_open_shop_cue(clean_text)
+                continue
         break
-    return clean_text, grant_item_label, grant_gold_amount
+    return clean_text, grant_item_label, grant_gold_amount, open_shop_npc_key
 
 
 def apply_grant_gold_to_character(
@@ -1562,7 +1742,12 @@ def create_turn(
         ) == "player"
 
         clean_assistant = COMBAT_START_RE.sub("", assistant_text).rstrip()
-        clean_assistant, grant_item_label, grant_gold_amount = extract_grant_cues(clean_assistant)
+        clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
+        _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
+        _narrative_for_cues, grant_item_label, grant_gold_amount, open_shop_npc_key = extract_grant_cues(
+            _narrative_for_cues
+        )
+        clean_assistant = _repack_narrative(clean_assistant, _narrative_for_cues, _parsed_json)
         validate_roll_cue_name(clean_assistant.strip())
 
         log = create_turn_log(
@@ -1629,6 +1814,8 @@ def create_turn(
             out["combat_state"] = new_combat
         if combat_extra:
             out.update(combat_extra)
+        if open_shop_npc_key:
+            out["open_shop"] = open_shop_npc_key
         return out
 
     except RuntimeError as e:
@@ -2103,7 +2290,21 @@ def create_turn_stream(
             combat_extra = None
             if full_raw.strip():
                 clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
-                clean_text, grant_item_label, grant_gold_amount = extract_grant_cues(clean_text)
+                fb = get_db()
+                try:
+                    clean_text = maybe_append_open_shop_fallback(
+                        fb, campaign_id_val, user_text_val, clean_text
+                    )
+                finally:
+                    fb.close()
+                _narrative_for_cues_s, _parsed_json_s = _extract_narrative_for_cues(clean_text)
+                (
+                    _narrative_for_cues_s,
+                    grant_item_label,
+                    grant_gold_amount,
+                    open_shop_npc_key,
+                ) = extract_grant_cues(_narrative_for_cues_s)
+                clean_text = _repack_narrative(clean_text, _narrative_for_cues_s, _parsed_json_s)
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(
@@ -2169,10 +2370,14 @@ def create_turn_stream(
                         )
                 finally:
                     save_conn.close()
+            else:
+                open_shop_npc_key = None
             if new_combat:
                 yield f"data: [COMBAT_STARTED]{json.dumps(new_combat)}\n\n"
             if combat_extra:
                 yield f"data: [COMBAT]{json.dumps(combat_extra)}\n\n"
+            if open_shop_npc_key:
+                yield f"data: [OPEN_SHOP]{json.dumps({'npc_key': open_shop_npc_key}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(
