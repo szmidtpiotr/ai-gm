@@ -708,3 +708,22 @@ class TestIntegration:
 
         if city_in_tree:
             assert len(city_in_tree.get("children", [])) > 0
+
+
+class TestLoc4AdminCampaignSessionLocation:
+    """LOC-4: GET/PATCH /api/admin/campaigns/{id}/session-location"""
+
+    def test_get_session_location_unknown_campaign_404(self, admin_token):
+        r = client.get(
+            "/api/admin/campaigns/999999991/session-location",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert r.status_code == 404
+
+    def test_patch_session_location_unknown_campaign_404(self, admin_token):
+        r = client.patch(
+            "/api/admin/campaigns/999999991/session-location",
+            json={"location_id": 1},
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+        assert r.status_code == 404
