@@ -10,6 +10,10 @@ clients:
 
 scrape_configs:
   - job_name: ai-gm-dev-docker
+    # Query tip (Loki): always start with at least one label pair, e.g.
+    # {job="ai-gm-dev", container="/ai-gm-dev-backend-1"} |= "request_complete"
+    # or {job="ai-gm-dev", service="backend-dev"} |= "/api/turns"
+    # Queries like |= "text" without {...} return HTTP 400 ("at least one label pair required").
     docker_sd_configs:
       - host: unix:///var/run/docker.sock
         refresh_interval: 5s

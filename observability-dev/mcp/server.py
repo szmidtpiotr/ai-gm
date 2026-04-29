@@ -39,7 +39,8 @@ def _loki_query_range(query: str, start_ns: int, end_ns: int, limit: int) -> dic
 @mcp.tool()
 def loki_query(query: str, since_minutes: int = 60, limit: int = 200) -> dict[str, Any]:
     """
-    Query Loki logs using a raw Loki `query` expression (example: {service="backend"} |= "request_complete").
+    Query Loki logs using a raw Loki `query` expression
+    (example: {job="ai-gm-dev", container="/ai-gm-dev-backend-1"} |= "request_complete").
 
     Returns parsed streams with `stream` labels and `values` (timestamp_ns, line).
     Read-only tool intended for external log analysis via Perplexity MCP connectors.
