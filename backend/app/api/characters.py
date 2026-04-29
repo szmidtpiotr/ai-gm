@@ -18,6 +18,8 @@ from app.services.loot_service import grant_loot_to_character
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
+from app.services.location_intent_parser import parse as parse_location_intent
+from app.services.location_validator import persist_ai_generated_location
 
 DB_PATH = "/data/ai_gm.db"
 HIDDEN_POTENTIALS = ["blessed", "cursed", "gifted", "hollow"]
@@ -1056,6 +1058,21 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         opening_message = (generate_chat(messages=messages, model=model, llm_config=llm_config) or "").strip() or None
 
         if opening_message:
+            try:
+                location_intent = parse_location_intent(opening_message, None)
+            except Exception as exc:
+                logger.warning(
+                    "[opening_scene] location_intent_parse_failed",
+                    campaign_id=campaign_id,
+                    error=str(exc),
+                )
+                location_intent = None
+
+            if location_intent and location_intent.action == "create":
+                persist_ai_generated_location(
+                    location_intent,
+                    campaign_id=campaign_id,
+                )
             next_turn_row = conn.execute(
                 """
                 SELECT COALESCE(MAX(turn_number), 0) + 1 AS next_turn

@@ -100,6 +100,23 @@ def _schema_sql() -> str:
     INSERT INTO game_config_consumables (key, label, is_active)
     VALUES ('health_potion_small', 'HP', 1), ('mana_potion', 'Mana', 1);
 
+    CREATE TABLE game_locations (
+      id INTEGER PRIMARY KEY,
+      key TEXT UNIQUE NOT NULL,
+      label TEXT NOT NULL,
+      description TEXT,
+      parent_id INTEGER REFERENCES game_locations(id),
+      location_type TEXT DEFAULT 'macro',
+      rules TEXT,
+      enemy_keys TEXT DEFAULT '[]',
+      npc_keys TEXT DEFAULT '[]',
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      ai_generated INTEGER DEFAULT 0,
+      approved INTEGER DEFAULT 1
+    );
+
     CREATE TABLE game_config_archetypes (
       key TEXT PRIMARY KEY,
       label TEXT NOT NULL,
@@ -304,3 +321,36 @@ class TestPhase8eStarterItems(unittest.TestCase):
         cid = r.json()["id"]
         self.assertEqual(ls.get_character_inventory(cid), [])
         self.assertEqual(r.json().get("gold_gp"), 0)
+
+    @patch("app.api.characters.generate_chat")
+    def test_opening_scene_creates_pending_location(self, mock_gc):
+        mock_gc.return_value = json.dumps({
+            "narrative": "Mgła unosi się nad drogą, zmierzacie w stronę rogatek.",
+            "location_intent": {
+                "action": "create",
+                "target_label": "Rozmokła droga przy rogatkach wioski",
+                "parent_key": "start",
+                "description": "Błotnisty trakt, mgła, zniszczony wóz"
+            }
+        })
+        r = self.client.post(
+            "/api/campaigns/1/characters",
+            json={
+                "user_id": 1,
+                "name": "L1",
+                "system_id": "fantasy",
+                "sheet_json": {"archetype": "warrior"},
+                "location": "here",
+                "is_active": 1,
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        conn = sqlite3.connect(str(self._tmp))
+        row = conn.execute(
+            "SELECT * FROM game_locations WHERE label = ?",
+            ("Rozmokła droga przy rogatkach wioski",),
+        ).fetchone()
+        conn.close()
+        self.assertIsNotNone(row, "pending location missing")
+        self.assertEqual(row["ai_generated"], 1)
+        self.assertEqual(row["approved"], 0)
