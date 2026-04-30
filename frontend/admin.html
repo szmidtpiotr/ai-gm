@@ -66,6 +66,7 @@
       <button class="secondary admin-tab" data-tab="skills">Skills</button>
       <button class="secondary admin-tab" data-tab="dc">DC</button>
       <button class="secondary admin-tab" data-tab="weapons">Weapons</button>
+      <button class="secondary admin-tab" data-tab="items">Items</button>
       <button class="secondary admin-tab" data-tab="enemies">Enemies</button>
       <button class="secondary admin-tab" data-tab="locations">Locations</button>
       <button class="secondary admin-tab" data-tab="conditions">Conditions</button>
@@ -117,6 +118,78 @@
           <button id="new-weapon-btn" class="secondary" type="button" disabled>Add weapon</button>
         </div>
         <div id="weapons-list" class="table-wrap"></div>
+      </section>
+
+      <section class="admin-card admin-tab-panel" data-panel="items">
+        <h2>Items</h2>
+        <p class="muted">
+          Katalog przedmiotów (armor, misc, quest, consumable, narrative).
+          <code>allowed_classes</code>: klasy oddzielone przecinkami lub puste = brak ograniczeń (JSON <code>[]</code>).
+          Pola efektów tylko dla <code>item_type=consumable</code>.
+          <code>ac_bonus</code> tylko dla <code>item_type=armor</code>.
+        </p>
+
+        <div class="inline-form" style="margin-bottom: 0.5rem;">
+          <label for="items-filter-type">Filtr type:</label>
+          <select id="items-filter-type">
+            <option value="">wszystkie</option>
+            <option value="armor">armor</option>
+            <option value="misc">misc</option>
+            <option value="quest">quest</option>
+            <option value="consumable">consumable</option>
+            <option value="narrative">narrative</option>
+          </select>
+          <button id="items-filter-btn" class="secondary" type="button" disabled>Filtruj</button>
+        </div>
+
+        <div class="inline-form" id="new-item-form" style="grid-template-columns: repeat(4, 1fr);">
+          <input id="new-item-key" placeholder="key (snake_case)">
+          <input id="new-item-label" placeholder="label">
+          <select id="new-item-type">
+            <option value="misc">misc</option>
+            <option value="armor">armor</option>
+            <option value="consumable">consumable</option>
+            <option value="quest">quest</option>
+            <option value="narrative">narrative</option>
+          </select>
+          <input id="new-item-value-gp" placeholder="value_gp" type="number" min="0" value="0">
+
+          <input id="new-item-weight-kg" placeholder="weight_kg" type="number" min="0" step="0.1" value="0">
+          <input id="new-item-allowed-classes" placeholder="allowed_classes (puste = [])" style="grid-column: span 2;">
+          <label class="inline-check"><input id="new-item-active" type="checkbox" checked> active</label>
+
+          <input id="new-item-description" placeholder="description" style="grid-column: 1 / -1;">
+
+          <div id="new-item-armor-fields" style="grid-column: 1 / -1; display: none;">
+            <input id="new-item-ac-bonus" placeholder="ac_bonus" type="number" min="0" value="0" style="width: 12rem;">
+          </div>
+
+          <div
+            id="new-item-consumable-fields"
+            style="grid-column: 1 / -1; display: none; gap: 8px; grid-template-columns: repeat(4, 1fr);"
+          >
+            <select id="new-item-effect-type">
+              <option value="misc">misc</option>
+              <option value="heal_hp">heal_hp</option>
+              <option value="restore_mana">restore_mana</option>
+              <option value="remove_condition">remove_condition</option>
+              <option value="add_condition">add_condition</option>
+              <option value="stat_buff">stat_buff</option>
+            </select>
+            <input id="new-item-effect-dice" placeholder="effect_dice (np. 2d6)">
+            <input id="new-item-effect-bonus" placeholder="effect_bonus" type="number" value="0">
+            <select id="new-item-effect-target">
+              <option value="self">self</option>
+              <option value="ally">ally</option>
+              <option value="any">any</option>
+            </select>
+            <input id="new-item-charges" placeholder="charges" type="number" min="1" value="1">
+          </div>
+
+          <button id="new-item-btn" class="secondary" type="button" disabled>Add item</button>
+        </div>
+
+        <div id="items-list" class="table-wrap"></div>
       </section>
 
       <section class="admin-card admin-tab-panel" data-panel="enemies">
