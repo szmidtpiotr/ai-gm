@@ -1,5 +1,8 @@
 # DEV environment — frontend: :3002, backend: :8100
 # DO NOT use on production. Use docker-compose.yml for prod.
+#
+# Uruchamiaj TEN plik osobno: `docker compose -f docker-compose.dev.yml up -d`
+# (nie łączyć z docker-compose.yml na tym samym hoście — duplikat portów 8000/3001.)
 name: ai-gm-dev
 
 services:
@@ -60,6 +63,7 @@ services:
     networks:
       - ai-gm-dev
 
+
   frontend:
     labels:
       - service=frontend-dev
@@ -74,6 +78,7 @@ services:
       - backend
     networks:
       - ai-gm-dev
+
 
   # Playwright + Express — Test Runner w panelu admin; backend łączy się po http://test-agent:4000
   test-agent:
@@ -142,6 +147,7 @@ services:
       - service=voice-dev
     networks:
       - ai-gm-dev
+
 
 networks:
   ai-gm-dev:
