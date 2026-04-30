@@ -5,7 +5,7 @@
   "tts_speed": 1.0,
   "tts_noise_scale": 0.6,
   "tts_noise_w": 0.7,
-  "stt_model": "small",
+  "stt_model": "tiny",
   "stt_language": "pl",
   "stt_beam_size": 5,
   "vad_filter": false,

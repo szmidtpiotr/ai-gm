@@ -862,6 +862,96 @@ window.sendMessage = async function () {
     return;
   }
 
+  // --- /admin intercept ---
+  if (window.state?.playerIsAdmin === true) {
+    const rawInput = (inputEl.value || "").trim();
+    if (/^\/admin\b/i.test(rawInput)) {
+      inputEl.value = "";
+      if (typeof window.updateUiState === "function") window.updateUiState();
+
+      let parseAdminCommand;
+      try {
+        ({ parseAdminCommand } = await import("./admin_commands_tree.js"));
+      } catch (_e) {
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: "Błąd: nie można załadować admin_commands_tree.js",
+          role: "system",
+        });
+        return;
+      }
+
+      const charId = window.state.selectedCharacterId;
+      if (!charId) {
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: "Błąd: brak wybranej postaci.",
+          role: "system",
+        });
+        return;
+      }
+
+      const token = localStorage.getItem("aigm_admin_token");
+      if (!token) {
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: "Błąd: brak admin_token w localStorage (klucz: aigm_admin_token).",
+          role: "system",
+        });
+        return;
+      }
+
+      const body = parseAdminCommand(rawInput);
+      if (!body) {
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: `Nieznana komenda: ${rawInput}`,
+          role: "system",
+        });
+        return;
+      }
+
+      const base = (window.API_BASE_URL || "/api").replace(/\/+$/, "");
+      try {
+        const resp = await fetch(`${base}/admin/cheat/${charId}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          const detail =
+            typeof data.detail === "object"
+              ? JSON.stringify(data.detail)
+              : String(data.detail || resp.status);
+          window.addMessage({
+            speaker: "🛠 Admin",
+            text: `❌ ${detail}`,
+            role: "system",
+          });
+          return;
+        }
+        const resultStr = JSON.stringify(data.result, null, 0);
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: `✅ ${body.cmd} -> ${resultStr}`,
+          role: "system",
+        });
+      } catch (err) {
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: `❌ ${err.message}`,
+          role: "system",
+        });
+      }
+      return;
+    }
+  }
+  // --- end /admin intercept ---
+
   const suppressUserBubble = !!window.__suppressNextUserBubbleForGm;
   if (window.__suppressNextUserBubbleForGm) {
     window.__suppressNextUserBubbleForGm = false;

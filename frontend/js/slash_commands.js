@@ -1,6 +1,7 @@
 /**
  * Slash-command autocomplete for the main game chat textarea (frontend-only).
  */
+import { getAdminSuggestions } from "./admin_commands_tree.js";
 
 /** Default copy if API is unavailable */
 export const SLASH_COMMANDS = [
@@ -259,6 +260,32 @@ export async function initSlashCommands(inputEl) {
   function syncFromInput() {
     const value = inputEl.value;
     const pos = inputEl.selectionStart ?? value.length;
+
+    const fullValue = inputEl.value;
+    const cursorPos = inputEl.selectionStart ?? fullValue.length;
+    const beforeCursor = fullValue.slice(0, cursorPos);
+    if (
+      window.state?.playerIsAdmin === true &&
+      /^\/admin\b/i.test(beforeCursor.trim())
+    ) {
+      const afterAdmin = beforeCursor.trim().replace(/^\/admin\s*/i, "");
+      const suggestions = getAdminSuggestions(afterAdmin);
+      if (!suggestions.length) {
+        hideAndClear();
+        return;
+      }
+      lastMatches = suggestions;
+      highlightIndex = Math.min(highlightIndex, suggestions.length - 1);
+      highlightIndex = Math.max(0, highlightIndex);
+      positionPopup(popup, inputEl);
+      renderList(popup, suggestions, highlightIndex, pickCommand);
+      popup.setAttribute("aria-hidden", "false");
+      requestAnimationFrame(() => {
+        popup.classList.add("slash-popup--open");
+      });
+      return;
+    }
+
     const ctx = getSlashContext(value, pos);
     if (!ctx) {
       hideAndClear();

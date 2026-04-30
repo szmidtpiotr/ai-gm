@@ -39,6 +39,10 @@
             <span class="nav-icon">🔊</span>
             <span class="nav-label">Głos</span>
           </button>
+          <button type="button" data-section="admin-commands">
+            <span class="nav-icon">🛠</span>
+            <span class="nav-label">Admin Cmd</span>
+          </button>
         </nav>
         <a
           href="/admin_panel/templates.html"
@@ -68,6 +72,7 @@
           <div class="section-panel" data-section="ui-settings" aria-busy="true"></div>
           <div class="section-panel" data-section="test-runner" aria-busy="true"></div>
           <div class="section-panel" data-section="voice" aria-busy="true"></div>
+          <div class="section-panel" data-section="admin-commands" aria-busy="true"></div>
         </section>
 
         <div class="activity-log-wrap">
@@ -289,6 +294,7 @@
       let uiSettingsReady = false;
       let testRunnerReady = false;
       let voiceReady = false;
+      let adminCommandsReady = false;
 
       async function maybeInitGameDesign(section) {
         if (section !== "game-design" || gameDesignReady) {
@@ -400,6 +406,26 @@
         }
       }
 
+      async function maybeInitAdminCommands(section) {
+        if (section !== "admin-commands" || adminCommandsReady) {
+          return;
+        }
+        const el = document.querySelector('.section-panel[data-section="admin-commands"]');
+        if (!el) {
+          return;
+        }
+        adminCommandsReady = true;
+        el.removeAttribute("aria-busy");
+        try {
+          const { init } = await import("/admin_panel/sections/admin_commands.js?v=1");
+          await init(el);
+        } catch (err) {
+          adminCommandsReady = false;
+          el.textContent = "Błąd ładowania Admin Commands.";
+          showToast(err.message || "Admin Commands nie załadowało się.", "error");
+        }
+      }
+
       async function maybeInitConfig(section) {
         if (section !== "config") {
           return;
@@ -451,6 +477,7 @@
             void maybeInitUiSettings(selected);
             void maybeInitTestRunner(selected);
             void maybeInitVoice(selected);
+            void maybeInitAdminCommands(selected);
           });
         });
       }

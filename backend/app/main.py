@@ -44,6 +44,7 @@ from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.migrations_admin import run_admin_migrations
 from app.routers.admin import router as admin_router
+from app.routers.admin_cheat import router as admin_cheat_router
 from app.routers.settings import router as settings_router
 from app.routers.debug import router as debug_router
 from app.routers.test_runner import router as test_runner_router
@@ -233,6 +234,7 @@ app.include_router(characters.router)
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(admin_cheat_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(locations_router, prefix="/api")
 app.include_router(session_location_router)
