@@ -78,17 +78,36 @@ def post_config(update: ConfigUpdate) -> dict[str, object]:
 async def websocket_stt(ws: WebSocket) -> None:
     await ws.accept()
     buffer = bytearray()
+
+    async def flush_transcription() -> None:
+        if not buffer:
+            return
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, stt_module.transcribe, bytes(buffer))
+        await ws.send_json(result)
+        buffer.clear()
+
     try:
         while True:
             try:
-                data = await asyncio.wait_for(ws.receive_bytes(), timeout=2.0)
-                buffer.extend(data)
+                message = await asyncio.wait_for(ws.receive(), timeout=2.5)
             except asyncio.TimeoutError:
-                if buffer:
-                    loop = asyncio.get_event_loop()
-                    result = await loop.run_in_executor(None, stt_module.transcribe, bytes(buffer))
-                    await ws.send_json(result)
-                    buffer.clear()
+                await flush_transcription()
+                continue
+
+            msg_type = message.get("type")
+            if msg_type == "websocket.disconnect":
+                break
+
+            data = message.get("bytes")
+            if data:
+                buffer.extend(data)
+                continue
+
+            text = (message.get("text") or "").strip().lower()
+            if text in {"__end__", "eof", "end"}:
+                # Explicit end marker from frontend: transcribe immediately.
+                await flush_transcription()
     except WebSocketDisconnect:
         pass
     except Exception as exc:  # pragma: no cover - websocket defensive path
