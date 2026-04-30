@@ -9,6 +9,12 @@
   let ws = null;
   let sttCloseTimer = null;
   let sttResultPending = false;
+  let sttMonitorCtx = null;
+  let sttMonitorSource = null;
+  let sttMonitorAnalyser = null;
+  let sttMonitorRaf = 0;
+  let sttLastVoiceAt = 0;
+  let sttAutoStopping = false;
   let audio = null;
   let audioCtx = null;
   let activeBufferSource = null;
@@ -19,6 +25,8 @@
   let ttsEnabled = true;
   let sttEnabled = false;
   let initialized = false;
+  const STT_SILENCE_AUTO_STOP_MS = 4000;
+  const STT_VOICE_RMS_THRESHOLD = 0.012;
 
   function _el(id) {
     return document.getElementById(id);
@@ -325,6 +333,80 @@
     }, 30000);
   }
 
+  function _stopSttLevelMonitor() {
+    if (sttMonitorRaf) {
+      cancelAnimationFrame(sttMonitorRaf);
+      sttMonitorRaf = 0;
+    }
+    if (sttMonitorSource) {
+      try {
+        sttMonitorSource.disconnect();
+      } catch (_e) {
+        // noop
+      }
+      sttMonitorSource = null;
+    }
+    if (sttMonitorAnalyser) {
+      try {
+        sttMonitorAnalyser.disconnect();
+      } catch (_e) {
+        // noop
+      }
+      sttMonitorAnalyser = null;
+    }
+    if (sttMonitorCtx) {
+      try {
+        sttMonitorCtx.close();
+      } catch (_e) {
+        // noop
+      }
+      sttMonitorCtx = null;
+    }
+  }
+
+  function _startSttLevelMonitor(stream) {
+    _stopSttLevelMonitor();
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    try {
+      sttMonitorCtx = new Ctx();
+      sttMonitorAnalyser = sttMonitorCtx.createAnalyser();
+      sttMonitorAnalyser.fftSize = 2048;
+      sttMonitorSource = sttMonitorCtx.createMediaStreamSource(stream);
+      sttMonitorSource.connect(sttMonitorAnalyser);
+      sttLastVoiceAt = Date.now();
+      sttAutoStopping = false;
+
+      const buf = new Float32Array(sttMonitorAnalyser.fftSize);
+      const tick = () => {
+        if (!mediaRecorder || !sttEnabled || sttAutoStopping) return;
+        sttMonitorAnalyser.getFloatTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i += 1) {
+          sum += buf[i] * buf[i];
+        }
+        const rms = Math.sqrt(sum / buf.length);
+        const now = Date.now();
+        if (rms >= STT_VOICE_RMS_THRESHOLD) {
+          sttLastVoiceAt = now;
+        } else if (now - sttLastVoiceAt >= STT_SILENCE_AUTO_STOP_MS) {
+          sttAutoStopping = true;
+          _status("Cisza 4s - zatrzymuje nasluch");
+          sttEnabled = false;
+          _setFlag(LS_STT, false);
+          _syncUiState();
+          stopRecording();
+          return;
+        }
+        sttMonitorRaf = requestAnimationFrame(tick);
+      };
+      sttMonitorRaf = requestAnimationFrame(tick);
+    } catch (err) {
+      console.warn("voice stt monitor start failed", err);
+      _stopSttLevelMonitor();
+    }
+  }
+
   function _attachSttWebSocketHandlers() {
     if (!ws) return;
     ws.onmessage = (event) => {
@@ -379,9 +461,7 @@
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
     inputEl.focus();
 
-    if (_getFlag(LS_STT_AUTOSEND, false)) {
-      _el("send-btn")?.click();
-    }
+    _el("send-btn")?.click();
   }
 
   async function startRecording() {
@@ -407,6 +487,7 @@
       }
 
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      _startSttLevelMonitor(mediaStream);
 
       await new Promise((resolve, reject) => {
         const socket = new WebSocket(_wsUrl());
@@ -479,6 +560,9 @@
     const sttBtn = _el("stt-toggle");
     const sttInputMicBtn = _el("stt-input-mic");
     if (!sttEnabled) sttResultPending = false;
+
+    _stopSttLevelMonitor();
+    sttAutoStopping = false;
 
     const afterRecorderFullyStopped = () => {
       if (mediaStream) {
@@ -564,7 +648,7 @@
 
     if (localStorage.getItem(LS_TTS) === null) _setFlag(LS_TTS, true);
     if (localStorage.getItem(LS_STT) === null) _setFlag(LS_STT, false);
-    if (localStorage.getItem(LS_STT_AUTOSEND) === null) _setFlag(LS_STT_AUTOSEND, false);
+    if (localStorage.getItem(LS_STT_AUTOSEND) === null) _setFlag(LS_STT_AUTOSEND, true);
     ttsEnabled = _getFlag(LS_TTS, true);
     sttEnabled = _getFlag(LS_STT, false);
     _syncUiState();
