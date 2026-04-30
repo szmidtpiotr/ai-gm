@@ -21,6 +21,26 @@
     el.skillsList = document.getElementById("skills-list");
     el.dcList = document.getElementById("dc-list");
     el.weaponsList = document.getElementById("weapons-list");
+    el.itemsList = document.getElementById("items-list");
+    el.newItemKey = document.getElementById("new-item-key");
+    el.newItemLabel = document.getElementById("new-item-label");
+    el.newItemType = document.getElementById("new-item-type");
+    el.newItemValueGp = document.getElementById("new-item-value-gp");
+    el.newItemWeightKg = document.getElementById("new-item-weight-kg");
+    el.newItemAllowedClasses = document.getElementById("new-item-allowed-classes");
+    el.newItemActive = document.getElementById("new-item-active");
+    el.newItemDescription = document.getElementById("new-item-description");
+    el.newItemAcBonus = document.getElementById("new-item-ac-bonus");
+    el.newItemArmorFields = document.getElementById("new-item-armor-fields");
+    el.newItemEffectType = document.getElementById("new-item-effect-type");
+    el.newItemEffectDice = document.getElementById("new-item-effect-dice");
+    el.newItemEffectBonus = document.getElementById("new-item-effect-bonus");
+    el.newItemEffectTarget = document.getElementById("new-item-effect-target");
+    el.newItemCharges = document.getElementById("new-item-charges");
+    el.newItemConsumableFields = document.getElementById("new-item-consumable-fields");
+    el.newItemBtn = document.getElementById("new-item-btn");
+    el.itemsFilterType = document.getElementById("items-filter-type");
+    el.itemsFilterBtn = document.getElementById("items-filter-btn");
     el.enemiesList = document.getElementById("enemies-list");
     el.conditionsList = document.getElementById("conditions-list");
     el.accountsList = document.getElementById("accounts-list");
@@ -134,6 +154,8 @@
     el.importCommitBtn.disabled = !connected || !state.selectedImportPayload;
     el.newSkillBtn.disabled = !connected;
     if (el.newWeaponBtn) el.newWeaponBtn.disabled = !connected;
+    if (el.newItemBtn) el.newItemBtn.disabled = !connected;
+    if (el.itemsFilterBtn) el.itemsFilterBtn.disabled = !connected;
     if (el.newEnemyBtn) el.newEnemyBtn.disabled = !connected;
     if (el.newConditionBtn) el.newConditionBtn.disabled = !connected;
     if (el.userLlmLoadBtn) el.userLlmLoadBtn.disabled = !connected;
@@ -282,6 +304,147 @@
       ["Key", "Label", "Die", "Stat", "Classes", "Active", "Action"],
       rows
     );
+  }
+
+  function updateItemFormFields() {
+    const t = el.newItemType ? el.newItemType.value : "";
+    if (el.newItemArmorFields) {
+      el.newItemArmorFields.style.display = t === "armor" ? "" : "none";
+    }
+    if (el.newItemConsumableFields) {
+      el.newItemConsumableFields.style.display = t === "consumable" ? "grid" : "none";
+    }
+  }
+
+  function renderItems(items) {
+    if (!el.itemsList) return;
+    if (!items || !items.length) {
+      el.itemsList.innerHTML = '<p class="muted">Brak przedmiotów.</p>';
+      return;
+    }
+    const rows = items
+      .map((it) => {
+        const classesRaw = Array.isArray(it.allowed_classes)
+          ? it.allowed_classes.join(", ")
+          : classesToInput(it.allowed_classes);
+        const classes = classesRaw && String(classesRaw).trim() ? esc(classesRaw) : "<em>—</em>";
+        const fxParts = [];
+        if (String(it.item_type) === "armor" && Number(it.ac_bonus) > 0) {
+          fxParts.push(`AC +${esc(it.ac_bonus)}`);
+        }
+        if (String(it.item_type) === "consumable") {
+          const line = `${it.effect_type || ""} ${it.effect_dice || ""} +${it.effect_bonus ?? 0}`.trim();
+          if (line) fxParts.push(esc(line));
+        }
+        const fxCol = fxParts.length ? fxParts.join(" · ") : "—";
+        const approvedNum = Number(it.approved);
+        const isDraft = approvedNum === 0;
+        const approvedBadge = isDraft
+          ? '<span style="color:#f59e0b;font-size:0.8em;"> ⚠ draft</span>'
+          : "";
+        const activeStr = it.is_active ? "1" : "0";
+        const lockHtml = isLocked(it) ? '<span class="lock-badge" title="Locked row">🔒</span>' : "";
+        return `<tr>
+      <td><code>${esc(it.key)}</code>${lockHtml}</td>
+      <td>${esc(it.label)}${approvedBadge}</td>
+      <td><span class="badge">${esc(it.item_type)}</span></td>
+      <td>${esc(it.value_gp ?? 0)} gp</td>
+      <td>${fxCol}</td>
+      <td>${classes}</td>
+      <td>${it.is_active ? "✓" : "–"}</td>
+      <td>
+        ${
+          isDraft
+            ? `<button type="button" class="secondary item-approve-btn" data-key="${esc(it.key)}" style="font-size:0.8em;">Zatwierdź</button> `
+            : ""
+        }
+        <button type="button" class="secondary item-toggle-btn" data-key="${esc(
+          it.key
+        )}" data-active="${activeStr}">
+          ${it.is_active ? "Dezaktywuj" : "Aktywuj"}
+        </button>
+        <button type="button" class="danger item-delete-btn" data-key="${esc(it.key)}" style="font-size:0.8em;">Usuń</button>
+      </td>
+    </tr>`;
+      })
+      .join("");
+
+    el.itemsList.innerHTML = `
+    <table class="admin-table">
+      <thead><tr>
+        <th>key</th><th>label</th><th>type</th><th>cena</th>
+        <th>efekt / AC</th><th>klasy</th><th>aktywny</th><th>akcje</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+    el.itemsList.querySelectorAll(".item-approve-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const key = btn.dataset.key;
+        try {
+          await api(`/admin/items/${encodeURIComponent(key)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ approved: 1, is_active: true, force: true }),
+          });
+          log(`Items: zatwierdzono '${key}'`);
+          await loadItems();
+        } catch (e) {
+          log(`Items approve error: ${e.message}`);
+          alert(e.message);
+        }
+      });
+    });
+
+    el.itemsList.querySelectorAll(".item-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const key = btn.dataset.key;
+        const newActive = btn.dataset.active === "1" ? false : true;
+        try {
+          await api(`/admin/items/${encodeURIComponent(key)}`, {
+            method: "PATCH",
+            body: JSON.stringify({ is_active: newActive, force: true }),
+          });
+          log(`Items: toggled '${key}' active=${newActive}`);
+          await loadItems();
+        } catch (e) {
+          log(`Items toggle error: ${e.message}`);
+          alert(e.message);
+        }
+      });
+    });
+
+    el.itemsList.querySelectorAll(".item-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const key = btn.dataset.key;
+        if (!window.confirm(`Usunąć item '${key}'?`)) return;
+        try {
+          await api(`/admin/items/${encodeURIComponent(key)}`, {
+            method: "DELETE",
+            body: JSON.stringify({ force: true }),
+          });
+          log(`Items: usunięto '${key}'`);
+          await loadItems();
+        } catch (e) {
+          log(`Items delete error: ${e.message}`);
+          alert(e.message);
+        }
+      });
+    });
+  }
+
+  async function loadItems() {
+    if (!el.itemsList) return;
+    if (!state.connected) return;
+    try {
+      const data = await api("/admin/items");
+      const raw = Array.isArray(data.items) ? data.items : [];
+      const filterType = (el.itemsFilterType && el.itemsFilterType.value) || "";
+      const items = filterType ? raw.filter((it) => String(it.item_type || "") === filterType) : raw;
+      renderItems(items);
+    } catch (e) {
+      log(`Items load error: ${e.message}`);
+      if (el.itemsList) el.itemsList.innerHTML = `<p class="muted">${esc(e.message)}</p>`;
+    }
   }
 
   async function loadEnemies() {
@@ -1010,6 +1173,7 @@
       loadSkills(),
       loadDc(),
       loadWeapons(),
+      loadItems(),
       loadEnemies(),
       loadConditions(),
       loadLocations(),
@@ -1212,6 +1376,62 @@
       await loadWeapons();
     } catch (err) {
       log(`Create weapon failed -> ${err.message}`);
+      alert(err.message);
+    }
+  }
+
+  async function handleCreateItem() {
+    if (!el.newItemBtn) return;
+    const key = (el.newItemKey && el.newItemKey.value) || "";
+    const label = (el.newItemLabel && el.newItemLabel.value) || "";
+    const item_type = (el.newItemType && el.newItemType.value) || "misc";
+    if (!String(key).trim() || !String(label).trim()) {
+      log("Items: key i label są wymagane");
+      return;
+    }
+    const allowedRaw = (el.newItemAllowedClasses && el.newItemAllowedClasses.value) || "";
+    const allowed_classes = String(allowedRaw).trim() ? parseAllowedClasses(allowedRaw) : [];
+
+    const payload = {
+      key: String(key).trim(),
+      label: String(label).trim(),
+      item_type,
+      description: (el.newItemDescription && el.newItemDescription.value) || "",
+      value_gp: parseInt((el.newItemValueGp && el.newItemValueGp.value) || "0", 10) || 0,
+      weight_kg: parseFloat((el.newItemWeightKg && el.newItemWeightKg.value) || "0") || 0,
+      allowed_classes,
+      is_active: !!(el.newItemActive && el.newItemActive.checked),
+    };
+
+    if (item_type === "armor") {
+      payload.ac_bonus = parseInt((el.newItemAcBonus && el.newItemAcBonus.value) || "0", 10) || 0;
+    }
+    if (item_type === "consumable") {
+      payload.effect_type = (el.newItemEffectType && el.newItemEffectType.value) || "misc";
+      const diceRaw = (el.newItemEffectDice && el.newItemEffectDice.value) || "";
+      payload.effect_dice = String(diceRaw).trim() ? String(diceRaw).trim() : null;
+      payload.effect_bonus = parseInt((el.newItemEffectBonus && el.newItemEffectBonus.value) || "0", 10) || 0;
+      payload.effect_target = (el.newItemEffectTarget && el.newItemEffectTarget.value) || "self";
+      payload.charges = parseInt((el.newItemCharges && el.newItemCharges.value) || "1", 10) || 1;
+    }
+
+    try {
+      await api("/admin/items", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      log(`Items: dodano '${String(key).trim()}'`);
+      if (el.newItemKey) el.newItemKey.value = "";
+      if (el.newItemLabel) el.newItemLabel.value = "";
+      if (el.newItemDescription) el.newItemDescription.value = "";
+      if (el.newItemEffectDice) el.newItemEffectDice.value = "";
+      if (el.newItemValueGp) el.newItemValueGp.value = "0";
+      if (el.newItemWeightKg) el.newItemWeightKg.value = "0";
+      if (el.newItemAllowedClasses) el.newItemAllowedClasses.value = "";
+      if (el.newItemActive) el.newItemActive.checked = true;
+      await loadItems();
+    } catch (err) {
+      log(`Create item failed -> ${err.message}`);
       alert(err.message);
     }
   }
@@ -1429,6 +1649,7 @@
     el.skillsList.innerHTML = "";
     el.dcList.innerHTML = "";
     if (el.weaponsList) el.weaponsList.innerHTML = "";
+    if (el.itemsList) el.itemsList.innerHTML = "";
     if (el.enemiesList) el.enemiesList.innerHTML = "";
     if (el.conditionsList) el.conditionsList.innerHTML = "";
     el.accountsList.innerHTML = "";
@@ -1441,6 +1662,19 @@
     el.logoutBtn.addEventListener("click", logout);
     el.newSkillBtn.addEventListener("click", handleCreateSkill);
     if (el.newWeaponBtn) el.newWeaponBtn.addEventListener("click", handleCreateWeapon);
+    if (el.newItemBtn) el.newItemBtn.addEventListener("click", handleCreateItem);
+    if (el.itemsFilterBtn) {
+      el.itemsFilterBtn.addEventListener("click", () => {
+        loadItems().catch((err) => {
+          log(`Items filter -> ${err.message}`);
+          alert(err.message);
+        });
+      });
+    }
+    if (el.newItemType) {
+      el.newItemType.addEventListener("change", updateItemFormFields);
+      updateItemFormFields();
+    }
     if (el.newEnemyBtn) el.newEnemyBtn.addEventListener("click", handleCreateEnemy);
     if (el.newConditionBtn) el.newConditionBtn.addEventListener("click", handleCreateCondition);
     el.exportBtn.addEventListener("click", handleExport);
@@ -1781,6 +2015,12 @@
         if (tab === "observability" && state.connected) {
           loadLokiSettings().catch((err) => {
             log(`Loki settings load failed -> ${err.message}`);
+            alert(err.message);
+          });
+        }
+        if (tab === "items" && state.connected) {
+          loadItems().catch((err) => {
+            log(`Ładowanie Items nie powiodło się -> ${err.message}`);
             alert(err.message);
           });
         }
