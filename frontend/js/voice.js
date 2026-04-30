@@ -389,7 +389,7 @@
 
       const buf = new Float32Array(sttMonitorAnalyser.fftSize);
       const tick = () => {
-        if (!mediaRecorder || !sttEnabled || sttAutoStopping) return;
+        if (!mediaStream || !sttEnabled || sttAutoStopping) return;
         sttMonitorAnalyser.getFloatTimeDomainData(buf);
         let sum = 0;
         for (let i = 0; i < buf.length; i += 1) {
@@ -513,6 +513,7 @@
     if (mediaRecorder) return;
 
     try {
+      _status("Lacze STT...");
       _clearSttCloseTimer();
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
         try {
@@ -576,20 +577,36 @@
       _status("Nagrywanie...");
     } catch (err) {
       console.warn("voice stt start failed", err);
+      const msg = String(err?.message || err).includes("websocket")
+        ? "Brak polaczenia STT (websocket)"
+        : "Brak dostepu do mikrofonu";
       sttResultPending = false;
+      _stopSttLevelMonitor();
       _clearSttCloseTimer();
+      if (mediaRecorder) {
+        try {
+          mediaRecorder.stop();
+        } catch (_e) {
+          /* noop */
+        }
+      }
+      mediaRecorder = null;
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((t) => t.stop());
+      }
+      mediaStream = null;
       try {
         ws?.close();
       } catch (_e) {
         /* noop */
       }
       ws = null;
-      if (String(err?.message || err).includes("websocket")) {
-        _status("Brak polaczenia STT (websocket)");
-      } else {
-        _status("Brak dostepu do mikrofonu");
-      }
-      stopRecording();
+      sttBtn?.classList.remove("is-recording");
+      sttInputMicBtn?.classList.remove("is-recording");
+      sttEnabled = false;
+      _setFlag(LS_STT, false);
+      _syncUiState();
+      _status(msg);
     }
   }
 
