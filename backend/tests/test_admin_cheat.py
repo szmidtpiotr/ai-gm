@@ -32,6 +32,8 @@ def _seed_schema(db_path: str) -> None:
               item_key TEXT,
               weapon_key TEXT,
               consumable_key TEXT,
+              quantity INTEGER NOT NULL DEFAULT 1,
+              equipped INTEGER NOT NULL DEFAULT 0,
               slot TEXT
             );
 
@@ -130,17 +132,155 @@ def test_add_item(client_with_auth):
     client, db_path = client_with_auth
     r = _post(client, "add item", key="weapon_axe")
     assert r.status_code == 200
-    assert r.json()["result"]["added"] == "weapon_axe"
+    body = r.json()["result"]
+    assert body["added"] == "weapon_axe"
+    assert body.get("equipped_slot") == "main_hand"
 
     conn = sqlite3.connect(db_path)
     try:
         row = conn.execute(
-            "SELECT weapon_key FROM character_inventory WHERE character_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT weapon_key, equipped, slot FROM character_inventory WHERE character_id = ? ORDER BY id DESC LIMIT 1",
             (1,),
         ).fetchone()
     finally:
         conn.close()
     assert row[0] == "weapon_axe"
+    assert row[1] == 1
+    assert row[2] == "main_hand"
+
+
+def test_add_item_maps_prefixed_weapon_to_catalog_key(client_with_auth):
+    """Frontend used to send weapon_longsword while catalog key is longsword — store canonical key."""
+    client, db_path = client_with_auth
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE game_config_weapons (
+                key TEXT PRIMARY KEY,
+                label TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO game_config_weapons (key, label) VALUES ('longsword', 'Longsword')",
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    r = _post(client, "add item", key="weapon_longsword")
+    assert r.status_code == 200
+    res = r.json()["result"]
+    assert res["added"] == "longsword"
+    assert res.get("equipped_slot") == "main_hand"
+
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT weapon_key, equipped, slot FROM character_inventory WHERE character_id = ? ORDER BY id DESC LIMIT 1",
+            (1,),
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row[0] == "longsword"
+    assert row[1] == 1
+    assert row[2] == "main_hand"
+
+    r2 = _post(client, "add item", key="longsword")
+    assert r2.status_code == 200
+    res2 = r2.json()["result"]
+    assert res2["added"] == "longsword"
+    assert res2.get("equipped_slot") == "off_hand"
+
+
+def test_add_item_prefers_consumable_key_when_items_catalog_marks_consumable(client_with_auth):
+    """Same key in items (item_type=consumable) + consumables → inventory must use consumable_key."""
+    client, db_path = client_with_auth
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE game_config_items (
+                key TEXT PRIMARY KEY,
+                label TEXT NOT NULL DEFAULT '',
+                item_type TEXT NOT NULL DEFAULT 'misc'
+            );
+            CREATE TABLE game_config_consumables (
+                key TEXT PRIMARY KEY,
+                label TEXT NOT NULL DEFAULT ''
+            );
+            INSERT INTO game_config_items (key, label, item_type)
+            VALUES ('g_test_potion', 'GP item', 'consumable');
+            INSERT INTO game_config_consumables (key, label)
+            VALUES ('g_test_potion', 'GP cons');
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    r = _post(client, "add item", key="g_test_potion")
+    assert r.status_code == 200
+    assert r.json()["result"]["added"] == "g_test_potion"
+
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT item_key, weapon_key, consumable_key
+            FROM character_inventory
+            WHERE character_id = 1
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row[0] is None
+    assert row[1] is None
+    assert row[2] == "g_test_potion"
+
+
+def test_add_item_respects_explicit_consumable_hint(client_with_auth):
+    client, db_path = client_with_auth
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE game_config_items (
+                key TEXT PRIMARY KEY,
+                label TEXT NOT NULL DEFAULT '',
+                item_type TEXT NOT NULL DEFAULT 'misc'
+            );
+            INSERT INTO game_config_items (key, label, item_type)
+            VALUES ('only_item_potion', 'Only item', 'consumable');
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    r = _post(client, "add item", key="only_item_potion", kind="consumable")
+    assert r.status_code == 200
+    assert r.json()["result"]["added"] == "only_item_potion"
+
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT item_key, weapon_key, consumable_key
+            FROM character_inventory
+            WHERE character_id = 1
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row[0] is None
+    assert row[1] is None
+    assert row[2] == "only_item_potion"
 
 
 def test_remove_item(client_with_auth):

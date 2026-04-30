@@ -301,7 +301,15 @@ def get_character_inventory(character_id: int) -> list[dict]:
             FROM character_inventory ci
             LEFT JOIN game_config_items gi ON gi.key = ci.item_key
             LEFT JOIN game_config_weapons gw ON gw.key = ci.weapon_key
+                OR (
+                    ci.weapon_key LIKE 'weapon_%'
+                    AND gw.key = SUBSTR(ci.weapon_key, 8)
+                )
             LEFT JOIN game_config_consumables gc ON gc.key = ci.consumable_key
+                OR (
+                    ci.consumable_key LIKE 'consumable_%'
+                    AND gc.key = SUBSTR(ci.consumable_key, 12)
+                )
             WHERE ci.character_id = ?
             ORDER BY ci.id ASC
             """,

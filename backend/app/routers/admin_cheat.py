@@ -12,6 +12,257 @@ from app.routers.admin import require_admin_token
 router = APIRouter(tags=["admin-cheat"])
 DB_PATH = resolve_db_path()
 
+
+def _sqlite_table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def _resolve_inventory_add_key(
+    conn: sqlite3.Connection, raw_key: str, preferred_kind: str | None = None
+) -> tuple[str, str]:
+    """
+    Map raw cheat key to (canonical_catalog_key, column_name).
+
+    column_name is one of weapon_key | consumable_key | item_key.
+
+    When game_config_* tables exist, match catalog rows (including legacy
+    ``weapon_<catalog_key>`` aliases). Otherwise fall back to prefix heuristics
+    so minimal test DBs without catalogs keep working.
+    """
+    k = str(raw_key or "").strip()
+    if not k:
+        raise ValueError("empty key")
+
+    def w(canonical: str) -> tuple[str, str]:
+        return canonical, "weapon_key"
+
+    def c(canonical: str) -> tuple[str, str]:
+        return canonical, "consumable_key"
+
+    def i(canonical: str) -> tuple[str, str]:
+        return canonical, "item_key"
+
+    has_w = _sqlite_table_exists(conn, "game_config_weapons")
+    has_c = _sqlite_table_exists(conn, "game_config_consumables")
+    has_i = _sqlite_table_exists(conn, "game_config_items")
+    pref = str(preferred_kind or "").strip().lower()
+
+    # Explicit command intent ("/admin add weapon|consumable ...") has priority.
+    if pref == "weapon":
+        if has_w:
+            row = conn.execute(
+                "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
+                (k,),
+            ).fetchone()
+            if row:
+                return w(str(row["key"]))
+            if k.startswith("weapon_"):
+                alt = k[7:]
+                row = conn.execute(
+                    "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
+                    (alt,),
+                ).fetchone()
+                if row:
+                    return w(str(row["key"]))
+        return w(k[7:] if k.startswith("weapon_") else k)
+
+    if pref == "consumable":
+        if has_c:
+            row = conn.execute(
+                "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                (k,),
+            ).fetchone()
+            if row:
+                return c(str(row["key"]))
+            if k.startswith("consumable_"):
+                alt = k[11:]
+                row = conn.execute(
+                    "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                    (alt,),
+                ).fetchone()
+                if row:
+                    return c(str(row["key"]))
+        return c(k[11:] if k.startswith("consumable_") else k)
+
+    if has_w:
+        row = conn.execute(
+            "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
+            (k,),
+        ).fetchone()
+        if row:
+            return w(str(row["key"]))
+        if k.startswith("weapon_"):
+            alt = k[7:]
+            row = conn.execute(
+                "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
+                (alt,),
+            ).fetchone()
+            if row:
+                return w(str(row["key"]))
+
+    if has_c:
+        row = conn.execute(
+            "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+            (k,),
+        ).fetchone()
+        if row:
+            return c(str(row["key"]))
+        if k.startswith("consumable_"):
+            alt = k[11:]
+            row = conn.execute(
+                "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                (alt,),
+            ).fetchone()
+            if row:
+                return c(str(row["key"]))
+
+    if has_i:
+        row = conn.execute(
+            "SELECT key, item_type FROM game_config_items WHERE key = ? LIMIT 1",
+            (k,),
+        ).fetchone()
+        if row:
+            ik = str(row["key"])
+            it = str(row["item_type"] or "").strip().lower() or "item"
+            # Mikstury / konsumable z efektami są w game_config_consumables; sam wiersz
+            # w items z item_type=consumable (np. import) musi trafiać do consumable_key,
+            # żeby ten sam kształt co grant_loot / sklep / silnik.
+            if it == "consumable" and has_c:
+                crow = conn.execute(
+                    "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                    (ik,),
+                ).fetchone()
+                if crow:
+                    return c(str(crow["key"]))
+            # Broń w katalogu broni — preferuj weapon_key zamiast item_key.
+            if it == "weapon" and has_w:
+                wrow = conn.execute(
+                    "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
+                    (ik,),
+                ).fetchone()
+                if wrow:
+                    return w(str(wrow["key"]))
+            return i(ik)
+
+    if k.startswith("weapon_"):
+        return w(k)
+    if k.startswith("consumable_"):
+        return c(k)
+    return i(k)
+
+
+def _occupied_equipment_slots(conn: sqlite3.Connection, character_id: int) -> dict[str, bool]:
+    o = {"main_hand": False, "off_hand": False, "armor": False}
+    rows = conn.execute(
+        """
+        SELECT slot FROM character_inventory
+        WHERE character_id = ? AND equipped = 1 AND slot IS NOT NULL AND slot != ''
+        """,
+        (int(character_id),),
+    ).fetchall()
+    for r in rows:
+        s = str(r["slot"] or "").lower()
+        if s in o:
+            o[s] = True
+    return o
+
+
+def _pick_weapon_equip_slot(
+    conn: sqlite3.Connection, character_id: int, weapon_catalog_key: str
+) -> str:
+    """Match frontend inventory.js pickEquipSlot: shields → off_hand when free, else hands."""
+    occupied = _occupied_equipment_slots(conn, character_id)
+    key_lower = weapon_catalog_key.lower()
+    lab = ""
+    row = conn.execute(
+        "SELECT label FROM game_config_weapons WHERE key = ? LIMIT 1",
+        (weapon_catalog_key,),
+    ).fetchone()
+    if row and row["label"] is not None:
+        lab = str(row["label"]).lower()
+    if "shield" in key_lower or "tarcz" in lab or "shield" in lab:
+        if not occupied["off_hand"]:
+            return "off_hand"
+        if not occupied["main_hand"]:
+            return "main_hand"
+        return "off_hand"
+    if not occupied["main_hand"]:
+        return "main_hand"
+    if not occupied["off_hand"]:
+        return "off_hand"
+    return "main_hand"
+
+
+def _auto_equip_new_inventory_row(
+    conn: sqlite3.Connection,
+    character_id: int,
+    inventory_id: int,
+    col: str,
+    canonical_key: str,
+) -> str | None:
+    """
+    After cheat INSERT, assign equipped + slot for weapons and armor items.
+    Returns slot name if equipped, else None.
+    """
+    cid = int(character_id)
+    iid = int(inventory_id)
+    slot: str | None = None
+    if col == "weapon_key":
+        slot = _pick_weapon_equip_slot(conn, cid, canonical_key)
+    elif col == "item_key":
+        row = conn.execute(
+            "SELECT item_type FROM game_config_items WHERE key = ? LIMIT 1",
+            (canonical_key,),
+        ).fetchone()
+        it = str(row["item_type"] or "").lower() if row else ""
+        if it == "armor":
+            slot = "armor"
+    else:
+        return None
+
+    if not slot:
+        return None
+
+    conn.execute(
+        "UPDATE character_inventory SET equipped = 0, slot = NULL WHERE character_id = ? AND slot = ?",
+        (cid, slot),
+    )
+    conn.execute(
+        "UPDATE character_inventory SET equipped = 1, slot = ? WHERE id = ?",
+        (slot, iid),
+    )
+    return slot
+
+
+def _inventory_key_remove_variants(raw_key: str) -> list[str]:
+    """Aliases so remove matches bare keys and legacy weapon_/consumable_ typos."""
+    k = str(raw_key or "").strip()
+    if not k:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(x: str) -> None:
+        if x and x not in seen:
+            seen.add(x)
+            out.append(x)
+
+    add(k)
+    if k.startswith("weapon_"):
+        add(k[7:])
+    else:
+        add("weapon_" + k)
+    if k.startswith("consumable_"):
+        add(k[11:])
+    else:
+        add("consumable_" + k)
+    return out
+
+
 AVAILABLE_CMDS = [
     "add gold",
     "set gold",
@@ -35,6 +286,7 @@ class CheatRequest(BaseModel):
     value: int | str | None = None
     key: str | None = None
     stat: str | None = None
+    kind: str | None = None
 
 
 @router.post("/admin/cheat/{character_id}")
@@ -128,34 +380,50 @@ def admin_cheat(
             result = {"location": loc}
 
         elif cmd == "add item":
-            item_key = str(req.key or "").strip()
-            if not item_key:
+            raw = str(req.key or "").strip()
+            if not raw:
                 raise HTTPException(status_code=422, detail="item_key_required")
-            if item_key.startswith("weapon_"):
-                conn.execute(
-                    "INSERT INTO character_inventory (character_id, weapon_key) VALUES (?, ?)",
-                    (character_id, item_key),
-                )
-            elif item_key.startswith("consumable_"):
-                conn.execute(
-                    "INSERT INTO character_inventory (character_id, consumable_key) VALUES (?, ?)",
-                    (character_id, item_key),
-                )
-            else:
-                conn.execute(
-                    "INSERT INTO character_inventory (character_id, item_key) VALUES (?, ?)",
-                    (character_id, item_key),
-                )
-            result = {"added": item_key}
+            try:
+                canonical, col = _resolve_inventory_add_key(conn, raw, req.kind)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="item_key_required") from None
+            conn.execute(
+                f"INSERT INTO character_inventory (character_id, {col}) VALUES (?, ?)",
+                (character_id, canonical),
+            )
+            inv_row = conn.execute("SELECT last_insert_rowid() AS id").fetchone()
+            inv_id = int(inv_row["id"]) if inv_row and inv_row["id"] is not None else 0
+            equipped_slot: str | None = None
+            if inv_id > 0:
+                try:
+                    equipped_slot = _auto_equip_new_inventory_row(
+                        conn, character_id, inv_id, col, canonical
+                    )
+                except sqlite3.OperationalError:
+                    equipped_slot = None
+            result = {"added": canonical}
+            if equipped_slot:
+                result["equipped_slot"] = equipped_slot
 
         elif cmd == "remove item":
             item_key = str(req.key or "").strip()
             if not item_key:
                 raise HTTPException(status_code=422, detail="item_key_required")
+            variants = _inventory_key_remove_variants(item_key)
+            if not variants:
+                raise HTTPException(status_code=422, detail="item_key_required")
+            placeholders = ",".join("?" * len(variants))
             conn.execute(
-                "DELETE FROM character_inventory "
-                "WHERE character_id = ? AND (item_key = ? OR weapon_key = ? OR consumable_key = ?)",
-                (character_id, item_key, item_key, item_key),
+                f"""
+                DELETE FROM character_inventory
+                WHERE character_id = ?
+                  AND (
+                    item_key IN ({placeholders})
+                    OR weapon_key IN ({placeholders})
+                    OR consumable_key IN ({placeholders})
+                  )
+                """,
+                (character_id, *variants, *variants, *variants),
             )
             result = {"removed": item_key}
 
