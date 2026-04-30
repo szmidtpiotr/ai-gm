@@ -97,6 +97,89 @@ def _resolve_inventory_add_key(
     return i(k)
 
 
+def _occupied_equipment_slots(conn: sqlite3.Connection, character_id: int) -> dict[str, bool]:
+    o = {"main_hand": False, "off_hand": False, "armor": False}
+    rows = conn.execute(
+        """
+        SELECT slot FROM character_inventory
+        WHERE character_id = ? AND equipped = 1 AND slot IS NOT NULL AND slot != ''
+        """,
+        (int(character_id),),
+    ).fetchall()
+    for r in rows:
+        s = str(r["slot"] or "").lower()
+        if s in o:
+            o[s] = True
+    return o
+
+
+def _pick_weapon_equip_slot(
+    conn: sqlite3.Connection, character_id: int, weapon_catalog_key: str
+) -> str:
+    """Match frontend inventory.js pickEquipSlot: shields → off_hand when free, else hands."""
+    occupied = _occupied_equipment_slots(conn, character_id)
+    key_lower = weapon_catalog_key.lower()
+    lab = ""
+    row = conn.execute(
+        "SELECT label FROM game_config_weapons WHERE key = ? LIMIT 1",
+        (weapon_catalog_key,),
+    ).fetchone()
+    if row and row["label"] is not None:
+        lab = str(row["label"]).lower()
+    if "shield" in key_lower or "tarcz" in lab or "shield" in lab:
+        if not occupied["off_hand"]:
+            return "off_hand"
+        if not occupied["main_hand"]:
+            return "main_hand"
+        return "off_hand"
+    if not occupied["main_hand"]:
+        return "main_hand"
+    if not occupied["off_hand"]:
+        return "off_hand"
+    return "main_hand"
+
+
+def _auto_equip_new_inventory_row(
+    conn: sqlite3.Connection,
+    character_id: int,
+    inventory_id: int,
+    col: str,
+    canonical_key: str,
+) -> str | None:
+    """
+    After cheat INSERT, assign equipped + slot for weapons and armor items.
+    Returns slot name if equipped, else None.
+    """
+    cid = int(character_id)
+    iid = int(inventory_id)
+    slot: str | None = None
+    if col == "weapon_key":
+        slot = _pick_weapon_equip_slot(conn, cid, canonical_key)
+    elif col == "item_key":
+        row = conn.execute(
+            "SELECT item_type FROM game_config_items WHERE key = ? LIMIT 1",
+            (canonical_key,),
+        ).fetchone()
+        it = str(row["item_type"] or "").lower() if row else ""
+        if it == "armor":
+            slot = "armor"
+    else:
+        return None
+
+    if not slot:
+        return None
+
+    conn.execute(
+        "UPDATE character_inventory SET equipped = 0, slot = NULL WHERE character_id = ? AND slot = ?",
+        (cid, slot),
+    )
+    conn.execute(
+        "UPDATE character_inventory SET equipped = 1, slot = ? WHERE id = ?",
+        (slot, iid),
+    )
+    return slot
+
+
 def _inventory_key_remove_variants(raw_key: str) -> list[str]:
     """Aliases so remove matches bare keys and legacy weapon_/consumable_ typos."""
     k = str(raw_key or "").strip()
@@ -249,7 +332,19 @@ def admin_cheat(
                 f"INSERT INTO character_inventory (character_id, {col}) VALUES (?, ?)",
                 (character_id, canonical),
             )
+            inv_row = conn.execute("SELECT last_insert_rowid() AS id").fetchone()
+            inv_id = int(inv_row["id"]) if inv_row and inv_row["id"] is not None else 0
+            equipped_slot: str | None = None
+            if inv_id > 0:
+                try:
+                    equipped_slot = _auto_equip_new_inventory_row(
+                        conn, character_id, inv_id, col, canonical
+                    )
+                except sqlite3.OperationalError:
+                    equipped_slot = None
             result = {"added": canonical}
+            if equipped_slot:
+                result["equipped_slot"] = equipped_slot
 
         elif cmd == "remove item":
             item_key = str(req.key or "").strip()
