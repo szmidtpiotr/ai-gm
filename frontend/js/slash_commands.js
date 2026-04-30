@@ -1,7 +1,11 @@
 /**
  * Slash-command autocomplete for the main game chat textarea (frontend-only).
  */
-import { getAdminSuggestions } from "./admin_commands_tree.js";
+import {
+  fetchAdminCatalogSuggestions,
+  getAdminSuggestions,
+  shouldUseAdminCatalog,
+} from "./admin_commands_tree.js";
 
 /** Default copy if API is unavailable */
 export const SLASH_COMMANDS = [
@@ -224,6 +228,40 @@ function applySlashInsert(inputEl, commandWithSlash) {
   inputEl.focus();
 }
 
+/**
+ * Pozycja początkowa `/admin` na linii zawierającej kursor (dla wieloczłonowych komend).
+ * @param {string} value
+ * @param {number} cursorPos
+ */
+function findAdminSlashStart(value, cursorPos) {
+  const lineStart = value.lastIndexOf("\n", Math.max(0, cursorPos - 1)) + 1;
+  const line = value.slice(lineStart, cursorPos);
+  const idx = line.search(/\/admin\s*/i);
+  if (idx < 0) {
+    return -1;
+  }
+  return lineStart + idx;
+}
+
+/**
+ * Zastępuje fragment od `/admin` do kursora pełnym tekstem komendy (np. wybór z katalogu).
+ * @param {HTMLTextAreaElement | HTMLInputElement} inputEl
+ * @param {string} fullCommand — np. "/admin add item rope"
+ */
+function applyAdminFullCommandInsert(inputEl, fullCommand) {
+  const val = inputEl.value;
+  const pos = inputEl.selectionStart ?? val.length;
+  const start = findAdminSlashStart(val, pos);
+  if (start < 0) {
+    return;
+  }
+  const cmd = fullCommand.trim();
+  inputEl.value = val.slice(0, start) + cmd + val.slice(pos);
+  const caret = start + cmd.length;
+  inputEl.setSelectionRange(caret, caret);
+  inputEl.focus();
+}
+
 function hidePopup() {
   const popup = document.getElementById("slash-popup");
   if (!popup) {
@@ -246,14 +284,30 @@ export async function initSlashCommands(inputEl) {
   const popup = ensurePopup();
   let highlightIndex = 0;
   let lastMatches = /** @type {{ command: string, description: string }[]} */ ([]);
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let adminCatalogTimer = null;
+  let adminCatalogSeq = 0;
 
   function hideAndClear() {
     lastMatches = [];
     hidePopup();
+    adminCatalogSeq += 1;
+    if (adminCatalogTimer) {
+      clearTimeout(adminCatalogTimer);
+      adminCatalogTimer = null;
+    }
   }
 
   function pickCommand(cmd) {
-    applySlashInsert(inputEl, cmd.command);
+    const val = inputEl.value;
+    const pos = inputEl.selectionStart ?? val.length;
+    const ctx = getSlashContext(val, pos);
+    const full = cmd.command || "";
+    if (full.startsWith("/admin") && !ctx) {
+      applyAdminFullCommandInsert(inputEl, full);
+    } else {
+      applySlashInsert(inputEl, full);
+    }
     hideAndClear();
   }
 
@@ -269,6 +323,39 @@ export async function initSlashCommands(inputEl) {
       /^\/admin\b/i.test(beforeCursor.trim())
     ) {
       const afterAdmin = beforeCursor.trim().replace(/^\/admin\s*/i, "");
+
+      if (shouldUseAdminCatalog(afterAdmin)) {
+        adminCatalogSeq += 1;
+        const seq = adminCatalogSeq;
+        if (adminCatalogTimer) {
+          clearTimeout(adminCatalogTimer);
+        }
+        adminCatalogTimer = setTimeout(async () => {
+          adminCatalogTimer = null;
+          const suggestions = await fetchAdminCatalogSuggestions(afterAdmin);
+          if (seq !== adminCatalogSeq) {
+            return;
+          }
+          if (suggestions == null) {
+            return;
+          }
+          if (!suggestions.length) {
+            hideAndClear();
+            return;
+          }
+          lastMatches = suggestions;
+          highlightIndex = Math.min(highlightIndex, suggestions.length - 1);
+          highlightIndex = Math.max(0, highlightIndex);
+          positionPopup(popup, inputEl);
+          renderList(popup, suggestions, highlightIndex, pickCommand);
+          popup.setAttribute("aria-hidden", "false");
+          requestAnimationFrame(() => {
+            popup.classList.add("slash-popup--open");
+          });
+        }, 180);
+        return;
+      }
+
       const suggestions = getAdminSuggestions(afterAdmin);
       if (!suggestions.length) {
         hideAndClear();
@@ -347,7 +434,11 @@ export async function initSlashCommands(inputEl) {
         return;
       }
 
-      if (!ctx || !lastMatches.length) {
+      const inAdminCmd = /\/admin\b/i.test(value.slice(0, pos));
+      if (!lastMatches.length) {
+        return;
+      }
+      if (!ctx && !inAdminCmd) {
         return;
       }
 
