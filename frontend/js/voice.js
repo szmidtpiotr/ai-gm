@@ -317,7 +317,7 @@
         /* noop */
       }
       if (ws === socket) ws = null;
-    }, 4500);
+    }, 6500);
   }
 
   function _attachSttWebSocketHandlers() {
@@ -469,11 +469,23 @@
         mediaStream.getTracks().forEach((t) => t.stop());
         mediaStream = null;
       }
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          // Tell backend to flush buffered chunks immediately instead of waiting for timeout.
+          ws.send("__end__");
+        } catch (_e) {
+          /* noop */
+        }
+      }
       _scheduleSttWebSocketClose();
       sttBtn?.classList.remove("is-recording");
       sttInputMicBtn?.classList.remove("is-recording");
-      if (sttEnabled) {
+      const waitingForResult =
+        !!ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING);
+      if (waitingForResult) {
         _status("Przetwarzanie STT...");
+      } else if (sttEnabled) {
+        _status("Gotowe");
       } else {
         _status("Nasluch wylaczony");
       }
