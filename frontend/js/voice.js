@@ -18,7 +18,7 @@
   let sttNoiseFloorRms = 0;
   let sttHadSpeech = false;
   let sttStartedAt = 0;
-  let sttHardStopTimer = null;
+  let sttDebugLastRenderAt = 0;
   let audio = null;
   let audioCtx = null;
   let activeBufferSource = null;
@@ -30,10 +30,9 @@
   let sttEnabled = false;
   let initialized = false;
   const STT_SILENCE_AUTO_STOP_MS = 2000;
-  const STT_START_GRACE_MS = 1500;
+  const STT_START_GRACE_MS = 800;
   const STT_MIN_VOICE_RMS_THRESHOLD = 0.01;
   const STT_NOISE_MULTIPLIER = 2.0;
-  const STT_MAX_RECORDING_MS = 8000;
 
   function _el(id) {
     return document.getElementById(id);
@@ -371,13 +370,6 @@
     }
   }
 
-  function _clearSttHardStopTimer() {
-    if (sttHardStopTimer) {
-      clearTimeout(sttHardStopTimer);
-      sttHardStopTimer = null;
-    }
-  }
-
   function _startSttLevelMonitor(stream) {
     _stopSttLevelMonitor();
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -393,6 +385,7 @@
       sttAutoStopping = false;
       sttNoiseFloorRms = 0.004;
       sttHadSpeech = false;
+      sttDebugLastRenderAt = 0;
 
       const buf = new Float32Array(sttMonitorAnalyser.fftSize);
       const tick = () => {
@@ -417,10 +410,10 @@
           sttNoiseFloorRms = sttNoiseFloorRms * 0.92 + rms * 0.08;
         }
 
-        // Auto-stop po ciszy: po krótkim grace period działa także gdy mowa nie została
-        // pewnie sklasyfikowana (np. cichy mikrofon / agresywne odszumianie telefonu).
+        const silenceMs = now - sttLastVoiceAt;
+        // Auto-stop po ciszy i po wykryciu mowy (bez hard-stopu czasu nagrania).
         const gracePassed = now - sttStartedAt >= STT_START_GRACE_MS;
-        if (gracePassed && !isSpeech && now - sttLastVoiceAt >= STT_SILENCE_AUTO_STOP_MS) {
+        if (gracePassed && sttHadSpeech && !isSpeech && silenceMs >= STT_SILENCE_AUTO_STOP_MS) {
           sttAutoStopping = true;
           _status("Cisza 2s - zatrzymuje nasluch");
           sttEnabled = false;
@@ -430,15 +423,17 @@
           return;
         }
 
-        // Fallback: jeśli szum otoczenia stale wygląda jak "mowa", zamknij po czasie.
-        if (now - sttStartedAt >= STT_MAX_RECORDING_MS) {
-          sttAutoStopping = true;
-          _status("Auto-stop po limicie czasu");
-          sttEnabled = false;
-          _setFlag(LS_STT, false);
-          _syncUiState();
-          stopRecording();
-          return;
+        // Live debug poziomu audio (co ~200 ms), żeby stroić próg ciszy.
+        if (now - sttDebugLastRenderAt >= 200) {
+          sttDebugLastRenderAt = now;
+          const lvl = (rms * 100).toFixed(1);
+          const thr = (adaptiveThreshold * 100).toFixed(1);
+          const silenceS = (silenceMs / 1000).toFixed(1);
+          if (sttHadSpeech) {
+            _status(`Nagrywanie... lvl:${lvl} thr:${thr} cisza:${silenceS}s`);
+          } else {
+            _status(`Nagrywanie... lvl:${lvl} thr:${thr} czekam na glos`);
+          }
         }
         sttMonitorRaf = requestAnimationFrame(tick);
       };
@@ -530,17 +525,6 @@
 
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       _startSttLevelMonitor(mediaStream);
-      _clearSttHardStopTimer();
-      // Hard fallback for browsers where analyser-based silence detection is unreliable.
-      sttHardStopTimer = setTimeout(() => {
-        if (!mediaRecorder || !sttEnabled) return;
-        sttAutoStopping = true;
-        _status("Auto-stop po limicie czasu");
-        sttEnabled = false;
-        _setFlag(LS_STT, false);
-        _syncUiState();
-        stopRecording();
-      }, STT_MAX_RECORDING_MS);
 
       await new Promise((resolve, reject) => {
         const socket = new WebSocket(_wsUrl());
@@ -615,7 +599,6 @@
     if (!sttEnabled) sttResultPending = false;
 
     _stopSttLevelMonitor();
-    _clearSttHardStopTimer();
     sttAutoStopping = false;
 
     const afterRecorderFullyStopped = () => {
