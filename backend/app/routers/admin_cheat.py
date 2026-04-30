@@ -12,6 +12,116 @@ from app.routers.admin import require_admin_token
 router = APIRouter(tags=["admin-cheat"])
 DB_PATH = resolve_db_path()
 
+
+def _sqlite_table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def _resolve_inventory_add_key(
+    conn: sqlite3.Connection, raw_key: str
+) -> tuple[str, str]:
+    """
+    Map raw cheat key to (canonical_catalog_key, column_name).
+
+    column_name is one of weapon_key | consumable_key | item_key.
+
+    When game_config_* tables exist, match catalog rows (including legacy
+    ``weapon_<catalog_key>`` aliases). Otherwise fall back to prefix heuristics
+    so minimal test DBs without catalogs keep working.
+    """
+    k = str(raw_key or "").strip()
+    if not k:
+        raise ValueError("empty key")
+
+    def w(canonical: str) -> tuple[str, str]:
+        return canonical, "weapon_key"
+
+    def c(canonical: str) -> tuple[str, str]:
+        return canonical, "consumable_key"
+
+    def i(canonical: str) -> tuple[str, str]:
+        return canonical, "item_key"
+
+    has_w = _sqlite_table_exists(conn, "game_config_weapons")
+    has_c = _sqlite_table_exists(conn, "game_config_consumables")
+    has_i = _sqlite_table_exists(conn, "game_config_items")
+
+    if has_w:
+        row = conn.execute(
+            "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
+            (k,),
+        ).fetchone()
+        if row:
+            return w(str(row["key"]))
+        if k.startswith("weapon_"):
+            alt = k[7:]
+            row = conn.execute(
+                "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
+                (alt,),
+            ).fetchone()
+            if row:
+                return w(str(row["key"]))
+
+    if has_c:
+        row = conn.execute(
+            "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+            (k,),
+        ).fetchone()
+        if row:
+            return c(str(row["key"]))
+        if k.startswith("consumable_"):
+            alt = k[11:]
+            row = conn.execute(
+                "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                (alt,),
+            ).fetchone()
+            if row:
+                return c(str(row["key"]))
+
+    if has_i:
+        row = conn.execute(
+            "SELECT key FROM game_config_items WHERE key = ? LIMIT 1",
+            (k,),
+        ).fetchone()
+        if row:
+            return i(str(row["key"]))
+
+    if k.startswith("weapon_"):
+        return w(k)
+    if k.startswith("consumable_"):
+        return c(k)
+    return i(k)
+
+
+def _inventory_key_remove_variants(raw_key: str) -> list[str]:
+    """Aliases so remove matches bare keys and legacy weapon_/consumable_ typos."""
+    k = str(raw_key or "").strip()
+    if not k:
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(x: str) -> None:
+        if x and x not in seen:
+            seen.add(x)
+            out.append(x)
+
+    add(k)
+    if k.startswith("weapon_"):
+        add(k[7:])
+    else:
+        add("weapon_" + k)
+    if k.startswith("consumable_"):
+        add(k[11:])
+    else:
+        add("consumable_" + k)
+    return out
+
+
 AVAILABLE_CMDS = [
     "add gold",
     "set gold",
@@ -128,34 +238,38 @@ def admin_cheat(
             result = {"location": loc}
 
         elif cmd == "add item":
-            item_key = str(req.key or "").strip()
-            if not item_key:
+            raw = str(req.key or "").strip()
+            if not raw:
                 raise HTTPException(status_code=422, detail="item_key_required")
-            if item_key.startswith("weapon_"):
-                conn.execute(
-                    "INSERT INTO character_inventory (character_id, weapon_key) VALUES (?, ?)",
-                    (character_id, item_key),
-                )
-            elif item_key.startswith("consumable_"):
-                conn.execute(
-                    "INSERT INTO character_inventory (character_id, consumable_key) VALUES (?, ?)",
-                    (character_id, item_key),
-                )
-            else:
-                conn.execute(
-                    "INSERT INTO character_inventory (character_id, item_key) VALUES (?, ?)",
-                    (character_id, item_key),
-                )
-            result = {"added": item_key}
+            try:
+                canonical, col = _resolve_inventory_add_key(conn, raw)
+            except ValueError:
+                raise HTTPException(status_code=422, detail="item_key_required") from None
+            conn.execute(
+                f"INSERT INTO character_inventory (character_id, {col}) VALUES (?, ?)",
+                (character_id, canonical),
+            )
+            result = {"added": canonical}
 
         elif cmd == "remove item":
             item_key = str(req.key or "").strip()
             if not item_key:
                 raise HTTPException(status_code=422, detail="item_key_required")
+            variants = _inventory_key_remove_variants(item_key)
+            if not variants:
+                raise HTTPException(status_code=422, detail="item_key_required")
+            placeholders = ",".join("?" * len(variants))
             conn.execute(
-                "DELETE FROM character_inventory "
-                "WHERE character_id = ? AND (item_key = ? OR weapon_key = ? OR consumable_key = ?)",
-                (character_id, item_key, item_key, item_key),
+                f"""
+                DELETE FROM character_inventory
+                WHERE character_id = ?
+                  AND (
+                    item_key IN ({placeholders})
+                    OR weapon_key IN ({placeholders})
+                    OR consumable_key IN ({placeholders})
+                  )
+                """,
+                (character_id, *variants, *variants, *variants),
             )
             result = {"removed": item_key}
 

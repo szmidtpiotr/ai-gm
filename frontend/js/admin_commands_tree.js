@@ -103,11 +103,11 @@ export function parseAdminCommand(raw) {
     return { cmd: `add ${p1}`, value: Number.isNaN(v) ? rest : v };
   }
   if (p0 === "add" && p1 === "weapon") {
-    const key = rest ? (rest.startsWith("weapon_") ? rest : `weapon_${rest}`) : undefined;
+    const key = rest ? rest.trim() : undefined;
     return { cmd: "add item", key };
   }
   if (p0 === "add" && p1 === "consumable") {
-    const key = rest ? (rest.startsWith("consumable_") ? rest : `consumable_${rest}`) : undefined;
+    const key = rest ? rest.trim() : undefined;
     return { cmd: "add item", key };
   }
   if (p0 === "add" && p1 === "item") {
@@ -141,4 +141,122 @@ export function parseAdminCommand(raw) {
     return { cmd: "show state" };
   }
   return null;
+}
+
+/** Cache katalogów (osobno items / weapons / consumables). */
+const CATALOG_TTL_MS = 60_000;
+/** @type {Record<string, { rows: Record<string, unknown>[] | null; at: number }>} */
+const _catalogCache = {
+  items: { rows: null, at: 0 },
+  weapons: { rows: null, at: 0 },
+  consumables: { rows: null, at: 0 },
+};
+
+/**
+ * Czy po "/admin " jesteśmy w kontekście doboru przedmiotu z katalogu DB.
+ * @param {string} afterAdmin
+ */
+export function shouldUseAdminCatalog(afterAdmin) {
+  return /^\s*add\s+(item|weapon|consumable)\b/i.test(afterAdmin || "");
+}
+
+function _apiBase() {
+  const raw =
+    typeof window !== "undefined" && window.API_BASE_URL ? String(window.API_BASE_URL) : "/api";
+  return raw.replace(/\/+$/, "");
+}
+
+/**
+ * @param {'items'|'weapons'|'consumables'} listKey
+ * @param {string} path
+ */
+async function _fetchCatalogList(listKey, path) {
+  const now = Date.now();
+  const slot = _catalogCache[listKey];
+  if (slot && slot.rows && now - slot.at < CATALOG_TTL_MS) {
+    return slot.rows;
+  }
+  const token =
+    typeof localStorage !== "undefined" ? localStorage.getItem("aigm_admin_token") : null;
+  if (!token) {
+    return [];
+  }
+  const url = `${_apiBase()}${path}`;
+  try {
+    const r = await fetch(url, {
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!r.ok) {
+      return [];
+    }
+    const data = await r.json();
+    const rows = Array.isArray(data.items) ? data.items : [];
+    if (slot) {
+      slot.rows = rows;
+      slot.at = now;
+    }
+    return rows;
+  } catch (_e) {
+    return [];
+  }
+}
+
+/**
+ * Podpowiedzi z bazy (label + key) dla "add item|weapon|consumable &lt;fragment&gt;".
+ * Zwraca null jeśli nie jesteśmy w trybie katalogu — wtedy slash_commands używa getAdminSuggestions.
+ *
+ * @param {string} afterAdmin
+ * @returns {Promise<{ command: string, description: string }[] | null>}
+ */
+export async function fetchAdminCatalogSuggestions(afterAdmin) {
+  if (!shouldUseAdminCatalog(afterAdmin)) {
+    return null;
+  }
+  const trimmed = afterAdmin.trimStart();
+  const m = trimmed.match(/^add\s+(item|weapon|consumable)\s*(.*)$/i);
+  if (!m) {
+    return [];
+  }
+  const branch = m[1].toLowerCase();
+  const rest = (m[2] || "").trim();
+  const queryToken = (rest.split(/\s+/)[0] || "").trim();
+  const q = queryToken.toLowerCase();
+
+  const listKey = branch === "item" ? "items" : branch === "weapon" ? "weapons" : "consumables";
+  const path =
+    branch === "item" ? "/admin/items" : branch === "weapon" ? "/admin/weapons" : "/admin/consumables";
+  const rows = await _fetchCatalogList(listKey, path);
+
+  const filtered = rows.filter((row) => {
+    const active = row.is_active !== false && row.is_active !== 0;
+    const label = String(row.label ?? "").toLowerCase();
+    const key = String(row.key ?? "").toLowerCase();
+    if (!q) {
+      return active;
+    }
+    return label.includes(q) || key.includes(q);
+  });
+
+  filtered.sort((a, b) =>
+    String(a.label || a.key || "").localeCompare(String(b.label || b.key || ""), undefined, {
+      sensitivity: "base",
+    }),
+  );
+
+  const max = 40;
+  const slice = filtered.slice(0, max);
+
+  return slice.map((row) => {
+    const key = String(row.key ?? "").trim();
+    const label = String(row.label ?? key).trim();
+    const cmdBranch = branch === "item" ? "item" : branch === "weapon" ? "weapon" : "consumable";
+    return {
+      command: `/admin add ${cmdBranch} ${key}`,
+      description: `${label} (${key})`,
+    };
+  });
 }

@@ -143,6 +143,45 @@ def test_add_item(client_with_auth):
     assert row[0] == "weapon_axe"
 
 
+def test_add_item_maps_prefixed_weapon_to_catalog_key(client_with_auth):
+    """Frontend used to send weapon_longsword while catalog key is longsword — store canonical key."""
+    client, db_path = client_with_auth
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE game_config_weapons (
+                key TEXT PRIMARY KEY,
+                label TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO game_config_weapons (key, label) VALUES ('longsword', 'Longsword')",
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    r = _post(client, "add item", key="weapon_longsword")
+    assert r.status_code == 200
+    assert r.json()["result"]["added"] == "longsword"
+
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            "SELECT weapon_key FROM character_inventory WHERE character_id = ? ORDER BY id DESC LIMIT 1",
+            (1,),
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row[0] == "longsword"
+
+    r2 = _post(client, "add item", key="longsword")
+    assert r2.status_code == 200
+    assert r2.json()["result"]["added"] == "longsword"
+
+
 def test_remove_item(client_with_auth):
     client, _ = client_with_auth
     _post(client, "add item", key="consumable_potion")

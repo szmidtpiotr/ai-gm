@@ -28,11 +28,11 @@ function parseCmd(raw) {
     return { cmd: `add ${p1}`, value: Number.isNaN(v) ? rest : v };
   }
   if (p0 === "add" && p1 === "weapon") {
-    const key = rest ? (rest.startsWith("weapon_") ? rest : `weapon_${rest}`) : undefined;
+    const key = rest ? rest.trim() : undefined;
     return { cmd: "add item", key };
   }
   if (p0 === "add" && p1 === "consumable") {
-    const key = rest ? (rest.startsWith("consumable_") ? rest : `consumable_${rest}`) : undefined;
+    const key = rest ? rest.trim() : undefined;
     return { cmd: "add item", key };
   }
   if (p0 === "add" && p1 === "item") return { cmd: "add item", key: rest || undefined };
