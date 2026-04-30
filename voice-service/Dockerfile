@@ -37,7 +37,11 @@ RUN mkdir -p /app/models/tts && \
     wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/pl/pl_PL/gosia/medium/pl_PL-gosia-medium.onnx \
         -O /app/models/tts/pl_PL-gosia-medium.onnx && \
     wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/pl/pl_PL/gosia/medium/pl_PL-gosia-medium.onnx.json \
-        -O /app/models/tts/pl_PL-gosia-medium.onnx.json
+        -O /app/models/tts/pl_PL-gosia-medium.onnx.json && \
+    wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/pl/pl_PL/bass/high/pl_PL-bass-high.onnx \
+        -O /app/models/tts/pl_PL-bass-high.onnx && \
+    wget -q https://huggingface.co/rhasspy/piper-voices/resolve/main/pl/pl_PL/bass/high/pl_PL-bass-high.onnx.json \
+        -O /app/models/tts/pl_PL-bass-high.onnx.json
 
 COPY . .
 
