@@ -127,8 +127,9 @@ services:
       context: ./voice-service
     container_name: ai-gm-voice-dev
     restart: unless-stopped
+    # Host port 8302 — PROD voice na tej maszynie zajmuje 8300; wewnętrznie nadal :8300.
     ports:
-      - "8300:8300"
+      - "8302:8300"
     environment:
       - VOICE_CONFIG_PATH=/app/config.json
       - VOICE_MODELS_DIR=/app/models/tts
