@@ -29,7 +29,7 @@
   let ttsEnabled = true;
   let sttEnabled = false;
   let initialized = false;
-  const STT_SILENCE_AUTO_STOP_MS = 3000;
+  const STT_SILENCE_AUTO_STOP_MS = 2000;
   const STT_MIN_VOICE_RMS_THRESHOLD = 0.03;
   const STT_NOISE_MULTIPLIER = 4.0;
   const STT_MAX_RECORDING_MS = 14000;
@@ -419,7 +419,7 @@
         // Auto-stop dopiero po realnym wykryciu mowy (nie od samego startu nagrywania).
         if (sttHadSpeech && !isSpeech && now - sttLastVoiceAt >= STT_SILENCE_AUTO_STOP_MS) {
           sttAutoStopping = true;
-          _status("Cisza 3s - zatrzymuje nasluch");
+          _status("Cisza 2s - zatrzymuje nasluch");
           sttEnabled = false;
           _setFlag(LS_STT, false);
           _syncUiState();
