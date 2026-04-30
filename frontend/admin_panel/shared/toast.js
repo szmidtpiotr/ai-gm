@@ -31,6 +31,6 @@ export function showToast(message, type = "info") {
     }, 220);
   };
 
-  setTimeout(dismiss, 4000);
+  setTimeout(dismiss, 6500);
   toast.addEventListener("click", dismiss);
 }

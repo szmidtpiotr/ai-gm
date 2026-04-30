@@ -1,0 +1,25 @@
+name: Warrior receives loot popup after defeating goblin
+goal: Sprawdzić, czy po pokonaniu goblina przez nowo utworzoną postać wojownika pojawia się automatycznie popup z lootem, umożliwiający wybór części (nie wszystkich) przedmiotów.
+persona:
+  character_class: Warrior
+  level: 1
+  equipment:
+    weapon: Short sword
+    armor: Basic
+  stats: Podstawowe statystyki startowe
+constraints:
+  - Goblin atakuje gracza od razu po rozpoczęciu spotkania.
+  - Wojownik musi przeżyć walkę.
+  - Popup z lootem pojawia się automatycznie po zakończonej walce (bez interakcji z ciałem).
+  - W loocie muszą znaleźć się co najmniej dwa różne przedmioty.
+  - Gracz może wybrać dowolną liczbę (ale nie wszystkie) przedmiotów z popupu.
+success_criteria:
+  popup_displayed: Popup z lootem pojawia się automatycznie po zwycięstwie.
+  partial_loot_possible: Gracz może wybrać tylko część dostępnych przedmiotów.
+  loot_collection: Wybrane przedmioty dodane do ekwipunku gracza; niewybrane pozostają niedostępne.
+  narration: Po zamknięciu popupu narrator generuje stosowny opis zdarzenia.
+max_steps: 12
+timeouts:
+  combat_resolution: 60s
+  popup_response: 30s
+  narration: 15s

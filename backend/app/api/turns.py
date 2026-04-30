@@ -42,6 +42,9 @@ from app.services.client_ui_config import (
 )
 from app.services.solo_death_service import apply_death_save_outcome, end_solo_campaign_on_death
 from app.services.user_llm_settings import get_user_llm_settings_full
+from app.services.location_config_service import get_bool_flag
+from app.services.location_intent_parser import LocationIntent, parse as parse_location_intent
+from app.services.location_validator import validate_move, log_integrity_violation
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
@@ -50,9 +53,186 @@ logger = get_logger(__name__)
 
 COMBAT_START_RE = re.compile(r"\[COMBAT_START:([^\]]+)\]", re.IGNORECASE)
 GRANT_ITEM_RE = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
+GRANT_GOLD_RE = re.compile(r"^Grant Gold\s+([+-]?\d+)$", re.IGNORECASE)
+OPEN_SHOP_RE = re.compile(r"^Open Shop\s+(\S+)$", re.IGNORECASE)
+# 9A-4c+ — gdy model nie generuje cue, dołącz „Open Shop” na podstawie intencji gracza i NPC w scenie.
+_TRADE_USER_INTENT_RE = re.compile(
+    r"(kup|sprzed|towar|towary|towarem|handl|handel|sklep|poka|pokaz"
+    r"|masz\s+do|cen|koszt|zapła|zapla|cennik|asorty|ofert|kram|lad|ladę|ladą|kupiec|merch)",
+    re.IGNORECASE,
+)
 GM_ROLL_CARD_PREFIX = "__AI_GM_GM_ROLL_V1__"
 # Short assistant line when combat victory follow-up skips the LLM (see create_turn_stream).
 COMBAT_VICTORY_STREAM_STUB = "Walka dobiegła końca."
+
+
+def _strip_json_code_fence(text: str) -> str:
+    """Remove markdown ```json fences that some LLMs add around JSON."""
+    value = (text or "").strip()
+    value = re.sub(r"^```(?:json)?\s*\n?", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"\n?```\s*$", "", value)
+    return value.strip()
+
+
+def _get_session_id_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> int | str | None:
+    row = conn.execute(
+        """
+        SELECT id FROM game_sessions
+        WHERE campaign_id = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        """,
+        (campaign_id,),
+    ).fetchone()
+    if row:
+        return row["id"]
+    return None
+
+
+def _inject_location_blocked(assistant_response: str, reason: str) -> str:
+    data = json.loads(_strip_json_code_fence(assistant_response))
+    narrative = str(data.get("narrative") or "").rstrip()
+    data["narrative"] = f"{narrative}\n\n[LOCATION_BLOCKED: {reason}]".strip()
+    data["location_intent"] = None
+    return json.dumps(data, ensure_ascii=False)
+
+
+def _inject_pre_llm_unknown_location_denial(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    user_text: str,
+    messages: list[dict],
+) -> bool:
+    """
+    Tryb bez auto-create: jeśli ruch zostałby zablokowany jako nieznana lokalizacja,
+    wstrzykuj instrukcję do system promptu PRZED LLM zamiast doklejać [LOCATION_BLOCKED]
+    po wygenerowanej narracji.
+
+    Returns:
+        True gdy dodano blok [SYSTEM] i należy pominąć późniejszy post-processing
+        `_process_location_intent` dla tej tury stream.
+    """
+    if not user_text.strip() or not messages:
+        return False
+    session_id = _get_session_id_for_campaign(conn, campaign_id)
+    if session_id is None:
+        return False
+    if not get_bool_flag("location_integrity_enabled", session_id, default=True):
+        return False
+    # Tryb B: auto-create — zostawiamy dotychczasowy post-hook na odpowiedzi GM
+    if get_bool_flag("location_auto_create_enabled", session_id, default=True):
+        return False
+
+    try:
+        intent = parse_location_intent(user_text, session_id)
+    except Exception as exc:
+        logger.error("pre_llm_location_intent_parse_error", error=str(exc), campaign_id=campaign_id)
+        return False
+
+    if not intent or intent.action not in ("move", "create"):
+        return False
+
+    try:
+        vr = validate_move(session_id, intent, campaign_id=campaign_id, auto_create_enabled=False)
+    except Exception as exc:
+        logger.error("pre_llm_location_validate_error", error=str(exc), campaign_id=campaign_id)
+        return False
+
+    if vr.allowed:
+        return False
+
+    reason = (vr.block_reason or "").lower()
+    if "nieznana" not in reason:
+        return False
+
+    block = (
+        f"\n[SYSTEM: Gracz próbuje przemieścić się do lokalizacji '{intent.target_label}', "
+        "która nie istnieje w bazie lokalizacji. Odmów mu narracyjnie — "
+        "opisz przeszkodę, mur, mgłę, strażnika lub inną fabularną blokadę. "
+        "NIE opisuj dotarcia do celu.]"
+    )
+    first = messages[0]
+    if isinstance(first, dict) and first.get("role") == "system":
+        first["content"] = f"{first.get('content', '').rstrip()}{block}"
+    else:
+        messages.insert(0, {"role": "system", "content": block.strip()})
+    logger.info(
+        "pre_llm_unknown_location_injection",
+        campaign_id=campaign_id,
+        session_id=session_id,
+        target_label=intent.target_label,
+    )
+    return True
+
+
+def _process_location_intent(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    assistant_response: str,
+    *,
+    skip_post_process: bool = False,
+) -> str:
+    """
+    Parse GM location_intent, validate it, update current_location_id, and inject
+    [LOCATION_BLOCKED] into JSON narrative when movement is rejected.
+    """
+    if skip_post_process:
+        return assistant_response
+
+    session_id = _get_session_id_for_campaign(conn, campaign_id)
+    if not get_bool_flag("location_integrity_enabled", session_id, default=True):
+        return assistant_response
+
+    clean_response = _strip_json_code_fence(assistant_response)
+    try:
+        intent = parse_location_intent(clean_response, session_id)
+    except Exception as exc:
+        logger.error("location_intent_parse_hook_error", error=str(exc), campaign_id=campaign_id)
+        return assistant_response
+
+    if not intent or intent.action not in ("move", "create"):
+        return assistant_response
+
+    try:
+        override_auto_create = intent.action == "create"
+        result = validate_move(
+            session_id,
+            intent,
+            campaign_id=campaign_id,
+            auto_create_enabled=True if override_auto_create else None,
+        )
+        if result.allowed and result.resolved_location_id and session_id is not None:
+            conn.execute(
+                "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+                (result.resolved_location_id, session_id),
+            )
+            conn.commit()
+            logger.info(
+                "location_updated_from_gm_response",
+                campaign_id=campaign_id,
+                session_id=session_id,
+                location_id=result.resolved_location_id,
+                is_new=result.is_new_location,
+            )
+        elif not result.allowed:
+            logger.warning(
+                "location_move_blocked",
+                campaign_id=campaign_id,
+                session_id=session_id,
+                attempted=intent.target_label,
+                reason=result.block_reason,
+            )
+            try:
+                return _inject_location_blocked(
+                    clean_response,
+                    result.block_reason or "Walidacja lokalizacji nie powiodła się",
+                )
+            except Exception:
+                return assistant_response
+    except Exception as exc:
+        logger.error("location_integrity_processing_error", error=str(exc), campaign_id=campaign_id)
+
+    return assistant_response
 
 
 def _maybe_start_combat_from_gm_tag(
@@ -624,6 +804,266 @@ def strip_last_grant_item_cue(assistant_text: str) -> str:
     return "\n".join(lines[:-1]).rstrip()
 
 
+def parse_grant_gold_cue(assistant_text: str) -> int | None:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return None
+    last_line = (lines[-1] or "").strip()
+    cue_match = GRANT_GOLD_RE.match(last_line)
+    if not cue_match:
+        return None
+    amount_raw = (cue_match.group(1) or "").strip()
+    try:
+        amount = int(amount_raw)
+    except (TypeError, ValueError):
+        return None
+    return amount if amount > 0 else None
+
+
+def strip_last_grant_gold_cue(assistant_text: str) -> str:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return assistant_text or ""
+    if not GRANT_GOLD_RE.match((lines[-1] or "").strip()):
+        return assistant_text or ""
+    return "\n".join(lines[:-1]).rstrip()
+
+
+def parse_open_shop_cue(assistant_text: str) -> str | None:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return None
+    last_line = (lines[-1] or "").strip()
+    cue_match = OPEN_SHOP_RE.match(last_line)
+    if not cue_match:
+        return None
+    npc_key = str(cue_match.group(1) or "").strip()
+    return npc_key or None
+
+
+def strip_last_open_shop_cue(assistant_text: str) -> str:
+    lines = (assistant_text or "").splitlines()
+    if not lines:
+        return assistant_text or ""
+    if not OPEN_SHOP_RE.match((lines[-1] or "").strip()):
+        return assistant_text or ""
+    return "\n".join(lines[:-1]).rstrip()
+
+
+def _extract_narrative_for_cues(text: str) -> tuple[str, dict | None]:
+    """
+    If text is JSON containing `narrative`, return (narrative, parsed_dict).
+    Otherwise return (text, None) as plain-text fallback.
+    """
+    try:
+        parsed = json.loads(_strip_json_code_fence(text))
+        if isinstance(parsed, dict) and "narrative" in parsed:
+            return str(parsed.get("narrative") or ""), parsed
+    except (ValueError, TypeError):
+        pass
+    return text, None
+
+
+def _repack_narrative(_original_text: str, narrative: str, parsed: dict | None) -> str:
+    """
+    Put cleaned narrative back into JSON if input was JSON; otherwise return narrative.
+    """
+    if parsed is None:
+        return narrative
+    try:
+        parsed["narrative"] = narrative
+        return json.dumps(parsed, ensure_ascii=False)
+    except Exception:
+        return narrative
+
+
+def _current_location_key(conn: sqlite3.Connection, campaign_id: int) -> str | None:
+    sid = _get_session_id_for_campaign(conn, campaign_id)
+    if sid is None:
+        return None
+    row = conn.execute(
+        """
+        SELECT gl.key
+        FROM game_sessions gs
+        LEFT JOIN game_locations gl ON gl.id = gs.current_location_id
+        WHERE gs.id = ?
+        """,
+        (sid,),
+    ).fetchone()
+    if row and row["key"]:
+        return str(row["key"])
+    return None
+
+
+def _shop_npc_keys_in_scene(conn: sqlite3.Connection, current_key: str | None) -> list[str]:
+    """Active NPCs with is_shop=1 at current location (+ globals), same filter as [NPC CONTEXT]."""
+    if current_key:
+        rows = conn.execute(
+            """
+            SELECT n.key
+            FROM npcs n
+            WHERE COALESCE(n.is_active, 1) = 1
+              AND COALESCE(n.is_shop, 0) = 1
+              AND (
+                EXISTS (
+                    SELECT 1 FROM npc_locations nl
+                    WHERE nl.npc_id = n.id AND nl.location_key = ?
+                )
+                OR NOT EXISTS (
+                    SELECT 1 FROM npc_locations nl2 WHERE nl2.npc_id = n.id
+                )
+              )
+            ORDER BY n.key COLLATE NOCASE
+            """,
+            (current_key,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT n.key
+            FROM npcs n
+            WHERE COALESCE(n.is_active, 1) = 1
+              AND COALESCE(n.is_shop, 0) = 1
+              AND NOT EXISTS (
+                  SELECT 1 FROM npc_locations nl WHERE nl.npc_id = n.id
+              )
+            ORDER BY n.key COLLATE NOCASE
+            """
+        ).fetchall()
+    return [str(r["key"]) for r in rows]
+
+
+def _pick_shop_npc_key(narrative: str, keys: list[str]) -> str | None:
+    if not keys:
+        return None
+    nlow = (narrative or "").lower()
+    for key in keys:
+        short = key.split("_")[-1]
+        if short and short in nlow:
+            return key
+    for key in keys:
+        if key.replace("_", "") in nlow.replace("_", ""):
+            return key
+    return keys[0]
+
+
+def maybe_append_open_shop_fallback(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    user_text: str,
+    assistant_after_combat_strip: str,
+) -> str:
+    """
+    If the model omits `Open Shop`, but the player's line is a trade intent and a shop NPC
+    is in scene, append `Open Shop <npc_key>` as the last line of `narrative` (JSON or plain).
+    """
+    raw = (assistant_after_combat_strip or "").strip()
+    ut = (user_text or "").strip()
+    if not raw or not ut:
+        return assistant_after_combat_strip
+    if not _TRADE_USER_INTENT_RE.search(ut):
+        return assistant_after_combat_strip
+
+    narrative, parsed = _extract_narrative_for_cues(raw)
+    if parse_open_shop_cue((narrative or "").strip()):
+        return assistant_after_combat_strip
+
+    loc_key = _current_location_key(conn, campaign_id)
+    keys = _shop_npc_keys_in_scene(conn, loc_key)
+    if not keys:
+        return assistant_after_combat_strip
+
+    chosen = _pick_shop_npc_key(narrative or "", keys)
+    if not chosen:
+        return assistant_after_combat_strip
+
+    new_narr = (narrative or "").rstrip() + f"\nOpen Shop {chosen}"
+    logger.info(
+        "open_shop_fallback_injected",
+        campaign_id=campaign_id,
+        npc_key=chosen,
+        location_key=loc_key,
+    )
+    return _repack_narrative(raw, new_narr.strip(), parsed)
+
+
+def extract_grant_cues(assistant_text: str) -> tuple[str, str | None, int | None, str | None]:
+    """
+    Collect GM grant cues from the end of assistant text.
+    Supports both cue kinds and both orders when they are in trailing lines.
+    Returns cleaned_text, grant_item_label, grant_gold_amount, open_shop_npc_key.
+    """
+    clean_text = (assistant_text or "").rstrip()
+    grant_item_label: str | None = None
+    grant_gold_amount: int | None = None
+    open_shop_npc_key: str | None = None
+
+    # JSON-mode GM response may carry Grant cue in `roll_cue` instead of last text line.
+    try:
+        payload = json.loads(_strip_json_code_fence(clean_text))
+    except Exception:
+        payload = None
+    if isinstance(payload, dict):
+        roll_cue = str(payload.get("roll_cue") or "").strip()
+        if roll_cue:
+            if grant_item_label is None:
+                grant_item_label = parse_grant_item_cue(roll_cue)
+            if grant_gold_amount is None:
+                grant_gold_amount = parse_grant_gold_cue(roll_cue)
+            if open_shop_npc_key is None:
+                open_shop_npc_key = parse_open_shop_cue(roll_cue)
+            if open_shop_npc_key is None:
+                open_shop_npc_key = parse_open_shop_cue(roll_cue)
+            if (
+                grant_item_label is not None
+                or grant_gold_amount is not None
+                or open_shop_npc_key is not None
+            ):
+                payload["roll_cue"] = None
+                clean_text = json.dumps(payload, ensure_ascii=False)
+
+    for _ in range(4):
+        if grant_item_label is None:
+            maybe_item = parse_grant_item_cue(clean_text)
+            if maybe_item:
+                grant_item_label = maybe_item
+                clean_text = strip_last_grant_item_cue(clean_text)
+                continue
+        if grant_gold_amount is None:
+            maybe_gold = parse_grant_gold_cue(clean_text)
+            if maybe_gold is not None:
+                grant_gold_amount = maybe_gold
+                clean_text = strip_last_grant_gold_cue(clean_text)
+                continue
+        if open_shop_npc_key is None:
+            maybe_shop = parse_open_shop_cue(clean_text)
+            if maybe_shop:
+                open_shop_npc_key = maybe_shop
+                clean_text = strip_last_open_shop_cue(clean_text)
+                continue
+        break
+    return clean_text, grant_item_label, grant_gold_amount, open_shop_npc_key
+
+
+def apply_grant_gold_to_character(
+    conn: sqlite3.Connection, *, character_id: int, amount: int
+) -> int | None:
+    if int(amount) <= 0:
+        return None
+    row = conn.execute(
+        """
+        UPDATE characters
+        SET gold_gp = COALESCE(gold_gp, 0) + ?
+        WHERE id = ?
+        RETURNING gold_gp
+        """,
+        (int(amount), int(character_id)),
+    ).fetchone()
+    if not row:
+        return None
+    return int(row["gold_gp"] or 0)
+
+
 def append_narrative_item_to_sheet(
     conn: sqlite3.Connection,
     *,
@@ -1177,6 +1617,74 @@ def create_turn(
                 )
                 return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
+            # /move — zmiana lokalizacji (Phase 8D)
+            if cmd == "/move":
+                target_location = text[5:].strip()  # Usuń "/move "
+                if not target_location:
+                    raise HTTPException(status_code=400, detail="Podaj nazwę lokalizacji: /move [nazwa]")
+                
+                # Sprawdź czy Location Integrity jest włączone
+                if not get_bool_flag("location_integrity_enabled", campaign_id, default=True):
+                    # System wyłączony — prosta zmiana bez walidacji
+                    result = {"command": "move", "location": target_location, "mode": "bypass"}
+                    log = create_turn_log(
+                        conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                        user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+                    )
+                    return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+                
+                # Walidacja przez Location Validator
+                from dataclasses import dataclass
+                
+                intent = LocationIntent(action="move", target_label=target_location)
+                result = validate_move(campaign_id, intent)
+                
+                if result.allowed:
+                    # Aktualizuj lokalizację w sesji
+                    if result.resolved_location_id:
+                        conn.execute(
+                            "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+                            (result.resolved_location_id, campaign_id)
+                        )
+                        conn.commit()
+                        
+                        # Pobierz nazwę nowej lokalizacji
+                        loc_row = conn.execute(
+                            "SELECT label FROM game_locations WHERE id = ?",
+                            (result.resolved_location_id,)
+                        ).fetchone()
+                        loc_name = loc_row["label"] if loc_row else target_location
+                    else:
+                        loc_name = target_location
+                    
+                    response_msg = f"Przenosisz się do: {loc_name}"
+                    if result.is_new_location:
+                        response_msg += " (nowa lokalizacja utworzona)"
+                    
+                    result_data = {
+                        "command": "move",
+                        "location": loc_name,
+                        "allowed": True,
+                        "is_new": result.is_new_location
+                    }
+                else:
+                    # Blokada — loguj próbę
+                    log_integrity_violation(campaign_id, intent, result.block_reason or "Nieznany powód")
+                    
+                    response_msg = f"Nie możesz się tam przenieść: {result.block_reason}"
+                    result_data = {
+                        "command": "move",
+                        "location": target_location,
+                        "allowed": False,
+                        "reason": result.block_reason
+                    }
+                
+                log = create_turn_log(
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=response_msg, route=route,
+                )
+                return _with_turn_trace({**log, "route": "command", "result": result_data}, turn_id)
+
             # /atak — stan silnika walki; /walka pozostaje aliasem (to samo zachowanie)
             if cmd in ("/atak", "/walka"):
                 result = _atak_command_response_for_api(campaign_id)
@@ -1220,6 +1728,11 @@ def create_turn(
         assistant_text = (result.get("message") or "").strip()
         if not assistant_text:
             raise HTTPException(status_code=500, detail="Empty narrative response")
+        assistant_text = _process_location_intent(
+            conn=conn,
+            campaign_id=campaign_id,
+            assistant_response=assistant_text,
+        )
 
         from app.services import combat_service as _cs
 
@@ -1229,9 +1742,12 @@ def create_turn(
         ) == "player"
 
         clean_assistant = COMBAT_START_RE.sub("", assistant_text).rstrip()
-        grant_item_label = parse_grant_item_cue(clean_assistant.strip())
-        if grant_item_label:
-            clean_assistant = strip_last_grant_item_cue(clean_assistant)
+        clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
+        _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
+        _narrative_for_cues, grant_item_label, grant_gold_amount, open_shop_npc_key = extract_grant_cues(
+            _narrative_for_cues
+        )
+        clean_assistant = _repack_narrative(clean_assistant, _narrative_for_cues, _parsed_json)
         validate_roll_cue_name(clean_assistant.strip())
 
         log = create_turn_log(
@@ -1259,6 +1775,20 @@ def create_turn(
                 given_at=f"turn:{log['turn_number']}",
             )
             conn.commit()
+        if grant_gold_amount is not None:
+            new_total = apply_grant_gold_to_character(
+                conn,
+                character_id=payload.character_id,
+                amount=grant_gold_amount,
+            )
+            conn.commit()
+            logger.info(
+                "grant_gold_applied",
+                campaign_id=campaign_id,
+                character_id=payload.character_id,
+                amount=grant_gold_amount,
+                new_total_gp=new_total,
+            )
 
         new_combat = _maybe_start_combat_from_gm_tag(
             campaign_id, payload.character_id, assistant_text
@@ -1284,6 +1814,8 @@ def create_turn(
             out["combat_state"] = new_combat
         if combat_extra:
             out.update(combat_extra)
+        if open_shop_npc_key:
+            out["open_shop"] = open_shop_npc_key
         return out
 
     except RuntimeError as e:
@@ -1587,6 +2119,10 @@ def create_turn_stream(
             roll_result_data=roll_result_data,
         )
 
+        location_skip_post_location_hook = _inject_pre_llm_unknown_location_denial(
+            conn, campaign_id, text, messages
+        )
+
         campaign_id_val = campaign_id
         character_id_val = payload.character_id
         user_text_val = user_text_stored if roll_request else llm_user_text
@@ -1740,13 +2276,35 @@ def create_turn_stream(
                 return
 
             full_raw = "".join(collected).replace("\\n", "\n")
+            hook_conn = get_db()
+            try:
+                full_raw = _process_location_intent(
+                    conn=hook_conn,
+                    campaign_id=campaign_id_val,
+                    assistant_response=full_raw,
+                    skip_post_process=location_skip_post_location_hook,
+                )
+            finally:
+                hook_conn.close()
             new_combat = None
             combat_extra = None
             if full_raw.strip():
                 clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
-                grant_item_label = parse_grant_item_cue(clean_text.strip())
-                if grant_item_label:
-                    clean_text = strip_last_grant_item_cue(clean_text)
+                fb = get_db()
+                try:
+                    clean_text = maybe_append_open_shop_fallback(
+                        fb, campaign_id_val, user_text_val, clean_text
+                    )
+                finally:
+                    fb.close()
+                _narrative_for_cues_s, _parsed_json_s = _extract_narrative_for_cues(clean_text)
+                (
+                    _narrative_for_cues_s,
+                    grant_item_label,
+                    grant_gold_amount,
+                    open_shop_npc_key,
+                ) = extract_grant_cues(_narrative_for_cues_s)
+                clean_text = _repack_narrative(clean_text, _narrative_for_cues_s, _parsed_json_s)
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(
@@ -1789,6 +2347,20 @@ def create_turn_stream(
                             given_at=f"turn:{stream_log['turn_number']}",
                         )
                         save_conn.commit()
+                    if grant_gold_amount is not None:
+                        new_total = apply_grant_gold_to_character(
+                            save_conn,
+                            character_id=character_id_val,
+                            amount=grant_gold_amount,
+                        )
+                        save_conn.commit()
+                        logger.info(
+                            "grant_gold_applied",
+                            campaign_id=campaign_id_val,
+                            character_id=character_id_val,
+                            amount=grant_gold_amount,
+                            new_total_gp=new_total,
+                        )
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, full_raw
                     )
@@ -1798,10 +2370,14 @@ def create_turn_stream(
                         )
                 finally:
                     save_conn.close()
+            else:
+                open_shop_npc_key = None
             if new_combat:
                 yield f"data: [COMBAT_STARTED]{json.dumps(new_combat)}\n\n"
             if combat_extra:
                 yield f"data: [COMBAT]{json.dumps(combat_extra)}\n\n"
+            if open_shop_npc_key:
+                yield f"data: [OPEN_SHOP]{json.dumps({'npc_key': open_shop_npc_key}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
 
         return StreamingResponse(

@@ -178,6 +178,7 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_weapons ADD COLUMN range_m INTEGER",
     "ALTER TABLE game_config_weapons ADD COLUMN weight_kg REAL NOT NULL DEFAULT 0.0",
     "ALTER TABLE game_config_weapons ADD COLUMN note TEXT",
+    "ALTER TABLE game_config_weapons ADD COLUMN value_gp INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE game_config_enemies ADD COLUMN tier TEXT NOT NULL DEFAULT 'standard'",
     "ALTER TABLE game_config_enemies ADD COLUMN attacks_per_turn INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE game_config_enemies ADD COLUMN damage_bonus INTEGER NOT NULL DEFAULT 0",
@@ -314,6 +315,153 @@ ADMIN_MIGRATIONS = [
     )
     """,
     "ALTER TABLE characters ADD COLUMN gold_gp INTEGER NOT NULL DEFAULT 0",
+    """
+    CREATE TABLE IF NOT EXISTS game_sessions (
+        id TEXT PRIMARY KEY,
+        campaign_id INTEGER,
+        test_run_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "ALTER TABLE game_sessions ADD COLUMN test_run_id TEXT",
+    """
+    CREATE TABLE IF NOT EXISTS debug_validation_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        test_run_id TEXT NOT NULL,
+        event TEXT NOT NULL,
+        is_legal INTEGER NOT NULL DEFAULT 1,
+        reason TEXT,
+        old_state TEXT,
+        new_state TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_debug_validation_log_test_run
+    ON debug_validation_log(test_run_id, created_at)
+    """,
+    # Phase 8D — Location Integrity migrations (8D-1 to 8D-4)
+    """
+    CREATE TABLE IF NOT EXISTS game_locations (
+        id INTEGER PRIMARY KEY,
+        key TEXT UNIQUE NOT NULL,
+        label TEXT NOT NULL,
+        description TEXT,
+        parent_id INTEGER REFERENCES game_locations(id),
+        location_type TEXT DEFAULT 'macro' CHECK(location_type IN ('macro', 'sub')),
+        rules TEXT,
+        enemy_keys TEXT DEFAULT '[]',
+        npc_keys TEXT DEFAULT '[]',
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_game_locations_parent
+    ON game_locations(parent_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_game_locations_key
+    ON game_locations(key)
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS npcs (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        key                 TEXT NOT NULL UNIQUE,
+        label               TEXT NOT NULL,
+        npc_type            TEXT NOT NULL DEFAULT 'neutral'
+                              CHECK (npc_type IN ('neutral', 'merchant', 'quest_giver', 'ally')),
+        description         TEXT,
+        personality_json    TEXT NOT NULL DEFAULT '{}',
+        is_shop             INTEGER NOT NULL DEFAULT 0,
+        shop_inventory_json TEXT NOT NULL DEFAULT '[]',
+        is_active           INTEGER NOT NULL DEFAULT 1,
+        created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS npc_locations (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        npc_id       INTEGER NOT NULL REFERENCES npcs(id) ON DELETE CASCADE,
+        location_key TEXT NOT NULL,
+        UNIQUE(npc_id, location_key)
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_npc_locations_npc_id
+    ON npc_locations(npc_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_npc_locations_location_key
+    ON npc_locations(location_key)
+    """,
+    "ALTER TABLE game_sessions ADD COLUMN current_location_id INTEGER REFERENCES game_locations(id)",
+    "ALTER TABLE game_sessions ADD COLUMN session_flags TEXT DEFAULT '{}'",
+    """
+    CREATE TABLE IF NOT EXISTS location_integrity_log (
+        id INTEGER PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES game_sessions(id),
+        character_id INTEGER,
+        attempted_move TEXT NOT NULL,
+        current_location_key TEXT,
+        reason_blocked TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_location_integrity_log_session
+    ON location_integrity_log(session_id, created_at)
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value) VALUES
+        ('location_integrity_enabled', '1'),
+        ('location_parser_json_enabled', '1'),
+        ('location_parser_fallback_enabled', '1')
+    """,
+    # Phase 8D — Add updated_at to game_config_meta for ON CONFLICT UPDATE
+    # Use constant default (epoch) because SQLite ALTER TABLE doesn't support function defaults
+    "ALTER TABLE game_config_meta ADD COLUMN updated_at TEXT DEFAULT '1970-01-01T00:00:00Z'",
+    # Phase 8D-5 — Location auto-create review state and DEV default flag
+    "ALTER TABLE game_locations ADD COLUMN ai_generated INTEGER DEFAULT 0",
+    "ALTER TABLE game_locations ADD COLUMN approved INTEGER DEFAULT 1",
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value)
+    VALUES ('location_auto_create_enabled', '1')
+    """,
+    # Phase 8F-1 — economy: weapon catalog prices (rows still at 0 GP after seed)
+    """
+    UPDATE game_config_weapons
+    SET value_gp = CASE key
+        WHEN 'dagger' THEN 10
+        WHEN 'longsword' THEN 30
+        WHEN 'battleaxe' THEN 55
+        WHEN 'spear' THEN 15
+        WHEN 'longbow' THEN 40
+        WHEN 'hand_crossbow' THEN 35
+        WHEN 'warhammer' THEN 45
+        WHEN 'greataxe' THEN 60
+        WHEN 'rapier' THEN 25
+        WHEN 'mace' THEN 12
+        WHEN 'halberd' THEN 55
+        WHEN 'heavy_crossbow' THEN 50
+        WHEN 'throwing_knife' THEN 5
+        WHEN 'tome_of_striking' THEN 80
+        WHEN 'staff_of_flames' THEN 75
+        WHEN 'orb_of_frost' THEN 90
+        WHEN 'wand_of_lightning' THEN 85
+        WHEN 'cursed_grimoire' THEN 120
+        ELSE COALESCE(value_gp, 0)
+    END
+    WHERE COALESCE(value_gp, 0) = 0
+      AND key IN (
+        'dagger', 'longsword', 'battleaxe', 'spear', 'longbow', 'hand_crossbow',
+        'warhammer', 'greataxe', 'rapier', 'mace', 'halberd', 'heavy_crossbow',
+        'throwing_knife', 'tome_of_striking', 'staff_of_flames', 'orb_of_frost',
+        'wand_of_lightning', 'cursed_grimoire'
+      )
+    """,
 ]
 
 ADMIN_SEEDS = [
@@ -436,6 +584,20 @@ ADMIN_SEEDS = [
     WHERE key = 'staff'
     """,
     """
+    UPDATE game_config_weapons
+    SET value_gp = CASE key
+        WHEN 'shortsword' THEN 15
+        WHEN 'sword' THEN 25
+        WHEN 'shield' THEN 12
+        WHEN 'shortbow' THEN 25
+        WHEN 'staff' THEN 6
+        WHEN 'wooden_shield' THEN 8
+        WHEN 'quarterstaff' THEN 7
+        ELSE COALESCE(value_gp, 0)
+    END
+    WHERE key IN ('shortsword', 'sword', 'shield', 'shortbow', 'staff', 'wooden_shield', 'quarterstaff')
+    """,
+    """
     INSERT OR IGNORE INTO game_config_items (
         key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active,
         proficiency_classes, note, locked_at, created_at, updated_at
@@ -485,6 +647,55 @@ ADMIN_SEEDS = [
         updated_at = datetime('now')
     WHERE key = 'scholar'
     """,
+    """
+    INSERT OR IGNORE INTO npcs
+    (key, label, npc_type, description, personality_json, is_shop, shop_inventory_json, is_active, created_at, updated_at)
+    VALUES
+    (
+        'merchant_aldric', 'Aldric, kupiec', 'merchant',
+        'Wędrowny kupiec z towarami pierwszej potrzeby.',
+        '{"personality":"sknerski, podejrzliwy, lubi plotki o lokalnych sprawach","topics":["handel","ceny","lokalne wiadomości"],"secret":null}',
+        1, '[]', 1, datetime('now'), datetime('now')
+    ),
+    (
+        'innkeeper_marta', 'Marta, karczmarka', 'neutral',
+        'Gospodyni lokalnej karczmy, zna wszystkie plotki.',
+        '{"personality":"gadatliwa, serdeczna, dobra gospodyni","topics":["plotki","noclegi","jedzenie","lokalni mieszkańcy"],"secret":null}',
+        0, '[]', 1, datetime('now'), datetime('now')
+    ),
+    (
+        'quest_giver_eldran', 'Eldran, mag', 'quest_giver',
+        'Tajemniczy mag szukający odważnych poszukiwaczy.',
+        '{"personality":"enigmatyczny, mówi zagadkami, zna starą wiedzę","topics":["magia","zadania","artefakty","historia świata"],"secret":"szuka zaginionego tomu zaklinarzy"}',
+        0, '[]', 1, datetime('now'), datetime('now')
+    ),
+    (
+        'blacksmith_goran', 'Goran, kowal', 'merchant',
+        'Kowal specjalizujący się w broni i zbroi.',
+        '{"personality":"lakoniczny, konkretny, dumny ze swojego rzemiosła","topics":["broń","zbroja","naprawa ekwipunku"],"secret":null}',
+        1, '[]', 1, datetime('now'), datetime('now')
+    )
+    """,
+    """
+    UPDATE npcs
+    SET shop_inventory_json = json('[{"type":"weapon","key":"shortsword"},{"type":"item","key":"health_potion"},{"type":"item","key":"torch"}]'),
+        updated_at = datetime('now')
+    WHERE key = 'merchant_aldric'
+    """,
+    """
+    UPDATE npcs
+    SET shop_inventory_json = json('[{"type":"weapon","key":"shortsword"},{"type":"weapon","key":"shortbow"},{"type":"armor","key":"leatherarmor"}]'),
+        updated_at = datetime('now')
+    WHERE key = 'blacksmith_goran'
+    """,
+    """
+    INSERT OR IGNORE INTO npc_locations (npc_id, location_key)
+    SELECT id, 'inn_main'
+    FROM npcs
+    WHERE key = 'innkeeper_marta'
+      AND EXISTS (SELECT 1 FROM game_locations WHERE key = 'inn_main')
+    """,
+    # Phase 8D — Location Integrity default flags (8D-3)
 ]
 
 
@@ -643,6 +854,13 @@ def _upgrade_loot_entries_three_way_xor(conn: sqlite3.Connection) -> None:
 
 def _migrate_legacy_archetype_json(conn: sqlite3.Connection) -> None:
     """One-time: normalize legacy archetype / allowed_classes JSON tokens to scholar."""
+    # Check if required tables exist (for fresh/test databases)
+    tables_exist = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name IN ('game_config_weapons', 'characters')"
+    ).fetchall()
+    if len(tables_exist) < 2:
+        return  # Tables don't exist yet, skip migration
+    
     _m = "ma" + "ge"
     _s = "scho" + "lar"
     q = chr(34)
@@ -784,12 +1002,23 @@ def run_admin_migrations() -> None:
         _upgrade_loot_entries_three_way_xor(conn)
 
         for sql in ADMIN_SEEDS:
-            conn.execute(sql)
-            conn.commit()
-            logger.info(
-                "admin_migration_seeded",
-                sql_preview=sql.strip().splitlines()[0],
-            )
+            try:
+                conn.execute(sql)
+                conn.commit()
+                logger.info(
+                    "admin_migration_seeded",
+                    sql_preview=sql.strip().splitlines()[0],
+                )
+            except sqlite3.OperationalError as e:
+                msg = str(e).lower()
+                if "already exists" in msg or "duplicate column" in msg:
+                    logger.info(
+                        "admin_migration_seeded_skipped",
+                        sql_preview=sql.strip().splitlines()[0],
+                        reason=str(e),
+                    )
+                else:
+                    raise
 
         _migrate_legacy_archetype_json(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)

@@ -1,0 +1,353 @@
+{
+  "title": "Test Runner - AI Agent Observability",
+  "uid": "test-runner-observability",
+  "description": "Dashboard for monitoring AI Test Agent runs, debugging step execution, and tracking test outcomes",
+  "schemaVersion": 38,
+  "version": 2,
+  "refresh": "30s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "run_id",
+        "type": "textbox",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Run ID",
+        "description": "Filter by specific test run ID"
+      },
+      {
+        "name": "scenario_name",
+        "type": "textbox",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "hide": 0,
+        "label": "Scenario Name",
+        "description": "Filter by scenario name"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Test Runner - Podsumowanie (ostatnia godzina)",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki"
+          },
+          "expr": "sum(count_over_time({service=\"test-agent\"} |= `run_completed` [1h]))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "graphMode": "none",
+        "colorMode": "value",
+        "justifyMode": "center",
+        "textMode": "value"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Sukcesy / Porażki",
+      "type": "piechart",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki"
+          },
+          "expr": "{service=\"test-agent\"} |= `run_completed` | json | line_format `{{.success}}`",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "right"
+        },
+        "pieType": "pie"
+      }
+    },
+    {
+      "id": 3,
+      "title": "Średni czas trwania testu (ms)",
+      "type": "stat",
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki"
+          },
+          "expr": "avg_over_time(({service=\"test-orchestrator\"} |= `run_cleanup` | json | unwrap duration_ms)[1h])",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "graphMode": "area",
+        "colorMode": "value"
+      }
+    },
+    {
+      "id": 4,
+      "title": "Logi Test Agent - Real-time",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki"
+          },
+          "expr": "{service=\"test-agent\"} |= \"$run_id\" | json",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 5,
+      "title": "Logi Orchestrator - Kroki i akcje",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 10
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki"
+          },
+          "expr": "{service=\"test-orchestrator\"} |= \"$run_id\" | json",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 6,
+      "title": "Akcje wykonane w krokach",
+      "type": "table",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki"
+          },
+          "expr": "{service=\"test-orchestrator\"} |= `step_action` | json | line_format `{{.step}} | {{.action_type}} | {{.reasoning}}`",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showHeader": true
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Błędy i problemy (ERROR/WARN)",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki"
+          },
+          "expr": "{service=~\"test-agent|test-orchestrator|backend\"} |~ \"(error|ERROR|warn|WARN)\" |= \"$run_id\" | json",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 8,
+      "title": "Liczba kroków w testach (histogram)",
+      "type": "histogram",
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki"
+          },
+          "expr": "sum(count_over_time({service=\"test-agent\"} |= `run_completed` [1h]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "EventSource / Połączenia SSE",
+      "type": "logs",
+      "gridPos": {
+        "x": 12,
+        "y": 22,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki"
+          },
+          "expr": "{service=~\"test-agent|backend\"} |~ \"(sse|stream|EventSource|połączenie przerwane)\" | json",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    },
+    {
+      "id": 10,
+      "title": "Debug: wait_for_gm_response (Krok 0 issues)",
+      "type": "logs",
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "loki",
+        "uid": ""
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki"
+          },
+          "expr": "{service=~\"test-agent|test-orchestrator|backend\"} |~ \"(wait_for_gm|gm_response|Krok 0|narration|message.assistant)\" |= \"$run_id\" | json",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      }
+    }
+  ]
+}

@@ -4,6 +4,9 @@
     token: "",
     connected: false,
     selectedImportPayload: null,
+    locations: [],
+    locationEnemies: [], // enemies assigned to current location being edited
+    currentSessionId: null, // for location flags and logs
   };
 
   const el = {};
@@ -55,6 +58,34 @@
     el.newConditionDesc = document.getElementById("new-condition-desc");
     el.newConditionActive = document.getElementById("new-condition-active");
     el.newConditionBtn = document.getElementById("new-condition-btn");
+    
+    // Locations elements
+    el.locationsTree = document.getElementById("locations-tree");
+    el.locationKey = document.getElementById("location-key");
+    el.locationLabel = document.getElementById("location-label");
+    el.locationType = document.getElementById("location-type");
+    el.locationParent = document.getElementById("location-parent");
+    el.locationDescription = document.getElementById("location-description");
+    el.locationRules = document.getElementById("location-rules");
+    el.locationRulesError = document.getElementById("location-rules-error");
+    el.locationEnemyTags = document.getElementById("location-enemy-tags");
+    el.locationEnemySelect = document.getElementById("location-enemy-select");
+    el.locationAddEnemyBtn = document.getElementById("location-add-enemy-btn");
+    el.locationEditMode = document.getElementById("location-edit-mode");
+    el.locationSaveBtn = document.getElementById("location-save-btn");
+    el.locationCancelBtn = document.getElementById("location-cancel-btn");
+    el.locationDeleteBtn = document.getElementById("location-delete-btn");
+    el.flagIntegrity = document.getElementById("flag-integrity");
+    el.flagParserJson = document.getElementById("flag-parser-json");
+    el.flagParserFallback = document.getElementById("flag-parser-fallback");
+    el.locationsFlagsInfo = document.getElementById("locations-flags-info");
+    el.locationsFlagsReset = document.getElementById("locations-flags-reset");
+    el.locationsFlagsSave = document.getElementById("locations-flags-save");
+    el.locationLogSince = document.getElementById("location-log-since");
+    el.locationLogUntil = document.getElementById("location-log-until");
+    el.locationLogRefresh = document.getElementById("location-log-refresh");
+    el.locationLogTable = document.getElementById("location-log-table");
+    
     el.devUsername = document.getElementById("admin-dev-username");
     el.devPassword = document.getElementById("admin-dev-password");
     el.devLoginBtn = document.getElementById("admin-dev-login-btn");
@@ -314,6 +345,480 @@
     );
   }
 
+  // ============ LOCATIONS ============
+  
+  async function loadLocations() {
+    if (!el.locationsTree) return;
+    try {
+      const data = await api("/locations");
+      state.locations = data.locations || [];
+      renderLocationsTree(state.locations);
+      updateLocationParentSelect();
+      updateLocationEnemySelect();
+    } catch (err) {
+      log(`Load locations failed -> ${err.message}`);
+      el.locationsTree.innerHTML = `<p class="muted">Błąd ładowania lokalizacji: ${esc(err.message)}</p>`;
+    }
+  }
+  
+  function renderLocationsTree(locations) {
+    if (!locations || locations.length === 0) {
+      el.locationsTree.innerHTML = '<p class="muted">Brak lokalizacji. Użyj formularza poniżej aby dodać pierwszą.</p>';
+      return;
+    }
+    
+    // Build tree structure: macro locations with their children
+    const macroLocs = locations.filter(l => l.type === 'macro' || !l.parent_id);
+    const subLocs = locations.filter(l => l.type === 'sub' && l.parent_id);
+    
+    let html = '<div class="location-tree"><ul>';
+    
+    for (const macro of macroLocs) {
+      const children = subLocs.filter(l => l.parent_id === macro.id);
+      const isExpanded = true; // Always expanded for now
+      const activeClass = macro.is_active ? '' : 'inactive';
+      
+      html += `
+        <li>
+          <div class="location-node ${activeClass}" data-id="${esc(macro.id)}" data-type="macro">
+            <span class="expand-btn">${children.length > 0 ? (isExpanded ? '▼' : '▶') : '·'}</span>
+            <span class="location-icon">🏛️</span>
+            <span class="location-label">${esc(macro.label)}</span>
+            <span class="location-key">${esc(macro.key)}</span>
+            <span class="location-type macro">makro</span>
+            <span class="location-actions">
+              <button class="secondary" data-action="edit-location" data-id="${esc(macro.id)}">Edit</button>
+            </span>
+          </div>
+          ${children.length > 0 ? renderLocationChildren(children) : ''}
+        </li>
+      `;
+    }
+    
+    // Orphan sub locations (shouldn't happen but handle gracefully)
+    const orphans = subLocs.filter(l => !macroLocs.some(m => m.id === l.parent_id));
+    if (orphans.length > 0) {
+      html += `<li style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #475569;"><em class="muted">Lokalizacje bez parenta:</em></li>`;
+      html += renderLocationChildren(orphans, true);
+    }
+    
+    html += '</ul></div>';
+    el.locationsTree.innerHTML = html;
+  }
+  
+  function renderLocationChildren(children, isOrphan = false) {
+    if (!children || children.length === 0) return '';
+    
+    let html = `<ul class="children" ${isOrphan ? 'style="border-left: 1px dashed #ef4444;"' : ''}>`;
+    for (const child of children) {
+      const activeClass = child.is_active ? '' : 'inactive';
+      html += `
+        <li>
+          <div class="location-node ${activeClass}" data-id="${esc(child.id)}" data-type="sub">
+            <span class="location-icon">📍</span>
+            <span class="location-label">${esc(child.label)}</span>
+            <span class="location-key">${esc(child.key)}</span>
+            <span class="location-type sub">sub</span>
+            <span class="location-actions">
+              <button class="secondary" data-action="edit-location" data-id="${esc(child.id)}">Edit</button>
+            </span>
+          </div>
+        </li>
+      `;
+    }
+    html += '</ul>';
+    return html;
+  }
+  
+  function updateLocationParentSelect() {
+    if (!el.locationParent) return;
+    const macros = state.locations.filter(l => l.type === 'macro' || !l.parent_id);
+    let options = '<option value="">— Brak parenta (makro) —</option>';
+    for (const m of macros) {
+      options += `<option value="${esc(m.id)}">${esc(m.label)} (${esc(m.key)})</option>`;
+    }
+    el.locationParent.innerHTML = options;
+  }
+  
+  async function updateLocationEnemySelect() {
+    if (!el.locationEnemySelect) return;
+    try {
+      const data = await api("/admin/enemies");
+      const enemies = data.items || [];
+      let options = '<option value="">— Wybierz wroga —</option>';
+      for (const e of enemies.filter(x => x.is_active)) {
+        options += `<option value="${esc(e.key)}">${esc(e.label)} (${esc(e.key)})</option>`;
+      }
+      el.locationEnemySelect.innerHTML = options;
+    } catch (err) {
+      // Silently fail - enemy assignment is optional
+    }
+  }
+  
+  function renderLocationEnemyTags() {
+    if (!el.locationEnemyTags) return;
+    if (!state.locationEnemies || state.locationEnemies.length === 0) {
+      el.locationEnemyTags.innerHTML = '<em class="muted">Brak przypisanych wrogów</em>';
+      return;
+    }
+    
+    el.locationEnemyTags.innerHTML = state.locationEnemies.map(key => `
+      <span class="enemy-tag">
+        ${esc(key)}
+        <span class="remove-enemy" data-enemy="${esc(key)}">×</span>
+      </span>
+    `).join('');
+  }
+  
+  function validateLocationRules() {
+    if (!el.locationRules || !el.locationRulesError) return true;
+    const value = el.locationRules.value.trim();
+    if (!value) {
+      el.locationRules.classList.remove('json-valid', 'json-invalid');
+      el.locationRulesError.style.display = 'none';
+      return true;
+    }
+    
+    try {
+      JSON.parse(value);
+      el.locationRules.classList.remove('json-invalid');
+      el.locationRules.classList.add('json-valid');
+      el.locationRulesError.style.display = 'none';
+      return true;
+    } catch (e) {
+      el.locationRules.classList.remove('json-valid');
+      el.locationRules.classList.add('json-invalid');
+      el.locationRulesError.style.display = 'block';
+      el.locationRulesError.textContent = `Błąd JSON: ${e.message}`;
+      return false;
+    }
+  }
+  
+  function clearLocationForm() {
+    el.locationEditMode.value = '';
+    el.locationKey.value = '';
+    el.locationLabel.value = '';
+    el.locationType.value = 'macro';
+    el.locationParent.value = '';
+    el.locationDescription.value = '';
+    el.locationRules.value = '';
+    el.locationRules.classList.remove('json-valid', 'json-invalid');
+    el.locationRulesError.style.display = 'none';
+    state.locationEnemies = [];
+    renderLocationEnemyTags();
+    el.locationDeleteBtn.style.display = 'none';
+    el.locationParent.disabled = false;
+  }
+  
+  function editLocation(id) {
+    const loc = state.locations.find(l => String(l.id) === String(id));
+    if (!loc) return;
+    
+    el.locationEditMode.value = id;
+    el.locationKey.value = loc.key || '';
+    el.locationLabel.value = loc.label || '';
+    el.locationType.value = loc.type || 'macro';
+    el.locationParent.value = loc.parent_id || '';
+    el.locationDescription.value = loc.description || '';
+    
+    // Format rules for display (JSON if valid object, else as-is)
+    if (loc.rules) {
+      if (typeof loc.rules === 'object') {
+        el.locationRules.value = JSON.stringify(loc.rules, null, 2);
+      } else {
+        el.locationRules.value = String(loc.rules);
+      }
+    } else {
+      el.locationRules.value = '';
+    }
+    validateLocationRules();
+    
+    // Load enemies
+    state.locationEnemies = Array.isArray(loc.enemy_keys) ? [...loc.enemy_keys] : [];
+    renderLocationEnemyTags();
+    
+    // Disable parent change for existing locations (to prevent tree issues)
+    el.locationParent.disabled = true;
+    el.locationDeleteBtn.style.display = 'inline-block';
+  }
+  
+  async function saveLocation() {
+    const isEdit = !!el.locationEditMode.value;
+    const id = el.locationEditMode.value;
+    
+    const payload = {
+      key: el.locationKey.value.trim() || slugify(el.locationLabel.value),
+      label: el.locationLabel.value.trim(),
+      type: el.locationType.value,
+      parent_id: el.locationParent.value ? parseInt(el.locationParent.value, 10) : null,
+      description: el.locationDescription.value.trim(),
+      rules: parseLocationRules(el.locationRules.value),
+      enemy_keys: state.locationEnemies,
+    };
+    
+    if (!payload.label) {
+      alert("Label jest wymagany");
+      return;
+    }
+    
+    if (!payload.key) {
+      alert("Key jest wymagany (lub label musi być wypełniony)");
+      return;
+    }
+    
+    try {
+      if (isEdit) {
+        // PUT to update
+        await api(`/locations/${esc(payload.key)}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+        log(`Updated location: ${payload.key}`);
+      } else {
+        // POST to create
+        await api("/locations", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        log(`Created location: ${payload.key}`);
+      }
+      clearLocationForm();
+      await loadLocations();
+    } catch (err) {
+      log(`Save location failed -> ${err.message}`);
+      alert(err.message);
+    }
+  }
+  
+  async function deleteLocation() {
+    const id = el.locationEditMode.value;
+    const loc = state.locations.find(l => String(l.id) === String(id));
+    if (!loc) return;
+    
+    if (!confirm(`Czy na pewno usunąć lokalizację "${loc.label}" (${loc.key})?`)) {
+      return;
+    }
+    
+    try {
+      await api(`/locations/${esc(loc.key)}`, { method: "DELETE" });
+      log(`Deleted location: ${loc.key}`);
+      clearLocationForm();
+      await loadLocations();
+    } catch (err) {
+      log(`Delete location failed -> ${err.message}`);
+      alert(err.message);
+    }
+  }
+  
+  function slugify(text) {
+    if (!text) return '';
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '_')
+      .substring(0, 50);
+  }
+  
+  function parseLocationRules(value) {
+    const trimmed = value.trim();
+    if (!trimmed) return {};
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return { text: trimmed };
+    }
+  }
+  
+  // ============ LOCATION FLAGS ============
+  
+  async function loadLocationFlags() {
+    if (!el.flagIntegrity) return;
+    // Load global defaults first
+    try {
+      const global = await api("/admin/config/location-flags");
+      const defaults = {
+        location_integrity_enabled: true,
+        location_parser_json_enabled: true,
+        location_parser_fallback_enabled: true,
+        ...global,
+      };
+      
+      // If we have a current session, load session-specific flags
+      if (state.currentSessionId) {
+        try {
+          const session = await api(`/admin/session/${state.currentSessionId}/flags`);
+          const effective = session.effective || {};
+          el.flagIntegrity.checked = effective.location_integrity_enabled ?? defaults.location_integrity_enabled;
+          el.flagParserJson.checked = effective.location_parser_json_enabled ?? defaults.location_parser_json_enabled;
+          el.flagParserFallback.checked = effective.location_parser_fallback_enabled ?? defaults.location_parser_fallback_enabled;
+          
+          const overrides = session.overrides || {};
+          const hasOverrides = Object.keys(overrides).length > 0;
+          el.locationsFlagsInfo.textContent = `Session: ${state.currentSessionId} | Global: ${defaults.location_integrity_enabled ? 'ON' : 'OFF'} / ${defaults.location_parser_json_enabled ? 'ON' : 'OFF'} / ${defaults.location_parser_fallback_enabled ? 'ON' : 'OFF'}${hasOverrides ? ' | Zmieniono' : ''}`;
+        } catch (err) {
+          // Session-specific flags not available, use global
+          setFlagDefaults(defaults);
+        }
+      } else {
+        setFlagDefaults(defaults);
+      }
+    } catch (err) {
+      log(`Load location flags failed -> ${err.message}`);
+    }
+  }
+  
+  function setFlagDefaults(defaults) {
+    el.flagIntegrity.checked = defaults.location_integrity_enabled ?? true;
+    el.flagParserJson.checked = defaults.location_parser_json_enabled ?? true;
+    el.flagParserFallback.checked = defaults.location_parser_fallback_enabled ?? true;
+    el.locationsFlagsInfo.textContent = `Global defaults: ${el.flagIntegrity.checked ? 'ON' : 'OFF'} / ${el.flagParserJson.checked ? 'ON' : 'OFF'} / ${el.flagParserFallback.checked ? 'ON' : 'OFF'} (brak wybranej sesji)`;
+  }
+  
+  async function saveLocationFlags() {
+    const flags = {
+      location_integrity_enabled: el.flagIntegrity.checked,
+      location_parser_json_enabled: el.flagParserJson.checked,
+      location_parser_fallback_enabled: el.flagParserFallback.checked,
+    };
+    
+    try {
+      if (state.currentSessionId) {
+        await api(`/admin/session/${state.currentSessionId}/flags`, {
+          method: "PATCH",
+          body: JSON.stringify(flags),
+        });
+        log(`Saved location flags for session ${state.currentSessionId}`);
+      } else {
+        // Save as global defaults (admin config)
+        await api("/admin/config/location-flags", {
+          method: "PUT",
+          body: JSON.stringify(flags),
+        });
+        log("Saved global location flags");
+      }
+      await loadLocationFlags();
+    } catch (err) {
+      log(`Save location flags failed -> ${err.message}`);
+      alert(err.message);
+    }
+  }
+  
+  async function resetLocationFlags() {
+    if (!confirm("Resetować flagi do wartości globalnych?")) return;
+    
+    try {
+      if (state.currentSessionId) {
+        await api(`/admin/session/${state.currentSessionId}/flags`, {
+          method: "DELETE",
+        });
+        log(`Reset location flags for session ${state.currentSessionId}`);
+      }
+      clearLocationForm();
+      await loadLocationFlags();
+    } catch (err) {
+      log(`Reset location flags failed -> ${err.message}`);
+      alert(err.message);
+    }
+  }
+  
+  // ============ LOCATION LOG ============
+  
+  async function loadLocationLog() {
+    if (!el.locationLogTable) return;
+    
+    const params = new URLSearchParams();
+    if (el.locationLogSince?.value) params.append("since", el.locationLogSince.value);
+    if (el.locationLogUntil?.value) params.append("until", el.locationLogUntil.value);
+    if (state.currentSessionId) params.append("session_id", state.currentSessionId);
+    params.append("limit", "50");
+    
+    try {
+      const data = await api(`/admin/location-log?${params.toString()}`);
+      const logs = data.logs || [];
+      
+      if (logs.length === 0) {
+        el.locationLogTable.innerHTML = '<p class="muted">Brak wpisów w logu dla wybranych kryteriów.</p>';
+        return;
+      }
+      
+      let html = '';
+      for (const log of logs) {
+        const blocked = log.blocked;
+        const entryClass = blocked ? 'blocked' : 'allowed';
+        const icon = blocked ? '🚫' : '✅';
+        const time = new Date(log.created_at).toLocaleString('pl-PL');
+        
+        html += `
+          <div class="log-entry ${entryClass}">
+            <span class="log-time">${esc(time)}</span> | 
+            <strong>${icon} ${esc(log.player_intent)}</strong> → 
+            <span class="log-location">${esc(log.from_location_key)} → ${esc(log.to_location_key)}</span>
+            ${log.reason ? `<span class="log-reason">(${esc(log.reason)})</span>` : ''}
+          </div>
+        `;
+      }
+      el.locationLogTable.innerHTML = html;
+    } catch (err) {
+      log(`Load location log failed -> ${err.message}`);
+      el.locationLogTable.innerHTML = `<p class="muted">Błąd ładowania logu: ${esc(err.message)}</p>`;
+    }
+  }
+  
+  // ============ LOCATIONS EVENT HANDLERS ============
+  
+  function setupLocationsEvents() {
+    // Tree edit buttons
+    el.locationsTree?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-action="edit-location"]');
+      if (btn) {
+        const id = btn.dataset.id;
+        editLocation(id);
+      }
+    });
+    
+    // Form buttons
+    el.locationSaveBtn?.addEventListener('click', saveLocation);
+    el.locationCancelBtn?.addEventListener('click', clearLocationForm);
+    el.locationDeleteBtn?.addEventListener('click', deleteLocation);
+    
+    // Enemy management
+    el.locationAddEnemyBtn?.addEventListener('click', () => {
+      const enemy = el.locationEnemySelect?.value;
+      if (!enemy) return;
+      if (!state.locationEnemies.includes(enemy)) {
+        state.locationEnemies.push(enemy);
+        renderLocationEnemyTags();
+      }
+      el.locationEnemySelect.value = '';
+    });
+    
+    el.locationEnemyTags?.addEventListener('click', (e) => {
+      const remove = e.target.closest('.remove-enemy');
+      if (remove) {
+        const enemy = remove.dataset.enemy;
+        state.locationEnemies = state.locationEnemies.filter(k => k !== enemy);
+        renderLocationEnemyTags();
+      }
+    });
+    
+    // JSON validation on input
+    el.locationRules?.addEventListener('input', validateLocationRules);
+    
+    // Flags
+    el.locationsFlagsSave?.addEventListener('click', saveLocationFlags);
+    el.locationsFlagsReset?.addEventListener('click', resetLocationFlags);
+    
+    // Log
+    el.locationLogRefresh?.addEventListener('click', loadLocationLog);
+    
+    // Type change affects parent
+    el.locationType?.addEventListener('change', () => {
+      const isMacro = el.locationType.value === 'macro';
+      el.locationParent.disabled = isMacro;
+      if (isMacro) el.locationParent.value = '';
+    });
+  }
+
   function clampCampaignHistoryMaxTurns(raw) {
     const n = Number.parseInt(String(raw || "200"), 10);
     if (Number.isNaN(n)) return 200;
@@ -507,6 +1012,7 @@
       loadWeapons(),
       loadEnemies(),
       loadConditions(),
+      loadLocations(),
       loadAccounts(),
       loadUserLlmUsers(),
       loadCampaignHistory(),
@@ -1232,6 +1738,10 @@
     document.body.addEventListener("click", handleSave);
     document.body.addEventListener("click", handleDelete);
     document.body.addEventListener("click", handleReset);
+    
+    // Setup Locations events
+    setupLocationsEvents();
+    
     el.tabButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
         const tab = btn.dataset.tab;
@@ -1257,6 +1767,15 @@
           loadCharacterRecreateList().catch((err) => {
             log(`Ładowanie listy postaci nie powiodło się -> ${err.message}`);
             alert(err.message);
+          });
+        }
+        if (tab === "locations" && state.connected) {
+          loadLocations().catch((err) => {
+            log(`Ładowanie lokalizacji nie powiodło się -> ${err.message}`);
+            alert(err.message);
+          });
+          loadLocationFlags().catch((err) => {
+            log(`Ładowanie flag lokalizacji nie powiodło się -> ${err.message}`);
           });
         }
         if (tab === "observability" && state.connected) {

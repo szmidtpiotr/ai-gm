@@ -6,6 +6,23 @@
   <title>AI-GM</title>
   <link rel="stylesheet" href="./styles.css">
   <link rel="stylesheet" href="./css/combat.css">
+  <script>
+    (function() {
+      fetch('/api/debug/settings/feature_flags')
+        .then(function(r) { return r.json(); })
+        .then(function(flags) {
+          if (flags && flags.ai_test_mode) {
+            var s = document.createElement('script');
+            s.src = '/js/otel_init.js';
+            s.defer = true;
+            document.head.appendChild(s);
+          }
+        })
+        .catch(function() {
+          // Keep normal gameplay unaffected if debug flags are unavailable.
+        });
+    })();
+  </script>
 </head>
 <body>
   <div
@@ -101,6 +118,14 @@
           <div class="campaign-character-in-llm">
             <div class="field">
               <label for="campaign-select" id="label-campaign">Kampania</label>
+              <span
+                class="muted"
+                data-testid="player-location"
+                id="player-location-hud"
+                style="margin-left: 0.5rem; font-size: 0.9em"
+                title="Etykieta testowa (AI Test Agent); treść może być uzupełniana przez grę"
+                >—</span
+              >
               <div class="field-row campaign-select-row">
                 <select id="campaign-select"></select>
                 <div class="campaign-action-buttons">
@@ -127,14 +152,22 @@
           </button>
         </div>
         <!-- Thinking bubble is inserted here dynamically by ui.js -->
-        <div class="chat" id="chat"></div>
+        <div class="chat" id="chat" data-testid="chat-messages"></div>
 
         <div class="chat history-panel" id="history-panel">
           <div class="muted">Historia kampanii...</div>
         </div>
+        <div id="voice-status" class="voice-status voice-status-chat" aria-live="polite"></div>
 
         <div class="composer">
-          <textarea id="input" placeholder="Akcja, /sheet, /mem [pytanie o przeszłość]…"></textarea>
+          <div class="input-with-mic">
+            <textarea
+              id="input"
+              data-testid="chat-input"
+              placeholder="Akcja, /sheet, /mem [pytanie o przeszłość]…"
+            ></textarea>
+            <button type="button" id="stt-input-mic" class="stt-input-mic" aria-pressed="false" title="Start/stop nasluchu">🎤</button>
+          </div>
           <div class="composer-actions">
             <button type="button" class="secondary" id="contextual-roll-btn" style="display:none;">
               🎲 Rzuć d20
@@ -161,7 +194,7 @@
                 Ucieczka
               </button>
             </div>
-            <button type="button" id="send-btn">Wyślij</button>
+            <button type="button" id="send-btn" data-testid="chat-send">Wyślij</button>
           </div>
         </div>
       </div>
@@ -193,6 +226,16 @@
           >
             📋 Copy Debug
           </button>
+          <div class="voice-controls-row">
+            <button type="button" id="tts-toggle" class="voice-toggle" title="Czytaj odpowiedzi GM" aria-pressed="false">
+              <span class="voice-toggle-icon" aria-hidden="true">🔊</span>
+              <span class="voice-toggle-label">TTS</span>
+            </button>
+            <button type="button" id="stt-toggle" class="voice-toggle" title="Mów zamiast pisać" aria-pressed="false">
+              <span class="voice-toggle-icon" aria-hidden="true">🎤</span>
+              <span class="voice-toggle-label">MIC</span>
+            </button>
+          </div>
           <div
             id="combat-debug-status"
             class="muted"
@@ -202,6 +245,14 @@
           >
             COMBAT: —
           </div>
+          <details
+            id="location-debug-panel"
+            class="muted"
+            style="font-size: 11px; font-family: ui-monospace, monospace; line-height: 1.35; word-break: break-word; opacity: 0.92;"
+          >
+            <summary style="cursor:pointer;">LOCATION: brak intencji</summary>
+            <pre id="location-debug-json" style="white-space: pre-wrap; margin: 6px 0 0;">—</pre>
+          </details>
         </div>
       </aside>
     </div>
@@ -317,18 +368,38 @@
     </section>
   </div>
 
+  <div class="character-modal-overlay" id="shop-modal" aria-hidden="true" hidden>
+    <section class="character-modal campaign-modal" role="dialog" aria-modal="true" aria-labelledby="shop-title">
+      <button type="button" class="character-modal-close secondary" id="shop-close-btn" aria-label="Zamknij">×</button>
+      <h2 id="shop-title">🏪 Sklep</h2>
+      <p class="muted">Twoje złoto: <strong><span id="shop-gold">0</span> GP</strong></p>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div>
+          <h3 style="margin: 8px 0;">Kup</h3>
+          <ul id="shop-buy-list" style="list-style: none; padding-left: 0; margin: 0;"></ul>
+        </div>
+        <div>
+          <h3 style="margin: 8px 0;">Sprzedaj</h3>
+          <ul id="shop-sell-list" style="list-style: none; padding-left: 0; margin: 0;"></ul>
+        </div>
+      </div>
+    </section>
+  </div>
+
   <script src="./js/config.js"></script>
   <script src="./js/state.js"></script>
   <script src="./js/utils.js"></script>
-  <script src="./js/ui.js"></script>
+  <script src="./js/ui.js?v=8d-location-debug-3"></script>
   <script src="./js/api.js"></script>
   <script src="./js/character_wizard.js"></script>
   <script src="./js/death_screen.js"></script>
-  <script src="./js/actions.js"></script>
+  <script src="./js/actions.js?v=8d-location-debug-mem-helpme-archive"></script>
   <script src="./js/events.js"></script>
   <script src="./js/main.js"></script>
-  <script src="./js/app.js"></script>
+  <script src="./js/app.js?v=8d-location-debug-1"></script>
   <script src="./js/inventory.js"></script>
+  <script src="./js/shop.js?v=9a4-open-shop-fallback"></script>
+  <script src="./js/voice.js?v=8g-voice-ui-2"></script>
   <script src="./js/combat_panel.js"></script>
   <script src="./js/combat_input.js"></script>
   <script type="module">

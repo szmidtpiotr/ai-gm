@@ -10,7 +10,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 11,
+  "version": 13,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -18,27 +18,6 @@
   },
   "templating": {
     "list": [
-      {
-        "name": "service",
-        "type": "query",
-        "datasource": {
-          "type": "loki",
-          "uid": "PD5A68A3BD6F8BA56"
-        },
-        "query": {
-          "query": "label_values(service)",
-          "refId": "StandardVariableQuery"
-        },
-        "refresh": 2,
-        "includeAll": true,
-        "multi": true,
-        "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
-        },
-        "allValue": ".+"
-      },
       {
         "name": "turn_id",
         "label": "Turn ID",
@@ -62,7 +41,7 @@
       },
       "targets": [
         {
-          "expr": "{service=~\"$service\"} | json | event=\"llm_error\"",
+          "expr": "{service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | event=\"llm_error\"",
           "refId": "A",
           "queryType": "range"
         }
@@ -87,7 +66,7 @@
       },
       "targets": [
         {
-          "expr": "100 * sum(count_over_time({service=~\"$service\"} | json | event=\"dice_roll\" | outcome=~\"success|hit\" [$__range])) / sum(count_over_time({service=~\"$service\"} | json | event=\"dice_roll\" [$__range]))",
+          "expr": "100 * sum(count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | event=\"dice_roll\" | outcome=~\"success|hit\" [$__range])) / sum(count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | event=\"dice_roll\" [$__range]))",
           "refId": "A",
           "queryType": "range"
         }
@@ -125,7 +104,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\"} | json | event=\"combat_start\" [24h]))",
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | event=\"combat_start\" [24h]))",
           "refId": "A",
           "queryType": "range"
         }
@@ -156,7 +135,7 @@
       },
       "targets": [
         {
-          "expr": "sum(count_over_time({service=~\"$service\"} | json | event=\"heartbeat\" [2m]))",
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | event=\"heartbeat\" [2m]))",
           "refId": "A",
           "queryType": "range"
         }
@@ -205,7 +184,7 @@
       },
       "targets": [
         {
-          "expr": "{service=~\"$service\"} | json | turn_id=~\"${turn_id}\"",
+          "expr": "{service=\"backend\", env=\"dev\", container=\"ai-gm-dev-backend-1\"} | json | turn_id=~\"${turn_id}\"",
           "refId": "A",
           "queryType": "range"
         }

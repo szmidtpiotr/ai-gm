@@ -10,7 +10,7 @@ PROCESS_START_TIME = time.time()
 
 def add_service_context(_: Any, __: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     event_dict["service"] = "backend"
-    event_dict["env"] = os.getenv("ENV", "production")
+    event_dict["env"] = os.getenv("APP_ENV", "dev")
     return event_dict
 
 

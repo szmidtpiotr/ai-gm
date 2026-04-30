@@ -862,6 +862,96 @@ window.sendMessage = async function () {
     return;
   }
 
+  // --- /admin intercept ---
+  if (window.state?.playerIsAdmin === true) {
+    const rawInput = (inputEl.value || "").trim();
+    if (/^\/admin\b/i.test(rawInput)) {
+      inputEl.value = "";
+      if (typeof window.updateUiState === "function") window.updateUiState();
+
+      let parseAdminCommand;
+      try {
+        ({ parseAdminCommand } = await import("./admin_commands_tree.js"));
+      } catch (_e) {
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: "Błąd: nie można załadować admin_commands_tree.js",
+          role: "system",
+        });
+        return;
+      }
+
+      const charId = window.state.selectedCharacterId;
+      if (!charId) {
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: "Błąd: brak wybranej postaci.",
+          role: "system",
+        });
+        return;
+      }
+
+      const token = localStorage.getItem("aigm_admin_token");
+      if (!token) {
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: "Błąd: brak admin_token w localStorage (klucz: aigm_admin_token).",
+          role: "system",
+        });
+        return;
+      }
+
+      const body = parseAdminCommand(rawInput);
+      if (!body) {
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: `Nieznana komenda: ${rawInput}`,
+          role: "system",
+        });
+        return;
+      }
+
+      const base = (window.API_BASE_URL || "/api").replace(/\/+$/, "");
+      try {
+        const resp = await fetch(`${base}/admin/cheat/${charId}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(body),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) {
+          const detail =
+            typeof data.detail === "object"
+              ? JSON.stringify(data.detail)
+              : String(data.detail || resp.status);
+          window.addMessage({
+            speaker: "🛠 Admin",
+            text: `❌ ${detail}`,
+            role: "system",
+          });
+          return;
+        }
+        const resultStr = JSON.stringify(data.result, null, 0);
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: `✅ ${body.cmd} -> ${resultStr}`,
+          role: "system",
+        });
+      } catch (err) {
+        window.addMessage({
+          speaker: "🛠 Admin",
+          text: `❌ ${err.message}`,
+          role: "system",
+        });
+      }
+      return;
+    }
+  }
+  // --- end /admin intercept ---
+
   const suppressUserBubble = !!window.__suppressNextUserBubbleForGm;
   if (window.__suppressNextUserBubbleForGm) {
     window.__suppressNextUserBubbleForGm = false;
@@ -1173,6 +1263,9 @@ window.sendMessage = async function () {
         memoryTurn: true
       });
       await window.loadTurns(window.state.selectedCampaignId);
+      if (typeof window.setShowArchiveBubbles === 'function') {
+        window.setShowArchiveBubbles(true);
+      }
     } catch (e) {
       if (requestId !== window.chatRequestState.requestId) return;
       window.removeThinkingBubble();
@@ -1276,6 +1369,11 @@ window.sendMessage = async function () {
         created_at: data.created_at || clientCreatedAt
       });
       await window.loadTurns(window.state.selectedCampaignId);
+      // Po odświeżeniu czatu helpme znów ma klasę „archiwum” — pokaż dymki aż do
+      // kolejnego wysłania narracji (setShowArchiveBubbles(false) w głównym sendTurn).
+      if (typeof window.setShowArchiveBubbles === 'function') {
+        window.setShowArchiveBubbles(true);
+      }
     } catch (e) {
       if (requestId !== window.chatRequestState.requestId) return;
       window.removeThinkingBubble();
@@ -1451,6 +1549,7 @@ window.sendMessage = async function () {
     let fullText = '';
     let streamBubble = null; // created lazily on first real token
     let streamDone = false;
+    let pendingOpenShopNpcKey = null;
 
     const applyCombatStartedSseToken = (token) => {
       if (!token || !token.startsWith('[COMBAT_STARTED]')) return false;
@@ -1578,6 +1677,18 @@ window.sendMessage = async function () {
       return true;
     };
 
+    const applyOpenShopSseToken = (token) => {
+      if (!token || !token.startsWith('[OPEN_SHOP]')) return false;
+      try {
+        const payload = JSON.parse(token.slice('[OPEN_SHOP]'.length));
+        const npcKey = String(payload?.npc_key || '').trim();
+        if (npcKey) pendingOpenShopNpcKey = npcKey;
+      } catch (_e) {
+        /* ignore malformed payload */
+      }
+      return true;
+    };
+
     while (!streamDone) {
       const { done, value } = await reader.read();
 
@@ -1596,6 +1707,8 @@ window.sendMessage = async function () {
             } else if (applyCombatEndedSseToken(token)) {
               /* skip */
             } else if (applyCmdJsonToken(token)) {
+              /* skip */
+            } else if (applyOpenShopSseToken(token)) {
               /* skip */
             } else if (token !== '[DONE]' && !token.startsWith('[ERROR]')) {
               // Unescape literal \n sequences the server may have encoded
@@ -1648,8 +1761,18 @@ window.sendMessage = async function () {
           continue;
         }
 
+        if (applyOpenShopSseToken(token)) {
+          continue;
+        }
+
         if (token === '[DONE]') {
-          const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
+          const cleanedGm = fullText
+            .replace(/\[COMBAT_START:[^\]]*\]/gi, '')
+            .replace(/\n?\s*Open Shop\s+\S+\s*$/i, '')
+            .trimEnd();
+          if (typeof window.updateLocationIntentDebugFromText === 'function') {
+            window.updateLocationIntentDebugFromText(fullText, 'stream');
+          }
           if (streamBubble) {
             window.finalizeStreamingBubble(streamBubble, cleanedGm);
           } else {
@@ -1662,6 +1785,9 @@ window.sendMessage = async function () {
           ) {
             window.state._combatVictoryUiPending = false;
             await window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
+          }
+          if (pendingOpenShopNpcKey && typeof window.openShopByNpcKey === 'function') {
+            void window.openShopByNpcKey(pendingOpenShopNpcKey, window.state.selectedCharacterId);
           }
           await window.loadTurns(window.state.selectedCampaignId);
           streamDone = true;
@@ -1710,7 +1836,13 @@ window.sendMessage = async function () {
     // Stream ended without [DONE] — finalize gracefully
     if (!streamDone) {
       if (streamBubble) {
-        const cleanedGm = fullText.replace(/\[COMBAT_START:[^\]]*\]/gi, '').trimEnd();
+        const cleanedGm = fullText
+          .replace(/\[COMBAT_START:[^\]]*\]/gi, '')
+          .replace(/\n?\s*Open Shop\s+\S+\s*$/i, '')
+          .trimEnd();
+        if (typeof window.updateLocationIntentDebugFromText === 'function') {
+          window.updateLocationIntentDebugFromText(fullText, 'stream-ended');
+        }
         window.finalizeStreamingBubble(streamBubble, cleanedGm);
         if (
           window.state._combatVictoryUiPending &&
@@ -1719,6 +1851,9 @@ window.sendMessage = async function () {
         ) {
           window.state._combatVictoryUiPending = false;
           await window.combatPanel.showVictoryAfterNarration(window.state._lastKilledEnemy);
+        }
+        if (pendingOpenShopNpcKey && typeof window.openShopByNpcKey === 'function') {
+          void window.openShopByNpcKey(pendingOpenShopNpcKey, window.state.selectedCharacterId);
         }
         await window.loadTurns(window.state.selectedCampaignId);
       } else {

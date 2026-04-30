@@ -1,7 +1,7 @@
-import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
-import { showToast } from "/admin_panel/shared/toast.js?v=17";
+import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=19";
+import { showToast } from "/admin_panel/shared/toast.js?v=19";
 import { showConfirm } from "/admin_panel/shared/table.js?v=23";
-import { openModal } from "/admin_panel/shared/modal.js?v=17";
+import { openModal } from "/admin_panel/shared/modal.js?v=19";
 
 function el(tag, cls, text) {
   const n = document.createElement(tag);
@@ -19,6 +19,142 @@ function parseApiError(err, fallback) {
     return String(err.body.detail);
   }
   return fallback;
+}
+
+/**
+ * LOC-4: podgląd i ręczna zmiana `game_sessions.current_location_id` (ostatnia sesja kampanii).
+ * @param {number} campaignId
+ * @param {string | undefined} campaignTitle
+ */
+async function openCampaignSessionLocationModal(campaignId, campaignTitle) {
+  const info = el("div", "muted");
+  info.textContent = "Loading…";
+  const lbl = el("label", "", "Location (catalog)");
+  lbl.style.display = "block";
+  lbl.style.marginTop = "12px";
+  const sel = /** @type {HTMLSelectElement} */ (el("select", "admin-input"));
+  sel.disabled = true;
+  const wrap = el("div", "");
+  wrap.appendChild(info);
+  wrap.appendChild(lbl);
+  wrap.appendChild(sel);
+
+  const title = campaignTitle?.trim()
+    ? `📍 Session location — ${campaignTitle}`
+    : `📍 Session location — campaign ${campaignId}`;
+
+  openModal({
+    title,
+    content: wrap,
+    footer: [
+      {
+        label: "Set location",
+        class: "primary-btn",
+        onClick: async (closeModal) => {
+          if (sel.disabled) return;
+          const v = sel.value;
+          if (!v) {
+            showToast("Pick a location from the list.", "info");
+            return;
+          }
+          try {
+            await adminFetch(`/api/admin/campaigns/${campaignId}/session-location`, {
+              method: "PATCH",
+              body: JSON.stringify({ location_id: parseInt(v, 10) }),
+            });
+            showToast("Session location updated.", "success");
+            closeModal();
+          } catch (e) {
+            showToast(parseApiError(e, "PATCH failed."), "error");
+          }
+        },
+      },
+      {
+        label: "Reset (null)",
+        class: "secondary-btn",
+        onClick: async (closeModal) => {
+          try {
+            await adminFetch(`/api/admin/campaigns/${campaignId}/session-location`, {
+              method: "PATCH",
+              body: JSON.stringify({ location_id: null }),
+            });
+            showToast("Session location cleared.", "success");
+            closeModal();
+          } catch (e) {
+            showToast(parseApiError(e, "Reset failed."), "error");
+          }
+        },
+      },
+      { label: "Close", class: "secondary-btn", onClick: (closeModal) => closeModal() },
+    ],
+  });
+
+  try {
+    const data = await adminFetch(`/api/admin/campaigns/${campaignId}/session-location`);
+    info.innerHTML = "";
+    info.className = "";
+    sel.disabled = false;
+    const sid = data.session_id;
+    const curLoc = data.current_location_id;
+    const curObj = data.current;
+
+    const pSid = el("p", "muted");
+    pSid.style.marginBottom = "6px";
+    pSid.textContent =
+      sid != null
+        ? `Session ID: ${sid}`
+        : "No row in game_sessions yet — one will be created on first PATCH.";
+    info.appendChild(pSid);
+
+    if (curLoc == null) {
+      const w = el("p", "");
+      w.style.color = "var(--warning)";
+      w.textContent =
+        "⚠️ No current_location_id (fail-open when target_key misses catalog).";
+      info.appendChild(w);
+    }
+
+    if (curLoc != null && !curObj) {
+      const w = el("p", "");
+      w.style.color = "var(--warning)";
+      w.textContent = `⚠️ current_location_id=${curLoc} — not found in catalog (inactive or orphaned).`;
+      info.appendChild(w);
+    }
+
+    if (curObj) {
+      const ap = curObj.approved === 0 ? " (pending approval)" : "";
+      info.appendChild(
+        el(
+          "p",
+          "",
+          `Current: ${curObj.label} (${curObj.location_type}) · ${curObj.key}${ap}`,
+        ),
+      );
+    }
+
+    sel.innerHTML = "";
+    const locs = data.locations || [];
+    if (!locs.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "(no locations in catalog)";
+      sel.appendChild(opt);
+      sel.disabled = true;
+      return;
+    }
+    for (const loc of locs) {
+      const opt = document.createElement("option");
+      opt.value = String(loc.id);
+      const pend = loc.approved === 0 ? " (pending)" : "";
+      opt.textContent = `${loc.label} · ${loc.key} (${loc.location_type})${pend}`;
+      if (curObj && Number(loc.id) === Number(curObj.id)) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  } catch (e) {
+    info.innerHTML = "";
+    sel.innerHTML = "";
+    info.appendChild(el("p", "", parseApiError(e, "Failed to load session location.")));
+  }
 }
 
 function mergeCounts(row, patch) {
@@ -659,6 +795,13 @@ async function mountCampaigns(userId, host) {
       tr.appendChild(el("td", "", String(c.turn_count ?? 0)));
       tr.appendChild(el("td", "", c.last_turn_at != null ? String(c.last_turn_at) : "—"));
       const td = el("td", "admin-table-actions");
+      const locBtn = el("button", "secondary-btn", "📍 Session location");
+      locBtn.type = "button";
+      locBtn.title = "LOC-4: view / set campaign session current_location_id";
+      locBtn.addEventListener("click", () => {
+        void openCampaignSessionLocationModal(c.id, c.title);
+      });
+      td.appendChild(locBtn);
       const regen = el("button", "secondary-btn", "🔄 Regen Summary");
       regen.type = "button";
       regen.addEventListener("click", async () => {

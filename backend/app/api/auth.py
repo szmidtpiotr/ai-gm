@@ -6,8 +6,7 @@ import bcrypt
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-
-DB_PATH = "/data/ai_gm.db"
+from app.core.db_runtime import resolve_db_path
 
 router = APIRouter()
 
@@ -48,7 +47,7 @@ def player_login(req: PlayerLoginReq):
     if not username or not password:
         raise HTTPException(status_code=400, detail="username and password are required")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(resolve_db_path())
     conn.row_factory = sqlite3.Row
     is_admin_val = 0
     try:
