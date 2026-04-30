@@ -284,6 +284,16 @@ body {
   padding: 8px 10px;
 }
 
+/* Keep admin checkboxes compact and consistent across all sections. */
+.admin-main input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  min-height: 14px;
+  margin: 0;
+  vertical-align: middle;
+  accent-color: #3b82f6;
+}
+
 .login-actions {
   display: flex;
   gap: 8px;
