@@ -15,6 +15,8 @@
   let sttMonitorRaf = 0;
   let sttLastVoiceAt = 0;
   let sttAutoStopping = false;
+  let sttNoiseFloorRms = 0;
+  let sttHadSpeech = false;
   let audio = null;
   let audioCtx = null;
   let activeBufferSource = null;
@@ -25,8 +27,9 @@
   let ttsEnabled = true;
   let sttEnabled = false;
   let initialized = false;
-  const STT_SILENCE_AUTO_STOP_MS = 4000;
-  const STT_VOICE_RMS_THRESHOLD = 0.012;
+  const STT_SILENCE_AUTO_STOP_MS = 3000;
+  const STT_MIN_VOICE_RMS_THRESHOLD = 0.02;
+  const STT_NOISE_MULTIPLIER = 2.8;
 
   function _el(id) {
     return document.getElementById(id);
@@ -376,6 +379,8 @@
       sttMonitorSource.connect(sttMonitorAnalyser);
       sttLastVoiceAt = Date.now();
       sttAutoStopping = false;
+      sttNoiseFloorRms = 0.004;
+      sttHadSpeech = false;
 
       const buf = new Float32Array(sttMonitorAnalyser.fftSize);
       const tick = () => {
@@ -387,11 +392,23 @@
         }
         const rms = Math.sqrt(sum / buf.length);
         const now = Date.now();
-        if (rms >= STT_VOICE_RMS_THRESHOLD) {
+        const adaptiveThreshold = Math.max(
+          STT_MIN_VOICE_RMS_THRESHOLD,
+          sttNoiseFloorRms * STT_NOISE_MULTIPLIER
+        );
+        const isSpeech = rms >= adaptiveThreshold;
+        if (isSpeech) {
           sttLastVoiceAt = now;
-        } else if (now - sttLastVoiceAt >= STT_SILENCE_AUTO_STOP_MS) {
+          sttHadSpeech = true;
+        } else {
+          // Aktualizujemy tło tylko gdy nie wykryto mowy.
+          sttNoiseFloorRms = sttNoiseFloorRms * 0.92 + rms * 0.08;
+        }
+
+        // Auto-stop dopiero po realnym wykryciu mowy (nie od samego startu nagrywania).
+        if (sttHadSpeech && !isSpeech && now - sttLastVoiceAt >= STT_SILENCE_AUTO_STOP_MS) {
           sttAutoStopping = true;
-          _status("Cisza 4s - zatrzymuje nasluch");
+          _status("Cisza 3s - zatrzymuje nasluch");
           sttEnabled = false;
           _setFlag(LS_STT, false);
           _syncUiState();
