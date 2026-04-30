@@ -346,11 +346,18 @@ class ItemCreateReq(BaseModel):
     item_type: str = "misc"
     description: str = ""
     value_gp: int = 0
-    weight: float = 0.0
-    proficiency_classes: list[str] = []
     weight_kg: float = 0.0
-    note: str | None = None
+    allowed_classes: list[str] = []
+    ac_bonus: int = 0
+    effect_type: str | None = None
+    effect_dice: str | None = None
+    effect_bonus: int = 0
+    effect_target: str = "self"
+    charges: int = 1
     effect_json: str | None = None
+    ai_generated: int = 0
+    approved: int = 1
+    note: str | None = None
     is_active: bool = True
 
 
@@ -360,11 +367,18 @@ class ItemPatchReq(BaseModel):
     item_type: str | None = None
     description: str | None = None
     value_gp: int | None = None
-    weight: float | None = None
-    proficiency_classes: list[str] | None = None
     weight_kg: float | None = None
-    note: str | None = None
+    allowed_classes: list[str] | None = None
+    ac_bonus: int | None = None
+    effect_type: str | None = None
+    effect_dice: str | None = None
+    effect_bonus: int | None = None
+    effect_target: str | None = None
+    charges: int | None = None
     effect_json: str | None = None
+    ai_generated: int | None = None
+    approved: int | None = None
+    note: str | None = None
     is_active: bool | None = None
     force: bool = False
 
@@ -401,7 +415,7 @@ class LootTableDeleteReq(BaseModel):
 class LootEntryReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
     item_key: str | None = None
-    consumable_key: str | None = None
+    consumable_key: str | None = None  # DEPRECATED 8H — traktowane jak item_key (katalog consumable)
     weapon_key: str | None = None
     weight: int = 10
     qty_min: int = 1
@@ -412,7 +426,10 @@ class LootEntryReq(BaseModel):
         ik = (self.item_key or "").strip() or None
         ck = (self.consumable_key or "").strip() or None
         wk = (self.weapon_key or "").strip() or None
-        if sum(1 for x in (ik, ck, wk) if x is not None) != 1:
+        if ck and not ik:
+            ik = ck
+            ck = None
+        if sum(1 for x in (ik, wk) if x is not None) != 1:
             raise ValueError("invalid_loot_entry_source")
         self.item_key = ik
         self.consumable_key = ck
@@ -431,7 +448,7 @@ class ConsumableCreateReq(BaseModel):
     effect_target: str = "self"
     weight_kg: float = 0.0
     charges: int = 1
-    base_price: int = 0
+    value_gp: int = 0  # było base_price (8H)
     note: str | None = None
     is_active: bool = True
 
@@ -447,7 +464,7 @@ class ConsumablePatchReq(BaseModel):
     effect_target: str | None = None
     weight_kg: float | None = None
     charges: int | None = None
-    base_price: int | None = None
+    value_gp: int | None = None  # było base_price (8H)
     note: str | None = None
     is_active: bool | None = None
     force: bool = False
@@ -968,11 +985,18 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
             item_type=req.item_type,
             description=req.description or "",
             value_gp=req.value_gp,
-            weight=req.weight,
-            proficiency_classes=req.proficiency_classes,
             weight_kg=req.weight_kg,
-            note=req.note,
+            allowed_classes=req.allowed_classes,
+            ac_bonus=req.ac_bonus,
+            effect_type=req.effect_type,
+            effect_dice=req.effect_dice,
+            effect_bonus=req.effect_bonus,
+            effect_target=req.effect_target,
+            charges=req.charges,
             effect_json=req.effect_json,
+            ai_generated=req.ai_generated,
+            approved=req.approved,
+            note=req.note,
             is_active=req.is_active,
         )
         return {"item": item}
@@ -984,16 +1008,20 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
         if str(e) == "invalid_item_type":
             raise HTTPException(
                 status_code=422,
-                detail="item_type must be one of: weapon, armor, consumable, misc, quest",
+                detail="item_type must be one of: weapon, armor, consumable, misc, quest, narrative",
             ) from None
         if str(e) == "invalid_effect_json":
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
-        if str(e) in ("invalid_value_gp", "invalid_weight"):
-            raise HTTPException(status_code=422, detail="value_gp and weight must be >= 0") from None
+        if str(e) == "invalid_value_gp":
+            raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
-        if str(e) == "invalid_proficiency_classes":
-            raise HTTPException(status_code=422, detail="proficiency_classes must be subset of [warrior,ranger,scholar]") from None
+        if str(e) == "invalid_ac_bonus":
+            raise HTTPException(status_code=422, detail="ac_bonus must be >= 0") from None
+        if str(e) == "invalid_charges":
+            raise HTTPException(status_code=422, detail="charges must be >= 1") from None
+        if str(e) in ("invalid_allowed_classes", "invalid_proficiency_classes"):
+            raise HTTPException(status_code=422, detail="allowed_classes must be subset of [warrior,ranger,scholar]") from None
         raise HTTPException(status_code=422, detail="Invalid item payload") from None
 
 
@@ -1006,11 +1034,18 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             item_type=req.item_type,
             description=req.description,
             value_gp=req.value_gp,
-            weight=req.weight,
-            proficiency_classes=req.proficiency_classes,
             weight_kg=req.weight_kg,
-            note=req.note,
+            allowed_classes=req.allowed_classes,
+            ac_bonus=req.ac_bonus,
+            effect_type=req.effect_type,
+            effect_dice=req.effect_dice,
+            effect_bonus=req.effect_bonus,
+            effect_target=req.effect_target,
+            charges=req.charges,
             effect_json=req.effect_json,
+            ai_generated=req.ai_generated,
+            approved=req.approved,
+            note=req.note,
             is_active=req.is_active,
             force=req.force,
         )
@@ -1025,16 +1060,20 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
         if str(e) == "invalid_item_type":
             raise HTTPException(
                 status_code=422,
-                detail="item_type must be one of: weapon, armor, consumable, misc, quest",
+                detail="item_type must be one of: weapon, armor, consumable, misc, quest, narrative",
             ) from None
         if str(e) == "invalid_effect_json":
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
-        if str(e) in ("invalid_value_gp", "invalid_weight"):
-            raise HTTPException(status_code=422, detail="value_gp and weight must be >= 0") from None
+        if str(e) == "invalid_value_gp":
+            raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
-        if str(e) == "invalid_proficiency_classes":
-            raise HTTPException(status_code=422, detail="proficiency_classes must be subset of [warrior,ranger,scholar]") from None
+        if str(e) == "invalid_ac_bonus":
+            raise HTTPException(status_code=422, detail="ac_bonus must be >= 0") from None
+        if str(e) == "invalid_charges":
+            raise HTTPException(status_code=422, detail="charges must be >= 1") from None
+        if str(e) in ("invalid_allowed_classes", "invalid_proficiency_classes"):
+            raise HTTPException(status_code=422, detail="allowed_classes must be subset of [warrior,ranger,scholar]") from None
         raise HTTPException(status_code=422, detail="Invalid item payload") from None
 
 
@@ -1074,7 +1113,7 @@ def admin_create_consumable(req: ConsumableCreateReq, _: None = Depends(require_
             effect_target=req.effect_target,
             weight_kg=req.weight_kg,
             charges=req.charges,
-            base_price=req.base_price,
+            base_price=req.value_gp,
             note=req.note,
             is_active=req.is_active,
         )
@@ -1092,10 +1131,12 @@ def admin_create_consumable(req: ConsumableCreateReq, _: None = Depends(require_
             raise HTTPException(status_code=422, detail="effect_dice must match ^\\d*d\\d+$ (e.g. d6, 2d8)") from None
         if str(e) == "invalid_charges":
             raise HTTPException(status_code=422, detail="charges must be >= 1") from None
-        if str(e) == "invalid_base_price":
-            raise HTTPException(status_code=422, detail="base_price must be >= 0") from None
+        if str(e) in ("invalid_base_price", "invalid_value_gp"):
+            raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
+        if str(e) == "invalid_ac_bonus":
+            raise HTTPException(status_code=422, detail="ac_bonus must be >= 0") from None
         raise HTTPException(status_code=422, detail="Invalid consumable payload") from None
 
 
@@ -1113,7 +1154,7 @@ def admin_patch_consumable(key: str, req: ConsumablePatchReq, _: None = Depends(
             effect_target=req.effect_target,
             weight_kg=req.weight_kg,
             charges=req.charges,
-            base_price=req.base_price,
+            base_price=req.value_gp,
             note=req.note,
             is_active=req.is_active,
             force=req.force,
@@ -1136,10 +1177,12 @@ def admin_patch_consumable(key: str, req: ConsumablePatchReq, _: None = Depends(
             raise HTTPException(status_code=422, detail="effect_dice must match ^\\d*d\\d+$ (e.g. d6, 2d8)") from None
         if str(e) == "invalid_charges":
             raise HTTPException(status_code=422, detail="charges must be >= 1") from None
-        if str(e) == "invalid_base_price":
-            raise HTTPException(status_code=422, detail="base_price must be >= 0") from None
+        if str(e) in ("invalid_base_price", "invalid_value_gp"):
+            raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
+        if str(e) == "invalid_ac_bonus":
+            raise HTTPException(status_code=422, detail="ac_bonus must be >= 0") from None
         raise HTTPException(status_code=422, detail="Invalid consumable payload") from None
 
 
@@ -1289,12 +1332,10 @@ def admin_upsert_loot_entry(key: str, req: LootEntryReq, _: None = Depends(requi
             raise HTTPException(status_code=404, detail="Loot table not found") from None
         if str(e) == "item_not_found":
             raise HTTPException(status_code=422, detail="item_key must reference an existing item") from None
-        if str(e) == "consumable_not_found":
-            raise HTTPException(status_code=422, detail="consumable_key must reference an existing consumable") from None
         if str(e) == "invalid_loot_entry_source":
             raise HTTPException(
                 status_code=422,
-                detail="Exactly one of item_key, weapon_key, or consumable_key must be set for a loot entry.",
+                detail="Exactly one of item_key or weapon_key must be set (consumable_key is deprecated: use item_key).",
             ) from None
         if str(e) == "weapon_not_found":
             raise HTTPException(status_code=422, detail="weapon_key must reference an existing weapon") from None
@@ -1320,7 +1361,7 @@ def admin_delete_loot_entry_weapon(key: str, weapon_key: str, _: None = Depends(
         if str(e) == "invalid_loot_entry_source":
             raise HTTPException(
                 status_code=422,
-                detail="Exactly one of item_key, weapon_key, or consumable_key must be set for a loot entry.",
+                detail="Exactly one of item_key or weapon_key must be set (consumable_key is deprecated: use item_key).",
             ) from None
         raise
 
@@ -1338,7 +1379,7 @@ def admin_delete_loot_entry_consumable(key: str, consumable_key: str, _: None = 
         if str(e) == "invalid_loot_entry_source":
             raise HTTPException(
                 status_code=422,
-                detail="Exactly one of item_key, weapon_key, or consumable_key must be set for a loot entry.",
+                detail="Exactly one of item_key or weapon_key must be set (consumable_key is deprecated: use item_key).",
             ) from None
         raise
 
