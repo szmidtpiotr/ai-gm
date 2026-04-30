@@ -32,6 +32,8 @@ def _seed_schema(db_path: str) -> None:
               item_key TEXT,
               weapon_key TEXT,
               consumable_key TEXT,
+              quantity INTEGER NOT NULL DEFAULT 1,
+              equipped INTEGER NOT NULL DEFAULT 0,
               slot TEXT
             );
 
@@ -130,17 +132,21 @@ def test_add_item(client_with_auth):
     client, db_path = client_with_auth
     r = _post(client, "add item", key="weapon_axe")
     assert r.status_code == 200
-    assert r.json()["result"]["added"] == "weapon_axe"
+    body = r.json()["result"]
+    assert body["added"] == "weapon_axe"
+    assert body.get("equipped_slot") == "main_hand"
 
     conn = sqlite3.connect(db_path)
     try:
         row = conn.execute(
-            "SELECT weapon_key FROM character_inventory WHERE character_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT weapon_key, equipped, slot FROM character_inventory WHERE character_id = ? ORDER BY id DESC LIMIT 1",
             (1,),
         ).fetchone()
     finally:
         conn.close()
     assert row[0] == "weapon_axe"
+    assert row[1] == 1
+    assert row[2] == "main_hand"
 
 
 def test_add_item_maps_prefixed_weapon_to_catalog_key(client_with_auth):
@@ -165,21 +171,27 @@ def test_add_item_maps_prefixed_weapon_to_catalog_key(client_with_auth):
 
     r = _post(client, "add item", key="weapon_longsword")
     assert r.status_code == 200
-    assert r.json()["result"]["added"] == "longsword"
+    res = r.json()["result"]
+    assert res["added"] == "longsword"
+    assert res.get("equipped_slot") == "main_hand"
 
     conn = sqlite3.connect(db_path)
     try:
         row = conn.execute(
-            "SELECT weapon_key FROM character_inventory WHERE character_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT weapon_key, equipped, slot FROM character_inventory WHERE character_id = ? ORDER BY id DESC LIMIT 1",
             (1,),
         ).fetchone()
     finally:
         conn.close()
     assert row[0] == "longsword"
+    assert row[1] == 1
+    assert row[2] == "main_hand"
 
     r2 = _post(client, "add item", key="longsword")
     assert r2.status_code == 200
-    assert r2.json()["result"]["added"] == "longsword"
+    res2 = r2.json()["result"]
+    assert res2["added"] == "longsword"
+    assert res2.get("equipped_slot") == "off_hand"
 
 
 def test_remove_item(client_with_auth):
