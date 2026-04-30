@@ -87,7 +87,7 @@ export function getAdminSuggestions(afterAdmin) {
 /**
  * Parsuje "/admin add gold 100" na body request dla POST /api/admin/cheat/{id}.
  * @param {string} raw
- * @returns {{ cmd: string, value?: number|string, key?: string, stat?: string } | null}
+ * @returns {{ cmd: string, value?: number|string, key?: string, stat?: string, kind?: string } | null}
  */
 export function parseAdminCommand(raw) {
   const t = (raw || "").trim().replace(/^\/admin\s*/i, "");
@@ -104,11 +104,11 @@ export function parseAdminCommand(raw) {
   }
   if (p0 === "add" && p1 === "weapon") {
     const key = rest ? rest.trim() : undefined;
-    return { cmd: "add item", key };
+    return { cmd: "add item", key, kind: "weapon" };
   }
   if (p0 === "add" && p1 === "consumable") {
     const key = rest ? rest.trim() : undefined;
-    return { cmd: "add item", key };
+    return { cmd: "add item", key, kind: "consumable" };
   }
   if (p0 === "add" && p1 === "item") {
     return { cmd: "add item", key: rest || undefined };
