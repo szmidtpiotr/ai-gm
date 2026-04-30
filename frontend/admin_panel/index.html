@@ -35,6 +35,10 @@
             <span class="nav-icon">🧪</span>
             <span class="nav-label">Test Runner</span>
           </button>
+          <button type="button" data-section="voice">
+            <span class="nav-icon">🔊</span>
+            <span class="nav-label">Głos</span>
+          </button>
         </nav>
         <a
           href="/admin_panel/templates.html"
@@ -63,6 +67,7 @@
           <div class="section-panel" data-section="config" aria-busy="true"></div>
           <div class="section-panel" data-section="ui-settings" aria-busy="true"></div>
           <div class="section-panel" data-section="test-runner" aria-busy="true"></div>
+          <div class="section-panel" data-section="voice" aria-busy="true"></div>
         </section>
 
         <div class="activity-log-wrap">
@@ -283,6 +288,7 @@
       let configReady = false;
       let uiSettingsReady = false;
       let testRunnerReady = false;
+      let voiceReady = false;
 
       async function maybeInitGameDesign(section) {
         if (section !== "game-design" || gameDesignReady) {
@@ -374,6 +380,26 @@
         }
       }
 
+      async function maybeInitVoice(section) {
+        if (section !== "voice" || voiceReady) {
+          return;
+        }
+        const el = document.querySelector('.section-panel[data-section="voice"]');
+        if (!el) {
+          return;
+        }
+        voiceReady = true;
+        el.removeAttribute("aria-busy");
+        try {
+          const { init } = await import("/admin_panel/sections/voice.js?v=1");
+          await init(el);
+        } catch (err) {
+          voiceReady = false;
+          el.textContent = "Błąd ładowania sekcji Głos.";
+          showToast(err.message || "Sekcja Głos nie załadowała się.", "error");
+        }
+      }
+
       async function maybeInitConfig(section) {
         if (section !== "config") {
           return;
@@ -424,6 +450,7 @@
             void maybeInitConfig(selected);
             void maybeInitUiSettings(selected);
             void maybeInitTestRunner(selected);
+            void maybeInitVoice(selected);
           });
         });
       }
