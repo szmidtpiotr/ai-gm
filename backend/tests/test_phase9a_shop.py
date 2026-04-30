@@ -71,7 +71,12 @@ def _seed_minimal_shop_db(path: str) -> None:
             INSERT INTO npcs(id, key, label, npc_type, is_shop, is_active, shop_inventory_json)
             VALUES (1, 'merchant_aldric', 'Aldric', 'merchant', 1, 1, ?)
             """,
-            ('[{"type":"weapon","key":"shortsword"},{"type":"consumable","key":"health_potion"}]',),
+            (
+                '[{"type":"weapon","key":"shortsword"},{"type":"consumable","key":"health_potion"},{"type":"item","key":"quest_trinket"}]',
+            ),
+        )
+        conn.execute(
+            "INSERT INTO game_config_items(key, label, description, value_gp, is_active) VALUES ('quest_trinket', 'Quest', 'No price', 0, 1)"
         )
         conn.execute(
             "INSERT INTO game_config_weapons(key, label, description, value_gp, is_active) VALUES (?, ?, ?, ?, 1)",
@@ -116,6 +121,7 @@ def test_shop_inventory_by_key_returns_items_and_gold(patch_shop_db):
     keys = {it["key"] for it in data["items"]}
     assert "shortsword" in keys
     assert "health_potion" in keys
+    assert "quest_trinket" not in keys
 
 
 def test_buy_item_deducts_gold_and_adds_inventory(patch_shop_db):

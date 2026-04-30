@@ -7,6 +7,7 @@ import math
 import sqlite3
 from typing import Any
 
+from app.services.dice import parse_character_sheet
 from app.services.loot_service import (
     LOOT_DB_PATH,
     apply_character_gold_delta,
@@ -138,7 +139,33 @@ def _parse_shop_inventory(raw_json: str) -> list[dict[str, str]]:
     return out
 
 
-def _character_sellables(conn: sqlite3.Connection, character_id: int) -> list[dict[str, Any]]:
+def _get_character_cha(conn: sqlite3.Connection, character_id: int) -> int:
+    try:
+        row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ? LIMIT 1",
+            (int(character_id),),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        # Backward compatibility for lightweight/test DBs without sheet_json column.
+        return 10
+    if not row:
+        return 10
+    try:
+        sheet = parse_character_sheet(row["sheet_json"] if isinstance(row, sqlite3.Row) else row[0])
+        stats = sheet.get("stats", {}) if isinstance(sheet, dict) else {}
+        return int(stats.get("CHA", 10))
+    except Exception:
+        return 10
+
+
+def _cha_sell_ratio(cha: int) -> float:
+    ratio = SELL_RATIO + (int(cha) - 10) * 0.02
+    return round(max(0.10, min(0.70, ratio)), 4)
+
+
+def _character_sellables(
+    conn: sqlite3.Connection, character_id: int, ratio: float
+) -> list[dict[str, Any]]:
     rows = conn.execute(
         """
         SELECT id, item_key, weapon_key, consumable_key, quantity, source
@@ -174,7 +201,11 @@ def _character_sellables(conn: sqlite3.Connection, character_id: int) -> list[di
                 "label": cat["label"],
                 "quantity": int(row["quantity"] or 1),
                 "value_gp": int(cat["value_gp"] or 0),
-                "sell_price_gp": int(math.floor(int(cat["value_gp"] or 0) * SELL_RATIO)),
+                "sell_price_gp": (
+                    max(1, int(math.floor(int(cat["value_gp"] or 0) * ratio)))
+                    if int(cat["value_gp"] or 0) > 0
+                    else 0
+                ),
                 "source": row["source"] or "",
             }
         )
@@ -184,18 +215,22 @@ def _character_sellables(conn: sqlite3.Connection, character_id: int) -> list[di
 def get_shop_inventory(npc_id: int, character_id: int) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
+        cha = _get_character_cha(conn, character_id)
+        ratio = _cha_sell_ratio(cha)
         entries = _parse_shop_inventory(str(npc["shop_inventory_json"] or "[]"))
         items = []
         for e in entries:
             cat = _catalog_item(conn, e["type"], e["key"])
-            if cat:
+            if cat and int(cat.get("value_gp") or 0) > 0:
                 items.append(cat)
-        sell_items = _character_sellables(conn, character_id)
+        sell_items = _character_sellables(conn, character_id, ratio)
     return {
         "npc": {"id": int(npc["id"]), "key": npc["key"], "label": npc["label"]},
         "items": items,
         "sell_items": sell_items,
         "character_gold": int(get_character_gold(character_id)),
+        "sell_ratio": ratio,
+        "cha": cha,
     }
 
 
@@ -289,9 +324,9 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
             raise ValueError("price_or_catalog_missing")
 
         base_price = int(cat["value_gp"] or 0)
-        earned = int(math.floor(base_price * SELL_RATIO))
-        if earned < 0:
-            earned = 0
+        cha = _get_character_cha(conn, character_id)
+        ratio = _cha_sell_ratio(cha)
+        earned = max(1, int(math.floor(base_price * ratio))) if base_price > 0 else 0
 
         qty = int(row["quantity"] or 1)
         if qty > 1:
@@ -307,6 +342,8 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
     return {
         "gold_gp": int(new_gold),
         "earned_gp": int(earned),
+        "sell_ratio": ratio,
+        "cha": int(cha),
         "sold_item": {
             "type": item_type,
             "key": item_key,

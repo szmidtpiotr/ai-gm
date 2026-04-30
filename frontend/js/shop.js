@@ -20,6 +20,7 @@
     modal.setAttribute("aria-hidden", "true");
     modal.hidden = true;
     modal.classList.add("hidden");
+    document.dispatchEvent(new CustomEvent("shopClosed"));
   }
 
   function openModal() {
@@ -61,7 +62,9 @@
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       const detail = data?.detail || `HTTP ${resp.status}`;
-      throw new Error(String(detail));
+      const err = new Error(String(detail));
+      err.status = Number(resp.status || 0);
+      throw err;
     }
     return data.data || {};
   }
@@ -123,7 +126,12 @@
             }
             toast(`Kupiono: ${it.label || it.key}`);
           } catch (e) {
-            toast(e.message || "Zakup nieudany");
+            if (Number(e?.status || 0) === 402) {
+              const missing = Math.max(0, Number(it.value_gp || 0) - Number(data?.character_gold || 0));
+              toast(`Za mało złota! (brakuje ${missing} GP)`);
+            } else {
+              toast(e.message || "Zakup nieudany");
+            }
           } finally {
             btn.disabled = false;
           }
@@ -152,13 +160,16 @@
         btn.addEventListener("click", async () => {
           btn.disabled = true;
           try {
-            await postSell(data.npc.id, characterId, Number(it.inventory_id));
+            const sold = await postSell(data.npc.id, characterId, Number(it.inventory_id));
             const fresh = await fetchShopDataByKey(data.npc.key, characterId);
             renderShop(fresh, characterId);
             if (typeof window.loadInventory === "function") {
               void window.loadInventory(characterId);
             }
-            toast(`Sprzedano: ${it.label || it.key}`);
+            const ratio = Number(sold?.sell_ratio || 0.5);
+            const cha = Number(sold?.cha || 10);
+            const ratioLabel = ratio !== 0.5 ? ` [CHA ${cha}: ${Math.round(ratio * 100)}%]` : "";
+            toast(`Sprzedano: ${it.label || it.key} (+${Number(sold?.earned_gp || 0)} GP)${ratioLabel}`);
           } catch (e) {
             toast(e.message || "Sprzedaż nieudana");
           } finally {
