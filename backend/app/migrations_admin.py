@@ -462,6 +462,56 @@ ADMIN_MIGRATIONS = [
         'wand_of_lightning', 'cursed_grimoire'
       )
     """,
+    # Phase 8H-1 — Item System Unification
+    "ALTER TABLE game_config_items ADD COLUMN ac_bonus INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_items ADD COLUMN effect_type TEXT",
+    "ALTER TABLE game_config_items ADD COLUMN effect_dice TEXT",
+    "ALTER TABLE game_config_items ADD COLUMN effect_bonus INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_items ADD COLUMN effect_target TEXT NOT NULL DEFAULT 'self'",
+    "ALTER TABLE game_config_items ADD COLUMN charges INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE game_config_items ADD COLUMN ai_generated INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_items ADD COLUMN approved INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE game_config_items ADD COLUMN allowed_classes TEXT NOT NULL DEFAULT '[]'",
+    """
+    UPDATE game_config_items
+    SET allowed_classes = proficiency_classes
+    WHERE proficiency_classes IS NOT NULL
+      AND proficiency_classes != '[]'
+      AND (allowed_classes IS NULL OR allowed_classes = '[]')
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_items (
+        key, label, item_type, description,
+        value_gp, weight_kg, allowed_classes,
+        ac_bonus, effect_type, effect_dice, effect_bonus, effect_target, charges,
+        note, is_active, locked_at, created_at, updated_at,
+        ai_generated, approved
+    )
+    SELECT
+        key, label, 'consumable', description,
+        base_price, weight_kg, '[]',
+        0, effect_type, effect_dice, effect_bonus, effect_target, charges,
+        note, is_active, locked_at, created_at, updated_at,
+        0, 1
+    FROM game_config_consumables
+    """,
+    """
+    UPDATE character_inventory
+    SET item_key = consumable_key,
+        consumable_key = NULL
+    WHERE consumable_key IS NOT NULL
+      AND item_key IS NULL
+      AND weapon_key IS NULL
+      AND EXISTS (
+          SELECT 1 FROM game_config_items WHERE key = character_inventory.consumable_key
+      )
+    """,
+    "ALTER TABLE game_config_weapons ADD COLUMN ai_generated INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_config_weapons ADD COLUMN approved INTEGER NOT NULL DEFAULT 1",
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value)
+    VALUES ('item_integrity_enabled', '0')
+    """,
 ]
 
 ADMIN_SEEDS = [
@@ -599,10 +649,10 @@ ADMIN_SEEDS = [
     """,
     """
     INSERT OR IGNORE INTO game_config_items (
-        key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active,
-        proficiency_classes, note, locked_at, created_at, updated_at
+        key, label, item_type, description, value_gp, weight_kg, effect_json, is_active,
+        allowed_classes, note, locked_at, created_at, updated_at
     ) VALUES
-    ('leatherarmor', 'Leather Armor', 'armor', 'Light body armor.', 20, 0, 8.0, NULL, 1,
+    ('leatherarmor', 'Leather Armor', 'armor', 'Light body armor.', 20, 8.0, NULL, 1,
      '["warrior","ranger"]', NULL, NULL, datetime('now'), datetime('now'))
     """,
     """
@@ -705,6 +755,8 @@ def _rebuild_loot_entries_for_consumable_support(conn: sqlite3.Connection) -> No
     cols = {row[1]: row for row in cur}
     if "item_key" not in cols:
         return
+    if "consumable_key" not in cols:
+        return
     if cols["item_key"][3] == 0:
         return
     logger.info("admin_migration_rebuild_loot_entries_nullable_item")
@@ -783,11 +835,13 @@ def _upgrade_loot_entries_three_way_xor(conn: sqlite3.Connection) -> None:
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_config_loot_entries'"
     ).fetchone():
         return
+    cols = {row[1]: row for row in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
+    if "consumable_key" not in cols:
+        return
     if conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type='index' AND name='ux_loot_entries_weapon'"
     ).fetchone():
         return
-    cols = {row[1]: row for row in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
     if "weapon_key" not in cols:
         try:
             conn.execute(
@@ -845,6 +899,145 @@ def _upgrade_loot_entries_three_way_xor(conn: sqlite3.Connection) -> None:
                 ON game_config_loot_entries(loot_table_key, consumable_key) WHERE consumable_key IS NOT NULL;
             CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_weapon
                 ON game_config_loot_entries(loot_table_key, weapon_key) WHERE weapon_key IS NOT NULL;
+            """
+        )
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
+
+
+def _finalize_phase_8h_items_schema(conn: sqlite3.Connection) -> None:
+    """Finalize 8H item columns after additive migrations complete."""
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_config_items'"
+    ).fetchone()
+    if not row:
+        return
+    cols = {r[1]: r for r in conn.execute("PRAGMA table_info(game_config_items)").fetchall()}
+    if "allowed_classes" in cols and "proficiency_classes" in cols:
+        conn.execute(
+            """
+            UPDATE game_config_items
+            SET allowed_classes = proficiency_classes
+            WHERE proficiency_classes IS NOT NULL
+              AND proficiency_classes != '[]'
+              AND (allowed_classes IS NULL OR allowed_classes = '[]')
+            """
+        )
+        conn.commit()
+        conn.execute("ALTER TABLE game_config_items DROP COLUMN proficiency_classes")
+        conn.commit()
+        logger.info("admin_migration_phase_8h_drop_column", table_name="game_config_items", column_name="proficiency_classes")
+        cols.pop("proficiency_classes", None)
+    if "weight" in cols and "weight_kg" in cols:
+        conn.execute(
+            """
+            UPDATE game_config_items
+            SET weight_kg = weight
+            WHERE COALESCE(weight, 0) > 0
+              AND COALESCE(weight_kg, 0.0) = 0.0
+            """
+        )
+        conn.commit()
+        conn.execute("ALTER TABLE game_config_items DROP COLUMN weight")
+        conn.commit()
+        logger.info("admin_migration_phase_8h_drop_column", table_name="game_config_items", column_name="weight")
+
+
+def _finalize_phase_8h_loot_entries(conn: sqlite3.Connection) -> None:
+    """Collapse loot entries to item/weapon XOR after consumables migrate into items."""
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_config_loot_entries'"
+    ).fetchone()
+    if not row:
+        return
+    cols = {r[1]: r for r in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
+    if "consumable_key" not in cols:
+        return
+
+    has_currency_code = "currency_code" in cols
+    logger.info("admin_migration_phase_8h_rebuild_loot_entries")
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        conn.execute("DROP INDEX IF EXISTS idx_loot_entries_table")
+        conn.execute("DROP INDEX IF EXISTS ux_loot_entries_item")
+        conn.execute("DROP INDEX IF EXISTS ux_loot_entries_consumable")
+        conn.execute("DROP INDEX IF EXISTS ux_loot_entries_weapon")
+        conn.execute(
+            f"""
+            CREATE TABLE game_config_loot_entries_8h (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                loot_table_key TEXT NOT NULL REFERENCES game_config_loot_tables(key) ON DELETE CASCADE,
+                item_key TEXT REFERENCES game_config_items(key) ON DELETE CASCADE,
+                weapon_key TEXT REFERENCES game_config_weapons(key) ON DELETE CASCADE,
+                {'currency_code TEXT,' if has_currency_code else ''}
+                weight INTEGER NOT NULL DEFAULT 10,
+                qty_min INTEGER NOT NULL DEFAULT 1,
+                qty_max INTEGER NOT NULL DEFAULT 1,
+                CONSTRAINT loot_xor CHECK (
+                    (CASE WHEN item_key IS NOT NULL THEN 1 ELSE 0 END) +
+                    (CASE WHEN weapon_key IS NOT NULL THEN 1 ELSE 0 END) = 1
+                )
+            )
+            """
+        )
+        conn.execute(
+            f"""
+            INSERT OR IGNORE INTO game_config_loot_entries_8h
+                (id, loot_table_key, item_key, weapon_key, {'currency_code, ' if has_currency_code else ''}weight, qty_min, qty_max)
+            SELECT
+                id,
+                loot_table_key,
+                COALESCE(
+                    item_key,
+                    CASE
+                        WHEN consumable_key IS NOT NULL
+                         AND EXISTS (SELECT 1 FROM game_config_items WHERE key = game_config_loot_entries.consumable_key)
+                        THEN consumable_key
+                        ELSE NULL
+                    END
+                ),
+                weapon_key,
+                {'currency_code,' if has_currency_code else ''}
+                weight,
+                qty_min,
+                qty_max
+            FROM game_config_loot_entries
+            WHERE (
+                CASE
+                    WHEN COALESCE(
+                        item_key,
+                        CASE
+                            WHEN consumable_key IS NOT NULL
+                             AND EXISTS (SELECT 1 FROM game_config_items WHERE key = game_config_loot_entries.consumable_key)
+                            THEN consumable_key
+                            ELSE NULL
+                        END
+                    ) IS NOT NULL THEN 1 ELSE 0
+                END
+                +
+                CASE WHEN weapon_key IS NOT NULL THEN 1 ELSE 0 END
+            ) = 1
+            """
+        )
+        conn.execute("DROP TABLE game_config_loot_entries")
+        conn.execute("ALTER TABLE game_config_loot_entries_8h RENAME TO game_config_loot_entries")
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_loot_entries_table
+            ON game_config_loot_entries(loot_table_key)
+            """
+        )
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_item
+            ON game_config_loot_entries(loot_table_key, item_key) WHERE item_key IS NOT NULL
+            """
+        )
+        conn.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_weapon
+            ON game_config_loot_entries(loot_table_key, weapon_key) WHERE weapon_key IS NOT NULL
             """
         )
         conn.commit()
@@ -1000,6 +1193,8 @@ def run_admin_migrations() -> None:
 
         _rebuild_loot_entries_for_consumable_support(conn)
         _upgrade_loot_entries_three_way_xor(conn)
+        _finalize_phase_8h_items_schema(conn)
+        _finalize_phase_8h_loot_entries(conn)
 
         for sql in ADMIN_SEEDS:
             try:

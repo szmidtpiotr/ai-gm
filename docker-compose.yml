@@ -5,12 +5,12 @@ services:
     restart: unless-stopped
     healthcheck:
       test:
-        - CMD
-        - python3
-        - -c
-        - |
-          import urllib.request as u
-          u.urlopen("http://127.0.0.1:8000/api/healthz", timeout=5).read()
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/healthz', timeout=5).read()",
+        ]
       interval: 15s
       timeout: 6s
       retries: 5
@@ -49,10 +49,7 @@ services:
     networks:
       - ai-gm
 
-  # Voice: domyślnie wyłączone (oszczędność RAM). Uruchomienie: docker compose --profile voice up -d voice-service
   voice-service:
-    profiles:
-      - voice
     build:
       context: ./voice-service
     container_name: ai-gm-voice
