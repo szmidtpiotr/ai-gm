@@ -27,11 +27,8 @@ def _resolve_inventory_add_key(
     """
     Map raw cheat key to (canonical_catalog_key, column_name).
 
-    column_name is one of weapon_key | consumable_key | item_key.
-
-    When game_config_* tables exist, match catalog rows (including legacy
-    ``weapon_<catalog_key>`` aliases). Otherwise fall back to prefix heuristics
-    so minimal test DBs without catalogs keep working.
+    column_name is weapon_key or item_key (8H: consumables catalog → item_key;
+    consumable_key column is legacy-only for old inventory rows).
     """
     k = str(raw_key or "").strip()
     if not k:
@@ -39,9 +36,6 @@ def _resolve_inventory_add_key(
 
     def w(canonical: str) -> tuple[str, str]:
         return canonical, "weapon_key"
-
-    def c(canonical: str) -> tuple[str, str]:
-        return canonical, "consumable_key"
 
     def i(canonical: str) -> tuple[str, str]:
         return canonical, "item_key"
@@ -51,7 +45,37 @@ def _resolve_inventory_add_key(
     has_i = _sqlite_table_exists(conn, "game_config_items")
     pref = str(preferred_kind or "").strip().lower()
 
-    # Explicit command intent ("/admin add weapon|consumable ...") has priority.
+    def resolve_consumable_pref() -> tuple[str, str]:
+        if has_i:
+            row = conn.execute(
+                "SELECT key FROM game_config_items WHERE key = ? AND item_type = 'consumable' LIMIT 1",
+                (k,),
+            ).fetchone()
+            if row:
+                return i(str(row["key"]))
+            alt = k[11:] if k.startswith("consumable_") else k
+            row = conn.execute(
+                "SELECT key FROM game_config_items WHERE key = ? AND item_type = 'consumable' LIMIT 1",
+                (alt,),
+            ).fetchone()
+            if row:
+                return i(str(row["key"]))
+        if has_c:
+            row = conn.execute(
+                "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                (k,),
+            ).fetchone()
+            if row:
+                return i(str(row["key"]))
+            alt = k[11:] if k.startswith("consumable_") else k
+            row = conn.execute(
+                "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                (alt,),
+            ).fetchone()
+            if row:
+                return i(str(row["key"]))
+        return i(k[11:] if k.startswith("consumable_") else k)
+
     if pref == "weapon":
         if has_w:
             row = conn.execute(
@@ -71,22 +95,7 @@ def _resolve_inventory_add_key(
         return w(k[7:] if k.startswith("weapon_") else k)
 
     if pref == "consumable":
-        if has_c:
-            row = conn.execute(
-                "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
-                (k,),
-            ).fetchone()
-            if row:
-                return c(str(row["key"]))
-            if k.startswith("consumable_"):
-                alt = k[11:]
-                row = conn.execute(
-                    "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
-                    (alt,),
-                ).fetchone()
-                if row:
-                    return c(str(row["key"]))
-        return c(k[11:] if k.startswith("consumable_") else k)
+        return resolve_consumable_pref()
 
     if has_w:
         row = conn.execute(
@@ -104,22 +113,6 @@ def _resolve_inventory_add_key(
             if row:
                 return w(str(row["key"]))
 
-    if has_c:
-        row = conn.execute(
-            "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
-            (k,),
-        ).fetchone()
-        if row:
-            return c(str(row["key"]))
-        if k.startswith("consumable_"):
-            alt = k[11:]
-            row = conn.execute(
-                "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
-                (alt,),
-            ).fetchone()
-            if row:
-                return c(str(row["key"]))
-
     if has_i:
         row = conn.execute(
             "SELECT key, item_type FROM game_config_items WHERE key = ? LIMIT 1",
@@ -127,18 +120,7 @@ def _resolve_inventory_add_key(
         ).fetchone()
         if row:
             ik = str(row["key"])
-            it = str(row["item_type"] or "").strip().lower() or "item"
-            # Mikstury / konsumable z efektami są w game_config_consumables; sam wiersz
-            # w items z item_type=consumable (np. import) musi trafiać do consumable_key,
-            # żeby ten sam kształt co grant_loot / sklep / silnik.
-            if it == "consumable" and has_c:
-                crow = conn.execute(
-                    "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
-                    (ik,),
-                ).fetchone()
-                if crow:
-                    return c(str(crow["key"]))
-            # Broń w katalogu broni — preferuj weapon_key zamiast item_key.
+            it = str(row["item_type"] or "").strip().lower() or "misc"
             if it == "weapon" and has_w:
                 wrow = conn.execute(
                     "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
@@ -148,10 +130,26 @@ def _resolve_inventory_add_key(
                     return w(str(wrow["key"]))
             return i(ik)
 
+    if has_c:
+        row = conn.execute(
+            "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+            (k,),
+        ).fetchone()
+        if row:
+            return i(str(row["key"]))
+        if k.startswith("consumable_"):
+            alt = k[11:]
+            row = conn.execute(
+                "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                (alt,),
+            ).fetchone()
+            if row:
+                return i(str(row["key"]))
+
     if k.startswith("weapon_"):
         return w(k)
     if k.startswith("consumable_"):
-        return c(k)
+        return i(k[11:] if len(k) > 11 else k)
     return i(k)
 
 

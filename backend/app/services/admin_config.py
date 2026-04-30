@@ -7,7 +7,7 @@ DB_PATH = "/data/ai_gm.db"
 KEY_RE = re.compile(r"^[a-z0-9_]{1,40}$")
 DAMAGE_DIE_RE = re.compile(r"^\d*d\d+$")
 ALLOWED_CLASSES = {"warrior", "ranger", "scholar"}
-ALLOWED_ITEM_TYPES = {"weapon", "armor", "consumable", "misc", "quest"}
+ALLOWED_ITEM_TYPES = {"weapon", "armor", "consumable", "misc", "quest", "narrative"}
 ALLOWED_WEAPON_TYPES = {"melee", "ranged", "spell"}
 ALLOWED_DAMAGE_TYPES = {"physical", "magic", "fire", "poison", "misc"}
 ALLOWED_TIERS = {"weak", "standard", "elite", "boss"}
@@ -65,6 +65,17 @@ def _validate_damage_die(damage_die: str) -> str:
     if not DAMAGE_DIE_RE.fullmatch(d):
         raise ValueError("invalid_damage_die")
     return d
+
+
+def _serialize_allowed_classes(values: list[str] | None) -> str:
+    """JSON array for allowed_classes; empty or None becomes '[]'."""
+    if values is None:
+        return "[]"
+    if not isinstance(values, list):
+        raise ValueError("invalid_allowed_classes")
+    if len(values) == 0:
+        return "[]"
+    return _validate_allowed_classes(values)
 
 
 def _validate_allowed_classes(values: list[str]) -> str:
@@ -142,6 +153,7 @@ def _validate_effect_target(v: str) -> str:
 
 
 def _validate_proficiency_classes(values: list[str] | None) -> str:
+    """DEPRECATED 8H — alias for allowed_classes; kept for backward compat with older callers."""
     if values is None:
         raise ValueError("invalid_proficiency_classes")
     if len(values) == 0:
@@ -167,6 +179,27 @@ def _validate_effect_dice(effect_dice: str | None) -> str | None:
     if effect_dice is None or not str(effect_dice).strip():
         return None
     return _validate_damage_die(str(effect_dice))
+
+
+def _normalize_item_row(row: dict) -> dict:
+    """Audit-friendly dict: bool is_active, allowed_classes as list."""
+    out = dict(row)
+    out["is_active"] = bool(out.get("is_active", 1))
+    raw_ac = out.get("allowed_classes")
+    if isinstance(raw_ac, str):
+        try:
+            out["allowed_classes"] = json.loads(raw_ac or "[]")
+        except Exception:
+            out["allowed_classes"] = []
+    elif raw_ac is None and "proficiency_classes" in out:
+        try:
+            out["allowed_classes"] = json.loads(out.get("proficiency_classes") or "[]")
+        except Exception:
+            out["allowed_classes"] = []
+        out.pop("proficiency_classes", None)
+    elif raw_ac is None:
+        out["allowed_classes"] = []
+    return out
 
 
 def list_stats() -> list[dict]:
@@ -1190,19 +1223,21 @@ def delete_condition(key: str, *, force: bool) -> None:
 def list_items() -> list[dict]:
     rows = _fetch_all(
         """
-        SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active,
-               proficiency_classes, note,
-               locked_at, created_at, updated_at
+        SELECT key, label, item_type, description, value_gp, weight_kg,
+               allowed_classes, ac_bonus,
+               effect_type, effect_dice, effect_bonus, effect_target, charges,
+               effect_json, ai_generated, approved,
+               note, is_active, locked_at, created_at, updated_at
         FROM game_config_items
-        ORDER BY label COLLATE NOCASE ASC, key ASC
+        ORDER BY item_type ASC, label COLLATE NOCASE ASC, key ASC
         """
     )
     for row in rows:
         row["is_active"] = bool(row.get("is_active", 1))
         try:
-            row["proficiency_classes"] = json.loads(row.get("proficiency_classes") or "[]")
+            row["allowed_classes"] = json.loads(row.get("allowed_classes") or "[]")
         except Exception:
-            row["proficiency_classes"] = []
+            row["allowed_classes"] = []
     return rows
 
 
@@ -1213,27 +1248,45 @@ def create_item(
     item_type: str = "misc",
     description: str = "",
     value_gp: int = 0,
-    weight: float = 0.0,
-    effect_json: str | None = None,
-    is_active: bool = True,
-    proficiency_classes: list[str] | None = None,
     weight_kg: float = 0.0,
+    allowed_classes: list[str] | None = None,
+    ac_bonus: int = 0,
+    effect_type: str | None = None,
+    effect_dice: str | None = None,
+    effect_bonus: int = 0,
+    effect_target: str = "self",
+    charges: int = 1,
+    effect_json: str | None = None,
+    ai_generated: int = 0,
+    approved: int = 1,
     note: str | None = None,
+    is_active: bool = True,
 ) -> dict:
     safe_key = _validate_key(key)
     safe_type = _validate_item_type(item_type)
     if value_gp < 0:
         raise ValueError("invalid_value_gp")
-    if weight < 0:
-        raise ValueError("invalid_weight")
     if weight_kg < 0:
         raise ValueError("invalid_weight_kg")
-    pc_json = _validate_proficiency_classes(proficiency_classes if proficiency_classes is not None else [])
+    if int(ac_bonus) < 0:
+        raise ValueError("invalid_ac_bonus")
+    if int(charges) < 1:
+        raise ValueError("invalid_charges")
+    ac_json = _serialize_allowed_classes(allowed_classes)
     eff: str | None
     if effect_json is None or (isinstance(effect_json, str) and not effect_json.strip()):
         eff = None
     else:
         eff = _normalize_effect_json(effect_json)
+    et: str | None
+    if effect_type is not None and str(effect_type).strip():
+        et = _validate_effect_type(str(effect_type))
+    elif safe_type == "consumable":
+        et = "misc"
+    else:
+        et = None
+    dice = _validate_effect_dice(effect_dice)
+    tgt = _validate_effect_target(effect_target)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1244,10 +1297,12 @@ def create_item(
         conn.execute(
             """
             INSERT INTO game_config_items (
-                key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active,
-                proficiency_classes, note,
-                locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+                key, label, item_type, description, value_gp, weight_kg,
+                allowed_classes, ac_bonus,
+                effect_type, effect_dice, effect_bonus, effect_target, charges,
+                effect_json, ai_generated, approved,
+                note, is_active, locked_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -1255,20 +1310,29 @@ def create_item(
                 safe_type,
                 description or "",
                 int(value_gp),
-                float(weight),
                 float(weight_kg),
+                ac_json,
+                int(ac_bonus),
+                et,
+                dice,
+                int(effect_bonus),
+                tgt,
+                int(charges),
                 eff,
-                1 if is_active else 0,
-                pc_json,
+                int(ai_generated),
+                int(approved),
                 note,
+                1 if is_active else 0,
             ),
         )
         new_row = _fetch_one(
             conn,
             """
-            SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active,
-                   proficiency_classes, note,
-                   locked_at, created_at, updated_at
+            SELECT key, label, item_type, description, value_gp, weight_kg,
+                   allowed_classes, ac_bonus,
+                   effect_type, effect_dice, effect_bonus, effect_target, charges,
+                   effect_json, ai_generated, approved,
+                   note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
             """,
             (safe_key,),
@@ -1276,9 +1340,9 @@ def create_item(
         if new_row:
             new_row["is_active"] = bool(new_row.get("is_active", 1))
             try:
-                new_row["proficiency_classes"] = json.loads(new_row.get("proficiency_classes") or "[]")
+                new_row["allowed_classes"] = json.loads(new_row.get("allowed_classes") or "[]")
             except Exception:
-                new_row["proficiency_classes"] = []
+                new_row["allowed_classes"] = []
         _audit(conn, "game_config_items", safe_key, "CREATE", None, new_row)
         conn.commit()
         return new_row or {}
@@ -1293,12 +1357,19 @@ def update_item(
     item_type: str | None,
     description: str | None,
     value_gp: int | None,
-    weight: float | None,
     effect_json: str | None,
     is_active: bool | None,
     force: bool,
-    proficiency_classes: list[str] | None = None,
+    allowed_classes: list[str] | None = None,
     weight_kg: float | None = None,
+    ac_bonus: int | None = None,
+    effect_type: str | None = None,
+    effect_dice: str | None = None,
+    effect_bonus: int | None = None,
+    effect_target: str | None = None,
+    charges: int | None = None,
+    ai_generated: int | None = None,
+    approved: int | None = None,
     note: str | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
@@ -1308,9 +1379,11 @@ def update_item(
         current = _fetch_one(
             conn,
             """
-            SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active,
-                   proficiency_classes, note,
-                   locked_at, created_at, updated_at
+            SELECT key, label, item_type, description, value_gp, weight_kg,
+                   allowed_classes, ac_bonus,
+                   effect_type, effect_dice, effect_bonus, effect_target, charges,
+                   effect_json, ai_generated, approved,
+                   note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
             """,
             (safe_key,),
@@ -1324,12 +1397,9 @@ def update_item(
         final_label = label if label is not None else current["label"]
         final_desc = description if description is not None else current.get("description") or ""
         final_gp = int(value_gp) if value_gp is not None else int(current["value_gp"])
-        final_w = float(weight) if weight is not None else float(current["weight"])
         final_wkg = float(weight_kg) if weight_kg is not None else float(current.get("weight_kg") or 0.0)
         if final_gp < 0:
             raise ValueError("invalid_value_gp")
-        if final_w < 0:
-            raise ValueError("invalid_weight")
         if final_wkg < 0:
             raise ValueError("invalid_weight_kg")
 
@@ -1341,18 +1411,49 @@ def update_item(
             final_effect = _normalize_effect_json(effect_json)
 
         final_active = (1 if is_active else 0) if is_active is not None else int(current.get("is_active", 1))
-        final_pc = (
-            _validate_proficiency_classes(proficiency_classes)
-            if proficiency_classes is not None
-            else (current.get("proficiency_classes") or "[]")
+        if allowed_classes is not None:
+            final_ac = _serialize_allowed_classes(allowed_classes)
+        else:
+            final_ac = current.get("allowed_classes") or "[]"
+        final_ac_bonus = int(ac_bonus) if ac_bonus is not None else int(current.get("ac_bonus") or 0)
+        if final_ac_bonus < 0:
+            raise ValueError("invalid_ac_bonus")
+
+        if effect_type is not None and str(effect_type).strip():
+            final_et = _validate_effect_type(str(effect_type))
+        elif effect_type is not None and isinstance(effect_type, str) and not effect_type.strip():
+            final_et = None
+        else:
+            final_et = current.get("effect_type")
+
+        if effect_dice is None:
+            final_dice = current.get("effect_dice")
+        elif isinstance(effect_dice, str) and not effect_dice.strip():
+            final_dice = None
+        else:
+            final_dice = _validate_effect_dice(effect_dice)
+
+        final_eff_bonus = int(effect_bonus) if effect_bonus is not None else int(current.get("effect_bonus") or 0)
+        final_tgt = (
+            _validate_effect_target(str(effect_target))
+            if effect_target is not None
+            else str(current.get("effect_target") or "self")
         )
+        final_charges = int(charges) if charges is not None else int(current.get("charges") or 1)
+        if final_charges < 1:
+            raise ValueError("invalid_charges")
+        final_ai = int(ai_generated) if ai_generated is not None else int(current.get("ai_generated") or 0)
+        final_appr = int(approved) if approved is not None else int(current.get("approved") or 1)
         final_note = note if note is not None else current.get("note")
 
         conn.execute(
             """
             UPDATE game_config_items
-            SET label = ?, item_type = ?, description = ?, value_gp = ?, weight = ?, weight_kg = ?, effect_json = ?,
-                is_active = ?, proficiency_classes = ?, note = ?, updated_at = datetime('now')
+            SET label = ?, item_type = ?, description = ?, value_gp = ?, weight_kg = ?,
+                allowed_classes = ?, ac_bonus = ?,
+                effect_type = ?, effect_dice = ?, effect_bonus = ?, effect_target = ?, charges = ?,
+                effect_json = ?, ai_generated = ?, approved = ?,
+                note = ?, is_active = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
             (
@@ -1360,21 +1461,30 @@ def update_item(
                 final_type,
                 final_desc,
                 final_gp,
-                final_w,
                 final_wkg,
+                final_ac,
+                final_ac_bonus,
+                final_et,
+                final_dice,
+                final_eff_bonus,
+                final_tgt,
+                final_charges,
                 final_effect,
-                final_active,
-                final_pc,
+                final_ai,
+                final_appr,
                 final_note,
+                final_active,
                 safe_key,
             ),
         )
         new_row = _fetch_one(
             conn,
             """
-            SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active,
-                   proficiency_classes, note,
-                   locked_at, created_at, updated_at
+            SELECT key, label, item_type, description, value_gp, weight_kg,
+                   allowed_classes, ac_bonus,
+                   effect_type, effect_dice, effect_bonus, effect_target, charges,
+                   effect_json, ai_generated, approved,
+                   note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
             """,
             (safe_key,),
@@ -1382,9 +1492,9 @@ def update_item(
         if new_row:
             new_row["is_active"] = bool(new_row.get("is_active", 1))
             try:
-                new_row["proficiency_classes"] = json.loads(new_row.get("proficiency_classes") or "[]")
+                new_row["allowed_classes"] = json.loads(new_row.get("allowed_classes") or "[]")
             except Exception:
-                new_row["proficiency_classes"] = []
+                new_row["allowed_classes"] = []
         _audit(conn, "game_config_items", safe_key, "UPDATE", dict(current), new_row)
         conn.commit()
         return new_row or {}
@@ -1400,9 +1510,11 @@ def delete_item(key: str, *, force: bool) -> None:
         current = _fetch_one(
             conn,
             """
-            SELECT key, label, item_type, description, value_gp, weight, weight_kg, effect_json, is_active,
-                   proficiency_classes, note,
-                   locked_at, created_at, updated_at
+            SELECT key, label, item_type, description, value_gp, weight_kg,
+                   allowed_classes, ac_bonus,
+                   effect_type, effect_dice, effect_bonus, effect_target, charges,
+                   effect_json, ai_generated, approved,
+                   note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
             """,
             (safe_key,),
@@ -1418,26 +1530,33 @@ def delete_item(key: str, *, force: bool) -> None:
         if ref and int(ref["c"]) > 0:
             raise ValueError("in_use")
         conn.execute("DELETE FROM game_config_items WHERE key = ?", (safe_key,))
-        cur_dict = dict(current)
-        cur_dict["is_active"] = bool(cur_dict.get("is_active", 1))
+        cur_dict = _normalize_item_row(dict(current))
         _audit(conn, "game_config_items", safe_key, "DELETE", cur_dict, None)
         conn.commit()
     finally:
         conn.close()
 
 
+def _consumable_row_as_legacy_dict(row: dict) -> dict:
+    """API shape expected by older admin clients: base_price mirrors value_gp."""
+    out = dict(row)
+    out["base_price"] = int(out.get("value_gp") or 0)
+    out["is_active"] = bool(out.get("is_active", 1))
+    return out
+
+
 def list_consumables() -> list[dict]:
+    """DEPRECATED 8H — consumables live in game_config_items with item_type='consumable'."""
     rows = _fetch_all(
         """
         SELECT key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
-               weight_kg, charges, base_price, note, is_active, locked_at, created_at, updated_at
-        FROM game_config_consumables
+               weight_kg, charges, value_gp, note, is_active, locked_at, created_at, updated_at
+        FROM game_config_items
+        WHERE item_type = 'consumable'
         ORDER BY label COLLATE NOCASE ASC, key ASC
         """
     )
-    for row in rows:
-        row["is_active"] = bool(row.get("is_active", 1))
-    return rows
+    return [_consumable_row_as_legacy_dict(dict(r)) for r in rows]
 
 
 def create_consumable(
@@ -1455,61 +1574,28 @@ def create_consumable(
     note: str | None = None,
     is_active: bool = True,
 ) -> dict:
-    safe_key = _validate_key(key)
-    et = _validate_effect_type(effect_type)
-    tgt = _validate_effect_target(effect_target)
-    dice = _validate_effect_dice(effect_dice)
-    if charges < 1:
-        raise ValueError("invalid_charges")
-    if base_price < 0:
-        raise ValueError("invalid_base_price")
-    if weight_kg < 0:
-        raise ValueError("invalid_weight_kg")
-
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        existing = _fetch_one(conn, "SELECT key FROM game_config_consumables WHERE key = ?", (safe_key,))
-        if existing:
-            raise ValueError("consumable_exists")
-        conn.execute(
-            """
-            INSERT INTO game_config_consumables (
-                key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
-                weight_kg, charges, base_price, note, is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
-            """,
-            (
-                safe_key,
-                label,
-                description or "",
-                et,
-                dice,
-                int(effect_bonus),
-                tgt,
-                float(weight_kg),
-                int(charges),
-                int(base_price),
-                note,
-                1 if is_active else 0,
-            ),
-        )
-        new_row = _fetch_one(
-            conn,
-            """
-            SELECT key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
-                   weight_kg, charges, base_price, note, is_active, locked_at, created_at, updated_at
-            FROM game_config_consumables WHERE key = ?
-            """,
-            (safe_key,),
-        )
-        if new_row:
-            new_row["is_active"] = bool(new_row.get("is_active", 1))
-        _audit(conn, "game_config_consumables", safe_key, "CREATE", None, new_row)
-        conn.commit()
-        return new_row or {}
-    finally:
-        conn.close()
+    """DEPRECATED 8H — creates a row in game_config_items (item_type='consumable')."""
+    created = create_item(
+        key=key,
+        label=label,
+        item_type="consumable",
+        description=description or "",
+        value_gp=int(base_price),
+        effect_json=None,
+        is_active=is_active,
+        weight_kg=float(weight_kg),
+        allowed_classes=[],
+        ac_bonus=0,
+        effect_type=effect_type,
+        effect_dice=effect_dice,
+        effect_bonus=int(effect_bonus),
+        effect_target=effect_target,
+        charges=int(charges),
+        ai_generated=0,
+        approved=1,
+        note=note,
+    )
+    return _consumable_row_as_legacy_dict(created)
 
 
 def update_consumable(
@@ -1529,6 +1615,7 @@ def update_consumable(
     new_key: str | None = None,
     force: bool,
 ) -> dict:
+    """DEPRECATED 8H — updates game_config_items row for consumable catalog entries."""
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1537,8 +1624,9 @@ def update_consumable(
             conn,
             """
             SELECT key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
-                   weight_kg, charges, base_price, note, is_active, locked_at, created_at, updated_at
-            FROM game_config_consumables WHERE key = ?
+                   weight_kg, charges, value_gp, note, is_active, locked_at, created_at, updated_at
+            FROM game_config_items
+            WHERE key = ? AND item_type = 'consumable'
             """,
             (safe_key,),
         )
@@ -1547,84 +1635,53 @@ def update_consumable(
         if current.get("locked_at") and not force:
             raise PermissionError("locked")
 
-        old_for_audit = dict(current)
         nk_req = (new_key or "").strip() if new_key is not None else ""
         if nk_req:
             nk = _validate_key(nk_req)
             if nk != safe_key:
-                if _fetch_one(conn, "SELECT key FROM game_config_consumables WHERE key = ?", (nk,)):
+                if _fetch_one(conn, "SELECT key FROM game_config_items WHERE key = ?", (nk,)):
                     raise ValueError("consumable_exists")
+                loot_cols = {r[1] for r in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
+                if "item_key" in loot_cols:
+                    conn.execute(
+                        "UPDATE game_config_loot_entries SET item_key = ? WHERE item_key = ?",
+                        (nk, safe_key),
+                    )
                 conn.execute(
-                    "UPDATE game_config_loot_entries SET consumable_key = ? WHERE consumable_key = ?",
-                    (nk, safe_key),
-                )
-                conn.execute(
-                    "UPDATE game_config_consumables SET key = ? WHERE key = ?",
+                    "UPDATE game_config_items SET key = ? WHERE key = ? AND item_type = 'consumable'",
                     (nk, safe_key),
                 )
                 safe_key = nk
+                conn.commit()
 
-        final_et = _validate_effect_type(effect_type) if effect_type is not None else current["effect_type"]
-        final_tgt = _validate_effect_target(effect_target) if effect_target is not None else current["effect_target"]
-        if effect_dice is None:
-            final_dice = current.get("effect_dice")
-        elif isinstance(effect_dice, str) and not effect_dice.strip():
-            final_dice = None
-        else:
-            final_dice = _validate_effect_dice(effect_dice)
-        final_bonus = int(effect_bonus) if effect_bonus is not None else int(current.get("effect_bonus") or 0)
-        final_wkg = float(weight_kg) if weight_kg is not None else float(current.get("weight_kg") or 0.0)
-        final_charges = int(charges) if charges is not None else int(current.get("charges") or 1)
-        final_price = int(base_price) if base_price is not None else int(current.get("base_price") or 0)
-        if final_charges < 1:
-            raise ValueError("invalid_charges")
-        if final_price < 0:
-            raise ValueError("invalid_base_price")
-        if final_wkg < 0:
-            raise ValueError("invalid_weight_kg")
-
-        conn.execute(
-            """
-            UPDATE game_config_consumables
-            SET label = ?, description = ?, effect_type = ?, effect_dice = ?, effect_bonus = ?, effect_target = ?,
-                weight_kg = ?, charges = ?, base_price = ?, note = ?, is_active = ?, updated_at = datetime('now')
-            WHERE key = ?
-            """,
-            (
-                label if label is not None else current["label"],
-                description if description is not None else current.get("description") or "",
-                final_et,
-                final_dice,
-                final_bonus,
-                final_tgt,
-                final_wkg,
-                final_charges,
-                final_price,
-                note if note is not None else current.get("note"),
-                (1 if is_active else 0) if is_active is not None else int(current.get("is_active", 1)),
-                safe_key,
-            ),
+        updated = update_item(
+            safe_key,
+            label=label,
+            item_type=None,
+            description=description,
+            value_gp=base_price,
+            effect_json=None,
+            is_active=is_active,
+            force=force,
+            weight_kg=weight_kg,
+            allowed_classes=None,
+            ac_bonus=None,
+            effect_type=effect_type,
+            effect_dice=effect_dice,
+            effect_bonus=effect_bonus,
+            effect_target=effect_target,
+            charges=charges,
+            ai_generated=None,
+            approved=None,
+            note=note,
         )
-        new_row = _fetch_one(
-            conn,
-            """
-            SELECT key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
-                   weight_kg, charges, base_price, note, is_active, locked_at, created_at, updated_at
-            FROM game_config_consumables WHERE key = ?
-            """,
-            (safe_key,),
-        )
-        if new_row:
-            new_row["is_active"] = bool(new_row.get("is_active", 1))
-        audit_row_key = str(new_row["key"]) if new_row else safe_key
-        _audit(conn, "game_config_consumables", audit_row_key, "UPDATE", old_for_audit, new_row)
-        conn.commit()
-        return new_row or {}
+        return _consumable_row_as_legacy_dict(updated)
     finally:
         conn.close()
 
 
 def delete_consumable(key: str, *, force: bool) -> None:
+    """DEPRECATED 8H — deletes consumable row from game_config_items."""
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1633,8 +1690,9 @@ def delete_consumable(key: str, *, force: bool) -> None:
             conn,
             """
             SELECT key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
-                   weight_kg, charges, base_price, note, is_active, locked_at, created_at, updated_at
-            FROM game_config_consumables WHERE key = ?
+                   weight_kg, charges, value_gp, note, is_active, locked_at, created_at, updated_at
+            FROM game_config_items
+            WHERE key = ? AND item_type = 'consumable'
             """,
             (safe_key,),
         )
@@ -1643,18 +1701,14 @@ def delete_consumable(key: str, *, force: bool) -> None:
         if current.get("locked_at") and not force:
             raise PermissionError("locked")
         ref = conn.execute(
-            """
-            SELECT COUNT(*) AS c FROM game_config_loot_entries
-            WHERE consumable_key IS NOT NULL AND consumable_key = ?
-            """,
+            "SELECT COUNT(*) AS c FROM game_config_loot_entries WHERE item_key IS NOT NULL AND item_key = ?",
             (safe_key,),
         ).fetchone()
         if ref and int(ref["c"]) > 0:
             raise ValueError("in_use")
-        conn.execute("DELETE FROM game_config_consumables WHERE key = ?", (safe_key,))
-        cur_dict = dict(current)
-        cur_dict["is_active"] = bool(cur_dict.get("is_active", 1))
-        _audit(conn, "game_config_consumables", safe_key, "DELETE", cur_dict, None)
+        conn.execute("DELETE FROM game_config_items WHERE key = ? AND item_type = 'consumable'", (safe_key,))
+        cur_dict = _consumable_row_as_legacy_dict(dict(current))
+        _audit(conn, "game_config_items", safe_key, "DELETE", cur_dict, None)
         conn.commit()
     finally:
         conn.close()
@@ -1837,18 +1891,19 @@ def delete_loot_table(key: str, *, force: bool) -> None:
         conn.close()
 
 
-def _loot_entry_source_keys(
+def _loot_entry_item_and_weapon_keys(
     item_key: str | None,
     consumable_key: str | None,
     weapon_key: str | None = None,
-) -> tuple[str | None, str | None, str | None]:
+) -> tuple[str | None, str | None]:
+    """Resolve loot source: deprecated consumable_key is treated as item_key (8H catalog)."""
     ik = _validate_key(item_key) if item_key and str(item_key).strip() else None
-    ck = _validate_key(consumable_key) if consumable_key and str(consumable_key).strip() else None
+    if ik is None and consumable_key and str(consumable_key).strip():
+        ik = _validate_key(consumable_key)
     wk = _validate_key(weapon_key) if weapon_key and str(weapon_key).strip() else None
-    n = sum(1 for x in (ik, ck, wk) if x is not None)
-    if n != 1:
+    if sum(1 for x in (ik, wk) if x is not None) != 1:
         raise ValueError("invalid_loot_entry_source")
-    return ik, ck, wk
+    return ik, wk
 
 
 def list_loot_entries(loot_table_key: str) -> list[dict]:
@@ -1859,25 +1914,21 @@ def list_loot_entries(loot_table_key: str) -> list[dict]:
         parent = _fetch_one(conn, "SELECT key FROM game_config_loot_tables WHERE key = ?", (safe_key,))
         if not parent:
             raise ValueError("loot_table_not_found")
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
+        currency_select = ", e.currency_code" if "currency_code" in cols else ""
         rows = conn.execute(
-            """
-            SELECT e.id, e.loot_table_key, e.item_key, e.consumable_key, e.weapon_key, e.weight, e.qty_min, e.qty_max,
+            f"""
+            SELECT e.id, e.loot_table_key, e.item_key, e.weapon_key, e.weight, e.qty_min, e.qty_max{currency_select},
                    i.label AS item_label,
-                   c.label AS consumable_label,
                    w.label AS weapon_label,
-                   COALESCE(i.label, c.label, w.label) AS source_label,
-                   CASE
-                       WHEN e.item_key IS NOT NULL THEN 'item'
-                       WHEN e.consumable_key IS NOT NULL THEN 'consumable'
-                       ELSE 'weapon'
-                   END AS source_type
+                   COALESCE(i.label, w.label) AS source_label,
+                   CASE WHEN e.item_key IS NOT NULL THEN 'item' ELSE 'weapon' END AS source_type
             FROM game_config_loot_entries e
             LEFT JOIN game_config_items i ON i.key = e.item_key
-            LEFT JOIN game_config_consumables c ON c.key = e.consumable_key
             LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
             WHERE e.loot_table_key = ?
             ORDER BY source_label COLLATE NOCASE ASC,
-                     COALESCE(e.item_key, e.consumable_key, e.weapon_key) ASC
+                     COALESCE(e.item_key, e.weapon_key) ASC
             """,
             (safe_key,),
         ).fetchall()
@@ -1897,7 +1948,7 @@ def upsert_loot_entry(
     qty_max: int,
 ) -> dict:
     lt = _validate_key(loot_table_key)
-    ik, ck, wk = _loot_entry_source_keys(item_key, consumable_key, weapon_key)
+    ik, wk = _loot_entry_item_and_weapon_keys(item_key, consumable_key, weapon_key)
     if weight < 1 or weight > 100:
         raise ValueError("invalid_weight")
     if qty_min < 1 or qty_max < 1 or qty_min > qty_max:
@@ -1915,8 +1966,8 @@ def upsert_loot_entry(
                 raise ValueError("item_not_found")
             conn.execute(
                 """
-                INSERT INTO game_config_loot_entries (loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
-                VALUES (?, ?, NULL, NULL, ?, ?, ?)
+                INSERT INTO game_config_loot_entries (loot_table_key, item_key, weapon_key, weight, qty_min, qty_max)
+                VALUES (?, ?, NULL, ?, ?, ?)
                 ON CONFLICT(loot_table_key, item_key) WHERE item_key IS NOT NULL DO UPDATE SET
                     weight = excluded.weight,
                     qty_min = excluded.qty_min,
@@ -1927,59 +1978,17 @@ def upsert_loot_entry(
             row = _fetch_one(
                 conn,
                 """
-                SELECT e.id, e.loot_table_key, e.item_key, e.consumable_key, e.weapon_key, e.weight, e.qty_min, e.qty_max,
+                SELECT e.id, e.loot_table_key, e.item_key, e.weapon_key, e.weight, e.qty_min, e.qty_max,
                        i.label AS item_label,
-                       c.label AS consumable_label,
                        w.label AS weapon_label,
-                       COALESCE(i.label, c.label, w.label) AS source_label,
-                       CASE
-                           WHEN e.item_key IS NOT NULL THEN 'item'
-                           WHEN e.consumable_key IS NOT NULL THEN 'consumable'
-                           ELSE 'weapon'
-                       END AS source_type
+                       COALESCE(i.label, w.label) AS source_label,
+                       CASE WHEN e.item_key IS NOT NULL THEN 'item' ELSE 'weapon' END AS source_type
                 FROM game_config_loot_entries e
                 LEFT JOIN game_config_items i ON i.key = e.item_key
-                LEFT JOIN game_config_consumables c ON c.key = e.consumable_key
                 LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
                 WHERE e.loot_table_key = ? AND e.item_key = ?
                 """,
                 (lt, ik),
-            )
-        elif ck is not None:
-            cons = _fetch_one(conn, "SELECT key FROM game_config_consumables WHERE key = ?", (ck,))
-            if not cons:
-                raise ValueError("consumable_not_found")
-            conn.execute(
-                """
-                INSERT INTO game_config_loot_entries (loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
-                VALUES (?, NULL, ?, NULL, ?, ?, ?)
-                ON CONFLICT(loot_table_key, consumable_key) WHERE consumable_key IS NOT NULL DO UPDATE SET
-                    weight = excluded.weight,
-                    qty_min = excluded.qty_min,
-                    qty_max = excluded.qty_max
-                """,
-                (lt, ck, weight, qty_min, qty_max),
-            )
-            row = _fetch_one(
-                conn,
-                """
-                SELECT e.id, e.loot_table_key, e.item_key, e.consumable_key, e.weapon_key, e.weight, e.qty_min, e.qty_max,
-                       i.label AS item_label,
-                       c.label AS consumable_label,
-                       w.label AS weapon_label,
-                       COALESCE(i.label, c.label, w.label) AS source_label,
-                       CASE
-                           WHEN e.item_key IS NOT NULL THEN 'item'
-                           WHEN e.consumable_key IS NOT NULL THEN 'consumable'
-                           ELSE 'weapon'
-                       END AS source_type
-                FROM game_config_loot_entries e
-                LEFT JOIN game_config_items i ON i.key = e.item_key
-                LEFT JOIN game_config_consumables c ON c.key = e.consumable_key
-                LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
-                WHERE e.loot_table_key = ? AND e.consumable_key = ?
-                """,
-                (lt, ck),
             )
         else:
             weap = _fetch_one(conn, "SELECT key FROM game_config_weapons WHERE key = ?", (wk,))
@@ -1987,8 +1996,8 @@ def upsert_loot_entry(
                 raise ValueError("weapon_not_found")
             conn.execute(
                 """
-                INSERT INTO game_config_loot_entries (loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
-                VALUES (?, NULL, NULL, ?, ?, ?, ?)
+                INSERT INTO game_config_loot_entries (loot_table_key, item_key, weapon_key, weight, qty_min, qty_max)
+                VALUES (?, NULL, ?, ?, ?, ?)
                 ON CONFLICT(loot_table_key, weapon_key) WHERE weapon_key IS NOT NULL DO UPDATE SET
                     weight = excluded.weight,
                     qty_min = excluded.qty_min,
@@ -1999,19 +2008,13 @@ def upsert_loot_entry(
             row = _fetch_one(
                 conn,
                 """
-                SELECT e.id, e.loot_table_key, e.item_key, e.consumable_key, e.weapon_key, e.weight, e.qty_min, e.qty_max,
+                SELECT e.id, e.loot_table_key, e.item_key, e.weapon_key, e.weight, e.qty_min, e.qty_max,
                        i.label AS item_label,
-                       c.label AS consumable_label,
                        w.label AS weapon_label,
-                       COALESCE(i.label, c.label, w.label) AS source_label,
-                       CASE
-                           WHEN e.item_key IS NOT NULL THEN 'item'
-                           WHEN e.consumable_key IS NOT NULL THEN 'consumable'
-                           ELSE 'weapon'
-                       END AS source_type
+                       COALESCE(i.label, w.label) AS source_label,
+                       CASE WHEN e.item_key IS NOT NULL THEN 'item' ELSE 'weapon' END AS source_type
                 FROM game_config_loot_entries e
                 LEFT JOIN game_config_items i ON i.key = e.item_key
-                LEFT JOIN game_config_consumables c ON c.key = e.consumable_key
                 LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
                 WHERE e.loot_table_key = ? AND e.weapon_key = ?
                 """,
@@ -2030,7 +2033,7 @@ def delete_loot_entry(
     weapon_key: str | None = None,
 ) -> None:
     lt = _validate_key(loot_table_key)
-    ik, ck, wk = _loot_entry_source_keys(item_key, consumable_key, weapon_key)
+    ik, wk = _loot_entry_item_and_weapon_keys(item_key, consumable_key, weapon_key)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -2038,27 +2041,17 @@ def delete_loot_entry(
             cur = _fetch_one(
                 conn,
                 """
-                SELECT id, loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max
+                SELECT id, loot_table_key, item_key, weapon_key, weight, qty_min, qty_max
                 FROM game_config_loot_entries WHERE loot_table_key = ? AND item_key = ?
                 """,
                 (lt, ik),
             )
             audit_id = f"{lt}:item:{ik}"
-        elif ck is not None:
-            cur = _fetch_one(
-                conn,
-                """
-                SELECT id, loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max
-                FROM game_config_loot_entries WHERE loot_table_key = ? AND consumable_key = ?
-                """,
-                (lt, ck),
-            )
-            audit_id = f"{lt}:consumable:{ck}"
         else:
             cur = _fetch_one(
                 conn,
                 """
-                SELECT id, loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max
+                SELECT id, loot_table_key, item_key, weapon_key, weight, qty_min, qty_max
                 FROM game_config_loot_entries WHERE loot_table_key = ? AND weapon_key = ?
                 """,
                 (lt, wk),
@@ -2070,11 +2063,6 @@ def delete_loot_entry(
             conn.execute(
                 "DELETE FROM game_config_loot_entries WHERE loot_table_key = ? AND item_key = ?",
                 (lt, ik),
-            )
-        elif ck is not None:
-            conn.execute(
-                "DELETE FROM game_config_loot_entries WHERE loot_table_key = ? AND consumable_key = ?",
-                (lt, ck),
             )
         else:
             conn.execute(
@@ -2096,20 +2084,38 @@ def _validate_starter_items_json(raw: str | None) -> str:
         raise ValueError("invalid_starter_items_json") from e
     if not isinstance(data, list):
         raise ValueError("invalid_starter_items_json")
+    out: list[dict] = []
     for entry in data:
         if not isinstance(entry, dict):
             raise ValueError("invalid_starter_items_json")
-        wk = entry.get("weapon_key")
-        ik = entry.get("item_key")
-        ck = entry.get("consumable_key")
-        n = sum(1 for x in (wk, ik, ck) if x is not None and str(x).strip())
-        if n != 1:
+        wk_raw = entry.get("weapon_key")
+        ik_raw = entry.get("item_key")
+        ck_raw = entry.get("consumable_key")
+        wk = str(wk_raw).strip() if wk_raw is not None and str(wk_raw).strip() else None
+        ik = str(ik_raw).strip() if ik_raw is not None and str(ik_raw).strip() else None
+        ck = str(ck_raw).strip() if ck_raw is not None and str(ck_raw).strip() else None
+        if ck and ik and ck != ik:
             raise ValueError("invalid_starter_items_json")
+        if ck and not ik:
+            ik = ck
+        if sum(1 for x in (wk, ik) if x) != 1:
+            raise ValueError("invalid_starter_items_json")
+        if wk:
+            _validate_key(wk)
+        else:
+            _validate_key(str(ik))
+        clean: dict = {}
+        if wk:
+            clean["weapon_key"] = wk
+        else:
+            clean["item_key"] = str(ik)
         if entry.get("quantity") is not None:
             q = int(entry["quantity"])
             if q < 1:
                 raise ValueError("invalid_starter_items_json")
-    return json.dumps(data, ensure_ascii=False)
+            clean["quantity"] = q
+        out.append(clean)
+    return json.dumps(out, ensure_ascii=False)
 
 
 def list_archetypes() -> list[dict]:
