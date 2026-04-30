@@ -25,6 +25,14 @@ function buildUrl(path) {
   }
 
   const normalizedPath = String(path || "").startsWith("/") ? path : `/${path}`;
+  // Be tolerant when user sets API Base URL to ".../api" and code passes "/api/...".
+  // In that case avoid producing ".../api/api/...".
+  if (baseUrl.endsWith("/api") && normalizedPath === "/api") {
+    return baseUrl;
+  }
+  if (baseUrl.endsWith("/api") && normalizedPath.startsWith("/api/")) {
+    return `${baseUrl}${normalizedPath.slice(4)}`;
+  }
   return `${baseUrl}${normalizedPath}`;
 }
 

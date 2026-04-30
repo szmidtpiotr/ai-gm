@@ -2,6 +2,11 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import os
 import random
+
+# env.test / .env w katalogu repozytorium (obok backend/) — AI_TEST_MODE=1 itd. bez ręcznego export
+from app.bootstrap_env import load_repo_env
+
+load_repo_env()
 import re
 import sqlite3
 import time
@@ -20,12 +25,32 @@ from app.services.dice import build_gm_dice_breakdown, parse_character_sheet
 from app.services.llm_service import generate_chat
 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
 
-from app.api import auth, campaign_helpme, campaign_history, campaign_memory, campaigns, characters, combat, commands, turns, mechanics, inventory
+from app.api import (
+    auth,
+    campaign_helpme,
+    campaign_history,
+    campaign_memory,
+    campaigns,
+    characters,
+    combat,
+    commands,
+    turns,
+    mechanics,
+    inventory,
+    npcs,
+    shop,
+)
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.migrations_admin import run_admin_migrations
 from app.routers.admin import router as admin_router
+from app.routers.admin_cheat import router as admin_cheat_router
 from app.routers.settings import router as settings_router
+from app.routers.debug import router as debug_router
+from app.routers.test_runner import router as test_runner_router
+from app.routers.locations import router as locations_router
+from app.routers.session_location import router as session_location_router
+from app.routers.admin_location import router as admin_location_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -199,6 +224,8 @@ app.include_router(campaigns.router, prefix="/api")
 app.include_router(combat.router, prefix="/api")
 app.include_router(characters.router, prefix="/api")
 app.include_router(inventory.router, prefix="/api")
+app.include_router(npcs.router, prefix="/api")
+app.include_router(shop.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")
 # Keep non-prefixed character endpoints available for direct local calls
@@ -207,8 +234,15 @@ app.include_router(characters.router)
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(admin_cheat_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
+app.include_router(locations_router, prefix="/api")
+app.include_router(session_location_router)
+app.include_router(admin_location_router)
 app.include_router(settings_router)
+if os.getenv("AI_TEST_MODE") == "1":
+    app.include_router(debug_router, prefix="/api")
+    app.include_router(test_runner_router, prefix="/api")
 
 
 Instrumentator().instrument(app).expose(app)

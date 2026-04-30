@@ -2,6 +2,7 @@ apiVersion: 1
 
 datasources:
   - name: Loki DEV
+    uid: PD5A68A3BD6F8BA56
     type: loki
     access: proxy
     url: http://loki:3100
@@ -17,3 +18,11 @@ datasources:
     editable: false
     jsonData:
       timeInterval: 15s
+
+  - name: AI-GM Story DB DEV
+    uid: ai_gm_sqlite_story
+    type: frser-sqlite-datasource
+    access: proxy
+    jsonData:
+      path: /var/lib/ai-gm-db/ai_gm.db
+    editable: false

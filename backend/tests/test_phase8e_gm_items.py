@@ -134,3 +134,27 @@ class TestPhase8eGmItems(unittest.TestCase):
         cleaned = turns_api.strip_last_grant_item_cue(txt)
         self.assertEqual(cleaned, "Mrok gęstnieje wokół ciebie.")
 
+    def test_grant_gold_cue_parser_detects_amount(self):
+        amount = turns_api.parse_grant_gold_cue("Kupiec kiwa głową.\nGrant Gold 35")
+        self.assertEqual(amount, 35)
+
+    def test_grant_gold_cue_zero_ignored(self):
+        self.assertIsNone(turns_api.parse_grant_gold_cue("Narracja.\nGrant Gold 0"))
+
+    def test_grant_gold_cue_removed_from_gm_text(self):
+        txt = "Kupiec przekazuje sakiewkę.\nGrant Gold 20"
+        cleaned = turns_api.strip_last_grant_gold_cue(txt)
+        self.assertEqual(cleaned, "Kupiec przekazuje sakiewkę.")
+
+    def test_apply_grant_gold_updates_character_gold(self):
+        conn = sqlite3.connect(str(self._tmp))
+        conn.row_factory = sqlite3.Row
+        try:
+            new_total = turns_api.apply_grant_gold_to_character(conn, character_id=1, amount=12)
+            conn.commit()
+            row = conn.execute("SELECT gold_gp FROM characters WHERE id = 1").fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(new_total, 12)
+        self.assertEqual(int(row["gold_gp"] or 0), 12)
+

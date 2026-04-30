@@ -288,6 +288,64 @@ window.appendToStreamingBubble = function (bubbleEl, token) {
   window.scrollChatToBottomThrottled();
 };
 
+window.parseGMResponse = function (text) {
+  const stripLocationBlocked = function (s) {
+    return String(s || '')
+      .replace(/\s*\[LOCATION_BLOCKED:[^\]]*\]/g, '')
+      .trim();
+  };
+
+  const raw = String(text || '').trim();
+  if (!raw) return stripLocationBlocked(String(text || ''));
+
+  const cleaned = raw
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  try {
+    const data = JSON.parse(cleaned);
+    if (data && typeof data === 'object' && typeof data.narrative === 'string') {
+      return stripLocationBlocked(data.narrative);
+    }
+  } catch (_e) {
+    // Plain-text fallback: older GM responses are not JSON wrappers.
+  }
+
+  const keyIndex = cleaned.indexOf('"narrative"');
+  if (keyIndex >= 0) {
+    const colonIndex = cleaned.indexOf(':', keyIndex);
+    const quoteIndex = colonIndex >= 0 ? cleaned.indexOf('"', colonIndex + 1) : -1;
+    if (quoteIndex >= 0) {
+      let out = '';
+      let escaped = false;
+      for (let i = quoteIndex + 1; i < cleaned.length; i += 1) {
+        const ch = cleaned[i];
+        if (escaped) {
+          if (ch === 'n') out += '\n';
+          else if (ch === 't') out += '\t';
+          else out += ch;
+          escaped = false;
+          continue;
+        }
+        if (ch === '\\') {
+          escaped = true;
+          continue;
+        }
+        if (ch === '"') {
+          const tail = cleaned.slice(i + 1).trimStart();
+          if (tail.startsWith(',') || tail.startsWith('}')) {
+            return stripLocationBlocked(out);
+          }
+        }
+        out += ch;
+      }
+    }
+  }
+
+  return stripLocationBlocked(String(text || ''));
+};
+
 window.suppressCombatEndedAutoUi = function () {
   if (!window.state?._combatJustEnded) return false;
   window.state.activeRollRequest = null;
@@ -316,6 +374,10 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
   if (!bubbleEl) return;
 
   const suppressRollAfterCombatEnd = !!window.state?._combatJustEnded;
+  const displayText =
+    typeof window.parseGMResponse === 'function'
+      ? window.parseGMResponse(fullText)
+      : fullText;
 
   bubbleEl.classList.remove('streaming');
   bubbleEl.removeAttribute('id');
@@ -326,18 +388,18 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
 
   const route = bubbleEl.querySelector('.route-badge')?.textContent || '';
   const pfx = window.COMBAT_ROLL_PREFIX;
-  const hasCombatEmbed = route === 'narrative' && String(fullText || '').includes(pfx);
+  const hasCombatEmbed = route === 'narrative' && String(displayText || '').includes(pfx);
 
   if (route === 'narrative' && hasCombatEmbed && bodyEl && typeof window.buildInterleavedNarrativeAndCombatHtml === 'function') {
-    const html = window.buildInterleavedNarrativeAndCombatHtml(fullText);
+    const html = window.buildInterleavedNarrativeAndCombatHtml(displayText);
     bodyEl.innerHTML = html || '';
     if (pre && pre.parentNode === bodyEl) {
       pre.remove();
     }
   } else {
-    let renderedText = fullText;
+    let renderedText = displayText;
     if (route === 'narrative' && typeof window.parsePendingRoll === 'function') {
-      renderedText = window.parsePendingRoll(fullText);
+      renderedText = window.parsePendingRoll(displayText);
       if (pre) pre.textContent = renderedText;
     } else if (typeof window.parsePendingRoll === 'function') {
       window.parsePendingRoll('');
@@ -371,6 +433,12 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
       }
       window.updateActionTriggerBtn(!!window.state.activeRollRequest);
     }
+    try {
+      window.voiceUI?.speakGMText?.(displayText);
+    } catch (err) {
+      console.warn('voice stream tts failed', err);
+    }
+    window.decorateGmBubbleWithVoice(bubbleEl, displayText);
   }
 
   window.scrollChatToBottom();
@@ -951,6 +1019,98 @@ window.setShowArchiveBubbles = function (show) {
   window.updateArchiveToggleUi();
 };
 
+window.ensureVoiceChatDebugOverlay = function () {
+  const { chatEl } = window.getEls();
+  if (!chatEl) return null;
+  let el = chatEl.querySelector("#voice-chat-debug");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "voice-chat-debug";
+    el.className = "voice-chat-debug";
+    el.setAttribute("aria-live", "polite");
+    chatEl.appendChild(el);
+  }
+  return el;
+};
+
+window.showVoiceChatDebug = function (text) {
+  const el = window.ensureVoiceChatDebugOverlay();
+  if (!el) return;
+  const message = String(text || "").trim();
+  if (!message) {
+    el.classList.remove("is-visible", "is-error");
+    el.textContent = "";
+    return;
+  }
+  const lower = message.toLowerCase();
+  const isError = lower.includes("blad") || lower.includes("error") || lower.includes("brak");
+  el.textContent = `Voice debug: ${message}`;
+  el.classList.add("is-visible");
+  el.classList.toggle("is-error", isError);
+};
+
+if (!window.__voiceDebugStatusListenerInstalled) {
+  window.__voiceDebugStatusListenerInstalled = true;
+  window.addEventListener("voice-debug-status", (event) => {
+    const text = event?.detail?.text || "";
+    window.showVoiceChatDebug(text);
+  });
+}
+
+window.updateGmVoiceBadgeVisual = function (btn) {
+  if (!btn) return;
+  const enabled = !!window.voiceUI?.isTtsEnabled?.();
+  btn.textContent = enabled ? "🔊" : "🔇";
+  btn.setAttribute("aria-label", enabled ? "Przeczytaj ponownie" : "Wlacz TTS i przeczytaj");
+  btn.setAttribute(
+    "title",
+    enabled ? "Przeczytaj ponownie te wiadomosc" : "TTS wylaczone - kliknij, aby wlaczyc i przeczytac"
+  );
+};
+
+window.decorateGmBubbleWithVoice = function (wrap, text) {
+  if (!wrap || !(wrap.classList && wrap.classList.contains("assistant"))) return;
+  if (wrap.querySelector(".gm-voice-btn")) return;
+  const clean = String(text || "").trim();
+  if (!clean) return;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "gm-voice-btn";
+  btn.__voiceText = clean;
+  window.updateGmVoiceBadgeVisual(btn);
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const enabled = !!window.voiceUI?.isTtsEnabled?.();
+      if (enabled) {
+        await window.voiceUI?.setTtsEnabled?.(false);
+        window.voiceUI?.stopPlayback?.();
+      } else {
+        await window.voiceUI?.setTtsEnabled?.(true, { unlock: true });
+        await window.voiceUI?.speakNowFromUserGesture?.(btn.__voiceText || "");
+      }
+    } catch (err) {
+      console.warn("gm voice replay failed", err);
+    }
+    window.updateGmVoiceBadgeVisual(btn);
+  });
+
+  wrap.appendChild(btn);
+};
+
+window.refreshAllGmVoiceBadges = function () {
+  document.querySelectorAll(".gm-voice-btn").forEach((btn) => window.updateGmVoiceBadgeVisual(btn));
+};
+
+if (!window.__voiceBadgeStateListenerInstalled) {
+  window.__voiceBadgeStateListenerInstalled = true;
+  window.addEventListener("voice-tts-state", () => {
+    window.refreshAllGmVoiceBadges();
+  });
+}
+
 window.addMessage = function ({
   speaker,
   text,
@@ -967,13 +1127,20 @@ window.addMessage = function ({
   const { chatEl } = window.getEls();
   if (!chatEl) return;
 
+  const messageText =
+    role === 'assistant' &&
+    route === 'narrative' &&
+    typeof window.parseGMResponse === 'function'
+      ? window.parseGMResponse(text)
+      : text;
+
   const combatRollPayload =
-    text && typeof window.tryParseCombatRollCardFromText === 'function'
-      ? window.tryParseCombatRollCardFromText(text)
+    messageText && typeof window.tryParseCombatRollCardFromText === 'function'
+      ? window.tryParseCombatRollCardFromText(messageText)
       : null;
   const rollPayload =
-    role === 'user' && text && typeof window.tryParseRollCardFromText === 'function'
-      ? window.tryParseRollCardFromText(text)
+    role === 'user' && messageText && typeof window.tryParseRollCardFromText === 'function'
+      ? window.tryParseRollCardFromText(messageText)
       : null;
   const effRoute = combatRollPayload || rollPayload ? 'dice' : route;
 
@@ -1001,6 +1168,9 @@ window.addMessage = function ({
   if (window.isArchiveBubble({ role, route: effRoute, memoryTurn, helpmeTurn })) {
     wrap.classList.add('is-archived-bubble');
     wrap.setAttribute('data-archived', '1');
+  }
+  if (role === 'assistant') {
+    wrap.setAttribute('data-testid', 'gm-message');
   }
 
   const meta = document.createElement('div');
@@ -1043,17 +1213,17 @@ window.addMessage = function ({
     body.innerHTML = window.buildRollCardHtml(rollPayload);
   } else if (
     role === 'user' &&
-    text &&
+    messageText &&
     !rollPayload &&
     !combatRollPayload &&
-    /^\s*(\/roll\b|roll\s+\S+\s+d\d+)/i.test(String(text).trim())
+    /^\s*(\/roll\b|roll\s+\S+\s+d\d+)/i.test(String(messageText).trim())
   ) {
     body.innerHTML =
       '<div class="roll-card roll-card--light roll-card--neutral roll-card--pending">' +
       '<div class="roll-card__line roll-card__line--detail">🎲 Rzut w toku…</div>' +
       '</div>';
   } else {
-    body.innerHTML = `<pre>${window.escapeHtml(text)}</pre>`;
+    body.innerHTML = `<pre>${window.escapeHtml(messageText)}</pre>`;
   }
 
   wrap.appendChild(meta);
@@ -1065,6 +1235,9 @@ window.addMessage = function ({
   }
   wrap.appendChild(body);
   chatEl.appendChild(wrap);
+  if (role === "assistant" && effRoute === "narrative") {
+    window.decorateGmBubbleWithVoice(wrap, messageText);
+  }
 
   window.scrollChatToBottom();
   window.updateArchiveToggleUi?.();
@@ -1081,26 +1254,33 @@ window.replaceThinkingBubble = function ({
   const { chatEl } = window.getEls();
   if (!chatEl) return;
 
+  const messageText =
+    role === 'assistant' &&
+    route === 'narrative' &&
+    typeof window.parseGMResponse === 'function'
+      ? window.parseGMResponse(text)
+      : text;
+
   const existing = chatEl.querySelector('#thinking-bubble');
   if (!existing) {
     window.addMessage({ speaker, text, role, route, turn, createdAt });
     return;
   }
 
-  let renderedText = text;
+  let renderedText = messageText;
   if (route === 'narrative' && typeof window.parsePendingRoll === 'function') {
-    renderedText = window.parsePendingRoll(text);
+    renderedText = window.parsePendingRoll(messageText);
   } else if (typeof window.parsePendingRoll === 'function') {
     window.parsePendingRoll('');
   }
 
   const combatRollPayload =
-    text && typeof window.tryParseCombatRollCardFromText === 'function'
-      ? window.tryParseCombatRollCardFromText(text)
+    messageText && typeof window.tryParseCombatRollCardFromText === 'function'
+      ? window.tryParseCombatRollCardFromText(messageText)
       : null;
   const rollPayload =
-    role === 'user' && text && typeof window.tryParseRollCardFromText === 'function'
-      ? window.tryParseRollCardFromText(text)
+    role === 'user' && messageText && typeof window.tryParseRollCardFromText === 'function'
+      ? window.tryParseRollCardFromText(messageText)
       : null;
   const effRoute = combatRollPayload || rollPayload ? 'dice' : route;
 
@@ -1182,6 +1362,14 @@ window.replaceThinkingBubble = function ({
   }
 
   existing.replaceWith(wrap);
+  if (role === 'assistant' && route === 'narrative') {
+    window.decorateGmBubbleWithVoice(wrap, renderedText);
+    try {
+      window.voiceUI?.speakGMText?.(renderedText);
+    } catch (err) {
+      console.warn('voice replace tts failed', err);
+    }
+  }
   window.scrollChatToBottom();
   window.updateArchiveToggleUi?.();
 };
@@ -1484,6 +1672,9 @@ window.renderTurnsToChat = function () {
         window.addBackInGameSeparator();
       } else if (turn.route === 'narrative') {
         const assistantTextRaw = String(turn.assistant_text || '');
+        if (typeof window.updateLocationIntentDebugFromText === 'function') {
+          window.updateLocationIntentDebugFromText(assistantTextRaw, 'history');
+        }
         const { rollData: persistedGmRoll, narrativeText } =
           typeof window.extractPersistedGmRollNarrative === 'function'
             ? window.extractPersistedGmRollNarrative(assistantTextRaw)
@@ -1493,11 +1684,16 @@ window.renderTurnsToChat = function () {
           window.addGmRollBubble(persistedGmRoll, turn.turn_number || turn.id);
         }
 
-        const assistantText = String(narrativeText || '');
+        const assistantText = String(
+          typeof window.parseGMResponse === 'function'
+            ? window.parseGMResponse(narrativeText)
+            : narrativeText || ''
+        );
         if (!assistantText.trim()) return;
 
         const msgWrap = document.createElement('div');
         msgWrap.className = 'message assistant';
+        msgWrap.setAttribute('data-testid', 'gm-message');
         const { chatEl } = window.getEls();
 
         const meta = document.createElement('div');
@@ -1528,6 +1724,7 @@ window.renderTurnsToChat = function () {
 
         msgWrap.appendChild(meta);
         msgWrap.appendChild(body);
+        window.decorateGmBubbleWithVoice(msgWrap, assistantText);
 
         const cueSource =
           typeof window.stripCombatRollBlocksForRollCue === 'function'

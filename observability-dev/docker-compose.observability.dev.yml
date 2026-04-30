@@ -52,10 +52,12 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_AUTH_ANONYMOUS_ENABLED=false
       - GF_SERVER_ROOT_URL=http://localhost:3302
+      - GF_INSTALL_PLUGINS=frser-sqlite-datasource
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - ./grafana/data:/var/lib/grafana
+      - ../data-dev:/var/lib/ai-gm-db:ro
     depends_on:
       - loki
       - prometheus

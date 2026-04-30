@@ -1,6 +1,6 @@
 import { adminFetch, APIError } from "/admin_panel/shared/api.js?v=17";
-import { showToast } from "/admin_panel/shared/toast.js?v=17";
-import { renderTable, showConfirm } from "/admin_panel/shared/table.js?v=23";
+import { showToast } from "/admin_panel/shared/toast.js?v=18";
+import { renderTable, showConfirm } from "/admin_panel/shared/table.js?v=24";
 
 const SUB_TABS = [
   { id: "stats", label: "Stats" },
@@ -8,6 +8,8 @@ const SUB_TABS = [
   { id: "dc", label: "DC" },
   { id: "weapons", label: "Weapons" },
   { id: "enemies", label: "Enemies" },
+  { id: "npcs", label: "NPC" },
+  { id: "locations", label: "Locations" },
   { id: "conditions", label: "Conditions" },
   { id: "items", label: "Przedmioty" },
   { id: "consumables", label: "Consumables" },
@@ -1070,6 +1072,275 @@ function mountEnemies(host) {
   void refreshEnemies(host);
 }
 
+function npcTypeBadgeClass(row) {
+  const t = String(row.npc_type || "neutral").toLowerCase();
+  const map = {
+    neutral: "tier-standard",
+    merchant: "tier-elite",
+    quest_giver: "tier-boss",
+    ally: "tier-weak",
+  };
+  return map[t] || "tier-standard";
+}
+
+function normalizeLocationKeysInput(newValue) {
+  if (Array.isArray(newValue)) {
+    return newValue.map((v) => String(v).trim()).filter(Boolean);
+  }
+  return String(newValue || "")
+    .split(/[\n,]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function refreshNpcs(host) {
+  const tableHost = host.querySelector(".admin-table-mount");
+  renderTable(tableHost, [], null, {});
+  try {
+    const data = await adminFetch("/api/admin/npcs");
+    const rows = (data.data || []).map((r) => ({
+      ...r,
+      _location_keys_text: Array.isArray(r.location_keys) ? r.location_keys.join(", ") : "",
+    }));
+    renderGameDesignTable(
+      tableHost,
+      "npcs",
+      [
+        { key: "id", label: "ID", type: "number" },
+        { key: "key", label: "Key" },
+        { key: "label", label: "Label", editable: true },
+        {
+          key: "npc_type",
+          label: "Type",
+          type: "badge",
+          badgeClass: npcTypeBadgeClass,
+          editable: true,
+          editType: "select",
+          editOptions: ["neutral", "merchant", "quest_giver", "ally"],
+        },
+        { key: "_location_keys_text", label: "Locations", type: "textarea", editable: true },
+        { key: "is_shop", label: "Shop", type: "boolean", editable: true },
+        { key: "is_active", label: "Active", type: "boolean", editable: true },
+        { key: "description", label: "Description", editable: true },
+        { key: "personality_json", label: "Personality JSON", type: "textarea", editable: true },
+        { key: "shop_inventory_json", label: "Shop JSON", type: "textarea", editable: true },
+      ],
+      rows,
+      {
+        exportRow: (row) => {
+          const copy = { ...row };
+          delete copy._location_keys_text;
+          return copy;
+        },
+        onEdit: async (row, key, newValue) => {
+          const body = {};
+          if (key === "label") body.label = String(newValue || "").trim();
+          if (key === "npc_type") body.npc_type = String(newValue || "").trim();
+          if (key === "description") body.description = String(newValue || "").trim() || null;
+          if (key === "is_shop") body.is_shop = newValue ? 1 : 0;
+          if (key === "is_active") body.is_active = newValue ? 1 : 0;
+          if (key === "_location_keys_text") body.location_keys = normalizeLocationKeysInput(newValue);
+          if (key === "personality_json") {
+            try {
+              JSON.parse(String(newValue || "{}"));
+            } catch (_e) {
+              showToast("personality_json must be valid JSON.", "error");
+              throw new Error("invalid_json");
+            }
+            body.personality_json = String(newValue || "{}");
+          }
+          if (key === "shop_inventory_json") {
+            try {
+              JSON.parse(String(newValue || "[]"));
+            } catch (_e) {
+              showToast("shop_inventory_json must be valid JSON.", "error");
+              throw new Error("invalid_json");
+            }
+            body.shop_inventory_json = String(newValue || "[]");
+          }
+          const res = await adminFetch(`/api/admin/npcs/${encodeURIComponent(String(row.id))}`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          });
+          if (!res || !res.ok) {
+            throw new Error("patch_failed");
+          }
+          if (key === "_location_keys_text") {
+            row.location_keys = body.location_keys || [];
+            row._location_keys_text = (body.location_keys || []).join(", ");
+          }
+          Object.assign(row, body);
+          showToast("NPC updated.", "success");
+        },
+        onDelete: async (row) => {
+          await adminFetch(`/api/admin/npcs/${encodeURIComponent(String(row.id))}`, { method: "DELETE" });
+          showToast("NPC deleted.", "success");
+          await refreshNpcs(host);
+        },
+      },
+    );
+  } catch (e) {
+    showToast(parseApiError(e, "Failed to load NPCs."), "error");
+    renderTable(tableHost, [], [], {});
+  }
+}
+
+function validateNpcImportRow(raw, index) {
+  const prefix = `Row ${index + 1}:`;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return `${prefix} must be an object`;
+  }
+  if (!raw.key || typeof raw.key !== "string") {
+    return `${prefix} key (string) is required`;
+  }
+  if (!raw.label || typeof raw.label !== "string") {
+    return `${prefix} label (string) is required`;
+  }
+  if (raw.personality_json !== undefined) {
+    if (typeof raw.personality_json === "string") {
+      try {
+        JSON.parse(String(raw.personality_json || "{}"));
+      } catch (_e) {
+        return `${prefix} personality_json must be valid JSON`;
+      }
+    } else if (
+      raw.personality_json !== null &&
+      typeof raw.personality_json !== "object"
+    ) {
+      return `${prefix} personality_json must be JSON string or object`;
+    }
+  }
+  if (raw.shop_inventory_json !== undefined) {
+    if (typeof raw.shop_inventory_json === "string") {
+      try {
+        JSON.parse(String(raw.shop_inventory_json || "[]"));
+      } catch (_e) {
+        return `${prefix} shop_inventory_json must be valid JSON`;
+      }
+    } else if (
+      raw.shop_inventory_json !== null &&
+      typeof raw.shop_inventory_json !== "object"
+    ) {
+      return `${prefix} shop_inventory_json must be JSON string or array/object`;
+    }
+  }
+  return null;
+}
+
+function npcImportRowToPayload(raw) {
+  return {
+    key: String(raw.key).trim(),
+    label: String(raw.label).trim(),
+    npc_type: String(raw.npc_type || "neutral").trim(),
+    description: raw.description == null ? null : String(raw.description),
+    personality_json:
+      raw.personality_json == null
+        ? "{}"
+        : typeof raw.personality_json === "string"
+          ? raw.personality_json
+          : JSON.stringify(raw.personality_json),
+    is_shop: raw.is_shop ? 1 : 0,
+    shop_inventory_json:
+      raw.shop_inventory_json == null
+        ? "[]"
+        : typeof raw.shop_inventory_json === "string"
+          ? raw.shop_inventory_json
+          : JSON.stringify(raw.shop_inventory_json),
+    is_active: raw.is_active === false || raw.is_active === 0 ? 0 : 1,
+    location_keys: Array.isArray(raw.location_keys) ? raw.location_keys.map((x) => String(x).trim()).filter(Boolean) : [],
+  };
+}
+
+function mountNpcs(host) {
+  const root = el("div", "admin-subpanel-inner");
+  const toggleRow = el("div", "admin-add-form-toggle");
+  const toggle = el("button", "secondary-btn", "Add NPC ▾");
+  toggle.type = "button";
+  const details = el("div", "add-form admin-add-form-collapsed");
+  const fields = el("div", "admin-add-form-fields");
+  fields.innerHTML = `
+    <div class="add-form-grid">
+      <label class="field"><span>Key</span><input data-field="key" type="text" /></label>
+      <label class="field"><span>Label</span><input data-field="label" type="text" /></label>
+      <label class="field"><span>Type</span>
+        <select data-field="npc_type">
+          <option value="neutral" selected>neutral</option>
+          <option value="merchant">merchant</option>
+          <option value="quest_giver">quest_giver</option>
+          <option value="ally">ally</option>
+        </select>
+      </label>
+      <label class="field"><span>Shop</span><input data-field="is_shop" type="checkbox" /></label>
+      <label class="field"><span>Active</span><input data-field="is_active" type="checkbox" checked /></label>
+      <label class="field add-form-span-2"><span>Description</span><input data-field="description" type="text" /></label>
+      <label class="field add-form-span-2"><span>Personality JSON</span><textarea data-field="personality_json" rows="4">{}</textarea></label>
+      <label class="field add-form-span-2"><span>Shop inventory JSON</span><textarea data-field="shop_inventory_json" rows="4">[]</textarea></label>
+      <label class="field add-form-span-2"><span>Location keys (one per line)</span><textarea data-field="location_keys" rows="4"></textarea></label>
+    </div>
+    <button type="button" class="primary-btn admin-add-form-submit" data-action="create-npc">Create</button>
+  `;
+  details.appendChild(fields);
+  toggle.addEventListener("click", () => {
+    details.classList.toggle("admin-add-form-collapsed");
+    toggle.textContent = details.classList.contains("admin-add-form-collapsed") ? "Add NPC ▾" : "Add NPC ▴";
+  });
+  toggleRow.appendChild(toggle);
+  root.appendChild(toggleRow);
+  root.appendChild(details);
+
+  wireBulkJsonImport(root, {
+    hint: "Wklej tablicę NPC. location_keys: tablica stringów. personality_json/shop_inventory_json: JSON string lub obiekt/tablica.",
+    templatesHref: "/admin_panel/templates.html#sec-npcs",
+    templatesAnchor: "Szablony JSON — NPC",
+    placeholder: '[{ "key":"merchant_aldric","label":"Aldric","npc_type":"merchant","is_shop":1 }]',
+    validateRow: (row, i) => validateNpcImportRow(row, i),
+    buildPayload: (row) => npcImportRowToPayload(row),
+    postPath: "/api/admin/npcs",
+    existingKeys: async () => {
+      const data = await adminFetch("/api/admin/npcs");
+      return new Set((data.data || []).map((r) => String(r.key)));
+    },
+    refresh: () => refreshNpcs(host),
+    confirmNoun: "NPC",
+  });
+
+  const mount = el("div", "admin-table-mount");
+  root.appendChild(mount);
+  fields.querySelector('[data-action="create-npc"]').addEventListener("click", async () => {
+    const payload = {
+      key: fields.querySelector('[data-field="key"]').value.trim(),
+      label: fields.querySelector('[data-field="label"]').value.trim(),
+      npc_type: fields.querySelector('[data-field="npc_type"]').value.trim(),
+      description: fields.querySelector('[data-field="description"]').value.trim() || null,
+      personality_json: fields.querySelector('[data-field="personality_json"]').value || "{}",
+      shop_inventory_json: fields.querySelector('[data-field="shop_inventory_json"]').value || "[]",
+      is_shop: fields.querySelector('[data-field="is_shop"]').checked ? 1 : 0,
+      is_active: fields.querySelector('[data-field="is_active"]').checked ? 1 : 0,
+      location_keys: normalizeLocationKeysInput(fields.querySelector('[data-field="location_keys"]').value),
+    };
+    if (!payload.key || !payload.label) {
+      showToast("Key i label są wymagane.", "info");
+      return;
+    }
+    try {
+      JSON.parse(payload.personality_json);
+      JSON.parse(payload.shop_inventory_json);
+    } catch (_e) {
+      showToast("Personality/Shop JSON must be valid.", "error");
+      return;
+    }
+    try {
+      await adminFetch("/api/admin/npcs", { method: "POST", body: JSON.stringify(payload) });
+      showToast("NPC created.", "success");
+      await refreshNpcs(host);
+    } catch (e) {
+      showToast(parseApiError(e, "Create failed."), "error");
+    }
+  });
+  host.appendChild(root);
+  void refreshNpcs(host);
+}
+
 async function refreshConditions(host) {
   const tableHost = host.querySelector(".admin-table-mount");
   renderTable(tableHost, [], null, {});
@@ -1137,6 +1408,1034 @@ async function refreshConditions(host) {
     showToast(parseApiError(e, "Failed to load conditions."), "error");
     renderTable(tableHost, [], [], {});
   }
+}
+
+// ============ LOCATIONS ============
+const LOCATION_RULES_DEFINITION = [
+  { key: "no_combat", label: "No Combat", type: "boolean", description: "Combat is forbidden (e.g., temples, safe zones)" },
+  { key: "no_loot", label: "No Loot", type: "boolean", description: "Enemies don't drop loot" },
+  { key: "teleport_blocked", label: "Teleport Blocked", type: "boolean", description: "Teleportation spells don't work" },
+  { key: "stealth_check", label: "Stealth Check", type: "boolean", description: "Entry requires successful stealth roll" },
+  { key: "rest_bonus", label: "Rest Bonus", type: "number", default: 2, description: "HP regen multiplier (e.g., 2 = 2x HP)" },
+  { key: "mana_regen", label: "Mana Regen", type: "number", default: 0, description: "Natural mana regen (0 = none, 1 = normal)" },
+  { key: "required_item", label: "Required Item", type: "text", default: "torch", description: "Item required in inventory to enter" },
+  { key: "reason", label: "Reason", type: "text", default: "Sacred ground", description: "Explanation shown to player (e.g., why combat is blocked)" },
+];
+
+function locationTypeBadgeClass(type) {
+  if (type === "macro") return "badge-blue";
+  if (type === "sub") return "badge-green";
+  return "badge";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function slugifyLocationKey(label) {
+  return String(label || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 100);
+}
+
+async function fetchLocationParentLabel(parentId, allLocations) {
+  const parent = allLocations.find(l => l.id === parentId);
+  return parent ? `${parent.label} (${parent.key})` : `ID:${parentId}`;
+}
+
+function validateLocationImportRow(row, i) {
+  const errs = [];
+  if (!row.label || String(row.label).trim() === "") errs.push(`[${i}] label is required`);
+  if (row.key != null && String(row.key).trim() === "") errs.push(`[${i}] key must be non-empty when provided`);
+  const resolvedKey = row.key != null && String(row.key).trim() !== "" ? String(row.key).trim() : slugifyLocationKey(row.label);
+  if (!resolvedKey) errs.push(`[${i}] key could not be generated from label`);
+  const t = String(row.location_type || "macro").toLowerCase();
+  if (!["macro", "sub"].includes(t)) errs.push(`[${i}] location_type must be macro or sub`);
+  if (t === "sub" && !((row.parent_id != null && Number(row.parent_id) > 0) || (row.parent_key != null && String(row.parent_key).trim() !== ""))) {
+    errs.push(`[${i}] parent_id or parent_key is required for sub locations`);
+  }
+  return errs.length ? errs.join("; ") : null;
+}
+
+function locationImportRowToPayload(row) {
+  const label = String(row.label || "").trim();
+  const key = row.key != null && String(row.key).trim() !== "" ? String(row.key).trim() : slugifyLocationKey(label);
+  return {
+    key,
+    label,
+    location_type: String(row.location_type || "macro").toLowerCase(),
+    parent_id: row.parent_id != null ? Number(row.parent_id) || null : null,
+    parent_key: row.parent_key != null && String(row.parent_key).trim() ? String(row.parent_key).trim() : null,
+    description: row.description == null ? null : String(row.description),
+    rules: (() => {
+      if (row.rules == null) return {};
+      if (typeof row.rules === "object") return row.rules;
+      try { return JSON.parse(String(row.rules)); } catch { return { text: String(row.rules) }; }
+    })(),
+    enemy_keys: Array.isArray(row.enemy_keys) ? row.enemy_keys : [],
+    npc_keys: Array.isArray(row.npc_keys) ? row.npc_keys : [],
+    is_active: row.is_active !== false && row.is_active !== 0,
+  };
+}
+
+// Rules builder helper - converts rules object to/from UI
+function buildRulesFromCheckboxes(container) {
+  const rules = {};
+  container.querySelectorAll("[data-rule-key]").forEach(el => {
+    const key = el.dataset.ruleKey;
+    const def = LOCATION_RULES_DEFINITION.find(r => r.key === key);
+    if (!def) return;
+    if (def.type === "boolean") {
+      if (el.checked) rules[key] = true;
+    } else if (def.type === "number") {
+      const val = parseFloat(el.value);
+      if (!isNaN(val)) rules[key] = val;
+    } else {
+      if (el.value.trim()) rules[key] = el.value.trim();
+    }
+  });
+  return rules;
+}
+
+function setRulesCheckboxes(container, rules) {
+  container.querySelectorAll("[data-rule-key]").forEach(el => {
+    const key = el.dataset.ruleKey;
+    const def = LOCATION_RULES_DEFINITION.find(r => r.key === key);
+    if (!def) return;
+    const val = rules?.[key];
+    if (def.type === "boolean") {
+      el.checked = !!val;
+    } else {
+      el.value = val != null ? String(val) : (def.default || "");
+    }
+  });
+}
+
+async function refreshLocations(host, statKeys) {
+  const mount = host.querySelector(".admin-table-mount");
+  if (!mount) return;
+  try {
+    const data = await adminFetch("/api/locations/admin/locations?active_only=1");
+    const allLocations = data || [];
+    const rows = await Promise.all(
+      allLocations.map(async (r) => ({
+        ...r,
+        _parent_label: r.parent_id ? await fetchLocationParentLabel(r.parent_id, allLocations) : "—",
+        _enemy_count: Array.isArray(r.enemy_keys) ? r.enemy_keys.length : 0,
+        _rules_preview: r.rules ? (typeof r.rules === "object" ? JSON.stringify(r.rules).slice(0, 40) : String(r.rules).slice(0, 40)) : "",
+        _rules: r.rules || {}, // keep full rules object for editing
+      })),
+    );
+    renderGameDesignTable(
+      mount,
+      "locations",
+      [
+        { key: "key", label: "Key" },
+        { key: "label", label: "Label", editable: true },
+        { key: "location_type", label: "Type", type: "badge", badgeClass: locationTypeBadgeClass, editable: true, editType: "select", editOptions: ["macro", "sub"] },
+        { key: "_parent_label", label: "Parent" },
+        { key: "_enemy_count", label: "Enemies", type: "number" },
+        { key: "_rules_preview", label: "Rules" },
+        { key: "is_active", label: "Active", type: "boolean", editable: true },
+      ],
+      rows,
+      {
+        onEdit: async (row, key, newValue, meta) => {
+          const body = { force: !!(meta && meta.force) };
+          if (key === "label") body.label = newValue;
+          if (key === "is_active") body.is_active = !!newValue;
+          if (key === "location_type") body.location_type = String(newValue).trim().toLowerCase();
+          const pathKey = row.key;
+          const res = await adminFetch(`/api/locations/admin/locations/${encodeURIComponent(pathKey)}`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          });
+          return res;
+        },
+        onDelete: async (row, meta = {}) => {
+          const doDelete = async (force) => {
+            await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, {
+              method: "DELETE",
+              body: JSON.stringify({ force: !!force }),
+            });
+          };
+          try {
+            await doDelete(!!meta.force);
+          } catch (err) {
+            // If 204 No Content or 404, treat as success for soft-delete
+            if (err.status === 204 || err.status === 404) {
+              return;
+            }
+            const detail = String(err?.body?.detail || "");
+            // Location has active children and backend asks for force=true
+            if (err.status === 422 && detail.toLowerCase().includes("force=true")) {
+              if (meta && meta.bulk) {
+                await doDelete(true);
+                return;
+              }
+              const okForce = await showConfirm(
+                "This location has active child locations. Delete location with children?",
+                { dangerous: true, showForceCheckbox: true, forceCheckboxLabel: "Force delete with children" },
+              );
+              if (!okForce || !okForce.ok || !okForce.force) {
+                return;
+              }
+              await doDelete(true);
+              return;
+            }
+            throw err;
+          }
+        },
+        extraActions: (row) => [
+          { label: "Edit", class: "secondary-btn", onClick: () => openLocationEditModal(host, row, allLocations) },
+        ],
+      },
+    );
+  } catch (e) {
+    showToast(parseApiError(e, "Failed to load locations."), "error");
+    renderTable(mount, [], [], {});
+  }
+}
+
+// Full edit modal for locations
+function openLocationEditModal(host, row, allLocations) {
+  const existing = document.getElementById("location-edit-modal");
+  if (existing) existing.remove();
+
+  const modal = el("div", "admin-modal");
+  modal.id = "location-edit-modal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;";
+
+  const content = el("div", "admin-modal-content");
+  content.style.cssText = "background:var(--panel);padding:20px;border-radius:var(--radius);max-width:700px;width:90%;max-height:80vh;overflow:auto;";
+
+  const enemiesList = window._cachedEnemiesList || [];
+  const selectedEnemies = new Set(Array.isArray(row.enemy_keys) ? row.enemy_keys : []);
+
+  // Build selected rules for multi-select
+  const currentRules = row._rules || {};
+  const selectedRules = Object.keys(currentRules).filter(k => {
+    const def = LOCATION_RULES_DEFINITION.find(d => d.key === k);
+    if (def) return true;
+    return false; // custom rules handled separately
+  });
+  const customRules = Object.entries(currentRules).filter(([k]) => !LOCATION_RULES_DEFINITION.find(d => d.key === k));
+
+  content.innerHTML = `
+    <h3>Edit Location: ${row.label}</h3>
+    <div class="edit-form-grid" style="display:grid;gap:12px;margin:16px 0;">
+      <label class="field"><span>Key</span><input id="edit-key" type="text" value="${row.key}" disabled /></label>
+      <label class="field"><span>Label</span><input id="edit-label" type="text" value="${row.label || ""}" /></label>
+      <label class="field"><span>Type</span>
+        <select id="edit-type">
+          <option value="macro" ${row.location_type === "macro" ? "selected" : ""}>Macro</option>
+          <option value="sub" ${row.location_type === "sub" ? "selected" : ""}>Sub</option>
+        </select>
+      </label>
+      <label class="field"><span>Parent</span>
+        <select id="edit-parent">
+          <option value="">— None —</option>
+          ${allLocations.filter(l => l.id !== row.id && l.location_type === "macro").map(p => 
+            `<option value="${p.id}" ${p.id === row.parent_id ? "selected" : ""}>${p.label} (${p.key})</option>`
+          ).join("")}
+        </select>
+      </label>
+      <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea id="edit-desc" rows="2">${row.description || ""}</textarea></label>
+      
+      <div class="field" style="grid-column:1/-1;">
+        <span>Rules</span>
+        <div class="multi-select-help" style="font-size:0.85em;color:var(--muted);margin-bottom:4px;">
+          💡 <strong>Ctrl+Click</strong> (Win) or <strong>Cmd+Click</strong> (Mac) to select multiple
+        </div>
+        <select id="edit-rules" multiple size="6" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+          ${LOCATION_RULES_DEFINITION.map(def => `
+            <option value="${def.key}" ${currentRules[def.key] !== undefined ? "selected" : ""}>
+              ${def.label} ${def.type !== "boolean" && currentRules[def.key] !== undefined ? `(${currentRules[def.key]})` : ""}
+            </option>
+          `).join("")}
+        </select>
+        <div id="edit-rules-values" style="margin-top:8px;">
+          ${LOCATION_RULES_DEFINITION.filter(def => def.type !== "boolean" && currentRules[def.key] !== undefined).map(def => `
+            <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+              <span>${def.label}:</span>
+              <input type="text" data-rule-value="${def.key}" value="${currentRules[def.key] || def.default || ""}" style="width:120px;padding:4px 8px;" />
+            </label>
+          `).join("")}
+        </div>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <span>Custom Rules <em class="muted">(JSON key:value pairs)</em></span>
+        <div id="edit-custom-rules" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;">
+          ${customRules.length === 0 ? '<div class="custom-rule-row" style="display:flex;gap:8px;margin:4px 0;"><input type="text" placeholder="key" class="custom-rule-key" style="width:150px;padding:4px 8px;" /><input type="text" placeholder="value" class="custom-rule-value" style="flex:1;padding:4px 8px;" /><button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button></div>' : 
+            customRules.map(([k, v]) => `
+              <div class="custom-rule-row" style="display:flex;gap:8px;margin:4px 0;">
+                <input type="text" value="${k}" class="custom-rule-key" style="width:150px;padding:4px 8px;" />
+                <input type="text" value="${typeof v === 'object' ? JSON.stringify(v) : v}" class="custom-rule-value" style="flex:1;padding:4px 8px;" />
+                <button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button>
+              </div>
+            `).join("")}
+        </div>
+        <button type="button" id="edit-add-custom-rule" class="secondary-btn" style="margin-top:8px;">+ Add Custom Rule</button>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <span>Enemies</span>
+        <div class="multi-select-help" style="font-size:0.85em;color:var(--muted);margin-bottom:4px;">
+          💡 <strong>Ctrl+Click</strong> (Win) or <strong>Cmd+Click</strong> (Mac) to select multiple
+        </div>
+        <select id="edit-enemies" multiple size="6" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+          ${enemiesList.length === 0 ? '<option disabled>No enemies available</option>' : 
+            enemiesList.slice().sort((a, b) => a.label.localeCompare(b.label)).map(e => `<option value="${e.key}" ${selectedEnemies.has(e.key) ? "selected" : ""}>${e.label} (${e.key})</option>`).join("")}
+        </select>
+      </div>
+
+      <label class="field"><span>Active</span><input id="edit-active" type="checkbox" ${row.is_active !== 0 ? "checked" : ""} /></label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button type="button" class="secondary-btn" id="edit-cancel">Cancel</button>
+      <button type="button" class="danger-btn" id="edit-delete">Delete</button>
+      <button type="button" class="primary-btn" id="edit-save">Save</button>
+    </div>
+  `;
+
+  // Add event listeners for rules select
+  const rulesSelect = content.querySelector("#edit-rules");
+  const rulesValuesContainer = content.querySelector("#edit-rules-values");
+  
+  rulesSelect.addEventListener("change", () => {
+    const selected = Array.from(rulesSelect.selectedOptions).map(o => o.value);
+    // Show value inputs for selected non-boolean rules
+    let valuesHtml = "";
+    selected.forEach(key => {
+      const def = LOCATION_RULES_DEFINITION.find(d => d.key === key);
+      if (def && def.type !== "boolean") {
+        const currentVal = currentRules[key] || def.default || "";
+        valuesHtml += `
+          <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+            <span>${def.label}:</span>
+            <input type="text" data-rule-value="${def.key}" value="${currentVal}" style="width:120px;padding:4px 8px;" />
+          </label>
+        `;
+      }
+    });
+    rulesValuesContainer.innerHTML = valuesHtml;
+  });
+
+  // Add custom rule
+  content.querySelector("#edit-add-custom-rule").addEventListener("click", () => {
+    const container = content.querySelector("#edit-custom-rules");
+    const row = document.createElement("div");
+    row.className = "custom-rule-row";
+    row.style.cssText = "display:flex;gap:8px;margin:4px 0;";
+    row.innerHTML = `
+      <input type="text" placeholder="key" class="custom-rule-key" style="width:150px;padding:4px 8px;" />
+      <input type="text" placeholder="value" class="custom-rule-value" style="flex:1;padding:4px 8px;" />
+      <button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button>
+    `;
+    container.appendChild(row);
+  });
+
+  // Remove custom rule
+  content.querySelector("#edit-custom-rules").addEventListener("click", (e) => {
+    if (e.target.classList.contains("remove-custom-rule")) {
+      e.target.closest(".custom-rule-row").remove();
+    }
+  });
+
+  modal.appendChild(content);
+  document.body.appendChild(modal);
+
+  // Events
+  content.querySelector("#edit-cancel").addEventListener("click", () => modal.remove());
+  content.querySelector("#edit-delete").addEventListener("click", async () => {
+    if (!confirm(`Delete location "${row.label}" (${row.key})?`)) return;
+    const doDelete = async (force) => {
+      await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, {
+        method: "DELETE",
+        body: JSON.stringify({ force: !!force }),
+      });
+    };
+    try {
+      await doDelete(false);
+      showToast("Location deleted", "success");
+      modal.remove();
+      refreshLocations(host);
+    } catch (e) {
+      const detail = String(e?.body?.detail || "");
+      if (e?.status === 422 && detail.toLowerCase().includes("force=true")) {
+        const okForce = confirm(
+          `Location "${row.label}" has active child locations. Delete with children?`,
+        );
+        if (!okForce) return;
+        try {
+          await doDelete(true);
+          showToast("Location and child locations deleted", "success");
+          modal.remove();
+          refreshLocations(host);
+          return;
+        } catch (e2) {
+          showToast(parseApiError(e2, "Delete failed"), "error");
+          return;
+        }
+      }
+      showToast(parseApiError(e, "Delete failed"), "error");
+    }
+  });
+  content.querySelector("#edit-save").addEventListener("click", async () => {
+    // Build rules from multi-select
+    const rules = {};
+    const selectedRules = Array.from(content.querySelector("#edit-rules").selectedOptions).map(o => o.value);
+    selectedRules.forEach(key => {
+      const def = LOCATION_RULES_DEFINITION.find(d => d.key === key);
+      if (def) {
+        if (def.type === "boolean") {
+          rules[key] = true;
+        } else {
+          // Get value from input
+          const valueInput = content.querySelector(`[data-rule-value="${key}"]`);
+          if (valueInput) {
+            if (def.type === "number") {
+              const numVal = parseFloat(valueInput.value);
+              if (!isNaN(numVal)) rules[key] = numVal;
+            } else {
+              rules[key] = valueInput.value.trim();
+            }
+          }
+        }
+      }
+    });
+    
+    // Add custom rules
+    content.querySelectorAll("#edit-custom-rules .custom-rule-row").forEach(rowEl => {
+      const keyInput = rowEl.querySelector(".custom-rule-key");
+      const valueInput = rowEl.querySelector(".custom-rule-value");
+      if (keyInput && valueInput && keyInput.value.trim()) {
+        const key = keyInput.value.trim();
+        const val = valueInput.value.trim();
+        // Try to parse as number or JSON, otherwise store as string
+        if (!isNaN(parseFloat(val)) && val !== "") {
+          rules[key] = parseFloat(val);
+        } else if (val === "true") {
+          rules[key] = true;
+        } else if (val === "false") {
+          rules[key] = false;
+        } else if (val.startsWith("{") || val.startsWith("[")) {
+          try { rules[key] = JSON.parse(val); } catch { rules[key] = val; }
+        } else {
+          rules[key] = val;
+        }
+      }
+    });
+    
+    const enemyKeys = Array.from(content.querySelector("#edit-enemies").selectedOptions).map(o => o.value);
+    const body = {
+      label: content.querySelector("#edit-label").value.trim(),
+      location_type: content.querySelector("#edit-type").value,
+      parent_id: content.querySelector("#edit-parent").value ? Number(content.querySelector("#edit-parent").value) : null,
+      description: content.querySelector("#edit-desc").value.trim(),
+      rules,
+      enemy_keys: enemyKeys,
+      is_active: content.querySelector("#edit-active").checked ? 1 : 0,
+    };
+    try {
+      await adminFetch(`/api/locations/${encodeURIComponent(row.key)}`, { method: "PUT", body: JSON.stringify(body) });
+      showToast("Location updated", "success");
+      modal.remove();
+      refreshLocations(host);
+    } catch (e) { showToast(parseApiError(e, "Save failed"), "error"); }
+  });
+
+  // Close on backdrop click
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+}
+
+function mountLocations(host) {
+  const root = el("div", "admin-subpanel-inner");
+  const versionInfo = el("div", "muted", "Locations UI version: 8D-fix-2026-04-28-1740");
+  versionInfo.style.cssText = "font-size:12px;margin:0 0 8px 0;";
+  root.appendChild(versionInfo);
+  
+  // Cache enemies for dropdowns
+  let enemiesListCache = [];
+  async function loadEnemiesCache() {
+    try {
+      const d = await adminFetch("/api/admin/enemies");
+      enemiesListCache = (d.items || []).filter(e => e.is_active);
+      window._cachedEnemiesList = enemiesListCache;
+    } catch (e) { /* ignore */ }
+  }
+  loadEnemiesCache();
+
+  const toggleRow = el("div", "admin-add-form-toggle");
+  const toggle = el("button", "secondary-btn", "Add location ▾");
+  toggle.type = "button";
+  const details = el("div", "add-form admin-add-form-collapsed");
+  const fields = el("div", "admin-add-form-fields");
+
+  // Formularz dodawania z rules dropdown i enemies dropdown (multi-select)
+  fields.innerHTML = `
+    <div class="add-form-grid">
+      <label class="field"><span>Key</span><input data-field="key" type="text" placeholder="auto-from-label" /></label>
+      <label class="field"><span>Label *</span><input data-field="label" type="text" /></label>
+      <label class="field"><span>Type</span>
+        <select data-field="location_type" id="add-type">
+          <option value="macro" selected>Macro (top-level)</option>
+          <option value="sub">Sub (under macro)</option>
+        </select>
+      </label>
+      <label class="field"><span>Parent (for sub)</span>
+        <select data-field="parent_key" id="add-parent-key">
+          <option value="">— Select parent macro —</option>
+        </select>
+      </label>
+      <label class="field"><span>Parent Key (for sub)</span><input data-field="parent_key" type="text" placeholder="slug of parent macro" /></label>
+      <label class="field" style="grid-column:1/-1;"><span>Description</span><textarea data-field="description" rows="2"></textarea></label>
+      
+      <div class="field" style="grid-column:1/-1;">
+        <span>Rules</span>
+        <div class="multi-select-help" style="font-size:0.85em;color:var(--muted);margin-bottom:4px;">
+          💡 <strong>Ctrl+Click</strong> (Win) or <strong>Cmd+Click</strong> (Mac) to select multiple. Click again to deselect.
+        </div>
+        <select id="add-rules" multiple size="6" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+          ${LOCATION_RULES_DEFINITION.map(def => `<option value="${def.key}">${def.label} ${def.type !== "boolean" ? `(default: ${def.default})` : ""} — ${def.description}</option>`).join("")}
+        </select>
+        <div id="add-rules-values" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <span>Custom Rules <em class="muted">(create your own)</em></span>
+        <div id="add-custom-rules" style="background:var(--panel-2);padding:12px;border-radius:6px;margin-top:4px;">
+          <div class="custom-rule-row" style="display:flex;gap:8px;margin:4px 0;">
+            <input type="text" placeholder="rule_key" class="custom-rule-key" style="width:150px;padding:4px 8px;" />
+            <input type="text" placeholder="value (text/number/true/false/JSON)" class="custom-rule-value" style="flex:1;padding:4px 8px;" />
+            <button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button>
+          </div>
+        </div>
+        <button type="button" id="add-custom-rule-btn" class="secondary-btn" style="margin-top:8px;">+ Add Custom Rule</button>
+      </div>
+
+      <div class="field" style="grid-column:1/-1;">
+        <span>Enemies</span>
+        <div class="multi-select-help" style="font-size:0.85em;color:var(--muted);margin-bottom:4px;">
+          💡 <strong>Ctrl+Click</strong> (Win) or <strong>Cmd+Click</strong> (Mac) to select multiple enemies
+        </div>
+        <select id="add-enemies" multiple size="6" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--panel);">
+          <option disabled>Loading enemies...</option>
+        </select>
+      </div>
+
+      <label class="field"><span>Active</span><input data-field="is_active" type="checkbox" checked /></label>
+    </div>
+    <button type="button" class="primary-btn admin-add-form-submit" data-action="create-location">Create</button>
+  `;
+
+  // Rules select change handler
+  const rulesSelect = fields.querySelector("#add-rules");
+  const rulesValuesContainer = fields.querySelector("#add-rules-values");
+  rulesSelect.addEventListener("change", () => {
+    const selected = Array.from(rulesSelect.selectedOptions).map(o => o.value);
+    let valuesHtml = "";
+    selected.forEach(key => {
+      const def = LOCATION_RULES_DEFINITION.find(d => d.key === key);
+      if (def && def.type !== "boolean") {
+        valuesHtml += `
+          <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+            <span>${def.label}:</span>
+            <input type="text" data-rule-value="${def.key}" placeholder="${def.default || "value"}" style="width:120px;padding:4px 8px;" />
+          </label>
+        `;
+      }
+    });
+    rulesValuesContainer.innerHTML = valuesHtml;
+  });
+
+  // Add custom rule
+  fields.querySelector("#add-custom-rule-btn").addEventListener("click", () => {
+    const container = fields.querySelector("#add-custom-rules");
+    const row = document.createElement("div");
+    row.className = "custom-rule-row";
+    row.style.cssText = "display:flex;gap:8px;margin:4px 0;";
+    row.innerHTML = `
+      <input type="text" placeholder="rule_key" class="custom-rule-key" style="width:150px;padding:4px 8px;" />
+      <input type="text" placeholder="value" class="custom-rule-value" style="flex:1;padding:4px 8px;" />
+      <button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button>
+    `;
+    container.appendChild(row);
+  });
+
+  // Remove custom rule
+  fields.querySelector("#add-custom-rules").addEventListener("click", (e) => {
+    if (e.target.classList.contains("remove-custom-rule")) {
+      e.target.closest(".custom-rule-row").remove();
+    }
+  });
+
+  // Populate enemies dropdown
+  setTimeout(async () => {
+    await loadEnemiesCache();
+    const enemiesSelect = fields.querySelector("#add-enemies");
+    if (enemiesListCache.length === 0) {
+      enemiesSelect.innerHTML = "<option disabled>No active enemies. Create enemies in Enemies tab first.</option>";
+    } else {
+      enemiesSelect.innerHTML = enemiesListCache.slice().sort((a, b) => a.label.localeCompare(b.label)).map(e => `<option value="${e.key}">${e.label} (${e.key})</option>`).join("");
+    }
+    try {
+      const locations = await adminFetch("/api/locations/admin/locations?active_only=1");
+      const parentSelect = fields.querySelector("#add-parent-key");
+      const macroLocations = (locations || []).filter((loc) => loc.location_type === "macro");
+      parentSelect.innerHTML = [
+        '<option value="">— Select parent macro —</option>',
+        ...macroLocations
+          .slice()
+          .sort((a, b) => String(a.label || a.key).localeCompare(String(b.label || b.key), undefined, { sensitivity: "base" }))
+          .map((loc) => `<option value="${loc.key}">${loc.label || loc.key} (${loc.key})</option>`),
+      ].join("");
+    } catch (_e) {
+      // Parent dropdown is a helper only; backend validation still catches invalid parents.
+    }
+  }, 100);
+
+  details.appendChild(fields);
+  toggle.addEventListener("click", () => {
+    details.classList.toggle("admin-add-form-collapsed");
+    toggle.textContent = details.classList.contains("admin-add-form-collapsed") ? "Add location ▾" : "Add location ▴";
+  });
+  toggleRow.appendChild(toggle);
+  root.appendChild(toggleRow);
+  root.appendChild(details);
+
+  // Rules panel section with custom rule creation
+  const rulesPanel = el("div", "rules-panel-section");
+  rulesPanel.style.cssText = "background:var(--panel-2);padding:12px;border-radius:6px;margin:12px 0;";
+  rulesPanel.innerHTML = `
+    <h4 style="margin:0 0 8px 0;">📋 Rules System</h4>
+    
+    <details style="margin-bottom:12px;">
+      <summary style="cursor:pointer;font-weight:600;color:var(--accent);">Available Rules (click to expand)</summary>
+      <div class="rules-list" style="display:grid;gap:4px;margin-top:8px;">
+        ${LOCATION_RULES_DEFINITION.map(def => `
+          <div class="rule-item" style="display:flex;align-items:center;gap:8px;padding:6px;background:var(--panel);border-radius:4px;">
+            <code style="background:#e2e8f0;padding:2px 6px;border-radius:3px;">${def.key}</code>
+            <strong>${def.label}</strong>
+            <span class="muted">${def.description}</span>
+            <span class="muted" style="margin-left:auto;font-size:0.85em;">${def.type}${def.default ? ` (default: ${def.default})` : ""}</span>
+          </div>
+        `).join("")}
+      </div>
+    </details>
+    
+    <details>
+      <summary style="cursor:pointer;font-weight:600;color:var(--accent);">➕ Create Custom Rule</summary>
+      <div style="margin-top:8px;padding:12px;background:var(--panel);border-radius:6px;">
+        <p class="muted" style="margin:0 0 8px 0;">Add your own rule that will be available in the dropdown above.</p>
+        <div style="display:grid;gap:8px;">
+          <label class="field">
+            <span>Rule Key <em class="muted">(lowercase_snake_case)</em></span>
+            <input id="new-rule-key" type="text" placeholder="e.g., poison_immunity" style="width:100%;padding:6px 8px;" />
+          </label>
+          <label class="field">
+            <span>Label <em class="muted">(display name)</em></span>
+            <input id="new-rule-label" type="text" placeholder="e.g., Poison Immunity" style="width:100%;padding:6px 8px;" />
+          </label>
+          <label class="field">
+            <span>Type</span>
+            <select id="new-rule-type" style="width:100%;padding:6px 8px;">
+              <option value="boolean">Boolean (on/off)</option>
+              <option value="number">Number (e.g., 2, 0.5)</option>
+              <option value="text">Text (e.g., "torch", "magic_key")</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Default Value <em class="muted">(optional)</em></span>
+            <input id="new-rule-default" type="text" placeholder="e.g., true, 2, torch" style="width:100%;padding:6px 8px;" />
+          </label>
+          <label class="field">
+            <span>Description</span>
+            <input id="new-rule-desc" type="text" placeholder="What this rule does..." style="width:100%;padding:6px 8px;" />
+          </label>
+        </div>
+        <button type="button" id="create-rule-btn" class="primary-btn" style="margin-top:12px;">Add Rule to System</button>
+        <div id="custom-rules-list" style="margin-top:12px;"></div>
+      </div>
+    </details>
+  `;
+  
+  // Create custom rule handler
+  rulesPanel.querySelector("#create-rule-btn").addEventListener("click", () => {
+    const key = rulesPanel.querySelector("#new-rule-key").value.trim();
+    const label = rulesPanel.querySelector("#new-rule-label").value.trim();
+    const type = rulesPanel.querySelector("#new-rule-type").value;
+    const defaultVal = rulesPanel.querySelector("#new-rule-default").value.trim();
+    const desc = rulesPanel.querySelector("#new-rule-desc").value.trim();
+    
+    if (!key || !label) {
+      showToast("Key and Label are required", "error");
+      return;
+    }
+    
+    // Add to definitions
+    const newRule = { key, label, type, default: defaultVal || undefined, description: desc || `Custom rule: ${key}` };
+    LOCATION_RULES_DEFINITION.push(newRule);
+    
+    // Add to dropdowns
+    const rulesSelects = [fields.querySelector("#add-rules"), document.querySelector("#edit-rules")].filter(Boolean);
+    rulesSelects.forEach(select => {
+      if (select) {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = `${label} ${type !== "boolean" && defaultVal ? `(default: ${defaultVal})` : ""} — ${desc || "Custom rule"}`;
+        select.appendChild(option);
+      }
+    });
+    
+    // Clear inputs
+    rulesPanel.querySelector("#new-rule-key").value = "";
+    rulesPanel.querySelector("#new-rule-label").value = "";
+    rulesPanel.querySelector("#new-rule-default").value = "";
+    rulesPanel.querySelector("#new-rule-desc").value = "";
+    
+    // Show in list
+    const list = rulesPanel.querySelector("#custom-rules-list");
+    const item = document.createElement("div");
+    item.style.cssText = "display:flex;align-items:center;gap:8px;padding:6px;background:#f0ebe0;border-radius:4px;margin:4px 0;";
+    item.innerHTML = `
+      <code style="background:#e2e8f0;padding:2px 6px;border-radius:3px;">${key}</code>
+      <strong>${label}</strong>
+      <span class="muted">${type}${defaultVal ? ` (default: ${defaultVal})` : ""}</span>
+      <span class="muted" style="margin-left:auto;font-size:0.85em;">✓ Added</span>
+    `;
+    list.appendChild(item);
+    
+    showToast(`Rule "${key}" added to system`, "success");
+  });
+  
+  root.appendChild(rulesPanel);
+
+  // Bulk Import
+  wireBulkJsonImport(root, {
+    hint: "Wklej tablicę lokalizacji. Macro locations nie wymagają parent_id. Sub locations wymagają istniejącego parent_id.",
+    templatesHref: "/admin_panel/templates.html#sec-locations",
+    templatesAnchor: "Szablony JSON — Locations",
+    placeholder: '[{ "key": "dark_forest", "label": "Dark Forest", "location_type": "macro", ... }]',
+    validateRow: (row, i) => validateLocationImportRow(row, i),
+    buildPayload: (row) => locationImportRowToPayload(row),
+    postPath: "/api/locations",
+    existingKeys: () => fetchExistingKeysFromAdminList("/api/locations/admin/locations?active_only=0"),
+    existingRows: () => fetchExistingRowsByKeyFromAdminList("/api/locations/admin/locations?active_only=0"),
+    patchPath: (key) => `/api/locations/admin/locations/${encodeURIComponent(key)}`,
+    buildDuplicatePatch: (raw, existing) =>
+      buildPatchFromExplicitFields(raw, existing, [
+        { rawKey: "label", patchKey: "label", getValue: (r) => String(r.label).trim() },
+        { rawKey: "description", patchKey: "description", getValue: (r) => (r.description == null ? null : String(r.description)) },
+        { rawKey: "rules", patchKey: "rules", getValue: (r) => {
+          if (r.rules == null) return {};
+          if (typeof r.rules === "object") return r.rules;
+          try { return JSON.parse(String(r.rules)); } catch { return { text: String(r.rules) }; }
+        }},
+        { rawKey: "enemy_keys", patchKey: "enemy_keys", getValue: (r) => (Array.isArray(r.enemy_keys) ? r.enemy_keys : []) },
+        { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
+      ]),
+    refresh: () => refreshLocations(host),
+    confirmNoun: "lokalizacji",
+  });
+
+  // Pending AI locations approval
+  const pendingSection = el("div", "locations-pending-section");
+  pendingSection.style.cssText = "background:#f8fafc;padding:12px;border-radius:6px;margin:16px 0;";
+  pendingSection.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;">
+      <h4 style="margin:0;">Lokalizacje do zatwierdzenia <span id="pending-locations-badge" class="badge">0</span></h4>
+      <button type="button" class="secondary-btn" id="pending-locations-refresh">Refresh</button>
+    </div>
+    <div id="pending-locations-table" class="table-wrap"><p class="muted">Loading pending locations...</p></div>
+  `;
+  root.appendChild(pendingSection);
+
+  const pendingBadge = pendingSection.querySelector("#pending-locations-badge");
+  const pendingTable = pendingSection.querySelector("#pending-locations-table");
+
+  async function loadPendingLocations() {
+    try {
+      const data = await adminFetch("/api/admin/locations/pending");
+      const rows = data.locations || [];
+      pendingBadge.textContent = String(data.count ?? rows.length);
+      if (!rows.length) {
+        pendingTable.innerHTML = "<p class='muted'>No AI-generated locations waiting for approval.</p>";
+        return;
+      }
+
+      const table = document.createElement("table");
+      table.className = "admin-table";
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>Type</th>
+            <th>Parent</th>
+            <th>Created</th>
+            <th>Akcja</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+      const tbody = table.querySelector("tbody");
+      rows.forEach((row) => {
+        const tr = document.createElement("tr");
+        const parent = row.parent_label ? `${row.parent_label} (${row.parent_key || "?"})` : "—";
+        tr.innerHTML = `
+          <td><strong>${escapeHtml(row.label || row.key || String(row.id))}</strong><br><code>${escapeHtml(row.key || "")}</code></td>
+          <td><span class="${locationTypeBadgeClass(row.location_type)}">${escapeHtml(row.location_type || "macro")}</span></td>
+          <td>${escapeHtml(parent)}</td>
+          <td>${escapeHtml(row.created_at || "")}</td>
+          <td style="white-space:nowrap;">
+            <button type="button" class="primary-btn" data-approve="${row.id}">Zatwierdź</button>
+            <button type="button" class="danger-btn" data-reject="${row.id}">Odrzuć</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      pendingTable.innerHTML = "";
+      pendingTable.appendChild(table);
+    } catch (e) {
+      pendingTable.innerHTML = "<p class='muted'>Error loading pending locations.</p>";
+      showToast(parseApiError(e, "Load pending locations failed"), "error");
+    }
+  }
+
+  pendingSection.querySelector("#pending-locations-refresh").addEventListener("click", loadPendingLocations);
+  pendingTable.addEventListener("click", async (event) => {
+    const approveId = event.target?.dataset?.approve;
+    const rejectId = event.target?.dataset?.reject;
+    const id = approveId || rejectId;
+    if (!id) return;
+    try {
+      await adminFetch(`/api/admin/locations/${encodeURIComponent(id)}/${approveId ? "approve" : "reject"}`, {
+        method: "POST",
+      });
+      showToast(approveId ? "Location approved" : "Location rejected", "success");
+      await loadPendingLocations();
+      await refreshLocations(host);
+    } catch (e) {
+      showToast(parseApiError(e, "Location approval action failed"), "error");
+    }
+  });
+
+  // Table mount
+  const mount = el("div", "admin-table-mount");
+  root.appendChild(mount);
+
+  // Create button
+  fields.querySelector('[data-action="create-location"]').addEventListener("click", async () => {
+    const get = (k) => {
+      const el = fields.querySelector(`[data-field="${k}"]`);
+      if (!el) return null;
+      if (el.type === "checkbox") return el.checked;
+      return el.value;
+    };
+    
+    // Build rules from multi-select
+    const rules = {};
+    const selectedRules = Array.from(fields.querySelector("#add-rules").selectedOptions).map(o => o.value);
+    selectedRules.forEach(key => {
+      const def = LOCATION_RULES_DEFINITION.find(d => d.key === key);
+      if (def) {
+        if (def.type === "boolean") {
+          rules[key] = true;
+        } else {
+          const valueInput = fields.querySelector(`[data-rule-value="${key}"]`);
+          if (valueInput && valueInput.value.trim()) {
+            if (def.type === "number") {
+              const numVal = parseFloat(valueInput.value);
+              if (!isNaN(numVal)) rules[key] = numVal;
+            } else {
+              rules[key] = valueInput.value.trim();
+            }
+          }
+        }
+      }
+    });
+    
+    // Add custom rules
+    fields.querySelectorAll("#add-custom-rules .custom-rule-row").forEach(rowEl => {
+      const keyInput = rowEl.querySelector(".custom-rule-key");
+      const valueInput = rowEl.querySelector(".custom-rule-value");
+      if (keyInput && valueInput && keyInput.value.trim()) {
+        const key = keyInput.value.trim();
+        const val = valueInput.value.trim();
+        if (!isNaN(parseFloat(val)) && val !== "") {
+          rules[key] = parseFloat(val);
+        } else if (val === "true") {
+          rules[key] = true;
+        } else if (val === "false") {
+          rules[key] = false;
+        } else if (val.startsWith("{") || val.startsWith("[")) {
+          try { rules[key] = JSON.parse(val); } catch { rules[key] = val; }
+        } else {
+          rules[key] = val;
+        }
+      }
+    });
+    
+    const enemyKeys = Array.from(fields.querySelector("#add-enemies").selectedOptions).map(o => o.value);
+    
+    const label = get("label");
+    const generatedKey = slugifyLocationKey(label);
+    const key = get("key").trim() || generatedKey;
+    const parentKey = get("parent_key").trim();
+    const payload = {
+      key,
+      label,
+      location_type: get("location_type"),
+      parent_id: null,
+      parent_key: parentKey || null,
+      description: get("description"),
+      rules,
+      enemy_keys: enemyKeys,
+      is_active: get("is_active") ? 1 : 0,
+    };
+    if (!payload.label) {
+      showToast("Label is required", "error");
+      return;
+    }
+    if (!payload.key) {
+      showToast("Could not auto-generate key from label", "error");
+      return;
+    }
+    if (payload.location_type === "sub" && !payload.parent_id && !payload.parent_key) {
+      showToast("Sub location needs parent_id or parent_key", "error");
+      return;
+    }
+    try {
+      await adminFetch("/api/locations", { method: "POST", body: JSON.stringify(payload) });
+      showToast("Location created", "success");
+      // Clear form
+      fields.querySelectorAll("[data-field]").forEach((el) => {
+        if (el.type === "checkbox") el.checked = el.dataset.field === "is_active";
+        else el.value = "";
+      });
+      fields.querySelector("#add-rules").selectedIndex = -1;
+      fields.querySelector("#add-rules-values").innerHTML = "";
+      fields.querySelector("#add-enemies").selectedIndex = -1;
+      // Clear custom rules except one empty row
+      const customContainer = fields.querySelector("#add-custom-rules");
+      customContainer.innerHTML = `
+        <div class="custom-rule-row" style="display:flex;gap:8px;margin:4px 0;">
+          <input type="text" placeholder="rule_key" class="custom-rule-key" style="width:150px;padding:4px 8px;" />
+          <input type="text" placeholder="value (text/number/true/false/JSON)" class="custom-rule-value" style="flex:1;padding:4px 8px;" />
+          <button type="button" class="remove-custom-rule secondary-btn" style="padding:4px 12px;">×</button>
+        </div>
+      `;
+      await refreshLocations(host);
+    } catch (e) {
+      showToast(parseApiError(e, "Create failed"), "error");
+    }
+  });
+
+  // Location Integrity System section
+  const flagsSection = el("div", "locations-flags-section");
+  flagsSection.style.cssText = "background:#f8fafc;padding:12px;border-radius:6px;margin:16px 0;";
+  flagsSection.innerHTML = `
+    <h4>Location Integrity System</h4>
+    <div style="display:grid;gap:8px;margin:8px 0;">
+      <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+        <span>Location Integrity enabled</span><input type="checkbox" id="flag-integrity" checked />
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+        <span>Auto-create unknown locations</span><input type="checkbox" id="flag-auto-create" checked />
+      </label>
+      <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+        <span>Parser JSON (Option A)</span><input type="checkbox" id="flag-parser-json" checked />
+      </label>
+    </div>
+    <div id="flags-info" class="muted" style="font-size:0.85em;margin:8px 0;">Global defaults: integrity ON / auto-create ON / parser JSON ON</div>
+    <div style="display:flex;gap:8px;">
+      <button type="button" class="primary-btn" id="flags-save">Save</button>
+    </div>
+  `;
+  root.appendChild(flagsSection);
+
+  // Log section
+  const logSection = el("div", "locations-log-section");
+  logSection.innerHTML = `
+    <h4>Location Integrity Log</h4>
+    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+      <input type="date" id="log-since" /><input type="date" id="log-until" />
+      <button type="button" class="secondary-btn" id="log-refresh">Refresh</button>
+    </div>
+    <div id="loc-log-table" class="table-wrap"><p class="muted">Select date range and click Refresh to view logs.</p></div>
+  `;
+  root.appendChild(logSection);
+
+  host.appendChild(root);
+
+  // Flags events
+  const flagsInfo = flagsSection.querySelector("#flags-info");
+  flagsSection.querySelector("#flags-save").addEventListener("click", async () => {
+    const flags = {
+      location_integrity_enabled: flagsSection.querySelector("#flag-integrity").checked ? 1 : 0,
+      location_auto_create_enabled: flagsSection.querySelector("#flag-auto-create").checked ? 1 : 0,
+      location_parser_json_enabled: flagsSection.querySelector("#flag-parser-json").checked ? 1 : 0,
+    };
+    try {
+      await adminFetch("/api/admin/config/location-flags", { method: "PUT", body: JSON.stringify(flags) });
+      showToast("Flags saved", "success");
+      loadFlags();
+    } catch (e) { showToast(parseApiError(e, "Save failed"), "error"); }
+  });
+
+  // Log events
+  const logTable = logSection.querySelector("#loc-log-table");
+  logSection.querySelector("#log-refresh").addEventListener("click", async () => {
+    const since = logSection.querySelector("#log-since").value;
+    const until = logSection.querySelector("#log-until").value;
+    const params = new URLSearchParams();
+    if (since) params.append("since", since);
+    if (until) params.append("until", until);
+    params.append("limit", "50");
+    try {
+      const data = await adminFetch(`/api/admin/location-log?${params.toString()}`);
+      const logs = data.entries || [];
+      if (!logs.length) { logTable.innerHTML = "<p class='muted'>No log entries for selected range.</p>"; return; }
+      let html = "";
+      for (const log of logs) {
+        const time = new Date(log.created_at).toLocaleString("pl-PL");
+        const blocked = log.reason_blocked && log.reason_blocked !== "allowed";
+        const cls = blocked ? "blocked" : "allowed";
+        const icon = blocked ? "🚫" : "✅";
+        html += `<div class="log-entry ${cls}"><span class="log-time">${time}</span> ${icon} ${log.attempted_move || "move"} <span class="log-loc">${log.current_location_key || "?"}</span>${blocked ? ` <span class="log-reason">(${log.reason_blocked})</span>` : ""}</div>`;
+      }
+      logTable.innerHTML = html;
+    } catch (e) { showToast(parseApiError(e, "Load log failed"), "error"); logTable.innerHTML = "<p class='muted'>Error loading logs.</p>"; }
+  });
+
+  // Load flags
+  async function loadFlags() {
+    try {
+      const flags = await adminFetch("/api/admin/config/location-flags");
+      flagsSection.querySelector("#flag-integrity").checked = flags.location_integrity_enabled;
+      flagsSection.querySelector("#flag-auto-create").checked = flags.location_auto_create_enabled;
+      flagsSection.querySelector("#flag-parser-json").checked = flags.location_parser_json_enabled;
+      const gi = flags.location_integrity_enabled ? "ON" : "OFF";
+      const ga = flags.location_auto_create_enabled ? "ON" : "OFF";
+      const gj = flags.location_parser_json_enabled ? "ON" : "OFF";
+      flagsInfo.textContent = `Global defaults: integrity ${gi} / auto-create ${ga} / parser JSON ${gj}`;
+    } catch (e) { flagsInfo.textContent = "Global defaults: integrity ON / auto-create ON / parser JSON ON (error loading)"; }
+  }
+
+  // Init
+  refreshLocations(host);
+  loadPendingLocations();
+  loadFlags();
 }
 
 function mountConditions(host) {
@@ -1322,7 +2621,7 @@ function wireBulkJsonImport(root, opts) {
     }
     if (errors.length) {
       resultPre.textContent = errors.join("\n");
-      showToast(`Dry run: ${errors.length} issue(s).`, "info");
+      showToast(`Dry run: ${errors.length} issue(s): ${errors.slice(0, 3).join(" | ")}`, "info");
       return;
     }
     let msg = `OK — ${parsed.length} ${noun} gotowych do importu.`;
@@ -1355,7 +2654,7 @@ function wireBulkJsonImport(root, opts) {
     });
     if (errors.length) {
       resultPre.textContent = errors.join("\n");
-      showToast("Fix validation errors before commit.", "error");
+      showToast(`Fix validation errors before commit: ${errors.slice(0, 3).join(" | ")}`, "error");
       return;
     }
     const skip409 = bulk.querySelector("[data-bulk-skip-409]")?.checked ?? true;
@@ -3321,6 +4620,8 @@ export async function init(container) {
     dc: () => mountDc(panels.get("dc")),
     weapons: () => mountWeapons(panels.get("weapons"), statKeys),
     enemies: () => mountEnemies(panels.get("enemies")),
+    npcs: () => mountNpcs(panels.get("npcs")),
+    locations: () => mountLocations(panels.get("locations")),
     conditions: () => mountConditions(panels.get("conditions")),
     items: () => mountItems(panels.get("items")),
     consumables: () => mountConsumables(panels.get("consumables")),

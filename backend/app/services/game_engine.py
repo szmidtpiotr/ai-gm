@@ -1,12 +1,17 @@
 import random
 import re
 import sqlite3
+import json
 
+from app.core.logging import get_logger
 from app.core.turn_engine import buildmessages, loadrecentturns
 from app.services.config_service import build_runtime_config_block
 from app.services.dice import infer_roll_type, parse_character_sheet
 from app.services.llm_service import generate_chat
 from app.services.solo_death_service import DEATH_SAVE_FAILURE_THRESHOLD
+
+
+logger = get_logger(__name__)
 
 
 def resolve_enemy_loot(enemy_key: str) -> list[dict]:
@@ -118,6 +123,175 @@ def _death_mechanica_system_append(
     )
 
 
+def _inject_location_llm_context(
+    conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
+) -> None:
+    """8D-LOC-1: blok [LOCATION CONTEXT] jako druga wiadomość systemowa (po głównym system prompt)."""
+    from app.services.location_config_service import get_bool_flag
+    from app.services.location_context_injector import (
+        build_location_context_block,
+        get_session_id_for_campaign,
+    )
+
+    if not messages:
+        return
+
+    sid = get_session_id_for_campaign(conn, campaign_id)
+    if sid is None:
+        logger.info("location_context_skipped", session_id=None, reason="no_session")
+        return
+    if not get_bool_flag("location_integrity_enabled", sid, default=True):
+        logger.info(
+            "location_context_skipped", session_id=str(sid), reason="flag_disabled"
+        )
+        return
+
+    try:
+        loc_block = build_location_context_block(sid, conn)
+        if loc_block:
+            known_count = sum(
+                1 for ln in loc_block.splitlines() if ln.startswith("  - { ")
+            )
+            messages.insert(1, {"role": "system", "content": loc_block})
+            logger.info(
+                "location_context_injected",
+                session_id=str(sid),
+                known_count=known_count,
+            )
+        else:
+            logger.info(
+                "location_context_skipped",
+                session_id=str(sid),
+                reason="no_current_location",
+            )
+    except Exception as exc:
+        logger.warning(
+            "location_context_injection_failed",
+            session_id=str(sid),
+            error=str(exc),
+        )
+
+
+def build_npc_context_block(conn: sqlite3.Connection, campaign_id: int) -> str | None:
+    """
+    Build [NPC CONTEXT] block for LLM:
+    - location-assigned NPC for current location
+    - global NPC (no rows in npc_locations)
+    """
+    from app.services.location_context_injector import get_session_id_for_campaign
+
+    sid = get_session_id_for_campaign(conn, campaign_id)
+    current_key: str | None = None
+    if sid is not None:
+        row = conn.execute(
+            """
+            SELECT gl.key
+            FROM game_sessions gs
+            LEFT JOIN game_locations gl ON gl.id = gs.current_location_id
+            WHERE gs.id = ?
+            """,
+            (str(sid),),
+        ).fetchone()
+        if row and row["key"]:
+            current_key = str(row["key"])
+
+    if current_key:
+        rows = conn.execute(
+            """
+            SELECT DISTINCT n.key, n.label, n.npc_type, n.description, n.personality_json
+            FROM npcs n
+            WHERE COALESCE(n.is_active, 1) = 1
+              AND (
+                EXISTS (
+                    SELECT 1 FROM npc_locations nl
+                    WHERE nl.npc_id = n.id AND nl.location_key = ?
+                )
+                OR NOT EXISTS (
+                    SELECT 1 FROM npc_locations nl2 WHERE nl2.npc_id = n.id
+                )
+              )
+            ORDER BY n.npc_type, n.label COLLATE NOCASE
+            """,
+            (current_key,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT n.key, n.label, n.npc_type, n.description, n.personality_json
+            FROM npcs n
+            WHERE COALESCE(n.is_active, 1) = 1
+              AND NOT EXISTS (
+                SELECT 1 FROM npc_locations nl WHERE nl.npc_id = n.id
+              )
+            ORDER BY n.npc_type, n.label COLLATE NOCASE
+            """
+        ).fetchall()
+
+    if not rows:
+        return None
+
+    lines = ["[NPC CONTEXT]"]
+    if current_key:
+        lines.append(f'current_location_key: {json.dumps(current_key)}')
+    else:
+        lines.append("current_location_key: null")
+    lines.append("npcs_in_scene:")
+
+    for row in rows:
+        personality = ""
+        topics = ""
+        secret = ""
+        try:
+            p = json.loads(row["personality_json"] or "{}")
+            if isinstance(p, dict):
+                personality = str(p.get("personality") or "").strip()
+                tv = p.get("topics")
+                if isinstance(tv, list):
+                    topics = ", ".join(str(x).strip() for x in tv if str(x).strip())
+                secret = str(p.get("secret") or "").strip()
+        except Exception:
+            personality = ""
+            topics = ""
+            secret = ""
+
+        line = (
+            f'- {row["label"]} ({row["npc_type"]})'
+            f' [key={row["key"]}]'
+        )
+        if row["description"]:
+            line += f": {row['description']}"
+        if personality:
+            line += f" | personality: {personality}"
+        if topics:
+            line += f" | topics: {topics}"
+        if secret:
+            line += f" | secret: {secret}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _inject_npc_llm_context(
+    conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
+) -> None:
+    """9A-3: inject dynamic [NPC CONTEXT] as a system message."""
+    if not messages:
+        return
+    try:
+        npc_block = build_npc_context_block(conn, campaign_id)
+        if not npc_block:
+            logger.info("npc_context_skipped", campaign_id=campaign_id, reason="no_npcs")
+            return
+        insert_at = 2 if len(messages) > 1 and messages[1].get("role") == "system" else 1
+        messages.insert(insert_at, {"role": "system", "content": npc_block})
+        visible_count = sum(1 for ln in npc_block.splitlines() if ln.startswith("- "))
+        logger.info("npc_context_injected", campaign_id=campaign_id, npc_count=visible_count)
+    except sqlite3.OperationalError as exc:
+        # 9A-3 should fail-open before 9A-1 migrations are applied.
+        logger.info("npc_context_skipped", campaign_id=campaign_id, reason="schema_missing", error=str(exc))
+    except Exception as exc:
+        logger.warning("npc_context_injection_failed", campaign_id=campaign_id, error=str(exc))
+
+
 def build_narrative_messages(
     conn: sqlite3.Connection,
     campaign: sqlite3.Row,
@@ -139,6 +313,9 @@ def build_narrative_messages(
         runtime_config_block=build_runtime_config_block(),
         combat_context_block=combat_block,
     )
+
+    _inject_location_llm_context(conn, int(campaign["id"]), messages)
+    _inject_npc_llm_context(conn, int(campaign["id"]), messages)
 
     combat_log_block = combat_svc.get_combat_turns_context_for_prompt(int(campaign["id"]))
     if combat_log_block and messages:
