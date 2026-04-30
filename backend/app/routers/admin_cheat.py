@@ -84,11 +84,31 @@ def _resolve_inventory_add_key(
 
     if has_i:
         row = conn.execute(
-            "SELECT key FROM game_config_items WHERE key = ? LIMIT 1",
+            "SELECT key, item_type FROM game_config_items WHERE key = ? LIMIT 1",
             (k,),
         ).fetchone()
         if row:
-            return i(str(row["key"]))
+            ik = str(row["key"])
+            it = str(row["item_type"] or "").strip().lower() or "item"
+            # Mikstury / konsumable z efektami są w game_config_consumables; sam wiersz
+            # w items z item_type=consumable (np. import) musi trafiać do consumable_key,
+            # żeby ten sam kształt co grant_loot / sklep / silnik.
+            if it == "consumable" and has_c:
+                crow = conn.execute(
+                    "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                    (ik,),
+                ).fetchone()
+                if crow:
+                    return c(str(crow["key"]))
+            # Broń w katalogu broni — preferuj weapon_key zamiast item_key.
+            if it == "weapon" and has_w:
+                wrow = conn.execute(
+                    "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
+                    (ik,),
+                ).fetchone()
+                if wrow:
+                    return w(str(wrow["key"]))
+            return i(ik)
 
     if k.startswith("weapon_"):
         return w(k)
