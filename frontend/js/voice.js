@@ -17,6 +17,7 @@
   let sttAutoStopping = false;
   let sttNoiseFloorRms = 0;
   let sttHadSpeech = false;
+  let sttStartedAt = 0;
   let audio = null;
   let audioCtx = null;
   let activeBufferSource = null;
@@ -28,8 +29,9 @@
   let sttEnabled = false;
   let initialized = false;
   const STT_SILENCE_AUTO_STOP_MS = 3000;
-  const STT_MIN_VOICE_RMS_THRESHOLD = 0.02;
-  const STT_NOISE_MULTIPLIER = 2.8;
+  const STT_MIN_VOICE_RMS_THRESHOLD = 0.03;
+  const STT_NOISE_MULTIPLIER = 4.0;
+  const STT_MAX_RECORDING_MS = 14000;
 
   function _el(id) {
     return document.getElementById(id);
@@ -378,6 +380,7 @@
       sttMonitorSource = sttMonitorCtx.createMediaStreamSource(stream);
       sttMonitorSource.connect(sttMonitorAnalyser);
       sttLastVoiceAt = Date.now();
+      sttStartedAt = sttLastVoiceAt;
       sttAutoStopping = false;
       sttNoiseFloorRms = 0.004;
       sttHadSpeech = false;
@@ -409,6 +412,17 @@
         if (sttHadSpeech && !isSpeech && now - sttLastVoiceAt >= STT_SILENCE_AUTO_STOP_MS) {
           sttAutoStopping = true;
           _status("Cisza 3s - zatrzymuje nasluch");
+          sttEnabled = false;
+          _setFlag(LS_STT, false);
+          _syncUiState();
+          stopRecording();
+          return;
+        }
+
+        // Fallback: jeśli szum otoczenia stale wygląda jak "mowa", zamknij po czasie.
+        if (now - sttStartedAt >= STT_MAX_RECORDING_MS) {
+          sttAutoStopping = true;
+          _status("Auto-stop po limicie czasu");
           sttEnabled = false;
           _setFlag(LS_STT, false);
           _syncUiState();
