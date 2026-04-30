@@ -8,6 +8,7 @@
   let mediaStream = null;
   let ws = null;
   let sttCloseTimer = null;
+  let sttResultPending = false;
   let audio = null;
   let audioCtx = null;
   let activeBufferSource = null;
@@ -317,7 +318,11 @@
         /* noop */
       }
       if (ws === socket) ws = null;
-    }, 6500);
+      if (sttResultPending) {
+        sttResultPending = false;
+        _status("STT timeout: brak odpowiedzi");
+      }
+    }, 30000);
   }
 
   function _attachSttWebSocketHandlers() {
@@ -327,6 +332,7 @@
         const payload = JSON.parse(event.data || "{}");
         const sock = ws;
         if (payload && payload.error) {
+          sttResultPending = false;
           _status(`STT error: ${payload.error}`);
           _clearSttCloseTimer();
           setTimeout(() => {
@@ -340,6 +346,7 @@
           return;
         }
         if (payload && Object.prototype.hasOwnProperty.call(payload, "text")) {
+          sttResultPending = false;
           const txt = String(payload.text || "").trim();
           if (txt) {
             handleTranscript(txt);
@@ -411,6 +418,13 @@
           clearTimeout(failTimer);
           resolve();
         };
+        socket.onclose = () => {
+          if (ws === socket) ws = null;
+          if (sttResultPending) {
+            sttResultPending = false;
+            _status("STT zakonczone bez wyniku");
+          }
+        };
         socket.onerror = () => {
           clearTimeout(failTimer);
           if (!opened) reject(new Error("STT websocket error"));
@@ -444,6 +458,7 @@
       _status("Nagrywanie...");
     } catch (err) {
       console.warn("voice stt start failed", err);
+      sttResultPending = false;
       _clearSttCloseTimer();
       try {
         ws?.close();
@@ -463,6 +478,7 @@
   function stopRecording() {
     const sttBtn = _el("stt-toggle");
     const sttInputMicBtn = _el("stt-input-mic");
+    if (!sttEnabled) sttResultPending = false;
 
     const afterRecorderFullyStopped = () => {
       if (mediaStream) {
@@ -477,6 +493,7 @@
           /* noop */
         }
       }
+      sttResultPending = true;
       _scheduleSttWebSocketClose();
       sttBtn?.classList.remove("is-recording");
       sttInputMicBtn?.classList.remove("is-recording");
