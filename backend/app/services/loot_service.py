@@ -40,7 +40,10 @@ def _catalog_entry(conn: sqlite3.Connection, loot: dict[str, Any]) -> tuple[str,
     if loot.get("item_key"):
         key = str(loot["item_key"]).strip()
         row = conn.execute(
-            "SELECT key, label, item_type FROM game_config_items WHERE key = ? AND is_active = 1",
+            """
+            SELECT key, label, item_type FROM game_config_items
+            WHERE key = ? AND is_active = 1 AND COALESCE(approved, 1) = 1
+            """,
             (key,),
         ).fetchone()
         if not row:
@@ -209,30 +212,8 @@ def grant_loot_to_character(character_id: int, loot_items: list[dict], source: s
                     """,
                     (cid, key, qty, src),
                 )
-            elif item_type == "consumable":
-                existing = conn.execute(
-                    """
-                    SELECT id, quantity FROM character_inventory
-                    WHERE character_id = ? AND consumable_key = ? AND weapon_key IS NULL AND item_key IS NULL
-                    ORDER BY id ASC LIMIT 1
-                    """,
-                    (cid, key),
-                ).fetchone()
-                if existing:
-                    conn.execute(
-                        "UPDATE character_inventory SET quantity = ? WHERE id = ?",
-                        (int(existing["quantity"] or 0) + qty, int(existing["id"])),
-                    )
-                else:
-                    conn.execute(
-                        """
-                        INSERT INTO character_inventory
-                        (character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source, meta_json)
-                        VALUES (?, NULL, NULL, ?, ?, 0, NULL, ?, NULL)
-                        """,
-                        (cid, key, qty, src),
-                    )
             else:
+                # 8H: wszystkie wiersze z game_config_items (w tym consumable) stackują po item_key
                 existing = conn.execute(
                     """
                     SELECT id, quantity FROM character_inventory

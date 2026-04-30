@@ -1045,6 +1045,39 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, str | None, int | None
     return clean_text, grant_item_label, grant_gold_amount, open_shop_npc_key
 
 
+def _resolve_grant_catalog_item(conn: sqlite3.Connection, label: str) -> dict[str, str] | None:
+    """Map Grant Item cue label to game_config_items (active, approved)."""
+    lab = str(label or "").strip()
+    if not lab:
+        return None
+    try:
+        row = conn.execute(
+            """
+            SELECT key, label
+            FROM game_config_items
+            WHERE lower(label) = lower(?) AND is_active = 1 AND COALESCE(approved, 1) = 1
+            LIMIT 1
+            """,
+            (lab,),
+        ).fetchone()
+        if row:
+            return {"item_key": str(row["key"]), "label": str(row["label"])}
+        row = conn.execute(
+            """
+            SELECT key, label
+            FROM game_config_items
+            WHERE lower(label) LIKE lower(?) AND is_active = 1 AND COALESCE(approved, 1) = 1
+            LIMIT 1
+            """,
+            (f"%{lab}%",),
+        ).fetchone()
+        if row:
+            return {"item_key": str(row["key"]), "label": str(row["label"])}
+    except sqlite3.OperationalError:
+        return None
+    return None
+
+
 def apply_grant_gold_to_character(
     conn: sqlite3.Connection, *, character_id: int, amount: int
 ) -> int | None:
@@ -1767,13 +1800,29 @@ def create_turn(
             assistant_text=clean_assistant,
         )
         if grant_item_label:
-            append_narrative_item_to_sheet(
-                conn,
-                character_id=payload.character_id,
-                label=grant_item_label,
-                source="gm",
-                given_at=f"turn:{log['turn_number']}",
-            )
+            resolved = _resolve_grant_catalog_item(conn, grant_item_label)
+            if resolved:
+                from app.services.loot_service import grant_loot_to_character
+
+                grant_loot_to_character(
+                    int(payload.character_id),
+                    [{"item_key": resolved["item_key"], "quantity": 1}],
+                    source="gm_grant_item",
+                )
+                logger.info(
+                    "grant_item_catalog",
+                    character_id=payload.character_id,
+                    item_key=resolved["item_key"],
+                    label=grant_item_label,
+                )
+            else:
+                append_narrative_item_to_sheet(
+                    conn,
+                    character_id=payload.character_id,
+                    label=grant_item_label,
+                    source="gm",
+                    given_at=f"turn:{log['turn_number']}",
+                )
             conn.commit()
         if grant_gold_amount is not None:
             new_total = apply_grant_gold_to_character(
@@ -2339,13 +2388,29 @@ def create_turn_stream(
                         assistant_text=clean_text,
                     )
                     if grant_item_label:
-                        append_narrative_item_to_sheet(
-                            save_conn,
-                            character_id=character_id_val,
-                            label=grant_item_label,
-                            source="gm",
-                            given_at=f"turn:{stream_log['turn_number']}",
-                        )
+                        resolved = _resolve_grant_catalog_item(save_conn, grant_item_label)
+                        if resolved:
+                            from app.services.loot_service import grant_loot_to_character
+
+                            grant_loot_to_character(
+                                int(character_id_val),
+                                [{"item_key": resolved["item_key"], "quantity": 1}],
+                                source="gm_grant_item",
+                            )
+                            logger.info(
+                                "grant_item_catalog",
+                                character_id=character_id_val,
+                                item_key=resolved["item_key"],
+                                label=grant_item_label,
+                            )
+                        else:
+                            append_narrative_item_to_sheet(
+                                save_conn,
+                                character_id=character_id_val,
+                                label=grant_item_label,
+                                source="gm",
+                                given_at=f"turn:{stream_log['turn_number']}",
+                            )
                         save_conn.commit()
                     if grant_gold_amount is not None:
                         new_total = apply_grant_gold_to_character(

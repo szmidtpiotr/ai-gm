@@ -345,6 +345,72 @@ def get_enemy_catalog_for_prompt(conn: sqlite3.Connection) -> str:
     return f"{trimmed}\n\n[... skrócono listę wrogów do {max_chars} znaków ...]"
 
 
+def get_item_catalog_for_prompt(conn: sqlite3.Connection) -> str:
+    """
+    Plain-text [ITEM CATALOG] for system prompt injection (8H-4).
+    Active + approved items only; skips narrative (campaign-specific).
+    """
+    max_chars = 2000
+    try:
+        rows = conn.execute(
+            """
+            SELECT key, label, item_type, value_gp,
+                   effect_type, effect_dice, effect_bonus, effect_target, charges,
+                   ac_bonus, description
+            FROM game_config_items
+            WHERE is_active = 1 AND COALESCE(approved, 1) = 1
+              AND item_type != 'narrative'
+            ORDER BY item_type ASC, key ASC
+            LIMIT 60
+            """
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return ""
+    if not rows:
+        return ""
+    lines: list[str] = ["[ITEM CATALOG]"]
+    current_type: str | None = None
+    for r in rows:
+        t = str(r["item_type"] or "misc").strip().lower() or "misc"
+        if t != current_type:
+            current_type = t
+            lines.append(f"  [{t.upper()}]")
+        key = str(r["key"])
+        label = str(r["label"] or key)
+        parts: list[str] = [f"    - {key}: {label}"]
+
+        if t == "armor" and r["ac_bonus"] is not None and int(r["ac_bonus"] or 0) > 0:
+            parts.append(f"(AC +{int(r['ac_bonus'])})")
+
+        if t == "consumable":
+            eff = str(r["effect_type"] or "misc")
+            dice = str(r["effect_dice"] or "").strip()
+            bonus = int(r["effect_bonus"] or 0)
+            target = str(r["effect_target"] or "self")
+            effect_str = eff
+            if dice:
+                effect_str += f" {dice}"
+            if bonus:
+                effect_str += f" +{bonus}"
+            effect_str += f" [{target}]"
+            charges = int(r["charges"] or 1)
+            if charges != 1:
+                effect_str += f" x{charges}"
+            parts.append(f"({effect_str})")
+
+        vgp = int(r["value_gp"] or 0)
+        if vgp:
+            parts.append(f"{vgp} gp")
+
+        lines.append(" ".join(parts))
+
+    out = "\n".join(lines)
+    if len(out) <= max_chars:
+        return out
+    trimmed = out[: max_chars - 50].rstrip()
+    return f"{trimmed}\n\n[... skrócono katalog przedmiotów ...]"
+
+
 def get_combat_context_for_prompt(campaign_id: int) -> str | None:
     st = get_active_combat(campaign_id)
     if not st or st.get("status") != "active":
