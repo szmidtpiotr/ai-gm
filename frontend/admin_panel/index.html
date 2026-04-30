@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin Panel</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=27" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=28" />
   </head>
   <body>
     <div class="admin-shell">
@@ -306,7 +306,7 @@
         }
         gameDesignReady = true;
         try {
-          const { init } = await import(`/admin_panel/sections/game_design.js?v=32&t=${Date.now()}`);
+          const { init } = await import(`/admin_panel/sections/game_design.js?v=33&t=${Date.now()}`);
           await init(el);
         } catch (err) {
           gameDesignReady = false;

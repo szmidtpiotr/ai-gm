@@ -405,6 +405,12 @@ body {
   font-family: Arial, sans-serif;
 }
 
+.admin-item-catalog-hint {
+  margin: 0 0 12px;
+  max-width: 52rem;
+  line-height: 1.35;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

@@ -12,7 +12,6 @@ const SUB_TABS = [
   { id: "locations", label: "Locations" },
   { id: "conditions", label: "Conditions" },
   { id: "items", label: "Przedmioty" },
-  { id: "consumables", label: "Consumables" },
   { id: "loot-tables", label: "Loot Tables" },
   { id: "archetypes", label: "Archetypes" },
   { id: "prompts", label: "Prompts" },
@@ -3445,6 +3444,12 @@ async function refreshItems(host) {
 
 function mountItems(host) {
   const root = el("div", "admin-subpanel-inner");
+  const catalogHint = el(
+    "p",
+    "muted admin-item-catalog-hint",
+    "Zużywalne (mikstury itd.): filtruj tabelę po kolumnie item_type → consumable. Osobna zakładka Consumables została usunięta (8H — jeden katalog game_config_items).",
+  );
+  root.appendChild(catalogHint);
   const toggleRow = el("div", "admin-add-form-toggle");
   const toggle = el("button", "secondary-btn", "Add item ▾");
   toggle.type = "button";
@@ -4624,7 +4629,6 @@ export async function init(container) {
     locations: () => mountLocations(panels.get("locations")),
     conditions: () => mountConditions(panels.get("conditions")),
     items: () => mountItems(panels.get("items")),
-    consumables: () => mountConsumables(panels.get("consumables")),
     "loot-tables": () => mountLootTables(panels.get("loot-tables")),
     archetypes: () => mountArchetypes(panels.get("archetypes")),
     prompts: () => mountPrompts(panels.get("prompts")),
