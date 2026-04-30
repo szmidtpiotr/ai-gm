@@ -30,9 +30,10 @@
   let sttEnabled = false;
   let initialized = false;
   const STT_SILENCE_AUTO_STOP_MS = 2000;
-  const STT_MIN_VOICE_RMS_THRESHOLD = 0.03;
-  const STT_NOISE_MULTIPLIER = 4.0;
-  const STT_MAX_RECORDING_MS = 14000;
+  const STT_START_GRACE_MS = 1500;
+  const STT_MIN_VOICE_RMS_THRESHOLD = 0.01;
+  const STT_NOISE_MULTIPLIER = 2.0;
+  const STT_MAX_RECORDING_MS = 8000;
 
   function _el(id) {
     return document.getElementById(id);
@@ -416,8 +417,10 @@
           sttNoiseFloorRms = sttNoiseFloorRms * 0.92 + rms * 0.08;
         }
 
-        // Auto-stop dopiero po realnym wykryciu mowy (nie od samego startu nagrywania).
-        if (sttHadSpeech && !isSpeech && now - sttLastVoiceAt >= STT_SILENCE_AUTO_STOP_MS) {
+        // Auto-stop po ciszy: po krótkim grace period działa także gdy mowa nie została
+        // pewnie sklasyfikowana (np. cichy mikrofon / agresywne odszumianie telefonu).
+        const gracePassed = now - sttStartedAt >= STT_START_GRACE_MS;
+        if (gracePassed && !isSpeech && now - sttLastVoiceAt >= STT_SILENCE_AUTO_STOP_MS) {
           sttAutoStopping = true;
           _status("Cisza 2s - zatrzymuje nasluch");
           sttEnabled = false;
