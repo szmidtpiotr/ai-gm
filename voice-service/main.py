@@ -59,6 +59,9 @@ class ConfigUpdate(BaseModel):
     stt_language: Optional[str] = None
     stt_beam_size: Optional[int] = None
     vad_filter: Optional[bool] = None
+    stt_silence_auto_stop_ms: Optional[int] = None
+    stt_min_voice_rms_threshold: Optional[float] = None
+    stt_noise_multiplier: Optional[float] = None
 
 
 @app.get("/voice/config")
@@ -69,6 +72,21 @@ def get_config() -> dict[str, object]:
 @app.post("/voice/config")
 def post_config(update: ConfigUpdate) -> dict[str, object]:
     changes = {k: v for k, v in update.model_dump().items() if v is not None}
+    if "stt_silence_auto_stop_ms" in changes:
+        v = int(changes["stt_silence_auto_stop_ms"])
+        if v < 500 or v > 10000:
+            raise HTTPException(status_code=422, detail="stt_silence_auto_stop_ms must be 500..10000")
+        changes["stt_silence_auto_stop_ms"] = v
+    if "stt_min_voice_rms_threshold" in changes:
+        v = float(changes["stt_min_voice_rms_threshold"])
+        if v <= 0 or v > 0.2:
+            raise HTTPException(status_code=422, detail="stt_min_voice_rms_threshold must be > 0 and <= 0.2")
+        changes["stt_min_voice_rms_threshold"] = v
+    if "stt_noise_multiplier" in changes:
+        v = float(changes["stt_noise_multiplier"])
+        if v < 1.0 or v > 5.0:
+            raise HTTPException(status_code=422, detail="stt_noise_multiplier must be 1.0..5.0")
+        changes["stt_noise_multiplier"] = v
     if "stt_model" in changes or "stt_language" in changes:
         stt_module.reload_model()
     return save_config(changes)

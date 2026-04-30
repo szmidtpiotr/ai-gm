@@ -16,6 +16,9 @@ DEFAULTS: dict[str, Any] = {
     "stt_language": "pl",
     "stt_beam_size": 5,
     "vad_filter": True,
+    "stt_silence_auto_stop_ms": 2000,
+    "stt_min_voice_rms_threshold": 0.01,
+    "stt_noise_multiplier": 1.5,
 }
 
 
