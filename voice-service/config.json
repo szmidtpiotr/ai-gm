@@ -1,0 +1,12 @@
+{
+  "tts_enabled": true,
+  "stt_enabled": true,
+  "tts_voice": "pl_PL-darkman-medium",
+  "tts_speed": 1.0,
+  "tts_noise_scale": 0.667,
+  "tts_noise_w": 0.8,
+  "stt_model": "small",
+  "stt_language": "pl",
+  "stt_beam_size": 5,
+  "vad_filter": false
+}
