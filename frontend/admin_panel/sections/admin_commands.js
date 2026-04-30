@@ -29,11 +29,11 @@ function parseCmd(raw) {
   }
   if (p0 === "add" && p1 === "weapon") {
     const key = rest ? rest.trim() : undefined;
-    return { cmd: "add item", key };
+    return { cmd: "add item", key, kind: "weapon" };
   }
   if (p0 === "add" && p1 === "consumable") {
     const key = rest ? rest.trim() : undefined;
-    return { cmd: "add item", key };
+    return { cmd: "add item", key, kind: "consumable" };
   }
   if (p0 === "add" && p1 === "item") return { cmd: "add item", key: rest || undefined };
   if (p0 === "add" && p1 === "stat") {

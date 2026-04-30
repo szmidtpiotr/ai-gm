@@ -22,7 +22,7 @@ def _sqlite_table_exists(conn: sqlite3.Connection, name: str) -> bool:
 
 
 def _resolve_inventory_add_key(
-    conn: sqlite3.Connection, raw_key: str
+    conn: sqlite3.Connection, raw_key: str, preferred_kind: str | None = None
 ) -> tuple[str, str]:
     """
     Map raw cheat key to (canonical_catalog_key, column_name).
@@ -49,6 +49,44 @@ def _resolve_inventory_add_key(
     has_w = _sqlite_table_exists(conn, "game_config_weapons")
     has_c = _sqlite_table_exists(conn, "game_config_consumables")
     has_i = _sqlite_table_exists(conn, "game_config_items")
+    pref = str(preferred_kind or "").strip().lower()
+
+    # Explicit command intent ("/admin add weapon|consumable ...") has priority.
+    if pref == "weapon":
+        if has_w:
+            row = conn.execute(
+                "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
+                (k,),
+            ).fetchone()
+            if row:
+                return w(str(row["key"]))
+            if k.startswith("weapon_"):
+                alt = k[7:]
+                row = conn.execute(
+                    "SELECT key FROM game_config_weapons WHERE key = ? LIMIT 1",
+                    (alt,),
+                ).fetchone()
+                if row:
+                    return w(str(row["key"]))
+        return w(k[7:] if k.startswith("weapon_") else k)
+
+    if pref == "consumable":
+        if has_c:
+            row = conn.execute(
+                "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                (k,),
+            ).fetchone()
+            if row:
+                return c(str(row["key"]))
+            if k.startswith("consumable_"):
+                alt = k[11:]
+                row = conn.execute(
+                    "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                    (alt,),
+                ).fetchone()
+                if row:
+                    return c(str(row["key"]))
+        return c(k[11:] if k.startswith("consumable_") else k)
 
     if has_w:
         row = conn.execute(
@@ -248,6 +286,7 @@ class CheatRequest(BaseModel):
     value: int | str | None = None
     key: str | None = None
     stat: str | None = None
+    kind: str | None = None
 
 
 @router.post("/admin/cheat/{character_id}")
@@ -345,7 +384,7 @@ def admin_cheat(
             if not raw:
                 raise HTTPException(status_code=422, detail="item_key_required")
             try:
-                canonical, col = _resolve_inventory_add_key(conn, raw)
+                canonical, col = _resolve_inventory_add_key(conn, raw, req.kind)
             except ValueError:
                 raise HTTPException(status_code=422, detail="item_key_required") from None
             conn.execute(

@@ -242,6 +242,47 @@ def test_add_item_prefers_consumable_key_when_items_catalog_marks_consumable(cli
     assert row[2] == "g_test_potion"
 
 
+def test_add_item_respects_explicit_consumable_hint(client_with_auth):
+    client, db_path = client_with_auth
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE game_config_items (
+                key TEXT PRIMARY KEY,
+                label TEXT NOT NULL DEFAULT '',
+                item_type TEXT NOT NULL DEFAULT 'misc'
+            );
+            INSERT INTO game_config_items (key, label, item_type)
+            VALUES ('only_item_potion', 'Only item', 'consumable');
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    r = _post(client, "add item", key="only_item_potion", kind="consumable")
+    assert r.status_code == 200
+    assert r.json()["result"]["added"] == "only_item_potion"
+
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT item_key, weapon_key, consumable_key
+            FROM character_inventory
+            WHERE character_id = 1
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row[0] is None
+    assert row[1] is None
+    assert row[2] == "only_item_potion"
+
+
 def test_remove_item(client_with_auth):
     client, _ = client_with_auth
     _post(client, "add item", key="consumable_potion")
