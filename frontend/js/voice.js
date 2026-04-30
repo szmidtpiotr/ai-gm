@@ -261,6 +261,8 @@
       const blob = await resp.blob();
       const blobUrl = URL.createObjectURL(blob);
       const a = _ensureAudio();
+      a.muted = false;
+      a.volume = 1;
       a.dataset.blobUrl = blobUrl;
       a.src = blobUrl;
       _status("Czytam...");
@@ -270,6 +272,16 @@
       isPlaying = false;
       _status(`Brak odtwarzania (${err?.name || "error"})`);
       console.warn("voice tts failed", err);
+      // Fallback: some browsers keep stale/blocked media element state.
+      if (audio) {
+        try {
+          audio.muted = false;
+          audio.volume = 1;
+          audio.load();
+        } catch (_e) {
+          // noop
+        }
+      }
     }
   }
 
