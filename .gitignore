@@ -42,3 +42,8 @@ backend/ai_test_config.json
 # Observability DEV - dane runtime (nie commitujemy)
 observability-dev/loki/data/
 observability-dev/grafana/data/
+
+# Voice service runtime models
+voice-service/models/tts/*.onnx
+voice-service/models/tts/*.onnx.json
+voice-service/models/stt/

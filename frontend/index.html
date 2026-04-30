@@ -157,13 +157,17 @@
         <div class="chat history-panel" id="history-panel">
           <div class="muted">Historia kampanii...</div>
         </div>
+        <div id="voice-status" class="voice-status voice-status-chat" aria-live="polite"></div>
 
         <div class="composer">
-          <textarea
-            id="input"
-            data-testid="chat-input"
-            placeholder="Akcja, /sheet, /mem [pytanie o przeszłość]…"
-          ></textarea>
+          <div class="input-with-mic">
+            <textarea
+              id="input"
+              data-testid="chat-input"
+              placeholder="Akcja, /sheet, /mem [pytanie o przeszłość]…"
+            ></textarea>
+            <button type="button" id="stt-input-mic" class="stt-input-mic" aria-pressed="false" title="Start/stop nasluchu">🎤</button>
+          </div>
           <div class="composer-actions">
             <button type="button" class="secondary" id="contextual-roll-btn" style="display:none;">
               🎲 Rzuć d20
@@ -222,6 +226,16 @@
           >
             📋 Copy Debug
           </button>
+          <div class="voice-controls-row">
+            <button type="button" id="tts-toggle" class="voice-toggle" title="Czytaj odpowiedzi GM" aria-pressed="false">
+              <span class="voice-toggle-icon" aria-hidden="true">🔊</span>
+              <span class="voice-toggle-label">TTS</span>
+            </button>
+            <button type="button" id="stt-toggle" class="voice-toggle" title="Mów zamiast pisać" aria-pressed="false">
+              <span class="voice-toggle-icon" aria-hidden="true">🎤</span>
+              <span class="voice-toggle-label">MIC</span>
+            </button>
+          </div>
           <div
             id="combat-debug-status"
             class="muted"
@@ -385,6 +399,7 @@
   <script src="./js/app.js?v=8d-location-debug-1"></script>
   <script src="./js/inventory.js"></script>
   <script src="./js/shop.js?v=9a4-open-shop-fallback"></script>
+  <script src="./js/voice.js?v=8g-voice-ui-1"></script>
   <script src="./js/combat_panel.js"></script>
   <script src="./js/combat_input.js"></script>
   <script type="module">

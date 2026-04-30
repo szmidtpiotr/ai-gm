@@ -433,6 +433,12 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
       }
       window.updateActionTriggerBtn(!!window.state.activeRollRequest);
     }
+    try {
+      window.voiceUI?.speakGMText?.(displayText);
+    } catch (err) {
+      console.warn('voice stream tts failed', err);
+    }
+    window.decorateGmBubbleWithVoice(bubbleEl, displayText);
   }
 
   window.scrollChatToBottom();
@@ -1013,6 +1019,98 @@ window.setShowArchiveBubbles = function (show) {
   window.updateArchiveToggleUi();
 };
 
+window.ensureVoiceChatDebugOverlay = function () {
+  const { chatEl } = window.getEls();
+  if (!chatEl) return null;
+  let el = chatEl.querySelector("#voice-chat-debug");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "voice-chat-debug";
+    el.className = "voice-chat-debug";
+    el.setAttribute("aria-live", "polite");
+    chatEl.appendChild(el);
+  }
+  return el;
+};
+
+window.showVoiceChatDebug = function (text) {
+  const el = window.ensureVoiceChatDebugOverlay();
+  if (!el) return;
+  const message = String(text || "").trim();
+  if (!message) {
+    el.classList.remove("is-visible", "is-error");
+    el.textContent = "";
+    return;
+  }
+  const lower = message.toLowerCase();
+  const isError = lower.includes("blad") || lower.includes("error") || lower.includes("brak");
+  el.textContent = `Voice debug: ${message}`;
+  el.classList.add("is-visible");
+  el.classList.toggle("is-error", isError);
+};
+
+if (!window.__voiceDebugStatusListenerInstalled) {
+  window.__voiceDebugStatusListenerInstalled = true;
+  window.addEventListener("voice-debug-status", (event) => {
+    const text = event?.detail?.text || "";
+    window.showVoiceChatDebug(text);
+  });
+}
+
+window.updateGmVoiceBadgeVisual = function (btn) {
+  if (!btn) return;
+  const enabled = !!window.voiceUI?.isTtsEnabled?.();
+  btn.textContent = enabled ? "🔊" : "🔇";
+  btn.setAttribute("aria-label", enabled ? "Przeczytaj ponownie" : "Wlacz TTS i przeczytaj");
+  btn.setAttribute(
+    "title",
+    enabled ? "Przeczytaj ponownie te wiadomosc" : "TTS wylaczone - kliknij, aby wlaczyc i przeczytac"
+  );
+};
+
+window.decorateGmBubbleWithVoice = function (wrap, text) {
+  if (!wrap || !(wrap.classList && wrap.classList.contains("assistant"))) return;
+  if (wrap.querySelector(".gm-voice-btn")) return;
+  const clean = String(text || "").trim();
+  if (!clean) return;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "gm-voice-btn";
+  btn.__voiceText = clean;
+  window.updateGmVoiceBadgeVisual(btn);
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const enabled = !!window.voiceUI?.isTtsEnabled?.();
+      if (enabled) {
+        await window.voiceUI?.setTtsEnabled?.(false);
+        window.voiceUI?.stopPlayback?.();
+      } else {
+        await window.voiceUI?.setTtsEnabled?.(true, { unlock: true });
+        await window.voiceUI?.speakNowFromUserGesture?.(btn.__voiceText || "");
+      }
+    } catch (err) {
+      console.warn("gm voice replay failed", err);
+    }
+    window.updateGmVoiceBadgeVisual(btn);
+  });
+
+  wrap.appendChild(btn);
+};
+
+window.refreshAllGmVoiceBadges = function () {
+  document.querySelectorAll(".gm-voice-btn").forEach((btn) => window.updateGmVoiceBadgeVisual(btn));
+};
+
+if (!window.__voiceBadgeStateListenerInstalled) {
+  window.__voiceBadgeStateListenerInstalled = true;
+  window.addEventListener("voice-tts-state", () => {
+    window.refreshAllGmVoiceBadges();
+  });
+}
+
 window.addMessage = function ({
   speaker,
   text,
@@ -1137,6 +1235,9 @@ window.addMessage = function ({
   }
   wrap.appendChild(body);
   chatEl.appendChild(wrap);
+  if (role === "assistant" && effRoute === "narrative") {
+    window.decorateGmBubbleWithVoice(wrap, messageText);
+  }
 
   window.scrollChatToBottom();
   window.updateArchiveToggleUi?.();
@@ -1261,6 +1362,14 @@ window.replaceThinkingBubble = function ({
   }
 
   existing.replaceWith(wrap);
+  if (role === 'assistant' && route === 'narrative') {
+    window.decorateGmBubbleWithVoice(wrap, renderedText);
+    try {
+      window.voiceUI?.speakGMText?.(renderedText);
+    } catch (err) {
+      console.warn('voice replace tts failed', err);
+    }
+  }
   window.scrollChatToBottom();
   window.updateArchiveToggleUi?.();
 };
@@ -1615,6 +1724,7 @@ window.renderTurnsToChat = function () {
 
         msgWrap.appendChild(meta);
         msgWrap.appendChild(body);
+        window.decorateGmBubbleWithVoice(msgWrap, assistantText);
 
         const cueSource =
           typeof window.stripCombatRollBlocksForRollCue === 'function'
