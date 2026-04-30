@@ -354,6 +354,14 @@ def build_narrative_messages(
             if enemy_catalog:
                 first["content"] = f"{first.get('content', '').rstrip()}\n\n{enemy_catalog}"
 
+    # 8H-4: item catalog — także podczas aktywnej walki (Grant Item / nagrody z katalogu)
+    if messages:
+        first = messages[0]
+        if isinstance(first, dict) and first.get("role") == "system":
+            item_catalog = combat_svc.get_item_catalog_for_prompt(conn)
+            if item_catalog:
+                first["content"] = f"{first.get('content', '').rstrip()}\n\n{item_catalog}"
+
     if death_append and messages:
         first = messages[0]
         if isinstance(first, dict) and first.get("role") == "system":
