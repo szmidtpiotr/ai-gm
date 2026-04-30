@@ -18,6 +18,7 @@
   let sttNoiseFloorRms = 0;
   let sttHadSpeech = false;
   let sttStartedAt = 0;
+  let sttHardStopTimer = null;
   let audio = null;
   let audioCtx = null;
   let activeBufferSource = null;
@@ -369,6 +370,13 @@
     }
   }
 
+  function _clearSttHardStopTimer() {
+    if (sttHardStopTimer) {
+      clearTimeout(sttHardStopTimer);
+      sttHardStopTimer = null;
+    }
+  }
+
   function _startSttLevelMonitor(stream) {
     _stopSttLevelMonitor();
     const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -519,6 +527,17 @@
 
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       _startSttLevelMonitor(mediaStream);
+      _clearSttHardStopTimer();
+      // Hard fallback for browsers where analyser-based silence detection is unreliable.
+      sttHardStopTimer = setTimeout(() => {
+        if (!mediaRecorder || !sttEnabled) return;
+        sttAutoStopping = true;
+        _status("Auto-stop po limicie czasu");
+        sttEnabled = false;
+        _setFlag(LS_STT, false);
+        _syncUiState();
+        stopRecording();
+      }, STT_MAX_RECORDING_MS);
 
       await new Promise((resolve, reject) => {
         const socket = new WebSocket(_wsUrl());
@@ -593,6 +612,7 @@
     if (!sttEnabled) sttResultPending = false;
 
     _stopSttLevelMonitor();
+    _clearSttHardStopTimer();
     sttAutoStopping = false;
 
     const afterRecorderFullyStopped = () => {
