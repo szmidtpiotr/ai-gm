@@ -430,6 +430,38 @@ ADMIN_MIGRATIONS = [
     INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES ('location_auto_create_enabled', '1')
     """,
+    # Phase 8F-1 — economy: weapon catalog prices (rows still at 0 GP after seed)
+    """
+    UPDATE game_config_weapons
+    SET value_gp = CASE key
+        WHEN 'dagger' THEN 10
+        WHEN 'longsword' THEN 30
+        WHEN 'battleaxe' THEN 55
+        WHEN 'spear' THEN 15
+        WHEN 'longbow' THEN 40
+        WHEN 'hand_crossbow' THEN 35
+        WHEN 'warhammer' THEN 45
+        WHEN 'greataxe' THEN 60
+        WHEN 'rapier' THEN 25
+        WHEN 'mace' THEN 12
+        WHEN 'halberd' THEN 55
+        WHEN 'heavy_crossbow' THEN 50
+        WHEN 'throwing_knife' THEN 5
+        WHEN 'tome_of_striking' THEN 80
+        WHEN 'staff_of_flames' THEN 75
+        WHEN 'orb_of_frost' THEN 90
+        WHEN 'wand_of_lightning' THEN 85
+        WHEN 'cursed_grimoire' THEN 120
+        ELSE COALESCE(value_gp, 0)
+    END
+    WHERE COALESCE(value_gp, 0) = 0
+      AND key IN (
+        'dagger', 'longsword', 'battleaxe', 'spear', 'longbow', 'hand_crossbow',
+        'warhammer', 'greataxe', 'rapier', 'mace', 'halberd', 'heavy_crossbow',
+        'throwing_knife', 'tome_of_striking', 'staff_of_flames', 'orb_of_frost',
+        'wand_of_lightning', 'cursed_grimoire'
+      )
+    """,
 ]
 
 ADMIN_SEEDS = [
