@@ -1,0 +1,75 @@
+BUG FIX: dice_roll logs missing dc and outcome in combat
+
+DIAGNOSIS (from Loki logs, campaign 1052, 2026-04-24):
+All combat dice_roll events show:
+  "dc": null, "outcome": null, "source": "gm_dice"
+
+Backend correctly emits combat_gm_roll_emit + dice_roll for every attack,
+but DC (= enemy AC) and outcome (hit/miss) are never passed to the logger.
+Roll cards on frontend cannot show ✅ SUKCES / ❌ PORAŻKA without these values.
+
+---
+
+BEFORE IMPLEMENTING, locate the exact log call:
+
+grep -n "dice_roll\|gm_dice\|dc.*null\|outcome.*null\|log.*roll\|emit.*roll" \
+  backend/app/services/combat_service.py \
+  backend/app/api/combat.py
+
+Find where dice_roll event is logged during resolve_attack().
+It likely looks like:
+  logger.info({..., "dc": None, "outcome": None, "source": "gm_dice"})
+or calls a shared log_dice_roll() / emit_roll() helper.
+
+---
+
+FIX (one location, minimal change):
+
+When logging dice_roll inside resolve_attack() (player attack path):
+  "dc"      → enemy AC value (already available as enemy stat in combat state)
+  "outcome" → "hit" if roll >= dc else "miss"
+               "critical_hit" if raw d20 == 20
+               "critical_miss" if raw d20 == 1
+
+When logging dice_roll inside enemy attack path (enemy-turn):
+  "dc"      → player DEX save DC or player AC (whichever is used)
+  "outcome" → same hit/miss logic
+
+DO NOT change the roll logic itself — only add dc and outcome to the existing log call.
+DO NOT change /api/gm/dice endpoint.
+DO NOT change roll card JS (frontend reads outcome from SSE token, not from this log).
+
+---
+
+VERIFY fix works:
+
+After deploy, trigger one combat attack and check Loki / docker logs:
+  docker logs ai-gm-backend --tail=20 | grep "dice_roll"
+
+Expected after fix:
+  {"roll_type": "1d20", "result": 14, "dc": 12, "outcome": "hit", "source": "combat_attack", ...}
+
+Wrong (current):
+  {"roll_type": "1d20", "result": 14, "dc": null, "outcome": null, "source": "gm_dice", ...}
+
+Also check: does roll card on frontend now show ✅/❌ correctly?
+If roll card still broken after this fix → separate issue in frontend SSE parser,
+not in this log call. Report separately.
+
+---
+
+ACCEPTANCE CRITERIA:
+
+- [ ] dice_roll log has dc = enemy AC (integer, not null) on player attack
+- [ ] dice_roll log has outcome = "hit" / "miss" / "critical_hit" / "critical_miss"
+- [ ] source changed from "gm_dice" to "combat_attack" (player) / "combat_enemy" (enemy)
+- [ ] No existing tests broken: python -m pytest tests/test_phase8_combat.py -v
+- [ ] Add test: resolve_attack() → check logged dc and outcome match enemy AC
+
+FILES TO MODIFY:
+- backend/app/services/combat_service.py  (log call in resolve_attack)
+
+DO NOT modify:
+- /api/gm/dice endpoint
+- frontend roll card JS
+- system_prompt.txt
