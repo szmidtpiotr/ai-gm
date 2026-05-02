@@ -1,0 +1,295 @@
+@custom-variant dark (&:is(.dark *));
+
+/* ========================================
+   AI-GM Dark Fantasy Theme
+   Inspired by: Warhammer Fantasy, D&D, Baldur's Gate
+   Palette: Aged parchment, candlelight gold, gothic stone
+   Mobile-first: 320px min, 375px baseline, 390px ideal
+   ======================================== */
+
+:root {
+  --font-size: 16px;
+
+  /* ===== Surface Colors (Gothic Stone & Aged Parchment) ===== */
+  --bg: #0a0806;                    /* Deep charcoal - main app background (chat area) */
+  --panel: #18120e;                 /* Stone panel - elevated surfaces */
+  --panel-2: #221a15;               /* Lighter stone - nested panels */
+  --top-bar: #1f1711;               /* Top bar - distinct from chat */
+  --bottom-bar: #1a1410;            /* Bottom composer bar - distinct layer */
+  --background: var(--bg);
+  --card: var(--panel);
+  --card-foreground: #f2eadc;
+  --popover: var(--panel-2);
+  --popover-foreground: #f2eadc;
+
+  /* ===== Text Colors ===== */
+  --text: #f2eadc;                  /* Aged parchment - primary text */
+  --muted: #b4a58d;                 /* Faded ink - secondary text */
+  --foreground: var(--text);
+  --muted-foreground: var(--muted);
+
+  /* ===== Accent Colors (Aged Candlelight Gold) ===== */
+  --accent: #b77a2b;                /* Warm aged gold - primary accent */
+  --accent-light: #d4a857;          /* Candlelight highlight */
+  --accent-dark: #8a5a1f;           /* Tarnished gold - subdued */
+  --primary: var(--accent);
+  --primary-foreground: #0f0b09;
+  --secondary: #2d2419;
+  --secondary-foreground: var(--text);
+
+  /* ===== Status Colors ===== */
+  --danger: #b91c1c;                /* Blood red */
+  --warning: #b45309;               /* Rust orange */
+  --ok: #15803d;                    /* Forest green */
+  --destructive: var(--danger);
+  --destructive-foreground: #ffffff;
+  --success: var(--ok);
+  --success-foreground: #ffffff;
+
+  /* ===== Chat Message Colors (Role-based) ===== */
+  --user: #1e3a5f;                  /* Player - deep blue */
+  --assistant: #2d4a2d;             /* GM - forest green */
+  --system: #5a5040;                /* System - muted brown */
+  --chat-player: var(--user);
+  --chat-gm: var(--assistant);
+  --chat-system: var(--system);
+
+  /* ===== Combat Colors ===== */
+  --combat-danger: #4a1f1f;         /* Combat state - dark red */
+  --combat-active: #2a3a2a;         /* Active turn - dark green */
+  --hp-low: var(--danger);
+  --hp-mid: var(--accent);
+  --hp-high: var(--ok);
+
+  /* ===== Border & Shadows ===== */
+  --border: rgba(183, 122, 43, 0.2); /* Subtle gold border */
+  --border-strong: rgba(183, 122, 43, 0.4); /* Stronger separator */
+  --input: rgba(183, 122, 43, 0.15);
+  --input-background: #1a1410;
+  --switch-background: #2d2419;
+  --ring: var(--accent);
+  --shadow: 0 4px 16px rgba(80, 50, 20, 0.35);
+  --shadow-strong: 0 2px 8px rgba(0, 0, 0, 0.6);
+
+  /* ===== Typography Tokens ===== */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ===== Spacing Tokens (8px grid) ===== */
+  --gap: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ===== Border Radius ===== */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* ===== Chat Bubble Sizing ===== */
+  --bubble-max: min(78%, 860px);
+
+  /* ===== Sidebar (deprecated but aliased for compatibility) ===== */
+  --sidebar: var(--panel);
+  --sidebar-foreground: var(--text);
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--bg);
+  --sidebar-accent: var(--secondary);
+  --sidebar-accent-foreground: var(--text);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+
+  /* ===== Fallback Aliases (for JS template compatibility) ===== */
+  --color-surface-app: var(--bg);
+  --color-surface-panel: var(--panel);
+  --color-surface-2: var(--panel-2);
+  --color-surface-offset: var(--panel-2);
+  --color-border: var(--border);
+  --color-text-primary: var(--text);
+  --color-text-muted: var(--muted);
+  --color-accent-primary: var(--accent);
+  --color-accent-highlight: var(--accent-light);
+  --color-status-danger: var(--danger);
+  --color-status-warning: var(--warning);
+  --color-status-success: var(--ok);
+  --color-chat-player: var(--user);
+  --color-chat-gm: var(--assistant);
+  --color-chat-system: var(--system);
+  --radius-default: var(--radius);
+  --space-default-gap: var(--gap);
+  --shadow-panel: var(--shadow);
+  --size-chat-bubble-max: var(--bubble-max);
+}
+
+.dark {
+  /* Theme is always dark - no light mode variant */
+}
+
+@theme inline {
+  /* Tailwind CSS v4 theme tokens */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--text);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+
+  /* Apply user font size only to narrative content, not UI chrome */
+  #chat-messages p,
+  #chat-messages .message-content,
+  .settings-preview-text {
+    font-size: var(--font-size) !important;
+  }
+
+  /* Mobile-first: Minimum 44px touch targets */
+  @media (max-width: 640px) {
+    button,
+    a[role="button"],
+    input[type="button"],
+    input[type="submit"] {
+      min-height: 44px;
+    }
+
+    /* Prevent iOS zoom on input focus */
+    input,
+    select,
+    textarea {
+      font-size: max(16px, 1rem);
+    }
+  }
+
+  /* Typography: Mobile-optimized readability */
+  h1 {
+    font-size: var(--text-xl);
+    font-weight: var(--font-weight-bold);
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+
+  h2 {
+    font-size: var(--text-lg);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.4;
+  }
+
+  h3 {
+    font-size: var(--text-md);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.4;
+  }
+
+  h4 {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.5;
+  }
+
+  p {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.6;
+  }
+
+  label {
+    font-size: var(--text-sm);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+  }
+
+  button {
+    font-size: var(--text-md);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.4;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+  }
+
+  /* Accessibility: Focus states must be visible */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
