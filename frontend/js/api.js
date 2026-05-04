@@ -395,6 +395,17 @@ window.refreshCombatLogTurns = async function (campaignId) {
   }
 };
 
+/**
+ * Nie zamykaj panelu walki przy GET combat inactive + loadTurns / fetchAndMaybeShow,
+ * dopóki gracz nie wyśle pierwszej „normalnej” wiadomości (patrz dismissCompletedCombatPanel).
+ */
+window.shouldHoldPostCombatPanel = function shouldHoldPostCombatPanel() {
+  if (!window.state || window.state._combatPanelReleasedUntilChat) return false;
+  if (window.state._holdCombatPanelUntilUserChat) return true;
+  const st = window.combatPanel && window.combatPanel._state;
+  return !!(st && String(st.status || '') === 'ended');
+};
+
 window.loadTurns = async function (campaignId, limit = 30, userId = null) {
   if (!campaignId) {
     window.state.serverTurns = [];
@@ -402,6 +413,8 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
     window.state.gmRollClientTurns = [];
     window.state.combatLogTurns = [];
     window.state.turns = [];
+    window.state._holdCombatPanelUntilUserChat = false;
+    window.state._combatPanelReleasedUntilChat = false;
     window.clearChat();
     window.clearHistoryPanel();
     return;
@@ -485,6 +498,9 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
       const hasActiveCombat = cd.active === true && cs != null;
 
       const clearCombatUi = () => {
+        if (window.state) {
+          window.state._holdCombatPanelUntilUserChat = false;
+        }
         window.state.combatClientTurns = [];
         window.state.combatLogTurns = [];
         window.state.turns = window.mergeTurnsForChat();
@@ -500,10 +516,22 @@ window.loadTurns = async function (campaignId, limit = 30, userId = null) {
       };
 
       if (!hasActiveCombat) {
-        clearCombatUi();
+        const holdPostCombatSummary =
+          typeof window.shouldHoldPostCombatPanel === 'function' &&
+          window.shouldHoldPostCombatPanel();
+        if (holdPostCombatSummary) {
+          if (typeof window.combatInput?.syncWithCombat === 'function') {
+            window.combatInput.syncWithCombat(null);
+          }
+        } else {
+          clearCombatUi();
+        }
       } else if (cs.status === 'ended') {
-        if (typeof window.combatPanel?.hide === 'function') {
-          window.combatPanel.hide();
+        if (typeof window.combatPanel?.render === 'function') {
+          window.combatPanel.render(cs);
+        }
+        if (typeof window.combatPanel?.show === 'function') {
+          window.combatPanel.show();
         }
         if (typeof window.combatInput?.syncWithCombat === 'function') {
           window.combatInput.syncWithCombat(null);

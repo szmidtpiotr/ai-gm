@@ -16,6 +16,8 @@ window.bindEvents = function () {
       String(window.state.selectedCampaignId)
     );
     window.state.helpmeLog = [];
+    window.state._holdCombatPanelUntilUserChat = false;
+    window.state._combatPanelReleasedUntilChat = false;
 
     const campaign = window.currentCampaign();
 
