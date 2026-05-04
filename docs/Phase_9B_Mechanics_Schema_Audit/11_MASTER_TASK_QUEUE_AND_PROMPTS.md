@@ -2,6 +2,7 @@
 
 <!-- MASTER_STATUS: ACTIVE -->
 <!-- LAST_UPDATE: 2026-05-04 -->
+<!-- T01_ROW: DONE — zamknięte na stałe; follow-up „admin per kampania” to osobna praca (T20 / UX), NIE ponowne T01 ani cofanie [x]. -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -11,7 +12,8 @@
 1. Realizuj **według Lp** (kolumna *Zależność* — nie zaczynaj zadania, dopóki poprzednie wymagane nie są `[x]`).
 2. Po rozpoczęciu: w sekcji PROMPT ustaw `STATUS: IN_PROGRESS` → po zakończeniu `STATUS: DONE` i wypełnij **Co zostało zrobione**.
 3. Ustaw `[x]` w tabeli §1 dla ukończonego wiersza.
-4. Opcjonalnie: **Notatki po implementacji** (Perplexity / człowiek).
+4. **Zadania już `[x]` (np. T01, T02):** nie cofaj checkboxa przy dopisywaniu follow-upów ani kolejnych fal — nowe wymagania przenoś do innego wiersza (np. T20) lub nowego ID; **T01 jest wykonane** (kod + testy + decyzja wariantu A); ewent. przeniesienie podglądu dual do admina to **osobny** element planu, nie „dokończenie T01”.
+5. Opcjonalnie: **Notatki po implementacji** (Perplexity / człowiek).
 
 **Uchwały źródłowe:** [`04_decisions_log.md`](04_decisions_log.md) — **[S11b]**, **[S10e]**, **[S10d]**, **[IMPL]**, **[AUDIT]**; spec: [`07_extended_design_spec.md`](07_extended_design_spec.md) §7.
 
@@ -42,12 +44,12 @@
 | 17 | **T17** | [ ] | **[IMPL] fala 3:** `effect_json` + walidacja admin | T11 | **[IMPL]**, **[S13]** |
 | 18 | **T18** | [ ] | **[IMPL] fala 4:** warunki + konsumable / `item_key` | T17 | **[IMPL]**, **[S6]** |
 | 19 | **T19** | [ ] | **[IMPL] fala 5:** import / snapshot / ostrzeżenia | T11 | **[IMPL]**, **[S7]** |
-| 20 | **T20** | [ ] | **[IMPL] fala 6:** dywergencja (heurystyka / drugi LLM) + UI plan MG (admin); **follow-up T01:** po usunięciu „Podgląd dual” z frontu gracza — odpowiednik w adminie per kampania (§1 *Follow-up UX*, §2 T01) | T05–T07 | **[IMPL]**, **[S11]** |
+| 20 | **T20** | [ ] | **[IMPL] fala 6:** dywergencja (heurystyka / drugi LLM) + UI plan MG (admin); **follow-up po T01 (T01 nadal [x]):** po usunięciu „Podgląd dual” z frontu gracza — odpowiednik w adminie per kampania (§1 *Follow-up UX*, §2 T01) | T05–T07 | **[IMPL]**, **[S11]** |
 | 21 | **T21** | [ ] | **[IMPL] fala 7:** progres cech za XP (meta + endpoint) | T12 | **[IMPL]**, **[S10]** |
 
 **Uwaga kolejności:** W tabeli **T06** jest przed **T05** (najpierw szkielet planu, potem blokada pierwszej narracji).
 
-**Follow-up UX (T01 → admin):** Przycisk **„Podgląd dual (T01)”** w modalu gracza jest **tymczasowy** (debug jakości rollupu). Gdy zostanie **usunięty z frontu gry**, ta sama możliwość ma być **przeniesiona do panelu administratora** — **per kampania** (`campaign_id`): odczyt tych samych wyników co dziś w podglądzie (tekst dla gracza, notatka MG, heurystyka wycieku planu, błąd parsowania JSON; opcjonalnie ponowne wywołanie `POST …/dual-summary-preview` lub ekwiwalent tylko dla ról admin). Gracz nie widzi tego widoku. Szczegóły i uzasadnienie: §2 T01 — *Plan wdrożenia (po usunięciu z UI gracza)*.
+**Follow-up UX (po zamkniętym T01 → admin):** **T01 pozostaje wykonane** (`[x]` w tabeli — bez zmian). Poniżej jest wyłącznie **kolejny krok produktowy**, gdy zniknie tymczasowy UI u gracza. Przycisk **„Podgląd dual (T01)”** w modalu gracza jest **tymczasowy** (debug jakości rollupu). Gdy zostanie **usunięty z frontu gry**, ta sama możliwość ma być **przeniesiona do panelu administratora** — **per kampania** (`campaign_id`): odczyt tych samych wyników co dziś w podglądzie (tekst dla gracza, notatka MG, heurystyka wycieku planu, błąd parsowania JSON; opcjonalnie ponowne wywołanie `POST …/dual-summary-preview` lub ekwiwalent tylko dla ról admin). Gracz nie widzi tego widoku. Szczegóły: §2 T01 — *Plan wdrożenia (po usunięciu z UI gracza)* — ten blok **nie** anuluje ani nie „odświeża” zamknięcia T01.
 
 ---
 
@@ -56,6 +58,8 @@
 <!-- STATUS_T01: DONE -->
 
 ### T01 — Test: jeden prompt (gracz + MG) vs dwa prompty
+
+**Stan zadania:** **DONE (trwale)** — zakres T01 (wariant A, moduł `history_summary_dual_prompt`, testy, tymczasowy podgląd w UI) jest **zamknięty**; dalsze prace opisane w *Plan wdrożenia (po usunięciu z UI gracza)* to **inna pozycja w planie** (np. T20), **nie** ponowne otwarcie T01.
 
 **Cel:** Na podstawie realnego lub mock LLM ustalić, czy **wariant A** (jeden call, dwa pola JSON) jest **wystarczający** — jeśli tak, wdrożyć tylko A (**mniej ścieżek = mniej pomyłek**, **[S11b]**).
 
@@ -88,7 +92,7 @@
 
 -
 
-**Plan wdrożenia (po usunięciu z UI gracza)**
+**Plan wdrożenia (po usunięciu z UI gracza)** — *nie jest częścią „dokończenia T01”; T01 jest już **DONE**.*
 
 - **Trigger:** usunięcie przycisku „Podgląd dual (T01)” z modala **„Podsumowanie kampanii”** po stronie gracza (właściciel kampanii).
 - **Wymaganie:** zamiast całkowicie chować narzędzie — **widok w panelu administratora** powiązany z **konkretną kampanią**: prezentacja tych samych danych co obecny podgląd (treść `player_summary` / `gm_notes`, heurystyka wycieku, komunikat parsowania), z dostępem wyłącznie dla ról admin (nie dla zwykłego gracza).
@@ -464,7 +468,7 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | T17 | PENDING | `effect_json` v0 + walidacja przy zapisie admina | `admin`, `items`, `conditions` |
 | T18 | PENDING | Konsumable / `item_key` / migracja loot | `loot_service`, migracje |
 | T19 | PENDING | Import: dokumentacja ryzyk + `catalog_snapshot` jako kanon | `admin_config_transfer.py`, docs |
-| T20 | PENDING | Dywergencja **[S11]** + UI edycji planu (admin); po czyszczeniu T01 z frontu — podgląd dual / debug rollupu per kampania w adminie | `game_engine`, admin |
+| T20 | PENDING | Dywergencja **[S11]** + UI edycji planu (admin); **follow-up po zamkniętym T01:** po czyszczeniu podglądu dual z frontu — debug rollupu per kampania w adminie | `game_engine`, admin |
 | T21 | PENDING | Koszty statów za XP + endpoint spend | `game_config_meta`, `characters` API |
 
 **Co zostało zrobione (T16–T21 — zbiorczo lub per ID)**
@@ -481,3 +485,4 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-03 | **T01 DONE** (kod + testy unittest); live 3× LLM — do uzupełnienia ręcznie. |
 | 2026-05-04 | **T02 DONE** — kolumna `audience`, API query, narracja gm→player, testy. |
 | 2026-05-04 | Follow-up T01: po usunięciu podglądu dual z UI gracza — widok odpowiednika w adminie per kampania (§1 *Follow-up UX*, §2 T01, rozszerzenie opisu **T20**). |
+| 2026-05-04 | Utrwalenie: **T01 = DONE** na stałe; follow-up admin wyłącznie jako osobna praca (reguła § *Zasady pracy* pkt 4; komentarz HTML; doprecyzowanie §1 *Follow-up UX* i §2 *Plan wdrożenia*). |
