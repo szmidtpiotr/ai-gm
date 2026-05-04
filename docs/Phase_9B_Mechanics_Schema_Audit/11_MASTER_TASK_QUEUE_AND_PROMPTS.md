@@ -2,6 +2,7 @@
 
 <!-- MASTER_STATUS: ACTIVE -->
 <!-- LAST_UPDATE: 2026-05-04 -->
+<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T08 OK 2026-05-04) -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -11,7 +12,7 @@
 1. Realizuj **według Lp** (kolumna *Zależność* — nie zaczynaj zadania, dopóki poprzednie wymagane nie są `[x]`).
 2. Po rozpoczęciu: w sekcji PROMPT ustaw `STATUS: IN_PROGRESS` → po zakończeniu `STATUS: DONE` i wypełnij **Co zostało zrobione**.
 3. Ustaw `[x]` w tabeli §1 dla ukończonego wiersza.
-4. Opcjonalnie: **Notatki po implementacji** (Perplexity / człowiek).
+4. Po **każdym wdrożeniu** uzupełnij **Notatki po implementacji** u danego ID (operacyjne: regresja, config, bezpieczeństwo, dług techniczny, link do PR/commit).
 
 **Uchwały źródłowe:** [`04_decisions_log.md`](04_decisions_log.md) — **[S11b]**, **[S10e]**, **[S10d]**, **[IMPL]**, **[AUDIT]**; spec: [`07_extended_design_spec.md`](07_extended_design_spec.md) §7.
 
@@ -91,7 +92,8 @@
 
 **Notatki po implementacji**
 
--
+- Seria **live 3× LLM** z UI (podgląd dual): wyniki halucynacji / stabilność JSON można dopisać tutaj lub w osobnym logu QA po ręcznym przebiegu.
+- **Podgląd dual** nie zastępuje produkcyjnego rollupu — do porównania wariantu A; rollout T02/T03 jest w osobnych endpointach z zapisem.
 
 ---
 
@@ -126,7 +128,8 @@
 
 **Notatki po implementacji**
 
--
+- Migracja `audience` jest **idempotentna** na starych DB; istniejące wiersze dostają domyślnie `player`.
+- Przy **imporcie** snapshotów konfiguracji / dumpów z innego środowiska sprawdzać spójność `audience` w `campaign_ai_summaries`, żeby nie „podmienić” stosu gracza wierszem MG.
 
 ---
 
@@ -160,7 +163,8 @@
 
 **Notatki po implementacji**
 
--
+- **Regresja:** każda zmiana w gałęzi `audience=player` w `generate_campaign_summary` → uruchomić `tests/test_history_summary_t03_player_only.py`.
+- **`/mem`** celowo czyta tylko rollup **player** — zmiana tego zachowania wymaga uzgodnienia z T02 (mieszanie treści MG-only z pamięcią gracza).
 
 ---
 
@@ -188,7 +192,8 @@
 
 **Notatki po implementacji**
 
--
+- Prompt MG jest **cięższy** niż player (transkrypt + `[PLAN_MG]`): przy bardzo długich kampaniach warto monitorować limity kontekstu LLM i ewentualnie skrócić `max_turns` po stronie wywołania.
+- Separacja T03/T04 utrzymuje zgodność z **[S11b]** — nie doklejać planu do ścieżki player „dla wygody”.
 
 ---
 
@@ -216,7 +221,8 @@
 
 **Notatki po implementacji**
 
--
+- PATCH **legacy** (płaskie klucze) jest mapowany na **aktywny łuk** — zachowanie opisane w §7.1 specyfikacji; przy refaktorze merge nie łamać testów `test_gm_plan_schema`.
+- **W2** (`campaign_story_beats` itd.) — wyłącznie po osobnym ADR (T14), jeśli W1 okaże się niewystarczający pod rozmiar / locking.
 
 ---
 
@@ -251,7 +257,9 @@
 
 **Notatki po implementacji**
 
--
+- **Legacy:** kampanie, które już mają tury narracyjne, nie dostają twardego bloku „brak planu” na pierwszej kolejnej turze (blokada dotyczy głównie **0 tur** narracyjnych).
+- **Recovery:** owner może użyć `POST …/gm-plan/generate-initial`, gdy plan nie powstał przy tworzeniu postaci (LLM timeout / błąd).
+- Po zmianach w warunku „gotowy plan” → regresja: `test_t05_gm_plan_generation`, `gm_plan_is_ready`.
 
 ---
 
@@ -278,7 +286,8 @@
 
 **Notatki po implementacji**
 
--
+- Query **`user_id`** określa „widza” dla GET szczegółów — to nie zastępuje pełnego modelu auth sesji; przy przyszłym JWT/API keys warto spiąć z jednym źródłem tożsamości.
+- **Frontend:** właściciel musi wywoływać GET z `?user_id=` (np. `apiCampaignGetUrl`), inaczej plan nie wraca — celowe dla bezpieczeństwa T07.
 
 ---
 
@@ -307,7 +316,9 @@
 
 **Notatki po implementacji**
 
--
+- Zmiana wartości **N**: wpis `game_config_meta.summary_rollup_cooldown_turns` — **panel admin nadal bez pola** (backlog **B01**); do czasu UI edycja przez SQL.
+- **`ensure`** przy blokadzie cooldownu zwraca ostatni skrót + `cooldown_active` — UI nadal powinien obsłużyć **429** na sztywnym `POST …/history/summary` (nadaje się do spięcia z **T09**).
+- Kotwica jest **wspólna** dla player/gm — jedna kampania = jeden licznik odstępu między kosztownymi rollupami LLM.
 
 ---
 
@@ -332,7 +343,7 @@
 
 **Notatki po implementacji**
 
--
+- *Brak wdrożenia — uzupełnić po wdrożeniu T09 (błędy API, 429 z T08, ostatni dobry skrót).*
 
 ---
 
@@ -356,7 +367,7 @@
 
 **Notatki po implementacji**
 
--
+- *Brak wdrożenia — uzupełnić po wdrożeniu T10 (N tur, worker, interakcja z T08).*
 
 ---
 
@@ -379,7 +390,7 @@
 
 **Notatki po implementacji**
 
--
+- *Brak wdrożenia — uzupełnić po wdrożeniu T11 (sync `06`/`04`, data zamknięcia).*
 
 ---
 
@@ -403,7 +414,7 @@
 
 **Notatki po implementacji**
 
--
+- *Brak wdrożenia — uzupełnić po wdrożeniu T12 (tabela/meta, seed, admin).*
 
 ---
 
@@ -426,7 +437,7 @@
 
 **Notatki po implementacji**
 
--
+- *Brak wdrożenia — uzupełnić po wdrożeniu T13 (pliki rulebooka, zgodność z [S10]).*
 
 ---
 
@@ -451,7 +462,7 @@
 
 **Notatki po implementacji**
 
--
+- *Brak wdrożenia — uzupełnić po wdrożeniu T14 (ADR, migracja W2 jeśli powstanie).*
 
 ---
 
@@ -475,7 +486,7 @@
 
 **Notatki po implementacji**
 
--
+- *Brak wdrożenia — uzupełnić po wdrożeniu T15 (trigger questa, generator planu, test bez nowego campaign_id).*
 
 ---
 
@@ -496,6 +507,10 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 
 -
 
+**Notatki po implementacji**
+
+- *Brak wdrożenia — po każdej zrealizowanej fali [IMPL] dopisać krótko per ID (pliki, ryzyka, zależności od T11).*
+
 ---
 
 ## 18. Historia zmian tego pliku
@@ -508,3 +523,4 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T03 DONE** — player summary tylko z transkryptu, `audience` w generatorze, test regresyjny, restart backendu. |
 | 2026-05-04 | **T04 DONE** — GM summary dostaje `gm_plan_json` + transkrypt, osobny test, restart backendu. |
 | 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
+| 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
