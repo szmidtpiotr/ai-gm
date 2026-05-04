@@ -37,6 +37,8 @@
       this._pendingGold = 0;
       /** When true, victory overlay is deferred until `showVictoryAfterNarration`. */
       this._deferVictoryOverlay = false;
+      /** Prevent reopening the end overlay after the user dismisses it. */
+      this._endOverlayDismissed = false;
       this._busy = false;
       this._host = null;
       this._card = null;
@@ -186,6 +188,14 @@
       this.ensureDom();
       if (!combatState) return;
       this._state = combatState;
+      if (
+        String(combatState.status || "") === "ended" &&
+        typeof window !== "undefined" &&
+        window.state
+      ) {
+        window.state._combatPanelReleasedUntilChat = false;
+        window.state._holdCombatPanelUntilUserChat = true;
+      }
       this.show();
       this.render(combatState);
     }
@@ -196,6 +206,7 @@
      */
     async showVictoryAfterNarration(_killedData) {
       this._deferVictoryOverlay = false;
+      this._endOverlayDismissed = false;
       const pending = Array.isArray(this._pendingLoot) ? this._pendingLoot.slice() : [];
       const pendingGold = Math.max(0, Number(this._pendingGold || 0));
       this._pendingLoot = null;
@@ -513,7 +524,7 @@
       }
 
       const ended = String(st.status || "") === "ended";
-      if (ended && !this._deferVictoryOverlay) {
+      if (ended && !this._deferVictoryOverlay && !this._endOverlayDismissed) {
         this._showEndScreen(st);
       } else {
         this._hideEnd();
@@ -568,10 +579,24 @@
     }
 
     _finishEndOverlay() {
+      this._endOverlayDismissed = true;
       this._hideEnd();
+    }
+
+    dismissCompletedCombatPanel() {
+      if (!this._state || String(this._state.status || "") !== "ended") return false;
+      if (typeof window !== "undefined" && window.state) {
+        window.state._combatPanelReleasedUntilChat = true;
+        window.state._holdCombatPanelUntilUserChat = false;
+      }
       this._accumulatedLoot = [];
+      this._pendingLoot = null;
+      this._pendingGold = 0;
+      this._deferVictoryOverlay = false;
+      this._endOverlayDismissed = false;
       this.hide();
       this._state = null;
+      return true;
     }
 
     _hideEnd() {
@@ -720,12 +745,20 @@
           window.updateCombatDebugStatusLabel(cd);
         }
         if (!cd.active || !cd.combat) {
+          const holdUntilChat =
+            typeof window.shouldHoldPostCombatPanel === "function" &&
+            window.shouldHoldPostCombatPanel();
+          if (holdUntilChat) {
+            this.show();
+            void this._refreshCombatEngineTurnsPanel();
+            return;
+          }
           this._state = null;
           this.hide();
           return;
         }
         const data = cd.combat;
-        if (String(data.status) === "active") {
+        if (String(data.status) === "active" || String(data.status) === "ended") {
           this.show();
           this.render(data);
         } else {
@@ -742,8 +775,11 @@
       this._pendingLoot = null;
       this._pendingGold = 0;
       this._deferVictoryOverlay = false;
+      this._endOverlayDismissed = false;
       if (typeof window !== "undefined" && window.state) {
         window.state._combatVictoryUiPending = false;
+        window.state._combatPanelReleasedUntilChat = false;
+        window.state._holdCombatPanelUntilUserChat = false;
       }
       this.render(combatState);
       this.show();
@@ -785,12 +821,23 @@
         const combatSnap = this._state;
         const enemyLabel = this._fleeEnemyDisplayName(combatSnap);
 
-        this.hide();
         if (typeof window.combatInput?.syncWithCombat === "function") {
           window.combatInput.syncWithCombat(null);
         }
-        this._accumulatedLoot = [];
-        this._state = null;
+        if (fleeData.combat_state) {
+          this._state = fleeData.combat_state;
+          this._endOverlayDismissed = false;
+          if (
+            String(fleeData.combat_state.status || "") === "ended" &&
+            typeof window !== "undefined" &&
+            window.state
+          ) {
+            window.state._combatPanelReleasedUntilChat = false;
+            window.state._holdCombatPanelUntilUserChat = true;
+          }
+          this.render(fleeData.combat_state);
+          this.show();
+        }
 
         if (!fleeData.already_ended) {
           const nm =
@@ -879,13 +926,28 @@
       const dmg = row.damage != null ? Number(row.damage) : null;
       const tgt = String(row.target_name || "").trim() || "—";
       if (actor === "player") {
+        let attackLabel = "ATAK GRACZA";
+        let attackStat = "";
+        try {
+          const meta =
+            typeof row.narrative === "string" && row.narrative.trim()
+              ? JSON.parse(row.narrative)
+              : {};
+          if (meta && typeof meta === "object") {
+            attackLabel = String(meta.attack_label || attackLabel).trim() || attackLabel;
+            attackStat = String(meta.attack_stat || "").trim().toUpperCase();
+          }
+        } catch (_e) {
+          /* ignore */
+        }
         const ac = this._defenseForCombatLogRow(row);
         const acBit = ac != null ? ` vs AC ${ac}` : "";
+        const statBit = attackStat ? ` · ${attackStat}` : "";
         const hitLine = hit
           ? `✅ TRAFIENIE · obrażenia: ${dmg != null ? dmg : "?"}`
           : "❌ PUDŁO";
         return `<div class="combat-engine-turn combat-engine-turn--player">
-          <div class="combat-engine-turn__head">⚔️ ATAK GRACZA → ${esc(tgt)}</div>
+          <div class="combat-engine-turn__head">⚔️ ${esc(attackLabel)}${statBit ? ` ${esc(statBit)}` : ""} → ${esc(tgt)}</div>
           <div class="combat-engine-turn__detail">Rzut: ${Number.isFinite(rv) ? rv : "—"}${acBit} → ${hitLine}</div>
         </div>`;
       }
@@ -922,7 +984,7 @@
       const el = this._host?.querySelector("#combat-engine-turns");
       if (!el) return;
       const cid = this._campaignId();
-      if (!cid || !this._state || String(this._state.status) !== "active") {
+      if (!cid || !this._state) {
         el.innerHTML = "";
         el.hidden = true;
         return;
@@ -939,7 +1001,7 @@
         const rows = Array.isArray(data.turns) ? data.turns : [];
         const interesting = rows.filter(
           (r) => r && (String(r.event_type) === "attack" || String(r.event_type) === "death")
-        );
+        ).reverse();
         if (!interesting.length) {
           el.innerHTML = "";
           el.hidden = true;
@@ -1080,6 +1142,10 @@
 
         if (cs) {
           this._state = cs;
+          if (endedNow && typeof window !== "undefined" && window.state) {
+            window.state._combatPanelReleasedUntilChat = false;
+            window.state._holdCombatPanelUntilUserChat = true;
+          }
           if (victoryNarrationFirst) {
             this._deferVictoryOverlay = true;
           }

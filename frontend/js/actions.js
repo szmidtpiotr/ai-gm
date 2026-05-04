@@ -25,6 +25,12 @@ window.state._wizardPendingCharacter = window.state._wizardPendingCharacter || n
 window.state._combatJustEnded = window.state._combatJustEnded || false;
 window.state._lastKilledEnemy = window.state._lastKilledEnemy || null;
 window.state._combatVictoryUiPending = window.state._combatVictoryUiPending || false;
+/** Po zakończonej walce: nie chowaj panelu walki przy loadTurns aż gracz wyśle zwykłą wiadomość z inputu (nie auto-narracja). */
+window.state._combatPanelReleasedUntilChat =
+  window.state._combatPanelReleasedUntilChat || false;
+/** Trzymaj panel podsumowania walki po aktywności GET /combat=inactive, dopóki gracz nie wyśle zwykłej wiadomości (nawet jeśli snapshot _state chwilowo znika). */
+window.state._holdCombatPanelUntilUserChat =
+  window.state._holdCombatPanelUntilUserChat || false;
 /** Ostatni znany opis wroga (key — label) gdy GET /combat zwraca active=false — do linii COMBAT: debug. */
 window.state._combatDebugEnemyHint = window.state._combatDebugEnemyHint || '';
 window.state.gmRollClientTurns = window.state.gmRollClientTurns || [];
@@ -971,6 +977,13 @@ window.sendMessage = async function () {
     text = String(pendingLine);
   }
   if (!text) return;
+
+  if (
+    pendingLine == null &&
+    typeof window.combatPanel?.dismissCompletedCombatPanel === 'function'
+  ) {
+    window.combatPanel.dismissCompletedCombatPanel();
+  }
 
   const clientCreatedAt = new Date().toISOString();
 
