@@ -29,7 +29,7 @@
 | 4 | **T04** | [x] | **Prompt** wersji MG: transkrypt **+** plan (`gm_plan_json`) | T02 | **[S11b]** |
 | 5 | **T06** | [x] | **`gm_plan_json` W1**: `gm_plan_schema` (normalize, merge, format), PATCH, §7.1, testy | — | **[S11b]**, W2 backlog |
 | 6 | **T05** | [x] | Po zapisie postaci: **generacja planu do skutku**; **blokada** pierwszej narracji bez planu | T06 | **[S11b]** |
-| 7 | **T07** | [ ] | API / serializacja: **gracz nie dostaje** `gm_plan_json` w GET kampanii (lista + szczegóły) | T06 | **[S11b]** |
+| 7 | **T07** | [x] | API / serializacja: **gracz nie dostaje** `gm_plan_json` w GET kampanii (lista + szczegóły) | T06 | **[S11b]** |
 | 8 | **T08** | [ ] | Multiplayer: **cooldown** odświeżenia rollupu **per `campaign_id`** | T02 | **[S11b]** |
 | 9 | **T09** | [ ] | UI: stan **„wymaga odświeżenia”** po błędzie LLM rollupu | T02 | **[S11b]** |
 | 10 | **T10** | [ ] | **Fala [IMPL] 1:** auto / prog tur / cron `POST …/history/summary/ensure` | T02–T04 (logicznie po dual zapisie) | **[IMPL]** |
@@ -250,7 +250,7 @@
 
 ## 8. PROMPTY — T07
 
-<!-- STATUS_T07: PENDING -->
+<!-- STATUS_T07: DONE -->
 
 ### T07 — API: `gm_plan_json` niewidoczne dla gracza
 
@@ -263,7 +263,11 @@
 
 **Co zostało zrobione**
 
--
+- **`GET /api/campaigns/{id}`:** query `user_id` (opcjonalny) — bez niego lub dla nieuprawnionego widza klucz `gm_plan_json` jest **usuwany** z JSON. Uprawnieni: właściciel kampanii, `users.is_admin=1`, rola `gm`/`admin` w `campaign_members`.
+- **`GET /api/campaigns` (lista):** bez zmian — SELECT już nie zawiera `gm_plan_json`.
+- **`POST /campaigns`:** odpowiedź filtrowana tym samym helperem (dla zwykłego tworzenia właściciel = `owner_user_id` — plan nadal widoczny).
+- **Frontend:** [`config.js`](../../frontend/js/config.js) — `window.apiCampaignGetUrl(id)` z `?user_id=` gdy jest `playerUserId`; użyte przy preflight przed tworzeniem postaci ([`actions.js`](../../frontend/js/actions.js)).
+- **Testy:** [`backend/tests/test_phase9b_t07_campaign_gm_plan_visibility.py`](../../backend/tests/test_phase9b_t07_campaign_gm_plan_visibility.py).
 
 **Notatki po implementacji**
 

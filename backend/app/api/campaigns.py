@@ -18,6 +18,68 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+def _may_view_gm_plan_json(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: int,
+    owner_user_id: int,
+    viewer_user_id: int | None,
+) -> bool:
+    """T07 / [S11b]: only owner, global admin, or campaign gm/admin role sees `gm_plan_json` in HTTP JSON."""
+    if viewer_user_id is None:
+        return False
+    try:
+        vid = int(viewer_user_id)
+        oid = int(owner_user_id)
+    except (TypeError, ValueError):
+        return False
+    if vid == oid:
+        return True
+    try:
+        urow = conn.execute(
+            "SELECT COALESCE(is_admin, 0) AS ia FROM users WHERE id = ?",
+            (vid,),
+        ).fetchone()
+        if urow and int(urow["ia"] or 0) == 1:
+            return True
+    except sqlite3.OperationalError:
+        pass
+    try:
+        mrow = conn.execute(
+            """
+            SELECT role FROM campaign_members
+            WHERE campaign_id = ? AND user_id = ?
+            """,
+            (campaign_id, vid),
+        ).fetchone()
+        if mrow:
+            role = str(mrow["role"] or "").strip().lower()
+            if role in ("gm", "admin"):
+                return True
+    except sqlite3.OperationalError:
+        pass
+    return False
+
+
+def _apply_gm_plan_visibility(
+    conn: sqlite3.Connection,
+    row_dict: dict,
+    campaign_id: int,
+    viewer_user_id: int | None,
+) -> dict:
+    owner_user_id = int(row_dict.get("owner_user_id") or 0)
+    if _may_view_gm_plan_json(
+        conn,
+        campaign_id=campaign_id,
+        owner_user_id=owner_user_id,
+        viewer_user_id=viewer_user_id,
+    ):
+        return row_dict
+    out = dict(row_dict)
+    out.pop("gm_plan_json", None)
+    return out
+
+
 def _parse_gm_plan(raw: str | None) -> dict:
     return normalize_gm_plan(raw)
 
@@ -76,26 +138,32 @@ def list_campaigns():
 
 
 @router.get("/campaigns/{campaign_id}")
-def get_campaign(campaign_id: int):
+def get_campaign(
+    campaign_id: int,
+    user_id: int | None = Query(
+        None,
+        description="Viewer user id; when omitted or unauthorized, `gm_plan_json` is omitted (T07).",
+    ),
+):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            """
+            SELECT id, title, system_id, model_id, owner_user_id, language, mode, status, created_at,
+                   gm_plan_json
+            FROM campaigns
+            WHERE id = ?
+            """,
+            (campaign_id,),
+        ).fetchone()
 
-    row = conn.execute(
-        """
-        SELECT id, title, system_id, model_id, owner_user_id, language, mode, status, created_at,
-               gm_plan_json
-        FROM campaigns
-        WHERE id = ?
-        """,
-        (campaign_id,),
-    ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Campaign not found")
 
-    conn.close()
-
-    if not row:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-
-    return dict(row)
+        return _apply_gm_plan_visibility(conn, dict(row), campaign_id, user_id)
+    finally:
+        conn.close()
 
 
 @router.patch("/campaigns/{campaign_id}/gm-plan")
@@ -320,15 +388,17 @@ def create_campaign(req: CampaignCreateRequest):
         (campaign_id,),
     ).fetchone()
 
-    conn.close()
-
     if not row:
+        conn.close()
         raise HTTPException(status_code=500, detail="Campaign created but could not be loaded")
+
+    out = _apply_gm_plan_visibility(conn, dict(row), campaign_id, req.owner_user_id)
+    conn.close()
 
     # NOTE: Chat history lives in the frontend — switching to a new campaign
     # clears the UI automatically because the campaign_id changes.
     # The backend does not maintain an in-memory chat state.
-    return dict(row)
+    return out
 
 
 @router.post("/campaigns/{campaign_id}/reset")

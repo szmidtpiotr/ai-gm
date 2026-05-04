@@ -606,7 +606,11 @@ window.createCharacterFromForm = async function () {
 
   // Preflight campaign validation against backend to avoid hidden stale state.
   try {
-    const checkResp = await fetch(`/api/campaigns/${selectedCampaignId}`);
+    const checkResp = await fetch(
+      typeof window.apiCampaignGetUrl === 'function'
+        ? window.apiCampaignGetUrl(selectedCampaignId)
+        : `/api/campaigns/${selectedCampaignId}`
+    );
     if (checkResp.status === 404) {
       const listResp = await fetch(window.API_CAMPAIGNS);
       if (listResp.ok) {
