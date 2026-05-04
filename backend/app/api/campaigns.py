@@ -9,6 +9,7 @@ from app.core.config import DEFAULT_CAMPAIGN_LANGUAGE
 from app.core.logging import get_logger
 from app.services.history_summary_service import generate_dual_summary_preview
 from app.services.solo_death_service import death_summary_payload
+from app.services.gm_plan_generation_service import retry_initial_gm_plan_for_campaign
 from app.services.gm_plan_schema import merge_gm_plan_patch, normalize_gm_plan
 
 DB_PATH = "/data/ai_gm.db"
@@ -127,6 +128,49 @@ def patch_campaign_gm_plan(campaign_id: int, req: GmPlanPatchRequest, user_id: i
             (campaign_id,),
         ).fetchone()
         return dict(out) if out else {}
+    except sqlite3.OperationalError as e:
+        if "no such column" in str(e).lower():
+            raise HTTPException(
+                status_code=503,
+                detail="gm_plan_json column missing — apply migrations and restart API",
+            ) from None
+        raise HTTPException(status_code=500, detail=str(e)) from None
+    finally:
+        conn.close()
+
+
+@router.post("/campaigns/{campaign_id}/gm-plan/generate-initial")
+def post_generate_initial_gm_plan(campaign_id: int, user_id: int = Query(...)):
+    """
+    T05: ponów generację początkowego planu MG (owner), np. gdy LLM padł przy tworzeniu postaci.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        ok, err = retry_initial_gm_plan_for_campaign(
+            conn, campaign_id=campaign_id, owner_user_id=int(user_id)
+        )
+        if not ok:
+            if err == "campaign_not_found":
+                raise HTTPException(status_code=404, detail="Campaign not found")
+            if err == "forbidden":
+                raise HTTPException(status_code=403, detail="user_id must match campaign owner")
+            raise HTTPException(
+                status_code=502,
+                detail=err or "Nie udało się wygenerować planu MG",
+            )
+        row = conn.execute(
+            "SELECT id, gm_plan_json FROM campaigns WHERE id = ?",
+            (campaign_id,),
+        ).fetchone()
+        plan_raw = (row["gm_plan_json"] if row else None) or "{}"
+        try:
+            plan_dict = json.loads(plan_raw) if isinstance(plan_raw, str) else {}
+        except json.JSONDecodeError:
+            plan_dict = {}
+        return {"ok": True, "campaign_id": campaign_id, "gm_plan_json": plan_dict}
+    except HTTPException:
+        raise
     except sqlite3.OperationalError as e:
         if "no such column" in str(e).lower():
             raise HTTPException(
