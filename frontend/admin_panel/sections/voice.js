@@ -82,6 +82,89 @@ export async function init(container) {
   globalCard.appendChild(makeLabeledRow("TTS (globalnie)", ttsGlobalToggle, "Czytaj odpowiedzi GM głosem"));
   globalCard.appendChild(makeLabeledRow("STT (globalnie)", sttGlobalToggle, "Umożliw graczom mówienie do mikrofonu"));
 
+  const CLIENT_TTS_KEYS = {
+    narrative: "ai-gm:tts:narrative",
+    memory: "ai-gm:tts:memory",
+    helpme: "ai-gm:tts:helpme",
+    dice: "ai-gm:tts:dice",
+    combat: "ai-gm:tts:combat",
+  };
+
+  const clientTtsCard = el("div", "admin-card");
+  clientTtsCard.appendChild(el("h3", "admin-card-title", "Automatyczny odczyt — typ dymku (gra)"));
+  clientTtsCard.appendChild(
+    el(
+      "p",
+      "muted",
+      "Zapis w localStorage tej przeglądarki (klucze ai-gm:tts:*). Dotyczy automatycznego TTS po wiadomościach w aplikacji gracza. Przycisk przy narracji czyta tekst po oczyszczeniu z bloków walki i rzutów."
+    )
+  );
+
+  const clientTtsTable = document.createElement("table");
+  clientTtsTable.className = "admin-table voice-client-tts-table";
+  const clientThead = document.createElement("thead");
+  const headTr = document.createElement("tr");
+  const thOn = document.createElement("th");
+  thOn.className = "admin-table-select-col";
+  thOn.textContent = "";
+  const thDesc = document.createElement("th");
+  thDesc.textContent = "Rodzaj dymku";
+  headTr.appendChild(thOn);
+  headTr.appendChild(thDesc);
+  clientThead.appendChild(headTr);
+
+  const clientTbody = document.createElement("tbody");
+  const clientTtsRows = [
+    [CLIENT_TTS_KEYS.narrative, true, "Narracja GM", "route: narrative"],
+    [CLIENT_TTS_KEYS.memory, false, "/mem — odpowiedź z pamięci podsumowania", "route: memory"],
+    [CLIENT_TTS_KEYS.helpme, false, "/helpme — pomoc meta", "route: helpme"],
+    [CLIENT_TTS_KEYS.dice, false, "Rzuty skill", "route: dice"],
+    [CLIENT_TTS_KEYS.combat, false, "Mechanika walki w czacie", "route: combat"],
+  ];
+
+  function readClientTtsPref(storageKey, defaultBool) {
+    try {
+      const v = localStorage.getItem(storageKey);
+      if (v === null) return defaultBool;
+      return v === "1";
+    } catch (_e) {
+      return defaultBool;
+    }
+  }
+
+  clientTtsRows.forEach(([storageKey, defaultBool, label, routeHint]) => {
+    const tr = document.createElement("tr");
+    const tdCb = document.createElement("td");
+    tdCb.className = "admin-table-select-col";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = readClientTtsPref(storageKey, defaultBool);
+    cb.addEventListener("change", () => {
+      try {
+        localStorage.setItem(storageKey, cb.checked ? "1" : "0");
+      } catch (_e) {
+        /* noop */
+      }
+    });
+    tdCb.appendChild(cb);
+
+    const tdLabel = document.createElement("td");
+    const strong = el("span", "", label);
+    tdLabel.appendChild(strong);
+    tdLabel.appendChild(document.createTextNode(" "));
+    const hint = el("code", "muted", routeHint);
+    hint.style.fontSize = "0.85em";
+    tdLabel.appendChild(hint);
+
+    tr.appendChild(tdCb);
+    tr.appendChild(tdLabel);
+    clientTbody.appendChild(tr);
+  });
+
+  clientTtsTable.appendChild(clientThead);
+  clientTtsTable.appendChild(clientTbody);
+  clientTtsCard.appendChild(clientTtsTable);
+
   // CARD 3: TTS config + test
   const ttsCard = el("div", "admin-card");
   ttsCard.appendChild(el("h3", "admin-card-title", "Konfiguracja TTS (Piper)"));
@@ -174,6 +257,7 @@ export async function init(container) {
 
   root.appendChild(statusCard);
   root.appendChild(globalCard);
+  root.appendChild(clientTtsCard);
   root.appendChild(ttsCard);
   root.appendChild(sttCard);
   container.appendChild(root);

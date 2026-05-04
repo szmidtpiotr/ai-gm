@@ -30,6 +30,9 @@ window.bootstrap = async function () {
     if (typeof window.initLlmSettingsCollapse === 'function') {
       window.initLlmSettingsCollapse();
     }
+    if (typeof window.initCombatChatBubblePref === 'function') {
+      window.initCombatChatBubblePref();
+    }
 
     const userId = window.state?.playerUserId || 1;
     try {

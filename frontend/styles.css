@@ -418,6 +418,19 @@ pre.narrative-pre {
   font: inherit;
 }
 
+/* Walka w czacie: mechanika bez kart roll-card — zwykły tekst */
+pre.combat-roll-plain {
+  display: block;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  font: inherit;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
 .sheet-heading {
   display: flex;
   flex-direction: column;

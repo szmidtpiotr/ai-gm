@@ -170,6 +170,99 @@ window.initLlmSettingsCollapse = function () {
   });
 };
 
+/** Gdy włączone: nie pokazuj mechanic walki w głównym czacie (panel Walki bez zmian). */
+window.HIDE_COMBAT_CHAT_BUBBLES_KEY = "ai-gm:hideCombatChatBubbles";
+
+window.isCombatChatBubbleHidden = function () {
+  try {
+    return localStorage.getItem(window.HIDE_COMBAT_CHAT_BUBBLES_KEY) === "1";
+  } catch (_e) {
+    return false;
+  }
+};
+
+window.initCombatChatBubblePref = function () {
+  const el = document.getElementById("hide-combat-chat-bubbles-toggle");
+  if (!el) return;
+  el.checked = window.isCombatChatBubbleHidden();
+  el.addEventListener("change", () => {
+    try {
+      localStorage.setItem(
+        window.HIDE_COMBAT_CHAT_BUBBLES_KEY,
+        el.checked ? "1" : "0"
+      );
+    } catch (_e) {}
+    if (typeof window.renderTurnsToChat === "function" && window.state?.selectedCampaignId) {
+      try {
+        window.renderTurnsToChat();
+      } catch (err) {
+        console.warn("renderTurnsToChat after combat chat pref failed:", err);
+      }
+    }
+  });
+};
+
+/** Preferencje automatycznego TTS wg „rodzaju” dymku (localStorage). */
+window.TTS_PREF_KEYS = {
+  narrative: "ai-gm:tts:narrative",
+  memory: "ai-gm:tts:memory",
+  helpme: "ai-gm:tts:helpme",
+  dice: "ai-gm:tts:dice",
+  combat: "ai-gm:tts:combat",
+};
+
+window.getTtsBubblePrefs = function () {
+  function read(key, defaultBool) {
+    try {
+      const v = localStorage.getItem(key);
+      if (v === null) return defaultBool;
+      return v === "1";
+    } catch (_e) {
+      return defaultBool;
+    }
+  }
+  const k = window.TTS_PREF_KEYS;
+  return {
+    narrative: read(k.narrative, true),
+    memory: read(k.memory, false),
+    helpme: read(k.helpme, false),
+    dice: read(k.dice, false),
+    combat: read(k.combat, false),
+  };
+};
+
+/**
+ * Czy automatycznie czytać ten dymek przez TTS (addMessage + strumień narracji).
+ * Domyślnie tylko narracja fabularna; /mem, helpme, dice, combat wyłączone.
+ */
+window.shouldAutoSpeakTtsForBubble = function (msg) {
+  const role = String(msg?.role || "").toLowerCase();
+  if (role !== "assistant" && role !== "gm") return false;
+  const routeRaw = String(msg?.route || "").toLowerCase();
+  const memoryTurn = !!msg?.memoryTurn;
+  const helpmeTurn = !!msg?.helpmeTurn;
+  const prefs = window.getTtsBubblePrefs?.() || {};
+
+  if (memoryTurn) return !!prefs.memory;
+  if (helpmeTurn) return !!prefs.helpme;
+
+  if (
+    routeRaw === "command" ||
+    routeRaw === "unknown" ||
+    routeRaw === "system" ||
+    routeRaw === "error"
+  ) {
+    return false;
+  }
+
+  if (!routeRaw || routeRaw === "narrative") return prefs.narrative !== false;
+  if (routeRaw === "memory") return !!prefs.memory;
+  if (routeRaw === "helpme") return !!prefs.helpme;
+  if (routeRaw === "dice") return !!prefs.dice;
+  if (routeRaw === "combat") return !!prefs.combat;
+  return false;
+};
+
 window.syncLlmControlsCollapseToCurrentState = function () {
   const pref = window.getLlmControlsCollapsedPref();
   if (pref !== null) {
@@ -801,6 +894,9 @@ window.loadHistorySummaryModalContent = async function (opts) {
     if (!ok) return;
   }
 
+  const dualWrap = document.getElementById("history-summary-dual-wrap");
+  if (dualWrap) dualWrap.style.display = "none";
+
   if (loadingEl) loadingEl.style.display = "block";
   if (bodyEl) {
     bodyEl.style.display = "none";
@@ -900,13 +996,107 @@ window.openHistorySummaryModal = async function () {
     regenBtn.style.display = isOwner ? "inline-flex" : "none";
     regenBtn.disabled = !isOwner;
   }
+  const dualBtn = document.getElementById("history-summary-dual-preview-btn");
+  if (dualBtn) {
+    const camp = typeof window.currentCampaign === "function" ? window.currentCampaign() : null;
+    const ownerId = Number(camp?.owner_user_id ?? camp?.owneruserid ?? 0);
+    const uid = Number(window.state?.playerUserId || 0);
+    const isOwner = !!(camp && ownerId === uid);
+    dualBtn.style.display = isOwner ? "inline-flex" : "none";
+    dualBtn.disabled = !isOwner;
+  }
 
   await window.loadHistorySummaryModalContent({ forceRegenerate: false });
+};
+
+window.runHistorySummaryDualPreview = async function () {
+  const cid = window.state?.selectedCampaignId;
+  const uid = window.state?.playerUserId || 1;
+  const camp = typeof window.currentCampaign === "function" ? window.currentCampaign() : null;
+  const ownerId = Number(camp?.owner_user_id ?? camp?.owneruserid ?? 0);
+  if (!cid || Number(uid) !== ownerId) {
+    window.addMessage?.({
+      speaker: "System",
+      text: "Tylko właściciel kampanii może uruchomić podgląd dual (T01).",
+      role: "system",
+    });
+    return;
+  }
+  const ok = window.confirm(
+    "Podgląd dual (T01): jedno wywołanie LLM zwróci tekst dla gracza i notatkę MG. Nie zapisuje nic w bazie. Kontynuować?"
+  );
+  if (!ok) return;
+
+  const dualWrap = document.getElementById("history-summary-dual-wrap");
+  const dualMeta = document.getElementById("history-summary-dual-meta");
+  const dualPl = document.getElementById("history-summary-dual-player");
+  const dualGm = document.getElementById("history-summary-dual-gm");
+  const loadingEl = document.getElementById("history-summary-loading");
+  if (dualWrap) dualWrap.style.display = "block";
+  if (dualMeta) dualMeta.textContent = "Wywołanie modelu…";
+  if (dualPl) dualPl.textContent = "";
+  if (dualGm) dualGm.textContent = "";
+  if (loadingEl) loadingEl.style.display = "block";
+
+  try {
+    const qs = new URLSearchParams({
+      user_id: String(uid),
+      max_turns: "200",
+    });
+    const url = `/api/campaigns/${cid}/dual-summary-preview?${qs}`;
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      let msg =
+        typeof data.detail === "string" ? data.detail : `HTTP ${r.status}`;
+      if (r.status === 404) {
+        const d = typeof data.detail === "string" ? data.detail : "";
+        if (d === "Campaign not found") {
+          msg +=
+            " — w tej bazie nie ma kampanii o tym ID (np. inne środowisko). Odśwież listę kampanii lub użyj instancji z właściwą bazą.";
+        } else if (d === "Not Found" || !d) {
+          msg +=
+            " — backend nie ma endpointu (zbyt stary obraz dev/prod?). Na serwerze dev: `docker compose -f docker-compose.dev.yml build backend && docker compose -f docker-compose.dev.yml up -d backend`.";
+        }
+      }
+      throw new Error(msg);
+    }
+    if (dualPl) dualPl.textContent = String(data.player_summary ?? "");
+    if (dualGm) dualGm.textContent = String(data.gm_notes ?? "");
+    const leaks = Array.isArray(data.leaked_plan_tokens)
+      ? data.leaked_plan_tokens.join(", ")
+      : "";
+    const pe = data.parse_error ? `Błąd parsowania JSON: ${data.parse_error}` : "";
+    const warn = data.warning ? String(data.warning) : "";
+    if (dualMeta) {
+      dualMeta.textContent = [
+        `Model: ${data.model_used ?? "—"}`,
+        `Tury w podglądzie: ${data.included_turn_count ?? "—"}`,
+        leaks ? `Heurystyka „token z planu w tekście gracza”: ${leaks}` : "Brak trafień heurystyki wycieku (albo pusty plan).",
+        pe,
+        warn,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
+  } catch (e) {
+    if (dualMeta) {
+      dualMeta.textContent =
+        "Błąd: " + (e && e.message ? e.message : String(e));
+    }
+  } finally {
+    if (loadingEl) loadingEl.style.display = "none";
+  }
 };
 
 window.bindHistorySummaryButton = function () {
   const btn = document.getElementById("history-summary-btn");
   const regenBtn = document.getElementById("history-summary-regenerate-btn");
+  const dualBtn = document.getElementById("history-summary-dual-preview-btn");
   const overlay = document.getElementById("history-summary-overlay");
   const closeBtn = document.getElementById("history-summary-close");
   if (btn) {
@@ -914,6 +1104,9 @@ window.bindHistorySummaryButton = function () {
   }
   if (regenBtn) {
     regenBtn.onclick = () => window.loadHistorySummaryModalContent({ forceRegenerate: true });
+  }
+  if (dualBtn) {
+    dualBtn.onclick = () => window.runHistorySummaryDualPreview();
   }
   if (closeBtn) {
     closeBtn.onclick = () => window.closeHistorySummaryModal();

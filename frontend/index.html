@@ -137,6 +137,13 @@
               </div>
             </div>
           </div>
+
+          <div class="field chat-combat-bubbles-pref" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);">
+            <label for="hide-combat-chat-bubbles-toggle" style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 0.9em; line-height: 1.35;">
+              <input type="checkbox" id="hide-combat-chat-bubbles-toggle" />
+              <span>Ukryj mechanikę walki w czacie (szczegóły nadal w panelu Walki po prawej)</span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -343,9 +350,20 @@
         <button type="button" class="secondary history-summary-regen-btn" id="history-summary-regenerate-btn" title="Wygeneruj ponownie podsumowanie AI (LLM)">
           Odśwież AI
         </button>
+        <button type="button" class="secondary history-summary-dual-btn" id="history-summary-dual-preview-btn" style="display: none;" title="Jedno wywołanie LLM: podgląd dla gracza + notatka MG (eksperyment T01, bez zapisu w bazie)">
+          Podgląd dual (T01)
+        </button>
       </div>
       <p id="history-summary-loading" class="muted" style="display: none;">Ładowanie…</p>
       <div id="history-summary-body" class="history-summary-body muted" style="display: none;"></div>
+      <div id="history-summary-dual-wrap" style="display: none; margin-top: 1rem;">
+        <h3 class="muted" style="font-size: 0.95rem;">Podgląd dual (T01) — nie zapisuje w bazie</h3>
+        <p id="history-summary-dual-meta" class="muted" style="font-size: 0.85rem;"></p>
+        <p class="muted" style="font-size: 0.85rem; margin-bottom: 0.25rem;"><strong>Dla gracza</strong> (tylko z transkryptu)</p>
+        <pre id="history-summary-dual-player" class="history-summary-body" style="white-space: pre-wrap; max-height: 12rem; overflow: auto;"></pre>
+        <p class="muted" style="font-size: 0.85rem; margin: 0.5rem 0 0.25rem;"><strong>Notatka MG</strong></p>
+        <pre id="history-summary-dual-gm" class="history-summary-body" style="white-space: pre-wrap; max-height: 12rem; overflow: auto;"></pre>
+      </div>
       <p id="history-summary-empty" class="muted" style="display: none;">
         Brak podsumowania — pojawi się po turach narracyjnych, gdy właściciel kampanii otworzy to okno (automatyczne odświeżanie co 5 nowych tur).
       </p>
@@ -389,17 +407,17 @@
   <script src="./js/config.js"></script>
   <script src="./js/state.js"></script>
   <script src="./js/utils.js"></script>
-  <script src="./js/ui.js?v=8d-location-debug-3"></script>
+  <script src="./js/ui.js?v=tts-prefs-admin-voice-2026-05-01"></script>
   <script src="./js/api.js"></script>
   <script src="./js/character_wizard.js"></script>
   <script src="./js/death_screen.js"></script>
   <script src="./js/actions.js?v=8d-location-debug-mem-helpme-archive"></script>
   <script src="./js/events.js"></script>
-  <script src="./js/main.js"></script>
-  <script src="./js/app.js?v=8d-location-debug-1"></script>
+  <script src="./js/main.js?v=tts-prefs-admin-voice-2026-05-01"></script>
+  <script src="./js/app.js?v=tts-prefs-admin-voice-2026-05-01"></script>
   <script src="./js/inventory.js"></script>
   <script src="./js/shop.js?v=9a4-open-shop-fallback"></script>
-  <script src="./js/voice.js?v=8g-voice-ui-2"></script>
+  <script src="./js/voice.js?v=tts-narrative-only-2026-05-01"></script>
   <script src="./js/combat_panel.js"></script>
   <script src="./js/combat_input.js"></script>
   <script type="module">

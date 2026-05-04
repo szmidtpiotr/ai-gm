@@ -294,6 +294,19 @@ body {
   accent-color: #3b82f6;
 }
 
+/* Voice panel — automatic TTS bubble prefs (even smaller, checkbox column left). */
+.admin-main .voice-client-tts-table input[type="checkbox"] {
+  width: 12px;
+  height: 12px;
+  min-height: 12px;
+}
+
+.admin-main .voice-client-tts-table td.admin-table-select-col {
+  width: 2rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
 .login-actions {
   display: flex;
   gap: 8px;
@@ -1532,6 +1545,35 @@ select.admin-table-cell-select {
   color: var(--muted);
   font-size: 15px;
   line-height: 1.5;
+}
+
+.templates-sot-callout {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--panel-2, rgba(0, 0, 0, 0.04));
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.templates-sot-callout p {
+  margin: 0;
+}
+
+.templates-toc {
+  margin: 0 0 28px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.templates-toc a {
+  color: var(--accent);
 }
 
 .template-section {

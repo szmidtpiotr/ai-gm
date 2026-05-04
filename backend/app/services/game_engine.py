@@ -292,6 +292,92 @@ def _inject_npc_llm_context(
         logger.warning("npc_context_injection_failed", campaign_id=campaign_id, error=str(exc))
 
 
+def _format_gm_plan_block(raw: str | None) -> str:
+    """Format `campaigns.gm_plan_json` for the narrative system prompt ([S11a])."""
+    if not raw or not str(raw).strip():
+        return ""
+    try:
+        d = json.loads(raw)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return ""
+    if not isinstance(d, dict):
+        return ""
+    parts: list[str] = []
+    rm = d.get("roadmap")
+    if rm and str(rm).strip():
+        parts.append("## Plan / roadmap MG\n" + str(rm).strip())
+    goals = d.get("scene_goals")
+    if isinstance(goals, list) and goals:
+        lines = "\n".join(f"- {g}" for g in goals if g is not None and str(g).strip())
+        if lines:
+            parts.append("## Cele bieżącego odcinka / sceny\n" + lines)
+    hooks = d.get("hooks")
+    if isinstance(hooks, dict):
+        npcs = hooks.get("npcs")
+        locs = hooks.get("locations")
+        bits = []
+        if isinstance(npcs, list) and npcs:
+            bits.append("NPC: " + ", ".join(str(x) for x in npcs if x))
+        if isinstance(locs, list) and locs:
+            bits.append("Lokacje: " + ", ".join(str(x) for x in locs if x))
+        if bits:
+            parts.append("## Haki fabularne\n" + "\n".join(bits))
+    ordn = d.get("current_scene_ordinal")
+    if ordn is not None:
+        try:
+            parts.append(f"## Licznik odcinka (MG): {int(ordn)}")
+        except (TypeError, ValueError):
+            pass
+    return "\n\n".join(parts)
+
+
+def _inject_campaign_s11_context(
+    conn: sqlite3.Connection,
+    campaign: sqlite3.Row,
+    messages: list[dict],
+) -> None:
+    """
+    Append MG plan + latest AI summary to system prompt so LLM keeps arc beyond last N turns.
+    """
+    if not messages:
+        return
+    first = messages[0]
+    if not isinstance(first, dict) or first.get("role") != "system":
+        return
+
+    cid = int(campaign["id"])
+    keys = campaign.keys()
+    raw_plan = campaign["gm_plan_json"] if "gm_plan_json" in keys else None
+
+    block_parts: list[str] = []
+    formatted = _format_gm_plan_block(raw_plan)
+    if formatted:
+        block_parts.append(formatted)
+
+    try:
+        from app.services.history_summary_service import fetch_latest_saved_summary
+
+        saved = fetch_latest_saved_summary(conn, cid)
+    except sqlite3.OperationalError:
+        saved = None
+
+    if saved and (saved.get("summary_text") or "").strip():
+        st = str(saved["summary_text"]).strip()
+        tc = saved.get("included_turn_count")
+        block_parts.append(
+            f"## Dotychczasowa fabuła (skrót archiwalny, ~{tc} tur narracyjnych)\n{st}"
+        )
+
+    if not block_parts:
+        return
+
+    bundle = (
+        "--- Kontekst kampanii (trzymaj spójność z planem i skrótem; improwizuj w ramach zasad silnika) ---\n\n"
+        + "\n\n".join(block_parts)
+    )
+    first["content"] = f"{first.get('content', '').rstrip()}\n\n{bundle}"
+
+
 def build_narrative_messages(
     conn: sqlite3.Connection,
     campaign: sqlite3.Row,
@@ -313,6 +399,8 @@ def build_narrative_messages(
         runtime_config_block=build_runtime_config_block(),
         combat_context_block=combat_block,
     )
+
+    _inject_campaign_s11_context(conn, campaign, messages)
 
     _inject_location_llm_context(conn, int(campaign["id"]), messages)
     _inject_npc_llm_context(conn, int(campaign["id"]), messages)

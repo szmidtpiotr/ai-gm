@@ -230,3 +230,31 @@ class TestLootService(unittest.TestCase):
         mock_logger.warning.assert_called()
         call_kw = mock_logger.warning.call_args[1]
         self.assertEqual(call_kw.get("character_id"), 1)
+
+    def test_inventory_mislabeled_quest_elixir_with_dice_resolves_as_consumable(self):
+        """8H: catalog row item_type=quest but effect_dice set → display/use as consumable."""
+        conn = sqlite3.connect(str(self._tmp))
+        try:
+            conn.execute("ALTER TABLE game_config_items ADD COLUMN effect_type TEXT")
+            conn.execute("ALTER TABLE game_config_items ADD COLUMN effect_dice TEXT")
+        except sqlite3.OperationalError:
+            pass
+        conn.execute(
+            """
+            INSERT INTO game_config_items (key, label, item_type, is_active, effect_type, effect_dice)
+            VALUES ('elixir_of_strength', 'Elixir of Strength', 'quest', 1, 'misc', 'd4')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO character_inventory
+              (character_id, item_key, weapon_key, consumable_key, quantity, equipped, slot, source)
+            VALUES (1, 'elixir_of_strength', NULL, NULL, 1, 0, NULL, 'test')
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        inv = ls.get_character_inventory(1)
+        row = next(x for x in inv if x.get("key") == "elixir_of_strength")
+        self.assertEqual(row["item_type"], "consumable")

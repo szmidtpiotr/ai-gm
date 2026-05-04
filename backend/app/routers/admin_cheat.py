@@ -113,6 +113,24 @@ def _resolve_inventory_add_key(
             if row:
                 return w(str(row["key"]))
 
+    # Legacy consumable catalog wins over mis-typed rows in game_config_items (e.g. quest stub
+    # blocking INSERT OR IGNORE ... FROM game_config_consumables during 8H migration).
+    if has_c:
+        crow = conn.execute(
+            "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+            (k,),
+        ).fetchone()
+        if crow:
+            return i(str(crow["key"]))
+        if k.startswith("consumable_"):
+            alt_c = k[11:]
+            crow = conn.execute(
+                "SELECT key FROM game_config_consumables WHERE key = ? LIMIT 1",
+                (alt_c,),
+            ).fetchone()
+            if crow:
+                return i(str(crow["key"]))
+
     if has_i:
         row = conn.execute(
             "SELECT key, item_type FROM game_config_items WHERE key = ? LIMIT 1",
