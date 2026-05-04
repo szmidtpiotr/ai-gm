@@ -15,14 +15,14 @@ Metoda: `grep` po `backend/` + definicje w [`migrations_admin.py`](../../backend
 
 | Obszar | Potrzeba mechaniczna | Czy jest kolumna / tabela? | Uwagi | **T11** |
 |--------|----------------------|----------------------------|--------|---------|
-| Broń / magia ([S1]) | Magia: cel vs **AOE**, szkoła / zasięg | **`targeting`**, **`aoe_radius_m`**, **`magic_school`** — **[S12]** w specyfikacji | Mapa/siatka — **[S19]** (poza MVP silnika) | **Otwarte:** brak tych kolumn w `game_config_weapons` w migracjach → **T16** |
-| Umiejętności ([S1]) | **Dwuręczność** + modyfikatory | `game_config_skills` + arkusz | Klucze vs `dice` | **Częściowo:** skills w DB + rzuty — spójność kluczy do monitorowania przy rozwoju walki |
+| Broń / magia ([S1]) | Magia: cel vs **AOE**, szkoła / zasięg | **`targeting`**, **`aoe_radius_m`**, **`magic_school`** — **[S12]** w specyfikacji | Mapa/siatka — **[S19]** (poza MVP silnika) | **Otwarte:** brak tych kolumn w `game_config_weapons`; runtime T16 domknął `weapon_type ↔ attack`, ale schema **[S12]** nadal czeka na osobną migrację |
+| Umiejętności ([S1]) | **Dwuręczność** + modyfikatory | `game_config_skills` + arkusz | Klucze vs `dice` | **Zgodne (T16):** seed `two_handed` + runtime bonus/kara przy broni 2H |
 | Umiejętności (**[S4]** / **[S10]**–**[S10e]**) | XP, koszty, magazyn | meta `xp_skill_rank_costs`, granty, `xp_award` na wrogach | **`game_config_xp_rewards`** (**[S10e]** / **T12**) | **Zgodne:** tier fallback przy `xp_award=0`; grant MG z `reward_key`; seed + admin GET/PATCH |
 | Kampania / LLM (**[S11]**…) | Plan, rollup, scena | `campaigns.gm_plan_json`; `campaign_ai_summaries` (+ `audience`); **POST** `…/gm-plan/advance-scene` w [`campaigns.py`](../../backend/app/api/campaigns.py) | SoT tur: `campaign_turns`; cooldown rollupu w meta | **Zgodne z kodem** (funkcje MVP wdrożone) |
 | Kampania — **W2** (**[S11b]**) | Kolejka beatów (`planned` / `active` / …) | Brak tabeli **`campaign_story_beats`** | **T14 (2026-05-04):** W1 wystarcza MVP — [`ADR_T14_W2_story_beats_deferred.md`](ADR_T14_W2_story_beats_deferred.md) | **Świadomie odłożone** — bez migracji w tej iteracji |
 | Przedmioty | Efekty JSON vs płaskie pola | `game_config_items`: **`effect_json`** + jednocześnie kolumny `effect_type` / `effect_*` (migracje 8H) | Docelowo jeden schemat **[S13]** | **Częściowo:** dane nadal dualne do migracji treści → **T17** |
 | Przedmioty | AC z pancerza | `ac_bonus` w `game_config_items` | Hit locations — przyszłość | **Zgodne** (kolumna w migracji) |
-| Czary | vs bronie | `weapon_type` (m.in. `spell`), bronie jako rekordy | Brak `targeting` / `magic_school` w DB | **Częściowo:** czar jako broń — tak; pola **[S12]** — nie → **T16** |
+| Czary | vs bronie | `weapon_type` (m.in. `spell`), bronie jako rekordy | Brak `targeting` / `magic_school` w DB | **Częściowo:** czar jako broń — tak; runtime ataku `spell_attack` spięty w **T16**; pola **[S12]** — nadal nie |
 | Przedmioty | Klasy / magia | `allowed_classes`; magia — **[S2]** w JSON | — | **Zgodne** (kolumna + kierunek JSON) |
 | Wrogowie (**[S14]**) | **`skills_json`**, sparse jak PC | W migracjach **`game_config_enemies`** — **bez** `skills_json` | `xp_award`, walka podstawowa | **Otwarte:** kolumna nie istnieje w repo → migracja + kod (iteracja) |
 | Warunki ([**S6**](../04_decisions_log.md)) | Wspólny JSON z przedmiotami | `game_config_conditions.effect_json` NOT NULL | Schemat § **[S13]** / walidator | **Częściowo:** pole jest; walidator pełny → **T17** |
@@ -31,7 +31,7 @@ Metoda: `grep` po `backend/` + definicje w [`migrations_admin.py`](../../backend
 | DC (**[S5]** / **[S9]**) | Klucz → liczba | [`dice.py`](../../backend/app/services/dice.py): `resolve_dc_for_roll`; `game_config_dc` | — | **Zgodne** |
 | Umiejętności (**[S4b]**) | `linked_stat` z DB | `skill_linked_stat_for_test`, runtime config | Aliasy `melee_attack`↔`attack` | **Zgodne** |
 | Umiejętności (**[S4]**) | `rank_ceiling` vs ranga | Kolumna w skills + logika awansu | — | **Do weryfikacji** przy API awansu (nieblokujące dla T11) |
-| Broń / rzuty (**[S1]**) | `weapon_type` vs atak | `combat_service` / `dice` | Macierz **[S1]** | **Częściowo** — domknięcie taktyki → **T16** |
+| Broń / rzuty (**[S1]**) | `weapon_type` vs atak | `combat_service` / `dice` | Macierz **[S1]** | **Zgodne (T16):** runtime wybiera `melee_attack` / `ranged_attack` / `spell_attack` z broni i respektuje finesse / 2H |
 | Import (**[S7]**) | Pełny INSERT vs wąski | [`admin_config_transfer.py`](../../backend/app/services/admin_config_transfer.py): `import_catalog_snapshot` (dynamiczny), `import_config` (węższy) | Ryzyko ucięcia pól przy złym torze | **Świadome:** dokumentacja ostrzega; operator używa snapshotu przy pełnym katalogu |
 
 *(Nowe luki dopisywać osobnym wierszem z datą.)*

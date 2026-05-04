@@ -19,7 +19,7 @@ class CombatStartRequest(BaseModel):
 
 
 class ResolveAttackRequest(BaseModel):
-    roll_result: int
+    roll_result: int | None = None
     raw_d20: int | None = None
     attacker: str = "player"
     # Opcjonalne — cel nadal wg tury w silniku; pola dla klienta (log / zgodność kontraktu).

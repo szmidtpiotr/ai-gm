@@ -23,6 +23,7 @@ from app.services.dice import (
     format_roll_for_llm,
     parse_character_sheet,
     parse_roll_command,
+    roll_d20,
     resolve_dc_for_roll,
     resolve_roll,
     resolve_test_name,
@@ -46,6 +47,7 @@ from app.services.user_llm_settings import get_user_llm_settings_full
 from app.services.location_config_service import get_bool_flag
 from app.services.location_intent_parser import LocationIntent, parse as parse_location_intent
 from app.services.location_validator import validate_move, log_integrity_violation
+from app.services.weapon_rules import is_attack_test, resolve_attack_roll_for_weapon, resolve_sheet_weapon
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
@@ -1470,12 +1472,24 @@ def create_turn(
                         status_code=400,
                         detail="Nieprawidłowy rzut: death_save przy HP > 0",
                     )
-            roll_result = resolve_roll(
-                character_sheet=character_sheet,
-                test_name=roll_request["skill"],
-                raw_roll=roll_request.get("raw_roll"),
-                dc=resolve_dc_for_roll(roll_request.get("dc")),
-            )
+            if is_attack_test(roll_request.get("skill")):
+                weapon_row = resolve_sheet_weapon(conn, character_sheet)
+                raw_roll = roll_request.get("raw_roll")
+                roll_result = resolve_attack_roll_for_weapon(
+                    character_sheet,
+                    raw_roll=int(raw_roll) if raw_roll is not None else roll_d20(),
+                    weapon_row=weapon_row,
+                )
+                roll_result["dc"] = resolve_dc_for_roll(roll_request.get("dc"))
+                if roll_result["dc"] is not None:
+                    roll_result["success"] = roll_result["total"] >= int(roll_result["dc"])
+            else:
+                roll_result = resolve_roll(
+                    character_sheet=character_sheet,
+                    test_name=roll_request["skill"],
+                    raw_roll=roll_request.get("raw_roll"),
+                    dc=resolve_dc_for_roll(roll_request.get("dc")),
+                )
             roll_result_data = roll_result
             roll_result_message = format_roll_for_llm(roll_result)
             user_text_stored = ROLL_CARD_PREFIX + "\n" + json.dumps(
@@ -2060,12 +2074,24 @@ def create_turn_stream(
                         media_type="text/event-stream",
                         headers=stream_headers,
                     )
-            roll_result = resolve_roll(
-                character_sheet=character_sheet,
-                test_name=roll_request["skill"],
-                raw_roll=roll_request.get("raw_roll"),
-                dc=resolve_dc_for_roll(roll_request.get("dc")),
-            )
+            if is_attack_test(roll_request.get("skill")):
+                weapon_row = resolve_sheet_weapon(conn, character_sheet)
+                raw_roll = roll_request.get("raw_roll")
+                roll_result = resolve_attack_roll_for_weapon(
+                    character_sheet,
+                    raw_roll=int(raw_roll) if raw_roll is not None else roll_d20(),
+                    weapon_row=weapon_row,
+                )
+                roll_result["dc"] = resolve_dc_for_roll(roll_request.get("dc"))
+                if roll_result["dc"] is not None:
+                    roll_result["success"] = roll_result["total"] >= int(roll_result["dc"])
+            else:
+                roll_result = resolve_roll(
+                    character_sheet=character_sheet,
+                    test_name=roll_request["skill"],
+                    raw_roll=roll_request.get("raw_roll"),
+                    dc=resolve_dc_for_roll(roll_request.get("dc")),
+                )
             roll_result_data = roll_result
             roll_result_message = format_roll_for_llm(roll_result)
             user_text_stored = ROLL_CARD_PREFIX + "\n" + json.dumps(

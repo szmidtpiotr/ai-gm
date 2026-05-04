@@ -112,6 +112,8 @@ def _schema_sql() -> str:
       attack_bonus INTEGER NOT NULL,
       dex_modifier INTEGER NOT NULL DEFAULT 0,
       damage_die TEXT NOT NULL,
+      tier TEXT DEFAULT 'standard',
+      xp_award INTEGER NOT NULL DEFAULT 0,
       description TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
       locked_at TEXT,
@@ -179,6 +181,12 @@ def _schema_sql() -> str:
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
       FOREIGN KEY (character_id) REFERENCES characters(id)
+    );
+    CREATE TABLE IF NOT EXISTS game_sessions (
+      id TEXT PRIMARY KEY,
+      campaign_id INTEGER NOT NULL,
+      session_flags TEXT DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     """
 

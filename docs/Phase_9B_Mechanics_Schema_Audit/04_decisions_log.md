@@ -68,6 +68,8 @@
 
 **Powiązane tabele:** `game_config_weapons`; później `game_config_skills` (dwuręczność).
 
+**Doprecyzowanie implementacyjne (T16 — 2026-05-04):** runtime wybiera test ataku bezpośrednio z `weapon_type` (`melee` → `melee_attack`, `ranged` → `ranged_attack`, `spell` → `spell_attack`). `finesse=1` pozwala w runtime użyć lepszego **STR/DEX** dla ataku i obrażeń przy broni zwinnej. `two_handed=1` korzysta z osobnego skilla `two_handed` (fallback alias `great_weapon`) i w MVP daje prosty modyfikator **do ataku**: **+1** przy dowolnym treningu, **-2** bez treningu. Sprawdzanie zasięgu i schema **[S12]** (`targeting`, `aoe_radius_m`, `magic_school`) pozostają osobnym krokiem.
+
 ---
 
 ### [S1b] Trafienie vs obrona oraz testy przeciwstawne — 2026-05-02
