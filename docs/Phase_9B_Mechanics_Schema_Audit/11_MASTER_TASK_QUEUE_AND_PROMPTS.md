@@ -2,7 +2,7 @@
 
 <!-- MASTER_STATUS: ACTIVE -->
 <!-- LAST_UPDATE: 2026-05-04 -->
-<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T13 OK 2026-05-04) -->
+<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T14 OK 2026-05-04) -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -37,7 +37,7 @@
 | 11 | **T11** | [x] | Zamknięcie **[AUDIT]**: synchronizacja [`06_schema_gaps.md`](06_schema_gaps.md) + wpis w `04` | — | **[AUDIT]** |
 | 12 | **T12** | [x] | Tabela nagród XP **[S10e]** + minimalny odczyt w silniku / admin | — | **[S10e]** |
 | 13 | **T13** | [x] | Player rulebook: lekki rozdział **XP** (blok D agendy) | T12 (opcjonalnie równolegle po szkicu tabeli) | Blok **D** |
-| 14 | **T14** | [ ] | **W2** (tabela `campaign_story_beats`): tylko jeśli T06–T07 niewystarczają — ADR + migracja | T06 | **[S11b]** |
+| 14 | **T14** | [x] | **W2** (tabela `campaign_story_beats`): tylko jeśli T06–T07 niewystarczają — ADR + migracja | T06 | **[S11b]** |
 | 15 | **T15** | [ ] | **Nowy akt** w tym samym `campaign_id`: trigger po głównym queście → ten sam LLM co start + narracja spinająca | T05, T06 | **[S11b]** |
 | 16 | **T16** | [ ] | **[IMPL] fala 2:** broń / `weapon_type` ↔ atak, finesse, dwuręczność | T11 częściowo | **[IMPL]**, **[S1]** |
 | 17 | **T17** | [ ] | **[IMPL] fala 3:** `effect_json` + walidacja admin | T11 | **[IMPL]**, **[S13]** |
@@ -223,7 +223,7 @@
 **Notatki po implementacji**
 
 - PATCH **legacy** (płaskie klucze) jest mapowany na **aktywny łuk** — zachowanie opisane w §7.1 specyfikacji; przy refaktorze merge nie łamać testów `test_gm_plan_schema`.
-- **W2** (`campaign_story_beats` itd.) — wyłącznie po osobnym ADR (T14), jeśli W1 okaże się niewystarczający pod rozmiar / locking.
+- **W2** (`campaign_story_beats` itd.) — **T14 (2026-05-04):** decyzja **odroczenia** — W1 wystarcza MVP; szczegóły [`ADR_T14_W2_story_beats_deferred.md`](ADR_T14_W2_story_beats_deferred.md). W2 — po nowym ADR, jeśli W1 przestanie wystarczać.
 
 ---
 
@@ -457,7 +457,7 @@
 
 ## 15. PROMPTY — T14
 
-<!-- STATUS_T14: PENDING -->
+<!-- STATUS_T14: DONE -->
 
 ### T14 — **W2** `campaign_story_beats` (tylko gdy W1 nie starczy)
 
@@ -472,11 +472,13 @@
 
 **Co zostało zrobione**
 
--
+- **Decyzja pisemna:** [`ADR_T14_W2_story_beats_deferred.md`](ADR_T14_W2_story_beats_deferred.md) — **W1 uznane za wystarczające** na MVP; **W2 nie migrowane** w tej iteracji; kryteria ponownej oceny w ADR.
+- **[`04_decisions_log.md`](04_decisions_log.md):** doprecyzowanie **T14** pod sekcją **[S11b]** (W1 vs W2) + link do ADR.
+- **[`06_schema_gaps.md`](06_schema_gaps.md):** osobny wiersz „W2 — świadomie odłożone”.
 
 **Notatki po implementacji**
 
-- *Brak wdrożenia — uzupełnić po wdrożeniu T14 (ADR, migracja W2 jeśli powstanie).*
+- Gdy pojawi się uzasadnienie z ADR (rozmiar JSON, locking beatów, silnik questów), **nowy** ticket: migracja `campaign_story_beats` + API — poza zamknięciem T14 w tej formie.
 
 ---
 
