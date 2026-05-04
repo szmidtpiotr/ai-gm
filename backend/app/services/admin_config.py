@@ -13,6 +13,38 @@ ALLOWED_DAMAGE_TYPES = {"physical", "magic", "fire", "poison", "misc"}
 ALLOWED_TIERS = {"weak", "standard", "elite", "boss"}
 ALLOWED_EFFECT_TYPES = {"heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff", "misc"}
 ALLOWED_EFFECT_TARGETS = {"self", "ally", "any"}
+ALLOWED_EFFECT_JSON_CATEGORIES = {
+    "character_condition",
+    "gear_bonus",
+    "consumable_immediate",
+    "aura",
+}
+ALLOWED_EFFECT_JSON_TYPES = {
+    "periodic_save",
+    "static_stat_modifier",
+    "heal_hp",
+    "apply_condition",
+    "remove_condition",
+    "block_action",
+    "narrative_only",
+}
+ALLOWED_EFFECT_JSON_TICKS = {"start_turn", "each_round", "on_use"}
+ALLOWED_EFFECT_JSON_STATS = {"STR", "DEX", "CON", "INT", "WIS", "CHA"}
+_EFFECT_JSON_TOP_LEVEL_KEYS = {"schema_version", "effect_category", "effects"}
+_EFFECT_JSON_EFFECT_KEYS = {"type", "condition_key", "dc_key", "stat", "value", "tick", "expires"}
+_EFFECT_JSON_CATEGORY_TYPES = {
+    "character_condition": {"periodic_save", "static_stat_modifier", "block_action", "narrative_only"},
+    "gear_bonus": {"static_stat_modifier", "narrative_only"},
+    "consumable_immediate": {"heal_hp", "apply_condition", "remove_condition", "narrative_only"},
+    "aura": {
+        "periodic_save",
+        "static_stat_modifier",
+        "apply_condition",
+        "remove_condition",
+        "block_action",
+        "narrative_only",
+    },
+}
 
 
 def _fetch_all(query: str) -> list[dict]:
@@ -98,7 +130,132 @@ def _normalize_effect_json(effect_json: str) -> str:
         parsed = json.loads(effect_json)
     except Exception as exc:
         raise ValueError("invalid_effect_json") from exc
+    errors = validate_effect_json_payload(parsed)
+    if errors:
+        raise ValueError("invalid_effect_json_schema")
     return json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
+
+
+def validate_effect_json_payload(payload: object) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(payload, dict):
+        return ["effect_json must be a JSON object"]
+
+    extra_top = sorted(set(payload.keys()) - _EFFECT_JSON_TOP_LEVEL_KEYS)
+    if extra_top:
+        errors.append(f"unknown top-level keys: {', '.join(extra_top)}")
+
+    schema_version = payload.get("schema_version")
+    if schema_version != 1:
+        errors.append("schema_version must equal 1")
+
+    category = str(payload.get("effect_category") or "").strip().lower()
+    if category not in ALLOWED_EFFECT_JSON_CATEGORIES:
+        errors.append(
+            "effect_category must be one of: "
+            + ", ".join(sorted(ALLOWED_EFFECT_JSON_CATEGORIES))
+        )
+
+    effects = payload.get("effects")
+    if not isinstance(effects, list) or len(effects) < 1:
+        errors.append("effects must be a non-empty array")
+        return errors
+
+    for idx, effect in enumerate(effects):
+        prefix = f"effects[{idx}]"
+        if not isinstance(effect, dict):
+            errors.append(f"{prefix} must be an object")
+            continue
+
+        extra_effect_keys = sorted(set(effect.keys()) - _EFFECT_JSON_EFFECT_KEYS)
+        if extra_effect_keys:
+            errors.append(f"{prefix} has unknown keys: {', '.join(extra_effect_keys)}")
+
+        effect_type = str(effect.get("type") or "").strip().lower()
+        if effect_type not in ALLOWED_EFFECT_JSON_TYPES:
+            errors.append(
+                f"{prefix}.type must be one of: "
+                + ", ".join(sorted(ALLOWED_EFFECT_JSON_TYPES))
+            )
+            continue
+
+        if category in _EFFECT_JSON_CATEGORY_TYPES and effect_type not in _EFFECT_JSON_CATEGORY_TYPES[category]:
+            errors.append(f"{prefix}.type={effect_type} is not allowed for effect_category={category}")
+
+        condition_key = effect.get("condition_key")
+        if condition_key is not None and not KEY_RE.fullmatch(str(condition_key).strip().lower()):
+            errors.append(f"{prefix}.condition_key must be lowercase_snake_case")
+
+        dc_key = effect.get("dc_key")
+        if dc_key is not None and not KEY_RE.fullmatch(str(dc_key).strip().lower()):
+            errors.append(f"{prefix}.dc_key must be lowercase_snake_case")
+
+        stat = effect.get("stat")
+        if stat is not None:
+            stat_norm = str(stat).strip().upper()
+            if stat_norm not in ALLOWED_EFFECT_JSON_STATS:
+                errors.append(f"{prefix}.stat must be one of: {', '.join(sorted(ALLOWED_EFFECT_JSON_STATS))}")
+
+        tick = effect.get("tick")
+        if tick is not None:
+            tick_norm = str(tick).strip().lower()
+            if tick_norm not in ALLOWED_EFFECT_JSON_TICKS:
+                errors.append(f"{prefix}.tick must be one of: {', '.join(sorted(ALLOWED_EFFECT_JSON_TICKS))}")
+
+        expires = effect.get("expires")
+        if expires is not None:
+            expires_norm = str(expires).strip().lower()
+            if expires_norm not in {"save_success", "manual"}:
+                if not expires_norm.startswith("duration_rounds:"):
+                    errors.append(
+                        f"{prefix}.expires must be save_success, manual, or duration_rounds:N"
+                    )
+                else:
+                    rounds_str = expires_norm.split(":", 1)[1].strip()
+                    if not rounds_str.isdigit() or int(rounds_str) < 1:
+                        errors.append(f"{prefix}.expires duration_rounds must be >= 1")
+
+        value = effect.get("value")
+        if effect_type == "static_stat_modifier":
+            if not isinstance(value, (int, float)):
+                errors.append(f"{prefix}.value must be a number for static_stat_modifier")
+            if stat is None:
+                errors.append(f"{prefix}.stat is required for static_stat_modifier")
+        elif effect_type == "heal_hp":
+            if not isinstance(value, (int, float, str)):
+                errors.append(f"{prefix}.value must be a number or dice string for heal_hp")
+            elif isinstance(value, str):
+                dice = value.strip().lower()
+                if not dice or not DAMAGE_DIE_RE.fullmatch(dice):
+                    errors.append(f"{prefix}.value must be a number or dice string like 2d4 for heal_hp")
+        elif effect_type in {"apply_condition", "remove_condition"}:
+            if not condition_key or not str(condition_key).strip():
+                errors.append(f"{prefix}.condition_key is required for {effect_type}")
+        elif effect_type == "periodic_save":
+            if tick is None:
+                errors.append(f"{prefix}.tick is required for periodic_save")
+            if expires is None:
+                errors.append(f"{prefix}.expires is required for periodic_save")
+            if dc_key is None and not isinstance(value, (int, float)):
+                errors.append(f"{prefix} requires dc_key or numeric value for periodic_save")
+        elif effect_type in {"block_action", "narrative_only"}:
+            pass
+
+    return errors
+
+
+def normalize_effect_json_value(effect_json: object) -> str:
+    if isinstance(effect_json, str):
+        return _normalize_effect_json(effect_json)
+    try:
+        errors = validate_effect_json_payload(effect_json)
+        if errors:
+            raise ValueError("invalid_effect_json_schema")
+        return json.dumps(effect_json, ensure_ascii=False, separators=(",", ":"))
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError("invalid_effect_json") from exc
 
 
 def _validate_item_type(item_type: str) -> str:

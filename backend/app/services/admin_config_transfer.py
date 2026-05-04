@@ -3,6 +3,8 @@ import sqlite3
 from datetime import datetime, UTC
 from typing import Any
 
+from app.services.admin_config import normalize_effect_json_value
+
 DB_PATH = "/data/ai_gm.db"
 SUPPORTED_MAJOR = "1"
 
@@ -170,6 +172,35 @@ def _validate_import_payload(payload: dict[str, Any]) -> tuple[bool, list[str]]:
     return len(errors) == 0, errors
 
 
+def _validate_effect_json_rows(
+    rows: list[Any],
+    *,
+    table_name: str,
+    effect_required: bool,
+) -> list[str]:
+    errors: list[str] = []
+    for idx, raw in enumerate(rows):
+        if not isinstance(raw, dict):
+            continue
+        effect_json = raw.get("effect_json")
+        label = f"{table_name}[{idx}]"
+        if effect_json is None or (isinstance(effect_json, str) and not effect_json.strip()):
+            if effect_required:
+                errors.append(f"{label}.effect_json is required")
+            continue
+        try:
+            normalize_effect_json_value(effect_json)
+        except ValueError as exc:
+            code = str(exc)
+            if code == "invalid_effect_json":
+                errors.append(f"{label}.effect_json must be valid JSON")
+            elif code == "invalid_effect_json_schema":
+                errors.append(f"{label}.effect_json must follow effect_json schema v1")
+            else:
+                errors.append(f"{label}.effect_json is invalid")
+    return errors
+
+
 def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
     ok, errors = _validate_import_payload(payload)
     if not ok:
@@ -182,6 +213,17 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
             "dry_run": dry_run,
             "errors": [f"Unsupported major config version: {incoming_version}"],
         }
+
+    tables = payload.get("tables") or {}
+    errors.extend(
+        _validate_effect_json_rows(
+            tables.get("game_config_conditions") or [],
+            table_name="game_config_conditions",
+            effect_required=True,
+        )
+    )
+    if errors:
+        return {"ok": False, "dry_run": dry_run, "errors": errors}
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -380,6 +422,21 @@ def _validate_catalog_snapshot_import(payload: dict[str, Any]) -> tuple[bool, li
     for name in _CATALOG_IMPORT_TABLES:
         if name in tables and not isinstance(tables[name], list):
             errors.append(f"Table {name} must be an array when present")
+    if isinstance(tables, dict):
+        errors.extend(
+            _validate_effect_json_rows(
+                tables.get("game_config_conditions") or [],
+                table_name="game_config_conditions",
+                effect_required=True,
+            )
+        )
+        errors.extend(
+            _validate_effect_json_rows(
+                tables.get("game_config_items") or [],
+                table_name="game_config_items",
+                effect_required=False,
+            )
+        )
     return len(errors) == 0, errors
 
 
@@ -458,7 +515,14 @@ def import_catalog_snapshot(payload: dict[str, Any], *, dry_run: bool) -> dict[s
             for raw in rows:
                 if not isinstance(raw, dict):
                     continue
-                _insert_catalog_row(conn, t, raw)
+                row = dict(raw)
+                if t == "game_config_conditions":
+                    row["effect_json"] = normalize_effect_json_value(row.get("effect_json"))
+                elif t == "game_config_items":
+                    effect_json = row.get("effect_json")
+                    if effect_json is not None and not (isinstance(effect_json, str) and not effect_json.strip()):
+                        row["effect_json"] = normalize_effect_json_value(effect_json)
+                _insert_catalog_row(conn, t, row)
         conn.execute("PRAGMA foreign_keys=ON")
         _audit(
             conn,

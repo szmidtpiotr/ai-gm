@@ -40,7 +40,7 @@
 | 14 | **T14** | [x] | **W2** (tabela `campaign_story_beats`): tylko jeśli T06–T07 niewystarczają — ADR + migracja | T06 | **[S11b]** |
 | 15 | **T15** | [x] | **Nowy akt** w tym samym `campaign_id`: trigger po głównym queście → ten sam LLM co start + narracja spinająca | T05, T06 | **[S11b]** |
 | 16 | **T16** | [x] | **[IMPL] fala 2:** broń / `weapon_type` ↔ atak, finesse, dwuręczność | T11 częściowo | **[IMPL]**, **[S1]** |
-| 17 | **T17** | [ ] | **[IMPL] fala 3:** `effect_json` + walidacja admin | T11 | **[IMPL]**, **[S13]** |
+| 17 | **T17** | [x] | **[IMPL] fala 3:** `effect_json` + walidacja admin | T11 | **[IMPL]**, **[S13]** |
 | 18 | **T18** | [ ] | **[IMPL] fala 4:** warunki + konsumable / `item_key` | T17 | **[IMPL]**, **[S6]** |
 | 19 | **T19** | [ ] | **[IMPL] fala 5:** import / snapshot / ostrzeżenia | T11 | **[IMPL]**, **[S7]** |
 | 20 | **T20** | [ ] | **[IMPL] fala 6:** dywergencja (heurystyka / drugi LLM) + UI plan MG (admin) | T05–T07 | **[IMPL]**, **[S11]** |
@@ -519,7 +519,7 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | ID | STATUS | Cel (jedno zdanie) | Główne pliki (orientacyjnie) |
 |----|--------|-------------------|------------------------------|
 | T16 | DONE | Mapowanie `weapon_type` ↔ rodzaj ataku + finesse / dwuręczność | `combat_service.py`, `dice.py`, `game_config_weapons` |
-| T17 | PENDING | `effect_json` v0 + walidacja przy zapisie admina | `admin`, `items`, `conditions` |
+| T17 | DONE | `effect_json` v0 + walidacja przy zapisie admina | `admin`, `items`, `conditions`, `admin_config_transfer.py` |
 | T18 | PENDING | Konsumable / `item_key` / migracja loot | `loot_service`, migracje |
 | T19 | PENDING | Import: dokumentacja ryzyk + `catalog_snapshot` jako kanon | `admin_config_transfer.py`, docs |
 | T20 | PENDING | Dywergencja **[S11]** + UI edycji planu (admin) | `game_engine`, admin |
@@ -531,12 +531,19 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 - **T16:** [`combat_service.py`](../../backend/app/services/combat_service.py) liczy `attack_roll` po stronie backendu na podstawie aktualnie wyposażonej broni; frontend panelu walki przestał zakładać stałe `STR`.
 - **T16:** `/roll` dla testów ataku w [`turns.py`](../../backend/app/api/turns.py) jest weapon-aware — backend bierze bieżącą broń postaci zamiast ślepo ufać aliasowi wpisanemu przez klienta.
 - **T16:** seed / default config dostał skill `two_handed`; testy: [`test_phase9b_t16_weapon_rules.py`](../../backend/tests/test_phase9b_t16_weapon_rules.py) + regresja [`test_phase8_combat.py`](../../backend/tests/test_phase8_combat.py).
+- **T17:** [`admin_config.py`](../../backend/app/services/admin_config.py) dostał wspólny walidator `effect_json` v0 zgodny z **[S13]**: `schema_version=1`, `effect_category`, niepusta tablica `effects[]`, startowy enum `type` i reguły pól per efekt.
+- **T17:** create/update dla `game_config_conditions` i `game_config_items` odrzucają już nie tylko „dowolny JSON”, ale także JSON łamiący schemat v0; router admina zwraca osobny błąd 422 dla błędnego schematu.
+- **T17:** import [`admin_config_transfer.py`](../../backend/app/services/admin_config_transfer.py) waliduje `effect_json` także w `dry_run` (`config/import` dla warunków, `catalog-snapshot/import` dla warunków i itemów) i normalizuje zapis przy właściwym imporcie.
+- **T17:** testy: [`test_phase9b_t17_effect_json_validation.py`](../../backend/tests/test_phase9b_t17_effect_json_validation.py) — create/update + import dry-run.
 
 **Notatki po implementacji**
 
 - T16 **nie** dodaje jeszcze kolumn **[S12]** (`targeting`, `aoe_radius_m`, `magic_school`) ani pełnego sprawdzania zasięgu — to osobny follow-up schematu / taktyki.
 - MVP dla `two_handed` celowo daje prosty efekt **na atak**, nie mnoży jednocześnie premii do obrażeń; liczby można później zbalansować bez zmiany kontraktu `weapon_rules.py`.
 - **Restart backendu i frontendu wymagany** po wdrożeniu (backend combat + `/roll`, frontend panel walki).
+- T17 **nie** usuwa jeszcze starych kolumn `effect_type` / `effect_*` ani ich runtime'owych odczytów; walidator pilnuje już nowego kształtu `effect_json`, ale pełne odcięcie dualnego modelu danych pozostaje follow-upem migracyjnym.
+- T17 egzekwuje świadomie **krótki** zestaw `effect_category` / `type`; rozszerzanie listy efektów ma iść iteracyjnie razem z realnym runtime'em stanów i consumables (T18+).
+- **Restart backendu wymagany** po wdrożeniu (zmiana kodu routera / usług admina). Frontend restart nie jest wymagany.
 
 ---
 
@@ -551,6 +558,7 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T04 DONE** — GM summary dostaje `gm_plan_json` + transkrypt, osobny test, restart backendu. |
 | 2026-05-04 | **T15 DONE** — `new_act_service`: trigger po ukończeniu głównego questa, merge nowego łuku W1, tura narracji spinającej; test `test_phase9b_t15_new_act`. |
 | 2026-05-04 | **T16 DONE** — `weapon_rules`: `weapon_type` → test ataku, finesse, `two_handed`; backend combat liczy `attack_roll`, `/roll` ataku stał się weapon-aware; test `test_phase9b_t16_weapon_rules` + regresja combat. |
+| 2026-05-04 | **T17 DONE** — walidator `effect_json` v0 wg **[S13]** dla admin create/update + import (`config/import`, `catalog-snapshot/import`); test `test_phase9b_t17_effect_json_validation`; wymagany restart backendu. |
 | 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
 | 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
 | 2026-05-04 | **B01/B02 DONE** — `/api/settings/summary` + panel admin (cooldown rollupu, tryb dostępu do dual preview: `owner` / `owner_admin` / `off`); frontend i backend respektują tryb podglądu dual. |

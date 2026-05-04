@@ -974,6 +974,8 @@ def admin_create_condition(req: ConditionCreateReq, _: None = Depends(require_ad
             raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
         if str(e) == "invalid_effect_json":
             raise HTTPException(status_code=422, detail="effect_json must be a valid JSON string") from None
+        if str(e) == "invalid_effect_json_schema":
+            raise HTTPException(status_code=422, detail="effect_json must follow schema v1 (schema_version, effect_category, effects[])") from None
         raise HTTPException(status_code=422, detail="Invalid condition payload") from None
 
 
@@ -1000,6 +1002,8 @@ def admin_patch_condition(key: str, req: ConditionPatchReq, _: None = Depends(re
             raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
         if str(e) == "invalid_effect_json":
             raise HTTPException(status_code=422, detail="effect_json must be a valid JSON string") from None
+        if str(e) == "invalid_effect_json_schema":
+            raise HTTPException(status_code=422, detail="effect_json must follow schema v1 (schema_version, effect_category, effects[])") from None
         raise HTTPException(status_code=422, detail="Invalid condition payload") from None
 
 
@@ -1055,6 +1059,8 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
             ) from None
         if str(e) == "invalid_effect_json":
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
+        if str(e) == "invalid_effect_json_schema":
+            raise HTTPException(status_code=422, detail="effect_json must follow schema v1 (schema_version, effect_category, effects[])") from None
         if str(e) == "invalid_value_gp":
             raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
@@ -1107,6 +1113,8 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             ) from None
         if str(e) == "invalid_effect_json":
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
+        if str(e) == "invalid_effect_json_schema":
+            raise HTTPException(status_code=422, detail="effect_json must follow schema v1 (schema_version, effect_category, effects[])") from None
         if str(e) == "invalid_value_gp":
             raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
