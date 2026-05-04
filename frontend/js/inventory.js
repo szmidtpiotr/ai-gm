@@ -97,12 +97,16 @@
         li.className = "backpack-item";
         const t = String(item.item_type || "").toLowerCase();
         const canEquip = t === "weapon" || t === "armor";
+        const canUse = t === "consumable" && !!item.can_use;
         const name = esc(item.label || item.key || "?");
         const qty = Number(item.quantity) > 1 ? `<span class="item-qty">\u00d7${esc(item.quantity)}</span>` : "";
         const equipBtn = canEquip
           ? `<button type="button" class="btn-equip" data-inventory-id="${invId}" data-item-type="${esc(t)}">Za\u0142\u00f3\u017c</button>`
           : "";
-        li.innerHTML = `<span class="item-name">${name}</span>${qty}${equipBtn}`;
+        const useBtn = canUse
+          ? `<button type="button" class="btn-use" data-inventory-id="${invId}">Użyj</button>`
+          : "";
+        li.innerHTML = `<span class="item-name">${name}</span>${qty}${useBtn}${equipBtn}`;
         backpack.appendChild(li);
       }
     });
@@ -139,12 +143,66 @@
   document.addEventListener("click", async (e) => {
     const equipBtn = e.target.closest(".btn-equip");
     const unequipBtn = e.target.closest(".btn-unequip");
-    if (!equipBtn && !unequipBtn) return;
+    const useBtn = e.target.closest(".btn-use");
+    if (!equipBtn && !unequipBtn && !useBtn) return;
 
     const cid = Number(window.state?.selectedCharacterId || 0);
     if (!cid) return;
 
     const base = apiBase();
+
+    if (useBtn) {
+      e.preventDefault();
+      const inventoryId = Number(useBtn.getAttribute("data-inventory-id"));
+      if (!Number.isFinite(inventoryId)) return;
+      try {
+        const res = await fetch(`${base}/inventory/${cid}/use`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ inventory_id: inventoryId }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (typeof window.addMessage === "function") {
+            window.addMessage({
+              speaker: "System",
+              text: `Przedmiot: ${payload?.detail || "nie udało się użyć przedmiotu"}`,
+              role: "error",
+            });
+          }
+          return;
+        }
+        if (typeof window.addMessage === "function") {
+          const itemLabel = payload?.data?.item?.label || "Przedmiot";
+          const effects = Array.isArray(payload?.data?.effects_applied) ? payload.data.effects_applied : [];
+          const summary = effects
+            .map((eff) => {
+              const t = String(eff?.type || "");
+              if (t === "heal_hp") return `HP +${Number(eff.amount || 0)}`;
+              if (t === "restore_mana") return `Mana +${Number(eff.amount || 0)}`;
+              if (t === "apply_condition") return `nałożono ${String(eff.condition_key || "warunek")}`;
+              if (t === "remove_condition") return `zdjęto ${String(eff.condition_key || "warunek")}`;
+              return t || "efekt";
+            })
+            .join(", ");
+          window.addMessage({
+            speaker: "System",
+            text: summary ? `${itemLabel}: ${summary}.` : `${itemLabel} użyty.`,
+            role: "system",
+          });
+        }
+      } catch (_err) {
+        return;
+      }
+      if (typeof window.loadCharacterSheet === "function") {
+        await window.loadCharacterSheet(cid);
+      }
+      if (window.state?.selectedCampaignId && typeof window.loadTurns === "function") {
+        await window.loadTurns(window.state.selectedCampaignId);
+      }
+      void window.loadInventory(cid);
+      return;
+    }
 
     if (equipBtn) {
       e.preventDefault();

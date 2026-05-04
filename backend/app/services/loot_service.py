@@ -1,12 +1,15 @@
-"""Phase 8C — loot and inventory service."""
+"""Phase 8C / T18 — loot, inventory and consumable runtime."""
 
 from __future__ import annotations
 
+import json
 import random
+import re
 import sqlite3
 from typing import Any
 
 from app.core.logging import get_logger
+from app.services.dice import parse_character_sheet
 
 LOOT_DB_PATH = "/data/ai_gm.db"
 
@@ -18,6 +21,7 @@ _SLOT_VALUES = {"main_hand", "off_hand", "armor"}
 _CONSUMABLE_EFFECT_SIGNAL = frozenset(
     {"heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff"}
 )
+_SUPPORTED_ITEM_USE_EFFECTS = {"heal_hp", "apply_condition", "remove_condition", "narrative_only"}
 
 
 def _inventory_rows_sql(effect_col_sql: str, effect_dice_col_sql: str) -> str:
@@ -54,6 +58,146 @@ def _conn() -> sqlite3.Connection:
     conn = sqlite3.connect(LOOT_DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _roll_dice_value(expr: str) -> int:
+    raw = str(expr or "").strip().lower()
+    m = re.match(r"^(\d*)d(\d+)$", raw)
+    if not m:
+        raise ValueError("invalid_effect_value")
+    n = int(m.group(1) or 1)
+    sides = int(m.group(2))
+    return sum(random.randint(1, sides) for _ in range(max(1, n)))
+
+
+def _normalize_sheet_conditions(sheet: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = sheet.get("conditions")
+    if not isinstance(raw, list):
+        raw = []
+    out: list[dict[str, Any]] = []
+    for entry in raw:
+        if isinstance(entry, dict):
+            key = str(entry.get("key") or "").strip().lower()
+            if not key:
+                continue
+            out.append(
+                {
+                    "key": key,
+                    "label": str(entry.get("label") or key).strip() or key,
+                    "effect_json": entry.get("effect_json"),
+                    "source_item_key": entry.get("source_item_key"),
+                    "applied_at": entry.get("applied_at"),
+                }
+            )
+        elif isinstance(entry, str) and entry.strip():
+            key = entry.strip().lower()
+            out.append({"key": key, "label": key, "effect_json": None, "source_item_key": None, "applied_at": None})
+    sheet["conditions"] = out
+    return out
+
+
+def _decode_effect_json(raw: Any) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return None
+        try:
+            parsed = json.loads(s)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    return None
+
+
+def _effect_payloads_from_item_row(row: sqlite3.Row) -> list[dict[str, Any]]:
+    parsed = _decode_effect_json(row["effect_json"] if "effect_json" in row.keys() else None)
+    if parsed and isinstance(parsed.get("effects"), list):
+        return [e for e in parsed["effects"] if isinstance(e, dict)]
+
+    effect_type = str(row["effect_type"] if "effect_type" in row.keys() and row["effect_type"] is not None else "").strip().lower()
+    if not effect_type:
+        return []
+    effect_bonus = int(row["effect_bonus"] if "effect_bonus" in row.keys() and row["effect_bonus"] is not None else 0)
+    effect_dice = str(row["effect_dice"] if "effect_dice" in row.keys() and row["effect_dice"] is not None else "").strip()
+    effect_value: int | str | None = None
+    if effect_dice:
+        effect_value = effect_dice
+    elif effect_bonus:
+        effect_value = effect_bonus
+
+    if effect_type == "heal_hp":
+        return [{"type": "heal_hp", "value": effect_value if effect_value is not None else 0}]
+    if effect_type == "restore_mana":
+        return [{"type": "restore_mana", "value": effect_value if effect_value is not None else 0}]
+    if effect_type == "remove_condition":
+        condition_key = str(row["effect_target"] if "effect_target" in row.keys() and row["effect_target"] is not None else "").strip().lower()
+        return [{"type": "remove_condition", "condition_key": condition_key}] if condition_key else []
+    if effect_type == "add_condition":
+        condition_key = str(row["effect_target"] if "effect_target" in row.keys() and row["effect_target"] is not None else "").strip().lower()
+        return [{"type": "apply_condition", "condition_key": condition_key}] if condition_key else []
+    return []
+
+
+def _condition_catalog_row(conn: sqlite3.Connection, condition_key: str) -> sqlite3.Row | None:
+    try:
+        return conn.execute(
+            """
+            SELECT key, label, effect_json, stackable
+            FROM game_config_conditions
+            WHERE key = ? AND COALESCE(is_active, 1) = 1
+            LIMIT 1
+            """,
+            (str(condition_key or "").strip().lower(),),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+
+
+def _sync_player_state_to_active_combat(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: int,
+    character_id: int,
+    current_hp: int,
+    conditions: list[dict[str, Any]],
+) -> None:
+    try:
+        row = conn.execute(
+            """
+            SELECT combatants
+            FROM active_combat
+            WHERE campaign_id = ? AND character_id = ?
+            LIMIT 1
+            """,
+            (int(campaign_id), int(character_id)),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return
+    if not row:
+        return
+    try:
+        combatants = json.loads(row["combatants"] or "[]")
+    except Exception:
+        return
+    if not isinstance(combatants, list):
+        return
+    changed = False
+    for combatant in combatants:
+        if not isinstance(combatant, dict) or str(combatant.get("id")) != "player":
+            continue
+        combatant["hp_current"] = int(current_hp)
+        combatant["conditions"] = conditions
+        changed = True
+        break
+    if changed:
+        conn.execute(
+            "UPDATE active_combat SET combatants = ?, updated_at = datetime('now') WHERE campaign_id = ? AND character_id = ?",
+            (json.dumps(combatants, ensure_ascii=False), int(campaign_id), int(character_id)),
+        )
 
 
 def _row_to_loot_entry(row: sqlite3.Row) -> dict[str, Any]:
@@ -333,7 +477,7 @@ def get_character_inventory(character_id: int) -> list[dict]:
         elif r["consumable_key"]:
             label = str(r["consumable_label"] or r["consumable_key"])
             item_type = "consumable"
-            key = r["consumable_key"]
+            key = r["consumable_catalog_item_key"] or r["consumable_key"]
         else:
             raw_kind = str(r["item_kind"] or "item").strip().lower()
             label = str(r["item_label"] or r["item_key"])
@@ -364,9 +508,191 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "label": label,
                 "item_type": item_type,
                 "key": key,
+                "can_use": item_type == "consumable",
             }
         )
     return out
+
+
+def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
+    """Consume one inventory stack and apply supported effects to the character sheet."""
+    cid = int(character_id)
+    iid = int(inventory_id)
+    with _conn() as conn:
+        row = conn.execute(
+            """
+            SELECT c.id AS character_id,
+                   c.campaign_id,
+                   c.sheet_json,
+                   ci.id AS inventory_id,
+                   ci.item_key,
+                   ci.weapon_key,
+                   ci.consumable_key,
+                   ci.quantity,
+                   gi.key AS catalog_item_key,
+                   gi.label AS item_label,
+                   gi.item_type,
+                   gi.effect_json,
+                   gi.effect_type,
+                   gi.effect_dice,
+                   gi.effect_bonus,
+                   gi.effect_target,
+                   gc.key AS legacy_consumable_key,
+                   gc.label AS legacy_consumable_label,
+                   gc.effect_type AS legacy_effect_type,
+                   gc.effect_dice AS legacy_effect_dice,
+                   gc.effect_bonus AS legacy_effect_bonus,
+                   gc.effect_target AS legacy_effect_target
+            FROM characters c
+            JOIN character_inventory ci ON ci.character_id = c.id
+            LEFT JOIN game_config_items gi ON gi.key = ci.item_key
+            LEFT JOIN game_config_consumables gc
+              ON gc.key = ci.consumable_key
+                 OR (ci.item_key IS NOT NULL AND gc.key = ci.item_key)
+            WHERE c.id = ? AND ci.id = ?
+            LIMIT 1
+            """,
+            (cid, iid),
+        ).fetchone()
+        if not row:
+            ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
+            if not ch:
+                raise ValueError("character not found")
+            raise ValueError("inventory entry not found")
+
+        if row["weapon_key"]:
+            raise ValueError("inventory item is not usable")
+
+        catalog_key = str(row["catalog_item_key"] or row["legacy_consumable_key"] or row["item_key"] or row["consumable_key"] or "").strip()
+        item_label = str(row["item_label"] or row["legacy_consumable_label"] or catalog_key or "item").strip() or "item"
+        raw_item_type = str(row["item_type"] or "").strip().lower()
+        if raw_item_type == "consumable" or row["legacy_consumable_key"]:
+            item_type = "consumable"
+        else:
+            legacy_effect_type = str(row["legacy_effect_type"] or "").strip().lower()
+            item_type = "consumable" if legacy_effect_type in _CONSUMABLE_EFFECT_SIGNAL else (raw_item_type or "item")
+        if item_type != "consumable":
+            raise ValueError("inventory item is not usable")
+
+        sheet = parse_character_sheet(row["sheet_json"] if "sheet_json" in row.keys() else None)
+        if not isinstance(sheet, dict):
+            sheet = {}
+        current_hp = int(sheet.get("current_hp", 0) or 0)
+        max_hp = max(1, int(sheet.get("max_hp", current_hp or 1) or (current_hp or 1)))
+        current_mana = int(sheet.get("current_mana", 0) or 0)
+        max_mana = max(0, int(sheet.get("max_mana", current_mana) or current_mana))
+        conditions = _normalize_sheet_conditions(sheet)
+
+        item_row: dict[str, Any] = dict(row)
+        if not item_row.get("catalog_item_key") and item_row.get("legacy_consumable_key"):
+            item_row["effect_type"] = item_row.get("legacy_effect_type")
+            item_row["effect_dice"] = item_row.get("legacy_effect_dice")
+            item_row["effect_bonus"] = item_row.get("legacy_effect_bonus")
+            item_row["effect_target"] = item_row.get("legacy_effect_target")
+        effects = _effect_payloads_from_item_row(item_row) if catalog_key else []
+        if not effects:
+            raise ValueError("inventory item has no usable effects")
+
+        results: list[dict[str, Any]] = []
+        for effect in effects:
+            effect_type = str(effect.get("type") or "").strip().lower()
+            if effect_type not in _SUPPORTED_ITEM_USE_EFFECTS and effect_type != "restore_mana":
+                raise ValueError("unsupported_item_effect")
+
+            if effect_type == "heal_hp":
+                value = effect.get("value", 0)
+                rolled = _roll_dice_value(value) if isinstance(value, str) and value.strip() else int(value or 0)
+                before = current_hp
+                current_hp = max(0, min(max_hp, current_hp + int(rolled)))
+                results.append({"type": "heal_hp", "amount": int(current_hp - before)})
+                continue
+
+            if effect_type == "restore_mana":
+                value = effect.get("value", 0)
+                rolled = _roll_dice_value(value) if isinstance(value, str) and value.strip() else int(value or 0)
+                before = current_mana
+                current_mana = max(0, min(max_mana, current_mana + int(rolled)))
+                results.append({"type": "restore_mana", "amount": int(current_mana - before)})
+                continue
+
+            if effect_type == "remove_condition":
+                condition_key = str(effect.get("condition_key") or "").strip().lower()
+                if not condition_key:
+                    raise ValueError("unsupported_item_effect")
+                before_count = len(conditions)
+                conditions = [c for c in conditions if str(c.get("key") or "").strip().lower() != condition_key]
+                sheet["conditions"] = conditions
+                results.append({"type": "remove_condition", "condition_key": condition_key, "removed": before_count - len(conditions)})
+                continue
+
+            if effect_type == "apply_condition":
+                condition_key = str(effect.get("condition_key") or "").strip().lower()
+                if not condition_key:
+                    raise ValueError("unsupported_item_effect")
+                cond_row = _condition_catalog_row(conn, condition_key)
+                if not cond_row:
+                    raise ValueError("condition_not_found")
+                stackable = bool(int(cond_row["stackable"] or 0)) if "stackable" in cond_row.keys() else False
+                already_has = any(str(c.get("key") or "").strip().lower() == condition_key for c in conditions)
+                if already_has and not stackable:
+                    results.append({"type": "apply_condition", "condition_key": condition_key, "applied": False, "reason": "already_present"})
+                    continue
+                conditions.append(
+                    {
+                        "key": str(cond_row["key"]),
+                        "label": str(cond_row["label"] or cond_row["key"]),
+                        "effect_json": cond_row["effect_json"],
+                        "source_item_key": catalog_key,
+                        "applied_at": "inventory_use",
+                    }
+                )
+                sheet["conditions"] = conditions
+                results.append({"type": "apply_condition", "condition_key": condition_key, "applied": True})
+                continue
+
+            if effect_type == "narrative_only":
+                results.append({"type": "narrative_only"})
+                continue
+
+        sheet["current_hp"] = current_hp
+        sheet["max_hp"] = max_hp
+        sheet["current_mana"] = current_mana
+        sheet["max_mana"] = max_mana
+        sheet["conditions"] = conditions
+
+        next_qty = int(row["quantity"] or 1) - 1
+        if next_qty > 0:
+            conn.execute("UPDATE character_inventory SET quantity = ? WHERE id = ?", (next_qty, iid))
+        else:
+            conn.execute("DELETE FROM character_inventory WHERE id = ?", (iid,))
+
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), cid),
+        )
+        _sync_player_state_to_active_combat(
+            conn,
+            campaign_id=int(row["campaign_id"] or 0),
+            character_id=cid,
+            current_hp=current_hp,
+            conditions=conditions,
+        )
+        conn.commit()
+
+    return {
+        "inventory_id": iid,
+        "character_id": cid,
+        "item": {"key": catalog_key, "label": item_label, "item_type": item_type},
+        "remaining_quantity": max(0, next_qty),
+        "effects_applied": results,
+        "character_state": {
+            "current_hp": current_hp,
+            "max_hp": max_hp,
+            "current_mana": current_mana,
+            "max_mana": max_mana,
+            "conditions": conditions,
+        },
+    }
 
 
 def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
