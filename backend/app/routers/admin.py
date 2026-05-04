@@ -211,9 +211,11 @@ class AdminCharacterRecreateReq(BaseModel):
 class ConfigImportReq(BaseModel):
     config_version: str
     tables: dict
+    export_kind: str | None = None
     exported_at: str | None = None
     exported_by: str | None = None
     excluded: list[str] | None = None
+    notes: str | None = None
 
 
 class SlashCommandItemReq(BaseModel):

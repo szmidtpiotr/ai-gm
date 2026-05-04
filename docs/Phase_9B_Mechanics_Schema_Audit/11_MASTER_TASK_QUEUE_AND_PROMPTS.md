@@ -42,7 +42,7 @@
 | 16 | **T16** | [x] | **[IMPL] fala 2:** broń / `weapon_type` ↔ atak, finesse, dwuręczność | T11 częściowo | **[IMPL]**, **[S1]** |
 | 17 | **T17** | [x] | **[IMPL] fala 3:** `effect_json` + walidacja admin | T11 | **[IMPL]**, **[S13]** |
 | 18 | **T18** | [x] | **[IMPL] fala 4:** warunki + konsumable / `item_key` | T17 | **[IMPL]**, **[S6]** |
-| 19 | **T19** | [ ] | **[IMPL] fala 5:** import / snapshot / ostrzeżenia | T11 | **[IMPL]**, **[S7]** |
+| 19 | **T19** | [x] | **[IMPL] fala 5:** import / snapshot / ostrzeżenia | T11 | **[IMPL]**, **[S7]** |
 | 20 | **T20** | [ ] | **[IMPL] fala 6:** dywergencja (heurystyka / drugi LLM) + UI plan MG (admin) | T05–T07 | **[IMPL]**, **[S11]** |
 | 21 | **T21** | [ ] | **[IMPL] fala 7:** progres cech za XP (meta + endpoint) | T12 | **[IMPL]**, **[S10]** |
 
@@ -521,7 +521,7 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | T16 | DONE | Mapowanie `weapon_type` ↔ rodzaj ataku + finesse / dwuręczność | `combat_service.py`, `dice.py`, `game_config_weapons` |
 | T17 | DONE | `effect_json` v0 + walidacja przy zapisie admina | `admin`, `items`, `conditions`, `admin_config_transfer.py` |
 | T18 | DONE | Konsumable / `item_key` / migracja loot | `loot_service`, `inventory`, `shop_service`, `combat_service` |
-| T19 | PENDING | Import: dokumentacja ryzyk + `catalog_snapshot` jako kanon | `admin_config_transfer.py`, docs |
+| T19 | DONE | Import: ostrzeżenia + `catalog_snapshot` jako kanon | `admin_config_transfer.py`, admin UI, docs |
 | T20 | PENDING | Dywergencja **[S11]** + UI edycji planu (admin) | `game_engine`, admin |
 | T21 | PENDING | Koszty statów za XP + endpoint spend | `game_config_meta`, `characters` API |
 
@@ -539,6 +539,10 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 - **T18:** API [`inventory.py`](../../backend/app/api/inventory.py) ma nowy endpoint `POST /inventory/{character_id}/use`, a frontend [`inventory.js`](../../frontend/js/inventory.js) pokazuje przycisk **Użyj** dla consumabli i odświeża kartę / walkę po użyciu.
 - **T18:** shop + loot + combat claim idą kanonicznie przez `item_key` dla consumabli; legacy `consumable_key` zostaje tylko jako fallback kompatybilności w odczycie / starych DB.
 - **T18:** testy: [`test_phase9b_t18_consumables_item_key.py`](../../backend/tests/test_phase9b_t18_consumables_item_key.py) + regresje [`test_phase9a_shop.py`](../../backend/tests/test_phase9a_shop.py), [`test_phase8c_inventory_api.py`](../../backend/tests/test_phase8c_inventory_api.py).
+- **T19:** [`admin_config_transfer.py`](../../backend/app/services/admin_config_transfer.py) zwraca jawne `warnings` przy `import_config`, gdy plik wygląda na `catalog_snapshot`, zawiera snapshot-only tabele (`items`, `loot_*`, `xp_rewards`, `consumables`) albo niesie rozszerzone kolumny broni, które wąski import mógłby uciąć.
+- **T19:** `export_config()` dostał znacznik `export_kind=config_bundle` i notkę, że pełny katalog powinien iść przez `catalog_snapshot`; `import_catalog_snapshot(..., dry_run)` zwraca ostrzeżenie o ignorowanym `game_config_meta`.
+- **T19:** admin UI: sekcja Config pokazuje ostrzeżenia z dry-runa `import_config`, a sekcja Game Design robi dry-run snapshotu przed potwierdzeniem importu i pokazuje wykryte tabele / warningi operatorowi.
+- **T19:** testy: [`test_phase9b_t19_import_warnings.py`](../../backend/tests/test_phase9b_t19_import_warnings.py) + regresja [`test_phase9b_t17_effect_json_validation.py`](../../backend/tests/test_phase9b_t17_effect_json_validation.py).
 
 **Notatki po implementacji**
 
@@ -551,6 +555,8 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 - T18 daje pierwszy runtime warunków tylko po stronie **użycia przedmiotu przez postać**; pełna obsługa cyklicznych stanów (`periodic_save`, `block_action`) w turach walki pozostaje follow-upem.
 - T18 zachowuje fallback do legacy `effect_type` / `game_config_consumables` dla istniejących danych, ale ścieżka kanoniczna to `game_config_items.item_type='consumable'` + `item_key`.
 - **Restart backendu wymagany** po wdrożeniu (nowe endpointy / runtime inventory). Frontend w dev nie wymaga rebuildu, ale wymaga odświeżenia zasobów w przeglądarce.
+- T19 nie synchronizuje jeszcze `import_config` do pełnego INSERT-u wszystkich tabel; zamiast tego wymusza świadomość operatora przez `warnings` i prowadzi do kanonicznej ścieżki `catalog_snapshot`.
+- **Restart backendu wymagany** po wdrożeniu (zmiana odpowiedzi API importu). Frontend w dev nie wymaga rebuildu, ale panel admina wymaga odświeżenia zasobów w przeglądarce.
 
 ---
 
@@ -567,6 +573,7 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T16 DONE** — `weapon_rules`: `weapon_type` → test ataku, finesse, `two_handed`; backend combat liczy `attack_roll`, `/roll` ataku stał się weapon-aware; test `test_phase9b_t16_weapon_rules` + regresja combat. |
 | 2026-05-04 | **T17 DONE** — walidator `effect_json` v0 wg **[S13]** dla admin create/update + import (`config/import`, `catalog-snapshot/import`); test `test_phase9b_t17_effect_json_validation`; wymagany restart backendu. |
 | 2026-05-04 | **T18 DONE** — `use_inventory_item()` dla consumabli + `sheet_json.conditions`, endpoint `POST /inventory/{id}/use`, frontendowy przycisk **Użyj**, shop/loot/combat claim na kanonicznym `item_key`; test `test_phase9b_t18_consumables_item_key` + regresje shop/inventory; wymagany restart backendu. |
+| 2026-05-04 | **T19 DONE** — `import_config` / `catalog_snapshot` zwracają jawne `warnings`, `export_config` oznacza się jako `config_bundle`, a admin UI pokazuje ostrzeżenia i robi dry-run snapshotu przed importem; test `test_phase9b_t19_import_warnings`; wymagany restart backendu. |
 | 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
 | 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
 | 2026-05-04 | **B01/B02 DONE** — `/api/settings/summary` + panel admin (cooldown rollupu, tryb dostępu do dual preview: `owner` / `owner_admin` / `off`); frontend i backend respektują tryb podglądu dual. |
