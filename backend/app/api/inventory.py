@@ -24,6 +24,10 @@ class GoldDeltaRequest(BaseModel):
     reason: str = ""
 
 
+class UseRequest(BaseModel):
+    inventory_id: int
+
+
 @router.get("/inventory/{character_id}")
 def get_inventory(character_id: int):
     try:
@@ -51,6 +55,22 @@ def post_inventory_equip(character_id: int, body: EquipRequest):
             raise HTTPException(status_code=404, detail=str(e)) from e
         if "invalid slot" in msg:
             raise HTTPException(status_code=400, detail="invalid slot") from e
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/inventory/{character_id}/use")
+def post_inventory_use(character_id: int, body: UseRequest):
+    try:
+        data = loot_service.use_inventory_item(character_id, body.inventory_id)
+        return {"ok": True, "data": data}
+    except ValueError as e:
+        msg = str(e).lower()
+        if "character not found" in msg or "inventory entry not found" in msg:
+            raise HTTPException(status_code=404, detail=str(e)) from e
+        if "condition_not_found" in msg:
+            raise HTTPException(status_code=422, detail="Referenced condition was not found") from e
+        if "not usable" in msg or "unsupported_item_effect" in msg or "no usable effects" in msg:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 

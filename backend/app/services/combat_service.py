@@ -86,6 +86,13 @@ def _player_hp_pair(sheet: dict) -> tuple[int, int]:
     return cur, max(mx, 1)
 
 
+def _sheet_conditions(sheet: dict) -> list[dict[str, Any]]:
+    raw = sheet.get("conditions")
+    if not isinstance(raw, list):
+        return []
+    return [x for x in raw if isinstance(x, dict)]
+
+
 def _ability_stats_seven(sheet: dict) -> dict[str, int]:
     """STR–CHA from sheet.stats plus speed (7 numeric fields for combat snapshot)."""
     raw = sheet.get("stats")
@@ -637,7 +644,7 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                 "defense": ac,
                 "stats": ability_stats,
                 "initiative_roll": init_player,
-                "conditions": [],
+                "conditions": _sheet_conditions(sheet),
             }
         ]
 
@@ -1523,8 +1530,6 @@ def claim_post_combat_loot(
                 continue
             if t == "weapon":
                 to_grant.append({"weapon_key": key, "quantity": qty})
-            elif t == "consumable":
-                to_grant.append({"consumable_key": key, "quantity": qty})
             else:
                 to_grant.append({"item_key": key, "quantity": qty})
 

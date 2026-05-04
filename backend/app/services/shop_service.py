@@ -82,6 +82,26 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
         }
 
     if t == "consumable":
+        try:
+            row = conn.execute(
+                """
+                SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp, item_type
+                FROM game_config_items
+                WHERE key = ? AND COALESCE(is_active, 1) = 1
+                LIMIT 1
+                """,
+                (k,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            row = None
+        if row and str(row["item_type"] or "").strip().lower() == "consumable":
+            return {
+                "type": "consumable",
+                "key": row["key"],
+                "label": row["label"] or row["key"],
+                "description": row["description"] or "",
+                "value_gp": int(row["price_gp"] or 0),
+            }
         row = conn.execute(
             """
             SELECT key, label, description, COALESCE(base_price, 0) AS price_gp
@@ -101,18 +121,30 @@ def _catalog_item(conn: sqlite3.Connection, item_type: str, item_key: str) -> di
         }
 
     # item / armor / misc / quest (stored in game_config_items)
-    row = conn.execute(
-        """
-        SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp
-        FROM game_config_items
-        WHERE key = ? AND COALESCE(is_active, 1) = 1
-        """,
-        (k,),
-    ).fetchone()
+    try:
+        row = conn.execute(
+            """
+            SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp, item_type
+            FROM game_config_items
+            WHERE key = ? AND COALESCE(is_active, 1) = 1
+            """,
+            (k,),
+        ).fetchone()
+        item_type_from_row = str(row["item_type"] or "").strip().lower() if row else ""
+    except sqlite3.OperationalError:
+        row = conn.execute(
+            """
+            SELECT key, label, description, COALESCE(value_gp, 0) AS price_gp
+            FROM game_config_items
+            WHERE key = ? AND COALESCE(is_active, 1) = 1
+            """,
+            (k,),
+        ).fetchone()
+        item_type_from_row = ""
     if not row:
         return None
     return {
-        "type": t or "item",
+        "type": (item_type_from_row or t or "item"),
         "key": row["key"],
         "label": row["label"] or row["key"],
         "description": row["description"] or "",
@@ -193,10 +225,11 @@ def _character_sellables(
         cat = _catalog_item(conn, item_type, item_key)
         if not cat:
             continue
+        effective_type = str(cat.get("type") or item_type)
         out.append(
             {
                 "inventory_id": int(row["id"]),
-                "item_type": item_type,
+                "item_type": effective_type,
                 "key": item_key,
                 "label": cat["label"],
                 "quantity": int(row["quantity"] or 1),
@@ -268,8 +301,6 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
     t = str(item_type).strip().lower()
     if t == "weapon":
         loot_payload = {"weapon_key": str(item_key).strip(), "quantity": 1}
-    elif t == "consumable":
-        loot_payload = {"consumable_key": str(item_key).strip(), "quantity": 1}
     else:
         loot_payload = {"item_key": str(item_key).strip(), "quantity": 1}
 
@@ -322,6 +353,7 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         cat = _catalog_item(conn, item_type, item_key)
         if not cat:
             raise ValueError("price_or_catalog_missing")
+        item_type = str(cat.get("type") or item_type)
 
         base_price = int(cat["value_gp"] or 0)
         cha = _get_character_cha(conn, character_id)
