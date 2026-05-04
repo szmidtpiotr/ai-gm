@@ -2,7 +2,7 @@
 
 <!-- MASTER_STATUS: ACTIVE -->
 <!-- LAST_UPDATE: 2026-05-04 -->
-<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T12 OK 2026-05-04) -->
+<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T13 OK 2026-05-04) -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -36,7 +36,7 @@
 | 10 | **T10** | [x] | **Fala [IMPL] 1:** auto / prog tur / cron `POST …/history/summary/ensure` | T02–T04 (logicznie po dual zapisie) | **[IMPL]** |
 | 11 | **T11** | [x] | Zamknięcie **[AUDIT]**: synchronizacja [`06_schema_gaps.md`](06_schema_gaps.md) + wpis w `04` | — | **[AUDIT]** |
 | 12 | **T12** | [x] | Tabela nagród XP **[S10e]** + minimalny odczyt w silniku / admin | — | **[S10e]** |
-| 13 | **T13** | [ ] | Player rulebook: lekki rozdział **XP** (blok D agendy) | T12 (opcjonalnie równolegle po szkicu tabeli) | Blok **D** |
+| 13 | **T13** | [x] | Player rulebook: lekki rozdział **XP** (blok D agendy) | T12 (opcjonalnie równolegle po szkicu tabeli) | Blok **D** |
 | 14 | **T14** | [ ] | **W2** (tabela `campaign_story_beats`): tylko jeśli T06–T07 niewystarczają — ADR + migracja | T06 | **[S11b]** |
 | 15 | **T15** | [ ] | **Nowy akt** w tym samym `campaign_id`: trigger po głównym queście → ten sam LLM co start + narracja spinająca | T05, T06 | **[S11b]** |
 | 16 | **T16** | [ ] | **[IMPL] fala 2:** broń / `weapon_type` ↔ atak, finesse, dwuręczność | T11 częściowo | **[IMPL]**, **[S1]** |
@@ -433,7 +433,7 @@
 
 ## 14. PROMPTY — T13
 
-<!-- STATUS_T13: PENDING -->
+<!-- STATUS_T13: DONE -->
 
 ### T13 — Player rulebook — rozdział XP (blok D)
 
@@ -446,11 +446,12 @@
 
 **Co zostało zrobione**
 
--
+- Nowy plik [`player_rulebook/xp_pool_and_rewards.md`](player_rulebook/xp_pool_and_rewards.md): pula bez LVL, źródła XP (walka / konfiguracja / grant MG), odcinek vs tydzień (**[S10c]**), widełki orientacyjne bez nazw SQL, **LLM nie jest źródłem liczb** (**[S10d]**), fabularnie MG / technicznie właściciel kampanii.
+- [`00_outline_and_tone.md`](player_rulebook/00_outline_and_tone.md): wiersz **4b** w spisie + odnośnik w zasadzie redakcyjnej §8.
 
 **Notatki po implementacji**
 
-- *Brak wdrożenia — uzupełnić po wdrożeniu T13 (pliki rulebooka, zgodność z [S10]).*
+- Nie opisano konkretnych przycisków ani ekranów — tylko zasady zgodne z uchwałami.
 
 ---
 

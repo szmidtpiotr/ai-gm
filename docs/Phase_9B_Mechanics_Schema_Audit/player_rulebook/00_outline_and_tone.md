@@ -15,7 +15,7 @@
 5. **Broń ([S1], [S1b], [S1c]):** STR/DEX wg typu broni; dwuręczność jako umiejętność; typ broni zgodny z rodzajem ataku; zasięg „czy doleciało”; konfrontacje dwurzędowe z **remisem na korzyść obrońcy**. Nie obiecujemy jeszcze w tekście gracza pełnej taktyki finesse w kodzie — dopóki `combat_service` nie implementuje **[S1]** w szczegółach, opisuj to jako **kierunek zasad** lub skrót z [`draft_formulas_and_examples.md`](draft_formulas_and_examples.md).
 6. **Przedmioty ([S2]):** Docelowo jeden schemat JSON; pancerz w liczeniu obrony (najpierw uproszczenie AC); klasy i magia przy użyciu przedmiotów — jak w uchwale.
 7. **Statystyki ([S3]):** Zamknięta lista cech z konfiguracji; nowa statystyka = nowa wersja zasad.
-8. **Umiejętności i XP ([S4], [S4b], [S5a], [S10a], [S10b], [S10c]):** Sufit rangi 5, **pula XP** (bez LVL), kara za deklarację bez umiejętności, pierwszy wykup +1; **widełki** przyznawania XP i kosztów rang — w szkicu [`draft_formulas_and_examples.md`](draft_formulas_and_examples.md) §0g; **cecha do rzutu** z bazy (`linked_stat`); opisy w katalogu dla gracza i dla kontekstu LLM.
+8. **Umiejętności i XP ([S4], [S4b], [S5a], [S10a], [S10b], [S10c]):** Sufit rangi 5, **pula XP** (bez LVL), kara za deklarację bez umiejętności, pierwszy wykup +1; **widełki** przyznawania XP i kosztów rang — w szkicu [`draft_formulas_and_examples.md`](draft_formulas_and_examples.md) §0g; lekki rozdział dla gracza: [`xp_pool_and_rewards.md`](xp_pool_and_rewards.md) (**T13**); **cecha do rzutu** z bazy (`linked_stat`); opisy w katalogu dla gracza i dla kontekstu LLM.
 9. **Warunki i konsumable ([S6]):** Wspólna rodzina JSON dla stanów i przedmiotów (różne kategorie efektów); jeden katalog przedmiotów dla zużywalnych; jeden `key` przedmiotu wszędzie; stany złożone — zasada parametryzacji (§2 **[S6]**).
 10. **Konfiguracja a świat ([S7], [S7a]):** Pełny katalog treści — snapshot import/export; LLM zapisuje przez **API**; backup i retencja — po wdrożeniu; jedna baza.
 
@@ -29,6 +29,7 @@
 | 2 | **Tworzenie postaci** — archetypy, start | archetypy + **[S3]**, **[S4]** |
 | 3 | **Statystyki** — znaczenie cech, modyfikatory | **[S3]** |
 | 4 | **Umiejętności** — rangi, sufit 5, kara, pierwszy wykup, powiązanie z cechą | **[S4]**, **[S4b]**, **[S5a]** |
+| 4b | **Pula XP** — skąd się bierze, widełki MG, odcinek gry, kto zatwierdza liczby | **[S10a]**–**[S10e]**; tekst: [`xp_pool_and_rewards.md`](xp_pool_and_rewards.md) |
 | 5 | **Rzuty i testy** — k20, kiedy test; konfrontacje; remis | **[S1b]**, **[S1c]**, **[S5]** (kiedy DC), **[S4b]** (docelowo odczyt z bazy) |
 | 6 | **Poziomy trudności (DC)** — etykiety i liczby z jednej tabeli | **[S5]** |
 | 7 | **Walka** — trafienie, obrażenia STR/DEX, broń, zasięg (kierunek), dwuręczność jako skill | **[S1]**, **[S1b]**; szczegóły taktyczne gdy kod dogoni **[S1]** |
