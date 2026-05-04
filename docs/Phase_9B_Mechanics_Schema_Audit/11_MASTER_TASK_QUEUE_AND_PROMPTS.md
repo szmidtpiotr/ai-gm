@@ -318,7 +318,7 @@
 **Notatki po implementacji**
 
 - Zmiana wartości **N**: wpis `game_config_meta.summary_rollup_cooldown_turns` — **panel admin nadal bez pola** (backlog **B01**); do czasu UI edycja przez SQL.
-- **`ensure`** przy blokadzie cooldownu zwraca ostatni skrót + `cooldown_active` — UI nadal powinien obsłużyć **429** na sztywnym `POST …/history/summary` (nadaje się do spięcia z **T09**).
+- **`ensure`** przy blokadzie cooldownu zwraca ostatni skrót + `cooldown_active` — obsługa w modalu historii (**T09**); **429** na `POST …/history/summary` mapowany + fallback GET ostatniego skrótu.
 - Kotwica jest **wspólna** dla player/gm — jedna kampania = jeden licznik odstępu między kosztownymi rollupami LLM.
 
 ---
