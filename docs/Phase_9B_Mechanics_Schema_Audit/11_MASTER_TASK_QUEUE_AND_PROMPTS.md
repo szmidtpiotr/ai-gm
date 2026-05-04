@@ -2,7 +2,7 @@
 
 <!-- MASTER_STATUS: ACTIVE -->
 <!-- LAST_UPDATE: 2026-05-04 -->
-<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T10 OK 2026-05-04) -->
+<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T11 OK 2026-05-04) -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -34,7 +34,7 @@
 | 8 | **T08** | [x] | Multiplayer: **cooldown** odświeżenia rollupu **per `campaign_id`** | T02 | **[S11b]** |
 | 9 | **T09** | [x] | UI: stan **„wymaga odświeżenia”** po błędzie LLM rollupu | T02 | **[S11b]** |
 | 10 | **T10** | [x] | **Fala [IMPL] 1:** auto / prog tur / cron `POST …/history/summary/ensure` | T02–T04 (logicznie po dual zapisie) | **[IMPL]** |
-| 11 | **T11** | [ ] | Zamknięcie **[AUDIT]**: synchronizacja [`06_schema_gaps.md`](06_schema_gaps.md) + wpis w `04` | — | **[AUDIT]** |
+| 11 | **T11** | [x] | Zamknięcie **[AUDIT]**: synchronizacja [`06_schema_gaps.md`](06_schema_gaps.md) + wpis w `04` | — | **[AUDIT]** |
 | 12 | **T12** | [ ] | Tabela nagród XP **[S10e]** + minimalny odczyt w silniku / admin | — | **[S10e]** |
 | 13 | **T13** | [ ] | Player rulebook: lekki rozdział **XP** (blok D agendy) | T12 (opcjonalnie równolegle po szkicu tabeli) | Blok **D** |
 | 14 | **T14** | [ ] | **W2** (tabela `campaign_story_beats`): tylko jeśli T06–T07 niewystarczają — ADR + migracja | T06 | **[S11b]** |
@@ -381,7 +381,7 @@
 
 ## 12. PROMPTY — T11
 
-<!-- STATUS_T11: PENDING -->
+<!-- STATUS_T11: DONE -->
 
 ### T11 — Zamknięcie **[AUDIT]** (`06_schema_gaps` + `04`)
 
@@ -394,11 +394,12 @@
 
 **Co zostało zrobione**
 
--
+- **[`06_schema_gaps.md`](06_schema_gaps.md):** ponowna tabela z kolumną **T11** — stan każdego obszaru vs `migrations_admin.py` + grep `backend/` (2026-05-04); nierozwiązane rzeczy oznaczone **Otwarte** z odnośnikiem do **T12** / **T16–T19** (nie zakładamy „braku luk” przy braku kodu).
+- **[`04_decisions_log.md`](04_decisions_log.md):** sekcja **[AUDIT]** — **status closed**, data zamknięcia procesu, odnośnik do `config_version` (meta) i łańcucha migracji.
 
 **Notatki po implementacji**
 
-- *Brak wdrożenia — uzupełnić po wdrożeniu T11 (sync `06`/`04`, data zamknięcia).*
+- Pełne „wyzerowanie” luk w DB **nie** jest warunkiem zamknięcia AUDIT — warunek to **jawna synchronizacja dokumentów** z repozytorium (uzgodnienie z § **[AUDIT]** w `04`).
 
 ---
 

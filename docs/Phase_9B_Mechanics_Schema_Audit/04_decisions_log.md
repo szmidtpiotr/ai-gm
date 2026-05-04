@@ -128,13 +128,13 @@
 
 ### [AUDIT] Luki w kolumnach — przedmioty, umiejętności, czary — 2026-05-02
 
-**Status:** open — lista robocza w [`06_schema_gaps.md`](06_schema_gaps.md), aktualizowana m.in. przy **Sesji 6b** (konsolidacja z uchwałami **[S1]–[S6]**).
+**Status:** **closed (proces T11, 2026-05-04)** — lista w [`06_schema_gaps.md`](06_schema_gaps.md) **zsynchronizowana** z repozytorium: każdy wiersz ma kolumnę **T11** (zgodne / częściowo / otwarte z odnośnikiem do backlogu **T12** lub fal **[IMPL]** **T16–T19**). **Wersja katalogu w runtime:** `game_config_meta.config_version` (seed **1.0.0**); numeracja **łańcucha migracji** = kolejność w [`migrations_admin.py`](../../backend/app/migrations_admin.py) / bootstrap w [`main.py`](../../backend/app/main.py).
 
 **Kontekst:** Przed migracjami trzeba ustalić, czy w schemacie **nie brakuje pól** potrzebnych do opisanych mechanik (np. statystyki powiązane z typami przedmiotów, dodatkowe atrybuty umiejętności, pola pod czary / AOE / szkoły magii).
 
 **Uchwała:** Przeprowadzić **przegląd** w oparciu o [`01_schema_inventory.md`](01_schema_inventory.md), [`02_code_usage_matrix.md`](02_code_usage_matrix.md) oraz uchwały (aktualnie **[S1]–[S6]**); wypisać **listę braków lub nadmiarów** (kolumna nieużywana vs brak kolumny pod planowaną mechanikę). Wynik zapisać w [`06_schema_gaps.md`](06_schema_gaps.md).
 
-**Konsekwencje:** Dopiero po domknięciu krytycznych pozycji listy sensowne są migracje SQL / zmiany w panelu admin.
+**Konsekwencje:** **Przegląd zamknięty** — nierozwiązane punkty są **jawnie oznaczone** w [`06_schema_gaps.md`](06_schema_gaps.md) (nie zakładamy „braku luk”, jeśli kod ich nie realizuje). Migracje produktowe nadal wg kolejki [`11_MASTER_TASK_QUEUE_AND_PROMPTS.md`](11_MASTER_TASK_QUEUE_AND_PROMPTS.md).
 
 **Powiązane tabele (start):** `game_config_items`, `game_config_skills`, bronie (`game_config_weapons`), `game_config_conditions`, `game_config_dc`, ewentualnie osobna tabela czarów jeśli powstanie.
 
