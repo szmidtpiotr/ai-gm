@@ -72,6 +72,7 @@ def _allowed_classes_to_db(value: Any) -> str:
 # Read-only snapshot for tools (LLM context, design docs). Not used by import_config.
 _CATALOG_SNAPSHOT_SPECS: tuple[tuple[str, str], ...] = (
     ("game_config_meta", "key ASC"),
+    ("game_config_xp_rewards", "category ASC, sort_order ASC, key ASC"),
     ("game_config_stats", "sort_order ASC, key ASC"),
     ("game_config_skills", "sort_order ASC, key ASC"),
     ("game_config_dc", "sort_order ASC, key ASC"),
@@ -351,6 +352,7 @@ _CATALOG_IMPORT_TABLES: tuple[str, ...] = (
     "game_config_stats",
     "game_config_skills",
     "game_config_dc",
+    "game_config_xp_rewards",
     "game_config_weapons",
     "game_config_conditions",
     "game_config_items",

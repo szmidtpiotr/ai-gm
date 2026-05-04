@@ -147,6 +147,7 @@ def _fetch_enemy_row(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
     return conn.execute(
         """
         SELECT key, label, hp_base, ac_base, attack_bonus, damage_die, dex_modifier,
+               tier,
                loot_table_key, drop_chance, COALESCE(xp_award, 0) AS xp_award
         FROM game_config_enemies
         WHERE key = ?
@@ -711,6 +712,7 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                     "loot_table_key": er["loot_table_key"],
                     "drop_chance": float(er["drop_chance"] if er["drop_chance"] is not None else 1.0),
                     "xp_award": xp_award_e,
+                    "tier": str(er["tier"] or "standard"),
                 }
             )
             turn_slots.append((slug, init_e, idx))
@@ -1000,22 +1002,38 @@ def resolve_attack(
                         loot = []
                         out["gold_drop"] = 0
                     xpa = 0
+                    xp_src = "none"
                     try:
-                        xpa = int(enemy.get("xp_award") or 0)
+                        raw_award = int(enemy.get("xp_award") or 0)
                     except (TypeError, ValueError):
+                        raw_award = 0
+                    from app.services import xp_service
+
+                    try:
+                        xpa, xp_src = xp_service.resolve_enemy_defeat_xp_amount(
+                            conn,
+                            catalog_xp_award=raw_award,
+                            tier=str(enemy.get("tier") or "") or None,
+                        )
+                    except Exception:
                         xpa = 0
+                        xp_src = "none"
                     if xpa > 0 and ch_id:
                         try:
-                            from app.services import xp_service
-
                             grant = xp_service.grant_character_xp(
                                 conn,
                                 ch_id,
                                 xpa,
                                 reason="enemy_defeat",
-                                meta={"enemy_key": ek},
+                                meta={
+                                    "enemy_key": ek,
+                                    "xp_source": xp_src,
+                                    "enemy_template_xp_award": raw_award,
+                                    "enemy_tier": str(enemy.get("tier") or ""),
+                                },
                             )
                             out["xp_granted"] = xpa
+                            out["xp_source"] = xp_src
                             out["xp_available"] = grant.get("xp_available")
                         except Exception as e:
                             logger.warning(

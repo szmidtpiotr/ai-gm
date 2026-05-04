@@ -232,6 +232,95 @@ def list_dc() -> list[dict]:
     )
 
 
+def list_xp_rewards() -> list[dict]:
+    """[T12 / S10e] Katalog nagród XP."""
+    try:
+        return _fetch_all(
+            """
+            SELECT key, category, label, description, xp_amount, is_active,
+                   sort_order, locked_at, created_at, updated_at
+            FROM game_config_xp_rewards
+            ORDER BY category ASC, sort_order ASC, key ASC
+            """
+        )
+    except sqlite3.OperationalError:
+        return []
+
+
+def update_xp_reward(
+    key: str,
+    *,
+    label: str | None,
+    description: str | None,
+    xp_amount: int | None,
+    is_active: int | None,
+    sort_order: int | None,
+    force: bool,
+) -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        current = _fetch_one(
+            conn,
+            """
+            SELECT key, category, label, description, xp_amount, is_active,
+                   sort_order, locked_at, created_at, updated_at
+            FROM game_config_xp_rewards WHERE key = ?
+            """,
+            (key,),
+        )
+        if not current:
+            raise KeyError("not_found")
+        if current.get("locked_at") and not force:
+            raise PermissionError("locked")
+
+        new_amount = (
+            int(xp_amount) if xp_amount is not None else int(current["xp_amount"] or 0)
+        )
+        if new_amount < 0:
+            raise ValueError("invalid_xp_amount")
+
+        updates = {
+            "label": label if label is not None else current["label"],
+            "description": description if description is not None else current.get("description"),
+            "xp_amount": new_amount,
+            "is_active": int(is_active) if is_active is not None else int(current["is_active"] or 1),
+            "sort_order": (
+                int(sort_order) if sort_order is not None else int(current["sort_order"] or 0)
+            ),
+        }
+        conn.execute(
+            """
+            UPDATE game_config_xp_rewards
+            SET label = ?, description = ?, xp_amount = ?, is_active = ?, sort_order = ?,
+                updated_at = datetime('now')
+            WHERE key = ?
+            """,
+            (
+                updates["label"],
+                updates["description"],
+                updates["xp_amount"],
+                updates["is_active"],
+                updates["sort_order"],
+                key,
+            ),
+        )
+        new_row = _fetch_one(
+            conn,
+            """
+            SELECT key, category, label, description, xp_amount, is_active,
+                   sort_order, locked_at, created_at, updated_at
+            FROM game_config_xp_rewards WHERE key = ?
+            """,
+            (key,),
+        )
+        _audit(conn, "game_config_xp_rewards", key, "UPDATE", current, new_row)
+        conn.commit()
+        return new_row or {}
+    finally:
+        conn.close()
+
+
 def list_weapons() -> list[dict]:
     rows = _fetch_all(
         """

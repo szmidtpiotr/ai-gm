@@ -549,6 +549,25 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_character_xp_grants_character
     ON character_xp_grants(character_id, created_at DESC)
     """,
+    # [T12 / S10e] Konfiguracyjna tabela nagród XP (kategoria → liczba punktów)
+    """
+    CREATE TABLE IF NOT EXISTS game_config_xp_rewards (
+        key TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        label TEXT NOT NULL,
+        description TEXT,
+        xp_amount INTEGER NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        locked_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_game_config_xp_rewards_cat
+    ON game_config_xp_rewards(category, sort_order, key)
+    """,
 ]
 
 ADMIN_SEEDS = [
@@ -798,6 +817,32 @@ ADMIN_SEEDS = [
       AND EXISTS (SELECT 1 FROM game_locations WHERE key = 'inn_main')
     """,
     # Phase 8D — Location Integrity default flags (8D-3)
+    # [T12 / S10e] Domyślne nagrody (widełki [S10b] — wartości środkowe pasma)
+    """
+    INSERT OR IGNORE INTO game_config_xp_rewards
+        (key, category, label, description, xp_amount, sort_order, is_active)
+    VALUES
+        ('enemy_tier_weak', 'enemy_tier', 'Wróg: ślaby / tło',
+         'Pas [S10b]: 2–5 XP — domyślnie 3', 3, 10, 1),
+        ('enemy_tier_standard', 'enemy_tier', 'Wróg: standard',
+         'Pas [S10b]: 5–12 XP — domyślnie 8', 8, 20, 1),
+        ('enemy_tier_elite', 'enemy_tier', 'Wróg: elita / mały boss',
+         'Pas [S10b]: 25–50 XP — domyślnie 30', 30, 30, 1),
+        ('enemy_tier_boss', 'enemy_tier', 'Wróg: boss / wyjątkowe zagrożenie',
+         'Pas [S10b]: 50–120 XP — domyślnie 70', 70, 40, 1),
+        ('quest_minor', 'quest', 'Quest / wątek poboczny',
+         'Szacunek [S10b]: 10–25 XP', 15, 50, 1),
+        ('quest_main', 'quest', 'Quest / cel główny kampanii',
+         'Szacunek [S10b]: 40–100 XP (po modelu questów)', 70, 60, 1),
+        ('mg_grant_small', 'mg_grant', 'MG: drobny plus fabularny',
+         'Pas [S10b]: 3–8 XP', 5, 100, 1),
+        ('mg_grant_scene', 'mg_grant', 'MG: mini-cel / postęp sceny',
+         'Pas [S10b]: 5–15 XP', 10, 110, 1),
+        ('mg_grant_breakthrough', 'mg_grant', 'MG: istotny przełom',
+         'Pas [S10b]: 15–35 XP', 25, 120, 1),
+        ('mg_grant_exceptional', 'mg_grant', 'MG: wybitny sukces (rzadko)',
+         'Pas [S10b]: 35–60 XP', 45, 130, 1)
+    """,
 ]
 
 

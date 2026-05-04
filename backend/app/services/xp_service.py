@@ -240,6 +240,95 @@ def insert_mg_xp_grant_audit(
     return int(cur.lastrowid or 0)
 
 
+def _normalize_enemy_tier(tier: str | None) -> str:
+    t = (tier or "standard").strip().lower()
+    if t in ("weak", "standard", "elite", "boss"):
+        return t
+    return "standard"
+
+
+def enemy_tier_reward_key(tier: str | None) -> str:
+    """Klucz wiersza `game_config_xp_rewards` dla poziomu zagrożenia wroga ([T12])."""
+    return f"enemy_tier_{_normalize_enemy_tier(tier)}"
+
+
+def get_xp_reward_amount(conn: sqlite3.Connection, key: str) -> int | None:
+    """Aktywny wpis `game_config_xp_rewards` po `key` ([S10e] / T12)."""
+    k = (key or "").strip()
+    if not k:
+        return None
+    try:
+        row = conn.execute(
+            """
+            SELECT xp_amount FROM game_config_xp_rewards
+            WHERE key = ? AND is_active = 1
+            LIMIT 1
+            """,
+            (k,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row:
+        return None
+    try:
+        return int(row["xp_amount"] if hasattr(row, "keys") else row[0])
+    except (TypeError, ValueError):
+        return None
+
+
+def require_xp_reward_amount(conn: sqlite3.Connection, key: str) -> int:
+    amt = get_xp_reward_amount(conn, key)
+    if amt is None or amt < 1:
+        raise ValueError("unknown_or_inactive_xp_reward_key")
+    return amt
+
+
+def resolve_enemy_defeat_xp_amount(
+    conn: sqlite3.Connection,
+    *,
+    catalog_xp_award: int,
+    tier: str | None,
+) -> tuple[int, str]:
+    """
+    Zwraca (punkty XP, źródło).
+    Priorytet: jawne `game_config_enemies.xp_award` > 0, inaczej tabela `game_config_xp_rewards` wg `tier`.
+    """
+    try:
+        explicit = int(catalog_xp_award or 0)
+    except (TypeError, ValueError):
+        explicit = 0
+    if explicit > 0:
+        return explicit, "enemy_xp_award"
+    rk = enemy_tier_reward_key(tier)
+    amt = get_xp_reward_amount(conn, rk)
+    if amt is not None and amt > 0:
+        return amt, "xp_reward_table"
+    return 0, "none"
+
+
+def list_xp_rewards_for_categories(
+    conn: sqlite3.Connection, categories: list[str]
+) -> list[dict[str, Any]]:
+    """Odczyt katalogu nagród (np. grant MG — kategorie `mg_grant`, `quest`)."""
+    cats = [c.strip() for c in categories if c and str(c).strip()]
+    if not cats:
+        return []
+    placeholders = ",".join("?" * len(cats))
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT key, category, label, description, xp_amount, sort_order
+            FROM game_config_xp_rewards
+            WHERE is_active = 1 AND category IN ({placeholders})
+            ORDER BY category ASC, sort_order ASC, key ASC
+            """,
+            tuple(cats),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [dict(r) for r in rows]
+
+
 def list_xp_grants_for_character(
     conn: sqlite3.Connection, character_id: int, *, limit: int = 50
 ) -> list[dict[str, Any]]:

@@ -2,7 +2,7 @@
 
 <!-- MASTER_STATUS: ACTIVE -->
 <!-- LAST_UPDATE: 2026-05-04 -->
-<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T11 OK 2026-05-04) -->
+<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T12 OK 2026-05-04) -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -35,7 +35,7 @@
 | 9 | **T09** | [x] | UI: stan **„wymaga odświeżenia”** po błędzie LLM rollupu | T02 | **[S11b]** |
 | 10 | **T10** | [x] | **Fala [IMPL] 1:** auto / prog tur / cron `POST …/history/summary/ensure` | T02–T04 (logicznie po dual zapisie) | **[IMPL]** |
 | 11 | **T11** | [x] | Zamknięcie **[AUDIT]**: synchronizacja [`06_schema_gaps.md`](06_schema_gaps.md) + wpis w `04` | — | **[AUDIT]** |
-| 12 | **T12** | [ ] | Tabela nagród XP **[S10e]** + minimalny odczyt w silniku / admin | — | **[S10e]** |
+| 12 | **T12** | [x] | Tabela nagród XP **[S10e]** + minimalny odczyt w silniku / admin | — | **[S10e]** |
 | 13 | **T13** | [ ] | Player rulebook: lekki rozdział **XP** (blok D agendy) | T12 (opcjonalnie równolegle po szkicu tabeli) | Blok **D** |
 | 14 | **T14** | [ ] | **W2** (tabela `campaign_story_beats`): tylko jeśli T06–T07 niewystarczają — ADR + migracja | T06 | **[S11b]** |
 | 15 | **T15** | [ ] | **Nowy akt** w tym samym `campaign_id`: trigger po głównym queście → ten sam LLM co start + narracja spinająca | T05, T06 | **[S11b]** |
@@ -405,7 +405,7 @@
 
 ## 13. PROMPTY — T12
 
-<!-- STATUS_T12: PENDING -->
+<!-- STATUS_T12: DONE -->
 
 ### T12 — Tabela nagród XP **[S10e]**
 
@@ -419,11 +419,15 @@
 
 **Co zostało zrobione**
 
--
+- **Tabela `game_config_xp_rewards`** (migracja + seed wartości środkowe **[S10b]**): kategorie `enemy_tier`, `quest`, `mg_grant`; indeks po `category`.
+- **Walka:** przy śmierci wroga priorytet `game_config_enemies.xp_award` > 0; w przeciwnym razie XP z wiersza `enemy_tier_{tier}` (pole `tier` zapisane w snapshotcie walki); meta grantu: `xp_source`, `enemy_tier`.
+- **Grant MG:** `POST …/xp/grant-mg` — opcjonalne `reward_key` (kwota z tabeli); `GET …/characters/{id}/xp/reward-catalog` dla ownera (filtr `categories`).
+- **Admin:** `GET /admin/xp-rewards`, `PATCH /admin/xp-rewards/{key}`; wpis w **catalog snapshot** import/export.
+- **Testy:** [`backend/tests/test_phase9b_t12_xp_rewards.py`](../../backend/tests/test_phase9b_t12_xp_rewards.py).
 
 **Notatki po implementacji**
 
-- *Brak wdrożenia — uzupełnić po wdrożeniu T12 (tabela/meta, seed, admin).*
+- Quest-y nadal bez automatycznego silnika — wiersze `quest_*` są gotowe pod przyszłe wywołania; MG może użyć `reward_key` przy grantach ręcznych.
 
 ---
 
