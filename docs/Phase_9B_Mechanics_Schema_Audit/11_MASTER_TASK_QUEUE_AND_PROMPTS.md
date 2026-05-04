@@ -2,7 +2,7 @@
 
 <!-- MASTER_STATUS: ACTIVE -->
 <!-- LAST_UPDATE: 2026-05-04 -->
-<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T14 OK 2026-05-04) -->
+<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T15 OK 2026-05-04) -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -38,7 +38,7 @@
 | 12 | **T12** | [x] | Tabela nagród XP **[S10e]** + minimalny odczyt w silniku / admin | — | **[S10e]** |
 | 13 | **T13** | [x] | Player rulebook: lekki rozdział **XP** (blok D agendy) | T12 (opcjonalnie równolegle po szkicu tabeli) | Blok **D** |
 | 14 | **T14** | [x] | **W2** (tabela `campaign_story_beats`): tylko jeśli T06–T07 niewystarczają — ADR + migracja | T06 | **[S11b]** |
-| 15 | **T15** | [ ] | **Nowy akt** w tym samym `campaign_id`: trigger po głównym queście → ten sam LLM co start + narracja spinająca | T05, T06 | **[S11b]** |
+| 15 | **T15** | [x] | **Nowy akt** w tym samym `campaign_id`: trigger po głównym queście → ten sam LLM co start + narracja spinająca | T05, T06 | **[S11b]** |
 | 16 | **T16** | [ ] | **[IMPL] fala 2:** broń / `weapon_type` ↔ atak, finesse, dwuręczność | T11 częściowo | **[IMPL]**, **[S1]** |
 | 17 | **T17** | [ ] | **[IMPL] fala 3:** `effect_json` + walidacja admin | T11 | **[IMPL]**, **[S13]** |
 | 18 | **T18** | [ ] | **[IMPL] fala 4:** warunki + konsumable / `item_key` | T17 | **[IMPL]**, **[S6]** |
@@ -484,7 +484,7 @@
 
 ## 16. PROMPTY — T15
 
-<!-- STATUS_T15: PENDING -->
+<!-- STATUS_T15: DONE -->
 
 ### T15 — **Nowy akt** w tej samej kampanii (bez nowego `campaigns`)
 
@@ -498,11 +498,17 @@
 
 **Co zostało zrobione**
 
--
+- **Główny quest:** domyślny klucz `main_quest`; nadpisanie: `gm_plan_json.engine_private.main_quest_key` (owner może ustawić przez PATCH `…/gm-plan`). Wykrycie: `main_quest_just_completed(old_sheet, new_sheet, main_key)` — klucz pojawia się w `quests_completed` i wcześniej go tam nie było.
+- **Pipeline:** [`new_act_service.py`](../../backend/app/services/new_act_service.py) — dwa wywołania LLM: (1) płaski JSON nowego łuku (jak T05) + **merge** W1: zamyka bieżący łuk (`status: closed`), dodaje `act_N` (`next_act_seq` w `engine_private`), ustawia `active_arc_id`; (2) krótka **narracja spinająca** dla gracza.
+- **Nowa tura:** `INSERT` do `campaign_turns` (`route=narrative`, kolejny `turn_number`) — `user_text` znacznik `[Nowy akt]`, `assistant_text` = narracja łącząca (ciągła historia, bez nowego `campaign_id`).
+- **Wyzwalacze:** `PATCH /characters/{id}/sheet` po zapisie merge oraz admin cheat `quest complete` (po `commit`); przy sukcesie cheat zwraca `result.new_act` (skrót pola pipeline).
+- **Testy:** [`test_phase9b_t15_new_act.py`](../../backend/tests/test_phase9b_t15_new_act.py) (mock LLM + temp SQLite).
 
 **Notatki po implementacji**
 
-- *Brak wdrożenia — uzupełnić po wdrożeniu T15 (trigger questa, generator planu, test bez nowego campaign_id).*
+- Regeneracja planu to **osobny prompt** „nowy akt” (kontekst: poprzedni blok planu + skrót transkryptu), ale **ten sam kształt JSON** co [`generate_initial_gm_plan_with_retries`](../../backend/app/services/gm_plan_generation_service.py) (`arc_payload_from_flat_llm`).
+- Brak gotowego `gm_plan_json` → pipeline zwraca błąd (`gm_plan_not_ready`); kampania `ended` → pomijane.
+- **Restart backendu:** zalecany po wdrożeniu (nowy moduł importowany przy pierwszym triggerze).
 
 ---
 
@@ -538,6 +544,7 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T02 DONE** — kolumna `audience`, API query, narracja gm→player, testy. |
 | 2026-05-04 | **T03 DONE** — player summary tylko z transkryptu, `audience` w generatorze, test regresyjny, restart backendu. |
 | 2026-05-04 | **T04 DONE** — GM summary dostaje `gm_plan_json` + transkrypt, osobny test, restart backendu. |
+| 2026-05-04 | **T15 DONE** — `new_act_service`: trigger po ukończeniu głównego questa, merge nowego łuku W1, tura narracji spinającej; test `test_phase9b_t15_new_act`. |
 | 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
 | 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
 | 2026-05-04 | Backlog **B02:** decyzja produktowa — „Podgląd dual (T01)” zostaje (QA vs rollup T02); opcjonalnie później dev/admin-only. |

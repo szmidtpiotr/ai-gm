@@ -1067,7 +1067,7 @@ def patch_character_sheet(character_id: int, req: CharacterSheetPatchRequest):
 
     row = conn.execute(
         """
-        SELECT id, sheet_json
+        SELECT id, campaign_id, sheet_json
         FROM characters
         WHERE id = ?
         """,
@@ -1095,6 +1095,7 @@ def patch_character_sheet(character_id: int, req: CharacterSheetPatchRequest):
         (json.dumps(merged_sheet_json, ensure_ascii=False), character_id),
     )
     conn.commit()
+    campaign_id_for_new_act = int(row["campaign_id"] or 0)
 
     updated_row = conn.execute(
         """
@@ -1109,6 +1110,15 @@ def patch_character_sheet(character_id: int, req: CharacterSheetPatchRequest):
 
     if not updated_row:
         raise HTTPException(status_code=500, detail="Character updated but could not be loaded")
+
+    from app.services.new_act_service import maybe_trigger_new_act_after_main_quest
+
+    maybe_trigger_new_act_after_main_quest(
+        campaign_id=campaign_id_for_new_act,
+        character_id=character_id,
+        old_sheet=existing_sheet_json,
+        new_sheet=merged_sheet_json,
+    )
 
     item = dict(updated_row)
     try:

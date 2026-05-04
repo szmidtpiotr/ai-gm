@@ -81,6 +81,14 @@ def _llm_flat_to_w1_patch(llm_obj: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def arc_payload_from_flat_llm(llm_obj: dict[str, Any]) -> dict[str, Any]:
+    """
+    Węzeł łuku (jeden arc) z płaskiego JSON z LLM — ten sam kształt co przy generacji startowej (T05).
+    Używane przy T15 (nowy akt): wstrzyknięcie pod nowym `arc_id` zamiast `default`.
+    """
+    return _llm_flat_to_w1_patch(llm_obj)["arcs"]["default"]
+
+
 def generate_initial_gm_plan_with_retries(
     conn,
     *,
