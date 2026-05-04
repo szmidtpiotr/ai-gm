@@ -399,11 +399,23 @@
       return `${window.COMBAT_ROLL_PREFIX}\n${JSON.stringify(payload)}`;
     }
 
-    hide() {
+    /**
+     * Chowanie karty walki. Domyślnie NIE zamyka modala łupów ani ekranu końca walki, jeśli są otwarte —
+     * inaczej równoległe `loadTurns` / `clearCombatUi` kasowałyby łupy zanim gracz kliknie „Weź” / „Pomiń”.
+     * @param {{ force?: boolean }} [opts] — `force: true` przy pełnym zamykaniu (np. dismiss po wiadomości).
+     */
+    hide(opts) {
+      const force = !!(opts && opts.force);
       if (this._host) this._host.classList.add("combat-panel-host--hidden");
       if (this._card) this._card.hidden = true;
-      this._hideLoot();
-      this._hideEnd();
+      const layerOpen = (el) =>
+        el && String(el.style.display || "").toLowerCase() === "flex";
+      const lootOpen = layerOpen(this._lootLayer);
+      const endOpen = layerOpen(this._endLayer);
+      if (force || (!lootOpen && !endOpen)) {
+        this._hideLoot();
+        this._hideEnd();
+      }
     }
 
     _setMsg(text, isError) {
@@ -594,7 +606,7 @@
       this._pendingGold = 0;
       this._deferVictoryOverlay = false;
       this._endOverlayDismissed = false;
-      this.hide();
+      this.hide({ force: true });
       this._state = null;
       return true;
     }
