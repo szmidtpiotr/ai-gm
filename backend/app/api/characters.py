@@ -15,6 +15,7 @@ from app.character_creation_config import (
     roll_creation_skills,
 )
 from app.services.loot_service import grant_loot_to_character
+from app.services.gm_plan_generation_service import generate_initial_gm_plan_with_retries
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT
@@ -1100,7 +1101,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
 
     campaign = conn.execute(
         """
-        SELECT id, system_id, model_id, language
+        SELECT id, system_id, model_id, language, title, owner_user_id, gm_plan_json
         FROM campaigns
         WHERE id = ?
         """,
@@ -1206,91 +1207,120 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     except Exception as e:
         logger.warning("[create_character] starter items / gold failed (non-fatal): %s", str(e))
 
-    opening_message = None
+    sheet = created_sheet or {}
+    archetype = str(sheet.get("archetype", "warrior")).strip().lower()
+    name = (req.name or "").strip() or "Bohater"
+    stats = sheet.get("stats", {}) or {}
+    skills = sheet.get("skills", {}) or {}
+    hp = sheet.get("max_hp", "?")
+    mana = sheet.get("max_mana", 0)
+    location = req.location or "nieznane miejsce"
+    background = str(sheet.get("background") or "").strip()
+
+    stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
+    skill_lines = ", ".join(
+        f"{k}:{v}" for k, v in skills.items() if isinstance(v, (int, float)) and v > 0
+    ) if skills else ""
+    archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
+
+    char_summary = (
+        f"Postać: {name}, Archetyp: {archetype_label}, "
+        f"HP: {hp}"
+        + (f", Mana: {mana}" if mana else "")
+        + (f", Statystyki: {stat_lines}" if stat_lines else "")
+        + (f", Umiejętności: {skill_lines}" if skill_lines else "")
+        + (f", Tło: {background}" if background else "")
+        + f", Lokalizacja startowa: {location}."
+    )
+
+    model = str(campaign["model_id"] or "").strip() or "gemma3:1b"
+    settings_conn = sqlite3.connect(DB_PATH)
+    settings_conn.row_factory = sqlite3.Row
     try:
-        sheet = created_sheet or {}
-        archetype = str(sheet.get("archetype", "warrior")).strip().lower()
-        name = (req.name or "").strip() or "Bohater"
-        stats = sheet.get("stats", {}) or {}
-        skills = sheet.get("skills", {}) or {}
-        hp = sheet.get("max_hp", "?")
-        mana = sheet.get("max_mana", 0)
-        location = req.location or "nieznane miejsce"
-        background = str(sheet.get("background") or "").strip()
+        model_row = settings_conn.execute(
+            "SELECT value FROM settings WHERE key = 'model' LIMIT 1"
+        ).fetchone()
+        if model_row and model_row["value"]:
+            model = str(model_row["value"]).strip()
+        elif os.getenv("LLM_MODEL"):
+            model = os.getenv("LLM_MODEL", "gemma3:1b").strip() or "gemma3:1b"
+    except Exception:
+        pass
+    finally:
+        settings_conn.close()
 
-        stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
-        skill_lines = ", ".join(
-            f"{k}:{v}" for k, v in skills.items() if isinstance(v, (int, float)) and v > 0
-        ) if skills else ""
-        archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
+    llm_config = get_user_llm_settings_full(req.user_id)
+    model = llm_config.get("model") or model
 
-        char_summary = (
-            f"Postać: {name}, Archetyp: {archetype_label}, "
-            f"HP: {hp}"
-            + (f", Mana: {mana}" if mana else "")
-            + (f", Statystyki: {stat_lines}" if stat_lines else "")
-            + (f", Umiejętności: {skill_lines}" if skill_lines else "")
-            + (f", Tło: {background}" if background else "")
-            + f", Lokalizacja startowa: {location}."
+    gm_plan_ready = False
+    gm_plan_error: str | None = None
+    try:
+        gm_plan_ready, gm_plan_error = generate_initial_gm_plan_with_retries(
+            conn,
+            campaign_id=campaign_id,
+            campaign_title=str(campaign["title"] or f"Kampania {campaign_id}"),
+            campaign_language=str(campaign["language"] or "pl"),
+            system_id=str(campaign["system_id"] or ""),
+            char_summary=char_summary,
+            user_id=int(req.user_id),
+            model=model,
+            llm_config=llm_config,
+            max_attempts=3,
         )
+    except Exception as e:
+        logger.warning("[create_character] gm plan generation failed (non-fatal): %s", str(e))
+        gm_plan_error = str(e)
 
-        opening_prompt = (
-            f"{char_summary}\n\n"
-            "To jest pierwsza chwila przygody. Zacznij sesję od klimatycznego opisu miejsca, "
-            "w którym bohater się znajduje. Nie pytaj gracza o plany - po prostu opisz scenę "
-            "i zostaw otwarte zakończenie zachęcające do działania."
-        )
-
-        messages = [
-            {"role": "system", "content": OPENING_SYSTEM_PROMPT},
-            {"role": "user", "content": opening_prompt},
-        ]
-
-        model = str(campaign["model_id"] or "").strip() or "gemma3:1b"
-        settings_conn = sqlite3.connect(DB_PATH)
-        settings_conn.row_factory = sqlite3.Row
+    opening_message = None
+    if gm_plan_ready:
         try:
-            model_row = settings_conn.execute(
-                "SELECT value FROM settings WHERE key = 'model' LIMIT 1"
-            ).fetchone()
-            if model_row and model_row["value"]:
-                model = str(model_row["value"]).strip()
-            elif os.getenv("LLM_MODEL"):
-                model = os.getenv("LLM_MODEL", "gemma3:1b").strip() or "gemma3:1b"
-        except Exception:
-            # settings table may not exist; keep fallback model
-            pass
-        finally:
-            settings_conn.close()
+            opening_prompt = (
+                f"{char_summary}\n\n"
+                "To jest pierwsza chwila przygody. Zacznij sesję od klimatycznego opisu miejsca, "
+                "w którym bohater się znajduje. Nie pytaj gracza o plany - po prostu opisz scenę "
+                "i zostaw otwarte zakończenie zachęcające do działania."
+            )
 
-        llm_config = get_user_llm_settings_full(req.user_id)
-        # Prefer per-user model selection when generating the opening message.
-        model = llm_config.get("model") or model
-        opening_message = (generate_chat(messages=messages, model=model, llm_config=llm_config) or "").strip() or None
+            messages = [
+                {"role": "system", "content": OPENING_SYSTEM_PROMPT},
+                {"role": "user", "content": opening_prompt},
+            ]
 
-        if opening_message:
-            try:
-                location_intent = parse_location_intent(opening_message, None)
-            except Exception as exc:
-                logger.warning(
-                    "[opening_scene] location_intent_parse_failed campaign_id=%s error=%s",
-                    campaign_id,
-                    str(exc),
-                )
-                location_intent = None
+            opening_message = (
+                generate_chat(messages=messages, model=model, llm_config=llm_config) or ""
+            ).strip() or None
 
-            if location_intent and location_intent.action == "create":
-                created = persist_ai_generated_location(
-                    location_intent,
-                    campaign_id=campaign_id,
-                    conn=conn,
-                )
-                if created:
-                    conn.execute(
-                        "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
-                        (created["id"], session_id),
+            if opening_message:
+                try:
+                    location_intent = parse_location_intent(opening_message, None)
+                except Exception as exc:
+                    logger.warning(
+                        "[opening_scene] location_intent_parse_failed campaign_id=%s error=%s",
+                        campaign_id,
+                        str(exc),
                     )
-                    conn.commit()
+                    location_intent = None
+
+                if location_intent and location_intent.action == "create":
+                    created = persist_ai_generated_location(
+                        location_intent,
+                        campaign_id=campaign_id,
+                        conn=conn,
+                    )
+                    if created:
+                        conn.execute(
+                            "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+                            (created["id"], session_id),
+                        )
+                        conn.commit()
+                    else:
+                        _ensure_opening_location_fallback(
+                            conn=conn,
+                            campaign_id=campaign_id,
+                            session_id=session_id,
+                            opening_message=opening_message,
+                            requested_location=req.location,
+                        )
                 else:
                     _ensure_opening_location_fallback(
                         conn=conn,
@@ -1299,36 +1329,28 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
                         opening_message=opening_message,
                         requested_location=req.location,
                     )
-            else:
-                _ensure_opening_location_fallback(
-                    conn=conn,
-                    campaign_id=campaign_id,
-                    session_id=session_id,
-                    opening_message=opening_message,
-                    requested_location=req.location,
+                next_turn_row = conn.execute(
+                    """
+                    SELECT COALESCE(MAX(turn_number), 0) + 1 AS next_turn
+                    FROM campaign_turns
+                    WHERE campaign_id = ?
+                    """,
+                    (campaign_id,),
+                ).fetchone()
+                next_turn_number = int(next_turn_row["next_turn"] or 1)
+                conn.execute(
+                    """
+                    INSERT INTO campaign_turns (
+                        campaign_id, character_id, user_text, route, assistant_text, turn_number
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (campaign_id, character_id, "", "narrative", opening_message, next_turn_number),
                 )
-            next_turn_row = conn.execute(
-                """
-                SELECT COALESCE(MAX(turn_number), 0) + 1 AS next_turn
-                FROM campaign_turns
-                WHERE campaign_id = ?
-                """,
-                (campaign_id,),
-            ).fetchone()
-            next_turn_number = int(next_turn_row["next_turn"] or 1)
-            conn.execute(
-                """
-                INSERT INTO campaign_turns (
-                    campaign_id, character_id, user_text, route, assistant_text, turn_number
-                )
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (campaign_id, character_id, "", "narrative", opening_message, next_turn_number),
-            )
-            conn.commit()
-    except Exception as e:
-        logger.warning("[create_character] opening message failed (non-fatal): %s", str(e))
-        opening_message = None
+                conn.commit()
+        except Exception as e:
+            logger.warning("[create_character] opening message failed (non-fatal): %s", str(e))
+            opening_message = None
 
     row = conn.execute(
         """
@@ -1351,6 +1373,8 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         item["sheet_json"] = {}
     item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
     item["opening_message"] = opening_message
+    item["gm_plan_ready"] = bool(gm_plan_ready)
+    item["gm_plan_error"] = gm_plan_error
 
     return item
 

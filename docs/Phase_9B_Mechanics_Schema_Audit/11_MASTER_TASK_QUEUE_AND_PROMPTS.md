@@ -28,7 +28,7 @@
 | 3 | **T03** | [x] | **Prompt** podsumowania gracza: **tylko** transkrypt — **bez** `gm_plan_json` w kontekście | T02 | **[S11b]** |
 | 4 | **T04** | [x] | **Prompt** wersji MG: transkrypt **+** plan (`gm_plan_json`) | T02 | **[S11b]** |
 | 5 | **T06** | [x] | **`gm_plan_json` W1**: `gm_plan_schema` (normalize, merge, format), PATCH, §7.1, testy | — | **[S11b]**, W2 backlog |
-| 6 | **T05** | [ ] | Po zapisie postaci: **generacja planu do skutku**; **blokada** pierwszej narracji bez planu | T06 | **[S11b]** |
+| 6 | **T05** | [x] | Po zapisie postaci: **generacja planu do skutku**; **blokada** pierwszej narracji bez planu | T06 | **[S11b]** |
 | 7 | **T07** | [ ] | API / serializacja: **gracz nie dostaje** `gm_plan_json` w GET kampanii (lista + szczegóły) | T06 | **[S11b]** |
 | 8 | **T08** | [ ] | Multiplayer: **cooldown** odświeżenia rollupu **per `campaign_id`** | T02 | **[S11b]** |
 | 9 | **T09** | [ ] | UI: stan **„wymaga odświeżenia”** po błędzie LLM rollupu | T02 | **[S11b]** |
@@ -215,7 +215,7 @@
 
 ## 7. PROMPTY — T05
 
-<!-- STATUS_T05: PENDING -->
+<!-- STATUS_T05: DONE -->
 
 ### T05 — Generacja planu po postaci **do skutku** przed pierwszą narracją
 
@@ -235,7 +235,12 @@
 
 **Co zostało zrobione**
 
--
+- [`gm_plan_schema.gm_plan_is_ready`](../../backend/app/services/gm_plan_schema.py) — minimalna treść planu przed narracją LLM.
+- [`gm_plan_generation_service`](../../backend/app/services/gm_plan_generation_service.py) — LLM JSON → W1, max 3 próby, zapis do `campaigns.gm_plan_json`; `retry_initial_gm_plan_for_campaign` dla ponowienia.
+- [`characters.create_character`](../../backend/app/api/characters.py) — najpierw generacja planu, potem opening scene + pierwsza tura tylko gdy `gm_plan_ready`; w odpowiedzi `gm_plan_ready` / `gm_plan_error`.
+- [`turns`](../../backend/app/api/turns.py) — przed `run_narrative_turn` / stream: `409` gdy brak planu i **0** tur narracyjnych (legacy kampanie z turami bez zmian).
+- [`POST /api/campaigns/{id}/gm-plan/generate-initial`](../../backend/app/api/campaigns.py) — owner: ponowienie generacji planu.
+- Testy: [`test_t05_gm_plan_generation.py`](../../backend/tests/test_t05_gm_plan_generation.py), rozszerzony [`test_gm_plan_schema.py`](../../backend/tests/test_gm_plan_schema.py).
 
 **Notatki po implementacji**
 

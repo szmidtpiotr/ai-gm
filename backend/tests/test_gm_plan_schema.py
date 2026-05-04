@@ -8,9 +8,25 @@ import unittest
 from app.services.gm_plan_schema import (
     GM_PLAN_SCHEMA_VERSION,
     format_gm_plan_block,
+    gm_plan_is_ready,
     merge_gm_plan_patch,
     normalize_gm_plan,
 )
+
+
+class TestGmPlanIsReady(unittest.TestCase):
+    def test_empty_not_ready(self):
+        self.assertFalse(gm_plan_is_ready("{}"))
+        self.assertFalse(gm_plan_is_ready(None))
+
+    def test_ready_with_roadmap_in_arc(self):
+        raw = json.dumps(
+            {
+                "arcs": {"default": {"roadmap": "Noc w porcie."}},
+                "active_arc_id": "default",
+            }
+        )
+        self.assertTrue(gm_plan_is_ready(raw))
 
 
 class TestNormalizeGmPlan(unittest.TestCase):

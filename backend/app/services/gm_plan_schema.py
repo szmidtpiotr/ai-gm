@@ -265,3 +265,45 @@ def format_gm_plan_block(raw: str | None) -> str:
         parts.append(f"## Aktywny łuk (MG): {aa.strip()}")
 
     return "\n\n".join(parts)
+
+
+def gm_plan_is_ready(raw: str | None) -> bool:
+    """
+    Minimalna treść planu MG zanim pierwsza narracja może pójść do LLM (T05).
+    Sprawdza aktywny łuk (lub pierwszy dostępny / legacy).
+    """
+    plan = normalize_gm_plan(raw)
+    arcs: dict[str, Any] = plan.get("arcs") if isinstance(plan.get("arcs"), dict) else {}
+    active_id = plan.get("active_arc_id")
+    node: dict[str, Any] | None = None
+    if isinstance(active_id, str) and active_id.strip() and active_id in arcs:
+        node = arcs[active_id]
+    elif arcs:
+        node = next(iter(arcs.values()))
+    if not isinstance(node, dict):
+        node = {}
+
+    roadmap = node.get("roadmap")
+    if roadmap is None and plan.get("roadmap"):
+        roadmap = plan.get("roadmap")
+    if roadmap is not None and str(roadmap).strip():
+        return True
+
+    goals = node.get("scene_goals")
+    if goals is None and isinstance(plan.get("scene_goals"), list):
+        goals = plan.get("scene_goals")
+    if isinstance(goals, list) and any(str(g).strip() for g in goals if g is not None):
+        return True
+
+    hooks = node.get("hooks")
+    if not isinstance(hooks, dict) and isinstance(plan.get("hooks"), dict):
+        hooks = plan.get("hooks")
+    if isinstance(hooks, dict):
+        npcs = hooks.get("npcs")
+        locs = hooks.get("locations")
+        if isinstance(npcs, list) and any(str(x).strip() for x in npcs if x is not None):
+            return True
+        if isinstance(locs, list) and any(str(x).strip() for x in locs if x is not None):
+            return True
+
+    return False

@@ -1196,6 +1196,44 @@ def get_active_campaign_or_gone(conn: sqlite3.Connection, campaign_id: int):
     return campaign
 
 
+def _narrative_turn_count(conn: sqlite3.Connection, campaign_id: int) -> int:
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS n
+        FROM campaign_turns
+        WHERE campaign_id = ? AND route = 'narrative'
+        """,
+        (campaign_id,),
+    ).fetchone()
+    return int(row["n"] or 0) if row else 0
+
+
+def _require_gm_plan_before_narrative_llm(
+    conn: sqlite3.Connection, campaign_id: int, campaign: sqlite3.Row
+) -> None:
+    """
+    T05: don't run player→LLM narrative until campaigns.gm_plan_json is substantive,
+    but only when there are no narrative turns yet (new campaign / plan failure).
+    """
+    from app.services.gm_plan_schema import gm_plan_is_ready
+
+    try:
+        raw = campaign["gm_plan_json"]
+    except (KeyError, IndexError):
+        raw = None
+    if gm_plan_is_ready(raw):
+        return
+    if _narrative_turn_count(conn, campaign_id) > 0:
+        return
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            "Plan kampanii MG nie jest jeszcze gotowy. Poczekaj na zakończenie generacji po utworzeniu postaci "
+            "lub poproś właściciela o ponowienie: POST /api/campaigns/{id}/gm-plan/generate-initial?user_id=…"
+        ),
+    )
+
+
 def get_next_turn_number(conn: sqlite3.Connection, campaign_id: int) -> int:
     row = conn.execute(
         """
@@ -1740,6 +1778,8 @@ def create_turn(
             )
             return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
+        _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
+
         route = "narrative"
         model = resolve_model_name(
             requested_model=payload.engine,
@@ -2152,6 +2192,8 @@ def create_turn_stream(
                 media_type="text/event-stream",
                 headers=stream_headers,
             )
+
+        _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 
         model = resolve_model_name(
             requested_model=payload.engine,
