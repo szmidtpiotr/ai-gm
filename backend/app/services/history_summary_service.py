@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Any
+from typing import Any, Literal
 
 from app.history_summary_prompt_loader import HISTORY_SUMMARY_PROMPT_TEXT
 from app.services.history_summary_dual_prompt import (
@@ -16,6 +16,20 @@ from app.services.user_llm_settings import get_user_llm_settings_full
 
 
 DB_PATH = "/data/ai_gm.db"
+
+# [T02 / S11b] Rollup storage: public-facing vs GM-only context (separate rows).
+SummaryAudience = Literal["player", "gm"]
+SUMMARY_AUDIENCE_PLAYER: SummaryAudience = "player"
+SUMMARY_AUDIENCE_GM: SummaryAudience = "gm"
+
+
+def _normalize_audience(audience: str) -> SummaryAudience:
+    a = (audience or "").strip().lower()
+    if a == SUMMARY_AUDIENCE_PLAYER:
+        return SUMMARY_AUDIENCE_PLAYER
+    if a == SUMMARY_AUDIENCE_GM:
+        return SUMMARY_AUDIENCE_GM
+    raise ValueError("audience must be 'player' or 'gm'")
 
 
 def _fetch_campaign(conn: sqlite3.Connection, campaign_id: int) -> dict[str, Any] | None:
@@ -202,27 +216,51 @@ def persist_summary(
     summary_text: str,
     model_used: str | None,
     included_turn_count: int,
+    audience: SummaryAudience = SUMMARY_AUDIENCE_PLAYER,
 ) -> int:
+    aud = _normalize_audience(audience)
     cur = conn.execute(
         """
-        INSERT INTO campaign_ai_summaries (campaign_id, summary_text, model_used, included_turn_count)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO campaign_ai_summaries (
+            campaign_id, summary_text, model_used, included_turn_count, audience
+        )
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (campaign_id, summary_text, model_used or "", included_turn_count),
+        (campaign_id, summary_text, model_used or "", included_turn_count, aud),
     )
     conn.commit()
     return int(cur.lastrowid or 0)
 
 
-def fetch_latest_saved_summary(conn: sqlite3.Connection, campaign_id: int) -> dict[str, Any] | None:
+def fetch_latest_saved_summary(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    *,
+    audience: SummaryAudience,
+) -> dict[str, Any] | None:
+    """Latest saved rollup for a single audience (separate history stacks per audience)."""
+    aud = _normalize_audience(audience)
     row = conn.execute(
         """
-        SELECT id, campaign_id, summary_text, model_used, included_turn_count, created_at
+        SELECT id, campaign_id, summary_text, model_used, included_turn_count, audience, created_at
         FROM campaign_ai_summaries
-        WHERE campaign_id = ?
+        WHERE campaign_id = ? AND audience = ?
         ORDER BY id DESC
         LIMIT 1
         """,
-        (campaign_id,),
+        (campaign_id, aud),
     ).fetchone()
     return dict(row) if row else None
+
+
+def fetch_latest_saved_summary_for_narrative(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+) -> dict[str, Any] | None:
+    """
+    Skrót dla promptu narracji: preferuj zapis **gm**; gdy brak (np. legacy), użyj **player**.
+    """
+    gm_row = fetch_latest_saved_summary(conn, campaign_id, audience=SUMMARY_AUDIENCE_GM)
+    if gm_row and (gm_row.get("summary_text") or "").strip():
+        return gm_row
+    return fetch_latest_saved_summary(conn, campaign_id, audience=SUMMARY_AUDIENCE_PLAYER)

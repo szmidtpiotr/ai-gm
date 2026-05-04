@@ -1181,6 +1181,21 @@ def _ensure_active_combat_loot_pool(conn: sqlite3.Connection) -> None:
         logger.info("admin_migration_applied", sql_preview="active_combat ADD COLUMN loot_pool")
 
 
+def _ensure_campaign_ai_summaries_audience(conn: sqlite3.Connection) -> None:
+    """[T02 / S11b] Distinguish player vs GM rollup rows; legacy rows default to player."""
+    try:
+        conn.execute(
+            "ALTER TABLE campaign_ai_summaries ADD COLUMN audience TEXT NOT NULL DEFAULT 'player'"
+        )
+        conn.commit()
+        logger.info("admin_migration_applied", sql_preview="campaign_ai_summaries ADD audience")
+    except sqlite3.OperationalError as e:
+        msg = str(e).lower()
+        if "duplicate column" in msg or "already exists" in msg:
+            return
+        raise
+
+
 def _ensure_enemy_loot_table_and_drop_chance(conn: sqlite3.Connection) -> None:
     """Add loot_table_key / drop_chance on game_config_enemies if missing (idempotent)."""
     cur = conn.cursor()
@@ -1260,6 +1275,7 @@ def run_admin_migrations() -> None:
                     raise
 
         _migrate_legacy_archetype_json(conn)
+        _ensure_campaign_ai_summaries_audience(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)
     finally:
         conn.close()

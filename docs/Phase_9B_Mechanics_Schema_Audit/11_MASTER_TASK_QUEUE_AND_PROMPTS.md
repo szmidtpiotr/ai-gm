@@ -1,7 +1,7 @@
 # Master: kolejka zadań + prompty (jeden plik)
 
 <!-- MASTER_STATUS: ACTIVE -->
-<!-- LAST_UPDATE: 2026-05-03 -->
+<!-- LAST_UPDATE: 2026-05-04 -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -24,7 +24,7 @@
 | Lp | ID | Gotowe | Zadanie (skrót) | Zależność | Uchwała / blok |
 |----|-----|:------:|-----------------|-----------|----------------|
 | 1 | **T01** | [x] | Test: **jeden** prompt rollup (gracz+MG) vs **dwa** prompty — jakość, leak, JSON | — | **[S11b]** |
-| 2 | **T02** | [ ] | Migracja + model: **dwa zapisy** rollupu (`audience` / `kind` lub druga tabela) | T01 | **[S11b]** |
+| 2 | **T02** | [x] | Migracja + model: **dwa zapisy** rollupu (`audience` / `kind` lub druga tabela) | T01 | **[S11b]** |
 | 3 | **T03** | [ ] | **Prompt** podsumowania gracza: **tylko** transkrypt — **bez** `gm_plan_json` w kontekście | T02 | **[S11b]** |
 | 4 | **T04** | [ ] | **Prompt** wersji MG: transkrypt **+** plan (`gm_plan_json`) | T02 | **[S11b]** |
 | 5 | **T06** | [ ] | **`gm_plan_json` W1**: szkielet pól, merge, dokumentacja w `07` / kodzie | — | **[S11b]**, W2 backlog |
@@ -90,7 +90,7 @@
 
 ## 3. PROMPTY — T02
 
-<!-- STATUS_T02: PENDING -->
+<!-- STATUS_T02: DONE -->
 
 ### T02 — Dwa rekordy rollupu (gracz vs MG) w DB
 
@@ -111,7 +111,11 @@
 
 **Co zostało zrobione**
 
--
+- **Decyzja:** jedna tabela + kolumna `audience` (`player` | `gm`), domyślnie `player` dla istniejących wierszy (migracja `_ensure_campaign_ai_summaries_audience` + `RAW_MIGRATIONS` w `main.py`).
+- **Zapis:** `persist_summary(..., audience=…)`; endpointy `POST/GET …/history/summary` i `…/ensure` przyjmują query `audience` (pattern `player|gm`), domyślnie `player`.
+- **Narracja:** `fetch_latest_saved_summary_for_narrative` — najpierw ostatni `gm`, w przeciwnym razie `player` (kompatybilność z samym stosem `player`).
+- **`/mem`:** corpus tylko z wierszy `audience=player` (żeby nie mieszać treści MG-only).
+- **Testy:** `backend/tests/test_history_summary_t02_audience.py`.
 
 **Notatki po implementacji**
 
@@ -467,3 +471,4 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 |------|--------|
 | 2026-05-03 | Utworzenie master kolejki T01–T21 + prompty; jeden plik źródłowy. |
 | 2026-05-03 | **T01 DONE** (kod + testy unittest); live 3× LLM — do uzupełnienia ręcznie. |
+| 2026-05-04 | **T02 DONE** — kolumna `audience`, API query, narracja gm→player, testy. |
