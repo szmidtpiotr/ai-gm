@@ -43,6 +43,7 @@ def create_campaign_history_summary(
             campaign_id=campaign_id,
             user_id=user_id,
             max_turns=max_turns,
+            audience=audience,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from None
@@ -136,6 +137,7 @@ def ensure_campaign_history_summary(
             campaign_id=campaign_id,
             user_id=user_id,
             max_turns=max_turns,
+            audience=audience,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from None

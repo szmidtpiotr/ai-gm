@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 
 from app.services.history_summary_service import (
+    SUMMARY_AUDIENCE_PLAYER,
     generate_campaign_summary,
     persist_summary,
 )
@@ -60,6 +61,7 @@ def regenerate_campaign_summary_admin(campaign_id: int) -> dict:
             campaign_id=campaign_id,
             user_id=owner_id,
             max_turns=200,
+            audience=SUMMARY_AUDIENCE_PLAYER,
         )
     except ValueError as e:
         if str(e) == "campaign_not_found":
@@ -77,6 +79,7 @@ def regenerate_campaign_summary_admin(campaign_id: int) -> dict:
                 summary_text=result["summary"],
                 model_used=str(result.get("model_used") or ""),
                 included_turn_count=int(result.get("included_turn_count") or 0),
+                audience=SUMMARY_AUDIENCE_PLAYER,
             )
         finally:
             conn2.close()

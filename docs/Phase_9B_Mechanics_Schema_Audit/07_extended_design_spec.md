@@ -146,6 +146,23 @@ Wspólny podzbiór dla **`game_config_items`** i **`game_config_conditions`** �
 | UI planu | **Generowanie LLM**; PATCH operatora — wyłącznie narzędzie awaryjne. |
 | Questy / XP | Dla systemu preferowana **struktura w DB** (cele, statusy) — ułatwia XP i audyt (**[S11b]**). |
 
+### 7.1. `gm_plan_json` — kształt **W1** (T06)
+
+Jeden JSON w kolumnie `campaigns.gm_plan_json` (bez osobnej tabeli beatów w W1). Implementacja: moduł `backend/app/services/gm_plan_schema.py`.
+
+| Pole | Znaczenie |
+|------|-----------|
+| `schema_version` | Aktualnie **2** — znacznik migracji z płaskich pól sprzed łuków. |
+| `arcs` | Mapa `arc_id` → obiekt łuku: m.in. `title`, `status` (`draft` / `active` / `closed`), `roadmap`, `scene_goals`, `hooks` (`npcs`, `locations`), `current_scene_ordinal`, `scene_log`, opcjonalnie `private_notes`. |
+| `active_arc_id` | Który łuk jest **kanoniczny** dla narracji, rollupu MG i endpointu „advance scene”. |
+| `engine_private` | Prywatne pole pod przyszłe metadane silnika (beaty, cache) — **deep merge** przy PATCH. |
+
+**Migracja legacy:** jeśli w JSON są stare klucze na górze (`roadmap`, `scene_goals`, `hooks`, `current_scene_ordinal`, `scene_log`) i nie ma jeszcze `arcs`, są przenoszone do `arcs.default` i ustawiane `active_arc_id = "default"`.
+
+**PATCH (`PATCH …/gm-plan`):** merge przez `merge_gm_plan_patch`: głębokie scalenie pod `arcs` i `engine_private`; pozostałe klucze nadpisują płytko. **Płaskie** klucze legacy z tabeli powyżej, gdy w tym samym body **nie** ma `arcs`, trafiają do **aktywnego** łuku (nie giną przy przejściu na W1).
+
+**Tekst do promptów:** jeden formatter `format_gm_plan_block` — ten sam kształt bloku w narracji ([S11a]) i w rollupie MG ([T04]).
+
 ---
 
 ## 8. XP — reszta projektowa

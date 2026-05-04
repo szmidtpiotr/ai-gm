@@ -1191,7 +1191,7 @@ def _ensure_campaign_ai_summaries_audience(conn: sqlite3.Connection) -> None:
         logger.info("admin_migration_applied", sql_preview="campaign_ai_summaries ADD audience")
     except sqlite3.OperationalError as e:
         msg = str(e).lower()
-        if "duplicate column" in msg or "already exists" in msg:
+        if "duplicate column" in msg or "already exists" in msg or "no such table" in msg:
             return
         raise
 

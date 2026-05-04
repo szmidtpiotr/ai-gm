@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import Any, Literal
 
@@ -11,6 +12,7 @@ from app.services.history_summary_dual_prompt import (
     leaked_plan_tokens_in_player_summary,
     parse_dual_json_response,
 )
+from app.services.gm_plan_schema import format_gm_plan_block
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
 
@@ -21,6 +23,22 @@ DB_PATH = "/data/ai_gm.db"
 SummaryAudience = Literal["player", "gm"]
 SUMMARY_AUDIENCE_PLAYER: SummaryAudience = "player"
 SUMMARY_AUDIENCE_GM: SummaryAudience = "gm"
+PLAYER_SUMMARY_SYSTEM_APPEND = """
+
+## AUDIENCE: PLAYER
+- Tworzysz wyłącznie wersję dla gracza / jawny notatnik kampanii.
+- Bazuj tylko na faktach z transkryptu dostarczonego w wiadomości użytkownika.
+- Nie odwołuj się do ukrytego planu MG, wewnętrznych notatek ani danych spoza transkryptu.
+- Jeśli czegoś nie ma w transkrypcie, pomiń to zamiast dopowiadać.
+""".strip()
+GM_SUMMARY_SYSTEM_APPEND = """
+
+## AUDIENCE: GM
+- Tworzysz prywatną wersję MG / kontekst dla silnika i panelu admin.
+- Możesz łączyć fakty z transkryptu z blokiem PLAN_MG, jeśli został dołączony.
+- Wolno wskazywać tropy, cele sceny i konsekwencje, które nie padły jeszcze wprost w dialogu.
+- Zachowaj rozdział: to nie jest tekst dla gracza.
+""".strip()
 
 
 def _normalize_audience(audience: str) -> SummaryAudience:
@@ -169,10 +187,12 @@ def generate_campaign_summary(
     campaign_id: int,
     user_id: int,
     max_turns: int = 200,
+    audience: SummaryAudience = SUMMARY_AUDIENCE_PLAYER,
 ) -> dict[str, Any]:
     """
     user_id must match campaigns.owner_user_id (caller enforced in router).
     """
+    aud = _normalize_audience(audience)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -189,14 +209,24 @@ def generate_campaign_summary(
             }
 
         transcript = format_transcript(turns, camp["title"] or f"Kampania {campaign_id}", camp["language"] or "pl")
+        gm_plan_raw = str(camp.get("gm_plan_json") or "").strip()
         llm_config = get_user_llm_settings_full(user_id)
         model = (camp.get("model_id") or "").strip() or None
+        system_prompt = HISTORY_SUMMARY_PROMPT_TEXT
+        user_content = transcript
+        if aud == SUMMARY_AUDIENCE_PLAYER:
+            system_prompt = f"{system_prompt.rstrip()}\n\n{PLAYER_SUMMARY_SYSTEM_APPEND}"
+        else:
+            system_prompt = f"{system_prompt.rstrip()}\n\n{GM_SUMMARY_SYSTEM_APPEND}"
+            formatted_plan = format_gm_plan_block(gm_plan_raw)
+            if formatted_plan:
+                user_content = f"[PLAN_MG]\n{formatted_plan}\n[/PLAN_MG]\n\n[TRANSKRYPT]\n{transcript}"
 
         messages = [
-            {"role": "system", "content": HISTORY_SUMMARY_PROMPT_TEXT},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": transcript,
+                "content": user_content,
             },
         ]
         summary = generate_chat(messages, model=model, llm_config=llm_config).strip()
@@ -204,6 +234,7 @@ def generate_campaign_summary(
             "summary": summary,
             "model_used": model or llm_config.get("model", ""),
             "included_turn_count": len(turns),
+            "audience": aud,
         }
     finally:
         conn.close()

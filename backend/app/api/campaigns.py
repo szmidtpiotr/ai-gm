@@ -9,6 +9,7 @@ from app.core.config import DEFAULT_CAMPAIGN_LANGUAGE
 from app.core.logging import get_logger
 from app.services.history_summary_service import generate_dual_summary_preview
 from app.services.solo_death_service import death_summary_payload
+from app.services.gm_plan_schema import merge_gm_plan_patch, normalize_gm_plan
 
 DB_PATH = "/data/ai_gm.db"
 logger = get_logger(__name__)
@@ -17,13 +18,7 @@ router = APIRouter()
 
 
 def _parse_gm_plan(raw: str | None) -> dict:
-    if not raw or not str(raw).strip():
-        return {"schema_version": 1}
-    try:
-        d = json.loads(raw)
-        return d if isinstance(d, dict) else {"schema_version": 1}
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return {"schema_version": 1}
+    return normalize_gm_plan(raw)
 
 
 class CampaignCreateRequest(BaseModel):
@@ -37,7 +32,7 @@ class CampaignCreateRequest(BaseModel):
 
 
 class GmPlanPatchRequest(BaseModel):
-    """Shallow merge into `campaigns.gm_plan_json` (keys from request overwrite)."""
+    """Merge into `gm_plan_json` (W1: `arcs` / `engine_private` — deep merge; legacy flat keys → aktywny łuk)."""
 
     model_config = ConfigDict(extra="forbid")
     gm_plan_json: dict
@@ -105,8 +100,9 @@ def get_campaign(campaign_id: int):
 @router.patch("/campaigns/{campaign_id}/gm-plan")
 def patch_campaign_gm_plan(campaign_id: int, req: GmPlanPatchRequest, user_id: int = Query(...)):
     """
-    Owner-only shallow merge into `gm_plan_json` (**[S11a]**).
-    Typical keys: `roadmap`, `scene_goals`, `hooks`, `current_scene_ordinal`, `scene_log`.
+    Owner-only merge into `gm_plan_json` (**[S11a]** / T06 W1).
+    Prefer body: `arcs`, `active_arc_id`, `engine_private`. Stare, płaskie klucze
+    (`roadmap`, `scene_goals`, …) trafiają do **aktywnego łuku**, o ile nie podano `arcs` w tym samym żądaniu.
     """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -120,7 +116,7 @@ def patch_campaign_gm_plan(campaign_id: int, req: GmPlanPatchRequest, user_id: i
         if int(row["owner_user_id"]) != int(user_id):
             raise HTTPException(status_code=403, detail="user_id must match campaign owner")
         base = _parse_gm_plan(row["gm_plan_json"])
-        merged = {**base, **req.gm_plan_json}
+        merged = merge_gm_plan_patch(base, req.gm_plan_json)
         conn.execute(
             "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
             (json.dumps(merged, ensure_ascii=False), campaign_id),
@@ -174,9 +170,25 @@ def advance_campaign_scene(
         through_turn = int(tr["m"] or 0) if tr else 0
 
         plan = _parse_gm_plan(row["gm_plan_json"])
-        ordn = int(plan.get("current_scene_ordinal") or 0) + 1
-        plan["current_scene_ordinal"] = ordn
-        log = plan.get("scene_log")
+        arcs: dict = plan.get("arcs") if isinstance(plan.get("arcs"), dict) else {}
+        active = plan.get("active_arc_id")
+        if isinstance(active, str) and active.strip() and active in arcs:
+            key = active
+        elif arcs:
+            key = next(iter(arcs.keys()))
+        else:
+            key = "default"
+            arcs["default"] = {
+                "id": "default",
+                "title": "",
+                "status": "active",
+                "scene_goals": [],
+                "hooks": {},
+            }
+        arc = arcs.get(key) if isinstance(arcs.get(key), dict) else {}
+        ordn = int(arc.get("current_scene_ordinal") or plan.get("current_scene_ordinal") or 0) + 1
+        arc["current_scene_ordinal"] = ordn
+        log = arc.get("scene_log")
         if not isinstance(log, list):
             log = []
         entry = {
@@ -188,7 +200,11 @@ def advance_campaign_scene(
         if nt:
             entry["note"] = nt
         log.append(entry)
-        plan["scene_log"] = log
+        arc["scene_log"] = log
+        arcs[key] = arc
+        plan["arcs"] = arcs
+        plan["active_arc_id"] = key
+        plan = normalize_gm_plan(json.dumps(plan, ensure_ascii=False))
 
         conn.execute(
             "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",

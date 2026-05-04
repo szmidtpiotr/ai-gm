@@ -512,6 +512,16 @@ async def get_all_location_logs(
                 "reason_blocked": row["reason_blocked"],
                 "created_at": row["created_at"]
             })
+
+        return {
+            "count": len(log_entries),
+            "entries": log_entries,
+            "filters_applied": {
+                "session_id": session_id,
+                "since": since,
+                "limit": limit,
+            },
+        }
         
     except sqlite3.Error as e:
         logger.error("get_all_location_logs_error", error=str(e))
