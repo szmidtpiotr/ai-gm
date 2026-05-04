@@ -2,7 +2,6 @@
 
 <!-- MASTER_STATUS: ACTIVE -->
 <!-- LAST_UPDATE: 2026-05-04 -->
-<!-- T01_ROW: DONE — zamknięte na stałe; follow-up „admin per kampania” to osobna praca (T20 / UX), NIE ponowne T01 ani cofanie [x]. -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -12,8 +11,7 @@
 1. Realizuj **według Lp** (kolumna *Zależność* — nie zaczynaj zadania, dopóki poprzednie wymagane nie są `[x]`).
 2. Po rozpoczęciu: w sekcji PROMPT ustaw `STATUS: IN_PROGRESS` → po zakończeniu `STATUS: DONE` i wypełnij **Co zostało zrobione**.
 3. Ustaw `[x]` w tabeli §1 dla ukończonego wiersza.
-4. **Zadania już `[x]` (np. T01, T02):** nie cofaj checkboxa przy dopisywaniu follow-upów ani kolejnych fal — nowe wymagania przenoś do innego wiersza (np. T20) lub nowego ID; **T01 jest wykonane** (kod + testy + decyzja wariantu A); ewent. przeniesienie podglądu dual do admina to **osobny** element planu, nie „dokończenie T01”.
-5. Opcjonalnie: **Notatki po implementacji** (Perplexity / człowiek).
+4. Opcjonalnie: **Notatki po implementacji** (Perplexity / człowiek).
 
 **Uchwały źródłowe:** [`04_decisions_log.md`](04_decisions_log.md) — **[S11b]**, **[S10e]**, **[S10d]**, **[IMPL]**, **[AUDIT]**; spec: [`07_extended_design_spec.md`](07_extended_design_spec.md) §7.
 
@@ -27,9 +25,9 @@
 |----|-----|:------:|-----------------|-----------|----------------|
 | 1 | **T01** | [x] | Test: **jeden** prompt rollup (gracz+MG) vs **dwa** prompty — jakość, leak, JSON | — | **[S11b]** |
 | 2 | **T02** | [x] | Migracja + model: **dwa zapisy** rollupu (`audience` / `kind` lub druga tabela) | T01 | **[S11b]** |
-| 3 | **T03** | [ ] | **Prompt** podsumowania gracza: **tylko** transkrypt — **bez** `gm_plan_json` w kontekście | T02 | **[S11b]** |
-| 4 | **T04** | [ ] | **Prompt** wersji MG: transkrypt **+** plan (`gm_plan_json`) | T02 | **[S11b]** |
-| 5 | **T06** | [ ] | **`gm_plan_json` W1**: szkielet pól, merge, dokumentacja w `07` / kodzie | — | **[S11b]**, W2 backlog |
+| 3 | **T03** | [x] | **Prompt** podsumowania gracza: **tylko** transkrypt — **bez** `gm_plan_json` w kontekście | T02 | **[S11b]** |
+| 4 | **T04** | [x] | **Prompt** wersji MG: transkrypt **+** plan (`gm_plan_json`) | T02 | **[S11b]** |
+| 5 | **T06** | [x] | **`gm_plan_json` W1**: `gm_plan_schema` (normalize, merge, format), PATCH, §7.1, testy | — | **[S11b]**, W2 backlog |
 | 6 | **T05** | [ ] | Po zapisie postaci: **generacja planu do skutku**; **blokada** pierwszej narracji bez planu | T06 | **[S11b]** |
 | 7 | **T07** | [ ] | API / serializacja: **gracz nie dostaje** `gm_plan_json` w GET kampanii (lista + szczegóły) | T06 | **[S11b]** |
 | 8 | **T08** | [ ] | Multiplayer: **cooldown** odświeżenia rollupu **per `campaign_id`** | T02 | **[S11b]** |
@@ -44,12 +42,10 @@
 | 17 | **T17** | [ ] | **[IMPL] fala 3:** `effect_json` + walidacja admin | T11 | **[IMPL]**, **[S13]** |
 | 18 | **T18** | [ ] | **[IMPL] fala 4:** warunki + konsumable / `item_key` | T17 | **[IMPL]**, **[S6]** |
 | 19 | **T19** | [ ] | **[IMPL] fala 5:** import / snapshot / ostrzeżenia | T11 | **[IMPL]**, **[S7]** |
-| 20 | **T20** | [ ] | **[IMPL] fala 6:** dywergencja (heurystyka / drugi LLM) + UI plan MG (admin); **follow-up po T01 (T01 nadal [x]):** po usunięciu „Podgląd dual” z frontu gracza — odpowiednik w adminie per kampania (§1 *Follow-up UX*, §2 T01) | T05–T07 | **[IMPL]**, **[S11]** |
+| 20 | **T20** | [ ] | **[IMPL] fala 6:** dywergencja (heurystyka / drugi LLM) + UI plan MG (admin) | T05–T07 | **[IMPL]**, **[S11]** |
 | 21 | **T21** | [ ] | **[IMPL] fala 7:** progres cech za XP (meta + endpoint) | T12 | **[IMPL]**, **[S10]** |
 
 **Uwaga kolejności:** W tabeli **T06** jest przed **T05** (najpierw szkielet planu, potem blokada pierwszej narracji).
-
-**Follow-up UX (po zamkniętym T01 → admin):** **T01 pozostaje wykonane** (`[x]` w tabeli — bez zmian). Poniżej jest wyłącznie **kolejny krok produktowy**, gdy zniknie tymczasowy UI u gracza. Przycisk **„Podgląd dual (T01)”** w modalu gracza jest **tymczasowy** (debug jakości rollupu). Gdy zostanie **usunięty z frontu gry**, ta sama możliwość ma być **przeniesiona do panelu administratora** — **per kampania** (`campaign_id`): odczyt tych samych wyników co dziś w podglądzie (tekst dla gracza, notatka MG, heurystyka wycieku planu, błąd parsowania JSON; opcjonalnie ponowne wywołanie `POST …/dual-summary-preview` lub ekwiwalent tylko dla ról admin). Gracz nie widzi tego widoku. Szczegóły: §2 T01 — *Plan wdrożenia (po usunięciu z UI gracza)* — ten blok **nie** anuluje ani nie „odświeża” zamknięcia T01.
 
 ---
 
@@ -58,8 +54,6 @@
 <!-- STATUS_T01: DONE -->
 
 ### T01 — Test: jeden prompt (gracz + MG) vs dwa prompty
-
-**Stan zadania:** **DONE (trwale)** — zakres T01 (wariant A, moduł `history_summary_dual_prompt`, testy, tymczasowy podgląd w UI) jest **zamknięty**; dalsze prace opisane w *Plan wdrożenia (po usunięciu z UI gracza)* to **inna pozycja w planie** (np. T20), **nie** ponowne otwarcie T01.
 
 **Cel:** Na podstawie realnego lub mock LLM ustalić, czy **wariant A** (jeden call, dwa pola JSON) jest **wystarczający** — jeśli tak, wdrożyć tylko A (**mniej ścieżek = mniej pomyłek**, **[S11b]**).
 
@@ -91,12 +85,6 @@
 **Notatki po implementacji**
 
 -
-
-**Plan wdrożenia (po usunięciu z UI gracza)** — *nie jest częścią „dokończenia T01”; T01 jest już **DONE**.*
-
-- **Trigger:** usunięcie przycisku „Podgląd dual (T01)” z modala **„Podsumowanie kampanii”** po stronie gracza (właściciel kampanii).
-- **Wymaganie:** zamiast całkowicie chować narzędzie — **widok w panelu administratora** powiązany z **konkretną kampanią**: prezentacja tych samych danych co obecny podgląd (treść `player_summary` / `gm_notes`, heurystyka wycieku, komunikat parsowania), z dostępem wyłącznie dla ról admin (nie dla zwykłego gracza).
-- **Powiązanie z kolejką:** implementacja UI najpewniej w **tej samej fali co rozbudowa admina pod rollup / plan MG** (logicznie obok **T20** — UI edycji planu; ewent. osobna zakładka/sekcja „Debug rollup” przy kampanii). Nie blokuje **T10** (automat `ensure`), ale **nie** odkładaj w nieskończoność: bez tego zespół traci widoczność jakości dual promptu po czyszczeniu frontu.
 
 ---
 
@@ -137,7 +125,7 @@
 
 ## 4. PROMPTY — T03
 
-<!-- STATUS_T03: PENDING -->
+<!-- STATUS_T03: DONE -->
 
 ### T03 — Prompt rollupu **gracza**: wyłącznie transkrypt
 
@@ -157,7 +145,11 @@
 
 **Co zostało zrobione**
 
--
+- **Ścieżka runtime:** `generate_campaign_summary(..., audience=...)` w [`history_summary_service.py`](../../backend/app/services/history_summary_service.py); dla `audience=player` do system promptu dopinana jest jawna reguła „tylko fakty z transkryptu”, bez użycia `gm_plan_json`.
+- **API:** [`campaign_history.py`](../../backend/app/api/campaign_history.py) przekazuje `audience` do generatora; ścieżka `player` jest więc formalnie oddzielona od przyszłej ścieżki `gm`.
+- **Admin / persist:** [`admin_campaigns.py`](../../backend/app/services/admin_campaigns.py) jawnie zapisuje regenerowany summary jako `audience=player`, żeby nie mieszać go z MG-only backlogiem T04.
+- **Test regresyjny:** [`backend/tests/test_history_summary_t03_player_only.py`](../../backend/tests/test_history_summary_t03_player_only.py) sprawdza, że sekret z `gm_plan_json` nie trafia do promptu gracza oraz że `gm` nie dostaje przez przypadek player-only instrukcji.
+- **Weryfikacja:** lokalnie i na `.61` zielone: `tests.test_history_summary_t01_dual_prompt`, `tests.test_history_summary_t02_audience`, `tests.test_history_summary_t03_player_only`.
 
 **Notatki po implementacji**
 
@@ -167,7 +159,7 @@
 
 ## 5. PROMPTY — T04
 
-<!-- STATUS_T04: PENDING -->
+<!-- STATUS_T04: DONE -->
 
 ### T04 — Prompt rollupu **MG**: transkrypt + plan
 
@@ -175,13 +167,17 @@
 
 **Implementacja**
 
-1. Zbuduj blok planu jak w `game_engine` (`_format_gm_plan_block`).
+1. Zbuduj blok planu wspólnie z narracją: `format_gm_plan_block` w [`gm_plan_schema.py`](../../backend/app/services/gm_plan_schema.py) (używane w `game_engine` i rollupie MG).
 2. Zapis pod `audience=gm` (lub równoważnie).
 3. Upewnij się, że endpoint dla gracza **nigdy** nie zwraca tego pola.
 
 **Co zostało zrobione**
 
--
+- **Ścieżka runtime:** `generate_campaign_summary(..., audience="gm")` buduje prompt MG-only w [`history_summary_service.py`](../../backend/app/services/history_summary_service.py) z osobnym `GM_SUMMARY_SYSTEM_APPEND`.
+- **Kontekst planu:** do wersji MG dokładany jest blok `[PLAN_MG]...[/PLAN_MG]` oparty o sformatowane `gm_plan_json` (roadmapa, cele sceny, haki, ordinal), plus `[TRANSKRYPT]`.
+- **Persist / API:** istniejące endpointy `campaign_history.py` zapisują i odczytują `audience=gm` bez zmian kontraktu T02; T03 (`player`) pozostało odseparowane.
+- **Testy:** nowy plik [`backend/tests/test_history_summary_t04_gm_context.py`](../../backend/tests/test_history_summary_t04_gm_context.py) sprawdza, że prompt MG dostaje plan i nie używa player-only reguł.
+- **Weryfikacja:** lokalnie i na `.61` zielone: `tests.test_history_summary_t01_dual_prompt`, `tests.test_history_summary_t02_audience`, `tests.test_history_summary_t03_player_only`, `tests.test_history_summary_t04_gm_context`.
 
 **Notatki po implementacji**
 
@@ -191,7 +187,7 @@
 
 ## 6. PROMPTY — T06
 
-<!-- STATUS_T06: PENDING -->
+<!-- STATUS_T06: DONE -->
 
 ### T06 — `gm_plan_json` **W1**: szkielet, merge, dokumentacja
 
@@ -205,7 +201,11 @@
 
 **Co zostało zrobione**
 
--
+- Moduł [`backend/app/services/gm_plan_schema.py`](../../backend/app/services/gm_plan_schema.py): `schema_version = 2`, `normalize_gm_plan`, `merge_gm_plan_patch` (m.in. legacy flat PATCH → aktywny łuk), `format_gm_plan_block`.
+- API: [`campaigns.py`](../../backend/app/api/campaigns.py) — `PATCH /gm-plan` używa merge zamiast `{**a,**b}`; `advance-scene` dopisuje log pod aktywnym łukiem.
+- Narracja / rollup: [`game_engine.py`](../../backend/app/services/game_engine.py), [`history_summary_service.py`](../../backend/app/services/history_summary_service.py) — jeden formatter z `gm_plan_schema`.
+- Dokumentacja: [`07_extended_design_spec.md`](07_extended_design_spec.md) §7.1.
+- Testy: [`backend/tests/test_gm_plan_schema.py`](../../backend/tests/test_gm_plan_schema.py), zaktualizowany [`test_history_summary_t04_gm_context.py`](../../backend/tests/test_history_summary_t04_gm_context.py).
 
 **Notatki po implementacji**
 
@@ -468,7 +468,7 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | T17 | PENDING | `effect_json` v0 + walidacja przy zapisie admina | `admin`, `items`, `conditions` |
 | T18 | PENDING | Konsumable / `item_key` / migracja loot | `loot_service`, migracje |
 | T19 | PENDING | Import: dokumentacja ryzyk + `catalog_snapshot` jako kanon | `admin_config_transfer.py`, docs |
-| T20 | PENDING | Dywergencja **[S11]** + UI edycji planu (admin); **follow-up po zamkniętym T01:** po czyszczeniu podglądu dual z frontu — debug rollupu per kampania w adminie | `game_engine`, admin |
+| T20 | PENDING | Dywergencja **[S11]** + UI edycji planu (admin) | `game_engine`, admin |
 | T21 | PENDING | Koszty statów za XP + endpoint spend | `game_config_meta`, `characters` API |
 
 **Co zostało zrobione (T16–T21 — zbiorczo lub per ID)**
@@ -484,5 +484,5 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-03 | Utworzenie master kolejki T01–T21 + prompty; jeden plik źródłowy. |
 | 2026-05-03 | **T01 DONE** (kod + testy unittest); live 3× LLM — do uzupełnienia ręcznie. |
 | 2026-05-04 | **T02 DONE** — kolumna `audience`, API query, narracja gm→player, testy. |
-| 2026-05-04 | Follow-up T01: po usunięciu podglądu dual z UI gracza — widok odpowiednika w adminie per kampania (§1 *Follow-up UX*, §2 T01, rozszerzenie opisu **T20**). |
-| 2026-05-04 | Utrwalenie: **T01 = DONE** na stałe; follow-up admin wyłącznie jako osobna praca (reguła § *Zasady pracy* pkt 4; komentarz HTML; doprecyzowanie §1 *Follow-up UX* i §2 *Plan wdrożenia*). |
+| 2026-05-04 | **T03 DONE** — player summary tylko z transkryptu, `audience` w generatorze, test regresyjny, restart backendu. |
+| 2026-05-04 | **T04 DONE** — GM summary dostaje `gm_plan_json` + transkrypt, osobny test, restart backendu. |
