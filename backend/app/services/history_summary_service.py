@@ -14,6 +14,11 @@ from app.services.history_summary_dual_prompt import (
 )
 from app.services.gm_plan_schema import format_gm_plan_block
 from app.services.llm_service import generate_chat
+from app.services.summary_settings_service import (
+    DEFAULT_SUMMARY_ROLLUP_COOLDOWN_TURNS,
+    META_KEY_SUMMARY_ROLLUP_COOLDOWN,
+    get_summary_rollup_cooldown_turns,
+)
 from app.services.user_llm_settings import get_user_llm_settings_full
 
 
@@ -74,30 +79,9 @@ def count_narrative_turns(conn: sqlite3.Connection, campaign_id: int) -> int:
     return int(row["n"] or 0) if row else 0
 
 
-# --- T08: campaign-wide cooldown between LLM rollup refreshes ([S11b]) ---
-META_KEY_SUMMARY_ROLLUP_COOLDOWN = "summary_rollup_cooldown_turns"
-DEFAULT_SUMMARY_ROLLUP_COOLDOWN_TURNS = 20
-
 # --- T10: optional background POST …/history/summary/ensure every N narrative turns ---
 META_KEY_SUMMARY_AUTO_ENSURE_EVERY_N = "summary_auto_ensure_every_n_narrative_turns"
 DEFAULT_SUMMARY_AUTO_ENSURE_EVERY_N_NARRATIVE_TURNS = 20
-
-
-def get_summary_rollup_cooldown_turns(conn: sqlite3.Connection) -> int:
-    """Minimal spacing between rollup LLM runs per campaign, in narrative turns."""
-    try:
-        row = conn.execute(
-            "SELECT value FROM game_config_meta WHERE key = ? LIMIT 1",
-            (META_KEY_SUMMARY_ROLLUP_COOLDOWN,),
-        ).fetchone()
-        if row:
-            raw_val = row["value"] if hasattr(row, "keys") else row[0]
-            if raw_val is not None:
-                n = int(str(raw_val).strip())
-                return max(1, min(500, n))
-    except (sqlite3.OperationalError, ValueError, TypeError):
-        pass
-    return DEFAULT_SUMMARY_ROLLUP_COOLDOWN_TURNS
 
 
 def get_summary_auto_ensure_every_n_narrative_turns(conn: sqlite3.Connection) -> int:

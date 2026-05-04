@@ -52,8 +52,8 @@
 
 | ID | Opis |
 |----|------|
-| **B01** | **Panel admin:** formularz do zmiany globalnej wartości **`game_config_meta.summary_rollup_cooldown_turns`** (cooldown rollupu historii, T08) — dziś tylko ręczny SQL / migracja seed. |
-| **B02** | **„Podgląd dual (T01)”** w zakładce Historia — **nie jest planowane usunięcie** w ramach T01–T21. To **osobna** funkcja od normalnego rollupu (**T02**): **produkcja / gra** = zapisane podsumowania przez `POST …/history/summary` z `audience=player|gm`; **podgląd dual** = jedno wywołanie LLM, **bez zapisu** w bazie, pod **eksperyment / QA**, **tylko właściciel**. Uzasadnienie i ścieżki zapisane przy **§2 PROMPTY — T01** („Co zostało zrobione”). **Opcjonalnie kiedyś:** schować za flagą dev lub tylko dla kont admin — **osobna decyzja produktowa**, poza kolejką T01–T21 (tu tylko spięcie backlogu, żeby nie mylić z „do usunięcia”). |
+| **B01** | **DONE (2026-05-04):** panel admin ma formularz do zmiany globalnej wartości **`game_config_meta.summary_rollup_cooldown_turns`** (`/api/settings/summary`, sekcja Config). |
+| **B02** | **DONE (2026-05-04):** „Podgląd dual (T01)” **zostaje**, ale jest sterowany ustawieniem **`dual_summary_preview_mode`** (`owner` / `owner_admin` / `off`). Nadal **nie zapisuje** do DB; to ścieżka QA, osobna od produkcyjnego rollupu T02. |
 
 ---
 
@@ -85,8 +85,8 @@
 
 - **`history_summary_dual_prompt.py`:** `DUAL_SINGLE_SYSTEM_PROMPT`, `build_dual_single_messages`, `parse_dual_json_response` (JSON + opcjonalna obudowa markdown code fence), `leaked_plan_tokens_in_player_summary` (heurystyka wycieku planu do `player_summary`).
 - **`tests/test_history_summary_t01_dual_prompt.py`:** unittest — uruchom: `cd backend && PYTHONPATH=. python3 -m unittest tests.test_history_summary_t01_dual_prompt -v`.
-- **Frontend (bez konsoli):** w modalu **„Podsumowanie kampanii”** (tylko **właściciel** kampanii) jest przycisk **„Podgląd dual (T01)”** — wywołuje `POST /api/campaigns/{id}/dual-summary-preview` (router `campaigns.py`, żeby uniknąć 404 na starych obrazach bez `campaign_history`) i pokazuje w oknie: tekst dla gracza, notatkę MG, heurystykę wycieku, ewent. błąd parsowania JSON. **Nie zapisuje** w `campaign_ai_summaries`.
-- **Czy to zostaje / czy zniknie:** **Tak — nadal ma sens.** To nie jest duplikat docelowego rollupu (T02): w grze chodzi o zapisane podsumowania z `POST …/history/summary` (`audience=player|gm`). Podgląd dual to **osobne** wywołanie: jeden prompt, **brak zapisu** w `campaign_ai_summaries` — do QA / porównania jakości. **Usunięcie nie jest zaplanowane** w kolejce T01–T21; opcjonalnie później: ukrycie za flagą dev lub tylko dla kont admin (decyzja produktowa). Backlog **B01** dotyczy osobno ustawień cooldownu w panelu admin.
+- **Frontend (bez konsoli):** w modalu **„Podsumowanie kampanii”** przycisk **„Podgląd dual (T01)”** jest widoczny zgodnie z globalnym ustawieniem **`dual_summary_preview_mode`** z `/api/settings/summary`: `owner` = właściciel kampanii; `owner_admin` = właściciel z rolą global admin; `off` = ukryty. Endpoint: `POST /api/campaigns/{id}/dual-summary-preview` (router `campaigns.py`, żeby uniknąć 404 na starych obrazach bez `campaign_history`). **Nie zapisuje** w `campaign_ai_summaries`.
+- **Czy to zostaje / czy zniknie:** **Tak — nadal ma sens.** To nie jest duplikat docelowego rollupu (T02): w grze chodzi o zapisane podsumowania z `POST …/history/summary` (`audience=player|gm`). Podgląd dual to **osobne** wywołanie: jeden prompt, **brak zapisu** w `campaign_ai_summaries` — do QA / porównania jakości. Po **B02** dostęp jest po prostu **konfigurowalny** z panelu admin, zamiast twardo zaszyty.
 - **Live 3× LLM:** wykonaj przez UI jak wyżej; wynik możesz dopisać w **Notatki** poniżej.
 
 **Rekomendacja (po kodzie, przed pełnym live):** przyjmij **wariant A** w T02/T03 z parsowaniem JSON + logowaniem heurystyki; wariant B tylko jeśli podgląd z UI pokaże powtarzalne halucynacje.
@@ -317,7 +317,7 @@
 
 **Notatki po implementacji**
 
-- Zmiana wartości **N**: wpis `game_config_meta.summary_rollup_cooldown_turns` — **panel admin nadal bez pola** (backlog **B01**); do czasu UI edycja przez SQL.
+- Zmiana wartości **N**: panel admin **Config** → `/api/settings/summary` → pole `summary_rollup_cooldown_turns`; zapis do `game_config_meta`.
 - **`ensure`** przy blokadzie cooldownu zwraca ostatni skrót + `cooldown_active` — obsługa w modalu historii (**T09**); **429** na `POST …/history/summary` mapowany + fallback GET ostatniego skrótu.
 - Kotwica jest **wspólna** dla player/gm — jedna kampania = jeden licznik odstępu między kosztownymi rollupami LLM.
 
@@ -375,7 +375,7 @@
 **Notatki po implementacji**
 
 - Trigger po **commit** tury narracyjnej (nie osobny cron OS).
-- Regulacja **N** jak cooldown T08 (`game_config_meta`); panel UI — analogicznie do backlogu **B01**.
+- Regulacja **N** jak cooldown T08 (`game_config_meta`); panel UI: `/api/settings/summary` (wdrożone w **B01**).
 
 ---
 
@@ -547,5 +547,5 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T15 DONE** — `new_act_service`: trigger po ukończeniu głównego questa, merge nowego łuku W1, tura narracji spinającej; test `test_phase9b_t15_new_act`. |
 | 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
 | 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
-| 2026-05-04 | Backlog **B02:** decyzja produktowa — „Podgląd dual (T01)” zostaje (QA vs rollup T02); opcjonalnie później dev/admin-only. |
+| 2026-05-04 | **B01/B02 DONE** — `/api/settings/summary` + panel admin (cooldown rollupu, tryb dostępu do dual preview: `owner` / `owner_admin` / `off`); frontend i backend respektują tryb podglądu dual. |
 | 2026-05-04 | **T09 DONE** — modal historii: baner + mapowanie błędów + fallback ostatniego skrótu + cooldown z ensure (T08). |

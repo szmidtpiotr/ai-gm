@@ -219,6 +219,87 @@ export async function init(container) {
   card2.appendChild(rowBtns);
   card2.appendChild(diffWrap);
 
+  const cardSummary = el("div", "admin-card");
+  cardSummary.appendChild(el("h3", "admin-card-title", "Summary / History settings"));
+  cardSummary.appendChild(
+    el(
+      "p",
+      "muted",
+      "Global settings for campaign history rollup and the experimental dual preview (T01 QA path).",
+    ),
+  );
+  const cooldownLabel = el("label", "field-label", "Rollup cooldown (narrative turns)");
+  const cooldownInput = el("input", "");
+  cooldownInput.type = "number";
+  cooldownInput.min = "1";
+  cooldownInput.max = "500";
+  cooldownInput.step = "1";
+  const cooldownHelp = el(
+    "p",
+    "muted",
+    "How many new narrative turns are required before the next LLM rollup refresh is allowed.",
+  );
+  const modeLabel = el("label", "field-label", "Dual preview access mode");
+  const modeSelect = document.createElement("select");
+  [
+    ["owner", "Campaign owner"],
+    ["owner_admin", "Campaign owner + global admin"],
+    ["off", "Disabled"],
+  ].forEach(([value, label]) => {
+    const opt = document.createElement("option");
+    opt.value = value;
+    opt.textContent = label;
+    modeSelect.appendChild(opt);
+  });
+  const modeHelp = el(
+    "p",
+    "muted",
+    "Controls access to the T01 dual preview button in the History modal. It never writes to the database.",
+  );
+  const summarySaveBtn = el("button", "primary-btn", "Save summary settings");
+  summarySaveBtn.type = "button";
+  summarySaveBtn.disabled = true;
+  cardSummary.appendChild(cooldownLabel);
+  cardSummary.appendChild(cooldownInput);
+  cardSummary.appendChild(cooldownHelp);
+  cardSummary.appendChild(modeLabel);
+  cardSummary.appendChild(modeSelect);
+  cardSummary.appendChild(modeHelp);
+  cardSummary.appendChild(summarySaveBtn);
+
+  async function loadSummarySettings() {
+    const res = await adminFetch("/api/settings/summary");
+    const data = res?.data || {};
+    cooldownInput.value = String(data.summary_rollup_cooldown_turns ?? 20);
+    modeSelect.value = String(data.dual_summary_preview_mode || "owner_admin");
+    summarySaveBtn.disabled = false;
+  }
+
+  summarySaveBtn.addEventListener("click", async () => {
+    const n = Number(cooldownInput.value || 20);
+    const label = summarySaveBtn.textContent;
+    summarySaveBtn.disabled = true;
+    summarySaveBtn.textContent = "⏳";
+    try {
+      const res = await adminFetch("/api/settings/summary", {
+        method: "PATCH",
+        body: JSON.stringify({
+          summary_rollup_cooldown_turns: Math.max(1, Math.min(500, Math.trunc(n || 20))),
+          dual_summary_preview_mode: modeSelect.value || "owner_admin",
+        }),
+      });
+      const data = res?.data || {};
+      cooldownInput.value = String(data.summary_rollup_cooldown_turns ?? 20);
+      modeSelect.value = String(data.dual_summary_preview_mode || "owner_admin");
+      showToast("Summary settings saved.", "success");
+    } catch (e) {
+      showToast(parseApiError(e, "Save failed."), "error");
+    } finally {
+      summarySaveBtn.textContent = label;
+      summarySaveBtn.disabled = false;
+    }
+  });
+
   const cardSlash = el("div", "admin-card slash-commands-card");
   cardSlash.style.gridColumn = "1 / -1";
   cardSlash.appendChild(el("h3", "admin-card-title", "Chat slash commands"));
@@ -289,6 +370,12 @@ export async function init(container) {
   }
 
   try {
+    await loadSummarySettings();
+  } catch (e) {
+    showToast(parseApiError(e, "Could not load summary settings."), "error");
+  }
+
+  try {
     await loadSlashCommandRows();
   } catch (e) {
     showToast(parseApiError(e, "Could not load slash command config."), "error");
@@ -298,6 +385,7 @@ export async function init(container) {
 
   grid.appendChild(card1);
   grid.appendChild(card2);
+  grid.appendChild(cardSummary);
   grid.appendChild(cardSlash);
   container.appendChild(grid);
 }

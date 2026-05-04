@@ -1143,26 +1143,67 @@ window.openHistorySummaryModal = async function () {
   }
   const dualBtn = document.getElementById("history-summary-dual-preview-btn");
   if (dualBtn) {
+    const settings = await window.getSummarySettingsForUi();
     const camp = typeof window.currentCampaign === "function" ? window.currentCampaign() : null;
     const ownerId = Number(camp?.owner_user_id ?? camp?.owneruserid ?? 0);
     const uid = Number(window.state?.playerUserId || 0);
+    const isAdmin = !!window.state?.playerIsAdmin;
     const isOwner = !!(camp && ownerId === uid);
-    dualBtn.style.display = isOwner ? "inline-flex" : "none";
-    dualBtn.disabled = !isOwner;
+    const mode = String(settings?.dual_summary_preview_mode || "owner_admin");
+    const allowed =
+      mode !== "off" && isOwner && (mode === "owner" || (mode === "owner_admin" && isAdmin));
+    dualBtn.style.display = allowed ? "inline-flex" : "none";
+    dualBtn.disabled = !allowed;
   }
 
   await window.loadHistorySummaryModalContent({ forceRegenerate: false });
 };
 
+window.getSummarySettingsForUi = async function () {
+  if (window.__summarySettingsUiCache) return window.__summarySettingsUiCache;
+  try {
+    const r = await fetch("/api/settings/summary");
+    const data = await r.json().catch(() => ({}));
+    const payload = data?.data && typeof data.data === "object" ? data.data : {};
+    const out = {
+      summary_rollup_cooldown_turns: Number(payload.summary_rollup_cooldown_turns || 20),
+      dual_summary_preview_mode: String(payload.dual_summary_preview_mode || "owner_admin"),
+    };
+    window.__summarySettingsUiCache = out;
+    return out;
+  } catch (_err) {
+    return {
+      summary_rollup_cooldown_turns: 20,
+      dual_summary_preview_mode: "owner_admin",
+    };
+  }
+};
+
 window.runHistorySummaryDualPreview = async function () {
   const cid = window.state?.selectedCampaignId;
   const uid = window.state?.playerUserId || 1;
+  const settings = await window.getSummarySettingsForUi();
   const camp = typeof window.currentCampaign === "function" ? window.currentCampaign() : null;
   const ownerId = Number(camp?.owner_user_id ?? camp?.owneruserid ?? 0);
-  if (!cid || Number(uid) !== ownerId) {
+  const isAdmin = !!window.state?.playerIsAdmin;
+  const mode = String(settings?.dual_summary_preview_mode || "owner_admin");
+  const allowed =
+    !!cid &&
+    Number(uid) === ownerId &&
+    mode !== "off" &&
+    (mode === "owner" || (mode === "owner_admin" && isAdmin));
+  if (!allowed) {
+    let msg = "Podgląd dual (T01) jest obecnie niedostępny.";
+    if (!cid || Number(uid) !== ownerId) {
+      msg = "Podgląd dual (T01) wymaga właściciela kampanii.";
+    } else if (mode === "owner_admin") {
+      msg = "Podgląd dual (T01) wymaga właściciela kampanii z rolą global admin.";
+    } else if (mode === "off") {
+      msg = "Podgląd dual (T01) jest wyłączony w ustawieniach admin.";
+    }
     window.addMessage?.({
       speaker: "System",
-      text: "Tylko właściciel kampanii może uruchomić podgląd dual (T01).",
+      text: msg,
       role: "system",
     });
     return;
