@@ -42,10 +42,12 @@
 | 17 | **T17** | [ ] | **[IMPL] fala 3:** `effect_json` + walidacja admin | T11 | **[IMPL]**, **[S13]** |
 | 18 | **T18** | [ ] | **[IMPL] fala 4:** warunki + konsumable / `item_key` | T17 | **[IMPL]**, **[S6]** |
 | 19 | **T19** | [ ] | **[IMPL] fala 5:** import / snapshot / ostrzeżenia | T11 | **[IMPL]**, **[S7]** |
-| 20 | **T20** | [ ] | **[IMPL] fala 6:** dywergencja (heurystyka / drugi LLM) + UI plan MG (admin) | T05–T07 | **[IMPL]**, **[S11]** |
+| 20 | **T20** | [ ] | **[IMPL] fala 6:** dywergencja (heurystyka / drugi LLM) + UI plan MG (admin); **follow-up T01:** po usunięciu „Podgląd dual” z frontu gracza — odpowiednik w adminie per kampania (§1 *Follow-up UX*, §2 T01) | T05–T07 | **[IMPL]**, **[S11]** |
 | 21 | **T21** | [ ] | **[IMPL] fala 7:** progres cech za XP (meta + endpoint) | T12 | **[IMPL]**, **[S10]** |
 
 **Uwaga kolejności:** W tabeli **T06** jest przed **T05** (najpierw szkielet planu, potem blokada pierwszej narracji).
+
+**Follow-up UX (T01 → admin):** Przycisk **„Podgląd dual (T01)”** w modalu gracza jest **tymczasowy** (debug jakości rollupu). Gdy zostanie **usunięty z frontu gry**, ta sama możliwość ma być **przeniesiona do panelu administratora** — **per kampania** (`campaign_id`): odczyt tych samych wyników co dziś w podglądzie (tekst dla gracza, notatka MG, heurystyka wycieku planu, błąd parsowania JSON; opcjonalnie ponowne wywołanie `POST …/dual-summary-preview` lub ekwiwalent tylko dla ról admin). Gracz nie widzi tego widoku. Szczegóły i uzasadnienie: §2 T01 — *Plan wdrożenia (po usunięciu z UI gracza)*.
 
 ---
 
@@ -85,6 +87,12 @@
 **Notatki po implementacji**
 
 -
+
+**Plan wdrożenia (po usunięciu z UI gracza)**
+
+- **Trigger:** usunięcie przycisku „Podgląd dual (T01)” z modala **„Podsumowanie kampanii”** po stronie gracza (właściciel kampanii).
+- **Wymaganie:** zamiast całkowicie chować narzędzie — **widok w panelu administratora** powiązany z **konkretną kampanią**: prezentacja tych samych danych co obecny podgląd (treść `player_summary` / `gm_notes`, heurystyka wycieku, komunikat parsowania), z dostępem wyłącznie dla ról admin (nie dla zwykłego gracza).
+- **Powiązanie z kolejką:** implementacja UI najpewniej w **tej samej fali co rozbudowa admina pod rollup / plan MG** (logicznie obok **T20** — UI edycji planu; ewent. osobna zakładka/sekcja „Debug rollup” przy kampanii). Nie blokuje **T10** (automat `ensure`), ale **nie** odkładaj w nieskończoność: bez tego zespół traci widoczność jakości dual promptu po czyszczeniu frontu.
 
 ---
 
@@ -456,7 +464,7 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | T17 | PENDING | `effect_json` v0 + walidacja przy zapisie admina | `admin`, `items`, `conditions` |
 | T18 | PENDING | Konsumable / `item_key` / migracja loot | `loot_service`, migracje |
 | T19 | PENDING | Import: dokumentacja ryzyk + `catalog_snapshot` jako kanon | `admin_config_transfer.py`, docs |
-| T20 | PENDING | Dywergencja **[S11]** + UI edycji planu (admin) | `game_engine`, admin |
+| T20 | PENDING | Dywergencja **[S11]** + UI edycji planu (admin); po czyszczeniu T01 z frontu — podgląd dual / debug rollupu per kampania w adminie | `game_engine`, admin |
 | T21 | PENDING | Koszty statów za XP + endpoint spend | `game_config_meta`, `characters` API |
 
 **Co zostało zrobione (T16–T21 — zbiorczo lub per ID)**
@@ -472,3 +480,4 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-03 | Utworzenie master kolejki T01–T21 + prompty; jeden plik źródłowy. |
 | 2026-05-03 | **T01 DONE** (kod + testy unittest); live 3× LLM — do uzupełnienia ręcznie. |
 | 2026-05-04 | **T02 DONE** — kolumna `audience`, API query, narracja gm→player, testy. |
+| 2026-05-04 | Follow-up T01: po usunięciu podglądu dual z UI gracza — widok odpowiednika w adminie per kampania (§1 *Follow-up UX*, §2 T01, rozszerzenie opisu **T20**). |
