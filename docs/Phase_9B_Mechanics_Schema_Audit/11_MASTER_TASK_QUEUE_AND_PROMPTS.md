@@ -53,6 +53,7 @@
 | ID | Opis |
 |----|------|
 | **B01** | **Panel admin:** formularz do zmiany globalnej wartości **`game_config_meta.summary_rollup_cooldown_turns`** (cooldown rollupu historii, T08) — dziś tylko ręczny SQL / migracja seed. |
+| **B02** | **„Podgląd dual (T01)”** w zakładce Historia — **nie jest planowane usunięcie** w ramach T01–T21. To **osobna** funkcja od normalnego rollupu (**T02**): **produkcja / gra** = zapisane podsumowania przez `POST …/history/summary` z `audience=player|gm`; **podgląd dual** = jedno wywołanie LLM, **bez zapisu** w bazie, pod **eksperyment / QA**, **tylko właściciel**. Uzasadnienie i ścieżki zapisane przy **§2 PROMPTY — T01** („Co zostało zrobione”). **Opcjonalnie kiedyś:** schować za flagą dev lub tylko dla kont admin — **osobna decyzja produktowa**, poza kolejką T01–T21 (tu tylko spięcie backlogu, żeby nie mylić z „do usunięcia”). |
 
 ---
 
@@ -524,3 +525,4 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T04 DONE** — GM summary dostaje `gm_plan_json` + transkrypt, osobny test, restart backendu. |
 | 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
 | 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
+| 2026-05-04 | Backlog **B02:** decyzja produktowa — „Podgląd dual (T01)” zostaje (QA vs rollup T02); opcjonalnie później dev/admin-only. |
