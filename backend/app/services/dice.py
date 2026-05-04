@@ -3,6 +3,7 @@ import random
 import re
 
 from app.core.logging import get_logger
+from app.services import config_service
 
 logger = get_logger(__name__)
 
@@ -39,7 +40,33 @@ SAVE_STAT_MAP = {
 # Keep spell_attack in INT mapping, as locked in phases.
 SKILL_STAT_MAP["spell_attack"] = "INT"
 
+# Dice canonical test name -> `game_config_skills.key` when they differ (ADMIN seeds use `attack`).
+DICE_TEST_TO_CONFIG_SKILL_KEY = {
+    "melee_attack": "attack",
+}
+
 VALID_TEST_NAMES = set(SKILL_STAT_MAP.keys()) | set(SAVE_STAT_MAP.keys())
+
+
+def skill_linked_stat_for_test(normalized_test: str) -> str | None:
+    """
+    Which stat (STR, DEX, …) applies to this skill test.
+    Primary: `linked_stat` from runtime config / DB (**[S4b]**).
+    Fallback: static SKILL_STAT_MAP for tests not seeded in `game_config_skills` (e.g. alchemy).
+    """
+    cfg = config_service.get_runtime_config()
+    skills = cfg.get("skills")
+    if not isinstance(skills, list):
+        skills = []
+    lookup_key = DICE_TEST_TO_CONFIG_SKILL_KEY.get(normalized_test, normalized_test)
+    for row in skills:
+        if not isinstance(row, dict) or row.get("key") != lookup_key:
+            continue
+        ls = row.get("linked_stat")
+        if isinstance(ls, str) and ls.strip():
+            return ls.strip()
+        return SKILL_STAT_MAP.get(normalized_test)
+    return SKILL_STAT_MAP.get(normalized_test)
 
 TEST_NAME_ALIASES = {
     # resolve_test_name uses .title() on underscore tokens; "death_save" -> "Death_Save"
@@ -93,14 +120,62 @@ def _strip_trailing_dc(text: str) -> tuple[str, int | None]:
     return s[: m.start()].strip(), int(m.group(1))
 
 
+# Trailing DC tier keys — must match `game_config_dc.key` (easy, medium, hard, …).
+_STRIP_TIER_SUFFIX = re.compile(
+    r"\s+(easy|medium|hard|extreme|legendary)\s*$",
+    re.I,
+)
+
+
+def _strip_trailing_dc_tier(text: str) -> tuple[str, str | None]:
+    s = (text or "").strip()
+    m = _STRIP_TIER_SUFFIX.search(s)
+    if not m:
+        return s, None
+    key = m.group(1).lower()
+    return s[: m.start()].strip(), key
+
+
+def resolve_dc_for_roll(dc: int | str | None) -> int | None:
+    """
+    Turn `/roll` DC into a number: passthrough int, or lookup `game_config_dc` by **key**
+    (**[S5]** — liczba z tabeli, nie z narracji).
+    """
+    if dc is None:
+        return None
+    if isinstance(dc, int):
+        return dc
+    s = str(dc).strip()
+    if s.isdigit():
+        return int(s)
+    key = s.lower()
+    cfg = config_service.get_runtime_config()
+    tiers = cfg.get("dc_tiers")
+    if not isinstance(tiers, list):
+        tiers = []
+    for row in tiers:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("key") or "").lower() != key:
+            continue
+        try:
+            return int(row.get("value", 0))
+        except (TypeError, ValueError):
+            logger.warning("invalid_dc_tier_value", key=key, row=row)
+            return None
+    logger.warning("unknown_dc_tier_key", key=key)
+    return None
+
+
 def parse_roll_command(text: str) -> dict | None:
     raw_in = (text or "").strip()
     if not raw_in:
         return None
 
     raw, dc_opt = _strip_trailing_dc(raw_in)
+    raw, dc_tier = _strip_trailing_dc_tier(raw)
 
-    # /roll Stealth, /roll Attack d20, /roll Attack 14
+    # /roll Stealth, /roll Attack d20, /roll Attack 14, /roll Stealth hard
     slash_match = re.match(r"^/roll(?:\s+(.+?))?(?:\s+(d\d+|\d+))?$", raw, re.I)
     if slash_match:
         raw_skill = (slash_match.group(1) or "Attack").strip()
@@ -113,6 +188,8 @@ def parse_roll_command(text: str) -> dict | None:
         out = {"skill": canonical_skill, "dice": roll_arg, "raw_roll": raw_roll}
         if dc_opt is not None:
             out["dc"] = dc_opt
+        elif dc_tier is not None:
+            out["dc"] = dc_tier
         return out
 
     # Roll Attack d20 (button-like payload)
@@ -130,6 +207,8 @@ def parse_roll_command(text: str) -> dict | None:
         }
         if dc_opt is not None:
             out["dc"] = dc_opt
+        elif dc_tier is not None:
+            out["dc"] = dc_tier
         return out
 
     return None
@@ -299,7 +378,7 @@ def resolve_roll(
         _log_roll_event(roll_result)
         return roll_result
 
-    stat_key = SKILL_STAT_MAP.get(normalized_test)
+    stat_key = skill_linked_stat_for_test(normalized_test)
     stat_value = _safe_int(stats.get(stat_key, 10), 10) if stat_key else 10
     stat_mod = (stat_value - 10) // 2 if stat_key else 0
     skill_rank = _safe_int(skills.get(normalized_test, 0), 0)
@@ -400,6 +479,14 @@ def resolve_gm_dice_roll_key(roll_key: str) -> dict | None:
             "stat": SAVE_STAT_MAP[canonical],
             "resolved_key": canonical,
             "is_save": True,
+        }
+    stat_from_config = skill_linked_stat_for_test(canonical)
+    if stat_from_config is not None:
+        return {
+            "skill": canonical,
+            "stat": stat_from_config,
+            "resolved_key": canonical,
+            "is_save": False,
         }
     if canonical in SKILL_STAT_MAP:
         return {

@@ -222,7 +222,11 @@
 
   async function speakGMText(text) {
     if (!available || !ttsEnabled) return;
-    const clean = sanitizeGMText(text);
+    let raw = String(text || "");
+    if (typeof window.stripTtsNoiseFromText === "function") {
+      raw = window.stripTtsNoiseFromText(raw);
+    }
+    const clean = sanitizeGMText(raw);
     if (!clean) return;
 
     try {
@@ -692,7 +696,11 @@
       try {
         const role = String(message?.role || "").toLowerCase();
         const text = message?.content || message?.text || "";
-        if (role === "assistant" || role === "gm") {
+        if (
+          (role === "assistant" || role === "gm") &&
+          typeof window.shouldAutoSpeakTtsForBubble === "function" &&
+          window.shouldAutoSpeakTtsForBubble(message)
+        ) {
           speakGMText(text);
         }
       } catch (err) {

@@ -2520,7 +2520,7 @@ function mountConditions(host) {
 
 function itemTypeBadgeClass(row) {
   const t = String(row.item_type || "misc").toLowerCase();
-  const ok = ["weapon", "armor", "consumable", "misc", "quest"];
+  const ok = ["weapon", "armor", "consumable", "misc", "quest", "narrative"];
   return `item-type-${ok.includes(t) ? t : "misc"}`;
 }
 
@@ -2753,6 +2753,10 @@ function wireBulkJsonImport(root, opts) {
   });
 }
 
+const ITEM_IMPORT_ALLOWED_TYPES = ["weapon", "armor", "consumable", "misc", "quest", "narrative"];
+const ITEM_IMPORT_EFFECT_TYPES = ["heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff", "misc"];
+const ITEM_IMPORT_EFFECT_TARGETS = ["self", "ally", "any"];
+
 function validateItemImportRow(raw, index) {
   const label = `Row ${index + 1}`;
   if (!raw || typeof raw !== "object") {
@@ -2770,32 +2774,61 @@ function validateItemImportRow(raw, index) {
     return `${label}: label is required`;
   }
   const it = String(raw.item_type || "misc").toLowerCase();
-  if (!["weapon", "armor", "consumable", "misc", "quest"].includes(it)) {
-    return `${label}: item_type must be weapon|armor|consumable|misc|quest`;
+  if (!ITEM_IMPORT_ALLOWED_TYPES.includes(it)) {
+    return `${label}: item_type must be one of: ${ITEM_IMPORT_ALLOWED_TYPES.join(", ")}`;
   }
   const gp = raw.value_gp != null ? Number(raw.value_gp) : 0;
-  const w = raw.weight != null ? Number(raw.weight) : 0;
   if (!Number.isFinite(gp) || gp < 0) {
     return `${label}: value_gp must be a number >= 0`;
   }
-  if (!Number.isFinite(w) || w < 0) {
-    return `${label}: weight must be a number >= 0`;
+  const wkgRaw =
+    raw.weight_kg != null && String(raw.weight_kg).trim() !== ""
+      ? Number(raw.weight_kg)
+      : raw.weight != null && String(raw.weight).trim() !== ""
+        ? Number(raw.weight)
+        : 0;
+  if (!Number.isFinite(wkgRaw) || wkgRaw < 0) {
+    return `${label}: weight_kg (or legacy weight) must be a number >= 0`;
   }
-  if (raw.weight_kg != null) {
-    const wkg = Number(raw.weight_kg);
-    if (!Number.isFinite(wkg) || wkg < 0) {
-      return `${label}: weight_kg must be a number >= 0`;
+  const classList = Array.isArray(raw.allowed_classes)
+    ? raw.allowed_classes
+    : Array.isArray(raw.proficiency_classes)
+      ? raw.proficiency_classes
+      : [];
+  for (const pc of classList) {
+    const p = String(pc || "").toLowerCase();
+    if (!["warrior", "ranger", "scholar"].includes(p)) {
+      return `${label}: invalid allowed_classes entry "${pc}"`;
     }
   }
-  if (raw.proficiency_classes != null) {
-    if (!Array.isArray(raw.proficiency_classes)) {
-      return `${label}: proficiency_classes must be an array of strings`;
+  if (raw.ac_bonus != null && String(raw.ac_bonus).trim() !== "") {
+    const ac = Number(raw.ac_bonus);
+    if (!Number.isFinite(ac) || ac < 0) {
+      return `${label}: ac_bonus must be a number >= 0`;
     }
-    for (const pc of raw.proficiency_classes) {
-      const p = String(pc || "").toLowerCase();
-      if (!["warrior", "ranger", "scholar"].includes(p)) {
-        return `${label}: invalid proficiency class "${pc}"`;
-      }
+  }
+  if (raw.effect_type != null && String(raw.effect_type).trim()) {
+    const et = String(raw.effect_type).trim().toLowerCase();
+    if (!ITEM_IMPORT_EFFECT_TYPES.includes(et)) {
+      return `${label}: effect_type must be one of: ${ITEM_IMPORT_EFFECT_TYPES.join(", ")}`;
+    }
+  }
+  if (raw.effect_dice != null && String(raw.effect_dice).trim()) {
+    const d = String(raw.effect_dice).trim().toLowerCase();
+    if (!IMPORT_DAMAGE_DIE_RE.test(d)) {
+      return `${label}: effect_dice must match dice pattern (e.g. 2d4) or be null/empty`;
+    }
+  }
+  if (raw.effect_target != null && String(raw.effect_target).trim()) {
+    const tgt = String(raw.effect_target).trim().toLowerCase();
+    if (!ITEM_IMPORT_EFFECT_TARGETS.includes(tgt)) {
+      return `${label}: effect_target must be self, ally, or any`;
+    }
+  }
+  if (raw.charges != null && String(raw.charges).trim() !== "") {
+    const ch = Number(raw.charges);
+    if (!Number.isFinite(ch) || ch < 1) {
+      return `${label}: charges must be >= 1`;
     }
   }
   if (raw.effect_json != null && String(raw.effect_json).trim()) {
@@ -2809,17 +2842,45 @@ function validateItemImportRow(raw, index) {
 }
 
 function itemImportRowToPayload(r) {
+  const wkg =
+    r.weight_kg != null && String(r.weight_kg).trim() !== ""
+      ? Number(r.weight_kg)
+      : r.weight != null && String(r.weight).trim() !== ""
+        ? Number(r.weight)
+        : 0;
+  const classes = Array.isArray(r.allowed_classes)
+    ? r.allowed_classes
+    : Array.isArray(r.proficiency_classes)
+      ? r.proficiency_classes
+      : [];
+  let effect_type = null;
+  if (r.effect_type != null && String(r.effect_type).trim()) {
+    effect_type = String(r.effect_type).trim().toLowerCase();
+  }
+  let effect_dice = null;
+  if (r.effect_dice != null && String(r.effect_dice).trim()) {
+    effect_dice = String(r.effect_dice).trim();
+  }
   return {
     key: String(r.key).trim(),
     label: String(r.label).trim(),
     item_type: String(r.item_type || "misc").toLowerCase(),
     description: r.description != null ? String(r.description) : "",
     value_gp: r.value_gp != null ? Number(r.value_gp) : 0,
-    weight: r.weight != null ? Number(r.weight) : 0,
-    weight_kg: r.weight_kg != null ? Number(r.weight_kg) : 0,
-    proficiency_classes: Array.isArray(r.proficiency_classes) ? r.proficiency_classes : [],
-    note: r.note != null && String(r.note).trim() ? String(r.note) : null,
+    weight_kg: wkg,
+    allowed_classes: classes,
+    ac_bonus: r.ac_bonus != null ? Number(r.ac_bonus) : 0,
+    effect_type,
+    effect_dice,
+    effect_bonus: r.effect_bonus != null ? Number(r.effect_bonus) : 0,
+    effect_target: r.effect_target != null && String(r.effect_target).trim()
+      ? String(r.effect_target).trim().toLowerCase()
+      : "self",
+    charges: r.charges != null ? Number(r.charges) : 1,
     effect_json: r.effect_json != null && String(r.effect_json).trim() ? String(r.effect_json) : null,
+    ai_generated: r.ai_generated != null ? Number(r.ai_generated) : 0,
+    approved: r.approved != null ? Number(r.approved) : 1,
+    note: r.note != null && String(r.note).trim() ? String(r.note) : null,
     is_active: r.is_active !== false && r.is_active !== 0,
   };
 }
@@ -3310,9 +3371,14 @@ function validateConsumableImportRow(raw, index) {
   if (!Number.isFinite(ch) || ch < 1) {
     return `${label}: charges must be >= 1`;
   }
-  const bp = raw.base_price != null ? Number(raw.base_price) : 0;
-  if (!Number.isFinite(bp) || bp < 0) {
-    return `${label}: base_price must be >= 0`;
+  const vgp =
+    raw.value_gp != null && String(raw.value_gp).trim() !== ""
+      ? Number(raw.value_gp)
+      : raw.base_price != null && String(raw.base_price).trim() !== ""
+        ? Number(raw.base_price)
+        : 0;
+  if (!Number.isFinite(vgp) || vgp < 0) {
+    return `${label}: value_gp (or legacy base_price) must be >= 0`;
   }
   const wkg = raw.weight_kg != null ? Number(raw.weight_kg) : 0;
   if (!Number.isFinite(wkg) || wkg < 0) {
@@ -3337,7 +3403,12 @@ function consumableImportRowToPayload(raw) {
     effect_target: String(raw.effect_target || "self").toLowerCase(),
     weight_kg: raw.weight_kg != null ? Number(raw.weight_kg) : 0,
     charges: raw.charges != null ? Number(raw.charges) : 1,
-    base_price: raw.base_price != null ? Number(raw.base_price) : 0,
+    value_gp:
+      raw.value_gp != null && String(raw.value_gp).trim() !== ""
+        ? Number(raw.value_gp)
+        : raw.base_price != null && String(raw.base_price).trim() !== ""
+          ? Number(raw.base_price)
+          : 0,
     note: noteRaw ? noteRaw : null,
     is_active: raw.is_active !== false && raw.is_active !== 0,
   };
@@ -3365,9 +3436,9 @@ async function refreshItems(host) {
           badgeClass: itemTypeBadgeClass,
           editable: true,
           editType: "select",
-          editOptions: ["weapon", "armor", "consumable", "misc", "quest"],
+          editOptions: ["weapon", "armor", "consumable", "misc", "quest", "narrative"],
           filterable: true,
-          filterOptions: ["weapon", "armor", "consumable", "misc", "quest"],
+          filterOptions: ["weapon", "armor", "consumable", "misc", "quest", "narrative"],
         },
         { key: "weight_kg", label: "Weight kg", type: "number", editable: true },
         { key: "value_gp", label: "GP", type: "number", editable: true },
@@ -3391,8 +3462,8 @@ async function refreshItems(host) {
           }
           if (key === "item_type") {
             const v = String(newValue || "").trim().toLowerCase();
-            if (!["weapon", "armor", "consumable", "misc", "quest"].includes(v)) {
-              showToast("item_type must be weapon, armor, consumable, misc, or quest.", "error");
+            if (!["weapon", "armor", "consumable", "misc", "quest", "narrative"].includes(v)) {
+              showToast("item_type must be weapon, armor, consumable, misc, quest, or narrative.", "error");
               throw new Error("invalid_item_type");
             }
             body.item_type = v;
@@ -3466,6 +3537,7 @@ function mountItems(host) {
           <option value="consumable">consumable</option>
           <option value="misc" selected>misc</option>
           <option value="quest">quest</option>
+          <option value="narrative">narrative</option>
         </select>
       </label>
       <label class="field add-form-span-2"><span>Description</span>
@@ -3473,8 +3545,7 @@ function mountItems(host) {
       </label>
       <label class="field"><span>Value (GP)</span><input data-field="value_gp" type="number" value="0" /></label>
       <label class="field"><span>Weight (kg)</span><input data-field="weight_kg" type="number" step="any" value="0" /></label>
-      <input type="hidden" data-field="weight" value="0" />
-      <label class="field add-form-span-2"><span>Proficiency classes</span>
+      <label class="field add-form-span-2"><span>Allowed classes</span>
         <span class="checkbox-inline"><label><input type="checkbox" data-pclass="warrior" /> warrior</label>
         <label><input type="checkbox" data-pclass="scholar" /> scholar</label>
         <label><input type="checkbox" data-pclass="ranger" /> ranger</label></span>
@@ -3500,7 +3571,8 @@ function mountItems(host) {
     hint: "Wklej tablicę przedmiotów (katalog). Dry run = walidacja; Commit = POST /api/admin/items.",
     templatesHref: "/admin_panel/templates.html#sec-items",
     templatesAnchor: "Szablony JSON — Items",
-    placeholder: '[{ "key": "health_potion", "item_type": "consumable", ... }]',
+    placeholder:
+      '[{ "key": "health_potion_small", "item_type": "consumable", "effect_type": "heal_hp", "effect_dice": "2d4", ... }]',
     validateRow: (row, i) => validateItemImportRow(row, i),
     buildPayload: (row) => itemImportRowToPayload(row),
     postPath: "/api/admin/items",
@@ -3513,11 +3585,51 @@ function mountItems(host) {
         { rawKey: "item_type", patchKey: "item_type", getValue: (r) => String(r.item_type || "misc").toLowerCase() },
         { rawKey: "description", patchKey: "description", getValue: (r) => (r.description == null ? "" : String(r.description)) },
         { rawKey: "value_gp", patchKey: "value_gp", getValue: (r) => Number(r.value_gp) },
-        { rawKey: "weight", patchKey: "weight", getValue: (r) => Number(r.weight) },
-        { rawKey: "weight_kg", patchKey: "weight_kg", getValue: (r) => Number(r.weight_kg) },
-        { rawKey: "proficiency_classes", patchKey: "proficiency_classes", getValue: (r) => (Array.isArray(r.proficiency_classes) ? r.proficiency_classes : []) },
+        {
+          rawKey: "weight_kg",
+          patchKey: "weight_kg",
+          getValue: (r) =>
+            r.weight_kg != null && String(r.weight_kg).trim() !== ""
+              ? Number(r.weight_kg)
+              : r.weight != null && String(r.weight).trim() !== ""
+                ? Number(r.weight)
+                : 0,
+        },
+        {
+          rawKey: "allowed_classes",
+          patchKey: "allowed_classes",
+          getValue: (r) =>
+            Array.isArray(r.allowed_classes)
+              ? r.allowed_classes
+              : Array.isArray(r.proficiency_classes)
+                ? r.proficiency_classes
+                : [],
+        },
+        { rawKey: "ac_bonus", patchKey: "ac_bonus", getValue: (r) => Number(r.ac_bonus) },
+        {
+          rawKey: "effect_type",
+          patchKey: "effect_type",
+          getValue: (r) => (r.effect_type != null && String(r.effect_type).trim() ? String(r.effect_type).trim().toLowerCase() : null),
+        },
+        {
+          rawKey: "effect_dice",
+          patchKey: "effect_dice",
+          getValue: (r) => (r.effect_dice != null && String(r.effect_dice).trim() ? String(r.effect_dice).trim() : null),
+        },
+        { rawKey: "effect_bonus", patchKey: "effect_bonus", getValue: (r) => Number(r.effect_bonus) },
+        {
+          rawKey: "effect_target",
+          patchKey: "effect_target",
+          getValue: (r) =>
+            r.effect_target != null && String(r.effect_target).trim()
+              ? String(r.effect_target).trim().toLowerCase()
+              : "self",
+        },
+        { rawKey: "charges", patchKey: "charges", getValue: (r) => Number(r.charges) },
         { rawKey: "note", patchKey: "note", getValue: (r) => (r.note == null || String(r.note).trim() === "" ? null : String(r.note)) },
         { rawKey: "effect_json", patchKey: "effect_json", getValue: (r) => (r.effect_json == null || String(r.effect_json).trim() === "" ? null : String(r.effect_json)) },
+        { rawKey: "ai_generated", patchKey: "ai_generated", getValue: (r) => Number(r.ai_generated) },
+        { rawKey: "approved", patchKey: "approved", getValue: (r) => Number(r.approved) },
         { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
       ]),
     refresh: () => refreshItems(host),
@@ -3542,11 +3654,18 @@ function mountItems(host) {
       item_type: fields.querySelector('[data-field="item_type"]').value.trim(),
       description: fields.querySelector('[data-field="description"]').value.trim(),
       value_gp: Number(fields.querySelector('[data-field="value_gp"]').value || 0),
-      weight: Number(fields.querySelector('[data-field="weight"]').value || 0),
       weight_kg: Number(fields.querySelector('[data-field="weight_kg"]').value || 0),
-      proficiency_classes: pclasses,
+      allowed_classes: pclasses,
+      ac_bonus: 0,
+      effect_type: null,
+      effect_dice: null,
+      effect_bonus: 0,
+      effect_target: "self",
+      charges: 1,
       note: noteRaw || null,
       effect_json: eff || null,
+      ai_generated: 0,
+      approved: 1,
       is_active: fields.querySelector('[data-field="is_active"]').checked,
     };
     if (!payload.key || !payload.label) {
@@ -3761,7 +3880,16 @@ function mountConsumables(host) {
         { rawKey: "effect_target", patchKey: "effect_target", getValue: (r) => String(r.effect_target || "self").toLowerCase() },
         { rawKey: "weight_kg", patchKey: "weight_kg", getValue: (r) => Number(r.weight_kg) },
         { rawKey: "charges", patchKey: "charges", getValue: (r) => Number(r.charges) },
-        { rawKey: "base_price", patchKey: "base_price", getValue: (r) => Number(r.base_price) },
+        {
+          rawKey: "value_gp",
+          patchKey: "value_gp",
+          getValue: (r) =>
+            r.value_gp != null && String(r.value_gp).trim() !== ""
+              ? Number(r.value_gp)
+              : r.base_price != null && String(r.base_price).trim() !== ""
+                ? Number(r.base_price)
+                : 0,
+        },
         { rawKey: "note", patchKey: "note", getValue: (r) => (r.note == null || String(r.note).trim() === "" ? null : String(r.note)) },
         { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
       ]),

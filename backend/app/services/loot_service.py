@@ -14,6 +14,41 @@ logger = get_logger(__name__)
 
 _SLOT_VALUES = {"main_hand", "off_hand", "armor"}
 
+# When game_config_items.item_type is wrong (e.g. quest) but effect_* matches consumable mechanics (8H).
+_CONSUMABLE_EFFECT_SIGNAL = frozenset(
+    {"heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff"}
+)
+
+
+def _inventory_rows_sql(effect_col_sql: str, effect_dice_col_sql: str) -> str:
+    """effect_* cols: gi.effect_type / gi.effect_dice or NULL placeholders for older DB."""
+    return f"""
+            SELECT ci.id, ci.slot, ci.equipped, ci.quantity, ci.source, ci.acquired_at,
+                   ci.item_key, ci.weapon_key, ci.consumable_key,
+                   gi.label AS item_label, gi.item_type AS item_kind, {effect_col_sql}, {effect_dice_col_sql},
+                   gw.label AS weapon_label,
+                   gc.label AS consumable_label,
+                   gc_item.key AS consumable_catalog_item_key,
+                   gc_item.label AS consumable_by_item_key_label
+            FROM character_inventory ci
+            LEFT JOIN game_config_items gi ON gi.key = ci.item_key
+            LEFT JOIN game_config_weapons gw ON gw.key = ci.weapon_key
+                OR (
+                    ci.weapon_key LIKE 'weapon_%'
+                    AND gw.key = SUBSTR(ci.weapon_key, 8)
+                )
+            LEFT JOIN game_config_consumables gc ON gc.key = ci.consumable_key
+                OR (
+                    ci.consumable_key LIKE 'consumable_%'
+                    AND gc.key = SUBSTR(ci.consumable_key, 12)
+                )
+            LEFT JOIN game_config_consumables gc_item ON gc_item.key = ci.item_key
+                AND ci.weapon_key IS NULL
+                AND (ci.consumable_key IS NULL OR ci.consumable_key = '')
+            WHERE ci.character_id = ?
+            ORDER BY ci.id ASC
+            """
+
 
 def _conn() -> sqlite3.Connection:
     conn = sqlite3.connect(LOOT_DB_PATH)
@@ -272,30 +307,22 @@ def get_character_inventory(character_id: int) -> list[dict]:
         ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
         if not ch:
             raise ValueError("character not found")
-        rows = conn.execute(
-            """
-            SELECT ci.id, ci.slot, ci.equipped, ci.quantity, ci.source, ci.acquired_at,
-                   ci.item_key, ci.weapon_key, ci.consumable_key,
-                   gi.label AS item_label, gi.item_type AS item_kind,
-                   gw.label AS weapon_label,
-                   gc.label AS consumable_label
-            FROM character_inventory ci
-            LEFT JOIN game_config_items gi ON gi.key = ci.item_key
-            LEFT JOIN game_config_weapons gw ON gw.key = ci.weapon_key
-                OR (
-                    ci.weapon_key LIKE 'weapon_%'
-                    AND gw.key = SUBSTR(ci.weapon_key, 8)
-                )
-            LEFT JOIN game_config_consumables gc ON gc.key = ci.consumable_key
-                OR (
-                    ci.consumable_key LIKE 'consumable_%'
-                    AND gc.key = SUBSTR(ci.consumable_key, 12)
-                )
-            WHERE ci.character_id = ?
-            ORDER BY ci.id ASC
-            """,
-            (cid,),
-        ).fetchall()
+        try:
+            rows = conn.execute(
+                _inventory_rows_sql(
+                    "gi.effect_type AS gi_effect_type",
+                    "gi.effect_dice AS gi_effect_dice",
+                ),
+                (cid,),
+            ).fetchall()
+        except sqlite3.OperationalError:
+            rows = conn.execute(
+                _inventory_rows_sql(
+                    "NULL AS gi_effect_type",
+                    "NULL AS gi_effect_dice",
+                ),
+                (cid,),
+            ).fetchall()
 
     out: list[dict] = []
     for r in rows:
@@ -308,9 +335,24 @@ def get_character_inventory(character_id: int) -> list[dict]:
             item_type = "consumable"
             key = r["consumable_key"]
         else:
+            raw_kind = str(r["item_kind"] or "item").strip().lower()
             label = str(r["item_label"] or r["item_key"])
-            item_type = str(r["item_kind"] or "item")
             key = r["item_key"]
+            # Legacy consumables table OR catalog effect_type → consumable (fixes wrong item_type on unified catalog rows).
+            et = str(r["gi_effect_type"] or "").strip().lower()
+            dice = str(r["gi_effect_dice"] or "").strip()
+            if r["consumable_catalog_item_key"]:
+                item_type = "consumable"
+                clab = r["consumable_by_item_key_label"]
+                if clab:
+                    label = str(clab)
+            elif et in _CONSUMABLE_EFFECT_SIGNAL:
+                item_type = "consumable"
+            elif raw_kind == "quest" and dice:
+                # Mis-tagged elixirs/potions still stored as quest; dice + consumable-like row → treat as consumable.
+                item_type = "consumable"
+            else:
+                item_type = raw_kind or "item"
         out.append(
             {
                 "id": int(r["id"]),

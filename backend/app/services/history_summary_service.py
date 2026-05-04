@@ -6,6 +6,11 @@ import sqlite3
 from typing import Any
 
 from app.history_summary_prompt_loader import HISTORY_SUMMARY_PROMPT_TEXT
+from app.services.history_summary_dual_prompt import (
+    build_dual_single_messages,
+    leaked_plan_tokens_in_player_summary,
+    parse_dual_json_response,
+)
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
 
@@ -16,7 +21,8 @@ DB_PATH = "/data/ai_gm.db"
 def _fetch_campaign(conn: sqlite3.Connection, campaign_id: int) -> dict[str, Any] | None:
     row = conn.execute(
         """
-        SELECT id, title, system_id, model_id, owner_user_id, language, mode, status, created_at
+        SELECT id, title, system_id, model_id, owner_user_id, language, mode, status, created_at,
+               gm_plan_json
         FROM campaigns WHERE id = ?
         """,
         (campaign_id,),
@@ -68,6 +74,80 @@ def format_transcript(turns: list[sqlite3.Row], campaign_title: str, language: s
         lines.append(f"MG: {an}")
         lines.append("")
     return "\n".join(lines)
+
+
+def generate_dual_summary_preview(
+    *,
+    campaign_id: int,
+    user_id: int,
+    max_turns: int = 200,
+    gm_plan_max_chars: int = 12000,
+) -> dict[str, Any]:
+    """
+    [T01] One LLM call → JSON player_summary + gm_notes. Does NOT persist.
+    gm_plan_json from campaign is passed to the prompt for gm_notes only (rules in dual prompt).
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        camp = _fetch_campaign(conn, campaign_id)
+        if not camp:
+            raise ValueError("campaign_not_found")
+        turns = fetch_narrative_turns(conn, campaign_id, max_turns)
+        if not turns:
+            return {
+                "player_summary": "",
+                "gm_notes": "",
+                "leaked_plan_tokens": [],
+                "model_used": "",
+                "included_turn_count": 0,
+                "warning": "Brak tur narracyjnych do podsumowania.",
+                "parse_error": None,
+            }
+
+        transcript = format_transcript(
+            turns, camp["title"] or f"Kampania {campaign_id}", camp["language"] or "pl"
+        )
+        gm_plan_raw = str(camp.get("gm_plan_json") or "").strip()
+        plan_excerpt: str | None
+        if not gm_plan_raw or gm_plan_raw in ("{}", "null"):
+            plan_excerpt = None
+        else:
+            plan_excerpt = gm_plan_raw[:gm_plan_max_chars]
+
+        llm_config = get_user_llm_settings_full(user_id)
+        model = (camp.get("model_id") or "").strip() or None
+        messages = build_dual_single_messages(
+            transcript=transcript, gm_plan_excerpt=plan_excerpt
+        )
+        raw = generate_chat(messages, model=model, llm_config=llm_config).strip()
+        try:
+            ps, gn = parse_dual_json_response(raw)
+        except Exception as exc:  # noqa: BLE001 — surface parse errors to API
+            return {
+                "player_summary": "",
+                "gm_notes": "",
+                "leaked_plan_tokens": [],
+                "model_used": model or llm_config.get("model", ""),
+                "included_turn_count": len(turns),
+                "warning": None,
+                "parse_error": str(exc),
+                "raw_preview": raw[:2000],
+            }
+
+        leaks = leaked_plan_tokens_in_player_summary(ps, gm_plan_raw, transcript)
+        return {
+            "player_summary": ps,
+            "gm_notes": gn,
+            "leaked_plan_tokens": leaks,
+            "model_used": model or llm_config.get("model", ""),
+            "included_turn_count": len(turns),
+            "warning": None,
+            "parse_error": None,
+            "raw_preview": None,
+        }
+    finally:
+        conn.close()
 
 
 def generate_campaign_summary(

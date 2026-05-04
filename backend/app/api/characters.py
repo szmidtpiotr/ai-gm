@@ -5,8 +5,8 @@ import random
 import re
 import sqlite3
 
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, ConfigDict, Field
 from app.character_creation_config import (
     CREATION_SKILL_POOL,
     MAX_SKILL_LVL_AT_CREATION,
@@ -621,6 +621,151 @@ def get_character_sheet(character_id: int):
     except Exception:
         sheet_json = {}
     return {"sheet_json": _strip_hidden_fields(sheet_json)}
+
+
+class SpendSkillXpRequest(BaseModel):
+    """Buy +1 rank in a skill; cost from `game_config_meta.xp_skill_rank_costs` ([S10])."""
+
+    model_config = ConfigDict(extra="ignore")
+    skill_key: str
+
+
+class GrantMgXpRequest(BaseModel):
+    """Manual XP from campaign owner (MG); audited (**[S10d]**)."""
+
+    model_config = ConfigDict(extra="ignore")
+    amount: int = Field(..., ge=1, le=50_000)
+    reason: str = Field(..., min_length=1, max_length=2000)
+
+
+@router.get("/characters/{character_id}/xp")
+def get_character_xp(character_id: int):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        from app.services import xp_service
+
+        try:
+            snap = xp_service.get_xp_snapshot(conn, character_id)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Character not found") from None
+        return snap
+    finally:
+        conn.close()
+
+
+@router.post("/characters/{character_id}/xp/spend-skill")
+def spend_character_skill_xp(character_id: int, req: SpendSkillXpRequest):
+    from app.services import xp_service
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        try:
+            result = xp_service.spend_skill_rank_up(conn, character_id, req.skill_key)
+            conn.commit()
+            return {"ok": True, **result}
+        except ValueError as e:
+            conn.rollback()
+            code = str(e)
+            if code == "character not found":
+                raise HTTPException(status_code=404, detail="Character not found") from None
+            if code == "skill_key_required":
+                raise HTTPException(status_code=400, detail="skill_key is required") from None
+            if code == "unknown_skill":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unknown skill — must exist in game_config_skills catalog.",
+                ) from None
+            if code == "skill_at_ceiling":
+                raise HTTPException(status_code=400, detail="Skill rank already at ceiling") from None
+            if code == "insufficient_xp":
+                raise HTTPException(status_code=400, detail="Not enough XP") from None
+            raise HTTPException(status_code=400, detail=code) from None
+    finally:
+        conn.close()
+
+
+@router.post("/characters/{character_id}/xp/grant-mg")
+def grant_character_xp_mg(character_id: int, req: GrantMgXpRequest, user_id: int = Query(...)):
+    """
+    Owner kampanii postaci przyznaje XP z puli MG (**[S10b]**); wpis w `character_xp_grants` (**[S10d]**).
+    """
+    from app.services import xp_service
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        info = xp_service.fetch_character_campaign_owner(conn, character_id)
+        if not info:
+            raise HTTPException(status_code=404, detail="Character not found") from None
+        if int(info["owner_user_id"]) != int(user_id):
+            raise HTTPException(
+                status_code=403,
+                detail="user_id must match campaign owner to grant XP",
+            ) from None
+        try:
+            result = xp_service.grant_character_xp(
+                conn,
+                character_id,
+                req.amount,
+                reason=req.reason.strip(),
+                meta={"granted_by": "mg_api", "campaign_id": int(info["campaign_id"])},
+            )
+            gid = xp_service.insert_mg_xp_grant_audit(
+                conn,
+                character_id=character_id,
+                campaign_id=int(info["campaign_id"]),
+                amount=int(req.amount),
+                reason=req.reason.strip(),
+                granted_by_user_id=int(user_id),
+            )
+            conn.commit()
+            return {"ok": True, **result, "grant_id": gid}
+        except ValueError as e:
+            conn.rollback()
+            if str(e) == "character not found":
+                raise HTTPException(status_code=404, detail="Character not found") from None
+            raise HTTPException(status_code=400, detail=str(e)) from None
+        except sqlite3.OperationalError as e:
+            conn.rollback()
+            if "no such table" in str(e).lower():
+                raise HTTPException(
+                    status_code=503,
+                    detail="character_xp_grants / migration missing — apply migrations and restart API",
+                ) from None
+            raise HTTPException(status_code=500, detail=str(e)) from None
+    finally:
+        conn.close()
+
+
+@router.get("/characters/{character_id}/xp/grant-log")
+def list_character_xp_grants(
+    character_id: int, user_id: int = Query(...), limit: int = Query(50, ge=1, le=200)
+):
+    """Ostatnie granty XP (audit); tylko owner kampanii."""
+    from app.services import xp_service
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        info = xp_service.fetch_character_campaign_owner(conn, character_id)
+        if not info:
+            raise HTTPException(status_code=404, detail="Character not found") from None
+        if int(info["owner_user_id"]) != int(user_id):
+            raise HTTPException(status_code=403, detail="user_id must match campaign owner") from None
+        try:
+            rows = xp_service.list_xp_grants_for_character(conn, character_id, limit=limit)
+        except sqlite3.OperationalError as e:
+            if "no such table" in str(e).lower():
+                raise HTTPException(
+                    status_code=503,
+                    detail="character_xp_grants missing — apply migrations and restart API",
+                ) from None
+            raise HTTPException(status_code=500, detail=str(e)) from None
+        return {"character_id": character_id, "grants": rows}
+    finally:
+        conn.close()
 
 
 @router.post("/characters/{character_id}/generate-identity", response_model=GeneratedIdentityPreview)

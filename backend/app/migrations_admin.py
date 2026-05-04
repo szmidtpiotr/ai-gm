@@ -512,6 +512,43 @@ ADMIN_MIGRATIONS = [
     INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES ('item_integrity_enabled', '0')
     """,
+    # Align game_config_items with legacy consumables catalog when INSERT OR IGNORE blocked 8H copy (wrong item_type).
+    """
+    UPDATE game_config_items
+    SET item_type = 'consumable'
+    WHERE key IN (SELECT key FROM game_config_consumables)
+      AND LOWER(COALESCE(item_type, '')) NOT IN ('consumable')
+    """,
+    # Same keys without legacy consumables row: infer consumable from effect_type (8H unified catalog).
+    """
+    UPDATE game_config_items
+    SET item_type = 'consumable'
+    WHERE LOWER(COALESCE(item_type, '')) NOT IN ('consumable')
+      AND effect_type IS NOT NULL
+      AND TRIM(effect_type) != ''
+      AND LOWER(TRIM(effect_type)) IN (
+        'heal_hp', 'restore_mana', 'remove_condition', 'add_condition', 'stat_buff'
+      )
+    """,
+    # [S11a] Roadmap / plan MG per campaign (JSON), inject + campaign_ai_summaries in narrative prompt
+    "ALTER TABLE campaigns ADD COLUMN gm_plan_json TEXT NOT NULL DEFAULT '{}'",
+    """
+    CREATE TABLE IF NOT EXISTS character_xp_grants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        character_id INTEGER NOT NULL,
+        campaign_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'mg_manual',
+        granted_by_user_id INTEGER NOT NULL,
+        meta_json TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_character_xp_grants_character
+    ON character_xp_grants(character_id, created_at DESC)
+    """,
 ]
 
 ADMIN_SEEDS = [
@@ -604,6 +641,13 @@ ADMIN_SEEDS = [
     """
     INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES ('loki_url', 'http://loki:3100')
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value)
+    VALUES (
+      'xp_skill_rank_costs',
+      '{"1":50,"2":100,"3":200,"4":400,"5":1200}'
+    )
     """,
     """
     UPDATE game_config_enemies

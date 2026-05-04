@@ -1,59 +1,73 @@
 # Książka zasad dla graczy — szkic (WFRP-inspired)
 
-**Status:** outline only. Pełny tekst powstanie po zamknięciu uchwał w [`../04_decisions_log.md`](../04_decisions_log.md).
+**Status:** outline zsynchronizowany z zamknięciem fazy 9B (**[S8]** w [`../04_decisions_log.md`](../04_decisions_log.md)). Pełny tekst narracyjny i tabele — w kolejnej fazie redakcyjnej / po wdrożeniu kodu tam, gdzie uchwały wymagają zmian w silniku.
 
-**Cel:** Jedna spójna książka w stylu *Warhammer Fantasy Roleplay*: konkretne procedury („najpierw X, potem Y”), przykłady, tabele trudności, minimalny żargon developerski. Gracz nie musi znać nazw tabel SQLite ani plików backendu.
+**Cel:** Jedna spójna książka w stylu *Warhammer Fantasy Roleplay*: konkretne procedury („najpierw X, potem Y”), przykłady, minimalny żargon developerski. Gracz nie musi znać nazw tabel SQLite ani plików backendu.
 
 ---
 
-## Zasady redakcyjne
+## Zasady redakcyjne (tylko to, co jest uchwalone)
 
-1. **Zgodność z ustaleniami:** Każdy rozdział mechaniczny musi mapować na to, co jest **uchwalone** w `04_decisions_log.md` i spójne z macierzą [`02_code_usage_matrix.md`](../02_code_usage_matrix.md). Przedmioty i broń w narracji gracza odnoszą się do **katalogu w bazie** (klucze, statystyki), zgodnie z definicją „używane w grze” w [`00_brief.md`](../00_brief.md) — bez obiecywania rzeczy, których nie ma w konfiguracji ani w twardym kontekście dla LLM.
+1. **Źródło prawdy:** Każdy rozdział mechaniczny mapuje na [`../04_decisions_log.md`](../04_decisions_log.md) i na [`../02_code_usage_matrix.md`](../02_code_usage_matrix.md). Definicja „używane w grze”: **[S0]** + [`../00_brief.md`](../00_brief.md). Nie obiecujemy mechanik sprzed wdrożenia w kodzie — tam gdzie uchwała wyprzedza kod (np. **[S4b]**, **[S5]**), tekst może mówić „w zasadach tak ma być” lub „po wdrożeniu”, bez udawania że silnik już tak liczy.
 2. **Druga osoba:** „Wykonujesz rzut…”, „Twoja postać może…”.
-3. **Terminologia:** Używaj kluczy umiejętności/statów z gry (np. Stealth, STR) tak, jak w interfejsie — nie „kolumna w DB”.
-4. **DC i opisy:** Progi trudności opisz jako etykiety (łatwe, średnie…) z **wartościami liczbowymi** z konfiguracji, ale zaznacz, że w sesji rzut może użyć konkretnego DC podanego przez sytuację (zgodnie z uchwałą o roli `game_config_dc`).
-5. **Broń:** Dopóki nie ma uchwały o finesse / dwuręczności — w rozdziale o walce opisz **tylko** to, co macierz potwierdza (np. kość obrażeń + modyfikator z atrybutu powiązanego z bronią w silniku), bez obietnic stylu D&D.
+3. **Terminologia:** Jak w interfejsie / konfiguracji (np. klucze umiejętności, etykiety DC) — nie nazewnictwo kolumn SQL.
+4. **DC ([S5]):** Mistrz Gry może mówić „łatwy / trudny test”; **konkretna liczba** DC pochodzi z **jednej tabeli** konfiguracji (`game_config_dc`). Poziomy DC stosujecie **tylko gdy jest rzut** — nie przy samej narracji bez testu.
+5. **Broń ([S1], [S1b], [S1c]):** STR/DEX wg typu broni; dwuręczność jako umiejętność; typ broni zgodny z rodzajem ataku; zasięg „czy doleciało”; konfrontacje dwurzędowe z **remisem na korzyść obrońcy**. Nie obiecujemy jeszcze w tekście gracza pełnej taktyki finesse w kodzie — dopóki `combat_service` nie implementuje **[S1]** w szczegółach, opisuj to jako **kierunek zasad** lub skrót z [`draft_formulas_and_examples.md`](draft_formulas_and_examples.md).
+6. **Przedmioty ([S2]):** Docelowo jeden schemat JSON; pancerz w liczeniu obrony (najpierw uproszczenie AC); klasy i magia przy użyciu przedmiotów — jak w uchwale.
+7. **Statystyki ([S3]):** Zamknięta lista cech z konfiguracji; nowa statystyka = nowa wersja zasad.
+8. **Umiejętności i XP ([S4], [S4b], [S5a], [S10a], [S10b], [S10c]):** Sufit rangi 5, **pula XP** (bez LVL), kara za deklarację bez umiejętności, pierwszy wykup +1; **widełki** przyznawania XP i kosztów rang — w szkicu [`draft_formulas_and_examples.md`](draft_formulas_and_examples.md) §0g; **cecha do rzutu** z bazy (`linked_stat`); opisy w katalogu dla gracza i dla kontekstu LLM.
+9. **Warunki i konsumable ([S6]):** Wspólna rodzina JSON dla stanów i przedmiotów (różne kategorie efektów); jeden katalog przedmiotów dla zużywalnych; jeden `key` przedmiotu wszędzie; stany złożone — zasada parametryzacji (§2 **[S6]**).
+10. **Konfiguracja a świat ([S7], [S7a]):** Pełny katalog treści — snapshot import/export; LLM zapisuje przez **API**; backup i retencja — po wdrożeniu; jedna baza.
 
 ---
 
-## Proponowany spis treści
+## Proponowany spis treści (mapowanie na uchwały)
 
-1. **Wstęp** — czym jest gra, rola Mistrza Gry (AI), fair play, bezpieczeństwo przy stole.
-2. **Tworzenie postaci** — archetypy, statystyki, umiejętności, ekwipunek startowy (zgodnie z `game_config_archetypes` / uchwałami).
-3. **Statystyki** — co oznaczają, jak liczyć modyfikator z wartości (standardowo (wartość−10)/2 jeśli taka jest uchwała).
-4. **Umiejętności** — rangi, sufit rangi (po uchwale o `rank_ceiling`), powiązanie z cechami.
-5. **Rzuty i testy** — k20, modyfikatory, przewaga/wada (jeśli obowiązują), **rzuty obronne** vs **testy umiejętności** (zgodnie z `dice.py` i uchwałami).
-6. **Poziomy trudności (DC)** — tabela nazw i liczb z konfiguracji; jak czytać sukces/porażkę.
-7. **Walka** — inicjatywa, atak, trafienie, obrażenia, śmierć wrogów, zasady **tylko** potwierdzone w kodzie (np. dodge jeśli używany).
-8. **Ekwipunek i przedmioty** — typy przedmiotów, pancerz, konsumable, **bez** obiecywania złożonych efektów z `effect_json` dopóki brak uchwały o schemacie.
-9. **Magia i zdolności specjalne** — na razie ramy narracyjne + odesłanie do tego, co silnik faktycznie liczy (np. `spell_attack` jeśli uchwalone).
-10. **Stan i warunki** — jeśli warunki mają wejść do gry: dopiero po uchwale o `game_config_conditions`.
-11. **Załączniki** — skrótówka komend, glosariusz.
+| # | Rozdział | Uchwały / uwagi |
+|---|----------|-----------------|
+| 1 | **Wstęp** — gra, Mistrz Gry (AI), fair play | **[S0]** |
+| 2 | **Tworzenie postaci** — archetypy, start | archetypy + **[S3]**, **[S4]** |
+| 3 | **Statystyki** — znaczenie cech, modyfikatory | **[S3]** |
+| 4 | **Umiejętności** — rangi, sufit 5, kara, pierwszy wykup, powiązanie z cechą | **[S4]**, **[S4b]**, **[S5a]** |
+| 5 | **Rzuty i testy** — k20, kiedy test; konfrontacje; remis | **[S1b]**, **[S1c]**, **[S5]** (kiedy DC), **[S4b]** (docelowo odczyt z bazy) |
+| 6 | **Poziomy trudności (DC)** — etykiety i liczby z jednej tabeli | **[S5]** |
+| 7 | **Walka** — trafienie, obrażenia STR/DEX, broń, zasięg (kierunek), dwuręczność jako skill | **[S1]**, **[S1b]**; szczegóły taktyczne gdy kod dogoni **[S1]** |
+| 8 | **Ekwipunek i przedmioty** — typy, pancerz, konsumable, JSON | **[S2]**, **[S6]** |
+| 9 | **Magia i zdolności specjalne** — na bazie broni `spell` / przedmiotów; brak osobnej tabeli czarów na razie | **[S1]**, **[S2]**, **[AUDIT]** / [`../06_schema_gaps.md`](../06_schema_gaps.md) |
+| 10 | **Stany i warunki** — JSON, przykłady złożonych stanów | **[S6]** |
+| 11 | **Załączniki** — komendy, glosariusz; opcjonalnie **eksport katalogu** (dla organizatorów, nie dla gracza końcowego) | **[S7]** |
+
+**Otwarte (nie obiecywać w książce jako gotowca):** **[S5b]** — wrogowie jak karta gracza / generator; dopóki nie ma osobnej uchwały wdrożeniowej.
 
 ---
 
-## Ton i przykład (fragment ilustracyjny — do przepisania po uchwałach)
+## Ton i przykład (fragment ilustracyjny)
 
 > **Rzut testu umiejętności**  
-> Gdy scena wymaga testu, wykonujesz rzut k20 i dodajesz modyfikatory opisane w podsumowaniu rzutu. Mistrz Gry ustala **DC** (trudność) dla sytuacji — liczba, którą musisz osiągnąć lub przekroczyć, aby odnieść sukces.
+> Gdy scena wymaga testu, wykonujesz rzut k20 i dodajesz modyfikatory (cecha z karty, ranga umiejętności, ewentualnie inne bonusy opisane w podsumowaniu). Mistrz Gry ustala **poziom trudności** słowami (np. trudny); **liczba**, którą musisz pokonać, pochodzi z **tej samej tabeli**, którą mają organizatorzy w konfiguracji — tak nie powstają „losowe” progi z powietrza (**[S5]**).
 
-_(Powyższe zdanie o DC jest poprawne tylko wtedy, gdy uchwała potwierdzi, że gracz widzi DC w wyniku rzutu — sprawdź aktualny UX i `04_decisions_log.md` przed publikacją.)_
+---
+
+## Szkic przykładów liczb
+
+[`draft_formulas_and_examples.md`](draft_formulas_and_examples.md) — spójny z [`../04_decisions_log.md`](../04_decisions_log.md) (**[S1]–[S7]**).
 
 ---
 
 ## Mapowanie na dokumenty projektowe
 
-| Rozdział książki | Źródło prawdy technicznej |
-|------------------|---------------------------|
-| Staty / umiejętności / DC | `game_config_*` + `config_service` + `04_decisions_log` |
-| Walka | `combat_service`, `dice` (ataki), uchwały o broni |
-| Przedmioty | `game_config_items`, loot, uchwała o `effect_json` |
-| Magia | Uchwały + `SKILL_STAT_MAP` / bronie `weapon_type` |
+| Obszar | Źródło |
+|--------|--------|
+| Staty, umiejętności, DC | `game_config_*`, **[S3]–[S5]**, **[S4b]** |
+| Walka, broń | `combat_service`, **[S1]** |
+| Przedmioty, stany | **[S2]**, **[S6]**, JSON |
+| Import / LLM / backup | **[S7]**, **[S7a]** |
+| Luki schematu vs kod | [`../06_schema_gaps.md`](../06_schema_gaps.md), **[AUDIT]** |
 
 ---
 
-## Następne kroki (redakcyjne, poza fazą 9B)
+## Następne kroki (poza zamknięciem fazy 9B docs)
 
-1. Po zamknięciu `04_decisions_log.md` — przepisać rozdziały 3–8 z konkretnymi liczbami i przykładami.
-2. Dodać ilustracje / tabele (opcjonalnie) i spis komend z [`/mechanics/slash-commands`](../../backend/app/api/mechanics.py).
-3. Review przez osobę, która nie pisała backendu — test czytelności.
+1. **Implementacja** zgodnie z [`../06_schema_gaps.md`](../06_schema_gaps.md) i uchwałami (m.in. `dice.py` + **[S4b]**, pipeline DC + **[S5]**, backup + **[S7a]**).
+2. Redakcja pełnych rozdziałów 3–11 z liczbami z `draft_formulas` po stabilizacji balansu.
+3. Review czytelności przez osobę bez kontekstu backendu.

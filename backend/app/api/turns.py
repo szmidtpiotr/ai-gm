@@ -23,8 +23,9 @@ from app.services.dice import (
     format_roll_for_llm,
     parse_character_sheet,
     parse_roll_command,
-    resolve_test_name,
+    resolve_dc_for_roll,
     resolve_roll,
+    resolve_test_name,
 )
 from app.services.game_engine import build_narrative_messages, run_narrative_turn
 from app.services.helpme_advisor_service import run_helpme_advisor
@@ -1427,7 +1428,7 @@ def create_turn(
                 character_sheet=character_sheet,
                 test_name=roll_request["skill"],
                 raw_roll=roll_request.get("raw_roll"),
-                dc=roll_request.get("dc"),
+                dc=resolve_dc_for_roll(roll_request.get("dc")),
             )
             roll_result_data = roll_result
             roll_result_message = format_roll_for_llm(roll_result)
@@ -2015,7 +2016,7 @@ def create_turn_stream(
                 character_sheet=character_sheet,
                 test_name=roll_request["skill"],
                 raw_roll=roll_request.get("raw_roll"),
-                dc=roll_request.get("dc"),
+                dc=resolve_dc_for_roll(roll_request.get("dc")),
             )
             roll_result_data = roll_result
             roll_result_message = format_roll_for_llm(roll_result)

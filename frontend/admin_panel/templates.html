@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bulk Import Templates — AI-GM Admin</title>
-    <link rel="stylesheet" href="/admin_panel/layout.css?v=21" />
+    <link rel="stylesheet" href="/admin_panel/layout.css?v=22" />
   </head>
   <body class="templates-page">
     <header class="templates-page-header">
@@ -18,6 +18,30 @@
         sub-tab (Skills, Weapons, Loot Tables, …) and expand <strong>Bulk import (JSON array)</strong> — paste the array
         there (Dry run / Commit). This page is a copy-friendly reference; no login required here.
       </p>
+      <div class="templates-sot-callout" role="note">
+        <p>
+          <strong>Source of truth dla kontekstu GM (kolejność priorytetu):</strong>
+          najpierw <code>game_config_items</code> — jeden skonsolidowany katalog przedmiotów (typy m.in. armor,
+          consumable, misc, quest, narrative; efekty zużywalnych przez <code>effect_type</code> / <code>effect_dice</code>),
+          potem broń (<code>game_config_weapons</code>), wrogowie, NPC, lokalizacje, loot tables itd. Pełny eksport do LLM:
+          <code>GET /api/admin/config/catalog-snapshot</code> (Admin Panel → eksport snapshotu). Szablony poniżej trzymają
+          się tej hierarchii: wpisy <strong>Items</strong> są punktem odniesienia dla mikstur i przedmiotów fabularnych
+          w loot i sklepach.
+        </p>
+      </div>
+      <nav class="templates-toc" aria-label="Sekcje szablonów">
+        <strong>Sekcje:</strong>
+        <a href="#sec-skills">Skills</a>
+        · <a href="#sec-weapons">Weapons</a>
+        · <a href="#sec-enemies">Enemies</a>
+        · <a href="#sec-npcs">NPC</a>
+        · <a href="#sec-locations">Locations</a>
+        · <a href="#sec-conditions">Conditions</a>
+        · <a href="#sec-items">Items</a>
+        · <a href="#sec-consumables">Consumables (legacy)</a>
+        · <a href="#sec-loot-tables">Loot tables</a>
+        · <a href="#sec-no-bulk">Stats / DC / Archetypes</a>
+      </nav>
 
       <section class="template-section" aria-labelledby="sec-skills">
         <h2 id="sec-skills">Skills</h2>
@@ -208,47 +232,47 @@
           </div>
           <pre class="copy-block" data-table="weapons">[
   {
-    "key": "shortsword",
-    "label": "Short Sword",
-    "damage_die": "d6",
+    "key": "war_axe_light",
+    "label": "Light war axe",
+    "damage_die": "d8",
     "linked_stat": "STR",
-    "allowed_classes": ["warrior", "ranger"],
-    "description": "A versatile blade for close combat.",
+    "allowed_classes": ["warrior"],
+    "description": "Compact axe for cleaving strikes in tight spaces.",
     "weapon_type": "melee",
     "two_handed": false,
-    "finesse": true,
-    "range_m": null,
-    "weight_kg": 1.0,
-    "note": null,
-    "is_active": true
-  },
-  {
-    "key": "longbow",
-    "label": "Longbow",
-    "damage_die": "d8",
-    "linked_stat": "DEX",
-    "allowed_classes": ["warrior", "ranger"],
-    "description": "Heavy bow for long-range volleys.",
-    "weapon_type": "ranged",
-    "two_handed": true,
     "finesse": false,
-    "range_m": 150,
-    "weight_kg": 1.0,
+    "range_m": null,
+    "weight_kg": 1.8,
     "note": null,
     "is_active": true
   },
   {
-    "key": "tome_of_striking",
-    "label": "Tome of Striking",
+    "key": "crossbow_hand",
+    "label": "Hand crossbow",
+    "damage_die": "d6",
+    "linked_stat": "DEX",
+    "allowed_classes": ["ranger", "warrior"],
+    "description": "One-handed crossbow for quick shots from cover.",
+    "weapon_type": "ranged",
+    "two_handed": false,
+    "finesse": false,
+    "range_m": 60,
+    "weight_kg": 1.2,
+    "note": null,
+    "is_active": true
+  },
+  {
+    "key": "rod_channeling",
+    "label": "Channeling rod",
     "damage_die": "d6",
     "linked_stat": "INT",
     "allowed_classes": ["scholar"],
-    "description": "Arcane focus that channels forceful strikes.",
+    "description": "Ceremonial rod used to aim spell-strikes.",
     "weapon_type": "spell",
     "two_handed": false,
     "finesse": false,
     "range_m": null,
-    "weight_kg": 0.5,
+    "weight_kg": 0.4,
     "note": null,
     "is_active": true
   }
@@ -489,7 +513,11 @@
                 <td><code>shop_inventory_json</code></td>
                 <td>JSON string or array</td>
                 <td>❌</td>
-                <td>Valid JSON. Recommended list of entries like <code>[{"type":"weapon","key":"shortsword"}]</code></td>
+                <td>
+                  Valid JSON. Przykład: <code>[{"type":"weapon","key":"war_axe_light"},{"type":"item","key":"health_potion_small"}]</code>
+                  — klucze muszą istnieć w katalogu broni / przedmiotów (<code>game_config_items</code> dla
+                  <code>type: item</code>).
+                </td>
               </tr>
               <tr>
                 <td><code>is_active</code></td>
@@ -524,9 +552,9 @@
     },
     "is_shop": 1,
     "shop_inventory_json": [
-      { "type": "weapon", "key": "shortsword" },
-      { "type": "item", "key": "health_potion" },
-      { "type": "item", "key": "torch" }
+      { "type": "weapon", "key": "war_axe_light" },
+      { "type": "item", "key": "health_potion_small" },
+      { "type": "item", "key": "rope" }
     ],
     "is_active": 1,
     "location_keys": []
@@ -881,9 +909,13 @@
       </section>
 
       <section class="template-section" aria-labelledby="sec-items">
-        <h2 id="sec-items">Items</h2>
+        <h2 id="sec-items">Items (<code>game_config_items</code>)</h2>
         <p class="muted">
-          Master catalogue entries for gear, consumables, quest objects, and other lootable or tradable items.
+          Główny katalog przedmiotów dla gry i dla GM: zbroje, zużywalne (z polami efektu), przedmioty fabularne,
+          klucze fabularne itd. Mikstury i consumables definiuj tutaj jako <code>item_type: consumable</code> z
+          <code>effect_type</code> / <code>effect_dice</code> — to jest preferowane źródło (8H) zamiast osobnej tabeli
+          legacy. Pole <code>effect_json</code> zostaw na rzadkie przypadki (np. stat_mods); dla healów używaj pól
+          efektu.
         </p>
         <div class="field-ref-wrap admin-table-wrap">
           <table class="admin-table">
@@ -900,67 +932,118 @@
                 <td><code>key</code></td>
                 <td>text</td>
                 <td>✅</td>
-                <td>lowercase_snake_case, unique</td>
+                <td>lowercase_snake_case, unique, 1–40 znaków</td>
               </tr>
               <tr>
                 <td><code>label</code></td>
                 <td>text</td>
                 <td>✅</td>
-                <td>Display name</td>
+                <td>Nazwa wyświetlana</td>
               </tr>
               <tr>
                 <td><code>item_type</code></td>
                 <td>text</td>
                 <td>✅</td>
-                <td>weapon | armor | consumable | misc | quest (default misc)</td>
+                <td>
+                  weapon | armor | consumable | misc | quest | narrative (domyślnie misc). <code>narrative</code> —
+                  przedmioty tylko do kontekstu/opowieści.
+                </td>
               </tr>
               <tr>
                 <td><code>description</code></td>
                 <td>text</td>
                 <td>❌</td>
-                <td>Flavour text</td>
+                <td>Opis dla gracza / GM</td>
               </tr>
               <tr>
                 <td><code>value_gp</code></td>
                 <td>number</td>
                 <td>❌</td>
-                <td>Base gold value, default 0</td>
-              </tr>
-              <tr>
-                <td><code>weight</code></td>
-                <td>number</td>
-                <td>❌</td>
-                <td>Legacy encumbrance column; default 0. Prefer <code>weight_kg</code> for new data.</td>
+                <td>Wartość w GP; domyślnie 0</td>
               </tr>
               <tr>
                 <td><code>weight_kg</code></td>
                 <td>number</td>
                 <td>❌</td>
-                <td>Mass in kilograms (spec-aligned); default 0</td>
+                <td>Masa w kg; domyślnie 0. W imporcie akceptowany jest alias <code>weight</code> (legacy).</td>
               </tr>
               <tr>
-                <td><code>proficiency_classes</code></td>
+                <td><code>allowed_classes</code></td>
                 <td>array[string]</td>
                 <td>❌</td>
-                <td>JSON array, e.g. ["warrior"]; subset of warrior/ranger/scholar; default []</td>
+                <td>
+                  Podzbiór <code>warrior</code>, <code>ranger</code>, <code>scholar</code>; domyślnie []. Alias:
+                  <code>proficiency_classes</code> (stara nazwa w JSON).
+                </td>
               </tr>
               <tr>
-                <td><code>note</code></td>
+                <td><code>ac_bonus</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Dla zbroi / tarcz: bonus do AC; domyślnie 0</td>
+              </tr>
+              <tr>
+                <td><code>effect_type</code></td>
+                <td>text | null</td>
+                <td>❌</td>
+                <td>
+                  Dla consumable: heal_hp | restore_mana | remove_condition | add_condition | stat_buff | misc. Jeśli
+                  consumable i brak — backend ustawi misc.
+                </td>
+              </tr>
+              <tr>
+                <td><code>effect_dice</code></td>
+                <td>text | null</td>
+                <td>❌</td>
+                <td>np. <code>2d4</code> — tylko wzorzec kości (<code>^\d*d\d+$</code>); stały dodatek w <code>effect_bonus</code></td>
+              </tr>
+              <tr>
+                <td><code>effect_bonus</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Płaski dodatek do efektu; domyślnie 0</td>
+              </tr>
+              <tr>
+                <td><code>effect_target</code></td>
                 <td>text</td>
                 <td>❌</td>
-                <td>Internal design notes</td>
+                <td>self | ally | any (domyślnie self)</td>
+              </tr>
+              <tr>
+                <td><code>charges</code></td>
+                <td>number</td>
+                <td>❌</td>
+                <td>Liczba użyć na stos; minimum 1</td>
+              </tr>
+              <tr>
+                <td><code>approved</code></td>
+                <td>number (0|1)</td>
+                <td>❌</td>
+                <td>Zatwierdzenie treści; domyślnie 1</td>
+              </tr>
+              <tr>
+                <td><code>ai_generated</code></td>
+                <td>number (0|1)</td>
+                <td>❌</td>
+                <td>Oznaczenie pochodzenia; domyślnie 0</td>
               </tr>
               <tr>
                 <td><code>effect_json</code></td>
                 <td>text</td>
                 <td>❌</td>
-                <td>JSON string, same format as conditions</td>
+                <td>Opcjonalny JSON string — używaj oszczędnie; efekty heal preferuj przez effect_*</td>
+              </tr>
+              <tr>
+                <td><code>note</code></td>
+                <td>text</td>
+                <td>❌</td>
+                <td>Notatki projektowe</td>
               </tr>
               <tr>
                 <td><code>is_active</code></td>
                 <td>boolean</td>
                 <td>❌</td>
-                <td>Default true</td>
+                <td>Domyślnie true</td>
               </tr>
             </tbody>
           </table>
@@ -972,34 +1055,54 @@
           </div>
           <pre class="copy-block" data-table="items">[
   {
-    "key": "health_potion",
-    "label": "Health Potion",
+    "key": "health_potion_small",
+    "label": "Mała mikstura zdrowia",
     "item_type": "consumable",
-    "description": "Restores 2d6 HP when consumed.",
+    "description": "Czerwony eliksir; przywraca trochę HP.",
     "value_gp": 25,
-    "weight": 0.5,
-    "weight_kg": 0.5,
-    "proficiency_classes": [],
-    "effect_json": "{\"heal\":\"2d6\"}",
+    "weight_kg": 0.1,
+    "allowed_classes": [],
+    "effect_type": "heal_hp",
+    "effect_dice": "2d4",
+    "effect_bonus": 2,
+    "effect_target": "self",
+    "charges": 1,
+    "approved": 1,
+    "ai_generated": 0,
     "is_active": true
   },
   {
-    "key": "iron_shield",
-    "label": "Iron Shield",
+    "key": "shield_iron_heater",
+    "label": "Żelazna puklerz",
     "item_type": "armor",
-    "description": "Sturdy shield. +2 AC when equipped.",
-    "value_gp": 40,
-    "weight": 6.0,
-    "effect_json": "{\"stat_mods\":{\"AC\":2}}",
+    "description": "Solidna tarcza jednoręczna.",
+    "value_gp": 45,
+    "weight_kg": 6,
+    "allowed_classes": ["warrior", "ranger"],
+    "ac_bonus": 2,
+    "approved": 1,
     "is_active": true
   },
   {
-    "key": "ancient_map",
-    "label": "Ancient Map",
+    "key": "quest_sigil_fragment",
+    "label": "Fragment sygillum",
     "item_type": "quest",
-    "description": "A tattered map showing a ruined fortress.",
+    "description": "Połówka metalowej pieczęci pasującej do ruin.",
     "value_gp": 0,
-    "weight": 0.1,
+    "weight_kg": 0.05,
+    "allowed_classes": [],
+    "approved": 1,
+    "is_active": true
+  },
+  {
+    "key": "lore_letter_blackwood",
+    "label": "List od Blackwood",
+    "item_type": "narrative",
+    "description": "Tylko kontekst fabularny — nie wpływa na mechanikę walki.",
+    "value_gp": 0,
+    "weight_kg": 0,
+    "allowed_classes": [],
+    "approved": 1,
     "is_active": true
   }
 ]</pre>
@@ -1007,10 +1110,12 @@
       </section>
 
       <section class="template-section" aria-labelledby="sec-consumables">
-        <h2 id="sec-consumables">Consumables (game_config_consumables)</h2>
+        <h2 id="sec-consumables">Consumables — <code>game_config_consumables</code> (legacy)</h2>
         <p class="muted">
-          Standalone consumable definitions referenced by loot tables via <code>consumable_key</code>. Separate from
-          catalogue <code>item_type: consumable</code> rows in <code>game_config_items</code>.
+          Osobna tabela historyczna; nadal można importować dla kompatybilności i odwołań <code>consumable_key</code> w
+          loot. <strong>Preferowany model (8H):</strong> wpisy <code>item_type: consumable</code> w
+          <code>game_config_items</code> — tam ustala się efekty i klucze używane jako <code>item_key</code> w loot /
+          sklepach. Nie duplikuj mikstur w obu miejscach bez potrzeby.
         </p>
         <div class="field-ref-wrap admin-table-wrap">
           <table class="admin-table">
@@ -1080,10 +1185,13 @@
                 <td>Uses per inventory stack; default 1</td>
               </tr>
               <tr>
-                <td><code>base_price</code></td>
+                <td><code>value_gp</code></td>
                 <td>number</td>
                 <td>❌</td>
-                <td>Price in copper pieces (or project currency); default 0</td>
+                <td>
+                  Cena / wartość w GP (API 8H; w JSON bulk import: <code>value_gp</code>). Alias w starych plikach:
+                  <code>base_price</code> — silnik mapuje na to samo pole.
+                </td>
               </tr>
               <tr>
                 <td><code>note</code></td>
@@ -1107,30 +1215,30 @@
           </div>
           <pre class="copy-block" data-table="consumables">[
   {
-    "key": "potion_healing_minor",
-    "label": "Minor healing potion",
-    "description": "A small vial of rose-tinted liquid.",
+    "key": "legacy_potion_minor",
+    "label": "Stary wzór — mikstura (legacy row)",
+    "description": "Tylko jeśli utrzymujesz równolegle game_config_consumables.",
     "effect_type": "heal_hp",
     "effect_dice": "2d4",
-    "effect_bonus": 2,
+    "effect_bonus": 0,
     "effect_target": "self",
     "weight_kg": 0.1,
     "charges": 1,
-    "base_price": 15,
+    "value_gp": 15,
     "note": null,
     "is_active": true
   },
   {
-    "key": "antidote_basic",
-    "label": "Basic antidote",
-    "description": "Counters common poisons.",
+    "key": "legacy_antidote",
+    "label": "Antidote (legacy)",
+    "description": "Usuwanie warunku przez klucz warunku w logice gry.",
     "effect_type": "remove_condition",
     "effect_dice": null,
     "effect_bonus": 0,
     "effect_target": "self",
     "weight_kg": 0.05,
     "charges": 1,
-    "base_price": 20,
+    "value_gp": 20,
     "note": null,
     "is_active": true
   }
@@ -1141,9 +1249,11 @@
       <section class="template-section" aria-labelledby="sec-loot-tables">
         <h2 id="sec-loot-tables">Loot tables</h2>
         <p class="muted">
-          Weighted drop tables: one object per table. Optional <code>entries</code> is an array of loot rows; each row
-          references exactly one catalogue key (<code>item_key</code>, <code>weapon_key</code>, or
-          <code>consumable_key</code>) that must already exist in the admin catalogues.
+          Ważone tabele dropów: jeden obiekt na tabelę. Opcjonalnie <code>entries</code> — każdy wiersz ma dokładnie jedno
+          z: <code>item_key</code> | <code>weapon_key</code> | <code>consumable_key</code>. Mikstury z katalogu
+          <code>game_config_items</code> podawaj jako <strong>item_key</strong> (np. <code>health_potion_small</code>);
+          <code>consumable_key</code> zostaw dla wpisów wyłącznie w <code>game_config_consumables</code> (backend może
+          mapować consumable_key → item_key przy imporcie).
         </p>
         <div class="field-ref-wrap admin-table-wrap">
           <table class="admin-table">
@@ -1219,16 +1329,27 @@
           <pre class="copy-block" data-table="loot-tables">[
   {
     "key": "example_loot_table",
-    "label": "Example drops",
-    "description": "Replace keys with real item / weapon / consumable keys from your project.",
+    "label": "Przykładowe dropsy",
+    "description": "Klucze muszą istnieć w odpowiednich katalogach.",
     "is_active": true,
     "entries": [
       { "item_key": "rope", "weight": 10, "qty_min": 1, "qty_max": 2 },
-      { "consumable_key": "potion_healing_minor", "weight": 3, "qty_min": 1, "qty_max": 1 }
+      { "item_key": "health_potion_small", "weight": 25, "qty_min": 1, "qty_max": 1 },
+      { "weapon_key": "war_axe_light", "weight": 5, "qty_min": 1, "qty_max": 1 }
     ]
   }
 ]</pre>
         </div>
+      </section>
+
+      <section class="template-section template-section-coming" aria-labelledby="sec-no-bulk">
+        <h2 id="sec-no-bulk">Stats, DC tiers, Archetypes</h2>
+        <p class="muted">
+          W panelu <strong>Game Design</strong> te katalogi edytujesz w tabelach (inline), ale
+          <strong>nie ma</strong> bloku <em>Bulk import (JSON array)</em> jak dla Skills czy Items. Nie dodawaj tutaj
+          ręcznie tablic JSON — używaj formularzy / edycji wierszy albo pełnego
+          <code>GET/POST /api/admin/config/catalog-snapshot</code> do migracji całego snapshota.
+        </p>
       </section>
     </main>
 

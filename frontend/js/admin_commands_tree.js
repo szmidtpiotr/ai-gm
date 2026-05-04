@@ -5,7 +5,7 @@
 
 /** @type {Record<string, Record<string, {}> | {}>} */
 export const ADMIN_CMD_TREE = {
-  add: { gold: {}, health: {}, item: {}, weapon: {}, consumable: {}, stat: {} },
+  add: { gold: {}, health: {}, item: {}, weapon: {}, stat: {} },
   set: { gold: {}, health: {}, level: {}, location: {} },
   remove: { item: {} },
   clear: { inventory: {} },
@@ -22,10 +22,6 @@ export const ADMIN_CMD_HINTS = {
   "add weapon": {
     hint: "Dodaj broń",
     placeholder: "[weapon_key lub sama nazwa, np. battleaxe]",
-  },
-  "add consumable": {
-    hint: "Dodaj konsumable",
-    placeholder: "[consumable_key lub sama nazwa, np. potion]",
   },
   "add stat": {
     hint: "Dodaj do statystyki",
@@ -157,7 +153,7 @@ const _catalogCache = {
  * @param {string} afterAdmin
  */
 export function shouldUseAdminCatalog(afterAdmin) {
-  return /^\s*add\s+(item|weapon|consumable)\b/i.test(afterAdmin || "");
+  return /^\s*add\s+(item|weapon)\b/i.test(afterAdmin || "");
 }
 
 function _apiBase() {
@@ -217,7 +213,7 @@ export async function fetchAdminCatalogSuggestions(afterAdmin) {
     return null;
   }
   const trimmed = afterAdmin.trimStart();
-  const m = trimmed.match(/^add\s+(item|weapon|consumable)\s*(.*)$/i);
+  const m = trimmed.match(/^add\s+(item|weapon)\s*(.*)$/i);
   if (!m) {
     return [];
   }
@@ -226,9 +222,8 @@ export async function fetchAdminCatalogSuggestions(afterAdmin) {
   const queryToken = (rest.split(/\s+/)[0] || "").trim();
   const q = queryToken.toLowerCase();
 
-  const listKey = branch === "item" ? "items" : branch === "weapon" ? "weapons" : "consumables";
-  const path =
-    branch === "item" ? "/admin/items" : branch === "weapon" ? "/admin/weapons" : "/admin/consumables";
+  const listKey = branch === "item" ? "items" : "weapons";
+  const path = branch === "item" ? "/admin/items" : "/admin/weapons";
   const rows = await _fetchCatalogList(listKey, path);
 
   const filtered = rows.filter((row) => {
@@ -253,7 +248,7 @@ export async function fetchAdminCatalogSuggestions(afterAdmin) {
   return slice.map((row) => {
     const key = String(row.key ?? "").trim();
     const label = String(row.label ?? key).trim();
-    const cmdBranch = branch === "item" ? "item" : branch === "weapon" ? "weapon" : "consumable";
+    const cmdBranch = branch === "item" ? "item" : "weapon";
     return {
       command: `/admin add ${cmdBranch} ${key}`,
       description: `${label} (${key})`,

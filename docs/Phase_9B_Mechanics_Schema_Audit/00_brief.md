@@ -14,6 +14,14 @@ Osobno: przygotować **publiczny szkielet zasad dla graczy** (ton inspirowany Wa
 
 **`game_config_*`** to wzorzec nazw **tabel konfiguracji gry** w bazie SQLite (np. `game_config_weapons`, `game_config_items`). Trzymają **definicje świata i mechanik** (broń, przedmioty, wrogowie, DC, umiejętności…) — zwykle edytowalne w panelu admin. To **nie** tabele stanu sesji (np. `characters`, `campaigns`). Gwiazdka `*` oznacza „dowolna tabela o tym prefiksie”, nie jedną konkretną tabelę.
 
+## Środowisko i dane (2026-05)
+
+Na etapie rozwoju **nie zakładamy** utrzymywania nieodtwarzalnej bazy produkcyjnej w tym torze pracy — **reset SQLite / ponowne migracje od zera** są akceptowalne przy zmianach schematu, dopóki nie obowiązuje osobna polityka backupu dla wdrożeń produkcyjnych.
+
+## Kolejność wdrożeń (**[IMPL]**)
+
+Priorytety fal (pamięć fabularna → broń/atak → JSON przedmiotów → warunki/konsumable → import → kampania „inteligentnie” → staty za XP) — **wiążąca kolejka robocza** w [`04_decisions_log.md`](04_decisions_log.md) (**[IMPL]**). Aktualizuj ją przy zmianie planu (dopisz datę / nową uchwałę zamiast usuwać stare wpisy).
+
 ## Zasada pracy
 
 **Najpierw decyzje i dokumentacja, potem kod.** Ta faza nie zakłada merge’u zmian w `migrations_admin.py`, `dice.py` ani `combat_service.py` — tylko audyt i log decyzji.
@@ -45,14 +53,23 @@ Pola, które **nie** wchodzą ani do mechaniki, ani do takiego „twardego” ko
 | [`02_code_usage_matrix.md`](02_code_usage_matrix.md) | Macierz: kolumna → ścieżka w kodzie lub „nie znaleziono w silniku” |
 | [`03_discussion_agenda.md`](03_discussion_agenda.md) | Kolejność tematów dyskusji |
 | [`04_decisions_log.md`](04_decisions_log.md) | Uchwały (data, treść, konsekwencje) |
+| [`06_schema_gaps.md`](06_schema_gaps.md) | Luki / nadmiary kolumn (przedmioty, skills, czary) — robocze |
 | [`player_rulebook/00_outline_and_tone.md`](player_rulebook/00_outline_and_tone.md) | Szkic książki zasad dla graczy |
+| [`player_rulebook/draft_formulas_and_examples.md`](player_rulebook/draft_formulas_and_examples.md) | Przykłady liczb i procedur (szkic pod instrukcję) |
+| [`07_extended_design_spec.md`](07_extended_design_spec.md) | Draft specyfikacji (magia §1, mapa §1.1, JSON, wróg, import, admin **[S20]**, Figma §11, LLM §12, **kampania §7 [S11b]**) — **[S11b]**–**[S20]** |
+| [`08_open_decisions_checklist.md`](08_open_decisions_checklist.md) | **Niedomknięte ustalenia** — jedna lista: proposed, częściowo zamknięte, [AUDIT], bloki A–D agendy |
+| [`09_figma_to_code_workflow.md`](09_figma_to_code_workflow.md) | **Od Figmy do kodu** — workflow bez żargonu: projekt → tokeny → komponenty → React → API (**[S16]**) |
+| [`11_MASTER_TASK_QUEUE_AND_PROMPTS.md`](11_MASTER_TASK_QUEUE_AND_PROMPTS.md) | **Master kolejki + prompty** — jeden plik: Lp 1–21, checkboxy, PROMPT per zadanie (jak [`../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md`](../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md)) |
+| [`10_agent_implementation_plan.md`](10_agent_implementation_plan.md) | Przekierowanie → `11_MASTER…` |
+| `PROMPT_T1_…` — `PROMPT_T3_…` | Skrót linku do odpowiedniej sekcji w `11_MASTER…` |
 
 ## Kotwice techniczne (stan na start fazy — do weryfikacji)
 
 - **Broń w walce:** [`backend/app/services/combat_service.py`](../../backend/app/services/combat_service.py) — `_load_weapon_row` pobiera wyłącznie `damage_die` i `linked_stat`. Obrażenia: `roll_damage_dice` + modyfikator z atrybutu wskazanego przez `linked_stat`. Pola `finesse`, `two_handed`, `range_m`, `weapon_type` są w bazie i w [`admin_config`](../../backend/app/services/admin_config.py), lecz **nie wchodzą w tę ścieżkę SQL**.
 - **Rzuty:** [`backend/app/services/dice.py`](../../backend/app/services/dice.py) — `SKILL_STAT_MAP` / `SAVE_STAT_MAP` są **statyczne w kodzie**. Tabela `game_config_skills.linked_stat` służy m.in. spójności z `game_config_stats` w adminie i konfiguracji runtime w [`config_service.py`](../../backend/app/services/config_service.py), ale **zmiana w DB nie aktualizuje automatycznie mapy w `dice.py`**.
-- **DC:** Wartości liczbowe z `game_config_dc` trafiają do `get_runtime_config()` i [`/mechanics/metadata`](../../backend/app/api/mechanics.py). W `resolve_roll` parametr `dc` jest przekazywany z zewnątrz — **nie jest losowany z tabeli DC przez silnik**.
+- **DC:** Wartości liczbowe z `game_config_dc` trafiają do `get_runtime_config()` i [`/mechanics/metadata`](../../backend/app/api/mechanics.py). Komenda `/roll … easy|medium|hard|…` mapuje klucz na `value` przez **`resolve_dc_for_roll`** (**[S9](04_decisions_log.md)**); literal `dc 15` bez zmian.
 - **Przedmioty:** `effect_json` jest walidowany jako JSON w adminie; w [`loot_service`](../../backend/app/services/loot_service.py) zwracany do klienta. [`get_item_catalog_for_prompt`](../../backend/app/services/combat_service.py) buduje katalog głównie z `effect_type`, `effect_dice`, `effect_bonus`, `effect_target`, `charges`, `ac_bonus` — nie z `effect_json`.
+- **Import / LLM (**[S7](04_decisions_log.md)**, **[S7a](04_decisions_log.md)**):** Pełny katalog treści → **`export_catalog_snapshot` / `import_catalog_snapshot`**; wąski rdzeń → `export_config` / `import_config` (ryzyko **ucięcia** części kolumn broni — patrz log). Zapis treści z pipeline’u LLM — **przez API** (walidacja, dry-run), nie raw SQL. **Backup** przed importem + **retencja** kopii — do wdrożenia (**[S7a](04_decisions_log.md)**). **Jedna baza** SQLite. **`config_version`** nie jest automatycznie podnoszony przy każdej zmianie treści.
 
 ## Diagram przepływu (skrót)
 
@@ -84,14 +101,14 @@ flowchart LR
 
 ## Kryterium ukończenia fazy
 
-- Macierz w `02_code_usage_matrix.md` pokrywa uzgodnione tabele i została przeglądnięta.
-- `04_decisions_log.md` zawiera uchwały dot. broni (w tym finesse / 2h), `effect_json`, relacji skills vs `dice.py`, roli DC.
-- `player_rulebook/00_outline_and_tone.md` jest gotowy jako wejście do pełnej książki zasad.
+- Uchwała **[S8]** w `04_decisions_log.md` — zamknięcie dokumentacyjnej fazy 9B.
+- Macierz w `02_code_usage_matrix.md` przeglądnięta wraz z Sesją 8; otwarte punkty wdrożeniowe w `06_schema_gaps.md`.
+- `player_rulebook/00_outline_and_tone.md` zsynchronizowany z uchwałami **[S0]–[S8]** jako outline pod pełną książkę.
 
 ## Poza zakresem
 
-- Implementacja zmian w kodzie lub migracje — **następna faza**.
-- Pełny tekst książki zasad — po zamknięciu outline.
+- Implementacja zmian w kodzie lub migracje — **następna faza** (według `06_schema_gaps.md` i logu).
+- Pełny tekst książki zasad — po outline (**[S8]**).
 
 ## Jak odświeżyć `01_schema_inventory.md` z produkcyjnej bazy
 

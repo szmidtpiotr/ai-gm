@@ -1,5 +1,7 @@
 # Macierz: kolumny vs użycie w kodzie
 
+**Sesja 8 (**[S8](../04_decisions_log.md)**):** Macierz jest **spójna z uchwałami**; pola oznaczone jako „nie w silniku” lub „docelowo” opisują **stan kodu**, nie cofanie decyzji projektowych — szczegóły wdrożenia: [`06_schema_gaps.md`](../06_schema_gaps.md).
+
 **Metoda:** przegląd [`backend/app/`](../../backend/app/) (głównie `services`, `api`, `routers`). Status **„nie znaleziono w silniku”** oznacza brak odczytu w logice deterministycznej walki/rzutów — pole może nadal być w panelu admin, eksporcie lub promptach.
 
 **Definicja „używane w grze”** (Sesja 0): patrz [`00_brief.md`](00_brief.md) — obejmuje **mechanikę** i **twarde dane dla LLM** (anty-halucynacja katalogu). Kolumna może być „używana” w sensie produktu nawet jeśli nie jest w `combat_service`, o ile np. trafia do katalogu / metadanych dla modelu.
@@ -65,7 +67,7 @@ Legenda:
 | Kolumna | Gdzie używane | Uwagi |
 |---------|----------------|-------|
 | `key`, `label`, `description`, `linked_stat`, `rank_ceiling` | **`config_service`**, admin, **`mechanics`** (opisy testów) | |
-| Rzuty w grze | **`dice.resolve_roll`** używa **`SKILL_STAT_MAP`** w kodzie, nie odczytuje `linked_stat` z DB w runtime | Ryzyko **rozjazdu** z `game_config_skills.linked_stat` |
+| Rzuty w grze | **`dice.resolve_roll`** / **`skill_linked_stat_for_test`** — `linked_stat` z **`get_runtime_config()`** (DB gdy `USE_DB_CONFIG`), alias `melee_attack`→`attack`; fallback **`SKILL_STAT_MAP`** | [**S4b**](../04_decisions_log.md) wdrożone w `dice.py`; statyczna mapa zostaje zapasem dla testów spoza tabeli skills. |
 | `rank_ceiling` | Admin, opisy w `config_service` | **`dice.resolve_roll`** bierze rangę z arkusza (`skills[key]`) i **nie** porównuje jej z `rank_ceiling` z DB. Ewentualny limit — do weryfikacji w [`characters` API](../../backend/app/api/characters.py) przy zapisie postaci. |
 
 ---
@@ -74,8 +76,8 @@ Legenda:
 
 | Kolumna | Gdzie używane | Uwagi |
 |---------|----------------|-------|
-| `key`, `label`, `value`, `description` | **`config_service`**, **`/mechanics/metadata`** (`dc_tiers`) | |
-| W `resolve_roll` | Parametr **`dc`** jest argumentem funkcji — **pochodzi z wywołania** (np. parser komendy), nie z automatycznego JOIN do `game_config_dc` | |
+| `key`, `label`, `value`, `description` | **`config_service`**, **`/mechanics/metadata`** (`dc_tiers`) | **`value`** = jedyne źródło prawdy dla liczbowego DC przy danym **`key`** ([**S5**](../04_decisions_log.md)). |
+| W `resolve_roll` | Parametr **`dc`**: liczba po **`resolve_dc_for_roll`** w [`turns.py`](../../backend/app/api/turns.py); komenda `/roll … hard` — klucz → `value` (**[S9](../04_decisions_log.md)**) | Orchestracja LLM: mapowanie narracji na klucz z `game_config_dc` (**[S5]**) |
 
 ---
 
@@ -93,7 +95,8 @@ Legenda:
 
 | Kolumna | Gdzie używane | Uwagi |
 |---------|----------------|-------|
-| Wszystkie | Głównie **admin** + walidacja `effect_json` | Wyszukaj `game_config_conditions` poza `admin_config` dla efektów w walce |
+| `effect_json` | Admin + walidacja; docelowo **wspólny schemat** z `game_config_items.effect_json` ([**S6**](../04_decisions_log.md), [**S2**](../04_decisions_log.md)) — **inne znaczenie gry**: „stan” vs bonus z przedmiotu (+STR itd.), rozróżniane w JSON / meta |
+| Pozostałe | Głównie **admin** | Wyszukaj `game_config_conditions` poza `admin_config` dla efektów w walce |
 
 _Szybki grep (backend/app, bez testów): poza adminem warunki mogą być rzadkie — jeśli brak, wpisz: **„tylko admin / przyszły combat pipeline”**._
 
@@ -127,18 +130,25 @@ _Szybki grep (backend/app, bez testów): poza adminem warunki mogą być rzadkie
 
 | Obszar | Użycie |
 |--------|--------|
-| `loot_service` (JOIN), `shop_service`, `admin_cheat` | Kompatybilność wstecz; nowe dane w `game_config_items` |
+| `loot_service` (JOIN), `shop_service`, `admin_cheat` | **Legacy** — docelowo wyłącznie **`game_config_items`** z `item_type = consumable`; jeden **`key`** jak dla każdego przedmiotu ([**S6**](../04_decisions_log.md)) |
 
 ---
 
 ## Import / eksport
 
-[`admin_config_transfer.py`](../../backend/app/services/admin_config_transfer.py) — kopiuje całe wiersze wybranych tabel. Jeśli kolumna jest **tylko wizualna**, nadal podróżuje w bundle — wpływa na **źródło prawdy** dla zespołu contentu.
+[`admin_config_transfer.py`](../../backend/app/services/admin_config_transfer.py).
+
+| Ścieżka | Zakres | Uwagi |
+|---------|--------|--------|
+| **`export_catalog_snapshot` / `import_catalog_snapshot`** | M.in. `items`, `consumables`, `loot_*`, broń, wrogowie, warunki… | **Kanoniczny** import pełnego katalogu treści — INSERT wg **wszystkich** kolumn z JSON (**[S7](../04_decisions_log.md)**). `game_config_meta` w pliku przy imporcie **ignorowane**. |
+| **`export_config` / `import_config`** | Stats, skills, dc; opcjonalnie broń, wrogowie, warunki | **Bez** przedmiotów i lootu w standardowym bundle; przy broni **węższy** zestaw kolumn w INSERT niż pełna migracja — **nie** zastępuje snapshotu przy pełnym wdrożeniu treści. |
+
+LLM / generator: kontekst i round-trip treści → preferuj **snapshot**; zapis wyłącznie przez **API**; backup pliku DB przed importem + **retencja** kopii — **[S7a](../04_decisions_log.md)**; jedna baza — **[S7]** / **[S7a](../04_decisions_log.md)**.
 
 ---
 
-## Następne kroki audytu
+## Następne kroki (faza implementacji)
 
-1. Dla każdej komórki „nie znaleziono” — uruchom `rg 'kolumna' backend/app --glob '!**/tests/**'`.
-2. Oznacz pola **„tylko LLM”** vs **„martwe”** w [`04_decisions_log.md`](04_decisions_log.md).
-3. Zaktualizuj [`player_rulebook/00_outline_and_tone.md`](player_rulebook/00_outline_and_tone.md) tak, by nie obiecywać mechanik oznaczonych jako niewdrożone.
+1. Zamknąć pozycje z [`06_schema_gaps.md`](../06_schema_gaps.md) w kodzie / migracjach zgodnie z uchwałami (**[S4b]**, **[S5]**, **[S6]**, **[S7]**…).
+2. Po zmianach w silniku — ewentualna aktualizacja komórek macierzy (grep) i **[AUDIT]**.
+3. Pełna redakcja [`player_rulebook/`](player_rulebook/) według outline (**[S8]**).

@@ -434,7 +434,17 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
       window.updateActionTriggerBtn(!!window.state.activeRollRequest);
     }
     try {
-      window.voiceUI?.speakGMText?.(displayText);
+      if (
+        typeof window.shouldAutoSpeakTtsForBubble !== 'function' ||
+        window.shouldAutoSpeakTtsForBubble({
+          role: 'assistant',
+          route: 'narrative',
+          memoryTurn: false,
+          helpmeTurn: false
+        })
+      ) {
+        window.voiceUI?.speakGMText?.(displayText);
+      }
     } catch (err) {
       console.warn('voice stream tts failed', err);
     }
@@ -615,12 +625,18 @@ window.extractPersistedGmRollNarrative = function (text) {
 window.addGmRollBubble = function (rollData, turn) {
   const { chatEl } = window.getEls();
   if (!chatEl) return;
+  if (typeof window.isCombatChatBubbleHidden === 'function' && window.isCombatChatBubbleHidden()) {
+    return;
+  }
 
   const wrap = document.createElement('div');
   wrap.className = 'message gm-roll-bubble';
   if (turn) wrap.dataset.turn = turn;
 
-  wrap.innerHTML = window.buildGmRollBubbleHtml(rollData);
+  wrap.innerHTML =
+    typeof window.buildGmRollPlainText === 'function'
+      ? `<pre class="combat-roll-plain">${window.escapeHtml(window.buildGmRollPlainText(rollData))}</pre>`
+      : window.buildGmRollBubbleHtml(rollData);
 
   chatEl.appendChild(wrap);
   window.scrollChatToBottom();
@@ -643,11 +659,11 @@ window.isArchiveBubble = function ({ role, route, memoryTurn, helpmeTurn } = {})
   if (memoryTurn || helpmeTurn) return true;
   if (role === 'system' || role === 'error') return true;
   if (role === 'assistant') {
-    if (!route || route === 'narrative') return false;
+    if (!route || route === 'narrative' || route === 'combat') return false;
     return true;
   }
   if (role === 'user') {
-    if (!route || route === 'input' || route === 'dice') return false;
+    if (!route || route === 'input' || route === 'dice' || route === 'combat') return false;
     return true;
   }
   return false;
@@ -739,6 +755,62 @@ window.stripCombatRollBlocksForRollCue = function (text) {
 };
 
 /**
+ * Wyodrębnia pojedynczy blok `__AI_GM_ROLL_V1__ { ... }` (skill roll) — jak combat JSON.
+ * @param {string} text
+ * @param {number} [fromIndex]
+ * @returns {{ start: number, end: number, data: object } | null}
+ */
+window._extractNextSkillRollPayload = function (text, fromIndex) {
+  const s = String(text || '');
+  const p = window.ROLL_CARD_PREFIX;
+  const idx = s.indexOf(p, fromIndex || 0);
+  if (idx < 0) return null;
+  let pos = idx + p.length;
+  while (pos < s.length && /\s/.test(s[pos])) pos += 1;
+  if (s[pos] !== '{') return null;
+  let depth = 0;
+  const start = pos;
+  for (; pos < s.length; pos += 1) {
+    const ch = s[pos];
+    if (ch === '{') depth += 1;
+    else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        try {
+          const data = JSON.parse(s.slice(start, pos + 1));
+          if (data && typeof data === 'object') {
+            return { start: idx, end: pos + 1, data };
+          }
+        } catch (_e) {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+};
+
+/** Na potrzeby TTS: usuwa osadzone bloki walki i kart skill roll z tekstu narracji. */
+window.stripTtsNoiseFromText = function (text) {
+  let s = String(text || '');
+  s = window.stripCombatRollBlocksForRollCue(s);
+  const p = window.ROLL_CARD_PREFIX;
+  if (!s.includes(p)) return s.trim();
+  let out = '';
+  let i = 0;
+  while (i < s.length) {
+    const ex = window._extractNextSkillRollPayload(s, i);
+    if (!ex) {
+      out += s.slice(i);
+      break;
+    }
+    out += s.slice(i, ex.start);
+    i = ex.end;
+  }
+  return out.trim();
+};
+
+/**
  * Narracja GM z osadzonymi kartami `__AI_GM_COMBAT_ROLL_V1__`; ostatni fragment tekstu
  * przechodzi przez `parsePendingRoll` (cue „Roll … d20”).
  */
@@ -768,8 +840,12 @@ window.buildInterleavedNarrativeAndCombatHtml = function (fullText) {
   let html = '';
   chunks.forEach((ch, idx) => {
     if (ch.type === 'card') {
-      if (typeof window.buildCombatRollCardHtml === 'function') {
-        html += window.buildCombatRollCardHtml(ch.value);
+      if (typeof window.isCombatChatBubbleHidden === 'function' && window.isCombatChatBubbleHidden()) {
+        return;
+      }
+      if (typeof window.buildCombatRollPlainText === 'function') {
+        const pt = window.buildCombatRollPlainText(ch.value);
+        html += `<pre class="combat-roll-plain narrative-pre">${window.escapeHtml(pt)}</pre>`;
       }
       return;
     }
@@ -789,6 +865,106 @@ window.formatCombatRollNum = function (n) {
   if (!Number.isFinite(v)) return '—';
   if (v === 0) return '0';
   return v > 0 ? String(v) : '\u2212' + String(Math.abs(v));
+};
+
+/**
+ * Plain-text combat mechanics (no roll-card UI). Used instead of buildCombatRollCardHtml in chat.
+ */
+window.buildCombatRollPlainText = function (data) {
+  if (!data || typeof data !== 'object') return '';
+  const kind = String(data.kind || 'player_attack');
+  if (kind === 'player_flee') {
+    const lines = [];
+    const intent = String(data.intent || '').trim();
+    if (intent) lines.push(`Intencja: ${intent}`);
+    lines.push(`${String(data.character_name || 'Bohater')} — ucieczka`);
+    lines.push(String(data.summary_line || 'Ucieczka z walki.'));
+    return lines.join('\n');
+  }
+  const intent = String(data.intent || '').trim();
+  const name = String(data.character_name || data.enemy_name || '?');
+  const label = String(data.attack_label || 'ATAK (STR)');
+  const d20 = Number(data.d20);
+  const mods = Array.isArray(data.modifiers) ? data.modifiers : [];
+  const modSegs = mods
+    .map((m) => `${String(m.name || '?')}: ${window.formatCombatRollNum(Number(m.value))}`)
+    .join(' | ');
+  const total = window.formatCombatRollNum(Number(data.total));
+  const hit = !!data.hit;
+  const dmg = data.damage != null ? String(data.damage) : '?';
+  const acNum = data.target_ac != null ? Number(data.target_ac) : NaN;
+  const ac = Number.isFinite(acNum) ? window.formatCombatRollNum(acNum) : null;
+
+  let line5 = '';
+  if (kind === 'enemy_attack') {
+    line5 = hit
+      ? `Rzut vs AC gracza ${ac != null ? ac : '—'} — ✅ TRAFIENIE — obrażenia: ${dmg}`
+      : `Rzut vs AC gracza ${ac != null ? ac : '—'} — ❌ PUDŁO`;
+  } else if (kind === 'player_attack') {
+    const vsAc = Number.isFinite(acNum) ? ` vs AC ${ac}` : '';
+    if (data.player_nat1) {
+      line5 = `Rzut: ${total}${vsAc} — 💀 fatalne pudło`;
+    } else if (data.dodged) {
+      line5 = `Rzut: ${total}${vsAc} — przeciwnik unika`;
+    } else if (hit) {
+      line5 = `Rzut: ${total}${vsAc} — ✅ TRAFIENIE — obrażenia: ${dmg}`;
+    } else {
+      line5 = `Rzut: ${total}${vsAc} — ❌ PUDŁO`;
+    }
+  } else {
+    line5 = hit
+      ? `Atakuję z wynikiem ${total} — ✅ SUKCES — trafiam za ${dmg} obrażeń!`
+      : `Atakuję z wynikiem ${total} — ❌ PUDŁO`;
+  }
+
+  const lines = [];
+  if (intent) lines.push(`Intencja: ${intent}`);
+  lines.push(`${name} — ${label}`);
+  const dieLine = Number.isFinite(d20)
+    ? `1d20: ${d20}${modSegs ? ` | ${modSegs}` : ''} | Wynik: ${total}`
+    : `Wynik: ${total}`;
+  lines.push(dieLine);
+  lines.push(line5);
+  if (kind === 'player_attack' && data.enemy_dead) {
+    lines.push('💀 Wróg pokonany');
+  }
+  return lines.join('\n');
+};
+
+/** Plain-text GM dodge / defensive roll (no roll-card). */
+window.buildGmRollPlainText = function (rollData) {
+  let verdictLabel;
+  const verdict = String(rollData?.verdict || '').toLowerCase();
+  const isLegacyCrit = verdict === 'crit' || (!verdict && (rollData.raw === 20 || rollData.is_nat20));
+  const isLegacyFumble = verdict === 'fumble' || (!verdict && (rollData.raw === 1 || rollData.is_nat1));
+
+  if (verdict === 'perfect_dodge') {
+    verdictLabel = '🌌 PERFEKCYJNY UNIK';
+  } else if (verdict === 'fumble_dodge') {
+    verdictLabel = '💀 FATALNE POTKNIĘCIE';
+  } else if (verdict === 'dodged') {
+    verdictLabel = '🌌 UNIK';
+  } else if (isLegacyCrit) {
+    verdictLabel = '⚡ TRAFIENIE KRYTYCZNE';
+  } else if (isLegacyFumble) {
+    verdictLabel = '💀 KRYTYCZNA PORAŻKA';
+  } else if (verdict === 'hit') {
+    verdictLabel = '🗡️ TRAFIENIE';
+  } else {
+    verdictLabel = '🛡️ PUDŁO';
+  }
+
+  const modifier = Number(rollData.modifier) || 0;
+  const modStr =
+    typeof window.formatRollModifier === 'function'
+      ? window.formatRollModifier(modifier)
+      : modifier > 0
+        ? `+${modifier}`
+        : `${modifier}`;
+  const head = `GM: ${rollData.skill || rollData.label || 'Atak'}`;
+  const line2 = `${rollData.dice || '1d20'}: ${rollData.raw ?? '?'} | Modyfikator: ${modStr}`;
+  const line3 = `Wynik: ${rollData.total ?? '?'} — ${verdictLabel}`;
+  return [head, line2, line3].join('\n');
 };
 
 window.buildCombatRollCardHtml = function (data) {
@@ -1071,7 +1247,11 @@ window.updateGmVoiceBadgeVisual = function (btn) {
 window.decorateGmBubbleWithVoice = function (wrap, text) {
   if (!wrap || !(wrap.classList && wrap.classList.contains("assistant"))) return;
   if (wrap.querySelector(".gm-voice-btn")) return;
-  const clean = String(text || "").trim();
+  const raw = String(text || "").trim();
+  const clean =
+    typeof window.stripTtsNoiseFromText === "function"
+      ? window.stripTtsNoiseFromText(raw).trim()
+      : raw;
   if (!clean) return;
 
   const btn = document.createElement("button");
@@ -1142,19 +1322,21 @@ window.addMessage = function ({
     role === 'user' && messageText && typeof window.tryParseRollCardFromText === 'function'
       ? window.tryParseRollCardFromText(messageText)
       : null;
-  const effRoute = combatRollPayload || rollPayload ? 'dice' : route;
+  const effRoute = rollPayload ? 'dice' : combatRollPayload ? 'combat' : route;
+
+  if (
+    combatRollPayload &&
+    typeof window.isCombatChatBubbleHidden === 'function' &&
+    window.isCombatChatBubbleHidden() &&
+    (role === 'user' || (role === 'assistant' && String(combatRollPayload.kind || '') === 'enemy_attack'))
+  ) {
+    return;
+  }
 
   const wrap = document.createElement('div');
   wrap.className = `message ${role}`;
   if (traceId) {
     wrap.setAttribute('data-turn-id', traceId);
-  }
-  if (
-    combatRollPayload &&
-    String(combatRollPayload.kind || '') === 'enemy_attack' &&
-    role === 'assistant'
-  ) {
-    wrap.classList.add('enemy-roll-bubble');
   }
   if (memoryTurn) {
     wrap.classList.add('memory-turn');
@@ -1205,10 +1387,12 @@ window.addMessage = function ({
   body.className = 'message-body';
   if (
     combatRollPayload &&
-    typeof window.buildCombatRollCardHtml === 'function' &&
+    typeof window.buildCombatRollPlainText === 'function' &&
     (role === 'user' || (role === 'assistant' && String(combatRollPayload.kind || '') === 'enemy_attack'))
   ) {
-    body.innerHTML = window.buildCombatRollCardHtml(combatRollPayload);
+    body.innerHTML = `<pre class="combat-roll-plain">${window.escapeHtml(
+      window.buildCombatRollPlainText(combatRollPayload)
+    )}</pre>`;
   } else if (rollPayload && typeof window.buildRollCardHtml === 'function') {
     body.innerHTML = window.buildRollCardHtml(rollPayload);
   } else if (
@@ -1282,17 +1466,20 @@ window.replaceThinkingBubble = function ({
     role === 'user' && messageText && typeof window.tryParseRollCardFromText === 'function'
       ? window.tryParseRollCardFromText(messageText)
       : null;
-  const effRoute = combatRollPayload || rollPayload ? 'dice' : route;
+  const effRoute = rollPayload ? 'dice' : combatRollPayload ? 'combat' : route;
+
+  if (
+    combatRollPayload &&
+    typeof window.isCombatChatBubbleHidden === 'function' &&
+    window.isCombatChatBubbleHidden() &&
+    (role === 'user' || (role === 'assistant' && String(combatRollPayload.kind || '') === 'enemy_attack'))
+  ) {
+    window.removeThinkingBubble();
+    return;
+  }
 
   const wrap = document.createElement('div');
   wrap.className = `message ${role}`;
-  if (
-    combatRollPayload &&
-    String(combatRollPayload.kind || '') === 'enemy_attack' &&
-    role === 'assistant'
-  ) {
-    wrap.classList.add('enemy-roll-bubble');
-  }
   if (window.isArchiveBubble({ role, route: effRoute })) {
     wrap.classList.add('is-archived-bubble');
     wrap.setAttribute('data-archived', '1');
@@ -1326,10 +1513,12 @@ window.replaceThinkingBubble = function ({
   body.className = 'message-body';
   if (
     combatRollPayload &&
-    typeof window.buildCombatRollCardHtml === 'function' &&
+    typeof window.buildCombatRollPlainText === 'function' &&
     (role === 'user' || (role === 'assistant' && String(combatRollPayload.kind || '') === 'enemy_attack'))
   ) {
-    body.innerHTML = window.buildCombatRollCardHtml(combatRollPayload);
+    body.innerHTML = `<pre class="combat-roll-plain">${window.escapeHtml(
+      window.buildCombatRollPlainText(combatRollPayload)
+    )}</pre>`;
   } else if (rollPayload && typeof window.buildRollCardHtml === 'function') {
     body.innerHTML = window.buildRollCardHtml(rollPayload);
   } else {
@@ -1365,7 +1554,17 @@ window.replaceThinkingBubble = function ({
   if (role === 'assistant' && route === 'narrative') {
     window.decorateGmBubbleWithVoice(wrap, renderedText);
     try {
-      window.voiceUI?.speakGMText?.(renderedText);
+      if (
+        typeof window.shouldAutoSpeakTtsForBubble !== 'function' ||
+        window.shouldAutoSpeakTtsForBubble({
+          role: 'assistant',
+          route: 'narrative',
+          memoryTurn: false,
+          helpmeTurn: false
+        })
+      ) {
+        window.voiceUI?.speakGMText?.(renderedText);
+      }
     } catch (err) {
       console.warn('voice replace tts failed', err);
     }
@@ -1585,8 +1784,10 @@ window.renderHistoryPanel = function () {
     const replayText =
       rollP && rollP.replay_command ? String(rollP.replay_command) : ut;
     const bodyHtml =
-      combatHist && typeof window.buildCombatRollCardHtml === 'function'
-        ? window.buildCombatRollCardHtml(combatHist)
+      combatHist && typeof window.buildCombatRollPlainText === 'function'
+        ? `<pre class="combat-roll-plain">${window.escapeHtml(
+            window.buildCombatRollPlainText(combatHist)
+          )}</pre>`
         : rollP && typeof window.buildRollCardHtml === 'function'
           ? window.buildRollCardHtml(rollP)
           : `<pre>${window.escapeHtml(ut)}</pre>`;
@@ -1680,7 +1881,10 @@ window.renderTurnsToChat = function () {
             ? window.extractPersistedGmRollNarrative(assistantTextRaw)
             : { rollData: null, narrativeText: assistantTextRaw };
 
-        if (persistedGmRoll) {
+        if (
+          persistedGmRoll &&
+          !(typeof window.isCombatChatBubbleHidden === 'function' && window.isCombatChatBubbleHidden())
+        ) {
           window.addGmRollBubble(persistedGmRoll, turn.turn_number || turn.id);
         }
 
@@ -1724,7 +1928,6 @@ window.renderTurnsToChat = function () {
 
         msgWrap.appendChild(meta);
         msgWrap.appendChild(body);
-        window.decorateGmBubbleWithVoice(msgWrap, assistantText);
 
         const cueSource =
           typeof window.stripCombatRollBlocksForRollCue === 'function'
@@ -1766,7 +1969,10 @@ window.renderTurnsToChat = function () {
           lastNarrativeRollRequest = null;
         }
 
-        if (chatEl) chatEl.appendChild(msgWrap);
+        if (chatEl && String(body.innerHTML || '').trim()) {
+          window.decorateGmBubbleWithVoice(msgWrap, assistantText);
+          chatEl.appendChild(msgWrap);
+        }
       } else {
         window.addMessage({
           speaker: 'System',

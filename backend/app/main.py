@@ -116,6 +116,24 @@ RAW_MIGRATIONS = [
     "ALTER TABLE campaigns ADD COLUMN death_reason TEXT",
     "ALTER TABLE campaigns ADD COLUMN ended_at TEXT",
     "ALTER TABLE campaigns ADD COLUMN epitaph TEXT",
+    "ALTER TABLE campaigns ADD COLUMN gm_plan_json TEXT NOT NULL DEFAULT '{}'",
+    """
+    CREATE TABLE IF NOT EXISTS character_xp_grants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        character_id INTEGER NOT NULL,
+        campaign_id INTEGER NOT NULL,
+        amount INTEGER NOT NULL,
+        reason TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'mg_manual',
+        granted_by_user_id INTEGER NOT NULL,
+        meta_json TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_character_xp_grants_character
+    ON character_xp_grants(character_id, created_at DESC)
+    """,
     """
     CREATE TABLE IF NOT EXISTS campaign_ai_summaries (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
