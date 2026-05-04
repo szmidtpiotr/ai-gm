@@ -47,6 +47,12 @@
 
 **Uwaga kolejności:** W tabeli **T06** jest przed **T05** (najpierw szkielet planu, potem blokada pierwszej narracji).
 
+### Backlog — poza numeracją T01–T21 (żeby nie umknęło)
+
+| ID | Opis |
+|----|------|
+| **B01** | **Panel admin:** formularz do zmiany globalnej wartości **`game_config_meta.summary_rollup_cooldown_turns`** (cooldown rollupu historii, T08) — dziś tylko ręczny SQL / migracja seed. |
+
 ---
 
 ## 2. PROMPTY — T01
@@ -78,6 +84,7 @@
 - **`history_summary_dual_prompt.py`:** `DUAL_SINGLE_SYSTEM_PROMPT`, `build_dual_single_messages`, `parse_dual_json_response` (JSON + opcjonalna obudowa markdown code fence), `leaked_plan_tokens_in_player_summary` (heurystyka wycieku planu do `player_summary`).
 - **`tests/test_history_summary_t01_dual_prompt.py`:** unittest — uruchom: `cd backend && PYTHONPATH=. python3 -m unittest tests.test_history_summary_t01_dual_prompt -v`.
 - **Frontend (bez konsoli):** w modalu **„Podsumowanie kampanii”** (tylko **właściciel** kampanii) jest przycisk **„Podgląd dual (T01)”** — wywołuje `POST /api/campaigns/{id}/dual-summary-preview` (router `campaigns.py`, żeby uniknąć 404 na starych obrazach bez `campaign_history`) i pokazuje w oknie: tekst dla gracza, notatkę MG, heurystykę wycieku, ewent. błąd parsowania JSON. **Nie zapisuje** w `campaign_ai_summaries`.
+- **Czy to zostaje / czy zniknie:** **Tak — nadal ma sens.** To nie jest duplikat docelowego rollupu (T02): w grze chodzi o zapisane podsumowania z `POST …/history/summary` (`audience=player|gm`). Podgląd dual to **osobne** wywołanie: jeden prompt, **brak zapisu** w `campaign_ai_summaries` — do QA / porównania jakości. **Usunięcie nie jest zaplanowane** w kolejce T01–T21; opcjonalnie później: ukrycie za flagą dev lub tylko dla kont admin (decyzja produktowa). Backlog **B01** dotyczy osobno ustawień cooldownu w panelu admin.
 - **Live 3× LLM:** wykonaj przez UI jak wyżej; wynik możesz dopisać w **Notatki** poniżej.
 
 **Rekomendacja (po kodzie, przed pełnym live):** przyjmij **wariant A** w T02/T03 z parsowaniem JSON + logowaniem heurystyki; wariant B tylko jeśli podgląd z UI pokaże powtarzalne halucynacje.
@@ -500,3 +507,4 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T02 DONE** — kolumna `audience`, API query, narracja gm→player, testy. |
 | 2026-05-04 | **T03 DONE** — player summary tylko z transkryptu, `audience` w generatorze, test regresyjny, restart backendu. |
 | 2026-05-04 | **T04 DONE** — GM summary dostaje `gm_plan_json` + transkrypt, osobny test, restart backendu. |
+| 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
