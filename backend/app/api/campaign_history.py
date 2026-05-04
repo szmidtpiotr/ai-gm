@@ -6,12 +6,24 @@ from app.api.turns import get_campaign_or_404, get_db
 from app.services.history_summary_service import (
     SUMMARY_AUDIENCE_PLAYER,
     count_narrative_turns,
+    evaluate_summary_rollup_cooldown,
     fetch_latest_saved_summary,
     generate_campaign_summary,
     persist_summary,
+    touch_rollup_cooldown_anchor,
+    turns_until_summary_rollup_allowed,
 )
 
 router = APIRouter()
+
+
+def _finalize_rollup_cooldown(campaign_id: int) -> None:
+    """T08: bump per-campaign anchor after any successful LLM rollup call."""
+    conn = get_db()
+    try:
+        touch_rollup_cooldown_anchor(conn, campaign_id)
+    finally:
+        conn.close()
 
 
 @router.post("/campaigns/{campaign_id}/history/summary")
@@ -35,6 +47,25 @@ def create_campaign_history_summary(
         campaign = get_campaign_or_404(conn, campaign_id)
         if int(campaign["owner_user_id"]) != int(user_id):
             raise HTTPException(status_code=403, detail="user_id must match campaign owner")
+        allowed, cooldown_n, last_anchor, cur_n = evaluate_summary_rollup_cooldown(
+            conn, campaign_id
+        )
+        if not allowed:
+            need = turns_until_summary_rollup_allowed(cooldown_n, last_anchor, cur_n)
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "summary_rollup_cooldown",
+                    "message": (
+                        "Odświeżenie skrótu fabularnego było zbyt niedawno dla tej kampanii. "
+                        f"Pozostało ok. {need} tur narracyjnych do następnego rollupu."
+                    ),
+                    "cooldown_turns": cooldown_n,
+                    "turns_until_allowed": need,
+                    "narrative_turn_count": cur_n,
+                    "last_rollup_narrative_turn_count": last_anchor,
+                },
+            )
     finally:
         conn.close()
 
@@ -66,6 +97,8 @@ def create_campaign_history_summary(
             )
         finally:
             conn.close()
+
+    _finalize_rollup_cooldown(campaign_id)
 
     return {
         "campaign_id": campaign_id,
@@ -132,6 +165,35 @@ def ensure_campaign_history_summary(
         if new_turns < stale_after_turns:
             return _payload_from_row(saved, refreshed=False)
 
+    conn_cd = get_db()
+    try:
+        allowed, cooldown_n, last_anchor, cur_n = evaluate_summary_rollup_cooldown(
+            conn_cd, campaign_id
+        )
+        if not allowed:
+            need = turns_until_summary_rollup_allowed(cooldown_n, last_anchor, cur_n)
+            if saved:
+                out = _payload_from_row(saved, refreshed=False)
+                out["cooldown_active"] = True
+                out["turns_until_summary_rollup_allowed"] = need
+                return out
+            return {
+                "campaign_id": campaign_id,
+                "summary": None,
+                "summary_id": None,
+                "model_used": None,
+                "included_turn_count": 0,
+                "created_at": None,
+                "audience": audience,
+                "narrative_turn_count": narrative_n,
+                "refreshed": False,
+                "cooldown_active": True,
+                "turns_until_summary_rollup_allowed": need,
+                "warning": None,
+            }
+    finally:
+        conn_cd.close()
+
     try:
         result = generate_campaign_summary(
             campaign_id=campaign_id,
@@ -148,6 +210,7 @@ def ensure_campaign_history_summary(
 
     text = (result.get("summary") or "").strip()
     if not text:
+        _finalize_rollup_cooldown(campaign_id)
         return {
             "campaign_id": campaign_id,
             "summary": None,
@@ -162,6 +225,7 @@ def ensure_campaign_history_summary(
         }
 
     if not persist:
+        _finalize_rollup_cooldown(campaign_id)
         return {
             "campaign_id": campaign_id,
             "summary": text,
@@ -194,6 +258,8 @@ def ensure_campaign_history_summary(
             status_code=500,
             detail="Summary generated but could not be reloaded from campaign_ai_summaries",
         )
+
+    _finalize_rollup_cooldown(campaign_id)
 
     return _payload_from_row(row, refreshed=True)
 

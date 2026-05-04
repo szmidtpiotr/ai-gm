@@ -8,6 +8,7 @@ from app.services.history_summary_service import (
     SUMMARY_AUDIENCE_PLAYER,
     generate_campaign_summary,
     persist_summary,
+    touch_rollup_cooldown_anchor,
 )
 
 DB_PATH = "/data/ai_gm.db"
@@ -81,6 +82,7 @@ def regenerate_campaign_summary_admin(campaign_id: int) -> dict:
                 included_turn_count=int(result.get("included_turn_count") or 0),
                 audience=SUMMARY_AUDIENCE_PLAYER,
             )
+            touch_rollup_cooldown_anchor(conn2, campaign_id)
         finally:
             conn2.close()
 

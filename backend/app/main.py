@@ -117,6 +117,7 @@ RAW_MIGRATIONS = [
     "ALTER TABLE campaigns ADD COLUMN ended_at TEXT",
     "ALTER TABLE campaigns ADD COLUMN epitaph TEXT",
     "ALTER TABLE campaigns ADD COLUMN gm_plan_json TEXT NOT NULL DEFAULT '{}'",
+    "ALTER TABLE campaigns ADD COLUMN last_rollup_narrative_turn_count INTEGER",
     """
     CREATE TABLE IF NOT EXISTS character_xp_grants (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
