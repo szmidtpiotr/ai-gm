@@ -1,0 +1,34 @@
+---
+description: Domyślne środowisko pracy — DEV (ai-gm), nie produkcja
+alwaysApply: true
+---
+
+# Środowisko DEV — domyślne dla agenta
+
+W projekcie **ai-gm** wykonuj weryfikację, restarty Dockera i testy **w środowisku deweloperskim**, chyba że użytkownik wyraźnie wskaże produkcję.
+
+## Nazewnictwo Docker (192.168.1.61 i lokalnie z `docker-compose.dev.yml`)
+
+- **Backend dev:** kontener `ai-gm-dev-backend-1` (projekt compose: `ai-gm-dev`, plik `docker-compose.dev.yml`).
+- **Frontend dev:** `ai-gm-dev-frontend-1` (port hosta **3002** → nginx).
+- **Test agent:** `ai-gm-dev-test-agent-1` (port **4000**).
+- **Produkcja (nie dotykać bez prośby):** `ai-gm-backend-1`, `ai-gm-frontend-1` itd. z głównego `docker-compose.yml`.
+
+## Porty (host)
+
+- API dev: **http://\<host\>:8100** (mapowanie 8100→8000 w kontenerze).
+- UI dev: **http://\<host\>:3002**.
+
+## Obowiązki agenta
+
+1. **Restart po zmianach backendu:** `docker restart ai-gm-dev-backend-1` (na serwerze przez SSH). Nie restartuj prod backendu, jeśli użytkownik nie poprosi.
+2. **pytest na serwerze:** uruchamiaj w kontenerze dev, np.  
+   `docker exec -w /app ai-gm-dev-backend-1 python -m pytest …`
+3. **Lokalny compose dev:** z katalogu repo  
+   `docker compose -f docker-compose.dev.yml up -d`  
+   (nie mieszać z prod `docker-compose.yml` na tych samych portach — patrz komentarze w `docker-compose.dev.yml`).
+4. **Baza dev:** w compose dev domyślnie volume `./data-dev` i `DATABASE_URL` wskazujący na **ai_gm_dev.db** (szczegóły w pliku compose).
+
+## Wyjątek
+
+Gdy użytkownik napisze jawnie **prod / produkcja / ai-gm-backend-1**, wtedy używaj stacku produkcyjnego.
