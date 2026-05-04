@@ -660,7 +660,12 @@
 
 **Decyzja przy kodzie:** **W1** na MVP; **W2** wyłącznie jako **rozbudowa**, jeśli W1 przestaje wystarczać (rozmiar planu, złożoność beatów). **Kolejka realizacji + prompty w jednym pliku:** [`11_MASTER_TASK_QUEUE_AND_PROMPTS.md`](11_MASTER_TASK_QUEUE_AND_PROMPTS.md) (T06, T14, …); [`10_agent_implementation_plan.md`](10_agent_implementation_plan.md) przekierowuje do mastera.
 
-**Konsekwencje:** Ticket’y: pipeline „postacie zapisane → generacja planu → pierwsza narracja”; rozdzielenie rollupu **player** vs **gm** w DB i API; cooldown odświeżenia w multiplayer; rozbudowa `gm_plan_json` (**W1**); tabela beatów (**W2** — backlog); flaga błędu rollupu w UI; strukturalne cele pod XP — bez zmiany filozofii `campaign_turns` jako kanonu.
+**Doprecyzowanie (T14 — W2 `campaign_story_beats`, 2026-05-04):**
+
+1. **Ocena W1:** W bieżącym zakresie produktu i kodu (T06) **jeden JSON** `gm_plan_json` na kampanii jest **wystarczający** — bez osobnej tabeli `campaign_story_beats` w tej iteracji.
+2. **Uzasadnienie i kryteria ponownej oceny:** [`ADR_T14_W2_story_beats_deferred.md`](ADR_T14_W2_story_beats_deferred.md). **Migracji W2 nie wykonujemy** przy zamykaniu T14; nowy ADR przed ewentualną implementacją W2.
+
+**Konsekwencje:** Ticket’y: pipeline „postacie zapisane → generacja planu → pierwsza narracja”; rozdzielenie rollupu **player** vs **gm** w DB i API; cooldown odświeżenia w multiplayer; rozbudowa `gm_plan_json` (**W1**); tabela beatów (**W2** — świadomie odłożona przy T14; patrz ADR powyżej); flaga błędu rollupu w UI; strukturalne cele pod XP — bez zmiany filozofii `campaign_turns` jako kanonu.
 
 **Doprecyzowanie (runda 2 — Q&A, 2026-05-03):**
 
