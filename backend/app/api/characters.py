@@ -6,7 +6,7 @@ import re
 import sqlite3
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.character_creation_config import (
     CREATION_SKILL_POOL,
     MAX_SKILL_LVL_AT_CREATION,
@@ -635,8 +635,23 @@ class GrantMgXpRequest(BaseModel):
     """Manual XP from campaign owner (MG); audited (**[S10d]**)."""
 
     model_config = ConfigDict(extra="ignore")
-    amount: int = Field(..., ge=1, le=50_000)
+    amount: int | None = Field(default=None, ge=1, le=50_000)
+    reward_key: str | None = Field(
+        default=None,
+        max_length=80,
+        description="Opcjonalnie: klucz z game_config_xp_rewards (T12) — kwota z DB, nie z LLM.",
+    )
     reason: str = Field(..., min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def amount_or_reward_key(self):
+        rk = (self.reward_key or "").strip()
+        if rk:
+            self.reward_key = rk
+            return self
+        if self.amount is not None and self.amount >= 1:
+            return self
+        raise ValueError("Provide amount (1..50000) or reward_key from game_config_xp_rewards")
 
 
 @router.get("/characters/{character_id}/xp")
@@ -706,20 +721,30 @@ def grant_character_xp_mg(character_id: int, req: GrantMgXpRequest, user_id: int
                 detail="user_id must match campaign owner to grant XP",
             ) from None
         try:
+            meta_grant: dict = {
+                "granted_by": "mg_api",
+                "campaign_id": int(info["campaign_id"]),
+            }
+            if req.reward_key:
+                grant_amount = xp_service.require_xp_reward_amount(conn, req.reward_key)
+                meta_grant["xp_reward_key"] = req.reward_key
+            else:
+                grant_amount = int(req.amount or 0)
             result = xp_service.grant_character_xp(
                 conn,
                 character_id,
-                req.amount,
+                grant_amount,
                 reason=req.reason.strip(),
-                meta={"granted_by": "mg_api", "campaign_id": int(info["campaign_id"])},
+                meta=meta_grant,
             )
             gid = xp_service.insert_mg_xp_grant_audit(
                 conn,
                 character_id=character_id,
                 campaign_id=int(info["campaign_id"]),
-                amount=int(req.amount),
+                amount=grant_amount,
                 reason=req.reason.strip(),
                 granted_by_user_id=int(user_id),
+                meta=meta_grant,
             )
             conn.commit()
             return {"ok": True, **result, "grant_id": gid}
@@ -727,6 +752,11 @@ def grant_character_xp_mg(character_id: int, req: GrantMgXpRequest, user_id: int
             conn.rollback()
             if str(e) == "character not found":
                 raise HTTPException(status_code=404, detail="Character not found") from None
+            if str(e) == "unknown_or_inactive_xp_reward_key":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unknown or inactive reward_key — use GET …/xp/reward-catalog",
+                ) from None
             raise HTTPException(status_code=400, detail=str(e)) from None
         except sqlite3.OperationalError as e:
             conn.rollback()
@@ -736,6 +766,48 @@ def grant_character_xp_mg(character_id: int, req: GrantMgXpRequest, user_id: int
                     detail="character_xp_grants / migration missing — apply migrations and restart API",
                 ) from None
             raise HTTPException(status_code=500, detail=str(e)) from None
+    finally:
+        conn.close()
+
+
+@router.get("/characters/{character_id}/xp/reward-catalog")
+def get_character_xp_reward_catalog(
+    character_id: int,
+    user_id: int = Query(...),
+    categories: str = Query(
+        "mg_grant,quest",
+        description="Po przecinku: mg_grant, quest, enemy_tier (T12 / S10e).",
+    ),
+):
+    """
+    Katalog `game_config_xp_rewards` dla właściciela kampanii (np. wybór `reward_key` przy grancie MG).
+    """
+    from app.services import xp_service
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        info = xp_service.fetch_character_campaign_owner(conn, character_id)
+        if not info:
+            raise HTTPException(status_code=404, detail="Character not found") from None
+        if int(info["owner_user_id"]) != int(user_id):
+            raise HTTPException(
+                status_code=403,
+                detail="user_id must match campaign owner",
+            ) from None
+        cats = [c.strip() for c in (categories or "").split(",") if c.strip()]
+        if not cats:
+            cats = ["mg_grant", "quest"]
+        try:
+            items = xp_service.list_xp_rewards_for_categories(conn, cats)
+        except sqlite3.OperationalError as e:
+            if "no such table" in str(e).lower():
+                raise HTTPException(
+                    status_code=503,
+                    detail="game_config_xp_rewards missing — apply migrations and restart API",
+                ) from None
+            raise HTTPException(status_code=500, detail=str(e)) from None
+        return {"character_id": character_id, "categories": cats, "items": items}
     finally:
         conn.close()
 

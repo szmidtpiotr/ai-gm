@@ -58,6 +58,7 @@ from app.services.admin_config import (
     list_loot_tables,
     list_weapons,
     list_dc,
+    list_xp_rewards,
     list_skills,
     list_stats,
     list_archetypes,
@@ -68,6 +69,7 @@ from app.services.admin_config import (
     update_weapon,
     update_consumable,
     update_dc,
+    update_xp_reward,
     update_skill,
     update_stat,
     update_archetype,
@@ -163,6 +165,17 @@ class DcPatchReq(BaseModel):
     value: int | None = None
     sort_order: int | None = None
     description: str | None = None
+    force: bool = False
+
+
+class XpRewardPatchReq(BaseModel):
+    """[T12] Edycja wpisu game_config_xp_rewards (category/key są stałe)."""
+
+    label: str | None = None
+    description: str | None = None
+    xp_amount: int | None = None
+    is_active: int | None = Field(default=None, description="0 wyłącza wpis w silniku")
+    sort_order: int | None = None
     force: bool = False
 
 
@@ -641,6 +654,36 @@ def admin_create_skill(req: SkillCreateReq, _: None = Depends(require_admin_toke
 @router.get("/admin/dc")
 def admin_dc(_: None = Depends(require_admin_token)):
     return {"items": list_dc()}
+
+
+@router.get("/admin/xp-rewards")
+def admin_xp_rewards(_: None = Depends(require_admin_token)):
+    return {"items": list_xp_rewards()}
+
+
+@router.patch("/admin/xp-rewards/{key}")
+def admin_patch_xp_reward(
+    key: str, req: XpRewardPatchReq, _: None = Depends(require_admin_token)
+):
+    try:
+        item = update_xp_reward(
+            key,
+            label=req.label,
+            description=req.description,
+            xp_amount=req.xp_amount,
+            is_active=req.is_active,
+            sort_order=req.sort_order,
+            force=req.force,
+        )
+        return {"item": item}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="XP reward key not found") from None
+    except PermissionError:
+        raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+    except ValueError as e:
+        if str(e) == "invalid_xp_amount":
+            raise HTTPException(status_code=422, detail="xp_amount must be >= 0") from None
+        raise HTTPException(status_code=422, detail=str(e)) from None
 
 
 @router.get("/admin/weapons")

@@ -146,6 +146,20 @@ RAW_MIGRATIONS = [
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS game_config_xp_rewards (
+        key TEXT PRIMARY KEY,
+        category TEXT NOT NULL,
+        label TEXT NOT NULL,
+        description TEXT,
+        xp_amount INTEGER NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        locked_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
 ]
 
 
