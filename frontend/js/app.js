@@ -859,6 +859,75 @@ window.closeHistorySummaryModal = function () {
 };
 
 /**
+ * T09: Tekst błędu z body JSON (FastAPI: detail string | object | walidacja).
+ * @param {any} data
+ * @returns {string}
+ */
+window._parseHistorySummaryDetail = function (data) {
+  const d = data && data.detail;
+  if (typeof d === "string" && d.trim()) return d.trim();
+  if (Array.isArray(d) && d.length) {
+    const parts = d.map((x) => (x && x.msg) || JSON.stringify(x)).filter(Boolean);
+    if (parts.length) return parts.join(" ");
+  }
+  if (d && typeof d === "object") {
+    if (typeof d.message === "string" && d.message.trim()) return d.message.trim();
+    if (d.error === "summary_rollup_cooldown" && typeof d.message === "string") {
+      return d.message.trim();
+    }
+  }
+  return "";
+};
+
+/**
+ * T09: Czytelny komunikat dla użytkownika wg kodu HTTP + JSON ([S11b], T08 429).
+ * @param {number} status
+ * @param {any} data
+ * @returns {string}
+ */
+window.formatHistorySummaryApiError = function (status, data) {
+  const parsed = window._parseHistorySummaryDetail(data);
+  if (parsed) return parsed;
+  if (status === 429) {
+    return (
+      "Zbyt częste odświeżanie skrótu fabularnego dla tej kampanii (cooldown). " +
+      "Poczekaj na kolejne tury narracyjne lub użyj zapisanego skrótu poniżej."
+    );
+  }
+  if (status === 502) {
+    return (
+      "Model LLM nie wygenerował podsumowania (błąd lub timeout). " +
+      "Możesz spróbować ponownie później — poniżej ewentualnie ostatni zapisany skrót."
+    );
+  }
+  if (status === 403) return "Brak uprawnień do wygenerowania podsumowania (tylko właściciel kampanii).";
+  if (status === 404) return "Nie znaleziono kampanii lub podsumowania.";
+  if (status >= 500) return "Błąd serwera przy podsumowaniu. Spróbuj ponownie później.";
+  return `Żądanie nie powiodło się (HTTP ${status}).`;
+};
+
+/**
+ * Odczyt ostatniego zapisanego skrótu (player) — fallback przy błędzie LLM / ensure.
+ * @param {string|number} campaignId
+ * @returns {Promise<{ summary: string | null, ok: boolean }>}
+ */
+window.fetchLatestSavedHistorySummary = async function (campaignId) {
+  const cid = String(campaignId || "").trim();
+  if (!cid) return { summary: null, ok: false };
+  try {
+    const qs = new URLSearchParams({ audience: "player" });
+    const r = await fetch(`/api/campaigns/${cid}/history/summary?${qs}`);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) return { summary: null, ok: false };
+    const s = data.summary;
+    if (s != null && String(s).trim() !== "") return { summary: String(s), ok: true };
+    return { summary: null, ok: true };
+  } catch (_e) {
+    return { summary: null, ok: false };
+  }
+};
+
+/**
  * @param {{ forceRegenerate?: boolean }} opts
  */
 window.loadHistorySummaryModalContent = async function (opts) {
@@ -908,7 +977,35 @@ window.loadHistorySummaryModalContent = async function (opts) {
       "Brak podsumowania — pojawi się po turach narracyjnych, gdy właściciel kampanii otworzy to okno (automatyczne odświeżanie co 5 nowych tur).";
   }
 
+  const bannerEl = document.getElementById("history-summary-banner");
+  if (bannerEl) {
+    bannerEl.style.display = "none";
+    bannerEl.textContent = "";
+    bannerEl.style.borderLeftColor = "#888";
+    bannerEl.style.background = "";
+  }
+
   try {
+    const showBanner = (text, kind) => {
+      if (!bannerEl) return;
+      if (!text) {
+        bannerEl.style.display = "none";
+        return;
+      }
+      bannerEl.textContent = text;
+      bannerEl.style.display = "block";
+      if (kind === "error") {
+        bannerEl.style.borderLeftColor = "#c62828";
+        bannerEl.style.background = "rgba(198, 40, 40, 0.08)";
+      } else if (kind === "warn") {
+        bannerEl.style.borderLeftColor = "#f57c00";
+        bannerEl.style.background = "rgba(245, 124, 0, 0.08)";
+      } else {
+        bannerEl.style.borderLeftColor = "#1565c0";
+        bannerEl.style.background = "rgba(21, 101, 192, 0.06)";
+      }
+    };
+
     let data;
     if (forceRegenerate) {
       const qs = new URLSearchParams({
@@ -923,36 +1020,69 @@ window.loadHistorySummaryModalContent = async function (opts) {
       });
       data = await r.json().catch(() => ({}));
       if (!r.ok) {
-        const msg =
-          typeof data.detail === "string" ? data.detail : `HTTP ${r.status}`;
-        throw new Error(msg);
+        const errMsg = window.formatHistorySummaryApiError(r.status, data);
+        const fb = await window.fetchLatestSavedHistorySummary(cid);
+        if (loadingEl) loadingEl.style.display = "none";
+        if (fb.summary && bodyEl) {
+          bodyEl.textContent = fb.summary;
+          bodyEl.style.display = "block";
+          showBanner(
+            "Nie udało się wygenerować nowego podsumowania. " +
+              errMsg +
+              " Poniżej ostatni zapisany skrót — odśwież ponownie, gdy LLM zadziała.",
+            "error"
+          );
+        } else if (emptyEl) {
+          emptyEl.style.display = "block";
+          showBanner(errMsg, "error");
+        }
+        return;
       }
     } else {
       const qs = new URLSearchParams({
         user_id: String(uid),
         stale_after_turns: "5",
       });
-      let r = await fetch(
-        `/api/campaigns/${cid}/history/summary/ensure?${qs}`,
-        { method: "POST" }
-      );
+      const r = await fetch(`/api/campaigns/${cid}/history/summary/ensure?${qs}`, {
+        method: "POST",
+      });
       data = await r.json().catch(() => ({}));
       if (!r.ok) {
-        const r2 = await fetch(`/api/campaigns/${cid}/history/summary`);
-        const d2 = await r2.json().catch(() => ({}));
-        if (!r2.ok) {
-          const msg =
-            typeof data.detail === "string"
-              ? data.detail
-              : typeof d2.detail === "string"
-                ? d2.detail
-                : `HTTP ${r.status}`;
-          throw new Error(msg);
+        const errMsg = window.formatHistorySummaryApiError(r.status, data);
+        const fb = await window.fetchLatestSavedHistorySummary(cid);
+        if (loadingEl) loadingEl.style.display = "none";
+        if (fb.summary && bodyEl) {
+          bodyEl.textContent = fb.summary;
+          bodyEl.style.display = "block";
+          showBanner(
+            "Automatyczne odświeżenie się nie powiodło. " +
+              errMsg +
+              " Poniżej ostatni zapisany skrót.",
+            "error"
+          );
+        } else if (emptyEl) {
+          emptyEl.style.display = "block";
+          showBanner(errMsg, "error");
         }
-        data = d2;
+        return;
       }
     }
+
     if (loadingEl) loadingEl.style.display = "none";
+
+    if (!forceRegenerate && data && data.cooldown_active) {
+      const need = data.turns_until_summary_rollup_allowed;
+      const parts = [
+        "Pełne odświeżenie przez LLM jest tymczasowo ograniczone (cooldown). Wyświetlono ostatni zapisany skrót.",
+        need != null && Number(need) > 0
+          ? `Kolejne odświeżenie LLM po ok. ${need} turach narracyjnych.`
+          : "",
+      ].filter(Boolean);
+      showBanner(parts.join(" "), "warn");
+    } else if (data && data.warning && String(data.warning).trim()) {
+      showBanner(String(data.warning).trim(), "warn");
+    }
+
     const s = data.summary;
     if (s != null && String(s).trim() !== "") {
       if (bodyEl) {
@@ -964,9 +1094,24 @@ window.loadHistorySummaryModalContent = async function (opts) {
     }
   } catch (e) {
     if (loadingEl) loadingEl.style.display = "none";
-    if (bodyEl) {
-      bodyEl.textContent =
-        "Błąd wczytywania: " + (e && e.message ? e.message : String(e));
+    const errText =
+      e && e.message
+        ? String(e.message)
+        : "Nieznany błąd wczytywania podsumowania.";
+    const fb = await window.fetchLatestSavedHistorySummary(cid);
+    const bannerElCatch = document.getElementById("history-summary-banner");
+    if (bannerElCatch && fb.summary && bodyEl) {
+      bodyEl.textContent = fb.summary;
+      bodyEl.style.display = "block";
+      bannerElCatch.textContent =
+        "Błąd wczytywania: " +
+        errText +
+        " Poniżej ostatni zapisany skrót (jeśli był w bazie).";
+      bannerElCatch.style.display = "block";
+      bannerElCatch.style.borderLeftColor = "#c62828";
+      bannerElCatch.style.background = "rgba(198, 40, 40, 0.08)";
+    } else if (bodyEl) {
+      bodyEl.textContent = "Błąd wczytywania: " + errText;
       bodyEl.style.display = "block";
     }
   }

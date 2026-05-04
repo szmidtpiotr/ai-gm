@@ -32,7 +32,7 @@
 | 6 | **T05** | [x] | Po zapisie postaci: **generacja planu do skutku**; **blokada** pierwszej narracji bez planu | T06 | **[S11b]** |
 | 7 | **T07** | [x] | API / serializacja: **gracz nie dostaje** `gm_plan_json` w GET kampanii (lista + szczegóły) | T06 | **[S11b]** |
 | 8 | **T08** | [x] | Multiplayer: **cooldown** odświeżenia rollupu **per `campaign_id`** | T02 | **[S11b]** |
-| 9 | **T09** | [ ] | UI: stan **„wymaga odświeżenia”** po błędzie LLM rollupu | T02 | **[S11b]** |
+| 9 | **T09** | [x] | UI: stan **„wymaga odświeżenia”** po błędzie LLM rollupu | T02 | **[S11b]** |
 | 10 | **T10** | [ ] | **Fala [IMPL] 1:** auto / prog tur / cron `POST …/history/summary/ensure` | T02–T04 (logicznie po dual zapisie) | **[IMPL]** |
 | 11 | **T11** | [ ] | Zamknięcie **[AUDIT]**: synchronizacja [`06_schema_gaps.md`](06_schema_gaps.md) + wpis w `04` | — | **[AUDIT]** |
 | 12 | **T12** | [ ] | Tabela nagród XP **[S10e]** + minimalny odczyt w silniku / admin | — | **[S10e]** |
@@ -325,7 +325,7 @@
 
 ## 10. PROMPTY — T09
 
-<!-- STATUS_T09: PENDING -->
+<!-- STATUS_T09: DONE -->
 
 ### T09 — UI: „wymaga odświeżenia” po błędzie rollupu
 
@@ -340,11 +340,14 @@
 
 **Co zostało zrobione**
 
--
+- **[`frontend/index.html`](../../frontend/index.html):** baner `#history-summary-banner` (stan / ostrzeżenie / błąd) nad treścią skrótu.
+- **[`frontend/js/app.js`](../../frontend/js/app.js):** `_parseHistorySummaryDetail`, `formatHistorySummaryApiError` (502, 429 + obiekt `detail` z T08, 403, 404, 5xx, walidacja FastAPI); `fetchLatestSavedHistorySummary` — fallback `GET …/history/summary?audience=player`.
+- **`loadHistorySummaryModalContent`:** przy błędzie **POST** ensure lub **POST** odświeżenia — komunikat PL + **ostatni zapisany skrót** z GET, jeśli istnieje; osobna ścieżka dla **`cooldown_active`** z ensure (T08) — baner z `turns_until_summary_rollup_allowed`; obsługa `warning` z API; catch sieciowy z tym samym fallbackiem GET.
 
 **Notatki po implementacji**
 
-- *Brak wdrożenia — uzupełnić po wdrożeniu T09 (błędy API, 429 z T08, ostatni dobry skrót).*
+- Flagi **`summary_stale` w GET kampanii** nie dodawano — wystarczy UI oparte na odpowiedziach endpointów historii + fallback GET (mniej zmian w API).
+- Po wdrożeniu frontu: twardy refresh / bust cache, jeśli statyczne `app.js` są serwowane z CDN lub cache przeglądarki.
 
 ---
 
@@ -526,3 +529,4 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
 | 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
 | 2026-05-04 | Backlog **B02:** decyzja produktowa — „Podgląd dual (T01)” zostaje (QA vs rollup T02); opcjonalnie później dev/admin-only. |
+| 2026-05-04 | **T09 DONE** — modal historii: baner + mapowanie błędów + fallback ostatniego skrótu + cooldown z ensure (T08). |
