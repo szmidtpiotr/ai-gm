@@ -32,3 +32,7 @@ W projekcie **ai-gm** wykonuj weryfikację, restarty Dockera i testy **w środow
 ## Wyjątek
 
 Gdy użytkownik napisze jawnie **prod / produkcja / ai-gm-backend-1**, wtedy używaj stacku produkcyjnego.
+
+## Długie kroki (build, testy, SQLite)
+
+Pełna sekwencja wdrożenia dev i weryfikacji T01–T06: [`.cursor/skills/ai-gm-dev-deploy/SKILL.md`](../skills/ai-gm-dev-deploy/SKILL.md).
