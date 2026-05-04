@@ -1,8 +1,13 @@
+import sqlite3
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from app.core.db_runtime import resolve_db_path
 from app.services.admin_auth import verify_admin_token
 from app.services.llm_service import get_runtime_config, set_runtime_config
+from app.services.summary_settings_service import read_summary_settings, upsert_summary_settings
 from app.services.ui_panel_settings import get_ui_panels_merged, merge_ui_panels_patch
 from app.services.user_llm_settings import (
     get_user_llm_settings_full,
@@ -11,6 +16,7 @@ from app.services.user_llm_settings import (
 )
 
 router = APIRouter()
+DB_PATH = resolve_db_path()
 
 
 def _require_admin_bearer(
@@ -39,6 +45,38 @@ def patch_ui_settings(req: UiPanelsPatchReq, _: None = Depends(_require_admin_be
     """Admin-only — merge panel defaults into game_config_meta (ui_panel_defaults)."""
     merged = merge_ui_panels_patch(req.panels or {})
     return {"ok": True, "data": {"panels": merged}}
+
+
+class SummarySettingsPatchReq(BaseModel):
+    summary_rollup_cooldown_turns: int | None = Field(default=None, ge=1, le=500)
+    dual_summary_preview_mode: Literal["owner", "owner_admin", "off"] | None = None
+
+
+@router.get("/settings/summary")
+def get_summary_settings():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return {"ok": True, "data": read_summary_settings(conn)}
+    finally:
+        conn.close()
+
+
+@router.patch("/settings/summary")
+def patch_summary_settings(
+    req: SummarySettingsPatchReq, _: None = Depends(_require_admin_bearer)
+):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        data = upsert_summary_settings(
+            conn,
+            summary_rollup_cooldown_turns=req.summary_rollup_cooldown_turns,
+            dual_summary_preview_mode=req.dual_summary_preview_mode,
+        )
+        return {"ok": True, "data": data}
+    finally:
+        conn.close()
 
 
 class LlmSettingsReq(BaseModel):

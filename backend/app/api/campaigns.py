@@ -11,11 +11,29 @@ from app.services.history_summary_service import generate_dual_summary_preview
 from app.services.solo_death_service import death_summary_payload
 from app.services.gm_plan_generation_service import retry_initial_gm_plan_for_campaign
 from app.services.gm_plan_schema import merge_gm_plan_patch, normalize_gm_plan
+from app.services.summary_settings_service import get_dual_summary_preview_mode
 
 DB_PATH = "/data/ai_gm.db"
 logger = get_logger(__name__)
 
 router = APIRouter()
+
+
+def _is_global_admin(conn: sqlite3.Connection, user_id: int | None) -> bool:
+    if user_id is None:
+        return False
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return False
+    try:
+        urow = conn.execute(
+            "SELECT COALESCE(is_admin, 0) AS ia FROM users WHERE id = ?",
+            (uid,),
+        ).fetchone()
+        return bool(urow and int(urow["ia"] or 0) == 1)
+    except sqlite3.OperationalError:
+        return False
 
 
 def _may_view_gm_plan_json(
@@ -35,15 +53,8 @@ def _may_view_gm_plan_json(
         return False
     if vid == oid:
         return True
-    try:
-        urow = conn.execute(
-            "SELECT COALESCE(is_admin, 0) AS ia FROM users WHERE id = ?",
-            (vid,),
-        ).fetchone()
-        if urow and int(urow["ia"] or 0) == 1:
-            return True
-    except sqlite3.OperationalError:
-        pass
+    if _is_global_admin(conn, vid):
+        return True
     try:
         mrow = conn.execute(
             """
@@ -471,6 +482,14 @@ def dual_summary_preview(
             raise HTTPException(status_code=404, detail="Campaign not found")
         if int(row["owner_user_id"]) != int(user_id):
             raise HTTPException(status_code=403, detail="user_id must match campaign owner")
+        preview_mode = get_dual_summary_preview_mode(conn)
+        if preview_mode == "off":
+            raise HTTPException(status_code=403, detail="Dual summary preview is disabled.")
+        if preview_mode == "owner_admin" and not _is_global_admin(conn, user_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Dual summary preview requires campaign owner with global admin role.",
+            )
     finally:
         conn.close()
 
