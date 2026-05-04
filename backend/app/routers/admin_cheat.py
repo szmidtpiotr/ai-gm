@@ -1,3 +1,4 @@
+import copy
 import json
 import sqlite3
 from typing import Any
@@ -325,6 +326,7 @@ def admin_cheat(
         sheet: dict[str, Any] = json.loads(char["sheet_json"] or "{}")
         campaign_id = int(char["campaign_id"] or 0)
         result: dict[str, Any] = {}
+        pending_new_act: tuple[dict[str, Any], dict[str, Any]] | None = None
         cmd = req.cmd.strip().lower()
 
         if cmd == "add gold":
@@ -477,6 +479,7 @@ def admin_cheat(
             key = str(req.key or "").strip()
             if not key:
                 raise HTTPException(status_code=422, detail="quest_key_required")
+            old_sheet_snapshot = copy.deepcopy(sheet)
             active: list[str] = list(sheet.get("quests_active") or [])
             completed: list[str] = list(sheet.get("quests_completed") or [])
             if key in active:
@@ -494,6 +497,7 @@ def admin_cheat(
                 "quests_active": active,
                 "quests_completed": completed,
             }
+            pending_new_act = (old_sheet_snapshot, sheet)
 
         elif cmd == "show state":
             gold = int(
@@ -543,6 +547,18 @@ def admin_cheat(
             )
 
         conn.commit()
+        if pending_new_act is not None:
+            from app.services.new_act_service import maybe_trigger_new_act_after_main_quest
+
+            old_s, new_s = pending_new_act
+            extra = maybe_trigger_new_act_after_main_quest(
+                campaign_id=campaign_id,
+                character_id=character_id,
+                old_sheet=old_s,
+                new_sheet=new_s,
+            )
+            if extra and extra.get("ok"):
+                result["new_act"] = extra
         return {"ok": True, "cmd": req.cmd, "result": result}
     except HTTPException:
         conn.rollback()
