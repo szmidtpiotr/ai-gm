@@ -14,6 +14,7 @@ from app.api import turns as turns_mod
 from app.api import campaign_history as ch_mod
 from app.main import app
 from app.services import history_summary_service as hs_mod
+from app.services import summary_ensure_service as ses_mod
 from app.services.history_summary_service import (
     evaluate_summary_rollup_cooldown,
     get_summary_rollup_cooldown_turns,
@@ -186,7 +187,7 @@ def test_ensure_returns_cooldown_when_stale_but_blocked(client_and_db):
     def banned(**kw):
         raise AssertionError("generate_campaign_summary should not run under cooldown")
 
-    with patch.object(ch_mod, "generate_campaign_summary", side_effect=banned):
+    with patch.object(ses_mod, "generate_campaign_summary", side_effect=banned):
         r = client.post(
             "/api/campaigns/1/history/summary/ensure?user_id=10&stale_after_turns=1"
         )

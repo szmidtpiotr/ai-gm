@@ -2,7 +2,7 @@
 
 <!-- MASTER_STATUS: ACTIVE -->
 <!-- LAST_UPDATE: 2026-05-04 -->
-<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T08 OK 2026-05-04) -->
+<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T10 OK 2026-05-04) -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -33,7 +33,7 @@
 | 7 | **T07** | [x] | API / serializacja: **gracz nie dostaje** `gm_plan_json` w GET kampanii (lista + szczegóły) | T06 | **[S11b]** |
 | 8 | **T08** | [x] | Multiplayer: **cooldown** odświeżenia rollupu **per `campaign_id`** | T02 | **[S11b]** |
 | 9 | **T09** | [x] | UI: stan **„wymaga odświeżenia”** po błędzie LLM rollupu | T02 | **[S11b]** |
-| 10 | **T10** | [ ] | **Fala [IMPL] 1:** auto / prog tur / cron `POST …/history/summary/ensure` | T02–T04 (logicznie po dual zapisie) | **[IMPL]** |
+| 10 | **T10** | [x] | **Fala [IMPL] 1:** auto / prog tur / cron `POST …/history/summary/ensure` | T02–T04 (logicznie po dual zapisie) | **[IMPL]** |
 | 11 | **T11** | [ ] | Zamknięcie **[AUDIT]**: synchronizacja [`06_schema_gaps.md`](06_schema_gaps.md) + wpis w `04` | — | **[AUDIT]** |
 | 12 | **T12** | [ ] | Tabela nagród XP **[S10e]** + minimalny odczyt w silniku / admin | — | **[S10e]** |
 | 13 | **T13** | [ ] | Player rulebook: lekki rozdział **XP** (blok D agendy) | T12 (opcjonalnie równolegle po szkicu tabeli) | Blok **D** |
@@ -353,7 +353,7 @@
 
 ## 11. PROMPTY — T10
 
-<!-- STATUS_T10: PENDING -->
+<!-- STATUS_T10: DONE -->
 
 ### T10 — Automatyzacja `history/summary/ensure` (**[IMPL]** fala 1)
 
@@ -367,11 +367,15 @@
 
 **Co zostało zrobione**
 
--
+- **`game_config_meta.summary_auto_ensure_every_n_narrative_turns`:** domyślnie `20` (migracja seed `INSERT OR IGNORE`), `0` = wyłączone; odczyt `get_summary_auto_ensure_every_n_narrative_turns` w `history_summary_service.py`.
+- **Po każdym zapisie** wiersza `campaign_turns` z `route='narrative'` (`create_turn_log` w `turns.py`): jeśli `COUNT(narrative) % N == 0` i `N > 0`, wątek daemon wywołuje `run_ensure_campaign_history_summary` dla **właściciela** kampanii (`summary_ensure_automation.py`). Logika jak `POST …/ensure` — **cooldown T08** bez zmian (`run_ensure` zwraca cache / `cooldown_active`).
+- **Router** `ensure` → `summary_ensure_service.run_ensure_campaign_history_summary` (wspólna ścieżka z automatyzacją).
+- **Logi:** zdarzenie `summary_auto_ensure_result` (`ok`, `refreshed`, `cooldown_active`, błędy).
 
 **Notatki po implementacji**
 
-- *Brak wdrożenia — uzupełnić po wdrożeniu T10 (N tur, worker, interakcja z T08).*
+- Trigger po **commit** tury narracyjnej (nie osobny cron OS).
+- Regulacja **N** jak cooldown T08 (`game_config_meta`); panel UI — analogicznie do backlogu **B01**.
 
 ---
 

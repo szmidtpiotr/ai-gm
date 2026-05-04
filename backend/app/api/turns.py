@@ -1285,6 +1285,14 @@ def create_turn_log(
 
     conn.commit()
 
+    if route == "narrative":
+        # T10 — po zapisie tury narracyjnej: co N tur (game_config_meta) uruchom ensure w tle.
+        from app.services.summary_ensure_automation import (
+            schedule_after_narrative_turn_committed,
+        )
+
+        schedule_after_narrative_turn_committed(campaign_id)
+
     return {
         "id": row["id"],
         "campaign_id": row["campaign_id"],
