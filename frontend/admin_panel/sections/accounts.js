@@ -14,15 +14,10 @@ function el(tag, cls, text) {
   return n;
 }
 
-function parseApiError(err, fallback) {
-  if (err instanceof APIError && err.body && typeof err.body === "object" && err.body.detail) {
-    return String(err.body.detail);
-  }
-  return fallback;
-}
+const ENDPOINT_404_HINT =
+  "404 Not Found — brak endpointu na tym serwerze (stary backend bez T20?) albo zły „API Base URL” w panelu admin.";
 
-/** Czytelniejsze błędy dla modalu GM Plan (404 „Not Found” = zły host / stary backend bez T20). */
-function parseGmPlanAdminError(err, fallback) {
+function parseApiError(err, fallback) {
   if (err instanceof APIError) {
     const st = err.status;
     const det =
@@ -30,18 +25,33 @@ function parseGmPlanAdminError(err, fallback) {
         ? String(err.body.detail)
         : "";
     if (st === 404 && (det === "Not Found" || det === "")) {
-      return "404 Not Found — brak endpointu na tym serwerze (stary backend bez T20?) albo zły „API Base URL” w panelu admin.";
+      return ENDPOINT_404_HINT;
     }
-    if (st === 404 && det) {
-      return det === "Campaign not found"
-        ? "Kampania nie istnieje w bazie podłączonej do tego API (inny host / inna baza niż lista kampanii)."
-        : det;
-    }
-    if (st === 502 && det) {
+    if (det) {
       return det;
     }
-    if (st === 401) {
+    if (st === 404) {
+      return ENDPOINT_404_HINT;
+    }
+  }
+  return fallback;
+}
+
+/** Dodatkowe komunikaty tylko dla modalu GM Plan (kampania / LLM). */
+function parseGmPlanAdminError(err, fallback) {
+  if (err instanceof APIError) {
+    if (err.status === 401) {
       return "Brak lub nieważny token admin — zaloguj się ponownie.";
+    }
+    const det =
+      err.body && typeof err.body === "object" && err.body.detail != null
+        ? String(err.body.detail)
+        : "";
+    if (err.status === 502 && det) {
+      return det;
+    }
+    if (err.status === 404 && det === "Campaign not found") {
+      return "Kampania nie istnieje w bazie podłączonej do tego API (inny host / inna baza niż lista kampanii).";
     }
   }
   return parseApiError(err, fallback);
