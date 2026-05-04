@@ -30,7 +30,7 @@
 | 5 | **T06** | [x] | **`gm_plan_json` W1**: `gm_plan_schema` (normalize, merge, format), PATCH, §7.1, testy | — | **[S11b]**, W2 backlog |
 | 6 | **T05** | [x] | Po zapisie postaci: **generacja planu do skutku**; **blokada** pierwszej narracji bez planu | T06 | **[S11b]** |
 | 7 | **T07** | [x] | API / serializacja: **gracz nie dostaje** `gm_plan_json` w GET kampanii (lista + szczegóły) | T06 | **[S11b]** |
-| 8 | **T08** | [ ] | Multiplayer: **cooldown** odświeżenia rollupu **per `campaign_id`** | T02 | **[S11b]** |
+| 8 | **T08** | [x] | Multiplayer: **cooldown** odświeżenia rollupu **per `campaign_id`** | T02 | **[S11b]** |
 | 9 | **T09** | [ ] | UI: stan **„wymaga odświeżenia”** po błędzie LLM rollupu | T02 | **[S11b]** |
 | 10 | **T10** | [ ] | **Fala [IMPL] 1:** auto / prog tur / cron `POST …/history/summary/ensure` | T02–T04 (logicznie po dual zapisie) | **[IMPL]** |
 | 11 | **T11** | [ ] | Zamknięcie **[AUDIT]**: synchronizacja [`06_schema_gaps.md`](06_schema_gaps.md) + wpis w `04` | — | **[AUDIT]** |
@@ -277,7 +277,7 @@
 
 ## 9. PROMPTY — T08
 
-<!-- STATUS_T08: PENDING -->
+<!-- STATUS_T08: DONE -->
 
 ### T08 — Cooldown odświeżenia rollupu **per kampania**
 
@@ -291,7 +291,12 @@
 
 **Co zostało zrobione**
 
--
+- **Migracja:** `campaigns.last_rollup_narrative_turn_count` — kotwica = liczba tur narracyjnych (`COUNT(*)` z `campaign_turns` dla `route='narrative'`) po ostatnim udanym rollupie LLM (**wspólna** dla całej kampanii, bez rozdziału player/gm).
+- **Konfiguracja:** klucz `game_config_meta.summary_rollup_cooldown_turns` (domyślnie **20** przy braku wpisu); zakres 1–500.
+- **`POST /campaigns/{id}/history/summary`:** przed LLM sprawdzenie cooldownu — przy blokadzie **429** z polami `cooldown_turns`, `turns_until_allowed`, `narrative_turn_count`, `last_rollup_narrative_turn_count`.
+- **`POST …/history/summary/ensure`:** jeśli wg `stale_after_turns` trzeba by odświeżyć, ale cooldown blokuje — zwracany jest **ostatni zapisany** skrót z `refreshed: false`, `cooldown_active: true`, `turns_until_summary_rollup_allowed`.
+- **Po każdym udanym wywołaniu** `generate_campaign_summary` (łącznie puste podsumowanie / `persist=false`) wywoływane jest „dotknięcie” kotwicy; **admin** `regenerate_campaign_summary_admin` też aktualizuje kotwicę po zapisie.
+- **Testy:** [`backend/tests/test_phase9b_t08_rollup_cooldown.py`](../../backend/tests/test_phase9b_t08_rollup_cooldown.py).
 
 **Notatki po implementacji**
 

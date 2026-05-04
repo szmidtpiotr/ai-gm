@@ -74,6 +74,80 @@ def count_narrative_turns(conn: sqlite3.Connection, campaign_id: int) -> int:
     return int(row["n"] or 0) if row else 0
 
 
+# --- T08: campaign-wide cooldown between LLM rollup refreshes ([S11b]) ---
+META_KEY_SUMMARY_ROLLUP_COOLDOWN = "summary_rollup_cooldown_turns"
+DEFAULT_SUMMARY_ROLLUP_COOLDOWN_TURNS = 20
+
+
+def get_summary_rollup_cooldown_turns(conn: sqlite3.Connection) -> int:
+    """Minimal spacing between rollup LLM runs per campaign, in narrative turns."""
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = ? LIMIT 1",
+            (META_KEY_SUMMARY_ROLLUP_COOLDOWN,),
+        ).fetchone()
+        if row:
+            raw_val = row["value"] if hasattr(row, "keys") else row[0]
+            if raw_val is not None:
+                n = int(str(raw_val).strip())
+                return max(1, min(500, n))
+    except (sqlite3.OperationalError, ValueError, TypeError):
+        pass
+    return DEFAULT_SUMMARY_ROLLUP_COOLDOWN_TURNS
+
+
+def evaluate_summary_rollup_cooldown(
+    conn: sqlite3.Connection, campaign_id: int
+) -> tuple[bool, int, int | None, int]:
+    """
+    Returns:
+      allowed — LLM rollup may run (no anchor yet, or enough new narrative turns)
+      cooldown_n — configured N
+      last_anchor — value of campaigns.last_rollup_narrative_turn_count
+      current_n — count_narrative_turns (total narrative rows for campaign)
+    """
+    cooldown_n = get_summary_rollup_cooldown_turns(conn)
+    current_n = count_narrative_turns(conn, campaign_id)
+    last_anchor: int | None = None
+    try:
+        row = conn.execute(
+            "SELECT last_rollup_narrative_turn_count AS a FROM campaigns WHERE id = ?",
+            (campaign_id,),
+        ).fetchone()
+        if row and row["a"] is not None:
+            last_anchor = int(row["a"])
+    except sqlite3.OperationalError:
+        last_anchor = None
+
+    if last_anchor is None:
+        return True, cooldown_n, None, current_n
+    delta = current_n - last_anchor
+    return (delta >= cooldown_n), cooldown_n, last_anchor, current_n
+
+
+def turns_until_summary_rollup_allowed(
+    cooldown_n: int, last_anchor: int | None, current_n: int
+) -> int:
+    """Narrative turns still needed before the next rollup is allowed."""
+    if last_anchor is None:
+        return 0
+    delta = current_n - last_anchor
+    return max(0, cooldown_n - delta)
+
+
+def touch_rollup_cooldown_anchor(conn: sqlite3.Connection, campaign_id: int) -> None:
+    """Record narrative turn count after a successful rollup LLM call (shared per campaign)."""
+    n = count_narrative_turns(conn, campaign_id)
+    try:
+        conn.execute(
+            "UPDATE campaigns SET last_rollup_narrative_turn_count = ? WHERE id = ?",
+            (n, campaign_id),
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
+
+
 def fetch_narrative_turns(
     conn: sqlite3.Connection, campaign_id: int, max_turns: int
 ) -> list[sqlite3.Row]:

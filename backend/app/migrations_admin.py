@@ -650,6 +650,10 @@ ADMIN_SEEDS = [
     )
     """,
     """
+    INSERT OR IGNORE INTO game_config_meta (key, value)
+    VALUES ('summary_rollup_cooldown_turns', '20')
+    """,
+    """
     UPDATE game_config_enemies
     SET tier = 'weak', attacks_per_turn = 1, damage_bonus = 1,
         damage_type = 'physical', xp_award = 3
