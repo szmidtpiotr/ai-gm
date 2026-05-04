@@ -21,6 +21,32 @@ function parseApiError(err, fallback) {
   return fallback;
 }
 
+/** Czytelniejsze błędy dla modalu GM Plan (404 „Not Found” = zły host / stary backend bez T20). */
+function parseGmPlanAdminError(err, fallback) {
+  if (err instanceof APIError) {
+    const st = err.status;
+    const det =
+      err.body && typeof err.body === "object" && err.body.detail != null
+        ? String(err.body.detail)
+        : "";
+    if (st === 404 && (det === "Not Found" || det === "")) {
+      return "404 Not Found — brak endpointu na tym serwerze (stary backend bez T20?) albo zły „API Base URL” w panelu admin.";
+    }
+    if (st === 404 && det) {
+      return det === "Campaign not found"
+        ? "Kampania nie istnieje w bazie podłączonej do tego API (inny host / inna baza niż lista kampanii)."
+        : det;
+    }
+    if (st === 502 && det) {
+      return det;
+    }
+    if (st === 401) {
+      return "Brak lub nieważny token admin — zaloguj się ponownie.";
+    }
+  }
+  return parseApiError(err, fallback);
+}
+
 /**
  * LOC-4: podgląd i ręczna zmiana `game_sessions.current_location_id` (ostatnia sesja kampanii).
  * @param {number} campaignId
@@ -155,6 +181,199 @@ async function openCampaignSessionLocationModal(campaignId, campaignTitle) {
     sel.innerHTML = "";
     info.appendChild(el("p", "", parseApiError(e, "Failed to load session location.")));
   }
+}
+
+/**
+ * T20: admin editor / inspector for campaigns.gm_plan_json with divergence preview.
+ * @param {number} campaignId
+ * @param {string | undefined} campaignTitle
+ */
+async function openCampaignGmPlanModal(campaignId, campaignTitle) {
+  const status = el("div", "muted", "Loading…");
+  const divergenceWrap = el("div", "");
+  const noteLabel = el("label", "", "Advance scene note");
+  noteLabel.style.display = "block";
+  noteLabel.style.marginTop = "12px";
+  const noteInput = /** @type {HTMLInputElement} */ (el("input", "admin-input"));
+  noteInput.type = "text";
+  noteInput.placeholder = "Optional note for scene_log";
+  const jsonLabel = el("label", "", "GM plan JSON");
+  jsonLabel.style.display = "block";
+  jsonLabel.style.marginTop = "12px";
+  const jsonArea = /** @type {HTMLTextAreaElement} */ (el("textarea", "admin-input"));
+  jsonArea.rows = 20;
+  jsonArea.spellcheck = false;
+  jsonArea.style.width = "100%";
+  const previewLabel = el("label", "", "Prompt preview");
+  previewLabel.style.display = "block";
+  previewLabel.style.marginTop = "12px";
+  const preview = el("pre", "config-diff-raw");
+  const wrap = el("div", "");
+  wrap.appendChild(status);
+  wrap.appendChild(divergenceWrap);
+  wrap.appendChild(noteLabel);
+  wrap.appendChild(noteInput);
+  wrap.appendChild(jsonLabel);
+  wrap.appendChild(jsonArea);
+  wrap.appendChild(previewLabel);
+  wrap.appendChild(preview);
+
+  let currentData = null;
+  let isBusy = false;
+  const title = campaignTitle?.trim() ? `🧭 GM Plan — ${campaignTitle}` : `🧭 GM Plan — campaign ${campaignId}`;
+
+  async function loadData() {
+    status.textContent = "Loading…";
+    divergenceWrap.innerHTML = "";
+    try {
+      const data = await adminFetch(`/api/admin/campaigns/${campaignId}/gm-plan`);
+      currentData = data;
+      status.className = "muted";
+      const activeArc = data?.gm_plan_json?.active_arc_id ? ` · active arc: ${data.gm_plan_json.active_arc_id}` : "";
+      const ready = data?.gm_plan_ready ? "ready" : "empty";
+      status.textContent = `Campaign #${campaignId} · ${String(data?.status || "")} · plan ${ready}${activeArc}`;
+      jsonArea.value = JSON.stringify(data?.gm_plan_json || {}, null, 2);
+      preview.textContent = String(data?.formatted_plan || "(empty plan)");
+
+      const div = data?.divergence;
+      if (div && typeof div === "object") {
+        const st = String(div.status || "");
+        const cls =
+          st === "diverged"
+            ? "warning-banner warning-banner-red"
+            : st === "mixed"
+              ? "warning-banner warning-banner-orange"
+              : "warning-banner warning-banner-orange";
+        const box = el("div", cls);
+        const head = el("strong", "", `Divergence: ${st || "n/a"}`);
+        box.appendChild(head);
+        box.appendChild(el("p", "", String(div.summary || "")));
+        const matched = Array.isArray(div.matched_plan_tokens) && div.matched_plan_tokens.length
+          ? `Matched: ${div.matched_plan_tokens.join(", ")}`
+          : "Matched: none";
+        const offroad = Array.isArray(div.offroad_tokens) && div.offroad_tokens.length
+          ? `Off-road: ${div.offroad_tokens.join(", ")}`
+          : "Off-road: none";
+        box.appendChild(el("p", "muted", `${matched} · ${offroad}`));
+        divergenceWrap.appendChild(box);
+      }
+
+      const cc = Number(data?.characters_count ?? 0);
+      if (!Number.isNaN(cc) && cc === 0) {
+        const w = el("div", "warning-banner warning-banner-orange");
+        w.appendChild(
+          el(
+            "strong",
+            "",
+            "Brak postaci w tej kampanii",
+          ),
+        );
+        w.appendChild(
+          el(
+            "p",
+            "",
+            "Regenerate initial wymaga co najmniej jednej postaci (kontekst z arkusza). Wpisz plan ręcznie (Save) albo utwórz postać w grze.",
+          ),
+        );
+        divergenceWrap.appendChild(w);
+      }
+    } catch (e) {
+      currentData = null;
+      status.className = "";
+      status.textContent = parseGmPlanAdminError(e, "Failed to load GM plan.");
+      preview.textContent = "";
+    }
+  }
+
+  openModal({
+    title,
+    content: wrap,
+    footer: [
+      {
+        label: "Save plan",
+        class: "primary-btn",
+        onClick: async () => {
+          if (isBusy) return;
+          let parsed;
+          try {
+            parsed = JSON.parse(jsonArea.value || "{}");
+          } catch (_e) {
+            showToast("GM plan JSON is invalid.", "error");
+            return;
+          }
+          isBusy = true;
+          try {
+            await adminFetch(`/api/admin/campaigns/${campaignId}/gm-plan`, {
+              method: "PUT",
+              body: JSON.stringify({ gm_plan_json: parsed }),
+            });
+            showToast("GM plan saved.", "success");
+            await loadData();
+          } catch (e) {
+            showToast(parseApiError(e, "Save failed."), "error");
+          } finally {
+            isBusy = false;
+          }
+        },
+      },
+      {
+        label: "Advance scene",
+        class: "secondary-btn",
+        onClick: async () => {
+          if (isBusy) return;
+          isBusy = true;
+          try {
+            await adminFetch(`/api/admin/campaigns/${campaignId}/gm-plan/advance-scene`, {
+              method: "POST",
+              body: JSON.stringify({ note: noteInput.value || "" }),
+            });
+            noteInput.value = "";
+            showToast("Scene advanced.", "success");
+            await loadData();
+          } catch (e) {
+            showToast(parseApiError(e, "Advance scene failed."), "error");
+          } finally {
+            isBusy = false;
+          }
+        },
+      },
+      {
+        label: "Regenerate initial",
+        class: "secondary-btn",
+        onClick: async () => {
+          if (isBusy) return;
+          if (currentData && Number(currentData.characters_count ?? 0) === 0) {
+            showToast("Najpierw utwórz postać w kampanii — bez niej nie da się zbudować kontekstu planu MG.", "info");
+            return;
+          }
+          isBusy = true;
+          try {
+            await adminFetch(`/api/admin/campaigns/${campaignId}/gm-plan/regenerate-initial`, {
+              method: "POST",
+              body: JSON.stringify({}),
+            });
+            showToast("GM plan regenerated.", "success");
+            await loadData();
+          } catch (e) {
+            showToast(parseGmPlanAdminError(e, "GM plan regeneration failed."), "error");
+          } finally {
+            isBusy = false;
+          }
+        },
+      },
+      {
+        label: "Refresh",
+        class: "secondary-btn",
+        onClick: async () => {
+          if (isBusy) return;
+          await loadData();
+        },
+      },
+      { label: "Close", class: "secondary-btn", onClick: (closeModal) => closeModal() },
+    ],
+  });
+
+  await loadData();
 }
 
 function mergeCounts(row, patch) {
@@ -795,6 +1014,13 @@ async function mountCampaigns(userId, host) {
       tr.appendChild(el("td", "", String(c.turn_count ?? 0)));
       tr.appendChild(el("td", "", c.last_turn_at != null ? String(c.last_turn_at) : "—"));
       const td = el("td", "admin-table-actions");
+      const planBtn = el("button", "secondary-btn", "🧭 GM Plan");
+      planBtn.type = "button";
+      planBtn.title = "T20: inspect / edit gm_plan_json and divergence";
+      planBtn.addEventListener("click", () => {
+        void openCampaignGmPlanModal(c.id, c.title);
+      });
+      td.appendChild(planBtn);
       const locBtn = el("button", "secondary-btn", "📍 Session location");
       locBtn.type = "button";
       locBtn.title = "LOC-4: view / set campaign session current_location_id";
