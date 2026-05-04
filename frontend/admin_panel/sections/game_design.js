@@ -4812,9 +4812,28 @@ export async function init(container) {
     try {
       const text = await f.text();
       const payload = JSON.parse(text);
+      const dryRun = await adminFetch("/api/admin/config/catalog-snapshot/import?dry_run=true", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      const countMap =
+        dryRun && typeof dryRun === "object" && dryRun.would_import_rows && typeof dryRun.would_import_rows === "object"
+          ? dryRun.would_import_rows
+          : {};
+      const nonZeroTables = Object.entries(countMap)
+        .filter(([, value]) => Number(value || 0) > 0)
+        .map(([key, value]) => `${key}: ${value}`);
+      const warningText =
+        Array.isArray(dryRun?.warnings) && dryRun.warnings.length
+          ? `\n\nWarnings:\n- ${dryRun.warnings.join("\n- ")}`
+          : "";
+      const noteText = dryRun?.note ? `\n\nNote: ${String(dryRun.note)}` : "";
       const ok = await showConfirm(
         "Replace ALL Game Design catalogue tables from this file (stats, skills, DC, weapons, enemies, conditions, items, consumables, loot tables + entries)? " +
-          "game_config_meta in the file is ignored (slash commands / Loki URLs are not overwritten). This cannot be undone.",
+          "game_config_meta in the file is ignored (slash commands / Loki URLs are not overwritten). This cannot be undone." +
+          (nonZeroTables.length ? `\n\nRows detected:\n- ${nonZeroTables.join("\n- ")}` : "") +
+          warningText +
+          noteText,
         { dangerous: true },
       );
       if (!ok) {
@@ -4825,7 +4844,12 @@ export async function init(container) {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      showToast("Catalog snapshot imported.", "success");
+      showToast(
+        Array.isArray(dryRun?.warnings) && dryRun.warnings.length
+          ? "Catalog snapshot imported with warnings."
+          : "Catalog snapshot imported.",
+        "success",
+      );
       try {
         const d2 = await adminFetch("/api/admin/stats");
         statKeys.length = 0;

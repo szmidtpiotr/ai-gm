@@ -7,6 +7,30 @@ from app.services.admin_config import normalize_effect_json_value
 
 DB_PATH = "/data/ai_gm.db"
 SUPPORTED_MAJOR = "1"
+_IMPORT_CONFIG_REQUIRED_TABLES = ("game_config_stats", "game_config_skills", "game_config_dc")
+_IMPORT_CONFIG_OPTIONAL_TABLES = (
+    "game_config_weapons",
+    "game_config_enemies",
+    "game_config_conditions",
+)
+_SNAPSHOT_ONLY_TABLES = (
+    "game_config_xp_rewards",
+    "game_config_items",
+    "game_config_consumables",
+    "game_config_loot_tables",
+    "game_config_loot_entries",
+)
+_NARROW_WEAPON_IMPORT_COLUMNS = {
+    "key",
+    "label",
+    "damage_die",
+    "linked_stat",
+    "allowed_classes",
+    "is_active",
+    "locked_at",
+    "created_at",
+    "updated_at",
+}
 
 
 def _now_iso() -> str:
@@ -107,7 +131,7 @@ def export_catalog_snapshot(exported_by: str = "dev-local") -> dict[str, Any]:
             "exported_by": exported_by,
             "tables": tables,
             "notes": (
-                "Read-only catalogue dump for design / LLM context. "
+                "Canonical full-catalog dump for design / LLM context and cross-environment migration. "
                 "To restore these tables in the admin Game Design section, use "
                 "POST /api/admin/config/catalog-snapshot/import (not POST /admin/config/import)."
             ),
@@ -124,6 +148,7 @@ def export_config(exported_by: str = "dev-local") -> dict[str, Any]:
     conn.row_factory = sqlite3.Row
     try:
         payload = {
+            "export_kind": "config_bundle",
             "config_version": _get_config_version(conn),
             "exported_at": _now_iso(),
             "exported_by": exported_by,
@@ -136,6 +161,11 @@ def export_config(exported_by: str = "dev-local") -> dict[str, Any]:
                 "game_config_conditions": _read_table(conn, "game_config_conditions", "key ASC"),
             },
             "excluded": ["admin_tokens", "admin_audit_log", "user_accounts"],
+            "notes": (
+                "Narrow config bundle for stats / skills / DC and selected legacy tables. "
+                "For full catalog migration (items, consumables, loot, xp rewards, full weapon schema) "
+                "prefer GET/POST /api/admin/config/catalog-snapshot."
+            ),
         }
         _audit(conn, "EXPORT", None, {"config_version": payload["config_version"]})
         conn.commit()
@@ -157,19 +187,62 @@ def _validate_import_payload(payload: dict[str, Any]) -> tuple[bool, list[str]]:
     if "tables" not in payload or not isinstance(payload["tables"], dict):
         errors.append("Missing or invalid tables")
         return False, errors
-    required_tables = ("game_config_stats", "game_config_skills", "game_config_dc")
-    for table in required_tables:
+    for table in _IMPORT_CONFIG_REQUIRED_TABLES:
         if table not in payload["tables"] or not isinstance(payload["tables"][table], list):
             errors.append(f"Missing or invalid table: {table}")
-    optional_tables = (
-        "game_config_weapons",
-        "game_config_enemies",
-        "game_config_conditions",
-    )
-    for table in optional_tables:
+    for table in _IMPORT_CONFIG_OPTIONAL_TABLES:
         if table in payload["tables"] and not isinstance(payload["tables"][table], list):
             errors.append(f"Invalid table (must be array): {table}")
     return len(errors) == 0, errors
+
+
+def _import_config_warnings(payload: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    tables = payload.get("tables")
+    if not isinstance(tables, dict):
+        return warnings
+
+    export_kind = str(payload.get("export_kind") or "").strip().lower()
+    if export_kind == "catalog_snapshot":
+        warnings.append(
+            "Ten plik wygląda na catalog_snapshot. Pełny katalog importuj przez /api/admin/config/catalog-snapshot/import, "
+            "bo /api/admin/config/import obsługuje tylko wąski rdzeń configu."
+        )
+
+    present_snapshot_tables = [name for name in _SNAPSHOT_ONLY_TABLES if isinstance(tables.get(name), list)]
+    if present_snapshot_tables:
+        warnings.append(
+            "import_config zignoruje tabele pełnego katalogu: "
+            + ", ".join(present_snapshot_tables)
+            + ". Dla items / loot / xp_rewards / consumables użyj catalog snapshot."
+        )
+
+    weapon_extra_cols: set[str] = set()
+    for raw in tables.get("game_config_weapons") or []:
+        if not isinstance(raw, dict):
+            continue
+        weapon_extra_cols.update(str(k) for k in raw.keys() if k not in _NARROW_WEAPON_IMPORT_COLUMNS)
+    if weapon_extra_cols:
+        warnings.append(
+            "import_config zapisuje broń w węższym formacie i może uciąć kolumny: "
+            + ", ".join(sorted(weapon_extra_cols))
+            + ". Pełne rekordy broni importuj przez catalog snapshot."
+        )
+
+    return warnings
+
+
+def _catalog_snapshot_warnings(payload: dict[str, Any]) -> list[str]:
+    warnings: list[str] = []
+    tables = payload.get("tables")
+    if not isinstance(tables, dict):
+        return warnings
+    if "game_config_meta" in tables:
+        warnings.append(
+            "game_config_meta z pliku zostanie zignorowane przy imporcie snapshotu "
+            "(nie nadpisujemy slash commands / ustawień technicznych)."
+        )
+    return warnings
 
 
 def _validate_effect_json_rows(
@@ -215,6 +288,7 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
         }
 
     tables = payload.get("tables") or {}
+    warnings = _import_config_warnings(payload)
     errors.extend(
         _validate_effect_json_rows(
             tables.get("game_config_conditions") or [],
@@ -246,7 +320,7 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
             return {
                 "ok": True,
                 "dry_run": True,
-                "warnings": [],
+                "warnings": warnings,
                 "changes": changes,
                 "target_version": incoming_version,
             }
@@ -383,7 +457,13 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
             {"to_version": incoming_version, "changes": changes},
         )
         conn.commit()
-        return {"ok": True, "dry_run": False, "changes": changes, "target_version": incoming_version}
+        return {
+            "ok": True,
+            "dry_run": False,
+            "warnings": warnings,
+            "changes": changes,
+            "target_version": incoming_version,
+        }
     finally:
         conn.close()
 
@@ -489,6 +569,7 @@ def import_catalog_snapshot(payload: dict[str, Any], *, dry_run: bool) -> dict[s
     tables_in = payload["tables"]
     if not isinstance(tables_in, dict):
         return {"ok": False, "dry_run": dry_run, "errors": ["Internal: tables is not a dict"]}
+    warnings = _catalog_snapshot_warnings(payload)
 
     counts = {
         t: len([x for x in (tables_in.get(t) or []) if isinstance(x, dict)]) for t in _CATALOG_IMPORT_TABLES
@@ -497,6 +578,7 @@ def import_catalog_snapshot(payload: dict[str, Any], *, dry_run: bool) -> dict[s
         return {
             "ok": True,
             "dry_run": True,
+            "warnings": warnings,
             "would_import_rows": counts,
             "note": "game_config_meta in the file is ignored on import.",
         }
@@ -534,6 +616,7 @@ def import_catalog_snapshot(payload: dict[str, Any], *, dry_run: bool) -> dict[s
         return {
             "ok": True,
             "dry_run": False,
+            "warnings": warnings,
             "imported_rows": counts,
             "note": "game_config_meta was not applied.",
         }

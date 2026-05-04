@@ -32,7 +32,7 @@ Metoda: `grep` po `backend/` + definicje w [`migrations_admin.py`](../../backend
 | Umiejętności (**[S4b]**) | `linked_stat` z DB | `skill_linked_stat_for_test`, runtime config | Aliasy `melee_attack`↔`attack` | **Zgodne** |
 | Umiejętności (**[S4]**) | `rank_ceiling` vs ranga | Kolumna w skills + logika awansu | — | **Do weryfikacji** przy API awansu (nieblokujące dla T11) |
 | Broń / rzuty (**[S1]**) | `weapon_type` vs atak | `combat_service` / `dice` | Macierz **[S1]** | **Zgodne (T16):** runtime wybiera `melee_attack` / `ranged_attack` / `spell_attack` z broni i respektuje finesse / 2H |
-| Import (**[S7]**) | Pełny INSERT vs wąski | [`admin_config_transfer.py`](../../backend/app/services/admin_config_transfer.py): `import_catalog_snapshot` (dynamiczny), `import_config` (węższy) | Ryzyko ucięcia pól przy złym torze | **Świadome:** dokumentacja ostrzega; operator używa snapshotu przy pełnym katalogu |
+| Import (**[S7]**) | Pełny INSERT vs wąski | [`admin_config_transfer.py`](../../backend/app/services/admin_config_transfer.py): `import_catalog_snapshot` (dynamiczny), `import_config` (węższy) | Ryzyko ucięcia pól przy złym torze | **Zgodne po T19:** API/UI zwracają jawne ostrzeżenia przy `import_config` (snapshot-only tabele, rozszerzone kolumny broni, plik typu `catalog_snapshot`), a panel Game Design robi dry-run snapshotu przed commitem |
 
 *(Nowe luki dopisywać osobnym wierszem z datą.)*
 

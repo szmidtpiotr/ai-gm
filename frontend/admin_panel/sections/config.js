@@ -30,7 +30,7 @@ export async function init(container) {
 
   const top = el("div", "warning-banner warning-banner-orange");
   top.textContent =
-    "⚠️ Export the current configuration before bulk edits or before committing an import.";
+    "⚠️ Export the current configuration before bulk edits or before committing an import. Full catalog migrations should use Catalog Snapshot; Import Config is a narrower legacy path.";
   container.appendChild(top);
 
   const grid = el("div", "two-col-cards");
@@ -85,10 +85,13 @@ export async function init(container) {
 
   /** @type {Record<string, unknown> | null} */
   let lastParsed = null;
+  /** @type {string[]} */
+  let lastDryRunWarnings = [];
   fileInp.addEventListener("change", () => {
     dryBtn.disabled = !fileInp.files || !fileInp.files.length;
     commitBtn.disabled = true;
     lastParsed = null;
+    lastDryRunWarnings = [];
     diffWrap.hidden = true;
     diffWrap.innerHTML = "";
   });
@@ -100,6 +103,21 @@ export async function init(container) {
 
     const ver = dryJson.target_version != null ? String(dryJson.target_version) : String(parsed.config_version || "");
     diffWrap.appendChild(el("p", "config-version-line", `Config version: ${ver}`));
+
+    if (Array.isArray(dryJson.warnings) && dryJson.warnings.length) {
+      const warn = el("div", "warning-banner warning-banner-orange");
+      warn.appendChild(el("strong", "", "Warnings:"));
+      const list = el("ul", "");
+      dryJson.warnings.forEach((msg) => {
+        list.appendChild(el("li", "", String(msg)));
+      });
+      warn.appendChild(list);
+      diffWrap.appendChild(warn);
+    }
+
+    if (dryJson.note) {
+      diffWrap.appendChild(el("p", "muted", String(dryJson.note)));
+    }
 
     const adds = el("div", "config-diff-block");
     adds.appendChild(el("h5", "config-diff-sub", "✅ Rows to add (import file)"));
@@ -166,11 +184,16 @@ export async function init(container) {
         method: "POST",
         body: JSON.stringify(parsed),
       });
+      lastDryRunWarnings = Array.isArray(res?.warnings) ? res.warnings.map((x) => String(x)) : [];
       renderDiff(res, parsed);
       commitBtn.disabled = false;
-      showToast("Dry run complete.", "success");
+      showToast(
+        Array.isArray(res?.warnings) && res.warnings.length ? "Dry run complete with warnings." : "Dry run complete.",
+        "success",
+      );
     } catch (e) {
       lastParsed = null;
+      lastDryRunWarnings = [];
       commitBtn.disabled = true;
       diffWrap.hidden = true;
       showToast(e instanceof SyntaxError ? "Invalid JSON file." : parseApiError(e, "Dry run failed."), "error");
@@ -185,7 +208,12 @@ export async function init(container) {
       showToast("Run a dry run first.", "info");
       return;
     }
-    const ok = await showConfirm("Commit this import? Current config will be overwritten.", { dangerous: true });
+    const warningLines = lastDryRunWarnings;
+    const ok = await showConfirm(
+      "Commit this import? Current config will be overwritten." +
+        (warningLines.length ? `\n\nWarnings:\n- ${warningLines.join("\n- ")}` : ""),
+      { dangerous: true },
+    );
     if (!ok) {
       return;
     }
@@ -200,6 +228,7 @@ export async function init(container) {
       showToast("Import committed. Config version bumped.", "success");
       fileInp.value = "";
       lastParsed = null;
+      lastDryRunWarnings = [];
       diffWrap.hidden = true;
       diffWrap.innerHTML = "";
       dryBtn.disabled = true;
