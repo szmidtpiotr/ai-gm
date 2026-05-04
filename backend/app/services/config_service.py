@@ -55,6 +55,13 @@ def _default_config() -> dict[str, Any]:
                 "description": "Zdolność do skutecznego uderzenia: celowanie, siła i timing ataku.",
             },
             {
+                "key": "two_handed",
+                "label": "Two-Handed",
+                "linked_stat": "STR",
+                "rank_ceiling": 5,
+                "description": "Biegłość w prowadzeniu ciężkiej broni dwuręcznej bez utraty kontroli nad ciosem.",
+            },
+            {
                 "key": "awareness",
                 "label": "Awareness",
                 "linked_stat": "WIS",

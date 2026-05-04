@@ -407,7 +407,7 @@ def resolve_roll(
 
 def format_roll_result_message(roll_result: dict) -> str:
     """Legacy bracket line (tests); prefer format_roll_for_llm for GM-facing text."""
-    mod = roll_result["stat_mod"] + roll_result["skill_rank"] + roll_result["proficiency"]
+    mod = int(roll_result.get("modifier", 0))
     return (
         f"[Roll result: {roll_result['test']} — rolled "
         f"{roll_result['raw']} + {mod} = {roll_result['total']}]"
@@ -422,7 +422,7 @@ def _fmt_mod_pl(mod: int) -> str:
 
 def format_roll_for_llm(roll_result: dict) -> str:
     """Short Polish line for the narrative LLM user message after a /roll."""
-    mod = roll_result["stat_mod"] + roll_result["skill_rank"] + roll_result["proficiency"]
+    mod = int(roll_result.get("modifier", 0))
     parts = [
         f"Wynik rzutu ({roll_result['test']}): k20={roll_result['raw']}, "
         f"modyfikator {_fmt_mod_pl(mod)}, suma {roll_result['total']}"

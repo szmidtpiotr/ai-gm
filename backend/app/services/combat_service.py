@@ -15,6 +15,12 @@ from typing import Any
 
 from app.core.logging import get_logger
 from app.services.dice import parse_character_sheet, roll_d20
+from app.services.weapon_rules import (
+    load_weapon_row,
+    resolve_attack_roll_for_weapon,
+    resolve_sheet_weapon,
+    stat_modifier,
+)
 
 # Tests may monkeypatch this to a temp file path.
 COMBAT_DB_PATH = "/data/ai_gm.db"
@@ -64,9 +70,7 @@ def _conn() -> sqlite3.Connection:
 
 
 def _stat_mod(sheet: dict, stat: str) -> int:
-    stats = sheet.get("stats") if isinstance(sheet.get("stats"), dict) else {}
-    v = int(stats.get(stat, 10) or 10)
-    return (v - 10) // 2
+    return stat_modifier(sheet, stat)
 
 
 def _player_ac_from_sheet(sheet: dict) -> int:
@@ -109,33 +113,6 @@ def roll_damage_dice(expr: str, mod: int = 0) -> int:
     sides = int(m.group(2))
     total = sum(random.randint(1, sides) for _ in range(max(1, n)))
     return max(0, total + mod)
-
-
-def _weapon_key_from_sheet(sheet: dict) -> str | None:
-    w = sheet.get("equipped_weapon")
-    if w:
-        return str(w).strip()
-    eq = sheet.get("equipped")
-    if isinstance(eq, dict):
-        if eq.get("weapon_key"):
-            return str(eq["weapon_key"]).strip()
-    return None
-
-
-def _load_weapon_row(conn: sqlite3.Connection, key: str | None) -> sqlite3.Row | None:
-    if not key:
-        return None
-    return conn.execute(
-        "SELECT key, label, damage_die, linked_stat FROM game_config_weapons WHERE key = ?",
-        (key,),
-    ).fetchone()
-
-
-def _default_weapon_key(conn: sqlite3.Connection) -> str | None:
-    row = conn.execute(
-        "SELECT key FROM game_config_weapons ORDER BY key ASC LIMIT 1",
-    ).fetchone()
-    return str(row["key"]) if row else None
 
 
 def _enemy_slug(key: str, index: int) -> str:
@@ -831,7 +808,7 @@ def compute_player_attack_dodge_outcome(
 
 def resolve_attack(
     campaign_id: int,
-    roll_result: int,
+    roll_result: int | None,
     attacker: str = "player",
     raw_d20: int | None = None,
 ) -> dict[str, Any]:
@@ -888,7 +865,24 @@ def resolve_attack(
             if old_nm in ("", "wróg", "wrog", "enemy"):
                 enemy["name"] = card_name
 
+            weapon_row = resolve_sheet_weapon(conn, sheet)
+            attack_roll: dict[str, Any] | None = None
             player_raw = int(raw_d20) if raw_d20 is not None else None
+            if player_raw is not None:
+                attack_roll = resolve_attack_roll_for_weapon(
+                    sheet,
+                    raw_roll=player_raw,
+                    weapon_row=weapon_row,
+                )
+                out["attack_roll"] = attack_roll
+                out["attack_test"] = str(attack_roll.get("test") or "")
+                out["weapon_key"] = str(attack_roll.get("weapon_key") or "")
+                out["weapon_label"] = str(attack_roll.get("weapon_label") or "")
+                out["weapon_type"] = str(attack_roll.get("weapon_type") or "melee")
+                if roll_result is None:
+                    roll_result = int(attack_roll["total"])
+            elif roll_result is None:
+                raise ValueError("missing player attack roll")
             player_nat20 = player_raw == 20
             player_nat1 = player_raw == 1
             dodge_roll: dict[str, Any] | None = None
@@ -901,7 +895,7 @@ def resolve_attack(
                 raw_dodge = roll_d20()
                 dex_mod = int(enemy.get("dex_modifier") or 0)
                 dodged, hit, dodge_total = compute_player_attack_dodge_outcome(
-                    int(roll_result),
+                    int(roll_result or 0),
                     int(raw_dodge),
                     dex_mod,
                     player_raw,
@@ -911,7 +905,7 @@ def resolve_attack(
                     "modifier": dex_mod,
                     "total": dodge_total,
                     "dodged": dodged,
-                    "player_roll": int(roll_result),
+                    "player_roll": int(roll_result or 0),
                     "verdict": (
                         "hit"
                         if player_nat20
@@ -931,7 +925,7 @@ def resolve_attack(
             out["target_id"] = target_id
             out["target_name"] = card_name
             out["enemy_key"] = card_key
-            out["attack_total"] = int(roll_result)
+            out["attack_total"] = int(roll_result or 0)
             out["player_raw_d20"] = player_raw
             out["player_nat20"] = player_nat20
             out["player_nat1"] = player_nat1
@@ -942,7 +936,7 @@ def resolve_attack(
             _log_dice_roll_combat_resolve(
                 source="combat_attack",
                 campaign_id=campaign_id,
-                result_total=int(roll_result),
+                result_total=int(roll_result or 0),
                 dc=enemy_ac,
                 hit=bool(hit),
                 raw_d20=player_raw,
@@ -952,13 +946,16 @@ def resolve_attack(
             out["gold_drop"] = 0
             dmg = 0
             if hit:
-                wkey = _weapon_key_from_sheet(sheet) or _default_weapon_key(conn)
-                wrow = _load_weapon_row(conn, wkey)
+                wrow = weapon_row
                 die = "1d6"
                 stat = "STR"
                 if wrow:
-                    die = (wrow["damage_die"] or "1d6").strip().lower()
-                    stat = (wrow["linked_stat"] or "STR").upper()
+                    die = str(wrow.get("damage_die") or "1d6").strip().lower()
+                    stat = str(
+                        (attack_roll or {}).get("damage_stat")
+                        or wrow.get("linked_stat")
+                        or "STR"
+                    ).upper()
                 mod = _stat_mod(sheet, stat)
                 dmg = roll_damage_dice(die, mod)
                 out["damage"] = dmg

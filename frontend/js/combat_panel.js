@@ -224,15 +224,32 @@
     }
 
     _playerAttackRollDbLine(intent, characterName, d20, mod, total, data, combatVictory) {
+      const attackRoll =
+        data && data.attack_roll && typeof data.attack_roll === "object" ? data.attack_roll : {};
+      const resolvedTotal =
+        attackRoll.total != null && Number.isFinite(Number(attackRoll.total))
+          ? Number(attackRoll.total)
+          : total;
+      const resolvedMod =
+        attackRoll.modifier != null && Number.isFinite(Number(attackRoll.modifier))
+          ? Number(attackRoll.modifier)
+          : mod;
+      const attackStat = String(attackRoll.attack_stat || "STR").toUpperCase();
+      const attackSkill = String(attackRoll.test || "melee_attack");
+      const typeLabelMap = {
+        melee_attack: "ATAK WRĘCZ",
+        ranged_attack: "ATAK DYSTANSOWY",
+        spell_attack: "ATAK MAGICZNY",
+      };
       const hit = !!data.hit;
       const dmg = data.damage != null ? Number(data.damage) : null;
       const summary = hit
-        ? `Atakuję z wynikiem ${total} — trafiam za ${dmg != null ? dmg : "?"} obrażeń!`
+        ? `Atakuję z wynikiem ${resolvedTotal} — trafiam za ${dmg != null ? dmg : "?"} obrażeń!`
         : (data.player_nat1
-            ? `Atakuję z wynikiem ${total} — fatalnie pudłuję i tracę tempo ataku!`
+            ? `Atakuję z wynikiem ${resolvedTotal} — fatalnie pudłuję i tracę tempo ataku!`
             : (data.dodged
-            ? `Atakuję z wynikiem ${total} — przeciwnik uskakuje i unika ciosu!`
-            : `Atakuję z wynikiem ${total} — pudło!`));
+            ? `Atakuję z wynikiem ${resolvedTotal} — przeciwnik uskakuje i unika ciosu!`
+            : `Atakuję z wynikiem ${resolvedTotal} — pudło!`));
       const tac =
         data.target_ac != null && Number.isFinite(Number(data.target_ac))
           ? Number(data.target_ac)
@@ -242,10 +259,10 @@
         intent: (intent || "").trim(),
         summary_line: summary,
         character_name: characterName,
-        attack_label: "ATAK (STR)",
+        attack_label: typeLabelMap[attackSkill] || "ATAK",
         d20,
-        modifiers: [{ name: "STR", value: mod }],
-        total,
+        modifiers: [{ name: attackStat, value: resolvedMod }],
+        total: resolvedTotal,
         hit,
         damage: dmg != null ? dmg : 0,
         enemy_key: data.enemy_key != null ? String(data.enemy_key) : "",
@@ -959,9 +976,6 @@
           await window.loadCharacterSheet(window.state.selectedCharacterId);
         }
         const sheet = window.state.characterSheet || {};
-        const str = Number(sheet.stats?.STR ?? 10);
-        const mod = window.getStatModifier ? window.getStatModifier(str) : Math.floor((str - 10) / 2);
-
         const diceResp = await fetch("/api/gm/dice", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -970,11 +984,9 @@
         if (!diceResp.ok) throw new Error(`Kość: HTTP ${diceResp.status}`);
         const diceData = await diceResp.json();
         const d20 = Number(diceData.total ?? 0);
-        const total = d20 + mod;
 
         const atkTarget = this._currentPlayerAttackTarget();
         const resolveBody = {
-          roll_result: total,
           raw_d20: d20,
           attacker: "player",
         };
@@ -1032,6 +1044,16 @@
           typeof window.currentCharacterName === "function"
             ? window.currentCharacterName()
             : String(sheet.name || "Bohater");
+        const attackRoll =
+          data && data.attack_roll && typeof data.attack_roll === "object" ? data.attack_roll : {};
+        const attackMod =
+          attackRoll.modifier != null && Number.isFinite(Number(attackRoll.modifier))
+            ? Number(attackRoll.modifier)
+            : 0;
+        const attackTotal =
+          attackRoll.total != null && Number.isFinite(Number(attackRoll.total))
+            ? Number(attackRoll.total)
+            : d20 + attackMod;
         const enemyAc =
           atkTarget && atkTarget.defense != null ? Number(atkTarget.defense) : null;
         const dataForCard = {
@@ -1047,8 +1069,8 @@
           intentRaw,
           charName,
           d20,
-          mod,
-          total,
+          attackMod,
+          attackTotal,
           dataForCard,
           endedNow
         );

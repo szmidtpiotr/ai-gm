@@ -39,7 +39,7 @@
 | 13 | **T13** | [x] | Player rulebook: lekki rozdział **XP** (blok D agendy) | T12 (opcjonalnie równolegle po szkicu tabeli) | Blok **D** |
 | 14 | **T14** | [x] | **W2** (tabela `campaign_story_beats`): tylko jeśli T06–T07 niewystarczają — ADR + migracja | T06 | **[S11b]** |
 | 15 | **T15** | [x] | **Nowy akt** w tym samym `campaign_id`: trigger po głównym queście → ten sam LLM co start + narracja spinająca | T05, T06 | **[S11b]** |
-| 16 | **T16** | [ ] | **[IMPL] fala 2:** broń / `weapon_type` ↔ atak, finesse, dwuręczność | T11 częściowo | **[IMPL]**, **[S1]** |
+| 16 | **T16** | [x] | **[IMPL] fala 2:** broń / `weapon_type` ↔ atak, finesse, dwuręczność | T11 częściowo | **[IMPL]**, **[S1]** |
 | 17 | **T17** | [ ] | **[IMPL] fala 3:** `effect_json` + walidacja admin | T11 | **[IMPL]**, **[S13]** |
 | 18 | **T18** | [ ] | **[IMPL] fala 4:** warunki + konsumable / `item_key` | T17 | **[IMPL]**, **[S6]** |
 | 19 | **T19** | [ ] | **[IMPL] fala 5:** import / snapshot / ostrzeżenia | T11 | **[IMPL]**, **[S7]** |
@@ -518,7 +518,7 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 
 | ID | STATUS | Cel (jedno zdanie) | Główne pliki (orientacyjnie) |
 |----|--------|-------------------|------------------------------|
-| T16 | PENDING | Mapowanie `weapon_type` ↔ rodzaj ataku + finesse / dwuręczność | `combat_service.py`, `dice.py`, `game_config_weapons` |
+| T16 | DONE | Mapowanie `weapon_type` ↔ rodzaj ataku + finesse / dwuręczność | `combat_service.py`, `dice.py`, `game_config_weapons` |
 | T17 | PENDING | `effect_json` v0 + walidacja przy zapisie admina | `admin`, `items`, `conditions` |
 | T18 | PENDING | Konsumable / `item_key` / migracja loot | `loot_service`, migracje |
 | T19 | PENDING | Import: dokumentacja ryzyk + `catalog_snapshot` jako kanon | `admin_config_transfer.py`, docs |
@@ -527,11 +527,16 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 
 **Co zostało zrobione (T16–T21 — zbiorczo lub per ID)**
 
--
+- **T16:** dodany wspólny runtime [`weapon_rules.py`](../../backend/app/services/weapon_rules.py) — wybór testu ataku z `weapon_type` (`melee_attack` / `ranged_attack` / `spell_attack`), finesse = wybór lepszego **STR/DEX** dla ataku i obrażeń przy broni zwinnej, `two_handed` = modyfikator ataku przez skill `two_handed` (fallback alias `great_weapon`; MVP: **+1** z treningiem / **-2** bez).
+- **T16:** [`combat_service.py`](../../backend/app/services/combat_service.py) liczy `attack_roll` po stronie backendu na podstawie aktualnie wyposażonej broni; frontend panelu walki przestał zakładać stałe `STR`.
+- **T16:** `/roll` dla testów ataku w [`turns.py`](../../backend/app/api/turns.py) jest weapon-aware — backend bierze bieżącą broń postaci zamiast ślepo ufać aliasowi wpisanemu przez klienta.
+- **T16:** seed / default config dostał skill `two_handed`; testy: [`test_phase9b_t16_weapon_rules.py`](../../backend/tests/test_phase9b_t16_weapon_rules.py) + regresja [`test_phase8_combat.py`](../../backend/tests/test_phase8_combat.py).
 
 **Notatki po implementacji**
 
-- *Brak wdrożenia — po każdej zrealizowanej fali [IMPL] dopisać krótko per ID (pliki, ryzyka, zależności od T11).*
+- T16 **nie** dodaje jeszcze kolumn **[S12]** (`targeting`, `aoe_radius_m`, `magic_school`) ani pełnego sprawdzania zasięgu — to osobny follow-up schematu / taktyki.
+- MVP dla `two_handed` celowo daje prosty efekt **na atak**, nie mnoży jednocześnie premii do obrażeń; liczby można później zbalansować bez zmiany kontraktu `weapon_rules.py`.
+- **Restart backendu i frontendu wymagany** po wdrożeniu (backend combat + `/roll`, frontend panel walki).
 
 ---
 
@@ -545,6 +550,7 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T03 DONE** — player summary tylko z transkryptu, `audience` w generatorze, test regresyjny, restart backendu. |
 | 2026-05-04 | **T04 DONE** — GM summary dostaje `gm_plan_json` + transkrypt, osobny test, restart backendu. |
 | 2026-05-04 | **T15 DONE** — `new_act_service`: trigger po ukończeniu głównego questa, merge nowego łuku W1, tura narracji spinającej; test `test_phase9b_t15_new_act`. |
+| 2026-05-04 | **T16 DONE** — `weapon_rules`: `weapon_type` → test ataku, finesse, `two_handed`; backend combat liczy `attack_roll`, `/roll` ataku stał się weapon-aware; test `test_phase9b_t16_weapon_rules` + regresja combat. |
 | 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
 | 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
 | 2026-05-04 | **B01/B02 DONE** — `/api/settings/summary` + panel admin (cooldown rollupu, tryb dostępu do dual preview: `owner` / `owner_admin` / `off`); frontend i backend respektują tryb podglądu dual. |

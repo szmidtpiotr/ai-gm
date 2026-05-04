@@ -586,14 +586,15 @@ ADMIN_SEEDS = [
     ('athletics', 'Athletics', 'STR', 5, 2, 'Wysiłek fizyczny: bieganie, skoki, wspinaczka i dźwiganie.'),
     ('initiative', 'Initiative', 'DEX', 5, 3, 'Szybka reakcja i gotowość do działania. Odpowiada za tempo i pierwszeństwo w niebezpiecznych chwilach.'),
     ('attack', 'Attack', 'STR', 5, 4, 'Zdolność do skutecznego uderzenia: celowanie, siła i timing ataku.'),
-    ('awareness', 'Awareness', 'WIS', 5, 5, 'Wnikliwa obserwacja i czujność. Pomaga dostrzec zagrożenia, śledzić tropy i wyłapać drobne sygnały.'),
-    ('persuasion', 'Persuasion', 'CHA', 5, 6, 'Urok, argumenty i przekonywanie innych. Odpowiada za perswazję i rozmowę prowadzącą do zgody.'),
-    ('intimidation', 'Intimidation', 'CHA', 5, 7, 'Straszenie, stanowczość i presja psychiczna. Odpowiada za zastraszanie i wymuszanie reakcji.'),
-    ('survival', 'Survival', 'WIS', 5, 8, 'Przetrwanie w trudnych warunkach. Odpowiada za orientację, instynkt i decyzje w terenie.'),
-    ('lore', 'Lore', 'INT', 5, 9, 'Wiedza z opowieści i dawnych ksiąg. Odpowiada za rozpoznanie kultury, historii, symboli i opowieści świata.'),
-    ('arcana', 'Arcana', 'INT', 5, 10, 'Rozumienie magii i zjawisk magicznych. Odpowiada za rozpoznawanie zaklęć, rytuałów i sekretów arkanów.'),
-    ('medicine', 'Medicine', 'WIS', 5, 11, 'Udzielanie pomocy i leczenie. Odpowiada za ocenę ran, dobór środków i stabilizację w walce.'),
-    ('investigation', 'Investigation', 'INT', 5, 12, 'Dociekliwość i analizowanie szczegółów. Odpowiada za szukanie tropów, wyciąganie wniosków i składanie faktów.')
+    ('two_handed', 'Two-Handed', 'STR', 5, 5, 'Biegłość w prowadzeniu ciężkiej broni dwuręcznej bez utraty kontroli nad ciosem.'),
+    ('awareness', 'Awareness', 'WIS', 5, 6, 'Wnikliwa obserwacja i czujność. Pomaga dostrzec zagrożenia, śledzić tropy i wyłapać drobne sygnały.'),
+    ('persuasion', 'Persuasion', 'CHA', 5, 7, 'Urok, argumenty i przekonywanie innych. Odpowiada za perswazję i rozmowę prowadzącą do zgody.'),
+    ('intimidation', 'Intimidation', 'CHA', 5, 8, 'Straszenie, stanowczość i presja psychiczna. Odpowiada za zastraszanie i wymuszanie reakcji.'),
+    ('survival', 'Survival', 'WIS', 5, 9, 'Przetrwanie w trudnych warunkach. Odpowiada za orientację, instynkt i decyzje w terenie.'),
+    ('lore', 'Lore', 'INT', 5, 10, 'Wiedza z opowieści i dawnych ksiąg. Odpowiada za rozpoznanie kultury, historii, symboli i opowieści świata.'),
+    ('arcana', 'Arcana', 'INT', 5, 11, 'Rozumienie magii i zjawisk magicznych. Odpowiada za rozpoznawanie zaklęć, rytuałów i sekretów arkanów.'),
+    ('medicine', 'Medicine', 'WIS', 5, 12, 'Udzielanie pomocy i leczenie. Odpowiada za ocenę ran, dobór środków i stabilizację w walce.'),
+    ('investigation', 'Investigation', 'INT', 5, 13, 'Dociekliwość i analizowanie szczegółów. Odpowiada za szukanie tropów, wyciąganie wniosków i składanie faktów.')
     """,
     """
     INSERT OR IGNORE INTO game_config_dc (key, label, value, sort_order, description) VALUES

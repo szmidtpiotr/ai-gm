@@ -437,11 +437,16 @@ def build_narrative_messages(
             "Do not just say the player failed — add a narrative consequence."
         )
     else:
+        weapon_bonus = int(roll_result_data.get("weapon_bonus") or 0)
+        bonus_part = ""
+        if weapon_bonus:
+            bonus_part = f" + weapon: {weapon_bonus}"
         roll_context = (
             "ROLL RESULT: "
             f"{roll_result_data.get('test')} check — rolled {roll_result_data.get('total')} "
             f"(d20: {roll_result_data.get('raw')} + stat: {roll_result_data.get('stat_mod')} + "
-            f"skill: {roll_result_data.get('skill_rank')} + proficiency: {roll_result_data.get('proficiency')})"
+            f"skill: {roll_result_data.get('skill_rank')} + proficiency: {roll_result_data.get('proficiency')}"
+            f"{bonus_part})"
         )
 
     if roll_result_data.get("test") == "death_save":
