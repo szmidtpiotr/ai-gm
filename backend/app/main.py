@@ -141,6 +141,7 @@ RAW_MIGRATIONS = [
         summary_text TEXT NOT NULL,
         model_used TEXT,
         included_turn_count INTEGER,
+        audience TEXT NOT NULL DEFAULT 'player',
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """,

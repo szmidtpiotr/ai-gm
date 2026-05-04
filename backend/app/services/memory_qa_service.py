@@ -24,7 +24,7 @@ def _fetch_summary_corpus(conn: sqlite3.Connection, campaign_id: int) -> str:
         """
         SELECT id, summary_text, created_at
         FROM campaign_ai_summaries
-        WHERE campaign_id = ?
+        WHERE campaign_id = ? AND IFNULL(audience, 'player') = 'player'
         ORDER BY id ASC
         """,
         (campaign_id,),

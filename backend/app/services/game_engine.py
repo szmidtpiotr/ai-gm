@@ -355,9 +355,9 @@ def _inject_campaign_s11_context(
         block_parts.append(formatted)
 
     try:
-        from app.services.history_summary_service import fetch_latest_saved_summary
+        from app.services.history_summary_service import fetch_latest_saved_summary_for_narrative
 
-        saved = fetch_latest_saved_summary(conn, cid)
+        saved = fetch_latest_saved_summary_for_narrative(conn, cid)
     except sqlite3.OperationalError:
         saved = None
 

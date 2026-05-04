@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.api.turns import get_campaign_or_404, get_db
 from app.services.history_summary_service import (
+    SUMMARY_AUDIENCE_PLAYER,
     count_narrative_turns,
     fetch_latest_saved_summary,
     generate_campaign_summary,
@@ -19,6 +20,11 @@ def create_campaign_history_summary(
     user_id: int = Query(..., description="Must match campaign owner; used for per-user LLM settings."),
     max_turns: int = Query(200, ge=5, le=2000),
     persist: bool = Query(True, description="Zapisz wynik w tabeli campaign_ai_summaries (kanon poza Loki)."),
+    audience: str = Query(
+        SUMMARY_AUDIENCE_PLAYER,
+        pattern="^(player|gm)$",
+        description="[T02] Który stos rollupu zapisać (player vs gm).",
+    ),
 ):
     """
     Generuje podsumowanie z tur narracyjnych w SQLite (nie z logów Loki).
@@ -55,6 +61,7 @@ def create_campaign_history_summary(
                 summary_text=result["summary"],
                 model_used=str(result.get("model_used") or ""),
                 included_turn_count=int(result.get("included_turn_count") or 0),
+                audience=audience,
             )
         finally:
             conn.close()
@@ -67,6 +74,7 @@ def create_campaign_history_summary(
         "warning": result.get("warning"),
         "persisted": bool(summary_id),
         "summary_id": summary_id,
+        "audience": audience,
     }
 
 
@@ -76,6 +84,11 @@ def ensure_campaign_history_summary(
     user_id: int = Query(..., description="Must match campaign owner; LLM settings."),
     max_turns: int = Query(200, ge=5, le=2000),
     persist: bool = Query(True, description="Zapisz nowe podsumowanie w campaign_ai_summaries."),
+    audience: str = Query(
+        SUMMARY_AUDIENCE_PLAYER,
+        pattern="^(player|gm)$",
+        description="[T02] Który stos rollupu sprawdzać / odświeżać.",
+    ),
     stale_after_turns: int = Query(
         5,
         ge=1,
@@ -95,7 +108,7 @@ def ensure_campaign_history_summary(
         if int(campaign["owner_user_id"]) != int(user_id):
             raise HTTPException(status_code=403, detail="user_id must match campaign owner")
         narrative_n = count_narrative_turns(conn, campaign_id)
-        saved = fetch_latest_saved_summary(conn, campaign_id)
+        saved = fetch_latest_saved_summary(conn, campaign_id, audience=audience)
     finally:
         conn.close()
 
@@ -107,6 +120,7 @@ def ensure_campaign_history_summary(
             "model_used": row["model_used"],
             "included_turn_count": row["included_turn_count"],
             "created_at": row["created_at"],
+            "audience": row.get("audience", SUMMARY_AUDIENCE_PLAYER),
             "narrative_turn_count": narrative_n,
             "refreshed": refreshed,
         }
@@ -139,6 +153,7 @@ def ensure_campaign_history_summary(
             "model_used": None,
             "included_turn_count": int(result.get("included_turn_count") or 0),
             "created_at": None,
+            "audience": audience,
             "narrative_turn_count": narrative_n,
             "refreshed": False,
             "warning": result.get("warning"),
@@ -152,6 +167,7 @@ def ensure_campaign_history_summary(
             "model_used": result.get("model_used"),
             "included_turn_count": int(result.get("included_turn_count") or 0),
             "created_at": None,
+            "audience": audience,
             "narrative_turn_count": narrative_n,
             "refreshed": True,
             "warning": result.get("warning"),
@@ -165,8 +181,9 @@ def ensure_campaign_history_summary(
             summary_text=result["summary"],
             model_used=str(result.get("model_used") or ""),
             included_turn_count=int(result.get("included_turn_count") or 0),
+            audience=audience,
         )
-        row = fetch_latest_saved_summary(conn, campaign_id)
+        row = fetch_latest_saved_summary(conn, campaign_id, audience=audience)
     finally:
         conn.close()
 
@@ -180,14 +197,21 @@ def ensure_campaign_history_summary(
 
 
 @router.get("/campaigns/{campaign_id}/history/summary")
-def get_latest_campaign_history_summary(campaign_id: int):
+def get_latest_campaign_history_summary(
+    campaign_id: int,
+    audience: str = Query(
+        SUMMARY_AUDIENCE_PLAYER,
+        pattern="^(player|gm)$",
+        description="[T02] Który stos rollupu zwrócić.",
+    ),
+):
     """Ostatnio zapisane podsumowanie (jeśli było POST z persist=true)."""
     conn = get_db()
     try:
         get_campaign_or_404(conn, campaign_id)
-        row = fetch_latest_saved_summary(conn, campaign_id)
+        row = fetch_latest_saved_summary(conn, campaign_id, audience=audience)
         if not row:
-            return {"campaign_id": campaign_id, "summary": None}
+            return {"campaign_id": campaign_id, "summary": None, "audience": audience}
         return {
             "campaign_id": campaign_id,
             "summary_id": row["id"],
@@ -195,6 +219,7 @@ def get_latest_campaign_history_summary(campaign_id: int):
             "model_used": row["model_used"],
             "included_turn_count": row["included_turn_count"],
             "created_at": row["created_at"],
+            "audience": row.get("audience", audience),
         }
     finally:
         conn.close()
