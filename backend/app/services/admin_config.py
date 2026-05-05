@@ -513,7 +513,7 @@ def list_weapons() -> list[dict]:
     rows = _fetch_all(
         """
         SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-               two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, weight_kg, description, note,
+               two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note,
                is_active, locked_at, created_at, updated_at
         FROM game_config_weapons
         ORDER BY key ASC
@@ -844,6 +844,7 @@ def create_weapon(
     targeting: str = "single",
     aoe_radius_m: float | None = None,
     magic_school: str | None = None,
+    value_gp: int = 0,
     weight_kg: float = 0.0,
     note: str | None = None,
 ) -> dict:
@@ -853,6 +854,8 @@ def create_weapon(
     safe_weapon_type = _validate_weapon_type(weapon_type)
     safe_targeting, safe_aoe_radius_m = _validate_targeting_fields(targeting, aoe_radius_m)
     safe_magic_school = _normalize_magic_school(magic_school)
+    if int(value_gp) < 0:
+        raise ValueError("invalid_value_gp")
     if weight_kg < 0:
         raise ValueError("invalid_weight_kg")
 
@@ -870,9 +873,9 @@ def create_weapon(
             """
             INSERT INTO game_config_weapons (
                 key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, weight_kg, description, note,
+                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note,
                 is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -887,6 +890,7 @@ def create_weapon(
                 safe_targeting,
                 safe_aoe_radius_m,
                 safe_magic_school,
+                int(value_gp),
                 float(weight_kg),
                 description or "",
                 note,
@@ -897,7 +901,7 @@ def create_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, weight_kg, description, note,
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note,
                    is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
@@ -931,6 +935,7 @@ def update_weapon(
     targeting: str | None = None,
     aoe_radius_m: float | None = None,
     magic_school: str | None = None,
+    value_gp: int | None = None,
     weight_kg: float | None = None,
     note: str | None = None,
 ) -> dict:
@@ -942,7 +947,7 @@ def update_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, weight_kg, description, note,
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note,
                    is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
@@ -986,6 +991,9 @@ def update_weapon(
             final_magic_school = _normalize_magic_school(magic_school)
         else:
             final_magic_school = _normalize_magic_school(current.get("magic_school"))
+        final_value_gp = int(value_gp) if value_gp is not None else int(current.get("value_gp") or 0)
+        if final_value_gp < 0:
+            raise ValueError("invalid_value_gp")
         final_weight_kg = (
             float(weight_kg) if weight_kg is not None else float(current.get("weight_kg") or 0.0)
         )
@@ -998,7 +1006,7 @@ def update_weapon(
             UPDATE game_config_weapons
             SET label = ?, damage_die = ?, weapon_type = ?, linked_stat = ?, allowed_classes = ?,
                 two_handed = ?, finesse = ?, range_m = ?, targeting = ?, aoe_radius_m = ?, magic_school = ?,
-                weight_kg = ?, description = ?, note = ?,
+                value_gp = ?, weight_kg = ?, description = ?, note = ?,
                 is_active = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
@@ -1014,6 +1022,7 @@ def update_weapon(
                 final_targeting,
                 final_aoe_radius_m,
                 final_magic_school,
+                final_value_gp,
                 final_weight_kg,
                 final_desc,
                 final_note,
@@ -1025,7 +1034,7 @@ def update_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, weight_kg, description, note,
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note,
                    is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,

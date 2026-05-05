@@ -70,10 +70,12 @@ def test_create_weapon_aoe_and_single_validation(tmp_path, monkeypatch):
         targeting="aoe_radius",
         aoe_radius_m=3.5,
         magic_school="fire",
+        value_gp=125,
     )
     assert row["targeting"] == "aoe_radius"
     assert float(row["aoe_radius_m"]) == 3.5
     assert row["magic_school"] == "fire"
+    assert int(row["value_gp"]) == 125
 
     row2 = admin_config.create_weapon(
         key="shortsword_t22",
@@ -142,6 +144,34 @@ def test_admin_api_rejects_invalid_aoe(tmp_path, monkeypatch):
         )
         assert resp.status_code == 422
         assert "aoe_radius_m must be > 0" in resp.json()["detail"]
+    finally:
+        client.close()
+        app.dependency_overrides.pop(require_admin_token, None)
+
+
+def test_admin_api_accepts_value_gp(tmp_path, monkeypatch):
+    db = tmp_path / "t22_api_price.db"
+    _seed_db(str(db))
+    monkeypatch.setattr(admin_config, "DB_PATH", str(db))
+
+    app.dependency_overrides[require_admin_token] = lambda: None
+    client = TestClient(app)
+    try:
+        create = client.post(
+            "/api/admin/weapons",
+            json={
+                "key": "priced_wand",
+                "label": "Priced Wand",
+                "damage_die": "1d6",
+                "linked_stat": "DEX",
+                "allowed_classes": ["scholar"],
+                "weapon_type": "spell",
+                "targeting": "single",
+                "value_gp": 77,
+            },
+        )
+        assert create.status_code == 200, create.text
+        assert int(create.json()["item"]["value_gp"]) == 77
     finally:
         client.close()
         app.dependency_overrides.pop(require_admin_token, None)

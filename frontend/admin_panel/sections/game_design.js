@@ -519,6 +519,7 @@ async function refreshWeapons(host, statKeys) {
           formatDisplay: (row) => (row.aoe_radius_m != null && row.aoe_radius_m !== "" ? String(row.aoe_radius_m) : "—"),
         },
         { key: "magic_school", label: "School", editable: true },
+        { key: "value_gp", label: "Price GP", type: "number", editable: true },
         { key: "weight_kg", label: "Weight kg", type: "number", editable: true },
         { key: "description", label: "Description", editable: true },
         { key: "note", label: "Note", editable: true },
@@ -600,6 +601,14 @@ async function refreshWeapons(host, statKeys) {
             const s = String(newValue ?? "").trim();
             body.magic_school = s || null;
           }
+          if (key === "value_gp") {
+            const n = Number(newValue);
+            if (!Number.isFinite(n) || n < 0) {
+              showToast("value_gp must be >= 0", "error");
+              throw new Error("invalid_value_gp");
+            }
+            body.value_gp = Math.floor(n);
+          }
           if (key === "weight_kg") {
             body.weight_kg = Number(newValue);
           }
@@ -676,6 +685,7 @@ function mountWeapons(host, statKeys) {
       </label>
       <label class="field"><span>AOE radius (m)</span><input data-field="aoe_radius_m" type="number" step="any" placeholder="required for aoe_radius" /></label>
       <label class="field"><span>Magic school</span><input data-field="magic_school" type="text" placeholder="optional" /></label>
+      <label class="field"><span>Price (GP)</span><input data-field="value_gp" type="number" min="0" step="1" value="0" /></label>
       <label class="field"><span>Weight (kg)</span><input data-field="weight_kg" type="number" step="any" value="0" /></label>
       <label class="field add-form-span-2"><span>Description</span><input data-field="description" type="text" /></label>
       <label class="field add-form-span-2"><span>Note</span><input data-field="note" type="text" /></label>
@@ -724,6 +734,7 @@ function mountWeapons(host, statKeys) {
           patchKey: "magic_school",
           getValue: (r) => (r.magic_school == null || String(r.magic_school).trim() === "" ? null : String(r.magic_school)),
         },
+        { rawKey: "value_gp", patchKey: "value_gp", getValue: (r) => Number(r.value_gp) },
         { rawKey: "weight_kg", patchKey: "weight_kg", getValue: (r) => Number(r.weight_kg) },
         { rawKey: "note", patchKey: "note", getValue: (r) => (r.note == null || String(r.note).trim() === "" ? null : String(r.note)) },
         { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
@@ -779,6 +790,11 @@ function mountWeapons(host, statKeys) {
       aoe_radius_m = null;
     }
     const magicSchoolRaw = fields.querySelector('[data-field="magic_school"]').value.trim();
+    const value_gp = Number(fields.querySelector('[data-field="value_gp"]').value || 0);
+    if (!Number.isFinite(value_gp) || value_gp < 0) {
+      showToast("Price (GP) must be >= 0.", "info");
+      return;
+    }
     const noteRaw = fields.querySelector('[data-field="note"]').value.trim();
     const payload = {
       key: fields.querySelector('[data-field="key"]').value.trim(),
@@ -794,6 +810,7 @@ function mountWeapons(host, statKeys) {
       targeting,
       aoe_radius_m,
       magic_school: magicSchoolRaw || null,
+      value_gp: Math.floor(value_gp),
       weight_kg: Number(fields.querySelector('[data-field="weight_kg"]').value || 0),
       note: noteRaw || null,
       is_active: fields.querySelector('[data-field="is_active"]').checked,
@@ -3260,6 +3277,10 @@ function validateWeaponImportRow(raw, index, statKeys) {
   if (targeting === "aoe_radius" && (raw.aoe_radius_m == null || String(raw.aoe_radius_m).trim() === "")) {
     return `${label}: aoe_radius_m is required when targeting=aoe_radius`;
   }
+  const vgp = raw.value_gp != null ? Number(raw.value_gp) : 0;
+  if (!Number.isFinite(vgp) || vgp < 0) {
+    return `${label}: value_gp must be >= 0`;
+  }
   return null;
 }
 
@@ -3294,6 +3315,7 @@ function weaponImportRowToPayload(raw) {
     targeting,
     aoe_radius_m,
     magic_school: magicSchoolRaw || null,
+    value_gp: raw.value_gp != null ? Math.floor(Number(raw.value_gp)) : 0,
     weight_kg: raw.weight_kg != null ? Number(raw.weight_kg) : 0,
     note: noteRaw ? noteRaw : null,
     is_active: raw.is_active !== false && raw.is_active !== 0,
