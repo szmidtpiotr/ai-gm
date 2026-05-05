@@ -1,38 +1,35 @@
 ---
-description: Domyślne środowisko pracy — DEV (ai-gm), nie produkcja
+description: Pracuj tylko na serwerze DEV 192.168.1.61, bez lokalnego Dockera
 alwaysApply: true
 ---
 
-# Środowisko DEV — domyślne dla agenta
+# Środowisko DEV — tylko zdalnie
 
-W projekcie **ai-gm** wykonuj weryfikację, restarty Dockera i testy **w środowisku deweloperskim**, chyba że użytkownik wyraźnie wskaże produkcję.
+Repo w tym workspace jest **zmapowanym folderem NFS** z serwera `192.168.1.61`.
+Traktuj lokalną maszynę wyłącznie jako klienta edytora.
 
-## Nazewnictwo Docker (192.168.1.61 i lokalnie z `docker-compose.dev.yml`)
+## Twarde zasady
 
-- **Backend dev:** kontener `ai-gm-dev-backend-1` (projekt compose: `ai-gm-dev`, plik `docker-compose.dev.yml`).
-- **Frontend dev:** `ai-gm-dev-frontend-1` (port hosta **3002** → nginx).
-- **Test agent:** `ai-gm-dev-test-agent-1` (port **4000**).
-- **Produkcja (nie dotykać bez prośby):** `ai-gm-backend-1`, `ai-gm-frontend-1` itd. z głównego `docker-compose.yml`.
+- Wszystkie testy, buildy, restarty i komendy runtime wykonuj **wyłącznie przez SSH** na `piotrszmidt@192.168.1.61`.
+- **Nigdy** nie uruchamiaj lokalnie `docker compose up`, `docker build`, `pytest`, dev serverów ani innych obciążających procesów dla tego projektu.
+- Nie używaj lokalnych kontenerów jako środowiska testowego ani referencyjnego.
+- Pracujesz na plikach z katalogu zmapowanego do `/home/piotrszmidt/remote_mount/ai-gm`, ale egzekucja ma odbywać się na serwerze `.61`.
 
-## Porty (host)
+## Zdalne środowisko docelowe
 
-- API dev: **http://\<host\>:8100** (mapowanie 8100→8000 w kontenerze).
-- UI dev: **http://\<host\>:3002**.
+- Host SSH: `piotrszmidt@192.168.1.61`
+- Repo na serwerze: `/home/piotrszmidt/ai-gm`
+- Publiczna domena DEV do weryfikacji: `https://aigm-dev.studio-colorbox.com/`
+- Backend dev: `ai-gm-dev-backend-1`
+- Frontend dev: `ai-gm-dev-frontend-1`
+- Test agent dev: `ai-gm-dev-test-agent-1`
 
-## Obowiązki agenta
+## Restart i testy
 
-1. **Restart po zmianach backendu:** `docker restart ai-gm-dev-backend-1` (na serwerze przez SSH). Nie restartuj prod backendu, jeśli użytkownik nie poprosi.
-2. **pytest na serwerze:** uruchamiaj w kontenerze dev, np.  
-   `docker exec -w /app ai-gm-dev-backend-1 python -m pytest …`
-3. **Lokalny compose dev:** z katalogu repo  
-   `docker compose -f docker-compose.dev.yml up -d`  
-   (nie mieszać z prod `docker-compose.yml` na tych samych portach — patrz komentarze w `docker-compose.dev.yml`).
-4. **Baza dev:** w compose dev domyślnie volume `./data-dev` i `DATABASE_URL` wskazujący na **ai_gm_dev.db** (szczegóły w pliku compose).
+1. Po zmianach backendu/frontendu wykonaj wymagany restart lub rebuild **na `.61`**.
+2. `pytest` uruchamiaj na `.61` zgodnie z preferencją użytkownika, np. przez `docker exec` w dev backendzie albo przez SSH do serwera.
+3. Nie dotykaj produkcyjnych kontenerów (`ai-gm-backend-1`, `ai-gm-frontend-1`), jeśli użytkownik wyraźnie o to nie poprosi.
 
-## Wyjątek
+## Długie kroki
 
-Gdy użytkownik napisze jawnie **prod / produkcja / ai-gm-backend-1**, wtedy używaj stacku produkcyjnego.
-
-## Długie kroki (build, testy, SQLite)
-
-Pełna sekwencja wdrożenia dev i weryfikacji T01–T06: [`.cursor/skills/ai-gm-dev-deploy/SKILL.md`](../skills/ai-gm-dev-deploy/SKILL.md).
+Pełna sekwencja wdrożenia dev i weryfikacji: [`.cursor/skills/ai-gm-dev-deploy/SKILL.md`](../skills/ai-gm-dev-deploy/SKILL.md).

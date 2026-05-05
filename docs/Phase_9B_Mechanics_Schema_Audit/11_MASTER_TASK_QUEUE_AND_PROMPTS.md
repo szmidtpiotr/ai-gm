@@ -596,3 +596,4 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T09 DONE** — modal historii: baner + mapowanie błędów + fallback ostatniego skrótu + cooldown z ensure (T08). |
 | 2026-05-04 | Utworzono **`12_FOLLOW_UP_IMPLEMENTATION_QUEUE.md`** — kolejka T22–T32 + B03–B05 dla niewdrożonych uchwał Phase 9B (legacy front; [S20] na starym adminie). |
 | 2026-05-05 | **T22 DONE (kolejka follow-up)** — `game_config_weapons` ma `targeting` / `aoe_radius_m` / `magic_school`; admin API + legacy UI + testy T22. |
+| 2026-05-05 | **T23 DONE (kolejka follow-up)** — `game_config_enemies.skills_json` dodane w migracji, obsłużone w admin API/legacy UI/import JSON oraz utrwalane w stanie combat jako przygotowanie pod formuły konfrontacji z T30. |

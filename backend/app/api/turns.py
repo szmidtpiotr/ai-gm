@@ -325,6 +325,65 @@ def _maybe_advance_combat_after_player_narrative(campaign_id: int) -> dict | Non
     return {"combat_advanced": True, "new_combat_turn": new_turn}
 
 
+def _maybe_handle_blocked_player_combat_turn(
+    *,
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    character_id: int,
+    user_text: str,
+    turn_id: str,
+) -> dict | None:
+    from app.services import combat_service as cs
+
+    combat = cs.get_active_combat(campaign_id)
+    if not combat or str(combat.get("status") or "") != "active":
+        return None
+    if str(combat.get("current_turn") or "") != "player":
+        return None
+
+    turn_effects = cs.evaluate_current_turn_conditions(campaign_id)
+    if not turn_effects.get("blocked"):
+        return None
+
+    assistant_text = str(
+        turn_effects.get("message") or "Warunek blokuje akcję bohatera w tej turze."
+    ).strip()
+    if not assistant_text:
+        assistant_text = "Warunek blokuje akcję bohatera w tej turze."
+
+    log = create_turn_log(
+        conn=conn,
+        campaign_id=campaign_id,
+        character_id=character_id,
+        user_text=user_text,
+        assistant_text=assistant_text,
+        route="narrative",
+    )
+    log_narrative_turn_structured(
+        route="narrative",
+        campaign_id=campaign_id,
+        character_id=character_id,
+        turn_row=log,
+        user_text=user_text,
+        assistant_text=assistant_text,
+    )
+    combat_extra = _maybe_advance_combat_after_player_narrative(campaign_id)
+
+    out: dict[str, Any] = {
+        "id": log["id"],
+        "campaign_id": log["campaign_id"],
+        "turn_number": log["turn_number"],
+        "created_at": log["created_at"],
+        "route": "narrative",
+        "result": {"message": assistant_text},
+        "turn_id": turn_id,
+        "combat_state": cs.get_active_combat(campaign_id),
+    }
+    if combat_extra:
+        out.update(combat_extra)
+    return out
+
+
 def _trace_ids_for_story_log() -> tuple[str, str]:
     if _structlog_get_contextvars is None:
         return "", ""
@@ -1473,7 +1532,7 @@ def create_turn(
                         detail="Nieprawidłowy rzut: death_save przy HP > 0",
                     )
             if is_attack_test(roll_request.get("skill")):
-                weapon_row = resolve_sheet_weapon(conn, character_sheet)
+                weapon_row = resolve_sheet_weapon(conn, character_sheet, int(payload.character_id))
                 raw_roll = roll_request.get("raw_roll")
                 roll_result = resolve_attack_roll_for_weapon(
                     character_sheet,
@@ -1809,6 +1868,16 @@ def create_turn(
             llm_config=llm_config,
         )
 
+        blocked_turn = _maybe_handle_blocked_player_combat_turn(
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+            user_text=user_text_stored if roll_request else text,
+            turn_id=turn_id,
+        )
+        if blocked_turn is not None:
+            return blocked_turn
+
         result = run_narrative_turn(
             conn=conn,
             campaign=campaign,
@@ -2075,7 +2144,7 @@ def create_turn_stream(
                         headers=stream_headers,
                     )
             if is_attack_test(roll_request.get("skill")):
-                weapon_row = resolve_sheet_weapon(conn, character_sheet)
+                weapon_row = resolve_sheet_weapon(conn, character_sheet, int(payload.character_id))
                 raw_roll = roll_request.get("raw_roll")
                 roll_result = resolve_attack_roll_for_weapon(
                     character_sheet,
@@ -2279,6 +2348,33 @@ def create_turn_stream(
             combat_was_active = bool(combat_before) and str(
                 combat_before.get("current_turn") or ""
             ) == "player"
+
+            if combat_was_active:
+                blocked_conn = get_db()
+                try:
+                    blocked_turn = _maybe_handle_blocked_player_combat_turn(
+                        conn=blocked_conn,
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        user_text=user_text_val,
+                        turn_id=turn_id,
+                    )
+                finally:
+                    blocked_conn.close()
+                if blocked_turn is not None:
+                    clean_text = str(
+                        ((blocked_turn.get("result") or {}).get("message"))
+                        or "Warunek blokuje akcję bohatera w tej turze."
+                    )
+                    yield f"data: {clean_text}\n\n"
+                    combat_payload = {
+                        "combat_advanced": bool(blocked_turn.get("combat_advanced")),
+                        "new_combat_turn": blocked_turn.get("new_combat_turn"),
+                    }
+                    if combat_payload.get("combat_advanced") and combat_payload.get("new_combat_turn"):
+                        yield f"data: [COMBAT]{json.dumps(combat_payload, ensure_ascii=False)}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
 
             if gm_roll_pre_payload:
                 logger.info("combat_gm_roll_emit", campaign_id=campaign_id_val)

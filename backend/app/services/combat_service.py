@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.core.logging import get_logger
-from app.services.dice import parse_character_sheet, roll_d20
+from app.services.dice import parse_character_sheet, resolve_dc_for_roll, roll_d20
 from app.services.weapon_rules import (
     load_weapon_row,
     resolve_attack_roll_for_weapon,
@@ -93,6 +93,94 @@ def _sheet_conditions(sheet: dict) -> list[dict[str, Any]]:
     return [x for x in raw if isinstance(x, dict)]
 
 
+def _decode_effect_json(raw: Any) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return None
+        try:
+            parsed = json.loads(s)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else None
+    return None
+
+
+def _condition_effects(condition: dict[str, Any]) -> list[dict[str, Any]]:
+    parsed = _decode_effect_json(condition.get("effect_json"))
+    if not parsed:
+        return []
+    effects = parsed.get("effects")
+    if not isinstance(effects, list):
+        return []
+    return [entry for entry in effects if isinstance(entry, dict)]
+
+
+def _condition_effect_state(condition: dict[str, Any], effect_idx: int) -> dict[str, Any]:
+    runtime = condition.get("runtime")
+    if not isinstance(runtime, dict):
+        runtime = {}
+        condition["runtime"] = runtime
+    effect_state = runtime.get("effect_state")
+    if not isinstance(effect_state, dict):
+        effect_state = {}
+        runtime["effect_state"] = effect_state
+    key = str(effect_idx)
+    state = effect_state.get(key)
+    if not isinstance(state, dict):
+        state = {}
+        effect_state[key] = state
+    return state
+
+
+def _condition_turn_marker(round_n: int, actor_id: str) -> str:
+    return f"{int(round_n)}:{str(actor_id or '').strip()}"
+
+
+def _combatant_stat_modifier(
+    combatant: dict[str, Any],
+    *,
+    sheet: dict[str, Any] | None,
+    stat: str | None,
+) -> int:
+    stat_key = str(stat or "").strip().upper()
+    if not stat_key:
+        return 0
+    if isinstance(sheet, dict):
+        stats = sheet.get("stats") if isinstance(sheet.get("stats"), dict) else {}
+        try:
+            return (int(stats.get(stat_key, 10) or 10) - 10) // 2
+        except (TypeError, ValueError):
+            pass
+    stats = combatant.get("stats") if isinstance(combatant.get("stats"), dict) else {}
+    try:
+        if stat_key in stats:
+            return (int(stats.get(stat_key, 10) or 10) - 10) // 2
+    except (TypeError, ValueError):
+        pass
+    if stat_key == "DEX":
+        try:
+            return int(combatant.get("dex_modifier") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _condition_duration_rounds(expires: str) -> int | None:
+    raw = str(expires or "").strip().lower()
+    if not raw.startswith("duration_rounds:"):
+        return None
+    tail = raw.split(":", 1)[1].strip()
+    if not tail.isdigit():
+        return None
+    rounds = int(tail)
+    return rounds if rounds >= 1 else None
+
+
 def _ability_stats_seven(sheet: dict) -> dict[str, int]:
     """STR–CHA from sheet.stats plus speed (7 numeric fields for combat snapshot)."""
     raw = sheet.get("stats")
@@ -127,10 +215,30 @@ def _enemy_slug(key: str, index: int) -> str:
     return f"{safe}_{index:02d}"
 
 
+def _parse_enemy_skills(raw: Any) -> dict[str, int]:
+    try:
+        parsed = json.loads(raw) if raw else {}
+    except (TypeError, ValueError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    out: dict[str, int] = {}
+    for k, v in parsed.items():
+        key = str(k).strip().lower()
+        if not key:
+            continue
+        try:
+            out[key] = int(v)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def _fetch_enemy_row(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
     return conn.execute(
         """
         SELECT key, label, hp_base, ac_base, attack_bonus, damage_die, dex_modifier,
+               skills_json,
                tier,
                loot_table_key, drop_chance, COALESCE(xp_award, 0) AS xp_award
         FROM game_config_enemies
@@ -500,6 +608,231 @@ def _log_combat_end_event(conn: sqlite3.Connection, row: sqlite3.Row, reason: st
     )
 
 
+def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
+    """
+    T24: process runtime `effect_json` condition effects for the actor whose turn is active.
+
+    Supported minimal set:
+    - `periodic_save`
+    - `block_action`
+
+    Effects are processed once per actor-turn. Successful `periodic_save` with
+    `expires=save_success` removes the condition before checking `block_action`.
+    """
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            return {"blocked": False, "events": [], "combat_state": None}
+
+        combatants: list[dict[str, Any]] = json.loads(row["combatants"] or "[]")
+        actor_id = str(row["current_turn"] or "").strip()
+        round_n = int(row["round"] or 1)
+        actor = _find_combatant(combatants, actor_id)
+        if not actor or int(actor.get("hp_current", 0) or 0) <= 0:
+            return {
+                "blocked": False,
+                "actor_id": actor_id,
+                "events": [],
+                "combat_state": _row_to_combat_dict(row),
+            }
+
+        actor_type = str(actor.get("type") or "").strip().lower()
+        sheet: dict[str, Any] | None = None
+        if actor_type == "player":
+            ch_row = conn.execute(
+                "SELECT sheet_json FROM characters WHERE id = ? LIMIT 1",
+                (int(row["character_id"]),),
+            ).fetchone()
+            if ch_row:
+                sheet = parse_character_sheet(ch_row["sheet_json"])
+                if not isinstance(sheet, dict):
+                    sheet = {}
+
+        source_conditions = actor.get("conditions") or []
+        conditions: list[dict[str, Any]] = []
+        for entry in source_conditions:
+            if isinstance(entry, dict):
+                conditions.append(dict(entry))
+
+        events: list[dict[str, Any]] = []
+        blocked = False
+        conditions_changed = False
+        runtime_changed = False
+        next_conditions: list[dict[str, Any]] = []
+        marker = _condition_turn_marker(round_n, actor_id)
+
+        for condition in conditions:
+            key = str(condition.get("key") or "").strip().lower()
+            label = str(condition.get("label") or key or "warunek").strip() or "warunek"
+            effects = _condition_effects(condition)
+            remove_condition = False
+
+            for effect_idx, effect in enumerate(effects):
+                effect_type = str(effect.get("type") or "").strip().lower()
+                if effect_type != "periodic_save":
+                    continue
+                tick = str(effect.get("tick") or "").strip().lower()
+                if tick not in {"start_turn", "each_round"}:
+                    continue
+                state = _condition_effect_state(condition, effect_idx)
+                if str(state.get("last_turn_marker") or "") == marker:
+                    continue
+                state["last_turn_marker"] = marker
+                runtime_changed = True
+
+                stat_key = str(effect.get("stat") or "").strip().upper() or None
+                modifier = _combatant_stat_modifier(actor, sheet=sheet, stat=stat_key)
+                raw_roll = int(roll_d20())
+                dc_value = resolve_dc_for_roll(effect.get("dc_key") or effect.get("value"))
+                dc_final = int(dc_value or 0)
+                total = int(raw_roll) + int(modifier)
+                success = raw_roll == 20 or (raw_roll != 1 and total >= dc_final)
+                state["last_raw_roll"] = int(raw_roll)
+                state["last_total"] = int(total)
+                state["last_dc"] = int(dc_final)
+                state["last_success"] = bool(success)
+
+                events.append(
+                    {
+                        "type": "periodic_save",
+                        "condition_key": key,
+                        "condition_label": label,
+                        "stat": stat_key,
+                        "raw_roll": int(raw_roll),
+                        "modifier": int(modifier),
+                        "total": int(total),
+                        "dc": int(dc_final),
+                        "success": bool(success),
+                    }
+                )
+
+                expires = str(effect.get("expires") or "").strip().lower()
+                duration_rounds = _condition_duration_rounds(expires)
+                if duration_rounds is not None:
+                    remaining = state.get("remaining_rounds")
+                    if not isinstance(remaining, int) or remaining < 1:
+                        remaining = duration_rounds
+                    remaining -= 1
+                    state["remaining_rounds"] = remaining
+                    runtime_changed = True
+                    if remaining <= 0:
+                        remove_condition = True
+
+                if success and expires == "save_success":
+                    remove_condition = True
+
+                if remove_condition:
+                    events.append(
+                        {
+                            "type": "condition_removed",
+                            "condition_key": key,
+                            "condition_label": label,
+                            "reason": "save_success" if success and expires == "save_success" else "duration_expired",
+                        }
+                    )
+                    conditions_changed = True
+                    break
+
+            if remove_condition:
+                continue
+
+            for effect in effects:
+                effect_type = str(effect.get("type") or "").strip().lower()
+                if effect_type != "block_action":
+                    continue
+                blocked = True
+                events.append(
+                    {
+                        "type": "block_action",
+                        "condition_key": key,
+                        "condition_label": label,
+                    }
+                )
+
+            next_conditions.append(condition)
+
+        if conditions_changed or runtime_changed:
+            actor["conditions"] = next_conditions
+            _persist_combatants(conn, row, combatants)
+
+        if conditions_changed and actor_type == "player" and isinstance(sheet, dict):
+            stripped_conditions: list[dict[str, Any]] = []
+            for condition in next_conditions:
+                stripped_conditions.append(
+                    {
+                        "key": condition.get("key"),
+                        "label": condition.get("label"),
+                        "effect_json": condition.get("effect_json"),
+                        "source_item_key": condition.get("source_item_key"),
+                        "applied_at": condition.get("applied_at"),
+                    }
+                )
+            sheet["conditions"] = stripped_conditions
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+            )
+
+        if events:
+            combat_id = int(row["id"])
+            for event in events:
+                event_type = str(event.get("type") or "condition")
+                narrative = ""
+                if event_type == "periodic_save":
+                    verdict = "sukces" if event.get("success") else "porażka"
+                    stat_label = str(event.get("stat") or "save")
+                    narrative = (
+                        f"{event['condition_label']}: rzut obronny {stat_label} "
+                        f"{event['total']} vs DC {event['dc']} ({verdict})."
+                    )
+                elif event_type == "condition_removed":
+                    narrative = f"{event['condition_label']}: efekt ustępuje."
+                elif event_type == "block_action":
+                    narrative = f"{event['condition_label']}: akcja zablokowana w tej turze."
+                log_combat_turn(
+                    conn,
+                    combat_id=combat_id,
+                    campaign_id=int(campaign_id),
+                    turn_number=_next_combat_log_sequence(conn, combat_id),
+                    actor=actor_id or actor_type or "system",
+                    event_type=event_type,
+                    target_id=actor_id or None,
+                    target_name=str(actor.get("name") or actor_id or "") or None,
+                    hit=None,
+                    narrative=narrative,
+                )
+
+        conn.commit()
+
+    combat_state = load_combat_snapshot(campaign_id)
+    message_lines: list[str] = []
+    for event in events:
+        event_type = str(event.get("type") or "")
+        if event_type == "periodic_save":
+            verdict = "sukces" if event.get("success") else "porażka"
+            stat_label = str(event.get("stat") or "save")
+            message_lines.append(
+                f"{event['condition_label']}: rzut obronny {stat_label} "
+                f"{event['total']} vs DC {event['dc']} ({verdict})."
+            )
+        elif event_type == "condition_removed":
+            message_lines.append(f"{event['condition_label']}: efekt ustępuje.")
+        elif event_type == "block_action":
+            message_lines.append(f"{event['condition_label']}: nie możesz wykonać akcji w tej turze.")
+
+    return {
+        "blocked": bool(blocked),
+        "actor_id": actor_id,
+        "actor_type": actor_type,
+        "events": events,
+        "message": "\n".join(message_lines).strip(),
+        "combat_state": combat_state,
+    }
+
+
 def list_combat_turns_for_campaign(campaign_id: int, limit: int = 50) -> list[dict[str, Any]]:
     snap = load_combat_snapshot(campaign_id)
     if not snap:
@@ -697,6 +1030,8 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                     "drop_chance": float(er["drop_chance"] if er["drop_chance"] is not None else 1.0),
                     "xp_award": xp_award_e,
                     "tier": str(er["tier"] or "standard"),
+                    # Stored now for opposed checks in upcoming [S1b] formulas (T30).
+                    "skills": _parse_enemy_skills(er["skills_json"]),
                 }
             )
             turn_slots.append((slug, init_e, idx))
@@ -823,6 +1158,22 @@ def resolve_attack(
     attacker: 'player' uses roll_result as total attack vs enemy dodge roll.
     attacker: 'enemy' ignores roll_result; rolls d20+attack_bonus internally vs player AC.
     """
+    turn_effects = evaluate_current_turn_conditions(campaign_id)
+    if turn_effects.get("blocked"):
+        blocked_actor = str(turn_effects.get("actor_id") or "").strip()
+        blocked_for_attacker = (attacker == "player" and blocked_actor == "player") or (
+            attacker == "enemy" and blocked_actor and blocked_actor != "player"
+        )
+        if blocked_for_attacker:
+            return {
+                "attacker": attacker,
+                "hit": False,
+                "blocked": True,
+                "message": str(turn_effects.get("message") or "Akcja zablokowana."),
+                "condition_events": turn_effects.get("events") or [],
+                "combat_state": turn_effects.get("combat_state"),
+            }
+
     with _conn() as conn:
         row = conn.execute(
             "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
@@ -872,7 +1223,7 @@ def resolve_attack(
             if old_nm in ("", "wróg", "wrog", "enemy"):
                 enemy["name"] = card_name
 
-            weapon_row = resolve_sheet_weapon(conn, sheet)
+            weapon_row = resolve_sheet_weapon(conn, sheet, ch_id)
             attack_roll: dict[str, Any] | None = None
             player_raw = int(raw_d20) if raw_d20 is not None else None
             if player_raw is not None:
@@ -952,6 +1303,27 @@ def resolve_attack(
             loot: list[dict] = []
             out["gold_drop"] = 0
             dmg = 0
+            player_attack_log_meta = None
+            if attack_roll:
+                player_attack_log_meta = json.dumps(
+                    {
+                        "raw_d20": int(player_raw) if player_raw is not None else None,
+                        "attack_test": str(attack_roll.get("test") or ""),
+                        "attack_stat": str(attack_roll.get("attack_stat") or ""),
+                        "attack_label": {
+                            "melee_attack": "ATAK WRĘCZ",
+                            "ranged_attack": "ATAK DYSTANSOWY",
+                            "spell_attack": "ATAK MAGICZNY",
+                        }.get(str(attack_roll.get("test") or ""), "ATAK"),
+                        "modifier": int(attack_roll.get("modifier") or 0),
+                        "total": int(attack_roll.get("total") or roll_result or 0),
+                        "weapon_key": str(attack_roll.get("weapon_key") or ""),
+                        "weapon_label": str(attack_roll.get("weapon_label") or ""),
+                        "weapon_type": str(attack_roll.get("weapon_type") or ""),
+                    },
+                    ensure_ascii=False,
+                )
+
             if hit:
                 wrow = weapon_row
                 die = "1d6"
@@ -1083,7 +1455,7 @@ def resolve_attack(
                             target_id=target_id,
                             target_name=str(enemy.get("name") or "") or None,
                             hit=True,
-                            narrative=None,
+                            narrative=player_attack_log_meta,
                         )
                         _persist_combatants_and_maybe_end(
                             conn,
@@ -1118,7 +1490,7 @@ def resolve_attack(
                 target_id=target_id,
                 target_name=str(enemy.get("name") or "") or None,
                 hit=bool(hit),
-                narrative=None,
+                narrative=player_attack_log_meta,
             )
 
             _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)

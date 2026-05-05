@@ -363,6 +363,23 @@ def _validate_conditions_immune(values: list[str] | None) -> str:
     return json.dumps(out, ensure_ascii=False)
 
 
+def _validate_enemy_skills_json(values: dict[str, int] | None) -> str:
+    if values is None:
+        return "{}"
+    if not isinstance(values, dict):
+        raise ValueError("invalid_skills_json")
+    out: dict[str, int] = {}
+    for raw_k, raw_v in values.items():
+        k = str(raw_k).strip().lower()
+        if not KEY_RE.fullmatch(k):
+            raise ValueError("invalid_skills_json")
+        try:
+            out[k] = int(raw_v)
+        except (TypeError, ValueError):
+            raise ValueError("invalid_skills_json") from None
+    return json.dumps(out, ensure_ascii=False)
+
+
 def _validate_effect_dice(effect_dice: str | None) -> str | None:
     if effect_dice is None or not str(effect_dice).strip():
         return None
@@ -534,7 +551,7 @@ def list_enemies() -> list[dict]:
         """
         SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                tier, attacks_per_turn, damage_bonus, damage_type,
-               xp_award, conditions_immune, loot_table_key, drop_chance, note,
+               xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
                description, is_active, locked_at, created_at, updated_at
         FROM game_config_enemies
         ORDER BY key ASC
@@ -545,6 +562,11 @@ def list_enemies() -> list[dict]:
             row["conditions_immune"] = json.loads(row.get("conditions_immune") or "[]")
         except Exception:
             row["conditions_immune"] = []
+        try:
+            parsed_sk = json.loads(row.get("skills_json") or "{}")
+            row["skills_json"] = parsed_sk if isinstance(parsed_sk, dict) else {}
+        except Exception:
+            row["skills_json"] = {}
         if row.get("drop_chance") is None:
             row["drop_chance"] = 1.0
         else:
@@ -1134,6 +1156,7 @@ def create_enemy(
     drop_chance: float = 1.0,
     note: str | None = None,
     dex_modifier: int = 0,
+    skills_json: dict[str, int] | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     safe_drop = _validate_drop_chance(drop_chance)
@@ -1151,6 +1174,7 @@ def create_enemy(
     safe_tier = _validate_tier(tier)
     safe_damage_type = _validate_damage_type(damage_type)
     ci_json = _validate_conditions_immune(conditions_immune if conditions_immune is not None else [])
+    safe_skills_json = _validate_enemy_skills_json(skills_json)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1169,9 +1193,9 @@ def create_enemy(
             INSERT INTO game_config_enemies (
                 key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                 tier, attacks_per_turn, damage_bonus, damage_type,
-                xp_award, conditions_immune, loot_table_key, drop_chance, note,
+                xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
                 description, is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -1187,6 +1211,7 @@ def create_enemy(
                 safe_damage_type,
                 xp_award,
                 ci_json,
+                safe_skills_json,
                 loot_table_key,
                 safe_drop,
                 note,
@@ -1199,7 +1224,7 @@ def create_enemy(
             """
             SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
-                   xp_award, conditions_immune, loot_table_key, drop_chance, note,
+                   xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at
             FROM game_config_enemies WHERE key = ?
             """,
@@ -1210,6 +1235,11 @@ def create_enemy(
                 new_row["conditions_immune"] = json.loads(new_row.get("conditions_immune") or "[]")
             except Exception:
                 new_row["conditions_immune"] = []
+            try:
+                parsed_sk = json.loads(new_row.get("skills_json") or "{}")
+                new_row["skills_json"] = parsed_sk if isinstance(parsed_sk, dict) else {}
+            except Exception:
+                new_row["skills_json"] = {}
             if new_row.get("drop_chance") is not None:
                 new_row["drop_chance"] = float(new_row["drop_chance"])
         _audit(conn, "game_config_enemies", safe_key, "CREATE", None, new_row)
@@ -1240,6 +1270,7 @@ def update_enemy(
     note: str | None = None,
     drop_chance: float | None = None,
     dex_modifier: int | None = None,
+    skills_json: dict[str, int] | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1250,7 +1281,7 @@ def update_enemy(
             """
             SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
-                   xp_award, conditions_immune, loot_table_key, drop_chance, note,
+                   xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at
             FROM game_config_enemies WHERE key = ?
             """,
@@ -1289,6 +1320,11 @@ def update_enemy(
             if conditions_immune is not None
             else (current.get("conditions_immune") or "[]")
         )
+        final_skills = (
+            _validate_enemy_skills_json(skills_json)
+            if skills_json is not None
+            else (current.get("skills_json") or "{}")
+        )
         final_loot = current.get("loot_table_key")
         if loot_table_key is not None:
             if loot_table_key == "":
@@ -1308,7 +1344,7 @@ def update_enemy(
             UPDATE game_config_enemies
             SET label = ?, hp_base = ?, ac_base = ?, attack_bonus = ?, dex_modifier = ?, damage_die = ?,
                 tier = ?, attacks_per_turn = ?, damage_bonus = ?, damage_type = ?,
-                xp_award = ?, conditions_immune = ?, loot_table_key = ?, drop_chance = ?, note = ?,
+                xp_award = ?, conditions_immune = ?, skills_json = ?, loot_table_key = ?, drop_chance = ?, note = ?,
                 description = ?, is_active = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
@@ -1325,6 +1361,7 @@ def update_enemy(
                 final_dmg_type,
                 final_xp,
                 final_ci,
+                final_skills,
                 final_loot,
                 final_drop,
                 final_note,
@@ -1338,7 +1375,7 @@ def update_enemy(
             """
             SELECT key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die,
                    tier, attacks_per_turn, damage_bonus, damage_type,
-                   xp_award, conditions_immune, loot_table_key, drop_chance, note,
+                   xp_award, conditions_immune, skills_json, loot_table_key, drop_chance, note,
                    description, is_active, locked_at, created_at, updated_at
             FROM game_config_enemies WHERE key = ?
             """,
@@ -1349,6 +1386,11 @@ def update_enemy(
                 new_row["conditions_immune"] = json.loads(new_row.get("conditions_immune") or "[]")
             except Exception:
                 new_row["conditions_immune"] = []
+            try:
+                parsed_sk = json.loads(new_row.get("skills_json") or "{}")
+                new_row["skills_json"] = parsed_sk if isinstance(parsed_sk, dict) else {}
+            except Exception:
+                new_row["skills_json"] = {}
             if new_row.get("drop_chance") is not None:
                 new_row["drop_chance"] = float(new_row["drop_chance"])
         cur_audit = dict(current)
@@ -1356,6 +1398,11 @@ def update_enemy(
             cur_audit["conditions_immune"] = json.loads(cur_audit.get("conditions_immune") or "[]")
         except Exception:
             cur_audit["conditions_immune"] = []
+        try:
+            parsed_cur_sk = json.loads(cur_audit.get("skills_json") or "{}")
+            cur_audit["skills_json"] = parsed_cur_sk if isinstance(parsed_cur_sk, dict) else {}
+        except Exception:
+            cur_audit["skills_json"] = {}
         _audit(conn, "game_config_enemies", safe_key, "UPDATE", cur_audit, new_row)
         conn.commit()
         return new_row or {}

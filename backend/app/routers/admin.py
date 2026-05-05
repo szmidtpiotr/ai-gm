@@ -318,6 +318,7 @@ class EnemyCreateReq(BaseModel):
     damage_type: str = "physical"
     xp_award: int = 0
     conditions_immune: list[str] = []
+    skills_json: dict[str, int] = {}
     loot_table_key: str | None = None
     drop_chance: float = 1.0
     note: str | None = None
@@ -339,6 +340,7 @@ class EnemyPatchReq(BaseModel):
     damage_type: str | None = None
     xp_award: int | None = None
     conditions_immune: list[str] | None = None
+    skills_json: dict[str, int] | None = None
     loot_table_key: str | None = None
     drop_chance: float | None = None
     note: str | None = None
@@ -868,6 +870,7 @@ def admin_create_enemy(req: EnemyCreateReq, _: None = Depends(require_admin_toke
             damage_type=req.damage_type,
             xp_award=req.xp_award,
             conditions_immune=req.conditions_immune,
+            skills_json=req.skills_json,
             loot_table_key=req.loot_table_key,
             drop_chance=req.drop_chance,
             note=req.note,
@@ -900,6 +903,8 @@ def admin_create_enemy(req: EnemyCreateReq, _: None = Depends(require_admin_toke
             raise HTTPException(status_code=422, detail="xp_award must be >= 0") from None
         if str(e) == "invalid_conditions_immune":
             raise HTTPException(status_code=422, detail="conditions_immune must be a list of valid condition keys") from None
+        if str(e) == "invalid_skills_json":
+            raise HTTPException(status_code=422, detail="skills_json must be an object: {skill_key: integer_rank_or_bonus}") from None
         if str(e) == "invalid_loot_table_key":
             raise HTTPException(status_code=422, detail="loot_table_key must reference an existing loot table") from None
         if str(e) == "invalid_drop_chance":
@@ -925,6 +930,7 @@ def admin_patch_enemy(key: str, req: EnemyPatchReq, _: None = Depends(require_ad
             damage_type=req.damage_type,
             xp_award=req.xp_award,
             conditions_immune=req.conditions_immune,
+            skills_json=req.skills_json,
             loot_table_key=req.loot_table_key,
             note=req.note,
             drop_chance=req.drop_chance,
@@ -960,6 +966,8 @@ def admin_patch_enemy(key: str, req: EnemyPatchReq, _: None = Depends(require_ad
             raise HTTPException(status_code=422, detail="xp_award must be >= 0") from None
         if str(e) == "invalid_conditions_immune":
             raise HTTPException(status_code=422, detail="conditions_immune must be a list of valid condition keys") from None
+        if str(e) == "invalid_skills_json":
+            raise HTTPException(status_code=422, detail="skills_json must be an object: {skill_key: integer_rank_or_bonus}") from None
         if str(e) == "invalid_loot_table_key":
             raise HTTPException(status_code=422, detail="loot_table_key must reference an existing loot table") from None
         if str(e) == "invalid_drop_chance":

@@ -407,7 +407,15 @@ def resolve_roll(
 
 def format_roll_result_message(roll_result: dict) -> str:
     """Legacy bracket line (tests); prefer format_roll_for_llm for GM-facing text."""
-    mod = int(roll_result.get("modifier", 0))
+    if "modifier" in roll_result:
+        mod = int(roll_result.get("modifier", 0))
+    else:
+        mod = (
+            int(roll_result.get("stat_mod", 0))
+            + int(roll_result.get("skill_rank", 0))
+            + int(roll_result.get("proficiency", 0))
+            + int(roll_result.get("weapon_bonus", 0))
+        )
     return (
         f"[Roll result: {roll_result['test']} — rolled "
         f"{roll_result['raw']} + {mod} = {roll_result['total']}]"

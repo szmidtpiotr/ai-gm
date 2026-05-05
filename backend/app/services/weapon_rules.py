@@ -54,6 +54,42 @@ def weapon_key_from_sheet(sheet: dict[str, Any]) -> str | None:
     return None
 
 
+def _normalize_catalog_weapon_key(raw: str | None) -> str | None:
+    """Inventory sometimes stores `weapon_shortbow`; catalog keys are `shortbow`."""
+    if not raw:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    low = s.lower()
+    if low.startswith("weapon_") and len(s) > 7:
+        return s[7:].strip() or None
+    return s
+
+
+def weapon_key_from_inventory(conn: sqlite3.Connection, character_id: int) -> str | None:
+    """Equipped weapon in main hand from Phase 8E inventory (not mirrored in sheet_json)."""
+    try:
+        row = conn.execute(
+            """
+            SELECT weapon_key FROM character_inventory
+            WHERE character_id = ?
+              AND COALESCE(equipped, 0) = 1
+              AND LOWER(TRIM(COALESCE(slot, ''))) = 'main_hand'
+              AND weapon_key IS NOT NULL
+              AND TRIM(weapon_key) != ''
+            ORDER BY id ASC
+            LIMIT 1
+            """,
+            (int(character_id),),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    if not row or row["weapon_key"] is None:
+        return None
+    return str(row["weapon_key"]).strip() or None
+
+
 def _normalize_weapon_row(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if not row:
         return None
@@ -105,8 +141,17 @@ def default_weapon_row(conn: sqlite3.Connection) -> dict[str, Any] | None:
     return _normalize_weapon_row(row)
 
 
-def resolve_sheet_weapon(conn: sqlite3.Connection, sheet: dict[str, Any]) -> dict[str, Any] | None:
-    return load_weapon_row(conn, weapon_key_from_sheet(sheet)) or default_weapon_row(conn)
+def resolve_sheet_weapon(
+    conn: sqlite3.Connection,
+    sheet: dict[str, Any],
+    character_id: int | None = None,
+) -> dict[str, Any] | None:
+    key = weapon_key_from_sheet(sheet)
+    if not key and character_id is not None:
+        inv_raw = weapon_key_from_inventory(conn, int(character_id))
+        key = _normalize_catalog_weapon_key(inv_raw)
+    row = load_weapon_row(conn, key) if key else None
+    return row or default_weapon_row(conn)
 
 
 def effective_attack_stat_for_weapon(sheet: dict[str, Any], weapon_row: dict[str, Any] | None) -> str:
