@@ -159,6 +159,7 @@ def test_import_config_dry_run_warns_about_narrow_weapon_schema(transfer_db):
             "weapon_type": "melee",
             "finesse": 1,
             "range_m": 2,
+            "targeting_profile_json": {"shape": "cone"},
         }
     ]
 
@@ -166,9 +167,7 @@ def test_import_config_dry_run_warns_about_narrow_weapon_schema(transfer_db):
 
     assert result["ok"] is True
     joined = " ".join(result["warnings"])
-    assert "weapon_type" in joined
-    assert "finesse" in joined
-    assert "range_m" in joined
+    assert "targeting_profile_json" in joined
 
 
 def test_import_catalog_snapshot_dry_run_warns_that_meta_is_ignored():

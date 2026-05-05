@@ -20,7 +20,7 @@
 
 | Lp | ID | Gotowe | Zadanie (skrót) | Zależność | Uchwały / ślad w dokach |
 |----|-----|:------:|-----------------|-----------|-------------------------|
-| 22 | **T22** | [ ] | **[S12]** Migracja `game_config_weapons`: `targeting`, `aoe_radius_m`, `magic_school`; seed; admin CRUD; `import_catalog_snapshot`; walidacja aplikacyjna ([`07` §1](07_extended_design_spec.md)) | — | [S12], `06` broń/czary |
+| 22 | **T22** | [x] | **[S12]** Migracja `game_config_weapons`: `targeting`, `aoe_radius_m`, `magic_school`; seed; admin CRUD; `import_catalog_snapshot`; walidacja aplikacyjna ([`07` §1](07_extended_design_spec.md)) | — | [S12], `06` broń/czary |
 | 23 | **T23** | [ ] | **[S14]** Kolumna `game_config_enemies.skills_json` + zapis/odczyt; użycie w konfrontacjach / przygotowanie pod **[S1b]** ([`07` §5](07_extended_design_spec.md)) | — | [S14], `06` wrogowie |
 | 24 | **T24** | [ ] | **[S6]** Runtime turowy: obsługa wybranych typów z `effect_json` — min. `periodic_save`, `block_action` w pętli walki / stanie postaci (obecnie częściowo tylko przy consumables) | T17† | `06` warunki |
 | 25 | **T25** | [ ] | **[S13] cleanup:** migracja treści z płaskich `effect_*` wyłącznie do `effect_json`; potem migracja schematu usuwająca legacy kolumny (etapami, z dry-run) | T17, T18 | `06` przedmioty |
@@ -93,3 +93,4 @@
 | Data | Zmiana |
 |------|--------|
 | 2026-05-04 | Utworzenie kolejki T22–T32 + backlog B03–B05; zakres bez nowego frontu gry; [S20] na legacy adminie. |
+| 2026-05-05 | **T22 DONE** — dodane pola `targeting`, `aoe_radius_m`, `magic_school` w `game_config_weapons`; walidacja API/admin + legacy UI; testy `test_phase9b_t22_weapon_targeting.py`. |

@@ -17,8 +17,12 @@ from app.services.admin_accounts import (
     update_account,
 )
 from app.services.admin_campaigns import (
+    advance_campaign_scene_admin,
+    get_campaign_gm_plan_admin,
     list_campaigns_by_owner,
+    regenerate_campaign_gm_plan_admin,
     regenerate_campaign_summary_admin,
+    replace_campaign_gm_plan_admin,
 )
 from app.services.admin_character_recreate import (
     delete_character_admin,
@@ -218,6 +222,16 @@ class ConfigImportReq(BaseModel):
     notes: str | None = None
 
 
+class AdminGmPlanPutReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    gm_plan_json: dict
+
+
+class AdminAdvanceSceneReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    note: str = Field(default="", max_length=2000)
+
+
 class SlashCommandItemReq(BaseModel):
     command: str
     description: str = Field(..., max_length=4000)
@@ -254,6 +268,9 @@ class WeaponCreateReq(BaseModel):
     two_handed: bool = False
     finesse: bool = False
     range_m: int | None = None
+    targeting: str = "single"
+    aoe_radius_m: float | None = None
+    magic_school: str | None = None
     weight_kg: float = 0.0
     note: str | None = None
     is_active: bool = True
@@ -270,6 +287,9 @@ class WeaponPatchReq(BaseModel):
     two_handed: bool | None = None
     finesse: bool | None = None
     range_m: int | None = None
+    targeting: str | None = None
+    aoe_radius_m: float | None = None
+    magic_school: str | None = None
     weight_kg: float | None = None
     note: str | None = None
     is_active: bool | None = None
@@ -707,6 +727,9 @@ def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_to
             two_handed=req.two_handed,
             finesse=req.finesse,
             range_m=req.range_m,
+            targeting=req.targeting,
+            aoe_radius_m=req.aoe_radius_m,
+            magic_school=req.magic_school,
             weight_kg=req.weight_kg,
             note=req.note,
             is_active=req.is_active,
@@ -725,6 +748,15 @@ def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_to
             raise HTTPException(status_code=422, detail="allowed_classes must be subset of [warrior,ranger,scholar]") from None
         if str(e) == "invalid_weapon_type":
             raise HTTPException(status_code=422, detail="weapon_type must be one of: melee, ranged, spell") from None
+        if str(e) == "invalid_targeting":
+            raise HTTPException(status_code=422, detail="targeting must be one of: single, aoe_radius") from None
+        if str(e) == "invalid_aoe_radius_m":
+            raise HTTPException(
+                status_code=422,
+                detail="aoe_radius_m must be > 0 when targeting=aoe_radius (null for targeting=single)",
+            ) from None
+        if str(e) == "invalid_magic_school":
+            raise HTTPException(status_code=422, detail="magic_school max length is 80 chars") from None
         if str(e) == "invalid_weight_kg":
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
         raise HTTPException(status_code=422, detail="Invalid weapon payload") from None
@@ -744,6 +776,9 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             two_handed=req.two_handed,
             finesse=req.finesse,
             range_m=req.range_m,
+            targeting=req.targeting,
+            aoe_radius_m=req.aoe_radius_m,
+            magic_school=req.magic_school,
             weight_kg=req.weight_kg,
             note=req.note,
             is_active=req.is_active,
@@ -765,6 +800,15 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             raise HTTPException(status_code=422, detail="allowed_classes must be subset of [warrior,ranger,scholar]") from None
         if str(e) == "invalid_weapon_type":
             raise HTTPException(status_code=422, detail="weapon_type must be one of: melee, ranged, spell") from None
+        if str(e) == "invalid_targeting":
+            raise HTTPException(status_code=422, detail="targeting must be one of: single, aoe_radius") from None
+        if str(e) == "invalid_aoe_radius_m":
+            raise HTTPException(
+                status_code=422,
+                detail="aoe_radius_m must be > 0 when targeting=aoe_radius (null for targeting=single)",
+            ) from None
+        if str(e) == "invalid_magic_school":
+            raise HTTPException(status_code=422, detail="magic_school max length is 80 chars") from None
         if str(e) == "invalid_weight_kg":
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
         raise HTTPException(status_code=422, detail="Invalid weapon payload") from None
@@ -1620,6 +1664,51 @@ def admin_regenerate_campaign_summary(
         raise HTTPException(status_code=404, detail="Campaign not found") from None
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from None
+
+
+@router.get("/admin/campaigns/{campaign_id}/gm-plan")
+def admin_get_campaign_gm_plan(campaign_id: int, _: None = Depends(require_admin_token)):
+    try:
+        return get_campaign_gm_plan_admin(campaign_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Campaign not found") from None
+
+
+@router.put("/admin/campaigns/{campaign_id}/gm-plan")
+def admin_put_campaign_gm_plan(
+    campaign_id: int,
+    req: AdminGmPlanPutReq,
+    _: None = Depends(require_admin_token),
+):
+    try:
+        return replace_campaign_gm_plan_admin(campaign_id, req.gm_plan_json)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Campaign not found") from None
+
+
+@router.post("/admin/campaigns/{campaign_id}/gm-plan/advance-scene")
+def admin_advance_campaign_scene(
+    campaign_id: int,
+    req: AdminAdvanceSceneReq,
+    _: None = Depends(require_admin_token),
+):
+    try:
+        return advance_campaign_scene_admin(campaign_id, note=req.note)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Campaign not found") from None
+
+
+@router.post("/admin/campaigns/{campaign_id}/gm-plan/regenerate-initial")
+def admin_regenerate_campaign_gm_plan(
+    campaign_id: int,
+    _: None = Depends(require_admin_token),
+):
+    try:
+        return regenerate_campaign_gm_plan_admin(campaign_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Campaign not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e) or "GM plan regeneration failed") from None
 
 
 @router.get("/admin/characters")

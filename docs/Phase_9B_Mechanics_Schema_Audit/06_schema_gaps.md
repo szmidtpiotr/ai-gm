@@ -15,7 +15,7 @@ Metoda: `grep` po `backend/` + definicje w [`migrations_admin.py`](../../backend
 
 | Obszar | Potrzeba mechaniczna | Czy jest kolumna / tabela? | Uwagi | **T11** |
 |--------|----------------------|----------------------------|--------|---------|
-| Broń / magia ([S1]) | Magia: cel vs **AOE**, szkoła / zasięg | **`targeting`**, **`aoe_radius_m`**, **`magic_school`** — **[S12]** w specyfikacji | Mapa/siatka — **[S19]** (poza MVP silnika) | **Otwarte:** brak tych kolumn w `game_config_weapons`; runtime T16 domknął `weapon_type ↔ attack`, ale schema **[S12]** nadal czeka na osobną migrację |
+| Broń / magia ([S1]) | Magia: cel vs **AOE**, szkoła / zasięg | **`targeting`**, **`aoe_radius_m`**, **`magic_school`** — **[S12]** w specyfikacji | Mapa/siatka — **[S19]** (poza MVP silnika) | **Częściowo (T22):** kolumny istnieją w `game_config_weapons` + admin CRUD/legacy UI; nadal bez solvera mapy (zgodnie z [S19]) |
 | Umiejętności ([S1]) | **Dwuręczność** + modyfikatory | `game_config_skills` + arkusz | Klucze vs `dice` | **Zgodne (T16):** seed `two_handed` + runtime bonus/kara przy broni 2H |
 | Umiejętności (**[S4]** / **[S10]**–**[S10e]**) | XP, koszty, magazyn | meta `xp_skill_rank_costs`, granty, `xp_award` na wrogach | **`game_config_xp_rewards`** (**[S10e]** / **T12**) | **Zgodne:** tier fallback przy `xp_award=0`; grant MG z `reward_key`; seed + admin GET/PATCH |
 | Cechy bazowe (**[S10a]** / **[S3]**) | Podnoszenie statu za XP | meta **`xp_stat_point_costs`**, **`xp_stat_value_ceiling`**; `sheet_json.stats` | Klucz musi istnieć w **`game_config_stats`** | **Zgodne (T21):** `POST /api/characters/{id}/xp/spend-stat`; koszt = przejście **do** wartości N (JSON jak dla rang skill) |

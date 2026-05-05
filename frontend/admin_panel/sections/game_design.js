@@ -505,6 +505,20 @@ async function refreshWeapons(host, statKeys) {
           editable: true,
           formatDisplay: (row) => (row.range_m != null && row.range_m !== "" ? String(row.range_m) : "—"),
         },
+        {
+          key: "targeting",
+          label: "Targeting",
+          editable: true,
+          editType: "select",
+          editOptions: ["single", "aoe_radius"],
+        },
+        {
+          key: "aoe_radius_m",
+          label: "AOE m",
+          editable: true,
+          formatDisplay: (row) => (row.aoe_radius_m != null && row.aoe_radius_m !== "" ? String(row.aoe_radius_m) : "—"),
+        },
+        { key: "magic_school", label: "School", editable: true },
         { key: "weight_kg", label: "Weight kg", type: "number", editable: true },
         { key: "description", label: "Description", editable: true },
         { key: "note", label: "Note", editable: true },
@@ -557,6 +571,34 @@ async function refreshWeapons(host, statKeys) {
               }
               body.range_m = n;
             }
+          }
+          if (key === "targeting") {
+            const t = String(newValue || "").trim().toLowerCase();
+            if (!["single", "aoe_radius"].includes(t)) {
+              showToast("targeting must be single or aoe_radius", "error");
+              throw new Error("invalid_targeting");
+            }
+            body.targeting = t;
+            if (t === "single") {
+              body.aoe_radius_m = null;
+            }
+          }
+          if (key === "aoe_radius_m") {
+            const s = String(newValue ?? "").trim();
+            if (s === "") {
+              body.aoe_radius_m = null;
+            } else {
+              const n = Number(s);
+              if (!Number.isFinite(n) || n <= 0) {
+                showToast("aoe_radius_m must be > 0 or empty.", "error");
+                throw new Error("invalid_aoe_radius_m");
+              }
+              body.aoe_radius_m = n;
+            }
+          }
+          if (key === "magic_school") {
+            const s = String(newValue ?? "").trim();
+            body.magic_school = s || null;
           }
           if (key === "weight_kg") {
             body.weight_kg = Number(newValue);
@@ -626,6 +668,14 @@ function mountWeapons(host, statKeys) {
       <label class="field"><span>Two-handed</span><input data-field="two_handed" type="checkbox" /></label>
       <label class="field"><span>Finesse</span><input data-field="finesse" type="checkbox" /></label>
       <label class="field"><span>Range (m)</span><input data-field="range_m" type="number" placeholder="optional" /></label>
+      <label class="field"><span>Targeting</span>
+        <select data-field="targeting">
+          <option value="single" selected>single</option>
+          <option value="aoe_radius">aoe_radius</option>
+        </select>
+      </label>
+      <label class="field"><span>AOE radius (m)</span><input data-field="aoe_radius_m" type="number" step="any" placeholder="required for aoe_radius" /></label>
+      <label class="field"><span>Magic school</span><input data-field="magic_school" type="text" placeholder="optional" /></label>
       <label class="field"><span>Weight (kg)</span><input data-field="weight_kg" type="number" step="any" value="0" /></label>
       <label class="field add-form-span-2"><span>Description</span><input data-field="description" type="text" /></label>
       <label class="field add-form-span-2"><span>Note</span><input data-field="note" type="text" /></label>
@@ -663,6 +713,17 @@ function mountWeapons(host, statKeys) {
         { rawKey: "two_handed", patchKey: "two_handed", getValue: (r) => !!r.two_handed },
         { rawKey: "finesse", patchKey: "finesse", getValue: (r) => !!r.finesse },
         { rawKey: "range_m", patchKey: "range_m", getValue: (r) => (r.range_m == null || r.range_m === "" ? null : Number(r.range_m)) },
+        { rawKey: "targeting", patchKey: "targeting", getValue: (r) => String(r.targeting || "single").trim().toLowerCase() },
+        {
+          rawKey: "aoe_radius_m",
+          patchKey: "aoe_radius_m",
+          getValue: (r) => (r.aoe_radius_m == null || r.aoe_radius_m === "" ? null : Number(r.aoe_radius_m)),
+        },
+        {
+          rawKey: "magic_school",
+          patchKey: "magic_school",
+          getValue: (r) => (r.magic_school == null || String(r.magic_school).trim() === "" ? null : String(r.magic_school)),
+        },
         { rawKey: "weight_kg", patchKey: "weight_kg", getValue: (r) => Number(r.weight_kg) },
         { rawKey: "note", patchKey: "note", getValue: (r) => (r.note == null || String(r.note).trim() === "" ? null : String(r.note)) },
         { rawKey: "is_active", patchKey: "is_active", getValue: (r) => r.is_active !== false && r.is_active !== 0 },
@@ -696,6 +757,28 @@ function mountWeapons(host, statKeys) {
         return;
       }
     }
+    const aoeRaw = fields.querySelector('[data-field="aoe_radius_m"]').value.trim();
+    let aoe_radius_m = null;
+    if (aoeRaw) {
+      aoe_radius_m = Number(aoeRaw);
+      if (!Number.isFinite(aoe_radius_m) || aoe_radius_m <= 0) {
+        showToast("AOE radius (m) must be > 0.", "info");
+        return;
+      }
+    }
+    const targeting = fields.querySelector('[data-field="targeting"]').value.trim().toLowerCase();
+    if (!["single", "aoe_radius"].includes(targeting)) {
+      showToast("Targeting must be single or aoe_radius.", "info");
+      return;
+    }
+    if (targeting === "aoe_radius" && aoe_radius_m == null) {
+      showToast("AOE radius is required when targeting=aoe_radius.", "info");
+      return;
+    }
+    if (targeting === "single") {
+      aoe_radius_m = null;
+    }
+    const magicSchoolRaw = fields.querySelector('[data-field="magic_school"]').value.trim();
     const noteRaw = fields.querySelector('[data-field="note"]').value.trim();
     const payload = {
       key: fields.querySelector('[data-field="key"]').value.trim(),
@@ -708,6 +791,9 @@ function mountWeapons(host, statKeys) {
       two_handed: fields.querySelector('[data-field="two_handed"]').checked,
       finesse: fields.querySelector('[data-field="finesse"]').checked,
       range_m,
+      targeting,
+      aoe_radius_m,
+      magic_school: magicSchoolRaw || null,
       weight_kg: Number(fields.querySelector('[data-field="weight_kg"]').value || 0),
       note: noteRaw || null,
       is_active: fields.querySelector('[data-field="is_active"]').checked,
@@ -3161,6 +3247,19 @@ function validateWeaponImportRow(raw, index, statKeys) {
       return `${label}: range_m must be a number or null`;
     }
   }
+  const targeting = String(raw.targeting || "single").trim().toLowerCase();
+  if (!["single", "aoe_radius"].includes(targeting)) {
+    return `${label}: targeting must be single or aoe_radius`;
+  }
+  if (raw.aoe_radius_m != null && String(raw.aoe_radius_m).trim() !== "") {
+    const ar = Number(raw.aoe_radius_m);
+    if (!Number.isFinite(ar) || ar <= 0) {
+      return `${label}: aoe_radius_m must be > 0 or null`;
+    }
+  }
+  if (targeting === "aoe_radius" && (raw.aoe_radius_m == null || String(raw.aoe_radius_m).trim() === "")) {
+    return `${label}: aoe_radius_m is required when targeting=aoe_radius`;
+  }
   return null;
 }
 
@@ -3169,7 +3268,16 @@ function weaponImportRowToPayload(raw) {
   if (raw.range_m != null && String(raw.range_m).trim() !== "") {
     range_m = Number(raw.range_m);
   }
+  let aoe_radius_m = null;
+  if (raw.aoe_radius_m != null && String(raw.aoe_radius_m).trim() !== "") {
+    aoe_radius_m = Number(raw.aoe_radius_m);
+  }
+  const targeting = String(raw.targeting || "single").trim().toLowerCase();
+  if (targeting === "single") {
+    aoe_radius_m = null;
+  }
   const noteRaw = raw.note != null ? String(raw.note).trim() : "";
+  const magicSchoolRaw = raw.magic_school != null ? String(raw.magic_school).trim() : "";
   return {
     key: String(raw.key).trim(),
     label: String(raw.label).trim(),
@@ -3183,6 +3291,9 @@ function weaponImportRowToPayload(raw) {
     two_handed: !!(raw.two_handed === true || raw.two_handed === 1),
     finesse: !!(raw.finesse === true || raw.finesse === 1),
     range_m,
+    targeting,
+    aoe_radius_m,
+    magic_school: magicSchoolRaw || null,
     weight_kg: raw.weight_kg != null ? Number(raw.weight_kg) : 0,
     note: noteRaw ? noteRaw : null,
     is_active: raw.is_active !== false && raw.is_active !== 0,
