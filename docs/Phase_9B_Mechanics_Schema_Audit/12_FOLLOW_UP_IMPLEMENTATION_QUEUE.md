@@ -1,7 +1,7 @@
 # Kolejka następcza — Phase 9B (po T01–T21)
 
 <!-- QUEUE_STATUS: ACTIVE -->
-<!-- LAST_UPDATE: 2026-05-04 -->
+<!-- LAST_UPDATE: 2026-05-05 -->
 <!-- MASTER_DONE: T01–T21 → patrz [`11_MASTER_TASK_QUEUE_AND_PROMPTS.md`](11_MASTER_TASK_QUEUE_AND_PROMPTS.md) -->
 
 **Cel:** Jedna lista **ustaleń z audytu** ([`04_decisions_log.md`](04_decisions_log.md), [`06_schema_gaps.md`](06_schema_gaps.md), [`07_extended_design_spec.md`](07_extended_design_spec.md), [`08_open_decisions_checklist.md`](08_open_decisions_checklist.md)), które **nie są** jeszcze domknięte w kodzie — z wyłączeniem rzeczy świadomie odłożonych (np. mapa taktyczna **[S19]**).
@@ -21,8 +21,8 @@
 | Lp | ID | Gotowe | Zadanie (skrót) | Zależność | Uchwały / ślad w dokach |
 |----|-----|:------:|-----------------|-----------|-------------------------|
 | 22 | **T22** | [x] | **[S12]** Migracja `game_config_weapons`: `targeting`, `aoe_radius_m`, `magic_school`; seed; admin CRUD; `import_catalog_snapshot`; walidacja aplikacyjna ([`07` §1](07_extended_design_spec.md)) | — | [S12], `06` broń/czary |
-| 23 | **T23** | [ ] | **[S14]** Kolumna `game_config_enemies.skills_json` + zapis/odczyt; użycie w konfrontacjach / przygotowanie pod **[S1b]** ([`07` §5](07_extended_design_spec.md)) | — | [S14], `06` wrogowie |
-| 24 | **T24** | [ ] | **[S6]** Runtime turowy: obsługa wybranych typów z `effect_json` — min. `periodic_save`, `block_action` w pętli walki / stanie postaci (obecnie częściowo tylko przy consumables) | T17† | `06` warunki |
+| 23 | **T23** | [x] | **[S14]** Kolumna `game_config_enemies.skills_json` + zapis/odczyt; użycie w konfrontacjach / przygotowanie pod **[S1b]** ([`07` §5](07_extended_design_spec.md)) | — | [S14], `06` wrogowie |
+| 24 | **T24** | [x] | **[S6]** Runtime turowy: obsługa wybranych typów z `effect_json` — min. `periodic_save`, `block_action` w pętli walki / stanie postaci (obecnie częściowo tylko przy consumables) | T17† | [S6], `06` warunki |
 | 25 | **T25** | [ ] | **[S13] cleanup:** migracja treści z płaskich `effect_*` wyłącznie do `effect_json`; potem migracja schematu usuwająca legacy kolumny (etapami, z dry-run) | T17, T18 | `06` przedmioty |
 | 26 | **T26** | [ ] | **[S7a]** Backup bazy / artefaktu przed `import_catalog_snapshot` / `import_config` + polityka retencji kopii ([`04`](04_decisions_log.md), [`00_brief.md`](00_brief.md)) | T19 | import |
 | 27 | **T27** | [ ] | **[S18]** Centralny resolver LLM: jedna ścieżka wyboru providera/modelu/klucza dla narracji, panelu admina i testów; hierarchia Default vs Custom; dokumentacja `env` | — | [S18], `07` §12 |
@@ -94,3 +94,5 @@
 |------|--------|
 | 2026-05-04 | Utworzenie kolejki T22–T32 + backlog B03–B05; zakres bez nowego frontu gry; [S20] na legacy adminie. |
 | 2026-05-05 | **T22 DONE** — dodane pola `targeting`, `aoe_radius_m`, `magic_school` w `game_config_weapons`; walidacja API/admin + legacy UI; testy `test_phase9b_t22_weapon_targeting.py`. |
+| 2026-05-05 | **T24 DONE** — runtime warunków w walce obsługuje `periodic_save` i `block_action` na starcie tury; blokada omija LLM dla gracza i zatrzymuje atak wroga; testy `test_phase9b_t24_condition_runtime.py` + regresja `test_phase8_combat.py`; wymagany rebuild backendu DEV. |
+| 2026-05-05 | **T24 follow-up DONE** — domknięty osobny blocker baseline po T24: `game_engine.build_narrative_messages()` obsługuje testowe `conn=None` / `MagicMock()` bez wejścia w ścieżki DB, a `format_roll_result_message()` znów wspiera starsze payloady bez `modifier`; baseline i test `test_game_engine_death.py` wróciły do zielonego stanu. |

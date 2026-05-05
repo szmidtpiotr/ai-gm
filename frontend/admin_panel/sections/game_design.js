@@ -852,6 +852,7 @@ async function refreshEnemies(host) {
     const rows = (data.items || []).map((r) => ({
       ...r,
       _ci: Array.isArray(r.conditions_immune) ? JSON.stringify(r.conditions_immune) : "[]",
+      _skills: r.skills_json && typeof r.skills_json === "object" ? JSON.stringify(r.skills_json) : "{}",
       _drop_pct: Math.round((r.drop_chance != null ? Number(r.drop_chance) : 1) * 100),
     }));
     renderGameDesignTable(
@@ -885,6 +886,7 @@ async function refreshEnemies(host) {
           editOptions: ["physical", "magic", "fire", "poison", "misc"],
         },
         { key: "xp_award", label: "XP", type: "number", editable: true },
+        { key: "_skills", label: "Skills JSON", type: "textarea", editable: true },
         {
           key: "loot_table_key",
           label: "Loot Table",
@@ -913,6 +915,7 @@ async function refreshEnemies(host) {
         exportRow: (row) => {
           const copy = { ...row };
           delete copy._ci;
+          delete copy._skills;
           delete copy._drop_pct;
           return copy;
         },
@@ -983,6 +986,20 @@ async function refreshEnemies(host) {
             }
             body.conditions_immune = parsed;
           }
+          if (key === "_skills") {
+            let parsed;
+            try {
+              parsed = JSON.parse(String(newValue || "{}"));
+            } catch (_e) {
+              showToast("skills_json must be valid JSON object.", "error");
+              throw new Error("invalid_json");
+            }
+            if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+              showToast("skills_json must be a JSON object.", "error");
+              throw new Error("invalid_json");
+            }
+            body.skills_json = parsed;
+          }
           if (key === "description") {
             body.description = newValue;
           }
@@ -998,6 +1015,7 @@ async function refreshEnemies(host) {
           });
           Object.assign(row, res.item || {}, {
             _ci: JSON.stringify((res.item && res.item.conditions_immune) || []),
+            _skills: JSON.stringify((res.item && res.item.skills_json) || {}),
             _drop_pct: Math.round(
               (res.item && res.item.drop_chance != null ? Number(res.item.drop_chance) : 1) * 100,
             ),
@@ -1062,6 +1080,8 @@ function mountEnemies(host) {
       <label class="field"><span>XP award</span><input data-field="xp_award" type="number" value="0" min="0" /></label>
       <label class="field add-form-span-2"><span>conditions_immune (JSON array)</span>
         <input data-field="conditions_immune" type="text" placeholder='["poisoned"]' /></label>
+      <label class="field add-form-span-2"><span>skills_json (JSON object)</span>
+        <input data-field="skills_json" type="text" placeholder='{"awareness": 2, "stealth": 1}' /></label>
       <label class="field add-form-span-2"><span>Loot table</span>
         <select data-enemy-loot-table><option value="">— none —</option></select></label>
       <label class="field"><span>Drop chance (0–100%)</span>
@@ -1109,6 +1129,7 @@ function mountEnemies(host) {
         { rawKey: "damage_type", patchKey: "damage_type", getValue: (r) => String(r.damage_type).trim().toLowerCase() },
         { rawKey: "xp_award", patchKey: "xp_award", getValue: (r) => Number(r.xp_award) },
         { rawKey: "conditions_immune", patchKey: "conditions_immune", getValue: (r) => (Array.isArray(r.conditions_immune) ? r.conditions_immune : []) },
+        { rawKey: "skills_json", patchKey: "skills_json", getValue: (r) => (r.skills_json && typeof r.skills_json === "object" ? r.skills_json : {}) },
         { rawKey: "loot_table_key", patchKey: "loot_table_key", getValue: (r) => (r.loot_table_key == null || String(r.loot_table_key).trim() === "" ? null : String(r.loot_table_key).trim()) },
         { rawKey: "drop_chance", patchKey: "drop_chance", getValue: (r) => Number(r.drop_chance) },
         { rawKey: "note", patchKey: "note", getValue: (r) => (r.note == null || String(r.note).trim() === "" ? null : String(r.note)) },
@@ -1135,6 +1156,21 @@ function mountEnemies(host) {
         return;
       }
     }
+    let skills_json = {};
+    const skillsRaw = fields.querySelector('[data-field="skills_json"]').value.trim();
+    if (skillsRaw) {
+      try {
+        const parsedSkills = JSON.parse(skillsRaw);
+        if (!parsedSkills || Array.isArray(parsedSkills) || typeof parsedSkills !== "object") {
+          showToast("skills_json must be a JSON object.", "info");
+          return;
+        }
+        skills_json = parsedSkills;
+      } catch (_e) {
+        showToast("skills_json must be valid JSON.", "info");
+        return;
+      }
+    }
     const ltRaw = fields.querySelector("[data-enemy-loot-table]").value.trim();
     const dropPctRaw = Number.parseInt(String(fields.querySelector("[data-enemy-drop-chance]").value || "100"), 10);
     const dropPct = Number.isFinite(dropPctRaw) ? Math.min(100, Math.max(0, dropPctRaw)) : 100;
@@ -1152,6 +1188,7 @@ function mountEnemies(host) {
       damage_type: fields.querySelector('[data-field="damage_type"]').value.trim(),
       xp_award: Number(fields.querySelector('[data-field="xp_award"]').value || 0),
       conditions_immune,
+      skills_json,
       loot_table_key: ltRaw || null,
       drop_chance: dropPct / 100,
       note: noteRaw || null,
@@ -3388,6 +3425,19 @@ function validateEnemyImportRow(raw, index) {
   if (raw.conditions_immune != null && !Array.isArray(raw.conditions_immune)) {
     return `${label}: conditions_immune must be an array`;
   }
+  if (raw.skills_json != null) {
+    if (!raw.skills_json || Array.isArray(raw.skills_json) || typeof raw.skills_json !== "object") {
+      return `${label}: skills_json must be an object`;
+    }
+    for (const [skillKey, skillVal] of Object.entries(raw.skills_json)) {
+      if (!/^[a-z0-9_]{1,40}$/.test(String(skillKey || "").trim())) {
+        return `${label}: skills_json has invalid skill key`;
+      }
+      if (!Number.isInteger(Number(skillVal))) {
+        return `${label}: skills_json values must be integers`;
+      }
+    }
+  }
   if (raw.drop_chance != null) {
     const dc = Number(raw.drop_chance);
     if (!Number.isFinite(dc) || dc < 0 || dc > 1) {
@@ -3421,6 +3471,7 @@ function enemyImportRowToPayload(raw) {
     damage_type: String(raw.damage_type || "physical").toLowerCase(),
     xp_award: raw.xp_award != null ? Number(raw.xp_award) : 0,
     conditions_immune: Array.isArray(raw.conditions_immune) ? raw.conditions_immune : [],
+    skills_json: raw.skills_json && typeof raw.skills_json === "object" ? raw.skills_json : {},
     loot_table_key: lt,
     drop_chance: raw.drop_chance != null ? Number(raw.drop_chance) : 1,
     note: noteRaw ? noteRaw : null,

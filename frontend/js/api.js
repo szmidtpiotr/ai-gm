@@ -80,6 +80,9 @@ window.loadHealth = async function (userId = null) {
 window.loadModels = async function (userId = null) {
   const { engineSelectEl } = window.getEls();
   const provider = String(window.state.llmSettings?.provider || '').toLowerCase();
+  const campaign = typeof window.currentCampaign === 'function' ? window.currentCampaign() : null;
+  const campaignModel =
+    String(campaign?.model_id || campaign?.modelid || '').trim();
   const wantAll = provider === 'openai' && !!window.state.showAllProviderModels;
 
   let modelsUrl = wantAll ? `${window.API_MODELS}?show_all=1` : window.API_MODELS;
@@ -108,12 +111,18 @@ window.loadModels = async function (userId = null) {
   engineSelectEl.innerHTML = '';
 
   if (window.state.models.length === 0) {
-    const fallbackOption = document.createElement('option');
-    fallbackOption.value = 'gemma4:e4b';
-    fallbackOption.textContent = 'gemma4:e4b';
-    engineSelectEl.appendChild(fallbackOption);
-    engineSelectEl.value = 'gemma4:e4b';
-    window.state.selectedEngine = 'gemma4:e4b';
+    const fallbackModel =
+      String(window.state.selectedEngine || '').trim() ||
+      campaignModel ||
+      String(window.state.llmSettings?.model || '').trim();
+    if (fallbackModel) {
+      const fallbackOption = document.createElement('option');
+      fallbackOption.value = fallbackModel;
+      fallbackOption.textContent = fallbackModel;
+      engineSelectEl.appendChild(fallbackOption);
+      engineSelectEl.value = fallbackModel;
+      window.state.selectedEngine = fallbackModel;
+    }
     return;
   }
 
@@ -128,6 +137,7 @@ window.loadModels = async function (userId = null) {
   const preferredFromRuntime = (window.state.llmSettings && window.state.llmSettings.model) || '';
   const preferredEngine =
     window.state.selectedEngine ||
+    campaignModel ||
     preferredFromRuntime ||
     window.state.models[0].name ||
     window.state.models[0];

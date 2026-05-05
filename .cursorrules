@@ -1,5 +1,13 @@
 # AI GM Project - Cursor AI Instructions
 
+## Remote Execution Only
+
+- This workspace is an NFS mount of `192.168.1.61:/home/piotrszmidt`.
+- Treat `/home/piotrszmidt/remote_mount/ai-gm` as a mapped remote folder, not a local dev environment.
+- Run all project commands that execute code or consume resources only on `piotrszmidt@192.168.1.61`.
+- Do not run local Docker, local pytest, local dev servers, or local rebuilds for this project.
+- Use `https://aigm-dev.studio-colorbox.com/` as the dev verification target unless the user explicitly asks for production.
+
 ## Context Sources (Read BEFORE every change)
 
 1. **Project Plan:** https://coda.io/d/AI-GM-Recovery-Plan (Coda Source of Truth)

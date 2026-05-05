@@ -116,6 +116,7 @@ def _schema_sql() -> str:
       xp_award INTEGER NOT NULL DEFAULT 0,
       description TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
+      skills_json TEXT,
       locked_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -123,8 +124,8 @@ def _schema_sql() -> str:
       drop_chance REAL NOT NULL DEFAULT 1.0
     );
     INSERT INTO game_config_enemies
-      (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, loot_table_key, drop_chance)
-    VALUES ('bandit', 'Bandit', 12, 13, 3, 1, '1d8', NULL, 0.0);
+      (key, label, hp_base, ac_base, attack_bonus, dex_modifier, damage_die, skills_json, loot_table_key, drop_chance)
+    VALUES ('bandit', 'Bandit', 12, 13, 3, 1, '1d8', '{}', NULL, 0.0);
 
     CREATE TABLE IF NOT EXISTS game_config_meta (
       key TEXT PRIMARY KEY,

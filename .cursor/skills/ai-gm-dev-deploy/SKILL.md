@@ -12,11 +12,18 @@ description: >-
 - Po merge/pushu na `develop`, gdy trzeba **odświeżyć obraz** `ai-gm-dev-backend` na serwerze.
 - Gdy użytkownik pyta, czy **T05/T06 są wdrożone** albo chce **sprawdzić treść łuku** w planie MG.
 
+## Zasada wykonania
+
+Wszystkie komendy z tego skilla wykonuj **wyłącznie na serwerze `192.168.1.61` przez SSH**.
+Nie uruchamiaj lokalnie Dockera, pytesta ani żadnych buildów dla tego projektu.
+Lokalny katalog `/home/piotrszmidt/remote_mount/ai-gm` jest tylko **zmapowanym folderem roboczym** do edycji plików.
+
 ## Stałe
 
 | Co | Wartość |
 |----|---------|
 | Host SSH | `piotrszmidt@192.168.1.61` |
+| Lokalny mount roboczy | `/home/piotrszmidt/remote_mount/ai-gm` |
 | Katalog repo na serwerze | `/home/piotrszmidt/ai-gm` |
 | Compose dev | `docker compose -f docker-compose.dev.yml` |
 | Kontener backend dev | `ai-gm-dev-backend-1` |
@@ -29,6 +36,7 @@ description: >-
 Wykonaj na serwerze (SSH):
 
 ```bash
+ssh piotrszmidt@192.168.1.61
 cd /home/piotrszmidt/ai-gm
 git fetch origin && git pull origin develop
 docker compose -f docker-compose.dev.yml build backend --no-cache
@@ -36,6 +44,12 @@ docker compose -f docker-compose.dev.yml up -d backend
 ```
 
 Poczekaj na **healthy** (`docker ps`). Opcjonalnie: `docker restart ai-gm-dev-backend-1` po samym pullu, jeśli kod jest montowany (rzadziej niż pełny build).
+
+## Czego nie robić
+
+- Nie wykonuj `docker compose up`, `docker build`, `pytest` ani `python ...` na lokalnej maszynie.
+- Nie traktuj kontenerów lokalnych jako źródła prawdy dla stanu środowiska.
+- Nie weryfikuj wdrożenia przez `localhost`; używaj domeny dev wskazanej poniżej.
 
 ## Weryfikacja obecności T01–T06 w obrazie
 

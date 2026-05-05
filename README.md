@@ -22,6 +22,15 @@ Installer notes:
 - For CI/automation use non-interactive mode: `./install.sh --yes`.
 - At the end, installer prints and saves a full status summary to `install-summary.txt` (URLs, LLM mode, DB path, runtime container status).
 
+## Remote Workspace Operation
+
+In the current team setup, `/home/piotrszmidt/remote_mount/ai-gm` is an NFS-mounted view of the repo hosted on `192.168.1.61`.
+
+- Edit files in the mounted workspace as needed, but run Docker, tests, restarts, and rebuilds only on `piotrszmidt@192.168.1.61`.
+- Do not use the local machine as the AI-GM dev runtime.
+- Validate deployed dev changes via `https://aigm-dev.studio-colorbox.com/`.
+- Restart or rebuild the relevant remote services after code changes when required.
+
 ## Current Stack
 
 - Backend: FastAPI + SQLite

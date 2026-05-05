@@ -297,6 +297,8 @@ def _inject_campaign_s11_context(
     conn: sqlite3.Connection,
     campaign: sqlite3.Row,
     messages: list[dict],
+    *,
+    current_user_text: str | None = None,
 ) -> None:
     """
     Append MG plan + latest AI summary to system prompt so LLM keeps arc beyond last N turns.
@@ -330,6 +332,25 @@ def _inject_campaign_s11_context(
             f"## Dotychczasowa fabuła (skrót archiwalny, ~{tc} tur narracyjnych)\n{st}"
         )
 
+    try:
+        from app.services.gm_plan_divergence import (
+            divergence_prompt_block,
+            evaluate_campaign_plan_divergence,
+        )
+
+        divergence = evaluate_campaign_plan_divergence(
+            conn,
+            campaign_id=cid,
+            raw_plan=raw_plan,
+            current_user_text=current_user_text,
+            limit=4,
+        )
+        divergence_block = divergence_prompt_block(divergence)
+        if divergence_block:
+            block_parts.append(divergence_block)
+    except sqlite3.OperationalError:
+        pass
+
     if not block_parts:
         return
 
@@ -341,7 +362,7 @@ def _inject_campaign_s11_context(
 
 
 def build_narrative_messages(
-    conn: sqlite3.Connection,
+    conn: sqlite3.Connection | None,
     campaign: sqlite3.Row,
     character: sqlite3.Row | None,
     user_text: str,
@@ -350,6 +371,7 @@ def build_narrative_messages(
 ) -> list[dict]:
     from app.services import combat_service as combat_svc
 
+    has_db_conn = isinstance(conn, sqlite3.Connection)
     recent_turns = loadrecentturns(conn, campaign["id"], limit=8)
     final_user_text = roll_result_message if roll_result_message else user_text
     combat_block = combat_svc.get_combat_context_for_prompt(int(campaign["id"]))
@@ -362,10 +384,10 @@ def build_narrative_messages(
         combat_context_block=combat_block,
     )
 
-    _inject_campaign_s11_context(conn, campaign, messages)
-
-    _inject_location_llm_context(conn, int(campaign["id"]), messages)
-    _inject_npc_llm_context(conn, int(campaign["id"]), messages)
+    if has_db_conn:
+        _inject_campaign_s11_context(conn, campaign, messages, current_user_text=user_text)
+        _inject_location_llm_context(conn, int(campaign["id"]), messages)
+        _inject_npc_llm_context(conn, int(campaign["id"]), messages)
 
     combat_log_block = combat_svc.get_combat_turns_context_for_prompt(int(campaign["id"]))
     if combat_log_block and messages:
@@ -397,7 +419,7 @@ def build_narrative_messages(
                 )
             first["content"] = f"{first.get('content', '').rstrip()}\n\n{extra}"
 
-    if not combat_block and messages:
+    if has_db_conn and not combat_block and messages:
         first = messages[0]
         if isinstance(first, dict) and first.get("role") == "system":
             enemy_catalog = combat_svc.get_enemy_catalog_for_prompt(conn)
@@ -405,7 +427,7 @@ def build_narrative_messages(
                 first["content"] = f"{first.get('content', '').rstrip()}\n\n{enemy_catalog}"
 
     # 8H-4: item catalog — także podczas aktywnej walki (Grant Item / nagrody z katalogu)
-    if messages:
+    if has_db_conn and messages:
         first = messages[0]
         if isinstance(first, dict) and first.get("role") == "system":
             item_catalog = combat_svc.get_item_catalog_for_prompt(conn)
