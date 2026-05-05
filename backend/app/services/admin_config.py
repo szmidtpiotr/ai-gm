@@ -9,6 +9,7 @@ DAMAGE_DIE_RE = re.compile(r"^\d*d\d+$")
 ALLOWED_CLASSES = {"warrior", "ranger", "scholar"}
 ALLOWED_ITEM_TYPES = {"weapon", "armor", "consumable", "misc", "quest", "narrative"}
 ALLOWED_WEAPON_TYPES = {"melee", "ranged", "spell"}
+ALLOWED_TARGETING_TYPES = {"single", "aoe_radius"}
 ALLOWED_DAMAGE_TYPES = {"physical", "magic", "fire", "poison", "misc"}
 ALLOWED_TIERS = {"weak", "standard", "elite", "boss"}
 ALLOWED_EFFECT_TYPES = {"heal_hp", "restore_mana", "remove_condition", "add_condition", "stat_buff", "misc"}
@@ -272,6 +273,36 @@ def _validate_weapon_type(v: str) -> str:
     return t
 
 
+def _validate_targeting(v: str) -> str:
+    t = (v or "").strip().lower()
+    if t not in ALLOWED_TARGETING_TYPES:
+        raise ValueError("invalid_targeting")
+    return t
+
+
+def _normalize_magic_school(v: str | None) -> str | None:
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    if len(s) > 80:
+        raise ValueError("invalid_magic_school")
+    return s
+
+
+def _validate_targeting_fields(targeting: str, aoe_radius_m: float | None) -> tuple[str, float | None]:
+    t = _validate_targeting(targeting)
+    if t == "single":
+        return t, None
+    if aoe_radius_m is None:
+        raise ValueError("invalid_aoe_radius_m")
+    r = float(aoe_radius_m)
+    if not (r > 0):
+        raise ValueError("invalid_aoe_radius_m")
+    return t, r
+
+
 def _validate_damage_type(v: str) -> str:
     t = (v or "").strip().lower()
     if t not in ALLOWED_DAMAGE_TYPES:
@@ -482,7 +513,7 @@ def list_weapons() -> list[dict]:
     rows = _fetch_all(
         """
         SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-               two_handed, finesse, range_m, weight_kg, description, note,
+               two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, weight_kg, description, note,
                is_active, locked_at, created_at, updated_at
         FROM game_config_weapons
         ORDER BY key ASC
@@ -810,6 +841,9 @@ def create_weapon(
     two_handed: bool = False,
     finesse: bool = False,
     range_m: int | None = None,
+    targeting: str = "single",
+    aoe_radius_m: float | None = None,
+    magic_school: str | None = None,
     weight_kg: float = 0.0,
     note: str | None = None,
 ) -> dict:
@@ -817,6 +851,8 @@ def create_weapon(
     safe_damage_die = _validate_damage_die(damage_die)
     safe_allowed_classes = _validate_allowed_classes(allowed_classes)
     safe_weapon_type = _validate_weapon_type(weapon_type)
+    safe_targeting, safe_aoe_radius_m = _validate_targeting_fields(targeting, aoe_radius_m)
+    safe_magic_school = _normalize_magic_school(magic_school)
     if weight_kg < 0:
         raise ValueError("invalid_weight_kg")
 
@@ -834,9 +870,9 @@ def create_weapon(
             """
             INSERT INTO game_config_weapons (
                 key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                two_handed, finesse, range_m, weight_kg, description, note,
+                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, weight_kg, description, note,
                 is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -848,6 +884,9 @@ def create_weapon(
                 1 if two_handed else 0,
                 1 if finesse else 0,
                 range_m,
+                safe_targeting,
+                safe_aoe_radius_m,
+                safe_magic_school,
                 float(weight_kg),
                 description or "",
                 note,
@@ -858,7 +897,7 @@ def create_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, weight_kg, description, note,
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, weight_kg, description, note,
                    is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
@@ -889,6 +928,9 @@ def update_weapon(
     two_handed: bool | None = None,
     finesse: bool | None = None,
     range_m: int | None = None,
+    targeting: str | None = None,
+    aoe_radius_m: float | None = None,
+    magic_school: str | None = None,
     weight_kg: float | None = None,
     note: str | None = None,
 ) -> dict:
@@ -900,7 +942,7 @@ def update_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, weight_kg, description, note,
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, weight_kg, description, note,
                    is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
@@ -932,6 +974,18 @@ def update_weapon(
             final_range_m = int(range_m)
         else:
             final_range_m = current.get("range_m")
+        final_targeting = (
+            _validate_targeting(targeting) if targeting is not None else str(current.get("targeting") or "single")
+        )
+        if aoe_radius_m is not None:
+            final_aoe_radius_m = float(aoe_radius_m)
+        else:
+            final_aoe_radius_m = current.get("aoe_radius_m")
+        final_targeting, final_aoe_radius_m = _validate_targeting_fields(final_targeting, final_aoe_radius_m)
+        if magic_school is not None:
+            final_magic_school = _normalize_magic_school(magic_school)
+        else:
+            final_magic_school = _normalize_magic_school(current.get("magic_school"))
         final_weight_kg = (
             float(weight_kg) if weight_kg is not None else float(current.get("weight_kg") or 0.0)
         )
@@ -943,7 +997,8 @@ def update_weapon(
             """
             UPDATE game_config_weapons
             SET label = ?, damage_die = ?, weapon_type = ?, linked_stat = ?, allowed_classes = ?,
-                two_handed = ?, finesse = ?, range_m = ?, weight_kg = ?, description = ?, note = ?,
+                two_handed = ?, finesse = ?, range_m = ?, targeting = ?, aoe_radius_m = ?, magic_school = ?,
+                weight_kg = ?, description = ?, note = ?,
                 is_active = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
@@ -956,6 +1011,9 @@ def update_weapon(
                 final_two,
                 final_finesse,
                 final_range_m,
+                final_targeting,
+                final_aoe_radius_m,
+                final_magic_school,
                 final_weight_kg,
                 final_desc,
                 final_note,
@@ -967,7 +1025,7 @@ def update_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, weight_kg, description, note,
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, weight_kg, description, note,
                    is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
