@@ -631,6 +631,13 @@ class SpendSkillXpRequest(BaseModel):
     skill_key: str
 
 
+class SpendStatXpRequest(BaseModel):
+    """Raise a core stat by 1; cost from `game_config_meta.xp_stat_point_costs` (**T21**)."""
+
+    model_config = ConfigDict(extra="ignore")
+    stat_key: str
+
+
 class GrantMgXpRequest(BaseModel):
     """Manual XP from campaign owner (MG); audited (**[S10d]**)."""
 
@@ -697,6 +704,44 @@ def spend_character_skill_xp(character_id: int, req: SpendSkillXpRequest):
                 raise HTTPException(status_code=400, detail="Skill rank already at ceiling") from None
             if code == "insufficient_xp":
                 raise HTTPException(status_code=400, detail="Not enough XP") from None
+            raise HTTPException(status_code=400, detail=code) from None
+    finally:
+        conn.close()
+
+
+@router.post("/characters/{character_id}/xp/spend-stat")
+def spend_character_stat_xp(character_id: int, req: SpendStatXpRequest):
+    """Spend XP to increase one stat from `game_config_stats` by 1 (**T21**)."""
+    from app.services import xp_service
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        try:
+            result = xp_service.spend_stat_point_up(conn, character_id, req.stat_key)
+            conn.commit()
+            return {"ok": True, **result}
+        except ValueError as e:
+            conn.rollback()
+            code = str(e)
+            if code == "character not found":
+                raise HTTPException(status_code=404, detail="Character not found") from None
+            if code == "stat_key_required":
+                raise HTTPException(status_code=400, detail="stat_key is required") from None
+            if code == "unknown_stat":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Unknown stat — must exist in game_config_stats catalog.",
+                ) from None
+            if code == "stat_at_ceiling":
+                raise HTTPException(status_code=400, detail="Stat already at configured ceiling") from None
+            if code == "insufficient_xp":
+                raise HTTPException(status_code=400, detail="Not enough XP") from None
+            if code == "stat_cost_not_configured":
+                raise HTTPException(
+                    status_code=400,
+                    detail="No XP cost configured for that stat value — check game_config_meta.",
+                ) from None
             raise HTTPException(status_code=400, detail=code) from None
     finally:
         conn.close()

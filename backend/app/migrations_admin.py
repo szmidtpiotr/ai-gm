@@ -671,6 +671,17 @@ ADMIN_SEEDS = [
     """,
     """
     INSERT OR IGNORE INTO game_config_meta (key, value)
+    VALUES (
+      'xp_stat_point_costs',
+      '{"8":40,"9":50,"10":65,"11":85,"12":110,"13":140,"14":180,"15":230,"16":300,"17":400,"18":550,"19":750,"20":1000}'
+    )
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value)
+    VALUES ('xp_stat_value_ceiling', '20')
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES ('summary_rollup_cooldown_turns', '20')
     """,
     """
