@@ -271,6 +271,7 @@ class WeaponCreateReq(BaseModel):
     targeting: str = "single"
     aoe_radius_m: float | None = None
     magic_school: str | None = None
+    value_gp: int = 0
     weight_kg: float = 0.0
     note: str | None = None
     is_active: bool = True
@@ -290,6 +291,7 @@ class WeaponPatchReq(BaseModel):
     targeting: str | None = None
     aoe_radius_m: float | None = None
     magic_school: str | None = None
+    value_gp: int | None = None
     weight_kg: float | None = None
     note: str | None = None
     is_active: bool | None = None
@@ -730,6 +732,7 @@ def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_to
             targeting=req.targeting,
             aoe_radius_m=req.aoe_radius_m,
             magic_school=req.magic_school,
+            value_gp=req.value_gp,
             weight_kg=req.weight_kg,
             note=req.note,
             is_active=req.is_active,
@@ -757,6 +760,8 @@ def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_to
             ) from None
         if str(e) == "invalid_magic_school":
             raise HTTPException(status_code=422, detail="magic_school max length is 80 chars") from None
+        if str(e) == "invalid_value_gp":
+            raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
         raise HTTPException(status_code=422, detail="Invalid weapon payload") from None
@@ -779,6 +784,7 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             targeting=req.targeting,
             aoe_radius_m=req.aoe_radius_m,
             magic_school=req.magic_school,
+            value_gp=req.value_gp,
             weight_kg=req.weight_kg,
             note=req.note,
             is_active=req.is_active,
@@ -809,6 +815,8 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             ) from None
         if str(e) == "invalid_magic_school":
             raise HTTPException(status_code=422, detail="magic_school max length is 80 chars") from None
+        if str(e) == "invalid_value_gp":
+            raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
         raise HTTPException(status_code=422, detail="Invalid weapon payload") from None
