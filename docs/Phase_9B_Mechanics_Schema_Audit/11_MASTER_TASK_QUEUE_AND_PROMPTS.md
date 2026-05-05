@@ -43,8 +43,8 @@
 | 17 | **T17** | [x] | **[IMPL] fala 3:** `effect_json` + walidacja admin | T11 | **[IMPL]**, **[S13]** |
 | 18 | **T18** | [x] | **[IMPL] fala 4:** warunki + konsumable / `item_key` | T17 | **[IMPL]**, **[S6]** |
 | 19 | **T19** | [x] | **[IMPL] fala 5:** import / snapshot / ostrzeżenia | T11 | **[IMPL]**, **[S7]** |
-| 20 | **T20** | [ ] | **[IMPL] fala 6:** dywergencja (heurystyka / drugi LLM) + UI plan MG (admin) | T05–T07 | **[IMPL]**, **[S11]** |
-| 21 | **T21** | [ ] | **[IMPL] fala 7:** progres cech za XP (meta + endpoint) | T12 | **[IMPL]**, **[S10]** |
+| 20 | **T20** | [x] | **[IMPL] fala 6:** dywergencja (heurystyka / drugi LLM) + UI plan MG (admin) | T05–T07 | **[IMPL]**, **[S11]** |
+| 21 | **T21** | [x] | **[IMPL] fala 7:** progres cech za XP (meta + endpoint) | T12 | **[IMPL]**, **[S10]** |
 
 **Uwaga kolejności:** W tabeli **T06** jest przed **T05** (najpierw szkielet planu, potem blokada pierwszej narracji).
 
@@ -522,8 +522,8 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | T17 | DONE | `effect_json` v0 + walidacja przy zapisie admina | `admin`, `items`, `conditions`, `admin_config_transfer.py` |
 | T18 | DONE | Konsumable / `item_key` / migracja loot | `loot_service`, `inventory`, `shop_service`, `combat_service` |
 | T19 | DONE | Import: ostrzeżenia + `catalog_snapshot` jako kanon | `admin_config_transfer.py`, admin UI, docs |
-| T20 | PENDING | Dywergencja **[S11]** + UI edycji planu (admin) | `game_engine`, admin |
-| T21 | PENDING | Koszty statów za XP + endpoint spend | `game_config_meta`, `characters` API |
+| T20 | DONE | Dywergencja **[S11]** + UI edycji planu (admin) | `game_engine`, admin |
+| T21 | DONE | Koszty statów za XP + endpoint spend | `game_config_meta`, `characters` API |
 
 **Co zostało zrobione (T16–T21 — zbiorczo lub per ID)**
 
@@ -543,6 +543,11 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 - **T19:** `export_config()` dostał znacznik `export_kind=config_bundle` i notkę, że pełny katalog powinien iść przez `catalog_snapshot`; `import_catalog_snapshot(..., dry_run)` zwraca ostrzeżenie o ignorowanym `game_config_meta`.
 - **T19:** admin UI: sekcja Config pokazuje ostrzeżenia z dry-runa `import_config`, a sekcja Game Design robi dry-run snapshotu przed potwierdzeniem importu i pokazuje wykryte tabele / warningi operatorowi.
 - **T19:** testy: [`test_phase9b_t19_import_warnings.py`](../../backend/tests/test_phase9b_t19_import_warnings.py) + regresja [`test_phase9b_t17_effect_json_validation.py`](../../backend/tests/test_phase9b_t17_effect_json_validation.py).
+- **T20:** nowy moduł [`gm_plan_divergence.py`](../../backend/app/services/gm_plan_divergence.py) ocenia ostatnie ruchy gracza względem aktywnego łuku `gm_plan_json` i zwraca miękki status (`aligned` / `mixed` / `diverged`) z tokenami zgodnymi / off-road.
+- **T20:** [`game_engine.py`](../../backend/app/services/game_engine.py) dokleja heurystyczny blok dywergencji do kontekstu kampanii dla narracyjnego promptu, ale tylko jako sygnał informacyjny dla modelu; gra nie jest twardo blokowana.
+- **T20:** admin API dostało endpointy `GET/PUT /api/admin/campaigns/{id}/gm-plan`, `POST .../advance-scene` i `POST .../regenerate-initial`, a panel Accounts pokazuje przy kampanii modal **GM Plan** z edycją JSON, preview promptu i podglądem dywergencji.
+- **T20:** testy: [`test_phase9b_t20_gm_plan_admin.py`](../../backend/tests/test_phase9b_t20_gm_plan_admin.py) — heurystyka, odczyt/zapis planu, `advance-scene`, regeneracja planu; uruchomione przez SSH na `.61`.
+- **T21:** meta [`xp_stat_point_costs`](../../backend/app/migrations_admin.py) (JSON: koszt przejścia **do** wartości N) + [`xp_stat_value_ceiling`](../../backend/app/migrations_admin.py) (domyślnie 20); [`xp_service.spend_stat_point_up`](../../backend/app/services/xp_service.py) walida klucz w `game_config_stats`; API `POST /api/characters/{id}/xp/spend-stat`; `GET /api/characters/{id}/xp` zwraca `stat_point_costs` i `stat_value_ceiling`; testy [`test_phase9b_t21_stat_xp.py`](../../backend/tests/test_phase9b_t21_stat_xp.py).
 
 **Notatki po implementacji**
 
@@ -557,6 +562,11 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 - **Restart backendu wymagany** po wdrożeniu (nowe endpointy / runtime inventory). Frontend w dev nie wymaga rebuildu, ale wymaga odświeżenia zasobów w przeglądarce.
 - T19 nie synchronizuje jeszcze `import_config` do pełnego INSERT-u wszystkich tabel; zamiast tego wymusza świadomość operatora przez `warnings` i prowadzi do kanonicznej ścieżki `catalog_snapshot`.
 - **Restart backendu wymagany** po wdrożeniu (zmiana odpowiedzi API importu). Frontend w dev nie wymaga rebuildu, ale panel admina wymaga odświeżenia zasobów w przeglądarce.
+- T20 wdraża tylko heurystykę dywergencji v0; nie dodaje jeszcze drugiego, osobnego calla LLM do oceny zejścia z osi fabularnej.
+- T20 daje pełny podgląd/edycję `gm_plan_json` w adminie, ale nadal nie wprowadza osobnej tabeli W2 (`campaign_story_beats`) z T14/ADR.
+- **Restart backendu wymagany** po wdrożeniu (nowe endpointy admin + wstrzyknięcie heurystyki do promptu). Frontend w dev nie wymaga rebuildu, ale panel admina wymaga odświeżenia zasobów w przeglądarce.
+- **T21:** jedna z dziesięciu „bazowych” statów może zostać podniesiona o **+1** za XP na raz; brak osobnego audytu jak przy grantach MG — wydatek jest czysto mechaniczny z karty. Próg sufitu globalny (`xp_stat_value_ceiling`); wartości powyżej tabeli kosztów korzystają z ekstrapolacji awaryjnej w kodzie (preferuj kompletny JSON w meta).
+- **Restart backendu wymagany** po wdrożeniu T21 (nowy endpoint + migracja seed meta dla istniejących DB przy kolejnym starcie migracji).
 
 ---
 
@@ -574,6 +584,8 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T17 DONE** — walidator `effect_json` v0 wg **[S13]** dla admin create/update + import (`config/import`, `catalog-snapshot/import`); test `test_phase9b_t17_effect_json_validation`; wymagany restart backendu. |
 | 2026-05-04 | **T18 DONE** — `use_inventory_item()` dla consumabli + `sheet_json.conditions`, endpoint `POST /inventory/{id}/use`, frontendowy przycisk **Użyj**, shop/loot/combat claim na kanonicznym `item_key`; test `test_phase9b_t18_consumables_item_key` + regresje shop/inventory; wymagany restart backendu. |
 | 2026-05-04 | **T19 DONE** — `import_config` / `catalog_snapshot` zwracają jawne `warnings`, `export_config` oznacza się jako `config_bundle`, a admin UI pokazuje ostrzeżenia i robi dry-run snapshotu przed importem; test `test_phase9b_t19_import_warnings`; wymagany restart backendu. |
+| 2026-05-04 | **T20 DONE** — heurystyka dywergencji `gm_plan_json` w narracyjnym promptcie + adminowy modal **GM Plan** (GET/PUT planu, advance-scene, regenerate-initial, preview dywergencji); test `test_phase9b_t20_gm_plan_admin`; wymagany restart backendu. |
+| 2026-05-04 | **T21 DONE** — `xp_stat_point_costs` + `xp_stat_value_ceiling` w meta, `POST …/xp/spend-stat`, rozszerzenie `GET …/xp`; test `test_phase9b_t21_stat_xp`; wymagany restart backendu. |
 | 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
 | 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
 | 2026-05-04 | **B01/B02 DONE** — `/api/settings/summary` + panel admin (cooldown rollupu, tryb dostępu do dual preview: `owner` / `owner_admin` / `off`); frontend i backend respektują tryb podglądu dual. |

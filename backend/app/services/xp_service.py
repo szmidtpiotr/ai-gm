@@ -1,9 +1,12 @@
 """
-Character XP pool and skill rank purchases (**[S10]**).
+Character XP pool and skill / stat purchases (**[S10]**, **T21**).
 
 - `sheet_json.xp_available`, `sheet_json.xp_lifetime_earned`
-- Costs: `game_config_meta.xp_skill_rank_costs` JSON object: {"1":50,"2":100,...}
-  meaning XP to reach rank N from rank N-1.
+- Skill ranks — `game_config_meta.xp_skill_rank_costs`: {"1":50,"2":100,...}
+  (XP to reach rank N from rank N-1).
+- Stat bumps — `game_config_meta.xp_stat_point_costs`: {"11":100,...}
+  (XP to raise a stat **to** value N from N-1). Optional ceiling:
+  `xp_stat_value_ceiling` (default **20**).
 """
 
 from __future__ import annotations
@@ -25,6 +28,25 @@ DEFAULT_RANK_UP_COSTS: dict[int, int] = {
     5: 1200,
 }
 
+# Target stat value (after +1) → XP cost; merged with `game_config_meta.xp_stat_point_costs`.
+DEFAULT_STAT_POINT_COSTS: dict[int, int] = {
+    8: 40,
+    9: 50,
+    10: 65,
+    11: 85,
+    12: 110,
+    13: 140,
+    14: 180,
+    15: 230,
+    16: 300,
+    17: 400,
+    18: 550,
+    19: 750,
+    20: 1000,
+}
+
+DEFAULT_STAT_VALUE_CEILING = 20
+
 
 def _load_rank_costs(conn: sqlite3.Connection) -> dict[int, int]:
     row = conn.execute(
@@ -45,6 +67,69 @@ def _load_rank_costs(conn: sqlite3.Connection) -> dict[int, int]:
         except (TypeError, ValueError):
             continue
     return out if out else dict(DEFAULT_RANK_UP_COSTS)
+
+
+def _load_stat_point_costs(conn: sqlite3.Connection) -> dict[int, int]:
+    row = conn.execute(
+        "SELECT value FROM game_config_meta WHERE key = 'xp_stat_point_costs' LIMIT 1"
+    ).fetchone()
+    base = dict(DEFAULT_STAT_POINT_COSTS)
+    if not row or row[0] is None or str(row[0]).strip() == "":
+        return base
+    try:
+        raw = json.loads(row[0])
+    except (json.JSONDecodeError, TypeError):
+        return base
+    if not isinstance(raw, dict):
+        return base
+    for k, v in raw.items():
+        try:
+            base[int(k)] = int(v)
+        except (TypeError, ValueError):
+            continue
+    return base
+
+
+def _stat_value_ceiling(conn: sqlite3.Connection) -> int:
+    row = conn.execute(
+        "SELECT value FROM game_config_meta WHERE key = 'xp_stat_value_ceiling' LIMIT 1"
+    ).fetchone()
+    if not row or row[0] is None or str(row[0]).strip() == "":
+        return DEFAULT_STAT_VALUE_CEILING
+    try:
+        v = int(str(row[0]).strip())
+        return max(3, min(99, v))
+    except (TypeError, ValueError):
+        return DEFAULT_STAT_VALUE_CEILING
+
+
+def _cost_for_stat_target(costs: dict[int, int], new_value: int) -> int:
+    if new_value in costs and int(costs[new_value]) > 0:
+        return int(costs[new_value])
+    if new_value in DEFAULT_STAT_POINT_COSTS:
+        return int(DEFAULT_STAT_POINT_COSTS[new_value])
+    # Fallback: nearest lower defined tier, scaled up (rough continuity).
+    keys = sorted(costs.keys())
+    if not keys:
+        return int(DEFAULT_STAT_POINT_COSTS.get(new_value, 999999))
+    lower = [k for k in keys if k < new_value]
+    if not lower:
+        return int(costs.get(keys[0], 999999))
+    k0 = max(lower)
+    base_cost = int(costs[k0])
+    steps = new_value - k0
+    c = base_cost
+    for _ in range(steps):
+        c = int(c * 1.35) + 25
+    return c
+
+
+def _stat_known_in_catalog(conn: sqlite3.Connection, stat_key: str) -> bool:
+    sk = (stat_key or "").strip().lower()
+    if not sk:
+        return False
+    row = conn.execute("SELECT key FROM game_config_stats WHERE key = ? LIMIT 1", (sk,)).fetchone()
+    return row is not None
 
 
 def _rank_ceiling_for_skill(skill_key: str) -> int:
@@ -182,6 +267,66 @@ def spend_skill_rank_up(
     }
 
 
+def spend_stat_point_up(
+    conn: sqlite3.Connection,
+    character_id: int,
+    stat_key: str,
+) -> dict[str, Any]:
+    """Raise one configured core stat by 1; cost from meta `xp_stat_point_costs` (**T21**)."""
+    sk = (stat_key or "").strip().lower()
+    if not sk:
+        raise ValueError("stat_key_required")
+
+    if not _stat_known_in_catalog(conn, sk):
+        raise ValueError("unknown_stat")
+
+    row = conn.execute(
+        "SELECT sheet_json FROM characters WHERE id = ?",
+        (character_id,),
+    ).fetchone()
+    if not row:
+        raise ValueError("character not found")
+
+    ceiling = _stat_value_ceiling(conn)
+    costs = _load_stat_point_costs(conn)
+
+    sheet = parse_character_sheet(row["sheet_json"])
+    stats = dict(sheet.get("stats") or {})
+    current = int(stats.get(sk, 10) or 10)
+    if current >= ceiling:
+        raise ValueError("stat_at_ceiling")
+
+    new_value = current + 1
+    if new_value > ceiling:
+        raise ValueError("stat_at_ceiling")
+
+    cost = _cost_for_stat_target(costs, new_value)
+    if cost <= 0:
+        raise ValueError("stat_cost_not_configured")
+
+    xp = int(sheet.get("xp_available") or 0)
+    if xp < cost:
+        raise ValueError("insufficient_xp")
+
+    stats[sk] = new_value
+    sheet["stats"] = stats
+    sheet["xp_available"] = xp - cost
+
+    conn.execute(
+        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+        (json.dumps(sheet, ensure_ascii=False), character_id),
+    )
+
+    return {
+        "stat_key": sk,
+        "previous_value": current,
+        "new_value": new_value,
+        "xp_spent": cost,
+        "xp_available": int(sheet["xp_available"]),
+        "stat_value_ceiling": ceiling,
+    }
+
+
 def get_xp_snapshot(conn: sqlite3.Connection, character_id: int) -> dict[str, Any]:
     row = conn.execute(
         "SELECT sheet_json FROM characters WHERE id = ?",
@@ -191,10 +336,14 @@ def get_xp_snapshot(conn: sqlite3.Connection, character_id: int) -> dict[str, An
         raise ValueError("character not found")
     sheet = parse_character_sheet(row["sheet_json"])
     costs = _load_rank_costs(conn)
+    st_costs = _load_stat_point_costs(conn)
+    st_ceil = _stat_value_ceiling(conn)
     return {
         "xp_available": int(sheet.get("xp_available") or 0),
         "xp_lifetime_earned": int(sheet.get("xp_lifetime_earned") or 0),
         "rank_up_costs": {str(k): costs[k] for k in sorted(costs.keys())},
+        "stat_point_costs": {str(k): st_costs[k] for k in sorted(st_costs.keys())},
+        "stat_value_ceiling": st_ceil,
     }
 
 
