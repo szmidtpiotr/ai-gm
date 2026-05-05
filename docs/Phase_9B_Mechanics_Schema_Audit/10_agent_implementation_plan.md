@@ -5,6 +5,8 @@
 
 **Źródło prawdy (kolejka + prompty w jednym pliku):** [`11_MASTER_TASK_QUEUE_AND_PROMPTS.md`](11_MASTER_TASK_QUEUE_AND_PROMPTS.md)
 
+**Kolejka następcza po zamknięciu T01–T21:** [`12_FOLLOW_UP_IMPLEMENTATION_QUEUE.md`](12_FOLLOW_UP_IMPLEMENTATION_QUEUE.md) (T22+, ustalenia z audytu jeszcze bez implementacji).
+
 Tam znajdziesz:
 
 - tabelę **Lp 1–21** z checkboxami `[ ]` / `[x]`,

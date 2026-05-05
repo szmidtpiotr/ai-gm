@@ -1,6 +1,6 @@
 # Luki i nadmiary w schemacie — przedmioty, umiejętności, czary
 
-**Status:** **T11 (2026-05-04)** — wiersze poniżej **zsynchronizowane** z repozytorium (`migrations_admin.py` + wyszukiwanie w `backend/`). Nierozwiązane pozycje są **jawnie** oznaczone jako otwarte / backlog (T12, T16–T19) zamiast „cichych” braków. Uchwały: [`04_decisions_log.md`](04_decisions_log.md) sekcja **[AUDIT]** (zamknięta). Źródła historyczne: [`01_schema_inventory.md`](01_schema_inventory.md), [`02_code_usage_matrix.md`](02_code_usage_matrix.md). **Projekt pod przegląd:** [`07_extended_design_spec.md`](07_extended_design_spec.md); **[S12]–[S20]**. **Zasada [S6] §2:** stany złożone w **parametrycznym JSON**; unikać kolumny SQL na każdy wariant.
+**Status:** **T11 (2026-05-04)** — wiersze poniżej **zsynchronizowane** z repozytorium (`migrations_admin.py` + wyszukiwanie w `backend/`). Nierozwiązane pozycje są **jawnie** oznaczone jako otwarte; plan domknięcia: [`12_FOLLOW_UP_IMPLEMENTATION_QUEUE.md`](12_FOLLOW_UP_IMPLEMENTATION_QUEUE.md) (**T22+**). Uchwały: [`04_decisions_log.md`](04_decisions_log.md) sekcja **[AUDIT]** (zamknięta). Źródła historyczne: [`01_schema_inventory.md`](01_schema_inventory.md), [`02_code_usage_matrix.md`](02_code_usage_matrix.md). **Projekt pod przegląd:** [`07_extended_design_spec.md`](07_extended_design_spec.md); **[S12]–[S20]**. **Zasada [S6] §2:** stany złożone w **parametrycznym JSON**; unikać kolumny SQL na każdy wariant.
 
 ## Cel
 
