@@ -2,7 +2,7 @@
 
 <!-- MASTER_STATUS: ACTIVE -->
 <!-- LAST_UPDATE: 2026-05-04 -->
-<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T15 OK 2026-05-04) -->
+<!-- NOTATKI_IMPL: uzupełniane przy każdym wdrożeniu (T01–T21 OK 2026-05-04); następna faza: [`12_FOLLOW_UP_IMPLEMENTATION_QUEUE.md`](12_FOLLOW_UP_IMPLEMENTATION_QUEUE.md) -->
 <!-- FORMAT: szablon jak ../../skills/_UNIVERSAL_CURSOR_PROMPT_TEMPLATE.md -->
 
 **Cel:** Jedna lista **kolejności realizacji**, odhaczanie postępu (`[ ]` → `[x]`), oraz pod spodem **każde zadanie jako PROMPT** (Cel → Kontekst → Pytania blokujące → Implementacja → Co zostało zrobione).
@@ -47,6 +47,10 @@
 | 21 | **T21** | [x] | **[IMPL] fala 7:** progres cech za XP (meta + endpoint) | T12 | **[IMPL]**, **[S10]** |
 
 **Uwaga kolejności:** W tabeli **T06** jest przed **T05** (najpierw szkielet planu, potem blokada pierwszej narracji).
+
+### Następna faza (po domknięciu T01–T21)
+
+Ustalenia z audytu **jeszcze bez pełnej implementacji** (schema, runtime, legacy admin, import, LLM): pojedynczy plik kolejki **`12_FOLLOW_UP_IMPLEMENTATION_QUEUE.md`** — ID **T22–T32**, backlog **B03–B05**. Zakres: **bez nowego frontu gry (React/Figma)**; [S20] planowany na **istniejący** panel admin.
 
 ### Backlog — poza numeracją T01–T21 (żeby nie umknęło)
 
@@ -590,3 +594,4 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
 | 2026-05-04 | **B01/B02 DONE** — `/api/settings/summary` + panel admin (cooldown rollupu, tryb dostępu do dual preview: `owner` / `owner_admin` / `off`); frontend i backend respektują tryb podglądu dual. |
 | 2026-05-04 | **T09 DONE** — modal historii: baner + mapowanie błędów + fallback ostatniego skrótu + cooldown z ensure (T08). |
+| 2026-05-04 | Utworzono **`12_FOLLOW_UP_IMPLEMENTATION_QUEUE.md`** — kolejka T22–T32 + B03–B05 dla niewdrożonych uchwał Phase 9B (legacy front; [S20] na starym adminie). |
