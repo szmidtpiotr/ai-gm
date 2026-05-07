@@ -437,7 +437,7 @@
         if (!configReady) {
           configReady = true;
           try {
-            const { init } = await import("/admin_panel/sections/config.js?v=23");
+            const { init } = await import("/admin_panel/sections/config.js?v=24");
             await init(el);
           } catch (err) {
             configReady = false;

@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.core.logging import get_logger
+from app.services.effect_json_migration import legacy_effect_fields_from_json
 from app.services.dice import parse_character_sheet, resolve_dc_for_roll, roll_d20
 from app.services.weapon_rules import (
     load_weapon_row,
@@ -448,8 +449,7 @@ def get_item_catalog_for_prompt(conn: sqlite3.Connection) -> str:
         rows = conn.execute(
             """
             SELECT key, label, item_type, value_gp,
-                   effect_type, effect_dice, effect_bonus, effect_target, charges,
-                   ac_bonus, description
+                   effect_json, charges, ac_bonus, description
             FROM game_config_items
             WHERE is_active = 1 AND COALESCE(approved, 1) = 1
               AND item_type != 'narrative'
@@ -476,10 +476,11 @@ def get_item_catalog_for_prompt(conn: sqlite3.Connection) -> str:
             parts.append(f"(AC +{int(r['ac_bonus'])})")
 
         if t == "consumable":
-            eff = str(r["effect_type"] or "misc")
-            dice = str(r["effect_dice"] or "").strip()
-            bonus = int(r["effect_bonus"] or 0)
-            target = str(r["effect_target"] or "self")
+            legacy = legacy_effect_fields_from_json(r["effect_json"]) or {}
+            eff = str(legacy.get("effect_type") or "misc")
+            dice = str(legacy.get("effect_dice") or "").strip()
+            bonus = int(legacy.get("effect_bonus") or 0)
+            target = str(legacy.get("effect_target") or "self")
             effect_str = eff
             if dice:
                 effect_str += f" {dice}"

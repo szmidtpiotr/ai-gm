@@ -24,6 +24,7 @@ ALLOWED_EFFECT_JSON_TYPES = {
     "periodic_save",
     "static_stat_modifier",
     "heal_hp",
+    "restore_mana",
     "apply_condition",
     "remove_condition",
     "block_action",
@@ -36,7 +37,7 @@ _EFFECT_JSON_EFFECT_KEYS = {"type", "condition_key", "dc_key", "stat", "value", 
 _EFFECT_JSON_CATEGORY_TYPES = {
     "character_condition": {"periodic_save", "static_stat_modifier", "block_action", "narrative_only"},
     "gear_bonus": {"static_stat_modifier", "narrative_only"},
-    "consumable_immediate": {"heal_hp", "apply_condition", "remove_condition", "narrative_only"},
+    "consumable_immediate": {"heal_hp", "restore_mana", "apply_condition", "remove_condition", "narrative_only"},
     "aura": {
         "periodic_save",
         "static_stat_modifier",
@@ -222,13 +223,13 @@ def validate_effect_json_payload(payload: object) -> list[str]:
                 errors.append(f"{prefix}.value must be a number for static_stat_modifier")
             if stat is None:
                 errors.append(f"{prefix}.stat is required for static_stat_modifier")
-        elif effect_type == "heal_hp":
+        elif effect_type in {"heal_hp", "restore_mana"}:
             if not isinstance(value, (int, float, str)):
-                errors.append(f"{prefix}.value must be a number or dice string for heal_hp")
+                errors.append(f"{prefix}.value must be a number or dice string for {effect_type}")
             elif isinstance(value, str):
                 dice = value.strip().lower()
                 if not dice or not DAMAGE_DIE_RE.fullmatch(dice):
-                    errors.append(f"{prefix}.value must be a number or dice string like 2d4 for heal_hp")
+                    errors.append(f"{prefix}.value must be a number or dice string like 2d4 for {effect_type}")
         elif effect_type in {"apply_condition", "remove_condition"}:
             if not condition_key or not str(condition_key).strip():
                 errors.append(f"{prefix}.condition_key is required for {effect_type}")
@@ -405,6 +406,55 @@ def _normalize_item_row(row: dict) -> dict:
     elif raw_ac is None:
         out["allowed_classes"] = []
     return out
+
+
+def _legacy_effect_fields_from_json(effect_json: object) -> dict[str, object]:
+    from app.services.effect_json_migration import legacy_effect_fields_from_json
+
+    legacy = legacy_effect_fields_from_json(effect_json) or {}
+    return {
+        "effect_type": legacy.get("effect_type"),
+        "effect_dice": legacy.get("effect_dice"),
+        "effect_bonus": int(legacy.get("effect_bonus") or 0),
+        "effect_target": str(legacy.get("effect_target") or "self"),
+    }
+
+
+def _normalize_legacy_item_effect_json(
+    *,
+    current_effect_json: str | None,
+    effect_type: str | None,
+    effect_dice: str | None,
+    effect_bonus: int | None,
+    effect_target: str | None,
+) -> str | None:
+    from app.services.effect_json_migration import normalize_flat_effect_to_json
+
+    if effect_type is None and effect_dice is None and effect_bonus is None and effect_target is None:
+        return current_effect_json
+
+    current = _legacy_effect_fields_from_json(current_effect_json)
+    if effect_type is not None:
+        current["effect_type"] = str(effect_type).strip().lower() or None
+    if effect_dice is not None:
+        current["effect_dice"] = _validate_effect_dice(effect_dice) if str(effect_dice).strip() else None
+    if effect_bonus is not None:
+        current["effect_bonus"] = int(effect_bonus)
+    if effect_target is not None:
+        current["effect_target"] = str(effect_target).strip().lower() or "self"
+
+    if not current.get("effect_type"):
+        return None
+
+    normalized = normalize_flat_effect_to_json(
+        current.get("effect_type"),
+        current.get("effect_dice"),
+        current.get("effect_bonus"),
+        current.get("effect_target"),
+    )
+    if normalized:
+        return normalized
+    raise ValueError("legacy_effect_requires_effect_json")
 
 
 def list_stats() -> list[dict]:
@@ -1585,14 +1635,14 @@ def list_items() -> list[dict]:
         """
         SELECT key, label, item_type, description, value_gp, weight_kg,
                allowed_classes, ac_bonus,
-               effect_type, effect_dice, effect_bonus, effect_target, charges,
-               effect_json, ai_generated, approved,
+               charges, effect_json, ai_generated, approved,
                note, is_active, locked_at, created_at, updated_at
         FROM game_config_items
         ORDER BY item_type ASC, label COLLATE NOCASE ASC, key ASC
         """
     )
     for row in rows:
+        row.update(_legacy_effect_fields_from_json(row.get("effect_json")))
         row["is_active"] = bool(row.get("is_active", 1))
         try:
             row["allowed_classes"] = json.loads(row.get("allowed_classes") or "[]")
@@ -1630,23 +1680,22 @@ def create_item(
         raise ValueError("invalid_weight_kg")
     if int(ac_bonus) < 0:
         raise ValueError("invalid_ac_bonus")
-    if int(charges) < 1:
+    final_charges = int(charges)
+    if final_charges < 1:
         raise ValueError("invalid_charges")
     ac_json = _serialize_allowed_classes(allowed_classes)
-    eff: str | None
-    if effect_json is None or (isinstance(effect_json, str) and not effect_json.strip()):
+    if effect_json is None:
+        eff = _normalize_legacy_item_effect_json(
+            current_effect_json=None,
+            effect_type=effect_type,
+            effect_dice=effect_dice,
+            effect_bonus=effect_bonus,
+            effect_target=effect_target,
+        )
+    elif isinstance(effect_json, str) and not effect_json.strip():
         eff = None
     else:
         eff = _normalize_effect_json(effect_json)
-    et: str | None
-    if effect_type is not None and str(effect_type).strip():
-        et = _validate_effect_type(str(effect_type))
-    elif safe_type == "consumable":
-        et = "misc"
-    else:
-        et = None
-    dice = _validate_effect_dice(effect_dice)
-    tgt = _validate_effect_target(effect_target)
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -1659,10 +1708,9 @@ def create_item(
             INSERT INTO game_config_items (
                 key, label, item_type, description, value_gp, weight_kg,
                 allowed_classes, ac_bonus,
-                effect_type, effect_dice, effect_bonus, effect_target, charges,
-                effect_json, ai_generated, approved,
+                charges, effect_json, ai_generated, approved,
                 note, is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -1673,11 +1721,7 @@ def create_item(
                 float(weight_kg),
                 ac_json,
                 int(ac_bonus),
-                et,
-                dice,
-                int(effect_bonus),
-                tgt,
-                int(charges),
+                final_charges,
                 eff,
                 int(ai_generated),
                 int(approved),
@@ -1690,14 +1734,14 @@ def create_item(
             """
             SELECT key, label, item_type, description, value_gp, weight_kg,
                    allowed_classes, ac_bonus,
-                   effect_type, effect_dice, effect_bonus, effect_target, charges,
-                   effect_json, ai_generated, approved,
+                   charges, effect_json, ai_generated, approved,
                    note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
             """,
             (safe_key,),
         )
         if new_row:
+            new_row.update(_legacy_effect_fields_from_json(new_row.get("effect_json")))
             new_row["is_active"] = bool(new_row.get("is_active", 1))
             try:
                 new_row["allowed_classes"] = json.loads(new_row.get("allowed_classes") or "[]")
@@ -1741,8 +1785,7 @@ def update_item(
             """
             SELECT key, label, item_type, description, value_gp, weight_kg,
                    allowed_classes, ac_bonus,
-                   effect_type, effect_dice, effect_bonus, effect_target, charges,
-                   effect_json, ai_generated, approved,
+                   charges, effect_json, ai_generated, approved,
                    note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
             """,
@@ -1764,7 +1807,13 @@ def update_item(
             raise ValueError("invalid_weight_kg")
 
         if effect_json is None:
-            final_effect = current.get("effect_json")
+            final_effect = _normalize_legacy_item_effect_json(
+                current_effect_json=current.get("effect_json"),
+                effect_type=effect_type,
+                effect_dice=effect_dice,
+                effect_bonus=effect_bonus,
+                effect_target=effect_target,
+            )
         elif isinstance(effect_json, str) and not effect_json.strip():
             final_effect = None
         else:
@@ -1779,26 +1828,6 @@ def update_item(
         if final_ac_bonus < 0:
             raise ValueError("invalid_ac_bonus")
 
-        if effect_type is not None and str(effect_type).strip():
-            final_et = _validate_effect_type(str(effect_type))
-        elif effect_type is not None and isinstance(effect_type, str) and not effect_type.strip():
-            final_et = None
-        else:
-            final_et = current.get("effect_type")
-
-        if effect_dice is None:
-            final_dice = current.get("effect_dice")
-        elif isinstance(effect_dice, str) and not effect_dice.strip():
-            final_dice = None
-        else:
-            final_dice = _validate_effect_dice(effect_dice)
-
-        final_eff_bonus = int(effect_bonus) if effect_bonus is not None else int(current.get("effect_bonus") or 0)
-        final_tgt = (
-            _validate_effect_target(str(effect_target))
-            if effect_target is not None
-            else str(current.get("effect_target") or "self")
-        )
         final_charges = int(charges) if charges is not None else int(current.get("charges") or 1)
         if final_charges < 1:
             raise ValueError("invalid_charges")
@@ -1811,8 +1840,7 @@ def update_item(
             UPDATE game_config_items
             SET label = ?, item_type = ?, description = ?, value_gp = ?, weight_kg = ?,
                 allowed_classes = ?, ac_bonus = ?,
-                effect_type = ?, effect_dice = ?, effect_bonus = ?, effect_target = ?, charges = ?,
-                effect_json = ?, ai_generated = ?, approved = ?,
+                charges = ?, effect_json = ?, ai_generated = ?, approved = ?,
                 note = ?, is_active = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
@@ -1824,10 +1852,6 @@ def update_item(
                 final_wkg,
                 final_ac,
                 final_ac_bonus,
-                final_et,
-                final_dice,
-                final_eff_bonus,
-                final_tgt,
                 final_charges,
                 final_effect,
                 final_ai,
@@ -1842,14 +1866,14 @@ def update_item(
             """
             SELECT key, label, item_type, description, value_gp, weight_kg,
                    allowed_classes, ac_bonus,
-                   effect_type, effect_dice, effect_bonus, effect_target, charges,
-                   effect_json, ai_generated, approved,
+                   charges, effect_json, ai_generated, approved,
                    note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
             """,
             (safe_key,),
         )
         if new_row:
+            new_row.update(_legacy_effect_fields_from_json(new_row.get("effect_json")))
             new_row["is_active"] = bool(new_row.get("is_active", 1))
             try:
                 new_row["allowed_classes"] = json.loads(new_row.get("allowed_classes") or "[]")
@@ -1872,8 +1896,7 @@ def delete_item(key: str, *, force: bool) -> None:
             """
             SELECT key, label, item_type, description, value_gp, weight_kg,
                    allowed_classes, ac_bonus,
-                   effect_type, effect_dice, effect_bonus, effect_target, charges,
-                   effect_json, ai_generated, approved,
+                   charges, effect_json, ai_generated, approved,
                    note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
             """,
@@ -1909,14 +1932,19 @@ def list_consumables() -> list[dict]:
     """DEPRECATED 8H — consumables live in game_config_items with item_type='consumable'."""
     rows = _fetch_all(
         """
-        SELECT key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
-               weight_kg, charges, value_gp, note, is_active, locked_at, created_at, updated_at
+        SELECT key, label, description, effect_json, weight_kg, charges, value_gp,
+               note, is_active, locked_at, created_at, updated_at
         FROM game_config_items
         WHERE item_type = 'consumable'
         ORDER BY label COLLATE NOCASE ASC, key ASC
         """
     )
-    return [_consumable_row_as_legacy_dict(dict(r)) for r in rows]
+    out: list[dict] = []
+    for row in rows:
+        payload = dict(row)
+        payload.update(_legacy_effect_fields_from_json(payload.get("effect_json")))
+        out.append(_consumable_row_as_legacy_dict(payload))
+    return out
 
 
 def create_consumable(
@@ -1935,21 +1963,24 @@ def create_consumable(
     is_active: bool = True,
 ) -> dict:
     """DEPRECATED 8H — creates a row in game_config_items (item_type='consumable')."""
+    effect_json = _normalize_legacy_item_effect_json(
+        current_effect_json=None,
+        effect_type=effect_type,
+        effect_dice=effect_dice,
+        effect_bonus=effect_bonus,
+        effect_target=effect_target,
+    )
     created = create_item(
         key=key,
         label=label,
         item_type="consumable",
         description=description or "",
         value_gp=int(base_price),
-        effect_json=None,
+        effect_json=effect_json,
         is_active=is_active,
         weight_kg=float(weight_kg),
         allowed_classes=[],
         ac_bonus=0,
-        effect_type=effect_type,
-        effect_dice=effect_dice,
-        effect_bonus=int(effect_bonus),
-        effect_target=effect_target,
         charges=int(charges),
         ai_generated=0,
         approved=1,
@@ -1983,8 +2014,8 @@ def update_consumable(
         current = _fetch_one(
             conn,
             """
-            SELECT key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
-                   weight_kg, charges, value_gp, note, is_active, locked_at, created_at, updated_at
+            SELECT key, label, description, effect_json, weight_kg, charges, value_gp,
+                   note, is_active, locked_at, created_at, updated_at
             FROM game_config_items
             WHERE key = ? AND item_type = 'consumable'
             """,
@@ -2049,8 +2080,8 @@ def delete_consumable(key: str, *, force: bool) -> None:
         current = _fetch_one(
             conn,
             """
-            SELECT key, label, description, effect_type, effect_dice, effect_bonus, effect_target,
-                   weight_kg, charges, value_gp, note, is_active, locked_at, created_at, updated_at
+            SELECT key, label, description, effect_json, weight_kg, charges, value_gp,
+                   note, is_active, locked_at, created_at, updated_at
             FROM game_config_items
             WHERE key = ? AND item_type = 'consumable'
             """,

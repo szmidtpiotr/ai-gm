@@ -851,7 +851,7 @@
                 <td><code>effect_json</code></td>
                 <td>text</td>
                 <td>✅</td>
-                <td>JSON string with stat_mods and duration</td>
+                <td>JSON string following effect_json schema v1</td>
               </tr>
               <tr>
                 <td><code>description</code></td>
@@ -882,7 +882,7 @@
         </div>
         <p class="muted" style="margin-top: 0">
           <strong>effect_json</strong> structure (must be valid JSON encoded as a string):
-          <code>{ "stat_mods": { "STR": -2 }, "duration": "3 turns" }</code>
+          <code>{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"STR","value":-2,"expires":"duration_rounds:3"}]}</code>
         </p>
         <div class="template-example">
           <div class="template-example-header">
@@ -893,14 +893,14 @@
   {
     "key": "poisoned",
     "label": "Poisoned",
-    "effect_json": "{\"stat_mods\":{\"STR\":-2},\"duration\":\"3 turns\"}",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"STR\",\"value\":-2,\"expires\":\"duration_rounds:3\"}]}",
     "description": "Toxin weakens muscles. STR -2 for 3 turns.",
     "is_active": true
   },
   {
     "key": "blinded",
     "label": "Blinded",
-    "effect_json": "{\"stat_mods\":{\"DEX\":-4},\"duration\":\"2 turns\"}",
+    "effect_json": "{\"schema_version\":1,\"effect_category\":\"character_condition\",\"effects\":[{\"type\":\"static_stat_modifier\",\"stat\":\"DEX\",\"value\":-4,\"expires\":\"duration_rounds:2\"}]}",
     "description": "Cannot see. DEX -4 for 2 turns.",
     "is_active": true
   }
@@ -911,11 +911,10 @@
       <section class="template-section" aria-labelledby="sec-items">
         <h2 id="sec-items">Items (<code>game_config_items</code>)</h2>
         <p class="muted">
-          Główny katalog przedmiotów dla gry i dla GM: zbroje, zużywalne (z polami efektu), przedmioty fabularne,
-          klucze fabularne itd. Mikstury i consumables definiuj tutaj jako <code>item_type: consumable</code> z
-          <code>effect_type</code> / <code>effect_dice</code> — to jest preferowane źródło (8H) zamiast osobnej tabeli
-          legacy. Pole <code>effect_json</code> zostaw na rzadkie przypadki (np. stat_mods); dla healów używaj pól
-          efektu.
+          Główny katalog przedmiotów dla gry i dla GM: zbroje, zużywalne, przedmioty fabularne, klucze fabularne itd.
+          Po T25 preferowanym formatem dla efektów jest <code>effect_json</code>. Legacy pola
+          <code>effect_type</code> / <code>effect_dice</code> są akceptowane tylko jako wygodny skrót dla prostych
+          heal/restore/apply-remove-condition i są automatycznie konwertowane do <code>effect_json</code>.
         </p>
         <div class="field-ref-wrap admin-table-wrap">
           <table class="admin-table">

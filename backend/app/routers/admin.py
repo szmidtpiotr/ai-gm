@@ -1123,6 +1123,13 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
         if str(e) == "invalid_effect_json_schema":
             raise HTTPException(status_code=422, detail="effect_json must follow schema v1 (schema_version, effect_category, effects[])") from None
+        if str(e) == "invalid_damage_die":
+            raise HTTPException(status_code=422, detail="effect_dice must match ^\\d*d\\d+$ (e.g. d6, 2d8)") from None
+        if str(e) == "legacy_effect_requires_effect_json":
+            raise HTTPException(
+                status_code=422,
+                detail="Legacy item effect fields can only auto-convert heal/restore/apply-remove-condition. Use effect_json for stat buffs or custom effects.",
+            ) from None
         if str(e) == "invalid_value_gp":
             raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
@@ -1177,6 +1184,13 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             raise HTTPException(status_code=422, detail="effect_json must be valid JSON") from None
         if str(e) == "invalid_effect_json_schema":
             raise HTTPException(status_code=422, detail="effect_json must follow schema v1 (schema_version, effect_category, effects[])") from None
+        if str(e) == "invalid_damage_die":
+            raise HTTPException(status_code=422, detail="effect_dice must match ^\\d*d\\d+$ (e.g. d6, 2d8)") from None
+        if str(e) == "legacy_effect_requires_effect_json":
+            raise HTTPException(
+                status_code=422,
+                detail="Legacy item effect fields can only auto-convert heal/restore/apply-remove-condition. Use effect_json for stat buffs or custom effects.",
+            ) from None
         if str(e) == "invalid_value_gp":
             raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
@@ -1242,6 +1256,11 @@ def admin_create_consumable(req: ConsumableCreateReq, _: None = Depends(require_
             raise HTTPException(status_code=422, detail="effect_target must be one of: self, ally, any") from None
         if str(e) == "invalid_damage_die":
             raise HTTPException(status_code=422, detail="effect_dice must match ^\\d*d\\d+$ (e.g. d6, 2d8)") from None
+        if str(e) == "legacy_effect_requires_effect_json":
+            raise HTTPException(
+                status_code=422,
+                detail="Legacy consumable fields can only auto-convert heal/restore/apply-remove-condition. Use effect_json via item editor for stat buffs or custom effects.",
+            ) from None
         if str(e) == "invalid_charges":
             raise HTTPException(status_code=422, detail="charges must be >= 1") from None
         if str(e) in ("invalid_base_price", "invalid_value_gp"):
@@ -1288,6 +1307,11 @@ def admin_patch_consumable(key: str, req: ConsumablePatchReq, _: None = Depends(
             raise HTTPException(status_code=422, detail="effect_target must be one of: self, ally, any") from None
         if str(e) == "invalid_damage_die":
             raise HTTPException(status_code=422, detail="effect_dice must match ^\\d*d\\d+$ (e.g. d6, 2d8)") from None
+        if str(e) == "legacy_effect_requires_effect_json":
+            raise HTTPException(
+                status_code=422,
+                detail="Legacy consumable fields can only auto-convert heal/restore/apply-remove-condition. Use effect_json via item editor for stat buffs or custom effects.",
+            ) from None
         if str(e) == "invalid_charges":
             raise HTTPException(status_code=422, detail="charges must be >= 1") from None
         if str(e) in ("invalid_base_price", "invalid_value_gp"):
