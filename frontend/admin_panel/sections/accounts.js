@@ -412,8 +412,10 @@ export async function init(container) {
   toolbar.appendChild(h2);
   toolbar.appendChild(addBtn);
 
+  const globalHost = el("div", "accounts-global-llm-host");
   const tableHost = el("div", "accounts-table-host");
   container.appendChild(toolbar);
+  container.appendChild(globalHost);
   container.appendChild(tableHost);
 
   /** @type {Array<Record<string, unknown>>} */
@@ -722,6 +724,7 @@ export async function init(container) {
 
   addBtn.addEventListener("click", () => openAddUserModal());
 
+  await mountGlobalLlmSettings(globalHost);
   await refreshList();
 }
 
@@ -794,16 +797,253 @@ function normalizeModelsListResponse(data) {
     .filter((m) => m && typeof m.name === "string" && m.name.trim());
 }
 
+async function mountGlobalLlmSettings(host) {
+  host.innerHTML = "";
+  const card = el("div", "accounts-llm-form");
+  const heading = el("h3", "", "Global LLM");
+  const intro = el(
+    "p",
+    "muted",
+    "Global provider / URL / API key are managed only here. Account-level custom settings below can still override these defaults.",
+  );
+  const status = el("p", "muted");
+  const presetSelect = el("select", "");
+  const presetLabel = el("input", "");
+  presetLabel.type = "text";
+  presetLabel.placeholder = "Preset name";
+  const provider = el("select", "");
+  provider.innerHTML = '<option value="ollama">ollama</option><option value="openai">openai</option>';
+  const baseUrl = el("input", "");
+  baseUrl.type = "text";
+  baseUrl.placeholder = "http://host:11434 or https://api.openai.com/v1";
+  const model = el("input", "");
+  model.type = "text";
+  model.placeholder = "gemma4:e4b / gpt-4.1-mini / etc.";
+  const apiKey = el("input", "");
+  apiKey.type = "password";
+  apiKey.placeholder = "Leave empty to keep stored key on update";
+
+  let snapshot = null;
+  let selectedPresetId = null;
+
+  function field(label, input) {
+    const wrap = el("div", "field");
+    wrap.appendChild(el("label", "", label));
+    wrap.appendChild(input);
+    return wrap;
+  }
+
+  function currentPreset() {
+    if (!snapshot || selectedPresetId == null) return null;
+    return (snapshot.presets || []).find((item) => Number(item.id) === Number(selectedPresetId)) || null;
+  }
+
+  function fillFromCurrentSettings() {
+    const settings = snapshot?.settings || {};
+    provider.value = String(settings.provider || "ollama").toLowerCase() || "ollama";
+    baseUrl.value = String(settings.base_url || "");
+    model.value = String(settings.model || "");
+    presetLabel.value = "";
+    apiKey.value = "";
+    apiKey.placeholder = settings.api_key_set
+      ? "Stored API key active; enter a new one only to replace it"
+      : "Paste API key if required";
+  }
+
+  function fillFromPreset(preset) {
+    if (!preset) {
+      fillFromCurrentSettings();
+      return;
+    }
+    provider.value = String(preset.provider || "ollama").toLowerCase() || "ollama";
+    baseUrl.value = String(preset.base_url || "");
+    model.value = String(preset.model || "");
+    presetLabel.value = String(preset.label || "");
+    apiKey.value = "";
+    apiKey.placeholder = preset.api_key_set
+      ? String(preset.api_key || "Stored API key active")
+      : "Paste API key if required";
+  }
+
+  function rebuildPresetOptions() {
+    const activeId = snapshot?.active_preset_id != null ? Number(snapshot.active_preset_id) : null;
+    presetSelect.innerHTML = "";
+    const envOpt = document.createElement("option");
+    envOpt.value = "";
+    envOpt.textContent = "Server env / no saved preset";
+    presetSelect.appendChild(envOpt);
+    for (const item of snapshot?.presets || []) {
+      const opt = document.createElement("option");
+      opt.value = String(item.id);
+      opt.textContent = item.is_active ? `${item.label} (active)` : item.label;
+      presetSelect.appendChild(opt);
+    }
+    selectedPresetId = activeId;
+    presetSelect.value = activeId != null ? String(activeId) : "";
+    fillFromPreset(currentPreset());
+  }
+
+  function renderStatus() {
+    const settings = snapshot?.settings || {};
+    const activeLabel = snapshot?.active_preset_label ? `Preset: ${snapshot.active_preset_label}` : "Preset: server env";
+    const providerText = String(settings.provider || "unknown");
+    const modelText = String(settings.model || "—");
+    const baseText = String(settings.base_url || "—");
+    status.textContent = `${activeLabel} | provider=${providerText} | model=${modelText} | base=${baseText}`;
+  }
+
+  async function reload() {
+    snapshot = await adminFetch("/api/admin/llm/global-settings");
+    rebuildPresetOptions();
+    renderStatus();
+  }
+
+  presetSelect.addEventListener("change", () => {
+    selectedPresetId = presetSelect.value ? Number(presetSelect.value) : null;
+    fillFromPreset(currentPreset());
+  });
+
+  const actions = el("div", "admin-table-actions");
+  const saveNewBtn = el("button", "primary-btn", "Save New + Activate");
+  saveNewBtn.type = "button";
+  saveNewBtn.addEventListener("click", async () => {
+    try {
+      await adminFetch("/api/admin/llm/presets", {
+        method: "POST",
+        body: JSON.stringify({
+          label: presetLabel.value.trim(),
+          provider: provider.value.trim().toLowerCase(),
+          base_url: baseUrl.value.trim(),
+          model: model.value.trim(),
+          api_key: apiKey.value.trim() || null,
+          activate: true,
+        }),
+      });
+      showToast("Global LLM preset saved and activated.", "success");
+      await reload();
+    } catch (e) {
+      showToast(parseApiError(e, "Failed to save preset."), "error");
+    }
+  });
+  actions.appendChild(saveNewBtn);
+
+  const updateBtn = el("button", "secondary-btn", "Update Selected + Activate");
+  updateBtn.type = "button";
+  updateBtn.addEventListener("click", async () => {
+    if (!selectedPresetId) {
+      showToast("Select a saved preset first.", "info");
+      return;
+    }
+    try {
+      await adminFetch("/api/admin/llm/presets", {
+        method: "POST",
+        body: JSON.stringify({
+          preset_id: selectedPresetId,
+          label: presetLabel.value.trim(),
+          provider: provider.value.trim().toLowerCase(),
+          base_url: baseUrl.value.trim(),
+          model: model.value.trim(),
+          api_key: apiKey.value.trim() || null,
+          activate: true,
+        }),
+      });
+      showToast("Global LLM preset updated and activated.", "success");
+      await reload();
+    } catch (e) {
+      showToast(parseApiError(e, "Failed to update preset."), "error");
+    }
+  });
+  actions.appendChild(updateBtn);
+
+  const activateBtn = el("button", "secondary-btn", "Activate Selected");
+  activateBtn.type = "button";
+  activateBtn.addEventListener("click", async () => {
+    if (!selectedPresetId) {
+      showToast("Select a saved preset first.", "info");
+      return;
+    }
+    try {
+      await adminFetch(`/api/admin/llm/presets/${selectedPresetId}/activate`, {
+        method: "POST",
+      });
+      showToast("Global LLM preset activated.", "success");
+      await reload();
+    } catch (e) {
+      showToast(parseApiError(e, "Activation failed."), "error");
+    }
+  });
+  actions.appendChild(activateBtn);
+
+  const envBtn = el("button", "secondary-btn", "Use Server Env");
+  envBtn.type = "button";
+  envBtn.addEventListener("click", async () => {
+    try {
+      await adminFetch("/api/admin/llm/use-env", { method: "POST" });
+      showToast("Global LLM reverted to server env.", "success");
+      await reload();
+    } catch (e) {
+      showToast(parseApiError(e, "Could not switch to server env."), "error");
+    }
+  });
+  actions.appendChild(envBtn);
+
+  const deleteBtn = el("button", "secondary-btn danger-outline", "Delete Selected");
+  deleteBtn.type = "button";
+  deleteBtn.addEventListener("click", async () => {
+    if (!selectedPresetId) {
+      showToast("Select an inactive preset to delete.", "info");
+      return;
+    }
+    const chosen = currentPreset();
+    const ok = await showConfirm(`Delete preset "${chosen?.label || selectedPresetId}"?`, { dangerous: true });
+    if (!ok) return;
+    try {
+      await adminFetch(`/api/admin/llm/presets/${selectedPresetId}`, { method: "DELETE" });
+      showToast("Preset deleted.", "success");
+      await reload();
+    } catch (e) {
+      showToast(parseApiError(e, "Delete failed."), "error");
+    }
+  });
+  actions.appendChild(deleteBtn);
+
+  card.appendChild(heading);
+  card.appendChild(intro);
+  card.appendChild(status);
+  card.appendChild(field("Saved presets", presetSelect));
+  card.appendChild(field("Preset label", presetLabel));
+  card.appendChild(field("Provider", provider));
+  card.appendChild(field("Base URL", baseUrl));
+  card.appendChild(field("Model", model));
+  card.appendChild(field("API Key", apiKey));
+  card.appendChild(actions);
+  host.appendChild(card);
+
+  try {
+    await reload();
+  } catch (e) {
+    host.innerHTML = "";
+    host.appendChild(el("p", "muted", parseApiError(e, "Failed to load global LLM settings.")));
+  }
+}
+
 async function mountLlm(userId, host) {
   host.innerHTML = "";
   const wrap = el("div", "accounts-llm-form");
+  wrap.appendChild(
+    el(
+      "p",
+      "muted",
+      "Per-account custom settings override the global LLM above. Switching back to default keeps the saved custom values for later reuse.",
+    ),
+  );
   try {
     const data = await adminFetch(`/api/admin/users/${userId}/llm-settings`);
     const s = data.settings || {};
     const prov = el("select", "");
     prov.innerHTML =
-      '<option value="ollama">ollama</option><option value="openai">openai</option><option value="custom">custom</option>';
-    prov.value = String(s.provider || "ollama").toLowerCase();
+      '<option value="default">default (server/admin)</option><option value="ollama">ollama</option><option value="openai">openai</option>';
+    prov.value = String(s.mode || "default").toLowerCase() === "default" ? "default" : String(s.provider || "ollama").toLowerCase();
     const base = el("input", "");
     base.type = "text";
     base.value = String(s.base_url || "");
@@ -862,15 +1102,6 @@ async function mountLlm(userId, host) {
       showAllModelsEl = null;
       openaiShowAllWrap = null;
       modelField.replaceChildren(modelLabel);
-
-      if (p === "custom") {
-        const inp = el("input", "");
-        inp.type = "text";
-        inp.value = prev || saved;
-        modelControl = inp;
-        modelField.appendChild(inp);
-        return;
-      }
 
       const rowInner = el("div", "accounts-llm-model-row-inner");
       const sel = el("select", "");
@@ -951,6 +1182,13 @@ async function mountLlm(userId, host) {
       });
     }
 
+    function updateCustomFieldsVisibility() {
+      const mode = prov.value.trim().toLowerCase();
+      const showCustom = mode !== "default";
+      base.parentElement.style.display = showCustom ? "" : "none";
+      apiKey.parentElement.style.display = showCustom ? "" : "none";
+    }
+
     [["Provider", prov], ["Base URL", base], ["API Key", apiKey]].forEach(([label, inp]) => {
       const f = el("div", "field");
       f.appendChild(el("label", "", String(label)));
@@ -960,20 +1198,24 @@ async function mountLlm(userId, host) {
     wrap.appendChild(modelField);
 
     await rebuildModelControl(String(s.model || ""));
+    updateCustomFieldsVisibility();
 
     prov.addEventListener("change", async () => {
+      updateCustomFieldsVisibility();
       await rebuildModelControl(getCurrentModelValue());
     });
 
     const save = el("button", "primary-btn", "Save");
     save.type = "button";
     save.addEventListener("click", async () => {
+      const mode = prov.value.trim().toLowerCase() === "default" ? "default" : "custom";
       const body = {
-        provider: prov.value.trim().toLowerCase(),
-        base_url: base.value.trim(),
-        model: getCurrentModelValue(),
+        mode,
+        provider: mode === "custom" ? prov.value.trim().toLowerCase() : "",
+        base_url: mode === "custom" ? base.value.trim() : "",
+        model: mode === "custom" ? getCurrentModelValue() : "",
       };
-      if (apiKey.value.trim()) {
+      if (mode === "custom" && apiKey.value.trim()) {
         body.api_key = apiKey.value;
       }
       try {
@@ -985,7 +1227,9 @@ async function mountLlm(userId, host) {
         apiKey.value = "";
         const dataFresh = await adminFetch(`/api/admin/users/${userId}/llm-settings`);
         Object.assign(s, dataFresh.settings || {});
-        await rebuildModelControl(body.model);
+        prov.value = String(s.mode || "default").toLowerCase() === "default" ? "default" : String(s.provider || "ollama").toLowerCase();
+        updateCustomFieldsVisibility();
+        await rebuildModelControl(body.model || String(s.model || ""));
       } catch (e) {
         showToast(parseApiError(e, "Save failed."), "error");
       }

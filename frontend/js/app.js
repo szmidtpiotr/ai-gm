@@ -9,6 +9,7 @@ window.SHEET_PANEL_STORAGE_KEY = "ai-gm:sheetPanelOpen";
 window.SHEET_STATS = ["STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK"];
 window.state.lastApiCall = window.state.lastApiCall || null;
 window.state.llmSettings = window.state.llmSettings || null;
+window.state.serverLlmSettings = window.state.serverLlmSettings || null;
 window.state.showAllProviderModels = window.state.showAllProviderModels ?? false;
 
 window.LLM_SETTINGS_COLLAPSE_PREF_KEY = "ai-gm:llmSettingsCollapsedPref";
@@ -75,17 +76,15 @@ window.applyFoldState = function () {
 })();
 
 window.playerMayEditLlmConnectionUi = function () {
-  if (window.state.playerIsAdmin === false) return false;
-  return true;
+  return false;
 };
 
 window.applyPlayerLlmSettingsAccessUi = function () {
   const wrap = document.getElementById("llm-player-admin-only");
   if (!wrap) return;
-  const show = window.playerMayEditLlmConnectionUi();
-  wrap.hidden = !show;
-  wrap.style.display = show ? "" : "none";
-  wrap.setAttribute("aria-hidden", show ? "false" : "true");
+  wrap.hidden = false;
+  wrap.style.display = "";
+  wrap.setAttribute("aria-hidden", "false");
 };
 
 window.state.mechanicMetadata = window.state.mechanicMetadata || null;
@@ -119,6 +118,20 @@ window.loadMechanicMetadata = async function () {
   }
 };
 
+/** Effective model for requests: user LLM profile, then campaign, then previous in-memory value. */
+window.resolveEffectiveEngineModel = function () {
+  const s = window.state?.llmSettings;
+  const fromUser = String(s?.model || "").trim();
+  const campaign = typeof window.currentCampaign === "function" ? window.currentCampaign() : null;
+  const campaignModel = String(campaign?.model_id || campaign?.modelid || "").trim();
+  return (
+    fromUser ||
+    campaignModel ||
+    String(window.state?.selectedEngine || "").trim() ||
+    ""
+  );
+};
+
 /** LLM provider/model/API key: backend (`GET/POST /api/settings/llm`, per-user PUT) is source of truth — not localStorage (iframes may block it). */
 window.persistLlmSettingsToStorage = function (_settings) {};
 
@@ -134,9 +147,14 @@ window.setLlmControlsCollapsed = function (collapsed) {
   const hintEl = document.getElementById("llm-settings-toggle-hint");
   if (!hintEl) return;
   const settings = window.state?.llmSettings;
+  const mode = String(settings?.mode || "default").toLowerCase();
   const provider = String(settings?.provider || "").toLowerCase() || "unknown";
   const apiKeySet = !!settings?.api_key_set;
   const connected = provider === "ollama" || apiKeySet;
+  if (mode === "default") {
+    hintEl.textContent = "Default";
+    return;
+  }
   hintEl.textContent = connected ? "Saved" : "Connect";
 };
 
@@ -321,18 +339,16 @@ window.normalizeLlmBaseUrlInput = function (rawBaseUrl, provider) {
 };
 
 window.getLlmProviderPayloadFromForm = function () {
-  const { llmProviderSelectEl, llmBaseUrlInputEl, llmApiKeyInputEl, engineSelectEl } = window.getEls();
-  const selected = (llmProviderSelectEl?.value || 'ollama-local').trim();
-  const campaign = typeof window.currentCampaign === 'function' ? window.currentCampaign() : null;
-  const campaignModel =
-    String(campaign?.model_id || campaign?.modelid || '').trim();
-  const model =
-    String(window.state.selectedEngine || '').trim() ||
-    String(engineSelectEl?.value || '').trim() ||
-    campaignModel;
+  const { llmProviderSelectEl, llmBaseUrlInputEl, llmApiKeyInputEl } = window.getEls();
+  const selected = (llmProviderSelectEl?.value || 'default').trim();
+  const model = window.resolveEffectiveEngineModel();
 
+  if (selected === 'default') {
+    return { mode: 'default', provider: '', base_url: '', model: '', api_key: '' };
+  }
   if (selected === 'ollama-local') {
     return {
+      mode: 'custom',
       provider: 'ollama',
       base_url: 'http://localhost:11434',
       model,
@@ -342,6 +358,7 @@ window.getLlmProviderPayloadFromForm = function () {
   if (selected === 'ollama-remote') {
     const base = window.normalizeLlmBaseUrlInput((llmBaseUrlInputEl?.value || '').trim(), 'ollama');
     return {
+      mode: 'custom',
       provider: 'ollama',
       base_url: base || 'http://host:11434',
       model,
@@ -350,6 +367,7 @@ window.getLlmProviderPayloadFromForm = function () {
   }
   const openaiBase = window.normalizeLlmBaseUrlInput((llmBaseUrlInputEl?.value || '').trim(), 'openai');
   return {
+    mode: 'custom',
     provider: 'openai',
     base_url: openaiBase || 'https://api.llmapi.ai',
     model,
@@ -368,13 +386,15 @@ window.updateLlmProviderFormVisibility = function () {
   } = window.getEls();
   if (!llmProviderSelectEl || !llmBaseUrlInputEl || !llmApiKeyInputEl) return;
   const selected = llmProviderSelectEl.value;
-  const hideExtra = selected === 'ollama-local';
+  const hideExtra = selected === 'default' || selected === 'ollama-local';
   if (llmBaseUrlFieldEl) llmBaseUrlFieldEl.style.display = hideExtra ? 'none' : 'flex';
   if (llmApiKeyFieldEl) llmApiKeyFieldEl.style.display = hideExtra ? 'none' : 'flex';
   if (openaiModelsToggleWrapEl) {
     openaiModelsToggleWrapEl.style.display = selected === 'openai' ? 'block' : 'none';
   }
-  if (selected === 'ollama-remote') {
+  if (selected === 'default') {
+    llmApiKeyInputEl.placeholder = 'Server default handles auth';
+  } else if (selected === 'ollama-remote') {
     llmBaseUrlInputEl.placeholder = 'http://host:port';
     llmApiKeyInputEl.placeholder = 'API key (optional)';
   } else if (selected === 'openai') {
@@ -384,129 +404,59 @@ window.updateLlmProviderFormVisibility = function () {
 };
 
 window.applyLlmSettingsToForm = function (settings) {
-  const { llmProviderSelectEl, llmBaseUrlInputEl, llmApiKeyInputEl, engineSelectEl } = window.getEls();
   if (!settings) return;
-  const provider = (settings.provider || 'ollama').toLowerCase();
-  const baseUrl = settings.base_url || '';
   const campaign = typeof window.currentCampaign === 'function' ? window.currentCampaign() : null;
-  const campaignModel =
-    String(campaign?.model_id || campaign?.modelid || '').trim();
+  const campaignModel = String(campaign?.model_id || campaign?.modelid || '').trim();
   const preferredModel =
     campaignModel ||
-    String(window.state.selectedEngine || '').trim() ||
-    String(settings.model || '').trim();
-  if (llmProviderSelectEl) {
-    if (provider === 'openai') {
-      llmProviderSelectEl.value = 'openai';
-    } else if (baseUrl && baseUrl !== 'http://localhost:11434') {
-      llmProviderSelectEl.value = 'ollama-remote';
-    } else {
-      llmProviderSelectEl.value = 'ollama-local';
-    }
-  }
-  if (llmBaseUrlInputEl) llmBaseUrlInputEl.value = baseUrl || 'http://localhost:11434';
-  if (llmApiKeyInputEl) llmApiKeyInputEl.value = '';
+    String(settings.model || '').trim() ||
+    String(window.state.selectedEngine || '').trim();
   if (preferredModel) {
     window.state.selectedEngine = preferredModel;
-    if (engineSelectEl) {
-      engineSelectEl.value = preferredModel;
-    }
   }
   window.updateLlmProviderFormVisibility();
-  if (llmApiKeyInputEl) {
-    const masked = String(settings.api_key || '').trim();
-    const keySet = !!settings.api_key_set;
-    if (keySet && masked) {
-      llmApiKeyInputEl.placeholder = masked;
-    } else if (keySet) {
-      llmApiKeyInputEl.placeholder = 'Klucz API zapisany (wklej nowy, aby zamienić)';
-    }
-  }
 };
 
 window.computeLlmGate = function () {
   const s = window.state.llmSettings;
-  const { llmProviderSelectEl, llmApiKeyInputEl, engineSelectEl } = window.getEls();
-  const providerUi = (llmProviderSelectEl?.value || 'ollama-local').toLowerCase();
-  const model =
-    String(s?.model || '').trim() ||
-    String(window.state.selectedEngine || '').trim() ||
-    String(engineSelectEl?.value || '').trim();
-
-  const keyInForm = (llmApiKeyInputEl?.value || '').trim();
-  const hasStoredKey = !!s?.api_key_set;
+  const model = window.resolveEffectiveEngineModel();
+  const mode = String(s?.mode || "default").toLowerCase();
 
   if (!model) {
     return {
       ok: false,
-      reason: 'Wybierz model LLM w panelu połączenia i zapisz (Connect).',
+      reason:
+        "Brak modelu LLM — ustaw globalnie lub per konto w Admin Panel → Accounts.",
     };
   }
 
-  if (providerUi === 'ollama-local') {
+  if (mode === "default") {
+    if (String(s?.provider || "").toLowerCase() === "openai" && !s?.api_key_set) {
+      return {
+        ok: false,
+        reason:
+          "Domyślny serwer używa dostawcy OpenAI bez klucza. Ustaw LLM_API_KEY na backendzie lub profil gracza (custom).",
+      };
+    }
     return { ok: true };
   }
 
-  if (!hasStoredKey && !keyInForm) {
+  const prov = String(s?.provider || "").toLowerCase();
+  if (prov === "ollama") {
+    return { ok: true };
+  }
+  if (!s?.api_key_set) {
     return {
       ok: false,
       reason:
-        'Dla OpenAI / zdalnego Ollama potrzebny jest klucz API: wklej go w ustawieniach LLM i zapisz (Connect).',
+        "Profil LLM (custom) wymaga klucza API — ustaw go w Admin Panel → Accounts dla tego konta.",
     };
   }
   return { ok: true };
 };
 
 window.connectLlmSettings = async function () {
-  if (typeof window.playerMayEditLlmConnectionUi === "function" && !window.playerMayEditLlmConnectionUi()) {
-    throw new Error("Brak uprawnień do zmiany ustawień LLM.");
-  }
-  const userId = window.state?.playerUserId || 1;
-  const raw = window.getLlmProviderPayloadFromForm();
-  const keyTrim = String(raw.api_key || '').trim();
-  const preserveKey = !keyTrim && !!(window.state.llmSettings && window.state.llmSettings.api_key_set);
-  const payload = {
-    provider: raw.provider,
-    base_url: raw.base_url,
-    model: raw.model,
-    api_key: preserveKey ? null : keyTrim || '',
-  };
-  const resp = await fetch('/api/settings/llm', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!resp.ok) {
-    throw new Error(`HTTP ${resp.status}`);
-  }
-  const data = await resp.json();
-  let newSettings = data?.settings || null;
-
-  // Persist per-user settings (including api_key) so that refresh/another device works.
-  try {
-    const userResp = await fetch(`/api/users/${userId}/llm-settings`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (userResp.ok) {
-      const userData = await userResp.json();
-      newSettings = userData?.settings || newSettings;
-    }
-  } catch (_err) {
-    // Keep runtime settings in memory.
-  }
-
-  window.state.llmSettings = newSettings;
-  window.state.selectedEngine = payload.model;
-  window.syncLlmControlsCollapseToCurrentState();
-  try {
-    await window.loadUserLlmSettings(userId);
-  } catch (_e) {
-    /* runtime settings already applied */
-  }
-  if (typeof window.updateUiState === 'function') window.updateUiState();
-  return data;
+  throw new Error("LLM connection settings are managed in Admin Panel -> Accounts.");
 };
 
 window.loadLlmSettings = async function () {
@@ -515,8 +465,10 @@ window.loadLlmSettings = async function () {
     throw new Error(`HTTP ${resp.status}`);
   }
   const settings = await resp.json();
-  window.state.llmSettings = settings;
-  window.applyLlmSettingsToForm(settings);
+  window.state.serverLlmSettings = settings;
+  if (!window.state.llmSettings) {
+    window.applyLlmSettingsToForm(settings);
+  }
   if (typeof window.updateUiState === 'function') window.updateUiState();
   return settings;
 };
@@ -533,24 +485,6 @@ window.loadUserLlmSettings = async function (userId) {
 };
 
 window.initLlmProviderControls = async function () {
-  const { llmProviderSelectEl, showAllModelsToggleEl } = window.getEls();
-  if (llmProviderSelectEl) {
-    llmProviderSelectEl.addEventListener('change', async () => {
-      window.updateLlmProviderFormVisibility();
-      const userId = window.state?.playerUserId || 1;
-      await window.loadModels(userId);
-    });
-  }
-  if (showAllModelsToggleEl) {
-    showAllModelsToggleEl.checked = !!window.state.showAllProviderModels;
-    showAllModelsToggleEl.addEventListener('change', async () => {
-      window.state.showAllProviderModels = !!showAllModelsToggleEl.checked;
-      const userId = window.state?.playerUserId || 1;
-      await window.loadModels(userId);
-    });
-  }
-  window.updateLlmProviderFormVisibility();
-
   try {
     await window.loadLlmSettings();
   } catch (e) {

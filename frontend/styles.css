@@ -37,7 +37,7 @@ body {
 }
 
 .app {
-  max-width: 1200px;
+  max-width: min(1680px, 100%);
   margin: 0 auto;
   padding: 16px;
 }
@@ -396,6 +396,24 @@ input:disabled {
 .play-area.sheet-open .sheet-panel {
   display: flex;
   flex-direction: column;
+}
+
+/* Wide chat: keep main column full width; character sheet floats over the right edge */
+@media (min-width: 901px) {
+  .play-area.sheet-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .play-area.sheet-open .sheet-panel {
+    position: fixed;
+    top: 80px;
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, env(safe-area-inset-bottom));
+    width: min(360px, calc(100vw - 32px));
+    max-height: calc(100vh - 96px);
+    z-index: 40;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  }
 }
 
 .sheet-panel-body {

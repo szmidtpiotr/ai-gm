@@ -31,12 +31,6 @@ window.bindEvents = function () {
 
     if (campaign?.model_id || campaign?.modelid) {
       window.state.selectedEngine = campaign.model_id || campaign.modelid;
-    } else if (!window.state.selectedEngine) {
-      window.state.selectedEngine = els.engineSelectEl.value;
-    }
-
-    if (window.state.selectedEngine) {
-      els.engineSelectEl.value = window.state.selectedEngine;
     }
 
     await window.loadCharacters(window.state.selectedCampaignId);
@@ -54,43 +48,6 @@ window.bindEvents = function () {
     await window.loadTurns(window.state.selectedCampaignId);
     window.updateUiState();
   };
-
-  els.engineSelectEl.onchange = () => {
-    window.state.selectedEngine = els.engineSelectEl.value;
-  };
-
-  if (els.testOllamaBtn) {
-    els.testOllamaBtn.onclick = async () => {
-      try {
-        const userId = window.state?.playerUserId || 1;
-        if (typeof window.connectLlmSettings === 'function') {
-          await window.connectLlmSettings();
-        }
-        await window.loadHealth(userId);
-        await window.loadModels(userId);
-
-        if (window.state.selectedEngine) {
-          els.engineSelectEl.value = window.state.selectedEngine;
-        }
-
-        window.addMessage({
-          speaker: 'System',
-          text: `Połączenie LLM zapisane (provider: ${window.state.llmSettings?.provider || 'unknown'})`,
-          role: 'system',
-          route: 'config'
-        });
-      } catch (e) {
-        const pretty = typeof window.prettyLlmErrorMessage === 'function'
-          ? window.prettyLlmErrorMessage(e.message)
-          : e.message;
-        window.addMessage({
-          speaker: 'Błąd',
-          text: `Połączenie LLM nie powiodło się: ${pretty}`,
-          role: 'error'
-        });
-      }
-    };
-  }
 
   els.sendBtn.onclick = window.sendMessage;
   if (els.diceBtn) {

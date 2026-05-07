@@ -44,7 +44,7 @@ window.bootstrap = async function () {
     }
 
     if (window.state.selectedCampaignId) {
-      const { systemSelectEl, engineSelectEl } = window.getEls();
+      const { systemSelectEl } = window.getEls();
       const campaign = window.currentCampaign();
 
       if (campaign?.system_id) {
@@ -60,7 +60,6 @@ window.bootstrap = async function () {
       // If user settings did not populate, fall back to campaign model.
       if (!window.state.selectedEngine && campaign?.model_id) {
         window.state.selectedEngine = campaign.model_id;
-        engineSelectEl.value = window.state.selectedEngine;
       }
 
       try {

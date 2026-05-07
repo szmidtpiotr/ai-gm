@@ -17,6 +17,25 @@ const SUB_TABS = [
   { id: "prompts", label: "Prompts" },
 ];
 
+const ASSISTANT_RESOURCES = [
+  { id: "skills", label: "Skills", tabId: "skills" },
+  { id: "weapons", label: "Weapons", tabId: "weapons" },
+  { id: "enemies", label: "Enemies", tabId: "enemies" },
+  { id: "conditions", label: "Conditions", tabId: "conditions" },
+  { id: "items", label: "Items", tabId: "items" },
+  { id: "consumables", label: "Consumables", tabId: "items" },
+  { id: "loot-tables", label: "Loot Tables", tabId: "loot-tables" },
+];
+
+const ASSISTANT_RESOURCE_BY_TAB = {
+  skills: "skills",
+  weapons: "weapons",
+  enemies: "enemies",
+  conditions: "conditions",
+  items: "items",
+  "loot-tables": "loot-tables",
+};
+
 function el(tag, cls, text) {
   const n = document.createElement(tag);
   if (cls) {
@@ -78,6 +97,11 @@ function renderBackupNotice(host, result, headingText = "Automatic backup before
     list.appendChild(el("li", "", line));
   });
   host.appendChild(list);
+}
+
+function getAssistantResourceTab(resourceId) {
+  const found = ASSISTANT_RESOURCES.find((item) => item.id === resourceId);
+  return found ? found.tabId : null;
 }
 
 function downloadJsonFile(data, filenameBase) {
@@ -4945,10 +4969,12 @@ function mountPrompts(host) {
 export async function init(container) {
   container.innerHTML = "";
   const title = el("h2", "", "Game Design");
+  const assistantCard = el("div", "admin-card");
   const tabs = el("div", "sub-tabs");
   const importMeta = el("div", "config-diff-wrap");
   const body = el("div", "game-design-body");
   container.appendChild(title);
+  container.appendChild(assistantCard);
   container.appendChild(tabs);
   container.appendChild(importMeta);
   container.appendChild(body);
@@ -5013,6 +5039,208 @@ export async function init(container) {
     activated.delete(id);
     activate(id);
   }
+
+  assistantCard.appendChild(el("h3", "admin-card-title", "LLM Assistant"));
+  assistantCard.appendChild(
+    el(
+      "p",
+      "muted",
+      "Describe the record you want in plain language. The assistant drafts JSON, validates it against admin API shape, and then you can save it to the current catalog.",
+    ),
+  );
+  const assistantControls = el("div", "two-col-cards");
+  const resourceField = el("div", "field");
+  resourceField.appendChild(el("label", "", "Target catalog"));
+  const resourceSelect = el("select", "");
+  ASSISTANT_RESOURCES.forEach((item) => {
+    const opt = document.createElement("option");
+    opt.value = item.id;
+    opt.textContent = item.label;
+    resourceSelect.appendChild(opt);
+  });
+  resourceField.appendChild(resourceSelect);
+  assistantControls.appendChild(resourceField);
+
+  const actionField = el("div", "field");
+  actionField.appendChild(el("label", "", "Conversation"));
+  const actionRow = el("div", "");
+  actionRow.style.display = "flex";
+  actionRow.style.gap = "8px";
+  actionRow.style.flexWrap = "wrap";
+  const clearAssistantBtn = el("button", "secondary-btn", "Clear thread");
+  clearAssistantBtn.type = "button";
+  const saveAssistantBtn = el("button", "primary-btn", "Save draft");
+  saveAssistantBtn.type = "button";
+  saveAssistantBtn.disabled = true;
+  actionRow.appendChild(clearAssistantBtn);
+  actionRow.appendChild(saveAssistantBtn);
+  actionField.appendChild(actionRow);
+  assistantControls.appendChild(actionField);
+  assistantCard.appendChild(assistantControls);
+
+  const historyHost = el("div", "config-diff-wrap");
+  historyHost.hidden = true;
+  assistantCard.appendChild(historyHost);
+
+  const promptField = el("div", "field");
+  promptField.appendChild(el("label", "", "Describe what you want"));
+  const promptInput = document.createElement("textarea");
+  promptInput.rows = 5;
+  promptInput.placeholder =
+    "Example: Create a poison condition that deals 2 damage at the start of each turn until the victim succeeds a standard save.";
+  promptField.appendChild(promptInput);
+  assistantCard.appendChild(promptField);
+
+  const promptActions = el("div", "");
+  promptActions.style.display = "flex";
+  promptActions.style.gap = "8px";
+  promptActions.style.flexWrap = "wrap";
+  const draftBtn = el("button", "primary-btn", "Generate draft");
+  draftBtn.type = "button";
+  promptActions.appendChild(draftBtn);
+  assistantCard.appendChild(promptActions);
+
+  const previewHost = el("div", "config-diff-wrap");
+  previewHost.hidden = true;
+  assistantCard.appendChild(previewHost);
+
+  /** @type {{role: "user"|"assistant", content: string}[]} */
+  let assistantHistory = [];
+  /** @type {{resource: string, draft: object, validated_payload: object, valid: boolean, errors: string[], assistant_reply: string} | null} */
+  let assistantDraft = null;
+
+  function syncAssistantResourceFromTab(tabId) {
+    const resourceId = ASSISTANT_RESOURCE_BY_TAB[tabId];
+    if (resourceId) {
+      resourceSelect.value = resourceId;
+    }
+  }
+
+  function renderAssistantHistory() {
+    if (!assistantHistory.length) {
+      historyHost.hidden = true;
+      historyHost.innerHTML = "";
+      return;
+    }
+    historyHost.hidden = false;
+    historyHost.innerHTML = "";
+    historyHost.appendChild(el("strong", "", "Conversation"));
+    assistantHistory.forEach((entry) => {
+      const block = el("div", "warning-banner");
+      block.style.marginTop = "8px";
+      block.appendChild(el("strong", "", entry.role === "user" ? "You" : "Assistant"));
+      block.appendChild(el("p", "muted", entry.content));
+      historyHost.appendChild(block);
+    });
+  }
+
+  function renderAssistantPreview() {
+    previewHost.innerHTML = "";
+    if (!assistantDraft) {
+      previewHost.hidden = true;
+      saveAssistantBtn.disabled = true;
+      return;
+    }
+    previewHost.hidden = false;
+    previewHost.appendChild(el("strong", "", "Draft preview"));
+    previewHost.appendChild(el("p", "muted", assistantDraft.assistant_reply || ""));
+    if (Array.isArray(assistantDraft.errors) && assistantDraft.errors.length) {
+      const warn = el("div", "warning-banner warning-banner-orange");
+      warn.appendChild(el("strong", "", "Validation issues"));
+      const list = el("ul", "");
+      assistantDraft.errors.forEach((msg) => list.appendChild(el("li", "", String(msg))));
+      warn.appendChild(list);
+      previewHost.appendChild(warn);
+    } else {
+      previewHost.appendChild(el("p", "muted", "Draft matches the expected admin payload shape and can be saved."));
+    }
+    const pre = el("pre", "config-diff-raw");
+    pre.textContent = JSON.stringify(assistantDraft.validated_payload || assistantDraft.draft || {}, null, 2);
+    previewHost.appendChild(pre);
+    saveAssistantBtn.disabled = !assistantDraft.valid;
+  }
+
+  function resetAssistantThread() {
+    assistantHistory = [];
+    assistantDraft = null;
+    promptInput.value = "";
+    renderAssistantHistory();
+    renderAssistantPreview();
+  }
+
+  clearAssistantBtn.addEventListener("click", () => resetAssistantThread());
+
+  draftBtn.addEventListener("click", async () => {
+    const message = String(promptInput.value || "").trim();
+    if (!message) {
+      showToast("Describe the record you want first.", "info");
+      return;
+    }
+    draftBtn.disabled = true;
+    const oldLabel = draftBtn.textContent;
+    draftBtn.textContent = "⏳";
+    try {
+      const result = await adminFetch("/api/admin/assistant/draft", {
+        method: "POST",
+        body: JSON.stringify({
+          resource: resourceSelect.value,
+          message,
+          history: assistantHistory,
+        }),
+      });
+      assistantHistory = [
+        ...assistantHistory,
+        { role: "user", content: message },
+        { role: "assistant", content: String(result.assistant_reply || "") },
+      ];
+      assistantDraft = result;
+      promptInput.value = "";
+      renderAssistantHistory();
+      renderAssistantPreview();
+      showToast(result.valid ? "Draft generated." : "Draft generated with validation issues.", result.valid ? "success" : "info");
+    } catch (e) {
+      showToast(parseApiError(e, "Assistant draft failed."), "error");
+    } finally {
+      draftBtn.textContent = oldLabel;
+      draftBtn.disabled = false;
+    }
+  });
+
+  saveAssistantBtn.addEventListener("click", async () => {
+    if (!assistantDraft || !assistantDraft.valid) {
+      showToast("Generate a valid draft before saving.", "info");
+      return;
+    }
+    const resourceId = resourceSelect.value;
+    const ok = await showConfirm("Save this assistant draft to the catalog?", { dangerous: false });
+    if (!ok) {
+      return;
+    }
+    saveAssistantBtn.disabled = true;
+    const oldLabel = saveAssistantBtn.textContent;
+    saveAssistantBtn.textContent = "⏳";
+    try {
+      await adminFetch("/api/admin/assistant/save", {
+        method: "POST",
+        body: JSON.stringify({
+          resource: resourceId,
+          payload: assistantDraft.validated_payload,
+        }),
+      });
+      const tabId = getAssistantResourceTab(resourceId);
+      if (tabId) {
+        activate(tabId);
+        remountActiveGameDesignTab();
+      }
+      showToast("Assistant draft saved.", "success");
+      resetAssistantThread();
+    } catch (e) {
+      showToast(parseApiError(e, "Assistant save failed."), "error");
+    } finally {
+      saveAssistantBtn.textContent = oldLabel;
+      saveAssistantBtn.disabled = !(assistantDraft && assistantDraft.valid);
+    }
+  });
 
   const snapshotBtn = el("button", "sub-tab-btn sub-tab-btn-action", "⬇ Export catalog snapshot (LLM)");
   snapshotBtn.type = "button";
@@ -5114,8 +5342,10 @@ export async function init(container) {
     if (!b || !b.dataset.subTab) {
       return;
     }
+    syncAssistantResourceFromTab(b.dataset.subTab);
     activate(b.dataset.subTab);
   });
 
+  syncAssistantResourceFromTab("stats");
   activate("stats");
 }

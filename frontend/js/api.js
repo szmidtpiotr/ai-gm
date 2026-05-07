@@ -79,6 +79,17 @@ window.loadHealth = async function (userId = null) {
 
 window.loadModels = async function (userId = null) {
   const { engineSelectEl } = window.getEls();
+  if (!engineSelectEl) {
+    const campaign = typeof window.currentCampaign === 'function' ? window.currentCampaign() : null;
+    const campaignModel =
+      String(campaign?.model_id || campaign?.modelid || '').trim();
+    window.state.selectedEngine =
+      String(window.state.llmSettings?.model || '').trim() ||
+      campaignModel ||
+      String(window.state.selectedEngine || '').trim() ||
+      '';
+    return;
+  }
   const provider = String(window.state.llmSettings?.provider || '').toLowerCase();
   const campaign = typeof window.currentCampaign === 'function' ? window.currentCampaign() : null;
   const campaignModel =

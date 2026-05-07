@@ -11,11 +11,25 @@ ADMIN_MIGRATIONS = [
     """
     CREATE TABLE IF NOT EXISTS user_llm_settings (
         user_id INTEGER PRIMARY KEY,
+        mode TEXT NOT NULL DEFAULT 'custom',
         provider TEXT NOT NULL,
         base_url TEXT NOT NULL,
         model TEXT NOT NULL,
         api_key TEXT NOT NULL DEFAULT '',
         api_key_set INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS llm_connection_presets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        label TEXT NOT NULL UNIQUE,
+        provider TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        model TEXT NOT NULL,
+        api_key TEXT NOT NULL DEFAULT '',
+        api_key_set INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """,
@@ -1331,6 +1345,27 @@ def _ensure_enemy_loot_table_and_drop_chance(conn: sqlite3.Connection) -> None:
             raise
 
 
+def _ensure_user_llm_settings_mode(conn: sqlite3.Connection) -> None:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='user_llm_settings'"
+    ).fetchone()
+    if not row:
+        return
+    existing = [r[1] for r in conn.execute("PRAGMA table_info(user_llm_settings)").fetchall()]
+    if "mode" not in existing:
+        conn.execute("ALTER TABLE user_llm_settings ADD COLUMN mode TEXT NOT NULL DEFAULT 'custom'")
+        conn.commit()
+        logger.info("admin_migration_applied", sql_preview="user_llm_settings ADD COLUMN mode")
+    conn.execute(
+        """
+        UPDATE user_llm_settings
+        SET mode = 'custom'
+        WHERE COALESCE(TRIM(mode), '') NOT IN ('default', 'custom')
+        """
+    )
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -1395,6 +1430,7 @@ def run_admin_migrations() -> None:
         _migrate_legacy_archetype_json(conn)
         _ensure_campaign_ai_summaries_audience(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)
+        _ensure_user_llm_settings_mode(conn)
     finally:
         conn.close()
 

@@ -1,13 +1,15 @@
+import json
 import os
 import re
 import shutil
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 from app.services.admin_accounts import (
     create_account_admin,
@@ -37,6 +39,18 @@ from app.services.admin_config_transfer import (
     export_config,
     import_catalog_snapshot,
     import_config,
+)
+from app.services.admin_llm_assistant import (
+    build_admin_assistant_messages,
+    extract_admin_assistant_json,
+    supported_admin_assistant_resources,
+)
+from app.services.llm_admin_service import (
+    activate_llm_preset,
+    clear_global_llm_override,
+    delete_llm_preset,
+    get_admin_llm_settings_snapshot,
+    save_llm_preset,
 )
 from app.services.admin_config import (
     create_condition,
@@ -79,6 +93,7 @@ from app.services.admin_config import (
     update_archetype,
     upsert_loot_entry,
 )
+from app.services.llm_service import generate_chat
 from app.services.client_ui_config import get_merged_slash_commands, set_slash_commands_ui
 from app.services.loki_settings import (
     DEFAULT_LOKI_URL,
@@ -244,9 +259,10 @@ class SlashCommandsPutReq(BaseModel):
 
 
 class UserLlmSettingsReq(BaseModel):
-    provider: str
-    base_url: str
-    model: str
+    mode: Literal["default", "custom"] = "custom"
+    provider: str = ""
+    base_url: str = ""
+    model: str = ""
     api_key: str | None = None
 
 
@@ -538,6 +554,131 @@ class PromptPutReq(BaseModel):
         return self
 
 
+AssistantResourceLiteral = Literal[
+    "skills",
+    "weapons",
+    "enemies",
+    "conditions",
+    "items",
+    "consumables",
+    "loot-tables",
+]
+
+
+class AdminAssistantChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=8000)
+
+
+class AdminAssistantDraftReq(BaseModel):
+    resource: AssistantResourceLiteral
+    message: str = Field(..., min_length=1, max_length=8000)
+    history: list[AdminAssistantChatMessage] = Field(default_factory=list)
+
+
+class AdminAssistantSaveReq(BaseModel):
+    resource: AssistantResourceLiteral
+    payload: dict = Field(default_factory=dict)
+
+
+def _assistant_resource_model(resource: AssistantResourceLiteral) -> type[BaseModel]:
+    mapping: dict[AssistantResourceLiteral, type[BaseModel]] = {
+        "skills": SkillCreateReq,
+        "weapons": WeaponCreateReq,
+        "enemies": EnemyCreateReq,
+        "conditions": ConditionCreateReq,
+        "items": ItemCreateReq,
+        "consumables": ConsumableCreateReq,
+        "loot-tables": LootTableCreateReq,
+    }
+    return mapping[resource]
+
+
+def _assistant_resource_title(resource: AssistantResourceLiteral) -> str:
+    for item in supported_admin_assistant_resources():
+        if item["resource"] == resource:
+            return item["title"]
+    return resource
+
+
+def _assistant_coerce_list_of_strings(value: object) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return [part.strip() for part in value.split(",") if part.strip()]
+    return [str(value).strip()] if str(value).strip() else []
+
+
+def _assistant_coerce_object(value: object) -> dict:
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return {}
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _assistant_prepare_payload(resource: AssistantResourceLiteral, draft: dict) -> dict:
+    payload = dict(draft or {})
+    if resource in {"conditions", "items"} and isinstance(payload.get("effect_json"), (dict, list)):
+        payload["effect_json"] = json.dumps(payload["effect_json"], ensure_ascii=False)
+    if resource in {"weapons", "items"} and "allowed_classes" in payload:
+        payload["allowed_classes"] = _assistant_coerce_list_of_strings(payload.get("allowed_classes"))
+    if resource == "enemies":
+        if "conditions_immune" in payload:
+            payload["conditions_immune"] = _assistant_coerce_list_of_strings(payload.get("conditions_immune"))
+        if "skills_json" in payload:
+            payload["skills_json"] = _assistant_coerce_object(payload.get("skills_json"))
+    return payload
+
+
+def _assistant_validation_errors(exc: ValidationError) -> list[str]:
+    out: list[str] = []
+    for err in exc.errors():
+        loc = ".".join(str(part) for part in err.get("loc") or [])
+        msg = str(err.get("msg") or "invalid value")
+        out.append(f"{loc}: {msg}" if loc else msg)
+    return out
+
+
+def _assistant_validate_payload(resource: AssistantResourceLiteral, draft: dict) -> tuple[dict, list[str]]:
+    payload = _assistant_prepare_payload(resource, draft)
+    model_cls = _assistant_resource_model(resource)
+    try:
+        validated = model_cls.model_validate(payload)
+    except ValidationError as exc:
+        return payload, _assistant_validation_errors(exc)
+    return validated.model_dump(exclude_none=True), []
+
+
+def _assistant_save_validated_payload(resource: AssistantResourceLiteral, payload: dict) -> dict:
+    if resource == "skills":
+        return admin_create_skill(SkillCreateReq.model_validate(payload), None)
+    if resource == "weapons":
+        return admin_create_weapon(WeaponCreateReq.model_validate(payload), None)
+    if resource == "enemies":
+        return admin_create_enemy(EnemyCreateReq.model_validate(payload), None)
+    if resource == "conditions":
+        return admin_create_condition(ConditionCreateReq.model_validate(payload), None)
+    if resource == "items":
+        return admin_create_item(ItemCreateReq.model_validate(payload), None)
+    if resource == "consumables":
+        return admin_create_consumable(ConsumableCreateReq.model_validate(payload), None)
+    if resource == "loot-tables":
+        return admin_create_loot_table(LootTableCreateReq.model_validate(payload), None)
+    raise HTTPException(status_code=404, detail="Unsupported assistant resource")
+
+
 def _prompt_paths(name: str) -> tuple[Path, Path, str]:
     if name not in PROMPT_NAME_TO_FILE:
         raise HTTPException(status_code=404, detail="Unknown prompt")
@@ -581,6 +722,127 @@ def admin_dev_login(req: AdminDevLoginReq):
 @router.get("/admin/verify")
 def admin_verify(_: None = Depends(require_admin_token)):
     return {"ok": True}
+
+
+class AdminGlobalLlmPresetReq(BaseModel):
+    label: str
+    provider: str
+    base_url: str
+    model: str
+    api_key: str | None = None
+    preset_id: int | None = None
+    activate: bool = False
+
+
+@router.get("/admin/llm/global-settings")
+def admin_llm_global_settings(_: None = Depends(require_admin_token)):
+    """Same payload as GET /api/settings/llm/admin — lives under /admin/* for proxies that only expose admin routes."""
+    return {"ok": True, **get_admin_llm_settings_snapshot()}
+
+
+@router.post("/admin/llm/presets")
+def admin_llm_post_preset(req: AdminGlobalLlmPresetReq, _: None = Depends(require_admin_token)):
+    try:
+        preset = save_llm_preset(
+            preset_id=req.preset_id,
+            label=req.label,
+            provider=req.provider,
+            base_url=req.base_url,
+            model=req.model,
+            api_key=req.api_key,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Preset not found") from exc
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "preset_label_exists":
+            raise HTTPException(status_code=409, detail="Preset label already exists") from exc
+        raise HTTPException(status_code=400, detail="Preset payload is invalid") from exc
+    if req.activate:
+        preset = activate_llm_preset(int(preset["id"]))
+    return {
+        "ok": True,
+        "preset": preset,
+        **get_admin_llm_settings_snapshot(),
+    }
+
+
+@router.post("/admin/llm/presets/{preset_id}/activate")
+def admin_llm_activate_preset(preset_id: int, _: None = Depends(require_admin_token)):
+    try:
+        preset = activate_llm_preset(preset_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Preset not found") from exc
+    return {
+        "ok": True,
+        "preset": preset,
+        **get_admin_llm_settings_snapshot(),
+    }
+
+
+@router.delete("/admin/llm/presets/{preset_id}")
+def admin_llm_delete_preset(preset_id: int, _: None = Depends(require_admin_token)):
+    try:
+        delete_llm_preset(preset_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Preset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="Active preset cannot be deleted") from exc
+    return {"ok": True, **get_admin_llm_settings_snapshot()}
+
+
+@router.post("/admin/llm/use-env")
+def admin_llm_use_env(_: None = Depends(require_admin_token)):
+    return {
+        "ok": True,
+        "settings": clear_global_llm_override(),
+        **get_admin_llm_settings_snapshot(),
+    }
+
+
+@router.get("/admin/assistant/resources")
+def admin_assistant_resources(_: None = Depends(require_admin_token)):
+    return {"items": supported_admin_assistant_resources()}
+
+
+@router.post("/admin/assistant/draft")
+def admin_assistant_draft(req: AdminAssistantDraftReq, _: None = Depends(require_admin_token)):
+    try:
+        messages = build_admin_assistant_messages(
+            resource=req.resource,
+            history=[msg.model_dump() for msg in req.history],
+            message=req.message,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+
+    try:
+        raw = generate_chat(messages=messages)
+        parsed = extract_admin_assistant_json(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=f"Assistant returned invalid JSON: {exc}") from None
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from None
+
+    validated_payload, errors = _assistant_validate_payload(req.resource, parsed["draft"])
+    return {
+        "ok": True,
+        "resource": req.resource,
+        "resource_title": _assistant_resource_title(req.resource),
+        "assistant_reply": parsed["reply"],
+        "draft": parsed["draft"],
+        "validated_payload": validated_payload,
+        "valid": len(errors) == 0,
+        "errors": errors,
+    }
+
+
+@router.post("/admin/assistant/save")
+def admin_assistant_save(req: AdminAssistantSaveReq, _: None = Depends(require_admin_token)):
+    validated_payload, errors = _assistant_validate_payload(req.resource, req.payload)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+    return _assistant_save_validated_payload(req.resource, validated_payload)
 
 
 @router.get("/admin/prompts")
@@ -1818,6 +2080,7 @@ def admin_put_user_llm_settings(
         api_key = None
     upsert_user_llm_settings(
         user_id=user_id,
+        mode=req.mode,
         provider=req.provider,
         base_url=req.base_url,
         model=req.model,
