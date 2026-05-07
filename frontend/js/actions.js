@@ -347,7 +347,7 @@ window.createCampaign = async function () {
 };
 
 window.createCampaignFromForm = async function () {
-  const { systemSelectEl, engineSelectEl } = window.getEls();
+  const { systemSelectEl } = window.getEls();
   const {
     campaignCreateTitleInputEl,
     campaignCreateFormEl,
@@ -360,7 +360,10 @@ window.createCampaignFromForm = async function () {
   const payload = {
     title,
     system_id: systemSelectEl.value,
-    model_id: engineSelectEl.value || (window.state.models[0]?.name ?? 'gemma3:1b'),
+    model_id:
+      (typeof window.resolveEffectiveEngineModel === 'function' &&
+        window.resolveEffectiveEngineModel()) ||
+      (window.state.models[0]?.name ?? 'gemma3:1b'),
     owner_user_id: window.state?.playerUserId || 1,
     language: window.state.lang || 'pl',
     mode: 'solo',
@@ -391,16 +394,6 @@ window.createCampaignFromForm = async function () {
           route: 'config',
         });
         throw new Error(g.reason);
-      }
-    }
-
-    if (typeof window.connectLlmSettings === 'function') {
-      try {
-        await window.connectLlmSettings();
-        if (typeof window.loadHealth === 'function') await window.loadHealth(userIdPre);
-        if (typeof window.loadModels === 'function') await window.loadModels(userIdPre);
-      } catch (llmErr) {
-        throw new Error(`Połączenie LLM nieaktywne: ${llmErr.message}`);
       }
     }
 
@@ -747,16 +740,6 @@ window.createCharacterFromForm = async function () {
       }
     }
 
-    if (typeof window.connectLlmSettings === 'function') {
-      try {
-        await window.connectLlmSettings();
-        if (typeof window.loadHealth === 'function') await window.loadHealth(userIdPre);
-        if (typeof window.loadModels === 'function') await window.loadModels(userIdPre);
-      } catch (llmErr) {
-        throw new Error(`Połączenie LLM nieaktywne: ${llmErr.message}`);
-      }
-    }
-
     const resp = await fetch(`/api/campaigns/${selectedCampaignId}/characters`, {
       method: 'POST',
       headers: window.getApiHeaders(),
@@ -866,7 +849,7 @@ window.requestGmOpeningIfQuiet = async function (campaignId, characterId) {
 };
 
 window.sendMessage = async function () {
-  const { inputEl, systemSelectEl, engineSelectEl, sendBtnEl } = window.getEls();
+  const { inputEl, systemSelectEl, sendBtnEl } = window.getEls();
 
   if (window.chatRequestState?.inFlight) {
     return;
@@ -1432,8 +1415,9 @@ window.sendMessage = async function () {
   }
 
   const selectedEngine =
+    (typeof window.resolveEffectiveEngineModel === 'function' &&
+      window.resolveEffectiveEngineModel()) ||
     String(window.state.selectedEngine || '').trim() ||
-    String(engineSelectEl?.value || '').trim() ||
     String(window.state.models?.[0]?.name || '').trim() ||
     '';
 
@@ -1441,7 +1425,7 @@ window.sendMessage = async function () {
     restorePendingLine();
     window.addMessage({
       speaker: 'System',
-      text: 'Nie wybrano modelu.',
+      text: 'Brak modelu LLM — ustaw go w Admin Panel → Accounts (globalnie lub dla konta).',
       role: 'error',
       createdAt: clientCreatedAt
     });

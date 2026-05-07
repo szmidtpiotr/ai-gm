@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=no-engine-select-wide-chat-2026-05-08">
   <link rel="stylesheet" href="./css/combat.css">
   <script>
     (function() {
@@ -74,45 +74,8 @@
         </div>
 
         <div id="llm-controls-body">
-          <div id="llm-player-admin-only">
-          <div class="field top-row-field" id="llm-provider-field">
-            <label for="llm-provider-select" id="label-llm-provider">Provider</label>
-            <select id="llm-provider-select">
-              <option value="ollama-local" selected>Ollama (local)</option>
-              <option value="ollama-remote">Ollama (remote)</option>
-              <option value="openai">OpenAI-compatible API</option>
-            </select>
-          </div>
-
-          <div class="field top-row-field" id="llm-base-url-field">
-            <label for="llm-base-url-input" id="label-llm-base-url">URL</label>
-            <div class="field-row ollama-host-row">
-              <input id="llm-base-url-input" value="http://localhost:11434" placeholder="http://host:port">
-            </div>
-          </div>
-
-          <div class="field top-row-field" id="llm-api-key-field">
-            <label for="llm-api-key-input" id="label-llm-api-key">API Key</label>
-            <div class="field-row ollama-host-row">
-              <input id="llm-api-key-input" type="password" placeholder="API key (optional)">
-            </div>
-          </div>
-
-          <div class="field top-row-field" id="llm-model-field">
-            <label for="engine-select" id="label-engine">Model</label>
-            <div class="field-row ollama-host-row">
-              <select id="engine-select">
-                <option value="gemma4:e4b">gemma4:e4b</option>
-              </select>
-              <button type="button" class="secondary" id="test-ollama-btn">Connect</button>
-            </div>
-            <div class="muted" id="openai-models-toggle-wrap" style="margin-top:6px; display:none;">
-              <label for="show-all-models-toggle" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
-                <input type="checkbox" id="show-all-models-toggle">
-                Show all provider models
-              </label>
-            </div>
-          </div>
+          <div class="muted" id="llm-player-admin-only">
+            Provider, base URL and API key are managed in Admin Panel → Accounts.
           </div>
 
           <div class="campaign-character-in-llm">
@@ -413,14 +376,14 @@
   <script src="./js/config.js"></script>
   <script src="./js/state.js"></script>
   <script src="./js/utils.js"></script>
-  <script src="./js/ui.js?v=tts-prefs-admin-voice-2026-05-01"></script>
-  <script src="./js/api.js"></script>
+  <script src="./js/ui.js?v=no-engine-select-wide-chat-2026-05-08"></script>
+  <script src="./js/api.js?v=no-engine-select-wide-chat-2026-05-08"></script>
   <script src="./js/character_wizard.js"></script>
   <script src="./js/death_screen.js"></script>
-  <script src="./js/actions.js?v=8d-location-debug-mem-helpme-archive"></script>
-  <script src="./js/events.js"></script>
-  <script src="./js/main.js?v=tts-prefs-admin-voice-2026-05-01"></script>
-  <script src="./js/app.js?v=tts-prefs-admin-voice-2026-05-01"></script>
+  <script src="./js/actions.js?v=no-engine-select-wide-chat-2026-05-08"></script>
+  <script src="./js/events.js?v=no-engine-select-wide-chat-2026-05-08"></script>
+  <script src="./js/main.js?v=no-engine-select-wide-chat-2026-05-08"></script>
+  <script src="./js/app.js?v=no-engine-select-wide-chat-2026-05-08"></script>
   <script src="./js/inventory.js"></script>
   <script src="./js/shop.js?v=9a4-open-shop-fallback"></script>
   <script src="./js/voice.js?v=tts-narrative-only-2026-05-01"></script>

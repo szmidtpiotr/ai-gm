@@ -43,13 +43,14 @@ In the current team setup, `/home/piotrszmidt/remote_mount/ai-gm` is an NFS-moun
 ### Player Side
 - Login gate before loading gameplay data.
 - Campaign/character/turn flow with streaming and non-streaming responses.
-- Per-user LLM settings (`provider`, `base_url`, `model`, optional `api_key`).
+- Player UI no longer edits provider / base URL / API key; those are managed from admin only.
 - LLM panel collapsed by default, toggleable in UI.
 - Mechanics metadata endpoint for skill/DC descriptions and roll hints.
 
 ### Admin Side
 - Token-protected `/api/admin/*` API.
 - Admin dev login endpoint for local development.
+- Global LLM settings and saved presets in `Admin Panel -> Accounts`.
 - Tabbed admin panel with inline CRUD:
   - stats
   - skills
@@ -85,6 +86,33 @@ In the current team setup, `/home/piotrszmidt/remote_mount/ai-gm` is an NFS-moun
   - `/api/admin/*`
 - Mechanics metadata:
   - `GET /api/mechanics/metadata`
+
+## LLM Resolution
+
+The backend resolves effective LLM config in one place:
+
+- **Server default**: active admin preset / runtime override if present, otherwise `LLM_*` environment variables.
+- **User custom**: `/api/users/{user_id}/llm-settings` with `mode="custom"` overrides the server default.
+- **User default**: `/api/users/{user_id}/llm-settings` with `mode="default"` falls back to the resolved server default.
+
+Relevant environment variables:
+
+- `LLM_PROVIDER`
+- `LLM_BASE_URL`
+- `LLM_MODEL`
+- `LLM_API_KEY`
+- `LLM_TEMPERATURE`
+- `LLM_TOP_P`
+- `LLM_TOP_K`
+- `LLM_REPEAT_PENALTY`
+- `LLM_MAX_TOKENS`
+
+Notes:
+- Global provider / API credentials are edited from `Admin Panel -> Accounts`, not from the player frontend.
+- Saved global presets can be activated later and deleted once inactive.
+
+- Player UI now saves only the player profile LLM mode/config and no longer overwrites the global server runtime on normal "Connect".
+- Tests/CI should use the same `LLM_*` env path or explicit request override fixtures instead of assuming a separate LLM config mechanism.
 
 ## Figma Handoff Docs
 

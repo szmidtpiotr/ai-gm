@@ -14,6 +14,9 @@ _runtime_config: dict[str, str] = {
     "model": "",
     "api_key": "",
 }
+DEFAULT_PROVIDER = "ollama"
+DEFAULT_BASE_URL = "http://localhost:11434"
+DEFAULT_MODEL = "gemma4:e4b"
 logger = get_logger(__name__)
 
 
@@ -40,6 +43,10 @@ def get_runtime_config(mask_api_key: bool = False) -> dict[str, Any]:
     }
 
 
+def _runtime_override_is_set() -> bool:
+    return any(bool((value or "").strip()) for value in _runtime_config.values())
+
+
 def get_effective_config(llm_config: dict[str, str] | None = None) -> dict[str, str]:
     """
     Effective LLM config resolution.
@@ -62,9 +69,9 @@ def get_effective_config(llm_config: dict[str, str] | None = None) -> dict[str, 
         runtime_val = _runtime_config.get(field, "")
         return (runtime_val or os.getenv(env_key, "") or "").strip()
 
-    provider = _pick("provider", "LLM_PROVIDER") or "ollama"
-    base_url = _pick("base_url", "LLM_BASE_URL") or "http://localhost:11434"
-    model = _pick("model", "LLM_MODEL") or "gemma4:e4b"
+    provider = _pick("provider", "LLM_PROVIDER") or DEFAULT_PROVIDER
+    base_url = _pick("base_url", "LLM_BASE_URL") or DEFAULT_BASE_URL
+    model = _pick("model", "LLM_MODEL") or DEFAULT_MODEL
     api_key = _pick("api_key", "LLM_API_KEY")
     normalized_provider = provider.strip().lower()
     return {
@@ -72,6 +79,24 @@ def get_effective_config(llm_config: dict[str, str] | None = None) -> dict[str, 
         "base_url": _normalize_base_url(base_url.strip(), normalized_provider),
         "model": model.strip(),
         "api_key": api_key.strip(),
+    }
+
+
+def get_default_config(mask_api_key: bool = False) -> dict[str, Any]:
+    effective = get_effective_config()
+    api_key = effective.get("api_key") or ""
+    if mask_api_key and api_key:
+        shown = f"{api_key[:6]}..." if len(api_key) > 6 else f"{api_key}..."
+    else:
+        shown = api_key
+    return {
+        "mode": "default",
+        "provider": effective["provider"],
+        "base_url": effective["base_url"],
+        "model": effective["model"],
+        "api_key": shown,
+        "api_key_set": bool(api_key.strip()),
+        "source": "runtime" if _runtime_override_is_set() else "env",
     }
 
 

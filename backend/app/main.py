@@ -43,6 +43,7 @@ from app.api import (
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.migrations_admin import run_admin_migrations
+from app.services.llm_admin_service import hydrate_runtime_from_stored_preset
 from app.routers.admin import router as admin_router
 from app.routers.admin_cheat import router as admin_cheat_router
 from app.routers.settings import router as settings_router
@@ -213,6 +214,7 @@ async def lifespan(app: FastAPI):
     run_raw_migrations()
     run_app_sql_migrations()
     run_admin_migrations()
+    hydrate_runtime_from_stored_preset()
     yield
     # Shutdown (nothing needed)
 

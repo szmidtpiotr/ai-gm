@@ -6,7 +6,15 @@ from pydantic import BaseModel, Field
 
 from app.core.db_runtime import resolve_db_path
 from app.services.admin_auth import verify_admin_token
-from app.services.llm_service import get_runtime_config, set_runtime_config
+from app.services.llm_admin_service import (
+    activate_llm_preset,
+    apply_global_llm_settings,
+    clear_global_llm_override,
+    delete_llm_preset,
+    get_admin_llm_settings_snapshot,
+    save_llm_preset,
+)
+from app.services.llm_service import get_default_config
 from app.services.summary_settings_service import read_summary_settings, upsert_summary_settings
 from app.services.ui_panel_settings import get_ui_panels_merged, merge_ui_panels_patch
 from app.services.user_llm_settings import (
@@ -88,30 +96,103 @@ class LlmSettingsReq(BaseModel):
 
 
 @router.post("/settings/llm")
-def set_llm_settings(req: LlmSettingsReq):
-    current = get_runtime_config(mask_api_key=False)
-    resolved_key = req.api_key if req.api_key is not None else str(current.get("api_key") or "")
-    set_runtime_config(
-        provider=req.provider,
-        base_url=req.base_url,
-        model=req.model,
-        api_key=resolved_key,
-    )
+def set_llm_settings(req: LlmSettingsReq, _: None = Depends(_require_admin_bearer)):
     return {
         "ok": True,
-        "settings": get_runtime_config(mask_api_key=True),
+        "settings": apply_global_llm_settings(
+            provider=req.provider,
+            base_url=req.base_url,
+            model=req.model,
+            api_key=req.api_key,
+        ),
     }
 
 
 @router.get("/settings/llm")
 def get_llm_settings():
-    return get_runtime_config(mask_api_key=True)
+    return get_default_config(mask_api_key=True)
 
 
-class UserLlmSettingsReq(BaseModel):
+@router.get("/settings/llm/admin")
+def get_admin_llm_settings(_: None = Depends(_require_admin_bearer)):
+    return {"ok": True, **get_admin_llm_settings_snapshot()}
+
+
+class LlmPresetReq(BaseModel):
+    label: str
     provider: str
     base_url: str
     model: str
+    api_key: str | None = None
+    preset_id: int | None = None
+    activate: bool = False
+
+
+@router.post("/settings/llm/presets")
+def post_llm_preset(req: LlmPresetReq, _: None = Depends(_require_admin_bearer)):
+    try:
+        preset = save_llm_preset(
+            preset_id=req.preset_id,
+            label=req.label,
+            provider=req.provider,
+            base_url=req.base_url,
+            model=req.model,
+            api_key=req.api_key,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Preset not found") from exc
+    except ValueError as exc:
+        detail = str(exc)
+        if detail == "preset_label_exists":
+            raise HTTPException(status_code=409, detail="Preset label already exists") from exc
+        raise HTTPException(status_code=400, detail="Preset payload is invalid") from exc
+    if req.activate:
+        preset = activate_llm_preset(int(preset["id"]))
+    return {
+        "ok": True,
+        "preset": preset,
+        **get_admin_llm_settings_snapshot(),
+    }
+
+
+@router.post("/settings/llm/presets/{preset_id}/activate")
+def post_activate_llm_preset(preset_id: int, _: None = Depends(_require_admin_bearer)):
+    try:
+        preset = activate_llm_preset(preset_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Preset not found") from exc
+    return {
+        "ok": True,
+        "preset": preset,
+        **get_admin_llm_settings_snapshot(),
+    }
+
+
+@router.delete("/settings/llm/presets/{preset_id}")
+def delete_llm_preset_route(preset_id: int, _: None = Depends(_require_admin_bearer)):
+    try:
+        delete_llm_preset(preset_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Preset not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail="Active preset cannot be deleted") from exc
+    return {"ok": True, **get_admin_llm_settings_snapshot()}
+
+
+@router.post("/settings/llm/use-env")
+def post_use_env_llm_settings(_: None = Depends(_require_admin_bearer)):
+    return {
+        "ok": True,
+        "settings": clear_global_llm_override(),
+        **get_admin_llm_settings_snapshot(),
+    }
+
+
+class UserLlmSettingsReq(BaseModel):
+    mode: Literal["default", "custom"] = "custom"
+    provider: str = ""
+    base_url: str = ""
+    model: str = ""
     # null/omit = keep existing stored api_key
     api_key: str | None = None
 
@@ -132,6 +213,7 @@ def put_user_llm_settings(user_id: int, req: UserLlmSettingsReq):
     """
     upsert_user_llm_settings(
         user_id=user_id,
+        mode=req.mode,
         provider=req.provider,
         base_url=req.base_url,
         model=req.model,

@@ -28,7 +28,7 @@
 | 24  | **T24** | [x]    | **[S6]** Runtime turowy: obsługa wybranych typów z `effect_json` — min. `periodic_save`, `block_action` w pętli walki / stanie postaci (obecnie częściowo tylko przy consumables)                                                                                                                                                | T17†      | [S6], `06` warunki      |
 | 25  | **T25** | [x]    | **[S13] cleanup:** migracja treści z płaskich `effect_*` wyłącznie do `effect_json`; potem migracja schematu usuwająca legacy kolumny (etapami, z dry-run). Uruchomiono `scripts/migrate_effect_columns_to_effect_json.py --apply` na `.61`, poprawiono blocker `poisoned`, potwierdzono dry-run importu i po rebuildzie backendu usunięto legacy kolumny z `game_config_items`. | T17, T18  | `06` przedmioty         |
 | 26  | **T26** | [x]    | **[S7a]** Backup bazy / artefaktu przed `import_catalog_snapshot` / `import_config` + polityka retencji kopii (`[04](04_decisions_log.md)`, `[00_brief.md](00_brief.md)`). Backend tworzy snapshot przed realnym importem, zapisuje go do `backups/imports/` i stosuje retencję: `30 dni`, minimum `3` starsze, max `10` plików. | T19       | import                  |
-| 27  | **T27** | [ ]    | **[S18]** Centralny resolver LLM: jedna ścieżka wyboru providera/modelu/klucza dla narracji, panelu admina i testów; hierarchia Default vs Custom; dokumentacja `env`                                                                                                                                                            | —         | [S18], `07` §12         |
+| 27  | **T27** | [x]    | **[S18]** Centralny resolver LLM: jedna ścieżka wyboru providera/modelu/klucza dla narracji, panelu admina i testów; hierarchia Default vs Custom; dokumentacja `env`. Dodano `user_llm_settings.mode`, resolver default/custom w backendzie, poprawkę UI gracza/admina i test `test_phase9b_t27_llm_resolver.py`. | —         | [S18], `07` §12         |
 | 28  | **T28** | [ ]    | **[S20]** Asystent konwersacyjny **na legacy adminie**: API (draft rekordu / JSON z opisu) → walidacja → podgląd → zapis; integracja z `game_design.js` i kolejnymi zakładkami katalogu **[S15]**                                                                                                                                | T27, T17  | [S20], `07` §10         |
 | 29  | **T29** | [ ]    | **Frontend gracza (legacy):** UI do **wydawania XP na cechy** (endpointy **T21**) + wyświetlanie kosztów z `GET …/xp`                                                                                                                                                                                                            | T21       | —                       |
 | 30  | **T30** | [ ]    | **[S1b]** Konfrontacje / taktyka NPC: konkretne formuły w kodzie + testy; korzystanie z `skills_json` wroga po **T23** (lub częściowy zakres wcześniej)                                                                                                                                                                          | T23†      | `08` §2, `06`           |
@@ -54,6 +54,26 @@
 - - Testy przez SSH na `.61`: `test_phase9b_t25_effect_json_migration.py`, `test_phase9b_t17_effect_json_validation.py`, `test_phase8c_loot_service.py` — zielone.
 - **Otwarte drobiazgi / uwagi**
 - - `test_phase9b_t18_consumables_item_key.py` nadal nie uruchamia się na hoście `.61`, bo lokalny interpreter nie ma zależności `starlette`; to problem środowiska testowego, nie samego T25.
+
+### T27 status (2026-05-07)
+- **Zrobiono**
+- - `backend/app/services/llm_service.py` zwraca już efektywny default LLM z jednego miejsca (`runtime` override albo `LLM_*` z env), a `GET /api/settings/llm` pokazuje ten sam resolved stan zamiast pustego runtime cache.
+- - `backend/app/services/user_llm_settings.py` i migracja `user_llm_settings.mode` rozróżniają teraz `default` vs `custom`; przy `custom` wygrywa profil użytkownika, przy `default` backend bierze konfigurację serwera/admina.
+- - Front gracza (`frontend/index.html`, `frontend/js/app.js`) nie pozwala już edytować provider / URL / API key; te ustawienia są tylko w adminie, a UI gracza korzysta z rozwiązanego configu backendu.
+- - Adminowy panel kont (`frontend/admin_panel/sections/accounts.js`) ma teraz blok `Global LLM` nad listą kont: aktywny preset globalny, zapis / aktywację nowych presetów, powrót do `LLM_*` z env i kasowanie nieaktywnych presetów.
+- - Per-user `mode=default` nadal zachowuje zapisane pola custom w `user_llm_settings`, więc można wrócić do wcześniejszej konfiguracji bez ręcznego przepisywania.
+- - Testy / CI mają jeden punkt wejścia do defaultu (`LLM_*`), a `backend/tests/test_phase9b_t27_llm_resolver.py` sprawdza fallback env, `custom` override, zachowanie customów po przełączeniu na `default` oraz globalne presety admina.
+- **Weryfikacja**
+- - SSH `.61`: `python3 -m pytest backend/tests/test_phase9b_t27_llm_resolver.py -q` → `4 passed`.
+
+### T28 status (2026-05-07)
+- **MVP wdrożone**
+- - Backend dostał endpointy `GET /api/admin/assistant/resources`, `POST /api/admin/assistant/draft` i `POST /api/admin/assistant/save`, które używają centralnego resolvera LLM z T27 i zwracają draft + wynik walidacji przed zapisem.
+- - `frontend/admin_panel/sections/game_design.js` ma nowy panel rozmowy LLM nad zakładkami Game Design: historia rozmowy, wybór katalogu, preview walidowanego JSON oraz zapis draftu do istniejącego admin API.
+- - Na start asystent obsługuje create-capable katalogi z legacy admina: `skills`, `weapons`, `enemies`, `conditions`, `items`, `consumables`, `loot-tables`.
+- - Test API: `backend/tests/test_phase9b_t28_admin_assistant.py` pokrywa draft + save dla warunku oraz negatywny przypadek walidacji.
+- **Pozostało przed pełnym DONE**
+- - Jeśli uznamy T28 za „cały Game Design”, do objęcia pozostają zakładki bez prostego create-flow (`stats`, `dc`, `archetypes`, część `npcs` / `locations` / `prompts`) albo jawna decyzja, że zakres T28 dotyczy tylko katalogów z tworzeniem rekordów.
 
 ## 2. Świadomie poza tą kolejką (nie „do domknięcia teraz”)
 
