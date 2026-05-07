@@ -656,7 +656,7 @@ ADMIN_SEEDS = [
     INSERT OR IGNORE INTO game_config_conditions
     (key, label, effect_json, description, is_active, locked_at, created_at, updated_at)
     VALUES
-    ('poisoned', 'Poisoned', '{"stat_mods":{"STR":-2},"duration":"3 turns"}', 'Temporary STR penalty.', 1, NULL, datetime('now'), datetime('now'))
+    ('poisoned', 'Poisoned', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"STR","value":-2,"expires":"duration_rounds:3"}]}', 'Temporary STR penalty.', 1, NULL, datetime('now'), datetime('now'))
     """,
     """
     UPDATE game_config_stats
@@ -1069,6 +1069,42 @@ def _finalize_phase_8h_items_schema(conn: sqlite3.Connection) -> None:
         logger.info("admin_migration_phase_8h_drop_column", table_name="game_config_items", column_name="weight")
 
 
+def _finalize_t25_effect_json_schema(conn: sqlite3.Connection) -> None:
+    """T25: once effect_json is populated, drop flat effect columns from item catalog."""
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_config_items'"
+    ).fetchone()
+    if not row:
+        return
+    cols = {r[1]: r for r in conn.execute("PRAGMA table_info(game_config_items)").fetchall()}
+    if "effect_json" not in cols:
+        return
+
+    if "effect_type" in cols:
+        pending = conn.execute(
+            """
+            SELECT COUNT(*) AS c
+            FROM game_config_items
+            WHERE COALESCE(TRIM(effect_json), '') = ''
+              AND COALESCE(TRIM(effect_type), '') IN ('heal_hp', 'restore_mana', 'remove_condition', 'add_condition')
+            """
+        ).fetchone()
+        if pending and int(pending["c"] or 0) > 0:
+            logger.info(
+                "admin_migration_t25_skip_drop_columns",
+                reason="convertible rows still miss effect_json",
+                pending_rows=int(pending["c"] or 0),
+            )
+            return
+
+    for column_name in ("effect_type", "effect_dice", "effect_bonus", "effect_target"):
+        if column_name not in cols:
+            continue
+        conn.execute(f"ALTER TABLE game_config_items DROP COLUMN {column_name}")
+        conn.commit()
+        logger.info("admin_migration_t25_drop_column", table_name="game_config_items", column_name=column_name)
+
+
 def _finalize_phase_8h_loot_entries(conn: sqlite3.Connection) -> None:
     """Collapse loot entries to item/weapon XOR after consumables migrate into items."""
     row = conn.execute(
@@ -1334,6 +1370,7 @@ def run_admin_migrations() -> None:
         _rebuild_loot_entries_for_consumable_support(conn)
         _upgrade_loot_entries_three_way_xor(conn)
         _finalize_phase_8h_items_schema(conn)
+        _finalize_t25_effect_json_schema(conn)
         _finalize_phase_8h_loot_entries(conn)
 
         for sql in ADMIN_SEEDS:

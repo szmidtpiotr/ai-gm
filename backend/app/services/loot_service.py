@@ -10,6 +10,7 @@ from typing import Any
 
 from app.core.logging import get_logger
 from app.services.dice import parse_character_sheet
+from app.services.effect_json_migration import legacy_effect_fields_from_json
 
 LOOT_DB_PATH = "/data/ai_gm.db"
 
@@ -24,12 +25,13 @@ _CONSUMABLE_EFFECT_SIGNAL = frozenset(
 _SUPPORTED_ITEM_USE_EFFECTS = {"heal_hp", "apply_condition", "remove_condition", "narrative_only"}
 
 
-def _inventory_rows_sql(effect_col_sql: str, effect_dice_col_sql: str) -> str:
-    """effect_* cols: gi.effect_type / gi.effect_dice or NULL placeholders for older DB."""
+def _inventory_rows_sql(effect_json_col_sql: str, effect_type_col_sql: str, effect_dice_col_sql: str) -> str:
+    """Select unified inventory rows; new schema uses effect_json, old schema may still use effect_*."""
     return f"""
             SELECT ci.id, ci.slot, ci.equipped, ci.quantity, ci.source, ci.acquired_at,
                    ci.item_key, ci.weapon_key, ci.consumable_key,
-                   gi.label AS item_label, gi.item_type AS item_kind, {effect_col_sql}, {effect_dice_col_sql},
+                   gi.label AS item_label, gi.item_type AS item_kind,
+                   {effect_json_col_sql}, {effect_type_col_sql}, {effect_dice_col_sql},
                    gw.label AS weapon_label,
                    gc.label AS consumable_label,
                    gc_item.key AS consumable_catalog_item_key,
@@ -218,13 +220,22 @@ def _row_to_loot_entry(row: sqlite3.Row) -> dict[str, Any]:
 def _catalog_entry(conn: sqlite3.Connection, loot: dict[str, Any]) -> tuple[str, str, str] | None:
     if loot.get("item_key"):
         key = str(loot["item_key"]).strip()
-        row = conn.execute(
-            """
-            SELECT key, label, item_type FROM game_config_items
-            WHERE key = ? AND is_active = 1 AND COALESCE(approved, 1) = 1
-            """,
-            (key,),
-        ).fetchone()
+        try:
+            row = conn.execute(
+                """
+                SELECT key, label, item_type FROM game_config_items
+                WHERE key = ? AND is_active = 1 AND COALESCE(approved, 1) = 1
+                """,
+                (key,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            row = conn.execute(
+                """
+                SELECT key, label, item_type FROM game_config_items
+                WHERE key = ? AND is_active = 1
+                """,
+                (key,),
+            ).fetchone()
         if not row:
             return None
         item_type = str(row["item_type"] or "item").strip().lower() or "item"
@@ -454,19 +465,31 @@ def get_character_inventory(character_id: int) -> list[dict]:
         try:
             rows = conn.execute(
                 _inventory_rows_sql(
+                    "gi.effect_json AS gi_effect_json",
                     "gi.effect_type AS gi_effect_type",
                     "gi.effect_dice AS gi_effect_dice",
                 ),
                 (cid,),
             ).fetchall()
         except sqlite3.OperationalError:
-            rows = conn.execute(
-                _inventory_rows_sql(
-                    "NULL AS gi_effect_type",
-                    "NULL AS gi_effect_dice",
-                ),
-                (cid,),
-            ).fetchall()
+            try:
+                rows = conn.execute(
+                    _inventory_rows_sql(
+                        "NULL AS gi_effect_json",
+                        "gi.effect_type AS gi_effect_type",
+                        "gi.effect_dice AS gi_effect_dice",
+                    ),
+                    (cid,),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                rows = conn.execute(
+                    _inventory_rows_sql(
+                        "NULL AS gi_effect_json",
+                        "NULL AS gi_effect_type",
+                        "NULL AS gi_effect_dice",
+                    ),
+                    (cid,),
+                ).fetchall()
 
     out: list[dict] = []
     for r in rows:
@@ -483,8 +506,9 @@ def get_character_inventory(character_id: int) -> list[dict]:
             label = str(r["item_label"] or r["item_key"])
             key = r["item_key"]
             # Legacy consumables table OR catalog effect_type → consumable (fixes wrong item_type on unified catalog rows).
-            et = str(r["gi_effect_type"] or "").strip().lower()
-            dice = str(r["gi_effect_dice"] or "").strip()
+            legacy = legacy_effect_fields_from_json(r["gi_effect_json"]) or {}
+            et = str(legacy.get("effect_type") or r["gi_effect_type"] or "").strip().lower()
+            dice = str(legacy.get("effect_dice") or r["gi_effect_dice"] or "").strip()
             if r["consumable_catalog_item_key"]:
                 item_type = "consumable"
                 clab = r["consumable_by_item_key_label"]
@@ -519,41 +543,78 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
     cid = int(character_id)
     iid = int(inventory_id)
     with _conn() as conn:
-        row = conn.execute(
-            """
-            SELECT c.id AS character_id,
-                   c.campaign_id,
-                   c.sheet_json,
-                   ci.id AS inventory_id,
-                   ci.item_key,
-                   ci.weapon_key,
-                   ci.consumable_key,
-                   ci.quantity,
-                   gi.key AS catalog_item_key,
-                   gi.label AS item_label,
-                   gi.item_type,
-                   gi.effect_json,
-                   gi.effect_type,
-                   gi.effect_dice,
-                   gi.effect_bonus,
-                   gi.effect_target,
-                   gc.key AS legacy_consumable_key,
-                   gc.label AS legacy_consumable_label,
-                   gc.effect_type AS legacy_effect_type,
-                   gc.effect_dice AS legacy_effect_dice,
-                   gc.effect_bonus AS legacy_effect_bonus,
-                   gc.effect_target AS legacy_effect_target
-            FROM characters c
-            JOIN character_inventory ci ON ci.character_id = c.id
-            LEFT JOIN game_config_items gi ON gi.key = ci.item_key
-            LEFT JOIN game_config_consumables gc
-              ON gc.key = ci.consumable_key
-                 OR (ci.item_key IS NOT NULL AND gc.key = ci.item_key)
-            WHERE c.id = ? AND ci.id = ?
-            LIMIT 1
-            """,
-            (cid, iid),
-        ).fetchone()
+        try:
+            row = conn.execute(
+                """
+                SELECT c.id AS character_id,
+                       c.campaign_id,
+                       c.sheet_json,
+                       ci.id AS inventory_id,
+                       ci.item_key,
+                       ci.weapon_key,
+                       ci.consumable_key,
+                       ci.quantity,
+                       gi.key AS catalog_item_key,
+                       gi.label AS item_label,
+                       gi.item_type,
+                       gi.effect_json,
+                       gi.effect_type,
+                       gi.effect_dice,
+                       gi.effect_bonus,
+                       gi.effect_target,
+                       gc.key AS legacy_consumable_key,
+                       gc.label AS legacy_consumable_label,
+                       gc.effect_type AS legacy_effect_type,
+                       gc.effect_dice AS legacy_effect_dice,
+                       gc.effect_bonus AS legacy_effect_bonus,
+                       gc.effect_target AS legacy_effect_target
+                FROM characters c
+                JOIN character_inventory ci ON ci.character_id = c.id
+                LEFT JOIN game_config_items gi ON gi.key = ci.item_key
+                LEFT JOIN game_config_consumables gc
+                  ON gc.key = ci.consumable_key
+                     OR (ci.item_key IS NOT NULL AND gc.key = ci.item_key)
+                WHERE c.id = ? AND ci.id = ?
+                LIMIT 1
+                """,
+                (cid, iid),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            row = conn.execute(
+                """
+                SELECT c.id AS character_id,
+                       c.campaign_id,
+                       c.sheet_json,
+                       ci.id AS inventory_id,
+                       ci.item_key,
+                       ci.weapon_key,
+                       ci.consumable_key,
+                       ci.quantity,
+                       gi.key AS catalog_item_key,
+                       gi.label AS item_label,
+                       gi.item_type,
+                       gi.effect_json,
+                       NULL AS effect_type,
+                       NULL AS effect_dice,
+                       NULL AS effect_bonus,
+                       NULL AS effect_target,
+                       gc.key AS legacy_consumable_key,
+                       gc.label AS legacy_consumable_label,
+                       gc.effect_type AS legacy_effect_type,
+                       gc.effect_dice AS legacy_effect_dice,
+                       gc.effect_bonus AS legacy_effect_bonus,
+                       gc.effect_target AS legacy_effect_target
+                FROM characters c
+                JOIN character_inventory ci ON ci.character_id = c.id
+                LEFT JOIN game_config_items gi ON gi.key = ci.item_key
+                LEFT JOIN game_config_consumables gc
+                  ON gc.key = ci.consumable_key
+                     OR (ci.item_key IS NOT NULL AND gc.key = ci.item_key)
+                WHERE c.id = ? AND ci.id = ?
+                LIMIT 1
+                """,
+                (cid, iid),
+            ).fetchone()
         if not row:
             ch = conn.execute("SELECT id FROM characters WHERE id = ?", (cid,)).fetchone()
             if not ch:
@@ -569,8 +630,11 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         if raw_item_type == "consumable" or row["legacy_consumable_key"]:
             item_type = "consumable"
         else:
+            item_legacy = legacy_effect_fields_from_json(row["effect_json"]) or {}
+            item_effect_type = str(item_legacy.get("effect_type") or "").strip().lower()
             legacy_effect_type = str(row["legacy_effect_type"] or "").strip().lower()
-            item_type = "consumable" if legacy_effect_type in _CONSUMABLE_EFFECT_SIGNAL else (raw_item_type or "item")
+            signal = item_effect_type or legacy_effect_type
+            item_type = "consumable" if signal in _CONSUMABLE_EFFECT_SIGNAL else (raw_item_type or "item")
         if item_type != "consumable":
             raise ValueError("inventory item is not usable")
 
@@ -584,7 +648,9 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
         conditions = _normalize_sheet_conditions(sheet)
 
         item_row: dict[str, Any] = dict(row)
-        if not item_row.get("catalog_item_key") and item_row.get("legacy_consumable_key"):
+        if not item_row.get("effect_json") and item_row.get("effect_type"):
+            pass
+        elif item_row.get("legacy_consumable_key"):
             item_row["effect_type"] = item_row.get("legacy_effect_type")
             item_row["effect_dice"] = item_row.get("legacy_effect_dice")
             item_row["effect_bonus"] = item_row.get("legacy_effect_bonus")

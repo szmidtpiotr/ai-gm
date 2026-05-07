@@ -27,10 +27,12 @@ services:
       - DEFAULT_CAMPAIGN_LANGUAGE=${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
       - GAME_LANG=${GAME_LANG:-pl-PL}
       - DATABASE_URL=${DATABASE_URL:-sqlite:////data/ai_gm.db}
+      - ADMIN_IMPORT_BACKUP_DIR=${ADMIN_IMPORT_BACKUP_DIR:-/backups/imports}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/data
+      - ./backups:/backups
     labels:
       - service=backend
     networks:

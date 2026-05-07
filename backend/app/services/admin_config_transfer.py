@@ -1,12 +1,18 @@
 import json
+import os
+from pathlib import Path
 import sqlite3
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 from typing import Any
 
 from app.services.admin_config import normalize_effect_json_value
 
 DB_PATH = "/data/ai_gm.db"
 SUPPORTED_MAJOR = "1"
+IMPORT_BACKUP_DIR = os.getenv("ADMIN_IMPORT_BACKUP_DIR", "/backups/imports")
+IMPORT_BACKUP_KEEP_LAST = 10
+IMPORT_BACKUP_MAX_AGE_DAYS = 30
+IMPORT_BACKUP_MIN_KEEP = 3
 _IMPORT_CONFIG_REQUIRED_TABLES = ("game_config_stats", "game_config_skills", "game_config_dc")
 _IMPORT_CONFIG_OPTIONAL_TABLES = (
     "game_config_weapons",
@@ -80,6 +86,88 @@ def _set_config_version(conn: sqlite3.Connection, version: str) -> None:
         """,
         (version,),
     )
+
+
+def _resolve_import_backup_dir() -> Path:
+    preferred = Path(IMPORT_BACKUP_DIR)
+    try:
+        preferred.mkdir(parents=True, exist_ok=True)
+        return preferred
+    except OSError:
+        fallback = Path(DB_PATH).resolve().parent / "backups" / "imports"
+        fallback.mkdir(parents=True, exist_ok=True)
+        return fallback
+
+
+def _align_backup_path_owner(path: Path) -> None:
+    try:
+        st = Path(DB_PATH).stat()
+        os.chown(path, st.st_uid, st.st_gid)
+    except OSError:
+        return
+
+
+def _prune_import_backups(backup_dir: Path) -> list[str]:
+    files = sorted(
+        backup_dir.glob("ai_gm_pre_import_*.db"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    if not files:
+        return []
+
+    cutoff = datetime.now(UTC) - timedelta(days=IMPORT_BACKUP_MAX_AGE_DAYS)
+    recent_files: list[Path] = []
+    expired_files: list[Path] = []
+    for path in files:
+        modified_at = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+        if modified_at >= cutoff:
+            recent_files.append(path)
+        else:
+            expired_files.append(path)
+
+    keep_candidates = recent_files + expired_files[:IMPORT_BACKUP_MIN_KEEP]
+    keep_set = set(keep_candidates[:IMPORT_BACKUP_KEEP_LAST])
+    pruned: list[str] = []
+    for path in files:
+        if path in keep_set:
+            continue
+        try:
+            path.unlink()
+            pruned.append(path.name)
+        except OSError:
+            continue
+    return pruned
+
+
+def _create_pre_import_backup(conn: sqlite3.Connection, import_kind: str) -> dict[str, Any]:
+    backup_dir = _resolve_import_backup_dir()
+    _align_backup_path_owner(backup_dir)
+    timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
+    safe_kind = "".join(ch if ch.isalnum() else "_" for ch in str(import_kind or "import").strip().lower()).strip("_")
+    if not safe_kind:
+        safe_kind = "import"
+    backup_path = backup_dir / f"ai_gm_pre_import_{safe_kind}_{timestamp}.db"
+
+    dest_conn = sqlite3.connect(str(backup_path))
+    try:
+        conn.backup(dest_conn)
+    finally:
+        dest_conn.close()
+    _align_backup_path_owner(backup_path)
+
+    pruned = _prune_import_backups(backup_dir)
+    return {
+        "path": str(backup_path),
+        "filename": backup_path.name,
+        "size_bytes": backup_path.stat().st_size if backup_path.exists() else 0,
+        "retention": {
+            "keep_last": IMPORT_BACKUP_KEEP_LAST,
+            "max_age_days": IMPORT_BACKUP_MAX_AGE_DAYS,
+            "min_keep": IMPORT_BACKUP_MIN_KEEP,
+        },
+        "pruned": pruned,
+    }
 
 
 def _read_table(conn: sqlite3.Connection, table_name: str, order_by: str) -> list[dict[str, Any]]:
@@ -315,6 +403,7 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
     try:
         current_version = _get_config_version(conn)
         before_snapshot = export_config(exported_by="pre-import-snapshot")
+        backup_meta: dict[str, Any] | None = None
         tbl = payload["tables"]
         changes = {
             "stats": len(tbl["game_config_stats"]),
@@ -335,6 +424,8 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
                 "changes": changes,
                 "target_version": incoming_version,
             }
+
+        backup_meta = _create_pre_import_backup(conn, "config")
 
         # Replace config tables atomically.
         conn.execute("DELETE FROM game_config_stats")
@@ -487,6 +578,7 @@ def import_config(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
             "warnings": warnings,
             "changes": changes,
             "target_version": incoming_version,
+            "backup": backup_meta,
         }
     finally:
         conn.close()
@@ -610,6 +702,7 @@ def import_catalog_snapshot(payload: dict[str, Any], *, dry_run: bool) -> dict[s
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
+        backup_meta = _create_pre_import_backup(conn, "catalog_snapshot")
         conn.execute("BEGIN IMMEDIATE")
         conn.execute("PRAGMA foreign_keys=OFF")
         for t in reversed(_CATALOG_IMPORT_TABLES):
@@ -643,6 +736,7 @@ def import_catalog_snapshot(payload: dict[str, Any], *, dry_run: bool) -> dict[s
             "warnings": warnings,
             "imported_rows": counts,
             "note": "game_config_meta was not applied.",
+            "backup": backup_meta,
         }
     except Exception as e:
         try:

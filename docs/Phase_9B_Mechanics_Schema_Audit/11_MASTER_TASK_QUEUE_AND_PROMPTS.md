@@ -528,6 +528,8 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | T19 | DONE | Import: ostrzeżenia + `catalog_snapshot` jako kanon | `admin_config_transfer.py`, admin UI, docs |
 | T20 | DONE | Dywergencja **[S11]** + UI edycji planu (admin) | `game_engine`, admin |
 | T21 | DONE | Koszty statów za XP + endpoint spend | `game_config_meta`, `characters` API |
+| T25 | DONE | Cleanup `effect_*` → `effect_json` dla itemów + drop legacy kolumn | `effect_json_migration.py`, `admin_config.py`, `loot_service.py`, `migrations_admin.py` |
+| T26 | DONE | Auto-backup DB przed importem + retencja kopii | `admin_config_transfer.py`, `docker-compose.yml`, `docs/ops/db_backup_policy.md` |
 
 **Co zostało zrobione (T16–T21 — zbiorczo lub per ID)**
 
@@ -552,6 +554,13 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 - **T20:** admin API dostało endpointy `GET/PUT /api/admin/campaigns/{id}/gm-plan`, `POST .../advance-scene` i `POST .../regenerate-initial`, a panel Accounts pokazuje przy kampanii modal **GM Plan** z edycją JSON, preview promptu i podglądem dywergencji.
 - **T20:** testy: [`test_phase9b_t20_gm_plan_admin.py`](../../backend/tests/test_phase9b_t20_gm_plan_admin.py) — heurystyka, odczyt/zapis planu, `advance-scene`, regeneracja planu; uruchomione przez SSH na `.61`.
 - **T21:** meta [`xp_stat_point_costs`](../../backend/app/migrations_admin.py) (JSON: koszt przejścia **do** wartości N) + [`xp_stat_value_ceiling`](../../backend/app/migrations_admin.py) (domyślnie 20); [`xp_service.spend_stat_point_up`](../../backend/app/services/xp_service.py) walida klucz w `game_config_stats`; API `POST /api/characters/{id}/xp/spend-stat`; `GET /api/characters/{id}/xp` zwraca `stat_point_costs` i `stat_value_ceiling`; testy [`test_phase9b_t21_stat_xp.py`](../../backend/tests/test_phase9b_t21_stat_xp.py).
+- **T25:** [`effect_json_migration.py`](../../backend/app/services/effect_json_migration.py) dostał dwukierunkowy helper (legacy flat fields ↔ `effect_json`), [`admin_config.py`](../../backend/app/services/admin_config.py), [`loot_service.py`](../../backend/app/services/loot_service.py) i [`combat_service.py`](../../backend/app/services/combat_service.py) przestały zależeć od kolumn `effect_type` / `effect_*` w `game_config_items`, zachowując kompatybilność API dla prostych heal/restore/apply-remove-condition.
+- **T25:** [`migrations_admin.py`](../../backend/app/migrations_admin.py) domyka cleanup schematu i na starcie backendu dropuje `effect_type`, `effect_dice`, `effect_bonus`, `effect_target` z `game_config_items`, jeśli konwertowalne rekordy mają już uzupełnione `effect_json`.
+- **T25:** na `.61` uruchomiono backup DB, `scripts/migrate_effect_columns_to_effect_json.py --apply --db data/ai_gm.db`, poprawiono legacy `game_config_conditions.poisoned` do schema v1, wyeksportowano/znormalizowano snapshot i potwierdzono `admin_config_transfer.import_catalog_snapshot(..., dry_run=True)` bez błędów; po rebuildzie backendu tabela `game_config_items` działa już bez legacy `effect_*`.
+- **T25:** testy przez SSH na `.61`: [`test_phase9b_t25_effect_json_migration.py`](../../backend/tests/test_phase9b_t25_effect_json_migration.py), [`test_phase9b_t17_effect_json_validation.py`](../../backend/tests/test_phase9b_t17_effect_json_validation.py), [`test_phase9b_t18_consumables_item_key.py`](../../backend/tests/test_phase9b_t18_consumables_item_key.py) i [`test_phase8c_loot_service.py`](../../backend/tests/test_phase8c_loot_service.py) — zielone po uporządkowaniu hostowego środowiska `FastAPI` / `httpx`.
+- **T26:** [`admin_config_transfer.py`](../../backend/app/services/admin_config_transfer.py) tworzy snapshot SQLite przed realnym `import_config` i `import_catalog_snapshot`, zwraca metadane backupu w odpowiedzi API i automatycznie czyści stare kopie wg polityki retencji.
+- **T26:** backend dostał trwały mount `./backups:/backups` oraz domyślny katalog importowych snapshotów `backups/imports/`; dokumentacja operacyjna została dopisana w [`docs/ops/db_backup_policy.md`](../../docs/ops/db_backup_policy.md), [`README.md`](../../README.md) i [`00_brief.md`](00_brief.md).
+- **T26:** testy: [`test_phase9b_t26_import_backups.py`](../../backend/tests/test_phase9b_t26_import_backups.py) + regresje importu/loot przez SSH na `.61`.
 
 **Notatki po implementacji**
 
@@ -571,6 +580,8 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 - **Restart backendu wymagany** po wdrożeniu (nowe endpointy admin + wstrzyknięcie heurystyki do promptu). Frontend w dev nie wymaga rebuildu, ale panel admina wymaga odświeżenia zasobów w przeglądarce.
 - **T21:** jedna z dziesięciu „bazowych” statów może zostać podniesiona o **+1** za XP na raz; brak osobnego audytu jak przy grantach MG — wydatek jest czysto mechaniczny z karty. Próg sufitu globalny (`xp_stat_value_ceiling`); wartości powyżej tabeli kosztów korzystają z ekstrapolacji awaryjnej w kodzie (preferuj kompletny JSON w meta).
 - **Restart backendu wymagany** po wdrożeniu T21 (nowy endpoint + migracja seed meta dla istniejących DB przy kolejnym starcie migracji).
+- **T25:** backend po wdrożeniu wymaga **rebuild + restart**, bo dopiero startup nowego obrazu uruchamia migrację usuwającą legacy kolumny `effect_*` z `game_config_items`. Frontend nie wymaga rebuildu; pliki statyczne i przykłady JSON zostały tylko zaktualizowane.
+- **T26:** backup tworzy się tylko dla realnego importu (`dry_run=false`); sam dry-run pozostaje lekki i nie produkuje artefaktów. Po zmianie mountów / zmiennych Dockera wymagany jest **rebuild + restart backendu**.
 
 ---
 
@@ -590,6 +601,8 @@ Poniżej: **jedno zdanie celu** + odesłanie do **[IMPL]**; pełne prompty możn
 | 2026-05-04 | **T19 DONE** — `import_config` / `catalog_snapshot` zwracają jawne `warnings`, `export_config` oznacza się jako `config_bundle`, a admin UI pokazuje ostrzeżenia i robi dry-run snapshotu przed importem; test `test_phase9b_t19_import_warnings`; wymagany restart backendu. |
 | 2026-05-04 | **T20 DONE** — heurystyka dywergencji `gm_plan_json` w narracyjnym promptcie + adminowy modal **GM Plan** (GET/PUT planu, advance-scene, regenerate-initial, preview dywergencji); test `test_phase9b_t20_gm_plan_admin`; wymagany restart backendu. |
 | 2026-05-04 | **T21 DONE** — `xp_stat_point_costs` + `xp_stat_value_ceiling` w meta, `POST …/xp/spend-stat`, rozszerzenie `GET …/xp`; test `test_phase9b_t21_stat_xp`; wymagany restart backendu. |
+| 2026-05-07 | **T25 DONE** — helper/CLI migracji `effect_*` → `effect_json`, kompatybilność admin/runtime bez kolumn flat w `game_config_items`, poprawka live `poisoned` do schema v1, snapshot export+normalize+import dry-run na `.61`, rebuild backendu i drop `effect_type/effect_dice/effect_bonus/effect_target` z tabeli itemów. |
+| 2026-05-07 | **T26 DONE** — automatyczny backup SQLite przed `import_config` / `import_catalog_snapshot`, trwały mount `./backups:/backups`, retencja (`30 dni`, min. `3` starsze, max `10`), nowy test `test_phase9b_t26_import_backups` i aktualizacja docs/ops. |
 | 2026-05-04 | Backlog **B01** (admin: edycja `summary_rollup_cooldown_turns`); doprecyzowanie przy T01: „Podgląd dual” zostaje jako QA, nie zamiennik rollupu produkcyjnego. |
 | 2026-05-04 | Reguła pracy § Zasady pt. 4: **Notatki po implementacji** po każdym wdrożeniu; uzupełnione notatki dla **T01–T08**; placeholdery dla T09+. |
 | 2026-05-04 | **B01/B02 DONE** — `/api/settings/summary` + panel admin (cooldown rollupu, tryb dostępu do dual preview: `owner` / `owner_admin` / `off`); frontend i backend respektują tryb podglądu dual. |

@@ -39,6 +39,47 @@ function parseApiError(err, fallback) {
   return fallback;
 }
 
+function backupSummaryLines(result) {
+  const backup = result && typeof result === "object" ? result.backup : null;
+  if (!backup || typeof backup !== "object") {
+    return [];
+  }
+  const retention = backup.retention && typeof backup.retention === "object" ? backup.retention : null;
+  const lines = [];
+  if (backup.path) {
+    lines.push(`Backup created: ${String(backup.path)}`);
+  }
+  if (retention) {
+    lines.push(
+      `Retention: keep recent ${Number(retention.max_age_days || 30)} days, preserve at least ${Number(retention.min_keep || 3)} older backups, max ${Number(retention.keep_last || 10)} files.`,
+    );
+  }
+  if (Array.isArray(backup.pruned) && backup.pruned.length) {
+    lines.push(`Pruned by retention: ${backup.pruned.join(", ")}`);
+  } else {
+    lines.push("Pruned by retention: none");
+  }
+  return lines;
+}
+
+function renderBackupNotice(host, result, headingText = "Automatic backup before import") {
+  const lines = backupSummaryLines(result);
+  if (!lines.length) {
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  host.hidden = false;
+  host.innerHTML = "";
+  host.className = "warning-banner";
+  host.appendChild(el("strong", "", headingText));
+  const list = el("ul", "");
+  lines.forEach((line) => {
+    list.appendChild(el("li", "", line));
+  });
+  host.appendChild(list);
+}
+
 function downloadJsonFile(data, filenameBase) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const blobUrl = URL.createObjectURL(blob);
@@ -2589,7 +2630,7 @@ function mountConditions(host) {
       <label class="field"><span>Key</span><input data-field="key" type="text" /></label>
       <label class="field"><span>Label</span><input data-field="label" type="text" /></label>
       <label class="field add-form-span-2"><span>Effect JSON</span>
-        <textarea data-field="effect_json" rows="3" placeholder='{"stat_mods":{"STR":-2},"duration":"3 turns"}'></textarea>
+        <textarea data-field="effect_json" rows="3" placeholder='{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"STR","value":-2,"expires":"duration_rounds:3"}]}'></textarea>
       </label>
       <label class="field add-form-span-2"><span>Description</span><input data-field="description" type="text" /></label>
       <label class="field"><span>Stackable</span><input data-field="stackable" type="checkbox" /></label>
@@ -4905,9 +4946,11 @@ export async function init(container) {
   container.innerHTML = "";
   const title = el("h2", "", "Game Design");
   const tabs = el("div", "sub-tabs");
+  const importMeta = el("div", "config-diff-wrap");
   const body = el("div", "game-design-body");
   container.appendChild(title);
   container.appendChild(tabs);
+  container.appendChild(importMeta);
   container.appendChild(body);
 
   const panels = new Map();
@@ -4984,6 +5027,16 @@ export async function init(container) {
   });
   tabs.appendChild(snapshotBtn);
 
+  const importHint = el(
+    "p",
+    "muted",
+    "Commit import creates an automatic DB backup before replacing Game Design tables. Retention keeps recent backups for 30 days, always preserves at least 3 older snapshots, and caps the pool at 10 files.",
+  );
+  importMeta.appendChild(importHint);
+  const importNotice = el("div", "warning-banner");
+  importNotice.hidden = true;
+  importMeta.appendChild(importNotice);
+
   const importInput = el("input");
   importInput.type = "file";
   importInput.accept = "application/json,.json";
@@ -5024,14 +5077,15 @@ export async function init(container) {
         importInput.value = "";
         return;
       }
-      await adminFetch("/api/admin/config/catalog-snapshot/import", {
+      const res = await adminFetch("/api/admin/config/catalog-snapshot/import", {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      renderBackupNotice(importNotice, res);
       showToast(
         Array.isArray(dryRun?.warnings) && dryRun.warnings.length
-          ? "Catalog snapshot imported with warnings."
-          : "Catalog snapshot imported.",
+          ? "Catalog snapshot imported with warnings. Backup created."
+          : "Catalog snapshot imported. Backup created.",
         "success",
       );
       try {

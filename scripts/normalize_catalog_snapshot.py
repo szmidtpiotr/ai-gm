@@ -18,7 +18,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
+from pathlib import Path
 from typing import Any
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR / "backend"))
+
+from app.services.effect_json_migration import normalize_flat_effect_to_json
 
 # Import order matches admin_config_transfer._CATALOG_IMPORT_TABLES FK safety for orphan loot prune.
 TABLE_ORDER = [
@@ -98,10 +105,6 @@ ALLOWED_COLUMNS: dict[str, frozenset[str]] = {
             "note",
             "weight_kg",
             "ac_bonus",
-            "effect_type",
-            "effect_dice",
-            "effect_bonus",
-            "effect_target",
             "charges",
             "ai_generated",
             "approved",
@@ -321,6 +324,16 @@ def _normalize_items(rows: list[dict]) -> tuple[list[dict], dict[str, str]]:
         et = str(r.get("effect_type") or "").strip().lower()
         if et and et not in EFFECT_TYPES:
             r["effect_type"] = "misc"
+
+        if not r.get("effect_json"):
+            normalized = normalize_flat_effect_to_json(
+                r.get("effect_type"),
+                r.get("effect_dice"),
+                r.get("effect_bonus"),
+                r.get("effect_target"),
+            )
+            if normalized:
+                r["effect_json"] = normalized
         row = _strip_columns("game_config_items", r)
         if k in by_key:
             by_key[k] = _prefer_item_row(by_key[k], row)

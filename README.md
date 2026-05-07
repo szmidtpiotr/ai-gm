@@ -120,6 +120,15 @@ container at `/data/ai_gm.db`).
 # Saves timestamped copy to ./backups/
 ```
 
+**Automatic pre-import backups:**
+
+- `POST /api/admin/config/import`
+- `POST /api/admin/config/catalog-snapshot/import`
+
+When `dry_run=false`, backend creates a DB snapshot in `./backups/imports/` before
+replacing config/catalog rows. Retention keeps recent backups for 30 days, always
+preserves at least the latest 3 older snapshots, and caps the import-backup pool at 10 files.
+
 **Restore:**
 ```bash
 ./scripts/restore.sh ai_gm_20260420_143000.db

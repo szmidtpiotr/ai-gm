@@ -21,6 +21,47 @@ function parseApiError(err, fallback) {
   return fallback;
 }
 
+function backupSummaryLines(result) {
+  const backup = result && typeof result === "object" ? result.backup : null;
+  if (!backup || typeof backup !== "object") {
+    return [];
+  }
+  const retention = backup.retention && typeof backup.retention === "object" ? backup.retention : null;
+  const lines = [];
+  if (backup.path) {
+    lines.push(`Backup created: ${String(backup.path)}`);
+  }
+  if (retention) {
+    lines.push(
+      `Retention: keep recent ${Number(retention.max_age_days || 30)} days, preserve at least ${Number(retention.min_keep || 3)} older backups, max ${Number(retention.keep_last || 10)} files.`,
+    );
+  }
+  if (Array.isArray(backup.pruned) && backup.pruned.length) {
+    lines.push(`Pruned by retention: ${backup.pruned.join(", ")}`);
+  } else {
+    lines.push("Pruned by retention: none");
+  }
+  return lines;
+}
+
+function renderBackupNotice(host, result, headingText = "Pre-import backup") {
+  const lines = backupSummaryLines(result);
+  if (!lines.length) {
+    host.hidden = true;
+    host.innerHTML = "";
+    return;
+  }
+  host.hidden = false;
+  host.innerHTML = "";
+  host.className = "warning-banner";
+  host.appendChild(el("strong", "", headingText));
+  const list = el("ul", "");
+  lines.forEach((line) => {
+    list.appendChild(el("li", "", line));
+  });
+  host.appendChild(list);
+}
+
 /**
  * @param {HTMLElement} container
  */
@@ -82,6 +123,8 @@ export async function init(container) {
 
   const diffWrap = el("div", "config-diff-wrap");
   diffWrap.hidden = true;
+  const importInfo = el("div", "warning-banner");
+  importInfo.hidden = true;
 
   /** @type {Record<string, unknown> | null} */
   let lastParsed = null;
@@ -221,11 +264,12 @@ export async function init(container) {
     commitBtn.disabled = true;
     commitBtn.textContent = "⏳";
     try {
-      await adminFetch("/api/admin/config/import", {
+      const res = await adminFetch("/api/admin/config/import", {
         method: "POST",
         body: JSON.stringify(lastParsed),
       });
-      showToast("Import committed. Config version bumped.", "success");
+      renderBackupNotice(importInfo, res, "Automatic backup before import");
+      showToast("Import committed. Backup created automatically.", "success");
       fileInp.value = "";
       lastParsed = null;
       lastDryRunWarnings = [];
@@ -242,10 +286,18 @@ export async function init(container) {
   });
 
   card2.appendChild(fileInp);
+  card2.appendChild(
+    el(
+      "p",
+      "muted",
+      "Commit import creates an automatic DB backup before any rows are replaced. Retention keeps recent backups for 30 days, always preserves at least 3 older snapshots, and caps the pool at 10 files.",
+    ),
+  );
   const rowBtns = el("div", "technical-btn-row");
   rowBtns.appendChild(dryBtn);
   rowBtns.appendChild(commitBtn);
   card2.appendChild(rowBtns);
+  card2.appendChild(importInfo);
   card2.appendChild(diffWrap);
 
   const cardSummary = el("div", "admin-card");
