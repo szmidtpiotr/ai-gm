@@ -893,7 +893,7 @@ async function mountGlobalLlmSettings(host) {
   }
 
   async function reload() {
-    snapshot = await adminFetch("/api/admin/llm/global-settings");
+    snapshot = await adminFetch("/api/settings/llm/admin");
     rebuildPresetOptions();
     renderStatus();
   }

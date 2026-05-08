@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./styles.css?v=no-engine-select-wide-chat-2026-05-08">
+  <link rel="stylesheet" href="./styles.css?v=chat-scroll-fix-2026-05-08c">
   <link rel="stylesheet" href="./css/combat.css">
   <script>
     (function() {
@@ -114,20 +114,22 @@
 
     <div class="play-area">
       <div class="play-main">
-        <div class="chat-toolbar">
-          <button type="button" id="archive-toggle-btn" class="archive-toggle-btn" aria-pressed="false" title="Pokaż/ukryj wiadomości OOC, /mem, systemowe i błędy">
-            <span class="archive-toggle-icon" aria-hidden="true">📦</span>
-            <span class="archive-toggle-label">Pokaż archiwum</span>
-            <span class="archive-toggle-count" id="archive-toggle-count">0</span>
-          </button>
-        </div>
-        <!-- Thinking bubble is inserted here dynamically by ui.js -->
-        <div class="chat" id="chat" data-testid="chat-messages"></div>
+        <div class="play-main-scroll">
+          <div class="chat-toolbar">
+            <button type="button" id="archive-toggle-btn" class="archive-toggle-btn" aria-pressed="false" title="Pokaż/ukryj wiadomości OOC, /mem, systemowe i błędy">
+              <span class="archive-toggle-icon" aria-hidden="true">📦</span>
+              <span class="archive-toggle-label">Pokaż archiwum</span>
+              <span class="archive-toggle-count" id="archive-toggle-count">0</span>
+            </button>
+          </div>
+          <!-- Thinking bubble is inserted here dynamically by ui.js -->
+          <div class="chat" id="chat" data-testid="chat-messages"></div>
 
-        <div class="chat history-panel" id="history-panel">
-          <div class="muted">Historia kampanii...</div>
+          <div class="chat history-panel" id="history-panel">
+            <div class="muted">Historia kampanii...</div>
+          </div>
+          <div id="voice-status" class="voice-status voice-status-chat" aria-live="polite"></div>
         </div>
-        <div id="voice-status" class="voice-status voice-status-chat" aria-live="polite"></div>
 
         <div class="composer">
           <div class="input-with-mic">
@@ -382,7 +384,7 @@
   <script src="./js/death_screen.js"></script>
   <script src="./js/actions.js?v=no-engine-select-wide-chat-2026-05-08"></script>
   <script src="./js/events.js?v=no-engine-select-wide-chat-2026-05-08"></script>
-  <script src="./js/main.js?v=no-engine-select-wide-chat-2026-05-08"></script>
+  <script src="./js/main.js?v=chat-layout-auth-grid-fix-2026-05-08"></script>
   <script src="./js/app.js?v=no-engine-select-wide-chat-2026-05-08"></script>
   <script src="./js/inventory.js"></script>
   <script src="./js/shop.js?v=9a4-open-shop-fallback"></script>

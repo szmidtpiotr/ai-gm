@@ -34,12 +34,20 @@ body {
   font-family: 'Georgia', 'Times New Roman', serif;
   background: var(--bg);
   color: var(--text);
+  overflow: hidden;
 }
 
 .app {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--gap);
   max-width: min(1680px, 100%);
   margin: 0 auto;
   padding: 16px;
+  overflow: hidden;
 }
 
 .controls,
@@ -66,7 +74,10 @@ body {
 
 .controls {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-bottom: 16px;
+  margin-bottom: 0;
+  max-height: min(32vh, 320px);
+  min-height: 0;
+  overflow: auto;
 }
 
 .llm-controls {
@@ -79,6 +90,8 @@ body {
   border-radius: 9px;
   background: rgba(255, 253, 248, 0.7);
   margin-bottom: 4px;
+  min-height: 0;
+  overflow: auto;
 }
 
 .llm-settings-toggle-row {
@@ -334,11 +347,12 @@ input:disabled {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 16px;
-  min-height: 420px;
-  max-height: 60vh;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
   overflow-x: hidden;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .voice-chat-debug {
@@ -369,28 +383,55 @@ input:disabled {
 }
 
 .play-area {
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+  overflow: hidden;
 }
 
 .play-area.sheet-open {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
 }
 
 .play-main {
   min-width: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.play-main-scroll {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.play-main-scroll > #chat {
+  min-height: 0;
+}
+
+.play-main-scroll > .history-panel {
+  min-height: 0;
 }
 
 .sheet-panel {
   display: none;
-  width: 340px;
+  width: 100%;
+  max-width: 360px;
+  min-height: 0;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
+  align-self: stretch;
 }
 
 .play-area.sheet-open .sheet-panel {
@@ -398,29 +439,13 @@ input:disabled {
   flex-direction: column;
 }
 
-/* Wide chat: keep main column full width; character sheet floats over the right edge */
-@media (min-width: 901px) {
-  .play-area.sheet-open {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .play-area.sheet-open .sheet-panel {
-    position: fixed;
-    top: 80px;
-    right: max(16px, env(safe-area-inset-right));
-    bottom: max(16px, env(safe-area-inset-bottom));
-    width: min(360px, calc(100vw - 32px));
-    max-height: calc(100vh - 96px);
-    z-index: 40;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
-  }
-}
-
 .sheet-panel-body {
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
+  overflow: auto;
 }
 
 .combat-panel-slot {
@@ -1025,6 +1050,11 @@ pre.combat-roll-plain {
 .composer {
   grid-template-columns: 1fr auto;
   align-items: end;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 0.9);
+  padding: 12px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
 }
 
 .composer-actions {
@@ -1410,6 +1440,7 @@ pre {
 @media (max-width: 900px) {
   .controls {
     grid-template-columns: 1fr 1fr;
+    max-height: min(34vh, 280px);
   }
 
   .play-area {
@@ -1418,10 +1449,12 @@ pre {
 
   .play-area.sheet-open {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(220px, 42dvh);
   }
 
   .sheet-panel {
     width: 100%;
+    max-width: none;
   }
 
   :root {
@@ -1430,6 +1463,10 @@ pre {
 }
 
 @media (max-width: 640px) {
+  .controls {
+    max-height: min(40vh, 320px);
+  }
+
   .llm-controls {
     grid-template-columns: 1fr;
     padding: 8px;
@@ -1451,11 +1488,6 @@ pre {
   .field-row,
   .field-row.single-action {
     grid-template-columns: 1fr;
-  }
-
-  .chat {
-    min-height: 320px;
-    max-height: 52vh;
   }
 
   .message,

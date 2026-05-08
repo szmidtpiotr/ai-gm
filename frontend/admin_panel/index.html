@@ -324,7 +324,7 @@
         }
         accountsReady = true;
         try {
-          const { init } = await import("/admin_panel/sections/accounts.js?v=22");
+          const { init } = await import("/admin_panel/sections/accounts.js?v=23");
           await init(el);
         } catch (err) {
           accountsReady = false;
