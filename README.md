@@ -6,6 +6,8 @@ The project includes player gameplay UI, admin configuration UI, per-user LLM se
 ## Quick Start
 
 ```bash
+# Fresh Ubuntu host may need:
+# sudo apt-get update && sudo apt-get install -y git
 git clone https://github.com/szmidtpiotr/ai-gm.git
 cd ai-gm
 chmod +x install.sh
@@ -13,14 +15,18 @@ chmod +x install.sh
 ```
 
 Services:
+
 - Frontend: `http://localhost:3001`
 - Backend API: `http://localhost:8000/api`
 - Swagger docs: `http://localhost:8000/docs`
 
 Installer notes:
+
 - `install.sh` now runs with interactive checkpoints before destructive/mid-configuration steps.
 - For CI/automation use non-interactive mode: `./install.sh --yes`.
 - At the end, installer prints and saves a full status summary to `install-summary.txt` (URLs, LLM mode, DB path, runtime container status).
+- Dedicated PROD host recommended bootstrap: `GRAFANA_ADMIN_PASSWORD='...' ./install.sh --with-observability --no-ollama`
+- `--no-ollama` is the recommended first boot mode when the final custom LLM URL / API key / model will be configured later from `Admin Panel -> Accounts`.
 
 ## Remote Workspace Operation
 
@@ -30,6 +36,25 @@ In the current team setup, `/home/piotrszmidt/remote_mount/ai-gm` is an NFS-moun
 - Do not use the local machine as the AI-GM dev runtime.
 - Validate deployed dev changes via `https://aigm-dev.studio-colorbox.com/`.
 - Restart or rebuild the relevant remote services after code changes when required.
+
+## Environment Roles
+
+- DEV host: `192.168.1.61`
+  - development runtime only
+  - branch flow centered on `develop`
+- PROD host: `192.168.1.63`
+  - production runtime only
+  - deploy only from `main`
+  - observability stack lives there together with PROD
+
+Current recommended production flow:
+
+1. Finish and validate work on DEV
+2. Promote `develop` -> `main`
+3. SSH to `192.168.1.63`
+4. Run `./scripts/deploy_prod.sh`
+
+`scripts/promote_and_deploy_prod.sh` is kept only as a legacy helper and should not be the default production path for the dedicated PROD host model.
 
 ## Current Stack
 
@@ -41,6 +66,7 @@ In the current team setup, `/home/piotrszmidt/remote_mount/ai-gm` is an NFS-moun
 ## Implemented Features
 
 ### Player Side
+
 - Login gate before loading gameplay data.
 - Campaign/character/turn flow with streaming and non-streaming responses.
 - Player UI no longer edits provider / base URL / API key; those are managed from admin only.
@@ -48,6 +74,7 @@ In the current team setup, `/home/piotrszmidt/remote_mount/ai-gm` is an NFS-moun
 - Mechanics metadata endpoint for skill/DC descriptions and roll hints.
 
 ### Admin Side
+
 - Token-protected `/api/admin/*` API.
 - Admin dev login endpoint for local development.
 - Global LLM settings and saved presets in `Admin Panel -> Accounts`.
@@ -65,6 +92,7 @@ In the current team setup, `/home/piotrszmidt/remote_mount/ai-gm` is an NFS-moun
 - Config export/import with dry-run and version checks.
 
 ### Config Tables (seeded)
+
 - `game_config_stats`
 - `game_config_skills`
 - `game_config_dc`
@@ -108,6 +136,7 @@ Relevant environment variables:
 - `LLM_MAX_TOKENS`
 
 Notes:
+
 - Global provider / API credentials are edited from `Admin Panel -> Accounts`, not from the player frontend.
 - Saved global presets can be activated later and deleted once inactive.
 
@@ -143,6 +172,7 @@ The SQLite database is stored at `./data/ai_gm.db` (bind-mounted into the backen
 container at `/data/ai_gm.db`).
 
 **Backup:**
+
 ```bash
 ./scripts/backup.sh
 # Saves timestamped copy to ./backups/
@@ -158,6 +188,7 @@ replacing config/catalog rows. Retention keeps recent backups for 30 days, alway
 preserves at least the latest 3 older snapshots, and caps the import-backup pool at 10 files.
 
 **Restore:**
+
 ```bash
 ./scripts/restore.sh ai_gm_20260420_143000.db
 # Auto-backs up current DB before replacing
@@ -165,6 +196,7 @@ preserves at least the latest 3 older snapshots, and caps the import-backup pool
 ```
 
 **Manual one-liner:**
+
 ```bash
 cp ./data/ai_gm.db ./backups/ai_gm_$(date +%Y%m%d_%H%M%S).db
 ```
