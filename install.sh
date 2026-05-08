@@ -9,6 +9,9 @@
 #   ./install.sh --skip-docker-install     # fail if Docker is missing (CI / strict env)
 #   GRAFANA_ADMIN_PASSWORD='…' ./install.sh --with-observability
 #       # same as default install, plus Grafana+Loki+Promtail+MCP (see observability/)
+#   GRAFANA_ADMIN_PASSWORD='…' ./install.sh --with-observability --no-ollama
+#       # recommended for dedicated PROD hosts when final custom LLM URL/key/model
+#       # will be configured after first boot
 #
 # Full stack (game + observability) on a new Linux host:
 #   export GRAFANA_ADMIN_PASSWORD='choose-a-strong-password'
@@ -25,7 +28,7 @@
 #
 # This script:
 #   - Optionally installs Docker Engine (Linux: get.docker.com; requires sudo)
-#   - Builds and starts backend + frontend via docker compose (production file only — no dev override)
+#   - Builds and starts backend + frontend + voice-service via docker compose (production file only — no dev override)
 #   - Creates SQLite DB at ./data/ai_gm.db (bind-mount), applies SQL seeds, restarts backend so migrations run
 #   - With --with-observability: starts Grafana+Loki+Promtail+MCP, first db-autosync for Grafana SQL/MCP story DB
 #   - Writes install-summary.txt (game + observability URLs, Perplexity MCP template, PUBLIC_* bookmarks)
@@ -111,7 +114,7 @@ if [[ "$NO_OLLAMA" == true ]]; then
   export LLM_BASE_URL="${LLM_BASE_URL:-https://api.openai.com/v1}"
   export LLM_MODEL="${LLM_MODEL:-gpt-4o-mini}"
   export LLM_API_KEY="${LLM_API_KEY:-}"
-  LLM_MODE_LABEL="Cloud (OpenAI-compatible, no local Ollama)"
+  LLM_MODE_LABEL="Cloud / custom OpenAI-compatible endpoint (no local Ollama)"
 else
   export LLM_PROVIDER="${LLM_PROVIDER:-ollama}"
   export LLM_BASE_URL="${LLM_BASE_URL:-http://host.docker.internal:11434}"
@@ -237,10 +240,10 @@ fi
 
 mkdir -p "${SCRIPT_DIR}/data" "${SCRIPT_DIR}/backups"
 
-# --- Build & start backend (production compose only — avoids docker-compose.override dev bind mounts) ---
+# --- Build & start full game stack (production compose only — avoids docker-compose.override dev bind mounts) ---
 if [[ "$SKIP_BUILD" != true ]]; then
   log "Building images…"
-  compose build backend frontend
+  compose build backend frontend voice-service
 fi
 
 log "Starting backend…"
@@ -269,6 +272,9 @@ sleep 4
 log "Starting frontend…"
 compose up -d frontend
 
+log "Starting voice-service…"
+compose up -d voice-service
+
 if [[ "$WITH_OBSERVABILITY" == true ]]; then
   confirm_continue "Proceed with observability deployment (Grafana/Loki/Promtail/MCP)?"
   if [[ -z "${GRAFANA_ADMIN_PASSWORD:-}" ]]; then
@@ -294,7 +300,7 @@ fi
 log "Waiting for API health…"
 HEALTH_OK=""
 for _ in $(seq 1 24); do
-  if curl -fsS --max-time 3 "http://127.0.0.1:8000/api/health" >/dev/null 2>&1; then
+  if curl -fsS --max-time 3 "http://127.0.0.1:8000/api/healthz" >/dev/null 2>&1; then
     HEALTH_OK=1
     break
   fi
@@ -329,11 +335,13 @@ emit_install_summary() {
   echo "  Player UI:       http://localhost:3001"
   echo "  Backend API:     http://localhost:8000/api"
   echo "  Swagger docs:    http://localhost:8000/docs"
-  echo "  Health:          http://localhost:8000/api/health"
+  echo "  Health:          http://localhost:8000/api/healthz"
+  echo "  Voice:           http://localhost:8300/voice/healthz"
   if [[ -n "$HOST_IP" && "$HOST_IP" != "127.0.0.1" ]]; then
     echo "  Player UI (LAN): http://${HOST_IP}:3001"
     echo "  Backend (LAN):   http://${HOST_IP}:8000/api"
     echo "  Swagger (LAN):   http://${HOST_IP}:8000/docs"
+    echo "  Voice (LAN):     http://${HOST_IP}:8300/voice/healthz"
   fi
   echo ""
   if [[ "$WITH_OBSERVABILITY" == true ]]; then
@@ -393,8 +401,8 @@ emit_install_summary() {
   echo "  Password: demo"
   echo ""
   if [[ "$NO_OLLAMA" == true ]]; then
-    echo "Next step (cloud LLM):"
-    echo "  Open Settings in the UI and set your API provider, URL, model, and API key,"
+    echo "Next step (cloud / custom LLM):"
+    echo "  Open Admin Panel -> Accounts and set the final provider, base URL, model, and API key,"
     echo "  OR set environment variables and run compose again, e.g.:"
     echo "    export LLM_API_KEY=sk-..."
     echo "    docker compose -f docker-compose.yml up -d backend"
@@ -434,6 +442,6 @@ emit_install_summary | tee "$SUMMARY_FILE"
 
 ok "Summary written to $SUMMARY_FILE"
 echo ""
-curl -sS "http://127.0.0.1:8000/api/health" 2>/dev/null | head -c 500 || true
+curl -sS "http://127.0.0.1:8000/api/healthz" 2>/dev/null | head -c 500 || true
 echo ""
 exit 0

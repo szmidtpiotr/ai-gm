@@ -1,4 +1,4 @@
-name: Deploy to Production
+name: Deploy to Production (legacy manual workflow disabled)
 
 on:
   workflow_dispatch:
@@ -9,18 +9,19 @@ on:
         default: "Manual production deploy"
 
 jobs:
-  deploy:
-    name: Promote and deploy on self-hosted .61
-    runs-on: [self-hosted, linux, x64, prod-deploy]
-    environment: production
-    timeout-minutes: 30
+  disabled:
+    name: Manual deploy required
+    runs-on: ubuntu-latest
     steps:
-      - name: Verify deploy repository exists
+      - name: Explain current production flow
         run: |
-          test -d /home/piotrszmidt/ai-gm
-          test -x /home/piotrszmidt/ai-gm/scripts/promote_and_deploy_prod.sh
-
-      - name: Run promote and deploy script locally
-        run: |
-          cd /home/piotrszmidt/ai-gm
-          ./scripts/promote_and_deploy_prod.sh "${{ github.event.inputs.release_note }}"
+          echo "This GitHub Actions workflow is intentionally disabled."
+          echo ""
+          echo "Current production model:"
+          echo "  1. Promote develop -> main outside the production host."
+          echo "  2. SSH to the dedicated PROD machine."
+          echo "  3. Run ./scripts/deploy_prod.sh manually on the PROD host."
+          echo ""
+          echo "Reason:"
+          echo "  Production is being moved off the old mixed DEV/PROD host."
+          echo "  The repo now treats manual deployment on the dedicated PROD VM as the source of truth."

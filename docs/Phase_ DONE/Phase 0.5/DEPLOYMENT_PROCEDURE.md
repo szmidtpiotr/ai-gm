@@ -1,5 +1,12 @@
 # Procedura: Wdrożenie z Dev na Produkcję
 
+Aktualizacja modelu środowisk:
+
+- `192.168.1.61` = **DEV only**
+- `192.168.1.63` = **PROD only**
+- aktualny preferowany deploy PROD jest **manualny przez skrypt na `.63`**
+- workflow GitHub Actions w repo jest obecnie wyłączony celowo, żeby nie wdrożyć niczego na stary host przez pomyłkę
+
 > ⚠️ Przeczytaj całość przed pierwszym wdrożeniem.
 
 ---
@@ -7,19 +14,11 @@
 ## Checklist przed wdrożeniem
 
 - [ ] Feature działa poprawnie na dev (`http://IP:3002`)
-- [ ] Brak nieskończonych błędów w logach dev:
-  ```bash
-  docker compose -f docker-compose.dev.yml logs --tail=30
-  ```
-- [ ] Masz dostęp SSH do maszyny `.61`
-- [ ] Baza prod jest w dobrym stanie:
-  ```bash
-  ls -lh data/ai_gm.db
-  ```
-- [ ] Nie ma niezacommitowanych zmian na dev:
-  ```bash
-  git status
-  ```
+- [ ] Brak nieskończonych błędów w logach dev: `docker compose -f docker-compose.dev.yml logs --tail=30`
+- [ ] Masz dostęp SSH do maszyny DEV `.61`
+- [ ] Masz dostęp SSH do maszyny PROD `.63`
+- [ ] Baza prod jest w dobrym stanie: `ls -lh data/ai_gm.db`
+- [ ] Nie ma niezacommitowanych zmian na dev: `git status`
 
 ---
 
@@ -46,86 +45,59 @@ git push origin main
 ## Krok 2 — Deploy na produkcję
 
 ```bash
+ssh <user>@192.168.1.63
 cd /ścieżka/do/ai-gm
 ./scripts/deploy_prod.sh
 ```
 
 Skrypt automatycznie:
+
 1. Sprawdza, czy jesteś na gałęzi `main` (odmawia jeśli nie)
 2. Tworzy backup bazy przed wdrożeniem → `backups/ai_gm_pre_deploy_DATA.db`
 3. Pobiera najnowszy kod z `main`
-4. Restartuje kontenery prod (`docker-compose.yml`)
-5. Czeka na healthcheck backendu (max 60 sekund)
+4. Restartuje kontenery prod (`docker-compose.yml`) na dedykowanym hoście `.63`
+5. Czeka na healthcheck backendu (max 120 sekund)
 
 ---
 
-## Tryb automatyczny (jedna komenda)
+## Pierwszy bootstrap nowej maszyny PROD
 
-Jeśli chcesz zrobić pełny flow `develop -> main -> deploy`, użyj:
+Na świeżej maszynie `.63` zrób najpierw bootstrap repo i stosu:
 
 ```bash
-cd /ścieżka/do/ai-gm
-./scripts/promote_and_deploy_prod.sh "chore: promote develop to main — [krótki opis]"
+sudo apt-get update && sudo apt-get install -y git
+git clone https://github.com/szmidtpiotr/ai-gm.git
+cd ai-gm
+chmod +x install.sh
+GRAFANA_ADMIN_PASSWORD='strong-password' ./install.sh --with-observability --no-ollama
 ```
 
-Skrypt automatycznie:
-1. Sprawdza, czy repo jest czyste
-2. Aktualizuje `develop` i `main` z `origin`
-3. Wykonuje merge `develop -> main` (merge commit)
-4. Pushuje `main` i synchronizuje `develop` do nowego `main`
-5. Uruchamia `./scripts/deploy_prod.sh`
+`--no-ollama` jest zalecane, jeśli finalny custom provider / URL / API key / model ustawisz później w panelu admina.
 
-Dzięki temu komenda "wdrażamy na produkcję" może oznaczać dokładnie powyższy skrypt.
+Po pierwszym bootstrapie kolejne release idą już przez:
+
+```bash
+./scripts/deploy_prod.sh
+```
 
 ---
 
-## Tryb automatyczny (GitHub Actions + approval)
+## Status GitHub Actions
 
-Dla bezpiecznego wdrożenia "jednym przyciskiem" dostępny jest workflow:
+Workflow:
 
 - Plik: `.github/workflows/deploy-production.yml`
-- Trigger: `workflow_dispatch` (manualny start w GitHub Actions)
-- Bramka bezpieczeństwa: `environment: production` (required approval)
-- Wykonanie: self-hosted runner na `.61` uruchamia lokalnie `./scripts/promote_and_deploy_prod.sh`
-
-### Jednorazowa konfiguracja
-
-1. GitHub → Settings → Environments → **New environment**: `production`
-2. W `production` ustaw:
-   - **Required reviewers** (np. Twoje konto)
-   - (opcjonalnie) wait timer i deployment branches
-3. GitHub → Settings → Actions → Runners → **New self-hosted runner**
-4. Na serwerze `.61` wykonaj kroki z GitHub (download + `./config.sh`) z etykietą:
-   - `prod-deploy`
-5. Uruchom runner jako usługę:
-   - `sudo ./svc.sh install`
-   - `sudo ./svc.sh start`
-6. Potwierdź w GitHub, że runner ma status **Idle** i etykiety:
-   - `self-hosted`, `linux`, `x64`, `prod-deploy`
-
-### Uruchomienie releasu (praktyka)
-
-1. Wejdź w GitHub → **Actions** → **Deploy to Production**
-2. Kliknij **Run workflow**
-3. Podaj `release_note` (np. `release: poprawki panelu admin`)
-4. Workflow zatrzyma się na approvalu środowiska `production`
-5. Kliknij **Approve and deploy**
-6. Sprawdź log joba `Promote and deploy on self-hosted .61`
-7. Po sukcesie wykonaj checklistę z sekcji "Krok 3 — Weryfikacja po wdrożeniu"
+- Status: **wyłączony celowo**
+- Powód: stary workflow był związany z dawnym mieszanym hostem DEV/PROD; aktualny model wymaga manualnego deployu na dedykowanym `.63`
 
 ---
 
 ## Krok 3 — Weryfikacja po wdrożeniu
 
 - [ ] Otwórz `http://IP:3001` — czy gra działa?
-- [ ] Sprawdź logi:
-  ```bash
-  docker compose logs backend --tail=20
-  ```
-- [ ] Sprawdź, czy dev stack nadal chodzi niezależnie:
-  ```bash
-  docker compose -f docker-compose.dev.yml ps
-  ```
+- [ ] Otwórz obserwowalność na `.63` (`:3000`, `:3100`, `:8001`) i potwierdź, że stack działa
+- [ ] Sprawdź logi: `docker compose logs backend --tail=20`
+- [ ] Sprawdź, czy dev stack nadal chodzi niezależnie: `docker compose -f docker-compose.dev.yml ps`
 
 ---
 
@@ -134,13 +106,14 @@ Dla bezpiecznego wdrożenia "jednym przyciskiem" dostępny jest workflow:
 ### Rollback kodu
 
 ```bash
-# Znajdź hash przed wdrożeniem
-git log --oneline -10
+# Preferuj bezpieczny rollback przez revert / nowy commit na main
+# zamiast force-pusha historii.
 
-# Wróć do poprzedniej wersji
+# Przykład: odwrócenie ostatniego commita i nowy deploy
 git checkout main
-git reset --hard <poprzedni-commit-hash>
-git push origin main --force-with-lease
+git pull --ff-only origin main
+git revert <commit-hash>
+git push origin main
 ./scripts/deploy_prod.sh
 ```
 
@@ -167,12 +140,14 @@ docker compose up -d
 
 ## Diagram przepływu
 
-```
+```text
 [Praca na develop]
        ↓
 [Test na :3002 — czy działa?]
        ↓
 [PR: develop → main] lub [git merge lokalnie]
+       ↓
+[SSH na 192.168.1.63]
        ↓
 [./scripts/deploy_prod.sh]
        ↓
