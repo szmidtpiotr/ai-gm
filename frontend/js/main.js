@@ -144,7 +144,7 @@ window._setAuthedUiVisible = function (authed) {
   if (authed) {
     overlayEl.style.display = "none";
     overlayEl.setAttribute("aria-hidden", "true");
-    gameAppEl.style.display = "block";
+    gameAppEl.style.display = "";
   } else {
     overlayEl.style.display = "flex";
     overlayEl.setAttribute("aria-hidden", "false");
