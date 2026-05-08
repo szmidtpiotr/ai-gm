@@ -123,21 +123,66 @@ Initial SSH verification of `192.168.1.63`:
 - Current state: minimal host, no `docker` installed yet, no `git` detected yet
 - `sudo` is available but requires a password
 
-This is acceptable for the migration plan, because `install.sh` is intended to bootstrap a fresh machine.
-However, no project bootstrap or deploy should be executed on `.63` until release approval for `main`.
+This was acceptable for the migration plan, because `install.sh` was intended to bootstrap a fresh machine.
+That bootstrap and later manual deploy have now been executed.
+
+## Migration Outcome
+
+The migration has now been executed.
+
+Completed work:
+
+1. Deployment/bootstrap scripts were updated for the dedicated PROD host model
+2. `develop` was promoted to `main`
+3. `192.168.1.63` was prepared with `git` and Docker
+4. AI-GM repo was cloned on `.63` under `/home/claude/ai-gm`
+5. Existing PROD database was restored onto `.63`
+6. App stack on `.63` was deployed from updated `main`
+7. Observability stack on `.63` was started and story DB snapshot synced
+8. Old PROD runtime on `.61` was stopped and removed
+
+## Current State
+
+### PROD (`192.168.1.63`)
+
+- App runtime active:
+  - frontend `:3001`
+  - backend `:8000`
+  - voice `:8300`
+- Observability active:
+  - Grafana `:3000`
+  - Loki `:3100`
+  - MCP `:8001`
+- Restored DB path: `/home/claude/ai-gm/data/ai_gm.db`
+- Manual deploy path: `/home/claude/ai-gm/scripts/deploy_prod.sh`
+- NPM/proxy should target `.63` for PROD domains
+
+### DEV (`192.168.1.61`)
+
+- DEV runtime remains active:
+  - frontend `:3002`
+  - backend `:8100`
+  - voice `:8302`
+  - test-agent `:4000`
+- DEV observability remains active:
+  - Grafana `:3302`
+  - Prometheus `:9092`
+  - Loki `:3102`
+  - MCP DEV `:8002`
+- Old PROD app and old PROD observability containers on `.61` were removed
+- `local-repo-mcp@ai-gm-prod` was intentionally left running because it is not part of the old app runtime
 
 ## Remaining Checks
 
-The high-level migration plan is already agreed.
-Before destructive cleanup on `.61` or bootstrap on `.63`, the remaining work is technical verification:
+The host split is complete. Remaining follow-up is operational hardening and cleanup:
 
-1. Audit `install.sh` for fresh-host compatibility with dedicated PROD + observability
-2. Audit `scripts/deploy_prod.sh` for dedicated PROD host use on `.63`
-3. Audit docs / workflows that still assume `.61` is the PROD machine
-4. Inventory actual PROD-only resources still present on `.61`
-5. Decide the exact DB handoff method when PROD bootstrap starts on `.63`
+1. Set final custom LLM configuration on PROD
+2. Validate production domains end-to-end through NPM
+3. Decide whether to keep / rename / move `local-repo-mcp@ai-gm-prod` on `.61`
+4. Optionally remove leftover old PROD Docker volumes/images from `.61`
+5. Optionally harden/refresh first-boot automation on `.63` now that real migration behavior is known
 
 ## Phase Status
 
-This document records the planning phase only.
-No cleanup or server-side deletion has been executed yet.
+This phase has moved from planning to execution.
+The DEV/PROD host split is operationally complete.
