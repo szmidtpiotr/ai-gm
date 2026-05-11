@@ -598,7 +598,7 @@ async function _renderNpcs(container) {
         badgeClass: (row) => row.npc_type === "merchant" ? "admin-badge-gold" : "admin-badge-muted",
         filterOptions: NPC_TYPES,
       },
-      { key: "_location_keys_text", label: "Lokacje",            editable: true, popup: true },
+      { key: "_location_keys_text", label: "Lokacje",            editable: false, popup: true },
       { key: "is_shop",             label: LABELS.isShop,        type: "boolean", editable: true },
       { key: "is_active",           label: LABELS.isActive,      type: "boolean", editable: true },
       { key: "description",         label: LABELS.description,   editable: true, popup: true },
@@ -664,7 +664,7 @@ async function _renderNpcs(container) {
   await load();
 }
 
-function _openNpcModal(row, onDone) {
+async function _openNpcModal(row, onDone) {
   const isEdit = !!row;
   const persJson = row?.personality_json
     ? (typeof row.personality_json === "string" ? row.personality_json : JSON.stringify(row.personality_json, null, 2))
@@ -672,7 +672,7 @@ function _openNpcModal(row, onDone) {
   const shopJson = row?.shop_inventory_json
     ? (typeof row.shop_inventory_json === "string" ? row.shop_inventory_json : JSON.stringify(row.shop_inventory_json, null, 2))
     : "[]";
-  const locKeys = Array.isArray(row?.location_keys) ? row.location_keys.join(", ") : (row?.location_keys ?? "");
+  const currentLocKeys = new Set(Array.isArray(row?.location_keys) ? row.location_keys : []);
 
   const form = document.createElement("div");
   form.className = "modal-form";
@@ -689,8 +689,33 @@ function _openNpcModal(row, onDone) {
     `<textarea name="description" rows="3">${_esc(row?.description ?? "")}</textarea>`));
   form.appendChild(_field(LABELS.personality,
     `<textarea name="personality_json" rows="4">${_esc(persJson)}</textarea>`));
-  form.appendChild(_field(LABELS.locationKeys,
-    `<input type="text" name="location_keys" value="${_esc(locKeys)}" placeholder="np. tavern_main, market" />`));
+
+  // ── Location multi-select ──
+  const locFieldWrap = document.createElement("div");
+  locFieldWrap.innerHTML = `<span style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">${LABELS.locationKeys}</span>`;
+  const locSelect = document.createElement("select");
+  locSelect.name = "location_keys";
+  locSelect.multiple = true;
+  locSelect.size = 5;
+  locSelect.className = "field-input npc-location-select";
+  locSelect.innerHTML = `<option disabled style="color:var(--text-muted);font-style:italic">Ładowanie lokacji…</option>`;
+  locFieldWrap.appendChild(locSelect);
+  locFieldWrap.innerHTML += `<p style="font-size:0.72rem;color:var(--text-muted);margin-top:3px">Ctrl+click aby wybrać wiele</p>`;
+  locFieldWrap.appendChild(locSelect); // re-append after innerHTML (quirk)
+
+  // re-get the select since innerHTML replaced it
+  const realLocSelect = locFieldWrap.querySelector("select");
+  form.appendChild(locFieldWrap);
+
+  // Load locations async and populate select
+  adminFetch("/api/locations/admin/locations").then(data => {
+    const locs = Array.isArray(data) ? data : (data.locations ?? data.items ?? []);
+    realLocSelect.innerHTML = locs.map(l =>
+      `<option value="${_esc(l.key)}" ${currentLocKeys.has(l.key) ? "selected" : ""}>${_esc(l.label)} (${_esc(l.key)})</option>`
+    ).join("");
+  }).catch(() => {
+    realLocSelect.innerHTML = `<option disabled>Błąd ładowania lokacji</option>`;
+  });
 
   const shopChkRow = _checkbox("is_shop", LABELS.isShop, row?.is_shop ?? false);
   form.appendChild(shopChkRow);
@@ -723,7 +748,9 @@ function _openNpcModal(row, onDone) {
           const description  = form.querySelector('[name="description"]').value.trim();
           const is_shop      = form.querySelector('[name="is_shop"]').checked;
           const is_active    = form.querySelector('[name="is_active"]').checked;
-          const loc_raw      = form.querySelector('[name="location_keys"]').value;
+          const location_keys = Array.from(
+            form.querySelector('[name="location_keys"]').selectedOptions
+          ).map(o => o.value);
 
           if (!key)   { showToast("Klucz jest wymagany.", "error"); return; }
           if (!label) { showToast("Nazwa jest wymagana.", "error"); return; }
@@ -734,7 +761,7 @@ function _openNpcModal(row, onDone) {
           const body = {
             key, label, npc_type, description, is_shop, is_active,
             personality_json: pJSON.value,
-            location_keys: loc_raw.split(",").map((s) => s.trim()).filter(Boolean),
+            location_keys,
           };
 
           if (is_shop) {
