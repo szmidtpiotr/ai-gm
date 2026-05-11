@@ -2663,18 +2663,27 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .rules-custom-list { display: flex; flex-direction: column; gap: 6px; }
 .rule-custom-row { display: flex; align-items: center; gap: 6px; }
 
-/* NPC location multi-select */
-.npc-location-select {
-  width: 100%;
+/* NPC location checkbox list */
+.npc-location-list {
+  max-height: 180px;
+  overflow-y: auto;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-primary);
-  font-size: 0.82rem;
+  border-radius: 6px;
   padding: 4px;
 }
-.npc-location-select option { padding: 4px 6px; }
-.npc-location-select option:checked { background: rgba(201,162,39,0.2); }
+.npc-location-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+.npc-location-item:hover { background: var(--bg-hover); }
+.npc-location-item input[type="checkbox"] { accent-color: var(--accent-gold); flex-shrink: 0; }
 
 /* ── Column resize handle ── */
 .col-resize-handle {

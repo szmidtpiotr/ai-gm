@@ -612,21 +612,17 @@ async function _renderNpcs(container) {
       showTextSearch:    true,
       searchPlaceholder: "Szukaj NPC…",
       async onEdit(row, colKey, newVal, { force } = {}) {
-        // Map computed fields back to API field names
-        const apiKey = colKey === "_location_keys_text" ? "location_keys" : colKey;
         let apiVal = newVal;
-        if (colKey === "_location_keys_text") {
-          apiVal = String(newVal).split(",").map(s => s.trim()).filter(Boolean);
-        }
+        // personality_json and shop_inventory_json must be sent as strings
         if (colKey === "personality_json" || colKey === "shop_inventory_json") {
-          const p = _tryJson(newVal, null);
+          const p = _tryJson(String(newVal), null);
           if (!p.ok) { showToast("Nieprawidłowy JSON.", "error"); throw new Error("bad json"); }
-          apiVal = p.value;
+          apiVal = JSON.stringify(p.value);
         }
         try {
           await adminFetch(`/api/npcs/${row.id}`, {
             method: "PATCH",
-            body:   JSON.stringify({ [apiKey]: apiVal, ...(force ? { force: true } : {}) }),
+            body:   JSON.stringify({ [colKey]: apiVal, ...(force ? { force: true } : {}) }),
           });
           showToast("Zapisano.", "success");
           await load();
@@ -690,31 +686,43 @@ async function _openNpcModal(row, onDone) {
   form.appendChild(_field(LABELS.personality,
     `<textarea name="personality_json" rows="4">${_esc(persJson)}</textarea>`));
 
-  // ── Location multi-select ──
+  // ── Location checkbox list ──
   const locFieldWrap = document.createElement("div");
-  locFieldWrap.innerHTML = `<span style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:4px">${LABELS.locationKeys}</span>`;
-  const locSelect = document.createElement("select");
-  locSelect.name = "location_keys";
-  locSelect.multiple = true;
-  locSelect.size = 5;
-  locSelect.className = "field-input npc-location-select";
-  locSelect.innerHTML = `<option disabled style="color:var(--text-muted);font-style:italic">Ładowanie lokacji…</option>`;
-  locFieldWrap.appendChild(locSelect);
-  locFieldWrap.innerHTML += `<p style="font-size:0.72rem;color:var(--text-muted);margin-top:3px">Ctrl+click aby wybrać wiele</p>`;
-  locFieldWrap.appendChild(locSelect); // re-append after innerHTML (quirk)
+  const locLabel = document.createElement("span");
+  locLabel.style.cssText = "font-size:0.8rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px";
+  locLabel.textContent = LABELS.locationKeys;
+  locFieldWrap.appendChild(locLabel);
 
-  // re-get the select since innerHTML replaced it
-  const realLocSelect = locFieldWrap.querySelector("select");
+  const locListWrap = document.createElement("div");
+  locListWrap.className = "npc-location-list";
+  locListWrap.innerHTML = `<p style="font-size:0.78rem;color:var(--text-muted);padding:8px">Ładowanie lokacji…</p>`;
+  locFieldWrap.appendChild(locListWrap);
   form.appendChild(locFieldWrap);
 
-  // Load locations async and populate select
+  // Load locations async and render checkboxes
   adminFetch("/api/locations/admin/locations").then(data => {
     const locs = Array.isArray(data) ? data : (data.locations ?? data.items ?? []);
-    realLocSelect.innerHTML = locs.map(l =>
-      `<option value="${_esc(l.key)}" ${currentLocKeys.has(l.key) ? "selected" : ""}>${_esc(l.label)} (${_esc(l.key)})</option>`
-    ).join("");
+    if (!locs.length) {
+      locListWrap.innerHTML = `<p style="font-size:0.78rem;color:var(--text-muted);padding:8px">Brak lokacji.</p>`;
+      return;
+    }
+    locListWrap.innerHTML = "";
+    locs.forEach(l => {
+      const item = document.createElement("label");
+      item.className = "npc-location-item";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.name = "location_key_cb";
+      cb.value = l.key;
+      cb.checked = currentLocKeys.has(l.key);
+      item.appendChild(cb);
+      const txt = document.createElement("span");
+      txt.innerHTML = `<strong>${_esc(l.label)}</strong> <code style="font-size:0.72rem;color:var(--text-muted)">${_esc(l.key)}</code>`;
+      item.appendChild(txt);
+      locListWrap.appendChild(item);
+    });
   }).catch(() => {
-    realLocSelect.innerHTML = `<option disabled>Błąd ładowania lokacji</option>`;
+    locListWrap.innerHTML = `<p style="font-size:0.78rem;color:var(--accent-red);padding:8px">Błąd ładowania lokacji.</p>`;
   });
 
   const shopChkRow = _checkbox("is_shop", LABELS.isShop, row?.is_shop ?? false);
@@ -749,25 +757,29 @@ async function _openNpcModal(row, onDone) {
           const is_shop      = form.querySelector('[name="is_shop"]').checked;
           const is_active    = form.querySelector('[name="is_active"]').checked;
           const location_keys = Array.from(
-            form.querySelector('[name="location_keys"]').selectedOptions
-          ).map(o => o.value);
+            form.querySelectorAll('[name="location_key_cb"]:checked')
+          ).map(cb => cb.value);
 
           if (!key)   { showToast("Klucz jest wymagany.", "error"); return; }
           if (!label) { showToast("Nazwa jest wymagana.", "error"); return; }
 
-          const pJSON = _tryJson(form.querySelector('[name="personality_json"]').value, {});
+          const persRaw = form.querySelector('[name="personality_json"]').value.trim() || "{}";
+          const pJSON = _tryJson(persRaw, {});
           if (!pJSON.ok) { showToast("Osobowość musi być poprawnym JSON.", "error"); return; }
 
+          // API expects personality_json as a JSON string, not an object
           const body = {
-            key, label, npc_type, description, is_shop, is_active,
-            personality_json: pJSON.value,
+            key, label, npc_type, description, is_shop: is_shop ? 1 : 0,
+            is_active: is_active ? 1 : 0,
+            personality_json: JSON.stringify(pJSON.value),
             location_keys,
           };
 
           if (is_shop) {
-            const sJSON = _tryJson(form.querySelector('[name="shop_inventory_json"]').value, []);
+            const shopRaw = form.querySelector('[name="shop_inventory_json"]').value.trim() || "[]";
+            const sJSON = _tryJson(shopRaw, []);
             if (!sJSON.ok) { showToast("Ekwipunek sklepu musi być poprawnym JSON.", "error"); return; }
-            body.shop_inventory_json = sJSON.value;
+            body.shop_inventory_json = JSON.stringify(sJSON.value);
           }
 
           try {
