@@ -424,6 +424,7 @@ html, body {
 .section-panel[data-section="mechanics"].active,
 .section-panel[data-section="content"].active,
 .section-panel[data-section="players"].active,
+.section-panel[data-section="campaigns"].active,
 .section-panel[data-section="system"].active {
   display: flex;
   flex-direction: column;
