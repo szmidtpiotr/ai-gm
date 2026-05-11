@@ -1,447 +1,317 @@
-# Phase 11 — Admin Panel 2.0
+# Admin Panel 2.0 — Complete Implementation Summary
 
-## Context
-
-The current admin panel is a functional but aging 8-tab vanilla JS tool built incrementally across game phases. It has grown organically, leaving a single 225 KB `game_design.js` monster, mixed Polish/English UI, no dashboard, no analytics, and a Test Runner tab that only belongs in dev.
-
-Admin Panel 2.0 is a **parallel deployment** — the old panel stays at `/admin/` and keeps working unchanged throughout development. The new panel lives at `/admin2/` and is developed phase by phase. Once all phases are complete and validated, the old panel can be retired (or kept forever as a fallback).
-
-**Stack:** Vanilla HTML/CSS/JS (no build system), FastAPI + SQLite backend, Nginx, Docker on 192.168.1.61 (DEV).
+**Status: ✅ All 10 phases complete** | URL: `https://aigm-dev.studio-colorbox.com/admin2/`
 
 ---
 
-## Parallel Deployment Architecture
+## Architecture
+
+Parallel deployment — old panel stays at `/panel/` untouched. New panel at `/admin2/` → `frontend/admin_panel_v2/`.
 
 ```
-Nginx (frontend container)
-├── /admin/       → frontend/admin_panel/       ← OLD panel (untouched)
-├── /panel/       → frontend/admin_panel/       ← OLD panel alias
-└── /admin2/      → frontend/admin_panel_v2/    ← NEW panel (this phase)
+Nginx
+├── /panel/   → frontend/admin_panel/        ← v1 (frozen)
+└── /admin2/  → frontend/admin_panel_v2/     ← v2 (this)
 ```
 
-### What changes to make this work
-1. `frontend/nginx.conf` — add 2 location blocks for `/admin2/`
-2. `frontend/admin_panel_v2/` — new folder, completely independent
-3. Backend API — only **additive** new endpoints; nothing existing is changed or removed
-
-### Shared utilities strategy
-Copy `shared/` from v1 into `admin_panel_v2/shared/` in Phase 1. This gives v2 a clean, independent copy that can be upgraded (new palette, sort, etc.) without risking v1.
-
-```
-frontend/
-├── admin_panel/           ← v1 (frozen, untouched)
-│   ├── shared/
-│   └── sections/
-└── admin_panel_v2/        ← v2 (new)
-    ├── shared/            ← copied from v1, then upgraded
-    ├── sections/          ← all new files
-    ├── index.html
-    └── layout.css
-```
-
----
-
-## Workflow: Questions Before Each Phase
-
-Before starting each phase, Claude will ask clarifying questions to confirm scope, design decisions, and any edge cases for that specific phase. **No phase starts without user confirmation.**
-
----
-
-## New Section Map
-
-Old 8 tabs → New 11 sections:
-
-| # | Section | Sidebar Label (PL) | Contents | Replaces |
-|---|---|---|---|---|
-| 1 | Overview | Przegląd | Live stat cards, recent activity feed | — (new) |
-| 2 | Mechanics | Mechaniki | Stats, Skills, DC Tiers, Conditions | game_design.js (partial) |
-| 3 | Content | Zawartość | Weapons, Enemies, Items, Consumables, Loot Tables, Archetypes | game_design.js (partial) |
-| 4 | World | Świat | Locations (tree), NPCs | game_design.js (partial) |
-| 5 | Prompts | Narracja | Prompt Studio — System, History, Memory, Helpme | game_design.js (partial) |
-| 6 | Players | Gracze | Users, roles, per-user LLM, campaign list, session timeline | accounts.js |
-| 7 | Campaigns | Kampanie | Campaign Monitor: live state, GM plan, scene advancement | accounts.js (partial) |
-| 8 | Campaign Designer | Kreator | AI agent for generating campaign hooks/snippets | — (new) |
-| 9 | Analytics | Statystyki | Dice stats, combat outcomes, turn activity (native charts) | — (new) |
-| 10 | Voice | Głos | Piper TTS/STT config | voice.js |
-| 11 | System | System | DB, Migrations, Backup, Config export/import, LLM presets, Slash commands, Admin Cmd | technical.js + config.js + ui_settings.js + admin_commands.js |
-
-**Removed from v2:** Test Runner (backend route stays for dev container use).
+**Stack:** Vanilla HTML/CSS/JS (no build system), FastAPI + SQLite, Docker on 192.168.1.61 (DEV).
 
 ---
 
 ## Design System
 
-**Style:** Dark SaaS Hybrid — charcoal base with amber gold accents and crimson for danger/crits.
+Dark SaaS Hybrid palette with amber gold accents:
 
 ```css
---bg-base:      #0f1117;   /* near-black base */
---bg-surface:   #1a1d27;   /* panels, cards */
---bg-elevated:  #252836;   /* raised elements */
---border:       #2e3244;
---accent-gold:  #c9a227;   /* primary accent, active sidebar, headings */
---accent-red:   #c0392b;   /* danger, crits, delete */
---accent-green: #27ae60;   /* success, connected */
+--bg-base:      #0f1117;
+--bg-surface:   #1a1d27;
+--bg-elevated:  #252836;
+--accent-gold:  #c9a227;   /* primary accent */
+--accent-red:   #c0392b;   /* danger / crits */
+--accent-green: #27ae60;   /* success */
 --text-primary: #e8e6e1;
 --text-muted:   #6b7280;
 ```
 
-**i18n convention:** Every section file starts with a `const LABELS = { ... }` block. All user-visible game content strings (labels, descriptions, placeholders) are Polish. UI chrome (Save, Delete, Loading...) stays English.
+**i18n:** Every section has `const LABELS = { ... }` at top. Game content labels are Polish; UI chrome stays English.
 
-**Sidebar:** grouped with dividers — `── GAME ──`, `── LIVE ──`, `── SYSTEM ──`.
+**Sidebar groups:** `── GAME ──` / `── LIVE ──` / `── SYSTEM ──`, collapsible, state persisted to localStorage.
 
 ---
 
-## Phase Progress
+## Sidebar Sections (final layout)
 
-| Phase | Description | Status | Notes |
+| # | Section | Label | Sub-tabs |
 |---|---|---|---|
-| **0** | Parallel deployment scaffold (Nginx + v2 folder + shared copy) | ✅ Done | `/admin2/` live, shared utilities copied |
-| **1** | Foundation: Design system, shell, login | ✅ Done | Dark SaaS CSS, 11-section shell, username+password login, collapsible sidebar |
-| **2** | Dashboard (Overview) | ✅ Done | `GET /api/admin/overview`, dashboard.js, 6 stat cards + 2 feeds, 30s refresh |
-| **3** | Game Content Split (Mechanics + Content + World) | ✅ Done | mechanics.js (Stats/Skills/DC/Conditions), content.js (Weapons/Enemies/Items/Consumables/Loot/Archetypes + AI Assistant), world.js (Locations/NPCs) |
-| **4** | Prompt Studio | ⬜ TODO | Dedicated editor with diff view |
-| **5** | Players Section Overhaul | ⬜ TODO | Backend: user activity endpoint, players.js |
-| **6** | Campaign Monitor | ⬜ TODO | Backend: live campaigns endpoint, campaigns_monitor.js |
-| **7** | Analytics | ⬜ TODO | New router + service, canvas charts |
-| **8** | Campaign Designer (AI Agent) | ⬜ TODO | New DB table, LLM endpoint, campaign_designer.js |
-| **9** | System Consolidation | ⬜ TODO | Merge 4 logical groups into system.js |
-| **10** | Voice Reskin | ⬜ TODO | Apply new CSS tokens to voice.js |
-| **11** | Cutover (optional) | ⬜ TODO | Redirect /admin/ → /admin2/, retire v1 |
-
-**Legend:** ⬜ TODO · 🔄 In Progress · ✅ Done · ❌ Blocked
+| 1 | Overview | Przegląd | — |
+| 2 | Mechanics | Mechaniki | Stats · Skills · DC · Conditions · Archetypes |
+| 3 | Content | Zawartość | Weapons · Armor · Items · Consumables · Loot Tables |
+| 4 | World | Świat | Locations · NPCs · Enemies · Reguły |
+| 5 | Prompts | Narracja | System · History Summary · Memory QA · Helpme |
+| 6 | Players | Gracze | — |
+| 7 | Campaigns | Kampanie | 🗺 Monitor · ✨ Kreator |
+| 8 | Analytics | Statystyki | — |
+| 9 | Voice | Głos | — |
+| 10 | System | System | Database · Config · LLM · Slash Commands · Admin Cmd |
 
 ---
 
-## Phase 0 — Parallel Deployment Scaffold
+## Phase-by-Phase What Was Built
 
-**Goal:** `/admin2/` is live and reachable. Shows a placeholder. Old `/admin/` completely untouched.
+### Phase 1 — Foundation
 
-### Files Changed
+- `frontend/admin_panel_v2/index.html` — full shell: sidebar with groups + dividers, topbar with LLM pill, login overlay (dev-login flow), activity log bar at bottom, section panels
+- `frontend/admin_panel_v2/layout.css` (v28) — complete design system: CSS vars, sidebar, tables, modals, toasts, all section-specific CSS
+- `frontend/admin_panel_v2/shared/` — api.js, auth.js, table.js (sort, filter, resize handles, popup tooltips), modal.js, toast.js
 
-| File | Action | Notes |
-|---|---|---|
-| `frontend/nginx.conf` | Edit | Add `/admin2/` → `admin_panel_v2/` location blocks |
-| `frontend/admin_panel_v2/index.html` | **New** | Placeholder "Admin 2.0 — coming soon" |
-| `frontend/admin_panel_v2/shared/api.js` | **New** | Copy from v1 |
-| `frontend/admin_panel_v2/shared/auth.js` | **New** | Copy from v1 |
-| `frontend/admin_panel_v2/shared/table.js` | **New** | Copy from v1 |
-| `frontend/admin_panel_v2/shared/modal.js` | **New** | Copy from v1 |
-| `frontend/admin_panel_v2/shared/toast.js` | **New** | Copy from v1 |
-
-Nginx blocks to add:
-```nginx
-location = /admin2 {
-    return 301 /admin2/;
-}
-
-location /admin2/ {
-    alias /usr/share/nginx/html/admin_panel_v2/;
-    try_files $uri $uri/ /admin_panel_v2/index.html;
-    add_header Cache-Control "no-store, must-revalidate" always;
-}
-```
-
-### Requires
-- Frontend container rebuild: `docker compose -f docker-compose.dev.yml up -d --build frontend`
-
-### Verification
-- `https://aigm-dev.studio-colorbox.com/admin/` still works (v1 intact).
-- `https://aigm-dev.studio-colorbox.com/admin2/` shows placeholder.
+**UX extras added later:**
+- Sidebar collapse (persistent)
+- Section persistence on F5 (`aigm_admin2_section` localStorage)
+- Activity log: sticky bottom, drag-to-resize, open/close persistent (`aigm_admin2_log_*`)
+- AI chat bubble (floating ⚡ button, bottom-right, opens popup chat panel)
+- Column resize drag handles on all tables (`tableId` → localStorage persistence)
+- Cell popup tooltips for truncated long-text fields (`col.popup: true`)
 
 ---
 
-## Phase 1 — Foundation: Design System & Shell
+### Phase 2 — Dashboard (Przegląd)
 
-**Goal:** Full new visual shell with login overlay, sidebar with all 11 section placeholders.
+**Backend:** `GET /api/admin/overview` — aggregates users, active campaigns, turns today, active combats, DB size, LLM preset name, recent audit log, recent turns.
 
-### Files Changed
-
-| File | Action | Notes |
-|---|---|---|
-| `frontend/admin_panel_v2/layout.css` | **New** | Full CSS vars, grouped sidebar, stat card components, table styles |
-| `frontend/admin_panel_v2/index.html` | Rewrite | 11-section sidebar with group dividers, login overlay, activity log |
-| `frontend/admin_panel_v2/shared/table.js` | Edit | Sort headers, sticky top, new palette classes |
-| `frontend/admin_panel_v2/shared/modal.js` | Edit | Restyle to new palette |
-| `frontend/admin_panel_v2/shared/toast.js` | Edit | Restyle to new palette |
-
-### Verification
-- `/admin2/` loads with dark design, login overlay appears.
-- Dev login works, all 11 nav items are clickable (sections show "coming soon" state).
-- No console errors.
+**Frontend:** `sections/dashboard.js`
+- 6 stat cards (Active Combats highlighted red when > 0)
+- Ostatnie zmiany (admin audit log feed)
+- Ostatnie tury gry (last game turns feed)
+- Auto-refresh every 30 s
 
 ---
 
-## Phase 2 — Dashboard (Overview)
+### Phase 3 — Game Content Split
 
-**Goal:** First screen shows live game state.
+**`sections/mechanics.js`** — Stats · Skills · DC Tiers · Conditions · Archetypes
+- Full CRUD on all tables via existing endpoints
+- AI Assistant as floating bubble popup
 
-### Backend
-| File | Action | Detail |
-|---|---|---|
-| `backend/app/routers/admin.py` | ✅ Added endpoint | `GET /api/admin/overview` |
+**`sections/content.js`** — Weapons · Armor · Items · Consumables · Loot Tables
+- Weapons: all columns including range_m, targeting, aoe, two_handed, finesse, magic_school, description, note
+- **Armor**: separate tab (item_type=armor), `ac_bonus` column prominent
+- Items: excludes armor entries
+- AI Assistant as floating bubble popup
 
-Response:
-```json
-{
-  "users_total": 7,
-  "campaigns_active": 4,
-  "turns_today": 3,
-  "active_combats": 1,
-  "db_size_mb": 3.15,
-  "llm_preset_name": "—",
-  "recent_audit": [...],
-  "recent_turns": [...]
-}
-```
+**`sections/world.js`** — Locations · NPCs · Enemies · Reguły
 
-### Frontend
-| File | Action | Detail |
-|---|---|---|
-| `frontend/admin_panel_v2/sections/dashboard.js` | ✅ Created | 6 stat cards + 2 feed panels, 30 s auto-refresh |
-| `frontend/admin_panel_v2/layout.css` | ✅ Updated | Dashboard CSS: `.stat-cards`, `.dash-feeds`, `.feed-row`, badge variants |
-| `frontend/admin_panel_v2/index.html` | ✅ Updated | `moduleMap` wired — `"overview"` → `dashboard.js?v=2` |
+_Locations:_
+- Columns: key, label, type, _parent_label (resolved from parent_id), _enemy_count, _rules_preview, description, is_active, locked_at
+- Pending locations section (open by default, gold badge count, Zatwierdź/Odrzuć buttons → `/api/admin/locations/{id}/approve|reject`)
+- Location modal: full rules editor (8 predefined checkboxes + value inputs + custom rules section + ✨ AI rule generator)
 
-**6 stat cards:** Users · Active Campaigns · Turns Today · Active Combats (red highlight when > 0) · DB Size · LLM Model
+_NPCs:_
+- Columns: id, key, label, npc_type, _location_keys_text (popup), is_shop, is_active, description (popup), personality_json (popup), shop_inventory_json (popup)
+- Edit modal: location assignment via scrollable checkbox list (loaded from `/api/locations/admin/locations`)
+- API field correction: personality_json/shop_inventory_json sent as strings (Pydantic `str` field)
 
-**Two side-by-side feeds:**
-- **Ostatnie zmiany (admin)** — last 10 audit log rows: CREATE/UPDATE/DELETE badge · table · row key · relative timestamp
-- **Ostatnie tury gry** — last 10 game turns: campaign title · player text snippet · relative timestamp
+_Enemies:_
+- Columns: key, label, tier, hp_base, ac_base, attack_bonus, damage_die, damage_bonus, attacks_per_turn, damage_type, xp_award, loot_table_key, _drop_pct, _skills (popup), _ci (popup), note (popup), description (popup), is_active, locked_at
+- Loot tables loaded in parallel for select dropdown
+- _skills/_ci/_drop_pct mapped back to skills_json/conditions_immune/drop_chance on edit
 
-**Auto-refresh:** silent 30 s `setInterval`; timer cleared on section deactivate.
+_Reguły (Rules Library tab):_
+- Predefined rules reference table (8 rules: no_combat, no_loot, teleport_blocked, stealth_check, rest_bonus, mana_regen, required_item, reason)
+- Named rule preset creator: build a set of rules, save under a name, reuse across locations (stored in localStorage)
+- AI bubble hidden on rules tab (uses its own AI button in preset editor)
 
-### Verification
-- ✅ Dashboard loads immediately after login, showing real DEV DB numbers.
-- ✅ Active combat card gets red border (1 combat active in DEV).
-- ✅ Both feeds scroll independently; content confirmed against DB.
-- ✅ No console errors.
-- ✅ Backend required `--no-cache` rebuild (code is baked into image, not bind-mounted).
+_AI generation (✨ bubble):_
+- Single floating bubble per tab, context-aware (generates location/npc/enemy based on active sub-tab)
+- Each entity type has dedicated system prompt in `_WORLD_GEN_PROMPTS`
+- Returns structured JSON pre-filled into the add/edit modal
 
 ---
 
-## Phase 3 — Game Content Split (Mechanics + Content + World)
+### Phase 4 — Prompt Studio (Narracja)
 
-**Goal:** 3 focused sections replacing the monolithic game_design.js logic.
-
-### Frontend (v2 only — v1 game_design.js is untouched)
-
-| File | Action | Sub-tabs |
-|---|---|---|
-| `frontend/admin_panel_v2/sections/mechanics.js` | **New** | Stats · Skills · DC Tiers · Conditions |
-| `frontend/admin_panel_v2/sections/content.js` | **New** | Weapons · Enemies · Items · Consumables · Loot Tables · Archetypes |
-| `frontend/admin_panel_v2/sections/world.js` | **New** | Locations (tree) · NPCs |
-
-All existing API endpoints unchanged. AI Assistant lives in `content.js`.
-
-### Verification
-- Each tab loads sub-tabs, CRUD works, lock guard shows warning on locked rows.
+**`sections/prompts.js`**
+- Horizontal tab bar (matching Świat style): 🧠 System Prompt · 📖 History Summary · 🔍 Memory QA · 💡 Helpme
+- Auto-loads first prompt on init
+- Monospace textarea, char/line count bar
+- Inline diff view (LCS-based line diff, add/delete/context highlighting) shown live while editing
+- Save via `PUT /api/admin/prompts/{name}`, restore from backup
+- Unsaved changes guard on tab switch
 
 ---
 
-## Phase 4 — Prompt Studio
+### Phase 5 — Players (Gracze)
 
-### Frontend
-| File | Action | Detail |
-|---|---|---|
-| `frontend/admin_panel_v2/sections/prompts.js` | **New** | Prompt list + monospace editor + inline diff |
+**Backend:** `GET /api/admin/users/{user_id}/activity` — campaigns with character name/level/HP, turn count, last turn date.
 
-Features: prompt picker (System / History / Memory / Helpme), character count, last-modified, diff view before save.
-
-### Verification
-- Edit prompt → diff shows. Save persists. Reload confirms.
-
----
-
-## Phase 5 — Players Section Overhaul
-
-### Backend
-| File | Action | Detail |
-|---|---|---|
-| `backend/app/routers/admin.py` | Add endpoint | `GET /api/admin/users/{user_id}/activity` |
-
-### Frontend
-| File | Action | Detail |
-|---|---|---|
-| `frontend/admin_panel_v2/sections/players.js` | **New** | User list + slide-in detail drawer |
-
-Drawer contents: role toggles, password reset, per-user LLM, campaign list with HP, session timeline sparkline.
-
-### Verification
-- User list loads. Drawer opens with real data. LLM override saves.
+**`sections/players.js`**
+- User list table: id, username, display_name, is_admin, is_active, campaign_count
+- Click row → slide-in drawer from right:
+  - Role toggles (is_admin, is_active)
+  - Password reset button
+  - Per-user LLM settings (mode: default/custom, full provider config)
+  - Campaign list with character HP bars, turn counts, last activity
+  - Session sparkline (canvas turns-per-day chart)
 
 ---
 
-## Phase 6 — Campaign Monitor
+### Phase 6 — Campaign Monitor
 
-### Backend
-| File | Action | Detail |
-|---|---|---|
-| `backend/app/routers/admin.py` | Add endpoint | `GET /api/admin/campaigns/live` |
+**Backend:** `GET /api/admin/campaigns/live` — joins campaigns + users + characters, returns HP/conditions/scene progress/last turn snippet.
 
-### Frontend
-| File | Action | Detail |
-|---|---|---|
-| `frontend/admin_panel_v2/sections/campaigns_monitor.js` | **New** | Campaign cards + detail modal |
-
-Modal: character sheet, GM plan arcs/scenes, last 10 turns, action buttons (Advance Scene, Regenerate, End).
-
-### Verification
-- Campaign appears with HP bar. Modal opens with GM plan and turns.
+**`sections/campaigns.js`** (accessed via Kampanie → 🗺 Monitor tab)
+- Campaign cards grid: HP bar (green/amber/red), status badge, conditions, scene progress, last player message snippet
+- Status filter + refresh + 60 s auto-refresh
+- Detail modal with 3 inner tabs:
+  - Przegląd — character sheet summary
+  - Plan GM — arc/scene list with progress markers
+  - Tury — last 15 turns (scrollable)
+- Actions: Advance Scene, Regenerate GM Plan, Regenerate Summary
 
 ---
 
-## Phase 7 — Analytics
+### Phase 7 — Analytics (Statystyki)
 
-### Backend
-| File | Action | Detail |
-|---|---|---|
-| `backend/app/routers/admin_analytics.py` | **New** | Analytics router |
-| `backend/app/services/admin_analytics.py` | **New** | DB query logic |
-| `backend/app/main.py` | Edit | Register at `/api/admin/analytics` |
+**Backend:**
+- `backend/app/routers/admin_analytics.py` — 4 endpoints
+- `backend/app/services/admin_analytics.py` — all DB query logic
+- Registered in `main.py` at `/api/admin/analytics`
 
-Endpoints: `overview`, `dice`, `combat`, `economy` — all with `?days=` param.
+Endpoints: `overview`, `dice`, `combat`, `economy` (all `?days=7|30|90`)
 
-### Frontend
-| File | Action | Detail |
-|---|---|---|
-| `frontend/admin_panel_v2/sections/analytics.js` | **New** | Day selector + canvas charts (no external libs) |
-
-Charts: d20 distribution bar, turns/day line, top enemies table, top items table.
-
-### Verification
-- Charts render with real data. Day range selector updates them.
+**`sections/analytics.js`**
+- Day range buttons (7/30/90), all 4 calls in parallel
+- 6 stat cards
+- Canvas line chart: turns/day (gold fill-under)
+- Canvas bar chart: d20 distribution (player=gold/enemy=blue, crits=green, fumbles=red, dashed expected line)
+- Combat stacked bar + top enemies table
+- Economy items table
 
 ---
 
-## Phase 8 — Campaign Designer (AI Agent)
+### Phase 8 — Campaign Designer / Hook Creator
 
-### Backend
-| File | Action | Detail |
-|---|---|---|
-| `backend/app/services/admin_campaign_designer.py` | **New** | LLM generation service |
-| `backend/app/migrations_admin.py` | Edit | Add `campaign_snippets` table |
-| `backend/app/routers/admin.py` | Add endpoints | generate (streaming) + snippets CRUD |
+**Backend:**
+- `campaign_snippets` table in `migrations_admin.py`
+- `POST /api/admin/campaign-designer/extract-pdf` — pypdf text extraction (max 25 000 chars)
+- `POST /api/admin/campaign-designer/generate-hooks` — LLM returns array of `{title, content}` hooks
+- `POST /api/admin/campaign-designer/generate-entity` — generates location/npc/enemy/rule JSON
+- `GET/POST/DELETE /api/admin/campaign-designer/snippets`
 
-```sql
-CREATE TABLE IF NOT EXISTS campaign_snippets (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  snippet_type TEXT NOT NULL,   -- hook / location / npc / encounter
-  title        TEXT NOT NULL,
-  content      TEXT NOT NULL,
-  tags         TEXT,
-  created_at   TEXT DEFAULT (datetime('now')),
-  is_active    INTEGER DEFAULT 1
-);
-```
+**`sections/designer.js`** (accessed via Kampanie → ✨ Kreator tab)
+- 3 input mode tabs: Prompt · Tekst/Historia · Plik PDF
+- PDF mode: file pick → extract-pdf → shows text with page count + truncation warning
+- Hook count selector (3/4/5/6)
+- Generate → shows hook cards with editable titles + Save/Discard buttons per hook
+- "Zapisz wszystkie" saves all unsaved hooks
+- Library: only hook snippets, search, expandable cards, copy, delete
+- LLM preset dropdown (overrides active preset)
 
-### Frontend
-| File | Action | Detail |
-|---|---|---|
-| `frontend/admin_panel_v2/sections/campaign_designer.js` | **New** | 2-column: generator (left) + library (right) |
-
-### Verification
-- Generate → streams. Save → in library. Delete → removed.
+**Kampanie hub (`sections/campaigns_hub.js`):** lazy-loads Monitor + Kreator as inner tabs.
 
 ---
 
-## Phase 9 — System Consolidation
+### Phase 9 — System Consolidation
 
-### Frontend
-| File | Action | Sub-tab |
-|---|---|---|
-| `frontend/admin_panel_v2/sections/system.js` | **New** | Database · Config · LLM · Slash Commands · Admin Cmd |
+**`sections/system.js`** — 5 inner sub-tabs:
 
-(v1 technical.js / config.js / ui_settings.js / admin_commands.js untouched)
-
-### Verification
-- All 5 sub-tabs load. Backup, export, import, migrate work.
-
----
-
-## Phase 10 — Voice Reskin
-
-### Frontend
-| File | Action | Detail |
-|---|---|---|
-| `frontend/admin_panel_v2/sections/voice.js` | **New** | Copy v1 logic, new CSS tokens + LABELS const |
-
-### Verification
-- Voice tab loads. Piper model management works.
+| Sub-tab | What it does |
+|---|---|
+| **LLM** | Preset management (create/edit/activate/delete), model fetcher (↻), Loki URL override |
+| **Database** | DB info, table list with row counts, migrations runner, backup download, restore with confirm |
+| **Config** | Export JSON, import with dry-run preview + commit, summary rollup settings |
+| **Slash Commands** | Enable/disable per command, description editor, save to DB |
+| **Admin Cmd** | Character cheat terminal: +GP, Full Heal, set level, clear inventory, end combat; quick action buttons; character state viewer |
 
 ---
 
-## Phase 11 — Cutover (Optional)
+### Phase 10 — Voice (Głos)
 
-When v2 is fully validated, redirect old paths to new panel:
-
-```nginx
-# In nginx.conf — replace /admin/ block with redirect
-location = /admin { return 301 /admin2/; }
-location /admin/ { return 301 /admin2/; }
-location = /panel { return 301 /admin2/; }
-location /panel/ { return 301 /admin2/; }
-```
-
-Or keep both running indefinitely — v1 as fallback, v2 as primary.
+**`sections/voice.js`** — same logic as v1, new design tokens:
+- Status badge (online/warn/offline) with TTS/STT loaded indicators
+- Toggle switches (not plain checkboxes) for global TTS/STT
+- Client TTS pref rows per bubble type (localStorage)
+- Two-column: TTS config + test | STT config + silence params
+- 30 s health poll, audio state cleanup on re-init
 
 ---
 
-## Files Summary
+## Extra Features (Beyond Original Plan)
 
-### New files (v2 only)
+| Feature | Where |
+|---|---|
+| Enemies moved to Świat | World tab, not Content |
+| Armor as separate tab | Content → Zbroja |
+| Kampanie + Kreator merged | Single sidebar entry, inner tabs |
+| Location rules editor | Location modal + Reguły sub-tab |
+| Pending location approve/reject | Locations tab, auto-badge count |
+| NPC location multi-select | NPC modal, checkbox list |
+| Rules library + presets | Świat → Reguły |
+| AI rule generator | Reguły preset editor + location modal |
+| Column resize (persistent) | All tables with tableId |
+| Cell popup tooltips | All long-text fields |
+| Activity log drag-resize | Bottom log bar |
+| Section persistence F5 | localStorage `aigm_admin2_section` |
+| Narracja horizontal tabs | Matching Świat layout |
+| demo/demo login fixed | DB password reset |
+
+---
+
+## File Map
+
 ```
 frontend/admin_panel_v2/
-├── index.html
-├── layout.css
+├── index.html                    (shell, sidebar, login, moduleMap)
+├── layout.css                    (v28 — complete design system)
 ├── shared/
-│   ├── api.js      (copy of v1, then upgraded)
-│   ├── auth.js     (copy of v1)
-│   ├── table.js    (copy of v1, then upgraded)
-│   ├── modal.js    (copy of v1, then upgraded)
-│   └── toast.js    (copy of v1, then upgraded)
+│   ├── api.js                    (adminFetch + event dispatch)
+│   ├── auth.js                   (connect/disconnect/baseUrl)
+│   ├── table.js                  (renderTable: sort, filter, resize, popup)
+│   ├── modal.js                  (openModal, showConfirm)
+│   └── toast.js                  (showToast)
 └── sections/
-    ├── dashboard.js
-    ├── mechanics.js
-    ├── content.js
-    ├── world.js
-    ├── prompts.js
-    ├── players.js
-    ├── campaigns_monitor.js
-    ├── analytics.js
-    ├── campaign_designer.js
-    ├── system.js
-    └── voice.js
+    ├── dashboard.js              (Overview)
+    ├── mechanics.js              (Stats/Skills/DC/Conditions/Archetypes)
+    ├── content.js                (Weapons/Armor/Items/Consumables/Loot)
+    ├── world.js                  (Locations/NPCs/Enemies/Reguły)
+    ├── prompts.js                (Narracja — 4 prompt editors)
+    ├── players.js                (Users + detail drawer)
+    ├── campaigns.js              (Campaign Monitor cards + modal)
+    ├── campaigns_hub.js          (Wrapper: Monitor + Kreator tabs)
+    ├── designer.js               (Hook Creator: PDF/Text/Prompt)
+    ├── analytics.js              (Charts: dice/turns/combat/economy)
+    ├── voice.js                  (TTS/STT config)
+    └── system.js                 (DB/Config/LLM/Slash/AdminCmd)
 
-backend/app/routers/admin_analytics.py
-backend/app/services/admin_analytics.py
-backend/app/services/admin_campaign_designer.py
-```
+backend/app/routers/
+├── admin.py                      (all admin endpoints — additive only)
+└── admin_analytics.py            (analytics router)
 
-### Modified files
-```
-frontend/nginx.conf                   (Phase 0 — add /admin2/ location)
-backend/app/routers/admin.py          (Phases 2,5,6,8 — additive endpoints only)
-backend/app/migrations_admin.py       (Phase 8 — campaign_snippets table)
-backend/app/main.py                   (Phase 7 — register analytics router)
-```
-
-### v1 files — NOT touched
-```
-frontend/admin_panel/   ← entire folder left completely alone
+backend/app/services/
+└── admin_analytics.py            (analytics DB queries)
 ```
 
 ---
 
-## Docker Notes
+## Backend Endpoints Added (new, all in admin.py unless noted)
 
-**Phase 0** (Nginx change) requires frontend container rebuild:
-```bash
-# Run on 192.168.1.61
-docker compose -f docker-compose.dev.yml up -d --build frontend
-```
+| Endpoint | Phase | Purpose |
+|---|---|---|
+| `GET /api/admin/overview` | 2 | Dashboard aggregate stats |
+| `GET /api/admin/users/{id}/activity` | 5 | User campaign/turn history |
+| `GET /api/admin/campaigns/live` | 6 | Live campaign state for monitor |
+| `GET /api/admin/analytics/*` | 7 | admin_analytics.py router |
+| `POST /api/admin/campaign-designer/extract-pdf` | 8 | PDF → text (pypdf) |
+| `POST /api/admin/campaign-designer/generate-hooks` | 8 | Multi-hook LLM generation |
+| `POST /api/admin/campaign-designer/generate-entity` | 8 | Single entity JSON (location/npc/enemy/rule) |
+| `GET/POST/DELETE /api/admin/campaign-designer/snippets` | 8 | Snippet CRUD |
+| `GET /api/admin/campaigns/{id}/turns` | 6 | Last N turns for modal |
 
-All subsequent frontend phases: static files only — no rebuild, just bump `?v=` cache params in `index.html`.
+---
 
-Backend changes (new endpoints, new table) require:
-```bash
-docker compose -f docker-compose.dev.yml up -d --build backend
-```
+## Next: Phase 12 — Campaign Plot Creator
+
+See `docs/Phase_11_Campaign_Plot_Creator/README.md` for full spec.
+
+**TL;DR:** Admin selects hooks + locations + NPCs + enemies from DB, writes a tone brief, and the LLM generates a full `gm_plan_json` campaign skeleton (arcs + scene goals). Preview + inline edit + save to campaign.
+
+Estimated effort: ~1 focused session.
