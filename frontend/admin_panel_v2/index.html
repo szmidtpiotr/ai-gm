@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin 2.0</title>
-    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=18" />
+    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=19" />
   </head>
   <body>
     <div class="admin-shell" id="admin-shell">
@@ -116,11 +116,12 @@
           <div class="section-panel" data-section="system"></div>
         </div>
 
-        <div class="activity-log-wrap">
-          <details class="activity-log">
-            <summary>Activity Log</summary>
-            <pre id="activity-log-pre"></pre>
-          </details>
+        <div class="activity-log-wrap" id="activity-log-wrap">
+          <button class="activity-log-toggle" id="activity-log-toggle" type="button">
+            <span class="activity-log-arrow" id="activity-log-arrow">▶</span>
+            Activity Log
+          </button>
+          <pre id="activity-log-pre"></pre>
         </div>
       </main>
     </div>
@@ -291,6 +292,26 @@
       if (localStorage.getItem(COLLAPSED_KEY) === "1") {
         applySidebarCollapse(true);
       }
+
+      /* ── activity log toggle ── */
+      const LOG_OPEN_KEY = "aigm_admin2_log_open";
+      const logWrap      = document.getElementById("activity-log-wrap");
+      const logToggleBtn = document.getElementById("activity-log-toggle");
+      const logArrow     = document.getElementById("activity-log-arrow");
+
+      function applyLogState(open) {
+        logWrap.classList.toggle("open", open);
+        logArrow.style.transform = open ? "rotate(90deg)" : "";
+        localStorage.setItem(LOG_OPEN_KEY, open ? "1" : "0");
+        if (open) logPre.scrollTop = logPre.scrollHeight;
+      }
+
+      logToggleBtn.addEventListener("click", () => {
+        applyLogState(!logWrap.classList.contains("open"));
+      });
+
+      // Restore saved state on load
+      applyLogState(localStorage.getItem(LOG_OPEN_KEY) === "1");
 
       /* ── section init registry ── */
       const initialized = new Set();
