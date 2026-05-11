@@ -470,41 +470,41 @@ html, body {
 
 /* Activity log */
 .activity-log-wrap {
-  border-top: 1px solid var(--border);
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
   background: var(--bg-surface);
+  border-top: 1px solid var(--border);
   flex-shrink: 0;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.25);
 }
 
-.activity-log {
-  padding: 0;
-}
-
-.activity-log summary {
-  padding: 8px 20px;
-  font-size: 0.75rem;
+.activity-log-toggle {
+  width: 100%;
+  padding: 7px 20px;
+  background: none;
+  border: none;
   color: var(--text-muted);
+  font-size: 0.74rem;
+  font-family: inherit;
   cursor: pointer;
-  user-select: none;
-  list-style: none;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: 6px;
+  user-select: none;
 }
+.activity-log-toggle:hover { color: var(--text-primary); background: var(--bg-elevated); }
 
-.activity-log summary::before {
-  content: '▶';
+.activity-log-arrow {
   font-size: 9px;
   transition: transform 0.15s;
+  display: inline-block;
 }
-
-.activity-log[open] summary::before {
-  transform: rotate(90deg);
-}
-
-.activity-log summary::-webkit-details-marker { display: none; }
 
 #activity-log-pre {
-  padding: 8px 20px 12px;
+  display: none;
+  padding: 6px 20px 10px;
   font-size: 0.72rem;
   font-family: "SF Mono", "Fira Code", "Consolas", monospace;
   color: var(--text-muted);
@@ -512,6 +512,10 @@ html, body {
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;
+}
+
+.activity-log-wrap.open #activity-log-pre {
+  display: block;
 }
 
 /* ============================================================
