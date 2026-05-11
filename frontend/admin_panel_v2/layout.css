@@ -1453,28 +1453,41 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 
 .content-main .subtab-panels { overflow-y: auto; }
 
-/* FAB button in subtab bar */
-.ai-fab-btn {
-  margin-left: auto;
-  padding: 5px 12px;
-  background: rgba(201,162,39,0.12);
-  border: 1px solid var(--accent-gold-dim);
-  border-radius: 5px;
-  color: var(--accent-gold);
-  font-size: 0.78rem;
-  font-weight: 600;
+/* AI chat bubble button */
+.ai-bubble-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--accent-gold);
+  color: #1a1206;
+  border: none;
+  font-size: 1.3rem;
   cursor: pointer;
-  transition: background var(--transition), border-color var(--transition);
-  white-space: nowrap;
-  flex-shrink: 0;
+  box-shadow: 0 4px 16px rgba(201,162,39,0.45);
+  z-index: 501;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.ai-fab-btn:hover { background: rgba(201,162,39,0.2); border-color: var(--accent-gold); }
+.ai-bubble-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(201,162,39,0.6);
+}
+.ai-bubble-btn.active {
+  background: var(--bg-elevated);
+  color: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
+}
 
 /* ── AI Assistant popup ── */
 
 .ai-assistant-popup {
   position: fixed;
-  bottom: 24px;
+  bottom: 88px;
   right: 24px;
   width: 360px;
   height: 520px;
