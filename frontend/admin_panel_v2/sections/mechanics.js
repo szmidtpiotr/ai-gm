@@ -60,36 +60,51 @@ export async function init(panel) {
           <button class="subtab-btn" data-tab="dc">${LABELS.dc}</button>
           <button class="subtab-btn" data-tab="conditions">${LABELS.conditions}</button>
           <button class="subtab-btn" data-tab="archetypes">${LABELS.archetypes}</button>
+          <button class="ai-fab-btn" id="ai-fab-btn" title="${LABELS.assistant}">⚡ ${LABELS.assistant}</button>
         </div>
         <div class="subtab-panels">
           ${TABS.map((t) => `<div class="subtab-panel${t === "stats" ? " active" : ""}" data-tab="${t}"></div>`).join("")}
         </div>
       </div>
-      <aside class="ai-assistant-panel">
-        <div class="ai-assistant-header">
-          <span>⚡ ${LABELS.assistant}</span>
+    </div>
+
+    <!-- Floating AI assistant popup -->
+    <aside class="ai-assistant-popup" id="ai-assistant-popup">
+      <div class="ai-assistant-header">
+        <span>⚡ ${LABELS.assistant}</span>
+        <div style="display:flex;gap:6px">
           <button class="secondary-btn small-btn" id="ai-clear-btn">${LABELS.clearChat}</button>
+          <button class="icon-btn ai-popup-close-btn" id="ai-popup-close-btn" title="Zamknij">✕</button>
         </div>
-        <div class="ai-resource-row">
-          <label>${LABELS.resource}
-            <select id="ai-resource-select">
-              ${ASSISTANT_RESOURCES.map((r) => `<option value="${r.value}">${r.label}</option>`).join("")}
-            </select>
-          </label>
-        </div>
-        <div class="ai-history" id="ai-history"></div>
-        <div class="ai-draft-wrap" id="ai-draft-wrap" style="display:none"></div>
-        <div class="ai-input-row">
-          <textarea id="ai-prompt" rows="3" placeholder="${LABELS.assistantHelp}"></textarea>
-          <button class="primary-btn" id="ai-generate-btn">${LABELS.generate}</button>
-        </div>
-      </aside>
-    </div>`;
+      </div>
+      <div class="ai-resource-row">
+        <label>${LABELS.resource}
+          <select id="ai-resource-select">
+            ${ASSISTANT_RESOURCES.map((r) => `<option value="${r.value}">${r.label}</option>`).join("")}
+          </select>
+        </label>
+      </div>
+      <div class="ai-history" id="ai-history"></div>
+      <div class="ai-draft-wrap" id="ai-draft-wrap" style="display:none"></div>
+      <div class="ai-input-row">
+        <textarea id="ai-prompt" rows="3" placeholder="${LABELS.assistantHelp}"></textarea>
+        <button class="primary-btn" id="ai-generate-btn">${LABELS.generate}</button>
+      </div>
+    </aside>`;
 
   _rendered.clear();
   _statsCache = null;
   _aiHistory  = [];
   _aiDraft    = null;
+
+  // ── AI popup toggle ──
+  const aiPopup = panel.querySelector("#ai-assistant-popup");
+  panel.querySelector("#ai-fab-btn").addEventListener("click", () => {
+    aiPopup.classList.toggle("open");
+  });
+  panel.querySelector("#ai-popup-close-btn").addEventListener("click", () => {
+    aiPopup.classList.remove("open");
+  });
 
   panel.querySelectorAll(".subtab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
