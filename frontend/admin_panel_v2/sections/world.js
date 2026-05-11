@@ -51,7 +51,7 @@ const LOCATION_RULES = [
   { key: "reason",           label: "Reason",           type: "text",    default: "Sacred ground", description: "Reason shown to player" },
 ];
 
-const TABS = ["locations", "npcs", "enemies"];
+const TABS = ["locations", "npcs", "enemies", "rules"];
 const _rendered = new Set();
 let _aiTrigger = null;  // updated by each tab render; called by the bubble
 
@@ -62,6 +62,7 @@ export async function init(panel) {
         <button class="subtab-btn active" data-tab="locations">${LABELS.locations}</button>
         <button class="subtab-btn" data-tab="npcs">${LABELS.npcs}</button>
         <button class="subtab-btn" data-tab="enemies">${LABELS.enemies}</button>
+        <button class="subtab-btn" data-tab="rules">📋 Reguły</button>
       </div>
       <div class="subtab-panels">
         ${TABS.map((t) => `<div class="subtab-panel${t === "locations" ? " active" : ""}" data-tab="${t}"></div>`).join("")}
@@ -86,7 +87,9 @@ export async function init(panel) {
       btn.classList.add("active");
       const tab = btn.dataset.tab;
       panel.querySelector(`.subtab-panel[data-tab="${tab}"]`).classList.add("active");
-      _aiTrigger = null;  // will be set by the render function
+      _aiTrigger = null;
+      const bubble = panel.querySelector(".ai-bubble-btn");
+      if (bubble) bubble.style.display = tab === "rules" ? "none" : "";
       _activateTab(panel, tab);
     });
   });
@@ -99,9 +102,13 @@ async function _activateTab(panel, tab) {
   _rendered.add(tab);
   const container = panel.querySelector(`.subtab-panel[data-tab="${tab}"]`);
   if (!container) return;
-  if (tab === "locations") await _renderLocations(container);
-  else if (tab === "npcs") await _renderNpcs(container);
-  else if (tab === "enemies") await _renderEnemies(container);
+  // Hide AI bubble on Rules tab (it has its own AI UI)
+  const bubble = panel.querySelector(".ai-bubble-btn");
+  if (bubble) bubble.style.display = tab === "rules" ? "none" : "";
+  if      (tab === "locations") await _renderLocations(container);
+  else if (tab === "npcs")      await _renderNpcs(container);
+  else if (tab === "enemies")   await _renderEnemies(container);
+  else if (tab === "rules")     await _renderRules(container);
 }
 
 // ── AI generation helper ──────────────────────────────────────────────────────
@@ -922,6 +929,142 @@ async function _renderEnemies(container) {
     onFill: (e) => _openEnemyModal(e, load),
   });
   await load();
+}
+
+// ── Rules library ─────────────────────────────────────────────────────────────
+
+const RULES_STORAGE_KEY = "aigm_admin2_rule_presets";
+
+function _loadRulePresets() {
+  try { return JSON.parse(localStorage.getItem(RULES_STORAGE_KEY) || "[]"); } catch { return []; }
+}
+function _saveRulePresets(list) {
+  try { localStorage.setItem(RULES_STORAGE_KEY, JSON.stringify(list)); } catch {}
+}
+
+async function _renderRules(container) {
+  container.innerHTML = "";
+
+  // ── Section 1: Predefined rules reference ──
+  const refSection = document.createElement("div");
+  refSection.className = "rules-section-wrap";
+  refSection.innerHTML = `
+    <div class="rules-section-header">
+      <span class="system-section-title" style="font-size:0.72rem">Wbudowane reguły lokacji</span>
+      <span class="system-help-text">Gotowe do użycia w każdej lokacji. Zaznacz w edytorze lokacji.</span>
+    </div>
+    <table class="sys-table" style="margin-bottom:20px">
+      <thead><tr><th>Klucz</th><th>Nazwa</th><th>Typ</th><th>Domyślnie</th><th>Opis</th></tr></thead>
+      <tbody>
+        ${LOCATION_RULES.map(r => `
+          <tr>
+            <td><code style="font-size:0.72rem;color:var(--text-link)">${_esc(r.key)}</code></td>
+            <td><strong>${_esc(r.label)}</strong></td>
+            <td><span class="admin-badge ${r.type === "boolean" ? "admin-badge-blue" : r.type === "number" ? "admin-badge-gold" : "admin-badge-muted"}">${_esc(r.type)}</span></td>
+            <td>${r.default !== undefined ? _esc(String(r.default)) : "—"}</td>
+            <td style="color:var(--text-muted);font-size:0.78rem">${_esc(r.description)}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>`;
+  container.appendChild(refSection);
+
+  // ── Section 2: Custom rule presets ──
+  const presetsSection = document.createElement("div");
+  presetsSection.className = "rules-section-wrap";
+
+  const presetsHeader = document.createElement("div");
+  presetsHeader.className = "rules-section-header";
+  presetsHeader.innerHTML = `
+    <span class="system-section-title" style="font-size:0.72rem">Szablony reguł (własne zestawy)</span>
+    <span class="system-help-text">Zapisz zestaw reguł pod nazwą, by szybko stosować go do lokacji.</span>`;
+
+  const addPresetBtn = document.createElement("button");
+  addPresetBtn.className = "primary-btn";
+  addPresetBtn.style.marginLeft = "auto";
+  addPresetBtn.textContent = "+ Nowy szablon";
+  presetsHeader.appendChild(addPresetBtn);
+  presetsSection.appendChild(presetsHeader);
+
+  const presetsList = document.createElement("div");
+  presetsList.className = "rules-presets-list";
+  presetsSection.appendChild(presetsList);
+  container.appendChild(presetsSection);
+
+  const renderPresets = () => {
+    const presets = _loadRulePresets();
+    presetsList.innerHTML = "";
+    if (!presets.length) {
+      presetsList.innerHTML = `<p class="system-help-text" style="padding:12px">Brak szablonów. Utwórz pierwszy zestaw reguł.</p>`;
+      return;
+    }
+    presets.forEach((preset, idx) => {
+      const card = document.createElement("div");
+      card.className = "rule-preset-card";
+      const ruleKeys = Object.keys(preset.rules || {});
+      card.innerHTML = `
+        <div class="rule-preset-card-header">
+          <strong class="rule-preset-name">${_esc(preset.name)}</strong>
+          <span class="system-help-text">${_esc(ruleKeys.join(", ") || "brak reguł")}</span>
+        </div>
+        <div class="rule-preset-card-actions">
+          <button class="secondary-btn preset-edit-btn" style="font-size:0.75rem">Edytuj</button>
+          <button class="secondary-btn danger-outline preset-delete-btn" style="font-size:0.75rem">Usuń</button>
+        </div>`;
+      card.querySelector(".preset-edit-btn").addEventListener("click", () => _openPresetModal(preset, idx, renderPresets));
+      card.querySelector(".preset-delete-btn").addEventListener("click", () => {
+        if (!confirm(`Usunąć szablon "${preset.name}"?`)) return;
+        const list = _loadRulePresets();
+        list.splice(idx, 1);
+        _saveRulePresets(list);
+        renderPresets();
+      });
+      presetsList.appendChild(card);
+    });
+  };
+
+  addPresetBtn.addEventListener("click", () => _openPresetModal(null, -1, renderPresets));
+  renderPresets();
+}
+
+function _openPresetModal(preset, idx, onDone) {
+  const isEdit = !!preset;
+  const form = document.createElement("div");
+  form.className = "modal-form";
+
+  const nameField = document.createElement("label");
+  nameField.className = "modal-field";
+  nameField.innerHTML = `<span>Nazwa szablonu *</span><input type="text" name="preset_name" value="${_esc(preset?.name ?? "")}" placeholder="np. Strefa bezpieczna, Loch śmierci" />`;
+  form.appendChild(nameField);
+
+  const rulesLabel = document.createElement("div");
+  rulesLabel.innerHTML = `<span style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);display:block;margin:12px 0 6px">Reguły zestawu</span>`;
+  const rulesDiv = _buildRulesEditor(preset?.rules || {});
+  rulesLabel.appendChild(rulesDiv);
+  form.appendChild(rulesLabel);
+
+  openModal({
+    title: isEdit ? `Edytuj szablon: ${preset.name}` : "Nowy szablon reguł",
+    content: form,
+    footer: [
+      { label: "Anuluj", class: "secondary-btn", onClick: c => c() },
+      {
+        label: isEdit ? "Zapisz" : "Utwórz",
+        class: "primary-btn",
+        onClick: async c => {
+          const name = form.querySelector('[name="preset_name"]').value.trim();
+          if (!name) { showToast("Podaj nazwę szablonu.", "error"); return; }
+          const rules = _getRulesFromEditor(rulesDiv);
+          const list = _loadRulePresets();
+          if (isEdit && idx >= 0) list[idx] = { name, rules };
+          else list.push({ name, rules });
+          _saveRulePresets(list);
+          showToast(isEdit ? "Szablon zaktualizowany." : "Szablon utworzony.", "success");
+          c();
+          onDone();
+        },
+      },
+    ],
+  });
 }
 
 function _openEnemyModal(row, onDone) {

@@ -2960,11 +2960,19 @@ Odpowiedź WYŁĄCZNIE jako JSON:
 {"key": "snake_case_klucz", "label": "Nazwa wroga", "tier": "standard", "hp_base": 20, "ac_base": 12, "attack_bonus": 3, "damage_bonus": 1, "damage_die": "d6", "attacks_per_turn": 1, "damage_type": "physical", "xp_award": 30, "description": "Opis 40-80 słów. Wygląd, zachowanie, taktyka."}""",
         "hint": "Wróg/przeciwnik do gry fantasy",
     },
+    "rule": {
+        "system": """Jesteś asystentem mistrza gry. Generujesz regułę lokacji dla mrocznej fantasy RPG.
+Reguła to mechanizm wpływający na zachowanie gracza w lokacji (np. zakaz walki, wymóg przedmiotu, premia do odpoczynku).
+Odpowiedź WYŁĄCZNIE jako JSON:
+{"key": "snake_case_klucz", "value": true, "label": "Czytelna nazwa", "description": "Krótki opis efektu 1-2 zdania."}
+Wartość `value` może być: true/false (boolean), liczba całkowita, lub krótki string.""",
+        "hint": "Reguła lokacji fantasy RPG",
+    },
 }
 
 
 class WorldGenReq(BaseModel):
-    entity_type: Literal["location", "npc", "enemy"]
+    entity_type: Literal["location", "npc", "enemy", "rule"]
     brief: str = Field(..., min_length=3, max_length=500)
     preset_id: int | None = None
 
