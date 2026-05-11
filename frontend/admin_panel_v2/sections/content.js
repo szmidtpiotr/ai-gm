@@ -5,6 +5,7 @@ import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
 
 const LABELS = {
   weapons:      "Broń",
+  armor:        "Zbroja",
   enemies:      "Wrogowie",
   items:        "Przedmioty",
   consumables:  "Materiały eksploatacyjne",
@@ -33,10 +34,11 @@ const LABELS = {
   resource:     "Katalog",
 };
 
-const TABS = ["weapons", "items", "consumables", "loot-tables"];
+const TABS = ["weapons", "armor", "items", "consumables", "loot-tables"];
 
 const ASSISTANT_RESOURCES = [
   { value: "weapons",     label: LABELS.weapons },
+  { value: "armor",       label: LABELS.armor },
   { value: "items",       label: LABELS.items },
   { value: "consumables", label: LABELS.consumables },
   { value: "loot-tables", label: LABELS.lootTables },
@@ -44,6 +46,7 @@ const ASSISTANT_RESOURCES = [
 
 const TAB_TO_RESOURCE = {
   weapons:       "weapons",
+  armor:         "armor",
   items:         "items",
   consumables:   "consumables",
   "loot-tables": "loot-tables",
@@ -61,12 +64,13 @@ export async function init(panel) {
       <div class="content-main">
         <div class="subtab-bar">
           <button class="subtab-btn active" data-tab="weapons">${LABELS.weapons}</button>
+          <button class="subtab-btn" data-tab="armor">${LABELS.armor}</button>
           <button class="subtab-btn" data-tab="items">${LABELS.items}</button>
           <button class="subtab-btn" data-tab="consumables">${LABELS.consumables}</button>
           <button class="subtab-btn" data-tab="loot-tables">${LABELS.lootTables}</button>
         </div>
         <div class="subtab-panels">
-          ${["weapons","items","consumables","loot-tables"].map(
+          ${["weapons","armor","items","consumables","loot-tables"].map(
             (t) => `<div class="subtab-panel${t === "weapons" ? " active" : ""}" data-tab="${t}"></div>`
           ).join("")}
         </div>
@@ -164,6 +168,7 @@ async function _activateTab(panel, tab) {
   if (!container) return;
   switch (tab) {
     case "weapons":     await _renderWeapons(container, panel); break;
+    case "armor":       await _renderArmor(container, panel); break;
     case "enemies":     await _renderEnemies(container, panel); break;
     case "items":       await _renderItems(container, panel); break;
     case "consumables": await _renderConsumables(container, panel); break;
@@ -462,6 +467,52 @@ function _openEnemyModal(row, onDone) {
 
 // ── Items ─────────────────────────────────────────────────────────────────────
 
+async function _renderArmor(container, panel) {
+  container.appendChild(_toolbar("Dodaj zbroję", () => _openItemModal({ item_type: "armor" }, load, true)));
+  const tableHost = document.createElement("div");
+  container.appendChild(tableHost);
+
+  const load = async () => {
+    renderTable(tableHost, null, null, {});
+    let rows;
+    try {
+      const data = (await adminFetch("/api/admin/items")).items || [];
+      rows = data.filter(r => r.item_type === "armor");
+    }
+    catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); return; }
+
+    const cols = [
+      { key: "key",        label: LABELS.key,    editable: false },
+      { key: "label",      label: LABELS.label,  editable: true },
+      { key: "value_gp",   label: "Cena (gp)",   type: "number", editable: true },
+      { key: "weight_kg",  label: "Waga (kg)",   type: "number", editable: true },
+      { key: "ac_bonus",   label: "Bonus AC",    type: "number", editable: true },
+      { key: "description",label: "Opis",        editable: true, popup: true },
+      { key: "is_active",  label: LABELS.isActive, type: "boolean", editable: true },
+      { key: "locked_at",  label: LABELS.locked,   type: "locked",  editable: false },
+    ];
+
+    renderTable(tableHost, cols, rows, {
+      tableId:        "armor",
+      showTextSearch: true, searchPlaceholder: "Szukaj zbroi…",
+      async onEdit(row, colKey, newVal, { force } = {}) {
+        try {
+          await adminFetch(`/api/admin/items/${row.key}`, { method: "PATCH", body: JSON.stringify({ [colKey]: newVal, ...(force ? { force: true } : {}) }) });
+          showToast("Zapisano.", "success"); await load();
+        } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); throw e; }
+      },
+      async onDelete(row, { force } = {}) {
+        try {
+          await adminFetch(`/api/admin/items/${row.key}${force ? "?force=true" : ""}`, { method: "DELETE" });
+          showToast("Usunięto.", "success"); await load();
+        } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); throw e; }
+      },
+      extraActions: (row) => [{ label: "Edytuj", class: "secondary-btn", onClick: () => _openItemModal(row, load) }],
+    });
+  };
+  await load();
+}
+
 async function _renderItems(container, panel) {
   const tableHost = document.createElement("div");
   container.appendChild(_toolbar("Dodaj przedmiot", () => _openItemModal(null, load)));
@@ -470,7 +521,10 @@ async function _renderItems(container, panel) {
   const load = async () => {
     renderTable(tableHost, null, null, {});
     let rows;
-    try { rows = (await adminFetch("/api/admin/items")).items || []; }
+    try {
+      const data = (await adminFetch("/api/admin/items")).items || [];
+      rows = data.filter(r => r.item_type !== "armor"); // armor has its own tab
+    }
     catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); return; }
 
     const cols = [
@@ -508,8 +562,8 @@ async function _renderItems(container, panel) {
   await load();
 }
 
-function _openItemModal(row, onDone) {
-  const isEdit = !!row;
+function _openItemModal(row, onDone, forceNew = false) {
+  const isEdit = !!row && !forceNew;
   const form = document.createElement("div");
   form.className = "modal-form";
   form.innerHTML = `
