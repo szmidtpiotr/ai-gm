@@ -574,9 +574,20 @@ async function _renderEnemies(container) {
 
   const load = async () => {
     renderTable(tableHost, null, null, {});
-    let rows;
-    try { rows = (await adminFetch("/api/admin/enemies")).items || []; }
-    catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); return; }
+    let rows, lootOpts = [];
+    try {
+      const [enemyData, lootData] = await Promise.all([
+        adminFetch("/api/admin/enemies"),
+        adminFetch("/api/admin/loot-tables").catch(() => ({ items: [] })),
+      ]);
+      rows = (enemyData.items || []).map(r => ({
+        ...r,
+        _skills: r.skills_json ? JSON.stringify(r.skills_json) : "{}",
+        _ci:     Array.isArray(r.conditions_immune) ? JSON.stringify(r.conditions_immune) : "[]",
+        _drop_pct: r.drop_chance != null ? Math.round(Number(r.drop_chance) * 100) : 0,
+      }));
+      lootOpts = (lootData.items || []).map(t => ({ value: t.key, label: t.label || t.key }));
+    } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); return; }
 
     const cols = [
       { key: "key",              label: LABELS.key,   editable: false },
@@ -590,20 +601,44 @@ async function _renderEnemies(container) {
       },
       { key: "hp_base",          label: "HP",          type: "number", editable: true },
       { key: "ac_base",          label: "AC",          type: "number", editable: true },
-      { key: "attack_bonus",     label: "Atk",         type: "number", editable: true },
+      { key: "attack_bonus",     label: "Atk+",        type: "number", editable: true },
       { key: "damage_die",       label: "Kość",        editable: true },
       { key: "damage_bonus",     label: "Dmg+",        type: "number", editable: true },
-      { key: "attacks_per_turn", label: "Ataki/turę",  type: "number", editable: true },
+      { key: "attacks_per_turn", label: "Atk/turę",    type: "number", editable: true },
+      { key: "damage_type",      label: "Typ dmg",
+        type: "badge", editType: "select",
+        editOptions: Object.keys(LABELS.damageTypes),
+        badgeClass: (r) => ({ fire:"admin-badge-red", magic:"admin-badge-blue", poison:"admin-badge-green", cold:"admin-badge-muted" }[r.damage_type] ?? "admin-badge-muted"),
+        filterOptions: Object.entries(LABELS.damageTypes).map(([v,l])=>({value:v,label:l})),
+      },
       { key: "xp_award",         label: "XP",          type: "number", editable: true },
+      { key: "loot_table_key",   label: "Loot",        type: "select-dropdown", editable: true, editOptions: [{ value: "", label: "— brak —" }, ...lootOpts] },
+      { key: "_drop_pct",        label: "Drop %",      type: "number", editable: true,
+        formatDisplay: (r) => r.drop_chance != null ? Math.round(Number(r.drop_chance) * 100) + "%" : "—" },
+      { key: "_skills",          label: "Skills JSON", editable: true, popup: true },
+      { key: "_ci",              label: "Immune JSON", editable: true, popup: true },
+      { key: "note",             label: "Notatka",     editable: true, popup: true },
+      { key: "description",      label: "Opis",        editable: true, popup: true },
       { key: "is_active",        label: LABELS.isActive, type: "boolean", editable: true },
       { key: "locked_at",        label: LABELS.locked,   type: "locked",  editable: false },
     ];
 
     renderTable(tableHost, cols, rows, {
+      tableId: "enemies",
       showTextSearch: true, searchPlaceholder: "Szukaj wrogów…",
       async onEdit(row, colKey, newVal, { force } = {}) {
+        // Map computed display keys back to actual API fields
+        const apiKey = colKey === "_skills" ? "skills_json"
+                     : colKey === "_ci"     ? "conditions_immune"
+                     : colKey === "_drop_pct" ? "drop_chance"
+                     : colKey;
+        let apiVal = newVal;
+        if (colKey === "_skills" || colKey === "_ci") {
+          try { apiVal = JSON.parse(newVal); } catch { showToast("Nieprawidłowy JSON.", "error"); throw new Error("bad json"); }
+        }
+        if (colKey === "_drop_pct") apiVal = Number(newVal) / 100;
         try {
-          await adminFetch(`/api/admin/enemies/${row.key}`, { method: "PATCH", body: JSON.stringify({ [colKey]: newVal, ...(force ? { force: true } : {}) }) });
+          await adminFetch(`/api/admin/enemies/${row.key}`, { method: "PATCH", body: JSON.stringify({ [apiKey]: apiVal, ...(force ? { force: true } : {}) }) });
           showToast("Zapisano.", "success"); await load();
         } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); throw e; }
       },
