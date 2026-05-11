@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin 2.0</title>
-    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=19" />
+    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=20" />
   </head>
   <body>
     <div class="admin-shell" id="admin-shell">
@@ -117,6 +117,7 @@
         </div>
 
         <div class="activity-log-wrap" id="activity-log-wrap">
+          <div class="activity-log-resize-handle" id="activity-log-resize" title="Drag to resize"></div>
           <button class="activity-log-toggle" id="activity-log-toggle" type="button">
             <span class="activity-log-arrow" id="activity-log-arrow">▶</span>
             Activity Log
@@ -293,21 +294,56 @@
         applySidebarCollapse(true);
       }
 
-      /* ── activity log toggle ── */
-      const LOG_OPEN_KEY = "aigm_admin2_log_open";
-      const logWrap      = document.getElementById("activity-log-wrap");
-      const logToggleBtn = document.getElementById("activity-log-toggle");
-      const logArrow     = document.getElementById("activity-log-arrow");
+      /* ── activity log toggle + resize ── */
+      const LOG_OPEN_KEY   = "aigm_admin2_log_open";
+      const LOG_HEIGHT_KEY = "aigm_admin2_log_height";
+      const logWrap        = document.getElementById("activity-log-wrap");
+      const logToggleBtn   = document.getElementById("activity-log-toggle");
+      const logArrow       = document.getElementById("activity-log-arrow");
+      const logResizeHandle= document.getElementById("activity-log-resize");
+
+      let logHeight = Math.max(60, parseInt(localStorage.getItem(LOG_HEIGHT_KEY) || "150", 10));
+
+      function applyLogHeight(h) {
+        logHeight = Math.max(60, Math.min(Math.floor(window.innerHeight * 0.65), h));
+        logPre.style.height = logHeight + "px";
+        localStorage.setItem(LOG_HEIGHT_KEY, String(logHeight));
+      }
 
       function applyLogState(open) {
         logWrap.classList.toggle("open", open);
         logArrow.style.transform = open ? "rotate(90deg)" : "";
         localStorage.setItem(LOG_OPEN_KEY, open ? "1" : "0");
-        if (open) logPre.scrollTop = logPre.scrollHeight;
+        if (open) {
+          applyLogHeight(logHeight);
+          logPre.scrollTop = logPre.scrollHeight;
+        }
       }
 
       logToggleBtn.addEventListener("click", () => {
         applyLogState(!logWrap.classList.contains("open"));
+      });
+
+      // Drag to resize — drag handle upward increases height
+      logResizeHandle.addEventListener("mousedown", e => {
+        if (!logWrap.classList.contains("open")) return;
+        e.preventDefault();
+        const startY = e.clientY;
+        const startH = logHeight;
+        document.body.style.cursor = "ns-resize";
+        document.body.style.userSelect = "none";
+
+        function onMove(e) {
+          applyLogHeight(startH + (startY - e.clientY));
+        }
+        function onUp() {
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        }
+        document.addEventListener("mousemove", onMove);
+        document.addEventListener("mouseup", onUp);
       });
 
       // Restore saved state on load

@@ -479,6 +479,32 @@ html, body {
   box-shadow: 0 -2px 8px rgba(0,0,0,0.25);
 }
 
+/* Drag-to-resize handle */
+.activity-log-resize-handle {
+  height: 5px;
+  cursor: ns-resize;
+  background: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.activity-log-wrap.open .activity-log-resize-handle:hover {
+  background: var(--accent-gold-dim);
+}
+/* Show subtle grip dots when open */
+.activity-log-wrap.open .activity-log-resize-handle::after {
+  content: "";
+  display: block;
+  margin: 1px auto 0;
+  width: 32px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background 0.15s;
+}
+.activity-log-wrap.open .activity-log-resize-handle:hover::after {
+  background: var(--accent-gold);
+}
+
 .activity-log-toggle {
   width: 100%;
   padding: 7px 20px;
@@ -508,7 +534,7 @@ html, body {
   font-size: 0.72rem;
   font-family: "SF Mono", "Fira Code", "Consolas", monospace;
   color: var(--text-muted);
-  max-height: 150px;
+  height: 150px; /* controlled by JS, max set in applyLogHeight() */
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;
