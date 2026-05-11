@@ -232,18 +232,23 @@ async function _renderWeapons(container, panel) {
     const statOpts = stats.map((s) => ({ value: s.key, label: s.label || s.key }));
 
     const cols = [
-      { key: "key",         label: LABELS.key,         editable: false },
-      { key: "label",       label: LABELS.label,       editable: true },
-      { key: "weapon_type", label: "Typ broni",
+      { key: "key",           label: LABELS.key,        editable: false },
+      { key: "label",         label: LABELS.label,      editable: true },
+      { key: "weapon_type",   label: "Typ",
         type: "badge", editType: "select",
         editOptions: Object.keys(LABELS.weaponTypes),
         badgeClass: (r) => r.weapon_type === "spell" ? "admin-badge-blue" : r.weapon_type === "ranged" ? "admin-badge-gold" : "admin-badge-muted",
         filterOptions: Object.entries(LABELS.weaponTypes).map(([v,l]) => ({value:v,label:l})),
       },
-      { key: "damage_die",  label: "Kość obrażeń",     editable: true },
-      { key: "linked_stat", label: "Statystyka",        type: "select-dropdown", editable: true, editOptions: statOpts },
-      { key: "is_active",   label: LABELS.isActive,     type: "boolean", editable: true },
-      { key: "locked_at",   label: LABELS.locked,       type: "locked",  editable: false },
+      { key: "damage_die",    label: "Kość",            editable: true },
+      { key: "linked_stat",   label: "Stat",            type: "select-dropdown", editable: true, editOptions: statOpts },
+      { key: "two_handed",    label: "Oburącz",         type: "boolean", editable: true },
+      { key: "finesse",       label: "Finezja",         type: "boolean", editable: true },
+      { key: "magic_school",  label: "Szkoła magii",    editable: true },
+      { key: "value_gp",      label: "Cena (gp)",       type: "number", editable: true },
+      { key: "weight_kg",     label: "Waga (kg)",       type: "number", editable: true },
+      { key: "is_active",     label: LABELS.isActive,   type: "boolean", editable: true },
+      { key: "locked_at",     label: LABELS.locked,     type: "locked",  editable: false },
     ];
 
     renderTable(tableHost, cols, rows, {
@@ -471,7 +476,8 @@ async function _renderItems(container, panel) {
         badgeClass: (r) => ({ weapon:"admin-badge-red", armor:"admin-badge-blue", consumable:"admin-badge-green", quest:"admin-badge-gold", narrative:"admin-badge-muted", misc:"admin-badge-muted" }[r.item_type] ?? "admin-badge-muted"),
         filterOptions: Object.entries(LABELS.itemTypes).map(([v,l])=>({value:v,label:l})),
       },
-      { key: "value_gp",  label: "Cena (gp)", type: "number", editable: true },
+      { key: "value_gp",  label: "Cena (gp)",  type: "number", editable: true },
+      { key: "weight_kg", label: "Waga (kg)",  type: "number", editable: true },
       { key: "is_active", label: LABELS.isActive, type: "boolean", editable: true },
       { key: "locked_at", label: LABELS.locked,   type: "locked",  editable: false },
     ];
@@ -562,18 +568,21 @@ async function _renderConsumables(container, panel) {
     catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); return; }
 
     const cols = [
-      { key: "key",         label: LABELS.key,   editable: false },
-      { key: "label",       label: LABELS.label, editable: true },
-      { key: "effect_type", label: "Efekt",
+      { key: "key",           label: LABELS.key,   editable: false },
+      { key: "label",         label: LABELS.label, editable: true },
+      { key: "effect_type",   label: "Efekt",
         type: "badge", editType: "select",
         editOptions: Object.keys(LABELS.effectTypes),
         badgeClass: (r) => r.effect_type === "heal_hp" ? "admin-badge-green" : r.effect_type === "restore_mana" ? "admin-badge-blue" : "admin-badge-muted",
         filterOptions: Object.entries(LABELS.effectTypes).map(([v,l])=>({value:v,label:l})),
       },
-      { key: "effect_dice", label: "Kość efektu", editable: true },
-      { key: "base_price",  label: "Cena",         type: "number", editable: true },
-      { key: "is_active",   label: LABELS.isActive, type: "boolean", editable: true },
-      { key: "locked_at",   label: LABELS.locked,   type: "locked",  editable: false },
+      { key: "effect_dice",   label: "Kość",    editable: true },
+      { key: "effect_bonus",  label: "Bonus",   type: "number", editable: true },
+      { key: "effect_target", label: "Cel",     editable: true },
+      { key: "charges",       label: "Ładunki", type: "number", editable: true },
+      { key: "base_price",    label: "Cena",    type: "number", editable: true },
+      { key: "is_active",     label: LABELS.isActive, type: "boolean", editable: true },
+      { key: "locked_at",     label: LABELS.locked,   type: "locked",  editable: false },
     ];
 
     renderTable(tableHost, cols, rows, {
