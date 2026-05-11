@@ -2643,6 +2643,26 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .npc-location-item:hover { background: var(--bg-hover); }
 .npc-location-item input[type="checkbox"] { accent-color: var(--accent-gold); flex-shrink: 0; }
 
+/* ── Rules library tab ── */
+.rules-section-wrap { padding: 16px 20px; }
+.rules-section-header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.rules-presets-list { display: flex; flex-direction: column; gap: 10px; }
+.rule-preset-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rule-preset-card:hover { border-color: var(--accent-gold-dim); }
+.rule-preset-card-header { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.rule-preset-name { font-size: 0.9rem; color: var(--text-primary); }
+.rule-preset-card-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
 /* ── Column resize handle ── */
 .col-resize-handle {
   position: absolute;
