@@ -342,6 +342,7 @@ async function _renderLocations(container) {
   // Pending locations section (above the main table)
   const pendingWrap = document.createElement("details");
   pendingWrap.className = "pending-details";
+  pendingWrap.open = true;  // open by default
   pendingWrap.innerHTML = `
     <summary>
       Oczekujące lokacje
@@ -364,22 +365,40 @@ async function _renderLocations(container) {
       return;
     }
 
+    // Build lookup map for parent labels (by id)
+    const locById = new Map((locations).map(l => [l.id, l]));
+    const rows = locations.map(loc => ({
+      ...loc,
+      _parent_label: loc.parent_id
+        ? (locById.get(loc.parent_id)?.label ?? `#${loc.parent_id}`)
+        : "—",
+      _enemy_count: Array.isArray(loc.enemy_keys) ? loc.enemy_keys.length : 0,
+      _rules_preview: (loc.rules && typeof loc.rules === "object" && Object.keys(loc.rules).length)
+        ? Object.keys(loc.rules).join(", ")
+        : "",
+    }));
+
     const columns = [
-      { key: "key",           label: LABELS.key,       editable: false },
-      { key: "label",         label: LABELS.label,     editable: true },
+      { key: "key",            label: LABELS.key,         editable: false },
+      { key: "label",          label: LABELS.label,       editable: true },
       {
-        key: "location_type", label: LABELS.type,
+        key: "location_type",  label: LABELS.type,
         type: "badge", editType: "select",
         editOptions: LOC_TYPES.map((t) => t.value),
         badgeClass: (row) => row.location_type === "macro" ? "admin-badge-gold" : "admin-badge-muted",
         filterOptions: LOC_TYPES,
       },
-      { key: "parent_key",    label: LABELS.parentKey, editable: false },
-      { key: "is_active",     label: LABELS.isActive,  type: "boolean", editable: true },
-      { key: "locked_at",     label: LABELS.locked,    type: "locked",  editable: false },
+      { key: "_parent_label",  label: "Nadrzędna",        editable: false },
+      { key: "_enemy_count",   label: "Wrogowie",         type: "number", editable: false },
+      { key: "_rules_preview", label: "Reguły",           editable: false, popup: true,
+        formatDisplay: (r) => r._rules_preview },
+      { key: "description",    label: LABELS.description, editable: true, popup: true },
+      { key: "is_active",      label: LABELS.isActive,    type: "boolean", editable: true },
+      { key: "locked_at",      label: LABELS.locked,      type: "locked",  editable: false },
     ];
 
-    renderTable(tableHost, columns, locations, {
+    renderTable(tableHost, columns, rows, {
+      tableId:           "locations",
       showTextSearch:    true,
       searchPlaceholder: "Szukaj lokacji…",
       async onEdit(row, colKey, newVal, { force } = {}) {
@@ -405,13 +424,15 @@ async function _renderLocations(container) {
           throw e;
         }
       },
-      extraActions: (row) => [
-        {
-          label: "Edytuj",
-          class: "secondary-btn",
-          onClick: () => _openLocationModal(row, locations, load),
+      extraActions: (row) => [{
+        label: "Edytuj",
+        class: "secondary-btn",
+        onClick: () => {
+          // Pass the original location object (with rules, enemy_keys etc.)
+          const orig = locations.find(l => l.key === row.key) || row;
+          _openLocationModal(orig, locations, load);
         },
-      ],
+      }],
     });
   };
 
@@ -428,7 +449,7 @@ async function _renderLocations(container) {
     listEl.textContent = "Ładowanie…";
     try {
       const data    = await adminFetch("/api/admin/locations/pending");
-      const pending = Array.isArray(data) ? data : (data.pending ?? []);
+      const pending = Array.isArray(data) ? data : (data.locations ?? data.pending ?? []);
       badge.textContent = String(pending.length);
       badge.style.display = pending.length ? "" : "none";
       if (!pending.length) {
@@ -505,7 +526,7 @@ function _openLocationModal(row, allLocations, onDone) {
     `<textarea name="description" rows="3">${_esc(row?.description ?? "")}</textarea>`));
 
   // ── Rules editor ──
-  const rulesDiv = _buildRulesEditor(row?.rules_json || {});
+  const rulesDiv = _buildRulesEditor(row?.rules || {});
   const rulesLabel = document.createElement("div");
   rulesLabel.innerHTML = `<span style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">Reguły lokacji</span>`;
   rulesLabel.appendChild(rulesDiv);
@@ -528,12 +549,12 @@ function _openLocationModal(row, allLocations, onDone) {
           const parent_key  = form.querySelector('[name="parent_key"]').value || null;
           const description = form.querySelector('[name="description"]').value.trim();
           const is_active   = form.querySelector('[name="is_active"]').checked;
-          const rules_json  = _getRulesFromEditor(rulesDiv);
+          const rules_json  = _getRulesFromEditor(rulesDiv);  // sent as "rules" to API
 
           if (!key)   { showToast("Klucz jest wymagany.", "error"); return; }
           if (!label) { showToast("Nazwa jest wymagana.", "error"); return; }
 
-          const body = { key, label, location_type: loc_type, parent_key, description, rules_json, is_active };
+          const body = { key, label, location_type: loc_type, parent_key, description, rules: rules_json, is_active };
 
           try {
             if (isEdit) {
