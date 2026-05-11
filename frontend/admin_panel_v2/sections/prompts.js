@@ -8,74 +8,48 @@ const LABELS = {
   "helpme-gm":            { label: "Doradca GM",           icon: "💡", desc: "Prompt OOC dla trybu helpme" },
 };
 
-let _prompts      = [];
-let _activeName   = null;
-let _origContent  = "";
-let _dirty        = false;
+let _activeName  = null;
+let _origContent = "";
+let _dirty       = false;
 
 export async function init(panel) {
+  // Build tab bar from LABELS
+  const tabNames = Object.keys(LABELS);
+
   panel.innerHTML = `
-    <div class="section-content prompts-layout">
-      <nav class="prompts-nav" id="prompts-nav">
-        <div class="prompts-nav-loading">Ładowanie…</div>
-      </nav>
+    <div class="section-content">
+      <div class="subtab-bar">
+        ${tabNames.map((name, i) => {
+          const meta = LABELS[name];
+          return `<button class="subtab-btn${i === 0 ? " active" : ""}" data-tab="${name}">${meta.icon} ${_esc(meta.label)}</button>`;
+        }).join("")}
+      </div>
       <div class="prompts-editor-wrap" id="prompts-editor-wrap">
-        <div class="prompts-placeholder">
-          <div style="font-size:2rem">📜</div>
-          <p style="color:var(--text-muted);margin-top:8px">Wybierz prompt z listy po lewej.</p>
-        </div>
+        <div class="prompts-loading">Ładowanie…</div>
       </div>
     </div>`;
 
-  _prompts    = [];
-  _activeName = null;
+  _activeName  = tabNames[0];
   _origContent = "";
-  _dirty      = false;
-
-  await _loadList(panel);
-}
-
-async function _loadList(panel) {
-  const nav = panel.querySelector("#prompts-nav");
-  try {
-    const data = await adminFetch("/api/admin/prompts");
-    _prompts = data.items || [];
-  } catch (e) {
-    nav.innerHTML = `<p style="color:var(--accent-red);padding:12px">Błąd: ${_esc(e.message)}</p>`;
-    return;
-  }
-  _renderNav(panel);
-}
-
-function _renderNav(panel) {
-  const nav = panel.querySelector("#prompts-nav");
-  nav.innerHTML = "";
-  _prompts.forEach((p) => {
-    const meta = LABELS[p.name] || { label: p.name, icon: "📄", desc: "" };
-    const btn = document.createElement("button");
-    btn.className = "prompt-nav-btn" + (p.name === _activeName ? " active" : "");
-    btn.dataset.name = p.name;
-    btn.innerHTML = `
-      <span class="prompt-nav-icon">${meta.icon}</span>
-      <span class="prompt-nav-info">
-        <span class="prompt-nav-label">${_esc(meta.label)}</span>
-        <span class="prompt-nav-size">${_formatSize(p.size_bytes)}</span>
-      </span>`;
-    btn.addEventListener("click", () => _openPrompt(panel, p.name));
-    nav.appendChild(btn);
-  });
-}
-
-async function _openPrompt(panel, name) {
-  if (_dirty) {
-    const leave = confirm("Masz niezapisane zmiany. Opuścić bez zapisywania?");
-    if (!leave) return;
-  }
-  _activeName  = name;
   _dirty       = false;
-  _origContent = "";
-  _renderNav(panel);
 
+  panel.querySelectorAll(".subtab-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (_dirty) {
+        if (!confirm("Masz niezapisane zmiany. Opuścić bez zapisywania?")) return;
+        _dirty = false;
+      }
+      panel.querySelectorAll(".subtab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      _activeName = btn.dataset.tab;
+      await _loadAndRender(panel, _activeName);
+    });
+  });
+
+  await _loadAndRender(panel, _activeName);
+}
+
+async function _loadAndRender(panel, name) {
   const wrap = panel.querySelector("#prompts-editor-wrap");
   wrap.innerHTML = `<div class="prompts-loading">Ładowanie…</div>`;
 
@@ -88,7 +62,7 @@ async function _openPrompt(panel, name) {
   }
 
   _origContent = data.content ?? "";
-  _dirty = false;
+  _dirty       = false;
   _renderEditor(panel, data);
 }
 
@@ -184,8 +158,6 @@ function _renderEditor(panel, data) {
       dirtyBadge.style.display = "none";
       diffWrap.style.display = "none";
       showToast("Prompt zapisany.", "success");
-      await _loadList(panel);
-      _renderNav(panel);
     } catch (e) {
       showToast("Błąd zapisu: " + (e.message || "?"), "error");
     } finally {
@@ -205,7 +177,7 @@ function _renderEditor(panel, data) {
       });
       showToast("Przywrócono z backupu.", "success");
       _dirty = false;
-      await _openPrompt(panel, _activeName);
+      await _loadAndRender(panel, _activeName);
     } catch (e) {
       showToast("Błąd przywracania: " + (e.message || "?"), "error");
       restoreBtn.disabled = false;
