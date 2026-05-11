@@ -579,19 +579,24 @@ async function _renderEnemies(container) {
     catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); return; }
 
     const cols = [
-      { key: "key",        label: LABELS.key,   editable: false },
-      { key: "label",      label: LABELS.label, editable: true },
-      { key: "tier",       label: "Poziom",
+      { key: "key",              label: LABELS.key,   editable: false },
+      { key: "label",            label: LABELS.label, editable: true },
+      { key: "tier",             label: "Poziom",
         type: "badge", editType: "select",
         editOptions: Object.keys(LABELS.tiers),
         formatDisplay: (r) => LABELS.tiers[r.tier] || r.tier,
         badgeClass: (r) => ({ weak: "admin-badge-muted", standard: "admin-badge-blue", elite: "admin-badge-gold", boss: "admin-badge-red" }[r.tier] ?? "admin-badge-muted"),
         filterOptions: Object.entries(LABELS.tiers).map(([v,l])=>({value:v,label:l})),
       },
-      { key: "hp_base",    label: "HP",  type: "number", editable: true },
-      { key: "damage_die", label: "Kość", editable: true },
-      { key: "xp_award",  label: "XP",  type: "number", editable: true },
-      { key: "is_active",  label: LABELS.isActive, type: "boolean", editable: true },
+      { key: "hp_base",          label: "HP",          type: "number", editable: true },
+      { key: "ac_base",          label: "AC",          type: "number", editable: true },
+      { key: "attack_bonus",     label: "Atk",         type: "number", editable: true },
+      { key: "damage_die",       label: "Kość",        editable: true },
+      { key: "damage_bonus",     label: "Dmg+",        type: "number", editable: true },
+      { key: "attacks_per_turn", label: "Ataki/turę",  type: "number", editable: true },
+      { key: "xp_award",         label: "XP",          type: "number", editable: true },
+      { key: "is_active",        label: LABELS.isActive, type: "boolean", editable: true },
+      { key: "locked_at",        label: LABELS.locked,   type: "locked",  editable: false },
     ];
 
     renderTable(tableHost, cols, rows, {
