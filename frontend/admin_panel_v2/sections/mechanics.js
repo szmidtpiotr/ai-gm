@@ -60,13 +60,15 @@ export async function init(panel) {
           <button class="subtab-btn" data-tab="dc">${LABELS.dc}</button>
           <button class="subtab-btn" data-tab="conditions">${LABELS.conditions}</button>
           <button class="subtab-btn" data-tab="archetypes">${LABELS.archetypes}</button>
-          <button class="ai-fab-btn" id="ai-fab-btn" title="${LABELS.assistant}">⚡ ${LABELS.assistant}</button>
         </div>
         <div class="subtab-panels">
           ${TABS.map((t) => `<div class="subtab-panel${t === "stats" ? " active" : ""}" data-tab="${t}"></div>`).join("")}
         </div>
       </div>
     </div>
+
+    <!-- AI bubble trigger -->
+    <button class="ai-bubble-btn" id="ai-fab-btn" title="${LABELS.assistant}">⚡</button>
 
     <!-- Floating AI assistant popup -->
     <aside class="ai-assistant-popup" id="ai-assistant-popup">
@@ -98,12 +100,15 @@ export async function init(panel) {
   _aiDraft    = null;
 
   // ── AI popup toggle ──
-  const aiPopup = panel.querySelector("#ai-assistant-popup");
-  panel.querySelector("#ai-fab-btn").addEventListener("click", () => {
-    aiPopup.classList.toggle("open");
+  const aiPopup  = panel.querySelector("#ai-assistant-popup");
+  const aiBubble = panel.querySelector("#ai-fab-btn");
+  aiBubble.addEventListener("click", () => {
+    const open = aiPopup.classList.toggle("open");
+    aiBubble.classList.toggle("active", open);
   });
   panel.querySelector("#ai-popup-close-btn").addEventListener("click", () => {
     aiPopup.classList.remove("open");
+    aiBubble.classList.remove("active");
   });
 
   panel.querySelectorAll(".subtab-btn").forEach((btn) => {
