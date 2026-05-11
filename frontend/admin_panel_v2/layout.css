@@ -1439,31 +1439,71 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 /* ── Content section: main + AI sidebar ── */
 
 .content-layout {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 0;
   height: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 .content-main {
   display: flex;
   flex-direction: column;
+  height: 100%;
   overflow: hidden;
-  border-right: 1px solid var(--border);
 }
 
 .content-main .subtab-panels { overflow-y: auto; }
 
-/* ── AI Assistant panel ── */
+/* FAB button in subtab bar */
+.ai-fab-btn {
+  margin-left: auto;
+  padding: 5px 12px;
+  background: rgba(201,162,39,0.12);
+  border: 1px solid var(--accent-gold-dim);
+  border-radius: 5px;
+  color: var(--accent-gold);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.ai-fab-btn:hover { background: rgba(201,162,39,0.2); border-color: var(--accent-gold); }
 
-.ai-assistant-panel {
+/* ── AI Assistant popup ── */
+
+.ai-assistant-popup {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 360px;
+  height: 520px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
-  background: var(--bg-surface);
-  height: 100%;
   overflow: hidden;
+  z-index: 500;
+  /* hidden by default */
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(16px) scale(0.97);
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
+.ai-assistant-popup.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.ai-popup-close-btn {
+  font-size: 0.82rem !important;
+  padding: 2px 7px !important;
+  color: var(--text-muted);
+}
+.ai-popup-close-btn:hover { color: var(--accent-red); }
 
 .ai-assistant-header {
   display: flex;
