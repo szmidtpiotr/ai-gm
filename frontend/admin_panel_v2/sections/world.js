@@ -40,6 +40,17 @@ const LOC_TYPES = [
   { value: "sub",   label: "Pod-lokacja" },
 ];
 
+const LOCATION_RULES = [
+  { key: "no_combat",        label: "No Combat",        type: "boolean", description: "Combat forbidden (temples, safe zones)" },
+  { key: "no_loot",          label: "No Loot",          type: "boolean", description: "Enemies don't drop loot" },
+  { key: "teleport_blocked", label: "Teleport Blocked", type: "boolean", description: "Teleportation spells don't work" },
+  { key: "stealth_check",    label: "Stealth Check",    type: "boolean", description: "Entry requires successful stealth roll" },
+  { key: "rest_bonus",       label: "Rest Bonus",       type: "number",  default: 2,         description: "HP regen multiplier (2 = 2× HP)" },
+  { key: "mana_regen",       label: "Mana Regen",       type: "number",  default: 0,         description: "Natural mana regen (0 = none)" },
+  { key: "required_item",    label: "Required Item",    type: "text",    default: "torch",   description: "Item key required to enter" },
+  { key: "reason",           label: "Reason",           type: "text",    default: "Sacred ground", description: "Reason shown to player" },
+];
+
 const TABS = ["locations", "npcs", "enemies"];
 const _rendered = new Set();
 let _aiTrigger = null;  // updated by each tab render; called by the bubble
@@ -155,6 +166,140 @@ async function _openAiGenerateModal({ entityType, title, onFill }) {
   });
 }
 
+// ── Location rules editor ─────────────────────────────────────────────────────
+
+function _buildRulesEditor(currentRules) {
+  const wrap = document.createElement("div");
+  wrap.className = "rules-editor";
+
+  // Predefined rules
+  const presetSection = document.createElement("div");
+  presetSection.className = "rules-preset-section";
+  const checkboxes = [];
+  const valueInputs = {};
+
+  LOCATION_RULES.forEach(rule => {
+    const isChecked = rule.key in currentRules;
+    const row = document.createElement("div");
+    row.className = "rule-row";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.name = `rule_${rule.key}`; cb.checked = isChecked;
+    checkboxes.push({ rule, cb });
+
+    const label = document.createElement("label");
+    label.className = "rule-row-label";
+    label.appendChild(cb);
+    label.innerHTML += ` <strong>${rule.label}</strong> <span class="rule-desc">${rule.description}</span>`;
+    row.appendChild(label);
+
+    if (rule.type !== "boolean") {
+      const inp = document.createElement("input");
+      inp.type = rule.type === "number" ? "number" : "text";
+      inp.className = "field-input rule-value-input";
+      inp.placeholder = String(rule.default ?? "");
+      inp.value = isChecked ? String(currentRules[rule.key] ?? rule.default ?? "") : "";
+      inp.style.display = isChecked ? "block" : "none";
+      inp.style.marginTop = "4px";
+      inp.dataset.ruleKey = rule.key;
+      valueInputs[rule.key] = inp;
+      cb.addEventListener("change", () => { inp.style.display = cb.checked ? "block" : "none"; });
+      row.appendChild(inp);
+    }
+
+    presetSection.appendChild(row);
+  });
+  wrap.appendChild(presetSection);
+
+  // Custom rules
+  const customSection = document.createElement("div");
+  customSection.className = "rules-custom-section";
+
+  const customHeader = document.createElement("div");
+  customHeader.className = "rules-custom-header";
+  customHeader.innerHTML = `<span style="font-size:0.78rem;font-weight:600;color:var(--text-muted)">Własne reguły</span>`;
+  const addCustomBtn = document.createElement("button");
+  addCustomBtn.type = "button"; addCustomBtn.className = "secondary-btn"; addCustomBtn.style.fontSize = "0.75rem";
+  addCustomBtn.textContent = "+ Dodaj";
+  const aiRuleBtn = document.createElement("button");
+  aiRuleBtn.type = "button"; aiRuleBtn.className = "secondary-btn"; aiRuleBtn.style.fontSize = "0.75rem";
+  aiRuleBtn.textContent = "✨ AI";
+  aiRuleBtn.title = "Generuj regułę z AI";
+  customHeader.appendChild(addCustomBtn);
+  customHeader.appendChild(aiRuleBtn);
+  customSection.appendChild(customHeader);
+
+  const customList = document.createElement("div");
+  customList.className = "rules-custom-list";
+  customSection.appendChild(customList);
+  wrap.appendChild(customSection);
+
+  // Pre-populate custom rules (any keys not in LOCATION_RULES)
+  const knownKeys = new Set(LOCATION_RULES.map(r => r.key));
+  Object.entries(currentRules).forEach(([k, v]) => {
+    if (!knownKeys.has(k)) _addCustomRuleRow(customList, k, String(v));
+  });
+
+  addCustomBtn.addEventListener("click", () => _addCustomRuleRow(customList, "", ""));
+
+  aiRuleBtn.addEventListener("click", async () => {
+    const brief = prompt("Opisz krótko efekt reguły (np. 'gracze tracą 1 HP co turę z powodu trucizny'):");
+    if (!brief) return;
+    aiRuleBtn.disabled = true; aiRuleBtn.textContent = "⏳";
+    try {
+      const data = await adminFetch("/api/admin/campaign-designer/generate-entity", {
+        method: "POST",
+        body: JSON.stringify({ entity_type: "rule", brief }),
+      });
+      const rule = data.entity || {};
+      _addCustomRuleRow(customList, rule.key || "", rule.value !== undefined ? String(rule.value) : "");
+      showToast("Reguła wygenerowana.", "success");
+    } catch (e) {
+      showToast(e.message || "Błąd generowania.", "error");
+    } finally { aiRuleBtn.disabled = false; aiRuleBtn.textContent = "✨ AI"; }
+  });
+
+  // Store references for _getRulesFromEditor
+  wrap._checkboxes   = checkboxes;
+  wrap._valueInputs  = valueInputs;
+  wrap._customList   = customList;
+  return wrap;
+}
+
+function _addCustomRuleRow(list, key, value) {
+  const row = document.createElement("div");
+  row.className = "rule-custom-row";
+  row.innerHTML = `
+    <input type="text" class="field-input rule-custom-key" placeholder="klucz_reguły" value="${_esc(key)}" style="flex:1;min-width:80px" />
+    <input type="text" class="field-input rule-custom-val" placeholder="wartość" value="${_esc(value)}" style="flex:1;min-width:80px" />
+    <button type="button" class="icon-btn rule-custom-del" style="color:var(--accent-red)">✕</button>`;
+  row.querySelector(".rule-custom-del").addEventListener("click", () => row.remove());
+  list.appendChild(row);
+}
+
+function _getRulesFromEditor(wrap) {
+  const result = {};
+  (wrap._checkboxes || []).forEach(({ rule, cb }) => {
+    if (!cb.checked) return;
+    if (rule.type === "boolean") {
+      result[rule.key] = true;
+    } else {
+      const inp = wrap._valueInputs[rule.key];
+      const raw = inp ? inp.value.trim() : String(rule.default ?? "");
+      result[rule.key] = rule.type === "number" ? Number(raw) : raw;
+    }
+  });
+  (wrap._customList?.querySelectorAll(".rule-custom-row") || []).forEach(row => {
+    const k = row.querySelector(".rule-custom-key").value.trim();
+    const v = row.querySelector(".rule-custom-val").value.trim();
+    if (k) {
+      const n = Number(v);
+      result[k] = (v === "true") ? true : (v === "false") ? false : (Number.isFinite(n) && v !== "") ? n : v;
+    }
+  });
+  return result;
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function _esc(s) {
@@ -194,13 +339,19 @@ async function _renderLocations(container) {
   toolbar.appendChild(addBtn);
   container.appendChild(toolbar);
 
-  const tableHost = document.createElement("div");
-  container.appendChild(tableHost);
-
+  // Pending locations section (above the main table)
   const pendingWrap = document.createElement("details");
   pendingWrap.className = "pending-details";
-  pendingWrap.innerHTML = `<summary>Oczekujące lokacje</summary><div id="pending-list" class="pending-list-body"></div>`;
+  pendingWrap.innerHTML = `
+    <summary>
+      Oczekujące lokacje
+      <span id="pending-badge" class="admin-badge admin-badge-gold" style="display:none"></span>
+    </summary>
+    <div id="pending-list" class="pending-list-body"></div>`;
   container.appendChild(pendingWrap);
+
+  const tableHost = document.createElement("div");
+  container.appendChild(tableHost);
 
   let locations = [];
 
@@ -271,30 +422,60 @@ async function _renderLocations(container) {
     onFill: (e) => _openLocationModal(e, locations, load),
   });
 
-  pendingWrap.addEventListener("toggle", async () => {
-    if (!pendingWrap.open) return;
+  const loadPending = async () => {
     const listEl = pendingWrap.querySelector("#pending-list");
+    const badge  = pendingWrap.querySelector("#pending-badge");
     listEl.textContent = "Ładowanie…";
     try {
-      const data = await adminFetch("/api/admin/locations/pending");
+      const data    = await adminFetch("/api/admin/locations/pending");
       const pending = Array.isArray(data) ? data : (data.pending ?? []);
+      badge.textContent = String(pending.length);
+      badge.style.display = pending.length ? "" : "none";
       if (!pending.length) {
         listEl.innerHTML = `<p class="section-note">Brak oczekujących lokacji.</p>`;
         return;
       }
-      listEl.innerHTML = pending.map((p) => `
-        <div class="pending-row">
-          <strong>${_esc(p.label)}</strong>
-          <code>${_esc(p.key)}</code>
-          <span class="badge-muted">${_esc(p.location_type)}</span>
-          ${p.parent_key ? `<span class="text-muted">→ ${_esc(p.parent_key)}</span>` : ""}
-        </div>`).join("");
+      listEl.innerHTML = "";
+      pending.forEach((p) => {
+        const row = document.createElement("div");
+        row.className = "pending-row";
+        row.innerHTML = `
+          <div class="pending-row-info">
+            <strong>${_esc(p.label)}</strong>
+            <code>${_esc(p.key)}</code>
+            <span class="admin-badge admin-badge-muted">${_esc(p.location_type)}</span>
+            ${p.parent_key ? `<span style="color:var(--text-muted);font-size:0.78rem">→ ${_esc(p.parent_key)}</span>` : ""}
+          </div>
+          <div class="pending-row-actions">
+            <button class="primary-btn pending-approve-btn" style="font-size:0.78rem;padding:4px 10px" data-id="${p.id}">✓ Zatwierdź</button>
+            <button class="secondary-btn danger-outline pending-reject-btn" style="font-size:0.78rem;padding:4px 8px" data-id="${p.id}">✕ Odrzuć</button>
+          </div>`;
+        row.querySelector(".pending-approve-btn").addEventListener("click", async () => {
+          try {
+            await adminFetch(`/api/admin/locations/${p.id}/approve`, { method: "POST" });
+            showToast("Lokacja zatwierdzona.", "success");
+            await Promise.all([load(), loadPending()]);
+          } catch (e) { showToast(e.message || "Błąd zatwierdzenia.", "error"); }
+        });
+        row.querySelector(".pending-reject-btn").addEventListener("click", async () => {
+          if (!confirm(`Odrzucić lokację "${p.label}"?`)) return;
+          try {
+            await adminFetch(`/api/admin/locations/${p.id}/reject`, { method: "POST" });
+            showToast("Lokacja odrzucona.", "success");
+            await loadPending();
+          } catch (e) { showToast(e.message || "Błąd odrzucenia.", "error"); }
+        });
+        listEl.appendChild(row);
+      });
     } catch (e) {
-      listEl.innerHTML = `<p class="text-error">${_esc(e.message)}</p>`;
+      listEl.innerHTML = `<p style="color:var(--accent-red);font-size:0.82rem">${_esc(e.message)}</p>`;
     }
-  });
+  };
+
+  pendingWrap.addEventListener("toggle", () => { if (pendingWrap.open) void loadPending(); });
 
   await load();
+  void loadPending(); // show badge count without opening section
 }
 
 function _openLocationModal(row, allLocations, onDone) {
@@ -323,9 +504,12 @@ function _openLocationModal(row, allLocations, onDone) {
   form.appendChild(_field(LABELS.description,
     `<textarea name="description" rows="3">${_esc(row?.description ?? "")}</textarea>`));
 
-  const rulesStr = row?.rules_json ? JSON.stringify(row.rules_json, null, 2) : "{}";
-  form.appendChild(_field("Reguły (JSON)",
-    `<textarea name="rules_json" rows="3">${_esc(rulesStr)}</textarea>`));
+  // ── Rules editor ──
+  const rulesDiv = _buildRulesEditor(row?.rules_json || {});
+  const rulesLabel = document.createElement("div");
+  rulesLabel.innerHTML = `<span style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);display:block;margin-bottom:6px">Reguły lokacji</span>`;
+  rulesLabel.appendChild(rulesDiv);
+  form.appendChild(rulesLabel);
 
   form.appendChild(_checkbox("is_active", LABELS.isActive, row?.is_active ?? true));
 
@@ -343,16 +527,13 @@ function _openLocationModal(row, allLocations, onDone) {
           const loc_type    = form.querySelector('[name="location_type"]').value;
           const parent_key  = form.querySelector('[name="parent_key"]').value || null;
           const description = form.querySelector('[name="description"]').value.trim();
-          const rules_raw   = form.querySelector('[name="rules_json"]').value.trim();
           const is_active   = form.querySelector('[name="is_active"]').checked;
+          const rules_json  = _getRulesFromEditor(rulesDiv);
 
           if (!key)   { showToast("Klucz jest wymagany.", "error"); return; }
           if (!label) { showToast("Nazwa jest wymagana.", "error"); return; }
 
-          const rJSON = _tryJson(rules_raw, {});
-          if (!rJSON.ok) { showToast("Reguły muszą być poprawnym JSON.", "error"); return; }
-
-          const body = { key, label, location_type: loc_type, parent_key, description, rules_json: rJSON.value, is_active };
+          const body = { key, label, location_type: loc_type, parent_key, description, rules_json, is_active };
 
           try {
             if (isEdit) {
@@ -394,13 +575,20 @@ async function _renderNpcs(container) {
     renderTable(tableHost, null, null, {});
     let rows;
     try {
-      rows = (await adminFetch("/api/admin/npcs")).data || [];
+      const data = await adminFetch("/api/admin/npcs");
+      rows = (data.data || data.items || []).map(r => ({
+        ...r,
+        _location_keys_text: Array.isArray(r.location_keys)
+          ? r.location_keys.join(", ")
+          : (r.location_keys_json ? JSON.stringify(r.location_keys_json) : ""),
+      }));
     } catch (e) {
       showToast("Błąd ładowania NPC: " + (e.message || "?"), "error");
       return;
     }
 
     const columns = [
+      { key: "id",       label: "ID",          editable: false },
       { key: "key",      label: LABELS.key,    editable: false },
       { key: "label",    label: LABELS.label,  editable: true },
       {
@@ -410,19 +598,35 @@ async function _renderNpcs(container) {
         badgeClass: (row) => row.npc_type === "merchant" ? "admin-badge-gold" : "admin-badge-muted",
         filterOptions: NPC_TYPES,
       },
-      { key: "is_shop",   label: LABELS.isShop,   type: "boolean", editable: false },
-      { key: "is_active", label: LABELS.isActive,  type: "boolean", editable: true },
-      { key: "locked_at", label: LABELS.locked,    type: "locked",  editable: false },
+      { key: "_location_keys_text", label: "Lokacje",            editable: true, popup: true },
+      { key: "is_shop",             label: LABELS.isShop,        type: "boolean", editable: true },
+      { key: "is_active",           label: LABELS.isActive,      type: "boolean", editable: true },
+      { key: "description",         label: LABELS.description,   editable: true, popup: true },
+      { key: "personality_json",    label: "Osobowość JSON",     editable: true, popup: true },
+      { key: "shop_inventory_json", label: "Ekwipunek sklepu",   editable: true, popup: true },
+      { key: "locked_at",           label: LABELS.locked,        type: "locked",  editable: false },
     ];
 
     renderTable(tableHost, columns, rows, {
+      tableId:           "npcs",
       showTextSearch:    true,
       searchPlaceholder: "Szukaj NPC…",
       async onEdit(row, colKey, newVal, { force } = {}) {
+        // Map computed fields back to API field names
+        const apiKey = colKey === "_location_keys_text" ? "location_keys" : colKey;
+        let apiVal = newVal;
+        if (colKey === "_location_keys_text") {
+          apiVal = String(newVal).split(",").map(s => s.trim()).filter(Boolean);
+        }
+        if (colKey === "personality_json" || colKey === "shop_inventory_json") {
+          const p = _tryJson(newVal, null);
+          if (!p.ok) { showToast("Nieprawidłowy JSON.", "error"); throw new Error("bad json"); }
+          apiVal = p.value;
+        }
         try {
           await adminFetch(`/api/npcs/${row.id}`, {
             method: "PATCH",
-            body:   JSON.stringify({ [colKey]: newVal, ...(force ? { force: true } : {}) }),
+            body:   JSON.stringify({ [apiKey]: apiVal, ...(force ? { force: true } : {}) }),
           });
           showToast("Zapisano.", "success");
           await load();
