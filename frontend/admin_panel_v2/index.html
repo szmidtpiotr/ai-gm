@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI-GM Admin 2.0</title>
+    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=13" />
+  </head>
+  <body>
+    <div class="admin-shell" id="admin-shell">
+
+      <!-- ── SIDEBAR ── -->
+      <aside class="admin-sidebar">
+        <div class="sidebar-header">
+          <span class="sidebar-logo">⚔️</span>
+          <span class="sidebar-title">AI-GM Admin</span>
+        </div>
+
+        <nav class="sidebar-nav" id="sidebar-nav">
+          <!-- Home -->
+          <button type="button" data-section="overview" class="active" title="Przegląd">
+            <span class="nav-icon">◈</span>
+            <span class="nav-label">Przegląd</span>
+          </button>
+
+          <!-- GAME group -->
+          <div class="nav-group-label">Game</div>
+          <button type="button" data-section="mechanics" title="Mechaniki">
+            <span class="nav-icon">⚙</span>
+            <span class="nav-label">Mechaniki</span>
+          </button>
+          <button type="button" data-section="content" title="Zawartość">
+            <span class="nav-icon">⚔</span>
+            <span class="nav-label">Zawartość</span>
+          </button>
+          <button type="button" data-section="world" title="Świat">
+            <span class="nav-icon">🌍</span>
+            <span class="nav-label">Świat</span>
+          </button>
+          <button type="button" data-section="prompts" title="Narracja">
+            <span class="nav-icon">📜</span>
+            <span class="nav-label">Narracja</span>
+          </button>
+
+          <!-- LIVE group -->
+          <div class="nav-group-label">Live</div>
+          <button type="button" data-section="players" title="Gracze">
+            <span class="nav-icon">👤</span>
+            <span class="nav-label">Gracze</span>
+          </button>
+          <button type="button" data-section="campaigns" title="Kampanie">
+            <span class="nav-icon">🗺</span>
+            <span class="nav-label">Kampanie</span>
+          </button>
+          <button type="button" data-section="designer" title="Kreator">
+            <span class="nav-icon">✨</span>
+            <span class="nav-label">Kreator</span>
+          </button>
+          <button type="button" data-section="analytics" title="Statystyki">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">Statystyki</span>
+          </button>
+
+          <!-- SYSTEM group -->
+          <div class="nav-group-label">System</div>
+          <button type="button" data-section="voice" title="Głos">
+            <span class="nav-icon">🔊</span>
+            <span class="nav-label">Głos</span>
+          </button>
+          <button type="button" data-section="system" title="System">
+            <span class="nav-icon">🛠</span>
+            <span class="nav-label">System</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-footer">
+          <a href="/admin/" title="Stary panel">
+            <span class="nav-icon">↩</span>
+            <span class="nav-label">Admin v1</span>
+          </a>
+          <button type="button" class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Toggle sidebar">‹</button>
+        </div>
+      </aside>
+
+      <!-- ── TOP BAR ── -->
+      <header class="admin-topbar">
+        <span class="topbar-section-title" id="topbar-title">Przegląd</span>
+        <div class="topbar-pills">
+          <span class="topbar-pill llm-pill" id="llm-pill" style="display:none">
+            <span>⚡</span>
+            <span id="llm-pill-label">—</span>
+          </span>
+          <span class="topbar-pill disconnected" id="connection-badge">
+            <span class="pill-dot"></span>
+            <span id="connection-label">Disconnected</span>
+          </span>
+        </div>
+        <div class="topbar-actions">
+          <button id="logout-btn" class="logout-btn" type="button" disabled>Logout</button>
+        </div>
+      </header>
+
+      <!-- ── MAIN ── -->
+      <main class="admin-main">
+        <div class="section-panels">
+          <div class="section-panel active" data-section="overview"></div>
+          <div class="section-panel" data-section="mechanics"></div>
+          <div class="section-panel" data-section="content"></div>
+          <div class="section-panel" data-section="world"></div>
+          <div class="section-panel" data-section="prompts"></div>
+          <div class="section-panel" data-section="players"></div>
+          <div class="section-panel" data-section="campaigns"></div>
+          <div class="section-panel" data-section="designer"></div>
+          <div class="section-panel" data-section="analytics"></div>
+          <div class="section-panel" data-section="voice"></div>
+          <div class="section-panel" data-section="system"></div>
+        </div>
+
+        <div class="activity-log-wrap">
+          <details class="activity-log">
+            <summary>Activity Log</summary>
+            <pre id="activity-log-pre"></pre>
+          </details>
+        </div>
+      </main>
+    </div>
+
+    <!-- ── LOGIN OVERLAY ── -->
+    <div id="login-overlay" class="login-overlay visible">
+      <div class="login-modal">
+        <h2>⚔ AI-GM Admin</h2>
+        <div class="field">
+          <label for="dev-username">Username</label>
+          <input id="dev-username" type="text" autocomplete="username" placeholder="your username" />
+        </div>
+        <div class="field">
+          <label for="dev-password">Password</label>
+          <input id="dev-password" type="password" autocomplete="current-password" placeholder="your password" />
+        </div>
+
+        <div class="login-actions" style="margin-top:18px">
+          <button id="dev-login-btn" class="primary-btn" type="button">Login</button>
+        </div>
+
+        <details class="advanced-box" style="margin-top:14px">
+          <summary>Advanced (Bearer Token)</summary>
+          <div>
+            <p class="muted">Paste an existing bearer token to connect without username/password.</p>
+            <div class="field" style="margin-top:8px">
+              <label for="api-base-url">API Base URL</label>
+              <input id="api-base-url" type="text" placeholder="https://your-host or http://localhost:8000" autocomplete="url" />
+            </div>
+            <div class="field">
+              <label for="bearer-token">Bearer Token</label>
+              <input id="bearer-token" type="text" placeholder="Paste token here" autocomplete="off" spellcheck="false" />
+            </div>
+            <button id="connect-btn" class="secondary-btn" type="button">Connect with token</button>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <script type="module">
+      import { adminFetch } from "/admin_panel_v2/shared/api.js?v=2";
+      import { autoConnect, connect, getBaseUrl, isConnected, logout } from "/admin_panel_v2/shared/auth.js?v=1";
+      import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
+
+      /* ── section metadata ── */
+      const SECTIONS = {
+        "overview":  { label: "Przegląd",   icon: "◈",  module: null },
+        "mechanics": { label: "Mechaniki",  icon: "⚙",  module: null },
+        "content":   { label: "Zawartość",  icon: "⚔",  module: null },
+        "world":     { label: "Świat",      icon: "🌍", module: null },
+        "prompts":   { label: "Narracja",   icon: "📜", module: null },
+        "players":   { label: "Gracze",     icon: "👤", module: null },
+        "campaigns": { label: "Kampanie",   icon: "🗺", module: null },
+        "designer":  { label: "Kreator",    icon: "✨", module: null },
+        "analytics": { label: "Statystyki", icon: "📊", module: null },
+        "voice":     { label: "Głos",       icon: "🔊", module: null },
+        "system":    { label: "System",     icon: "🛠", module: null },
+      };
+
+      /* ── DOM refs ── */
+      const shell        = document.getElementById("admin-shell");
+      const overlay      = document.getElementById("login-overlay");
+      const logoutBtn    = document.getElementById("logout-btn");
+      const connectBtn   = document.getElementById("connect-btn");
+      const devLoginBtn  = document.getElementById("dev-login-btn");
+      const apiBaseInput = document.getElementById("api-base-url");
+      const tokenInput   = document.getElementById("bearer-token");
+      const devUser      = document.getElementById("dev-username");
+      const devPass      = document.getElementById("dev-password");
+      const connBadge    = document.getElementById("connection-badge");
+      const connLabel    = document.getElementById("connection-label");
+      const topbarTitle  = document.getElementById("topbar-title");
+      const llmPill      = document.getElementById("llm-pill");
+      const llmPillLabel = document.getElementById("llm-pill-label");
+      const logPre       = document.getElementById("activity-log-pre");
+      const collapseBtn  = document.getElementById("sidebar-collapse-btn");
+
+      /* ── activity log ── */
+      function log(text) {
+        const ts = new Date().toLocaleTimeString();
+        logPre.textContent = logPre.textContent
+          ? `${logPre.textContent}\n[${ts}] ${text}`
+          : `[${ts}] ${text}`;
+        logPre.scrollTop = logPre.scrollHeight;
+      }
+
+      /* ── connection UI ── */
+      function setConnected(ok) {
+        overlay.classList.toggle("visible", !ok);
+        connBadge.className = `topbar-pill ${ok ? "connected" : "disconnected"}`;
+        connLabel.textContent = ok ? "Connected" : "Disconnected";
+        logoutBtn.disabled = !ok;
+      }
+
+      /* ── resolve API root ── */
+      function apiRoot() {
+        const v = (apiBaseInput?.value || "").trim().replace(/\/+$/, "");
+        if (v) return v;
+        try { return String(window.location.origin).replace(/\/+$/, ""); } catch { return ""; }
+      }
+
+      /* ── connect flow ── */
+      async function handleConnect() {
+        try {
+          await connect(apiRoot(), tokenInput.value.trim());
+          setConnected(true);
+          showToast("Connected.", "success");
+          log("Connected to " + apiRoot());
+          await fetchLlmPreset();
+        } catch (e) {
+          setConnected(false);
+          showToast(e.message || "Connection failed.", "error");
+          log("Connection failed");
+        }
+      }
+
+      async function handleDevLogin() {
+        const root = apiRoot();
+        const u = devUser.value.trim();
+        const p = devPass.value;
+        if (!root) { showToast("API Base URL missing.", "info"); return; }
+        if (!u || !p) { showToast("Username and password required.", "info"); return; }
+        if (apiBaseInput && !apiBaseInput.value.trim()) apiBaseInput.value = root;
+        try {
+          const res = await fetch(`${root}/api/admin/dev-login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: u, password: p }),
+          });
+          const body = await res.json();
+          if (!res.ok || !body?.token) throw new Error(body?.detail || `HTTP ${res.status}`);
+          tokenInput.value = body.token;
+          await connect(root, body.token);
+          setConnected(true);
+          showToast("Dev login succeeded.", "success");
+          log("Dev login OK");
+          await fetchLlmPreset();
+        } catch (e) {
+          showToast(e.message || "Dev login failed.", "error");
+          log("Dev login failed");
+        }
+      }
+
+      /* ── LLM preset pill ── */
+      async function fetchLlmPreset() {
+        try {
+          const data = await adminFetch("/api/admin/llm/global-settings");
+          const name = data?.active_preset_label || data?.settings?.model || null;
+          if (name) {
+            llmPillLabel.textContent = name;
+            llmPill.style.display = "flex";
+          }
+        } catch { /* non-critical */ }
+      }
+
+      /* ── sidebar collapse ── */
+      const COLLAPSED_KEY = "aigm_admin2_collapsed";
+      function applySidebarCollapse(collapsed) {
+        shell.classList.toggle("sidebar-collapsed", collapsed);
+        collapseBtn.title = collapsed ? "Expand sidebar" : "Collapse sidebar";
+        localStorage.setItem(COLLAPSED_KEY, collapsed ? "1" : "0");
+      }
+
+      collapseBtn?.addEventListener("click", () => {
+        applySidebarCollapse(!shell.classList.contains("sidebar-collapsed"));
+      });
+
+      if (localStorage.getItem(COLLAPSED_KEY) === "1") {
+        applySidebarCollapse(true);
+      }
+
+      /* ── section init registry ── */
+      const initialized = new Set();
+
+      async function initSection(key) {
+        if (initialized.has(key)) return;
+        const panel = document.querySelector(`.section-panel[data-section="${key}"]`);
+        if (!panel) return;
+
+        /* lazy-load module when it exists, else show placeholder */
+        const moduleMap = {
+          "overview":  "/admin_panel_v2/sections/dashboard.js?v=2",
+          "mechanics": "/admin_panel_v2/sections/mechanics.js?v=6",
+          "content":   "/admin_panel_v2/sections/content.js?v=7",
+          "world":     "/admin_panel_v2/sections/world.js?v=6",
+          "prompts":   "/admin_panel_v2/sections/prompts.js?v=1",
+          "players":   "/admin_panel_v2/sections/players.js?v=2",
+          "campaigns": "/admin_panel_v2/sections/campaigns.js?v=1",
+          "analytics": "/admin_panel_v2/sections/analytics.js?v=1",
+          "designer": "/admin_panel_v2/sections/designer.js?v=2",
+          "system":    "/admin_panel_v2/sections/system.js?v=4",
+        };
+
+        if (moduleMap[key]) {
+          initialized.add(key);
+          try {
+            const { init } = await import(moduleMap[key]);
+            await init(panel);
+          } catch (err) {
+            initialized.delete(key);
+            showToast(err.message || `${key} failed to load.`, "error");
+          }
+        } else {
+          initialized.add(key);
+          const meta = SECTIONS[key] || {};
+          panel.innerHTML = `
+            <div class="section-placeholder">
+              <div class="section-placeholder-icon">${meta.icon || "🔧"}</div>
+              <h2>${meta.label || key}</h2>
+              <p style="color:var(--text-muted);font-size:0.8rem">Coming soon — Phase 1 shell ready</p>
+            </div>`;
+        }
+      }
+
+      /* ── sidebar navigation ── */
+      function wireSidebar() {
+        const navBtns = Array.from(document.querySelectorAll("#sidebar-nav button[data-section]"));
+        const panels  = Array.from(document.querySelectorAll(".section-panel"));
+
+        navBtns.forEach(btn => {
+          btn.addEventListener("click", () => {
+            const key = btn.dataset.section;
+            navBtns.forEach(b => b.classList.toggle("active", b === btn));
+            panels.forEach(p => p.classList.toggle("active", p.dataset.section === key));
+            topbarTitle.textContent = SECTIONS[key]?.label || key;
+            void initSection(key);
+          });
+        });
+      }
+
+      /* ── activity log listener ── */
+      window.addEventListener("admin-fetch", e => {
+        const d = e.detail || {};
+        log(`${d.method || "GET"} ${d.path || "-"} → ${d.status || 0} ${d.ok ? "OK" : "ERR"}`);
+      });
+
+      /* ── boot ── */
+      document.addEventListener("DOMContentLoaded", async () => {
+        const saved = (getBaseUrl() || "").trim();
+        apiBaseInput.value = saved || window.location.origin || "";
+
+        wireSidebar();
+
+        const connected = await autoConnect();
+        setConnected(connected && isConnected());
+        log("Admin 2.0 initialized");
+
+        if (connected) {
+          await fetchLlmPreset();
+          void initSection("overview");
+        }
+
+        connectBtn?.addEventListener("click", handleConnect);
+        devLoginBtn?.addEventListener("click", handleDevLogin);
+        logoutBtn?.addEventListener("click", () => { logout(); });
+
+        /* Enter key submits login */
+        [devUser, devPass].forEach(el => {
+          el?.addEventListener("keydown", e => {
+            if (e.key === "Enter") { e.preventDefault(); void handleDevLogin(); }
+          });
+        });
+
+        /* Auto-focus username on load */
+        if (!connected) setTimeout(() => devUser?.focus(), 50);
+      });
+
+      window.adminFetch = adminFetch;
+    </script>
+  </body>
+</html>

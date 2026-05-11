@@ -99,11 +99,13 @@
       a.volume = 1;
       audioUnlocked = true;
       _status("TTS gotowe");
+      setTimeout(() => _status(""), 2500);
     } catch (err) {
       // iOS WebKit often rejects HTMLAudio unlock, but WebAudio context may already be usable.
       if (ctxReady) {
         audioUnlocked = true;
         _status("TTS gotowe");
+        setTimeout(() => _status(""), 2500);
         console.warn("voice html audio unlock failed; using webaudio", err);
       } else {
         audioUnlocked = false;
@@ -513,8 +515,6 @@
     inputEl.value = value;
     inputEl.dispatchEvent(new Event("input", { bubbles: true }));
     inputEl.focus();
-
-    _el("send-btn")?.click();
   }
 
   async function startRecording() {
@@ -522,6 +522,9 @@
     const sttBtn = _el("stt-toggle");
     const sttInputMicBtn = _el("stt-input-mic");
     if (!sttEnabled) return;
+    // Don't let a queued TTS read over active recording.
+    pendingSpeakText = "";
+    stopPlayback();
     if (!navigator.mediaDevices || !window.MediaRecorder) {
       setAvailability(false, "STT niedostepne w tej przegladarce");
       return;
@@ -542,6 +545,17 @@
 
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       _startSttLevelMonitor(mediaStream);
+      try {
+        const _bc = new (window.AudioContext || window.webkitAudioContext)();
+        const _bo = _bc.createOscillator();
+        const _bg = _bc.createGain();
+        _bo.connect(_bg); _bg.connect(_bc.destination);
+        _bo.type = 'sine'; _bo.frequency.value = 880;
+        _bg.gain.setValueAtTime(0.15, _bc.currentTime);
+        _bg.gain.exponentialRampToValueAtTime(0.001, _bc.currentTime + 0.12);
+        _bo.start(); _bo.stop(_bc.currentTime + 0.12);
+        _bo.onended = () => _bc.close();
+      } catch (_) {}
 
       await new Promise((resolve, reject) => {
         const socket = new WebSocket(_wsUrl());

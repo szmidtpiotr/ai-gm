@@ -15,6 +15,7 @@ from app.services.admin_accounts import (
     create_account_admin,
     list_accounts,
     reset_account_sheet,
+    set_account_password,
     soft_delete_account,
     update_account,
 )
@@ -50,8 +51,10 @@ from app.services.llm_admin_service import (
     clear_global_llm_override,
     delete_llm_preset,
     get_admin_llm_settings_snapshot,
+    get_llm_preset,
     save_llm_preset,
 )
+from app.services.llm_service import _normalize_base_url as _llm_normalize_base_url
 from app.services.admin_config import (
     create_condition,
     create_consumable,
@@ -202,6 +205,10 @@ class AccountPatchReq(BaseModel):
     display_name: str | None = None
     is_active: int | None = None
     is_admin: int | None = Field(default=None, description="0 = player, 1 = admin")
+
+
+class AccountPasswordResetReq(BaseModel):
+    new_password: str = Field(..., min_length=8)
 
 
 class AccountCreateReq(BaseModel):
@@ -734,6 +741,26 @@ class AdminGlobalLlmPresetReq(BaseModel):
     activate: bool = False
 
 
+class AdminLlmFetchModelsReq(BaseModel):
+    provider: str
+    base_url: str
+    api_key: str | None = None
+    preset_id: int | None = None
+
+
+class CampaignDesignerGenerateReq(BaseModel):
+    snippet_type: Literal["hook", "location", "npc", "encounter"]
+    brief: str = Field(..., min_length=5, max_length=1000)
+    preset_id: int | None = None
+
+
+class CampaignDesignerSaveReq(BaseModel):
+    snippet_type: Literal["hook", "location", "npc", "encounter"]
+    title: str = Field(..., min_length=1, max_length=200)
+    content: str = Field(..., min_length=1, max_length=8000)
+    tags: str | None = None
+
+
 @router.get("/admin/llm/global-settings")
 def admin_llm_global_settings(_: None = Depends(require_admin_token)):
     """Same payload as GET /api/settings/llm/admin — lives under /admin/* for proxies that only expose admin routes."""
@@ -798,6 +825,128 @@ def admin_llm_use_env(_: None = Depends(require_admin_token)):
         "settings": clear_global_llm_override(),
         **get_admin_llm_settings_snapshot(),
     }
+
+
+@router.post("/admin/llm/fetch-models")
+async def admin_llm_fetch_models(req: AdminLlmFetchModelsReq, _: None = Depends(require_admin_token)):
+    import asyncio as _asyncio
+    import httpx
+    import re as _re
+
+    api_key = (req.api_key or "").strip()
+    if not api_key and req.preset_id is not None:
+        try:
+            preset = get_llm_preset(req.preset_id, mask_api_key=False)
+            api_key = (preset.get("api_key") or "").strip()
+        except KeyError:
+            pass
+
+    provider = (req.provider or "").strip().lower()
+    # Apply the same normalization as llm_service so "https://ollama.com/api/" → "https://ollama.com"
+    base_url = _llm_normalize_base_url((req.base_url or "").strip(), provider)
+
+    if not base_url:
+        return {"ok": False, "models": [], "error": "base_url is required"}
+
+    def _extract_azure_alias_candidates(raw_list: list[dict]) -> list[str]:
+        """
+        From the /openai/models catalog, extract only the short alias IDs
+        (no YYYY-MM-DD date suffix, no bare trailing -N number) that support
+        chat_completion. These are the candidate deployment names to probe.
+        """
+        _SKIP = _re.compile(
+            r"(tts|whisper|embed|dall-e|image|audio|realtime|transcribe|sora|translate|rerank)",
+            _re.IGNORECASE,
+        )
+        _DATE_SUFFIX    = _re.compile(r"-\d{4}-\d{2}-\d{2}")
+        _NUMBERED_COPY  = _re.compile(r"-\d{1,2}$")
+
+        result = []
+        for m in raw_list:
+            mid = m.get("id", "")
+            if not m.get("capabilities", {}).get("chat_completion"):
+                continue
+            if _SKIP.search(mid):
+                continue
+            if _DATE_SUFFIX.search(mid):
+                continue  # versioned name like gpt-4.1-2025-04-14
+            if _NUMBERED_COPY.search(mid):
+                continue  # load-balancing copy like Phi-4-5
+            result.append(mid)
+        return sorted(result, key=str.lower)
+
+    async def _probe_azure_deployment(
+        client: "httpx.AsyncClient",
+        sem: "_asyncio.Semaphore",
+        model_id: str,
+        key: str,
+        base: str,
+    ) -> str | None:
+        async with sem:
+            try:
+                r = await client.post(
+                    f"{base}/openai/deployments/{model_id}/chat/completions",
+                    headers={"api-key": key, "Content-Type": "application/json"},
+                    params={"api-version": "2024-02-01"},
+                    json={"messages": [{"role": "user", "content": "hi"}], "max_tokens": 1},
+                    timeout=5.0,
+                )
+                if r.status_code == 200:
+                    return model_id
+            except Exception:
+                pass
+        return None
+
+    try:
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            if provider == "ollama":
+                # Standard Ollama: /api/tags — send Bearer if key provided (Ollama Cloud)
+                headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+                r = await client.get(f"{base_url}/api/tags", headers=headers, timeout=12.0)
+                r.raise_for_status()
+                data = r.json()
+                models = sorted(m["name"] for m in data.get("models", []))
+
+            elif provider == "azure":
+                # Step 1: Fetch the global model catalog (api-key header, NOT Bearer)
+                # /openai/deployments always 404 on Foundry-connected resources;
+                # /v1/models also 404. Only /openai/models works for listing.
+                r = await client.get(
+                    f"{base_url}/openai/models",
+                    headers={"api-key": api_key},
+                    params={"api-version": "2024-02-01"},
+                    timeout=12.0,
+                )
+                r.raise_for_status()
+                data = r.json()
+                candidates = _extract_azure_alias_candidates(data.get("data", []))
+
+                # Step 2: Probe candidates in parallel (max 10 concurrent) to find
+                # which ones are actually deployed on this resource. Failures
+                # (DeploymentNotFound) return in ~250 ms; successes in ~1 s.
+                sem = _asyncio.Semaphore(10)
+                probe_tasks = [
+                    _probe_azure_deployment(client, sem, mid, api_key, base_url)
+                    for mid in candidates
+                ]
+                results = await _asyncio.gather(*probe_tasks)
+                models = sorted((m for m in results if m is not None), key=str.lower)
+
+            else:
+                # OpenAI-compatible (openai + other): standard /v1/models
+                r = await client.get(
+                    f"{base_url}/v1/models",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+                r.raise_for_status()
+                data = r.json()
+                models = sorted(m["id"] for m in data.get("data", []))
+
+        return {"ok": True, "models": models}
+    except httpx.HTTPStatusError as exc:
+        return {"ok": False, "models": [], "error": f"HTTP {exc.response.status_code}"}
+    except Exception as exc:
+        return {"ok": False, "models": [], "error": str(exc)}
 
 
 @router.get("/admin/assistant/resources")
@@ -1948,12 +2097,197 @@ def admin_reset_account_sheet(account_id: int, _: None = Depends(require_admin_t
         raise HTTPException(status_code=404, detail="Account not found") from None
 
 
+@router.post("/admin/accounts/{account_id}/set-password")
+def admin_set_account_password(
+    account_id: int, req: AccountPasswordResetReq, _: None = Depends(require_admin_token)
+):
+    try:
+        return set_account_password(account_id, req.new_password)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Account not found") from None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters") from None
+
+
+@router.get("/admin/users/{user_id}/activity")
+def admin_user_activity(user_id: int, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect("/data/ai_gm.db")
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                c.id, c.title, c.status, c.created_at,
+                ch.name AS char_name, ch.sheet_json,
+                (SELECT COUNT(*) FROM campaign_turns ct WHERE ct.campaign_id = c.id) AS turn_count,
+                (SELECT MAX(ct2.created_at) FROM campaign_turns ct2 WHERE ct2.campaign_id = c.id) AS last_turn_at
+            FROM campaigns c
+            JOIN campaign_members cm ON cm.campaign_id = c.id AND cm.user_id = ?
+            LEFT JOIN characters ch ON ch.campaign_id = c.id AND ch.user_id = ?
+            ORDER BY c.created_at DESC
+            """,
+            (user_id, user_id),
+        ).fetchall()
+        items = []
+        for r in rows:
+            item: dict = {
+                "id": r["id"],
+                "title": r["title"],
+                "status": r["status"],
+                "created_at": r["created_at"],
+                "char_name": r["char_name"],
+                "turn_count": r["turn_count"] or 0,
+                "last_turn_at": r["last_turn_at"],
+            }
+            if r["sheet_json"]:
+                try:
+                    sheet = json.loads(r["sheet_json"])
+                    item["char_archetype"] = sheet.get("archetype")
+                    item["char_current_hp"] = sheet.get("current_hp")
+                    item["char_max_hp"] = sheet.get("max_hp")
+                    item["char_xp"] = sheet.get("xp_lifetime_earned")
+                    item["char_conditions"] = sheet.get("conditions", [])
+                except Exception:
+                    pass
+            items.append(item)
+        return {"items": items}
+    finally:
+        conn.close()
+
+
 @router.get("/admin/campaigns")
 def admin_list_campaigns(
     owner_id: int = Query(..., description="Campaign owner user id"),
     _: None = Depends(require_admin_token),
 ):
     return {"items": list_campaigns_by_owner(owner_id)}
+
+
+@router.get("/admin/campaigns/live")
+def admin_campaigns_live(_: None = Depends(require_admin_token)):
+    """All campaigns with character, location, last turn snippet, and scene progress."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute("""
+            SELECT
+                c.id, c.title, c.status, c.created_at, c.ended_at,
+                c.gm_plan_json,
+                ga.username AS owner_username,
+                ch.id AS char_id, ch.name AS char_name, ch.location AS char_location,
+                ch.sheet_json,
+                (SELECT ct.user_text || '|||' || ct.assistant_text
+                 FROM campaign_turns ct
+                 WHERE ct.campaign_id = c.id
+                 ORDER BY ct.id DESC LIMIT 1) AS last_turn_raw,
+                (SELECT ct.created_at
+                 FROM campaign_turns ct
+                 WHERE ct.campaign_id = c.id
+                 ORDER BY ct.id DESC LIMIT 1) AS last_turn_at,
+                (SELECT COUNT(*) FROM campaign_turns ct WHERE ct.campaign_id = c.id) AS turn_count
+            FROM campaigns c
+            LEFT JOIN users ga ON ga.id = c.owner_user_id
+            LEFT JOIN characters ch ON ch.campaign_id = c.id
+            ORDER BY c.id DESC
+        """).fetchall()
+
+        items = []
+        for r in rows:
+            sheet = {}
+            try:
+                sheet = json.loads(r["sheet_json"] or "{}")
+            except Exception:
+                pass
+
+            gm_plan = {}
+            try:
+                gm_plan = json.loads(r["gm_plan_json"] or "{}")
+            except Exception:
+                pass
+
+            # Extract scene progress from gm_plan
+            scene_current = 0
+            scene_total = 0
+            arc_title = None
+            try:
+                arcs = gm_plan.get("arcs", {})
+                active_arc_id = gm_plan.get("active_arc_id")
+                if active_arc_id and active_arc_id in arcs:
+                    arc = arcs[active_arc_id]
+                    arc_title = arc.get("title") or active_arc_id
+                    scene_goals = arc.get("scene_goals", [])
+                    scene_total = len(scene_goals)
+                    # Count completed scenes: first non-completed is current
+                    completed = sum(1 for sg in scene_goals if isinstance(sg, dict) and sg.get("status") == "completed")
+                    scene_current = completed + 1 if completed < scene_total else scene_total
+            except Exception:
+                pass
+
+            # Last turn text
+            last_turn_player = None
+            last_turn_gm = None
+            if r["last_turn_raw"]:
+                parts = r["last_turn_raw"].split("|||", 1)
+                last_turn_player = (parts[0] or "")[:200]
+                last_turn_gm = (parts[1] or "")[:200] if len(parts) > 1 else None
+
+            conditions_raw = sheet.get("conditions", [])
+            if isinstance(conditions_raw, str):
+                try:
+                    conditions_raw = json.loads(conditions_raw)
+                except Exception:
+                    conditions_raw = []
+
+            items.append({
+                "id": r["id"],
+                "title": r["title"],
+                "status": r["status"],
+                "created_at": r["created_at"],
+                "ended_at": r["ended_at"],
+                "owner_username": r["owner_username"],
+                "char_id": r["char_id"],
+                "char_name": r["char_name"],
+                "char_location": r["char_location"],
+                "char_archetype": sheet.get("archetype"),
+                "char_level": sheet.get("level"),
+                "char_current_hp": sheet.get("current_hp"),
+                "char_max_hp": sheet.get("max_hp"),
+                "char_conditions": conditions_raw,
+                "scene_current": scene_current,
+                "scene_total": scene_total,
+                "arc_title": arc_title,
+                "last_turn_player": last_turn_player,
+                "last_turn_gm": last_turn_gm,
+                "last_turn_at": r["last_turn_at"],
+                "turn_count": r["turn_count"],
+            })
+
+        return {"items": items}
+    finally:
+        conn.close()
+
+
+@router.get("/admin/campaigns/{campaign_id}/turns")
+def admin_get_campaign_turns(
+    campaign_id: int,
+    limit: int = Query(default=15, ge=1, le=100),
+    _: None = Depends(require_admin_token),
+):
+    """Last N turns for a campaign (newest first → reversed for display)."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """SELECT id, turn_number, user_text, assistant_text, route, created_at
+               FROM campaign_turns
+               WHERE campaign_id = ?
+               ORDER BY id DESC LIMIT ?""",
+            (campaign_id, limit),
+        ).fetchall()
+        turns = [dict(r) for r in reversed(rows)]
+        return {"items": turns}
+    finally:
+        conn.close()
 
 
 @router.post("/admin/campaigns/{campaign_id}/regenerate-summary")
@@ -2278,3 +2612,387 @@ def admin_slash_commands_put(
         return {"ok": True, "commands": out}
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from None
+
+
+@router.get("/admin/overview")
+def admin_overview(_: None = Depends(require_admin_token)):
+    """Dashboard overview: stat cards + recent audit log + recent game turns."""
+    path = ADMIN_SQLITE_PATH
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    try:
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+
+        users_total = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        campaigns_active = conn.execute(
+            "SELECT COUNT(*) FROM campaigns WHERE status = 'active'"
+        ).fetchone()[0]
+        turns_today = conn.execute(
+            "SELECT COUNT(*) FROM campaign_turns WHERE created_at >= ?", (today,)
+        ).fetchone()[0]
+        active_combats = conn.execute(
+            "SELECT COUNT(*) FROM active_combat WHERE status = 'active'"
+        ).fetchone()[0]
+
+        db_size_mb = round(os.path.getsize(path) / (1024 * 1024), 2) if os.path.isfile(path) else 0
+
+        from app.services.llm_admin_service import get_admin_llm_settings_snapshot
+        llm_snap = get_admin_llm_settings_snapshot()
+        llm_preset_name = (llm_snap.get("active_preset") or {}).get("name") or llm_snap.get("model") or "—"
+
+        audit_rows = conn.execute(
+            "SELECT table_name, row_key, operation, performed_at FROM admin_audit_log ORDER BY id DESC LIMIT 10"
+        ).fetchall()
+        recent_audit = [
+            {
+                "table_name": r["table_name"],
+                "row_key": r["row_key"],
+                "operation": r["operation"],
+                "performed_at": r["performed_at"],
+            }
+            for r in audit_rows
+        ]
+
+        turn_rows = conn.execute(
+            """
+            SELECT ct.id, c.title AS campaign_title, ct.user_text, ct.assistant_text, ct.created_at
+            FROM campaign_turns ct
+            JOIN campaigns c ON c.id = ct.campaign_id
+            ORDER BY ct.id DESC LIMIT 10
+            """
+        ).fetchall()
+        recent_turns = [
+            {
+                "id": r["id"],
+                "campaign_title": r["campaign_title"],
+                "user_text": (r["user_text"] or "")[:120],
+                "assistant_text": (r["assistant_text"] or "")[:120],
+                "created_at": r["created_at"],
+            }
+            for r in turn_rows
+        ]
+
+        return {
+            "users_total": users_total,
+            "campaigns_active": campaigns_active,
+            "turns_today": turns_today,
+            "active_combats": active_combats,
+            "db_size_mb": db_size_mb,
+            "llm_preset_name": llm_preset_name,
+            "recent_audit": recent_audit,
+            "recent_turns": recent_turns,
+        }
+    finally:
+        conn.close()
+
+
+# ── Campaign Designer ─────────────────────────────────────────────────────────
+
+_DESIGNER_SYSTEM = """Jesteś kreatywnym asystentem mistrza gry (GM) dla mrocznej fantasy RPG w języku polskim.
+Tworzysz krótkie, gotowe do użycia fragmenty kampanii: haki fabularne, opisy lokacji, szkice NPCów i opisy starć.
+
+ZASADY:
+- Pisz wyłącznie po polsku.
+- Zachowaj klimat mrocznej, średniowiecznej fantasy.
+- Odpowiedź ZAWSZE w formacie JSON:
+  {"title": "<krótki tytuł>", "content": "<treść 100-300 słów>"}
+- Tytuł: zwięzły, intrygujący (max 10 słów).
+- Treść: konkretna, gotowa do odczytania graczowi lub użycia przez GM.
+- Nie dodawaj żadnych wyjaśnień poza JSON-em."""
+
+_DESIGNER_TYPE_HINTS = {
+    "hook": "hak fabularny — tajemnicze zlecenie, plotka, zdarzenie wciągające gracza w przygodę",
+    "location": "opis lokacji — atmosfera, charakterystyczne detale, potencjalne zagrożenia i sekrety",
+    "npc": "szkic NPCa — imię, wygląd, motywacja, sekret, styl dialogu",
+    "encounter": "opis starcia — sytuacja, wrogowie, warunki terenu, możliwe rozwiązania inne niż walka",
+}
+
+
+@router.post("/admin/campaign-designer/generate")
+def campaign_designer_generate(
+    req: CampaignDesignerGenerateReq,
+    _: None = Depends(require_admin_token),
+):
+    hint = _DESIGNER_TYPE_HINTS.get(req.snippet_type, req.snippet_type)
+    messages = [
+        {"role": "system", "content": _DESIGNER_SYSTEM},
+        {"role": "user", "content": f"Typ: {hint}\n\nBrief od GM: {req.brief}"},
+    ]
+
+    # Build llm_config from requested preset (unmasked key), or use global active preset
+    llm_config = None
+    if req.preset_id is not None:
+        try:
+            preset = get_llm_preset(req.preset_id, mask_api_key=False)
+            llm_config = {
+                "provider": preset["provider"],
+                "base_url": preset["base_url"],
+                "model": preset["model"],
+                "api_key": preset.get("api_key") or "",
+            }
+        except KeyError:
+            raise HTTPException(status_code=404, detail="Preset not found") from None
+
+    try:
+        raw = generate_chat(messages=messages, llm_config=llm_config)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}") from e
+
+    title, content = None, None
+    try:
+        json_match = re.search(r'\{[^{}]*"title"[^{}]*"content"[^{}]*\}', raw, re.DOTALL)
+        if not json_match:
+            json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if json_match:
+            parsed = json.loads(json_match.group())
+            title = parsed.get("title", "").strip()
+            content = parsed.get("content", "").strip()
+    except Exception:
+        pass
+
+    if not title or not content:
+        content = raw.strip()
+        title = req.brief[:60].strip()
+
+    return {
+        "snippet_type": req.snippet_type,
+        "title": title,
+        "content": content,
+        "raw": raw,
+    }
+
+
+@router.get("/admin/campaign-designer/snippets")
+def campaign_designer_list_snippets(
+    snippet_type: str | None = Query(default=None),
+    _: None = Depends(require_admin_token),
+):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        if snippet_type:
+            rows = conn.execute(
+                "SELECT * FROM campaign_snippets WHERE is_active=1 AND snippet_type=? ORDER BY id DESC",
+                (snippet_type,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM campaign_snippets WHERE is_active=1 ORDER BY id DESC",
+            ).fetchall()
+        return {"items": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.post("/admin/campaign-designer/snippets")
+def campaign_designer_save_snippet(
+    req: CampaignDesignerSaveReq,
+    _: None = Depends(require_admin_token),
+):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = conn.execute(
+            "INSERT INTO campaign_snippets (snippet_type, title, content, tags) VALUES (?,?,?,?)",
+            (req.snippet_type, req.title, req.content, req.tags),
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT * FROM campaign_snippets WHERE id=?", (cur.lastrowid,)
+        ).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/campaign-designer/snippets/{snippet_id}")
+def campaign_designer_delete_snippet(
+    snippet_id: int,
+    _: None = Depends(require_admin_token),
+):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            "UPDATE campaign_snippets SET is_active=0 WHERE id=?", (snippet_id,)
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+# ── Hook Generator (multi-hook from text or PDF) ───────────────────────────────
+
+_HOOKS_SYSTEM = """Jesteś kreatywnym asystentem mistrza gry (GM) dla mrocznej fantasy RPG w języku polskim.
+Na podstawie podanego materiału źródłowego (opis, historia, fragment książki) wygeneruj DOKŁADNIE {count} oryginalnych haków fabularnych.
+
+ZASADY:
+- Pisz wyłącznie po polsku.
+- Każdy hak musi być unikalny i zaskakujący.
+- Zachowaj klimat mrocznej, średniowiecznej fantasy.
+- Odpowiedź WYŁĄCZNIE jako tablica JSON (bez żadnego tekstu przed ani po):
+[
+  {{"title": "Tytuł haka 1", "content": "Opis 50-150 słów. Konkretna sytuacja wciągająca gracza."}},
+  {{"title": "Tytuł haka 2", "content": "..."}},
+  ...
+]"""
+
+
+class HookGenerateReq(BaseModel):
+    source_text: str = Field(..., min_length=10, max_length=30000)
+    count: int = Field(default=4, ge=1, le=8)
+    preset_id: int | None = None
+
+
+def _build_llm_config_from_preset(preset_id: int | None) -> dict | None:
+    if preset_id is None:
+        return None
+    try:
+        preset = get_llm_preset(preset_id, mask_api_key=False)
+        return {
+            "provider": preset["provider"],
+            "base_url": preset["base_url"],
+            "model": preset["model"],
+            "api_key": preset.get("api_key") or "",
+        }
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Preset not found") from None
+
+
+@router.post("/admin/campaign-designer/extract-pdf")
+async def campaign_designer_extract_pdf(
+    file: UploadFile = File(...),
+    _: None = Depends(require_admin_token),
+):
+    """Extract text from an uploaded PDF or TXT file."""
+    content = await file.read()
+    filename = (file.filename or "").lower()
+
+    if filename.endswith(".pdf"):
+        try:
+            import io
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(content))
+            pages = []
+            for page in reader.pages:
+                t = page.extract_text()
+                if t:
+                    pages.append(t)
+            text = "\n\n".join(pages)
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"PDF parse error: {e}") from e
+    else:
+        # txt / md / other text
+        try:
+            text = content.decode("utf-8", errors="replace")
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"File decode error: {e}") from e
+
+    MAX_CHARS = 25000
+    truncated = len(text) > MAX_CHARS
+    return {
+        "text": text[:MAX_CHARS],
+        "total_chars": len(text),
+        "truncated": truncated,
+        "pages": len(reader.pages) if filename.endswith(".pdf") else None,
+    }
+
+
+@router.post("/admin/campaign-designer/generate-hooks")
+def campaign_designer_generate_hooks(
+    req: HookGenerateReq,
+    _: None = Depends(require_admin_token),
+):
+    """Generate multiple hook ideas from source text."""
+    system = _HOOKS_SYSTEM.replace("{count}", str(req.count))
+    messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": f"Materiał źródłowy:\n\n{req.source_text[:20000]}"},
+    ]
+    llm_config = _build_llm_config_from_preset(req.preset_id)
+
+    try:
+        raw = generate_chat(messages=messages, llm_config=llm_config)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}") from e
+
+    # Parse JSON array from response
+    hooks = []
+    try:
+        arr_match = re.search(r'\[.*\]', raw, re.DOTALL)
+        if arr_match:
+            parsed = json.loads(arr_match.group())
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if isinstance(item, dict) and item.get("title") and item.get("content"):
+                        hooks.append({
+                            "title": str(item["title"]).strip(),
+                            "content": str(item["content"]).strip(),
+                        })
+    except Exception:
+        pass
+
+    if not hooks:
+        # Fallback: wrap the entire raw response as one hook
+        hooks = [{"title": "Wygenerowany hak", "content": raw.strip()}]
+
+    return {"hooks": hooks, "raw": raw}
+
+
+# ── World AI generation (location / npc / enemy) ──────────────────────────────
+
+_WORLD_GEN_PROMPTS = {
+    "location": {
+        "system": """Jesteś asystentem mistrza gry. Generujesz opisy lokacji dla mrocznej fantasy RPG po polsku.
+Odpowiedź WYŁĄCZNIE jako JSON:
+{"key": "snake_case_klucz", "label": "Nazwa lokacji", "type": "sub", "description": "Opis 80-150 słów. Atmosfera, detale, zagrożenia, sekrety."}""",
+        "hint": "Lokacja do gry fantasy",
+    },
+    "npc": {
+        "system": """Jesteś asystentem mistrza gry. Generujesz postacie NPC dla mrocznej fantasy RPG po polsku.
+Odpowiedź WYŁĄCZNIE jako JSON:
+{"key": "snake_case_klucz", "label": "Imię i nazwisko", "npc_type": "neutral", "description": "Opis 60-120 słów. Wygląd, osobowość, motywacja, sekret.", "personality": ""}""",
+        "hint": "Postać NPC do gry fantasy",
+    },
+    "enemy": {
+        "system": """Jesteś asystentem mistrza gry. Generujesz wrogów dla mrocznej fantasy RPG po polsku.
+Odpowiedź WYŁĄCZNIE jako JSON:
+{"key": "snake_case_klucz", "label": "Nazwa wroga", "tier": "standard", "hp_base": 20, "ac_base": 12, "attack_bonus": 3, "damage_bonus": 1, "damage_die": "d6", "attacks_per_turn": 1, "damage_type": "physical", "xp_award": 30, "description": "Opis 40-80 słów. Wygląd, zachowanie, taktyka."}""",
+        "hint": "Wróg/przeciwnik do gry fantasy",
+    },
+}
+
+
+class WorldGenReq(BaseModel):
+    entity_type: Literal["location", "npc", "enemy"]
+    brief: str = Field(..., min_length=3, max_length=500)
+    preset_id: int | None = None
+
+
+@router.post("/admin/campaign-designer/generate-entity")
+def campaign_designer_generate_entity(
+    req: WorldGenReq,
+    _: None = Depends(require_admin_token),
+):
+    """Generate a location, NPC, or enemy entity for direct use in the World tab."""
+    cfg = _WORLD_GEN_PROMPTS[req.entity_type]
+    messages = [
+        {"role": "system", "content": cfg["system"]},
+        {"role": "user", "content": f"Brief: {req.brief}"},
+    ]
+    llm_config = _build_llm_config_from_preset(req.preset_id)
+
+    try:
+        raw = generate_chat(messages=messages, llm_config=llm_config)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM error: {e}") from e
+
+    try:
+        obj_match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if obj_match:
+            parsed = json.loads(obj_match.group())
+            return {"entity": parsed, "raw": raw}
+    except Exception:
+        pass
+
+    raise HTTPException(status_code=422, detail=f"LLM returned unparseable response: {raw[:200]}")

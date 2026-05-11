@@ -42,6 +42,7 @@ from app.api import (
 )
 from app.api.health import router as health_router
 from app.api.models import router as models_router
+from app.api.client_logs import router as client_logs_router
 from app.migrations_admin import run_admin_migrations
 from app.services.llm_admin_service import hydrate_runtime_from_stored_preset
 from app.routers.admin import router as admin_router
@@ -52,6 +53,8 @@ from app.routers.test_runner import router as test_runner_router
 from app.routers.locations import router as locations_router
 from app.routers.session_location import router as session_location_router
 from app.routers.admin_location import router as admin_location_router
+from app.routers.bg_images import router as bg_images_router
+from app.routers.admin_analytics import router as admin_analytics_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -264,18 +267,21 @@ app.include_router(npcs.router, prefix="/api")
 app.include_router(shop.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")
+app.include_router(client_logs_router, prefix="/api")
 # Keep non-prefixed character endpoints available for direct local calls
 # (e.g. /characters/{id}/sheet), while preserving /api/* routes.
 app.include_router(characters.router)
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(admin_analytics_router, prefix="/api")
 app.include_router(admin_cheat_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(locations_router, prefix="/api")
 app.include_router(session_location_router)
 app.include_router(admin_location_router)
 app.include_router(settings_router)
+app.include_router(bg_images_router, prefix="/api")
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")
     app.include_router(test_runner_router, prefix="/api")

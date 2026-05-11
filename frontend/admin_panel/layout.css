@@ -2431,3 +2431,103 @@ select[multiple] option:checked::before {
 .test-runner-log-step {
   color: var(--text);
 }
+
+/* ── Background image manager (ui_settings.js) ─────────────────────────── */
+.admin-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 8px 0;
+}
+
+.admin-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 24px 0;
+}
+
+.ui-bg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.ui-bg-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--card-bg, #1a1a1a);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ui-bg-card__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.ui-bg-card__desc {
+  font-size: 11px;
+  color: var(--text-muted, #888);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.ui-bg-card__preview {
+  height: 100px;
+  border-radius: 6px;
+  background: var(--border) center/cover no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.ui-bg-card__preview--loaded {
+  color: transparent;
+}
+
+.ui-bg-card__status {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.ui-bg-card__status--default {
+  background: rgba(255,255,255,0.05);
+  color: var(--muted);
+}
+
+.ui-bg-card__status--custom {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+}
+
+.ui-bg-card__btns {
+  display: flex;
+  gap: 8px;
+}
+
+.ui-bg-card__upload-btn {
+  flex: 1;
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.ui-bg-card__delete-btn {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.ui-bg-card__progress {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  animation: pulse 1s ease infinite;
+}

@@ -598,6 +598,21 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_game_config_xp_rewards_cat
     ON game_config_xp_rewards(category, sort_order, key)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS campaign_snippets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        snippet_type TEXT NOT NULL,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        tags TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        is_active INTEGER NOT NULL DEFAULT 1
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_campaign_snippets_type
+    ON campaign_snippets(snippet_type, is_active)
+    """,
 ]
 
 ADMIN_SEEDS = [

@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0908">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>AI-GM</title>
+  <link rel="stylesheet" href="./css/styles.css?v=tts-eq-2026-05-10">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- LOGIN SCREEN -->
+  <div id="login-screen" class="screen screen--active">
+    <div class="login">
+      <div class="login__logo">
+        <div class="login__icons">
+          <span class="login__icon">💀</span>
+          <span class="login__icon login__icon--main">📜</span>
+          <span class="login__icon">🔥</span>
+        </div>
+        <h1 class="login__title">AI-GM</h1>
+        <p class="login__subtitle">Mroczna kraina czeka na bohatera</p>
+      </div>
+
+      <form id="login-form" class="login__form">
+        <div class="form-field">
+          <label for="login-username">Login</label>
+          <input type="text" id="login-username" placeholder="Wprowadź login..." autocomplete="username">
+        </div>
+        <div class="form-field">
+          <label for="login-password">Hasło</label>
+          <input type="password" id="login-password" placeholder="Wprowadź hasło..." autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn--primary btn--full">
+          <span class="btn__icon">✨</span>
+          Zaloguj się
+        </button>
+      </form>
+
+      <footer class="login__footer">
+        <p class="login__quote">"W mroku świec, historie się rodzą..."</p>
+        <p class="login__version">v1.0.0</p>
+      </footer>
+    </div>
+  </div>
+
+  <!-- CAMPAIGNS SCREEN -->
+  <div id="campaigns-screen" class="screen">
+    <header class="header">
+      <div class="header__left">
+        <span class="header__icon">📜</span>
+      </div>
+      <div class="header__center">
+        <h1 class="header__title">Kampanie</h1>
+        <p class="header__subtitle" id="welcome-user">Witaj</p>
+      </div>
+      <button type="button" class="header__action" id="logout-btn" title="Wyloguj">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>
+    </header>
+
+    <main class="campaigns">
+      <button type="button" class="campaign-card campaign-card--new" id="new-campaign-btn">
+        <div class="campaign-card__icon">
+          <span>+</span>
+        </div>
+        <div class="campaign-card__content">
+          <h3>Nowa kampania</h3>
+          <p>Rozpocznij nową przygodę w mrocznych krainach</p>
+        </div>
+        <span class="campaign-card__arrow">›</span>
+      </button>
+
+      <div id="campaigns-list"></div>
+
+      <div id="campaigns-empty" class="empty-state">
+        <span class="empty-state__icon">📜</span>
+        <h3>Nie masz jeszcze żadnych kampanii</h3>
+        <p>Stwórz swoją pierwszą przygodę</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- NEW CAMPAIGN SCREEN -->
+  <div id="new-campaign-screen" class="screen">
+    <header class="header">
+      <button type="button" class="header__back" id="new-campaign-back">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="header__center">
+        <span class="header__icon">📜</span>
+        <h1 class="header__title">Nowa kampania</h1>
+      </div>
+      <div class="header__right"></div>
+    </header>
+
+    <main class="wizard-content">
+      <div class="wizard-hero">
+        <span class="wizard-hero__icon">✨</span>
+        <h2>Nazwa kampanii</h2>
+        <p>Nadaj nazwę swojej przygodzie. To będzie tytuł, pod którym zapiszesz swoje epickie historie w mrocznych krainach.</p>
+      </div>
+
+      <form id="new-campaign-form" class="wizard-form">
+        <div class="form-field">
+          <label for="campaign-name">Nazwa kampanii</label>
+          <input type="text" id="campaign-name" placeholder="np. Mroczne Ziemie, Klątwa Starego Lasu..." maxlength="50">
+          <span class="form-field__counter"><span id="campaign-name-count">0</span>/50 znaków</span>
+        </div>
+
+        <button type="submit" class="btn btn--primary btn--full">
+          <span class="btn__icon">✨</span>
+          Stwórz kampanię
+        </button>
+
+        <div class="suggestions">
+          <p class="suggestions__label">Przykładowe nazwy:</p>
+          <div class="suggestions__chips">
+            <button type="button" class="chip" data-value="Cienie Północy">Cienie Północy</button>
+            <button type="button" class="chip" data-value="Ostatni Bastion">Ostatni Bastion</button>
+            <button type="button" class="chip" data-value="Ruiny Starego Królestwa">Ruiny Starego Królestwa</button>
+          </div>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <!-- CHARACTER WIZARD SCREEN -->
+  <div id="character-wizard-screen" class="screen">
+    <header class="header">
+      <button type="button" class="header__back" id="wizard-back">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="header__center">
+        <span class="header__icon">📜</span>
+        <h1 class="header__title" id="wizard-title">Tożsamość bohatera</h1>
+        <p class="header__subtitle" id="wizard-step">Krok 1 z 4</p>
+      </div>
+      <div class="header__right"></div>
+    </header>
+
+    <main class="wizard-content" id="wizard-content">
+      <!-- Step content will be dynamically inserted -->
+    </main>
+
+    <footer class="wizard-footer">
+      <button type="button" class="btn btn--primary btn--full" id="wizard-next">
+        Dalej
+        <span class="btn__icon">›</span>
+      </button>
+      <button type="button" class="btn btn--secondary btn--full" id="wizard-prev" style="display:none;">
+        Wstecz
+      </button>
+    </footer>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="game-screen" class="screen">
+    <header class="header header--game">
+      <button type="button" class="header__avatar" id="open-sheet-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      </button>
+      <div class="header__center">
+        <h1 class="header__title" id="character-name-display">Bohater</h1>
+        <p class="header__subtitle" id="character-stats-display">Poziom 1 • 29/29 HP</p>
+        <div class="header-hp-bar">
+          <div class="header-hp-bar__fill" id="header-hp-bar-fill" style="width:100%"></div>
+        </div>
+      </div>
+      <button type="button" class="header__action" id="open-journal-btn" title="Dziennik podróżnika">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          <line x1="9" y1="7" x2="16" y2="7"/>
+          <line x1="9" y1="11" x2="16" y2="11"/>
+          <line x1="9" y1="15" x2="13" y2="15"/>
+        </svg>
+      </button>
+      <button type="button" class="header__action" id="open-settings-btn" title="Ustawienia">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Combat Banner (hidden when no combat) -->
+    <div id="combat-banner" class="combat-banner" hidden>
+      <div class="combat-banner__top">
+        <span class="combat-banner__round" id="combat-round">Runda 1</span>
+        <span class="combat-banner__turn" id="combat-turn-label">Twoja tura</span>
+      </div>
+      <div class="combat-banner__enemies" id="combat-enemies">
+        <!-- Enemy entries inserted here -->
+      </div>
+      <div class="combat-banner__msg" id="combat-msg" hidden></div>
+    </div>
+
+    <main class="chat" id="chat-container">
+      <div class="chat__messages" id="chat-messages">
+        <!-- Messages will be inserted here -->
+      </div>
+    </main>
+
+    <footer class="composer" id="composer">
+      <div class="composer__input-wrap">
+        <button type="button" class="composer__mic" id="stt-input-mic" title="Mikrofon (STT)" aria-pressed="false">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </button>
+        <input type="text" id="chat-input" class="composer__input" placeholder="Wpisz akcję lub /komenda...">
+        <div class="composer__tts-reading" id="tts-reading-overlay" hidden title="Dotknij, aby zatrzymać">
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <button type="button" class="composer__send" id="send-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+      <div class="composer__voice-status" id="voice-status" hidden></div>
+    </footer>
+
+    <!-- Combat composer (replaces normal composer during combat) -->
+    <footer id="combat-composer" class="combat-composer" hidden>
+      <button type="button" class="combat-btn combat-btn--attack" id="combat-attack-btn" data-clog="combat_attack_button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14.5 17.5L3 6V3h3l11.5 11.5"/>
+          <line x1="13" y1="19" x2="19" y2="13"/>
+          <line x1="16" y1="16" x2="20" y2="20"/>
+          <line x1="19" y1="21" x2="21" y2="19"/>
+        </svg>
+        <span>Atak</span>
+      </button>
+      <button type="button" class="combat-btn combat-btn--flee" id="combat-flee-btn" data-clog="combat_flee_button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M13 19l9-7-9-7v14z"/>
+          <path d="M2 19l9-7-9-7v14z"/>
+        </svg>
+        <span>Ucieczka</span>
+      </button>
+    </footer>
+
+    <!-- Character Sheet Panel -->
+    <div id="sheet-panel" class="sheet-panel">
+      <div class="sheet-panel__handle"></div>
+      <div class="sheet-panel__header">
+        <h2 id="sheet-character-name">Bohater</h2>
+        <div class="sheet-tabs">
+          <button type="button" class="sheet-tab sheet-tab--active" data-tab="stats">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+              <circle cx="12" cy="7" r="4"/>
+            </svg>
+          </button>
+          <button type="button" class="sheet-tab" data-tab="skills">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+          </button>
+          <button type="button" class="sheet-tab" data-tab="inventory">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+            </svg>
+          </button>
+          <button type="button" class="sheet-tab" data-tab="appearance">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="sheet-panel__content">
+        <!-- Stats Tab -->
+        <div id="tab-stats" class="sheet-tab-content sheet-tab-content--active">
+          <div class="stat-card stat-card--hp">
+            <span class="stat-card__label">PUNKTY ŻYCIA</span>
+            <span class="stat-card__value" id="sheet-hp">29 / 29</span>
+            <div class="stat-card__bar">
+              <div class="stat-card__bar-fill" id="sheet-hp-bar" style="width: 100%"></div>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <span class="stat-card__label">POZIOM</span>
+            <span class="stat-card__value" id="sheet-level">1</span>
+          </div>
+
+          <div class="stats-grid" id="sheet-stats">
+            <!-- Stats will be inserted here -->
+          </div>
+        </div>
+
+        <!-- Skills Tab -->
+        <div id="tab-skills" class="sheet-tab-content">
+          <h3 class="sheet-section-title">Umiejętności</h3>
+          <div class="skills-list" id="sheet-skills">
+            <!-- Skills will be inserted here -->
+          </div>
+        </div>
+
+        <!-- Inventory Tab — Adventurer's Pack -->
+        <div id="tab-inventory" class="sheet-tab-content">
+
+          <!-- Gold tally -->
+          <div class="inv-gold" id="sheet-gold">
+            <div class="inv-gold__icon" aria-hidden="true">G</div>
+            <div class="inv-gold__label">Złoto</div>
+            <div class="inv-gold__value">0</div>
+            <div class="inv-gold__unit">zł</div>
+          </div>
+
+          <!-- Equipment triptych -->
+          <div class="inv-section-label">
+            <span>Wyposażenie</span>
+          </div>
+          <div class="inv-slots" id="sheet-equip-slots"></div>
+
+          <!-- Backpack -->
+          <div class="inv-section-label">
+            <span>Plecak</span>
+            <span class="inv-section-label__count" id="inv-backpack-count">0</span>
+          </div>
+          <div class="inv-list" id="sheet-backpack"></div>
+
+          <!-- Story / lore items -->
+          <div class="inv-section-label inv-section-label--lore">
+            <span>Przedmioty fabularne</span>
+            <span class="inv-section-label__count" id="inv-lore-count">0</span>
+          </div>
+          <div class="inv-list inv-list--lore" id="sheet-lore"></div>
+
+        </div>
+
+        <!-- Appearance + History Tab (combined) -->
+        <div id="tab-appearance" class="sheet-tab-content">
+          <div class="sheet-lore-block">
+            <h3 class="sheet-section-title">Historia / Tło postaci</h3>
+            <p class="sheet-lore-text" id="sheet-backstory-text">—</p>
+          </div>
+          <div class="sheet-lore-block" id="sheet-appearance-block">
+            <h3 class="sheet-section-title">Wygląd</h3>
+            <p class="sheet-lore-text" id="sheet-appearance-text">—</p>
+          </div>
+          <div class="sheet-lore-block" id="sheet-personality-block">
+            <h3 class="sheet-section-title">Osobowość</h3>
+            <p class="sheet-lore-text" id="sheet-personality-text">—</p>
+          </div>
+          <div class="sheet-lore-block" id="sheet-flaw-block">
+            <h3 class="sheet-section-title">Wada</h3>
+            <p class="sheet-lore-text" id="sheet-flaw-text">—</p>
+          </div>
+          <div class="sheet-lore-block" id="sheet-bond-block">
+            <h3 class="sheet-section-title">Więź</h3>
+            <p class="sheet-lore-text" id="sheet-bond-text">—</p>
+          </div>
+        </div>
+
+      </div>
+
+      <p class="sheet-panel__hint">Przesuń palcem w lewo/prawo, aby zmienić zakładkę</p>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="settings-panel">
+      <div class="settings-panel__handle"></div>
+
+      <header class="settings-header">
+        <div class="settings-header__ornament"></div>
+        <h2 class="settings-header__title">Ustawienia</h2>
+        <div class="settings-header__ornament"></div>
+      </header>
+
+      <div class="settings-panel__content">
+
+        <!-- Appearance Section -->
+        <section class="settings-group settings-group--foldable" id="settings-group-font">
+          <header class="settings-group__header settings-group__header--toggle" data-fold="settings-fold-font">
+            <span class="settings-group__icon">✦</span>
+            <h3 class="settings-group__title">Wygląd tekstu</h3>
+            <span class="settings-group__chevron">›</span>
+          </header>
+
+          <div class="settings-fold" id="settings-fold-font" hidden>
+          <div class="settings-control">
+            <label class="settings-label" for="font-select">Krój pisma</label>
+            <div class="settings-select-wrap">
+              <select id="font-select" class="settings-select">
+                <option value="system">Domyślna systemowa</option>
+                <option value="serif">Georgia — klasyczna</option>
+                <option value="lora">Lora — elegancka</option>
+                <option value="playfair">Playfair — dramatyczna</option>
+                <option value="imfell">IM Fell — stary manuskrypt</option>
+                <option value="uncial">Uncial — celtycka</option>
+                <option value="cinzel">Cinzel — inskrypcja</option>
+              </select>
+              <span class="settings-select__arrow">▾</span>
+            </div>
+          </div>
+
+          <div class="settings-control">
+            <div class="settings-label-row">
+              <label class="settings-label" for="font-size">Rozmiar</label>
+              <output class="settings-value" id="font-size-value">16px</output>
+            </div>
+            <div class="settings-slider-wrap">
+              <span class="settings-slider__min">A</span>
+              <input type="range" id="font-size" class="settings-slider" min="12" max="24" value="16">
+              <span class="settings-slider__max">A</span>
+            </div>
+          </div>
+
+          <!-- Preview Parchment -->
+          <div class="settings-preview">
+            <div class="settings-preview__corner settings-preview__corner--tl"></div>
+            <div class="settings-preview__corner settings-preview__corner--tr"></div>
+            <div class="settings-preview__corner settings-preview__corner--bl"></div>
+            <div class="settings-preview__corner settings-preview__corner--br"></div>
+            <p class="settings-preview__text" id="settings-preview-text">
+              Mroczne cienie tańczą na ścianach lochu. Słyszysz odległe kroki...
+            </p>
+          </div>
+          </div><!-- end settings-fold-font -->
+        </section>
+
+        <!-- Bubble Metadata -->
+        <div class="settings-divider">
+          <span class="settings-divider__ornament">◆</span>
+        </div>
+
+        <section class="settings-group settings-group--foldable" id="settings-group-bubbles">
+          <header class="settings-group__header settings-group__header--toggle" data-fold="settings-fold-bubbles">
+            <span class="settings-group__icon">💬</span>
+            <h3 class="settings-group__title">Informacje w dymkach</h3>
+            <span class="settings-group__chevron">›</span>
+          </header>
+
+          <div class="settings-fold" id="settings-fold-bubbles" hidden>
+          <div class="settings-control settings-control--toggle">
+            <label class="settings-label settings-label--toggle" for="bubble-toggle-name">Wyświetl nazwę</label>
+            <label class="settings-toggle">
+              <input type="checkbox" id="bubble-toggle-name">
+              <span class="settings-toggle__track"></span>
+            </label>
+          </div>
+
+          <div class="settings-control settings-control--toggle">
+            <label class="settings-label settings-label--toggle" for="bubble-toggle-turn">Wyświetl numer tury</label>
+            <label class="settings-toggle">
+              <input type="checkbox" id="bubble-toggle-turn">
+              <span class="settings-toggle__track"></span>
+            </label>
+          </div>
+
+          <div class="settings-control settings-control--toggle">
+            <label class="settings-label settings-label--toggle" for="bubble-toggle-datetime">Wyświetl datę i godzinę</label>
+            <label class="settings-toggle">
+              <input type="checkbox" id="bubble-toggle-datetime">
+              <span class="settings-toggle__track"></span>
+            </label>
+          </div>
+          </div><!-- end settings-fold-bubbles -->
+        </section>
+
+        <!-- Voice Section -->
+        <div class="settings-divider">
+          <span class="settings-divider__ornament">◆</span>
+        </div>
+
+        <section class="settings-group settings-group--foldable" id="settings-group-voice">
+          <header class="settings-group__header settings-group__header--toggle" data-fold="settings-fold-voice">
+            <span class="settings-group__icon">🎙️</span>
+            <h3 class="settings-group__title">Głos</h3>
+            <span class="settings-group__chevron">›</span>
+          </header>
+
+          <div class="settings-fold" id="settings-fold-voice" hidden>
+            <div class="settings-control settings-control--toggle">
+              <label class="settings-label settings-label--toggle" for="tts-toggle">Czytaj narrację GM</label>
+              <label class="settings-toggle">
+                <input type="checkbox" id="tts-toggle">
+                <span class="settings-toggle__track"></span>
+              </label>
+            </div>
+            <div class="settings-control settings-control--toggle">
+              <label class="settings-label settings-label--toggle" for="stt-toggle">Mikrofon (STT)</label>
+              <label class="settings-toggle">
+                <input type="checkbox" id="stt-toggle">
+                <span class="settings-toggle__track"></span>
+              </label>
+            </div>
+            <p class="settings-hint" id="voice-settings-status">Sprawdzanie dostępności głosu...</p>
+          </div>
+        </section>
+
+        <!-- Navigation -->
+        <div class="settings-divider">
+          <span class="settings-divider__ornament">◆</span>
+        </div>
+
+        <section class="settings-group">
+          <button type="button" class="settings-nav-btn" id="go-to-campaigns-btn">
+            <span class="settings-nav-btn__icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+              </svg>
+            </span>
+            <span class="settings-nav-btn__text">Wybierz kampanię</span>
+            <span class="settings-nav-btn__arrow">›</span>
+          </button>
+        </section>
+
+        <!-- Admin Section (hidden by default) -->
+        <div class="settings-divider settings-divider--danger" id="admin-settings-divider" style="display: none;">
+          <span class="settings-divider__ornament">⚠</span>
+        </div>
+
+        <section class="settings-group settings-group--admin" id="admin-settings-section" style="display: none;">
+          <header class="settings-group__header">
+            <span class="settings-group__icon settings-group__icon--danger">☠</span>
+            <h3 class="settings-group__title settings-group__title--danger">Strefa admina</h3>
+          </header>
+
+          <!-- Service Status -->
+          <div class="service-status-row">
+            <div class="service-status-item">
+              <span class="service-dot" id="svc-dot-backend"></span>
+              <span class="service-dot-label">BACKEND</span>
+            </div>
+            <div class="service-status-item">
+              <span class="service-dot" id="svc-dot-llm"></span>
+              <span class="service-dot-label">LLM</span>
+            </div>
+            <div class="service-status-item">
+              <span class="service-dot" id="svc-dot-loki"></span>
+              <span class="service-dot-label">LOKI</span>
+            </div>
+          </div>
+
+          <!-- Debug toggle -->
+          <div class="settings-control settings-control--toggle" style="margin-bottom: var(--space-md);">
+            <label class="settings-label settings-label--toggle" for="debug-toggle">🐛 Pokaż debug pod wiadomościami GM</label>
+            <label class="settings-toggle">
+              <input type="checkbox" id="debug-toggle">
+              <span class="settings-toggle__track"></span>
+            </label>
+          </div>
+
+          <div class="settings-admin-actions">
+            <button type="button" class="settings-admin-btn" id="reset-campaign-btn">
+              <span class="settings-admin-btn__icon">↺</span>
+              <div class="settings-admin-btn__content">
+                <span class="settings-admin-btn__title">Reset kampanii</span>
+                <span class="settings-admin-btn__desc">Czyści historię czatu</span>
+              </div>
+            </button>
+
+            <button type="button" class="settings-admin-btn" id="reset-character-btn">
+              <span class="settings-admin-btn__icon">⟲</span>
+              <div class="settings-admin-btn__content">
+                <span class="settings-admin-btn__title">Reset postaci</span>
+                <span class="settings-admin-btn__desc">Przywraca stan początkowy</span>
+              </div>
+            </button>
+
+            <button type="button" class="settings-admin-btn settings-admin-btn--test" id="test-death-btn">
+              <span class="settings-admin-btn__icon">💀</span>
+              <div class="settings-admin-btn__content">
+                <span class="settings-admin-btn__title">Test: Śmierć</span>
+                <span class="settings-admin-btn__desc">Pokaż ekran śmierci</span>
+              </div>
+            </button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- Journal Panel -->
+    <div id="journal-panel" class="journal-panel">
+      <div class="journal-panel__handle"></div>
+
+      <header class="settings-header">
+        <div class="settings-header__ornament"></div>
+        <h2 class="settings-header__title">Dziennik podróżnika</h2>
+        <div class="settings-header__ornament"></div>
+      </header>
+
+      <div class="journal-panel__content">
+        <div id="journal-loading" class="journal-loading" style="display:none;">
+          <span class="journal-loading__dot"></span>
+          <span class="journal-loading__dot"></span>
+          <span class="journal-loading__dot"></span>
+        </div>
+
+        <div id="journal-empty" class="journal-empty" style="display:none;">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+          <p>Jeszcze brak zapisów w dzienniku.<br>Podsumowanie pojawi się po kilku turach.</p>
+        </div>
+
+        <div id="journal-body" class="journal-body" style="display:none;"></div>
+
+        <div id="journal-banner" class="journal-banner" style="display:none;"></div>
+
+        <div class="journal-actions">
+          <button type="button" class="journal-regen-btn" id="journal-regen-btn" title="Wygeneruj nowe podsumowanie (tylko właściciel)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+            Odśwież podsumowanie
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overlay for panels -->
+    <div id="panel-overlay" class="panel-overlay"></div>
+
+    <!-- Death Screen Overlay -->
+    <div id="death-screen" class="death-screen" hidden>
+      <div class="death-embers">
+        <div class="ember"></div>
+        <div class="ember"></div>
+        <div class="ember"></div>
+        <div class="ember"></div>
+        <div class="ember"></div>
+        <div class="ember"></div>
+        <div class="ember"></div>
+        <div class="ember"></div>
+        <div class="ember"></div>
+        <div class="ember"></div>
+        <div class="ember"></div>
+        <div class="ember"></div>
+      </div>
+      <div class="death-vignette"></div>
+      <div class="death-content">
+        <div class="death-skull">
+          <svg viewBox="0 0 64 64" fill="currentColor">
+            <path d="M32 4C18.7 4 8 14.7 8 28c0 8.4 4.3 15.8 10.8 20.1V56c0 2.2 1.8 4 4 4h2v-4h-2v-6.3l-1.4-.9C15.3 44.5 12 36.7 12 28c0-11 9-20 20-20s20 9 20 20c0 8.7-3.3 16.5-9.4 20.8l-1.4.9V56h-2v4h2c2.2 0 4-1.8 4-4v-7.9C51.7 43.8 56 36.4 56 28c0-13.3-10.7-24-24-24z"/>
+            <circle cx="22" cy="28" r="6"/>
+            <circle cx="42" cy="28" r="6"/>
+            <path d="M26 44h2v6h-2zM30 44h4v6h-4zM36 44h2v6h-2z"/>
+          </svg>
+          <div class="death-skull__glow"></div>
+        </div>
+        <div class="death-text">
+          <p class="death-subtitle">Twój bohater</p>
+          <h1 class="death-title">poległ...</h1>
+          <p class="death-name" id="death-character-name">Bohater</p>
+        </div>
+        <p class="death-epitaph">Ciemność pochłonęła kolejną duszę...</p>
+        <div class="death-actions">
+          <button type="button" class="death-btn death-btn--resurrect" id="resurrect-btn">
+            <span class="death-btn__icon">✦</span>
+            Wskrześ bohatera
+          </button>
+          <button type="button" class="death-btn death-btn--return" id="death-return-btn">
+            Powrót do kampanii
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Combat End Overlay -->
+  <div id="combat-end-overlay" class="combat-end-overlay" hidden>
+    <div class="combat-end-inner">
+      <div class="combat-end-icon" id="combat-end-icon">⚔️</div>
+      <h2 class="combat-end-title" id="combat-end-title">Zwycięstwo!</h2>
+      <div class="combat-end-loot" id="combat-end-loot"></div>
+      <button type="button" class="combat-end-btn" id="combat-end-btn">Kontynuuj</button>
+    </div>
+  </div>
+
+  <!-- Combat Loot Popup -->
+  <div id="combat-loot-overlay" class="combat-end-overlay" hidden>
+    <div class="combat-end-inner">
+      <h2 class="combat-end-title">Łupy</h2>
+      <div id="combat-loot-list" class="combat-loot-list"></div>
+      <button type="button" class="combat-end-btn" id="combat-loot-claim-btn">Weź łupy</button>
+      <button type="button" class="combat-end-btn combat-end-btn--secondary" id="combat-loot-skip-btn">Pomiń</button>
+    </div>
+  </div>
+
+  <script src="./js/clog.js?v=combat-v35"></script>
+  <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
+  <script src="./js/app.js?v=tts-eq-overlay-2026-05-10"></script>
+</body>
+</html>
