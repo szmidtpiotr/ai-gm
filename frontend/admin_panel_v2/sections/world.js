@@ -42,6 +42,7 @@ const LOC_TYPES = [
 
 const TABS = ["locations", "npcs", "enemies"];
 const _rendered = new Set();
+let _aiTrigger = null;  // updated by each tab render; called by the bubble
 
 export async function init(panel) {
   panel.innerHTML = `
@@ -57,6 +58,15 @@ export async function init(panel) {
     </div>`;
 
   _rendered.clear();
+  _aiTrigger = null;
+
+  // Floating AI bubble
+  const aiBubble = document.createElement("button");
+  aiBubble.className = "ai-bubble-btn";
+  aiBubble.title = "Generuj z AI";
+  aiBubble.textContent = "✨";
+  aiBubble.addEventListener("click", () => { if (_aiTrigger) _aiTrigger(); });
+  panel.appendChild(aiBubble);
 
   panel.querySelectorAll(".subtab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -65,6 +75,7 @@ export async function init(panel) {
       btn.classList.add("active");
       const tab = btn.dataset.tab;
       panel.querySelector(`.subtab-panel[data-tab="${tab}"]`).classList.add("active");
+      _aiTrigger = null;  // will be set by the render function
       _activateTab(panel, tab);
     });
   });
@@ -180,11 +191,7 @@ async function _renderLocations(container) {
   const addBtn = document.createElement("button");
   addBtn.className = "primary-btn";
   addBtn.textContent = "+ " + LABELS.addLocation;
-  const aiBtn = document.createElement("button");
-  aiBtn.className = "secondary-btn";
-  aiBtn.textContent = "✨ Generuj z AI";
   toolbar.appendChild(addBtn);
-  toolbar.appendChild(aiBtn);
   container.appendChild(toolbar);
 
   const tableHost = document.createElement("div");
@@ -258,11 +265,11 @@ async function _renderLocations(container) {
   };
 
   addBtn.addEventListener("click", () => _openLocationModal(null, locations, load));
-  aiBtn.addEventListener("click", () => _openAiGenerateModal({
+  _aiTrigger = () => _openAiGenerateModal({
     entityType: "location",
     title: "Generuj lokację z AI",
     onFill: (e) => _openLocationModal(e, locations, load),
-  }));
+  });
 
   pendingWrap.addEventListener("toggle", async () => {
     if (!pendingWrap.open) return;
@@ -377,11 +384,7 @@ async function _renderNpcs(container) {
   const addBtn = document.createElement("button");
   addBtn.className = "primary-btn";
   addBtn.textContent = "+ " + LABELS.addNpc;
-  const aiBtn = document.createElement("button");
-  aiBtn.className = "secondary-btn";
-  aiBtn.textContent = "✨ Generuj z AI";
   toolbar.appendChild(addBtn);
-  toolbar.appendChild(aiBtn);
   container.appendChild(toolbar);
 
   const tableHost = document.createElement("div");
@@ -449,11 +452,11 @@ async function _renderNpcs(container) {
   };
 
   addBtn.addEventListener("click", () => _openNpcModal(null, load));
-  aiBtn.addEventListener("click", () => _openAiGenerateModal({
+  _aiTrigger = () => _openAiGenerateModal({
     entityType: "npc",
     title: "Generuj NPC z AI",
     onFill: (e) => _openNpcModal(e, load),
-  }));
+  });
   await load();
 }
 
@@ -562,11 +565,7 @@ async function _renderEnemies(container) {
   const addBtn = document.createElement("button");
   addBtn.className = "primary-btn";
   addBtn.textContent = "+ " + LABELS.addEnemy;
-  const aiBtn = document.createElement("button");
-  aiBtn.className = "secondary-btn";
-  aiBtn.textContent = "✨ Generuj z AI";
   toolbar.appendChild(addBtn);
-  toolbar.appendChild(aiBtn);
   container.appendChild(toolbar);
 
   const tableHost = document.createElement("div");
@@ -653,11 +652,11 @@ async function _renderEnemies(container) {
   };
 
   addBtn.addEventListener("click", () => _openEnemyModal(null, load));
-  aiBtn.addEventListener("click", () => _openAiGenerateModal({
+  _aiTrigger = () => _openAiGenerateModal({
     entityType: "enemy",
     title: "Generuj wroga z AI",
     onFill: (e) => _openEnemyModal(e, load),
-  }));
+  });
   await load();
 }
 
