@@ -2605,6 +2605,50 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   line-height: 1.6;
 }
 
+/* ── Column resize handle ── */
+.col-resize-handle {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 2;
+}
+.col-resize-handle:hover,
+.col-resize-handle:active { background: var(--accent-gold-dim); }
+
+/* ── Cell popup tooltip ── */
+.admin-cell-tooltip {
+  position: fixed;
+  display: none;
+  z-index: 9999;
+  background: var(--bg-elevated);
+  border: 1px solid var(--accent-gold-dim);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  pointer-events: none;
+  max-width: 380px;
+}
+.has-cell-popup {
+  cursor: help;
+  text-decoration: underline dotted var(--text-muted);
+  text-underline-offset: 3px;
+}
+
+/* Prevent text overflow in fixed-layout table */
+.admin-table td, .admin-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-table td.admin-table-cell-edit-host,
+.admin-table .admin-table-cell-edit-host { overflow: visible; }
+
 /* ── Voice section ── */
 .voice-layout {
   display: flex;

@@ -250,15 +250,14 @@ async function _renderWeapons(container, panel) {
       { key: "aoe",           label: "AoE",             editable: true },
       { key: "value_gp",      label: "Cena (gp)",       type: "number",  editable: true },
       { key: "weight_kg",     label: "Waga (kg)",       type: "number",  editable: true },
-      { key: "description",   label: "Opis",            editable: true,
-        formatDisplay: (r) => r.description ? r.description.substring(0, 60) + (r.description.length > 60 ? "…" : "") : "" },
-      { key: "note",          label: "Notatka",         editable: true,
-        formatDisplay: (r) => r.note ? r.note.substring(0, 60) + (r.note.length > 60 ? "…" : "") : "" },
+      { key: "description",   label: "Opis",            editable: true, popup: true },
+      { key: "note",          label: "Notatka",         editable: true, popup: true },
       { key: "is_active",     label: LABELS.isActive,   type: "boolean", editable: true },
       { key: "locked_at",     label: LABELS.locked,     type: "locked",  editable: false },
     ];
 
     renderTable(tableHost, cols, rows, {
+      tableId:           "weapons",
       showTextSearch:    true,
       searchPlaceholder: "Szukaj broni…",
       async onEdit(row, colKey, newVal, { force } = {}) {

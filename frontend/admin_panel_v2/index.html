@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin 2.0</title>
-    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=20" />
+    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=21" />
   </head>
   <body>
     <div class="admin-shell" id="admin-shell">
@@ -278,6 +278,11 @@
         } catch { /* non-critical */ }
       }
 
+      /* ── active section persistence ── */
+      const SECTION_KEY = "aigm_admin2_section";
+      function saveSection(key) { try { localStorage.setItem(SECTION_KEY, key); } catch {} }
+      function loadSection()    { try { return localStorage.getItem(SECTION_KEY) || "overview"; } catch { return "overview"; } }
+
       /* ── sidebar collapse ── */
       const COLLAPSED_KEY = "aigm_admin2_collapsed";
       function applySidebarCollapse(collapsed) {
@@ -361,7 +366,7 @@
         const moduleMap = {
           "overview":  "/admin_panel_v2/sections/dashboard.js?v=2",
           "mechanics": "/admin_panel_v2/sections/mechanics.js?v=8",
-          "content":   "/admin_panel_v2/sections/content.js?v=11",
+          "content":   "/admin_panel_v2/sections/content.js?v=12",
           "world":     "/admin_panel_v2/sections/world.js?v=7",
           "prompts":   "/admin_panel_v2/sections/prompts.js?v=1",
           "players":   "/admin_panel_v2/sections/players.js?v=2",
@@ -404,6 +409,7 @@
             navBtns.forEach(b => b.classList.toggle("active", b === btn));
             panels.forEach(p => p.classList.toggle("active", p.dataset.section === key));
             topbarTitle.textContent = SECTIONS[key]?.label || key;
+            saveSection(key);
             void initSection(key);
           });
         });
@@ -428,7 +434,15 @@
 
         if (connected) {
           await fetchLlmPreset();
-          void initSection("overview");
+          const lastSection = loadSection();
+          const navBtns = Array.from(document.querySelectorAll("#sidebar-nav button[data-section]"));
+          const panels  = Array.from(document.querySelectorAll(".section-panel"));
+          const targetBtn = navBtns.find(b => b.dataset.section === lastSection) || navBtns[0];
+          const targetKey = targetBtn?.dataset.section || "overview";
+          navBtns.forEach(b => b.classList.toggle("active", b === targetBtn));
+          panels.forEach(p => p.classList.toggle("active", p.dataset.section === targetKey));
+          topbarTitle.textContent = SECTIONS[targetKey]?.label || targetKey;
+          void initSection(targetKey);
         }
 
         connectBtn?.addEventListener("click", handleConnect);
