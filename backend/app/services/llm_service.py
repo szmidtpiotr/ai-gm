@@ -319,7 +319,10 @@ class OpenAIDriver:
 
 
 def _resolve_model(model: str | None, effective: dict[str, str]) -> str:
-    return (model or "").strip() or effective["model"]
+    v = (model or "").strip()
+    if v and v != "default":
+        return v
+    return effective["model"]
 
 
 def _raise_llm_http_error(exc: httpx.HTTPStatusError) -> None:

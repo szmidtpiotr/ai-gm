@@ -1,0 +1,861 @@
+(function () {
+  const LS_TTS = "voice_tts_enabled";
+  const LS_STT = "voice_stt_enabled";
+  const LS_STT_AUTOSEND = "voice_stt_autosend";
+
+  let available = true;
+  let mediaRecorder = null;
+  let mediaStream = null;
+  let ws = null;
+  let sttCloseTimer = null;
+  let sttResultPending = false;
+  let sttMonitorCtx = null;
+  let sttMonitorSource = null;
+  let sttMonitorAnalyser = null;
+  let sttMonitorRaf = 0;
+  let sttLastVoiceAt = 0;
+  let sttAutoStopping = false;
+  let sttNoiseFloorRms = 0;
+  let sttHadSpeech = false;
+  let sttStartedAt = 0;
+  let sttDebugLastRenderAt = 0;
+  let audio = null;
+  let audioCtx = null;
+  let activeBufferSource = null;
+  let pendingSpeakText = "";
+  let isPlaying = false;
+  let suppressAudioError = false;
+  let audioUnlocked = false;
+  let ttsEnabled = true;
+  let sttEnabled = false;
+  let initialized = false;
+  const STT_SILENCE_AUTO_STOP_MS = 2000;
+  const STT_START_GRACE_MS = 800;
+  const STT_MIN_VOICE_RMS_THRESHOLD = 0.01;
+  const STT_NOISE_MULTIPLIER = 2.0;
+
+  function _el(id) {
+    return document.getElementById(id);
+  }
+
+  function _status(text) {
+    const statusEl = _el("voice-status");
+    if (statusEl) statusEl.textContent = text || "";
+    window.dispatchEvent(
+      new CustomEvent("voice-debug-status", {
+        detail: { text: String(text || "") },
+      })
+    );
+  }
+
+  function _isIosWebkit() {
+    const ua = navigator.userAgent || "";
+    const platform = navigator.platform || "";
+    const touchMac = platform === "MacIntel" && navigator.maxTouchPoints > 1;
+    return /iPad|iPhone|iPod/i.test(ua) || touchMac;
+  }
+
+  function _ensureAudioContext() {
+    if (audioCtx) return audioCtx;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    audioCtx = new Ctx();
+    return audioCtx;
+  }
+
+  function _ensureAudio() {
+    if (audio) return audio;
+    audio = new Audio();
+    audio.preload = "auto";
+    audio.setAttribute("playsinline", "true");
+    audio.onended = () => {
+      isPlaying = false;
+      _emitPlayingState(false);
+      stopPlayback();
+    };
+    audio.onerror = () => {
+      if (!isPlaying) return;
+      if (suppressAudioError) return;
+      _status("Blad odtwarzania audio");
+      stopPlayback();
+    };
+    return audio;
+  }
+
+  // Safari requires play() to be called in the *synchronous* frame of the gesture handler.
+  // Using async/await before play() can break Safari's autoplay policy even if play() is
+  // technically before the first explicit await. This function is intentionally NOT async.
+  function _unlockAudioFromGesture() {
+    const a = _ensureAudio();
+    a.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YQAAAAA=";
+    a.volume = 0;
+    const playPromise = a.play(); // synchronous — no await before this line
+
+    const ctx = _ensureAudioContext();
+    if (ctx && ctx.state !== "running") {
+      ctx.resume().catch(() => {});
+    }
+
+    const onUnlocked = () => {
+      try { a.pause(); a.currentTime = 0; } catch (_e) {}
+      a.volume = 1;
+      _unlocking = false;
+      audioUnlocked = true;
+      _status("TTS gotowe");
+      setTimeout(() => _status(""), 2500);
+      if (pendingSpeakText) {
+        const queued = pendingSpeakText;
+        pendingSpeakText = "";
+        speakGMText(queued);
+      }
+    };
+
+    const onFailed = (err) => {
+      a.volume = 1;
+      _unlocking = false;
+      audioUnlocked = false;
+      _status(`Autoplay blocked (${err?.name || "error"}) — dotknij ekranu`);
+      console.warn("voice tts unlock failed", err);
+    };
+
+    if (playPromise && typeof playPromise.then === "function") {
+      playPromise.then(onUnlocked).catch(onFailed);
+    } else {
+      // Old Safari: play() returns undefined — assume success
+      onUnlocked();
+    }
+  }
+
+  let _unlocking = false;
+
+  function _tryUnlockFromUserGesture() {
+    if (!ttsEnabled || audioUnlocked || _unlocking) return;
+    _unlocking = true;
+    _unlockAudioFromGesture();
+  }
+
+  function _isHttps() {
+    return window.location.protocol === "https:";
+  }
+
+  function _voiceEndpoint(path) {
+    return path.startsWith("/") ? path : `/${path}`;
+  }
+
+  function _wsUrl() {
+    const proto = _isHttps() ? "wss" : "ws";
+    return `${proto}://${window.location.host}/voice/stt`;
+  }
+
+  function _getFlag(key, defaultValue) {
+    const val = localStorage.getItem(key);
+    if (val === null) return defaultValue;
+    return val === "1";
+  }
+
+  function _setFlag(key, value) {
+    localStorage.setItem(key, value ? "1" : "0");
+  }
+
+  function _emitTtsState() {
+    window.dispatchEvent(
+      new CustomEvent("voice-tts-state", {
+        detail: { enabled: !!ttsEnabled },
+      })
+    );
+  }
+
+  function _emitPlayingState(playing) {
+    window.dispatchEvent(new CustomEvent("voice-tts-playing", { detail: { playing: !!playing } }));
+  }
+
+  function sanitizeGMText(text) {
+    return String(text || "")
+      .split("\n")
+      .filter((line) => !/^\s*\[ROLL:[^\]]*\]\s*$/i.test(line))
+      .join("\n")
+      .trim();
+  }
+
+  function _syncUiState() {
+    const ttsBtn = _el("tts-toggle");
+    const sttBtn = _el("stt-toggle");
+    const sttInputMicBtn = _el("stt-input-mic");
+    if (!ttsBtn) return;
+
+    if (ttsBtn.type === "checkbox") {
+      ttsBtn.checked = ttsEnabled;
+    } else {
+      ttsBtn.classList.toggle("is-active", ttsEnabled);
+      ttsBtn.setAttribute("aria-pressed", ttsEnabled ? "true" : "false");
+    }
+    if (sttBtn) {
+      if (sttBtn.type === "checkbox") {
+        sttBtn.checked = sttEnabled;
+      } else {
+        sttBtn.classList.toggle("is-active", sttEnabled);
+        sttBtn.setAttribute("aria-pressed", sttEnabled ? "true" : "false");
+      }
+    }
+    if (sttInputMicBtn) {
+      sttInputMicBtn.classList.toggle("is-active", sttEnabled);
+      sttInputMicBtn.setAttribute("aria-pressed", sttEnabled ? "true" : "false");
+    }
+  }
+
+  function setAvailability(enabled, reason = "") {
+    available = !!enabled;
+    const ttsBtn = _el("tts-toggle");
+    const sttBtn = _el("stt-toggle");
+    const sttInputMicBtn = _el("stt-input-mic");
+    if (ttsBtn) ttsBtn.disabled = !available;
+    if (sttBtn) sttBtn.disabled = !available;
+    if (sttInputMicBtn) sttInputMicBtn.disabled = !available;
+    _status(available ? "" : reason || "Glos chwilowo niedostepny");
+  }
+
+  function stopPlayback() {
+    if (activeBufferSource) {
+      try {
+        activeBufferSource.stop();
+      } catch (_e) {
+        // noop
+      }
+      activeBufferSource = null;
+    }
+    if (!audio) return;
+    try {
+      suppressAudioError = true;
+      isPlaying = false;
+      _emitPlayingState(false);
+      audio.pause();
+      if (audio.dataset.blobUrl && audio.dataset.blobUrl.startsWith("blob:")) {
+        // Defer revocation — don't set audio.src="" which resets activation state
+        // on mobile browsers, breaking subsequent play() calls without a gesture.
+        const stale = audio.dataset.blobUrl;
+        setTimeout(() => URL.revokeObjectURL(stale), 1000);
+        audio.dataset.blobUrl = "";
+      }
+    } catch (_e) {
+      // noop
+    } finally {
+      // Keep the element; we only reset its source.
+      setTimeout(() => {
+        suppressAudioError = false;
+      }, 0);
+    }
+  }
+
+  async function speakGMText(text) {
+    if (!available || !ttsEnabled) return;
+    let raw = String(text || "");
+    if (typeof window.stripTtsNoiseFromText === "function") {
+      raw = window.stripTtsNoiseFromText(raw);
+    }
+    const clean = sanitizeGMText(raw);
+    if (!clean) return;
+
+    try {
+      if (!audioUnlocked) {
+        pendingSpeakText = clean;
+        _status("Tapnij ekran, aby odblokowac audio");
+        return;
+      }
+      pendingSpeakText = "";
+      stopPlayback();
+      const url = `${_voiceEndpoint("/voice/tts")}?text=${encodeURIComponent(clean)}`;
+      const resp = await fetch(url, { method: "GET" });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+      if (_isIosWebkit()) {
+        const ctx = _ensureAudioContext();
+        if (ctx) {
+          if (ctx.state !== "running") await ctx.resume();
+          const arr = await resp.arrayBuffer();
+          const decoded = await ctx.decodeAudioData(arr.slice(0));
+          const src = ctx.createBufferSource();
+          src.buffer = decoded;
+          src.connect(ctx.destination);
+          src.onended = () => {
+            isPlaying = false;
+            _emitPlayingState(false);
+            activeBufferSource = null;
+          };
+          activeBufferSource = src;
+          _status("Czytam...");
+          isPlaying = true;
+          _emitPlayingState(true);
+          src.start(0);
+          return;
+        }
+      }
+
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = _ensureAudio();
+      a.muted = false;
+      a.volume = 1;
+      a.dataset.blobUrl = blobUrl;
+      a.src = blobUrl;
+      _status("Czytam...");
+      isPlaying = true;
+      _emitPlayingState(true);
+      await a.play();
+    } catch (err) {
+      isPlaying = false;
+      _emitPlayingState(false);
+      _status(`Brak odtwarzania (${err?.name || "error"})`);
+      console.warn("voice tts failed", err);
+      // Fallback: some browsers keep stale/blocked media element state.
+      if (audio) {
+        try {
+          audio.muted = false;
+          audio.volume = 1;
+          audio.load();
+        } catch (_e) {
+          // noop
+        }
+      }
+    }
+  }
+
+  function setTtsEnabled(next, opts = {}) {
+    const enabled = !!next;
+    const unlock = !!opts.unlock;
+    ttsEnabled = enabled;
+    _setFlag(LS_TTS, enabled);
+    _syncUiState();
+    _emitTtsState();
+    if (enabled && unlock) {
+      _status("TTS wlaczone");
+      _tryUnlockFromUserGesture();
+    } else if (enabled) {
+      _status("TTS wlaczone");
+    }
+    if (!enabled) {
+      stopPlayback();
+      _status("TTS wylaczone");
+    }
+  }
+
+  function isTtsEnabled() {
+    return !!ttsEnabled;
+  }
+
+  function getPlaybackState() {
+    return { isPlaying: !!isPlaying };
+  }
+
+  async function speakNowFromUserGesture(text) {
+    if (!ttsEnabled) {
+      setTtsEnabled(true, { unlock: true });
+    } else if (!audioUnlocked) {
+      _tryUnlockFromUserGesture();
+    }
+    // speakGMText queues text when audioUnlocked=false; the unlock callback drains it
+    await speakGMText(text);
+  }
+
+  function _clearSttCloseTimer() {
+    if (sttCloseTimer) {
+      clearTimeout(sttCloseTimer);
+      sttCloseTimer = null;
+    }
+  }
+
+  function _scheduleSttWebSocketClose() {
+    const socket = ws;
+    if (!socket) return;
+    _clearSttCloseTimer();
+    // Serwer dokleja bufory ~2 s po ostatnim chunku — nie zamykamy socketa od razu
+    // i nie zerujemy `ws`, żeby `onmessage` mogło przyjąć JSON z transkrypcją.
+    sttCloseTimer = setTimeout(() => {
+      sttCloseTimer = null;
+      try {
+        if (socket.readyState === WebSocket.OPEN) {
+          socket.close();
+        }
+      } catch (_e) {
+        /* noop */
+      }
+      if (ws === socket) ws = null;
+      if (sttResultPending) {
+        sttResultPending = false;
+        _status("STT timeout: brak odpowiedzi");
+      }
+    }, 30000);
+  }
+
+  function _stopSttLevelMonitor() {
+    if (sttMonitorRaf) {
+      cancelAnimationFrame(sttMonitorRaf);
+      sttMonitorRaf = 0;
+    }
+    if (sttMonitorSource) {
+      try {
+        sttMonitorSource.disconnect();
+      } catch (_e) {
+        // noop
+      }
+      sttMonitorSource = null;
+    }
+    if (sttMonitorAnalyser) {
+      try {
+        sttMonitorAnalyser.disconnect();
+      } catch (_e) {
+        // noop
+      }
+      sttMonitorAnalyser = null;
+    }
+    if (sttMonitorCtx) {
+      try {
+        sttMonitorCtx.close();
+      } catch (_e) {
+        // noop
+      }
+      sttMonitorCtx = null;
+    }
+  }
+
+  function _startSttLevelMonitor(stream) {
+    _stopSttLevelMonitor();
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    try {
+      sttMonitorCtx = new Ctx();
+      sttMonitorAnalyser = sttMonitorCtx.createAnalyser();
+      sttMonitorAnalyser.fftSize = 2048;
+      sttMonitorSource = sttMonitorCtx.createMediaStreamSource(stream);
+      sttMonitorSource.connect(sttMonitorAnalyser);
+      sttLastVoiceAt = Date.now();
+      sttStartedAt = sttLastVoiceAt;
+      sttAutoStopping = false;
+      sttNoiseFloorRms = 0.004;
+      sttHadSpeech = false;
+      sttDebugLastRenderAt = 0;
+
+      const buf = new Float32Array(sttMonitorAnalyser.fftSize);
+      const tick = () => {
+        if (!mediaStream || !sttEnabled || sttAutoStopping) return;
+        sttMonitorAnalyser.getFloatTimeDomainData(buf);
+        let sum = 0;
+        for (let i = 0; i < buf.length; i += 1) {
+          sum += buf[i] * buf[i];
+        }
+        const rms = Math.sqrt(sum / buf.length);
+        const now = Date.now();
+        const adaptiveThreshold = Math.max(
+          STT_MIN_VOICE_RMS_THRESHOLD,
+          sttNoiseFloorRms * STT_NOISE_MULTIPLIER
+        );
+        const isSpeech = rms >= adaptiveThreshold;
+        if (isSpeech) {
+          sttLastVoiceAt = now;
+          sttHadSpeech = true;
+        } else {
+          // Aktualizujemy tło tylko gdy nie wykryto mowy.
+          sttNoiseFloorRms = sttNoiseFloorRms * 0.92 + rms * 0.08;
+        }
+
+        const silenceMs = now - sttLastVoiceAt;
+        // Auto-stop po ciszy i po wykryciu mowy (bez hard-stopu czasu nagrania).
+        const gracePassed = now - sttStartedAt >= STT_START_GRACE_MS;
+        if (gracePassed && sttHadSpeech && !isSpeech && silenceMs >= STT_SILENCE_AUTO_STOP_MS) {
+          sttAutoStopping = true;
+          _status("Cisza 2s - zatrzymuje nasluch");
+          sttEnabled = false;
+          _setFlag(LS_STT, false);
+          _syncUiState();
+          stopRecording();
+          return;
+        }
+
+        // Live debug poziomu audio (co ~200 ms), żeby stroić próg ciszy.
+        if (now - sttDebugLastRenderAt >= 200) {
+          sttDebugLastRenderAt = now;
+          const lvl = (rms * 100).toFixed(1);
+          const thr = (adaptiveThreshold * 100).toFixed(1);
+          const silenceS = (silenceMs / 1000).toFixed(1);
+          if (sttHadSpeech) {
+            _status(`Nagrywanie... lvl:${lvl} thr:${thr} cisza:${silenceS}s`);
+          } else {
+            _status(`Nagrywanie... lvl:${lvl} thr:${thr} czekam na glos`);
+          }
+        }
+        sttMonitorRaf = requestAnimationFrame(tick);
+      };
+      sttMonitorRaf = requestAnimationFrame(tick);
+    } catch (err) {
+      console.warn("voice stt monitor start failed", err);
+      _stopSttLevelMonitor();
+    }
+  }
+
+  function _attachSttWebSocketHandlers() {
+    if (!ws) return;
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data || "{}");
+        const sock = ws;
+        if (payload && payload.error) {
+          sttResultPending = false;
+          _status(`STT error: ${payload.error}`);
+          _clearSttCloseTimer();
+          setTimeout(() => {
+            try {
+              sock?.close();
+            } catch (_e) {
+              /* noop */
+            }
+            if (ws === sock) ws = null;
+          }, 200);
+          return;
+        }
+        if (payload && Object.prototype.hasOwnProperty.call(payload, "text")) {
+          sttResultPending = false;
+          const txt = String(payload.text || "").trim();
+          if (txt) {
+            handleTranscript(txt);
+            _status("Transkrypcja gotowa");
+          } else {
+            _status("STT: pusty wynik (glosniej / inny mikrofon?)");
+          }
+          _clearSttCloseTimer();
+          setTimeout(() => {
+            try {
+              sock?.close();
+            } catch (_e) {
+              /* noop */
+            }
+            if (ws === sock) ws = null;
+          }, 200);
+        }
+      } catch (err) {
+        console.warn("voice stt parse failed", err);
+      }
+    };
+  }
+
+  function handleTranscript(text) {
+    const inputEl = _el("chat-input") || _el("input");
+    if (!inputEl) return;
+    const value = String(text || "").trim();
+    if (!value) return;
+    inputEl.value = value;
+    inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+    inputEl.focus();
+  }
+
+  async function startRecording() {
+    if (!available) return;
+    const sttBtn = _el("stt-toggle");
+    const sttInputMicBtn = _el("stt-input-mic");
+    if (!sttEnabled) return;
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      setAvailability(false, "STT niedostepne w tej przegladarce");
+      return;
+    }
+    if (mediaRecorder) return;
+
+    try {
+      _status("Lacze STT...");
+      _clearSttCloseTimer();
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        try {
+          ws.close();
+        } catch (_e) {
+          /* noop */
+        }
+        ws = null;
+      }
+
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      _startSttLevelMonitor(mediaStream);
+      try {
+        const _bc = new (window.AudioContext || window.webkitAudioContext)();
+        const _bo = _bc.createOscillator();
+        const _bg = _bc.createGain();
+        _bo.connect(_bg); _bg.connect(_bc.destination);
+        _bo.type = 'sine'; _bo.frequency.value = 880;
+        _bg.gain.setValueAtTime(0.15, _bc.currentTime);
+        _bg.gain.exponentialRampToValueAtTime(0.001, _bc.currentTime + 0.12);
+        _bo.start(); _bo.stop(_bc.currentTime + 0.12);
+        _bo.onended = () => _bc.close();
+      } catch (_) {}
+
+      await new Promise((resolve, reject) => {
+        const socket = new WebSocket(_wsUrl());
+        ws = socket;
+        const failTimer = setTimeout(() => reject(new Error("STT websocket timeout")), 15000);
+        let opened = false;
+        socket.onopen = () => {
+          opened = true;
+          clearTimeout(failTimer);
+          resolve();
+        };
+        socket.onclose = () => {
+          if (ws === socket) ws = null;
+          if (sttResultPending) {
+            sttResultPending = false;
+            _status("STT zakonczone bez wyniku");
+          }
+        };
+        socket.onerror = () => {
+          clearTimeout(failTimer);
+          if (!opened) reject(new Error("STT websocket error"));
+          else {
+            _status("Blad websocket STT");
+            stopRecording();
+          }
+        };
+        _attachSttWebSocketHandlers();
+      });
+
+      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
+      let mime;
+      for (let i = 0; i < mimeCandidates.length; i += 1) {
+        if (MediaRecorder.isTypeSupported(mimeCandidates[i])) {
+          mime = mimeCandidates[i];
+          break;
+        }
+      }
+      mediaRecorder = mime
+        ? new MediaRecorder(mediaStream, { mimeType: mime })
+        : new MediaRecorder(mediaStream);
+      mediaRecorder.ondataavailable = (evt) => {
+        if (evt.data && evt.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(evt.data);
+        }
+      };
+      mediaRecorder.start(350);
+      sttBtn?.classList.add("is-recording");
+      sttInputMicBtn?.classList.add("is-recording");
+      _status("Nagrywanie...");
+    } catch (err) {
+      console.warn("voice stt start failed", err);
+      const msg = String(err?.message || err).includes("websocket")
+        ? "Brak polaczenia STT (websocket)"
+        : "Brak dostepu do mikrofonu";
+      sttResultPending = false;
+      _stopSttLevelMonitor();
+      _clearSttCloseTimer();
+      if (mediaRecorder) {
+        try {
+          mediaRecorder.stop();
+        } catch (_e) {
+          /* noop */
+        }
+      }
+      mediaRecorder = null;
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((t) => t.stop());
+      }
+      mediaStream = null;
+      try {
+        ws?.close();
+      } catch (_e) {
+        /* noop */
+      }
+      ws = null;
+      sttBtn?.classList.remove("is-recording");
+      sttInputMicBtn?.classList.remove("is-recording");
+      sttEnabled = false;
+      _setFlag(LS_STT, false);
+      _syncUiState();
+      _status(msg);
+    }
+  }
+
+  function stopRecording() {
+    const sttBtn = _el("stt-toggle");
+    const sttInputMicBtn = _el("stt-input-mic");
+    if (!sttEnabled) sttResultPending = false;
+
+    _stopSttLevelMonitor();
+    sttAutoStopping = false;
+
+    const afterRecorderFullyStopped = () => {
+      try {
+        const _bc = new (window.AudioContext || window.webkitAudioContext)();
+        const _bo = _bc.createOscillator();
+        const _bg = _bc.createGain();
+        _bo.connect(_bg); _bg.connect(_bc.destination);
+        _bo.type = 'sine'; _bo.frequency.value = 660;
+        _bg.gain.setValueAtTime(0.15, _bc.currentTime);
+        _bg.gain.exponentialRampToValueAtTime(0.001, _bc.currentTime + 0.12);
+        _bo.start(); _bo.stop(_bc.currentTime + 0.12);
+        _bo.onended = () => _bc.close();
+      } catch (_) {}
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((t) => t.stop());
+        mediaStream = null;
+      }
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          // Tell backend to flush buffered chunks immediately instead of waiting for timeout.
+          ws.send("__end__");
+        } catch (_e) {
+          /* noop */
+        }
+      }
+      sttResultPending = true;
+      _scheduleSttWebSocketClose();
+      sttBtn?.classList.remove("is-recording");
+      sttInputMicBtn?.classList.remove("is-recording");
+      const waitingForResult =
+        !!ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING);
+      if (waitingForResult) {
+        _status("Przetwarzanie STT...");
+      } else if (sttEnabled) {
+        _status("Gotowe");
+      } else {
+        _status("Nasluch wylaczony");
+      }
+    };
+
+    if (mediaRecorder) {
+      const rec = mediaRecorder;
+      mediaRecorder = null;
+      try {
+        if (rec.state !== "inactive") {
+          rec.addEventListener(
+            "stop",
+            () => {
+              afterRecorderFullyStopped();
+            },
+            { once: true }
+          );
+          rec.requestData?.();
+          rec.stop();
+          return;
+        }
+      } catch (_e) {
+        /* fall through — zatrzymaj jak resztę bez nagrywania */
+      }
+    }
+
+    afterRecorderFullyStopped();
+  }
+
+  function _patchAddMessageHook() {
+    if (window.__voiceAddMessagePatched) return;
+    const original = window.addMessage;
+    if (typeof original !== "function") return;
+
+    window.addMessage = function patchedAddMessage(message, ...rest) {
+      const result = original.call(this, message, ...rest);
+      try {
+        const role = String(message?.role || "").toLowerCase();
+        const text = message?.content || message?.text || "";
+        if (
+          (role === "assistant" || role === "gm") &&
+          typeof window.shouldAutoSpeakTtsForBubble === "function" &&
+          window.shouldAutoSpeakTtsForBubble(message)
+        ) {
+          speakGMText(text);
+        }
+      } catch (err) {
+        console.warn("voice hook failed", err);
+      }
+      return result;
+    };
+    window.__voiceAddMessagePatched = true;
+  }
+
+  async function init() {
+    if (initialized) return;
+    initialized = true;
+
+    const ttsBtn = _el("tts-toggle");
+    const sttBtn = _el("stt-toggle");
+    const sttInputMicBtn = _el("stt-input-mic");
+    if (!ttsBtn || (!_el("chat-input") && !_el("input"))) return;
+
+    if (localStorage.getItem(LS_TTS) === null) _setFlag(LS_TTS, true);
+    if (localStorage.getItem(LS_STT) === null) _setFlag(LS_STT, false);
+    if (localStorage.getItem(LS_STT_AUTOSEND) === null) _setFlag(LS_STT_AUTOSEND, true);
+    ttsEnabled = _getFlag(LS_TTS, true);
+    sttEnabled = _getFlag(LS_STT, false);
+    _syncUiState();
+
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      if (sttBtn) sttBtn.disabled = true;
+      if (sttInputMicBtn) sttInputMicBtn.disabled = true;
+      _status("STT niedostepne w tej przegladarce");
+    }
+
+    // For checkbox toggles the `change` event in app.js drives setTtsEnabled/toggleStt.
+    // For button toggles we register the click listener here.
+    if (ttsBtn.type !== "checkbox") {
+      ttsBtn.addEventListener("click", () => {
+        const next = !ttsEnabled;
+        setTtsEnabled(next, { unlock: next });
+      });
+    }
+
+    const onAnyGesture = () => {
+      _tryUnlockFromUserGesture();
+    };
+    document.addEventListener("touchend", onAnyGesture, { passive: true });
+    document.addEventListener("pointerup", onAnyGesture, { passive: true });
+    document.addEventListener("click", onAnyGesture, { passive: true });
+
+    const toggleStt = async () => {
+      const next = !sttEnabled;
+      sttEnabled = next;
+      _setFlag(LS_STT, next);
+      _syncUiState();
+      if (next) {
+        // Stop any TTS before recording to avoid simultaneous playback + mic
+        stopPlayback();
+        pendingSpeakText = "";
+        await startRecording();
+      } else {
+        stopRecording();
+      }
+    };
+    if (sttBtn && sttBtn.type !== "checkbox") {
+      sttBtn.addEventListener("click", () => {
+        void toggleStt();
+      });
+    }
+    if (sttInputMicBtn) {
+      sttInputMicBtn.addEventListener("click", () => {
+        void toggleStt();
+      });
+    }
+
+    // Expose toggleStt so app.js checkbox change handler can call it.
+    window.__voiceToggleStt = toggleStt;
+
+    _patchAddMessageHook();
+
+    try {
+      const resp = await fetch(_voiceEndpoint("/voice/healthz"));
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      setAvailability(true);
+    } catch (_err) {
+      setAvailability(false, "Glos chwilowo niedostepny");
+    }
+  }
+
+  window.voiceUI = {
+    init,
+    speakGMText,
+    speakNowFromUserGesture,
+    stopPlayback,
+    startRecording,
+    stopRecording,
+    setAvailability,
+    setTtsEnabled,
+    unlockAudio: _tryUnlockFromUserGesture,
+    isTtsEnabled,
+    getPlaybackState,
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => window.voiceUI.init());
+  } else {
+    window.voiceUI.init();
+  }
+})();

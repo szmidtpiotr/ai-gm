@@ -430,7 +430,8 @@ input:disabled {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   align-self: stretch;
 }
 
@@ -445,7 +446,7 @@ input:disabled {
   flex-direction: column;
   gap: 12px;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
 }
 
 .combat-panel-slot {
@@ -934,18 +935,24 @@ pre.combat-roll-plain {
   position: absolute;
   right: 8px;
   bottom: 6px;
-  width: 24px;
-  min-height: 24px;
+  width: 36px;
+  min-height: 36px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: rgba(255, 253, 248, 0.85);
+  border: 1.5px solid var(--border);
+  background: rgba(255, 253, 248, 0.92);
   color: var(--assistant);
-  font-size: 12px;
+  font-size: 16px;
   padding: 0;
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+  cursor: pointer;
+}
+.gm-voice-btn:hover {
+  background: rgba(255, 248, 230, 1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
 }
 
 /*

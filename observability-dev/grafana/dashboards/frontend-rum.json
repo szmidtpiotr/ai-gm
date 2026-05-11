@@ -1,0 +1,289 @@
+{
+  "id": null,
+  "uid": "ai-gm-frontend-rum-dev",
+  "title": "AI GM - Frontend RUM (Mobile) [DEV]",
+  "description": "Real-user monitoring for the mobile-first frontend (/front/). Events arrive via POST /api/client-logs and are emitted as structured JSON by the backend with logger='client_rum'.",
+  "tags": ["ai-gm", "frontend", "rum", "mobile", "client"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "session",
+        "label": "Session",
+        "type": "textbox",
+        "query": ".*",
+        "current": { "text": ".*", "value": ".*" }
+      },
+      {
+        "name": "campaign",
+        "label": "Campaign ID",
+        "type": "textbox",
+        "query": ".*",
+        "current": { "text": ".*", "value": ".*" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Sesje (ostatnia godzina)",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "count(count by (session_id) (count_over_time({service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" [$__range])))",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Eventy / min",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "sum(rate({service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" [1m]) * 60)",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1 } },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Błędy klienta (1h)",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | level=\"error\" [$__range]))",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Walki rozpoczęte",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | client_event=\"combat_started\" [$__range]))",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Kliknięcia Atak / Ucieczka",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | client_event=~\"combat_attack_invoked|combat_flee_invoked\" [$__range]))",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Akcje zablokowane",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | client_event=~\"combat_attack_blocked|combat_flee_blocked\" [$__range]))",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Eventy klienta wg typu (rate / 1m)",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "sum by (client_event) (rate({service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | session_id=~\"$session\" [1m]))",
+          "refId": "A",
+          "legendFormat": "{{client_event}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 1 } },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "right", "showLegend": true }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 }
+    },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Pełny strumień walki (combat_*) — ostatnie 100",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "{service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | client_event=~\"combat_.+\" | session_id=~\"$session\" | campaign_id=~\"$campaign\" | line_format \"{{.client_event}}\"",
+          "refId": "A",
+          "queryType": "range",
+          "maxLines": 100
+        }
+      ],
+      "options": { "showHeader": true },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 12 }
+    },
+    {
+      "id": 30,
+      "type": "logs",
+      "title": "Wszystkie błędy klienta (level=error)",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "{service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | level=\"error\" | session_id=~\"$session\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 24 }
+    },
+    {
+      "id": 40,
+      "type": "logs",
+      "title": "Pełny strumień RUM (filtr po sesji/kampanii)",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "{service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | session_id=~\"$session\" | campaign_id=~\"$campaign\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "showLabels": false,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none"
+      },
+      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 36 }
+    },
+    {
+      "id": 50,
+      "type": "table",
+      "title": "Stan przycisków walki (ostatnie sesje)",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "{service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | client_event=\"combat_buttons_state\" | session_id=~\"$session\"",
+          "refId": "A",
+          "queryType": "range",
+          "maxLines": 50
+        }
+      ],
+      "options": { "showHeader": true },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 50 }
+    },
+    {
+      "id": 51,
+      "type": "table",
+      "title": "Render walki (current_turn, isPlayerTurn)",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "{service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | client_event=\"combat_render\" | session_id=~\"$session\"",
+          "refId": "A",
+          "queryType": "range",
+          "maxLines": 50
+        }
+      ],
+      "options": { "showHeader": true },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 50 }
+    },
+    {
+      "id": 60,
+      "type": "stat",
+      "title": "Rzuty kośćmi (1h)",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | client_event=\"dice_rolled\" [$__range]))",
+          "refId": "A",
+          "queryType": "instant"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 } },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 60 }
+    },
+    {
+      "id": 61,
+      "type": "table",
+      "title": "Rzuty kośćmi — ostatnie 50",
+      "datasource": { "type": "loki", "uid": "PD5A68A3BD6F8BA56" },
+      "targets": [
+        {
+          "expr": "{service=\"backend\", env=\"dev\"} | json | logger=\"client_rum\" | client_event=\"dice_rolled\" | session_id=~\"$session\"",
+          "refId": "A",
+          "queryType": "range",
+          "maxLines": 50
+        }
+      ],
+      "options": { "showHeader": true },
+      "gridPos": { "h": 10, "w": 18, "x": 6, "y": 60 }
+    }
+  ]
+}

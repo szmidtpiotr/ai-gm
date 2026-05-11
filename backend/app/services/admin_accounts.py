@@ -171,6 +171,24 @@ def create_account_admin(
         conn.close()
 
 
+def set_account_password(account_id: int, new_password: str) -> dict:
+    if not new_password or len(new_password) < 8:
+        raise ValueError("invalid_password")
+    pw_hash = bcrypt.hashpw(new_password.encode("utf-8"), bcrypt.gensalt()).decode("ascii")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        current = _get_user(conn, account_id)
+        if not current:
+            raise KeyError("not_found")
+        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (pw_hash, account_id))
+        _audit(conn, str(account_id), "PASSWORD_RESET", None, {"password_changed": True})
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
 def reset_account_sheet(account_id: int) -> dict:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row

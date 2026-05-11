@@ -1205,23 +1205,31 @@ def _sheet_current_hp(sheet: dict) -> int | None:
     return None
 
 
+def _clean_model_hint(m: str | None) -> str | None:
+    """Normalize model hints — treat 'default' sentinel as absent."""
+    v = (m or "").strip()
+    return v if v and v != "default" else None
+
+
 def resolve_model_name(
     requested_model: str | None,
     campaign_model: str | None,
     llm_config: dict[str, str] | None = None,
 ) -> str:
+    req = _clean_model_hint(requested_model)
+    cam = _clean_model_hint(campaign_model)
     effective = get_effective_config(llm_config)
     if effective["provider"] == "openai":
-        return (requested_model or campaign_model or effective["model"]).strip()
+        return (req or cam or effective["model"]).strip()
 
     health = get_health(llm_config)
     available = health.get("models") or []
     if not available:
-        return (requested_model or campaign_model or effective["model"]).strip()
-    if requested_model and requested_model in available:
-        return requested_model
-    if campaign_model and campaign_model in available:
-        return campaign_model
+        return (req or cam or effective["model"]).strip()
+    if req and req in available:
+        return req
+    if cam and cam in available:
+        return cam
     if effective["model"] in available:
         return effective["model"]
     return available[0]

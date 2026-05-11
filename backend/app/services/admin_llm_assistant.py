@@ -179,9 +179,13 @@ def build_admin_assistant_messages(
         f"Goal: {cfg['summary']}\n"
         "You must return valid JSON only, with this exact object shape:\n"
         '{\n'
-        '  "reply": "short helpful explanation for the admin",\n'
+        '  "reply": "krótkie wyjaśnienie po polsku dla admina",\n'
         '  "draft": { ... resource payload ... }\n'
         '}\n'
+        "LANGUAGE RULE (highest priority): This is a Polish-language dark fantasy RPG. "
+        "ALL user-visible text fields MUST be written in Polish. "
+        "This includes: `label`, `description`, `note`, `reply`, and any narrative text. "
+        "Technical identifiers (`key`, `linked_stat`, `weapon_type`, `tier`, etc.) stay in English snake_case.\n"
         "Rules:\n"
         f"{rules}\n"
         f"Preferred fields for this resource: {fields}.\n"

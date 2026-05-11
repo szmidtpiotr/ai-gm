@@ -46,3 +46,15 @@ observability-dev/grafana/data/
 voice-service/models/tts/*.onnx
 voice-service/models/tts/*.onnx.json
 voice-service/models/stt/
+
+# MCP server config (contains API keys)
+.mcp.json
+
+# Claude Code session data (settings may contain API keys)
+.claude/
+
+# Stray SQLite DB files at project root (data/ is the real mount)
+backend/ai_gm.db
+
+# Downloaded binaries
+*.tar.gz

@@ -855,6 +855,9 @@ window.sendMessage = async function () {
     return;
   }
 
+  // Unlock audio early so it's ready by the time GM responds.
+  try { window.voiceUI?.setTtsEnabled?.(true, { unlock: true }); } catch (_) {};
+
   // --- /admin intercept ---
   if (window.state?.playerIsAdmin === true) {
     const rawInput = (inputEl.value || "").trim();

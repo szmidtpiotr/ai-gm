@@ -30,6 +30,7 @@
 | 26  | **T26** | [x]    | **[S7a]** Backup bazy / artefaktu przed `import_catalog_snapshot` / `import_config` + polityka retencji kopii (`[04](04_decisions_log.md)`, `[00_brief.md](00_brief.md)`). Backend tworzy snapshot przed realnym importem, zapisuje go do `backups/imports/` i stosuje retencję: `30 dni`, minimum `3` starsze, max `10` plików. | T19       | import                  |
 | 27  | **T27** | [x]    | **[S18]** Centralny resolver LLM: jedna ścieżka wyboru providera/modelu/klucza dla narracji, panelu admina i testów; hierarchia Default vs Custom; dokumentacja `env`. Dodano `user_llm_settings.mode`, resolver default/custom w backendzie, poprawkę UI gracza/admina i test `test_phase9b_t27_llm_resolver.py`. | —         | [S18], `07` §12         |
 | 28  | **T28** | [ ]    | **[S20]** Asystent konwersacyjny **na legacy adminie**: API (draft rekordu / JSON z opisu) → walidacja → podgląd → zapis; integracja z `game_design.js` i kolejnymi zakładkami katalogu **[S15]**                                                                                                                                | T27, T17  | [S20], `07` §10         |
+| 28.5| **T28.5**| [x]   | **Mobile-first alternative frontend** (Figma v18-20): nowy klient `/front/` z CSS Grid/Flexbox, slide-up panels, dark theme (#1a1a2e, accent #c9a54a), tab-based character sheet; działa równolegle do legacy frontu                                                                                                            | —         | Figma designs           |
 | 29  | **T29** | [ ]    | **Frontend gracza (legacy):** UI do **wydawania XP na cechy** (endpointy **T21**) + wyświetlanie kosztów z `GET …/xp`                                                                                                                                                                                                            | T21       | —                       |
 | 30  | **T30** | [ ]    | **[S1b]** Konfrontacje / taktyka NPC: konkretne formuły w kodzie + testy; korzystanie z `skills_json` wroga po **T23** (lub częściowy zakres wcześniej)                                                                                                                                                                          | T23†      | `08` §2, `06`           |
 | 31  | **T31** | [ ]    | **AC / pancerze (MVP):** jawna reguła sumowania `ac_bonus` przy wielu źródłach (`[07` §4](07_extended_design_spec.md)) — implementacja + test                                                                                                                                                                                    | —         | [S2]                    |
@@ -75,6 +76,15 @@
 - **Pozostało przed pełnym DONE**
 - - Jeśli uznamy T28 za „cały Game Design”, do objęcia pozostają zakładki bez prostego create-flow (`stats`, `dc`, `archetypes`, część `npcs` / `locations` / `prompts`) albo jawna decyzja, że zakres T28 dotyczy tylko katalogów z tworzeniem rekordów.
 
+### T28.5 status (2026-05-08)
+- **DONE**
+- - Utworzono `frontend/front/` z mobile-first frontendem na podstawie Figma v18-20 (14 screenów w `frontend/front/img/`).
+- - `frontend/front/index.html` — pełna struktura HTML: ekrany login, campaigns, new-campaign, character-wizard, game; panel karty postaci z tabami (stats/skills/inventory); panel ustawień.
+- - `frontend/front/css/styles.css` (~800 linii) — design system z CSS variables; kolory dark theme (#1a1a2e, #252542, accent #c9a54a); komponenty: buttons, cards, form fields, chat bubbles (GM green, user blue), stat rows, skill rows; animacje paneli transform: translateY; breakpointy desktop 768px i 1024px.
+- - `frontend/front/js/app.js` — logika aplikacji: nawigacja ekranów, login/logout, CRUD kampanii, wizard postaci, chat messaging, toggle panelu karty postaci, panel ustawień; import konfiguracji z `../../js/config.js`, `state.js`, `utils.js`.
+- - `frontend/nginx.conf` — dodano location `/front/` z aliasem do `/usr/share/nginx/html/front/`.
+- - Dostępne pod `https://aigm-dev.studio-colorbox.com/front/` po rebuildzie kontenerów.
+
 ## 2. Świadomie poza tą kolejką (nie „do domknięcia teraz”)
 
 
@@ -111,6 +121,7 @@
 | T26 | `00_brief`, `04` [S7a]                               |
 | T27 | `07` §12; `08` [S18]                                 |
 | T28 | `07` §10–11; `08` [S20]; **legacy UI**               |
+| T28.5 | Figma designs v18-20; mobile-first parallel frontend |
 | T29 | Konsekwencja **T21** dla gracza (API już jest)       |
 | T30 | `08` §2 [S1b]; `06`                                  |
 | T31 | `07` §4                                              |
@@ -142,5 +153,6 @@
 | 2026-05-05 | **T22 DONE** — dodane pola `targeting`, `aoe_radius_m`, `magic_school` w `game_config_weapons`; walidacja API/admin + legacy UI; testy `test_phase9b_t22_weapon_targeting.py`.                                                                                                                                                             |
 | 2026-05-05 | **T24 DONE** — runtime warunków w walce obsługuje `periodic_save` i `block_action` na starcie tury; blokada omija LLM dla gracza i zatrzymuje atak wroga; testy `test_phase9b_t24_condition_runtime.py` + regresja `test_phase8_combat.py`; wymagany rebuild backendu DEV.                                                                 |
 | 2026-05-05 | **T24 follow-up DONE** — domknięty osobny blocker baseline po T24: `game_engine.build_narrative_messages()` obsługuje testowe `conn=None` / `MagicMock()` bez wejścia w ścieżki DB, a `format_roll_result_message()` znów wspiera starsze payloady bez `modifier`; baseline i test `test_game_engine_death.py` wróciły do zielonego stanu. |
+| 2026-05-08 | **T28.5 DONE** — Mobile-first alternative frontend (`frontend/front/`) based on Figma v18-20; HTML + CSS (~800 lines) + JS; nginx location `/front/`; dark theme, slide-up panels, tabbed character sheet.                                                                                                                                 |
 
 

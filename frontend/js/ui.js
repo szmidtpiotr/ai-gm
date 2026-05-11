@@ -1,3 +1,22 @@
+window.playGmNotificationSound = function () {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(660, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    osc.start(now);
+    osc.stop(now + 0.45);
+    osc.onended = () => ctx.close();
+  } catch (_) {}
+};
+
 window.getEls = function () {
   return {
     appTitleEl: document.getElementById('app-title'),
@@ -449,6 +468,10 @@ window.finalizeStreamingBubble = function (bubbleEl, fullText) {
       console.warn('voice stream tts failed', err);
     }
     window.decorateGmBubbleWithVoice(bubbleEl, displayText);
+  }
+
+  if (route === 'narrative') {
+    window.playGmNotificationSound();
   }
 
   window.scrollChatToBottom();
@@ -1235,13 +1258,9 @@ if (!window.__voiceDebugStatusListenerInstalled) {
 
 window.updateGmVoiceBadgeVisual = function (btn) {
   if (!btn) return;
-  const enabled = !!window.voiceUI?.isTtsEnabled?.();
-  btn.textContent = enabled ? "🔊" : "🔇";
-  btn.setAttribute("aria-label", enabled ? "Przeczytaj ponownie" : "Wlacz TTS i przeczytaj");
-  btn.setAttribute(
-    "title",
-    enabled ? "Przeczytaj ponownie te wiadomosc" : "TTS wylaczone - kliknij, aby wlaczyc i przeczytac"
-  );
+  btn.textContent = "🔊";
+  btn.setAttribute("aria-label", "Przeczytaj tę wiadomość");
+  btn.setAttribute("title", "Przeczytaj tę wiadomość na głos");
 };
 
 window.decorateGmBubbleWithVoice = function (wrap, text) {
@@ -1263,18 +1282,10 @@ window.decorateGmBubbleWithVoice = function (wrap, text) {
     e.preventDefault();
     e.stopPropagation();
     try {
-      const enabled = !!window.voiceUI?.isTtsEnabled?.();
-      if (enabled) {
-        await window.voiceUI?.setTtsEnabled?.(false);
-        window.voiceUI?.stopPlayback?.();
-      } else {
-        await window.voiceUI?.setTtsEnabled?.(true, { unlock: true });
-        await window.voiceUI?.speakNowFromUserGesture?.(btn.__voiceText || "");
-      }
+      await window.voiceUI?.speakNowFromUserGesture?.(btn.__voiceText || "");
     } catch (err) {
       console.warn("gm voice replay failed", err);
     }
-    window.updateGmVoiceBadgeVisual(btn);
   });
 
   wrap.appendChild(btn);
