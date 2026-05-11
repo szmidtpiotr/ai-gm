@@ -394,8 +394,7 @@ html, body {
 
 .admin-main {
   grid-area: main;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;           /* scroll lives in .section-panels now */
   background: var(--bg-base);
   display: flex;
   flex-direction: column;
@@ -403,8 +402,10 @@ html, body {
 
 .section-panels {
   flex: 1;
-  position: relative;
   min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
 }
 
 .section-panel {
@@ -418,7 +419,7 @@ html, body {
   display: block;
 }
 
-/* Full-height panels: prompts, content (with AI sidebar), players, system */
+/* Full-height panels occupy exactly the section-panels container height */
 .section-panel[data-section="prompts"].active,
 .section-panel[data-section="mechanics"].active,
 .section-panel[data-section="content"].active,
@@ -427,7 +428,7 @@ html, body {
   display: flex;
   flex-direction: column;
   padding: 0;
-  height: calc(100vh - var(--topbar-height));
+  height: 100%;
   overflow: hidden;
 }
 
@@ -470,12 +471,10 @@ html, body {
 
 /* Activity log */
 .activity-log-wrap {
-  position: sticky;
-  bottom: 0;
+  flex-shrink: 0;
   z-index: 100;
   background: var(--bg-surface);
   border-top: 1px solid var(--border);
-  flex-shrink: 0;
   box-shadow: 0 -2px 8px rgba(0,0,0,0.25);
 }
 
