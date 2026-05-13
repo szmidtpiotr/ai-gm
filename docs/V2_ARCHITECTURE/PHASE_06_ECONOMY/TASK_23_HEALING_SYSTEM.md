@@ -1,7 +1,7 @@
 # TASK 23 — Healing System
 
 **Phase:** 06 — Economy  
-**Status:** ❌ Not Started  
+**Status:** ✅ Done — commit `5fb1b9a` (2026-05-13)  
 **Related tasks:** TASK 20 (inventory/consumables), TASK 25 (XP/progression)
 
 ---

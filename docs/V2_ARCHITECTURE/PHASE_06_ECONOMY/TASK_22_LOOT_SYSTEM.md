@@ -1,7 +1,7 @@
 # TASK 22 — Loot System
 
 **Phase:** 06 — Economy  
-**Status:** ❌ Not Started  
+**Status:** ✅ Done — commit `5fb1b9a` (2026-05-13)  
 **Related tasks:** TASK 05 (combat), TASK 20 (inventory), TASK 23 (healing)
 
 ---
