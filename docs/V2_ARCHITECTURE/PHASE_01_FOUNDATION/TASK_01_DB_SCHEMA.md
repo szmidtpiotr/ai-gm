@@ -558,6 +558,9 @@ CREATE TABLE IF NOT EXISTS location_connections (
     requires_flag       TEXT DEFAULT NULL,
     is_bidirectional    INTEGER NOT NULL DEFAULT 1,
     is_active           INTEGER NOT NULL DEFAULT 1,
+    encounter_chance    REAL NOT NULL DEFAULT 0.1,
+    -- Admin-configurable per route. 0.0 = safe, 0.8 = almost certain encounter.
+    -- See 12_TRAVEL_SYSTEM.md for suggested defaults by danger_level.
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(from_location_key, to_location_key)
 );
@@ -618,6 +621,75 @@ CREATE TABLE IF NOT EXISTS character_campaign_history (
 
 CREATE INDEX IF NOT EXISTS idx_char_campaign_history
     ON character_campaign_history (character_id, completed_at);
+```
+
+### `game_sessions` — in-game clock
+
+```sql
+ALTER TABLE game_sessions ADD COLUMN ingame_hours INTEGER NOT NULL DEFAULT 9;
+-- Campaigns start at 09:00 (morning). Advances on: travel, short rest (+1h), long rest (+8h).
+-- Used by GM narrator for time-of-day context and by travel system for dungeon cooldown checks.
+-- See 12_TRAVEL_SYSTEM.md.
+```
+
+### `game_config_xp_awards`
+
+Admin-configurable XP award amounts. Mechanic Resolver reads from this table instead of hardcoded values. See `TASK_26_XP_CONFIG_AND_LOG.md`.
+
+```sql
+CREATE TABLE IF NOT EXISTS game_config_xp_awards (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    category    TEXT NOT NULL
+        CHECK(category IN ('combat','campaign','exploration','skills','narrative','session')),
+    source_key  TEXT UNIQUE NOT NULL,
+    label       TEXT NOT NULL,
+    description TEXT,
+    xp_amount   INTEGER NOT NULL DEFAULT 0,
+    is_active   INTEGER NOT NULL DEFAULT 1,
+    is_locked   INTEGER NOT NULL DEFAULT 0,
+    locked_at   TEXT DEFAULT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+Seed data in `TASK_26_XP_CONFIG_AND_LOG.md` — 24 rows covering all XP sources.
+
+### `character_quests`
+
+Tracks active and completed quests per hero per campaign. See `15_QUEST_SYSTEM.md`.
+
+```sql
+CREATE TABLE IF NOT EXISTS character_quests (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    character_id        INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    campaign_id         INTEGER NOT NULL REFERENCES campaigns(id),
+    quest_type          TEXT NOT NULL DEFAULT 'main'
+        CHECK(quest_type IN ('main','side')),
+    title               TEXT NOT NULL,
+    narrative           TEXT NOT NULL DEFAULT '',
+    status              TEXT NOT NULL DEFAULT 'active'
+        CHECK(status IN ('active','completed','failed')),
+    resolution          TEXT DEFAULT NULL,
+    resolution_narrative TEXT DEFAULT NULL,
+    created_turn        INTEGER,
+    completed_turn      INTEGER DEFAULT NULL,
+    created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_character_quests_active
+    ON character_quests (character_id, status, campaign_id);
+```
+
+### `character_xp_grants` — additional columns
+
+```sql
+-- Already exists. Add these columns for XP log tracing (TASK_26):
+ALTER TABLE character_xp_grants ADD COLUMN source_key TEXT DEFAULT NULL;
+ALTER TABLE character_xp_grants ADD COLUMN campaign_id INTEGER DEFAULT NULL;
+ALTER TABLE character_xp_grants ADD COLUMN turn_number INTEGER DEFAULT NULL;
+ALTER TABLE character_xp_grants ADD COLUMN detail TEXT DEFAULT NULL;
 ```
 
 ### `character_dungeon_runs`

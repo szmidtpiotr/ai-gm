@@ -4,6 +4,8 @@
 
 Players accumulate a lot of story. The `/mem` command lets them search their own campaign history. The "Historia" button generates a narrative summary. The GM uses session continuity context to stay consistent between sessions. The `/helpme` command provides hints without spoilers.
 
+**Journal panel expansion:** The existing `journal-panel` in the frontend gains a **"Misje"** tab alongside the existing "Historia" tab. Misje shows active quests (with LLM-generated journal-voice narrative) and completed quests (collapsed). Full quest system spec in `15_QUEST_SYSTEM.md`. This task handles the Historia tab; TASK_15 (Quest System) handles the Misje tab. Both live in the same panel.
+
 ---
 
 ## `/mem` — Semantic Search Over Campaign History

@@ -10,6 +10,10 @@
 
 Skill tests resolve all non-combat challenges: sneaking past guards, picking locks, persuading merchants, reading ancient runes. Two triggers exist — the narrator LLM may call for a test mid-prose, or the player may explicitly attempt a skilled action. Both paths converge on the same backend resolution logic.
 
+**[TRAP] tag extension:** This task also handles the `[TRAP:skill_key:dc:damage_dice:condition]` tag — a minimal extension that reuses skill test resolution. When detected: surface a roll popup, apply damage + condition on fail. No new system needed. See `16_REMAINING_DECISIONS.md` for full spec.
+
+Example: `[TRAP:perception:12:d6:leg_wound]` → Perception roll vs DC 12 → fail = 1d6 damage + LEG_WOUND condition.
+
 ---
 
 ## Trigger Paths
