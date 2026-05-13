@@ -1,7 +1,7 @@
 # TASK 11 — Turn Processing Pipeline
 
 **Phase:** 04 — Gameplay  
-**Status:** ❌ Not Started  
+**Status:** ✅ Done — commit `92e990f` (2026-05-13)  
 **File to modify:** `backend/app/services/game_engine.py`
 
 ---
