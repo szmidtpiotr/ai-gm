@@ -1,6 +1,6 @@
 # TASK 26 — XP Configuration Panel + XP Log
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done — commit `5fb1b9a` (2026-05-13)
 **Phase:** 06 — Economy
 **Depends on:** Task 25V2 (XP system design), Task 01 (DB Schema)
 **Unlocks:** Admin can tune XP economy without code changes; players can trace their earnings

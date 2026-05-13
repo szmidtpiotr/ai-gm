@@ -1,7 +1,7 @@
 # TASK 24 — Wound Labels
 
 **Phase:** 06 — Economy  
-**Status:** ❌ Not Started  
+**Status:** ✅ Done — commit `5fb1b9a` (2026-05-13)  
 **Related tasks:** TASK 11 (turn pipeline / context injector), TASK 23 (healing system)
 
 ---

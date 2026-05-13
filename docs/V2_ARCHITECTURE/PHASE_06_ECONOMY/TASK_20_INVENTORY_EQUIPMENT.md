@@ -1,7 +1,7 @@
 # TASK 20 — Inventory and Equipment
 
 **Phase:** 06 — Economy  
-**Status:** ❌ Not Started  
+**Status:** ✅ Done — commit `5fb1b9a` (2026-05-13)  
 **Related tasks:** TASK 21 (shop), TASK 22 (loot), TASK 23 (healing)
 
 ---

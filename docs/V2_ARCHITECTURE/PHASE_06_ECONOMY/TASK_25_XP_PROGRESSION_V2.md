@@ -1,7 +1,7 @@
 # TASK 25 (V2) — XP and Progression
 
 **Phase:** 06 — Economy
-**Status:** ❌ Not Started
+**Status:** ✅ Done — commit `5fb1b9a` (2026-05-13)
 **Related tasks:** TASK 11 (Turn Pipeline — Resolver grants XP), TASK 05 (HP/Mana formulas — magic tied to INT/WIS), TASK 42 (Persistent Hero — XP persists across campaigns)
 
 ---
