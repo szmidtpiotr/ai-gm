@@ -1,7 +1,18 @@
 # TASK 07 — Campaign Plan Generation
 
-Phase: 02 — Character
-Status: Spec
+**Status:** ✅ Done — commit `56a46d5` (2026-05-13)
+**Phase:** 02 — Character
+**New file:** `backend/app/services/campaign_plan_service.py`
+**Test file:** `backend/tests/test_campaign_plan_service.py` — 22 tests, all passing
+
+**Implementation Notes:**
+- `CampaignPlan` uses Pydantic v2 `.model_validate()` / `.model_dump()`
+- `engine_private` stored in separate `campaigns.engine_private_json` column (migration added)
+- `_store_plan()` gracefully falls back to storing full plan in `gm_plan_json` if column missing
+- `get_public_plan()` strips `engine_private` for player-facing endpoints
+- `finalize-sheet` detects V2 characters (has bonds/weaknesses) and routes to V2 generator; falls back to legacy for V1 characters
+- Ideas Bank seeds query (`campaign_ideas` table) — returns empty list gracefully if no approved seeds
+- `deviation_consequence` and `importance` fields on PlotNPC are validated via Literal types
 
 ---
 
