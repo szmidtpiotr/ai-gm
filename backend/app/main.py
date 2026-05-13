@@ -280,7 +280,6 @@ app.include_router(settings_router, prefix="/api")
 app.include_router(locations_router, prefix="/api")
 app.include_router(session_location_router)
 app.include_router(admin_location_router)
-app.include_router(settings_router)
 app.include_router(bg_images_router, prefix="/api")
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")
