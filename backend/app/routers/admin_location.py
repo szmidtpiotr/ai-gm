@@ -728,8 +728,8 @@ class LocationPositionPatch(BaseModel):
 class ConnectionCreate(BaseModel):
     from_key: str
     to_key: str
-    travel_time_minutes: int = 60
-    is_dangerous: bool = False
+    travel_hours: int = 1
+    danger_level: str = "normal"  # "normal" or "high"
     is_bidirectional: bool = True
 
 
@@ -761,7 +761,7 @@ async def get_connections(_: None = Depends(require_admin_token)):
     try:
         rows = conn.execute(
             "SELECT from_location_key as from_key, to_location_key as to_key, "
-            "travel_time_minutes, is_dangerous, is_bidirectional "
+            "travel_hours, danger_level, is_bidirectional "
             "FROM location_connections WHERE is_active = 1"
         ).fetchall()
         return {"connections": [dict(r) for r in rows]}
@@ -776,16 +776,16 @@ async def create_connection(body: ConnectionCreate, _: None = Depends(require_ad
     try:
         conn.execute(
             """INSERT OR REPLACE INTO location_connections
-               (from_location_key, to_location_key, travel_time_minutes, is_dangerous, is_bidirectional, is_active)
+               (from_location_key, to_location_key, travel_hours, danger_level, is_bidirectional, is_active)
                VALUES (?, ?, ?, ?, ?, 1)""",
-            (body.from_key, body.to_key, body.travel_time_minutes, body.is_dangerous, body.is_bidirectional),
+            (body.from_key, body.to_key, body.travel_hours, body.danger_level, body.is_bidirectional),
         )
         if body.is_bidirectional:
             conn.execute(
                 """INSERT OR REPLACE INTO location_connections
-                   (from_location_key, to_location_key, travel_time_minutes, is_dangerous, is_bidirectional, is_active)
+                   (from_location_key, to_location_key, travel_hours, danger_level, is_bidirectional, is_active)
                    VALUES (?, ?, ?, ?, ?, 1)""",
-                (body.to_key, body.from_key, body.travel_time_minutes, body.is_dangerous, body.is_bidirectional),
+                (body.to_key, body.from_key, body.travel_hours, body.danger_level, body.is_bidirectional),
             )
         conn.commit()
         return {"ok": True}

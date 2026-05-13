@@ -273,6 +273,7 @@ async function _renderWeapons(container, panel) {
 
     renderTable(tableHost, cols, rows, {
       tableId:           "weapons",
+      selectable:        true,
       showTextSearch:    true,
       searchPlaceholder: "Szukaj broni…",
       async onEdit(row, colKey, newVal, { force } = {}) {
@@ -504,6 +505,7 @@ async function _renderArmor(container, panel) {
 
     renderTable(tableHost, cols, rows, {
       tableId:        "armor",
+      selectable:     true,
       showTextSearch: true, searchPlaceholder: "Szukaj zbroi…",
       async onEdit(row, colKey, newVal, { force } = {}) {
         try {
@@ -553,6 +555,7 @@ async function _renderItems(container, panel) {
     ];
 
     renderTable(tableHost, cols, rows, {
+      selectable: true,
       showTextSearch: true, searchPlaceholder: "Szukaj przedmiotów…",
       async onEdit(row, colKey, newVal, { force } = {}) {
         try {
@@ -656,6 +659,7 @@ async function _renderConsumables(container, panel) {
     ];
 
     renderTable(tableHost, cols, rows, {
+      selectable: true,
       showTextSearch: true, searchPlaceholder: "Szukaj materiałów…",
       async onEdit(row, colKey, newVal, { force } = {}) {
         try {
