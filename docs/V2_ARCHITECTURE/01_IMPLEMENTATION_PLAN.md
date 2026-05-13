@@ -75,12 +75,12 @@
 
 | Task | File | Status | Notes |
 |------|------|--------|-------|
-| 14 | TASK_14_COMBAT_STATE_MACHINE | ❌ | Initiative, round flow, **range zones**, enemy auto-turn |
-| 15 | TASK_15_ENEMY_AI_RULES | ❌ | Behavior profiles in DB, rule-based enemy decisions |
-| 16 | TASK_16_FEAR_TERROR | ❌ | WIS save, FRIGHTENED/PANICKED/BREAK conditions |
-| 17 | TASK_17_CRITICAL_HITS | ❌ | Threshold + hit location table + lasting effects |
-| 18 | TASK_18_DEATH_SAVES | ❌ | Escalating DC 10/13/16/19, CON modifier, counter reset |
-| 19 | TASK_19_FLEE_MECHANIC | ❌ | Opposed DEX, loot abandoned, zone change |
+| 14 | TASK_14_COMBAT_STATE_MACHINE | ✅ | Initiative, round flow, **range zones**, enemy auto-turn |
+| 15 | TASK_15_ENEMY_AI_RULES | ✅ | Behavior profiles in DB, rule-based enemy decisions |
+| 16 | TASK_16_FEAR_TERROR | ✅ | WIS save, FRIGHTENED/PANICKED/BREAK conditions |
+| 17 | TASK_17_CRITICAL_HITS | ✅ | Threshold + hit location table + lasting effects |
+| 18 | TASK_18_DEATH_SAVES | ✅ | Escalating DC 10/13/16/19, CON modifier, counter reset |
+| 19 | TASK_19_FLEE_MECHANIC | ✅ | Opposed DEX, loot abandoned, zone change |
 
 ### Phase 06 — Economy
 > Depends on Phase 03 (locations for loot), Phase 05 (combat for loot/healing).

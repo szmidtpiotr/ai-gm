@@ -1,6 +1,6 @@
 # TASK 14: Combat State Machine
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done — commit `b22299d` (2026-05-13)
 
 ## Overview
 

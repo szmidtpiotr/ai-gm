@@ -1,6 +1,6 @@
 # TASK 16: Fear & Terror System
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done — commit `b22299d` (2026-05-13)
 
 ## Overview
 
