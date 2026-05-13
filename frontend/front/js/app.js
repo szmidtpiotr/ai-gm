@@ -872,12 +872,38 @@ function _renderStep3(c) {
 }
 
 // Step 4 — Identity review (LLM-generated)
+const BOND_TYPES   = ['person','place','object','ideal'];
+const WEAKNESS_TYPES = ['fear','flaw','addiction','trauma'];
+const BOND_TYPE_LABELS     = {person:'Osoba',place:'Miejsce',object:'Przedmiot',ideal:'Ideał'};
+const WEAKNESS_TYPE_LABELS = {fear:'Strach',flaw:'Wada',addiction:'Nałóg',trauma:'Trauma'};
+
+function _typeSelect(id, options, labels, current) {
+    return `<select id="${id}" class="wizard-type-select">${
+        options.map(o => `<option value="${o}"${o===current?' selected':''}>${labels[o]||o}</option>`).join('')
+    }</select>`;
+}
+
 function _renderStep4(c) {
     const p = wizardIdentityPreview;
     if (!p) {
-        c.innerHTML = `<div class="wizard-form"><p class="wizard-hint">Generowanie tożsamości...</p></div>`;
+        c.innerHTML = `<div class="wizard-form"><p class="wizard-hint">GM konsultuje starsze, mroczniejsze księgi...</p></div>`;
         return;
     }
+    const bonds     = p.bonds     || [{description:p.bond||'',type:'ideal'},{description:'',type:'ideal'}];
+    const weaknesses= p.weaknesses|| [{description:p.flaw||'',type:'flaw'},{description:'',type:'flaw'}];
+
+    const bondsHtml = bonds.slice(0,2).map((b,i) => `
+        <div class="wizard-bond-row">
+            ${_typeSelect(`wiz-bond-type-${i}`, BOND_TYPES, BOND_TYPE_LABELS, b.type||'ideal')}
+            <textarea id="wiz-bond-${i}" rows="2" class="wizard-bond-text">${_esc(b.description||'')}</textarea>
+        </div>`).join('');
+
+    const weakHtml = weaknesses.slice(0,2).map((w,i) => `
+        <div class="wizard-bond-row">
+            ${_typeSelect(`wiz-weak-type-${i}`, WEAKNESS_TYPES, WEAKNESS_TYPE_LABELS, w.type||'flaw')}
+            <textarea id="wiz-weak-${i}" rows="2" class="wizard-bond-text">${_esc(w.description||'')}</textarea>
+        </div>`).join('');
+
     c.innerHTML = `
         <div class="wizard-form">
             <div class="form-field">
@@ -889,14 +915,14 @@ function _renderStep4(c) {
                 <textarea id="wiz-personality" rows="3">${_esc(p.personality)}</textarea>
             </div>
             <div class="form-field">
-                <label>Słabość (zablokowane)</label>
-                <input type="text" value="${_esc(p.flaw)}" disabled>
+                <label>Więzi</label>
+                ${bondsHtml}
             </div>
             <div class="form-field">
-                <label>Więź (zablokowane)</label>
-                <input type="text" value="${_esc(p.bond)}" disabled>
+                <label>Słabości</label>
+                ${weakHtml}
             </div>
-            <p class="wizard-hint">🔒 Twój sekret zostanie ujawniony, gdy historia tego zażąda.</p>
+            <p class="wizard-hint">🔒 GM zna też to, o czym sam nie wiesz. Objawi się w swoim czasie.</p>
         </div>
     `;
 }
@@ -959,7 +985,7 @@ async function _wizardStep1Submit() {
             user_id: currentUser?.id,
             name,
             system_id: currentCampaign?.system_id || 'fantasy',
-            sheet_json: { archetype, backstory: bg },
+            sheet_json: { archetype, background_note: bg, backstory: bg },
         });
     }
 
@@ -1027,18 +1053,30 @@ async function _wizardFinalizeAndEnter() {
         skillSlotCurrent[origKey] = tgt;
     }
 
-    // Identity overrides
+    // Identity overrides — V2 structured format
     const appearance = document.getElementById('wiz-appearance')?.value?.trim() || wizardIdentityPreview?.appearance || '';
     const personality = document.getElementById('wiz-personality')?.value?.trim() || wizardIdentityPreview?.personality || '';
-    const flaw = wizardIdentityPreview?.flaw || '';
-    const bond = wizardIdentityPreview?.bond || '';
-    const secret = wizardIdentityPreview?.secret || '';
+
+    const bonds = [0,1].map(i => ({
+        description: document.getElementById(`wiz-bond-${i}`)?.value?.trim() || '',
+        type: document.getElementById(`wiz-bond-type-${i}`)?.value || 'ideal',
+    })).filter(b => b.description);
+
+    const weaknesses = [0,1].map(i => ({
+        description: document.getElementById(`wiz-weak-${i}`)?.value?.trim() || '',
+        type: document.getElementById(`wiz-weak-type-${i}`)?.value || 'flaw',
+    })).filter(w => w.description);
 
     const result = await apiRequest('POST', `/characters/${charId}/finalize-sheet`, {
         stat_overrides: statOverrides,
         skills: finalSkills,
         skill_slot_current: Object.keys(skillSlotCurrent).length > 0 ? skillSlotCurrent : null,
-        identity_overrides: { appearance, personality, flaw, bond, secret },
+        identity_overrides: {
+            appearance,
+            personality,
+            bonds: bonds.length > 0 ? bonds : null,
+            weaknesses: weaknesses.length > 0 ? weaknesses : null,
+        },
     });
 
     // Reload character with finalized sheet

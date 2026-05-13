@@ -249,6 +249,7 @@ def _build_character_sheet(
 def _strip_hidden_fields(sheet: dict) -> dict:
     sanitized = dict(sheet or {})
     sanitized.pop("hidden_potential", None)
+    sanitized.pop("gm_only", None)  # V2: never expose gm_only (secret_predisposition etc.) to player
     return sanitized
 
 
@@ -408,20 +409,35 @@ def _coerce_creation_skills_payload(
     return out
 
 
+class BondEntry(BaseModel):
+    """V2 structured bond."""
+    description: str = ""
+    type: str = "person"  # person | place | object | ideal
+
+
+class WeaknessEntry(BaseModel):
+    """V2 structured weakness."""
+    description: str = ""
+    type: str = "flaw"  # fear | flaw | addiction | trauma
+
+
 class IdentityOverrideIn(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     appearance: str | None = None
     personality: str | None = None
+    # V2 structured fields
+    bonds: list[dict] | None = None       # [{description, type}]
+    weaknesses: list[dict] | None = None  # [{description, type}]
+    # Legacy V1 fields (kept for backward compat)
     flaw: str | None = None
     secret: str | None = None
-    bond: str | None = None  # single bond text, stored as bonds[0].text
+    bond: str | None = None
 
 
 class FinalizeSheetRequest(BaseModel):
     stat_overrides: dict[str, int] | None = None
     skills: dict[str, int] | None = None
-    # Rolled slot key -> skill key that holds that slot's rank after optional swap (same as key if no swap).
     skill_slot_current: dict[str, str] | None = None
     identity_overrides: IdentityOverrideIn | None = None
 
@@ -431,9 +447,13 @@ class GeneratedIdentityPreview(BaseModel):
 
     appearance: str
     personality: str
-    flaw: str
-    bond: str
-    secret: str
+    # V2 structured fields
+    bonds: list[dict] = []      # [{description, type}] — player-editable
+    weaknesses: list[dict] = [] # [{description, type}] — player-editable
+    # Legacy V1 fields (kept for backward compat with old frontend)
+    flaw: str = ""
+    bond: str = ""
+    secret: str = ""
 
 
 def _strip_code_fences(text: str) -> str:
@@ -455,49 +475,108 @@ _SESSION_LANG_LABELS = {
 
 
 def _identity_generation_user_prompt(
-    name: str, char_class: str, backstory: str, session_language: str
+    name: str, char_class: str, backstory: str, session_language: str,
+    stats: dict | None = None, skills: dict | None = None,
 ) -> str:
     lang = (session_language or "pl").strip().lower() or "pl"
     label = _SESSION_LANG_LABELS.get(lang, f"the campaign session language (ISO {lang})")
+
+    # Build stat context for better identity generation
+    stat_lines = ""
+    if stats:
+        top_stats = sorted(stats.items(), key=lambda x: -int(x[1] or 0))[:3]
+        stat_lines = f"Najwyższe statystyki: {', '.join(f'{k}={v}' for k, v in top_stats)}\n"
+    skill_lines = ""
+    if skills:
+        top_skills = [(k, v) for k, v in skills.items() if int(v or 0) >= 2][:3]
+        if top_skills:
+            skill_lines = f"Główne umiejętności: {', '.join(f'{k}({v})' for k, v in top_skills)}\n"
+
     return (
-        f"Postać: {name}, Klasa: {char_class}\n"
-        f"Tło: {backstory}\n\n"
-        f"Język kampanii (OBOWIĄZKOWY dla wszystkich wartości JSON): {lang} ({label}).\n\n"
+        f"Postać: {name}, Archetype: {char_class}\n"
+        f"Tło: {backstory or '(brak notatki)'}\n"
+        f"{stat_lines}{skill_lines}\n"
+        f"Język kampanii (OBOWIĄZKOWY dla wszystkich wartości): {lang} ({label}).\n\n"
         "Wygeneruj tożsamość bohatera jako JSON. ZASADY BEZWZGLĘDNE:\n"
-        '1. Każde pole MUSI zawierać niepusty tekst. "" jest BŁĘDEM.\n'
+        '1. Każde pole MUSI zawierać niepusty tekst.\n'
         '2. "appearance": opis wyglądu fizycznego (2-3 zdania)\n'
-        '3. "personality": dominująca cecha charakteru (1-2 zdania)\n'
-        '4. "flaw": konkretna wada lub słabość która utrudnia życie bohaterowi (1-2 zdania).\n'
-        '   PRZYKŁAD: "Ma obsesyjny strach przed wodą po tym jak o mało nie utonął."\n'
-        '5. "secret": mroczna tajemnica skrywana przed wszystkimi (1-2 zdania).\n'
-        '   PRZYKŁAD: "Zabił własnego mentora podczas napadu szaleństwa i ukrył ciało."\n'
-        '6. "bonds": lista z DOKŁADNIE jednym elementem:\n'
-        '   [{"text": "opis konkretnej więzi z osobą lub miejscem", "strength": "strong", "origin": "creation"}]\n'
-        '   PRZYKŁAD text: "Przysiągł zemścić się na lordzie który spalił jego wioskę."\n'
+        '3. "personality": dominująca cecha charakteru (2-3 zdania, głos, nawyki, sposób bycia)\n'
+        '4. "bonds": lista DOKŁADNIE 2 więzi, każda z polami "description" i "type".\n'
+        '   type musi być jednym z: "person", "place", "object", "ideal"\n'
+        '   Przykład: [{"description": "Przysiągł zemścić się na lordzie...", "type": "person"},\n'
+        '              {"description": "Nie rozstaje się ze starym medalionem ojca", "type": "object"}]\n'
+        '5. "weaknesses": lista DOKŁADNIE 2 słabości, każda z polami "description" i "type".\n'
+        '   type musi być jednym z: "fear", "flaw", "addiction", "trauma"\n'
+        '   Przykład: [{"description": "Obsesyjny strach przed ogniem...", "type": "fear"},\n'
+        '              {"description": "Sięga po alkohol gdy sytuacja staje się trudna", "type": "addiction"}]\n'
+        '6. "secret_predisposition": 1-2 zdania opisujące UKRYTĄ cechę charakteru której postać NIE jest świadoma.\n'
+        '   To tajemnica dla GM — nie dla gracza. Coś co wyjdzie pod presją.\n'
+        '   Przykład: "Mimo pozorów hardości, Aldric czuje głęboką potrzebę bycia docenionym."\n'
         "Zwróć WYŁĄCZNIE poprawny JSON, bez komentarzy, bez markdown."
     )
 
 
 _IDENTITY_RETRY_USER = (
-    "Poprzednia odpowiedź była niekompletna: flaw, secret lub bonds[0].text były puste. "
-    "Wygeneruj ponownie TEN SAM JSON z niepustymi, konkretnymi treściami we wszystkich polach."
+    "Poprzednia odpowiedź była niekompletna lub miała błędny format. "
+    "Wygeneruj ponownie TEN SAM JSON. Pamiętaj: bonds i weaknesses to listy DOKŁADNIE 2 elementów "
+    "z polami 'description' i 'type'. Żadne pole nie może być puste."
 )
 
 
 def _bond_text_from_identity_dict(data: dict) -> str:
+    """Legacy helper — extracts first bond as plain text."""
     bonds = data.get("bonds")
     if isinstance(bonds, list) and bonds:
         b0 = bonds[0]
         if isinstance(b0, dict):
-            return str(b0.get("text") or "").strip()
+            return str(b0.get("description") or b0.get("text") or "").strip()
     return str(data.get("bond") or "").strip()
 
 
+def _parse_v2_bonds(data: dict) -> list[dict]:
+    """Parse bonds list into V2 format [{description, type}]."""
+    raw = data.get("bonds")
+    if not isinstance(raw, list):
+        # Fallback: wrap legacy bond text
+        text = _bond_text_from_identity_dict(data)
+        return [{"description": text, "type": "ideal"}] * 2 if text else []
+    result = []
+    for b in raw[:2]:
+        if isinstance(b, dict):
+            desc = str(b.get("description") or b.get("text") or "").strip()
+            btype = str(b.get("type") or "person").strip().lower()
+            if btype not in ("person", "place", "object", "ideal"):
+                btype = "person"
+            if desc:
+                result.append({"description": desc, "type": btype})
+    return result
+
+
+def _parse_v2_weaknesses(data: dict) -> list[dict]:
+    """Parse weaknesses list into V2 format [{description, type}]."""
+    raw = data.get("weaknesses")
+    if not isinstance(raw, list):
+        # Fallback: wrap legacy flaw
+        flaw = str(data.get("flaw") or "").strip()
+        return [{"description": flaw, "type": "flaw"}] * 2 if flaw else []
+    result = []
+    for w in raw[:2]:
+        if isinstance(w, dict):
+            desc = str(w.get("description") or w.get("text") or "").strip()
+            wtype = str(w.get("type") or "flaw").strip().lower()
+            if wtype not in ("fear", "flaw", "addiction", "trauma"):
+                wtype = "flaw"
+            if desc:
+                result.append({"description": desc, "type": wtype})
+    return result
+
+
 def _identity_dict_fields_non_empty(data: dict) -> bool:
-    flaw = str(data.get("flaw") or "").strip()
-    secret = str(data.get("secret") or "").strip()
-    bond = _bond_text_from_identity_dict(data)
-    return bool(flaw and secret and bond)
+    appearance = str(data.get("appearance") or "").strip()
+    personality = str(data.get("personality") or "").strip()
+    bonds = _parse_v2_bonds(data)
+    weaknesses = _parse_v2_weaknesses(data)
+    return bool(appearance and personality and bonds and weaknesses)
 
 
 def _parse_identity_llm_to_dict(raw: str) -> dict:
@@ -512,12 +591,22 @@ def _parse_identity_llm_to_dict(raw: str) -> dict:
 
 
 def _dict_to_identity_preview(data: dict) -> GeneratedIdentityPreview:
+    bonds = _parse_v2_bonds(data)
+    weaknesses = _parse_v2_weaknesses(data)
+    # Pad to 2 if LLM returned fewer
+    while len(bonds) < 2:
+        bonds.append({"description": "...", "type": "ideal"})
+    while len(weaknesses) < 2:
+        weaknesses.append({"description": "...", "type": "flaw"})
     return GeneratedIdentityPreview(
         appearance=str(data.get("appearance") or "").strip(),
         personality=str(data.get("personality") or "").strip(),
-        flaw=str(data.get("flaw") or "").strip(),
-        bond=_bond_text_from_identity_dict(data),
-        secret=str(data.get("secret") or "").strip(),
+        bonds=bonds,
+        weaknesses=weaknesses,
+        # Legacy fields for backward compat
+        flaw=weaknesses[0]["description"] if weaknesses else "",
+        bond=bonds[0]["description"] if bonds else "",
+        secret=str(data.get("secret_predisposition") or data.get("secret") or "").strip(),
     )
 
 
@@ -912,14 +1001,21 @@ def generate_character_identity(character_id: int):
 
     name = str(sheet.get("name") or row["name"] or "").strip() or "Hero"
     char_class = str(sheet.get("class") or sheet.get("archetype") or "").strip() or "adventurer"
-    backstory = str(sheet.get("backstory") or sheet.get("background") or "").strip()
+    backstory = str(
+        sheet.get("background_note") or sheet.get("backstory") or sheet.get("background") or ""
+    ).strip()
     if not backstory:
         backstory = "(No backstory provided yet — infer a fitting tone from name and class.)"
+
+    stats = sheet.get("stats") or {}
+    skills = sheet.get("skills") or {}
 
     session_language = str(row["language"] or "pl").strip() or "pl"
     lang = session_language.strip().lower()
     label = _SESSION_LANG_LABELS.get(lang, f"session language ({lang})")
-    user_prompt = _identity_generation_user_prompt(name, char_class, backstory, session_language)
+    user_prompt = _identity_generation_user_prompt(
+        name, char_class, backstory, session_language, stats=stats, skills=skills
+    )
     base_messages = [
         {
             "role": "system",
@@ -963,6 +1059,23 @@ def generate_character_identity(character_id: int):
                 status_code=500,
                 detail="Identity generation incomplete — please try again",
             )
+
+    # Store secret_predisposition in gm_only (never returned to player via _strip_hidden_fields)
+    secret_pred = str(data.get("secret_predisposition") or data.get("secret") or "").strip()
+    if secret_pred:
+        conn2 = sqlite3.connect(DB_PATH)
+        try:
+            row2 = conn2.execute("SELECT sheet_json FROM characters WHERE id = ?", (character_id,)).fetchone()
+            if row2:
+                s2 = json.loads(row2[0] or "{}") if row2[0] else {}
+                if "gm_only" not in s2:
+                    s2["gm_only"] = {}
+                s2["gm_only"]["secret_predisposition"] = secret_pred
+                conn2.execute("UPDATE characters SET sheet_json = ? WHERE id = ?",
+                              (json.dumps(s2), character_id))
+                conn2.commit()
+        finally:
+            conn2.close()
 
     return _dict_to_identity_preview(data)
 
@@ -1077,13 +1190,19 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
             rebuilt["identity"]["appearance"] = io.appearance
         if io.personality is not None:
             rebuilt["identity"]["personality"] = io.personality
+        # V2: structured bonds and weaknesses
+        if io.bonds is not None:
+            rebuilt["identity"]["bonds"] = io.bonds
+        if io.weaknesses is not None:
+            rebuilt["identity"]["weaknesses"] = io.weaknesses
+        # Legacy V1 fields (backward compat)
         if io.flaw is not None:
             rebuilt["identity"]["flaw"] = io.flaw
         if io.secret is not None:
             rebuilt["identity"]["secret"] = io.secret
-        if io.bond is not None:
+        if io.bond is not None and io.bonds is None:
             rebuilt["identity"]["bonds"] = [
-                {"text": io.bond, "strength": "strong", "origin": "creation"}
+                {"description": io.bond, "type": "ideal"}
             ]
 
     conn.execute(
