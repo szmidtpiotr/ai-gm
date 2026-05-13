@@ -1,6 +1,6 @@
 # TASK 18: Death Save System
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done — commit `b22299d` (2026-05-13)
 
 ## Overview
 

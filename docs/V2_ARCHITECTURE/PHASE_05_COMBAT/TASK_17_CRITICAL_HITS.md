@@ -1,6 +1,6 @@
 # TASK 17: Critical Hits & Hit Location Table
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done — commit `b22299d` (2026-05-13)
 
 ## Overview
 

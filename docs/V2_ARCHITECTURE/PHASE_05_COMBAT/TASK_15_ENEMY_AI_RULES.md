@@ -1,6 +1,6 @@
 # TASK 15: Enemy AI — Rule-Based Behavior Profiles
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done — commit `b22299d` (2026-05-13)
 
 ## Overview
 
