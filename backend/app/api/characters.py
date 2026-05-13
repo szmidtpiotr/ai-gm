@@ -15,6 +15,7 @@ from app.character_creation_config import (
     roll_creation_skills,
 )
 from app.services.loot_service import grant_loot_to_character
+from app.services.vitality_service import calculate_hp, calculate_mana
 from app.services.gm_plan_generation_service import generate_initial_gm_plan_with_retries
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
@@ -218,19 +219,13 @@ def _build_character_sheet(
     con_mod = _stat_modifier(stats["CON"])
     int_mod = _stat_modifier(stats["INT"])
 
-    if normalized_archetype == "warrior":
-        hp = 12 + con_mod
-        sheet["current_hp"] = hp
-        sheet["max_hp"] = hp
-        sheet["current_mana"] = 0
-        sheet["max_mana"] = 0
-    else:
-        hp = 6 + con_mod
-        mana = 8 + int_mod
-        sheet["current_hp"] = hp
-        sheet["max_hp"] = hp
-        sheet["current_mana"] = mana
-        sheet["max_mana"] = mana
+    level = int(sheet.get("level", 1) or 1)
+    hp = calculate_hp(normalized_archetype, stats["CON"], level)
+    mana = calculate_mana(normalized_archetype, stats["INT"], level)
+    sheet["current_hp"] = hp
+    sheet["max_hp"] = hp
+    sheet["current_mana"] = mana
+    sheet["max_mana"] = mana
 
     if "hidden_potential" not in sheet:
         sheet["hidden_potential"] = random.choice(HIDDEN_POTENTIALS)
@@ -1550,10 +1545,10 @@ def _default_playtest_sheet(name: str, archetype: str, old_sheet: dict) -> dict:
         "archetype": arc,
         "background": bg,
         "level": 1,
-        "current_hp": 10,
-        "max_hp": 10,
-        "current_mana": 0,
-        "max_mana": 0,
+        "current_hp": calculate_hp(arc, int(stats.get("CON", 10))),
+        "max_hp":     calculate_hp(arc, int(stats.get("CON", 10))),
+        "current_mana": calculate_mana(arc, int(stats.get("INT", 10))),
+        "max_mana":     calculate_mana(arc, int(stats.get("INT", 10))),
         "stats": stats,
         "skills": skills,
         "inventory": [],
