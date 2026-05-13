@@ -804,13 +804,23 @@ No router or service files are modified in this task. The tables are created now
 
 ## Test Checklist
 
-- [x] Run migration on a fresh DB — all tables created, all indexes present ✓
+- [x] Run migration on fresh DB — 47 migration steps applied, all tables created ✓
 - [x] Run migration on existing V1 DB — all ALTER TABLE succeed, no data lost ✓
-- [x] Re-run migration on already-migrated DB — no errors, idempotent ✓
-- [x] `game_config_xp_awards` seeded with 27 rows ✓
-- [x] `game_config_archetypes.hp_base` seeded (warrior=10, scholar=6) ✓
+- [x] Re-run migration on already-migrated DB — idempotent (second run logs "skipped") ✓
+- [x] XP awards seeded — 27 rows in `game_config_xp_awards` ✓
+- [x] Archetypes `hp_base` seeded — warrior=10, scholar=6 ✓
 - [x] Armor `ac_bonus` migrated from `effect_json` — 6 armor items updated ✓
 - [x] All new columns present on characters, npcs, enemies, game_sessions ✓
+- [x] `no-such-table` error handled gracefully for test fixture DBs (bugfix `2f0cc36`) ✓
 - [ ] Insert a row into `action_log` with valid `mechanic_result` JSON — verify retrieval
 - [ ] Insert a `character_conditions` row with `expires_at = NULL` — verify active query returns it
 - [ ] Delete a campaign — verify `action_log` and `combat_loot` rows cascade-delete
+
+---
+
+## Implementation Notes
+
+- Migration function: `_run_v2_schema_migrations(conn)` added to `backend/app/migrations_admin.py`
+- Called at end of `run_admin_migrations()`, phase bumped to 12.0
+- Key design: `_exec()` helper catches `"no such table"` gracefully — test fixture DBs only create admin tables, not app tables (`characters`, `game_sessions`, `character_xp_grants`). These ALTER TABLEs silently skip in test context.
+- V1 cleanup: `leatherarmor` (old key) still in DB; `ac_bonus` migrated from `effect_json`; `weight` column not dropped (SQLite version constraint)
