@@ -209,3 +209,19 @@ Read-only. Admins cannot manually edit the plan through the panel (editing the r
 4. **Branch required:** Catastrophic deviation auto-injects `[BRANCH_REQUIRED]` in narrator context. Narrator emits it. Verify branch generation called, plan updated.
 
 5. **Campaign end:** Narrator emits `[CAMPAIGN_END:ending_main_victory]`. Verify `campaign.status='completed'`. Verify victory payload sent to frontend.
+
+---
+
+## Implementation Notes
+**Status:** ✅ Done — commit `92e990f` (2026-05-13)  
+**File:** `backend/app/services/campaign_plan_runtime.py`  
+**Tests:** `backend/tests/test_campaign_plan_runtime.py` — 8 tests, all passing
+
+- `get_plan()` / `save_plan()`: JSON parse with graceful empty-dict fallback for malformed plans
+- `mark_beat_visited()`: handles both dict-format beats `{"beat_key": "x", "visited": false}` and legacy string-format beats; returns `True` only if newly marked (idempotent)
+- `_check_and_advance_act()`: called automatically inside `mark_beat_visited` — advances `active_act` when all structured beats in current act are visited
+- `mark_npc_dead()`: updates `alive=false` in `key_npcs` array; returns `deviation_consequence` string for caller to act on
+- `log_deviation()`: caps deviations list at 20 entries; updates `deviation_level` only upward (normal → minor → major → catastrophic)
+- `get_narrator_context_block()`: returns empty string if plan empty; truncates act summary to 150 chars; shows up to 4 alive key NPCs; shows next 3 unvisited beats
+- Campaign plan Pydantic schema (CampaignPlan from TASK_07) is the authoritative model for generation; runtime functions work directly with the parsed JSON dict for speed
+- `[BEAT_COMPLETE:key]` and `[NPC_KILLED:key]` tag processing is done in `world_service.process_create_tags()` (Phase 03) and calls into this module

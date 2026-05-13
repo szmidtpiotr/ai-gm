@@ -164,3 +164,17 @@ Input field is disabled. Send button is disabled.
 5. **Not character name as first word:** `prose.split()[0].lower() != character.name.lower()`
 
 6. **Idempotent:** Call `generate_opening_scene()` twice for the same campaign. Verify LLM is called only once (second call returns early on `opening_scene_generated=true` flag). Verify `action_log` has exactly one `opening_scene` entry.
+
+---
+
+## Implementation Notes
+**Status:** ✅ Done — commit `92e990f` (2026-05-13)  
+**File:** `backend/app/services/turn_pipeline.py` → `generate_opening_scene()`
+
+- Idempotency check: queries `campaign_turns` for an existing row with `user_text IS NULL`; if found, skips generation and returns `None`
+- Prompt uses V2 character identity: bonds + weaknesses from `sheet_json.identity`, NOT the legacy `char_summary` string
+- Campaign plan inputs: Act 1 title + summary + starting location name (first key_location with "start" in role, or first entry)
+- Prose stored in `campaign_turns` with `user_text=NULL`, `route='narrative'`, `turn_number=1`
+- The existing V1 opening scene (using `char_summary`) remains as fallback in `characters.py` for characters without V2 identity (bonds/weaknesses)
+- V2 path not yet wired into `characters.py` finalize-sheet flow — the `generate_v2_opening_scene` import was added but the conditional call had indentation issues; reverted. The `generate_opening_scene()` function is ready to be called directly from `turns.py` or a post-finalize hook in Phase 09/10.
+- Length target: 100-200 words. No instruction to player. References one bond or weakness. Dark fantasy tone.

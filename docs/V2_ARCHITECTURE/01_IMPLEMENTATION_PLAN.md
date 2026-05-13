@@ -65,7 +65,7 @@
 
 | Task | File | Status | Notes |
 |------|------|--------|-------|
-| 11 | TASK_11_TURN_PIPELINE | ✅ | Full 9-step pipeline in game_engine.py |
+| 11 | TASK_11_TURN_PIPELINE | ✅ | Full 9-step pipeline in turn_pipeline.py |
 | 12 | TASK_12_SKILL_TESTS | 🔶 | Non-combat rolls, counter-skill matrix, roll popup |
 | 13 | TASK_13_CAMPAIGN_PLAN_V2 | ✅ | Runtime schema, deviation detection, all GM tags |
 | 04B | TASK_04B_OPENING_SCENE | ✅ | First GM turn after character finalization |
