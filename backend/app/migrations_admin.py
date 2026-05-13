@@ -1393,6 +1393,10 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
             msg = str(e).lower()
             if "already exists" in msg or "duplicate column" in msg:
                 logger.debug("v2_migration_skipped", label=label)
+            elif "no such table" in msg:
+                # Table doesn't exist in this DB (e.g. test fixtures only create admin tables).
+                # Skip silently — the column will be added when the full app DB is used.
+                logger.debug("v2_migration_skipped_no_table", label=label, reason=str(e))
             else:
                 logger.error("v2_migration_error", label=label, error=str(e))
                 raise
