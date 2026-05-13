@@ -39,15 +39,15 @@
 | 01 | TASK_01_DB_SCHEMA | ✅ | All tables + game_state_definitions seed, location_connections, map columns |
 | 02 | TASK_02_INTENT_PARSER | ✅ | Player text → ACTION tag |
 | 03 | TASK_03_WORLD_STATE_MACHINE | ✅ | Validates actions, transitions states, reads state_definitions from DB |
-| 04 | TASK_04_CONTEXT_INJECTOR | ❌ | Builds narrator prompt from DB content + mechanical result |
+| 04 | TASK_04_CONTEXT_INJECTOR | ✅ | Builds narrator prompt from DB content + mechanical result |
 
 ### Phase 02 — Character
 > Depends on Phase 01.
 
 | Task | File | Status | Notes |
 |------|------|--------|-------|
-| 05 | TASK_05_HP_MANA_FORMULAS | ❌ | HP = base + CON_mod × level. Mana = 8 + INT_mod × 3 |
-| 06 | TASK_06_CHARACTER_WIZARD | ❌ | 4-step wizard, GM identity generation, secret predisposition |
+| 05 | TASK_05_HP_MANA_FORMULAS | ✅ | HP = base + CON_mod × level. Mana = 8 + INT_mod × level (Scholar) |
+| 06 | TASK_06_CHARACTER_WIZARD | ✅ | 4-step wizard, GM identity generation, secret predisposition |
 | 07 | TASK_07_CAMPAIGN_PLAN_GENERATION | ❌ | LLM generates from character + Ideas Bank |
 | 42 | TASK_42_PERSISTENT_HERO | ❌ | Hero lives across campaigns, rest state, adventure selection |
 
