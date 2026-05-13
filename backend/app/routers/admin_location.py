@@ -717,3 +717,96 @@ async def patch_campaign_session_location(
     finally:
         conn.close()
 
+
+# ── World Builder endpoints (Phase 08 Task 40) ────────────────────────────
+
+class LocationPositionPatch(BaseModel):
+    map_x: float
+    map_y: float
+
+
+class ConnectionCreate(BaseModel):
+    from_key: str
+    to_key: str
+    travel_time_minutes: int = 60
+    is_dangerous: bool = False
+    is_bidirectional: bool = True
+
+
+class ConnectionDelete(BaseModel):
+    from_key: str
+    to_key: str
+
+
+@router.patch("/api/admin/locations/{location_key}/position")
+async def patch_location_position(location_key: str, body: LocationPositionPatch,
+                                   _: None = Depends(require_admin_token)):
+    """Save Cytoscape node position for a location."""
+    conn = _get_db_connection()
+    try:
+        conn.execute(
+            "UPDATE game_locations SET map_x = ?, map_y = ? WHERE key = ?",
+            (body.map_x, body.map_y, location_key),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.get("/api/admin/locations/connections")
+async def get_connections(_: None = Depends(require_admin_token)):
+    """List all location connections for the world builder graph."""
+    conn = _get_db_connection()
+    try:
+        rows = conn.execute(
+            "SELECT from_location_key as from_key, to_location_key as to_key, "
+            "travel_time_minutes, is_dangerous, is_bidirectional "
+            "FROM location_connections WHERE is_active = 1"
+        ).fetchall()
+        return {"connections": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.post("/api/admin/locations/connections")
+async def create_connection(body: ConnectionCreate, _: None = Depends(require_admin_token)):
+    """Create a new connection between two locations."""
+    conn = _get_db_connection()
+    try:
+        conn.execute(
+            """INSERT OR REPLACE INTO location_connections
+               (from_location_key, to_location_key, travel_time_minutes, is_dangerous, is_bidirectional, is_active)
+               VALUES (?, ?, ?, ?, ?, 1)""",
+            (body.from_key, body.to_key, body.travel_time_minutes, body.is_dangerous, body.is_bidirectional),
+        )
+        if body.is_bidirectional:
+            conn.execute(
+                """INSERT OR REPLACE INTO location_connections
+                   (from_location_key, to_location_key, travel_time_minutes, is_dangerous, is_bidirectional, is_active)
+                   VALUES (?, ?, ?, ?, ?, 1)""",
+                (body.to_key, body.from_key, body.travel_time_minutes, body.is_dangerous, body.is_bidirectional),
+            )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.post("/api/admin/locations/connections/delete")
+async def delete_connection(body: ConnectionDelete, _: None = Depends(require_admin_token)):
+    """Remove a connection (and its reverse if bidirectional)."""
+    conn = _get_db_connection()
+    try:
+        conn.execute(
+            "DELETE FROM location_connections WHERE from_location_key = ? AND to_location_key = ?",
+            (body.from_key, body.to_key),
+        )
+        conn.execute(
+            "DELETE FROM location_connections WHERE from_location_key = ? AND to_location_key = ?",
+            (body.to_key, body.from_key),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()

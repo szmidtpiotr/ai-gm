@@ -1,4 +1,4 @@
-# AI-GM V2 — Architecture Overview
+# AI-GM V2 — Architecture Overview!
 
 > **Core principle:** The system controls the world. The LLM describes it.
 
@@ -7,18 +7,22 @@
 ## The Paradigm Shift
 
 ### V1 (old): LLM as Game Master
+
 ```
 Player input → LLM decides what happens → LLM narrates it
 ```
+
 Problems: LLM hallucinates facts, invents NPCs/stats, inconsistent world state, 
 unreliable tag emission, no guarantee of mechanical fairness.
 
 ### V2 (new): System as Game Master, LLM as Narrator
+
 ```
 Player input → Intent Parser → World State Machine → Mechanic Resolver
                                                             ↓
                                               Context Injector → LLM Narrator → Polish prose
 ```
+
 The LLM has two jobs only: **parse intent** and **narrate outcomes**. 
 It never decides what happens. The system decides. The LLM describes.
 
@@ -99,9 +103,11 @@ It never decides what happens. The system decides. The LLM describes.
 ## The LLM's Two Jobs
 
 ### Job 1 — Intent Parser
+
 **Input:** Free text player action  
 **Output:** Structured ACTION tag  
 **Constraints:**
+
 - If intent is clear → emit one ACTION tag
 - If ambiguous → emit CLARIFY request (system asks player)
 - If impossible in current state → emit BLOCKED (system explains)
@@ -118,9 +124,11 @@ Example inputs → outputs:
 ```
 
 ### Job 2 — Narrator
+
 **Input:** Mechanical facts (outcome, rolls, HP, NPC personality, location description)  
 **Output:** 2-4 sentences of vivid Polish dark fantasy prose  
 **Constraints:**
+
 - Never contradict the mechanical facts given
 - Never invent world content not in the provided context
 - Never decide additional outcomes beyond what was given
@@ -183,15 +191,15 @@ Example inputs → outputs:
 
 **The DB is the only source of truth for game world facts.**
 
-| Content type | Source | LLM can invent? |
-|---|---|---|
-| Location names, descriptions, atmosphere | `game_locations` DB | No — must use DB record |
-| NPC names, personality, knowledge | `npc_definitions` DB | No — must use DB record |
-| Enemy stats, abilities, behavior | `game_config_enemies` DB | No — must use DB record |
-| Item descriptions, effects | `game_config_items` DB | No — must use DB record |
-| Dice roll outcomes | Mechanic Resolver | No — mechanical |
-| Narrative prose (how things are described) | LLM Narrator | Yes — this is its job |
-| NPC dialogue (within DB personality) | LLM Narrator | Yes — within constraints |
+| Content type                               | Source                   | LLM can invent?          |
+| ------------------------------------------ | ------------------------ | ------------------------ |
+| Location names, descriptions, atmosphere   | `game_locations` DB      | No — must use DB record  |
+| NPC names, personality, knowledge          | `npc_definitions` DB     | No — must use DB record  |
+| Enemy stats, abilities, behavior           | `game_config_enemies` DB | No — must use DB record  |
+| Item descriptions, effects                 | `game_config_items` DB   | No — must use DB record  |
+| Dice roll outcomes                         | Mechanic Resolver        | No — mechanical          |
+| Narrative prose (how things are described) | LLM Narrator             | Yes — this is its job    |
+| NPC dialogue (within DB personality)       | LLM Narrator             | Yes — within constraints |
 
 **When LLM needs content not in DB:** Emit `[CREATE_*]` tag. System creates DB record with `pending_review` status. Admin reviews and approves/rejects.
 
@@ -200,6 +208,7 @@ Example inputs → outputs:
 ## Tone & World Design
 
 **Dark Fantasy WFRP-inspired:**
+
 - The world is dangerous, unfair, and morally grey
 - Common people suffer; power corrupts
 - Victories are often pyrrhic — solutions create new problems
@@ -208,12 +217,14 @@ Example inputs → outputs:
 - Horror elements: fear of the unknown, grotesque monsters, corruption
 
 **D&D-clean mechanics:**
+
 - 7 stats (STR, DEX, CON, INT, WIS, CHA, LCK) with simple modifiers
 - d20 + modifier vs DC (no WFRP's complex advance system)
 - Levels 1–10 (suggested cap)
 - Two archetypes: Warrior, Scholar
 
 **WFRP mechanical elements included:**
+
 - Fear & Terror rolls for horrific encounters
 - Critical hit location table (where the hit lands)
 - Grim dark narrative tone enforced by LLM prompt
@@ -284,6 +295,7 @@ Rules: Hero has one active adventure at a time. Hero without active adventure is
 ## Conditions System
 
 All game conditions (fear, wounds, poison, bleeding, blinded) have a fully specified lifecycle:
+
 - Duration tracked in **combat rounds**
 - Ongoing damage ticks at **end of each round**
 - Stacking: **admin-configurable global switch** (off by default = refresh duration)
@@ -294,17 +306,17 @@ Full specification: `11_CONDITIONS_SYSTEM.md`
 
 ## New Systems vs V1
 
-| System | V1 | V2 |
-|---|---|---|
-| Player intent | LLM decides how to handle | Intent Parser → structured tag |
-| Enemy behavior | LLM narrates + decides | DB behavior profiles, rule-based |
-| World content | LLM invents freely | DB first, CREATE tag for new |
-| Combat resolution | Strict (mostly) | Strict + crit table + fear + conditions |
-| NPC dialogue | LLM free-form | LLM within DB personality + keyword triggers |
-| Campaign plan | Unstructured JSON | Formal schema, system-readable |
-| Fear/Terror | Not implemented | Full mechanic (WIS test) → conditions |
-| Critical hits | Not implemented | Hit location table + wound conditions |
-| Input UX | Free text only | Hybrid: buttons + free text |
-| Admin tools | Basic CRUD | Ideas Workshop + Smart Entry Agent (visual questionnaire) |
-| Hero model | Campaign-centric | **Hero-centric** (campaigns assigned to heroes) |
-| Conditions | Not tracked | Full lifecycle: apply/tick/clear (11_CONDITIONS_SYSTEM.md) |
+| System            | V1                        | V2                                                         |
+| ----------------- | ------------------------- | ---------------------------------------------------------- |
+| Player intent     | LLM decides how to handle | Intent Parser → structured tag                             |
+| Enemy behavior    | LLM narrates + decides    | DB behavior profiles, rule-based                           |
+| World content     | LLM invents freely        | DB first, CREATE tag for new                               |
+| Combat resolution | Strict (mostly)           | Strict + crit table + fear + conditions                    |
+| NPC dialogue      | LLM free-form             | LLM within DB personality + keyword triggers               |
+| Campaign plan     | Unstructured JSON         | Formal schema, system-readable                             |
+| Fear/Terror       | Not implemented           | Full mechanic (WIS test) → conditions                      |
+| Critical hits     | Not implemented           | Hit location table + wound conditions                      |
+| Input UX          | Free text only            | Hybrid: buttons + free text                                |
+| Admin tools       | Basic CRUD                | Ideas Workshop + Smart Entry Agent (visual questionnaire)  |
+| Hero model        | Campaign-centric          | **Hero-centric** (campaigns assigned to heroes)            |
+| Conditions        | Not tracked               | Full lifecycle: apply/tick/clear (11_CONDITIONS_SYSTEM.md) |

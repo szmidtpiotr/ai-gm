@@ -2,6 +2,7 @@ import { adminFetch } from "/admin_panel_v2/shared/api.js?v=2";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
 import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=5";
 import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
+import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=1";
 
 const LABELS = {
   locations:    "Lokacje",
@@ -51,7 +52,7 @@ const LOCATION_RULES = [
   { key: "reason",           label: "Reason",           type: "text",    default: "Sacred ground", description: "Reason shown to player" },
 ];
 
-const TABS = ["locations", "npcs", "enemies", "rules"];
+const TABS = ["locations", "npcs", "enemies", "rules", "pending", "builder"];
 const _rendered = new Set();
 let _aiTrigger = null;  // updated by each tab render; called by the bubble
 
@@ -63,6 +64,8 @@ export async function init(panel) {
         <button class="subtab-btn" data-tab="npcs">${LABELS.npcs}</button>
         <button class="subtab-btn" data-tab="enemies">${LABELS.enemies}</button>
         <button class="subtab-btn" data-tab="rules">📋 Reguły</button>
+        <button class="subtab-btn" data-tab="pending">⏳ Oczekujące <span id="pending-nav-badge" class="admin-badge admin-badge-gold" style="display:none"></span></button>
+        <button class="subtab-btn" data-tab="builder">🗺 Mapa Świata</button>
       </div>
       <div class="subtab-panels">
         ${TABS.map((t) => `<div class="subtab-panel${t === "locations" ? " active" : ""}" data-tab="${t}"></div>`).join("")}
@@ -89,7 +92,7 @@ export async function init(panel) {
       panel.querySelector(`.subtab-panel[data-tab="${tab}"]`).classList.add("active");
       _aiTrigger = null;
       const bubble = panel.querySelector(".ai-bubble-btn");
-      if (bubble) bubble.style.display = tab === "rules" ? "none" : "";
+      if (bubble) bubble.style.display = (tab === "rules" || tab === "pending" || tab === "builder") ? "none" : "";
       _activateTab(panel, tab);
     });
   });
@@ -109,6 +112,11 @@ async function _activateTab(panel, tab) {
   else if (tab === "npcs")      await _renderNpcs(container);
   else if (tab === "enemies")   await _renderEnemies(container);
   else if (tab === "rules")     await _renderRules(container);
+  else if (tab === "pending")   await _renderPendingReview(container, panel);
+  else if (tab === "builder") {
+    const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=1");
+    await initBuilder(container);
+  }
 }
 
 // ── AI generation helper ──────────────────────────────────────────────────────
@@ -1127,4 +1135,111 @@ function _openEnemyModal(row, onDone) {
       },
     ],
   });
+}
+
+// ── Pending Review Queue (Task 32) ────────────────────────────────────────
+
+async function _renderPendingReview(container, panel) {
+  container.innerHTML = `
+    <div class="pending-review-layout">
+      <h2 class="section-heading">⏳ Oczekujące na weryfikację</h2>
+      <p class="section-note">Encje stworzone przez GM podczas sesji. Zatwierdź aby stały się permanentne.</p>
+      <div class="subtab-bar" style="margin-bottom:12px">
+        <button class="subtab-btn active" data-ptab="locations">Lokacje <span id="pr-loc-badge" class="admin-badge admin-badge-gold" style="display:none"></span></button>
+        <button class="subtab-btn" data-ptab="npcs">NPC <span id="pr-npc-badge" class="admin-badge admin-badge-gold" style="display:none"></span></button>
+        <button class="subtab-btn" data-ptab="enemies">Wrogowie <span id="pr-enemy-badge" class="admin-badge admin-badge-gold" style="display:none"></span></button>
+      </div>
+      <div id="pr-loc-panel" class="pr-panel active"></div>
+      <div id="pr-npc-panel" class="pr-panel" style="display:none"></div>
+      <div id="pr-enemy-panel" class="pr-panel" style="display:none"></div>
+    </div>`;
+
+  container.querySelectorAll("[data-ptab]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      container.querySelectorAll("[data-ptab]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      container.querySelectorAll(".pr-panel").forEach(p => p.style.display = "none");
+      const map = { locations: "pr-loc-panel", npcs: "pr-npc-panel", enemies: "pr-enemy-panel" };
+      const target = container.querySelector(`#${map[btn.dataset.ptab]}`);
+      if (target) target.style.display = "";
+    });
+  });
+
+  await Promise.all([
+    _loadPendingType(container, "locations", "pr-loc-panel", "pr-loc-badge", panel),
+    _loadPendingType(container, "npcs", "pr-npc-panel", "pr-npc-badge", panel),
+    _loadPendingType(container, "enemies", "pr-enemy-panel", "pr-enemy-badge", panel),
+  ]);
+}
+
+async function _loadPendingType(container, type, panelId, badgeId, panel) {
+  const panelEl = container.querySelector(`#${panelId}`);
+  const badge = container.querySelector(`#${badgeId}`);
+  const navBadge = panel.querySelector("#pending-nav-badge");
+  panelEl.innerHTML = `<div class="camp-loading">Ładowanie…</div>`;
+
+  try {
+    const data = await adminFetch(`/api/admin/world/pending/${type}`);
+    const items = data.items || [];
+
+    badge.textContent = String(items.length);
+    badge.style.display = items.length ? "" : "none";
+
+    // Update nav tab badge total
+    const total = (parseInt(panel.querySelector("#pr-loc-badge")?.textContent || 0) || 0) +
+                  (parseInt(panel.querySelector("#pr-npc-badge")?.textContent || 0) || 0) +
+                  (parseInt(panel.querySelector("#pr-enemy-badge")?.textContent || 0) || 0);
+    if (navBadge) { navBadge.textContent = String(total); navBadge.style.display = total ? "" : "none"; }
+
+    if (!items.length) {
+      panelEl.innerHTML = `<p class="section-note">Brak oczekujących pozycji.</p>`;
+      return;
+    }
+
+    panelEl.innerHTML = "";
+    const entityType = type === "locations" ? "location" : type === "npcs" ? "npc" : "enemy";
+    items.forEach(item => {
+      const row = document.createElement("div");
+      row.className = "pending-row";
+      row.innerHTML = `
+        <div class="pending-row-info">
+          <strong>${_esc(item.label || item.name || item.key)}</strong>
+          <code>${_esc(item.key)}</code>
+          ${item.description ? `<span style="color:var(--text-muted);font-size:0.76rem">${_esc(item.description.slice(0, 80))}${item.description.length > 80 ? "…" : ""}</span>` : ""}
+        </div>
+        <div class="pending-row-actions">
+          <button class="primary-btn pending-approve-btn" style="font-size:0.78rem;padding:4px 10px">✓ Zatwierdź</button>
+          <button class="secondary-btn danger-outline pending-reject-btn" style="font-size:0.78rem;padding:4px 8px">✕ Odrzuć</button>
+        </div>`;
+
+      row.querySelector(".pending-approve-btn").addEventListener("click", async () => {
+        try {
+          await adminFetch(`/api/admin/world/review/${entityType}/${item.key}`, {
+            method: "POST", body: JSON.stringify({ action: "approve" }),
+          });
+          showToast("Zatwierdzone.", "success");
+          row.remove();
+          badge.textContent = String(Math.max(0, (parseInt(badge.textContent) || 1) - 1));
+          if (badge.textContent === "0") badge.style.display = "none";
+        } catch (e) { showToast(e.message, "error"); }
+      });
+
+      row.querySelector(".pending-reject-btn").addEventListener("click", async () => {
+        if (!confirm(`Odrzucić "${item.label || item.key}"?`)) return;
+        try {
+          await adminFetch(`/api/admin/world/review/${entityType}/${item.key}`, {
+            method: "POST", body: JSON.stringify({ action: "discard" }),
+          });
+          showToast("Odrzucone.", "success");
+          row.remove();
+          badge.textContent = String(Math.max(0, (parseInt(badge.textContent) || 1) - 1));
+          if (badge.textContent === "0") badge.style.display = "none";
+        } catch (e) { showToast(e.message, "error"); }
+      });
+
+      panelEl.appendChild(row);
+    });
+  } catch (e) {
+    panelEl.innerHTML = `<p style="color:var(--accent-red);font-size:0.82rem">${_esc(e.message)}</p>`;
+  }
 }

@@ -111,7 +111,7 @@
 
 | Task | File | Status | Notes |
 |------|------|--------|-------|
-| 30 | TASK_30_IDEAS_WORKSHOP | ❌ | AI agent co-authoring for Ideas Bank |
+| 30 | TASK_30_IDEAS_WORKSHOP | ✅ | AI agent co-authoring for Ideas Bank |
 | 31 | TASK_31_CAMPAIGN_WORKSHOP | ❌ | Admin views/edits live campaigns |
 | 32 | TASK_32_WORLD_REVIEW_QUEUE | ❌ | Approve/reject pending world entries |
 | 33SA | TASK_33_SMART_ENTRY_AGENT | ❌ | Universal AI-assisted form creation for any table |
