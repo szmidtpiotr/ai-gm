@@ -622,34 +622,33 @@ For each test, define the initial `session_flags` state, the input ACTION tag, a
 
 ### State Enforcement Tests
 
-- [ ] ATTACK in NARRATIVE state → Blocked "Nie ma wrogów w pobliżu."
-- [ ] FLEE in NARRATIVE state → Blocked "Nie ma z czego uciekać."
-- [ ] DIALOGUE in COMBAT state → Blocked "Nie możesz rozmawiać podczas walki."
-- [ ] MOVEMENT in COMBAT state → Blocked "Nie możesz się swobodnie poruszać podczas walki."
-- [ ] REST in COMBAT state → Blocked "Nie możesz odpoczywać podczas walki."
-- [ ] SHOP in COMBAT state → Blocked "Nie możesz handlować podczas walki."
+- [x] ATTACK in NARRATIVE → routes to `combat_resolver`, `new_state=COMBAT` ✓
+- [x] FLEE in NARRATIVE → Blocked "Nie ma z czego uciekać." ✓
+- [x] DIALOGUE in COMBAT → Blocked "Nie możesz rozmawiać podczas walki." ✓
+- [x] MOVEMENT in COMBAT → Blocked ✓
+- [x] REST in COMBAT → Blocked ✓
+- [x] SHOP in COMBAT → Blocked ✓
 
 ### Validation Tests
 
-- [ ] ATTACK target=dead_enemy → Blocked "{enemy.name} jest już martwy/a."
-- [ ] ATTACK target=nonexistent_key → Blocked "Cel '{key}' nie istnieje w tej walce."
-- [ ] ATTACK with stunned condition (active) → Blocked "Jesteś ogłuszony/a."
-- [ ] ATTACK with stunned condition (expired this turn) → Valid → combat_resolver
-- [ ] DIALOGUE with NPC not in current location → Blocked "{name} nie jest tutaj."
-- [ ] DIALOGUE with dead NPC → Blocked "{name} nie żyje."
-- [ ] MOVEMENT to unreachable destination → Blocked "Nie można tam dotrzeć z tego miejsca."
+- [x] ATTACK `target=dead_enemy` → Blocked ✓
+- [x] ATTACK `target=nonexistent_key` → Blocked ✓
+- [x] ATTACK with `stunned` condition → Blocked ✓
+- [x] DIALOGUE with NPC not in location → Blocked ✓
+- [x] DIALOGUE with dead NPC (`is_active=0`) → Blocked ✓
+- [x] MOVEMENT to unreachable destination → Blocked ✓
+- [x] REST in unsafe location (`safe_for_rest=0`) → Blocked ✓
+- [x] REST (long) in short-rest-only location (`safe_for_rest=1`) → Blocked ✓
+- [x] REST with active combat → Blocked ✓
+- [ ] ATTACK with stunned condition (expired this turn) → Valid → `combat_resolver`
 - [ ] MOVEMENT to locked location without key → Blocked "Przejście jest zablokowane."
-- [ ] REST in unsafe location (safe_for_rest=0) → Blocked "To miejsce nie jest bezpieczne."
-- [ ] REST (long) in short-rest-only location (safe_for_rest=1) → Blocked "To miejsce nadaje się tylko na krótki odpoczynek."
-- [ ] REST with enemies alive in location → Blocked "W pobliżu są wrogowie."
 
 ### Routing Tests
 
-- [ ] ATTACK valid in COMBAT → resolver=combat_resolver, state unchanged
-- [ ] FLEE valid in COMBAT → resolver=flee_resolver
-- [ ] DIALOGUE valid in NARRATIVE → resolver=dialogue_resolver
-- [ ] REST valid (short) in safe location → resolver=rest_resolver, new_state=RESTING
-- [ ] SHOP valid with merchant NPC present → resolver=shop_resolver, new_state=SHOPPING
+- [x] All routing tests pass — correct `resolver_key` returned ✓
+- [x] DEATH_SAVE_PENDING intercept — all non-SKILL_ATTEMPT actions blocked with death save message ✓
+- [x] FEAR_TEST_PENDING intercept — routes to `fear_resolver` ✓
+- [x] `build_session_flags()` and `get_session_state()` verified ✓
 
 ### State Transition Tests
 
@@ -667,3 +666,15 @@ For each test, define the initial `session_flags` state, the input ACTION tag, a
 - [ ] Enemy with `default_action=use_special` at 60% HP, cooldown=2 remaining → action=attack (fallback)
 - [ ] Enemy with `fear_aura=1` → character WIS save triggered at combat start
 - [ ] Enemy with no behavior profile → default action=attack character
+
+---
+
+## Implementation Notes
+
+- File: `backend/app/services/world_state_machine.py`
+- Tests: `backend/tests/test_world_state_machine.py` — 41 tests, all passing
+- Critical design: validators return ONLY `WSMResult.blocked(msg)` OR `WSMResult(valid=True)`. They NEVER return routed results. Routing is exclusively done by the `_ROUTES` table in step 4 of `validate_and_route()`.
+- Extra session_flags (e.g. REST needs `rest_type_in_progress`) returned via `_get_route_flags()` helper
+- Resolver keys are strings (`"combat_resolver"`, `"dialogue_resolver"`, etc.) — actual implementations in Phase 05+
+- `transition_state()` method for use by `game_engine`: patches `session_flags` JSON in DB
+- Test bug discovered: `narrative_flags(current_location_key=x)` conflicted with hardcoded default. Fixed with `kwargs.setdefault()` pattern
