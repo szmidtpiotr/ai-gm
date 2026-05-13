@@ -1,7 +1,21 @@
 # TASK 06 — Character Creation Wizard
 
-Phase: 02 — Character
-Status: Spec
+**Status:** ✅ Done — commit `7333544` (2026-05-13)
+**Phase:** 02 — Character
+
+**What was implemented:**
+- `_strip_hidden_fields()` now strips `gm_only` — secret_predisposition never reaches player
+- `GeneratedIdentityPreview` model extended with `bonds: list[dict]` and `weaknesses: list[dict]`
+- LLM prompt updated: generates structured bonds (description+type) and weaknesses (description+type) plus `secret_predisposition`
+- `generate_character_identity`: reads `background_note`, passes stats/skills to prompt, stores secret in `gm_only`
+- `finalize-sheet`: saves structured bonds/weaknesses arrays
+- Frontend Step 4: editable type dropdowns (person/place/object/ideal; fear/flaw/addiction/trauma)
+- Frontend sends V2 format to finalize-sheet
+
+**Notes:**
+- Legacy fields (flaw, bond, secret) kept in `GeneratedIdentityPreview` for backward compat
+- `_IDENTITY_RETRY_USER` updated to mention V2 format requirements
+- Abandoned wizard cleanup (TTL, beforeunload) deferred — not yet implemented
 
 ---
 
@@ -137,6 +151,33 @@ If the wizard modal is closed at any point before Finalize:
 3. If cancelled: return to the wizard at the current step.
 
 A character is considered an "orphan" if it has no associated completed campaign session. The cleanup also applies if the browser tab is closed mid-wizard — handle via `beforeunload` event calling a cleanup endpoint, with a server-side TTL fallback for records in `status='wizard_draft'` older than 24 hours.
+
+> **Deferred:** Abandoned wizard cleanup (confirmation dialog, DELETE endpoint, beforeunload, TTL) was not implemented in this task. It is a known gap — orphan records can accumulate. Planned for Phase 10 Polish.
+
+---
+
+## Implementation Notes
+
+**Files changed:**
+- `backend/app/api/characters.py` — identity models, LLM prompt, gm_only storage
+- `frontend/front/js/app.js` — Step 4 UI, finalize payload format
+
+**Key decisions made during implementation:**
+
+1. **`gm_only` field strips cleanly** — `_strip_hidden_fields()` now pops `gm_only` from every player-facing sheet response. The secret predisposition is stored once after `generate-identity` returns, then never returned in any GET.
+
+2. **Backward compatibility preserved** — `GeneratedIdentityPreview` keeps `flaw`, `bond`, `secret` fields alongside the new `bonds[]`, `weaknesses[]`. The `finalize-sheet` `IdentityOverrideIn` model accepts both formats. Old code that passes `flaw`/`bond` still works.
+
+3. **LLM prompt quality** — the updated prompt passes the character's top 3 stats and top skills, producing more thematically grounded identity text (a high-STR Warrior with Athletics rank 3 gets different bonds/weaknesses than a high-INT Scholar with Arcana rank 3).
+
+4. **Type validation** — `_parse_v2_bonds` and `_parse_v2_weaknesses` silently correct invalid type values (e.g., LLM returns "friendship" → falls back to "ideal"). Never crash on LLM output variation.
+
+5. **Frontend Step 4** — two `<select>` + `<textarea>` pairs for bonds, two for weaknesses. All editable. The "locked" flaw/bond inputs from V1 are removed. WFRP tone maintained in labels and loading text.
+
+**What's still V1 in this area:**
+- No `background_note` field in the character creation POST body model — it's passed via `sheet_json.background_note` and read from there in the generator
+- Step 1 archetype flavour text (WFRP copy) not yet added — Step 1 still uses the existing archetype button UI
+- No background note character counter (500 char limit) enforced in frontend
 
 ---
 

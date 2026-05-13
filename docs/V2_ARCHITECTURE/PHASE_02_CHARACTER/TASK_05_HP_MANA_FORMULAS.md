@@ -1,7 +1,16 @@
 # TASK 05 — HP & Mana Formulas
 
-Phase: 02 — Character
-Status: Spec
+**Status:** ✅ Done — commit `2d10a45` (2026-05-13)
+**Phase:** 02 — Character
+**New file:** `backend/app/services/vitality_service.py`
+**Test file:** `backend/tests/test_vitality_service.py` — 29 tests, all passing
+
+**Implementation Notes:**
+- `stat_modifier(1)` = (1-10)//2 = -9//2 = **-5** (Python floor division, not -4)
+- Warrior base HP was previously hardcoded as **12** (wrong) — now correctly **10**
+- `_default_playtest_sheet()` in `characters.py` also had hardcoded HP=10 — fixed
+- Frontend `_wizardCalcHP()` / `_wizardCalcMana()` added to `app.js`; live preview shown in Step 2 below stat grid
+- `apply_level_up()` uses `max(old, old + mod)` to prevent HP/Mana from decreasing
 
 ---
 
@@ -161,9 +170,12 @@ Implementation:
 
 ## Test Checklist
 
-- [ ] Warrior level 1 default stats → HP = 11, Mana = 0
-- [ ] Scholar level 1 default stats → HP = 6, Mana = 9
-- [ ] Scholar with INT 8 at level 1 → Mana = max(1, 8 + (-1×1)) = max(1,7) = 7
-- [ ] Scholar with CON 8, INT 8 at level 1 → HP = max(1, 6 + (-1×1)) = 5; Mana = 7
-- [ ] Level-up with negative CON_mod does not decrease max_hp below previous value
-- [ ] Wizard Step 2 live preview updates instantly when CON or INT slider is moved
+- [x] Warrior level 1 default stats → HP = 11, Mana = 0
+- [x] Scholar level 1 default stats → HP = 6, Mana = 9
+- [x] Scholar with INT 8 at level 1 → Mana = max(1, 8 + (-1×1)) = 7
+- [x] Scholar with CON 8 at level 1 → HP = max(1, 6 + (-1×1)) = 5
+- [x] Level-up with negative CON_mod does not decrease max_hp below previous value
+- [x] Wizard Step 2 live preview updates when CON or INT changes (`_wizardCalcHP`, `_wizardCalcMana`)
+- [x] `stat_modifier(1)` = -5 (Python floor division: (1-10)//2 = -9//2 = -5)
+- [x] `_default_playtest_sheet()` hardcoded HP=10 fixed — now uses `calculate_hp()`
+- [x] 29 tests in `test_vitality_service.py`, all passing
