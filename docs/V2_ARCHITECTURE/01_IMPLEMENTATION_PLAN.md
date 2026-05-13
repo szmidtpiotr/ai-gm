@@ -36,9 +36,9 @@
 
 | Task | File | Status | Notes |
 |------|------|--------|-------|
-| 01 | TASK_01_DB_SCHEMA | ❌ | All tables + game_state_definitions seed, location_connections, map columns |
-| 02 | TASK_02_INTENT_PARSER | ❌ | Player text → ACTION tag |
-| 03 | TASK_03_WORLD_STATE_MACHINE | ❌ | Validates actions, transitions states, reads state_definitions from DB |
+| 01 | TASK_01_DB_SCHEMA | ✅ | All tables + game_state_definitions seed, location_connections, map columns |
+| 02 | TASK_02_INTENT_PARSER | ✅ | Player text → ACTION tag |
+| 03 | TASK_03_WORLD_STATE_MACHINE | ✅ | Validates actions, transitions states, reads state_definitions from DB |
 | 04 | TASK_04_CONTEXT_INJECTOR | ❌ | Builds narrator prompt from DB content + mechanical result |
 
 ### Phase 02 — Character

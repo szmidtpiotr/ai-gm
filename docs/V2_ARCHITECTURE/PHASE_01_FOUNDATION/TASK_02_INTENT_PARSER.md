@@ -1,10 +1,17 @@
 # TASK 02 — Intent Parser
 
+**Status:** ✅ Done — commit `e5ab5d5` (2026-05-13)
 **Phase:** 01 — Foundation  
 **Depends on:** TASK_01 (DB Schema — `action_log` table must exist)  
 **Blocks:** TASK_03 (World State Machine consumes ACTION tags produced here)  
 **New file:** `backend/app/services/intent_parser.py`  
-**Modified file:** `backend/app/services/game_engine.py`
+**Test file:** `backend/tests/test_intent_parser.py` — 32 tests, all passing
+
+**Notes:**
+- Tag format: `[ACTION:TYPE:param=val]` for actions, `[CLARIFY:reason=...]` / `[BLOCKED:reason=...]` for signals
+- `ACTION:` is a literal prefix in the tag — the regex must consume it before reading the type
+- Button clicks use `parse_structured_action()` which bypasses LLM entirely
+- `game_engine.py` integration deferred to TASK_11 (Turn Pipeline)
 
 ---
 
