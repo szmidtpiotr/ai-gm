@@ -101,10 +101,10 @@
 
 | Task | File | Status | Notes |
 |------|------|--------|-------|
-| 26N | TASK_26_NARRATOR_ENGINE | ❌ | System prompt, constraints, post-processing |
-| 27 | TASK_27_COMBAT_NARRATION | ❌ | Per-action narration, parallellised, fallback templates |
-| 28 | TASK_28_NPC_DIALOGUE | ❌ | In-character, keyword triggers, session memory |
-| 29 | TASK_29_SCENE_NARRATION | ❌ | Exploration, movement, rest, skill test outcomes |
+| 26N | TASK_26_NARRATOR_ENGINE | ✅ | System prompt, constraints, post-processing, fallbacks |
+| 27 | TASK_27_COMBAT_NARRATION | ✅ | Per-action narration, parallellised, fallback templates |
+| 28 | TASK_28_NPC_DIALOGUE | ✅ | In-character, keyword triggers, session memory |
+| 29 | TASK_29_SCENE_NARRATION | ✅ | Exploration, movement, rest, skill test outcomes |
 
 ### Phase 08 — Admin
 > Depends on Phase 03, 04.
