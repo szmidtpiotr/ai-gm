@@ -81,12 +81,14 @@ async function _loadCytoscape() {
 
 async function _loadData(container) {
   try {
-    const [locsData, connData] = await Promise.all([
-      adminFetch("/api/admin/locations"),
+    const [locsRaw, connData] = await Promise.all([
+      adminFetch("/api/locations/admin/locations"),
       adminFetch("/api/admin/locations/connections").catch(() => ({ connections: [] })),
     ]);
-    _allLocations = locsData.locations ?? locsData ?? [];
-    _allConnections = connData.connections ?? connData ?? [];
+    // Endpoint returns a plain list; filter to macro locations only for the graph
+    const allLocs = Array.isArray(locsRaw) ? locsRaw : (locsRaw.locations ?? []);
+    _allLocations = allLocs.filter(l => l.location_type === "macro" && l.is_active !== 0);
+    _allConnections = connData.connections ?? [];
   } catch (e) {
     showToast("Błąd ładowania lokacji: " + e.message, "error");
   }
@@ -95,24 +97,27 @@ async function _loadData(container) {
 function _initGraph(container) {
   const graphEl = container.querySelector("#wb-graph");
 
-  const nodes = _allLocations.map(loc => {
+  const nodes = _allLocations.map((loc, i) => {
     const color = ARCHETYPE_COLORS[loc.location_type] || ARCHETYPE_COLORS.default;
     const status = loc.review_status || "permanent";
+    // Spread nodes in a grid if no saved positions
+    const cols = Math.ceil(Math.sqrt(_allLocations.length));
+    const defaultX = (i % cols) * 120 + 60;
+    const defaultY = Math.floor(i / cols) * 100 + 60;
     return {
       data: {
         id: loc.key,
         label: loc.label,
         key: loc.key,
         locType: loc.location_type || "macro",
-        archetype: loc.archetype || "default",
         safeForRest: loc.safe_for_rest || false,
         reviewStatus: status,
         description: loc.description || "",
         color,
       },
       position: {
-        x: (loc.map_x != null ? loc.map_x : Math.random() * 800),
-        y: (loc.map_y != null ? loc.map_y : Math.random() * 500),
+        x: (loc.map_x != null ? loc.map_x : defaultX),
+        y: (loc.map_y != null ? loc.map_y : defaultY),
       },
     };
   });
@@ -310,8 +315,8 @@ function _showLocationDetail(container, data) {
         method: "POST", body: JSON.stringify({ action: "approve" }),
       });
       showToast("Lokacja zatwierdzona.", "success");
-      _cy.$(`#${data.key}`).data("reviewStatus", "permanent");
-      _cy.$(`#${data.key}`).style("border-style", "solid").style("border-color", "#66aaff").style("opacity", 1);
+      _cy.$id(data.key).data("reviewStatus", "permanent");
+      _cy.$id(data.key).style("border-style", "solid").style("border-color", "#66aaff").style("opacity", 1);
       _showLocationDetail(container, { ...data, reviewStatus: "permanent" });
     } catch (e) { showToast(e.message, "error"); }
   });
@@ -445,7 +450,7 @@ function _showAddLocationForm(container) {
     const safe = sidebar.querySelector("#wb-new-safe").checked;
     if (!key || !label) { showToast("Klucz i nazwa są wymagane.", "error"); return; }
     try {
-      await adminFetch("/api/admin/locations", {
+      await adminFetch("/api/locations", {
         method: "POST",
         body: JSON.stringify({ key, label, location_type: locationType, description, safe_for_rest: safe }),
       });

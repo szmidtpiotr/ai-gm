@@ -2,6 +2,7 @@ import { adminFetch } from "/admin_panel_v2/shared/api.js?v=2";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
 import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=5";
 import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
+import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=1";
 
 const LABELS = {
   weapons:      "Broń",
@@ -68,6 +69,7 @@ export async function init(panel) {
           <button class="subtab-btn" data-tab="items">${LABELS.items}</button>
           <button class="subtab-btn" data-tab="consumables">${LABELS.consumables}</button>
           <button class="subtab-btn" data-tab="loot-tables">${LABELS.lootTables}</button>
+          <button class="subtab-btn" id="smart-entry-btn" title="AI asystent tworzenia treści" style="margin-left:auto">🤖 Kreator AI</button>
         </div>
         <div class="subtab-panels">
           ${["weapons","armor","items","consumables","loot-tables"].map(
@@ -122,8 +124,16 @@ export async function init(panel) {
     aiBubble.classList.remove("active");
   });
 
+  // ── Smart Entry Agent button ──
+  const TABLE_MAP = { weapons: "game_config_weapons", armor: "game_config_items", items: "game_config_items", consumables: "game_config_consumables", "loot-tables": null };
+  panel.querySelector("#smart-entry-btn").addEventListener("click", () => {
+    const activeTab = panel.querySelector(".subtab-btn.active")?.dataset?.tab;
+    openSmartEntry(TABLE_MAP[activeTab] || null);
+  });
+
   panel.querySelectorAll(".subtab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
+      if (btn.id === "smart-entry-btn") return;
       panel.querySelectorAll(".subtab-btn").forEach((b) => b.classList.remove("active"));
       panel.querySelectorAll(".subtab-panel").forEach((p) => p.classList.remove("active"));
       btn.classList.add("active");

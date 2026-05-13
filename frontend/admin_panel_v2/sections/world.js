@@ -354,18 +354,7 @@ async function _renderLocations(container) {
   toolbar.appendChild(addBtn);
   container.appendChild(toolbar);
 
-  // Pending locations section (above the main table)
-  const pendingWrap = document.createElement("details");
-  pendingWrap.className = "pending-details";
-  pendingWrap.open = true;  // open by default
-  pendingWrap.innerHTML = `
-    <summary>
-      Oczekujące lokacje
-      <span id="pending-badge" class="admin-badge admin-badge-gold" style="display:none"></span>
-    </summary>
-    <div id="pending-list" class="pending-list-body"></div>`;
-  container.appendChild(pendingWrap);
-
+  // Pending review moved to dedicated "Oczekujące" tab
   const tableHost = document.createElement("div");
   container.appendChild(tableHost);
 
@@ -458,60 +447,7 @@ async function _renderLocations(container) {
     onFill: (e) => _openLocationModal(e, locations, load),
   });
 
-  const loadPending = async () => {
-    const listEl = pendingWrap.querySelector("#pending-list");
-    const badge  = pendingWrap.querySelector("#pending-badge");
-    listEl.textContent = "Ładowanie…";
-    try {
-      const data    = await adminFetch("/api/admin/locations/pending");
-      const pending = Array.isArray(data) ? data : (data.locations ?? data.pending ?? []);
-      badge.textContent = String(pending.length);
-      badge.style.display = pending.length ? "" : "none";
-      if (!pending.length) {
-        listEl.innerHTML = `<p class="section-note">Brak oczekujących lokacji.</p>`;
-        return;
-      }
-      listEl.innerHTML = "";
-      pending.forEach((p) => {
-        const row = document.createElement("div");
-        row.className = "pending-row";
-        row.innerHTML = `
-          <div class="pending-row-info">
-            <strong>${_esc(p.label)}</strong>
-            <code>${_esc(p.key)}</code>
-            <span class="admin-badge admin-badge-muted">${_esc(p.location_type)}</span>
-            ${p.parent_key ? `<span style="color:var(--text-muted);font-size:0.78rem">→ ${_esc(p.parent_key)}</span>` : ""}
-          </div>
-          <div class="pending-row-actions">
-            <button class="primary-btn pending-approve-btn" style="font-size:0.78rem;padding:4px 10px" data-id="${p.id}">✓ Zatwierdź</button>
-            <button class="secondary-btn danger-outline pending-reject-btn" style="font-size:0.78rem;padding:4px 8px" data-id="${p.id}">✕ Odrzuć</button>
-          </div>`;
-        row.querySelector(".pending-approve-btn").addEventListener("click", async () => {
-          try {
-            await adminFetch(`/api/admin/locations/${p.id}/approve`, { method: "POST" });
-            showToast("Lokacja zatwierdzona.", "success");
-            await Promise.all([load(), loadPending()]);
-          } catch (e) { showToast(e.message || "Błąd zatwierdzenia.", "error"); }
-        });
-        row.querySelector(".pending-reject-btn").addEventListener("click", async () => {
-          if (!confirm(`Odrzucić lokację "${p.label}"?`)) return;
-          try {
-            await adminFetch(`/api/admin/locations/${p.id}/reject`, { method: "POST" });
-            showToast("Lokacja odrzucona.", "success");
-            await loadPending();
-          } catch (e) { showToast(e.message || "Błąd odrzucenia.", "error"); }
-        });
-        listEl.appendChild(row);
-      });
-    } catch (e) {
-      listEl.innerHTML = `<p style="color:var(--accent-red);font-size:0.82rem">${_esc(e.message)}</p>`;
-    }
-  };
-
-  pendingWrap.addEventListener("toggle", () => { if (pendingWrap.open) void loadPending(); });
-
   await load();
-  void loadPending(); // show badge count without opening section
 }
 
 function _openLocationModal(row, allLocations, onDone) {
