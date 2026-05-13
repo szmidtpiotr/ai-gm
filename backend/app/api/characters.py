@@ -16,6 +16,7 @@ from app.character_creation_config import (
 )
 from app.services.loot_service import grant_loot_to_character
 from app.services.vitality_service import calculate_hp, calculate_mana
+from app.services.campaign_plan_service import generate_v2_campaign_plan
 from app.services.gm_plan_generation_service import generate_initial_gm_plan_with_retries
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
@@ -1496,18 +1497,42 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     gm_plan_ready = False
     gm_plan_error: str | None = None
     try:
-        gm_plan_ready, gm_plan_error = generate_initial_gm_plan_with_retries(
-            conn,
-            campaign_id=campaign_id,
-            campaign_title=str(campaign["title"] or f"Kampania {campaign_id}"),
-            campaign_language=str(campaign["language"] or "pl"),
-            system_id=str(campaign["system_id"] or ""),
-            char_summary=char_summary,
-            user_id=int(req.user_id),
-            model=model,
-            llm_config=llm_config,
-            max_attempts=3,
-        )
+        # V2: use structured plan generator if character has bonds/weaknesses
+        rebuilt_sheet = json.loads(conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (character_id,)
+        ).fetchone()["sheet_json"] or "{}")
+        identity_block = rebuilt_sheet.get("identity") or {}
+        has_v2_identity = bool(identity_block.get("bonds") or identity_block.get("weaknesses"))
+
+        if has_v2_identity:
+            char_data = {
+                "name": name,
+                "archetype": archetype,
+                "background_note": background,
+                "identity": identity_block,
+                "gm_only": rebuilt_sheet.get("gm_only") or {},
+            }
+            gm_plan_ready, gm_plan_error = generate_v2_campaign_plan(
+                conn,
+                campaign_id=campaign_id,
+                character_data=char_data,
+                model=model,
+                llm_config=llm_config,
+                max_attempts=2,
+            )
+        else:
+            gm_plan_ready, gm_plan_error = generate_initial_gm_plan_with_retries(
+                conn,
+                campaign_id=campaign_id,
+                campaign_title=str(campaign["title"] or f"Kampania {campaign_id}"),
+                campaign_language=str(campaign["language"] or "pl"),
+                system_id=str(campaign["system_id"] or ""),
+                char_summary=char_summary,
+                user_id=int(req.user_id),
+                model=model,
+                llm_config=llm_config,
+                max_attempts=3,
+            )
     except Exception as e:
         logger.warning("[create_character] gm plan generation failed (non-fatal): %s", str(e))
         gm_plan_error = str(e)

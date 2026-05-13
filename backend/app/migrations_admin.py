@@ -1716,6 +1716,10 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     conn.commit()
     logger.info("v2_migration_applied", label="v2-xp-awards-seed")
 
+    # ── ALTER TABLE: campaigns (V2 plan storage) ──────────────────────────
+    _exec("ALTER TABLE campaigns ADD COLUMN engine_private_json TEXT DEFAULT NULL",
+          "v2-campaigns-engine-private-json")
+
     logger.info("v2_schema_migrations_complete")
 
 
