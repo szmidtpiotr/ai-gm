@@ -48,6 +48,7 @@ from app.services.location_config_service import get_bool_flag
 from app.services.location_intent_parser import LocationIntent, parse as parse_location_intent
 from app.services.location_validator import validate_move, log_integrity_violation
 from app.services.weapon_rules import is_attack_test, resolve_attack_roll_for_weapon, resolve_sheet_weapon
+from app.services.world_service import process_create_tags, get_current_location_info
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
@@ -2624,7 +2625,27 @@ def create_turn_stream(
                 yield f"data: [COMBAT]{json.dumps(combat_extra)}\n\n"
             if open_shop_npc_key:
                 yield f"data: [OPEN_SHOP]{json.dumps({'npc_key': open_shop_npc_key}, ensure_ascii=False)}\n\n"
-            yield "data: [DONE]\n\n"
+
+            # V2: process [CREATE_*] / [NPC_KILLED] tags from accumulated text
+            try:
+                done_conn = sqlite3.connect(DB_PATH)
+                done_conn.row_factory = sqlite3.Row
+                try:
+                    process_create_tags(full_raw or "", done_conn, campaign_id_val)
+                    loc_info = get_current_location_info(done_conn, campaign_id_val)
+                finally:
+                    done_conn.close()
+            except Exception:
+                loc_info = None
+
+            # Include current_location in DONE payload
+            done_payload = {}
+            if loc_info:
+                done_payload["current_location"] = loc_info
+            if done_payload:
+                yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
+            else:
+                yield "data: [DONE]\n\n"
 
         return StreamingResponse(
             token_generator(),
