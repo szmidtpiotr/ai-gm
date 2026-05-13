@@ -1381,6 +1381,340 @@ def _ensure_user_llm_settings_mode(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
+    """V2 architecture migrations — idempotent, safe to re-run."""
+
+    def _exec(sql: str, label: str) -> None:
+        try:
+            conn.execute(sql)
+            conn.commit()
+            logger.info("v2_migration_applied", label=label)
+        except sqlite3.OperationalError as e:
+            msg = str(e).lower()
+            if "already exists" in msg or "duplicate column" in msg:
+                logger.debug("v2_migration_skipped", label=label)
+            else:
+                logger.error("v2_migration_error", label=label, error=str(e))
+                raise
+
+    # ── New tables ────────────────────────────────────────────────────────
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS action_log (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id     INTEGER NOT NULL,
+            character_id    INTEGER NOT NULL,
+            turn_number     INTEGER NOT NULL,
+            action_type     TEXT    NOT NULL,
+            action_params   TEXT    NOT NULL DEFAULT '{}',
+            mechanic_result TEXT    NOT NULL DEFAULT '{}',
+            narrative_text  TEXT    NOT NULL DEFAULT '',
+            created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+        )
+    """, "v2-action-log-table")
+    _exec("CREATE INDEX IF NOT EXISTS idx_action_log_campaign ON action_log (campaign_id, turn_number)", "v2-action-log-idx-campaign")
+    _exec("CREATE INDEX IF NOT EXISTS idx_action_log_character ON action_log (character_id, created_at)", "v2-action-log-idx-character")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS character_conditions (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id    INTEGER NOT NULL,
+            condition_type  TEXT    NOT NULL,
+            severity        INTEGER NOT NULL DEFAULT 1,
+            rounds_remaining INTEGER DEFAULT NULL,
+            expires_at      TEXT    DEFAULT NULL,
+            source          TEXT    NOT NULL DEFAULT '',
+            effect_json     TEXT    NOT NULL DEFAULT '{}',
+            FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+        )
+    """, "v2-character-conditions-table")
+    _exec("CREATE INDEX IF NOT EXISTS idx_char_conditions_active ON character_conditions (character_id, expires_at)", "v2-char-conditions-idx")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS enemy_behavior_profiles (
+            enemy_key                       TEXT    PRIMARY KEY,
+            default_action                  TEXT    NOT NULL DEFAULT 'attack',
+            hp_threshold_flee               INTEGER NOT NULL DEFAULT 0,
+            special_ability_key             TEXT    DEFAULT NULL,
+            special_ability_cooldown_turns  INTEGER NOT NULL DEFAULT 3,
+            dialogue_on_aggro               TEXT    NOT NULL DEFAULT '',
+            dialogue_on_death               TEXT    NOT NULL DEFAULT '',
+            fear_aura                       INTEGER NOT NULL DEFAULT 0,
+            fear_dc                         INTEGER NOT NULL DEFAULT 0
+        )
+    """, "v2-enemy-behavior-profiles-table")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS combat_loot (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id         INTEGER NOT NULL,
+            character_id        INTEGER NOT NULL,
+            combat_location_id  TEXT    NOT NULL,
+            loot_items          TEXT    NOT NULL DEFAULT '[]',
+            status              TEXT    NOT NULL DEFAULT 'available',
+            created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE,
+            FOREIGN KEY (character_id) REFERENCES characters(id)
+        )
+    """, "v2-combat-loot-table")
+    _exec("CREATE INDEX IF NOT EXISTS idx_combat_loot_campaign ON combat_loot (campaign_id, status)", "v2-combat-loot-idx")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS campaign_ideas (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            category        TEXT    NOT NULL,
+            title           TEXT    NOT NULL,
+            description     TEXT    NOT NULL DEFAULT '',
+            structured_data TEXT    NOT NULL DEFAULT '{}',
+            tags            TEXT    NOT NULL DEFAULT '[]',
+            quality_rating  INTEGER NOT NULL DEFAULT 0,
+            times_used      INTEGER NOT NULL DEFAULT 0,
+            created_by      TEXT    NOT NULL DEFAULT 'system',
+            created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+            review_status   TEXT    NOT NULL DEFAULT 'draft',
+            cooldown_hours  INTEGER NOT NULL DEFAULT 0
+        )
+    """, "v2-campaign-ideas-table")
+    _exec("CREATE INDEX IF NOT EXISTS idx_campaign_ideas_category ON campaign_ideas (category, review_status, quality_rating)", "v2-campaign-ideas-idx")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS location_connections (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_location_key   TEXT NOT NULL,
+            to_location_key     TEXT NOT NULL,
+            travel_hours        REAL NOT NULL DEFAULT 1.0,
+            travel_description  TEXT,
+            danger_level        TEXT NOT NULL DEFAULT 'low',
+            requires_item_key   TEXT DEFAULT NULL,
+            requires_flag       TEXT DEFAULT NULL,
+            is_bidirectional    INTEGER NOT NULL DEFAULT 1,
+            is_active           INTEGER NOT NULL DEFAULT 1,
+            encounter_chance    REAL NOT NULL DEFAULT 0.1,
+            created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(from_location_key, to_location_key)
+        )
+    """, "v2-location-connections-table")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS location_npc_assignments (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            location_key    TEXT NOT NULL,
+            npc_key         TEXT NOT NULL,
+            assignment_type TEXT NOT NULL DEFAULT 'resident',
+            notes           TEXT,
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(location_key, npc_key)
+        )
+    """, "v2-location-npc-assignments-table")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS location_enemy_assignments (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            location_key    TEXT NOT NULL,
+            enemy_key       TEXT NOT NULL,
+            spawn_chance    REAL NOT NULL DEFAULT 1.0,
+            max_count       INTEGER NOT NULL DEFAULT 3,
+            notes           TEXT,
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(location_key, enemy_key)
+        )
+    """, "v2-location-enemy-assignments-table")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS character_campaign_history (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id    INTEGER NOT NULL,
+            campaign_id     INTEGER NOT NULL,
+            outcome         TEXT NOT NULL DEFAULT 'active',
+            chapter_summary TEXT,
+            xp_earned       INTEGER NOT NULL DEFAULT 0,
+            gold_at_end     INTEGER NOT NULL DEFAULT 0,
+            turns_count     INTEGER NOT NULL DEFAULT 0,
+            completed_at    TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """, "v2-character-campaign-history-table")
+    _exec("CREATE INDEX IF NOT EXISTS idx_char_campaign_history ON character_campaign_history (character_id, completed_at)", "v2-char-campaign-history-idx")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS game_config_xp_awards (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            category    TEXT NOT NULL,
+            source_key  TEXT UNIQUE NOT NULL,
+            label       TEXT NOT NULL,
+            description TEXT,
+            xp_amount   INTEGER NOT NULL DEFAULT 0,
+            is_active   INTEGER NOT NULL DEFAULT 1,
+            is_locked   INTEGER NOT NULL DEFAULT 0,
+            locked_at   TEXT DEFAULT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """, "v2-xp-awards-table")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS character_quests (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id         INTEGER NOT NULL,
+            campaign_id          INTEGER NOT NULL,
+            quest_type           TEXT NOT NULL DEFAULT 'main',
+            title                TEXT NOT NULL,
+            narrative            TEXT NOT NULL DEFAULT '',
+            status               TEXT NOT NULL DEFAULT 'active',
+            resolution           TEXT DEFAULT NULL,
+            resolution_narrative TEXT DEFAULT NULL,
+            created_turn         INTEGER,
+            completed_turn       INTEGER DEFAULT NULL,
+            created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+        )
+    """, "v2-character-quests-table")
+    _exec("CREATE INDEX IF NOT EXISTS idx_character_quests_active ON character_quests (character_id, status, campaign_id)", "v2-char-quests-idx")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS character_dungeon_runs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id    INTEGER NOT NULL,
+            location_key    TEXT NOT NULL,
+            cleared_at      TEXT NOT NULL,
+            cooldown_until  TEXT NOT NULL,
+            run_count       INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(character_id, location_key)
+        )
+    """, "v2-character-dungeon-runs-table")
+
+    # ── ALTER TABLE: V1 cleanup ───────────────────────────────────────────
+
+    _exec("ALTER TABLE game_config_items ADD COLUMN ac_bonus INTEGER NOT NULL DEFAULT 0", "v2-items-ac-bonus")
+    # Migrate existing armor AC from effect_json into ac_bonus
+    try:
+        conn.execute("""
+            UPDATE game_config_items
+            SET ac_bonus = CAST(json_extract(effect_json, '$.stat_mods.AC') AS INTEGER)
+            WHERE item_type = 'armor'
+              AND json_extract(effect_json, '$.stat_mods.AC') IS NOT NULL
+              AND ac_bonus = 0
+        """)
+        conn.commit()
+        logger.info("v2_migration_applied", label="v2-items-ac-bonus-data-migrate")
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="v2-items-ac-bonus-data-migrate", error=str(e))
+
+    _exec("ALTER TABLE game_config_archetypes ADD COLUMN hp_base INTEGER NOT NULL DEFAULT 10", "v2-archetypes-hp-base")
+    try:
+        conn.execute("UPDATE game_config_archetypes SET hp_base = 10 WHERE key = 'warrior' AND hp_base = 10")
+        conn.execute("UPDATE game_config_archetypes SET hp_base = 6  WHERE key = 'scholar'")
+        conn.execute("UPDATE game_config_archetypes SET hp_base = 8  WHERE key = 'ranger'")
+        conn.commit()
+        logger.info("v2_migration_applied", label="v2-archetypes-hp-base-seed")
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="v2-archetypes-hp-base-seed", error=str(e))
+
+    _exec("ALTER TABLE game_config_consumables ADD COLUMN ai_generated INTEGER NOT NULL DEFAULT 0", "v2-consumables-ai-generated")
+    _exec("ALTER TABLE game_config_consumables ADD COLUMN approved INTEGER NOT NULL DEFAULT 1", "v2-consumables-approved")
+
+    # ── ALTER TABLE: game_locations ───────────────────────────────────────
+
+    _exec("ALTER TABLE game_locations ADD COLUMN map_x REAL DEFAULT NULL", "v2-locations-map-x")
+    _exec("ALTER TABLE game_locations ADD COLUMN map_y REAL DEFAULT NULL", "v2-locations-map-y")
+    _exec("ALTER TABLE game_locations ADD COLUMN map_icon TEXT NOT NULL DEFAULT 'town'", "v2-locations-map-icon")
+    _exec("ALTER TABLE game_locations ADD COLUMN visible_before_visit INTEGER NOT NULL DEFAULT 0", "v2-locations-visible-before-visit")
+    _exec("ALTER TABLE game_locations ADD COLUMN safe_for_rest INTEGER NOT NULL DEFAULT 0", "v2-locations-safe-for-rest")
+    _exec("ALTER TABLE game_locations ADD COLUMN review_status TEXT NOT NULL DEFAULT 'permanent'", "v2-locations-review-status")
+    _exec("ALTER TABLE game_locations ADD COLUMN parent_key TEXT DEFAULT NULL", "v2-locations-parent-key")
+
+    # Seed parent_key from parent_id
+    try:
+        conn.execute("""
+            UPDATE game_locations
+            SET parent_key = (
+                SELECT key FROM game_locations p WHERE p.id = game_locations.parent_id
+            )
+            WHERE parent_id IS NOT NULL AND parent_key IS NULL
+        """)
+        conn.commit()
+        logger.info("v2_migration_applied", label="v2-locations-parent-key-seed")
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="v2-locations-parent-key-seed", error=str(e))
+
+    # ── ALTER TABLE: npcs ─────────────────────────────────────────────────
+
+    _exec("ALTER TABLE npcs ADD COLUMN personality_prompt TEXT DEFAULT NULL", "v2-npcs-personality-prompt")
+    _exec("ALTER TABLE npcs ADD COLUMN keyword_triggers TEXT NOT NULL DEFAULT '[]'", "v2-npcs-keyword-triggers")
+    _exec("ALTER TABLE npcs ADD COLUMN review_status TEXT NOT NULL DEFAULT 'permanent'", "v2-npcs-review-status")
+
+    # ── ALTER TABLE: game_config_enemies ──────────────────────────────────
+
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN review_status TEXT NOT NULL DEFAULT 'permanent'", "v2-enemies-review-status")
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN behavior_profile_key TEXT DEFAULT NULL", "v2-enemies-behavior-profile-key")
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN hit_location_table TEXT NOT NULL DEFAULT 'standard'", "v2-enemies-hit-location-table")
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN fear_aura INTEGER NOT NULL DEFAULT 0", "v2-enemies-fear-aura")
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN fear_dc INTEGER NOT NULL DEFAULT 12", "v2-enemies-fear-dc")
+    _exec("ALTER TABLE game_config_enemies ADD COLUMN skills_json TEXT NOT NULL DEFAULT '{}'", "v2-enemies-skills-json")
+
+    # ── ALTER TABLE: game_sessions ────────────────────────────────────────
+
+    _exec("ALTER TABLE game_sessions ADD COLUMN ingame_hours INTEGER NOT NULL DEFAULT 9", "v2-sessions-ingame-hours")
+
+    # ── ALTER TABLE: characters ───────────────────────────────────────────
+
+    _exec("ALTER TABLE characters ADD COLUMN hero_status TEXT NOT NULL DEFAULT 'active'", "v2-characters-hero-status")
+    _exec("ALTER TABLE characters ADD COLUMN visited_location_keys TEXT NOT NULL DEFAULT '[]'", "v2-characters-visited-locations")
+
+    # ── ALTER TABLE: character_xp_grants ─────────────────────────────────
+
+    _exec("ALTER TABLE character_xp_grants ADD COLUMN source_key TEXT DEFAULT NULL", "v2-xp-grants-source-key")
+    _exec("ALTER TABLE character_xp_grants ADD COLUMN campaign_id INTEGER DEFAULT NULL", "v2-xp-grants-campaign-id")
+    _exec("ALTER TABLE character_xp_grants ADD COLUMN turn_number INTEGER DEFAULT NULL", "v2-xp-grants-turn-number")
+    _exec("ALTER TABLE character_xp_grants ADD COLUMN detail TEXT DEFAULT NULL", "v2-xp-grants-detail")
+
+    # ── Seed: game_config_xp_awards ───────────────────────────────────────
+
+    xp_seeds = [
+        ('combat', 'kill_weak',           'Zabicie słabego wroga',            'Wróg tier=weak',                                            10),
+        ('combat', 'kill_standard',       'Zabicie standardowego wroga',      'Wróg tier=standard',                                        25),
+        ('combat', 'kill_elite',          'Zabicie elitarnego wroga',         'Wróg tier=elite',                                           50),
+        ('combat', 'kill_boss',           'Zabicie bossa',                    'Wróg tier=boss',                                           150),
+        ('combat', 'death_save_survived', 'Przeżycie rzutu na śmierć',        'Po każdym przeżytym rzucie na śmierć',                      15),
+        ('combat', 'outnumbered_victory', 'Zwycięstwo w przewadze (3+ wrogów)','Wszyscy wrogowie pokonani przy 3+ na starcie',             20),
+        ('campaign', 'beat_complete',     'Cel kampanii ukończony',           '[BEAT_COMPLETE] tag',                                       30),
+        ('campaign', 'side_quest',        'Zlecenie poboczne ukończone',      '[QUEST_COMPLETE] tag',                                      40),
+        ('campaign', 'dungeon_cleared',   'Loch wyczyszczony',                '[DUNGEON_CLEAR] tag',                                       75),
+        ('campaign', 'campaign_ending',   'Zakończenie kampanii',             '[CAMPAIGN_END] tag',                                       200),
+        ('exploration', 'location_new',   'Odkrycie nowej lokacji',           'Pierwsza wizyta w makrolokacji',                            15),
+        ('exploration', 'npc_first_talk', 'Pierwsza rozmowa z NPC',           'Pierwszy DIALOGUE z danym kluczem NPC',                      5),
+        ('exploration', 'secret',         'Odkrycie sekretu / wskazówki',     '[DISCOVERY:lore_key] tag',                                  10),
+        ('exploration', 'hidden_room',    'Odkrycie ukrytego przejścia',      '[DISCOVERY:secret_location] tag',                          10),
+        ('skills', 'skill_dc_12',         'Test umiejętności DC 12–15',       'Sukces w teście DC w zakresie 12-15',                        3),
+        ('skills', 'skill_dc_16',         'Test umiejętności DC 16–19',       'Sukces w teście DC w zakresie 16-19',                        8),
+        ('skills', 'skill_dc_20',         'Test umiejętności DC 20+',         'Wyjątkowy sukces w teście',                                 15),
+        ('skills', 'opposed_major_npc',   'Wygrana w teście z ważną postacią','NPC importance=critical lub supporting',                   10),
+        ('narrative', 'nonviolent_solution','Rozwiązanie bez walki',          'Konflikt zakończony bez walki',                             20),
+        ('narrative', 'heroic_sacrifice', 'Bohaterskie poświęcenie',          'Obrażenia przyjęte celowo dla ochrony NPC',                 25),
+        ('narrative', 'clever_environment','Kreatywne użycie otoczenia',      'Nieoczekiwane rozwiązanie z użyciem otoczenia',             10),
+        ('narrative', 'moral_choice',     'Trudny wybór moralny',             'Decyzja z realnym kosztem dla bohatera',                    15),
+        ('narrative', 'unexpected_ally',  'Pozyskanie niespodziewanego sojusznika','Wróg przekonany do współpracy',                      10),
+        ('narrative', 'major_discovery',  'Odkrycie kluczowej prawdy',        'Ważna tajemnica kampanii ujawniona',                        15),
+        ('narrative', '_cap_per_session', 'Limit narracyjnych PD / sesję',    'Maksymalna kwota z kategorii narracja na sesję',            50),
+        ('session', 'session_20turns',    'Sesja 20–39 tur',                  'Przyznawane przy długim odpoczynku',                        10),
+        ('session', 'session_40turns',    'Sesja 40+ tur',                    'Przyznawane przy długim odpoczynku',                        20),
+    ]
+    for category, source_key, label, description, xp_amount in xp_seeds:
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO game_config_xp_awards (category, source_key, label, description, xp_amount, is_locked) VALUES (?, ?, ?, ?, ?, 1)",
+                (category, source_key, label, description, xp_amount)
+            )
+        except Exception:
+            pass
+    conn.commit()
+    logger.info("v2_migration_applied", label="v2-xp-awards-seed")
+
+    logger.info("v2_schema_migrations_complete")
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -1446,7 +1780,8 @@ def run_admin_migrations() -> None:
         _ensure_campaign_ai_summaries_audience(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)
         _ensure_user_llm_settings_mode(conn)
+        _run_v2_schema_migrations(conn)
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="11.0")
+    logger.info("admin_migration_complete", phase="12.0")
