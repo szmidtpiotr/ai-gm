@@ -1,5 +1,7 @@
 # TASK 38 — Campaign End: Death and Victory
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 Two ways a campaign ends: the character dies (all death saves exhausted) or the story reaches a scripted ending (campaign plan victory condition). Both transitions have dedicated screens. Post-end options let the player carry their story forward into a new character or a new world.

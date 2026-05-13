@@ -1,5 +1,7 @@
 # TASK 29 — Scene Narration (Non-Combat, Non-Dialogue)
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 Everything that isn't combat or NPC dialogue is a scene narration. This covers: exploration, movement between locations, skill test outcomes, rest, examination of objects, and ambient campaign events. Scene narrations are longer and more atmospheric than combat narrations — they are where the dark fantasy tone breathes.

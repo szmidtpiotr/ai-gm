@@ -1,5 +1,7 @@
 # TASK 34 — Combat UI
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 When the game enters COMBAT state, the right panel transforms into a dedicated combat view. The main narrative panel continues to show narration. The right panel shows the tactical situation: who is fighting, whose turn it is, HP bars, conditions, and round status.

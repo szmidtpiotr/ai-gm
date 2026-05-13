@@ -1,5 +1,7 @@
 # TASK 37 — Command Palette
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 `/help` opens a modal showing all player-visible commands. Admins see all commands. Each command can be toggled per-visibility in the admin panel. Unknown commands return a friendly error message.

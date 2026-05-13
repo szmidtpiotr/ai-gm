@@ -1,5 +1,7 @@
 # TASK 39 — Auth and Onboarding
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 This is a private, closed game. Players cannot self-register. Admins create accounts. Authentication uses proper tokens stored in localStorage. The first-time experience is minimal — a brief overlay and then directly into play. There is no tutorial level; the opening scene is the tutorial.

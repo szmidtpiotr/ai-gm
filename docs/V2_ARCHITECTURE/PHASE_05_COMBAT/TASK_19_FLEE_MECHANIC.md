@@ -1,5 +1,7 @@
 # TASK 19: Flee Mechanic
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 A player can attempt to flee combat on their turn. Fleeing uses an opposed DEX roll — player vs. the fastest enemy pursuing them. Success escapes combat; failure wastes the player's turn while enemies still get to attack. Loot from the encounter is abandoned. XP is not awarded.

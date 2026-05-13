@@ -1,5 +1,7 @@
 # TASK 27 — Combat Narration
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 Combat generates one short LLM narration call per action per round. These are the most performance-critical narrator calls in the system: they must be fast, vivid, and structurally consistent. Numbers are never mentioned — HP, damage values, and dice results are displayed in the UI, not read aloud.

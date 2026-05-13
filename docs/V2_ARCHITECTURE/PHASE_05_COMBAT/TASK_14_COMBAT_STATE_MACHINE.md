@@ -1,5 +1,7 @@
 # TASK 14: Combat State Machine
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 Combat in AI-GM is a fully server-resolved loop. The backend resolves a complete round — player action, all enemy reactions, condition ticks, loot checks — and returns a structured log. The LLM only narrates the resolved result. There is no real-time back-and-forth between the frontend and backend for individual enemy turns.

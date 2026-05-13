@@ -1,7 +1,7 @@
 # TASK 23 — Healing System
 
 **Phase:** 06 — Economy  
-**Status:** Pending  
+**Status:** ❌ Not Started  
 **Related tasks:** TASK 20 (inventory/consumables), TASK 25 (XP/progression)
 
 ---

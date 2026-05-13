@@ -1,7 +1,7 @@
 # TASK 20 — Inventory and Equipment
 
 **Phase:** 06 — Economy  
-**Status:** Pending  
+**Status:** ❌ Not Started  
 **Related tasks:** TASK 21 (shop), TASK 22 (loot), TASK 23 (healing)
 
 ---
