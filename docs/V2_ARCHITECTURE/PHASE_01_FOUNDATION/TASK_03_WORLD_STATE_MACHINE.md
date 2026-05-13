@@ -1,10 +1,18 @@
 # TASK 03 — World State Machine
 
+**Status:** ✅ Done — commit `3ded667` (2026-05-13)
 **Phase:** 01 — Foundation  
 **Depends on:** TASK_01 (DB Schema), TASK_02 (Intent Parser — produces ACTION tags that WSM consumes)  
 **Blocks:** TASK_04 (Context Injector receives mechanic results from resolvers WSM routes to)  
 **New file:** `backend/app/services/world_state_machine.py`  
-**Modified file:** `backend/app/services/game_engine.py`
+**Test file:** `backend/tests/test_world_state_machine.py` — 41 tests, all passing
+
+**Notes:**
+- Validators return `WSMResult(valid=True)` or `WSMResult.blocked(msg)` only — never route
+- Routing is always done by the `_ROUTES` table in step 4
+- Extra session_flags (e.g. REST needs `rest_type_in_progress`) returned via `_get_route_flags()`
+- Resolver keys returned as strings — actual resolver implementations come in Phase 05+
+- `game_engine.py` integration deferred to TASK_11 (Turn Pipeline)
 
 ---
 

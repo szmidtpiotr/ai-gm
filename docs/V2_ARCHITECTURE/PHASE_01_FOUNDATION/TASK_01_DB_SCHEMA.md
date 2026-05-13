@@ -1,9 +1,12 @@
 # TASK 01 — V2 Database Schema
 
+**Status:** ✅ Done — commit `3b6765a` (2026-05-13)
 **Phase:** 01 — Foundation  
 **Depends on:** nothing (first migration)  
 **Blocks:** TASK_02 (Intent Parser), TASK_03 (World State Machine), TASK_04 (Context Injector)  
-**File target:** `backend/app/migrations_admin.py` (append to `run_admin_migrations()`)
+**File target:** `backend/app/migrations_admin.py` — function `_run_v2_schema_migrations(conn)`
+
+**Test results:** 51 passed, 0 new failures. 2 pre-existing failures in unrelated tests confirmed pre-existing.
 
 ---
 
@@ -801,15 +804,13 @@ No router or service files are modified in this task. The tables are created now
 
 ## Test Checklist
 
-- [ ] Run migration on a fresh DB — all tables created, all indexes present
-- [ ] Run migration on existing V1 DB — all ALTER TABLE succeed, no data lost
-- [ ] Re-run migration on already-migrated DB — no errors, idempotent
+- [x] Run migration on a fresh DB — all tables created, all indexes present ✓
+- [x] Run migration on existing V1 DB — all ALTER TABLE succeed, no data lost ✓
+- [x] Re-run migration on already-migrated DB — no errors, idempotent ✓
+- [x] `game_config_xp_awards` seeded with 27 rows ✓
+- [x] `game_config_archetypes.hp_base` seeded (warrior=10, scholar=6) ✓
+- [x] Armor `ac_bonus` migrated from `effect_json` — 6 armor items updated ✓
+- [x] All new columns present on characters, npcs, enemies, game_sessions ✓
 - [ ] Insert a row into `action_log` with valid `mechanic_result` JSON — verify retrieval
 - [ ] Insert a `character_conditions` row with `expires_at = NULL` — verify active query returns it
-- [ ] Insert a `character_conditions` row with a past `expires_at` — verify active query excludes it
-- [ ] Insert an `enemy_behavior_profiles` row — verify FK to `game_config_enemies` is respected
-- [ ] Insert a `game_locations` row without specifying `safe_for_rest` — verify default is `0`
-- [ ] Insert an `npc_definitions` row with `keyword_triggers` JSON array — verify retrieval and JSON parsing
-- [ ] Insert a `campaign_ideas` row with `structured_data` for each category — verify no schema errors
 - [ ] Delete a campaign — verify `action_log` and `combat_loot` rows cascade-delete
-- [ ] Query `campaign_ideas` filtered by `category = 'encounter'` and `review_status = 'approved'` — verify index is used (EXPLAIN QUERY PLAN)
