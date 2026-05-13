@@ -675,6 +675,18 @@ function _renderStep1(c) {
 }
 
 // Step 2 — Stat redistribution (pool model matching original frontend)
+function _wizardCalcHP(archetype, con, level = 1) {
+    const base = archetype === 'warrior' ? 10 : (archetype === 'scholar' ? 6 : 8);
+    const mod = Math.floor((con - 10) / 2);
+    return Math.max(1, base + mod * level);
+}
+
+function _wizardCalcMana(archetype, int_, level = 1) {
+    if (archetype !== 'scholar') return 0;
+    const mod = Math.floor((int_ - 10) / 2);
+    return Math.max(1, 8 + mod * level);
+}
+
 function _renderStep2(c) {
     const archetype = wizardCreatedChar?.sheet_json?.archetype || 'warrior';
     const bonus = ARCHETYPE_BONUS[archetype] || {};
@@ -699,12 +711,24 @@ function _renderStep2(c) {
             </div>`;
     }
 
+    const previewCon = wizardStatBases['CON'] ?? 10;
+    const previewInt = wizardStatBases['INT'] ?? 10;
+    const previewHp   = _wizardCalcHP(archetype, previewCon);
+    const previewMana = _wizardCalcMana(archetype, previewInt);
+    const manaLine = archetype === 'scholar'
+        ? `<span class="wizard-preview-item">✨ Mana: <strong>${previewMana}</strong></span>`
+        : `<span class="wizard-preview-item wizard-preview-muted">✨ Mana: —</span>`;
+
     c.innerHTML = `
         <div class="wizard-form">
             <p class="wizard-hint">Przesuń punkty między statystykami. Zmniejsz stat (−) aby dodać do puli, wydaj pulę (+) na inne. Bonusy klasy dodawane automatycznie.</p>
             <div class="wizard-points">Niezapisane punkty: <strong>${wizardStatUnassigned}</strong></div>
             <p class="wizard-class-note">${bonusStr} dodawane automatycznie po potwierdzeniu</p>
             <div class="wizard-stat-grid">${rows}</div>
+            <div class="wizard-vitality-preview">
+                <span class="wizard-preview-item">❤️ HP: <strong>${previewHp}</strong></span>
+                ${manaLine}
+            </div>
             <button type="button" class="btn btn--secondary wizard-reset-btn" id="wiz-stat-reset">Reset</button>
         </div>
     `;
