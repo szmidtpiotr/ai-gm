@@ -1720,6 +1720,34 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     _exec("ALTER TABLE campaigns ADD COLUMN engine_private_json TEXT DEFAULT NULL",
           "v2-campaigns-engine-private-json")
 
+    # ── Seed: enemy_behavior_profiles (Phase 05) ──────────────────────────
+    behavior_seeds = [
+        ("goblin",         "Goblin Standard",      "attack_player", 25, "throw_rock", 3, "Goblin warczy i atakuje!", "Goblin pada z cichym świstem.", 0, 0),
+        ("goblin_archer",  "Goblin Archer",         "attack_player", 20, None,         0, "Goblin łucznik naciąga cięciwę!", "Goblin pada.", 0, 0),
+        ("bandit",         "Bandit",                "attack_weakest",20, None,         0, "Bandyta atakuje!", "Bandyta osunął się na ziemię.", 0, 0),
+        ("wolf",           "Wolf",                  "attack_player",  15, None,         0, "Wilk warczy z nisko opuszczoną głową.", "Wilk pada.", 0, 0),
+        ("skeleton",       "Skeleton",              "attack_player",   0, None,         0, "Szkielet zgrzyta kośćmi.", "Kości rozsypują się.", 0, 0),
+        ("orc",            "Orc",                   "attack_weakest", 10, None,         0, "Ork ryczy i szarżuje!", "Ork pada z głuchym łoskotem.", 0, 0),
+        ("troll",          "Troll",                 "attack_player",   5, "regenerate", 2, "Troll ryczy — sam widok budzi grozę!", "Troll pada.", 1, 12),
+        ("vampire_master", "Vampire",               "attack_player",   0, "drain_life",  3, "Wampir uśmiecha się. Zimno.", "Wampir rozpływa się w mroku.", 1, 16),
+    ]
+    for (key, display_name, default_action, hp_flee, special_key, special_cd,
+         aggro, death, fear_aura, fear_dc) in behavior_seeds:
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO enemy_behavior_profiles
+                   (enemy_key, default_action, hp_threshold_flee, special_ability_key,
+                    special_ability_cooldown_turns, dialogue_on_aggro, dialogue_on_death,
+                    fear_aura, fear_dc)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (key, default_action, hp_flee, special_key, special_cd,
+                 aggro, death, fear_aura, fear_dc)
+            )
+        except Exception:
+            pass
+    conn.commit()
+    logger.info("v2_migration_applied", label="v2-behavior-profiles-seed")
+
     logger.info("v2_schema_migrations_complete")
 
 
