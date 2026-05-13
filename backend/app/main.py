@@ -55,6 +55,7 @@ from app.routers.session_location import router as session_location_router
 from app.routers.admin_location import router as admin_location_router
 from app.routers.bg_images import router as bg_images_router
 from app.routers.admin_analytics import router as admin_analytics_router
+from app.routers.world_review import router as world_review_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -281,6 +282,7 @@ app.include_router(locations_router, prefix="/api")
 app.include_router(session_location_router)
 app.include_router(admin_location_router)
 app.include_router(bg_images_router, prefix="/api")
+app.include_router(world_review_router)
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")
     app.include_router(test_runner_router, prefix="/api")
