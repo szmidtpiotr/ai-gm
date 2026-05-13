@@ -1,6 +1,6 @@
 # TASK 27 — Combat Narration
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done — `narrator_service.narrate_combat_action()` + `narrate_round()`
 
 ## Overview
 

@@ -1,6 +1,6 @@
 # TASK 28 — NPC Dialogue Narration
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done — `narrator_service.narrate_npc_dialogue()`
 
 ## Overview
 

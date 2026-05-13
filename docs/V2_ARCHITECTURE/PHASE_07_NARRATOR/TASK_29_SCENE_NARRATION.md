@@ -1,6 +1,6 @@
 # TASK 29 — Scene Narration (Non-Combat, Non-Dialogue)
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done — `narrator_service.narrate_scene()`
 
 ## Overview
 
