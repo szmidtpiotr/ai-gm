@@ -1,7 +1,7 @@
 # TASK 11 — Turn Processing Pipeline
 
 **Phase:** 04 — Gameplay  
-**Status:** Pending  
+**Status:** ❌ Not Started  
 **File to modify:** `backend/app/services/game_engine.py`
 
 ---

@@ -1,5 +1,7 @@
 # TASK 33 — Hybrid Input UI
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 Player input combines two modalities: context-sensitive action buttons (shortcuts for common actions in the current state) and a free-text input field (always present, always primary). Buttons are convenience — they bypass the Intent Parser and go directly to the World State Machine. Free text is expression — it goes through full Intent Parsing.

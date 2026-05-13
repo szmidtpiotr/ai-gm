@@ -1,7 +1,7 @@
 # TASK 43 — Player World Map
 
 **Phase:** 09 — Frontend
-**Status:** Not Started
+**Status:** ❌ Not Started
 **Depends on:** TASK 40 (World Builder — same data source), TASK 08 (Location System)
 
 ---

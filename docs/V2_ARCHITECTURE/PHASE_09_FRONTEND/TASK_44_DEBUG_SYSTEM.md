@@ -1,7 +1,7 @@
 # TASK 44 — Debug System
 
 **Phase:** 09 — Frontend
-**Status:** Not Started
+**Status:** ❌ Not Started
 **Depends on:** TASK 11 (Turn Pipeline — must expose debug data in response payload)
 
 ---

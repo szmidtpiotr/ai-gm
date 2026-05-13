@@ -1,7 +1,7 @@
 # TASK 22 — Loot System
 
 **Phase:** 06 — Economy  
-**Status:** Pending  
+**Status:** ❌ Not Started  
 **Related tasks:** TASK 05 (combat), TASK 20 (inventory), TASK 23 (healing)
 
 ---

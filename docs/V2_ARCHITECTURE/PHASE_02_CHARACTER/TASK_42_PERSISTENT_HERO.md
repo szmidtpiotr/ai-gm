@@ -1,7 +1,7 @@
 # TASK 42 — Persistent Hero System
 
 **Phase:** 02 — Character
-**Status:** Not Started
+**Status:** ❌ Not Started
 **Depends on:** TASK 06 (Character Creation Wizard)
 
 ---

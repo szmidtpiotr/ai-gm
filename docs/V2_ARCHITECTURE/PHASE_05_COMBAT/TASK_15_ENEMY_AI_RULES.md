@@ -1,5 +1,7 @@
 # TASK 15: Enemy AI — Rule-Based Behavior Profiles
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 Enemy decisions are resolved by deterministic Python logic, not the LLM. Each enemy type has a `behavior_profile_key` that points to a row in `enemy_behavior_profiles`. On each enemy turn, `enemy_behavior_service.py` reads the profile, evaluates conditions in priority order, and returns a structured action. The LLM never touches the decision — it only receives the resolved action as narration context.

@@ -1,5 +1,7 @@
 # TASK 36 — Memory, History, and Campaign Continuity
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 Players accumulate a lot of story. The `/mem` command lets them search their own campaign history. The "Historia" button generates a narrative summary. The GM uses session continuity context to stay consistent between sessions. The `/helpme` command provides hints without spoilers.

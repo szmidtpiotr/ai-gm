@@ -1,7 +1,7 @@
 # TASK 41 — Dungeon Runs
 
 **Phase:** 06 — Economy
-**Status:** Not Started
+**Status:** ❌ Not Started
 **Depends on:** TASK 40 (World Builder — dungeon nodes), TASK 14 (Combat)
 
 ---

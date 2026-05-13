@@ -1,7 +1,7 @@
 # TASK 12 — Skill Tests
 
 **Phase:** 04 — Gameplay  
-**Status:** Pending  
+**Status:** ❌ Not Started  
 **Related tasks:** TASK 11 (turn pipeline), TASK 05 (character stats)
 
 ---

@@ -1,5 +1,7 @@
 # TASK 16: Fear & Terror System
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 The Fear & Terror system brings WFRP's psychological horror into combat. Encountering certain entities forces a WIS saving throw. Failure applies escalating conditions — FRIGHTENED, PANICKED, or BREAK — that constrain player choices and create genuine tension. The mechanics are resolved by the backend entirely; the LLM narrates the psychological moment after the outcome is determined.

@@ -1,5 +1,7 @@
 # TASK 17: Critical Hits & Hit Location Table
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 A critical hit occurs when an attack roll exceeds the target's Armor Class (AC) by a configurable threshold, or when a natural 20 is rolled. Critical hits deal doubled damage and trigger a d6 hit location roll. Each location applies a mechanical condition to the target — never just a flat damage bonus. The LLM narrates the wound vividly after the location and condition are resolved by the backend.

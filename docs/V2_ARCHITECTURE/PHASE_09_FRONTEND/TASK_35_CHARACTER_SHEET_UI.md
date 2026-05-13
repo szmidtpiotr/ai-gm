@@ -1,5 +1,7 @@
 # TASK 35 — Character Sheet UI
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 The character sheet lives in the right sidebar and is the player's persistent reference for their character's state. It is visible during all non-combat states. During combat, it is replaced by the Combat UI (TASK_34) and returns when combat ends.

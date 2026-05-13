@@ -1,5 +1,7 @@
 # TASK 28 — NPC Dialogue Narration
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 When the player initiates dialogue with an NPC, the narrator voices that NPC in first person. The NPC's words come entirely from the LLM — but constrained by their personality, their knowledge set, and any mandatory disclosures triggered by the player's input.

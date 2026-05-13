@@ -1,7 +1,7 @@
 # TASK 21 — Shop System
 
 **Phase:** 06 — Economy  
-**Status:** Pending  
+**Status:** ❌ Not Started  
 **Related tasks:** TASK 20 (inventory), TASK 11 (turn pipeline), TASK 12 (skill tests)
 
 ---

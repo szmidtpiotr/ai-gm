@@ -1,5 +1,7 @@
 # TASK 18: Death Save System
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 When a player character reaches 0 HP, they do not die immediately. They enter a Death Save state, rolling **pure d20** against an escalating DC ladder. The ladder makes each subsequent near-death moment within the same combat harder to survive — a character who has been dropped multiple times is genuinely closer to the grave. Three failures mean death.

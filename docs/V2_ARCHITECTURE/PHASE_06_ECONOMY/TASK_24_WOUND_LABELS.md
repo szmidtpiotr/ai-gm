@@ -1,7 +1,7 @@
 # TASK 24 — Wound Labels
 
 **Phase:** 06 — Economy  
-**Status:** Pending  
+**Status:** ❌ Not Started  
 **Related tasks:** TASK 11 (turn pipeline / context injector), TASK 23 (healing system)
 
 ---

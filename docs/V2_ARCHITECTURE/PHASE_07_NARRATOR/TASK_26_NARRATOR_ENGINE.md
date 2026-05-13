@@ -1,5 +1,7 @@
 # TASK 26 — Narrator Engine (Core Architecture)
 
+**Status:** ❌ Not Started
+
 ## Overview
 
 The LLM has exactly two jobs in this system: **Intent Parsing** and **Narration**. This task covers narration only. The narrator is a pure prose renderer — it receives structured mechanical facts and returns Polish prose. It does not decide what happens. It never invents facts.

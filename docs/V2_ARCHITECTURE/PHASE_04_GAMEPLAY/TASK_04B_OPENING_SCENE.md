@@ -1,7 +1,7 @@
 # TASK 14 — Opening Scene
 
 **Phase:** 04 — Gameplay  
-**Status:** Pending  
+**Status:** ❌ Not Started  
 **Related tasks:** TASK 07 (campaign plan generation), TASK 09 (character finalization), TASK 11 (turn pipeline)
 
 ---
