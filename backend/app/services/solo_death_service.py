@@ -16,11 +16,24 @@ logger = get_logger(__name__)
 
 DEATH_SAVE_FAILURE_THRESHOLD = 3
 
+# V2: Escalating DC ladder — pure d20, no CON modifier
+# Each time player reaches 0 HP in same combat, DC increases.
+_V2_DC_LADDER = [10, 13, 16, 19]
+
+
+def get_v2_death_save_dc(death_save_count: int) -> int:
+    """Return the DC for the Nth 0-HP event in this combat (1-indexed)."""
+    idx = min(max(0, death_save_count - 1), len(_V2_DC_LADDER) - 1)
+    return _V2_DC_LADDER[idx]
+
 
 def apply_death_save_outcome(sheet: dict, roll_result: dict) -> tuple[dict, bool]:
     """
     Update death_save_failures on sheet for a resolved death_save roll.
     Returns (updated_sheet, died) where died is True if failures >= threshold.
+
+    V2: Uses escalating DC via death_save_count field on sheet.
+    Falls back to fixed DC 10 for V1 compatibility.
     """
     if roll_result.get("test") != "death_save":
         return sheet, False
@@ -31,13 +44,20 @@ def apply_death_save_outcome(sheet: dict, roll_result: dict) -> tuple[dict, bool
     is_nat20 = bool(roll_result.get("is_nat20"))
     is_nat1 = bool(roll_result.get("is_nat1"))
 
-    if total >= 10 or is_nat20:
-        new_failures = 0
+    # V2: use escalating DC if death_save_count is tracked
+    death_save_count = int(out.get("death_save_count") or 1)
+    dc = get_v2_death_save_dc(death_save_count)
+
+    if total >= dc or is_nat20:
+        # Success: clear failures (but NOT death_save_count — it persists per combat)
+        new_failures = prev  # V2: failures do NOT reset on success (ladder is per-combat)
     else:
         inc = 2 if is_nat1 else 1
         new_failures = prev + inc
 
     out["death_save_failures"] = new_failures
+    # Increment count for next 0-HP event
+    out["death_save_count"] = death_save_count + (1 if not (total >= dc or is_nat20) else 0)
     died = new_failures >= DEATH_SAVE_FAILURE_THRESHOLD
     return out, died
 
