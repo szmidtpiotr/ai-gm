@@ -1,7 +1,7 @@
 # TASK 10 — Data Tables as Source of Truth
 
-Phase: 03 — World
-Status: Spec
+**Status:** ✅ Done — commit `cd4c2d1` (2026-05-13)
+**Phase:** 03 — World
 
 ---
 
@@ -193,3 +193,15 @@ ALTER TABLE game_config_enemies ADD COLUMN review_status TEXT DEFAULT 'permanent
 ```
 
 All new columns have safe defaults and will not break existing records.
+
+---
+
+## Implementation Notes
+- `review_status` columns on game_locations, npcs, game_config_enemies already in DB from TASK_01 migrations
+- `process_create_tags()` in `world_service.py`: regex-based tag parsing, idempotent (existing key = return existing record)
+- [CREATE_ENEMY] inherits stats from `based_on` key if provided; otherwise uses tier defaults
+- Items: no [CREATE_ITEM] tag — items are admin-only, consistent with spec
+- Admin review queue: 5 endpoints at `/api/admin/world/...` (counts, list per type, approve/discard)
+- `build_available_content_index()` injects [AVAILABLE CONTENT] block with real DB keys
+- Tags processed AFTER turn saves to DB (in DONE event handler) — prevents blocking the stream
+- Turn pipeline (TASK_11) will need to call `build_available_content_index()` + `build_v2_npc_context_block()` before each LLM call

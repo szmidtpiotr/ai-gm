@@ -1,7 +1,7 @@
 # TASK 09 — NPC System (V2)
 
-Phase: 03 — World
-Status: Spec
+**Status:** ✅ Done — commit `cd4c2d1` (2026-05-13)
+**Phase:** 03 — World
 
 ---
 
@@ -173,3 +173,13 @@ New NPCs created via `[CREATE_NPC]` start with `review_status = 'pending_review'
 - Discard (→ `discarded`): NPC becomes a ghost record, not injected into future sessions. Sessions where it was already used are unaffected.
 
 See TASK_10 for the full review queue UI.
+
+---
+
+## Implementation Notes
+- `personality_prompt`, `keyword_triggers`, `npc_type` already in DB from TASK_01 migrations
+- `build_v2_npc_context_block()` in `world_service.py`: reads personality_prompt + keyword_triggers, injects must_reveal_info when player text matches keyword (case-insensitive substring match)
+- Secret triggers (`is_secret=true`) inject: "NPC reveals reluctantly, hints then confirms if pressed"
+- `[NPC_KILLED: key=x]` tag: sets npcs.is_active=0, updates campaign plan key_npcs alive flag
+- NPC location assignment: checks `location_npc_assignments` first, falls back to `npc_keys` JSON on game_locations
+- NPC personality_prompt auto-generation via secondary LLM call (on [CREATE_NPC] tag) — NOT yet implemented; personality_prompt is set from the raw `personality=` tag field (truncated to 300 chars)

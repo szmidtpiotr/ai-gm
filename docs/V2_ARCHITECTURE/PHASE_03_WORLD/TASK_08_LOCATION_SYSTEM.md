@@ -1,7 +1,7 @@
 # TASK 08 — Location System
 
-Phase: 03 — World
-Status: Spec
+**Status:** ✅ Done — commit `cd4c2d1` (2026-05-13)
+**Phase:** 03 — World
 
 ---
 
@@ -156,3 +156,13 @@ On the location edit form, add:
 - `parent_key` text field (shown only when type = sub)
 
 These fields already likely exist in the locations router — verify and add any missing ones.
+
+---
+
+## Implementation Notes
+- `safe_for_rest` and `review_status` columns already added in TASK_01 migrations — no new migration needed
+- `current_location` added to SSE stream DONE event: `[DONE]{"current_location":{"key":"...","label":"...","safe_for_rest":0}}`
+- `get_current_location_info()` in `world_service.py` — JOIN on game_sessions.current_location_id
+- Available content index (enemies/NPCs per location) built by `build_available_content_index()` in `world_service.py`
+- Starting location from campaign plan (TASK_07) not yet wired — pending Turn Pipeline (TASK_11)
+- 25 tests in `test_world_service.py` covering all core functions

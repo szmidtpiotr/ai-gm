@@ -56,9 +56,9 @@
 
 | Task | File | Status | Notes |
 |------|------|--------|-------|
-| 08 | TASK_08_LOCATION_SYSTEM | ❌ | Badge, safe_for_rest, location_connections validation |
-| 09 | TASK_09_NPC_SYSTEM | ❌ | Personality DB, keyword triggers, dialogue hooks |
-| 10 | TASK_10_DATA_TABLES_SOURCE_OF_TRUTH | ❌ | Lookup-before-create, pending_review, review queue |
+| 08 | TASK_08_LOCATION_SYSTEM | ✅ | Badge, safe_for_rest, location_connections validation |
+| 09 | TASK_09_NPC_SYSTEM | ✅ | Personality DB, keyword triggers, dialogue hooks |
+| 10 | TASK_10_DATA_TABLES_SOURCE_OF_TRUTH | ✅ | Lookup-before-create, pending_review, review queue |
 
 ### Phase 04 — Gameplay Loop
 > Depends on Phase 01, 02, 03.
