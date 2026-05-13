@@ -2954,7 +2954,9 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   gap: 8px;
   margin-top: 8px;
 }
-\.workshop-textarea {\n  min-height: 60px;\n  max-height: 160px;
+.workshop-textarea {
+  min-height: 120px;
+  max-height: 240px;
   flex: 1;
   background: var(--bg-elevated);
   border: 1px solid var(--border);

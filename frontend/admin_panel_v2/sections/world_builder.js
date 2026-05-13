@@ -127,8 +127,8 @@ function _initGraph(container) {
       id: `${conn.from_key}-${conn.to_key}`,
       source: conn.from_key,
       target: conn.to_key,
-      travelTime: conn.travel_time_minutes || 0,
-      isDangerous: conn.is_dangerous || false,
+      travelTime: conn.travel_hours || 0,
+      isDangerous: conn.danger_level === "high",
       isBidirectional: conn.is_bidirectional !== false,
     },
   }));
@@ -383,8 +383,8 @@ function _showConnectionsPanel(container, key, label) {
         ${_allLocations.filter(l => l.key !== key).map(l => `<option value="${_esc(l.key)}">${_esc(l.label)}</option>`).join("")}
       </select>
       <div style="display:flex;gap:8px;align-items:center">
-        <input type="number" id="wb-conn-time" class="field-input" placeholder="Czas (min)" min="1" max="9999" style="width:90px" value="60" />
-        <label style="font-size:0.8rem"><input type="checkbox" id="wb-conn-danger"> Niebezpieczna</label>
+        <input type="number" id="wb-conn-time" class="field-input" placeholder="Czas podróży (h)" min="1" max="9999" style="width:90px" value="1" />
+        <label style="font-size:0.8rem"><input type="checkbox" id="wb-conn-danger"> danger_level: high</label>
       </div>
       <button class="primary-btn" id="wb-add-conn-btn" type="button" style="width:100%;margin-top:8px">Dodaj połączenie</button>
     </div>`;
@@ -398,14 +398,14 @@ function _showConnectionsPanel(container, key, label) {
   });
 }
 
-async function _createConnection(container, fromKey, toKey, travelTime = 60, isDangerous = false) {
+async function _createConnection(container, fromKey, toKey, travelTime = 1, isDangerous = false) {
   try {
     await adminFetch("/api/admin/locations/connections", {
       method: "POST",
       body: JSON.stringify({
         from_key: fromKey, to_key: toKey,
-        travel_time_minutes: travelTime,
-        is_dangerous: isDangerous,
+        travel_hours: travelTime,
+        danger_level: isDangerous ? "high" : "normal",
         is_bidirectional: true,
       }),
     });

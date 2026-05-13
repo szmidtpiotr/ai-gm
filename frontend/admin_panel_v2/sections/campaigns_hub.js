@@ -85,7 +85,8 @@ async function _initCampaignWorkshop(container) {
           <div class="chat-msg agent"><div class="chat-bubble">Wybierz kampanię i zacznij rozmowę. Mogę analizować plan, proponować zmiany, wykrywać luki fabularne.</div></div>
         </div>
         <div class="workshop-input-row">
-          <textarea id="cw-input" class="workshop-textarea" rows="2"
+          <textarea id="cw-input" class="workshop-textarea" rows="4"
+            style="min-height:80px"
             placeholder="Zapytaj o kampanię lub poproś o zmiany…" maxlength="2000" disabled></textarea>
           <button class="primary-btn" id="cw-send-btn" type="button" disabled>Wyślij</button>
         </div>

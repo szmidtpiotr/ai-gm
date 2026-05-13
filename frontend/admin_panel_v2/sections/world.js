@@ -114,7 +114,7 @@ async function _activateTab(panel, tab) {
   else if (tab === "rules")     await _renderRules(container);
   else if (tab === "pending")   await _renderPendingReview(container, panel);
   else if (tab === "builder") {
-    const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=1");
+    const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=2");
     await initBuilder(container);
   }
 }
@@ -403,6 +403,7 @@ async function _renderLocations(container) {
 
     renderTable(tableHost, columns, rows, {
       tableId:           "locations",
+      selectable:        true,
       showTextSearch:    true,
       searchPlaceholder: "Szukaj lokacji…",
       async onEdit(row, colKey, newVal, { force } = {}) {
@@ -581,6 +582,7 @@ async function _renderNpcs(container) {
 
     renderTable(tableHost, columns, rows, {
       tableId:           "npcs",
+      selectable:        true,
       showTextSearch:    true,
       searchPlaceholder: "Szukaj NPC…",
       async onEdit(row, colKey, newVal, { force } = {}) {
@@ -839,6 +841,7 @@ async function _renderEnemies(container) {
 
     renderTable(tableHost, cols, rows, {
       tableId: "enemies",
+      selectable: true,
       showTextSearch: true, searchPlaceholder: "Szukaj wrogów…",
       async onEdit(row, colKey, newVal, { force } = {}) {
         // Map computed display keys back to actual API fields

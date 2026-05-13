@@ -83,7 +83,8 @@ function _initWorkshop(container) {
           </div>
         </div>
         <div class="workshop-input-row">
-          <textarea id="workshop-input" class="workshop-textarea" rows="2"
+          <textarea id="workshop-input" class="workshop-textarea" rows="4"
+            style="min-height:80px"
             placeholder="Opisz pomysł lub odpowiedz na pytanie agenta…" maxlength="2000"></textarea>
           <button class="primary-btn" id="workshop-send-btn" type="button">Wyślij</button>
         </div>
@@ -119,7 +120,7 @@ function _initWorkshop(container) {
         body: JSON.stringify({ session_id: _sessionId, message: text }),
       });
       typing.remove();
-      _appendMsg(messages, resp.reply || "—", "agent");
+      _appendMsg(messages, _stripJsonBlock(resp.reply) || "—", "agent");
       if (resp.draft) {
         _currentDraft = resp.draft;
         _renderDraft(container, resp.draft);
@@ -166,6 +167,11 @@ function _initWorkshop(container) {
   });
 }
 
+function _stripJsonBlock(text) {
+  // Remove ```json ... ``` blocks entirely — draft is shown in right panel
+  return text.replace(/```json[\s\S]*?```/gi, '').replace(/```[\s\S]*?```/gi, '').trim();
+}
+
 function _appendMsg(container, text, type) {
   const div = document.createElement("div");
   div.className = `chat-msg ${type}`;
@@ -182,17 +188,29 @@ function _renderDraft(container, draft) {
   const label = CATEGORY_LABELS[category] || category;
 
   let fields = "";
-  const skip = new Set(["category"]);
+  const skip = new Set(["category", "title"]);
   for (const [k, v] of Object.entries(draft)) {
     if (skip.has(k)) continue;
-    const val = typeof v === "object" ? JSON.stringify(v, null, 2) : String(v ?? "");
-    fields += `<div class="draft-field"><span class="draft-key">${_esc(k)}</span><span class="draft-val">${_esc(val)}</span></div>`;
+    let valHtml = "";
+    if (Array.isArray(v)) {
+      const items = v.map(item => `<li>${_esc(String(item ?? ""))}</li>`).join("");
+      valHtml = `<ul class="draft-list">${items}</ul>`;
+    } else if (v !== null && typeof v === "object") {
+      valHtml = `<span class="draft-val">${_esc(JSON.stringify(v, null, 2))}</span>`;
+    } else {
+      valHtml = `<span class="draft-val">${_esc(String(v ?? ""))}</span>`;
+    }
+    fields += `<div class="draft-field"><span class="draft-key">${_esc(k)}</span>${valHtml}</div>`;
   }
 
   preview.innerHTML = `
     <div class="draft-category-badge">${icon} ${_esc(label)}</div>
-    <div class="draft-title">${_esc(draft.title || "—")}</div>
-    <div class="draft-fields">${fields}</div>`;
+    <h3 class="draft-title">${_esc(draft.title || "—")}</h3>
+    <div class="draft-fields">${fields}</div>
+    <details style="margin-top:12px">
+      <summary style="font-size:0.75rem;color:var(--text-muted);cursor:pointer">JSON (do zapisu)</summary>
+      <pre style="font-size:0.72rem;background:var(--bg-elevated);padding:8px;border-radius:4px;overflow:auto;max-height:200px;white-space:pre-wrap;margin-top:6px">${_esc(JSON.stringify(draft, null, 2))}</pre>
+    </details>`;
 }
 
 // ── Ideas Bank ──────────────────────────────────────────────────────────────

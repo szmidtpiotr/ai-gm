@@ -263,6 +263,7 @@ async function _renderSkills(container) {
     ];
 
     renderTable(tableHost, columns, rows, {
+      selectable: true,
       showTextSearch: true,
       searchPlaceholder: "Szukaj umiejętności…",
       async onEdit(row, colKey, newVal, { force }) {
@@ -465,6 +466,7 @@ async function _renderConditions(container) {
     ];
 
     renderTable(tableHost, columns, rows, {
+      selectable: true,
       showTextSearch: true,
       searchPlaceholder: "Szukaj stanów…",
       async onEdit(row, colKey, newVal, { force }) {
