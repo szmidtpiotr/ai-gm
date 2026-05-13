@@ -1,7 +1,7 @@
 # TASK 13 — Campaign Plan V2: Runtime Behavior
 
 **Phase:** 04 — Gameplay  
-**Status:** ❌ Not Started  
+**Status:** ✅ Done — commit `92e990f` (2026-05-13)  
 **Related tasks:** TASK 07 (plan generation), TASK 11 (turn pipeline)
 
 ---
