@@ -17,6 +17,7 @@ from app.character_creation_config import (
 from app.services.loot_service import grant_loot_to_character
 from app.services.vitality_service import calculate_hp, calculate_mana
 from app.services.campaign_plan_service import generate_v2_campaign_plan
+from app.services.turn_pipeline import generate_opening_scene as generate_v2_opening_scene
 from app.services.gm_plan_generation_service import generate_initial_gm_plan_with_retries
 from app.services.llm_service import generate_chat
 from app.services.user_llm_settings import get_user_llm_settings_full
