@@ -48,7 +48,7 @@
 |------|------|--------|-------|
 | 05 | TASK_05_HP_MANA_FORMULAS | ✅ | HP = base + CON_mod × level. Mana = 8 + INT_mod × level (Scholar) |
 | 06 | TASK_06_CHARACTER_WIZARD | ✅ | 4-step wizard, GM identity generation, secret predisposition |
-| 07 | TASK_07_CAMPAIGN_PLAN_GENERATION | ❌ | LLM generates from character + Ideas Bank |
+| 07 | TASK_07_CAMPAIGN_PLAN_GENERATION | ✅ | LLM generates from character + Ideas Bank |
 | 42 | TASK_42_PERSISTENT_HERO | ❌ | Hero lives across campaigns, rest state, adventure selection |
 
 ### Phase 03 — World
