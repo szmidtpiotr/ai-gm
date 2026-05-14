@@ -1,4 +1,4 @@
-import { adminFetch } from "/admin_panel_v2/shared/api.js?v=2";
+import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
 
 const LABELS = {

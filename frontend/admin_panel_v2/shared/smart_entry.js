@@ -2,7 +2,7 @@
  * Smart Entry Agent overlay — Phase 08 Task 33
  * Import and call openSmartEntry(table?) from any admin section.
  */
-import { adminFetch } from "/admin_panel_v2/shared/api.js?v=2";
+import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
 
 let _overlay = null;

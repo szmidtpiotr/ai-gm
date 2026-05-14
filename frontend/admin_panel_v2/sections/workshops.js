@@ -3,7 +3,7 @@
  * Tab 1: Warsztat Pomysłów (Ideas Workshop — Task 30)
  * Tab 2: Bank Pomysłów (Ideas Bank browser)
  */
-import { adminFetch } from "/admin_panel_v2/shared/api.js?v=2";
+import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
 
 let _sessionId = null;
