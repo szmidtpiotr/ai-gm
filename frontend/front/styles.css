@@ -888,6 +888,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+  position: relative;
 }
 
 .chat__messages {
@@ -3471,7 +3472,7 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
 
 /* ── Skill Test Roll Popup — Task 12 ───────────────────────────────────────── */
 .skill-roll-overlay {
-  position: fixed;
+  position: absolute;
   inset: 0;
   background: rgba(0,0,0,0.82);
   display: flex;
