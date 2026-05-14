@@ -280,13 +280,13 @@ def _return_skill_test_pending(
     mod_info = calc_skill_modifier_info(sheet, skill_key)
     skill_test_id = f"st-{uuid.uuid4().hex[:8]}"
 
-    from app.services.skill_service import SKILL_LABELS, _get_counter
+    from app.services.skill_service import _skill_label, _get_counter
     counter = _get_counter(conn, skill_key)
 
     pending = {
         "skill_test_id": skill_test_id,
         "skill_key": skill_key,
-        "skill_label": SKILL_LABELS.get(skill_key, skill_key.title()),
+        "skill_label": _skill_label(skill_key),
         "counter": counter,
         "modifier_breakdown": mod_info,
         "params": params,

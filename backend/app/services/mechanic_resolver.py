@@ -179,14 +179,8 @@ def _resolve_skill(params: dict, ctx: dict) -> dict:
 
     skill_key = params.get("skill_key", "perception")
 
-    # Skill-to-stat mapping
-    stat_map = {
-        "stealth": "DEX", "lockpick": "DEX", "acrobatics": "DEX",
-        "perception": "WIS", "insight": "WIS", "survival": "WIS",
-        "persuasion": "CHA", "deception": "CHA", "intimidation": "CHA",
-        "athletics": "STR", "arcana": "INT", "medicine": "INT", "lore": "INT",
-    }
-    governing_stat = stat_map.get(skill_key, "INT")
+    from app.services.skill_service import _skill_stat
+    governing_stat = _skill_stat(skill_key)
     stat_val = int(stats.get(governing_stat, 10))
     stat_mod = stat_modifier(stat_val)
     skill_rank = int(skills.get(skill_key, 0))

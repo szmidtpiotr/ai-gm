@@ -1216,9 +1216,141 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         (json.dumps(rebuilt, ensure_ascii=False), character_id),
     )
     conn.commit()
+
+    # ── Generate GM plan + opening scene if not already done ─────────────────
+    # finalize-sheet is the final step of character creation; trigger plan
+    # generation here so the player gets the opening GM message immediately.
+    opening_message = None
+    try:
+        char_row = conn.execute(
+            "SELECT campaign_id, user_id, name, location FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        campaign_id = int(char_row["campaign_id"]) if char_row else None
+        user_id = int(char_row["user_id"]) if char_row else None
+
+        if campaign_id:
+            campaign = conn.execute(
+                "SELECT * FROM campaigns WHERE id = ?", (campaign_id,)
+            ).fetchone()
+
+            if campaign:
+                from app.services.gm_plan_schema import gm_plan_is_ready
+                plan_already_ready = gm_plan_is_ready(campaign["gm_plan_json"] if campaign else None)
+
+                # Check if opening turn already exists
+                existing_turn = conn.execute(
+                    "SELECT 1 FROM campaign_turns WHERE campaign_id = ? LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+
+                if not plan_already_ready and not existing_turn:
+                    llm_config = get_user_llm_settings_full(user_id or 0)
+                    model = llm_config.get("model") or "gemma3:1b"
+
+                    identity_block = rebuilt.get("identity") or {}
+                    has_v2_identity = bool(identity_block.get("bonds") or identity_block.get("weaknesses"))
+
+                    archetype = str(rebuilt.get("archetype", "warrior")).strip().lower()
+                    name = str(char_row["name"] or "Bohater")
+                    stats = rebuilt.get("stats") or {}
+                    skills = rebuilt.get("skills") or {}
+                    hp = rebuilt.get("max_hp", "?")
+                    mana = rebuilt.get("max_mana", 0)
+                    location = str(char_row["location"] or "nieznane miejsce")
+                    background = str(rebuilt.get("background") or "").strip()
+                    archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
+                    stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
+                    skill_lines = ", ".join(
+                        f"{k}:{v}" for k, v in skills.items()
+                        if isinstance(v, (int, float)) and v > 0
+                    ) if skills else ""
+                    char_summary = (
+                        f"Postać: {name}, Archetyp: {archetype_label}, HP: {hp}"
+                        + (f", Mana: {mana}" if mana else "")
+                        + (f", Statystyki: {stat_lines}" if stat_lines else "")
+                        + (f", Umiejętności: {skill_lines}" if skill_lines else "")
+                        + (f", Tło: {background}" if background else "")
+                        + f", Lokalizacja startowa: {location}."
+                    )
+
+                    if has_v2_identity:
+                        char_data = {
+                            "name": name,
+                            "archetype": archetype,
+                            "background_note": background,
+                            "identity": identity_block,
+                            "gm_only": rebuilt.get("gm_only") or {},
+                        }
+                        gm_plan_ready, _ = generate_v2_campaign_plan(
+                            conn,
+                            campaign_id=campaign_id,
+                            character_data=char_data,
+                            model=model,
+                            llm_config=llm_config,
+                            max_attempts=2,
+                        )
+                    else:
+                        gm_plan_ready, _ = generate_initial_gm_plan_with_retries(
+                            conn,
+                            campaign_id=campaign_id,
+                            campaign_title=str(campaign["title"] or f"Kampania {campaign_id}"),
+                            campaign_language=str(campaign["language"] or "pl"),
+                            system_id=str(campaign["system_id"] or ""),
+                            char_summary=char_summary,
+                            user_id=user_id or 0,
+                            model=model,
+                            llm_config=llm_config,
+                            max_attempts=3,
+                        )
+
+                    if gm_plan_ready:
+                        opening_prompt = (
+                            f"{char_summary}\n\n"
+                            "To jest pierwsza chwila przygody. Zacznij sesję od klimatycznego opisu miejsca, "
+                            "w którym bohater się znajduje. Nie pytaj gracza o plany - po prostu opisz scenę "
+                            "i zostaw otwarte zakończenie zachęcające do działania."
+                        )
+                        messages = [
+                            {"role": "system", "content": OPENING_SYSTEM_PROMPT},
+                            {"role": "user", "content": opening_prompt},
+                        ]
+                        opening_message = (
+                            generate_chat(messages=messages, model=model, llm_config=llm_config) or ""
+                        ).strip() or None
+
+                        if opening_message:
+                            session_id = conn.execute(
+                                "SELECT id FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                                (campaign_id,),
+                            ).fetchone()
+                            if not session_id:
+                                conn.execute(
+                                    "INSERT INTO game_sessions (campaign_id, session_flags) VALUES (?, ?)",
+                                    (campaign_id, "{}"),
+                                )
+                                conn.commit()
+
+                            next_turn = int((conn.execute(
+                                "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                                (campaign_id,),
+                            ).fetchone()[0]) or 1)
+                            conn.execute(
+                                """INSERT INTO campaign_turns
+                                   (campaign_id, character_id, user_text, route, assistant_text, turn_number)
+                                   VALUES (?, ?, ?, ?, ?, ?)""",
+                                (campaign_id, character_id, "", "narrative", opening_message, next_turn),
+                            )
+                            conn.commit()
+    except Exception as e:
+        logger.warning("[finalize_sheet] gm_plan/opening_scene failed (non-fatal): %s", str(e))
+
     conn.close()
 
-    return {"sheet_json": _strip_hidden_fields(rebuilt)}
+    result = {"sheet_json": _strip_hidden_fields(rebuilt)}
+    if opening_message:
+        result["opening_message"] = opening_message
+    return result
 
 
 @router.patch("/characters/{character_id}/sheet")

@@ -19,20 +19,60 @@ from app.services.dice import roll_d20
 
 DB_PATH = "/data/ai_gm.db"
 
-# Skill → governing stat
-SKILL_STAT_MAP = {
+# Fallback skill → governing stat (used when DB lookup unavailable)
+_SKILL_STAT_FALLBACK: dict[str, str] = {
     "stealth": "DEX", "lockpick": "DEX", "acrobatics": "DEX",
     "perception": "WIS", "insight": "WIS", "survival": "WIS",
     "persuasion": "CHA", "deception": "CHA", "intimidation": "CHA",
     "athletics": "STR", "arcana": "INT", "medicine": "INT", "lore": "INT",
 }
 
-SKILL_LABELS = {
+# Fallback labels
+_SKILL_LABEL_FALLBACK: dict[str, str] = {
     "stealth": "Skradanie", "lockpick": "Otwieranie zamków", "acrobatics": "Akrobatyka",
     "perception": "Percepcja", "insight": "Wnikliwość", "survival": "Przetrwanie",
     "persuasion": "Perswazja", "deception": "Oszustwo", "intimidation": "Zastraszenie",
     "athletics": "Atletyka", "arcana": "Arkana", "medicine": "Medycyna", "lore": "Wiedza",
 }
+
+# Module-level cache populated from DB on first use
+_skill_stat_cache: dict[str, str] = {}
+_skill_label_cache: dict[str, str] = {}
+
+
+def _load_skills_from_db() -> None:
+    """Populate skill caches from game_config_skills. Called lazily."""
+    if _skill_stat_cache:
+        return
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT key, linked_stat, label FROM game_config_skills WHERE is_active = 1"
+        ).fetchall()
+        for row in rows:
+            k = str(row["key"]).lower()
+            _skill_stat_cache[k] = str(row["linked_stat"] or "INT").upper()
+            _skill_label_cache[k] = str(row["label"] or k.title())
+        conn.close()
+    except Exception:
+        pass
+
+
+def _skill_stat(skill_key: str) -> str:
+    """Return governing stat for a skill. Reads DB first, falls back to hardcoded."""
+    _load_skills_from_db()
+    return _skill_stat_cache.get(skill_key) or _SKILL_STAT_FALLBACK.get(skill_key, "INT")
+
+
+def _skill_label(skill_key: str) -> str:
+    """Return display label for a skill."""
+    _load_skills_from_db()
+    return _skill_label_cache.get(skill_key) or _SKILL_LABEL_FALLBACK.get(skill_key, skill_key.title())
+
+
+# Keep SKILL_LABELS for backward compat (tag intercept code)
+SKILL_LABELS = _SKILL_LABEL_FALLBACK
 
 
 # ── Modifier calculation ──────────────────────────────────────────────────────
@@ -41,7 +81,7 @@ def calc_skill_modifier_info(sheet: dict, skill_key: str) -> dict:
     """Return full modifier breakdown for the Roll Popup."""
     stats = sheet.get("stats") or {}
     skills = sheet.get("skills") or {}
-    governing_stat = SKILL_STAT_MAP.get(skill_key, "INT")
+    governing_stat = _skill_stat(skill_key)
     stat_val = int(stats.get(governing_stat, 10))
     stat_mod = stat_modifier(stat_val)
     skill_rank = int(skills.get(skill_key, 0))
@@ -139,7 +179,7 @@ def intercept_skill_test_tag(
     pending = {
         "skill_test_id": skill_test_id,
         "skill_key": skill_key,
-        "skill_label": SKILL_LABELS.get(skill_key, skill_key.title()),
+        "skill_label": _skill_label(skill_key),
         "counter": counter,
         "modifier_breakdown": mod_info,
     }
@@ -175,7 +215,7 @@ def intercept_trap_tag(
     pending = {
         "skill_test_id": skill_test_id,
         "skill_key": skill_key,
-        "skill_label": SKILL_LABELS.get(skill_key, skill_key.title()),
+        "skill_label": _skill_label(skill_key),
         "counter": {"counter_type": "dc", "dc": dc},
         "modifier_breakdown": mod_info,
         "trap": {
