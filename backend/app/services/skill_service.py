@@ -35,40 +35,37 @@ _SKILL_LABEL_FALLBACK: dict[str, str] = {
     "athletics": "Atletyka", "arcana": "Arkana", "medicine": "Medycyna", "lore": "Wiedza",
 }
 
-# Module-level cache populated from DB on first use
-_skill_stat_cache: dict[str, str] = {}
-_skill_label_cache: dict[str, str] = {}
-
-
-def _load_skills_from_db() -> None:
-    """Populate skill caches from game_config_skills. Called lazily."""
-    if _skill_stat_cache:
-        return
+def _query_skill_from_db(skill_key: str) -> tuple[str, str] | None:
+    """Query game_config_skills for a single skill. Returns (linked_stat, label) or None."""
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT key, linked_stat, label FROM game_config_skills WHERE is_active = 1"
-        ).fetchall()
-        for row in rows:
-            k = str(row["key"]).lower()
-            _skill_stat_cache[k] = str(row["linked_stat"] or "INT").upper()
-            _skill_label_cache[k] = str(row["label"] or k.title())
+        row = conn.execute(
+            "SELECT linked_stat, label FROM game_config_skills WHERE key = ? AND is_active = 1 LIMIT 1",
+            (skill_key,),
+        ).fetchone()
         conn.close()
+        if row:
+            return str(row["linked_stat"] or "INT").upper(), str(row["label"] or skill_key.title())
     except Exception:
         pass
+    return None
 
 
 def _skill_stat(skill_key: str) -> str:
-    """Return governing stat for a skill. Reads DB first, falls back to hardcoded."""
-    _load_skills_from_db()
-    return _skill_stat_cache.get(skill_key) or _SKILL_STAT_FALLBACK.get(skill_key, "INT")
+    """Return governing stat for a skill. Always reads from DB, falls back to hardcoded map."""
+    result = _query_skill_from_db(skill_key)
+    if result:
+        return result[0]
+    return _SKILL_STAT_FALLBACK.get(skill_key, "INT")
 
 
 def _skill_label(skill_key: str) -> str:
-    """Return display label for a skill."""
-    _load_skills_from_db()
-    return _skill_label_cache.get(skill_key) or _SKILL_LABEL_FALLBACK.get(skill_key, skill_key.title())
+    """Return display label for a skill. Always reads from DB, falls back to hardcoded map."""
+    result = _query_skill_from_db(skill_key)
+    if result:
+        return result[1]
+    return _SKILL_LABEL_FALLBACK.get(skill_key, skill_key.title())
 
 
 # Keep SKILL_LABELS for backward compat (tag intercept code)

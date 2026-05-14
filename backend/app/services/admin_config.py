@@ -853,6 +853,15 @@ def create_skill(
             (key,),
         )
         _audit(conn, "game_config_skills", key, "INSERT", None, new_row)
+        # Auto-seed skill_counters with DC 12 default so new skills work in tests immediately
+        try:
+            conn.execute(
+                """INSERT OR IGNORE INTO skill_counters (player_skill_key, counter_type, counter_key, default_dc)
+                   VALUES (?, 'dc', NULL, 12)""",
+                (key,),
+            )
+        except Exception:
+            pass
         conn.commit()
         return new_row or {}
     finally:
