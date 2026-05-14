@@ -7,30 +7,28 @@ Items marked **[BLOCKED]** depend on another item being done first.
 
 ## HIGH PRIORITY
 
-### 1. Weapon `effect_json` — Structured Combat Effects
+### 1. ~~Weapon `effect_json` — Structured Combat Effects~~ ✅ DONE (2026-05-14)
 
-**What**: Add a structured `effect_json` field to `game_config_weapons` (and later items/consumables) that the combat engine actually evaluates — so special abilities like poison, fire damage, or area effects are real mechanics, not just GM flavor text.
+**Implemented:**
+- DB: `effect_json TEXT DEFAULT NULL` on `game_config_weapons`
+- Combat engine: `_apply_weapon_effects()` — `extra_damage` (doubled on crit), `on_hit_save` (enemy rolls stat vs DC; on fail: extra damage or apply condition from `game_config_conditions`)
+- Condition duration countdown + legacy `skip_turn` + legacy `damage_per_turn` now evaluated each round
+- AI Kreator: LLM generates valid `effect_json`; Effect Builder UI (visual cards, no raw JSON needed)
+- Admin Panel: `effect_json` column + textarea in weapon Edit modal
 
-**Schema proposal:**
-```json
-{
-  "type": "poison_damage",
-  "dice": "1d4",
-  "dc": 12,
-  "stat": "CON",
-  "duration_rounds": 2,
-  "on_hit": true
-}
-```
+**Remaining gap — condition `stat_mods`** (see item 1a below):
+Conditions like `poisoned` ({stat_mods:{STR:-2}}) show up and deal periodic damage, but stat penalties are NOT yet applied to attack/save rolls. This requires checking conditions before every roll computation.
 
-**What needs to change:**
-- DB migration: add `effect_json TEXT DEFAULT NULL` to `game_config_weapons`
-- `combat_service.py`: read `effect_json` after a hit, resolve the effect (apply extra damage dice, save roll, condition application)
-- `smart_entry.py`: add `effect_json` to weapon SCHEMA_DESCRIPTORS with structured options (type enum: `fire_damage`, `poison_damage`, `stun`, `knockback`, `aoe`, `drain_mana`, etc.)
-- AI Kreator: LLM generates `effect_json` when admin describes special abilities, validated against the enum
-- Admin Panel v2: `effect_json` field in the Kreator form (read-only JSON preview + structured sub-form)
+### 1a. Condition `stat_mods` applied to combat rolls
 
-**Related**: The current `note` field (informational only) stays for GM flavor text. `effect_json` is the machine-readable counterpart.
+**What**: When an actor has a condition with `stat_mods` (e.g. poisoned → STR -2), those penalties should reduce their effective stat modifier during attacks and saving throws.
+
+**Where to change:**
+- `_combatant_stat_modifier()` in `combat_service.py` — currently reads raw stats; needs to sum up `stat_mods` from all active conditions
+- Affects both enemy attacks (enemy combatant conditions) and player saves
+- Conditions are already stored in `actor["conditions"]`; just need to fold their `stat_mods` into the modifier
+
+**Complexity:** Medium. One helper function change + tests.
 
 ---
 
