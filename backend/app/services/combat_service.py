@@ -94,6 +94,106 @@ def _sheet_conditions(sheet: dict) -> list[dict[str, Any]]:
     return [x for x in raw if isinstance(x, dict)]
 
 
+def _apply_weapon_effects(
+    weapon_row: dict | None,
+    sheet: dict,
+    enemy: dict,
+    is_crit: bool,
+    conn: Any,
+) -> dict[str, Any]:
+    """Evaluate weapon effect_json after a successful hit.
+
+    Supported effect types:
+      extra_damage  — roll additional dice (doubled on crit)
+      on_hit_save   — enemy makes a stat save vs DC; on fail: extra_damage or apply_condition
+    Modifies enemy["conditions"] in place. Returns summary dict.
+    """
+    raw = weapon_row.get("effect_json") if weapon_row else None
+    parsed = _decode_effect_json(raw)
+    if not parsed:
+        return {}
+    effects = parsed.get("effects")
+    if not isinstance(effects, list) or not effects:
+        return {}
+
+    total_extra = 0
+    cond_applied: list[str] = []
+    narrative_parts: list[str] = []
+
+    for effect in effects:
+        etype = str(effect.get("type") or "")
+
+        if etype == "extra_damage":
+            dice_expr = str(effect.get("dice") or "1d4")
+            dtype = str(effect.get("damage_type") or "physical")
+            rolls = 2 if is_crit else 1
+            extra = sum(roll_damage_dice(dice_expr) for _ in range(rolls))
+            total_extra += extra
+            narrative_parts.append(f"+{extra} ({dtype})")
+
+        elif etype == "on_hit_save":
+            stat = str(effect.get("stat") or "CON").upper()
+            dc = int(effect.get("dc") or 12)
+            enemy_stats = enemy.get("stats") or {}
+            raw_val = int(enemy_stats.get(stat, 10) or 10)
+            save_mod = (raw_val - 10) // 2
+            save_roll = random.randint(1, 20)
+            save_total = save_roll + save_mod
+            success = save_total >= dc
+
+            if not success:
+                on_fail = effect.get("on_fail") or {}
+                fail_type = str(on_fail.get("type") or "")
+
+                if fail_type == "extra_damage":
+                    dice_expr = str(on_fail.get("dice") or "1d6")
+                    dtype = str(on_fail.get("damage_type") or "physical")
+                    extra = roll_damage_dice(dice_expr)
+                    total_extra += extra
+                    narrative_parts.append(
+                        f"Rzut obronny {stat} nieudany ({save_total}<{dc}): +{extra} ({dtype})"
+                    )
+
+                elif fail_type == "apply_condition":
+                    cond_key = str(on_fail.get("condition_key") or "poisoned")
+                    duration = int(on_fail.get("duration_rounds") or 2)
+                    cond_label, cond_efx = cond_key, None
+                    try:
+                        crow = conn.execute(
+                            "SELECT label, effect_json FROM game_config_conditions WHERE key = ?",
+                            (cond_key,),
+                        ).fetchone()
+                        if crow:
+                            cond_label = crow["label"] or cond_key
+                            cond_efx = crow["effect_json"]
+                    except Exception:
+                        pass
+                    existing = enemy.get("conditions") or []
+                    if not any(c.get("key") == cond_key for c in existing):
+                        if not isinstance(enemy.get("conditions"), list):
+                            enemy["conditions"] = []
+                        enemy["conditions"].append({
+                            "key": cond_key,
+                            "label": cond_label,
+                            "effect_json": cond_efx,
+                            "duration_rounds": duration,
+                            "applied_at": "weapon_hit",
+                            "runtime": {},
+                        })
+                        cond_applied.append(cond_key)
+                    narrative_parts.append(
+                        f"Rzut obronny {stat} nieudany ({save_total}<{dc}): {cond_label} ({duration} rundy)"
+                    )
+            else:
+                narrative_parts.append(f"Rzut obronny {stat} udany ({save_total}≥{dc})")
+
+    return {
+        "extra_damage": total_extra,
+        "conditions_applied": cond_applied,
+        "weapon_effect_narrative": "; ".join(narrative_parts) if narrative_parts else "",
+    }
+
+
 def _decode_effect_json(raw: Any) -> dict[str, Any] | None:
     if raw is None:
         return None
@@ -1343,7 +1443,24 @@ def resolve_attack(
                 next_hp = max(0, prev_hp - dmg)
                 enemy["hp_current"] = next_hp
                 out["target_hp_remaining"] = next_hp
-                dead = next_hp <= 0
+
+                # ── Weapon effect_json (extra damage, save-or-condition) ──────
+                _wfx = _apply_weapon_effects(
+                    wrow, sheet, enemy, is_crit=(player_raw == 20), conn=conn
+                )
+                if _wfx.get("extra_damage"):
+                    _extra = int(_wfx["extra_damage"])
+                    enemy["hp_current"] = max(0, int(enemy.get("hp_current", 0) or 0) - _extra)
+                    dmg += _extra
+                    out["damage"] = dmg
+                    out["target_hp_remaining"] = int(enemy.get("hp_current", 0) or 0)
+                if _wfx.get("weapon_effect_narrative"):
+                    out["weapon_effect_narrative"] = _wfx["weapon_effect_narrative"]
+                if _wfx.get("conditions_applied"):
+                    out["weapon_conditions_applied"] = _wfx["conditions_applied"]
+                # ─────────────────────────────────────────────────────────────
+
+                dead = int(enemy.get("hp_current", 0) or 0) <= 0
                 out["enemy_dead"] = dead
                 if dead:
                     enemy["dead"] = True

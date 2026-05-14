@@ -164,6 +164,169 @@ function _renderFormFields() {
   });
 }
 
+// ── Effect Builder ────────────────────────────────────────────────────────────
+
+const EFFECT_DAMAGE_TYPES = ["fire","cold","poison","lightning","magic","physical"];
+const EFFECT_CONDITIONS   = ["poisoned","burning","bleeding","stunned","blinded","frightened","cursed"];
+const EFFECT_STATS        = ["CON","STR","DEX","INT","WIS","CHA"];
+const DICE_OPTIONS        = ["1d4","1d6","1d8","1d10","1d12","2d4","2d6"];
+
+function _buildEffectBuilder(field) {
+  const wrap = document.createElement("div");
+  wrap.className = "se-effect-builder";
+  wrap.dataset.fieldKey = field.key;
+
+  const list = document.createElement("div");
+  list.className = "se-effect-list";
+  wrap.appendChild(list);
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "se-effect-toolbar";
+  toolbar.innerHTML = `
+    <select class="field-input se-effect-add-type" style="font-size:0.78rem;flex:1">
+      <option value="">+ Dodaj efekt…</option>
+      <option value="extra_damage">Dodatkowe obrażenia</option>
+      <option value="on_hit_save">Test obronny przy trafieniu</option>
+    </select>`;
+  wrap.appendChild(toolbar);
+
+  toolbar.querySelector(".se-effect-add-type").addEventListener("change", e => {
+    const type = e.target.value;
+    e.target.value = "";
+    if (!type) return;
+    const effects = _readEffects(wrap);
+    if (type === "extra_damage") {
+      effects.push({ type: "extra_damage", dice: "1d6", damage_type: "fire" });
+    } else {
+      effects.push({ type: "on_hit_save", stat: "CON", dc: 12, on_fail: { type: "apply_condition", condition_key: "poisoned", duration_rounds: 2 } });
+    }
+    _setEffects(wrap, effects);
+    _notifyChange(wrap);
+  });
+
+  return wrap;
+}
+
+function _readEffects(wrap) {
+  const cards = wrap.querySelectorAll(".se-effect-card");
+  const effects = [];
+  cards.forEach(card => {
+    const type = card.dataset.effectType;
+    if (type === "extra_damage") {
+      effects.push({
+        type: "extra_damage",
+        dice: card.querySelector(".ef-dice")?.value || "1d6",
+        damage_type: card.querySelector(".ef-dmgtype")?.value || "fire",
+      });
+    } else if (type === "on_hit_save") {
+      const onFailType = card.querySelector(".ef-onfail-type")?.value || "apply_condition";
+      const on_fail = onFailType === "extra_damage"
+        ? { type: "extra_damage", dice: card.querySelector(".ef-fail-dice")?.value || "1d6", damage_type: card.querySelector(".ef-fail-dmgtype")?.value || "poison" }
+        : { type: "apply_condition", condition_key: card.querySelector(".ef-condkey")?.value || "poisoned", duration_rounds: parseInt(card.querySelector(".ef-duration")?.value || "2") };
+      effects.push({
+        type: "on_hit_save",
+        stat: card.querySelector(".ef-stat")?.value || "CON",
+        dc: parseInt(card.querySelector(".ef-dc")?.value || "12"),
+        on_fail,
+      });
+    }
+  });
+  return effects;
+}
+
+function _setEffects(wrap, effects) {
+  const list = wrap.querySelector(".se-effect-list");
+  list.innerHTML = "";
+  effects.forEach((eff, i) => {
+    const card = document.createElement("div");
+    card.className = "se-effect-card";
+    card.dataset.effectType = eff.type;
+
+    if (eff.type === "extra_damage") {
+      card.innerHTML = `
+        <div class="se-effect-header">
+          <span class="se-effect-badge">⚡ Dodatkowe obrażenia</span>
+          <button class="se-effect-remove" type="button" data-idx="${i}">✕</button>
+        </div>
+        <div class="se-effect-row">
+          <label>Kości</label>
+          <select class="field-input ef-dice" style="width:80px">${DICE_OPTIONS.map(d=>`<option ${d===eff.dice?"selected":""}>${d}</option>`).join("")}</select>
+          <label>Typ</label>
+          <select class="field-input ef-dmgtype" style="width:90px">${EFFECT_DAMAGE_TYPES.map(t=>`<option ${t===eff.damage_type?"selected":""}>${t}</option>`).join("")}</select>
+        </div>`;
+    } else if (eff.type === "on_hit_save") {
+      const of = eff.on_fail || {};
+      const failIsDmg = of.type === "extra_damage";
+      card.innerHTML = `
+        <div class="se-effect-header">
+          <span class="se-effect-badge">🎲 Test obronny</span>
+          <button class="se-effect-remove" type="button" data-idx="${i}">✕</button>
+        </div>
+        <div class="se-effect-row">
+          <label>Stat</label>
+          <select class="field-input ef-stat" style="width:70px">${EFFECT_STATS.map(s=>`<option ${s===eff.stat?"selected":""}>${s}</option>`).join("")}</select>
+          <label>DC</label>
+          <input class="field-input ef-dc" type="number" value="${eff.dc||12}" min="5" max="30" style="width:55px">
+        </div>
+        <div class="se-effect-row">
+          <label>Przy porażce</label>
+          <select class="field-input ef-onfail-type" style="width:130px">
+            <option value="apply_condition" ${!failIsDmg?"selected":""}>Efekt statusu</option>
+            <option value="extra_damage" ${failIsDmg?"selected":""}>Dodatkowe obrażenia</option>
+          </select>
+        </div>
+        <div class="se-effect-row se-onfail-cond" style="${failIsDmg?"display:none":""}">
+          <label>Stan</label>
+          <select class="field-input ef-condkey" style="width:110px">${EFFECT_CONDITIONS.map(c=>`<option ${c===of.condition_key?"selected":""}>${c}</option>`).join("")}</select>
+          <label>Rundy</label>
+          <input class="field-input ef-duration" type="number" value="${of.duration_rounds||2}" min="1" max="10" style="width:50px">
+        </div>
+        <div class="se-effect-row se-onfail-dmg" style="${failIsDmg?"":"display:none"}">
+          <label>Kości</label>
+          <select class="field-input ef-fail-dice" style="width:80px">${DICE_OPTIONS.map(d=>`<option ${d===of.dice?"selected":""}>${d}</option>`).join("")}</select>
+          <label>Typ</label>
+          <select class="field-input ef-fail-dmgtype" style="width:90px">${EFFECT_DAMAGE_TYPES.map(t=>`<option ${t===of.damage_type?"selected":""}>${t}</option>`).join("")}</select>
+        </div>`;
+      card.querySelector(".ef-onfail-type").addEventListener("change", e => {
+        const isDmg = e.target.value === "extra_damage";
+        card.querySelector(".se-onfail-cond").style.display = isDmg ? "none" : "";
+        card.querySelector(".se-onfail-dmg").style.display = isDmg ? "" : "none";
+        _notifyChange(wrap);
+      });
+    }
+
+    card.querySelectorAll("input,select").forEach(el => el.addEventListener("change", () => _notifyChange(wrap)));
+    card.querySelector(".se-effect-remove").addEventListener("click", e => {
+      const idx = parseInt(e.target.dataset.idx);
+      const effs = _readEffects(wrap);
+      effs.splice(idx, 1);
+      _setEffects(wrap, effs);
+      _notifyChange(wrap);
+    });
+    list.appendChild(card);
+  });
+}
+
+function _notifyChange(wrap) {
+  wrap.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function _readEffectBuilderValue(wrap) {
+  const effects = _readEffects(wrap);
+  if (!effects.length) return null;
+  return JSON.stringify({ effects });
+}
+
+function _setEffectBuilderValue(wrap, jsonStr) {
+  if (!jsonStr) { _setEffects(wrap, []); return; }
+  try {
+    const parsed = typeof jsonStr === "string" ? JSON.parse(jsonStr) : jsonStr;
+    _setEffects(wrap, parsed.effects || []);
+  } catch { _setEffects(wrap, []); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function _buildInput(field) {
   let el;
   if (field.type === "single_choice" && field.options) {
@@ -211,6 +374,8 @@ function _buildInput(field) {
     el.className = "field-input se-field-textarea";
     el.rows = 3;
     if (field.placeholder) el.placeholder = field.placeholder.slice(0, 120);
+  } else if (field.type === "effect_builder") {
+    el = _buildEffectBuilder(field);
   } else {
     el = document.createElement("input");
     el.type = "text";
@@ -241,6 +406,8 @@ function _bindInputEvents(el, field) {
     el.querySelector("input")?.addEventListener("change", update);
   } else if (el.classList.contains("se-multi-choice")) {
     el.querySelectorAll("input").forEach(cb => cb.addEventListener("change", update));
+  } else if (el.classList.contains("se-effect-builder")) {
+    el.addEventListener("change", update);
   } else {
     el.addEventListener("input", update);
     el.addEventListener("change", update);
@@ -255,6 +422,9 @@ function _readValue(field, el) {
   if (field.type === "multi_choice") {
     return Array.from(el.querySelectorAll("input:checked")).map(c => c.value).join(",");
   }
+  if (field.type === "effect_builder") {
+    return _readEffectBuilderValue(el);
+  }
   return el.value || "";
 }
 
@@ -263,9 +433,15 @@ function _renderFormValues() {
   _schemaFields.forEach(field => {
     const row = _overlay.querySelector(`.se-field-row[data-field-key="${field.key}"]`);
     if (!row) return;
+    const val = _draft[field.key] ?? "";
+    if (field.type === "effect_builder") {
+      const eb = row.querySelector(".se-effect-builder");
+      if (eb) _setEffectBuilderValue(eb, val || null);
+      _updateFieldRow(field.key);
+      return;
+    }
     const el = row.querySelector("input,select,textarea,div.se-multi-choice");
     if (!el) return;
-    const val = _draft[field.key] ?? "";
     if (field.type === "boolean") {
       const cb = row.querySelector("input[type=checkbox]");
       if (cb) cb.checked = !!val;
