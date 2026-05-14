@@ -99,6 +99,59 @@ def _inactive_combat_tag_reminder(user_text: str | None) -> str:
     return lines
 
 
+import re as _re_skill
+_SKILL_VERB_HINT = _re_skill.compile(
+    r"\b(próbuj|próbować|spróbuj|staram|chcę|chcę się|zamiarzam|usiłuj|"
+    r"skrad|przekrad|przekonaj|perswad|oszuk|zastraszy|przeszuk|spost|zauważ|"
+    r"wytrop|przetrwaj|wylecz|zidentyfik|zbadaj|ident|użyj|kradnę|włamuj|wyważam|"
+    r"skaczę|wspinaj|bieg|uciekam|uchylam|unikam)\b",
+    _re_skill.IGNORECASE,
+)
+
+_SKILL_KEYS_HINT = (
+    "stealth, lockpick, acrobatics, perception, insight, survival, "
+    "persuasion, deception, intimidation, athletics, arcana, medicine, lore"
+)
+
+
+def _skill_test_tag_instruction(conn, campaign_id: int, user_text: str | None) -> str | None:
+    """
+    Inject [SKILL_TEST] tag instructions when player text hints at a non-combat skill use.
+    Also loads custom skills from DB to include in the hint.
+    """
+    if not user_text:
+        return None
+    if not _SKILL_VERB_HINT.search(user_text):
+        return None
+
+    # Load extra custom skills from DB
+    extra_skills = _SKILL_KEYS_HINT
+    try:
+        if conn:
+            rows = conn.execute(
+                "SELECT key FROM game_config_skills WHERE is_active = 1 ORDER BY sort_order"
+            ).fetchall()
+            if rows:
+                extra_skills = ", ".join(r[0] for r in rows)
+    except Exception:
+        pass
+
+    return (
+        "[MECHANIKA — TESTY UMIEJĘTNOŚCI]\n"
+        "Wiadomość gracza sugeruje próbę użycia umiejętności (skradanie, perswazja, identyfikacja, itp.).\n"
+        "Gdy gracz próbuje działania wymagającego testu umiejętności, OSADŹ w swojej odpowiedzi tag:\n"
+        "  [SKILL_TEST:klucz_umiejętności:DC:wartość]\n"
+        "Przykłady:\n"
+        "  [SKILL_TEST:stealth:DC:13]   ← skradanie (DC zależy od trudności)\n"
+        "  [SKILL_TEST:alchemy:DC:14]   ← identyfikacja substancji\n"
+        "  [SKILL_TEST:persuasion:OPPOSED:WIS]  ← przekonanie NPC (przeciwstawny)\n"
+        "Tag musi stać SAMODZIELNIE w swojej linii (pusta linia przed i po).\n"
+        "NIE opisuj wyniku rzutu — tag przerwie narrację i gracz sam rzuci kością.\n"
+        f"Dostępne umiejętności: {extra_skills}.\n"
+        "Jeśli działanie gracza jest BANALNE (nie wymaga rzutu), nie używaj tagu — narraj wprost."
+    )
+
+
 def _death_mechanica_system_append(
     character: sqlite3.Row | None, roll_result_data: dict | None
 ) -> str | None:
@@ -438,6 +491,12 @@ def build_narrative_messages(
         first = messages[0]
         if isinstance(first, dict) and first.get("role") == "system":
             first["content"] = f"{first.get('content', '').rstrip()}\n\n{death_append}"
+
+    # Skill test tag instruction — injected when player text hints at skill use
+    if not combat_block and not roll_result_message and has_db_conn and messages:
+        _st_block = _skill_test_tag_instruction(conn, int(campaign["id"]), user_text)
+        if _st_block:
+            messages.append({"role": "system", "content": _st_block})
 
     if not roll_result_data or not messages:
         return messages
