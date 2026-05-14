@@ -21,6 +21,7 @@ const SLASH_COMMANDS = [
 // ============================================================================
 const screens = {
     login: document.getElementById('login-screen'),
+    heroes: document.getElementById('heroes-screen'),
     campaigns: document.getElementById('campaigns-screen'),
     newCampaign: document.getElementById('new-campaign-screen'),
     characterWizard: document.getElementById('character-wizard-screen'),
@@ -33,6 +34,13 @@ const elements = {
     usernameInput: document.getElementById('login-username'),
     passwordInput: document.getElementById('login-password'),
     loginError: null,
+
+    // Heroes
+    heroesList: document.getElementById('heroes-list'),
+    heroesEmpty: document.getElementById('heroes-empty'),
+    heroesWelcome: document.getElementById('heroes-welcome'),
+    btnNewHero: document.getElementById('new-hero-btn'),
+    btnHeroesLogout: document.getElementById('heroes-logout-btn'),
 
     // Campaigns
     campaignsList: document.getElementById('campaigns-list'),
@@ -328,18 +336,17 @@ async function handleLogin(e) {
             window.clog?.setContext({ user_id: currentUser.id, username: currentUser.username });
             window.clog?.event('login_success', { user_id: currentUser.id });
 
-            console.log('[Login] Success, loading campaigns...');
-            if (elements.welcomeUser) {
-                elements.welcomeUser.textContent = `Witaj, ${currentUser.display_name || currentUser.username}`;
-            }
+            console.log('[Login] Success, loading heroes...');
+            const displayName = currentUser.display_name || currentUser.username;
+            if (elements.heroesWelcome) elements.heroesWelcome.textContent = `Witaj, ${displayName}`;
+            if (elements.welcomeUser) elements.welcomeUser.textContent = `Witaj, ${displayName}`;
             updateAdminSettingsVisibility();
             try {
-                await loadCampaigns();
+                await loadHeroes();
             } catch (e) {
-                console.error('[Login] loadCampaigns failed:', e);
+                console.error('[Login] loadHeroes failed:', e);
             }
-            console.log('[Login] Calling showScreen(campaigns)...');
-            showScreen('campaigns');
+            showScreen('heroes');
         } else {
             console.error('[Login] Invalid response:', response);
             showToast('Nieprawidłowa odpowiedź serwera', 'error');
@@ -372,6 +379,76 @@ function checkAuth() {
         return true;
     }
     return false;
+}
+
+// ============================================================================
+// Heroes (character-first flow — Task 42)
+// ============================================================================
+let currentHero = null;
+
+async function loadHeroes() {
+    if (!currentUser?.id) return;
+    const response = await apiRequest('GET', `/characters?user_id=${currentUser.id}`);
+    const heroes = response.heroes || [];
+    renderHeroes(heroes);
+}
+
+function renderHeroes(heroes) {
+    const list = elements.heroesList;
+    const empty = elements.heroesEmpty;
+    if (!list) return;
+    list.innerHTML = '';
+
+    if (heroes.length === 0) {
+        if (empty) empty.style.display = '';
+        return;
+    }
+    if (empty) empty.style.display = 'none';
+
+    heroes.forEach(hero => {
+        const sheet = hero.sheet_json || {};
+        const archetype = sheet.archetype || hero.system_id || '?';
+        const level = sheet.level || 1;
+        const hp = sheet.current_hp ?? sheet.max_hp ?? '?';
+        const maxHp = sheet.max_hp ?? '?';
+        const status = hero.status || 'idle';
+        const statusLabel = { idle: 'Wolny', in_campaign: 'W kampanii', in_dungeon: 'W lochu' }[status] || status;
+        const campaignTitle = hero.campaign_title || '';
+
+        const card = document.createElement('div');
+        card.className = 'campaign-card';
+        card.innerHTML = `
+            <div class="campaign-card__icon"><span>⚔</span></div>
+            <div class="campaign-card__content">
+                <h3>${_esc(hero.name)}</h3>
+                <p>${_esc(archetype)} · Poziom ${level} · HP ${hp}/${maxHp}</p>
+                ${campaignTitle ? `<p style="font-size:0.8em;opacity:0.6">${_esc(campaignTitle)}</p>` : ''}
+            </div>
+            <span class="campaign-card__arrow" style="font-size:0.75em;opacity:0.7">${_esc(statusLabel)}</span>
+        `;
+        card.addEventListener('click', () => selectHero(hero));
+        list.appendChild(card);
+    });
+}
+
+async function selectHero(hero) {
+    currentHero = hero;
+    // If hero has an active campaign, load into it directly
+    if (hero.campaign_id && hero.status === 'in_campaign') {
+        try {
+            const campaign = await apiRequest('GET', `/campaigns/${hero.campaign_id}`);
+            await selectCampaign(campaign);
+            return;
+        } catch (e) {
+            console.warn('[Hero] Could not load active campaign:', e);
+        }
+    }
+    // Otherwise show campaigns screen filtered to this hero
+    if (elements.welcomeUser) {
+        elements.welcomeUser.textContent = `Bohater: ${hero.name}`;
+    }
+    await loadCampaigns();
+    showScreen('campaigns');
 }
 
 // ============================================================================
@@ -980,11 +1057,20 @@ async function _wizardStep1Submit() {
     let char;
     if (wizardCreatedChar && wizardCreatedChar.name === name && (wizardCreatedChar.sheet_json?.archetype === archetype)) {
         char = wizardCreatedChar;
-    } else {
+    } else if (currentCampaignId) {
+        // Classic flow: campaign already exists, create character inside it
         char = await apiRequest('POST', `/campaigns/${currentCampaignId}/characters`, {
             user_id: currentUser?.id,
             name,
             system_id: currentCampaign?.system_id || 'fantasy',
+            sheet_json: { archetype, background_note: bg, backstory: bg },
+        });
+    } else {
+        // Hero-first flow: create standalone character, no campaign yet
+        char = await apiRequest('POST', `/characters`, {
+            user_id: currentUser?.id,
+            name,
+            system_id: 'fantasy',
             sheet_json: { archetype, background_note: bg, backstory: bg },
         });
     }
@@ -1079,13 +1165,20 @@ async function _wizardFinalizeAndEnter() {
         },
     });
 
-    // Reload character with finalized sheet
-    const chars = await apiRequest('GET', `/campaigns/${currentCampaignId}/characters`);
-    const charList = chars.characters || (Array.isArray(chars) ? chars : []);
-    characterData = charList.find(c => c.id === charId) || wizardCreatedChar;
-    if (result?.sheet_json) characterData.sheet_json = result.sheet_json;
-
-    await enterGame(currentCampaign);
+    if (currentCampaignId) {
+        // Classic flow: reload from campaign and enter game
+        const chars = await apiRequest('GET', `/campaigns/${currentCampaignId}/characters`);
+        const charList = chars.characters || (Array.isArray(chars) ? chars : []);
+        characterData = charList.find(c => c.id === charId) || wizardCreatedChar;
+        if (result?.sheet_json) characterData.sheet_json = result.sheet_json;
+        await enterGame(currentCampaign);
+    } else {
+        // Hero-first flow: hero created standalone → go to heroes screen
+        currentHero = wizardCreatedChar;
+        showToast(`Bohater ${wizardCreatedChar.name} gotowy! Wybierz przygodę.`, 'success');
+        await loadHeroes();
+        showScreen('heroes');
+    }
 }
 
 // ============================================================================
@@ -3472,6 +3565,13 @@ function initEventListeners() {
     // Login
     elements.loginForm?.addEventListener('submit', handleLogin);
 
+    // Heroes
+    elements.btnNewHero?.addEventListener('click', () => {
+        currentHero = null;
+        startCharacterWizard();
+    });
+    elements.btnHeroesLogout?.addEventListener('click', handleLogout);
+
     // Campaigns
     elements.btnNewCampaign?.addEventListener('click', showNewCampaignScreen);
     elements.btnLogout?.addEventListener('click', handleLogout);
@@ -3495,8 +3595,13 @@ function initEventListeners() {
     elements.btnWizardPrev?.addEventListener('click', handleWizardPrev);
     elements.btnWizardNext?.addEventListener('click', handleWizardNext);
     elements.btnWizardBack?.addEventListener('click', () => {
-        loadCampaigns();
-        showScreen('campaigns');
+        if (currentCampaignId) {
+            loadCampaigns();
+            showScreen('campaigns');
+        } else {
+            loadHeroes();
+            showScreen('heroes');
+        }
     });
 
     // Game
@@ -3872,8 +3977,11 @@ async function init() {
 
     if (checkAuth()) {
         updateAdminSettingsVisibility();
-        await loadCampaigns();
-        showScreen('campaigns');
+        const displayName = currentUser.display_name || currentUser.username || '';
+        if (elements.heroesWelcome) elements.heroesWelcome.textContent = `Witaj, ${displayName}`;
+        if (elements.welcomeUser) elements.welcomeUser.textContent = `Witaj, ${displayName}`;
+        await loadHeroes();
+        showScreen('heroes');
     } else {
         showScreen('login');
     }
