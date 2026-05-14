@@ -837,6 +837,23 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
                     conditions_changed = True
                     break
 
+            # Duration countdown (for conditions applied via weapon effect_json)
+            dur = condition.get("duration_rounds")
+            if isinstance(dur, int) and dur > 0:
+                leg_state = _condition_effect_state(condition, "duration_tick")
+                if str(leg_state.get("last_turn_marker") or "") != marker:
+                    leg_state["last_turn_marker"] = marker
+                    runtime_changed = True
+                    condition["duration_rounds"] = dur - 1
+                    if condition["duration_rounds"] <= 0:
+                        remove_condition = True
+                        events.append({
+                            "type": "condition_removed",
+                            "condition_key": key,
+                            "condition_label": label,
+                        })
+                        conditions_changed = True
+
             if remove_condition:
                 continue
 
@@ -852,6 +869,41 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
                         "condition_label": label,
                     }
                 )
+
+            # Legacy condition format: skip_turn and damage_per_turn
+            # (game_config_conditions uses {"skip_turn":true,"damage_per_turn":N,...})
+            if not effects:
+                legacy = _decode_effect_json(condition.get("effect_json"))
+                if isinstance(legacy, dict):
+                    leg_state = _condition_effect_state(condition, "legacy_tick")
+                    already_ticked = str(leg_state.get("last_turn_marker") or "") == marker
+                    if not already_ticked:
+                        leg_state["last_turn_marker"] = marker
+                        runtime_changed = True
+
+                        if legacy.get("skip_turn"):
+                            blocked = True
+                            events.append({
+                                "type": "block_action",
+                                "condition_key": key,
+                                "condition_label": label,
+                            })
+
+                        dpt = legacy.get("damage_per_turn")
+                        if dpt and isinstance(dpt, (int, float)) and dpt > 0:
+                            dmg = int(dpt)
+                            prev_hp = int(actor.get("hp_current", 0) or 0)
+                            actor["hp_current"] = max(0, prev_hp - dmg)
+                            dtype = str(legacy.get("damage_type") or "physical")
+                            events.append({
+                                "type": "condition_damage",
+                                "condition_key": key,
+                                "condition_label": label,
+                                "damage": dmg,
+                                "damage_type": dtype,
+                                "hp_after": int(actor.get("hp_current", 0)),
+                            })
+                            conditions_changed = True
 
             next_conditions.append(condition)
 
@@ -893,6 +945,10 @@ def evaluate_current_turn_conditions(campaign_id: int) -> dict[str, Any]:
                     narrative = f"{event['condition_label']}: efekt ustępuje."
                 elif event_type == "block_action":
                     narrative = f"{event['condition_label']}: akcja zablokowana w tej turze."
+                elif event_type == "condition_damage":
+                    dtype = str(event.get("damage_type") or "")
+                    dtype_label = {"fire": "ogień", "poison": "trucizna", "physical": "obrażenia fizyczne", "cold": "zimno", "lightning": "błyskawica"}.get(dtype, dtype)
+                    narrative = f"{event['condition_label']}: {event['damage']} obrażeń ({dtype_label}). HP po: {event['hp_after']}."
                 log_combat_turn(
                     conn,
                     combat_id=combat_id,
