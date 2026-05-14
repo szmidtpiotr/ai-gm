@@ -1104,9 +1104,11 @@ def generate_character_identity(character_id: int):
 
     row = conn.execute(
         """
-        SELECT c.id, c.user_id, c.name, c.sheet_json, cam.model_id, cam.language
+        SELECT c.id, c.user_id, c.name, c.sheet_json,
+               COALESCE(cam.model_id, 'default') AS model_id,
+               COALESCE(cam.language, 'pl')      AS language
         FROM characters c
-        JOIN campaigns cam ON cam.id = c.campaign_id
+        LEFT JOIN campaigns cam ON cam.id = c.campaign_id
         WHERE c.id = ?
         """,
         (character_id,),
