@@ -3012,16 +3012,102 @@ def campaign_designer_generate_entity(
 
 # ── Task 26: Scholar Spells — Admin endpoints ─────────────────────────────────
 
+_SPELL_COLUMNS = [
+    "key", "label", "tier", "mana_cost", "spell_type", "damage_die", "heal_die",
+    "effect_stat", "effect_type", "effect_duration", "target_zone", "aoe",
+    "description", "rank2_json", "rank3_json", "is_active",
+]
+_SPELL_TYPES = {"attack", "heal", "defense", "effect", "attack_aoe"}
+_SPELL_ZONES = {"any", "self", "engaged", "ranged"}
+
+
 @router.get("/admin/spells")
 def admin_list_spells(_: None = Depends(require_admin_token)):
-    """List all active spells in the game_config_spells table."""
+    """List all spells in the game_config_spells table (admin — includes inactive)."""
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
-            "SELECT * FROM game_config_spells WHERE is_active = 1 ORDER BY tier, key"
+            "SELECT * FROM game_config_spells ORDER BY tier, key"
         ).fetchall()
         return {"items": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.post("/admin/spells")
+def admin_create_spell(req: dict = Body(...), _: None = Depends(require_admin_token)):
+    key = (req.get("key") or "").strip()
+    label = (req.get("label") or "").strip()
+    if not key or not label:
+        raise HTTPException(status_code=400, detail="key and label are required")
+    spell_type = req.get("spell_type", "attack")
+    if spell_type not in _SPELL_TYPES:
+        raise HTTPException(status_code=422, detail=f"spell_type must be one of: {', '.join(_SPELL_TYPES)}")
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            """INSERT INTO game_config_spells
+               (key, label, tier, mana_cost, spell_type, damage_die, heal_die,
+                effect_stat, effect_type, effect_duration, target_zone, aoe,
+                description, rank2_json, rank3_json, is_active)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                key, label,
+                int(req.get("tier") or 1),
+                int(req.get("mana_cost") or 2),
+                spell_type,
+                req.get("damage_die") or None,
+                req.get("heal_die") or None,
+                req.get("effect_stat") or None,
+                req.get("effect_type") or None,
+                int(req.get("effect_duration") or 1),
+                req.get("target_zone") or "any",
+                1 if req.get("aoe") else 0,
+                req.get("description") or None,
+                req.get("rank2_json") or None,
+                req.get("rank3_json") or None,
+                1 if req.get("is_active", 1) else 0,
+            ),
+        )
+        conn.commit()
+        return {"ok": True, "key": key}
+    except sqlite3.IntegrityError as e:
+        raise HTTPException(status_code=409, detail=f"Spell key already exists: {key}") from e
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/spells/{spell_key}")
+def admin_update_spell(spell_key: str, req: dict = Body(...), _: None = Depends(require_admin_token)):
+    allowed = {c for c in _SPELL_COLUMNS if c != "key"}
+    updates = {k: v for k, v in req.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    if "spell_type" in updates and updates["spell_type"] not in _SPELL_TYPES:
+        raise HTTPException(status_code=422, detail=f"spell_type must be one of: {', '.join(_SPELL_TYPES)}")
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        vals = list(updates.values()) + [spell_key]
+        cur = conn.execute(f"UPDATE game_config_spells SET {sets} WHERE key = ?", vals)
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Spell not found: {spell_key}")
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/spells/{spell_key}")
+def admin_delete_spell(spell_key: str, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        cur = conn.execute("DELETE FROM game_config_spells WHERE key = ?", (spell_key,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Spell not found: {spell_key}")
+        return {"ok": True}
     finally:
         conn.close()
 

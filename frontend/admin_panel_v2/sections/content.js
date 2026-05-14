@@ -7,6 +7,7 @@ import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=5";
 const LABELS = {
   weapons:      "Broń",
   armor:        "Zbroja",
+  spells:       "Zaklęcia",
   enemies:      "Wrogowie",
   items:        "Przedmioty",
   consumables:  "Materiały eksploatacyjne",
@@ -35,7 +36,7 @@ const LABELS = {
   resource:     "Katalog",
 };
 
-const TABS = ["weapons", "armor", "items", "consumables", "loot-tables"];
+const TABS = ["weapons", "armor", "spells", "items", "consumables", "loot-tables"];
 
 const ASSISTANT_RESOURCES = [
   { value: "weapons",     label: LABELS.weapons },
@@ -66,13 +67,14 @@ export async function init(panel) {
         <div class="subtab-bar">
           <button class="subtab-btn active" data-tab="weapons">${LABELS.weapons}</button>
           <button class="subtab-btn" data-tab="armor">${LABELS.armor}</button>
+          <button class="subtab-btn" data-tab="spells">${LABELS.spells}</button>
           <button class="subtab-btn" data-tab="items">${LABELS.items}</button>
           <button class="subtab-btn" data-tab="consumables">${LABELS.consumables}</button>
           <button class="subtab-btn" data-tab="loot-tables">${LABELS.lootTables}</button>
           <button class="subtab-btn" id="smart-entry-btn" title="AI asystent tworzenia treści" style="margin-left:auto">🤖 Kreator AI</button>
         </div>
         <div class="subtab-panels">
-          ${["weapons","armor","items","consumables","loot-tables"].map(
+          ${["weapons","armor","spells","items","consumables","loot-tables"].map(
             (t) => `<div class="subtab-panel${t === "weapons" ? " active" : ""}" data-tab="${t}"></div>`
           ).join("")}
         </div>
@@ -87,7 +89,7 @@ export async function init(panel) {
   _aiDraft   = null;
 
   // ── Smart Entry bubble (bottom-right) + tab button both open Smart Entry ──
-  const TABLE_MAP = { weapons: "game_config_weapons", armor: "game_config_items", items: "game_config_items", consumables: "game_config_consumables", "loot-tables": null };
+  const TABLE_MAP = { weapons: "game_config_weapons", armor: "game_config_items", spells: "game_config_spells", items: "game_config_items", consumables: "game_config_consumables", "loot-tables": null };
   const _getActiveTable = () => TABLE_MAP[panel.querySelector(".subtab-btn.active:not(#smart-entry-btn)")?.dataset?.tab] || null;
 
   panel.querySelector("#ai-fab-btn").addEventListener("click", () => openSmartEntry(_getActiveTable()));
@@ -96,7 +98,7 @@ export async function init(panel) {
   // ── Auto-refresh table after Smart Entry save ──
   const _onSmartSave = (e) => {
     const table = e.detail?.table;
-    const tabMap = { game_config_weapons: "weapons", game_config_items: "items", game_config_consumables: "consumables" };
+    const tabMap = { game_config_weapons: "weapons", game_config_items: "items", game_config_consumables: "consumables", game_config_spells: "spells" };
     const tab = tabMap[table];
     if (tab) {
       // Re-render the saved tab to show the new record
@@ -142,6 +144,7 @@ async function _activateTab(panel, tab) {
   switch (tab) {
     case "weapons":     await _renderWeapons(container, panel); break;
     case "armor":       await _renderArmor(container, panel); break;
+    case "spells":      await _renderSpells(container, panel); break;
     case "enemies":     await _renderEnemies(container, panel); break;
     case "items":       await _renderItems(container, panel); break;
     case "consumables": await _renderConsumables(container, panel); break;
@@ -203,7 +206,10 @@ async function _renderWeapons(container, panel) {
     renderTable(tableHost, null, null, {});
     let [rows, stats] = [[], []];
     try {
-      [rows, stats] = await Promise.all([adminFetch("/api/admin/weapons").then((r) => r.items || []), _fetchStats()]);
+      [rows, stats] = await Promise.all([
+        adminFetch("/api/admin/weapons").then((r) => (r.items || []).filter(w => w.weapon_type !== "spell")),
+        _fetchStats(),
+      ]);
     } catch (e) {
       showToast("Błąd ładowania broni: " + (e.message || "?"), "error"); return;
     }
@@ -443,6 +449,135 @@ function _openEnemyModal(row, onDone) {
           } catch (e) { showToast((e.message || "Błąd"), "error"); }
         },
       },
+    ],
+  });
+}
+
+// ── Spells (game_config_spells) ───────────────────────────────────────────────
+
+async function _renderSpells(container, panel) {
+  const tableHost = document.createElement("div");
+  container.appendChild(_toolbar("Dodaj zaklęcie", () => _openSpellModal(null, load)));
+  container.appendChild(tableHost);
+
+  const SPELL_TYPES = { attack: "Atak", heal: "Leczenie", defense: "Obrona", effect: "Efekt", attack_aoe: "Atak AoE" };
+  const TIER_LABELS = { 1: "T1", 2: "T2", 3: "T3", 4: "T4", 5: "T5" };
+
+  const load = async () => {
+    renderTable(tableHost, null, null, {});
+    let rows = [];
+    try { rows = (await adminFetch("/api/admin/spells")).items || []; }
+    catch (e) { showToast("Błąd ładowania zaklęć: " + (e.message || "?"), "error"); return; }
+
+    const cols = [
+      { key: "key",           label: LABELS.key,       editable: false },
+      { key: "label",         label: LABELS.label,     editable: true },
+      { key: "tier",          label: "Tier",           type: "number", editable: true },
+      { key: "mana_cost",     label: "Mana",           type: "number", editable: true },
+      { key: "spell_type",    label: "Typ",
+        type: "badge", editType: "select",
+        editOptions: Object.keys(SPELL_TYPES),
+        badgeClass: (r) => r.spell_type === "attack" ? "admin-badge-red" : r.spell_type === "heal" ? "admin-badge-green" : r.spell_type === "attack_aoe" ? "admin-badge-red" : "admin-badge-blue",
+        formatDisplay: (r) => SPELL_TYPES[r.spell_type] || r.spell_type,
+      },
+      { key: "damage_die",    label: "Kość dmg",       editable: true },
+      { key: "heal_die",      label: "Kość leczenia",  editable: true },
+      { key: "effect_stat",   label: "Stat efektu",    editable: true },
+      { key: "effect_type",   label: "Efekt",          editable: true },
+      { key: "target_zone",   label: "Zasięg",         editable: true },
+      { key: "aoe",           label: "AoE",            type: "boolean", editable: true },
+      { key: "description",   label: "Opis",           editable: true, popup: true },
+      { key: "rank2_json",    label: "Ranga 2 (JSON)", editable: true, popup: true },
+      { key: "rank3_json",    label: "Ranga 3 (JSON)", editable: true, popup: true },
+      { key: "is_active",     label: LABELS.isActive,  type: "boolean", editable: true },
+    ];
+
+    renderTable(tableHost, cols, rows, {
+      tableId: "spells",
+      selectable: true,
+      showTextSearch: true,
+      searchPlaceholder: "Szukaj zaklęć…",
+      async onEdit(row, colKey, newVal, { force } = {}) {
+        try {
+          await adminFetch(`/api/admin/spells/${row.key}`, {
+            method: "PATCH", body: JSON.stringify({ [colKey]: newVal }),
+          });
+          showToast("Zapisano.", "success"); await load();
+        } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); throw e; }
+      },
+      async onDelete(row) {
+        try {
+          await adminFetch(`/api/admin/spells/${row.key}`, { method: "DELETE" });
+          showToast("Usunięto.", "success"); await load();
+        } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); throw e; }
+      },
+      extraActions: (row) => [{ label: "Edytuj", class: "secondary-btn", onClick: () => _openSpellModal(row, load) }],
+    });
+  };
+  await load();
+}
+
+function _openSpellModal(row, onDone) {
+  const isEdit = !!row;
+  const SPELL_TYPE_OPTS = ["attack","heal","defense","effect","attack_aoe"];
+  const ZONE_OPTS = ["any","self","engaged","ranged"];
+
+  const form = document.createElement("div");
+  form.className = "modal-form";
+  form.innerHTML = `
+    <label class="modal-field"><span>Klucz *</span><input name="key" type="text" value="${_esc(row?.key ?? "")}" ${isEdit ? "readonly" : ""} placeholder="np. magic_bolt" autocomplete="off"/></label>
+    <label class="modal-field"><span>Nazwa *</span><input name="label" type="text" value="${_esc(row?.label ?? "")}" placeholder="Błysk Magiczny" autocomplete="off"/></label>
+    <label class="modal-field"><span>Tier (1–5) *</span><input name="tier" type="number" value="${row?.tier ?? 1}" min="1" max="5"/></label>
+    <label class="modal-field"><span>Koszt many *</span><input name="mana_cost" type="number" value="${row?.mana_cost ?? 2}" min="1" max="10"/></label>
+    <label class="modal-field"><span>Typ</span>
+      <select name="spell_type">${SPELL_TYPE_OPTS.map(t => `<option value="${t}" ${row?.spell_type===t?"selected":""}>${t}</option>`).join("")}</select>
+    </label>
+    <label class="modal-field"><span>Kość obrażeń</span><input name="damage_die" type="text" value="${_esc(row?.damage_die ?? "")}" placeholder="np. 2d6"/></label>
+    <label class="modal-field"><span>Kość leczenia</span><input name="heal_die" type="text" value="${_esc(row?.heal_die ?? "")}" placeholder="np. 2d6"/></label>
+    <label class="modal-field"><span>Stat efektu (WIS/CON…)</span><input name="effect_stat" type="text" value="${_esc(row?.effect_stat ?? "")}" placeholder="WIS"/></label>
+    <label class="modal-field"><span>Typ efektu (stun/sleep…)</span><input name="effect_type" type="text" value="${_esc(row?.effect_type ?? "")}" placeholder="sleeping"/></label>
+    <label class="modal-field"><span>Czas trwania (rundy)</span><input name="effect_duration" type="number" value="${row?.effect_duration ?? 1}" min="1"/></label>
+    <label class="modal-field"><span>Zasięg</span>
+      <select name="target_zone">${ZONE_OPTS.map(z => `<option value="${z}" ${(row?.target_zone??'any')===z?"selected":""}>${z}</option>`).join("")}</select>
+    </label>
+    <label class="modal-checkbox-row"><input name="aoe" type="checkbox" ${row?.aoe?"checked":""}><span>AoE (trafia wszystkich wrogów)</span></label>
+    <label class="modal-field"><span>Opis</span><textarea name="description" rows="2">${_esc(row?.description ?? "")}</textarea></label>
+    <label class="modal-field"><span>Ranga 2 (JSON)</span><textarea name="rank2_json" rows="2" placeholder='{"mana_cost":2,"damage_die":"2d8"}'>${_esc(row?.rank2_json ?? "")}</textarea></label>
+    <label class="modal-field"><span>Ranga 3 (JSON)</span><textarea name="rank3_json" rows="2" placeholder='{"mana_cost":1,"damage_die":"3d6"}'>${_esc(row?.rank3_json ?? "")}</textarea></label>`;
+
+  openModal({
+    title: isEdit ? `Edytuj zaklęcie: ${row.key}` : "Dodaj zaklęcie",
+    content: form,
+    footer: [
+      { label: LABELS.cancel, class: "secondary-btn", onClick: (c) => c() },
+      { label: isEdit ? LABELS.save : LABELS.add, class: "primary-btn", onClick: async (c) => {
+          const g = (n) => form.querySelector(`[name="${n}"]`);
+          const key = g("key").value.trim();
+          const label = g("label").value.trim();
+          if (!key || !label) { showToast("Klucz i nazwa są wymagane.", "error"); return; }
+          const body = {
+            key, label,
+            tier: parseInt(g("tier").value) || 1,
+            mana_cost: parseInt(g("mana_cost").value) || 2,
+            spell_type: g("spell_type").value,
+            damage_die: g("damage_die").value.trim() || null,
+            heal_die: g("heal_die").value.trim() || null,
+            effect_stat: g("effect_stat").value.trim() || null,
+            effect_type: g("effect_type").value.trim() || null,
+            effect_duration: parseInt(g("effect_duration").value) || 1,
+            target_zone: g("target_zone").value,
+            aoe: g("aoe").checked ? 1 : 0,
+            description: g("description").value.trim(),
+            rank2_json: g("rank2_json").value.trim() || null,
+            rank3_json: g("rank3_json").value.trim() || null,
+          };
+          try {
+            if (isEdit) await adminFetch(`/api/admin/spells/${row.key}`, { method: "PATCH", body: JSON.stringify(body) });
+            else        await adminFetch("/api/admin/spells",             { method: "POST",  body: JSON.stringify(body) });
+            showToast(isEdit ? "Zapisano." : "Dodano zaklęcie.", "success");
+            c(); await onDone();
+          } catch (e) { showToast((e.message || "Błąd zapisu"), "error"); }
+        }},
     ],
   });
 }
