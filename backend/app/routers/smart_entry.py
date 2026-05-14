@@ -642,6 +642,16 @@ def smart_entry_save(
                 record[k] = float(v) if "." in str(v) else int(v)
             except (ValueError, TypeError):
                 pass
+        elif field_type == "multi_choice":
+            # Store as JSON array e.g. '["warrior","scholar"]'
+            if isinstance(v, list):
+                record[k] = json.dumps(v, ensure_ascii=False)
+            elif isinstance(v, str) and v and not v.startswith("["):
+                vals = [s.strip() for s in v.split(",") if s.strip()]
+                record[k] = json.dumps(vals, ensure_ascii=False)
+        elif isinstance(v, (dict, list)):
+            # Fallback: serialize any other nested object to JSON string
+            record[k] = json.dumps(v, ensure_ascii=False)
 
     if target_key:
         # UPDATE existing record

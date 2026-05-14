@@ -297,6 +297,7 @@ class WeaponCreateReq(BaseModel):
     value_gp: int = 0
     weight_kg: float = 0.0
     note: str | None = None
+    effect_json: str | None = None
     is_active: bool = True
 
 
@@ -317,11 +318,8 @@ class WeaponPatchReq(BaseModel):
     value_gp: int | None = None
     weight_kg: float | None = None
     note: str | None = None
+    effect_json: str | None = None
     is_active: bool | None = None
-    force: bool = False
-
-
-class WeaponDeleteReq(BaseModel):
     force: bool = False
 
 
@@ -1148,6 +1146,7 @@ def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_to
             value_gp=req.value_gp,
             weight_kg=req.weight_kg,
             note=req.note,
+            effect_json=req.effect_json,
             is_active=req.is_active,
         )
         return {"item": item}
@@ -1200,6 +1199,7 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             value_gp=req.value_gp,
             weight_kg=req.weight_kg,
             note=req.note,
+            effect_json=req.effect_json,
             is_active=req.is_active,
             force=req.force,
         )
@@ -1236,9 +1236,9 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
 
 
 @router.delete("/admin/weapons/{key}")
-def admin_delete_weapon(key: str, req: WeaponDeleteReq, _: None = Depends(require_admin_token)):
+def admin_delete_weapon(key: str, force: bool = False, _: None = Depends(require_admin_token)):
     try:
-        delete_weapon(key, force=req.force)
+        delete_weapon(key, force=force)
         return {"ok": True}
     except KeyError:
         raise HTTPException(status_code=404, detail="Weapon not found") from None
