@@ -95,7 +95,7 @@
 | 25V2 | TASK_25_XP_PROGRESSION_V2 | ✅ | WFRP style: everything purchased with XP, magic tied to INT |
 | 26 | TASK_26_SCHOLAR_SPELLS | ✅ | Spell list, Arcane Points, upgrade tiers, miscast scaling, rank-by-usage |
 | 42 | TASK_42_CHARACTER_FIRST_FLOW | ❌ | **PREREQUISITE for 41** — invert campaign→character to character→campaign/dungeon |
-| 41 | TASK_41_DUNGEON_RUNS | ❌ | Standalone farmable dungeons, cooldown, scaling — requires Task 42 |
+| 41 | TASK_41_DUNGEON_RUNS | ✅ | Standalone farmable dungeons, cooldown, scaling — requires Task 42 |
 
 ### Phase 07 — Narrator
 > Depends on Phase 04, 05.
