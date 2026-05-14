@@ -2002,7 +2002,7 @@ def create_turn(
                 if _cm:
                     _cue_name = _cm.group(1).strip()
                     _canonical = resolve_test_name(_cue_name)
-                    # Fallback: custom skills not in hardcoded map — check game_config_skills
+                    # Fallback 1: custom skill by exact key match
                     if _canonical is None:
                         _norm_cue = _cue_name.lower().replace(" ", "_")
                         try:
@@ -2012,6 +2012,40 @@ def create_turn(
                             ).fetchone()
                             if _cue_db:
                                 _canonical = _norm_cue
+                        except Exception:
+                            pass
+                    # Fallback 2: LLM used generic D&D skill (investigation/athletics/etc.)
+                    # but player's action better matches a custom skill — override by
+                    # checking word overlap between player text and skill descriptions
+                    _GENERIC_SKILLS = {"investigation","perception","insight","athletics",
+                                       "acrobatics","arcana","medicine","lore","survival","stealth"}
+                    if _canonical in _GENERIC_SKILLS:
+                        try:
+                            import re as _re_sk
+                            _txt_lower = (text or "").lower()
+                            _custom_rows = conn.execute(
+                                "SELECT key, label, description FROM game_config_skills "
+                                "WHERE is_active = 1 AND key NOT IN "
+                                "('stealth','lockpick','acrobatics','perception','insight',"
+                                " 'survival','persuasion','deception','intimidation',"
+                                " 'athletics','arcana','medicine','lore','attack')"
+                            ).fetchall()
+                            _best_key, _best_score = None, 0
+                            # 4-char prefix stems from player text
+                            _txt_stems = set(
+                                w[:4] for w in _re_sk.findall(r'\b\w{4,}\b', _txt_lower)
+                            )
+                            for _cr in _custom_rows:
+                                _skill_corpus = f"{_cr['label']} {_cr['description'] or ''}".lower()
+                                # 4-char prefix stems from skill corpus
+                                _skill_stems = [w[:4] for w in _re_sk.findall(r'\b\w{4,}\b', _skill_corpus)]
+                                # Score: how many skill stems appear in player text stems
+                                _score = sum(1 for s in _skill_stems if s in _txt_stems)
+                                if _score > _best_score:
+                                    _best_score = _score
+                                    _best_key = _cr["key"]
+                            if _best_score >= 1 and _best_key:
+                                _canonical = _best_key
                         except Exception:
                             pass
                     if _canonical and not is_attack_test(_canonical):
