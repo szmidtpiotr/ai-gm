@@ -60,6 +60,7 @@ from app.routers.world_review import router as world_review_router
 from app.routers.ideas_workshop import router as ideas_workshop_router
 from app.routers.campaign_workshop import router as campaign_workshop_router
 from app.routers.smart_entry import router as smart_entry_router
+from app.routers.hex_world import router as hex_world_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -291,6 +292,7 @@ app.include_router(world_review_router)
 app.include_router(ideas_workshop_router)
 app.include_router(campaign_workshop_router)
 app.include_router(smart_entry_router)
+app.include_router(hex_world_router)
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")
     app.include_router(test_runner_router, prefix="/api")
