@@ -1,8 +1,8 @@
-import { adminFetch } from "/admin_panel_v2/shared/api.js?v=2";
+import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
 import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=5";
 import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
-import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=1";
+import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=2";
 
 const LABELS = {
   weapons:      "Broń",

@@ -66,7 +66,8 @@ export async function adminFetch(path, options = {}) {
     }
 
     if (!response.ok) {
-      const msg = responseBody?.detail || responseBody?.error || "API request failed";
+      let msg = responseBody?.detail || responseBody?.error || "API request failed";
+      if (Array.isArray(msg)) msg = msg.map(e => e.msg || JSON.stringify(e)).join("; ");
       throw new APIError(response.status, responseBody, String(msg).slice(0, 200));
     }
 

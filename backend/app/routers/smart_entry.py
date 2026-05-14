@@ -459,7 +459,7 @@ def _build_llm_context(session: dict, user_message: str, db_context: Optional[di
 class SmartEntryMessageReq(BaseModel):
     session_id: str
     table: Optional[str] = None
-    message: str
+    message: str = ""
     answer: Optional[dict] = None  # {"question_id": str, "value": Any}
 
 
