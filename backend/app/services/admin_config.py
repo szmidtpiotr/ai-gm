@@ -580,17 +580,18 @@ def list_weapons() -> list[dict]:
     rows = _fetch_all(
         """
         SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-               two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note,
-               is_active, locked_at, created_at, updated_at
+               two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note, effect_json,
+               effect_json, is_active, locked_at, created_at, updated_at
         FROM game_config_weapons
         ORDER BY key ASC
         """
     )
     for row in rows:
+        raw_ac = row.get("allowed_classes") or "[]"
         try:
-            row["allowed_classes"] = json.loads(row.get("allowed_classes") or "[]")
-        except Exception:
-            row["allowed_classes"] = []
+            row["allowed_classes"] = json.loads(raw_ac)
+        except (json.JSONDecodeError, TypeError):
+            row["allowed_classes"] = [s.strip() for s in str(raw_ac).split(",") if s.strip()]
         row["two_handed"] = bool(row.get("two_handed"))
         row["finesse"] = bool(row.get("finesse"))
     return rows
@@ -919,6 +920,7 @@ def create_weapon(
     value_gp: int = 0,
     weight_kg: float = 0.0,
     note: str | None = None,
+    effect_json: str | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     safe_damage_die = _validate_damage_die(damage_die)
@@ -945,9 +947,9 @@ def create_weapon(
             """
             INSERT INTO game_config_weapons (
                 key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note,
-                is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note, effect_json,
+                effect_json, is_active, locked_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -966,6 +968,7 @@ def create_weapon(
                 float(weight_kg),
                 description or "",
                 note,
+                effect_json,
                 1 if is_active else 0,
             ),
         )
@@ -973,8 +976,8 @@ def create_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note,
-                   is_active, locked_at, created_at, updated_at
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note, effect_json,
+                   effect_json, is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
             (safe_key,),
@@ -1010,6 +1013,7 @@ def update_weapon(
     value_gp: int | None = None,
     weight_kg: float | None = None,
     note: str | None = None,
+    effect_json: str | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1019,8 +1023,8 @@ def update_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note,
-                   is_active, locked_at, created_at, updated_at
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note, effect_json,
+                   effect_json, is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
             (safe_key,),
@@ -1072,13 +1076,14 @@ def update_weapon(
         if final_weight_kg < 0:
             raise ValueError("invalid_weight_kg")
         final_note = note if note is not None else current.get("note")
+        final_effect_json = effect_json if effect_json is not None else current.get("effect_json")
 
         conn.execute(
             """
             UPDATE game_config_weapons
             SET label = ?, damage_die = ?, weapon_type = ?, linked_stat = ?, allowed_classes = ?,
                 two_handed = ?, finesse = ?, range_m = ?, targeting = ?, aoe_radius_m = ?, magic_school = ?,
-                value_gp = ?, weight_kg = ?, description = ?, note = ?,
+                value_gp = ?, weight_kg = ?, description = ?, note = ?, effect_json = ?,
                 is_active = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
@@ -1098,6 +1103,7 @@ def update_weapon(
                 final_weight_kg,
                 final_desc,
                 final_note,
+                final_effect_json,
                 final_is_active,
                 safe_key,
             ),
@@ -1106,8 +1112,8 @@ def update_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note,
-                   is_active, locked_at, created_at, updated_at
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note, effect_json,
+                   effect_json, is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
             (safe_key,),
@@ -1179,7 +1185,11 @@ def delete_weapon(key: str, *, force: bool) -> None:
             raise ValueError("in_use")
 
         conn.execute("DELETE FROM game_config_weapons WHERE key = ?", (safe_key,))
-        current["allowed_classes"] = json.loads(current.get("allowed_classes") or "[]")
+        raw_ac = current.get("allowed_classes") or "[]"
+        try:
+            current["allowed_classes"] = json.loads(raw_ac)
+        except (json.JSONDecodeError, TypeError):
+            current["allowed_classes"] = [s.strip() for s in str(raw_ac).split(",") if s.strip()]
         _audit(conn, "game_config_weapons", safe_key, "DELETE", current, None)
         conn.commit()
     finally:
