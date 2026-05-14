@@ -1870,6 +1870,43 @@ def create_turn(
 
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 
+        _skill_pending_narrator = None  # set if narrator embeds [SKILL_TEST]/[TRAP] tag
+
+        # ── Skill test — explicit __ACTION:SKILL_ATTEMPT:key pattern ─────────
+        _skill_action_m = None
+        if text.startswith("__ACTION:SKILL_ATTEMPT:"):
+            _skill_action_m = text.split(":", 2)[2].strip().lower() if ":" in text[len("__ACTION:SKILL_ATTEMPT:"):] or True else None
+            _skill_action_m = text[len("__ACTION:SKILL_ATTEMPT:"):].strip().lower() or None
+
+        if _skill_action_m:
+            from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+            import uuid as _uuid
+            char_sheet = json.loads(character["sheet_json"] or "{}")
+            sk = _skill_action_m
+            mod_info = calc_skill_modifier_info(char_sheet, sk)
+            counter = _get_counter(conn, sk)
+            _pending = {
+                "skill_test_id": f"st-{_uuid.uuid4().hex[:8]}",
+                "skill_key": sk,
+                "skill_label": _skill_label(sk),
+                "counter": counter,
+                "modifier_breakdown": mod_info,
+            }
+            gs_row = conn.execute(
+                "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if gs_row:
+                _sf = json.loads(gs_row["session_flags"] or "{}")
+                _sf["pending_skill_test"] = _pending
+                _sf["state"] = "SKILL_TEST_PENDING"
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                    (json.dumps(_sf, ensure_ascii=False), campaign_id),
+                )
+                conn.commit()
+            return _with_turn_trace({"skill_test_pending": _pending, "prose": None, "route": "skill_test"}, turn_id)
+
         route = "narrative"
         model = resolve_model_name(
             requested_model=payload.engine,
@@ -1907,6 +1944,36 @@ def create_turn(
             campaign_id=campaign_id,
             assistant_response=assistant_text,
         )
+
+        # ── [SKILL_TEST:] / [TRAP:] tag interception ─────────────────────────
+        _skill_pending_narrator = None
+        try:
+            from app.services.skill_service import intercept_skill_test_tag, intercept_trap_tag, calc_skill_modifier_info
+            import uuid as _uuid2
+            _char_sh = json.loads(character["sheet_json"] or "{}")
+            assistant_text, _skill_pending_narrator = intercept_skill_test_tag(
+                assistant_text, conn, campaign_id, payload.character_id
+            )
+            if not _skill_pending_narrator:
+                assistant_text, _skill_pending_narrator = intercept_trap_tag(
+                    assistant_text, conn, campaign_id, payload.character_id, _char_sh
+                )
+            if _skill_pending_narrator:
+                gs_row2 = conn.execute(
+                    "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                if gs_row2:
+                    _sf2 = json.loads(gs_row2["session_flags"] or "{}")
+                    _sf2["pending_skill_test"] = _skill_pending_narrator
+                    _sf2["state"] = "SKILL_TEST_PENDING"
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                        (json.dumps(_sf2, ensure_ascii=False), campaign_id),
+                    )
+                    conn.commit()
+        except Exception as _se:
+            logger.warning("skill_tag_intercept_error: %s", str(_se))
 
         from app.services import combat_service as _cs
 
@@ -1998,8 +2065,11 @@ def create_turn(
             "created_at": log["created_at"],
             "route": "narrative",
             "result": result_out,
+            "prose": clean_assistant,
             "turn_id": turn_id,
         }
+        if _skill_pending_narrator:
+            out["skill_test_pending"] = _skill_pending_narrator
         if new_combat is not None:
             out["combat_state"] = new_combat
         if combat_extra:
