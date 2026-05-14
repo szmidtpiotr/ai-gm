@@ -2999,6 +2999,8 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   color: var(--text-secondary);
   line-height: 1.5;
   white-space: pre-wrap;
+  user-select: text;
+  cursor: text;
 }
 .chat-msg.user .chat-bubble {
   background: var(--accent-blue, #2a4a8a);
