@@ -652,14 +652,35 @@ def list_user_characters(user_id: int):
 
 @router.post("/characters")
 def create_standalone_character(req: dict = Body(...)):
-    """Create a character without a campaign (hero-first flow). campaign_id stays NULL."""
+    """Create a character without a campaign (hero-first flow). campaign_id stays NULL.
+    Rolls stats and skills identically to the campaign-scoped endpoint so the wizard
+    steps 2 and 3 work correctly.
+    """
     user_id = req.get("user_id")
     name = (req.get("name") or "").strip()
     system_id = req.get("system_id", "fantasy")
-    sheet_json = req.get("sheet_json") or {}
+    base_sheet = dict(req.get("sheet_json") or {})
 
     if not user_id or not name:
         raise HTTPException(status_code=400, detail="user_id and name are required")
+
+    archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
+    if archetype not in ("warrior", "scholar"):
+        archetype = "warrior"
+
+    # Roll stats and skills exactly as the campaign-scoped endpoint does
+    base_sheet["archetype"] = archetype
+    base_sheet["stats"] = {
+        k: max(STAT_ROLL_MIN, min(STAT_ROLL_MAX, roll_4d6_drop_lowest()))
+        for k in ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
+    }
+    skills_rolled = roll_creation_skills(archetype)
+    base_sheet["skills"] = skills_rolled
+    base_sheet["skills_at_creation"] = dict(skills_rolled)
+
+    created_sheet = _build_character_sheet(base_sheet, archetype, apply_archetype_skill_minimums=False)
+    created_sheet["skills_at_creation"] = dict(skills_rolled)
+    created_sheet.setdefault("narrative_items", [])
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -668,14 +689,13 @@ def create_standalone_character(req: dict = Body(...)):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        sheet_str = json.dumps(sheet_json, ensure_ascii=False)
         cur = conn.execute(
             """
             INSERT INTO characters
                 (campaign_id, user_id, name, system_id, sheet_json, is_active, status, created_at)
             VALUES (NULL, ?, ?, ?, ?, 1, 'idle', datetime('now'))
             """,
-            (int(user_id), name, system_id, sheet_str),
+            (int(user_id), name, system_id, json.dumps(created_sheet, ensure_ascii=False)),
         )
         conn.commit()
         char_id = cur.lastrowid
