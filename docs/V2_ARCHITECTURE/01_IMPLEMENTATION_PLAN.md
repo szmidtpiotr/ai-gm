@@ -302,6 +302,31 @@ Quick reference:
 
 Work completed as of 2026-05-14 that was not in the original V2 plan:
 
+### Campaign Version Sync / Migration Script — Design Decision (2026-05-14)
+
+**Decision:** Build an admin-triggered campaign migration tool (not automatic, not silent).
+
+**Context:** When game mechanics change (HP formula, new sheet fields, schema version bump) existing live campaigns must be brought forward without losing turns, narrative, or character progress. The "Campaign V2 Migration Tool" (to_do_ideas.md item #5) covers this need.
+
+**Agreed design:**
+- Triggered from admin Campaign Monitor — a "Migruj kampanię" button per campaign
+- Reads `schema_version` (and optionally `game_version`) from the campaign row
+- Migration is **idempotent** — re-running on an already-migrated campaign is a no-op
+- V1 → V2 path: recalculate HP/Mana with V2 formula, add missing `sheet_json` fields (bonds, weaknesses, secret_predisposition) with neutral defaults, recalculate XP from turn history
+- V2 → V2.x path: additive only — new fields get defaults, existing data untouched
+- Each migration step is logged to a per-campaign audit log (stored in `migrations_log` JSON field or a separate table)
+- Backend: a `campaign_migrator.py` service, triggered via `POST /api/admin/campaigns/{id}/migrate`
+- Frontend: button in Campaign Monitor → shows a modal with a preview of what will change → confirm → progress log displayed
+
+**Not in scope for this migration tool:**
+- Automatic migration on deploy (too risky — do it admin-side deliberately)
+- Bulk migration of all campaigns at once (do one at a time to catch issues)
+- Rollback (the pre-migrate auto-backup via `./scripts/backup.sh` is the rollback path)
+
+**Priority:** Medium — implement before next production schema change. Tracked in to_do_ideas.md item #5.
+
+---
+
 ### Condition `stat_mods` applied to combat rolls (2026-05-14)
 
 - `_combatant_stat_modifier()` in `combat_service.py` now folds `stat_mods` from all active conditions into the computed modifier

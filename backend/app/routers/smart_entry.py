@@ -66,6 +66,7 @@ WRITABLE_TABLES = {
     "game_config_items",
     "game_config_consumables",
     "game_config_enemies",
+    "game_config_spells",
 }
 
 READ_ONLY_TABLES = {
@@ -308,6 +309,104 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
             "loot_table_key": {
                 "type": "text",
                 "question": "Klucz tabeli łupów (opcjonalnie, np. 'goblin_loot').",
+            },
+        },
+    },
+    "game_config_spells": {
+        "required": ["key", "label", "tier", "mana_cost", "spell_type"],
+        "optional": ["damage_die", "heal_die", "effect_stat", "effect_type", "effect_duration", "target_zone", "aoe", "description", "rank2_json", "rank3_json"],
+        "fields": {
+            "key": {
+                "type": "text",
+                "question": "Podaj unikalny klucz (slug) dla zaklęcia, np. 'frost_bolt'.",
+            },
+            "label": {
+                "type": "text",
+                "question": "Jak ma się nazywać to zaklęcie (wyświetlana nazwa)?",
+            },
+            "tier": {
+                "type": "single_choice",
+                "question": "Jaki poziom mocy ma zaklęcie (1=słabe, 5=legendarne)?",
+                "options": [
+                    {"label": "1", "description": "Tier 1 — podstawowe, tanie"},
+                    {"label": "2", "description": "Tier 2 — solidne zaklęcie"},
+                    {"label": "3", "description": "Tier 3 — silne, wymagające"},
+                    {"label": "4", "description": "Tier 4 — rzadkie, potężne"},
+                    {"label": "5", "description": "Tier 5 — legendarne"},
+                ],
+            },
+            "mana_cost": {
+                "type": "number",
+                "question": "Ile many kosztuje rzucenie (1–10)?",
+                "min": 1,
+                "max": 10,
+            },
+            "spell_type": {
+                "type": "single_choice",
+                "question": "Jaki rodzaj zaklęcia?",
+                "options": [
+                    {"label": "attack", "description": "Atak — zadaje obrażenia jednemu wrogowi"},
+                    {"label": "attack_aoe", "description": "Atak AoE — uderza wszystkich wrogów"},
+                    {"label": "heal", "description": "Leczenie — przywraca HP"},
+                    {"label": "defense", "description": "Obrona — tarcza, buffy"},
+                    {"label": "effect", "description": "Efekt — nakłada stan na cel"},
+                ],
+            },
+            "damage_die": {
+                "type": "text",
+                "question": "Kość obrażeń (np. '2d6', '1d8'). Zostaw puste jeśli nie atakuje.",
+            },
+            "heal_die": {
+                "type": "text",
+                "question": "Kość leczenia (np. '2d6'). Zostaw puste jeśli nie leczy.",
+            },
+            "effect_stat": {
+                "type": "single_choice",
+                "question": "Na jaki atrybut rzuca się rzut obronny celu (jeśli zaklęcie nakłada stan)?",
+                "options": [
+                    {"label": "STR", "description": "Siła"},
+                    {"label": "DEX", "description": "Zręczność"},
+                    {"label": "CON", "description": "Kondycja"},
+                    {"label": "INT", "description": "Inteligencja"},
+                    {"label": "WIS", "description": "Mądrość"},
+                    {"label": "CHA", "description": "Charyzma"},
+                ],
+            },
+            "effect_type": {
+                "type": "text",
+                "question": "Klucz nakładanego stanu (np. 'sleeping', 'stunned', 'poisoned', 'blinded'). Zostaw puste jeśli brak.",
+            },
+            "effect_duration": {
+                "type": "number",
+                "question": "Ile rund trwa efekt (domyślnie 1)?",
+                "min": 1,
+                "max": 10,
+            },
+            "target_zone": {
+                "type": "single_choice",
+                "question": "Zasięg zaklęcia — w jakiej strefie może być cel?",
+                "options": [
+                    {"label": "any", "description": "Dowolna strefa"},
+                    {"label": "self", "description": "Tylko siebie"},
+                    {"label": "engaged", "description": "Tylko cel w zasięgu walki wręcz"},
+                    {"label": "ranged", "description": "Tylko cel w zasięgu dystansowym"},
+                ],
+            },
+            "aoe": {
+                "type": "boolean",
+                "question": "Czy zaklęcie trafia wszystkich wrogów naraz (AoE)?",
+            },
+            "description": {
+                "type": "textarea",
+                "question": "Opis zaklęcia dla GM (wygląd efektu, klimat, atmosfera, 2-3 zdania).",
+            },
+            "rank2_json": {
+                "type": "textarea",
+                "question": "Ulepszenie na Rangę 2 (JSON, np. '{\"mana_cost\":2,\"damage_die\":\"2d8\"}'). Zostaw puste jeśli brak.",
+            },
+            "rank3_json": {
+                "type": "textarea",
+                "question": "Ulepszenie na Rangę 3 (JSON, np. '{\"mana_cost\":1,\"damage_die\":\"3d6\"}'). Zostaw puste jeśli brak.",
             },
         },
     },
