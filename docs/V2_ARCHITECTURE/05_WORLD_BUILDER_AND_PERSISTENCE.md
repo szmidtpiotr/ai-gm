@@ -8,43 +8,104 @@
 
 ### Overview
 
-A node-edge graph editor in the admin panel. Locations are interactive bubbles, travel routes are connecting lines. The world is built by admin and grows organically as campaigns are played — new GM-created locations appear as pending bubbles waiting for approval.
+A **hex grid** world map — each hex represents **1 hour of travel time** in the narrative clock. Locations sit on hex cells. The terrain of each hex determines travel speed and encounter chance. Admin paints terrain and places locations; the travel system derives journey time automatically from hex path + terrain modifiers.
+
+**Decision (2026-05-14):** Replaced node-edge graph (Cytoscape.js) with hex grid (Honeycomb.js + SVG). Rationale: hexes connect naturally to the narrative clock, terrain adds mechanical depth, and hex adjacency is simpler to manage than arbitrary graph edges.
 
 ### Technology
 
-**Cytoscape.js** — lightweight graph visualization library, works with vanilla JS.
-- Drag-and-drop nodes built in
-- Interactive edge creation (click-drag between nodes)
-- Custom node styling per state
-- No framework dependency
+**Honeycomb.js + native SVG** — clean separation of concerns:
+- **Honeycomb.js** (~12KB, no dependencies): hex math — axial coordinates, neighbor lookup, pathfinding, pixel positions of hex corners
+- **SVG** (native browser): rendering hex polygons, terrain icons, location markers, click/hover events
+- **Chart.js** (separate): analytics charts — unrelated to hex map
+
+No build step required — load Honeycomb as ES module from CDN.
+
+### 1 Hex = 1 Hour Design
+
+Travel time is **computed from the hex path**, not stored manually. Each terrain type has a time modifier:
+
+| Terrain | Modifier | 1 hex costs |
+|---|---|---|
+| Plains | ×1.0 | 1h |
+| Road | ×0.5 | 30min |
+| Forest | ×1.5 | 1.5h |
+| Mountain | ×2.0 | 2h |
+| Swamp | ×2.0 | 2h |
+| Water | blocked | — (need boat item) |
+
+**Travel formula:**
+```python
+def compute_travel_time(path: list[Hex], terrain_map: dict) -> float:
+    return sum(TERRAIN_MODIFIERS[terrain_map.get((h.q, h.r), "plains")] for h in path)
+```
+
+**`location_connections.travel_hours`** is now a **derived/cache field** — computed on pathfinding, not set by admin. Connections exist only as "passable / blocked / requires_item" flags.
+
+**Narrator injection on travel:**
+```
+"Podróż: 2 heksy przez las (3h) → 1 równina (1h). Łącznie: 4 godziny drogi.
+ Atmosfera: gęsty las sosnowy, cisza przerywana odgłosami ptaków."
+```
+
+### Terrain Types & Icons
+
+| Terrain key | Icon | Colour | Encounter chance |
+|---|---|---|---|
+| `plains` | — | #c8d89a | 10% |
+| `forest` | 🌲 | #5a8a3c | 20% |
+| `mountain` | ⛰️ | #8a7a6a | 25% |
+| `water` | 💧 | #4a7aaa | 0% (blocked) |
+| `swamp` | 🌿 | #6a8a5a | 30% |
+| `road` | — | #c8b87a | 5% |
+| `city` | 🏘️ | #c8a87a | 0% (safe) |
+| `dungeon` | ⚔️ | #8a3a3a | 40% |
+| `ruins` | 🏚️ | #7a7a6a | 25% |
+| `castle` | 🏰 | #7a8a9a | 0% (safe) |
+
+Admin paints terrain by clicking/drag-selecting hexes and choosing terrain type. Location hexes inherit terrain icon but can override colour.
 
 ### DB Schema
 
 ```sql
--- Positions and display
-ALTER TABLE game_locations ADD COLUMN map_x REAL DEFAULT NULL;
-ALTER TABLE game_locations ADD COLUMN map_y REAL DEFAULT NULL;
-ALTER TABLE game_locations ADD COLUMN map_icon TEXT DEFAULT 'town';
-  -- values: town / dungeon / forest / ruin / castle / cave / road / camp
+-- map_x, map_y, map_icon already migrated to game_locations
+-- map_x = axial q coordinate (integer)
+-- map_y = axial r coordinate (integer)
+-- map_icon = terrain/location type for display
 
--- Player visibility
-ALTER TABLE game_locations ADD COLUMN visible_before_visit INTEGER DEFAULT 0;
-  -- 0 = fog of war until visited
-  -- 1 = always visible on player map (famous city, known landmark)
+-- New: terrain layer (painted by admin, independent of locations)
+CREATE TABLE map_terrain (
+    q           INTEGER NOT NULL,
+    r           INTEGER NOT NULL,
+    terrain     TEXT NOT NULL DEFAULT 'plains',
+    PRIMARY KEY (q, r)
+);
 
--- Travel connections
-CREATE TABLE IF NOT EXISTS location_connections (
+-- location_connections: travel_hours is now DERIVED, not stored
+-- requires_item_key and is_active remain meaningful
+CREATE TABLE location_connections (
     id                  INTEGER PRIMARY KEY,
     from_location_key   TEXT NOT NULL,
     to_location_key     TEXT NOT NULL,
-    travel_hours        REAL DEFAULT 1.0,
-    travel_description  TEXT,            -- "Forest road, moderately dangerous"
-    is_dangerous        INTEGER DEFAULT 0,
-    requires_item_key   TEXT DEFAULT NULL, -- locked gate, need a boat, etc.
-    is_bidirectional    INTEGER DEFAULT 1, -- 0 = one-way only
+    travel_hours        REAL DEFAULT NULL,      -- NULL = computed from hex path
+    requires_item_key   TEXT DEFAULT NULL,
+    is_bidirectional    INTEGER DEFAULT 1,
     is_active           INTEGER DEFAULT 1
 );
 ```
+
+### Per-Hex Encounter Rolls on Travel
+
+For each hex traversed, the system rolls for a random encounter based on terrain:
+```python
+for hex in path:
+    terrain = terrain_map.get((hex.q, hex.r), "plains")
+    if random.random() < ENCOUNTER_CHANCE[terrain]:
+        encounter = pick_encounter_for_terrain(terrain)  # from game_config_encounters
+        # injects into narrator as ambush / event
+```
+
+Encounter tables per terrain type already exist in `game_config_encounters.zone` column (`dungeon`, `forest`, etc.).
 
 ### Node Visual States
 
