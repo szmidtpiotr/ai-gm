@@ -1,7 +1,17 @@
 # TASK 41 — Dungeon Runs
 
 **Phase:** 06 — Economy
-**Status:** ❌ Not Started
+**Status:** ✅ Done
+
+## Implementation Status
+
+- DB: `game_dungeons` table (key, label, location_key, rooms, enemy_pool, boss_enemy, loot_tier, atmosphere, cooldown_hours, min_level) + 3 seeds (goblin_warren, rat_tunnels, crypt_of_bones)
+- DB: `character_dungeon_runs` table (UNIQUE per character+location, run_count, cooldown_until)
+- `dungeon_service.py`: get_dungeon/list_dungeons, check_cooldown, complete_dungeon, enter_dungeon, advance_room, generate_dungeon_instance, scale_enemy_stats, get_active_dungeon_run
+- Enemy scaling: ×0.75 (L1-2) → ×1.0 (L3-4) → ×1.25 (L5-6) → ×1.5 (L7-8) → ×2.0 (L9+); boss one tier above; damage die stepped up at ≥1.5×
+- `dungeons.py` endpoints: GET /dungeons, GET /dungeons/{key}, POST /dungeons/{key}/enter (423 if cooldown), POST /dungeons/advance-room, GET /campaigns/{id}/dungeon-run, POST /dungeons/{key}/complete
+- Admin panel: Świat → Lochy tab (list, create, edit, delete dungeons via /api/admin/dungeons)
+- Note: World Builder integration (TASK 40) needed for map node authoring; dungeon backend works standalone
 **Depends on:** TASK 40 (World Builder — dungeon nodes), TASK 14 (Combat)
 
 ---

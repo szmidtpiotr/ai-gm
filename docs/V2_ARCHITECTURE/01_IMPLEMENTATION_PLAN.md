@@ -401,6 +401,23 @@ Work completed as of 2026-05-14 that was not in the original V2 plan:
 - 18 unit tests in `backend/tests/test_phase9b_t29_condition_stat_mods.py` cover baseline, single penalty, stacking, multi-stat, and conditions-without-stat-mods
 - See `11_CONDITIONS_SYSTEM.md` for the updated execution model table
 
+### Scholar Spells — Task 26 full implementation (2026-05-15)
+
+- `backend/app/services/spell_service.py` — new service: spell lookup, mana deduction, miscast (level-scaled), Nat20 secondary effects, learn/upgrade spells, `grant_starting_spells()`
+- DB: `game_config_spells` table with 9 seeded spells (magic_bolt, mend_wounds, arcane_shield, sleep, burning_arc, drain_life, chain_lightning, stone_skin, fireball) — tier 1–5, mana costs, rank 2/3 JSON upgrades
+- DB: `character_spells` join table (character_id, spell_key, rank, use_count)
+- `combat_service.py`: mana check + deduct before spell attack; miscast on Nat1 (stun L1-2, 1d4 self-dmg L3-4, 1d6+stun L5-7, 1d8+stun+secondary L8+); Nat20 secondary effects (d6: double/stun/zone-change/burning)
+- Character creation: Scholar starts with magic_bolt + mend_wounds R1, `arcane_points=1` in sheet JSON
+- Admin endpoints: GET /admin/spells, GET/POST /admin/characters/{id}/spells (learn, upgrade)
+
+### Dungeon Runs — Task 41 full implementation (2026-05-15)
+
+- DB: `game_dungeons` table (key, label, location_key, rooms, enemy_pool, boss_enemy, loot_tier, atmosphere, cooldown_hours, min_level) + 3 seeds: goblin_warren, rat_tunnels, crypt_of_bones
+- DB: `character_dungeon_runs` table — UNIQUE per (character_id, location_key), tracks run_count + cooldown_until
+- `dungeon_service.py`: `scale_enemy_stats()` level multiplier ×0.75→×2.0 (boss one tier higher, damage die stepped at ≥1.5×), `generate_dungeon_instance()` builds rooms[] with scaled stats, `enter_dungeon()` (cooldown check → generate → persist in session_flags.dungeon_run), `advance_room()` (mark cleared → next room or complete), `get_active_dungeon_run()`, `get_current_room()`
+- `dungeons.py` endpoints: POST /dungeons/{key}/enter (423 on cooldown), POST /dungeons/advance-room (complete+record on last room), GET /campaigns/{id}/dungeon-run
+- Admin panel: Świat → Lochy tab — list, create, edit, delete via /api/admin/dungeons
+
 ### Spells admin CRUD + content tab (2026-05-14)
 
 - Backend: `GET /admin/spells` returns all spells (active + inactive); `POST`, `PATCH`, `DELETE` added for full spell management

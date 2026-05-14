@@ -125,6 +125,27 @@ Formerly "Warsztaty". Two-pane layout:
 
 Playwright + Express on port 4000 used by admin Test Runner. `BASE_URL=http://frontend:80`.
 
+### Scholar Magic System
+
+Scholar archetype has `current_mana` / `max_mana` tracked in sheet JSON. Mana deducted on every `spell_attack` combat action.
+
+- `game_config_spells` — 9 spells (tiers 1–5): magic_bolt, mend_wounds, arcane_shield, sleep, burning_arc, drain_life, chain_lightning, stone_skin, fireball
+- `character_spells` — spells known per character + rank (1/2/3). Scholar starts with magic_bolt + mend_wounds R1
+- `arcane_points` in `sheet_json` — earn 1/level, spend: 1pt = learn new spell, 1pt = R2, 2pt = R3
+- Miscast (Nat 1): stun only (L1-2), 1d4 self-dmg (L3-4), 1d6+stun (L5-7), 1d8+stun+secondary (L8+)
+- Nat 20 secondary (d6): double dmg / +stun / zone-change / burning condition
+
+### Dungeon Runs
+
+Standalone farmable dungeons separate from campaign story content.
+
+- `game_dungeons` — dungeon seeds (enemy_pool, boss_enemy, rooms, loot_tier, cooldown_hours, atmosphere)
+- `character_dungeon_runs` — per-character cooldown tracking (UNIQUE per character+dungeon)
+- Entry: `POST /api/dungeons/{key}/enter` — checks cooldown (423 if blocked), generates scaled instance, stores in `session_flags.dungeon_run`
+- Advance: `POST /api/dungeons/advance-room` — marks room cleared, moves to next, records completion on last room
+- Enemy scaling: ×0.75–×2.0 by hero level; boss always one tier above regular enemies
+- Admin: Świat → Lochy tab in admin panel v2
+
 ## Locked Game Mechanics (do not modify without explicit approval)
 
 - **Stats (7):** STR, DEX, CON, INT, WIS, CHA, LCK
@@ -152,6 +173,8 @@ Playwright + Express on port 4000 used by admin Test Runner. `BASE_URL=http://fr
 - Backend entry: `backend/app/main.py`
 - LLM service: `backend/app/services/llm_service.py`
 - Combat: `backend/app/services/combat_service.py`
+- Scholar spell system: `backend/app/services/spell_service.py`
+- Dungeon runs: `backend/app/services/dungeon_service.py`
 - Smart Entry router: `backend/app/routers/smart_entry.py`
 - Ideas Workshop router: `backend/app/routers/ideas_workshop.py`
 - Admin migrations: `backend/app/migrations_admin.py`
@@ -161,5 +184,6 @@ Playwright + Express on port 4000 used by admin Test Runner. `BASE_URL=http://fr
 - Campaign monitor: `frontend/admin_panel_v2/sections/campaigns.js`
 - Ideas Bank: `frontend/admin_panel_v2/sections/workshops.js`
 - All styles: `frontend/admin_panel_v2/layout.css`
+- Player UI: `frontend/front/index.html`, `frontend/front/js/app.js`, `frontend/front/css/styles.css`
 - Compose: `docker-compose.yml` (PROD), `docker-compose.dev.yml` (DEV)
 - Planned work: `to_do_ideas.md`
