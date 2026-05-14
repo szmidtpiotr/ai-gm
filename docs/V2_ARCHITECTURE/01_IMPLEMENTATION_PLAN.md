@@ -302,6 +302,22 @@ Quick reference:
 
 Work completed as of 2026-05-14 that was not in the original V2 plan:
 
+### Spell Rank Progression + Knowledge Book (2026-05-14)
+
+**Spell rank progression by usage:**
+- `character_spells.use_count` column tracks successful casts per spell per character
+- `record_spell_use(character_id, spell_key, conn)` in `spell_service.py`: increments counter, auto-ranks up when threshold reached, resets counter to 0 on rank-up
+- Thresholds: R1→R2 = 5 successful casts (all tiers). R2→R3 = 5 + (tier × 2). Example: Tier 1 spell needs 7 uses for R3; Tier 5 needs 15.
+- Hook in `combat_service.resolve_attack()` after successful spell hit: fires for all `_is_spell and hit` outcomes
+- Frontend receives `out["spell_rank_up"] = {spell_key, new_rank}` when a rank-up occurs (used for narration/notification)
+
+**Knowledge Book:**
+- `knowledge_book` table: `tip_key`, `category` (general/magic/combat/mechanics/exploration/economy), `title`, `body`, `sort_order`, `is_active`
+- Admin CRUD: `GET/POST/PATCH/DELETE /api/admin/knowledge-book`
+- Admin UI: **Księga Wiedzy** sidebar section (`sections/knowledge.js`) — full table, inline edit, add/edit modal
+- 5 seed tips: spell_rank_progression, mana_system, nat20_nat1, conditions_stat_mods, dc_scale
+- **Convention going forward:** whenever a new mechanic is designed/implemented, add a player-facing tip to `knowledge_book` seed in `migrations_admin.py`
+
 ### Campaign Version Sync / Migration Script — Design Decision (2026-05-14)
 
 **Decision:** Build an admin-triggered campaign migration tool (not automatic, not silent).
