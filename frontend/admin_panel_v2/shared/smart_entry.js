@@ -263,7 +263,7 @@ function _renderFormValues() {
   _schemaFields.forEach(field => {
     const row = _overlay.querySelector(`.se-field-row[data-field-key="${field.key}"]`);
     if (!row) return;
-    const el = row.querySelector("input,select,div.se-multi-choice");
+    const el = row.querySelector("input,select,textarea,div.se-multi-choice");
     if (!el) return;
     const val = _draft[field.key] ?? "";
     if (field.type === "boolean") {
