@@ -325,31 +325,62 @@ export async function init(panel) {
         return;
       }
 
-      modalBody.innerHTML = arcEntries.map(([arcId, arc]) => {
+      const renderArc = ([arcId, arc]) => {
         const isActive = arcId === activeArcId;
         const scenes = arc.scene_goals || [];
+        const currentSceneIdx = typeof plan.current_scene_index === "number" ? plan.current_scene_index : -1;
+
         const sceneHtml = scenes.map((sg, i) => {
-          if (typeof sg === "string") {
-            return `<div class="camp-scene-item">${i + 1}. ${escHtml(sg)}</div>`;
-          }
-          const done = sg.status === "completed";
-          return `<div class="camp-scene-item ${done ? "camp-scene-done" : ""}">
-            ${done ? "✓" : `${i + 1}.`} ${escHtml(sg.text || sg.description || sg.goal || JSON.stringify(sg))}
+          const isCurrent = isActive && i === currentSceneIdx;
+          const text = typeof sg === "string" ? sg : (sg.text || sg.description || sg.goal || JSON.stringify(sg));
+          const done = typeof sg === "object" && sg.status === "completed";
+          return `<div class="camp-scene-item ${done ? "camp-scene-done" : ""} ${isCurrent ? "camp-scene-current" : ""}">
+            <span class="camp-scene-num">${done ? "✓" : (isCurrent ? "▶" : (i + 1) + ".")}</span>
+            <span>${escHtml(text)}</span>
           </div>`;
         }).join("");
+
+        // Hooks: could be object {npcs, locations, items} or string
+        let hooksHtml = "";
+        if (arc.hooks && typeof arc.hooks === "object") {
+          const parts = [];
+          if (arc.hooks.npcs?.length) {
+            parts.push(`<div class="camp-plan-section-label">NPCs</div><ul class="camp-plan-list">${
+              arc.hooks.npcs.map(n => `<li>${escHtml(typeof n === "string" ? n : (n.name || JSON.stringify(n)))}</li>`).join("")
+            }</ul>`);
+          }
+          if (arc.hooks.locations?.length) {
+            parts.push(`<div class="camp-plan-section-label">Lokacje</div><ul class="camp-plan-list">${
+              arc.hooks.locations.map(l => `<li>${escHtml(typeof l === "string" ? l : (l.name || JSON.stringify(l)))}</li>`).join("")
+            }</ul>`);
+          }
+          if (arc.hooks.items?.length) {
+            parts.push(`<div class="camp-plan-section-label">Przedmioty / haki</div><ul class="camp-plan-list">${
+              arc.hooks.items.map(it => `<li>${escHtml(typeof it === "string" ? it : JSON.stringify(it))}</li>`).join("")
+            }</ul>`);
+          }
+          hooksHtml = parts.join("");
+        } else if (arc.hooks && typeof arc.hooks === "string") {
+          hooksHtml = `<p class="muted" style="font-size:0.82rem">${escHtml(arc.hooks)}</p>`;
+        }
 
         return `
           <div class="camp-arc-block ${isActive ? "camp-arc-active" : ""}">
             <div class="camp-arc-header">
-              ${isActive ? `<span class="badge badge-green" style="font-size:0.65rem">aktywny</span>` : ""}
               <span class="camp-arc-title">${escHtml(arc.title || arcId)}</span>
-              <span class="camp-arc-status badge badge-muted">${arc.status || ""}</span>
+              ${isActive ? `<span class="badge badge-green" style="font-size:0.65rem">aktywny</span>` : ""}
+              ${arc.status && arc.status !== "active" ? `<span class="badge badge-muted" style="font-size:0.65rem">${escHtml(arc.status)}</span>` : ""}
             </div>
-            ${arc.hooks ? `<div class="camp-arc-hooks muted" style="font-size:0.8rem;margin-bottom:8px">${escHtml(arc.hooks)}</div>` : ""}
+            ${arc.roadmap ? `<div class="camp-plan-roadmap">${escHtml(arc.roadmap)}</div>` : ""}
+            ${arc.description ? `<div class="camp-plan-roadmap">${escHtml(arc.description)}</div>` : ""}
+            <div class="camp-plan-section-label">Cele scen</div>
             <div class="camp-scenes-list">${sceneHtml || '<span class="muted">brak scen</span>'}</div>
+            ${hooksHtml ? `<details class="camp-plan-hooks-details"><summary class="camp-plan-section-label" style="cursor:pointer">Haki narracyjne</summary>${hooksHtml}</details>` : ""}
           </div>
         `;
-      }).join("");
+      };
+
+      modalBody.innerHTML = `<div class="camp-plan-scroll">${arcEntries.map(renderArc).join("")}</div>`;
     } catch (e) {
       modalBody.innerHTML = `<div class="camp-loading" style="color:var(--accent-red)">${e.message}</div>`;
     }

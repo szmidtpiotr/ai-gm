@@ -90,7 +90,7 @@ def _assert_writable(table: str) -> None:
 SCHEMA_DESCRIPTORS: dict[str, dict] = {
     "game_config_weapons": {
         "required": ["key", "label", "damage_die", "weapon_type", "linked_stat"],
-        "optional": ["two_handed", "value_gp", "allowed_classes"],
+        "optional": ["two_handed", "value_gp", "allowed_classes", "description", "note", "targeting", "weight_kg"],
         "fields": {
             "key": {
                 "type": "text",
@@ -104,11 +104,11 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
                 "type": "single_choice",
                 "question": "Jak duże obrażenia zadaje?",
                 "options": [
-                    {"label": "d4", "description": "Lekka broń", "preview": "Avg: 2.5 + STR"},
-                    {"label": "d6", "description": "Standardowa broń", "preview": "Avg: 3.5 + STR"},
-                    {"label": "d8", "description": "Solidna broń", "preview": "Avg: 4.5 + STR"},
-                    {"label": "d10", "description": "Ciężka broń", "preview": "Avg: 5.5 + STR"},
-                    {"label": "d12", "description": "Broń dwuręczna lub potężna", "preview": "Avg: 6.5 + STR"},
+                    {"label": "d4", "description": "Lekka broń"},
+                    {"label": "d6", "description": "Standardowa broń"},
+                    {"label": "d8", "description": "Solidna broń"},
+                    {"label": "d10", "description": "Ciężka broń"},
+                    {"label": "d12", "description": "Broń dwuręczna lub potężna"},
                 ],
             },
             "weapon_type": {
@@ -136,7 +136,7 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
             "value_gp": {
                 "type": "number",
                 "question": "Ile kosztuje ta broń (w złotych monetach, 1-500)?",
-                "min": 1,
+                "min": 0,
                 "max": 500,
             },
             "allowed_classes": {
@@ -145,7 +145,30 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
                 "options": [
                     {"label": "warrior", "description": "Wojownik"},
                     {"label": "scholar", "description": "Uczony"},
+                    {"label": "ranger", "description": "Łucznik/Strzelec"},
                 ],
+            },
+            "description": {
+                "type": "textarea",
+                "question": "Opis broni dla GM (wygląd, materiał, historia, klimat).",
+            },
+            "note": {
+                "type": "textarea",
+                "question": "Specjalne zdolności / reguły (np. 'Zadaje 1k4 trucizny przy trafieniu, DC 12 odporność').",
+            },
+            "targeting": {
+                "type": "single_choice",
+                "question": "Rodzaj celowania?",
+                "options": [
+                    {"label": "single", "description": "Jeden cel"},
+                    {"label": "aoe", "description": "Obszar (AOE)"},
+                    {"label": "line", "description": "Linia"},
+                ],
+            },
+            "weight_kg": {
+                "type": "number",
+                "question": "Waga w kilogramach (np. 0.5, 2.0)?",
+                "min": 0,
             },
         },
     },
@@ -445,6 +468,8 @@ def smart_entry_schema(table: str, _: None = Depends(_require_admin)):
         "tier": "Poziom", "hp_base": "HP bazowe", "ac_base": "AC bazowe",
         "attack_bonus": "Bonus do ataku", "damage_dice": "Kości obrażeń",
         "drop_chance": "Szansa łupu", "loot_table_key": "Tabela łupów",
+        "description": "Opis (dla GM)", "note": "Zdolności specjalne",
+        "targeting": "Rodzaj celowania", "weight_kg": "Waga (kg)",
     }
 
     fields = []
