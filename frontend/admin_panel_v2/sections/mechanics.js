@@ -258,7 +258,8 @@ async function _renderSkills(container) {
       { key: "label",        label: LABELS.label,       editable: true },
       { key: "linked_stat",  label: LABELS.linkedStat,  editable: true, type: "select-dropdown", editOptions: statOptions },
       { key: "rank_ceiling", label: LABELS.rankCeiling, editable: true, type: "number", min: 1 },
-      { key: "description",  label: LABELS.description, editable: true, type: "textarea" },
+      { key: "description",       label: LABELS.description,        editable: true, type: "textarea" },
+      { key: "trigger_keywords",  label: "Słowa kluczowe (trigger)", editable: true, popup: true },
       { key: "locked_at",    label: LABELS.locked,      type: "locked", editable: false },
     ];
 
@@ -342,6 +343,14 @@ function _openSkillModal(stats, onSubmit, prefill = {}) {
     <label class="modal-field">
       <span>${LABELS.description}</span>
       <textarea name="description" rows="3">${_esc(prefill.description ?? "")}</textarea>
+    </label>
+    <label class="modal-field">
+      <span>Słowa kluczowe gracza (trigger_keywords)</span>
+      <input type="text" name="trigger_keywords" value="${_esc(prefill.trigger_keywords ?? "")}"
+        placeholder="np. miecz,broń,wykuć,kowal — oddzielone przecinkami" autocomplete="off" />
+      <span style="font-size:0.7rem;color:var(--text-muted);margin-top:3px">
+        Gdy gracz używa tych słów → ten skill jest wybierany niezależnie od AI.
+      </span>
     </label>`;
 
   const { close } = openModal({
@@ -368,8 +377,9 @@ function _openSkillModal(stats, onSubmit, prefill = {}) {
           if (!linked_stat) { showToast("Powiązana statystyka jest wymagana.", "error"); return; }
           if (!Number.isFinite(rank_ceiling) || rank_ceiling < 1) { showToast("Maks. rang musi być liczbą ≥ 1.", "error"); return; }
 
+          const trigger_keywords = form.querySelector('[name="trigger_keywords"]').value.trim();
           c();
-          await onSubmit({ key, label, linked_stat, rank_ceiling, description });
+          await onSubmit({ key, label, linked_stat, rank_ceiling, description, trigger_keywords: trigger_keywords || null });
         },
       },
     ],
