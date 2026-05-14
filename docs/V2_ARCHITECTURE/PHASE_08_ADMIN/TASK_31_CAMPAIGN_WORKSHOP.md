@@ -1,8 +1,20 @@
 # TASK 31 — Campaign Workshop (Admin Live Campaign Editor)
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done
 **Phase:** 08 — Admin Tools
 **Depends on:** Task 13 (Campaign Plan v2 schema)
+
+---
+
+## Implementation Status
+
+- Moved inside the campaign detail modal as a 4th tab "🔧 Warsztat" (not a separate panel as originally specced)
+- Campaign ID auto-loaded from context — no dropdown needed
+- `POST /api/admin/campaigns/{id}/workshop/message` endpoint implemented and working
+- `POST /api/admin/campaigns/{id}/workshop/apply` endpoint for applying approved changes
+- Right panel shows "PROPONOWANE ZMIANY" cards with per-change ✓ Zatwierdź / ✗ Odrzuć buttons
+- Raw JSON stripped from chat display — only human-readable text shown to admin
+- Frontend: `renderWorkshopTab()` in `campaigns.js`
 
 ---
 

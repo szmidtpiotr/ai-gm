@@ -1,8 +1,19 @@
 # TASK 30 — Ideas Workshop (AI Agent for Admin)
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done
 **Phase:** 08 — Admin Tools
 **Depends on:** Phase 01 DB Schema (campaign_ideas table), Phase 03 Data Tables
+
+---
+
+## Implementation Status
+
+- `POST /api/admin/ideas/workshop/message` endpoint implemented and working
+- `campaign_ideas` table created with fields: category, title, structured_data, quality_rating, review_status, is_active
+- `is_active` migration applied
+- Frontend: "Bank pomysłów" section in admin_panel_v2 — Warsztat Pomysłów chat (left) + Bank Pomysłów grid with category/rating filters (right), implemented in `workshops.js`
+- Save button appears dynamically when LLM signals `ready_to_save` in the response
+- Ideas Bank grid supports browsing and filtering saved ideas
 
 ---
 

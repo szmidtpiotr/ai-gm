@@ -112,9 +112,9 @@
 | Task | File | Status | Notes |
 |------|------|--------|-------|
 | 30 | TASK_30_IDEAS_WORKSHOP | ✅ | AI agent co-authoring for Ideas Bank |
-| 31 | TASK_31_CAMPAIGN_WORKSHOP | ❌ | Admin views/edits live campaigns |
-| 32 | TASK_32_WORLD_REVIEW_QUEUE | ❌ | Approve/reject pending world entries |
-| 33SA | TASK_33_SMART_ENTRY_AGENT | ❌ | Universal AI-assisted form creation for any table |
+| 31 | TASK_31_CAMPAIGN_WORKSHOP | ✅ | Campaign workshop tab inside campaign detail modal |
+| 32 | TASK_32_WORLD_REVIEW_QUEUE | ✅ | Approve/reject pending world entries — Lokacje/NPC/Przeciwnicy |
+| 33SA | TASK_33_SMART_ENTRY_AGENT | ⚠️ | Form-first approach built; Q&A questionnaire mode missing |
 | 40 | TASK_40_WORLD_BUILDER | ❌ | **DETAILED** — Cytoscape.js visual map editor, NPC/enemy assignment, connections |
 
 ### Phase 09 — Frontend
@@ -295,3 +295,26 @@ Quick reference:
 - No regressions in previous phases
 
 **Deploy after each phase:** push to develop branch, test on DEV server.
+
+---
+
+## Out-of-Plan Work Completed
+
+Work completed as of 2026-05-14 that was not in the original V2 plan:
+
+### Weapon effect_json (2026-05-14)
+- `effect_json TEXT DEFAULT NULL` column added to `game_config_weapons` via migration
+- `_apply_weapon_effects()` method in `combat_service.py`: handles `extra_damage` (doubled on crit) and `on_hit_save` (save or take extra damage / apply condition)
+- Conditions applied via weapon effect look up `game_config_conditions` for full condition data
+- Legacy condition evaluation working: `skip_turn`, `damage_per_turn`, duration countdown
+- Effect Builder UI in AI Kreator (Smart Entry): visual card-based editor — no raw JSON required from admin
+- LLM generates valid `effect_json` from a plain-language description
+- Admin Panel: `effect_json` column visible in weapon table + textarea in weapon Edit modal
+
+### Admin Panel v2 (`frontend/admin_panel_v2/`)
+- Full replacement of the old admin panel; served at `/admin2/`
+- Sections: dashboard, mechanics, content (weapons/items/consumables/loot), world, narrator, players, campaigns, analytics, workshops (Bank pomysłów), voice, system
+- Smart Entry v3 integrated as AI Kreator across all content sections
+- Campaign detail modal: 4 tabs — Przegląd, Plan GM, Tury, Warsztat
+- Plan GM tab: all arcs shown read-only, hooks rendered as lists (NPCs / Lokacje / Przedmioty)
+- Świat section: builder tab placeholder + Oczekujące (pending review) sub-tab
