@@ -2007,7 +2007,7 @@ def create_turn(
                         _norm_cue = _cue_name.lower().replace(" ", "_")
                         try:
                             _cue_db = conn.execute(
-                                "SELECT key FROM game_config_skills WHERE key = ? AND is_active = 1 LIMIT 1",
+                                "SELECT key FROM game_config_skills WHERE key = ? LIMIT 1",
                                 (_norm_cue,),
                             ).fetchone()
                             if _cue_db:
@@ -2026,7 +2026,7 @@ def create_turn(
                         _txt_norm = (text or "").lower().translate(_PL_MAP)
                         _kw_rows = conn.execute(
                             "SELECT key, trigger_keywords FROM game_config_skills "
-                            "WHERE is_active = 1 AND trigger_keywords IS NOT NULL AND trigger_keywords != ''"
+                            "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != ''"
                         ).fetchall()
                         for _kr in _kw_rows:
                             _kws = [k.strip().lower().translate(_PL_MAP)
@@ -2034,8 +2034,10 @@ def create_turn(
                             if any(kw and kw in _txt_norm for kw in _kws):
                                 _canonical = _kr["key"]
                                 break
-                    except Exception:
-                        pass
+                    except Exception as _kw_err:
+                        logger.warning("trigger_keywords_error: %s", str(_kw_err))
+                    logger.info("skill_test_canonical_resolved",
+                                cue=_cue_name, canonical=_canonical, txt_norm=_txt_norm[:40])
                     if _canonical and not is_attack_test(_canonical):
                         # It's a skill, not an attack — show Roll Popup
                         from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter

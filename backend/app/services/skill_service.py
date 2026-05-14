@@ -41,7 +41,7 @@ def _query_skill_from_db(skill_key: str) -> tuple[str, str] | None:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
         row = conn.execute(
-            "SELECT linked_stat, label FROM game_config_skills WHERE key = ? AND is_active = 1 LIMIT 1",
+            "SELECT linked_stat, label FROM game_config_skills WHERE key = ? LIMIT 1",
             (skill_key,),
         ).fetchone()
         conn.close()

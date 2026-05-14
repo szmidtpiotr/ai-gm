@@ -127,7 +127,7 @@ def _skill_test_tag_instruction(conn, campaign_id: int, user_text: str | None) -
         if conn:
             rows = conn.execute(
                 "SELECT key, label, linked_stat, description FROM game_config_skills "
-                "WHERE is_active = 1 ORDER BY sort_order"
+                "ORDER BY sort_order"
             ).fetchall()
             for r in rows:
                 desc = str(r["description"] or "").strip()
