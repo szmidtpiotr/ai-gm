@@ -2726,3 +2726,127 @@ def search_body_or_location(
         }
     finally:
         conn.close()
+
+
+# ── Skill Test Resolution — Task 12 ──────────────────────────────────────────
+
+class SkillTestResolvePayload(BaseModel):
+    character_id: int
+    skill_test_id: str
+    d20_roll: int  # 1–20, client-generated
+
+
+@router.post("/campaigns/{campaign_id}/skill-test/resolve")
+def resolve_skill_test_endpoint(
+    campaign_id: int,
+    payload: SkillTestResolvePayload,
+):
+    """
+    Player sends their d20 roll. Backend resolves the pending skill test,
+    makes a second narrator LLM call, and returns prose + mechanic result.
+    """
+    import json as _json
+    from app.services.skill_service import resolve_skill_test, build_skill_result_context
+    from app.services.llm_service import generate_chat as _gen_chat
+    from app.services.world_service import process_create_tags as _proc_tags, get_current_location_info
+
+    if not (1 <= payload.d20_roll <= 20):
+        raise HTTPException(status_code=400, detail="d20_roll must be 1–20")
+
+    conn = get_db()
+    try:
+        campaign = get_active_campaign_or_gone(conn, campaign_id)
+        character = get_character_or_404(conn, campaign_id, payload.character_id)
+        llm_config = get_user_llm_settings_full(character["user_id"])
+
+        # Load session_flags and pending test
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            raise HTTPException(status_code=404, detail="No active game session")
+
+        session_flags = _json.loads(gs["session_flags"] or "{}")
+        pending = session_flags.get("pending_skill_test")
+        if not pending:
+            raise HTTPException(status_code=409, detail="No pending skill test in this session")
+        if pending.get("skill_test_id") != payload.skill_test_id:
+            raise HTTPException(status_code=409, detail="skill_test_id mismatch — wrong session?")
+
+        # Resolve
+        result = resolve_skill_test(
+            d20_roll=payload.d20_roll,
+            pending=pending,
+            conn=conn,
+            campaign_id=campaign_id,
+            character_id=payload.character_id,
+        )
+
+        # Clear pending state
+        session_flags.pop("pending_skill_test", None)
+        session_flags["state"] = "NARRATIVE"
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (_json.dumps(session_flags, ensure_ascii=False), campaign_id),
+        )
+
+        # Second narrator call
+        skill_ctx = build_skill_result_context(result)
+        nat_instruction = ""
+        if result.get("nat20"):
+            nat_instruction = "To był wyjątkowy sukces — pokaż coś nieoczekiwanego i korzystnego."
+        elif result.get("nat1"):
+            nat_instruction = "To był fumble — wprowadź komplikację, która stworzy przyszłe napięcie."
+
+        narrator_prompt = (
+            f"{skill_ctx}\n\n"
+            f"Napisz narrację wyniku testu umiejętności po polsku. "
+            f"60-90 słów. Klimat dark fantasy. Nie wymieniaj liczb ani kości. "
+            f"{nat_instruction}"
+        )
+        try:
+            prose_raw = _gen_chat(
+                messages=[{"role": "user", "content": narrator_prompt}],
+                llm_config=llm_config,
+            ) or ""
+        except Exception as e:
+            logger.warning("skill_test_narrator_error", error=str(e))
+            outcome = result.get("outcome", "")
+            prose_raw = "Sukces!" if "SUCCESS" in outcome else "Niepowodzenie."
+
+        prose, _ = _proc_tags(prose_raw, conn, campaign_id)
+
+        # Log turn
+        turn_number = conn.execute(
+            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()[0]
+        skill_label = pending.get("skill_label", pending.get("skill_key", "skill"))
+        conn.execute(
+            """INSERT INTO campaign_turns
+               (campaign_id, character_id, turn_number, user_text, assistant_text, route, created_at)
+               VALUES (?,?,?,?,?,?,datetime('now'))""",
+            (campaign_id, payload.character_id, turn_number,
+             f"[Rzut: {skill_label} — {payload.d20_roll}]", prose, "skill_test"),
+        )
+        conn.commit()
+
+        char_state_row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (payload.character_id,)
+        ).fetchone()
+        char_sheet = _json.loads((char_state_row[0] if char_state_row else None) or "{}")
+        current_loc = get_current_location_info(conn, campaign_id)
+
+        return {
+            "prose": prose,
+            "skill_test_result": result,
+            "turn_number": turn_number,
+            "state": {
+                "character_hp": char_sheet.get("current_hp"),
+                "character_max_hp": char_sheet.get("max_hp"),
+                "current_location": current_loc.get("key") if current_loc else None,
+            },
+        }
+    finally:
+        conn.close()
