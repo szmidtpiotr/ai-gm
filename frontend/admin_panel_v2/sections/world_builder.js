@@ -1,491 +1,336 @@
 /**
- * Visual World Builder — Phase 08 Task 40
- * Cytoscape.js node-edge graph editor for location management.
- * Locations = nodes, travel routes = edges.
+ * World Builder v2 — Hex Grid Map Editor (Task 40)
+ * Uses SVG hex rendering. Replaces the old Cytoscape.js node-graph.
  */
 import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
 
-let _cy = null;
-let _edgeHandles = null;
-let _allLocations = [];
-let _allConnections = [];
+let _hexTypes = {};
+let _hexes = {};
+let _teleports = [];
+let _selectedHex = null;
+let _paintType = "forest";
+let _drawingTeleport = null;
+let _svg = null;
+let _zoom = 1.0;
+let _pan = { x: 400, y: 280 };
+let _isDragging = false;
+let _dragStart = null;
+let _container = null;
 
-function _esc(s) {
-  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const HEX_SIZE = 40;
+
+// ── Hex geometry (flat-top) ───────────────────────────────────────────────────
+
+function hexToPixel(q, r) {
+  return { x: HEX_SIZE * 1.5 * q, y: HEX_SIZE * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r) };
 }
 
-const ARCHETYPE_COLORS = {
-  tavern:  "#8b6340",
-  dungeon: "#4a3a6e",
-  forest:  "#2d5a27",
-  city:    "#5a6e7f",
-  ruin:    "#6e5a4a",
-  road:    "#7a7a5a",
-  default: "#5a5a6e",
-};
+function hexRound(q, r) {
+  const s = -q - r;
+  let rq = Math.round(q), rr = Math.round(r), rs = Math.round(s);
+  const dq=Math.abs(rq-q),dr=Math.abs(rr-r),ds=Math.abs(rs-s);
+  if(dq>dr&&dq>ds) rq=-rr-rs; else if(dr>ds) rr=-rq-rs;
+  return { q:rq, r:rr };
+}
 
-const NODE_STATUS_STYLE = {
-  permanent: { border: "#66aaff", opacity: 1 },
-  pending_review: { border: "#ffcc44", opacity: 0.85 },
-  discarded: { border: "#cc4444", opacity: 0.4 },
-};
+function hexCorners(cx, cy, size) {
+  return Array.from({length:6},(_,i)=>{
+    const a = Math.PI/180*60*i;
+    return `${cx+size*Math.cos(a)},${cy+size*Math.sin(a)}`;
+  }).join(" ");
+}
+
+function hexKey(q, r) { return `${q},${r}`; }
+function hexNeighbors(q, r) {
+  return [[1,0],[-1,0],[0,1],[0,-1],[1,-1],[-1,1]].map(([dq,dr])=>({q:q+dq,r:r+dr}));
+}
+
+function _ws(wx, wy) { return { x: wx*_zoom+_pan.x, y: wy*_zoom+_pan.y }; }
+
+// ── Render ────────────────────────────────────────────────────────────────────
+
+function _render() {
+  if(!_svg) return;
+  let html = "";
+
+  // Painted hexes
+  for(const hex of Object.values(_hexes)) {
+    const {x,y} = hexToPixel(hex.q, hex.r);
+    const {x:sx,y:sy} = _ws(x,y);
+    const rz = HEX_SIZE*_zoom;
+    const cfg = _hexTypes[hex.hex_type]||{map_color:"#4a6a4a",map_icon:""};
+    const sel = _selectedHex&&_selectedHex.q===hex.q&&_selectedHex.r===hex.r;
+    html += `<polygon class="hx" data-q="${hex.q}" data-r="${hex.r}"
+      points="${hexCorners(sx,sy,rz-1)}"
+      fill="${cfg.map_color}" stroke="${sel?"#f0c040":"#222"}" stroke-width="${sel?2:0.7}"
+      style="cursor:pointer"/>`;
+    if(_zoom>=0.45&&cfg.map_icon)
+      html += `<text x="${sx}" y="${sy-rz*0.05}" text-anchor="middle"
+        font-size="${Math.max(9,13*_zoom)}" style="pointer-events:none">${cfg.map_icon}</text>`;
+    if(_zoom>=0.5&&hex.label)
+      html += `<text x="${sx}" y="${sy+rz*0.38}" text-anchor="middle"
+        font-size="${Math.max(7,9*_zoom)}" fill="#c8c0a8" style="pointer-events:none">${_e(hex.label.slice(0,14))}</text>`;
+  }
+
+  // Ghost (adjacent empties)
+  if(_zoom>=0.3) {
+    const placed = new Set(Object.keys(_hexes));
+    const ghosts = new Set();
+    for(const h of Object.values(_hexes))
+      for(const n of hexNeighbors(h.q,h.r))
+        if(!placed.has(hexKey(n.q,n.r))) ghosts.add(hexKey(n.q,n.r));
+    for(const k of ghosts) {
+      const [q,r]=k.split(",").map(Number);
+      const {x,y}=hexToPixel(q,r);
+      const {x:sx,y:sy}=_ws(x,y);
+      html += `<polygon class="hg" data-q="${q}" data-r="${r}"
+        points="${hexCorners(sx,sy,HEX_SIZE*_zoom-1)}"
+        fill="transparent" stroke="#2a2a3a" stroke-width="0.5" stroke-dasharray="3,3"
+        style="cursor:crosshair"/>`;
+    }
+  }
+
+  // Teleport connections
+  for(const t of _teleports) {
+    const p1=hexToPixel(t.from_q,t.from_r), p2=hexToPixel(t.to_q,t.to_r);
+    const s1=_ws(p1.x,p1.y), s2=_ws(p2.x,p2.y);
+    const mx=(s1.x+s2.x)/2, my=(s1.y+s2.y)/2-28*_zoom;
+    const colors={boat:"#3a8aaa",magic:"#8a3aaa",tunnel:"#8a6a3a",portal:"#3aaa6a"};
+    const col=colors[t.travel_type]||"#888";
+    html += `<path d="M${s1.x},${s1.y} Q${mx},${my} ${s2.x},${s2.y}"
+      fill="none" stroke="${col}" stroke-width="${1.4*_zoom}" stroke-dasharray="5,3"
+      style="pointer-events:none"/>`;
+    if(_zoom>=0.55&&t.label)
+      html += `<text x="${mx}" y="${my-4}" text-anchor="middle"
+        font-size="${Math.max(7,8*_zoom)}" fill="${col}" style="pointer-events:none">${_e(t.label)}</text>`;
+  }
+
+  _svg.innerHTML = html;
+  _svg.querySelectorAll(".hx,.hg").forEach(el=>el.addEventListener("click",_onHexClick));
+  _container.querySelector("#wb-zoom-label").textContent = `Zoom: ${Math.round(_zoom*100)}%`;
+}
+
+function _e(s){return String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+async function _load() {
+  const [m,t] = await Promise.all([
+    adminFetch("/api/admin/world/map"),
+    adminFetch("/api/admin/world/hex-types"),
+  ]);
+  _hexes={};
+  for(const h of (m.hexes||[])) _hexes[hexKey(h.q,h.r)]=h;
+  _teleports=m.teleport_connections||[];
+  _hexTypes={};
+  for(const t2 of (t.hex_types||[])) _hexTypes[t2.hex_type]=t2;
+}
+
+// ── Interaction ───────────────────────────────────────────────────────────────
+
+async function _onHexClick(e) {
+  const q=parseInt(e.target.dataset.q), r=parseInt(e.target.dataset.r);
+  if(_drawingTeleport) {
+    if(_drawingTeleport.q===q&&_drawingTeleport.r===r) {
+      _drawingTeleport=null; showToast("Anulowano.","info"); return;
+    }
+    await _createTeleport(_drawingTeleport.q,_drawingTeleport.r,q,r);
+    _drawingTeleport=null; return;
+  }
+  if(_hexes[hexKey(q,r)]) { _selectedHex={q,r}; _render(); _renderDetail(_hexes[hexKey(q,r)]); }
+  else await _paint(q,r);
+}
+
+async function _paint(q,r) {
+  try {
+    const cfg=_hexTypes[_paintType]||{};
+    const res=await adminFetch("/api/admin/world/hexes",{
+      method:"POST",body:JSON.stringify({q,r,hex_type:_paintType,encounter_chance:cfg.encounter_base_chance||0.15})
+    });
+    _hexes[hexKey(q,r)]=res.hex;
+    _selectedHex={q,r}; _render(); _renderDetail(res.hex);
+    showToast(`${cfg.label||_paintType} dodany.`,"success");
+  } catch(e){showToast(e.message||"Błąd","error");}
+}
+
+async function _deleteHex(q,r) {
+  if(!confirm(`Usunąć hex (${q},${r})?`)) return;
+  try {
+    await adminFetch(`/api/admin/world/hexes/${q}/${r}`,{method:"DELETE"});
+    delete _hexes[hexKey(q,r)]; _selectedHex=null; _render(); _clearDetail();
+    showToast("Hex usunięty.","success");
+  } catch(e){showToast(e.message||"Błąd","error");}
+}
+
+async function _saveHex(q,r,updates) {
+  try {
+    const res=await adminFetch(`/api/admin/world/hexes/${q}/${r}`,{method:"PATCH",body:JSON.stringify(updates)});
+    _hexes[hexKey(q,r)]=res.hex; _render(); _renderDetail(res.hex);
+    showToast("Zapisano.","success");
+  } catch(e){showToast(e.message||"Błąd","error");}
+}
+
+async function _createTeleport(fq,fr,tq,tr) {
+  const type=prompt("Typ: boat | magic | tunnel | portal","boat")||"boat";
+  const hours=parseFloat(prompt("Czas (h):","8")||"8");
+  const label=prompt("Etykieta (opcjonalna):","")?.trim()||null;
+  try {
+    const res=await adminFetch("/api/admin/world/teleport-connections",{
+      method:"POST",body:JSON.stringify({from_q:fq,from_r:fr,to_q:tq,to_r:tr,travel_type:type,travel_hours:hours,label})
+    });
+    _teleports.push(res.connection); _render(); showToast(`Połączenie ${type} dodane.`,"success");
+  } catch(e){showToast(e.message||"Błąd","error");}
+}
+
+// ── Detail panel ──────────────────────────────────────────────────────────────
+
+function _renderDetail(hex) {
+  const p=_container.querySelector(".wb-detail");
+  if(!p) return;
+  const cfg=_hexTypes[hex.hex_type]||{};
+  const pool=(Array.isArray(hex.encounter_pool)?hex.encounter_pool:[]).join(",");
+  const myTeleports=_teleports.filter(t=>(t.from_q===hex.q&&t.from_r===hex.r)||(t.to_q===hex.q&&t.to_r===hex.r));
+
+  p.innerHTML=`
+    <div class="wb-dh">
+      <span>${cfg.map_icon||"⬡"} (${hex.q},${hex.r})</span>
+      <button class="icon-btn" id="wbd-del">🗑</button>
+    </div>
+    <label class="wb-lbl">Typ terenu</label>
+    <select id="wbd-type">${Object.entries(_hexTypes).map(([k,v])=>
+      `<option value="${k}"${k===hex.hex_type?" selected":""}>${v.map_icon||""} ${v.label}</option>`).join("")}</select>
+    <label class="wb-lbl">Etykieta</label>
+    <input id="wbd-label" type="text" value="${_e(hex.label||"")}" placeholder="np. Thornwood"/>
+    <label class="wb-lbl">Atmosfera</label>
+    <textarea id="wbd-atm" rows="2">${_e(hex.atmosphere||"")}</textarea>
+    <label class="wb-lbl">Szansa spotkania</label>
+    <input id="wbd-enc" type="number" value="${hex.encounter_chance}" min="0" max="1" step="0.05"/>
+    <label class="wb-lbl">Wrogowie (klucze, przecinkami)</label>
+    <input id="wbd-pool" type="text" value="${_e(pool)}"/>
+    <div style="display:flex;gap:6px;margin-top:10px">
+      <button class="primary-btn" id="wbd-save" style="flex:1">Zapisz</button>
+      <button class="secondary-btn" id="wbd-tp">⤷ Połącz</button>
+    </div>
+    <div style="margin-top:10px;font-size:0.72rem;color:var(--text-muted)">Połączenia specjalne:</div>
+    ${myTeleports.length?myTeleports.map(t=>{
+      const other=(t.from_q===hex.q&&t.from_r===hex.r)?`→(${t.to_q},${t.to_r})`:`←(${t.from_q},${t.from_r})`;
+      return `<div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;margin:2px 0">
+        <span style="flex:1">${t.travel_type} ${other} ${t.travel_hours}h</span>
+        <button class="icon-btn wbd-del-tp" data-id="${t.id}" style="font-size:0.65rem">✕</button>
+      </div>`;
+    }).join(""):`<span style="font-size:0.72rem;color:var(--text-muted)">Brak</span>`}`;
+
+  p.querySelector("#wbd-del").onclick=()=>_deleteHex(hex.q,hex.r);
+  p.querySelector("#wbd-save").onclick=()=>_saveHex(hex.q,hex.r,{
+    hex_type:p.querySelector("#wbd-type").value,
+    label:p.querySelector("#wbd-label").value.trim()||null,
+    atmosphere:p.querySelector("#wbd-atm").value.trim()||null,
+    encounter_chance:parseFloat(p.querySelector("#wbd-enc").value)||0.15,
+    encounter_pool:p.querySelector("#wbd-pool").value.split(",").map(s=>s.trim()).filter(Boolean),
+  });
+  p.querySelector("#wbd-tp").onclick=()=>{
+    _drawingTeleport={q:hex.q,r:hex.r};
+    showToast("Kliknij docelowy hex. Kliknij ten sam → anuluj.","info");
+  };
+  p.querySelectorAll(".wbd-del-tp").forEach(b=>b.onclick=async()=>{
+    const id=parseInt(b.dataset.id);
+    try{
+      await adminFetch(`/api/admin/world/teleport-connections/${id}`,{method:"DELETE"});
+      _teleports=_teleports.filter(t=>t.id!==id); _render(); _renderDetail(_hexes[hexKey(hex.q,hex.r)]);
+      showToast("Połączenie usunięte.","success");
+    }catch(e){showToast(e.message,"error");}
+  });
+}
+
+function _clearDetail() {
+  const p=_container.querySelector(".wb-detail");
+  if(p) p.innerHTML=`<div style="color:var(--text-muted);padding:12px;font-size:0.82rem">Kliknij hex aby edytować lub puste miejsce aby pomalować.</div>`;
+}
+
+function _renderPalette() {
+  const pal=_container.querySelector(".wb-palette");
+  if(!pal) return;
+  pal.innerHTML=Object.entries(_hexTypes).map(([k,v])=>
+    `<button class="wb-pb${_paintType===k?" active":""}" data-type="${k}"
+      style="background:${v.map_color};color:#e8e4dc" title="${v.label} ${v.travel_hours}h">${v.map_icon||"⬡"}</button>`
+  ).join("");
+  pal.querySelectorAll(".wb-pb").forEach(b=>b.onclick=()=>{
+    _paintType=b.dataset.type; _drawingTeleport=null; _renderPalette();
+  });
+}
+
+// ── Pan / zoom ────────────────────────────────────────────────────────────────
+
+function _onWheel(e) {
+  e.preventDefault();
+  const rect=_svg.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const f=e.deltaY<0?1.15:0.87;
+  const nz=Math.max(0.12,Math.min(5,_zoom*f));
+  _pan.x=mx-(mx-_pan.x)*(nz/_zoom); _pan.y=my-(my-_pan.y)*(nz/_zoom);
+  _zoom=nz; _render();
+}
+
+function _center() {
+  const list=Object.values(_hexes);
+  if(!list.length){_pan={x:400,y:280};_zoom=1;return;}
+  const px=list.map(h=>hexToPixel(h.q,h.r).x);
+  const py=list.map(h=>hexToPixel(h.q,h.r).y);
+  const cx=(Math.min(...px)+Math.max(...px))/2;
+  const cy=(Math.min(...py)+Math.max(...py))/2;
+  _pan={x:450-cx,y:300-cy}; _zoom=1;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
 
 export async function init(container) {
-  container.innerHTML = `
-    <div class="builder-layout">
-      <div class="builder-toolbar">
-        <span class="builder-title">🗺 Mapa Świata</span>
-        <div class="builder-toolbar-actions">
-          <button class="secondary-btn" id="wb-add-loc-btn" type="button">+ Dodaj lokację</button>
-          <button class="secondary-btn" id="wb-fit-btn" type="button">⊡ Dopasuj widok</button>
-          <button class="secondary-btn" id="wb-save-positions-btn" type="button">💾 Zapisz układ</button>
-          <button class="secondary-btn" id="wb-toggle-edges-btn" type="button">⇄ Tryb połączeń</button>
-          <span class="builder-hint" id="wb-hint">Kliknij węzeł aby zobaczyć szczegóły</span>
+  _container=container; _hexes={}; _teleports=[]; _selectedHex=null;
+  _zoom=1; _pan={x:400,y:280}; _drawingTeleport=null;
+
+  container.innerHTML=`
+    <div class="wb-layout">
+      <div class="wb-sidebar">
+        <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted);letter-spacing:0.1em;padding:8px 10px">
+          TERRAIN
         </div>
+        <div class="wb-palette"></div>
+        <div style="font-size:0.7rem;color:var(--text-muted);padding:8px 10px;line-height:1.6">
+          Kliknij puste → maluj<br>
+          Kliknij hex → edytuj<br>
+          Alt+drag → przesuń<br>
+          Scroll → zoom
+        </div>
+        <div id="wb-zoom-label" style="font-size:0.7rem;color:var(--text-muted);padding:4px 10px">Zoom: 100%</div>
+        <button class="secondary-btn" id="wb-center" style="margin:6px 10px;font-size:0.72rem;width:calc(100% - 20px)">⊡ Dopasuj widok</button>
       </div>
-      <div class="builder-body">
-        <div class="builder-graph" id="wb-graph"></div>
-        <div class="builder-sidebar" id="wb-sidebar">
-          <div class="builder-sidebar-empty">Kliknij lokację aby zobaczyć szczegóły.</div>
-        </div>
+      <div class="wb-canvas-wrap">
+        <svg id="wb-svg" style="width:100%;height:100%;background:#080608;display:block"></svg>
+      </div>
+      <div class="wb-detail">
+        <div style="color:var(--text-muted);padding:12px;font-size:0.82rem">Kliknij hex aby edytować.</div>
       </div>
     </div>`;
 
-  await _loadCytoscape();
-  await _loadData(container);
-  _initGraph(container);
-  _wireToolbar(container);
-}
+  _svg=container.querySelector("#wb-svg");
 
-async function _loadCytoscape() {
-  if (window.cytoscape) return;
-  await new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = "https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js";
-    s.onload = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-  await new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = "https://unpkg.com/cytoscape-edgehandles@4.0.1/cytoscape-edgehandles.js";
-    s.onload = resolve;
-    s.onerror = () => resolve(); // non-critical, continue without it
-    document.head.appendChild(s);
-  });
-  if (window.cytoscapeEdgehandles) {
-    window.cytoscape.use(window.cytoscapeEdgehandles);
+  try { await _load(); } catch(e) {
+    container.innerHTML=`<p style="color:var(--accent-red);padding:20px">Błąd ładowania mapy: ${e.message}</p>`;
+    return;
   }
-}
 
-async function _loadData(container) {
-  try {
-    const [locsRaw, connData] = await Promise.all([
-      adminFetch("/api/locations/admin/locations"),
-      adminFetch("/api/admin/locations/connections").catch(() => ({ connections: [] })),
-    ]);
-    // Endpoint returns a plain list; filter to macro locations only for the graph
-    const allLocs = Array.isArray(locsRaw) ? locsRaw : (locsRaw.locations ?? []);
-    _allLocations = allLocs.filter(l => l.location_type === "macro" && l.is_active !== 0);
-    _allConnections = connData.connections ?? [];
-  } catch (e) {
-    showToast("Błąd ładowania lokacji: " + e.message, "error");
-  }
-}
+  _renderPalette(); _center(); _render();
 
-function _initGraph(container) {
-  const graphEl = container.querySelector("#wb-graph");
-
-  const nodes = _allLocations.map((loc, i) => {
-    const color = ARCHETYPE_COLORS[loc.location_type] || ARCHETYPE_COLORS.default;
-    const status = loc.review_status || "permanent";
-    // Spread nodes in a grid if no saved positions
-    const cols = Math.ceil(Math.sqrt(_allLocations.length));
-    const defaultX = (i % cols) * 120 + 60;
-    const defaultY = Math.floor(i / cols) * 100 + 60;
-    return {
-      data: {
-        id: loc.key,
-        label: loc.label,
-        key: loc.key,
-        locType: loc.location_type || "macro",
-        safeForRest: loc.safe_for_rest || false,
-        reviewStatus: status,
-        description: loc.description || "",
-        color,
-      },
-      position: {
-        x: (loc.map_x != null ? loc.map_x : defaultX),
-        y: (loc.map_y != null ? loc.map_y : defaultY),
-      },
-    };
-  });
-
-  const edges = _allConnections.map(conn => ({
-    data: {
-      id: `${conn.from_key}-${conn.to_key}`,
-      source: conn.from_key,
-      target: conn.to_key,
-      travelTime: conn.travel_hours || 0,
-      isDangerous: conn.danger_level === "high",
-      isBidirectional: conn.is_bidirectional !== false,
-    },
-  }));
-
-  _cy = window.cytoscape({
-    container: graphEl,
-    elements: { nodes, edges },
-    style: [
-      {
-        selector: "node",
-        style: {
-          "background-color": "data(color)",
-          "label": "data(label)",
-          "color": "#e8e0d0",
-          "font-size": "11px",
-          "text-valign": "bottom",
-          "text-margin-y": "4px",
-          "width": 44,
-          "height": 44,
-          "border-width": 2,
-          "border-color": "#66aaff",
-          "text-background-color": "#1a1a2e",
-          "text-background-opacity": 0.8,
-          "text-background-padding": "2px",
-        },
-      },
-      {
-        selector: "node[reviewStatus = 'pending_review']",
-        style: {
-          "border-color": "#ffcc44",
-          "border-style": "dashed",
-          "opacity": 0.85,
-        },
-      },
-      {
-        selector: "node[reviewStatus = 'discarded']",
-        style: { "opacity": 0.35, "border-color": "#cc4444" },
-      },
-      {
-        selector: "node[safeForRest]",
-        style: { "shape": "round-rectangle" },
-      },
-      {
-        selector: "node:selected",
-        style: {
-          "border-color": "#ffffff",
-          "border-width": 3,
-        },
-      },
-      {
-        selector: "edge",
-        style: {
-          "width": 2,
-          "line-color": "#556699",
-          "target-arrow-color": "#556699",
-          "target-arrow-shape": "triangle",
-          "curve-style": "bezier",
-          "label": "data(travelTime)",
-          "font-size": "9px",
-          "color": "#aaa",
-          "text-rotation": "autorotate",
-        },
-      },
-      {
-        selector: "edge[isDangerous]",
-        style: { "line-color": "#cc4444", "target-arrow-color": "#cc4444" },
-      },
-      {
-        selector: ".eh-handle",
-        style: {
-          "background-color": "#88aaff",
-          "width": 12,
-          "height": 12,
-          "shape": "ellipse",
-          "overlay-opacity": 0,
-          "border-width": 12,
-          "border-opacity": 0,
-        },
-      },
-    ],
-    layout: { name: "preset" },
-    wheelSensitivity: 0.3,
-  });
-
-  // Save positions on node drag end
-  _cy.on("dragfree", "node", e => {
-    const node = e.target;
-    _saveNodePosition(node.id(), node.position());
-  });
-
-  // Show sidebar on node click
-  _cy.on("tap", "node", e => {
-    _showLocationDetail(container, e.target.data());
-  });
-
-  // Edge click — show connection detail
-  _cy.on("tap", "edge", e => {
-    _showEdgeDetail(container, e.target.data());
-  });
-
-  // Background click — clear sidebar
-  _cy.on("tap", e => {
-    if (e.target === _cy) {
-      container.querySelector("#wb-sidebar").innerHTML =
-        `<div class="builder-sidebar-empty">Kliknij lokację aby zobaczyć szczegóły.</div>`;
+  _svg.addEventListener("wheel",_onWheel,{passive:false});
+  let _ds=null;
+  _svg.addEventListener("mousedown",e=>{
+    if(e.button===1||(e.button===0&&e.altKey)){
+      _ds={x:e.clientX-_pan.x,y:e.clientY-_pan.y};e.preventDefault();
     }
   });
-
-  // Edge handles for connecting nodes
-  if (_cy.edgehandles) {
-    _edgeHandles = _cy.edgehandles({
-      preview: false,
-      hoverDelay: 150,
-      snap: false,
-      complete: async (sourceNode, targetNode, addedEles) => {
-        addedEles.remove();
-        await _createConnection(container, sourceNode.id(), targetNode.id());
-      },
-    });
-    _edgeHandles.disable(); // start disabled
-  }
-}
-
-function _wireToolbar(container) {
-  container.querySelector("#wb-fit-btn").addEventListener("click", () => {
-    _cy?.fit(undefined, 40);
+  window.addEventListener("mousemove",e=>{
+    if(_ds){_pan={x:e.clientX-_ds.x,y:e.clientY-_ds.y};_render();}
   });
-
-  container.querySelector("#wb-save-positions-btn").addEventListener("click", async () => {
-    await _saveAllPositions();
-    showToast("Układ zapisany.", "success");
-  });
-
-  let edgeMode = false;
-  const toggleBtn = container.querySelector("#wb-toggle-edges-btn");
-  const hint = container.querySelector("#wb-hint");
-  toggleBtn.addEventListener("click", () => {
-    edgeMode = !edgeMode;
-    if (edgeMode) {
-      _edgeHandles?.enable();
-      toggleBtn.classList.add("active");
-      hint.textContent = "Tryb połączeń: przeciągnij z jednej lokacji do drugiej";
-    } else {
-      _edgeHandles?.disable();
-      toggleBtn.classList.remove("active");
-      hint.textContent = "Kliknij węzeł aby zobaczyć szczegóły";
-    }
-  });
-
-  container.querySelector("#wb-add-loc-btn").addEventListener("click", () => {
-    _showAddLocationForm(container);
-  });
-}
-
-function _showLocationDetail(container, data) {
-  const sidebar = container.querySelector("#wb-sidebar");
-  const statusBadge = data.reviewStatus === "pending_review"
-    ? `<span style="color:#ffcc44">⏳ Oczekuje</span>`
-    : data.reviewStatus === "discarded"
-    ? `<span style="color:#cc4444">✕ Odrzucona</span>`
-    : `<span style="color:#66ff99">✓ Zatwierdzona</span>`;
-
-  sidebar.innerHTML = `
-    <div class="wb-detail">
-      <div class="wb-detail-name">${_esc(data.label)}</div>
-      <div class="wb-detail-key"><code>${_esc(data.key)}</code> ${statusBadge}</div>
-      <div class="wb-detail-meta">
-        Typ: ${_esc(data.locType)} &nbsp;|&nbsp;
-        Odpoczynek: ${data.safeForRest ? "✓ bezpieczny" : "✗ ryzykowny"}
-      </div>
-      <div class="wb-detail-desc">${_esc(data.description || "—")}</div>
-      <div class="wb-detail-actions">
-        ${data.reviewStatus === "pending_review" ? `
-          <button class="primary-btn" id="wb-approve-btn" type="button" style="font-size:0.8rem">✓ Zatwierdź</button>
-          <button class="secondary-btn danger-outline" id="wb-discard-btn" type="button" style="font-size:0.8rem">✕ Odrzuć</button>
-        ` : ""}
-        <button class="secondary-btn" id="wb-connections-btn" type="button" style="font-size:0.8rem">⇄ Połączenia</button>
-      </div>
-    </div>`;
-
-  sidebar.querySelector("#wb-approve-btn")?.addEventListener("click", async () => {
-    try {
-      await adminFetch(`/api/admin/world/review/location/${_esc(data.key)}`, {
-        method: "POST", body: JSON.stringify({ action: "approve" }),
-      });
-      showToast("Lokacja zatwierdzona.", "success");
-      _cy.$id(data.key).data("reviewStatus", "permanent");
-      _cy.$id(data.key).style("border-style", "solid").style("border-color", "#66aaff").style("opacity", 1);
-      _showLocationDetail(container, { ...data, reviewStatus: "permanent" });
-    } catch (e) { showToast(e.message, "error"); }
-  });
-
-  sidebar.querySelector("#wb-discard-btn")?.addEventListener("click", async () => {
-    if (!confirm(`Odrzucić lokację "${data.label}"?`)) return;
-    try {
-      await adminFetch(`/api/admin/world/review/location/${_esc(data.key)}`, {
-        method: "POST", body: JSON.stringify({ action: "discard" }),
-      });
-      showToast("Lokacja odrzucona.", "success");
-      _cy.$(`#${data.key}`).style("opacity", 0.35);
-    } catch (e) { showToast(e.message, "error"); }
-  });
-
-  sidebar.querySelector("#wb-connections-btn")?.addEventListener("click", () => {
-    _showConnectionsPanel(container, data.key, data.label);
-  });
-}
-
-function _showEdgeDetail(container, data) {
-  const sidebar = container.querySelector("#wb-sidebar");
-  sidebar.innerHTML = `
-    <div class="wb-detail">
-      <div class="wb-detail-name">Połączenie</div>
-      <div class="wb-detail-meta">${_esc(data.source)} → ${_esc(data.target)}</div>
-      <div class="wb-detail-meta">Czas podróży: ${data.travelTime} min &nbsp;|&nbsp; ${data.isDangerous ? "⚠ Niebezpieczna" : "Bezpieczna"}</div>
-      <div class="wb-detail-actions">
-        <button class="secondary-btn danger-outline" id="wb-del-edge-btn" type="button" style="font-size:0.8rem">✕ Usuń połączenie</button>
-      </div>
-    </div>`;
-
-  sidebar.querySelector("#wb-del-edge-btn").addEventListener("click", async () => {
-    if (!confirm("Usunąć to połączenie?")) return;
-    try {
-      await adminFetch("/api/admin/locations/connections/delete", {
-        method: "POST",
-        body: JSON.stringify({ from_key: data.source, to_key: data.target }),
-      });
-      _cy.$(`#${data.id}`).remove();
-      showToast("Połączenie usunięto.", "success");
-      sidebar.innerHTML = `<div class="builder-sidebar-empty">Kliknij lokację aby zobaczyć szczegóły.</div>`;
-    } catch (e) { showToast(e.message, "error"); }
-  });
-}
-
-function _showConnectionsPanel(container, key, label) {
-  const sidebar = container.querySelector("#wb-sidebar");
-  const edges = _cy.edges(`[source = "${key}"], [target = "${key}"]`);
-  let list = "";
-  edges.forEach(e => {
-    const other = e.source().id() === key ? e.target().id() : e.source().id();
-    list += `<div class="wb-conn-row">${_esc(other)} (${e.data("travelTime")} min)</div>`;
-  });
-
-  sidebar.innerHTML = `
-    <div class="wb-detail">
-      <div class="wb-detail-name">Połączenia: ${_esc(label)}</div>
-      <div>${list || "<p style='color:var(--text-muted)'>Brak połączeń.</p>"}</div>
-      <hr style="border-color:var(--border-color);margin:10px 0">
-      <div class="wb-detail-meta" style="font-weight:600">Dodaj połączenie:</div>
-      <select id="wb-conn-target" class="field-input" style="width:100%;margin:6px 0">
-        <option value="">Wybierz lokację docelową</option>
-        ${_allLocations.filter(l => l.key !== key).map(l => `<option value="${_esc(l.key)}">${_esc(l.label)}</option>`).join("")}
-      </select>
-      <div style="display:flex;gap:8px;align-items:center">
-        <input type="number" id="wb-conn-time" class="field-input" placeholder="Czas podróży (h)" min="1" max="9999" style="width:90px" value="1" />
-        <label style="font-size:0.8rem"><input type="checkbox" id="wb-conn-danger"> danger_level: high</label>
-      </div>
-      <button class="primary-btn" id="wb-add-conn-btn" type="button" style="width:100%;margin-top:8px">Dodaj połączenie</button>
-    </div>`;
-
-  sidebar.querySelector("#wb-add-conn-btn").addEventListener("click", async () => {
-    const target = sidebar.querySelector("#wb-conn-target").value;
-    const time = parseInt(sidebar.querySelector("#wb-conn-time").value) || 60;
-    const danger = sidebar.querySelector("#wb-conn-danger").checked;
-    if (!target) { showToast("Wybierz lokację docelową.", "error"); return; }
-    await _createConnection(container, key, target, time, danger);
-  });
-}
-
-async function _createConnection(container, fromKey, toKey, travelTime = 1, isDangerous = false) {
-  try {
-    await adminFetch("/api/admin/locations/connections", {
-      method: "POST",
-      body: JSON.stringify({
-        from_key: fromKey, to_key: toKey,
-        travel_hours: travelTime,
-        danger_level: isDangerous ? "high" : "normal",
-        is_bidirectional: true,
-      }),
-    });
-    // Add edge to graph
-    _cy.add({ data: {
-      id: `${fromKey}-${toKey}`,
-      source: fromKey, target: toKey,
-      travelTime, isDangerous,
-    }});
-    showToast(`Połączono: ${fromKey} ↔ ${toKey}`, "success");
-    _showConnectionsPanel(container, fromKey, _allLocations.find(l => l.key === fromKey)?.label || fromKey);
-  } catch (e) { showToast(e.message, "error"); }
-}
-
-function _showAddLocationForm(container) {
-  const sidebar = container.querySelector("#wb-sidebar");
-  sidebar.innerHTML = `
-    <div class="wb-detail">
-      <div class="wb-detail-name">+ Nowa lokacja</div>
-      <div class="modal-form" style="gap:8px">
-        <div><label style="font-size:0.8rem">Klucz *</label>
-          <input type="text" id="wb-new-key" class="field-input" placeholder="np. dark_forest" style="width:100%" /></div>
-        <div><label style="font-size:0.8rem">Nazwa *</label>
-          <input type="text" id="wb-new-label" class="field-input" placeholder="np. Ciemny Las" style="width:100%" /></div>
-        <div><label style="font-size:0.8rem">Typ</label>
-          <select id="wb-new-type" class="field-input" style="width:100%">
-            <option value="macro">Makro</option>
-            <option value="sub">Pod-lokacja</option>
-          </select></div>
-        <div><label style="font-size:0.8rem">Opis</label>
-          <textarea id="wb-new-desc" class="field-input" rows="2" style="width:100%" placeholder="Krótki opis atmosferyczny…"></textarea></div>
-        <label style="font-size:0.8rem"><input type="checkbox" id="wb-new-safe"> Bezpieczny odpoczynek</label>
-        <button class="primary-btn" id="wb-create-loc-btn" type="button" style="width:100%;margin-top:8px">Utwórz</button>
-      </div>
-    </div>`;
-
-  sidebar.querySelector("#wb-create-loc-btn").addEventListener("click", async () => {
-    const key = sidebar.querySelector("#wb-new-key").value.trim();
-    const label = sidebar.querySelector("#wb-new-label").value.trim();
-    const locationType = sidebar.querySelector("#wb-new-type").value;
-    const description = sidebar.querySelector("#wb-new-desc").value.trim();
-    const safe = sidebar.querySelector("#wb-new-safe").checked;
-    if (!key || !label) { showToast("Klucz i nazwa są wymagane.", "error"); return; }
-    try {
-      await adminFetch("/api/locations", {
-        method: "POST",
-        body: JSON.stringify({ key, label, location_type: locationType, description, safe_for_rest: safe }),
-      });
-      // Add node to graph
-      const x = 300 + Math.random() * 200;
-      const y = 200 + Math.random() * 200;
-      _cy.add({ data: {
-        id: key, label, key, locType: locationType,
-        safeForRest: safe, reviewStatus: "permanent",
-        color: ARCHETYPE_COLORS.default, description,
-      }, position: { x, y } });
-      _allLocations.push({ key, label, location_type: locationType, description, safe_for_rest: safe });
-      showToast("Lokacja dodana.", "success");
-      sidebar.innerHTML = `<div class="builder-sidebar-empty">Kliknij lokację aby zobaczyć szczegóły.</div>`;
-    } catch (e) { showToast(e.message, "error"); }
-  });
-}
-
-async function _saveNodePosition(key, pos) {
-  try {
-    await adminFetch(`/api/admin/locations/${_esc(key)}/position`, {
-      method: "PATCH",
-      body: JSON.stringify({ map_x: pos.x, map_y: pos.y }),
-    });
-  } catch { /* silently ignore position save failures */ }
-}
-
-async function _saveAllPositions() {
-  const updates = _cy.nodes().map(n => ({
-    key: n.id(), map_x: n.position("x"), map_y: n.position("y"),
-  }));
-  await Promise.allSettled(updates.map(u =>
-    adminFetch(`/api/admin/locations/${_esc(u.key)}/position`, {
-      method: "PATCH",
-      body: JSON.stringify({ map_x: u.map_x, map_y: u.map_y }),
-    })
-  ));
+  window.addEventListener("mouseup",()=>{_ds=null;});
+  container.querySelector("#wb-center").onclick=()=>{_center();_render();};
 }

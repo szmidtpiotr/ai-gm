@@ -1955,6 +1955,88 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     conn.commit()
     logger.info("v2_migration_applied", label="v2-behavior-profiles-seed")
 
+    # ── Task 40: Hex World Builder ────────────────────────────────────────────
+    _exec("""
+        CREATE TABLE IF NOT EXISTS world_hexes (
+            id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+            q                           INTEGER NOT NULL,
+            r                           INTEGER NOT NULL,
+            hex_type                    TEXT NOT NULL DEFAULT 'plains',
+            label                       TEXT,
+            atmosphere                  TEXT,
+            encounter_chance            REAL NOT NULL DEFAULT 0.15,
+            encounter_pool              TEXT NOT NULL DEFAULT '[]',
+            location_key                TEXT REFERENCES game_locations(key),
+            discovered_in_campaign_id   INTEGER,
+            created_by_gm               INTEGER NOT NULL DEFAULT 0,
+            created_by_campaign_id      INTEGER,
+            is_active                   INTEGER NOT NULL DEFAULT 1,
+            created_at                  TEXT DEFAULT (datetime('now'))
+        )
+    """, "v2-world-hexes")
+    _exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_world_hexes_coords ON world_hexes(q, r)",
+          "v2-world-hexes-idx")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS campaign_hex_data (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id         INTEGER NOT NULL,
+            hex_q               INTEGER NOT NULL,
+            hex_r               INTEGER NOT NULL,
+            narrative_encounter TEXT,
+            campaign_label      TEXT,
+            campaign_notes      TEXT,
+            discovered          INTEGER NOT NULL DEFAULT 0
+        )
+    """, "v2-campaign-hex-data")
+    _exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_hex_unique ON campaign_hex_data(campaign_id, hex_q, hex_r)",
+          "v2-campaign-hex-idx")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS hex_type_config (
+            hex_type                TEXT PRIMARY KEY,
+            label                   TEXT NOT NULL,
+            travel_hours            REAL NOT NULL DEFAULT 1.0,
+            encounter_base_chance   REAL NOT NULL DEFAULT 0.15,
+            map_color               TEXT NOT NULL DEFAULT '#4a6a4a',
+            map_icon                TEXT,
+            is_active               INTEGER NOT NULL DEFAULT 1
+        )
+    """, "v2-hex-type-config")
+    _exec("""
+        INSERT OR IGNORE INTO hex_type_config
+            (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon) VALUES
+        ('road',      'Droga',     1.0, 0.05, '#c8a86c', '🛤️'),
+        ('plains',    'Równiny',   1.0, 0.15, '#7a9a4a', '🌾'),
+        ('forest',    'Las',       1.0, 0.30, '#2d5a2d', '🌲'),
+        ('hills',     'Wzgórza',   1.0, 0.20, '#8a7a5a', '⛰️'),
+        ('mountains', 'Góry',      1.0, 0.25, '#6a6a6a', '🏔️'),
+        ('swamp',     'Bagno',     1.0, 0.40, '#4a5a3a', '🌿'),
+        ('river',     'Rzeka',     1.0, 0.10, '#3a6a8a', '🌊'),
+        ('town',      'Miasto',    0.0, 0.00, '#c8a44a', '🏘️'),
+        ('dungeon',   'Loch',      0.0, 1.00, '#5a1a1a', '⚔️'),
+        ('ruins',     'Ruiny',     1.0, 0.60, '#6a5a4a', '🏚️'),
+        ('castle',    'Zamek',     0.0, 0.00, '#5a5a8a', '🏰'),
+        ('cave',      'Jaskinia',  1.0, 0.50, '#3a3a3a', '🕳️')
+    """, "v2-hex-type-config-seed")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS hex_teleport_connections (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_q              INTEGER NOT NULL,
+            from_r              INTEGER NOT NULL,
+            to_q                INTEGER NOT NULL,
+            to_r                INTEGER NOT NULL,
+            travel_type         TEXT NOT NULL DEFAULT 'boat',
+            travel_hours        REAL NOT NULL DEFAULT 8.0,
+            encounter_chance    REAL NOT NULL DEFAULT 0.20,
+            requires_item_key   TEXT DEFAULT NULL,
+            label               TEXT,
+            is_bidirectional    INTEGER NOT NULL DEFAULT 1,
+            is_active           INTEGER NOT NULL DEFAULT 1
+        )
+    """, "v2-hex-teleport-connections")
+
     logger.info("v2_schema_migrations_complete")
 
 
