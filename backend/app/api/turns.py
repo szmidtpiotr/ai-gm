@@ -2015,16 +2015,23 @@ def create_turn(
                         except Exception:
                             pass
                     # Fallback 2: check trigger_keywords — admin-defined keywords that
-                    # deterministically override whatever skill the LLM picked
+                    # deterministically override whatever skill the LLM picked.
+                    # Both player text and keywords are normalized to ASCII so that
+                    # Polish chars (ń→n, ć→c, ę→e, ó→o, ą→a, ł→l, ś→s, ź/ż→z) match.
                     try:
-                        _txt_lower = (text or "").lower()
+                        _PL_MAP = str.maketrans(
+                            "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
+                            "acelnoszzACELNOSZZ"
+                        )
+                        _txt_norm = (text or "").lower().translate(_PL_MAP)
                         _kw_rows = conn.execute(
                             "SELECT key, trigger_keywords FROM game_config_skills "
                             "WHERE is_active = 1 AND trigger_keywords IS NOT NULL AND trigger_keywords != ''"
                         ).fetchall()
                         for _kr in _kw_rows:
-                            _kws = [k.strip().lower() for k in (_kr["trigger_keywords"] or "").split(",") if k.strip()]
-                            if any(kw and kw in _txt_lower for kw in _kws):
+                            _kws = [k.strip().lower().translate(_PL_MAP)
+                                    for k in (_kr["trigger_keywords"] or "").split(",") if k.strip()]
+                            if any(kw and kw in _txt_norm for kw in _kws):
                                 _canonical = _kr["key"]
                                 break
                     except Exception:

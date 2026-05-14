@@ -1903,6 +1903,15 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
 
         popupEl?.remove();
 
+        // Show the roll result as a user message in chat history
+        const sr = response.skill_test_result || {};
+        if (sr.skill_label || sr.skill_key) {
+            const skillName = sr.skill_label || sr.skill_key || 'Test';
+            const outcome = sr.nat20 ? ' — Naturalny 20!' : sr.nat1 ? ' — Naturalny 1' : sr.success ? ' — Sukces' : ' — Porażka';
+            const rollLine = `🎲 ${skillName}: ${sr.d20_roll} +${sr.modifier} = ${sr.player_total}${outcome}`;
+            appendMessage({ role: 'user', content: rollLine, created_at: new Date() });
+        }
+
         if (response.prose) {
             const { narrative: gmContent } = parseGmFull(response.prose);
             appendMessage({
