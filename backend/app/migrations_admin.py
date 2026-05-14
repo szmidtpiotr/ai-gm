@@ -1532,6 +1532,40 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     """, "v2-spells-seed")
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── Knowledge Book (tips shown during travel/rest) ───────────────────────
+    _exec("""
+        ALTER TABLE character_spells ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0
+    """, "v2-character-spells-use-count")
+    _exec("""
+        CREATE TABLE IF NOT EXISTS knowledge_book (
+            tip_key     TEXT PRIMARY KEY,
+            category    TEXT NOT NULL DEFAULT 'general',
+            title       TEXT NOT NULL,
+            body        TEXT NOT NULL,
+            is_active   INTEGER NOT NULL DEFAULT 1,
+            sort_order  INTEGER NOT NULL DEFAULT 0
+        )
+    """, "v2-knowledge-book")
+    _exec("""
+        INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES
+        ('spell_rank_progression', 'magic', 'Mistrzostwo przez praktykę',
+         'Im częściej rzucasz zaklęcie, tym sprawniej je opanujesz — mana zaczyna płynąć naturalniej, a efekty stają się silniejsze. Każde udane użycie przybliża cię do kolejnego stopnia biegłości. Tier zaklęcia wpływa na to, jak długo trwa droga do pełnego mistrzostwa.',
+         10),
+        ('mana_system', 'magic', 'Mana i odpoczynek',
+         'Uczony regeneruje całą manę po długim odpoczynku. W walce mana to jego najcenniejszy zasób — każde zaklęcie kosztuje punkty many, a gdy skończy się mana, zostają tylko pięści.',
+         20),
+        ('nat20_nat1', 'combat', 'Szczęście i pech w kościach',
+         'Rzut 20 na k20 to zawsze sukces — krytyczne trafienie lub spektakularny wyczyn. Rzut 1 to zawsze porażka — komplikacja fabularna albo groźna pomyłka. Żaden modyfikator tego nie zmienia.',
+         30),
+        ('conditions_stat_mods', 'combat', 'Stany i ich wpływ na rzuty',
+         'Stany bojowe (zatrucie, oślepienie, strach) bezpośrednio obniżają atrybuty — zatrute stworzenie walczy słabiej. Efekty się kumulują, więc wróg z kilkoma stanami jest poważnie osłabiony.',
+         40),
+        ('dc_scale', 'mechanics', 'Skala trudności',
+         'Łatwe zadania to DC 8, standardowe — DC 12, trudne — DC 16, ekstremalne — DC 20, legendarne — powyżej 24. Proficiency bonus +2 jest dodawany automatycznie gdy biegłość umiejętności wynosi 3 lub więcej.',
+         50)
+    """, "v2-knowledge-book-seed")
+    # ─────────────────────────────────────────────────────────────────────────
+
     _exec("""
         CREATE TABLE IF NOT EXISTS skill_counters (
             player_skill_key TEXT PRIMARY KEY,

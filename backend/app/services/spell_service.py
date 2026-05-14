@@ -189,6 +189,74 @@ def resolve_mend_wounds(sheet: dict, spell_stats: dict) -> dict:
 
 # ── Arcane Points ─────────────────────────────────────────────────────────────
 
+# ── Spell rank progression via use_count ──────────────────────────────────────
+
+def _rank_up_threshold(tier: int, target_rank: int) -> int:
+    """Successful casts needed to reach target_rank. R1→R2: always 5. R2→R3: 5 + tier*2."""
+    if target_rank == 2:
+        return 5
+    if target_rank == 3:
+        return 5 + int(tier) * 2
+    return 9999
+
+
+def record_spell_use(character_id: int, spell_key: str, conn=None) -> dict:
+    """Increment use_count for a known spell; auto rank-up when threshold reached."""
+    managed = conn is None
+    if managed:
+        conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT cs.rank, cs.use_count, gs.tier "
+            "FROM character_spells cs "
+            "JOIN game_config_spells gs ON gs.key = cs.spell_key "
+            "WHERE cs.character_id = ? AND cs.spell_key = ?",
+            (character_id, spell_key),
+        ).fetchone()
+        if not row:
+            return {"recorded": False}
+
+        current_rank = int(row["rank"])
+        use_count = int(row["use_count"]) + 1
+        tier = int(row["tier"])
+
+        ranked_up = False
+        new_rank = current_rank
+        if current_rank < 3:
+            threshold = _rank_up_threshold(tier, current_rank + 1)
+            if use_count >= threshold:
+                new_rank = current_rank + 1
+                use_count = 0
+                ranked_up = True
+                conn.execute(
+                    "UPDATE character_spells SET rank = ?, use_count = 0 WHERE character_id = ? AND spell_key = ?",
+                    (new_rank, character_id, spell_key),
+                )
+            else:
+                conn.execute(
+                    "UPDATE character_spells SET use_count = ? WHERE character_id = ? AND spell_key = ?",
+                    (use_count, character_id, spell_key),
+                )
+        else:
+            conn.execute(
+                "UPDATE character_spells SET use_count = ? WHERE character_id = ? AND spell_key = ?",
+                (use_count, character_id, spell_key),
+            )
+
+        if managed:
+            conn.commit()
+        return {
+            "recorded": True,
+            "spell_key": spell_key,
+            "use_count": use_count,
+            "rank": new_rank,
+            "ranked_up": ranked_up,
+        }
+    finally:
+        if managed:
+            conn.close()
+
+
 def learn_spell(character_id: int, spell_key: str) -> dict:
     """Add a spell at rank 1 to character_spells."""
     conn = _get_db()

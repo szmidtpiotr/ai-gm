@@ -1595,6 +1595,24 @@ def resolve_attack(
                             })
                 # ─────────────────────────────────────────────────────────────
 
+                # ── Spell rank progression: record successful use ─────────────
+                if _is_spell and _mana_ok:
+                    _spell_key = str((attack_roll or {}).get("weapon_key") or "")
+                    if _spell_key:
+                        try:
+                            from app.services.spell_service import record_spell_use
+                            _use_result = record_spell_use(
+                                int(row["character_id"]), _spell_key, conn
+                            )
+                            if _use_result.get("ranked_up"):
+                                out["spell_rank_up"] = {
+                                    "spell_key": _spell_key,
+                                    "new_rank": _use_result["rank"],
+                                }
+                        except Exception:
+                            pass
+                # ─────────────────────────────────────────────────────────────
+
                 if dead:
                     enemy["dead"] = True
                     ek = str(enemy.get("enemy_key") or "")

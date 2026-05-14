@@ -3153,3 +3153,74 @@ def admin_upgrade_spell(
         return {"ok": True, "spell": result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+# ── Knowledge Book ────────────────────────────────────────────────────────────
+
+@router.get("/admin/knowledge-book")
+def admin_list_knowledge_book(_: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM knowledge_book ORDER BY sort_order, tip_key"
+        ).fetchall()
+        return {"items": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.post("/admin/knowledge-book")
+def admin_create_knowledge_tip(req: dict = Body(...), _: None = Depends(require_admin_token)):
+    tip_key = (req.get("tip_key") or "").strip()
+    title = (req.get("title") or "").strip()
+    body = (req.get("body") or "").strip()
+    if not tip_key or not title or not body:
+        raise HTTPException(status_code=400, detail="tip_key, title, body are required")
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO knowledge_book (tip_key, category, title, body, is_active, sort_order) VALUES (?,?,?,?,?,?)",
+            (tip_key, req.get("category") or "general", title, body,
+             1 if req.get("is_active", 1) else 0, int(req.get("sort_order") or 0)),
+        )
+        conn.commit()
+        return {"ok": True, "tip_key": tip_key}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail=f"Tip key already exists: {tip_key}")
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/knowledge-book/{tip_key}")
+def admin_update_knowledge_tip(
+    tip_key: str, req: dict = Body(...), _: None = Depends(require_admin_token)
+):
+    allowed = {"category", "title", "body", "is_active", "sort_order"}
+    updates = {k: v for k, v in req.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        vals = list(updates.values()) + [tip_key]
+        cur = conn.execute(f"UPDATE knowledge_book SET {sets} WHERE tip_key = ?", vals)
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Tip not found: {tip_key}")
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/knowledge-book/{tip_key}")
+def admin_delete_knowledge_tip(tip_key: str, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        cur = conn.execute("DELETE FROM knowledge_book WHERE tip_key = ?", (tip_key,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Tip not found: {tip_key}")
+        return {"ok": True}
+    finally:
+        conn.close()
