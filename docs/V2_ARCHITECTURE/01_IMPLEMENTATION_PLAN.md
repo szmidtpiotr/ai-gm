@@ -302,6 +302,21 @@ Quick reference:
 
 Work completed as of 2026-05-14 that was not in the original V2 plan:
 
+### Condition `stat_mods` applied to combat rolls (2026-05-14)
+
+- `_combatant_stat_modifier()` in `combat_service.py` now folds `stat_mods` from all active conditions into the computed modifier
+- Applies to: player attack rolls, player saves, enemy attack rolls, enemy periodic saves
+- Multiple conditions stack additively; works for both sheet-based (player) and combatant-dict-based (enemy) actors
+- 18 unit tests in `backend/tests/test_phase9b_t29_condition_stat_mods.py` cover baseline, single penalty, stacking, multi-stat, and conditions-without-stat-mods
+- See `11_CONDITIONS_SYSTEM.md` for the updated execution model table
+
+### Spells admin CRUD + content tab (2026-05-14)
+
+- Backend: `GET /admin/spells` returns all spells (active + inactive); `POST`, `PATCH`, `DELETE` added for full spell management
+- Frontend: **Zaklęcia** subtab in Content section — full table with tier/mana/type/dice columns, inline edit, add/edit modal, delete
+- Weapons tab filters out `weapon_type = 'spell'` rows (already migrated to `game_config_spells` in Task 26)
+- Smart Entry wired to `game_config_spells` when the Zaklęcia tab is active
+
 ### Weapon effect_json (2026-05-14)
 - `effect_json TEXT DEFAULT NULL` column added to `game_config_weapons` via migration
 - `_apply_weapon_effects()` method in `combat_service.py`: handles `extra_damage` (doubled on crit) and `on_hit_save` (save or take extra damage / apply condition)
