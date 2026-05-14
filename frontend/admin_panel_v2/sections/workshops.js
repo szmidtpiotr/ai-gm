@@ -196,7 +196,7 @@ function _renderDraft(container, draft) {
       const items = v.map(item => `<li>${_esc(String(item ?? ""))}</li>`).join("");
       valHtml = `<ul class="draft-list">${items}</ul>`;
     } else if (v !== null && typeof v === "object") {
-      valHtml = `<span class="draft-val">${_esc(JSON.stringify(v, null, 2))}</span>`;
+      valHtml = `<pre class="draft-val-json">${_esc(JSON.stringify(v, null, 2))}</pre>`;
     } else {
       valHtml = `<span class="draft-val">${_esc(String(v ?? ""))}</span>`;
     }

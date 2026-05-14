@@ -2924,7 +2924,9 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   min-height: 0;
 }
 .workshop-draft-col {
-  flex: 0.8;
+  width: 340px;
+  max-width: 340px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg-elevated);
@@ -3032,6 +3034,7 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 }
 .draft-key { color: var(--text-muted); min-width: 80px; font-weight: 600; }
 .draft-val { color: var(--text-secondary); word-break: break-word; }
+.draft-val-json { color: var(--text-secondary); font-size: 0.72rem; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; background: var(--bg-surface); padding: 4px 6px; border-radius: 3px; max-width: 100%; margin: 2px 0; }
 
 /* Ideas Bank grid */
 .bank-toolbar {
