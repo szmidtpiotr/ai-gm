@@ -3224,3 +3224,105 @@ def admin_delete_knowledge_tip(tip_key: str, _: None = Depends(require_admin_tok
         return {"ok": True}
     finally:
         conn.close()
+
+
+# ── Dungeon admin CRUD ────────────────────────────────────────────────────────
+
+@router.get("/admin/dungeons")
+def admin_list_dungeons(_: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM game_dungeons ORDER BY min_level, key"
+        ).fetchall()
+        return {"items": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.post("/admin/dungeons")
+def admin_create_dungeon(
+    req: dict = Body(...), _: None = Depends(require_admin_token)
+):
+    key = (req.get("key") or "").strip()
+    label = (req.get("label") or "").strip()
+    location_key = (req.get("location_key") or key).strip()
+    if not key or not label:
+        raise HTTPException(status_code=400, detail="key and label are required")
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            """
+            INSERT INTO game_dungeons
+                (key, label, location_key, rooms, enemy_pool, boss_enemy,
+                 loot_tier, atmosphere, cooldown_hours, min_level, is_active)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                key,
+                label,
+                location_key,
+                int(req.get("rooms") or 5),
+                req.get("enemy_pool") or "[]",
+                req.get("boss_enemy") or None,
+                req.get("loot_tier") or "standard",
+                req.get("atmosphere") or None,
+                int(req.get("cooldown_hours") or 72),
+                int(req.get("min_level") or 1),
+                1 if req.get("is_active", 1) else 0,
+            ),
+        )
+        conn.commit()
+        return {"ok": True, "key": key}
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409, detail=f"Dungeon key already exists: {key}"
+        )
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/dungeons/{dungeon_key}")
+def admin_update_dungeon(
+    dungeon_key: str,
+    req: dict = Body(...),
+    _: None = Depends(require_admin_token),
+):
+    allowed = {
+        "label", "location_key", "rooms", "enemy_pool", "boss_enemy",
+        "loot_tier", "atmosphere", "cooldown_hours", "min_level", "is_active",
+    }
+    updates = {k: v for k, v in req.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields")
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        vals = list(updates.values()) + [dungeon_key]
+        cur = conn.execute(f"UPDATE game_dungeons SET {sets} WHERE key = ?", vals)
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(
+                status_code=404, detail=f"Dungeon not found: {dungeon_key}"
+            )
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/dungeons/{dungeon_key}")
+def admin_delete_dungeon(dungeon_key: str, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        cur = conn.execute(
+            "DELETE FROM game_dungeons WHERE key = ?", (dungeon_key,)
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(
+                status_code=404, detail=f"Dungeon not found: {dungeon_key}"
+            )
+        return {"ok": True}
+    finally:
+        conn.close()

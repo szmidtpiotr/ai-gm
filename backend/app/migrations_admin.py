@@ -1627,6 +1627,36 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
          'Bohater nie jest przywiązany do jednej kampanii — przeżywa ją i wraca silniejszy. Statystyki, ekwipunek, złoto i umiejętności zostają. Po zakończeniu przygody możesz wybrać nową kampanię, wejść do lochu, lub po prostu odpocząć.',
          60)
     """, "v2-knowledge-book-seed")
+    _exec("""
+        INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES
+        ('dungeon_cooldown', 'exploration', 'Lochy odradzają się',
+         'Po oczyszczeniu lochu wrogowie odradzają się po pewnym czasie — każde miejsce ma swój rytm. Wróć gdy minie czas odnowienia i zmierz się z nim ponownie, silniejszy niż poprzednio.',
+         70)
+    """, "v2-dungeon-tip")
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # ── Task 41: Dungeon Runs ─────────────────────────────────────────────────
+    _exec("""
+        CREATE TABLE IF NOT EXISTS game_dungeons (
+            key             TEXT PRIMARY KEY,
+            label           TEXT NOT NULL,
+            location_key    TEXT NOT NULL,
+            rooms           INTEGER NOT NULL DEFAULT 5,
+            enemy_pool      TEXT NOT NULL DEFAULT '[]',
+            boss_enemy      TEXT,
+            loot_tier       TEXT NOT NULL DEFAULT 'standard',
+            atmosphere      TEXT,
+            cooldown_hours  INTEGER NOT NULL DEFAULT 72,
+            min_level       INTEGER NOT NULL DEFAULT 1,
+            is_active       INTEGER NOT NULL DEFAULT 1
+        )
+    """, "v2-game-dungeons")
+    _exec("""
+        INSERT OR IGNORE INTO game_dungeons (key, label, location_key, rooms, enemy_pool, boss_enemy, loot_tier, atmosphere, cooldown_hours, min_level) VALUES
+        ('goblin_warren',  'Nora Goblinów',     'goblin_warren',  5, '["goblin","goblin_archer"]', 'goblin_shaman',  'standard', 'Ciasne tunele, smród gnijącego mięsa, pobrzękiwanie oręża w ciemności.',              48, 1),
+        ('crypt_of_bones', 'Krypta Kości',      'crypt_of_bones', 6, '["skeleton","zombie"]',      'skeleton_lord',  'rich',     'Wilgotne katakumby, fosforyzujące kości, echo kroków odbija się od kamiennych ścian.', 72, 2),
+        ('rat_tunnels',    'Kanały pod Miastem','rat_tunnels',    4, '["giantrat"]',               NULL,             'poor',     'Ciemne, zawilgocone kanały. Coś tu mieszka i nie lubi gości.',                        24, 1)
+    """, "v2-game-dungeons-seed")
     # ─────────────────────────────────────────────────────────────────────────
 
     # ── Task 42: Character-first flow ────────────────────────────────────────

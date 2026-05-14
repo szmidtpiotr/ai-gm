@@ -52,7 +52,7 @@ const LOCATION_RULES = [
   { key: "reason",           label: "Reason",           type: "text",    default: "Sacred ground", description: "Reason shown to player" },
 ];
 
-const TABS = ["locations", "npcs", "enemies", "rules", "pending", "builder"];
+const TABS = ["locations", "npcs", "enemies", "dungeons", "rules", "pending", "builder"];
 const _rendered = new Set();
 let _aiTrigger = null;  // updated by each tab render; called by the bubble
 
@@ -63,6 +63,7 @@ export async function init(panel) {
         <button class="subtab-btn active" data-tab="locations">${LABELS.locations}</button>
         <button class="subtab-btn" data-tab="npcs">${LABELS.npcs}</button>
         <button class="subtab-btn" data-tab="enemies">${LABELS.enemies}</button>
+        <button class="subtab-btn" data-tab="dungeons">⚔️ Lochy</button>
         <button class="subtab-btn" data-tab="rules">📋 Reguły</button>
         <button class="subtab-btn" data-tab="pending">⏳ Oczekujące <span id="pending-nav-badge" class="admin-badge admin-badge-gold" style="display:none"></span></button>
         <button class="subtab-btn" data-tab="builder">🗺 Mapa Świata</button>
@@ -111,6 +112,7 @@ async function _activateTab(panel, tab) {
   if      (tab === "locations") await _renderLocations(container);
   else if (tab === "npcs")      await _renderNpcs(container);
   else if (tab === "enemies")   await _renderEnemies(container);
+  else if (tab === "dungeons")  await _renderDungeons(container);
   else if (tab === "rules")     await _renderRules(container);
   else if (tab === "pending")   await _renderPendingReview(container, panel);
   else if (tab === "builder") {
@@ -1181,4 +1183,138 @@ async function _loadPendingType(container, type, panelId, badgeId, panel) {
   } catch (e) {
     panelEl.innerHTML = `<p style="color:var(--accent-red);font-size:0.82rem">${_esc(e.message)}</p>`;
   }
+}
+
+// ── Dungeons ──────────────────────────────────────────────────────────────────
+
+async function _renderDungeons(container) {
+  const tableHost = document.createElement("div");
+  const addBtn = document.createElement("button");
+  addBtn.className = "primary-btn";
+  addBtn.textContent = "+ Dodaj loch";
+  addBtn.style.marginBottom = "12px";
+
+  const load = async () => {
+    renderTable(tableHost, null, null, {});
+    let rows = [];
+    try { rows = (await adminFetch("/api/admin/dungeons")).items || []; }
+    catch (e) { showToast("Błąd ładowania lochów: " + (e.message || "?"), "error"); return; }
+
+    const cols = [
+      { key: "key",           label: "Klucz",        editable: false },
+      { key: "label",         label: "Nazwa",         editable: true },
+      { key: "rooms",         label: "Pokoje",        type: "number", editable: true },
+      { key: "cooldown_hours",label: "Cooldown (h)",  type: "number", editable: true },
+      { key: "min_level",     label: "Min. poziom",   type: "number", editable: true },
+      { key: "loot_tier",     label: "Łupy",
+        type: "badge", editType: "select",
+        editOptions: ["poor", "standard", "rich"],
+        badgeClass: (r) => ({ poor: "admin-badge-blue", standard: "admin-badge-green", rich: "admin-badge-gold" }[r.loot_tier] || "admin-badge-blue"),
+        formatDisplay: (r) => ({ poor: "Słabe", standard: "Standardowe", rich: "Bogate" }[r.loot_tier] || r.loot_tier),
+      },
+      { key: "boss_enemy",    label: "Boss",          editable: true },
+      { key: "atmosphere",    label: "Atmosfera",     editable: true, popup: true },
+      { key: "is_active",     label: "Aktywny",       type: "boolean", editable: true },
+    ];
+
+    renderTable(tableHost, cols, rows, {
+      tableId: "dungeons",
+      showTextSearch: true,
+      searchPlaceholder: "Szukaj lochów…",
+      async onEdit(row, colKey, newVal) {
+        try {
+          await adminFetch(`/api/admin/dungeons/${row.key}`, { method: "PATCH", body: JSON.stringify({ [colKey]: newVal }) });
+          showToast("Zapisano.", "success"); await load();
+        } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); throw e; }
+      },
+      async onDelete(row) {
+        try {
+          await adminFetch(`/api/admin/dungeons/${row.key}`, { method: "DELETE" });
+          showToast("Usunięto.", "success"); await load();
+        } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); throw e; }
+      },
+      extraActions: (row) => [{ label: "Edytuj", class: "secondary-btn", onClick: () => _openDungeonModal(row, load) }],
+    });
+  };
+
+  addBtn.addEventListener("click", () => _openDungeonModal(null, load));
+  container.appendChild(addBtn);
+  container.appendChild(tableHost);
+  await load();
+}
+
+function _openDungeonModal(row, onDone) {
+  const isEdit = !!row;
+  const form = document.createElement("div");
+  form.className = "modal-form";
+  form.innerHTML = `
+    <label class="modal-field"><span>Klucz *</span>
+      <input name="key" type="text" value="${_esc(row?.key ?? "")}" ${isEdit ? "readonly" : ""} placeholder="np. goblin_warren" autocomplete="off"/>
+    </label>
+    <label class="modal-field"><span>Nazwa *</span>
+      <input name="label" type="text" value="${_esc(row?.label ?? "")}" placeholder="Nora Goblinów"/>
+    </label>
+    <label class="modal-field"><span>Klucz lokacji</span>
+      <input name="location_key" type="text" value="${_esc(row?.location_key ?? "")}" placeholder="Zostaw puste = jak klucz lochu"/>
+    </label>
+    <label class="modal-field"><span>Pokoje (1–20)</span>
+      <input name="rooms" type="number" value="${row?.rooms ?? 5}" min="1" max="20"/>
+    </label>
+    <label class="modal-field"><span>Pula wrogów (JSON array)</span>
+      <input name="enemy_pool" type="text" value="${_esc(row?.enemy_pool ?? '[]')}" placeholder='["goblin","goblin_archer"]'/>
+    </label>
+    <label class="modal-field"><span>Boss (klucz wroga, opcjonalnie)</span>
+      <input name="boss_enemy" type="text" value="${_esc(row?.boss_enemy ?? "")}" placeholder="goblin_shaman"/>
+    </label>
+    <label class="modal-field"><span>Jakość łupów</span>
+      <select name="loot_tier">
+        ${["poor","standard","rich"].map(t => `<option value="${t}" ${(row?.loot_tier ?? "standard") === t ? "selected" : ""}>${{ poor:"Słabe", standard:"Standardowe", rich:"Bogate" }[t]}</option>`).join("")}
+      </select>
+    </label>
+    <label class="modal-field"><span>Cooldown (godziny)</span>
+      <input name="cooldown_hours" type="number" value="${row?.cooldown_hours ?? 72}" min="1" max="720"/>
+    </label>
+    <label class="modal-field"><span>Minimalny poziom</span>
+      <input name="min_level" type="number" value="${row?.min_level ?? 1}" min="1" max="20"/>
+    </label>
+    <label class="modal-field"><span>Atmosfera (opis klimatu)</span>
+      <textarea name="atmosphere" rows="3" placeholder="Ciasne tunele, smród gnijącego mięsa…">${_esc(row?.atmosphere ?? "")}</textarea>
+    </label>
+    <label class="modal-checkbox-row">
+      <input name="is_active" type="checkbox" ${(row?.is_active ?? 1) ? "checked" : ""}>
+      <span>Aktywny</span>
+    </label>
+  `;
+
+  openModal({
+    title: isEdit ? `Edytuj loch: ${row.key}` : "Nowy loch",
+    content: form,
+    footer: [
+      { label: "Anuluj", class: "secondary-btn", onClick: (c) => c() },
+      { label: isEdit ? "Zapisz" : "Dodaj", class: "primary-btn", onClick: async (c) => {
+          const g = (n) => form.querySelector(`[name="${n}"]`);
+          const key = g("key").value.trim();
+          const label = g("label").value.trim();
+          if (!key || !label) { showToast("Klucz i nazwa są wymagane.", "error"); return; }
+          const body = {
+            key, label,
+            location_key:   g("location_key").value.trim() || key,
+            rooms:          parseInt(g("rooms").value) || 5,
+            enemy_pool:     g("enemy_pool").value.trim() || "[]",
+            boss_enemy:     g("boss_enemy").value.trim() || null,
+            loot_tier:      g("loot_tier").value,
+            cooldown_hours: parseInt(g("cooldown_hours").value) || 72,
+            min_level:      parseInt(g("min_level").value) || 1,
+            atmosphere:     g("atmosphere").value.trim() || null,
+            is_active:      g("is_active").checked ? 1 : 0,
+          };
+          try {
+            if (isEdit) await adminFetch(`/api/admin/dungeons/${row.key}`, { method: "PATCH", body: JSON.stringify(body) });
+            else        await adminFetch("/api/admin/dungeons",              { method: "POST",  body: JSON.stringify(body) });
+            showToast(isEdit ? "Zapisano." : "Dodano loch.", "success");
+            c(); await onDone();
+          } catch (e) { showToast(e.message || "Błąd zapisu", "error"); }
+        }},
+    ],
+  });
 }

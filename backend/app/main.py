@@ -40,6 +40,7 @@ from app.api import (
     npcs,
     shop,
 )
+from app.api.dungeons import router as dungeons_router
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.api.client_logs import router as client_logs_router
@@ -259,6 +260,7 @@ async def request_logging_middleware(request: Request, call_next):
         )
 
 app.include_router(commands.router, prefix="/api")
+app.include_router(dungeons_router, prefix="/api")
 app.include_router(turns.router, prefix="/api")
 app.include_router(campaign_history.router, prefix="/api")
 app.include_router(campaign_memory.router, prefix="/api")

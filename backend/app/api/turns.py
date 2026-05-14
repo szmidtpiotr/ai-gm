@@ -55,8 +55,9 @@ DB_PATH = "/data/ai_gm.db"
 logger = get_logger(__name__)
 
 
-COMBAT_START_RE = re.compile(r"\[COMBAT_START:([^\]]+)\]", re.IGNORECASE)
-GRANT_ITEM_RE = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
+COMBAT_START_RE  = re.compile(r"\[COMBAT_START:([^\]]+)\]", re.IGNORECASE)
+DUNGEON_CLEAR_RE = re.compile(r"\[DUNGEON_CLEAR:([^\]]+)\]", re.IGNORECASE)
+GRANT_ITEM_RE    = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
 GRANT_GOLD_RE = re.compile(r"^Grant Gold\s+([+-]?\d+)$", re.IGNORECASE)
 OPEN_SHOP_RE = re.compile(r"^Open Shop\s+(\S+)$", re.IGNORECASE)
 # 9A-4c+ — gdy model nie generuje cue, dołącz „Open Shop” na podstawie intencji gracza i NPC w scenie.
@@ -280,6 +281,30 @@ def _maybe_start_combat_from_gm_tag(
         return None
     except Exception as e:
         logger.error("combat_gm_tag_error", campaign_id=campaign_id, error_message=str(e))
+        return None
+
+
+def _handle_dungeon_clear_tag(
+    campaign_id: int, character_id: int, assistant_text: str
+) -> dict | None:
+    """Parse [DUNGEON_CLEAR:key] from GM text and record dungeon completion."""
+    match = DUNGEON_CLEAR_RE.search(assistant_text or "")
+    if not match:
+        return None
+    dungeon_key = match.group(1).strip()
+    if not dungeon_key:
+        return None
+    try:
+        from app.services.dungeon_service import complete_dungeon, check_cooldown
+        cd = check_cooldown(character_id, dungeon_key)
+        if cd.get("on_cooldown"):
+            logger.info("dungeon_clear_tag_skip_cooldown", campaign_id=campaign_id, dungeon_key=dungeon_key)
+            return None
+        result = complete_dungeon(character_id, dungeon_key)
+        logger.info("dungeon_clear_tag_recorded", campaign_id=campaign_id, dungeon_key=dungeon_key)
+        return result
+    except Exception as e:
+        logger.error("dungeon_clear_tag_error", campaign_id=campaign_id, dungeon_key=dungeon_key, error=str(e))
         return None
 
 
@@ -1983,6 +2008,9 @@ def create_turn(
         ) == "player"
 
         clean_assistant = COMBAT_START_RE.sub("", assistant_text).rstrip()
+        # [DUNGEON_CLEAR:key] — strip tag and record completion
+        _dungeon_clear_result = _handle_dungeon_clear_tag(campaign_id, character_id, clean_assistant)
+        clean_assistant = DUNGEON_CLEAR_RE.sub("", clean_assistant).rstrip()
         clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
         _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
         _narrative_for_cues, grant_item_label, grant_gold_amount, open_shop_npc_key = extract_grant_cues(
@@ -2154,6 +2182,8 @@ def create_turn(
             out.update(combat_extra)
         if open_shop_npc_key:
             out["open_shop"] = open_shop_npc_key
+        if _dungeon_clear_result:
+            out["dungeon_cleared"] = _dungeon_clear_result
         return out
 
     except RuntimeError as e:
