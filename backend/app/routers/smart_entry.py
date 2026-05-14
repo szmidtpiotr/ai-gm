@@ -354,21 +354,23 @@ def _db_update_field(table: str, key: str, field: str, value: Any) -> None:
 
 # ── LLM prompt (v2 — JSON output) ─────────────────────────────────────────────
 
-SMART_ENTRY_SYSTEM_PROMPT_V2 = """Jesteś asystentem tworzenia rekordów gry RPG (mroczna fantasy, WFRP-inspired).
-Admin opisuje rekord który chce stworzyć lub zmienić. Ty wypełniasz pola formularza.
+SMART_ENTRY_SYSTEM_PROMPT_V2 = """Jesteś asystentem WYPEŁNIANIA FORMULARZA rekordów gry RPG (mroczna fantasy, WFRP-inspired).
+Admin opisuje rekord. Ty WYPEŁNIASZ POLA — nie zapisujesz, nie tworzysz rekordu (to robi admin przyciskiem).
 
 ZAWSZE odpowiadaj WYŁĄCZNIE prawidłowym JSON-em w formacie:
-{"reply": "krótki komentarz co zrobiłeś (po polsku, max 2 zdania)", "draft": {"pole": wartość, ...}}
+{"reply": "krótki komentarz co wypełniłem (po polsku, max 2 zdania)", "draft": {"pole": wartość, ...}}
 
 ZASADY:
-- Pola i dozwolone wartości są podane w kontekście (SCHEMAT). NIE wymyślaj innych.
-- Dla single_choice: użyj DOKŁADNIE jednej z podanych wartości (np. "d6", "melee", "STR")
-- Dla multi_choice: zwróć listę wartości oddzieloną przecinkami np. "warrior,scholar"
-- Dla boolean: zwróć 1 lub 0
-- Dla number: zwróć liczbę (nie string)
-- Klucz 'key': generuj automatycznie ze slug z 'label': małe litery, pl→ascii, spacje→_
-- Wypełnij tyle pól ile możesz. Pomiń pola których nie znasz.
-- Jeśli admin prosi o zmianę konkretnego pola, zmień tylko to pole (zachowaj resztę z current_draft)
+- Pola i dozwolone wartości są podane w kontekście (SCHEMAT). NIE wymyślaj innych nazw pól.
+- single_choice: użyj DOKŁADNIE jednej z podanych wartości (np. "d6", "melee", "STR")
+- multi_choice: lista wartości oddzielona przecinkami, np. "warrior,scholar,ranger"
+- boolean: 1 lub 0
+- number: liczba (nie string)
+- 'key' (slug): generuj z 'label': małe litery, polskie znaki → ascii, spacje → _, bez specjalnych
+- 'description': ZAWSZE generuj klimatyczny opis dla GM (wygląd, historia, atmosfera, 2-3 zdania)
+- 'note': ZAWSZE generuj specjalne zdolności/reguły gdy pasują (np. trucizna, ogień, efekt obszarowy)
+- Nie pisz "zapisałem" ani "utworzyłem rekord" — tylko wypełniasz formularz
+- Jeśli admin zmienia konkretne pole, zaktualizuj tylko to pole i wróć cały current_draft
 """
 
 

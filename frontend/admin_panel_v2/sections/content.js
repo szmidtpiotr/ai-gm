@@ -138,6 +138,7 @@ async function _activateTab(panel, tab) {
   _rendered.add(tab);
   const container = panel.querySelector(`.subtab-panel[data-tab="${tab}"]`);
   if (!container) return;
+  container.innerHTML = "";
   switch (tab) {
     case "weapons":     await _renderWeapons(container, panel); break;
     case "armor":       await _renderArmor(container, panel); break;
