@@ -3008,3 +3008,62 @@ def campaign_designer_generate_entity(
         pass
 
     raise HTTPException(status_code=422, detail=f"LLM returned unparseable response: {raw[:200]}")
+
+
+# ── Task 26: Scholar Spells — Admin endpoints ─────────────────────────────────
+
+@router.get("/admin/spells")
+def admin_list_spells(_: None = Depends(require_admin_token)):
+    """List all active spells in the game_config_spells table."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT * FROM game_config_spells WHERE is_active = 1 ORDER BY tier, key"
+        ).fetchall()
+        return {"items": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.get("/admin/characters/{character_id}/spells")
+def admin_character_spells(character_id: int, _: None = Depends(require_admin_token)):
+    """Return the spell book for a character."""
+    from app.services.spell_service import get_character_spells
+    return {"spells": get_character_spells(character_id)}
+
+
+@router.post("/admin/characters/{character_id}/spells/learn")
+def admin_learn_spell(
+    character_id: int,
+    req: dict = Body(...),
+    _: None = Depends(require_admin_token),
+):
+    """Teach a character a new spell (rank 1)."""
+    from app.services.spell_service import learn_spell
+    spell_key = req.get("spell_key", "")
+    if not spell_key:
+        raise HTTPException(status_code=400, detail="spell_key is required")
+    try:
+        result = learn_spell(character_id, spell_key)
+        return {"ok": True, "spell": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/admin/characters/{character_id}/spells/upgrade")
+def admin_upgrade_spell(
+    character_id: int,
+    req: dict = Body(...),
+    _: None = Depends(require_admin_token),
+):
+    """Upgrade a character's spell to the next rank (max 3)."""
+    from app.services.spell_service import upgrade_spell
+    spell_key = req.get("spell_key", "")
+    if not spell_key:
+        raise HTTPException(status_code=400, detail="spell_key is required")
+    try:
+        result = upgrade_spell(character_id, spell_key)
+        return {"ok": True, "spell": result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
