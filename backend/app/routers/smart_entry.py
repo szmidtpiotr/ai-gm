@@ -1,8 +1,8 @@
 """
-Smart Entry Agent Router — Phase 08 Task 33
+Smart Entry Agent Router — Phase 08 Task 33 (v2)
 
 Admin endpoints for an AI-assisted record creation/editing agent.
-The agent asks structured questions and builds DB records interactively.
+v2: Form-first flow — LLM fills JSON draft in one shot instead of Q&A.
 """
 
 import json
@@ -42,8 +42,6 @@ def _get_or_create_session(session_id: str) -> dict:
             "history": [],
             "draft": {},
             "target_key": None,
-            "answers": {},
-            "proposed_changes": None,
             "last_active": time.time(),
         }
     else:
@@ -281,28 +279,6 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
     },
 }
 
-# ── Table inference ───────────────────────────────────────────────────────────
-
-TABLE_KEYWORDS: list[tuple[str, list[str]]] = [
-    ("game_config_weapons", ["weapon", "broń", "bron", "sword", "miecz", "axe", "siekier", "bow", "łuk", "spear", "włóczni", "dagger", "sztylet", "hammer", "młot"]),
-    ("game_config_enemies", [
-        "enemy", "enemies", "wróg", "wroga", "wrogi", "wrogiem", "wrogów",
-        "monster", "potwór", "potwora", "potwory", "creature", "stworzenie",
-        "boss", "goblin", "orc", "ork", "dragon", "smok", "undead", "nieumarły",
-    ]),
-    ("game_config_consumables", ["consumable", "konsumable", "potion", "mikstura", "elixir", "eliksir", "scroll", "zwój", "food", "jedzenie"]),
-    ("game_config_items", ["item", "przedmiot", "armor", "zbroja", "shield", "tarcza", "accessory", "akcesoria", "ring", "pierścień", "amulet", "helm", "hełm"]),
-]
-
-
-def _infer_table(message: str) -> Optional[str]:
-    msg_lower = message.lower()
-    for table, keywords in TABLE_KEYWORDS:
-        for kw in keywords:
-            if kw in msg_lower:
-                return table
-    return None
-
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
@@ -310,32 +286,6 @@ def _get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
-
-
-def _db_search(table: str, filters: dict, limit: int = 5) -> list[dict]:
-    """Simple SELECT with LIKE filters."""
-    if table not in WRITABLE_TABLES and table not in READ_ONLY_TABLES:
-        return []
-    conn = _get_db()
-    try:
-        if filters:
-            conditions = []
-            params = []
-            for col, val in filters.items():
-                conditions.append(f"{col} LIKE ?")
-                params.append(f"%{val}%")
-            where = " AND ".join(conditions)
-            rows = conn.execute(
-                f"SELECT * FROM {table} WHERE {where} LIMIT ?",
-                params + [limit],
-            ).fetchall()
-        else:
-            rows = conn.execute(f"SELECT * FROM {table} LIMIT ?", (limit,)).fetchall()
-        return [dict(r) for r in rows]
-    except sqlite3.OperationalError:
-        return []
-    finally:
-        conn.close()
 
 
 def _db_get(table: str, key: str) -> Optional[dict]:
@@ -379,79 +329,85 @@ def _db_update_field(table: str, key: str, field: str, value: Any) -> None:
         conn.close()
 
 
-# ── Agent system prompt ───────────────────────────────────────────────────────
+# ── LLM prompt (v2 — JSON output) ─────────────────────────────────────────────
 
-SMART_ENTRY_SYSTEM_PROMPT = """Jesteś asystentem tworzenia treści gry RPG. Pomagasz administratorowi tworzyć i edytować rekordy w bazie danych.
-Zadajesz jedno konkretne pytanie na raz. Jesteś precyzyjny i skupiony na mechanice.
-Nie zadawaj więcej niż 6 pytań zanim zaproponujesz gotowy rekord.
-Gdy draft jest kompletny powiedz adminowi i zaproponuj zapis.
-Świat gry: mroczna fantasy, WFRP-inspired."""
+SMART_ENTRY_SYSTEM_PROMPT_V2 = """Jesteś asystentem tworzenia rekordów gry RPG (mroczna fantasy, WFRP-inspired).
+Admin opisuje rekord który chce stworzyć lub zmienić. Ty wypełniasz pola formularza.
+
+ZAWSZE odpowiadaj WYŁĄCZNIE prawidłowym JSON-em w formacie:
+{"reply": "krótki komentarz co zrobiłeś (po polsku, max 2 zdania)", "draft": {"pole": wartość, ...}}
+
+ZASADY:
+- Pola i dozwolone wartości są podane w kontekście (SCHEMAT). NIE wymyślaj innych.
+- Dla single_choice: użyj DOKŁADNIE jednej z podanych wartości (np. "d6", "melee", "STR")
+- Dla multi_choice: zwróć listę wartości oddzieloną przecinkami np. "warrior,scholar"
+- Dla boolean: zwróć 1 lub 0
+- Dla number: zwróć liczbę (nie string)
+- Klucz 'key': generuj automatycznie ze slug z 'label': małe litery, pl→ascii, spacje→_
+- Wypełnij tyle pól ile możesz. Pomiń pola których nie znasz.
+- Jeśli admin prosi o zmianę konkretnego pola, zmień tylko to pole (zachowaj resztę z current_draft)
+"""
 
 
-# ── Question builder ──────────────────────────────────────────────────────────
-
-def _build_questions_for_table(table: str, answered: dict) -> list[dict]:
-    """Return the next unanswered question as a visual card list (max 1)."""
-    schema = SCHEMA_DESCRIPTORS.get(table)
+def _build_schema_constraint_text(table: str) -> str:
+    """Build a human-readable schema description for the LLM."""
+    schema = SCHEMA_DESCRIPTORS.get(table, {})
     if not schema:
-        return []
-
-    questions = []
-    # Ask required fields first, then optional
-    for field_key in schema["required"] + schema["optional"]:
-        if field_key in answered:
-            continue
-        field_def = schema["fields"].get(field_key)
-        if not field_def:
-            continue
-
-        q: dict[str, Any] = {
-            "id": field_key,
-            "type": field_def["type"],
-            "question": field_def["question"],
-        }
-        if "options" in field_def:
-            q["options"] = field_def["options"]
-        if "min" in field_def:
-            q["min"] = field_def["min"]
-        if "max" in field_def:
-            q["max"] = field_def["max"]
-
-        questions.append(q)
-        break  # one question at a time
-
-    return questions if questions else []
+        return ""
+    lines = [f"SCHEMAT {table}:", "Wymagane:"]
+    for fk in schema.get("required", []):
+        fd = schema["fields"].get(fk, {})
+        line = f"  {fk} (typ={fd.get('type', 'text')})"
+        if fd.get("options"):
+            opts = [str(o.get("label", o) if isinstance(o, dict) else o) for o in fd["options"]]
+            line += f" → dozwolone: [{', '.join(opts)}]"
+        if "min" in fd:
+            line += f" min={fd['min']}"
+        if "max" in fd:
+            line += f" max={fd['max']}"
+        lines.append(line)
+    if schema.get("optional"):
+        lines.append("Opcjonalne:")
+        for fk in schema.get("optional", []):
+            fd = schema["fields"].get(fk, {})
+            line = f"  {fk} (typ={fd.get('type', 'text')})"
+            if fd.get("options"):
+                opts = [str(o.get("label", o) if isinstance(o, dict) else o) for o in fd["options"]]
+                line += f" → dozwolone: [{', '.join(opts)}]"
+            lines.append(line)
+    return "\n".join(lines)
 
 
-def _all_required_filled(table: str, answered: dict) -> bool:
-    schema = SCHEMA_DESCRIPTORS.get(table)
-    if not schema:
-        return False
-    return all(f in answered for f in schema["required"])
-
-
-# ── Agent logic ───────────────────────────────────────────────────────────────
-
-def _build_llm_context(session: dict, user_message: str, db_context: Optional[dict]) -> str:
-    """Build a context string injected into the LLM alongside the system prompt."""
-    parts = []
-
-    if session.get("table"):
-        parts.append(f"Aktywna tabela: {session['table']}")
-
-    if session.get("answers"):
-        parts.append(f"Zebrane odpowiedzi: {json.dumps(session['answers'], ensure_ascii=False)}")
-
-    if db_context:
-        parts.append(f"Znalezione w DB: {json.dumps(db_context, ensure_ascii=False)}")
-
-    if session.get("draft"):
-        parts.append(f"Bieżący draft: {json.dumps(session['draft'], ensure_ascii=False)}")
-
-    if session.get("target_key"):
-        parts.append(f"Edytowany rekord: {session['target_key']}")
-
-    return "\n".join(parts)
+def _parse_llm_draft_response(reply: str) -> tuple[str, dict]:
+    """Parse LLM reply that should contain JSON {reply, draft}. Returns (text, draft)."""
+    text = reply.strip()
+    # Remove markdown code fences
+    text = re.sub(r'```(?:json)?\s*', '', text)
+    text = text.replace('```', '').strip()
+    # Try whole thing as JSON
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return str(data.get("reply", "")), dict(data.get("draft", {}))
+    except json.JSONDecodeError:
+        pass
+    # Find first { ... } block
+    start = text.find('{')
+    if start >= 0:
+        depth = 0
+        for i, c in enumerate(text[start:], start):
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    try:
+                        data = json.loads(text[start:i + 1])
+                        if isinstance(data, dict):
+                            return str(data.get("reply", reply)), dict(data.get("draft", {}))
+                    except json.JSONDecodeError:
+                        break
+    return reply, {}
 
 
 # ── Request/response models ───────────────────────────────────────────────────
@@ -460,19 +416,83 @@ class SmartEntryMessageReq(BaseModel):
     session_id: str
     table: Optional[str] = None
     message: str = ""
-    answer: Optional[dict] = None  # {"question_id": str, "value": Any}
+    current_draft: Optional[dict] = None  # full form state from frontend
+    target_key: Optional[str] = None      # if editing an existing record
 
 
 class SmartEntrySaveReq(BaseModel):
     session_id: str
-
-
-class SmartEntryApplyChangeReq(BaseModel):
-    session_id: str
-    change_index: int
+    draft: dict = {}        # form values from frontend
+    table: Optional[str] = None
+    target_key: Optional[str] = None  # if editing existing
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@router.get("/schema")
+def smart_entry_schema(table: str, _: None = Depends(_require_admin)):
+    """Return field schema for frontend form rendering."""
+    schema = SCHEMA_DESCRIPTORS.get(table)
+    if not schema:
+        raise HTTPException(status_code=404, detail=f"No schema for table '{table}'")
+
+    FIELD_LABELS = {
+        "key": "Klucz (slug)", "label": "Nazwa", "damage_die": "Kość obrażeń",
+        "weapon_type": "Typ broni", "linked_stat": "Stat. powiązana", "two_handed": "Dwuręczna",
+        "value_gp": "Cena (gp)", "allowed_classes": "Klasy", "item_type": "Typ przedmiotu",
+        "ac_bonus": "Bonus AC", "effect_json": "Efekt (JSON)", "effect_type": "Typ efektu",
+        "base_price": "Cena bazowa", "effect_dice": "Kości efektu", "effect_bonus": "Bonus efektu",
+        "tier": "Poziom", "hp_base": "HP bazowe", "ac_base": "AC bazowe",
+        "attack_bonus": "Bonus do ataku", "damage_dice": "Kości obrażeń",
+        "drop_chance": "Szansa łupu", "loot_table_key": "Tabela łupów",
+    }
+
+    fields = []
+    for field_key in schema["required"] + schema.get("optional", []):
+        field_def = schema["fields"].get(field_key, {})
+        f: dict[str, Any] = {
+            "key": field_key,
+            "label": FIELD_LABELS.get(field_key, field_key.replace("_", " ").title()),
+            "type": field_def.get("type", "text"),
+            "required": field_key in schema["required"],
+        }
+        if field_def.get("options"):
+            f["options"] = field_def["options"]
+        if "min" in field_def:
+            f["min"] = field_def["min"]
+        if "max" in field_def:
+            f["max"] = field_def["max"]
+        if field_def.get("question"):
+            f["placeholder"] = field_def["question"]
+        fields.append(f)
+
+    return {"table": table, "fields": fields}
+
+
+@router.get("/list")
+def smart_entry_list(table: str, _: None = Depends(_require_admin)):
+    """Return list of existing records for the dropdown."""
+    if table not in WRITABLE_TABLES:
+        raise HTTPException(status_code=400, detail=f"Unknown table '{table}'")
+    conn = _get_db()
+    try:
+        rows = conn.execute(f"SELECT key, label FROM {table} ORDER BY label LIMIT 300").fetchall()
+        return {"items": [{"key": r["key"], "label": r["label"]} for r in rows]}
+    except sqlite3.OperationalError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.get("/record")
+def smart_entry_record(table: str, key: str, _: None = Depends(_require_admin)):
+    """Return a single record by key for editing."""
+    _assert_writable(table)
+    record = _db_get(table, key)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Record '{key}' not found in {table}")
+    return record
+
 
 @router.post("/message")
 def smart_entry_message(
@@ -481,125 +501,60 @@ def smart_entry_message(
 ):
     session = _get_or_create_session(req.session_id)
 
-    # ── Apply incoming structured answer ──────────────────────────────────────
-    if req.answer and isinstance(req.answer, dict):
-        qid = req.answer.get("question_id")
-        val = req.answer.get("value")
-        if qid is not None and val is not None:
-            session["answers"][qid] = val
-            session["draft"][qid] = val
-
-    # ── Resolve table ─────────────────────────────────────────────────────────
+    # Sync table
     if req.table:
-        if req.table in READ_ONLY_TABLES:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Table '{req.table}' is read-only and cannot be used with Smart Entry.",
-            )
-        if req.table not in WRITABLE_TABLES:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Unknown table '{req.table}'. Supported: {sorted(WRITABLE_TABLES)}",
-            )
+        _assert_writable(req.table)
         session["table"] = req.table
-    elif not session["table"]:
-        inferred = _infer_table(req.message)
-        if inferred:
-            session["table"] = inferred
+    if req.target_key is not None:
+        session["target_key"] = req.target_key or None
 
-    table = session["table"]
+    # Merge frontend draft into session draft
+    if req.current_draft:
+        session["draft"].update({k: v for k, v in req.current_draft.items() if v not in (None, "")})
 
-    # ── DB context: look up existing records matching the message ─────────────
-    db_context: Optional[dict] = None
+    table = session.get("table")
+
+    # Build system prompt with schema constraints
+    schema_text = _build_schema_constraint_text(table) if table else "Tabela nieznana — zapytaj o typ rekordu."
+
+    # Build user message context
+    context_parts = []
     if table:
-        # Try exact key match first
-        words = re.findall(r"[a-z_]+", req.message.lower())
-        for word in words:
-            if len(word) >= 3:
-                found = _db_get(table, word)
-                if found:
-                    session["target_key"] = word
-                    db_context = {"found": found, "mode": "update"}
-                    break
-
-        # Fall back to label LIKE search
-        if not db_context:
-            similar = _db_search(table, {"label": req.message[:40]}, limit=3)
-            if similar:
-                db_context = {"similar": similar}
-
-    # ── Build questions ───────────────────────────────────────────────────────
-    questions: Optional[list] = None
-    ready_to_save = False
-    save_key: Optional[str] = None
-
-    if table:
-        if session.get("target_key"):
-            # UPDATE flow — detect proposed changes from LLM later
-            pass
-        else:
-            # CREATE flow
-            all_required_done = _all_required_filled(table, session["answers"])
-            if all_required_done:
-                # Required fields are complete — ready to save, optionals are bonus
-                ready_to_save = True
-                save_key = None  # new record
-                # Still offer optional questions if they haven't been asked yet
-                questions = _build_questions_for_table(table, session["answers"])
-                if not questions:
-                    questions = None
-            else:
-                # Keep asking until required fields are done
-                questions = _build_questions_for_table(table, session["answers"])
-                if not questions:
-                    questions = None
-
-        if session.get("target_key") and _all_required_filled(table, session["answers"]):
-            ready_to_save = True
-            save_key = session["target_key"]
-
-    # ── Build LLM messages ────────────────────────────────────────────────────
-    context_str = _build_llm_context(session, req.message, db_context)
+        context_parts.append(schema_text)
+    if session["draft"]:
+        context_parts.append(f"Bieżący draft: {json.dumps(session['draft'], ensure_ascii=False)}")
+    if session.get("target_key"):
+        context_parts.append(f"TRYB EDYCJI rekordu: {session['target_key']}")
 
     user_content = req.message
-    if context_str:
-        user_content = f"{context_str}\n\nWiadomość admina: {req.message}"
+    if context_parts:
+        user_content = "\n".join(context_parts) + f"\n\nAdmin: {req.message}"
 
     session["history"].append({"role": "user", "content": user_content})
-    messages = [{"role": "system", "content": SMART_ENTRY_SYSTEM_PROMPT}] + session["history"]
+    messages = [{"role": "system", "content": SMART_ENTRY_SYSTEM_PROMPT_V2}] + session["history"][-10:]
 
     try:
-        reply = generate_chat(messages=messages)
+        raw_reply = generate_chat(messages=messages)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM error: {e}")
 
-    session["history"].append({"role": "assistant", "content": reply})
+    session["history"].append({"role": "assistant", "content": raw_reply})
 
-    # ── Detect proposed_changes in UPDATE flow ────────────────────────────────
-    proposed_changes: Optional[list] = None
-    if session.get("target_key"):
-        changes_match = re.search(r"```json\s*\n(\[.*?\])\n```", reply, re.DOTALL)
-        if changes_match:
-            try:
-                changes = json.loads(changes_match.group(1))
-                if isinstance(changes, list):
-                    session["proposed_changes"] = changes
-                    proposed_changes = changes
-            except json.JSONDecodeError:
-                pass
-        else:
-            proposed_changes = session.get("proposed_changes")
+    # Parse JSON response
+    reply_text, new_draft = _parse_llm_draft_response(raw_reply)
+
+    # Validate and merge new_draft into session draft
+    if new_draft and table:
+        schema = SCHEMA_DESCRIPTORS.get(table, {})
+        valid_fields = set(schema.get("required", [])) | set(schema.get("optional", []))
+        for k, v in new_draft.items():
+            if k in valid_fields:
+                session["draft"][k] = v
 
     return {
         "session_id": req.session_id,
-        "reply": reply,
-        "questions": questions if questions else None,
-        "db_context": db_context,
-        "draft": session["draft"] if session["draft"] else None,
-        "proposed_changes": proposed_changes,
-        "ready_to_save": ready_to_save,
-        "save_table": table,
-        "save_key": save_key,
+        "reply": reply_text or "Wypełniłem co mogłem.",
+        "draft": session["draft"],
     }
 
 
@@ -608,33 +563,28 @@ def smart_entry_save(
     req: SmartEntrySaveReq,
     _: None = Depends(_require_admin),
 ):
-    session = _sessions.get(req.session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found or expired.")
+    # Use request values, fall back to session
+    session = _sessions.get(req.session_id, {})
+    table = req.table or session.get("table")
+    draft = req.draft or session.get("draft", {})
+    target_key = req.target_key or session.get("target_key")
 
-    table = session.get("table")
     if not table:
-        raise HTTPException(status_code=400, detail="No table set in session.")
-
+        raise HTTPException(status_code=400, detail="No table specified.")
     _assert_writable(table)
-
-    draft = session.get("draft", {})
     if not draft:
         raise HTTPException(status_code=400, detail="No draft data to save.")
 
     schema = SCHEMA_DESCRIPTORS.get(table, {})
     required = schema.get("required", [])
-    missing = [f for f in required if f not in draft]
+    missing = [f for f in required if not draft.get(f)]
     if missing:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Draft is missing required fields: {missing}",
-        )
+        raise HTTPException(status_code=422, detail=f"Missing required fields: {missing}")
 
-    # Coerce boolean/number fields
+    # Coerce types
     record = dict(draft)
     fields_def = schema.get("fields", {})
-    for k, v in record.items():
+    for k, v in list(record.items()):
         field_type = fields_def.get(k, {}).get("type")
         if field_type == "boolean":
             record[k] = 1 if v else 0
@@ -644,44 +594,16 @@ def smart_entry_save(
             except (ValueError, TypeError):
                 pass
 
-    try:
-        saved_key = _db_insert(table, record)
-    except sqlite3.IntegrityError as e:
-        raise HTTPException(status_code=409, detail=f"Record already exists or constraint failed: {e}")
-
-    return {"ok": True, "key": saved_key, "table": table}
-
-
-@router.post("/apply-change")
-def smart_entry_apply_change(
-    req: SmartEntryApplyChangeReq,
-    _: None = Depends(_require_admin),
-):
-    session = _sessions.get(req.session_id)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found or expired.")
-
-    proposed = session.get("proposed_changes") or []
-    if req.change_index < 0 or req.change_index >= len(proposed):
-        raise HTTPException(status_code=400, detail=f"change_index {req.change_index} is out of range.")
-
-    table = session.get("table")
-    target_key = session.get("target_key")
-    if not table or not target_key:
-        raise HTTPException(status_code=400, detail="No table/target_key set in session.")
-
-    _assert_writable(table)
-
-    change = proposed[req.change_index]
-    field = change.get("field")
-    new_value = change.get("new_value") if "new_value" in change else change.get("value")
-
-    if not field:
-        raise HTTPException(status_code=400, detail="Change is missing 'field'.")
-
-    try:
-        _db_update_field(table, target_key, field, new_value)
-    except sqlite3.OperationalError as e:
-        raise HTTPException(status_code=500, detail=f"DB update failed: {e}")
-
-    return {"ok": True}
+    if target_key:
+        # UPDATE existing record
+        for field, value in record.items():
+            if field != "key":
+                _db_update_field(table, target_key, field, value)
+        return {"ok": True, "key": target_key, "table": table, "mode": "update"}
+    else:
+        # INSERT new record
+        try:
+            key = _db_insert(table, record)
+            return {"ok": True, "key": key, "table": table, "mode": "create"}
+        except sqlite3.IntegrityError as e:
+            raise HTTPException(status_code=409, detail=f"Record already exists: {e}")
