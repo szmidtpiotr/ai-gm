@@ -93,7 +93,7 @@
 | 23 | TASK_23_HEALING_SYSTEM | ✅ | Items, rest, Scholar Mend Wounds |
 | 24 | TASK_24_WOUND_LABELS | ✅ | HP% thresholds, narrator injection, HP bar colour |
 | 25V2 | TASK_25_XP_PROGRESSION_V2 | ✅ | WFRP style: everything purchased with XP, magic tied to INT |
-| 26 | TASK_26_SCHOLAR_SPELLS | ❌ | Spell list, Arcane Points, upgrade tiers, miscast scaling |
+| 26 | TASK_26_SCHOLAR_SPELLS | ✅ | Spell list, Arcane Points, upgrade tiers, miscast scaling |
 | 41 | TASK_41_DUNGEON_RUNS | ❌ | Standalone farmable dungeons, cooldown, scaling |
 
 ### Phase 07 — Narrator
