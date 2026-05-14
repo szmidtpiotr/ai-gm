@@ -166,31 +166,56 @@ def tick_round_conditions(combatants):
 ```
 
 ### Mechanical Effect Application
+
+Stat penalties from conditions are applied **at the point of every roll** via `_combatant_stat_modifier()` in `combat_service.py`. When the function computes a stat modifier it first reads the raw stat value, then iterates over all active conditions and sums any `stat_mods` deltas from their `effect_json`.
+
 ```python
-def get_attack_modifier(character_id) -> int:
-    modifier = 0
-    conditions = db.get_active_conditions(character_id)
+# Simplified view of _combatant_stat_modifier() after Task 1a fix:
+def _combatant_stat_modifier(combatant, *, sheet, stat):
+    stat_key = stat.upper()
+    base = (raw_stat - 10) // 2          # from sheet.stats or combatant.stats
+
+    conditions = active_conditions(sheet or combatant)
     for cond in conditions:
-        if cond.condition_type == "ARM_WOUND":
-            modifier -= 1
-        elif cond.condition_type == "WINDED":
-            modifier -= 2  # only for STR-based attacks
-        elif cond.condition_type == "BLINDED":
-            modifier -= 4
-    return modifier
+        parsed = parse_effect_json(cond["effect_json"])
+        sm = parsed.get("stat_mods", {})  # e.g. {"STR": -2}
+        base += sm.get(stat_key, 0)       # fold penalty in
+
+    return base
 ```
+
+**What this affects:**
+- Player attack rolls (STR/DEX modifier contribution)
+- Player saving throws (stat modifier contribution)
+- Enemy attack rolls (any stat they roll with)
+- Enemy saving throws triggered by `on_hit_save` weapon effects
+- Periodic save rolls inside `evaluate_current_turn_conditions()`
+
+**Example:** A player with STR 14 (+2) who is Frightened (`{"stat_mods":{"STR":-2,"INT":-1}}`) will attack at +0, not +2. An enemy with DEX 14 (+2) who is Blinded (`{"stat_mods":{"DEX":-4}}`) uses DEX -2 for saves.
+
+Multiple conditions **stack additively** — no cap in the current implementation.
 
 ---
 
 ## Admin Panel — Conditions Table
 
-The `game_config_conditions` table in admin lets admins view/edit condition definitions. Each condition in this table maps to the hardcoded logic above. Admin can:
+The `game_config_conditions` table in admin lets admins view/edit condition definitions. Admin can:
 - Edit `label` (display name)
 - Edit `description` (shown to player)
 - Toggle `is_active` (disable a condition from being applied)
-- Edit `effect_json` (reference only — actual logic is in code)
+- Edit `effect_json` — **this is now partially live**
 
-**The effect_json on conditions is documentation, not execution.** The actual mechanical effects are coded in the Mechanic Resolver. This ensures no hallucination risk.
+**`effect_json` execution model (as of Task 1a):**
+
+| Field in `effect_json` | Executed? | Notes |
+|---|---|---|
+| `stat_mods` | ✅ **Yes** | Applied to every roll via `_combatant_stat_modifier()` |
+| `damage_per_turn` | ✅ Yes | Periodic HP loss evaluated in `evaluate_current_turn_conditions()` |
+| `skip_turn` | ✅ Yes | Block action evaluated per turn |
+| `effects[].type = "periodic_save"` | ✅ Yes | Structured save loop |
+| `effects[].type = "block_action"` | ✅ Yes | Structured action block |
+| `attack_penalty` | ❌ Not yet | Stored as metadata only |
+| `duration` (string like "2 turns") | ❌ Not yet | Duration countdown uses `duration_rounds` (int) on the live condition instance |
 
 ---
 

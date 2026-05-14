@@ -251,24 +251,43 @@ def _combatant_stat_modifier(
     stat_key = str(stat or "").strip().upper()
     if not stat_key:
         return 0
+
+    # base modifier from raw stat value
+    base = 0
     if isinstance(sheet, dict):
         stats = sheet.get("stats") if isinstance(sheet.get("stats"), dict) else {}
         try:
-            return (int(stats.get(stat_key, 10) or 10) - 10) // 2
+            base = (int(stats.get(stat_key, 10) or 10) - 10) // 2
         except (TypeError, ValueError):
             pass
-    stats = combatant.get("stats") if isinstance(combatant.get("stats"), dict) else {}
-    try:
-        if stat_key in stats:
-            return (int(stats.get(stat_key, 10) or 10) - 10) // 2
-    except (TypeError, ValueError):
-        pass
-    if stat_key == "DEX":
+    else:
+        stats = combatant.get("stats") if isinstance(combatant.get("stats"), dict) else {}
         try:
-            return int(combatant.get("dex_modifier") or 0)
+            if stat_key in stats:
+                base = (int(stats.get(stat_key, 10) or 10) - 10) // 2
+            elif stat_key == "DEX":
+                base = int(combatant.get("dex_modifier") or 0)
         except (TypeError, ValueError):
-            return 0
-    return 0
+            pass
+
+    # fold in stat_mods from every active condition
+    conditions: list[dict[str, Any]] = (
+        _sheet_conditions(sheet)
+        if isinstance(sheet, dict)
+        else [c for c in (combatant.get("conditions") or []) if isinstance(c, dict)]
+    )
+    for cond in conditions:
+        parsed = _decode_effect_json(cond.get("effect_json"))
+        if not parsed:
+            continue
+        sm = parsed.get("stat_mods")
+        if isinstance(sm, dict) and stat_key in sm:
+            try:
+                base += int(sm[stat_key])
+            except (TypeError, ValueError):
+                pass
+
+    return base
 
 
 def _condition_duration_rounds(expires: str) -> int | None:
