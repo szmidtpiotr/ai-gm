@@ -1760,88 +1760,149 @@ async function handleSendMessage() {
     }
 }
 
-// ── Skill Test Roll Popup — Task 12 ──────────────────────────────────────────
+// ── Skill Test Roll Popup — Grimoire Redesign ────────────────────────────────
 
 function showSkillTestPopup(pending) {
     const existing = document.getElementById('skill-roll-popup');
     if (existing) existing.remove();
 
-    const mod = pending.modifier_breakdown || {};
-    const totalMod = mod.total || 0;
-    const modSign = totalMod >= 0 ? '+' : '';
-    const skillLabel = pending.skill_label || pending.skill_key || 'Umiejętność';
+    const mod   = pending.modifier_breakdown || {};
+    const total = mod.total || 0;
+    const sign  = total >= 0 ? '+' : '';
+    const name  = (pending.skill_label || pending.skill_key || 'Umiejętność').toUpperCase();
 
     const modRows = [
-        { label: 'Ranga umiejętności', val: mod.skill_rank ?? 0 },
-        { label: `Mod. ${mod.governing_stat || 'stat'}`, val: mod.stat_mod ?? 0 },
-        { label: 'Biegłość', val: mod.proficiency ?? 0 },
+        { label: `Ranga`,           val: mod.skill_rank  ?? 0 },
+        { label: `Mod. ${mod.governing_stat || 'STAT'}`, val: mod.stat_mod    ?? 0 },
+        { label: `Biegłość`,        val: mod.proficiency ?? 0 },
     ].filter(r => r.val !== 0).map(r =>
-        `<div class="skill-roll-mod-row"><span>${r.label}</span><span>${r.val >= 0 ? '+' : ''}${r.val}</span></div>`
+        `<div class="srp-mod-row">
+           <div class="srp-mod-dot"></div>
+           <span class="srp-mod-lbl">${r.label}</span>
+           <span class="srp-mod-num">${r.val >= 0 ? '+' : ''}${r.val}</span>
+         </div>`
     ).join('');
+
+    // Decagon d20 SVG (10-sided polygon with inner triangle facets)
+    const D20 = `<svg viewBox="0 0 200 200" class="srp-die-svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="dg" cx="50%" cy="42%" r="58%">
+          <stop offset="0%" stop-color="#1c1408"/>
+          <stop offset="100%" stop-color="#070504"/>
+        </radialGradient>
+      </defs>
+      <polygon class="srp-d20-outer"
+        points="100,5 155.8,23.1 190.4,70.6 190.4,129.4 155.8,176.9 100,195 44.2,176.9 9.6,129.4 9.6,70.6 44.2,23.1"
+        fill="url(#dg)" stroke="#7a5618" stroke-width="1.5"/>
+      <polygon points="100,42 164,152 36,152"
+        fill="none" stroke="#4a360e" stroke-width="0.8" opacity="0.6"/>
+      <line x1="100" y1="42"  x2="100" y2="5"    stroke="#3a2a0a" stroke-width="0.5" opacity="0.5"/>
+      <line x1="164" y1="152" x2="190" y2="130"   stroke="#3a2a0a" stroke-width="0.5" opacity="0.5"/>
+      <line x1="36"  y1="152" x2="10"  y2="130"   stroke="#3a2a0a" stroke-width="0.5" opacity="0.5"/>
+      <line x1="100" y1="42"  x2="156" y2="23"    stroke="#3a2a0a" stroke-width="0.4" opacity="0.4"/>
+      <line x1="100" y1="42"  x2="44"  y2="23"    stroke="#3a2a0a" stroke-width="0.4" opacity="0.4"/>
+      <text class="srp-d20-num" id="srp-num" x="100" y="116"
+        text-anchor="middle" dominant-baseline="middle"
+        font-family="Cinzel,serif" font-weight="700" fill="#c9961a">?</text>
+    </svg>`;
 
     const popup = document.createElement('div');
     popup.id = 'skill-roll-popup';
     popup.className = 'skill-roll-overlay';
-    // Mount inside chat container so it covers only the game area
-    const _chatRoot = document.getElementById('chat-container') || document.body;
     popup.innerHTML = `
-        <div class="skill-roll-box">
-            <div class="skill-roll-title">TEST UMIEJĘTNOŚCI</div>
-            <div class="skill-roll-name">${escapeHtml(skillLabel.toUpperCase())}</div>
-            <div class="skill-roll-mods">
-                ${modRows}
-                <div class="skill-roll-mod-total"><span>Twój bonus</span><span>${modSign}${totalMod}</span></div>
-            </div>
-            <div class="skill-roll-dice" id="skill-dice-display">🎲</div>
-            <div class="skill-roll-result" id="skill-roll-result" style="display:none"></div>
-            <button class="skill-roll-btn" id="skill-roll-btn">Rzuć k20</button>
-            <button class="skill-roll-confirm" id="skill-roll-confirm" style="display:none" disabled>Potwierdź →</button>
-        </div>`;
+      <div class="srp-box">
+        <div class="srp-ornament">
+          <div class="srp-orn-line"></div>
+          <div class="srp-orn-gem"></div>
+          <div class="srp-orn-line"></div>
+        </div>
+        <div class="srp-eyebrow">Próba Umiejętności</div>
+        <div class="srp-skill-name">${escapeHtml(name)}</div>
+        <div class="srp-mods">
+          ${modRows}
+          <div class="srp-mod-total">
+            <span>Twój bonus</span>
+            <span class="srp-mod-total-val">${sign}${total}</span>
+          </div>
+        </div>
+        <div class="srp-die-wrap" id="srp-die">${D20}</div>
+        <div class="srp-result" id="srp-result" style="opacity:0">
+          <span class="srp-res-d20" id="srp-rd20">—</span>
+          <span class="srp-res-sep">${sign}${total}</span>
+          <span class="srp-res-eq">=</span>
+          <span class="srp-res-total" id="srp-rtot">—</span>
+        </div>
+        <div class="srp-nat-label" id="srp-nat"></div>
+        <button class="srp-btn-roll" id="srp-roll">⚄ Rzuć Kością</button>
+        <button class="srp-btn-confirm" id="srp-confirm" style="display:none">Zatwierdź wynik →</button>
+        <div class="srp-ornament srp-ornament--bottom">
+          <div class="srp-orn-line"></div>
+          <div class="srp-orn-gem"></div>
+          <div class="srp-orn-line"></div>
+        </div>
+      </div>`;
+
+    const _chatRoot = document.getElementById('chat-container') || document.body;
     _chatRoot.appendChild(popup);
 
-    let rolledValue = null;
-    const diceEl = popup.querySelector('#skill-dice-display');
-    const resultEl = popup.querySelector('#skill-roll-result');
-    const rollBtn = popup.querySelector('#skill-roll-btn');
-    const confirmBtn = popup.querySelector('#skill-roll-confirm');
+    let rolled = null;
+    const dieWrap  = popup.querySelector('#srp-die');
+    const dieNum   = popup.querySelector('#srp-num');
+    const result   = popup.querySelector('#srp-result');
+    const rd20     = popup.querySelector('#srp-rd20');
+    const rtot     = popup.querySelector('#srp-rtot');
+    const natLbl   = popup.querySelector('#srp-nat');
+    const rollBtn  = popup.querySelector('#srp-roll');
+    const confBtn  = popup.querySelector('#srp-confirm');
 
     rollBtn.addEventListener('click', () => {
         rollBtn.disabled = true;
-        diceEl.classList.add('skill-dice-spin');
-        // Animate through random values then settle
+        dieWrap.classList.add('srp-rolling');
         let ticks = 0;
-        const interval = setInterval(() => {
-            diceEl.textContent = Math.ceil(Math.random() * 20);
-            ticks++;
-            if (ticks >= 12) {
-                clearInterval(interval);
-                rolledValue = Math.ceil(Math.random() * 20);
-                diceEl.textContent = rolledValue;
-                diceEl.classList.remove('skill-dice-spin');
-                diceEl.classList.add('skill-dice-landed');
-                const total = rolledValue + totalMod;
-                const nat20 = rolledValue === 20;
-                const nat1 = rolledValue === 1;
-                resultEl.style.display = '';
-                resultEl.innerHTML = `
-                    <span class="skill-roll-d20 ${nat20 ? 'nat20' : nat1 ? 'nat1' : ''}">${rolledValue}</span>
-                    <span class="skill-roll-plus">${modSign}${totalMod}</span>
-                    <span class="skill-roll-eq">=</span>
-                    <span class="skill-roll-total">${total}</span>
-                    ${nat20 ? '<div class="skill-roll-nat">NATURALNY 20!</div>' : ''}
-                    ${nat1 ? '<div class="skill-roll-nat nat1-label">NATURALNY 1</div>' : ''}
-                `;
-                confirmBtn.style.display = '';
-                confirmBtn.disabled = false;
+        const iv = setInterval(() => {
+            dieNum.textContent = Math.ceil(Math.random() * 20);
+            if (++ticks >= 18) {
+                clearInterval(iv);
+                rolled = Math.ceil(Math.random() * 20);
+                const sum   = rolled + total;
+                const nat20 = rolled === 20;
+                const nat1  = rolled === 1;
+                dieWrap.classList.remove('srp-rolling');
+                dieWrap.classList.add('srp-landed');
+                dieNum.textContent = rolled;
+
+                // Colour the die
+                const outer = popup.querySelector('.srp-d20-outer');
+                if (nat20) {
+                    outer.style.stroke = '#f0c040';
+                    dieNum.style.fill = '#f0c040';
+                    dieWrap.classList.add('srp-nat20');
+                    natLbl.textContent = 'NATURALNY 20';
+                    natLbl.className = 'srp-nat-label nat20';
+                } else if (nat1) {
+                    outer.style.stroke = '#8b1a1a';
+                    dieNum.style.fill = '#c04040';
+                    dieWrap.classList.add('srp-nat1');
+                    natLbl.textContent = 'NATURALNY 1';
+                    natLbl.className = 'srp-nat-label nat1';
+                }
+
+                setTimeout(() => {
+                    rd20.textContent = rolled;
+                    rtot.textContent = sum;
+                    rtot.className = 'srp-res-total' + (nat20 ? ' nat20' : nat1 ? ' nat1' : '');
+                    result.style.opacity = '1';
+                    confBtn.style.display = '';
+                }, 250);
             }
-        }, 80);
+        }, 65);
     });
 
-    confirmBtn.addEventListener('click', async () => {
-        if (rolledValue === null) return;
-        confirmBtn.disabled = true;
-        confirmBtn.textContent = 'Rozwiązuję…';
-        await resolveSkillTest(pending.skill_test_id, rolledValue, popup);
+    confBtn.addEventListener('click', async () => {
+        if (rolled === null) return;
+        confBtn.disabled = true;
+        confBtn.textContent = '⟳  Rozwiązuję…';
+        await resolveSkillTest(pending.skill_test_id, rolled, popup);
     });
 }
 
