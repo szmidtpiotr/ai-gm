@@ -94,7 +94,7 @@ def _load_campaign_context(campaign_id: int) -> dict:
 
         turns = conn.execute(
             """
-            SELECT turn_number, role, content, created_at
+            SELECT turn_number, user_text, assistant_text, created_at
             FROM campaign_turns
             WHERE campaign_id = ?
             ORDER BY turn_number DESC
@@ -106,8 +106,9 @@ def _load_campaign_context(campaign_id: int) -> dict:
         campaign_data["recent_turns"] = [
             {
                 "turn_number": t["turn_number"],
-                "role": t["role"],
-                "content": t["content"],
+                "role": "player",
+                "content": (t["user_text"] or "")[:400],
+                "gm": (t["assistant_text"] or "")[:400],
                 "created_at": t["created_at"],
             }
             for t in reversed(turns)
@@ -191,7 +192,7 @@ def campaign_workshop_message(
         f"### GM Plan:\n{json.dumps(ctx['gm_plan'], ensure_ascii=False, indent=2)}\n\n"
         f"### Last 10 turns:\n"
         + "\n".join(
-            f"[Turn {t['turn_number']}] {t['role']}: {t['content'][:300]}"
+            f"[Turn {t['turn_number']}] Player: {t['content'][:200]} | GM: {t['gm'][:200]}"
             for t in ctx["recent_turns"]
         )
     )

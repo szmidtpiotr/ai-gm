@@ -79,57 +79,37 @@ export async function init(panel) {
       </div>
     </div>
 
-    <!-- AI bubble trigger -->
-    <button class="ai-bubble-btn" id="ai-fab-btn" title="${LABELS.assistant}">⚡</button>
-
-    <!-- Floating AI assistant popup -->
-    <aside class="ai-assistant-popup" id="ai-assistant-popup">
-      <div class="ai-assistant-header">
-        <span>⚡ ${LABELS.assistant}</span>
-        <div style="display:flex;gap:6px">
-          <button class="secondary-btn small-btn" id="ai-clear-btn">${LABELS.clearChat}</button>
-          <button class="icon-btn ai-popup-close-btn" id="ai-popup-close-btn" title="Zamknij">✕</button>
-        </div>
-      </div>
-      <div class="ai-resource-row">
-        <label>${LABELS.resource}
-          <select id="ai-resource-select">
-            ${ASSISTANT_RESOURCES.map((r) =>
-              `<option value="${r.value}">${r.label}</option>`
-            ).join("")}
-          </select>
-        </label>
-      </div>
-      <div class="ai-history" id="ai-history"></div>
-      <div class="ai-draft-wrap" id="ai-draft-wrap" style="display:none"></div>
-      <div class="ai-input-row">
-        <textarea id="ai-prompt" rows="3" placeholder="${LABELS.assistantHelp}"></textarea>
-        <button class="primary-btn" id="ai-generate-btn">${LABELS.generate}</button>
-      </div>
-    </aside>`;
+    <!-- Smart Entry bubble (replaces old ⚡ Asystent AI) -->
+    <button class="ai-bubble-btn" id="ai-fab-btn" title="🤖 Kreator AI — twórz treści z asystentem">🤖</button>`;
 
   _rendered.clear();
   _aiHistory = [];
   _aiDraft   = null;
 
-  // ── AI popup toggle ──
-  const aiPopup  = panel.querySelector("#ai-assistant-popup");
-  const aiBubble = panel.querySelector("#ai-fab-btn");
-  aiBubble.addEventListener("click", () => {
-    const open = aiPopup.classList.toggle("open");
-    aiBubble.classList.toggle("active", open);
-  });
-  panel.querySelector("#ai-popup-close-btn").addEventListener("click", () => {
-    aiPopup.classList.remove("open");
-    aiBubble.classList.remove("active");
-  });
-
-  // ── Smart Entry Agent button ──
+  // ── Smart Entry bubble (bottom-right) + tab button both open Smart Entry ──
   const TABLE_MAP = { weapons: "game_config_weapons", armor: "game_config_items", items: "game_config_items", consumables: "game_config_consumables", "loot-tables": null };
-  panel.querySelector("#smart-entry-btn").addEventListener("click", () => {
-    const activeTab = panel.querySelector(".subtab-btn.active")?.dataset?.tab;
-    openSmartEntry(TABLE_MAP[activeTab] || null);
-  });
+  const _getActiveTable = () => TABLE_MAP[panel.querySelector(".subtab-btn.active:not(#smart-entry-btn)")?.dataset?.tab] || null;
+
+  panel.querySelector("#ai-fab-btn").addEventListener("click", () => openSmartEntry(_getActiveTable()));
+  panel.querySelector("#smart-entry-btn").addEventListener("click", () => openSmartEntry(_getActiveTable()));
+
+  // ── Auto-refresh table after Smart Entry save ──
+  const _onSmartSave = (e) => {
+    const table = e.detail?.table;
+    const tabMap = { game_config_weapons: "weapons", game_config_items: "items", game_config_consumables: "consumables" };
+    const tab = tabMap[table];
+    if (tab) {
+      // Re-render the saved tab to show the new record
+      _rendered.delete(tab);
+      const tabPanel = panel.querySelector(`.subtab-panel[data-tab="${tab}"]`);
+      if (tabPanel) _activateTab(panel, tab);
+    }
+  };
+  window.addEventListener("smart-entry-saved", _onSmartSave);
+  // Clean up listener when panel is destroyed
+  new MutationObserver((_, obs) => {
+    if (!document.contains(panel)) { window.removeEventListener("smart-entry-saved", _onSmartSave); obs.disconnect(); }
+  }).observe(document.body, { childList: true, subtree: true });
 
   panel.querySelectorAll(".subtab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -148,25 +128,7 @@ export async function init(panel) {
     });
   });
 
-  panel.querySelector("#ai-resource-select").addEventListener("change", (e) => {
-    _aiResource = e.target.value;
-  });
-
-  panel.querySelector("#ai-clear-btn").addEventListener("click", () => {
-    _aiHistory = [];
-    _aiDraft   = null;
-    _renderAiHistory(panel);
-    _renderAiDraft(panel);
-  });
-
-  panel.querySelector("#ai-generate-btn").addEventListener("click", () => _handleGenerate(panel));
-
-  panel.querySelector("#ai-prompt").addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      _handleGenerate(panel);
-    }
-  });
+  // Old popup elements removed — smart_entry.js handles AI creation now
 
   await _activateTab(panel, "weapons");
 }
