@@ -325,15 +325,10 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
                 "question": "Jak ma się nazywać to zaklęcie (wyświetlana nazwa)?",
             },
             "tier": {
-                "type": "single_choice",
-                "question": "Jaki poziom mocy ma zaklęcie (1=słabe, 5=legendarne)?",
-                "options": [
-                    {"label": "1", "description": "Tier 1 — podstawowe, tanie"},
-                    {"label": "2", "description": "Tier 2 — solidne zaklęcie"},
-                    {"label": "3", "description": "Tier 3 — silne, wymagające"},
-                    {"label": "4", "description": "Tier 4 — rzadkie, potężne"},
-                    {"label": "5", "description": "Tier 5 — legendarne"},
-                ],
+                "type": "number",
+                "question": "Jaki poziom mocy ma zaklęcie? (1=podstawowe, 2=solidne, 3=silne, 4=potężne, 5=legendarne)",
+                "min": 1,
+                "max": 5,
             },
             "mana_cost": {
                 "type": "number",
@@ -491,6 +486,24 @@ Generuj jako JSON string gdy broń ma specjalne efekty. Dozwolone typy:
 Przykład ognistego miecza: {"effects":[{"type":"extra_damage","dice":"1d6","damage_type":"fire"}]}
 Przykład zatrutego sztyletu: {"effects":[{"type":"on_hit_save","stat":"CON","dc":12,"on_fail":{"type":"apply_condition","condition_key":"poisoned","duration_rounds":3}}]}
 Zostaw null jeśli broń nie ma efektów specjalnych.
+
+TABELA game_config_spells — zaklęcia Uczonego (NIE mają effect_json):
+- 'key': slug z label (polskie znaki→ascii, spacje→_)
+- 'tier': liczba 1–5
+- 'mana_cost': liczba 1–10
+- 'spell_type': attack|attack_aoe|heal|defense|effect
+- 'damage_die': tylko dla attack/attack_aoe, np. "2d6". Dla innych null.
+- 'heal_die': tylko dla heal, np. "2d6". Dla innych null.
+- 'effect_stat': atrybut rzutu obronnego (dla type=effect), np. "WIS". Dla innych null.
+- 'effect_type': klucz stanu np. "silence", "sleeping", "stunned", "poisoned". Dla innych null.
+- 'effect_duration': ile rund trwa efekt (liczba, domyślnie 1–3)
+- 'aoe': 1 jeśli trafia wszystkich wrogów, 0 jeśli jeden cel
+- 'rank2_json' i 'rank3_json': JSON string z ulepszeniami wyższej rangi. ZAWSZE generuj jeśli zaklęcie ma sens na wyższym poziomie:
+  Dla ataku: '{"mana_cost":2,"damage_die":"2d8"}' (lepsza kość lub tańszy koszt)
+  Dla leczenia: '{"mana_cost":2,"heal_die":"2d8"}'
+  Dla efektu/debuffu: '{"mana_cost":3,"effect_duration":4}' (dłuższy efekt lub tańszy)
+  Dla obrony: '{"mana_cost":2,"ac_bonus":5,"duration":2}'
+  Jeśli naprawdę brak sensu dla wyższej rangi — wstaw null (nie placeholder tekst).
 """
 
 
