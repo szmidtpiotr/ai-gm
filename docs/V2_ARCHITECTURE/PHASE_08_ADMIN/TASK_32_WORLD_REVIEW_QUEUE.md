@@ -1,8 +1,20 @@
 # TASK 32 — World Review Queue
 
-**Status:** ❌ Not Started
+**Status:** ✅ Done
 **Phase:** 08 — Admin Tools
 **Depends on:** Task 10 (Data Tables Source of Truth — creates pending_review entries)
+
+---
+
+## Implementation Status
+
+- "Oczekujące" sub-tab implemented inside the Świat section in admin_panel_v2 (`world.js _renderPendingReview`)
+- Three entity types supported: Lokacje, NPC, Przeciwnicy
+- Per-row Zatwierdź / Odrzuć buttons working
+- `GET /api/admin/world/pending/{type}` — fetch pending by entity type
+- `POST /api/admin/world/review/{type}/{key}` with `{action: "approve"|"discard"}` — review action endpoint (note: POST not PATCH as originally specced)
+- Badge count on nav tab showing total pending items across all types
+- "Edytuj i Zatwierdź" inline edit and batch bulk-approve are not implemented
 
 ---
 

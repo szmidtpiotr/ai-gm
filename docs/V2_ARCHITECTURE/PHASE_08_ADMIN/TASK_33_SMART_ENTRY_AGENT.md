@@ -1,9 +1,30 @@
 # TASK 33 — Smart Entry Agent (Universal AI-Assisted Admin Creation)
 
-**Status:** ❌ Not Started
+**Status:** ⚠️ Partially Done
 **Phase:** 08 — Admin Tools
 **Depends on:** Task 01 (DB Schema), all game_config tables seeded
 **Unlocks:** Admins can create/edit world content via conversation instead of raw forms
+
+---
+
+## Implementation Status
+
+**Built (Smart Entry v3 — form-first approach):**
+- `GET /api/admin/smart-entry/schema?table=X` — field definitions used to render the right-pane form
+- `GET /api/admin/smart-entry/list?table=X` — existing records for the "load existing" dropdown
+- `GET /api/admin/smart-entry/record?table=X&key=Y` — single record fetch for edit mode
+- `POST /api/admin/smart-entry/message` — LLM fills all form fields in one shot (schema-constrained JSON output)
+- `POST /api/admin/smart-entry/save` — INSERT (new) or UPDATE (edit) mode
+- Effect Builder UI: visual card-based editor for `effect_json` field on weapons (no raw JSON needed)
+- LLM always generates description and note fields; auto-slug derived from label
+- Load existing record from dropdown enables edit/UPDATE mode
+- Tables supported: `game_config_weapons`, `game_config_items`, `game_config_consumables`, `game_config_enemies`
+
+**Missing from spec:**
+- Q&A visual questionnaire mode (spec wants one decision at a time with option cards; current implementation fills all fields at once)
+- DB balance-check queries ("compare to existing similar weapons before suggesting values")
+- Tables not yet supported: `game_config_conditions`, `game_config_skills`, `game_config_archetypes`
+- Q&A mode is tracked as a future improvement (to_do_ideas.md item #2); blocked until prioritised
 
 ---
 
