@@ -912,6 +912,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   min-height: 0;
+  position: relative;
 }
 
 .chat__messages {
@@ -4255,3 +4256,159 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   word-break: break-all;
   line-height: 1.5;
 }
+
+/* ── Skill Test Roll Popup v3 ─────────────────────────────────────────────── */
+.skill-roll-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(5,4,3,0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+}
+.srp-card {
+  background: #0e0c09;
+  border: 1px solid #4a3510;
+  box-shadow: 0 4px 32px rgba(0,0,0,0.8), inset 0 1px 0 rgba(180,130,30,0.05);
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  font-family: Cinzel,"Palatino Linotype",serif;
+  overflow: hidden;
+}
+.srp-head {
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid rgba(74,53,16,0.4);
+}
+.srp-eyebrow {
+  font-size: 0.47rem;
+  letter-spacing: 0.3em;
+  color: #4a3510;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+.srp-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #c9961a;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.15;
+}
+.srp-mods-line {
+  font-size: 0.6rem;
+  color: #6a5228;
+  letter-spacing: 0.04em;
+  margin-top: 4px;
+}
+.srp-mods-line span { color: #8a6a30; font-weight: 700; }
+.srp-die-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 16px 10px;
+  gap: 10px;
+}
+.srp-die-wrap {
+  width: 90px;
+  height: 90px;
+  flex-shrink: 0;
+}
+.srp-die-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 3px 10px rgba(160,100,10,0.2));
+}
+.srp-d20-outer { transition: stroke 0.25s; }
+.srp-d20-num   { transition: fill 0.25s; }
+.srp-die-wrap.srp-rolling {
+  animation: srpTumble 0.1s linear infinite;
+}
+@keyframes srpTumble {
+  0%  { transform: rotate(-4deg) scale(1.02); }
+  50% { transform: rotate(4deg) scale(0.98); }
+  100%{ transform: rotate(-4deg) scale(1.02); }
+}
+.srp-die-wrap.srp-landed {
+  animation: srpLand 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+@keyframes srpLand {
+  from { transform: scale(1.15); }
+  to   { transform: scale(1); }
+}
+.srp-die-wrap.srp-nat20 .srp-die-svg {
+  filter: drop-shadow(0 0 10px rgba(240,192,64,0.8));
+}
+.srp-die-wrap.srp-nat1 {
+  animation: srpShake 0.4s ease;
+}
+@keyframes srpShake {
+  0%,100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+.srp-result {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  min-height: 36px;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.srp-result.visible { opacity: 1; }
+.srp-res-val {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #ddd4b8;
+  font-family: Cinzel,serif;
+  line-height: 1;
+}
+.srp-res-sep { font-size: 0.75rem; color: #4a3510; }
+.srp-res-total {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #c9961a;
+  font-family: Cinzel,serif;
+  line-height: 1;
+}
+.srp-res-total.nat20 { color: #f0c040; }
+.srp-res-total.nat1  { color: #c04040; }
+.srp-res-label { font-size: 0.9rem; color: #c9961a; align-self: flex-end; padding-bottom: 2px; }
+.srp-nat {
+  font-size: 0.52rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  text-align: center;
+  min-height: 12px;
+}
+.srp-nat.nat20 { color: #f0c040; }
+.srp-nat.nat1  { color: #b03030; }
+.srp-foot {
+  border-top: 1px solid rgba(74,53,16,0.3);
+  display: flex;
+  flex-direction: column;
+}
+.srp-btn {
+  background: transparent;
+  border: none;
+  font-family: Cinzel,serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  padding: 11px 16px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  text-align: center;
+}
+.srp-btn-roll { color: #c9961a; border-bottom: 1px solid rgba(74,53,16,0.2); }
+.srp-btn-roll:hover:not(:disabled) { background: rgba(201,150,26,0.07); color: #e8b830; }
+.srp-btn-roll:disabled { opacity: 0.35; cursor: not-allowed; }
+.srp-btn-confirm { color: #7a6030; }
+.srp-btn-confirm:hover:not(:disabled) { background: rgba(201,150,26,0.05); color: #a08040; }
+.srp-btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
