@@ -1710,6 +1710,18 @@ async function handleSendMessage() {
 
         typingIndicator.remove();
 
+        // ── Skill test pending? Show Roll Popup instead of (or before) prose ──
+        if (response.skill_test_pending) {
+            if (response.prose) {
+                // Narrator already produced some prose before the pending test
+                const { narrative: preText } = parseGmFull(response.prose);
+                appendMessage({ role: 'assistant', content: preText, created_at: new Date() });
+            }
+            showSkillTestPopup(response.skill_test_pending);
+            scrollToBottom();
+            return;  // don't refresh yet — will refresh after resolve
+        }
+
         // Backend returns: { result: { message: "..." } } or { result: "..." }
         let gmText = null;
         if (response.result) {
@@ -1718,7 +1730,7 @@ async function handleSendMessage() {
                 : (response.result.message || response.result.narrative);
         }
         // Fallback to other possible fields
-        gmText = gmText || response.assistant_text || response.gm_response || response.content;
+        gmText = gmText || response.prose || response.assistant_text || response.gm_response || response.content;
 
         if (gmText) {
             const { narrative: gmContent, ...gmMeta } = parseGmFull(gmText);
@@ -1747,6 +1759,125 @@ async function handleSendMessage() {
         scrollToBottom();
     }
 }
+
+// ── Skill Test Roll Popup — Task 12 ──────────────────────────────────────────
+
+function showSkillTestPopup(pending) {
+    const existing = document.getElementById('skill-roll-popup');
+    if (existing) existing.remove();
+
+    const mod = pending.modifier_breakdown || {};
+    const totalMod = mod.total || 0;
+    const modSign = totalMod >= 0 ? '+' : '';
+    const skillLabel = pending.skill_label || pending.skill_key || 'Umiejętność';
+
+    const modRows = [
+        { label: 'Ranga umiejętności', val: mod.skill_rank ?? 0 },
+        { label: `Mod. ${mod.governing_stat || 'stat'}`, val: mod.stat_mod ?? 0 },
+        { label: 'Biegłość', val: mod.proficiency ?? 0 },
+    ].filter(r => r.val !== 0).map(r =>
+        `<div class="skill-roll-mod-row"><span>${r.label}</span><span>${r.val >= 0 ? '+' : ''}${r.val}</span></div>`
+    ).join('');
+
+    const popup = document.createElement('div');
+    popup.id = 'skill-roll-popup';
+    popup.className = 'skill-roll-overlay';
+    popup.innerHTML = `
+        <div class="skill-roll-box">
+            <div class="skill-roll-title">TEST UMIEJĘTNOŚCI</div>
+            <div class="skill-roll-name">${escapeHtml(skillLabel.toUpperCase())}</div>
+            <div class="skill-roll-mods">
+                ${modRows}
+                <div class="skill-roll-mod-total"><span>Twój bonus</span><span>${modSign}${totalMod}</span></div>
+            </div>
+            <div class="skill-roll-dice" id="skill-dice-display">🎲</div>
+            <div class="skill-roll-result" id="skill-roll-result" style="display:none"></div>
+            <button class="skill-roll-btn" id="skill-roll-btn">Rzuć k20</button>
+            <button class="skill-roll-confirm" id="skill-roll-confirm" style="display:none" disabled>Potwierdź →</button>
+        </div>`;
+    document.body.appendChild(popup);
+
+    let rolledValue = null;
+    const diceEl = popup.querySelector('#skill-dice-display');
+    const resultEl = popup.querySelector('#skill-roll-result');
+    const rollBtn = popup.querySelector('#skill-roll-btn');
+    const confirmBtn = popup.querySelector('#skill-roll-confirm');
+
+    rollBtn.addEventListener('click', () => {
+        rollBtn.disabled = true;
+        diceEl.classList.add('skill-dice-spin');
+        // Animate through random values then settle
+        let ticks = 0;
+        const interval = setInterval(() => {
+            diceEl.textContent = Math.ceil(Math.random() * 20);
+            ticks++;
+            if (ticks >= 12) {
+                clearInterval(interval);
+                rolledValue = Math.ceil(Math.random() * 20);
+                diceEl.textContent = rolledValue;
+                diceEl.classList.remove('skill-dice-spin');
+                diceEl.classList.add('skill-dice-landed');
+                const total = rolledValue + totalMod;
+                const nat20 = rolledValue === 20;
+                const nat1 = rolledValue === 1;
+                resultEl.style.display = '';
+                resultEl.innerHTML = `
+                    <span class="skill-roll-d20 ${nat20 ? 'nat20' : nat1 ? 'nat1' : ''}">${rolledValue}</span>
+                    <span class="skill-roll-plus">${modSign}${totalMod}</span>
+                    <span class="skill-roll-eq">=</span>
+                    <span class="skill-roll-total">${total}</span>
+                    ${nat20 ? '<div class="skill-roll-nat">NATURALNY 20!</div>' : ''}
+                    ${nat1 ? '<div class="skill-roll-nat nat1-label">NATURALNY 1</div>' : ''}
+                `;
+                confirmBtn.style.display = '';
+                confirmBtn.disabled = false;
+            }
+        }, 80);
+    });
+
+    confirmBtn.addEventListener('click', async () => {
+        if (rolledValue === null) return;
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Rozwiązuję…';
+        await resolveSkillTest(pending.skill_test_id, rolledValue, popup);
+    });
+}
+
+async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
+    try {
+        const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/skill-test/resolve`, {
+            character_id: characterData.id,
+            skill_test_id: skillTestId,
+            d20_roll: d20Roll,
+        });
+
+        popupEl?.remove();
+
+        if (response.prose) {
+            const { narrative: gmContent } = parseGmFull(response.prose);
+            appendMessage({
+                role: 'assistant',
+                content: gmContent,
+                created_at: new Date(),
+                turn_number: response.turn_number,
+            });
+        }
+
+        // Update HP if trap dealt damage
+        await refreshCharacterData();
+        await pollCombatState();
+        scrollToBottom();
+
+        // Re-enable input
+        if (elements.btnSend) elements.btnSend.disabled = false;
+    } catch (err) {
+        popupEl?.remove();
+        showToast(err.message || 'Błąd rozwiązania testu', 'error');
+        if (elements.btnSend) elements.btnSend.disabled = false;
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function refreshCharacterData() {
     if (!currentCampaignId || !characterData?.id) return;

@@ -1485,6 +1485,31 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     _exec("ALTER TABLE game_config_weapons ADD COLUMN effect_json TEXT DEFAULT NULL", "v2-weapon-effect-json")
 
     _exec("""
+        CREATE TABLE IF NOT EXISTS skill_counters (
+            player_skill_key TEXT PRIMARY KEY,
+            counter_type     TEXT NOT NULL DEFAULT 'dc',
+            counter_key      TEXT,
+            default_dc       INTEGER NOT NULL DEFAULT 12
+        )
+    """, "v2-skill-counters-table")
+    _exec("""
+        INSERT OR IGNORE INTO skill_counters (player_skill_key, counter_type, counter_key, default_dc) VALUES
+        ('stealth',      'opposed', 'perception', 12),
+        ('lockpick',     'dc',      NULL,         14),
+        ('acrobatics',   'dc',      NULL,         10),
+        ('perception',   'dc',      NULL,         12),
+        ('insight',      'opposed', 'deception',  12),
+        ('survival',     'dc',      NULL,         12),
+        ('persuasion',   'opposed', 'WIS',        12),
+        ('deception',    'opposed', 'insight',    12),
+        ('intimidation', 'opposed', 'WIS',        12),
+        ('athletics',    'dc',      NULL,         12),
+        ('arcana',       'dc',      NULL,         14),
+        ('medicine',     'dc',      NULL,         12),
+        ('lore',         'dc',      NULL,         14)
+    """, "v2-skill-counters-seed")
+
+    _exec("""
         CREATE TABLE IF NOT EXISTS location_connections (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             from_location_key   TEXT NOT NULL,

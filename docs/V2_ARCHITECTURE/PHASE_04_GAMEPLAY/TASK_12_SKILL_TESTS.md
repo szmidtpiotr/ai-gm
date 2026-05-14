@@ -1,7 +1,17 @@
 # TASK 12 — Skill Tests
 
 **Phase:** 04 — Gameplay  
-**Status:** ❌ Not Started  
+**Status:** ✅ Done
+
+## Implementation Status
+
+- `skill_counters` table created with seed data (all 13 skills, DC and opposed types)
+- `skill_service.py` — tag interception, modifier calculation, resolution, narrator context
+- `[SKILL_TEST:skill_key:DC:14]` and `[SKILL_TEST:skill_key:OPPOSED:perception]` tags intercepted from narrator prose; state set to `SKILL_TEST_PENDING`
+- `[TRAP:skill_key:dc:damage_dice:condition]` tags intercepted; damage applied on failure
+- Turn pipeline: `SKILL_ATTEMPT` actions now return `skill_test_pending` (no auto-roll); player must provide d20 via Roll Popup
+- `POST /api/campaigns/{id}/skill-test/resolve` — accepts `{d20_roll, skill_test_id}`, resolves test, makes second narrator LLM call, returns prose
+- Frontend Roll Popup: shows skill name, modifier breakdown, animated dice roll, nat20/nat1 highlights, sends d20 to resolve endpoint  
 **Related tasks:** TASK 11 (turn pipeline), TASK 05 (character stats)
 
 ---

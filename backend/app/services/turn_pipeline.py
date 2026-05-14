@@ -37,6 +37,10 @@ from app.services.campaign_plan_runtime import (
 )
 from app.services.vitality_service import stat_modifier
 from app.services.llm_service import generate_chat
+from app.services.skill_service import (
+    calc_skill_modifier_info, intercept_skill_test_tag, intercept_trap_tag,
+    build_skill_result_context,
+)
 
 logger = structlog.get_logger()
 
@@ -66,6 +70,7 @@ def process_v2_turn(
       action_type: str
     """
     t_start = time.perf_counter()
+    _skill_pending = None  # set if narrator embeds [SKILL_TEST] or [TRAP] tag
 
     # ── Step 1: Parse input ────────────────────────────────────────────────
     if is_structured_action(user_input):
@@ -150,6 +155,13 @@ def process_v2_turn(
     # ── Step 4: DB Lookup ─────────────────────────────────────────────────
     context = _load_action_context(action_type, params, character_id, campaign_id, session_flags, conn)
 
+    # ── SKILL_ATTEMPT early-return: send Roll Popup to player ─────────────
+    if action_type == "SKILL_ATTEMPT":
+        return _return_skill_test_pending(
+            params, context, session_flags, wsm_result,
+            campaign_id, character_id, conn
+        )
+
     # ── Step 5: Mechanic Resolver ─────────────────────────────────────────
     mechanic_result = mechanic_resolve(action_type, params, context)
 
@@ -201,6 +213,22 @@ def process_v2_turn(
     # Process CREATE tags and NPC_KILLED from narrator response
     prose, _ = process_create_tags(prose_raw, conn, campaign_id)
 
+    # Intercept [SKILL_TEST:...] and [TRAP:...] tags from narrator prose
+    sheet_row = conn.execute("SELECT sheet_json FROM characters WHERE id = ?", (character_id,)).fetchone()
+    _sheet = json.loads((sheet_row[0] if sheet_row else None) or "{}")
+    prose, _skill_pending = intercept_skill_test_tag(prose, conn, campaign_id, character_id)
+    if not _skill_pending:
+        prose, _skill_pending = intercept_trap_tag(prose, conn, campaign_id, character_id, _sheet)
+    if _skill_pending:
+        # Store pending in session_flags and set state
+        session_flags["pending_skill_test"] = _skill_pending
+        session_flags["state"] = "SKILL_TEST_PENDING"
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (json.dumps(session_flags, ensure_ascii=False), campaign_id),
+        )
+        conn.commit()
+
     # ── Step 9: Assemble response ─────────────────────────────────────────
     current_loc = get_current_location_info(conn, campaign_id)
     char_state = _get_character_state(character_id, conn)
@@ -230,10 +258,66 @@ def process_v2_turn(
         "action_type": action_type,
         "mechanic_result": mechanic_result,
         "system_messages": [],
+        "skill_test_pending": _skill_pending,
     }
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+
+def _return_skill_test_pending(
+    params: dict,
+    context: dict,
+    session_flags: dict,
+    wsm_result,
+    campaign_id: int,
+    character_id: int,
+    conn: sqlite3.Connection,
+) -> dict:
+    """Return a skill_test_pending payload without resolving — player must send d20."""
+    import uuid
+    skill_key = params.get("skill_key", "perception")
+    sheet = context.get("character_sheet") or {}
+    mod_info = calc_skill_modifier_info(sheet, skill_key)
+    skill_test_id = f"st-{uuid.uuid4().hex[:8]}"
+
+    from app.services.skill_service import SKILL_LABELS, _get_counter
+    counter = _get_counter(conn, skill_key)
+
+    pending = {
+        "skill_test_id": skill_test_id,
+        "skill_key": skill_key,
+        "skill_label": SKILL_LABELS.get(skill_key, skill_key.title()),
+        "counter": counter,
+        "modifier_breakdown": mod_info,
+        "params": params,
+    }
+
+    # Store in session
+    session_flags["pending_skill_test"] = pending
+    session_flags["state"] = "SKILL_TEST_PENDING"
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+        (json.dumps(session_flags, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
+
+    char_state = _get_character_state(character_id, conn)
+    current_loc = get_current_location_info(conn, campaign_id)
+    return {
+        "prose": None,
+        "skill_test_pending": pending,
+        "state": {
+            "character_hp": char_state.get("current_hp"),
+            "character_max_hp": char_state.get("max_hp"),
+            "wound_label": _wound_label(char_state.get("current_hp", 0), char_state.get("max_hp", 1)),
+            "current_location": current_loc.get("key") if current_loc else None,
+            "xp_delta": 0,
+        },
+        "current_location": current_loc,
+        "action_type": "SKILL_ATTEMPT",
+        "system_messages": [],
+    }
+
 
 def _system_response(message: str, session_flags: dict, campaign_id: int,
                       conn: sqlite3.Connection) -> dict:
