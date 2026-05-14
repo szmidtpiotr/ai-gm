@@ -93,8 +93,9 @@
 | 23 | TASK_23_HEALING_SYSTEM | ✅ | Items, rest, Scholar Mend Wounds |
 | 24 | TASK_24_WOUND_LABELS | ✅ | HP% thresholds, narrator injection, HP bar colour |
 | 25V2 | TASK_25_XP_PROGRESSION_V2 | ✅ | WFRP style: everything purchased with XP, magic tied to INT |
-| 26 | TASK_26_SCHOLAR_SPELLS | ✅ | Spell list, Arcane Points, upgrade tiers, miscast scaling |
-| 41 | TASK_41_DUNGEON_RUNS | ❌ | Standalone farmable dungeons, cooldown, scaling |
+| 26 | TASK_26_SCHOLAR_SPELLS | ✅ | Spell list, Arcane Points, upgrade tiers, miscast scaling, rank-by-usage |
+| 42 | TASK_42_CHARACTER_FIRST_FLOW | ❌ | **PREREQUISITE for 41** — invert campaign→character to character→campaign/dungeon |
+| 41 | TASK_41_DUNGEON_RUNS | ❌ | Standalone farmable dungeons, cooldown, scaling — requires Task 42 |
 
 ### Phase 07 — Narrator
 > Depends on Phase 04, 05.
@@ -115,7 +116,7 @@
 | 31 | TASK_31_CAMPAIGN_WORKSHOP | ✅ | Campaign workshop tab inside campaign detail modal |
 | 32 | TASK_32_WORLD_REVIEW_QUEUE | ✅ | Approve/reject pending world entries — Lokacje/NPC/Przeciwnicy |
 | 33SA | TASK_33_SMART_ENTRY_AGENT | ⚠️ | Form-first approach built; Q&A questionnaire mode missing |
-| 40 | TASK_40_WORLD_BUILDER | ❌ | **DETAILED** — Cytoscape.js visual map editor, NPC/enemy assignment, connections |
+| 40 | TASK_40_WORLD_BUILDER | ❌ | **Hex grid map** — Honeycomb.js + SVG, terrain painting, 1h-per-hex travel, encounter rolls |
 
 ### Phase 09 — Frontend
 > Depends on Phase 04, 05, 06.
@@ -301,6 +302,55 @@ Quick reference:
 ## Out-of-Plan Work Completed
 
 Work completed as of 2026-05-14 that was not in the original V2 plan:
+
+### Task 42 — Character-First Flow (2026-05-14, design decision)
+
+**Problem:** Current flow is Campaign → Character (character is created inside a campaign). This makes dungeon runs impossible to test — a hero can't enter a dungeon without first creating a campaign.
+
+**Decision:** Invert to Character → (Campaign | Dungeon | Free Roam).
+
+**New flow:**
+1. Player lands on a **hero selection screen** — list of existing heroes or "Create new hero"
+2. Character wizard runs standalone (no campaign yet) — produces a persistent `character` record
+3. After hero is ready: "What's next?" screen — pick Campaign / Dungeon Run / (future: Free Roam)
+4. Campaign creation links an existing hero (not creates one inline)
+5. Dungeon run links an existing hero directly — no campaign needed
+
+**DB impact:**
+- `campaigns.character_id` already exists — no FK change needed
+- Character creation endpoint separates from campaign creation endpoint
+- A character with no active campaign is valid — "idle hero"
+- `characters` table gains `status` field: `idle | in_campaign | in_dungeon`
+
+**Frontend impact:**
+- Player UI: new hero selection / creation screen before campaign/dungeon entry
+- Admin UI: Campaign creation form gets "pick existing character" dropdown instead of inline wizard
+- Campaign monitor: hero shown as persistent entity, not campaign-scoped
+
+**Backend impact:**
+- `POST /api/characters` — create standalone character (no campaign_id required)
+- `POST /api/campaigns` — accepts `character_id`, no longer creates character inline
+- `GET /api/characters/{id}` — hero profile with all campaigns + dungeon runs listed
+
+---
+
+### Hex Map Design Decision (2026-05-14)
+
+**Decision:** World map uses hex grid (Honeycomb.js + SVG), replacing the planned node-edge graph (Cytoscape.js).
+
+**1 hex = 1 hour of travel** — travel time is computed from hex path + terrain modifiers, not stored manually in `location_connections`.
+
+**Terrain system:** Each hex cell has a terrain type (`plains`, `forest`, `mountain`, `water`, `swamp`, `road`, `city`, `dungeon`, `ruins`, `castle`). Terrain determines: travel time modifier (0.5×–2×), encounter chance (5%–40%), and visual icon/colour.
+
+**New DB table:** `map_terrain (q, r, terrain)` — the terrain canvas, painted by admin independently of location placement.
+
+**`location_connections.travel_hours`** becomes a derived/cache field (computed from hex pathfinding), not manually set.
+
+**Per-hex encounter rolls:** Each hex traversed during travel rolls for a random encounter using `game_config_encounters.zone` matching the terrain type.
+
+**Full spec:** `05_WORLD_BUILDER_AND_PERSISTENCE.md` section 1.
+
+---
 
 ### Spell Rank Progression + Knowledge Book (2026-05-14)
 
