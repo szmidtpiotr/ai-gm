@@ -1782,6 +1782,8 @@ function showSkillTestPopup(pending) {
     const popup = document.createElement('div');
     popup.id = 'skill-roll-popup';
     popup.className = 'skill-roll-overlay';
+    // Mount inside chat container so it covers only the game area
+    const _chatRoot = document.getElementById('chat-container') || document.body;
     popup.innerHTML = `
         <div class="skill-roll-box">
             <div class="skill-roll-title">TEST UMIEJĘTNOŚCI</div>
@@ -1795,7 +1797,7 @@ function showSkillTestPopup(pending) {
             <button class="skill-roll-btn" id="skill-roll-btn">Rzuć k20</button>
             <button class="skill-roll-confirm" id="skill-roll-confirm" style="display:none" disabled>Potwierdź →</button>
         </div>`;
-    document.body.appendChild(popup);
+    _chatRoot.appendChild(popup);
 
     let rolledValue = null;
     const diceEl = popup.querySelector('#skill-dice-display');

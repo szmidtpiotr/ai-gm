@@ -2002,6 +2002,18 @@ def create_turn(
                 if _cm:
                     _cue_name = _cm.group(1).strip()
                     _canonical = resolve_test_name(_cue_name)
+                    # Fallback: custom skills not in hardcoded map — check game_config_skills
+                    if _canonical is None:
+                        _norm_cue = _cue_name.lower().replace(" ", "_")
+                        try:
+                            _cue_db = conn.execute(
+                                "SELECT key FROM game_config_skills WHERE key = ? AND is_active = 1 LIMIT 1",
+                                (_norm_cue,),
+                            ).fetchone()
+                            if _cue_db:
+                                _canonical = _norm_cue
+                        except Exception:
+                            pass
                     if _canonical and not is_attack_test(_canonical):
                         # It's a skill, not an attack — show Roll Popup
                         from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
