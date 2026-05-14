@@ -101,54 +101,58 @@ def _inactive_combat_tag_reminder(user_text: str | None) -> str:
 
 import re as _re_skill
 _SKILL_VERB_HINT = _re_skill.compile(
-    r"\b(próbuj|próbować|spróbuj|staram|chcę|chcę się|zamiarzam|usiłuj|"
+    r"\b(próbuj|próbować|spróbuj|staram|chcę|zamiarzam|usiłuj|"
     r"skrad|przekrad|przekonaj|perswad|oszuk|zastraszy|przeszuk|spost|zauważ|"
     r"wytrop|przetrwaj|wylecz|zidentyfik|zbadaj|ident|użyj|kradnę|włamuj|wyważam|"
-    r"skaczę|wspinaj|bieg|uciekam|uchylam|unikam)\b",
+    r"skaczę|wspinaj|bieg|uciekam|uchylam|unikam|"
+    r"kuj|wykuj|wykuć|oceniam|oszacuj|napraw|naprawiam|konstruuj|tworzę|robię|"
+    r"rzemiosł|kowalstwo|alchemi|leczę|badan|tropię|ukryj|ukrywam|szpieg)\b",
     _re_skill.IGNORECASE,
-)
-
-_SKILL_KEYS_HINT = (
-    "stealth, lockpick, acrobatics, perception, insight, survival, "
-    "persuasion, deception, intimidation, athletics, arcana, medicine, lore"
 )
 
 
 def _skill_test_tag_instruction(conn, campaign_id: int, user_text: str | None) -> str | None:
     """
-    Inject [SKILL_TEST] tag instructions when player text hints at a non-combat skill use.
-    Also loads custom skills from DB to include in the hint.
+    Inject skill test instructions when player text hints at a skill use.
+    Loads skills from DB with descriptions so LLM picks the right custom key.
     """
     if not user_text:
         return None
     if not _SKILL_VERB_HINT.search(user_text):
         return None
 
-    # Load extra custom skills from DB
-    extra_skills = _SKILL_KEYS_HINT
+    # Load skills from DB with descriptions — crucial so LLM knows WHEN to use custom skills
+    skill_lines = []
     try:
         if conn:
             rows = conn.execute(
-                "SELECT key FROM game_config_skills WHERE is_active = 1 ORDER BY sort_order"
+                "SELECT key, label, linked_stat, description FROM game_config_skills "
+                "WHERE is_active = 1 ORDER BY sort_order"
             ).fetchall()
-            if rows:
-                extra_skills = ", ".join(r[0] for r in rows)
+            for r in rows:
+                desc = str(r["description"] or "").strip()
+                desc_part = f" — {desc[:60]}" if desc else ""
+                skill_lines.append(f"  {r['key']} ({r['label']}, {r['linked_stat']}){desc_part}")
     except Exception:
-        pass
+        skill_lines = ["  stealth, lockpick, perception, persuasion, athletics, arcana, medicine, lore"]
+
+    skills_block = "\n".join(skill_lines)
 
     return (
-        "[MECHANIKA — TESTY UMIEJĘTNOŚCI]\n"
-        "Wiadomość gracza sugeruje próbę użycia umiejętności (skradanie, perswazja, identyfikacja, itp.).\n"
-        "Gdy gracz próbuje działania wymagającego testu umiejętności, OSADŹ w swojej odpowiedzi tag:\n"
-        "  [SKILL_TEST:klucz_umiejętności:DC:wartość]\n"
+        "[MECHANIKA — TESTY UMIEJĘTNOŚCI — WAŻNE]\n"
+        "Wiadomość gracza wymaga testu umiejętności. Użyj pola roll_cue w JSON:\n"
+        "  \"roll_cue\": \"Roll <klucz_umiejętności> d20\"\n\n"
+        "ZASADA: używaj DOKŁADNIE tych kluczy (key) z listy poniżej. "
+        "NIE używaj angielskich odpowiedników z D&D (np. 'Investigation', 'Athletics' itp.) "
+        "— użyj polskiego klucza z listy.\n\n"
+        "DOSTĘPNE UMIEJĘTNOŚCI:\n"
+        f"{skills_block}\n\n"
         "Przykłady:\n"
-        "  [SKILL_TEST:stealth:DC:13]   ← skradanie (DC zależy od trudności)\n"
-        "  [SKILL_TEST:alchemy:DC:14]   ← identyfikacja substancji\n"
-        "  [SKILL_TEST:persuasion:OPPOSED:WIS]  ← przekonanie NPC (przeciwstawny)\n"
-        "Tag musi stać SAMODZIELNIE w swojej linii (pusta linia przed i po).\n"
-        "NIE opisuj wyniku rzutu — tag przerwie narrację i gracz sam rzuci kością.\n"
-        f"Dostępne umiejętności: {extra_skills}.\n"
-        "Jeśli działanie gracza jest BANALNE (nie wymaga rzutu), nie używaj tagu — narraj wprost."
+        "  \"roll_cue\": \"Roll stealth d20\"       ← skradanie\n"
+        "  \"roll_cue\": \"Roll kowalstwo d20\"     ← ocena/naprawa broni, wykuwanie\n"
+        "  \"roll_cue\": \"Roll persuasion d20\"    ← przekonywanie NPC\n"
+        "  \"roll_cue\": \"Roll perception d20\"    ← spostrzeżenie czegoś\n\n"
+        "Nie opisuj wyniku rzutu w narracji — gracz sam rzuci kością."
     )
 
 
