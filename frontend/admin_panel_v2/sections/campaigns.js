@@ -65,6 +65,7 @@ export async function init(panel) {
           <button class="camp-tab-btn active" data-tab="overview" type="button">Przegląd</button>
           <button class="camp-tab-btn" data-tab="plan" type="button">Plan GM</button>
           <button class="camp-tab-btn" data-tab="turns" type="button">Tury</button>
+          <button class="camp-tab-btn" data-tab="workshop" type="button">🔧 Warsztat</button>
         </div>
         <div class="camp-modal-body" id="camp-modal-body">
         </div>
@@ -213,6 +214,8 @@ export async function init(panel) {
       await renderPlanTab(c);
     } else if (currentTab === "turns") {
       await renderTurnsTab(c);
+    } else if (currentTab === "workshop") {
+      await renderWorkshopTab(c);
     }
 
     renderModalActions(c);
@@ -479,4 +482,132 @@ export async function init(panel) {
 
 function escHtml(str) {
   return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ── Campaign Workshop ──────────────────────────────────────────────────────
+
+function _cwEsc(s) {
+  return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function _cwGenId() {
+  return "cw-" + Math.random().toString(36).slice(2, 10);
+}
+
+async function renderWorkshopTab(c) {
+  // Get modalBody from the closure scope via the DOM — re-initialize each time
+  const modalBodyEl = document.getElementById("camp-modal-body");
+  if (!modalBodyEl) return;
+
+  const sessionId = _cwGenId();
+  const campaignId = c.id;
+
+  modalBodyEl.innerHTML = `
+    <div class="workshop-layout" style="height:100%">
+      <div class="workshop-chat-col">
+        <div class="workshop-messages" id="cw-messages-${campaignId}">
+          <div class="chat-msg agent"><div class="chat-bubble">Kampania "${_cwEsc(c.title)}" załadowana. Mogę analizować plan GM, proponować zmiany narracyjne, wykrywać luki fabularne. O co pytasz?</div></div>
+        </div>
+        <div class="workshop-input-row">
+          <textarea id="cw-input-${campaignId}" class="workshop-textarea" rows="4"
+            style="min-height:80px"
+            placeholder="Zapytaj o kampanię lub poproś o zmiany…" maxlength="2000"></textarea>
+          <button class="primary-btn" id="cw-send-btn-${campaignId}" type="button">Wyślij</button>
+        </div>
+      </div>
+
+      <div class="workshop-draft-col" id="cw-changes-col-${campaignId}">
+        <div class="workshop-draft-header">PROPONOWANE ZMIANY</div>
+        <div id="cw-proposed-${campaignId}" style="color:var(--text-muted);font-size:0.82rem;padding:8px">
+          Zmiany zaproponowane przez agenta pojawią się tutaj.
+        </div>
+      </div>
+    </div>`;
+
+  const messagesEl = modalBodyEl.querySelector(`#cw-messages-${campaignId}`);
+  const inputEl    = modalBodyEl.querySelector(`#cw-input-${campaignId}`);
+  const sendBtn    = modalBodyEl.querySelector(`#cw-send-btn-${campaignId}`);
+  const proposedEl = modalBodyEl.querySelector(`#cw-proposed-${campaignId}`);
+
+  function appendMsg(text, type) {
+    const div = document.createElement("div");
+    div.className = `chat-msg ${type}`;
+    div.innerHTML = `<div class="chat-bubble">${_cwEsc(text).replace(/\n/g, "<br>")}</div>`;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  function renderWorkshopChanges(changes) {
+    if (!changes || !changes.length) return;
+    proposedEl.innerHTML = "";
+    changes.forEach(ch => {
+      const row = document.createElement("div");
+      row.className = "workshop-change-row";
+      const fieldName = _cwEsc(ch.field || ch.path || "?");
+      const oldVal = _cwEsc(String(ch.old_value ?? "—").slice(0, 200));
+      const newVal = _cwEsc(String(ch.new_value ?? "?").slice(0, 200));
+      const reason = ch.reason ? `<div class="workshop-change-reason">${_cwEsc(ch.reason)}</div>` : "";
+      row.innerHTML = `
+        <div class="workshop-change-field">${fieldName}</div>
+        <div class="workshop-change-diff">
+          <span class="workshop-old">${oldVal}</span>
+          <span class="workshop-arrow">→</span>
+          <span class="workshop-new">${newVal}</span>
+        </div>
+        ${reason}
+        <button class="primary-btn workshop-approve-btn" type="button">✓ Zatwierdź</button>`;
+      row.querySelector(".workshop-approve-btn").addEventListener("click", async () => {
+        try {
+          await adminFetch(`/api/admin/campaigns/${campaignId}/workshop/apply`, {
+            method: "POST",
+            body: JSON.stringify({ field: ch.field || ch.path, new_value: ch.new_value }),
+          });
+          showToast("Zmiana zatwierdzona.", "success");
+          const btn = row.querySelector(".workshop-approve-btn");
+          btn.textContent = "✓ Zastosowano";
+          btn.disabled = true;
+          btn.className = "secondary-btn workshop-approve-btn";
+        } catch(e) { showToast(e.message, "error"); }
+      });
+      proposedEl.appendChild(row);
+    });
+  }
+
+  async function sendMessage() {
+    const msg = inputEl.value.trim();
+    if (!msg) return;
+    inputEl.value = "";
+
+    appendMsg(msg, "user");
+    sendBtn.disabled = true;
+    const typing = appendMsg("…", "agent");
+
+    try {
+      const resp = await adminFetch(
+        `/api/admin/campaigns/${campaignId}/workshop/message`,
+        { method: "POST", body: JSON.stringify({ session_id: sessionId, message: msg }) }
+      );
+
+      const reply = resp.reply || "";
+      const changes = resp.proposed_changes || [];
+
+      // Strip JSON blocks from reply before display
+      const cleanReply = reply.replace(/```json[\s\S]*?```/g, "").replace(/```[\s\S]*?```/g, "").trim();
+
+      typing.remove();
+      if (cleanReply) appendMsg(cleanReply, "agent");
+      renderWorkshopChanges(changes);
+    } catch (e) {
+      typing.remove();
+      appendMsg(`Błąd: ${_cwEsc(e.message || "?")}`, "agent error");
+    } finally {
+      sendBtn.disabled = false;
+    }
+  }
+
+  sendBtn.addEventListener("click", sendMessage);
+  inputEl.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
 }

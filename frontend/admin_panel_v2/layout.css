@@ -3081,7 +3081,7 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  width: min(92vw, 920px);
+  width: min(1000px, 95vw);
   height: min(88vh, 700px);
   display: flex;
   flex-direction: column;
@@ -3104,7 +3104,8 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   gap: 0;
 }
 .smart-entry-chat-col {
-  flex: 1.2;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   padding: 12px;
@@ -3149,6 +3150,55 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 }
 .se-draft-preview { flex: 1; overflow: auto; }
 .se-preview-actions { margin-top: auto; padding-top: 8px; }
+
+/* Smart Entry v3 — form-first layout */
+.smart-entry-form-col {
+  width: 380px;
+  min-width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+.se-form-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.se-form-fields-panel {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.se-form-footer {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+.se-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.se-field-label {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.se-field-row.required .se-field-label { color: var(--text-secondary); }
+.se-field-row.filled .se-field-label { color: var(--accent-green); }
+.se-field-input { width: 100%; }
+.se-bool-wrap { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.se-field-checkbox { width: 16px; height: 16px; cursor: pointer; }
+.se-multi-choice { display: flex; flex-wrap: wrap; gap: 6px; }
+.se-multi-option { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; cursor: pointer; }
+/* Hide old preview col if still in DOM */
+.smart-entry-preview-col { display: none; }
 
 /* Smart entry question cards */
 .se-question-block { margin-bottom: 12px; }
