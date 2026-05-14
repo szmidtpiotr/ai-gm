@@ -1481,6 +1481,44 @@ def resolve_attack(
                     ensure_ascii=False,
                 )
 
+            # ── Spell: detect spell_attack weapon + mana deduction ────────────
+            _is_spell = str(
+                (attack_roll or {}).get("weapon_type")
+                or (str(weapon_row.get("weapon_type")) if weapon_row else "")
+            ).lower() == "spell"
+            _spell_mana_cost = int(weapon_row.get("mana_cost") or 2) if (_is_spell and weapon_row) else 2
+            _mana_ok = True
+            if _is_spell:
+                from app.services.spell_service import check_and_deduct_mana
+                _mana_ok, _new_mana = check_and_deduct_mana(sheet, _spell_mana_cost)
+                if not _mana_ok:
+                    _persist_combatants(conn, row, combatants)
+                    conn.execute(
+                        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                        (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+                    )
+                    conn.commit()
+                    return {
+                        "attacker": attacker,
+                        "hit": False,
+                        "damage": 0,
+                        "blocked": True,
+                        "message": (
+                            f"Brak many! Potrzebujesz {_spell_mana_cost} many, "
+                            f"masz {int(sheet.get('current_mana', 0))}."
+                        ),
+                        "mana_insufficient": True,
+                        "current_mana": int(sheet.get("current_mana", 0)),
+                    }
+                out["mana_spent"] = _spell_mana_cost
+                out["mana_after"] = _new_mana
+                # Persist mana deduction immediately
+                conn.execute(
+                    "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                    (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+                )
+            # ─────────────────────────────────────────────────────────────────
+
             if hit:
                 wrow = weapon_row
                 die = "1d6"
@@ -1518,6 +1556,26 @@ def resolve_attack(
 
                 dead = int(enemy.get("hp_current", 0) or 0) <= 0
                 out["enemy_dead"] = dead
+
+                # ── Spell Nat 20 secondary effects ────────────────────────────
+                if _is_spell and player_nat20 and hit:
+                    from app.services.spell_service import resolve_spell_nat20_secondary
+                    _nat20_fx = resolve_spell_nat20_secondary(enemy, dmg)
+                    out["spell_nat20_secondary"] = _nat20_fx
+                    if _nat20_fx.get("condition"):
+                        _cond = _nat20_fx["condition"]
+                        existing_conds = enemy.get("conditions") or []
+                        if not any(c.get("key") == _cond for c in existing_conds):
+                            if not isinstance(enemy.get("conditions"), list):
+                                enemy["conditions"] = []
+                            enemy["conditions"].append({
+                                "key": _cond,
+                                "label": _cond.title(),
+                                "duration_rounds": 2,
+                                "runtime": {},
+                            })
+                # ─────────────────────────────────────────────────────────────
+
                 if dead:
                     enemy["dead"] = True
                     ek = str(enemy.get("enemy_key") or "")
@@ -1648,6 +1706,21 @@ def resolve_attack(
                 out["enemy_dead"] = False
                 out["loot"] = []
                 out["gold_drop"] = 0
+
+            # ── Spell Miscast (Nat 1 on spell attack) ─────────────────────────
+            if _is_spell and player_nat1:
+                from app.services.spell_service import resolve_miscast
+                _miscast = resolve_miscast(sheet, enemy, conn)
+                out["miscast"] = _miscast
+                out["hp_after"] = _miscast.get("hp_after", int(sheet.get("current_hp", 0)))
+                conn.execute(
+                    "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                    (json.dumps(sheet, ensure_ascii=False), int(row["character_id"])),
+                )
+            # ─────────────────────────────────────────────────────────────────
+
+            if _is_spell and _mana_ok:
+                out["current_mana"] = int(sheet.get("current_mana", 0))
 
             cid = int(row["id"])
             tn = _next_combat_log_sequence(conn, cid)

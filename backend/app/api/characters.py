@@ -1582,6 +1582,21 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
     except Exception as e:
         logger.warning("[create_character] starter items / gold failed (non-fatal): %s", str(e))
 
+    # Grant starting spells for Scholar
+    if archetype == "scholar":
+        try:
+            from app.services.spell_service import grant_starting_spells
+            created_sheet["arcane_points"] = 1
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (json.dumps(created_sheet, ensure_ascii=False), character_id),
+            )
+            conn.commit()
+            grant_starting_spells(character_id, conn)
+            conn.commit()
+        except Exception as e:
+            logger.warning("[create_character] scholar starting spells failed (non-fatal): %s", str(e))
+
     sheet = created_sheet or {}
     archetype = str(sheet.get("archetype", "warrior")).strip().lower()
     name = (req.name or "").strip() or "Bohater"

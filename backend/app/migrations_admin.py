@@ -1485,6 +1485,53 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     _exec("ALTER TABLE game_config_weapons ADD COLUMN effect_json TEXT DEFAULT NULL", "v2-weapon-effect-json")
     _exec("ALTER TABLE game_config_skills ADD COLUMN trigger_keywords TEXT DEFAULT NULL", "v2-skill-trigger-keywords")
 
+    # ── Task 26: Scholar Spells ───────────────────────────────────────────────
+    _exec("""
+        CREATE TABLE IF NOT EXISTS game_config_spells (
+            key             TEXT PRIMARY KEY,
+            label           TEXT NOT NULL,
+            tier            INTEGER NOT NULL DEFAULT 1,
+            mana_cost       INTEGER NOT NULL DEFAULT 2,
+            spell_type      TEXT NOT NULL DEFAULT 'attack',
+            damage_die      TEXT,
+            heal_die        TEXT,
+            effect_stat     TEXT,
+            effect_type     TEXT,
+            effect_duration INTEGER DEFAULT 1,
+            target_zone     TEXT NOT NULL DEFAULT 'any',
+            aoe             INTEGER NOT NULL DEFAULT 0,
+            description     TEXT,
+            rank2_json      TEXT,
+            rank3_json      TEXT,
+            is_active       INTEGER NOT NULL DEFAULT 1
+        )
+    """, "v2-game-config-spells")
+
+    _exec("""
+        CREATE TABLE IF NOT EXISTS character_spells (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id    INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+            spell_key       TEXT NOT NULL REFERENCES game_config_spells(key),
+            rank            INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(character_id, spell_key)
+        )
+    """, "v2-character-spells")
+
+    _exec("""
+        INSERT OR IGNORE INTO game_config_spells
+            (key, label, tier, mana_cost, spell_type, damage_die, heal_die, effect_stat, effect_type, effect_duration, target_zone, aoe, description, rank2_json, rank3_json) VALUES
+        ('magic_bolt',      'Błysk Magiczny',    1, 2, 'attack',      '2d6', NULL,  NULL,  NULL,       1, 'any',      0, 'Strumień magicznej energii uderzający wroga.',         '{\"mana_cost\":2,\"damage_die\":\"2d8\"}',                              '{\"mana_cost\":1,\"damage_die\":\"3d6\"}'),
+        ('mend_wounds',     'Rana Uleczona',      1, 2, 'heal',        NULL,  '2d6', NULL,  NULL,       1, 'self',     0, 'Magiczne leczenie ran bohatera.',                      '{\"mana_cost\":2,\"heal_die\":\"2d8\"}',                               '{\"mana_cost\":1,\"heal_die\":\"3d6\"}'),
+        ('arcane_shield',   'Tarcza Arkan',       1, 2, 'defense',     NULL,  NULL,  NULL,  NULL,       1, 'self',     0, 'Magiczna tarcza zwiększająca pancerz.',                '{\"mana_cost\":2,\"ac_bonus\":4,\"duration\":1}',                      '{\"mana_cost\":1,\"ac_bonus\":4,\"duration\":2}'),
+        ('sleep',           'Sen',                2, 3, 'effect',      NULL,  NULL,  'WIS', 'sleeping', 1, 'any',      0, 'Wpędza wroga w magiczny sen.',                         '{\"mana_cost\":3,\"effect_duration\":2}',                              '{\"mana_cost\":2,\"effect_duration\":3}'),
+        ('burning_arc',     'Pałająca Ścieżka',  2, 4, 'attack_aoe',  '1d6', NULL,  NULL,  NULL,       1, 'any',      1, 'Łuk ognia trafia wszystkich wrogów.',                  '{\"mana_cost\":4,\"damage_die\":\"1d8\"}',                             '{\"mana_cost\":3,\"damage_die\":\"2d6\"}'),
+        ('drain_life',      'Wysysanie Życia',    3, 3, 'attack',      '2d8', NULL,  NULL,  NULL,       1, 'engaged',  0, 'Wysysa życie wroga, lecząc rzucającego.',              '{\"mana_cost\":3,\"damage_die\":\"2d10\"}',                            '{\"mana_cost\":2,\"damage_die\":\"3d6\",\"heal_pct\":100}'),
+        ('chain_lightning', 'Łańcuch Błyskawic', 4, 5, 'attack_aoe',  '2d6', NULL,  NULL,  NULL,       1, 'any',      0, 'Błyskawica skacząca przez do 3 wrogów.',               NULL,                                                                  NULL),
+        ('stone_skin',      'Kamienna Skóra',     4, 4, 'defense',     NULL,  NULL,  NULL,  NULL,       3, 'self',     0, 'Skóra twardnieje jak kamień.',                         '{\"mana_cost\":4,\"ac_bonus\":5,\"duration\":4}',                      '{\"mana_cost\":2,\"ac_bonus\":6,\"duration\":4}'),
+        ('fireball',        'Kula Ognia',         5, 6, 'attack_aoe',  '3d6', NULL,  NULL,  NULL,       1, 'any',      1, 'Ognista eksplozja niszczy wszystkich wrogów.',         NULL,                                                                  NULL)
+    """, "v2-spells-seed")
+    # ─────────────────────────────────────────────────────────────────────────
+
     _exec("""
         CREATE TABLE IF NOT EXISTS skill_counters (
             player_skill_key TEXT PRIMARY KEY,
