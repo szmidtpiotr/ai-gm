@@ -1381,6 +1381,66 @@ def _ensure_user_llm_settings_mode(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _make_character_first_migration(conn: sqlite3.Connection) -> None:
+    """Task 42: make characters.campaign_id nullable + add status column.
+
+    SQLite cannot ALTER COLUMN to drop NOT NULL, so we recreate the table.
+    Idempotent: checks for 'status' column presence before running.
+    """
+    cursor = conn.execute("PRAGMA table_info(characters)")
+    cols = {row[1] for row in cursor.fetchall()}
+    if "status" in cols:
+        logger.debug("v2_migration_skipped", label="v2-character-first-flow")
+        return
+
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.execute("""
+            CREATE TABLE characters_v42 (
+                id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id           INTEGER,
+                user_id               INTEGER NOT NULL,
+                name                  TEXT NOT NULL,
+                system_id             TEXT NOT NULL,
+                sheet_json            TEXT NOT NULL,
+                location              TEXT,
+                is_active             INTEGER NOT NULL DEFAULT 1,
+                created_at            TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                backstory             TEXT,
+                appearance            TEXT,
+                personality           TEXT,
+                motivation            TEXT,
+                note                  TEXT,
+                gold                  INTEGER NOT NULL DEFAULT 0,
+                gold_gp               INTEGER NOT NULL DEFAULT 0,
+                hero_status           TEXT NOT NULL DEFAULT 'active',
+                visited_location_keys TEXT NOT NULL DEFAULT '[]',
+                status                TEXT NOT NULL DEFAULT 'idle',
+                FOREIGN KEY (campaign_id) REFERENCES campaigns(id),
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        conn.execute("""
+            INSERT INTO characters_v42
+                (id, campaign_id, user_id, name, system_id, sheet_json, location,
+                 is_active, created_at, backstory, appearance, personality, motivation, note,
+                 gold, gold_gp, hero_status, visited_location_keys, status)
+            SELECT id, campaign_id, user_id, name, system_id, sheet_json, location,
+                   is_active, created_at, backstory, appearance, personality, motivation, note,
+                   gold, gold_gp, hero_status, visited_location_keys, 'idle'
+            FROM characters
+        """)
+        conn.execute("DROP TABLE characters")
+        conn.execute("ALTER TABLE characters_v42 RENAME TO characters")
+        conn.commit()
+        logger.info("v2_migration_applied", label="v2-character-first-flow")
+    except Exception as e:
+        logger.error("v2_migration_failed", label="v2-character-first-flow", error=str(e))
+        raise
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+
 def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     """V2 architecture migrations — idempotent, safe to re-run."""
 
@@ -1562,8 +1622,16 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
          40),
         ('dc_scale', 'mechanics', 'Skala trudności',
          'Łatwe zadania to DC 8, standardowe — DC 12, trudne — DC 16, ekstremalne — DC 20, legendarne — powyżej 24. Proficiency bonus +2 jest dodawany automatycznie gdy biegłość umiejętności wynosi 3 lub więcej.',
-         50)
+         50),
+        ('hero_persistence', 'mechanics', 'Twój bohater żyje dalej',
+         'Bohater nie jest przywiązany do jednej kampanii — przeżywa ją i wraca silniejszy. Statystyki, ekwipunek, złoto i umiejętności zostają. Po zakończeniu przygody możesz wybrać nową kampanię, wejść do lochu, lub po prostu odpocząć.',
+         60)
     """, "v2-knowledge-book-seed")
+    # ─────────────────────────────────────────────────────────────────────────
+
+    # ── Task 42: Character-first flow ────────────────────────────────────────
+    _make_character_first_migration(conn)
+
     # ─────────────────────────────────────────────────────────────────────────
 
     _exec("""

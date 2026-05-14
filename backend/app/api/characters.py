@@ -5,7 +5,7 @@ import random
 import re
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.character_creation_config import (
     CREATION_SKILL_POOL,
@@ -615,6 +615,107 @@ def _dict_to_identity_preview(data: dict) -> GeneratedIdentityPreview:
 # Opening scene uses the same unified prompt as narrative turns and /api/gm/chat (fantasy).
 OPENING_SYSTEM_PROMPT = SYSTEM_PROMPT_TEXT
 
+
+# ── Task 42: Character-first flow endpoints ───────────────────────────────────
+
+@router.get("/characters")
+def list_user_characters(user_id: int):
+    """List all characters (heroes) belonging to a user, across all campaigns."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT c.id, c.campaign_id, c.user_id, c.name, c.system_id,
+                   c.sheet_json, c.location, c.is_active, c.created_at, c.status,
+                   cam.title AS campaign_title, cam.status AS campaign_status
+            FROM characters c
+            LEFT JOIN campaigns cam ON cam.id = c.campaign_id
+            WHERE c.user_id = ? AND c.is_active = 1
+            ORDER BY c.created_at DESC
+            """,
+            (user_id,),
+        ).fetchall()
+        heroes = []
+        for row in rows:
+            item = dict(row)
+            try:
+                sheet = json.loads(item.get("sheet_json") or "{}")
+            except Exception:
+                sheet = {}
+            item["sheet_json"] = _strip_hidden_fields(sheet)
+            heroes.append(item)
+        return {"heroes": heroes}
+    finally:
+        conn.close()
+
+
+@router.post("/characters")
+def create_standalone_character(req: dict = Body(...)):
+    """Create a character without a campaign (hero-first flow). campaign_id stays NULL."""
+    user_id = req.get("user_id")
+    name = (req.get("name") or "").strip()
+    system_id = req.get("system_id", "fantasy")
+    sheet_json = req.get("sheet_json") or {}
+
+    if not user_id or not name:
+        raise HTTPException(status_code=400, detail="user_id and name are required")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        user = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        sheet_str = json.dumps(sheet_json, ensure_ascii=False)
+        cur = conn.execute(
+            """
+            INSERT INTO characters
+                (campaign_id, user_id, name, system_id, sheet_json, is_active, status, created_at)
+            VALUES (NULL, ?, ?, ?, ?, 1, 'idle', datetime('now'))
+            """,
+            (int(user_id), name, system_id, sheet_str),
+        )
+        conn.commit()
+        char_id = cur.lastrowid
+        row = conn.execute("SELECT * FROM characters WHERE id = ?", (char_id,)).fetchone()
+        item = dict(row)
+        try:
+            item["sheet_json"] = json.loads(item["sheet_json"])
+        except Exception:
+            item["sheet_json"] = {}
+        return item
+    finally:
+        conn.close()
+
+
+@router.patch("/characters/{character_id}/status")
+def update_character_status(character_id: int, req: dict = Body(...)):
+    """Update hero status: idle | in_campaign | in_dungeon."""
+    status = req.get("status", "idle")
+    campaign_id = req.get("campaign_id")  # set when entering campaign
+    if status not in ("idle", "in_campaign", "in_dungeon"):
+        raise HTTPException(status_code=422, detail="status must be idle | in_campaign | in_dungeon")
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        if campaign_id is not None:
+            conn.execute(
+                "UPDATE characters SET status = ?, campaign_id = ? WHERE id = ?",
+                (status, int(campaign_id), character_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE characters SET status = ? WHERE id = ?",
+                (status, character_id),
+            )
+        conn.commit()
+        return {"ok": True, "status": status}
+    finally:
+        conn.close()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/campaigns/{campaign_id}/characters")
 def list_characters(campaign_id: int):
