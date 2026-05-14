@@ -1483,6 +1483,7 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     _exec("CREATE INDEX IF NOT EXISTS idx_campaign_ideas_category ON campaign_ideas (category, review_status, quality_rating)", "v2-campaign-ideas-idx")
     _exec("ALTER TABLE campaign_ideas ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1", "v2-campaign-ideas-is-active")
     _exec("ALTER TABLE game_config_weapons ADD COLUMN effect_json TEXT DEFAULT NULL", "v2-weapon-effect-json")
+    _exec("ALTER TABLE game_config_skills ADD COLUMN trigger_keywords TEXT DEFAULT NULL", "v2-skill-trigger-keywords")
 
     _exec("""
         CREATE TABLE IF NOT EXISTS skill_counters (

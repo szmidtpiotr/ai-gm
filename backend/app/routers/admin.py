@@ -157,6 +157,7 @@ class SkillPatchReq(BaseModel):
     rank_ceiling: int | None = None
     sort_order: int | None = None
     description: str | None = None
+    trigger_keywords: str | None = None
     force: bool = False
 
 
@@ -168,6 +169,7 @@ class SkillCreateReq(BaseModel):
     rank_ceiling: int = 5
     sort_order: int | None = None
     description: str | None = ""
+    trigger_keywords: str | None = None
 
     @field_validator("sort_order", mode="before")
     @classmethod
@@ -1074,6 +1076,7 @@ def admin_create_skill(req: SkillCreateReq, _: None = Depends(require_admin_toke
             rank_ceiling=req.rank_ceiling,
             sort_order=req.sort_order,
             description=(req.description or "").strip() if req.description is not None else None,
+            trigger_keywords=(req.trigger_keywords or "").strip() or None,
         )
         return {"item": item}
     except ValueError as e:
@@ -1972,6 +1975,7 @@ def admin_patch_skill(key: str, req: SkillPatchReq, _: None = Depends(require_ad
             rank_ceiling=req.rank_ceiling,
             sort_order=req.sort_order,
             description=req.description,
+            trigger_keywords=req.trigger_keywords,
             force=req.force,
         )
         return {"item": item}
