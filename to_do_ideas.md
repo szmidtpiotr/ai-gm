@@ -122,6 +122,10 @@ Currently locked to dark theme. Add a toggle stored in `localStorage`.
 
 ## DONE (reference)
 
+- Scholar Spells (Task 26): spell table, miscast, mana, arcane points, 9 spells seeded (2026-05-15)
+- Dungeon Runs (Task 41): entry/cooldown/scaling/room progression (2026-05-15)
+- Skill Tests (Task 12): roll popup, trigger_keywords, [SKILL_TEST] interception (2026-05-14)
+- weapon effect_json: structured combat effects, condition evaluation (2026-05-14)
 - Smart Entry v3 form-first redesign (2026-05-14)
 - Warsztat moved inside campaign modal, no dropdown needed (2026-05-14)
 - Bank pomysłów (renamed from Warsztaty) (2026-05-14)
