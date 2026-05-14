@@ -1991,6 +1991,48 @@ def create_turn(
         clean_assistant = _repack_narrative(clean_assistant, _narrative_for_cues, _parsed_json)
         validate_roll_cue_name(clean_assistant.strip())
 
+        # ── roll_cue skill test intercept ─────────────────────────────────────
+        # When narrator emits roll_cue:"Roll Arcana d20" (not an attack), convert
+        # it to skill_test_pending so the Roll Popup appears.
+        if _parsed_json and not _skill_pending_narrator:
+            _raw_cue = str(_parsed_json.get("roll_cue") or "").strip()
+            if _raw_cue:
+                import re as _rc_re
+                _cm = _rc_re.match(r"^Roll (.+?) d\d+$", _raw_cue, _rc_re.IGNORECASE)
+                if _cm:
+                    _cue_name = _cm.group(1).strip()
+                    _canonical = resolve_test_name(_cue_name)
+                    if _canonical and not is_attack_test(_canonical):
+                        # It's a skill, not an attack — show Roll Popup
+                        from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+                        import uuid as _uuid3
+                        _char_sh2 = json.loads(character["sheet_json"] or "{}")
+                        _sk2 = _canonical
+                        _skill_pending_narrator = {
+                            "skill_test_id": f"st-{_uuid3.uuid4().hex[:8]}",
+                            "skill_key": _sk2,
+                            "skill_label": _skill_label(_sk2),
+                            "counter": _get_counter(conn, _sk2),
+                            "modifier_breakdown": calc_skill_modifier_info(_char_sh2, _sk2),
+                        }
+                        # Store in session
+                        try:
+                            _gs3 = conn.execute(
+                                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                                (campaign_id,),
+                            ).fetchone()
+                            if _gs3:
+                                _sf3 = json.loads(_gs3["session_flags"] or "{}")
+                                _sf3["pending_skill_test"] = _skill_pending_narrator
+                                _sf3["state"] = "SKILL_TEST_PENDING"
+                                conn.execute(
+                                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                                    (json.dumps(_sf3, ensure_ascii=False), campaign_id),
+                                )
+                                conn.commit()
+                        except Exception as _e3:
+                            logger.warning("roll_cue_session_store_error: %s", str(_e3))
+
         log = create_turn_log(
             conn=conn,
             campaign_id=campaign_id,
