@@ -105,21 +105,26 @@ async function _callAgent(extra = {}) {
     });
 
     typing.remove();
-    if (resp.reply) _appendMsg(resp.reply, "agent");
+    // Strip markdown code blocks from agent reply
+    const cleanReply = (resp.reply || "").replace(/```[\s\S]*?```/g, "").trim();
+    if (cleanReply) _appendMsg(cleanReply, "agent");
     if (resp.questions) _renderQuestions(resp.questions);
     else overlay.querySelector("#se-questions").innerHTML = "";
-    if (resp.draft) _renderDraft(resp.draft);
+    if (resp.draft && Object.keys(resp.draft).length) _renderDraft(resp.draft);
     if (resp.proposed_changes?.length) _renderChanges(resp.proposed_changes);
     if (resp.ready_to_save) {
       overlay.querySelector("#se-save-btn").style.display = "";
     }
     if (resp.db_context) {
-      const info = JSON.stringify(resp.db_context, null, 2);
-      _appendMsg(`Znaleziono w DB:\n${info}`, "agent info");
+      const info = Object.entries(resp.db_context)
+        .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`)
+        .join("\n");
+      _appendMsg(`DB: ${info}`, "agent info");
     }
   } catch (e) {
     typing.remove();
-    _appendMsg(`Błąd: ${e.message}`, "agent error");
+    const msg = typeof e?.message === "string" ? e.message : JSON.stringify(e);
+    _appendMsg(`Błąd: ${msg}`, "agent error");
   } finally {
     sendBtn.disabled = false;
   }
@@ -132,11 +137,16 @@ async function _save() {
       body: JSON.stringify({ session_id: _sessionId }),
     });
     showToast(`Zapisano: ${resp.key}`, "success");
-    _appendMsg(`✓ Rekord "${resp.key}" zapisany.`, "agent success");
+    _appendMsg(`✓ Rekord "${resp.key}" zapisany. Możesz zamknąć asystenta lub stworzyć kolejny rekord.`, "agent success");
     _overlay.querySelector("#se-save-btn").style.display = "none";
+    // Notify any listening sections that content was saved (for auto-refresh)
+    window.dispatchEvent(new CustomEvent("smart-entry-saved", {
+      detail: { table: resp.table || _currentTable, key: resp.key },
+    }));
     _sessionId = _genId();
   } catch (e) {
-    showToast(e.message || "Błąd zapisu.", "error");
+    const msg = typeof e?.message === "string" ? e.message : JSON.stringify(e);
+    showToast(msg || "Błąd zapisu.", "error");
   }
 }
 

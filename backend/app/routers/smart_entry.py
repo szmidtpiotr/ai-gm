@@ -649,7 +649,7 @@ def smart_entry_save(
     except sqlite3.IntegrityError as e:
         raise HTTPException(status_code=409, detail=f"Record already exists or constraint failed: {e}")
 
-    return {"ok": True, "key": saved_key}
+    return {"ok": True, "key": saved_key, "table": table}
 
 
 @router.post("/apply-change")

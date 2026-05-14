@@ -421,7 +421,7 @@ async function _renderLocations(container) {
       },
       async onDelete(row, { force } = {}) {
         try {
-          await adminFetch(`/api/locations/admin/locations/${row.key}${force ? "?force=true" : ""}`, { method: "DELETE" });
+          await adminFetch(`/api/locations/${row.key}${force ? "?force=true" : ""}`, { method: "DELETE" });
           showToast("Usunięto.", "success");
           await load();
         } catch (e) {
