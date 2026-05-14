@@ -3199,6 +3199,20 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .se-multi-option { display: flex; align-items: center; gap: 4px; font-size: 0.8rem; cursor: pointer; }
 /* Hide old preview col if still in DOM */
 .smart-entry-preview-col { display: none; }
+/* Textarea field in smart entry form */
+.se-field-textarea { width: 100%; min-height: 64px; resize: vertical; font-size: 0.84rem; }
+
+/* Camp plan tab */
+.camp-plan-scroll { padding: 8px 0; }
+.camp-plan-roadmap { font-size: 0.82rem; color: var(--text-secondary); margin: 4px 0 10px; line-height: 1.5; }
+.camp-plan-section-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 8px 0 4px; }
+.camp-plan-list { margin: 0 0 6px 16px; padding: 0; font-size: 0.82rem; color: var(--text-secondary); }
+.camp-plan-list li { margin-bottom: 2px; }
+.camp-plan-hooks-details { margin-top: 8px; }
+.camp-plan-hooks-details summary { outline: none; }
+.camp-scene-num { display: inline-block; width: 20px; flex-shrink: 0; font-weight: 700; }
+.camp-scene-current { background: rgba(245,158,11,0.08); border-left: 3px solid var(--accent-gold); padding-left: 6px; border-radius: 3px; }
+.camp-scene-item { display: flex; gap: 4px; align-items: flex-start; padding: 3px 0; font-size: 0.83rem; }
 
 /* Smart entry question cards */
 .se-question-block { margin-bottom: 12px; }

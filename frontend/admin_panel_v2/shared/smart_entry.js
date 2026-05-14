@@ -206,6 +206,11 @@ function _buildInput(field) {
       lbl.appendChild(document.createTextNode(" " + val));
       el.appendChild(lbl);
     });
+  } else if (field.type === "textarea") {
+    el = document.createElement("textarea");
+    el.className = "field-input se-field-textarea";
+    el.rows = 3;
+    if (field.placeholder) el.placeholder = field.placeholder.slice(0, 120);
   } else {
     el = document.createElement("input");
     el.type = "text";
