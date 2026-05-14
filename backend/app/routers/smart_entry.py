@@ -90,7 +90,7 @@ def _assert_writable(table: str) -> None:
 SCHEMA_DESCRIPTORS: dict[str, dict] = {
     "game_config_weapons": {
         "required": ["key", "label", "damage_die", "weapon_type", "linked_stat"],
-        "optional": ["two_handed", "value_gp", "allowed_classes", "description", "note", "targeting", "weight_kg"],
+        "optional": ["two_handed", "value_gp", "allowed_classes", "description", "note", "targeting", "weight_kg", "effect_json"],
         "fields": {
             "key": {
                 "type": "text",
@@ -169,6 +169,17 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
                 "type": "number",
                 "question": "Waga w kilogramach (np. 0.5, 2.0)?",
                 "min": 0,
+            },
+            "effect_json": {
+                "type": "effect_builder",
+                "question": (
+                    "Efekty bojowe przy trafieniu (JSON). Schemat:\n"
+                    '{"effects":[{"type":"extra_damage","dice":"1d6","damage_type":"fire"}]}\n'
+                    "lub: on_hit_save z on_fail: extra_damage albo apply_condition.\n"
+                    "damage_type: fire|cold|poison|lightning|magic|physical\n"
+                    "apply_condition keys: poisoned|burning|bleeding|stunned|blinded|frightened|cursed\n"
+                    "Zostaw null jeśli brak efektów specjalnych."
+                ),
             },
         },
     },
@@ -368,9 +379,19 @@ ZASADY:
 - number: liczba (nie string)
 - 'key' (slug): generuj z 'label': małe litery, polskie znaki → ascii, spacje → _, bez specjalnych
 - 'description': ZAWSZE generuj klimatyczny opis dla GM (wygląd, historia, atmosfera, 2-3 zdania)
-- 'note': ZAWSZE generuj specjalne zdolności/reguły gdy pasują (np. trucizna, ogień, efekt obszarowy)
+- 'note': ZAWSZE generuj krótki opis efektów dla GM (co czuje bohater, jak GM powinien to opisać)
 - Nie pisz "zapisałem" ani "utworzyłem rekord" — tylko wypełniasz formularz
 - Jeśli admin zmienia konkretne pole, zaktualizuj tylko to pole i wróć cały current_draft
+
+POLE effect_json (MECHANIKA BOJOWA — tylko dla broni):
+Generuj jako JSON string gdy broń ma specjalne efekty. Dozwolone typy:
+  extra_damage: {"type":"extra_damage","dice":"1d6","damage_type":"fire|cold|poison|lightning|magic|physical"}
+  on_hit_save:  {"type":"on_hit_save","stat":"CON|STR|DEX|INT|WIS|CHA","dc":12,
+                  "on_fail":{"type":"extra_damage","dice":"1d4","damage_type":"poison"}
+                             lub {"type":"apply_condition","condition_key":"poisoned|burning|bleeding|stunned|blinded|frightened|cursed","duration_rounds":2}}
+Przykład ognistego miecza: {"effects":[{"type":"extra_damage","dice":"1d6","damage_type":"fire"}]}
+Przykład zatrutego sztyletu: {"effects":[{"type":"on_hit_save","stat":"CON","dc":12,"on_fail":{"type":"apply_condition","condition_key":"poisoned","duration_rounds":3}}]}
+Zostaw null jeśli broń nie ma efektów specjalnych.
 """
 
 
@@ -472,6 +493,7 @@ def smart_entry_schema(table: str, _: None = Depends(_require_admin)):
         "drop_chance": "Szansa łupu", "loot_table_key": "Tabela łupów",
         "description": "Opis (dla GM)", "note": "Zdolności specjalne",
         "targeting": "Rodzaj celowania", "weight_kg": "Waga (kg)",
+        "effect_json": "Efekty bojowe (JSON)",
     }
 
     fields = []
