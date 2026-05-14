@@ -230,6 +230,7 @@ async function _renderWeapons(container, panel) {
       { key: "weight_kg",     label: "Waga (kg)",       type: "number",  editable: true },
       { key: "description",   label: "Opis",            editable: true, popup: true },
       { key: "note",          label: "Notatka",         editable: true, popup: true },
+      { key: "effect_json",   label: "Efekty bojowe",   editable: true, popup: true },
       { key: "is_active",     label: LABELS.isActive,   type: "boolean", editable: true },
       { key: "locked_at",     label: LABELS.locked,     type: "locked",  editable: false },
     ];
@@ -276,7 +277,12 @@ function _openWeaponModal(row, onDone) {
     <label class="modal-field"><span>Zasięg (m)</span><input name="range_m" type="number" value="${row?.range_m??0}" min="0"/></label>
     <label class="modal-field"><span>Wartość (gp)</span><input name="value_gp" type="number" value="${row?.value_gp??0}" min="0"/></label>
     <label class="modal-field"><span>Waga (kg)</span><input name="weight_kg" type="number" value="${row?.weight_kg??0}" step="0.1" min="0"/></label>
-    <label class="modal-field"><span>Opis</span><textarea name="description" rows="3">${_esc(row?.description??"")}</textarea></label>
+    <label class="modal-field"><span>Opis (dla GM)</span><textarea name="description" rows="3">${_esc(row?.description??"")}</textarea></label>
+    <label class="modal-field"><span>Notatka / zdolności specjalne</span><textarea name="note" rows="2">${_esc(row?.note??"")}</textarea></label>
+    <label class="modal-field"><span>Efekty bojowe (effect_json)</span>
+      <textarea name="effect_json" rows="4" placeholder='np. {"effects":[{"type":"extra_damage","dice":"1d6","damage_type":"fire"}]}'>${_esc(row?.effect_json??"")}</textarea>
+      <span style="font-size:0.72rem;color:var(--text-muted)">Typy: extra_damage, on_hit_save. Zostaw puste jeśli brak efektów.</span>
+    </label>
     <div class="modal-field"><span>Dostępne klasy</span><div class="checkbox-group">${classes.map(c=>`<label class="modal-checkbox-row"><input type="checkbox" name="classes_${c}" ${(row?.allowed_classes??[]).includes(c)?"checked":""}><span>${c}</span></label>`).join("")}</div></div>
     <label class="modal-checkbox-row"><input name="two_handed" type="checkbox" ${row?.two_handed?"checked":""}><span>Oburęczna</span></label>
     <label class="modal-checkbox-row"><input name="finesse" type="checkbox" ${row?.finesse?"checked":""}><span>Finezja</span></label>
@@ -308,6 +314,8 @@ function _openWeaponModal(row, onDone) {
             value_gp: Number(g("value_gp").value),
             weight_kg: Number(g("weight_kg").value),
             description: g("description").value.trim(),
+            note: g("note").value.trim(),
+            effect_json: g("effect_json").value.trim() || null,
             two_handed: g("two_handed").checked,
             finesse: g("finesse").checked,
             is_active: g("is_active").checked,
