@@ -737,6 +737,87 @@ def update_character_status(character_id: int, req: dict = Body(...)):
 
 # ─────────────────────────────────────────────────────────────────────────────
 
+
+@router.delete("/characters/{character_id}")
+def delete_character(character_id: int, user_id: int):
+    """
+    Soft-delete a hero (sets is_active=0). Ownership verified via user_id.
+    Cannot delete a hero while in_campaign (must leave/end campaign first).
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT id, user_id, status, name, campaign_id FROM characters WHERE id = ? AND is_active = 1",
+            (character_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Hero not found")
+        if int(row["user_id"]) != int(user_id):
+            raise HTTPException(status_code=403, detail="Cannot delete another user's hero")
+        if row["status"] == "in_campaign":
+            raise HTTPException(
+                status_code=409,
+                detail="Hero is currently in an active campaign. End or leave the campaign first."
+            )
+        conn.execute("UPDATE characters SET is_active = 0 WHERE id = ?", (character_id,))
+        conn.commit()
+        return {"ok": True, "deleted_id": character_id, "name": row["name"]}
+    finally:
+        conn.close()
+
+
+@router.post("/characters/{character_id}/assign-campaign")
+def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
+    """
+    Assign an existing standalone hero to a campaign.
+    Copies hero stats to a new character record for that campaign,
+    or re-links if the campaign has no character yet.
+    """
+    campaign_id = req.get("campaign_id")
+    user_id = req.get("user_id")
+    if not campaign_id or not user_id:
+        raise HTTPException(status_code=400, detail="campaign_id and user_id required")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        hero = conn.execute(
+            "SELECT * FROM characters WHERE id = ? AND user_id = ? AND is_active = 1",
+            (character_id, user_id),
+        ).fetchone()
+        if not hero:
+            raise HTTPException(status_code=404, detail="Hero not found or not yours")
+
+        campaign = conn.execute(
+            "SELECT id, status, title FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        if campaign["status"] not in ("active", "pending"):
+            raise HTTPException(status_code=409, detail="Campaign is not active")
+
+        # Check campaign has no character yet
+        existing = conn.execute(
+            "SELECT id FROM characters WHERE campaign_id = ? AND is_active = 1", (campaign_id,)
+        ).fetchone()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="Campaign already has a character. Each campaign supports one hero."
+            )
+
+        # Link hero to campaign
+        conn.execute(
+            "UPDATE characters SET campaign_id = ?, status = 'in_campaign' WHERE id = ?",
+            (int(campaign_id), character_id),
+        )
+        conn.commit()
+        return {"ok": True, "character_id": character_id, "campaign_id": campaign_id}
+    finally:
+        conn.close()
+
+
 @router.get("/campaigns/{campaign_id}/characters")
 def list_characters(campaign_id: int):
     conn = sqlite3.connect(DB_PATH)

@@ -414,9 +414,14 @@ function renderHeroes(heroes) {
         const status = hero.status || 'idle';
         const statusLabel = { idle: 'Wolny', in_campaign: 'W kampanii', in_dungeon: 'W lochu' }[status] || status;
         const campaignTitle = hero.campaign_title || '';
+        const canDelete = status !== 'in_campaign';
+
+        const wrapper = document.createElement('div');
+        wrapper.style.cssText = 'position:relative;display:flex;align-items:stretch;margin-bottom:8px';
 
         const card = document.createElement('div');
         card.className = 'campaign-card';
+        card.style.flex = '1';
         card.innerHTML = `
             <div class="campaign-card__icon"><span>⚔</span></div>
             <div class="campaign-card__content">
@@ -427,7 +432,31 @@ function renderHeroes(heroes) {
             <span class="campaign-card__arrow" style="font-size:0.75em;opacity:0.7">${_esc(statusLabel)}</span>
         `;
         card.addEventListener('click', () => selectHero(hero));
-        list.appendChild(card);
+
+        // Delete button
+        if (canDelete) {
+            const delBtn = document.createElement('button');
+            delBtn.style.cssText = 'background:#3a1212;border:none;color:#c94a4a;padding:0 14px;cursor:pointer;border-radius:0 var(--radius-md) var(--radius-md) 0;font-size:1.1rem;';
+            delBtn.title = 'Usuń bohatera';
+            delBtn.textContent = '🗑';
+            delBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm(`Usunąć bohatera "${hero.name}"? Ta operacja jest nieodwracalna.`)) return;
+                try {
+                    await apiRequest('DELETE', `/characters/${hero.id}?user_id=${currentUser.id}`);
+                    showToast('Bohater usunięty', 'success');
+                    await loadHeroes();
+                } catch (err) {
+                    showToast(err.message || 'Błąd usuwania', 'error');
+                }
+            });
+            wrapper.appendChild(card);
+            wrapper.appendChild(delBtn);
+        } else {
+            wrapper.appendChild(card);
+        }
+
+        list.appendChild(wrapper);
     });
 }
 
@@ -617,8 +646,34 @@ async function selectCampaign(campaign) {
         if (myCharacter) {
             characterData = myCharacter;
             await enterGame(campaign);
+        } else if (currentHero && currentHero.status === 'idle' && !currentHero.campaign_id) {
+            // Hero is unassigned — offer to bring them into this campaign
+            const confirmed = confirm(
+                `Przypisać bohatera "${currentHero.name}" do kampanii "${campaign.title || ''}"?\n\nBohater wejdzie do tej kampanii i zachowa swoje statystyki.`
+            );
+            if (confirmed) {
+                try {
+                    await apiRequest('POST', `/characters/${currentHero.id}/assign-campaign`, {
+                        campaign_id: campaign.id,
+                        user_id: currentUser.id,
+                    });
+                    // Reload character data
+                    const refetch = await apiRequest('GET', `/campaigns/${campaign.id}/characters`);
+                    const assigned = (refetch.characters || []).find(c => c.id === currentHero.id);
+                    if (assigned) {
+                        characterData = assigned;
+                        currentHero = assigned;
+                        await enterGame(campaign);
+                        return;
+                    }
+                } catch (err) {
+                    showToast(err.message || 'Nie można przypisać bohatera', 'error');
+                }
+            }
+            // Fall through to wizard if declined or error
+            startCharacterWizard();
         } else {
-            // No character for this user - start creation wizard
+            // No character — start creation wizard
             startCharacterWizard();
         }
     } catch (error) {
