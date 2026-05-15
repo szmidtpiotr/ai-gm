@@ -456,6 +456,18 @@
         <div class="settings-header__ornament"></div>
       </header>
 
+      <!-- Quick-nav at top of settings panel -->
+      <div class="settings-nav-mini">
+        <button type="button" class="settings-nav-mini-btn" id="go-to-campaigns-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          Kampanie
+        </button>
+        <button type="button" class="settings-nav-mini-btn" id="go-to-heroes-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+          Postacie
+        </button>
+      </div>
+
       <div class="settings-panel__content">
 
         <!-- Appearance Section -->
@@ -578,22 +590,7 @@
           </div>
         </section>
 
-        <!-- Navigation -->
-        <div class="settings-divider">
-          <span class="settings-divider__ornament">◆</span>
-        </div>
-
-        <section class="settings-group">
-          <button type="button" class="settings-nav-btn" id="go-to-campaigns-btn">
-            <span class="settings-nav-btn__icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 12H5M12 19l-7-7 7-7"/>
-              </svg>
-            </span>
-            <span class="settings-nav-btn__text">Wybierz kampanię</span>
-            <span class="settings-nav-btn__arrow">›</span>
-          </button>
-        </section>
+        <!-- Navigation moved to top mini-nav -->
 
         <!-- Admin Section (hidden by default) -->
         <div class="settings-divider settings-divider--danger" id="admin-settings-divider" style="display: none;">

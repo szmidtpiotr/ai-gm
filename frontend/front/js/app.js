@@ -473,11 +473,11 @@ function renderHeroes(heroes) {
             delBtn.textContent = '🗑';
             delBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                const input = window.prompt(`Aby usunąć bohatera "${hero.name}", wpisz słowo DELETE.\nTa operacja jest nieodwracalna.`);
-                if (input !== 'DELETE') return;
+                const confirmed = await showDeleteHeroModal(hero.name);
+                if (!confirmed) return;
                 try {
                     await apiRequest('DELETE', `/characters/${hero.id}?user_id=${currentUser.id}`);
-                    showToast('Bohater usunięty', 'success');
+                    showToast('Bohater i powiązane kampanie usunięte', 'success');
                     await loadHeroes();
                 } catch (err) {
                     showToast(err.message || 'Błąd usuwania', 'error');
@@ -1096,37 +1096,50 @@ function _renderStep4(c) {
     const bonds     = p.bonds     || [{description:p.bond||'',type:'ideal'},{description:'',type:'ideal'}];
     const weaknesses= p.weaknesses|| [{description:p.flaw||'',type:'flaw'},{description:'',type:'flaw'}];
 
+    const _mkSelect = (id, types, labels, val) =>
+      `<select class="wiz-identity-type" id="${id}">
+        ${types.map(t=>`<option value="${t}"${val===t?' selected':''}>${labels[t]||t}</option>`).join('')}
+       </select>`;
+
     const bondsHtml = bonds.slice(0,2).map((b,i) => `
-        <div class="wizard-bond-row">
-            ${_typeSelect(`wiz-bond-type-${i}`, BOND_TYPES, BOND_TYPE_LABELS, b.type||'ideal')}
-            <textarea id="wiz-bond-${i}" rows="2" class="wizard-bond-text">${_esc(b.description||'')}</textarea>
+        <div class="wiz-identity-pair">
+          <div class="wiz-identity-pair-header">
+            ${_mkSelect(`wiz-bond-type-${i}`, BOND_TYPES, BOND_TYPE_LABELS, b.type||'ideal')}
+          </div>
+          <textarea id="wiz-bond-${i}" rows="2" class="wiz-identity-textarea"
+            placeholder="Opisz więź…">${_esc(b.description||'')}</textarea>
         </div>`).join('');
 
     const weakHtml = weaknesses.slice(0,2).map((w,i) => `
-        <div class="wizard-bond-row">
-            ${_typeSelect(`wiz-weak-type-${i}`, WEAKNESS_TYPES, WEAKNESS_TYPE_LABELS, w.type||'flaw')}
-            <textarea id="wiz-weak-${i}" rows="2" class="wizard-bond-text">${_esc(w.description||'')}</textarea>
+        <div class="wiz-identity-pair">
+          <div class="wiz-identity-pair-header">
+            ${_mkSelect(`wiz-weak-type-${i}`, WEAKNESS_TYPES, WEAKNESS_TYPE_LABELS, w.type||'flaw')}
+          </div>
+          <textarea id="wiz-weak-${i}" rows="2" class="wiz-identity-textarea"
+            placeholder="Opisz słabość…">${_esc(w.description||'')}</textarea>
         </div>`).join('');
 
     c.innerHTML = `
-        <div class="wizard-form">
-            <div class="form-field">
-                <label>Wygląd</label>
-                <textarea id="wiz-appearance" rows="3">${_esc(p.appearance)}</textarea>
-            </div>
-            <div class="form-field">
-                <label>Osobowość</label>
-                <textarea id="wiz-personality" rows="3">${_esc(p.personality)}</textarea>
-            </div>
-            <div class="form-field">
-                <label>Więzi</label>
-                ${bondsHtml}
-            </div>
-            <div class="form-field">
-                <label>Słabości</label>
-                ${weakHtml}
-            </div>
-            <p class="wizard-hint">🔒 GM zna też to, o czym sam nie wiesz. Objawi się w swoim czasie.</p>
+        <div class="wiz-identity-grid">
+          <div class="wiz-identity-card">
+            <div class="wiz-identity-label">Wygląd</div>
+            <textarea id="wiz-appearance" rows="3" class="wiz-identity-textarea"
+              placeholder="Jak wygląda twój bohater?">${_esc(p.appearance)}</textarea>
+          </div>
+          <div class="wiz-identity-card">
+            <div class="wiz-identity-label">Osobowość</div>
+            <textarea id="wiz-personality" rows="3" class="wiz-identity-textarea"
+              placeholder="Jak zachowuje się twój bohater?">${_esc(p.personality)}</textarea>
+          </div>
+          <div class="wiz-identity-card">
+            <div class="wiz-identity-label">Więzi</div>
+            ${bondsHtml}
+          </div>
+          <div class="wiz-identity-card">
+            <div class="wiz-identity-label">Słabości</div>
+            ${weakHtml}
+          </div>
+          <div class="wiz-identity-hint">GM zna też to, o czym sam nie wiesz. Objawi się w swoim czasie.</div>
         </div>
     `;
 }
@@ -3773,6 +3786,15 @@ function initEventListeners() {
     // Go to campaigns from settings
     elements.btnGoToCampaigns?.addEventListener('click', handleGoToCampaigns);
 
+    // Go to heroes (Postacie) from settings
+    document.getElementById('go-to-heroes-btn')?.addEventListener('click', async () => {
+        closeSettings();
+        currentHero = null;
+        try { sessionStorage.removeItem('aigm_active_session'); } catch {}
+        await loadHeroes();
+        showScreen('heroes');
+    });
+
     // Admin actions (C04-C06)
     elements.btnResetCampaign?.addEventListener('click', handleResetCampaign);
     elements.btnResetCharacter?.addEventListener('click', handleResetCharacter);
@@ -4424,4 +4446,54 @@ function initWorldMap() {
     if (_wmap._ds) { _wmap.pan = { x: e.clientX - _wmap._ds.x, y: e.clientY - _wmap._ds.y }; _wmRender(); }
   });
   window.addEventListener('mouseup', () => { _wmap._ds = null; });
+}
+
+// ── Custom DELETE hero confirmation modal ────────────────────────────────────
+
+function showDeleteHeroModal(heroName) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'delete-modal-overlay';
+    overlay.innerHTML = `
+      <div class="delete-modal" role="dialog" aria-modal="true">
+        <div class="delete-modal__header">
+          <span class="delete-modal__icon">☠</span>
+          <span class="delete-modal__title">Nieodwracalne usunięcie</span>
+        </div>
+        <div class="delete-modal__body">
+          <div class="delete-modal__hero-name">${escapeHtml(heroName)}</div>
+          <p class="delete-modal__desc">
+            Bohater oraz wszystkie jego kampanie zostaną trwale usunięte.<br>
+            Tej operacji nie można cofnąć.
+          </p>
+          <div class="delete-modal__label">Wpisz DELETE aby potwierdzić</div>
+          <input type="text" class="delete-modal__input" id="del-confirm-input"
+            placeholder="DELETE" autocomplete="off" spellcheck="false"/>
+        </div>
+        <div class="delete-modal__footer">
+          <button class="delete-modal__btn delete-modal__btn--cancel" id="del-cancel">Anuluj</button>
+          <button class="delete-modal__btn delete-modal__btn--confirm" id="del-confirm" disabled>Usuń na zawsze</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    const input = overlay.querySelector('#del-confirm-input');
+    const confirmBtn = overlay.querySelector('#del-confirm');
+    const cancelBtn = overlay.querySelector('#del-cancel');
+
+    setTimeout(() => input.focus(), 50);
+
+    input.addEventListener('input', () => {
+      const ok = input.value === 'DELETE';
+      confirmBtn.disabled = !ok;
+      input.classList.toggle('valid', ok);
+    });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !confirmBtn.disabled) { overlay.remove(); resolve(true); }
+      if (e.key === 'Escape') { overlay.remove(); resolve(false); }
+    });
+    confirmBtn.addEventListener('click', () => { overlay.remove(); resolve(true); });
+    cancelBtn.addEventListener('click', () => { overlay.remove(); resolve(false); });
+    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
+  });
 }
