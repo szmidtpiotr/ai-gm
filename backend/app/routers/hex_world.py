@@ -361,3 +361,66 @@ def get_player_map(campaign_id: int, character_id: int = 0):
         }
     finally:
         conn.close()
+
+
+# ── Chain travel endpoint ─────────────────────────────────────────────────────
+
+class HexTravelReq(BaseModel):
+    character_id: int
+    destination_q: int
+    destination_r: int
+
+
+@router.post("/campaigns/{campaign_id}/hex-travel")
+def hex_chain_travel(campaign_id: int, req: HexTravelReq):
+    """
+    Chain travel to a destination hex via A* pathfinding.
+    Rolls encounters per hex along the route.
+    Returns: travel result including narrative context for the narrator.
+    """
+    import json as _json
+    from app.services.hex_travel_service import resolve_chain_travel
+
+    conn = _get_db()
+    try:
+        # Get character sheet
+        char = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
+            (req.character_id, campaign_id),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="Character not found")
+        sheet = _json.loads(char["sheet_json"] or "{}")
+
+        # Get current hex from session_flags
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        flags = _json.loads((gs["session_flags"] if gs else None) or "{}")
+        current_hex_dict = flags.get("current_hex")
+
+        if current_hex_dict:
+            from_hex = (int(current_hex_dict["q"]), int(current_hex_dict["r"]))
+        else:
+            # No hex position yet: place player at origin so pathfinding from (0,0)
+            # or use destination directly if no hexes built yet (first placement)
+            origin_exists = conn.execute(
+                "SELECT 1 FROM world_hexes WHERE q=0 AND r=0 AND is_active=1"
+            ).fetchone()
+            from_hex = (0, 0) if origin_exists else (req.destination_q, req.destination_r)
+
+        to_hex = (req.destination_q, req.destination_r)
+
+        result = resolve_chain_travel(
+            campaign_id=campaign_id,
+            character_id=req.character_id,
+            from_hex=from_hex,
+            to_hex=to_hex,
+            character_sheet=sheet,
+            conn=conn,
+        )
+
+        return result
+    finally:
+        conn.close()
