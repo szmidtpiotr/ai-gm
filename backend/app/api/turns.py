@@ -1307,8 +1307,8 @@ def _require_gm_plan_before_narrative_llm(
     conn: sqlite3.Connection, campaign_id: int, campaign: sqlite3.Row
 ) -> None:
     """
-    T05: don't run player→LLM narrative until campaigns.gm_plan_json is substantive,
-    but only when there are no narrative turns yet (new campaign / plan failure).
+    T05: ensure gm_plan_json is ready before running the narrative LLM.
+    If plan is missing, auto-generate it now (on-demand, first turn triggers it).
     """
     from app.services.gm_plan_schema import gm_plan_is_ready
 
@@ -1320,13 +1320,51 @@ def _require_gm_plan_before_narrative_llm(
         return
     if _narrative_turn_count(conn, campaign_id) > 0:
         return
-    raise HTTPException(
-        status_code=409,
-        detail=(
-            "Plan kampanii MG nie jest jeszcze gotowy. Poczekaj na zakończenie generacji po utworzeniu postaci "
-            "lub poproś właściciela o ponowienie: POST /api/campaigns/{id}/gm-plan/generate-initial?user_id=…"
-        ),
-    )
+
+    # Plan not ready and no turns yet — auto-generate now
+    try:
+        from app.services.gm_plan_generation_service import generate_initial_gm_plan_with_retries
+        from app.services.user_llm_settings import get_user_llm_settings_full
+
+        # Find the character for this campaign to build char summary
+        char_row = conn.execute(
+            "SELECT user_id, name, sheet_json, location FROM characters WHERE campaign_id = ? AND is_active = 1 LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not char_row:
+            return  # no character yet, skip
+
+        user_id = int(char_row["user_id"] or 0)
+        llm_config = get_user_llm_settings_full(user_id)
+        model = llm_config.get("model") or "gemma3:1b"
+
+        import json as _j
+        sheet = _j.loads(char_row["sheet_json"] or "{}")
+        archetype = str(sheet.get("archetype", "warrior")).lower()
+        archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
+        stats = sheet.get("stats") or {}
+        stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
+        char_summary = (
+            f"Postać: {char_row['name'] or 'Bohater'}, Archetyp: {archetype_label}"
+            + (f", Statystyki: {stat_lines}" if stat_lines else "")
+            + f", Lokalizacja: {char_row['location'] or 'nieznane miejsce'}."
+        )
+        generate_initial_gm_plan_with_retries(
+            conn,
+            campaign_id=campaign_id,
+            campaign_title=str(campaign["title"] or f"Kampania {campaign_id}"),
+            campaign_language="pl",
+            system_id="fantasy",
+            char_summary=char_summary,
+            user_id=user_id,
+            model=model,
+            llm_config=llm_config,
+            max_attempts=2,
+        )
+        logger.info("gm_plan_auto_generated_on_first_turn", campaign_id=campaign_id)
+    except Exception as _plan_err:
+        logger.warning("gm_plan_auto_generation_failed", campaign_id=campaign_id, error=str(_plan_err))
+        # Don't block — let the turn proceed without a plan rather than permanent error
 
 
 def get_next_turn_number(conn: sqlite3.Connection, campaign_id: int) -> int:

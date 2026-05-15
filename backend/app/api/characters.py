@@ -816,100 +816,22 @@ def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
         _ensure_game_session(conn, int(campaign_id))
         conn.commit()
 
-        # Trigger GM plan + opening scene generation in background
-        # (non-fatal: campaign is playable without it, plan generates lazily)
-        opening_message = None
+        # Place on starting hex (fast — no LLM call)
+        # GM plan + opening scene will be generated on first turn (lazy, via _require_gm_plan)
         try:
-            sheet = json.loads(hero["sheet_json"] or "{}")
-            from app.services.gm_plan_schema import gm_plan_is_ready
-            from app.services.gm_plan_generation_service import generate_initial_gm_plan_with_retries
-            from app.services.campaign_plan_service import generate_v2_campaign_plan
-            from app.services.llm_service import generate_chat
-            from app.services.user_llm_settings import get_user_llm_settings_full
-
-            plan_raw = conn.execute(
-                "SELECT gm_plan_json FROM campaigns WHERE id = ?", (int(campaign_id),)
+            from app.services.hex_travel_service import resolve_starting_hex
+            gs_ch = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (int(campaign_id),),
             ).fetchone()
-            already_ready = gm_plan_is_ready(plan_raw["gm_plan_json"] if plan_raw else None)
-            no_turns = not conn.execute(
-                "SELECT 1 FROM campaign_turns WHERE campaign_id = ? LIMIT 1", (int(campaign_id),)
-            ).fetchone()
-
-            if not already_ready and no_turns:
-                llm_config = get_user_llm_settings_full(int(user_id))
-                model = llm_config.get("model") or "gemma3:1b"
-                identity_block = sheet.get("identity") or {}
-                char_name = hero["name"] or "Bohater"
-                archetype = str(sheet.get("archetype", "warrior")).lower()
-                archetype_label = "Uczony" if archetype == "scholar" else "Wojownik"
-                stats = sheet.get("stats") or {}
-                stat_lines = ", ".join(f"{k}:{v}" for k, v in stats.items()) if stats else ""
-                char_summary = (
-                    f"Postać: {char_name}, Archetyp: {archetype_label}"
-                    + (f", Statystyki: {stat_lines}" if stat_lines else "")
-                    + f", Lokalizacja: {hero['location'] or 'nieznane miejsce'}."
-                )
-
-                has_v2 = bool(identity_block.get("bonds") or identity_block.get("weaknesses"))
-                if has_v2:
-                    gm_ready, _ = generate_v2_campaign_plan(
-                        conn, campaign_id=int(campaign_id),
-                        character_data={"name": char_name, "archetype": archetype,
-                                        "identity": identity_block, "gm_only": sheet.get("gm_only") or {}},
-                        model=model, llm_config=llm_config, max_attempts=2,
-                    )
-                else:
-                    gm_ready, _ = generate_initial_gm_plan_with_retries(
-                        conn, campaign_id=int(campaign_id),
-                        campaign_title=str(campaign["title"] or f"Kampania {campaign_id}"),
-                        campaign_language="pl", system_id="fantasy",
-                        char_summary=char_summary, user_id=int(user_id),
-                        model=model, llm_config=llm_config, max_attempts=3,
-                    )
-
-                if gm_ready:
-                    opening_prompt = (
-                        f"{char_summary}\n\nTo jest pierwsza chwila przygody. "
-                        "Zacznij sesję od klimatycznego opisu miejsca. Nie pytaj gracza o plany."
-                    )
-                    opening_message = (generate_chat(
-                        messages=[{"role": "system", "content": OPENING_SYSTEM_PROMPT},
-                                   {"role": "user", "content": opening_prompt}],
-                        model=model, llm_config=llm_config,
-                    ) or "").strip() or None
-                    if opening_message:
-                        next_t = int((conn.execute(
-                            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
-                            (int(campaign_id),),
-                        ).fetchone()[0]) or 1)
-                        conn.execute(
-                            """INSERT INTO campaign_turns
-                               (campaign_id, character_id, turn_number, user_text, route, assistant_text)
-                               VALUES (?,?,?,?,?,?)""",
-                            (int(campaign_id), character_id, next_t, "", "narrative", opening_message),
-                        )
-                        conn.commit()
-
-                        # Place on starting hex
-                        try:
-                            from app.services.hex_travel_service import resolve_starting_hex
-                            gs_ch = conn.execute(
-                                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-                                (int(campaign_id),),
-                            ).fetchone()
-                            _fc = json.loads((gs_ch["session_flags"] if gs_ch else None) or "{}")
-                            if not _fc.get("current_hex"):
-                                resolve_starting_hex(int(campaign_id), character_id,
-                                                     hero["location"] or None, conn)
-                        except Exception:
-                            pass
+            _fc = json.loads((gs_ch["session_flags"] if gs_ch else None) or "{}")
+            if not _fc.get("current_hex"):
+                resolve_starting_hex(int(campaign_id), character_id,
+                                     hero["location"] or None, conn)
         except Exception as e:
-            logger.warning("[assign_campaign] gm_plan/opening failed (non-fatal): %s", str(e))
+            logger.warning("[assign_campaign] starting hex failed (non-fatal): %s", str(e))
 
-        return {
-            "ok": True, "character_id": character_id, "campaign_id": campaign_id,
-            "opening_message": opening_message,
-        }
+        return {"ok": True, "character_id": character_id, "campaign_id": campaign_id}
     finally:
         conn.close()
 
