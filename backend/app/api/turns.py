@@ -2009,7 +2009,7 @@ def create_turn(
 
         clean_assistant = COMBAT_START_RE.sub("", assistant_text).rstrip()
         # [DUNGEON_CLEAR:key] — strip tag and record completion
-        _dungeon_clear_result = _handle_dungeon_clear_tag(campaign_id, character_id, clean_assistant)
+        _dungeon_clear_result = _handle_dungeon_clear_tag(campaign_id, payload.character_id, clean_assistant)
         clean_assistant = DUNGEON_CLEAR_RE.sub("", clean_assistant).rstrip()
         clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
         _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
@@ -3128,18 +3128,21 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0):
         conn.close()
 
 
+class HexTravelPayload(BaseModel):
+    character_id: int
+    destination_q: int
+    destination_r: int
+
+
 @router.post("/campaigns/{campaign_id}/hex-travel")
-def player_hex_travel(campaign_id: int, payload: dict = None):
+def player_hex_travel(campaign_id: int, payload: HexTravelPayload):
     """Player-initiated hex chain travel."""
     import json as _j, sqlite3 as _sq
     from app.services.hex_travel_service import resolve_chain_travel
-    if payload is None:
-        from fastapi import Body
-        raise HTTPException(status_code=400, detail="body required")
 
-    character_id = int(payload.get("character_id") or 0)
-    dest_q = int(payload.get("destination_q") or 0)
-    dest_r = int(payload.get("destination_r") or 0)
+    character_id = payload.character_id
+    dest_q = payload.destination_q
+    dest_r = payload.destination_r
 
     DB_PATH = "/data/ai_gm.db"
     conn = _sq.connect(DB_PATH)
