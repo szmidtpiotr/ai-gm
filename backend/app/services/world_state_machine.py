@@ -344,6 +344,26 @@ class WorldStateMachine:
         return WSMResult(valid=True)
 
     def _validate_movement(self, flags: dict, params: dict, character_id: int, campaign_id: int) -> WSMResult:
+        # Critical wound blocks ALL movement
+        if self._has_active_condition(character_id, "wound_critical", flags.get("_current_turn", 0)):
+            return WSMResult.blocked("Jesteś zbyt ciężko ranny/a, by się poruszać.")
+
+        # ── Hex-based movement (new model) ────────────────────────────────
+        # If destination is given as hex coords, validate via world_hexes
+        dest_q = params.get("destination_q")
+        dest_r = params.get("destination_r")
+        if dest_q is not None and dest_r is not None:
+            dest_hex = self.conn.execute(
+                "SELECT q, r, hex_type FROM world_hexes WHERE q = ? AND r = ? AND is_active = 1",
+                (int(dest_q), int(dest_r)),
+            ).fetchone()
+            if not dest_hex:
+                return WSMResult.blocked("To miejsce nie istnieje na mapie.")
+            # Actual pathfinding happens in resolve_chain_travel;
+            # WSM just confirms dest hex exists and movement is legal state-wise
+            return WSMResult(valid=True)
+
+        # ── Legacy location-key movement (backward compat) ────────────────
         if "destination_key" not in params:
             return WSMResult.blocked("Wskaż cel podróży.")
 
@@ -355,10 +375,6 @@ class WorldStateMachine:
         current_key = flags.get("current_location_key")
         if current_key and not self._locations_connected(current_key, dest_key):
             return WSMResult.blocked("Nie można tam dotrzeć z tego miejsca.")
-
-        # Critical wound blocks movement
-        if self._has_active_condition(character_id, "wound_critical", flags.get("_current_turn", 0)):
-            return WSMResult.blocked("Jesteś zbyt ciężko ranny/a, by się poruszać.")
 
         return WSMResult(valid=True)
 
