@@ -728,7 +728,7 @@ async function handleNewCampaignWithHero() {
         }
 
         loadingToast?.remove?.();
-        // Go directly to game — opening scene will be generated
+        showToast(`Kampania "${title}" gotowa! Wkraczasz do gry…`, 'success', 3000);
         await enterGame(campaign);
     } catch (err) {
         loadingToast?.remove?.();
@@ -1276,11 +1276,12 @@ async function _wizardFinalizeAndEnter() {
         if (result?.sheet_json) characterData.sheet_json = result.sheet_json;
         await enterGame(currentCampaign);
     } else {
-        // Hero-first flow: hero created standalone → go to heroes screen
+        // Hero-first flow: hero created standalone → go to campaigns chooser
         currentHero = wizardCreatedChar;
-        showToast(`Bohater ${wizardCreatedChar.name} gotowy! Wybierz przygodę.`, 'success');
-        await loadHeroes();
-        showScreen('heroes');
+        if (elements.welcomeUser) elements.welcomeUser.textContent = `Bohater: ${wizardCreatedChar.name}`;
+        showToast(`Bohater ${wizardCreatedChar.name} gotowy! Wybierz przygodę.`, 'success', 3000);
+        await loadCampaigns();
+        showScreen('campaigns');
     }
 }
 
@@ -4239,22 +4240,51 @@ async function _wmExecuteTravel() {
 
     const enc = response.encounter;
     const hours = response.total_hours || 0;
-    const label = t.label;
+    // Build readable destination: use label, fallback to hex type name, never show coords
+    const arrivedHex = response.arrived_hex || {};
+    const arrivedData = response.hex_data || {};
+    const hexTypeName = (_wmap.hexTypes?.[arrivedData.hex_type]?.label) || arrivedData.hex_type || 'nieznane miejsce';
+    const destLabel = t.label || arrivedData.label || hexTypeName;
 
-    let prose = hours > 0
-      ? `Podróżujesz do ${label} (${hours}h drogi).`
-      : `Przybyłeś do ${label}.`;
-    if (enc) prose += ` Na drodze natykasz się na ${enc.enemy_key}!`;
+    // Travel narrative — no coordinates, clean Polish prose
+    let prose;
+    if (hours > 0) {
+      const hStr = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
+      prose = `Podróżujesz do <strong>${escapeHtml(destLabel)}</strong> — droga zajmuje ${hStr} ${hours === 1 ? 'godzinę' : 'godzin'}.`;
+    } else {
+      prose = `Przybyłeś do <strong>${escapeHtml(destLabel)}</strong>.`;
+    }
+    if (arrivedData.atmosphere) {
+      prose += ` <em>${escapeHtml(arrivedData.atmosphere)}</em>`;
+    }
+    if (enc) prose += ` Na drodze natykasz się na wroga!`;
 
-    appendMessage({ role: 'assistant', content: prose, created_at: new Date() });
+    // Append as GM message (innerHTML so bold/em render)
+    const travelBubble = document.createElement('div');
+    travelBubble.className = 'chat-bubble chat-bubble--gm';
+    travelBubble.innerHTML = `<div class="chat-bubble__content">${prose}</div>`;
+    elements.chatMessages.appendChild(travelBubble);
 
-    // If encounter → start combat automatically
+    // Update current hex on map
+    if (arrivedHex.q !== undefined) {
+      _wmap.currentHex = arrivedHex;
+      if (!_wmap.panel.hasAttribute('hidden')) _wmRender();
+    }
+
+    // If encounter → trigger combat via proper COMBAT_START mechanism
     if (enc?.enemy_key) {
-      // Send attack intent to trigger combat start
-      setTimeout(() => sendMessage(`[Napotkałem wroga: ${enc.enemy_key}]`), 300);
+      setTimeout(async () => {
+        try {
+          // Send as structured action that WSM can parse directly
+          await sendMessage(`__ACTION:ATTACK:${enc.enemy_key}`);
+        } catch {
+          await sendMessage(`Natykam się na ${enc.enemy_key} i przygotowuję się do walki.`);
+        }
+      }, 500);
     }
 
     await refreshCharacterData();
+    await pollCombatState();
     scrollToBottom();
   } catch (err) {
     showToast(err.message || 'Błąd podróży', 'error');
@@ -4305,6 +4335,14 @@ function initWorldMap() {
 
   document.getElementById('open-map-btn')?.addEventListener('click', _wmOpen);
   document.getElementById('wmap-close-btn')?.addEventListener('click', _wmClose);
+
+  // Swipe right on map panel to close (mobile)
+  let _swipeStartX = 0;
+  _wmap.panel.addEventListener('touchstart', e => { _swipeStartX = e.touches[0].clientX; }, { passive: true });
+  _wmap.panel.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - _swipeStartX;
+    if (dx > 60) _wmClose(); // swipe right 60px+ → close
+  }, { passive: true });
   document.getElementById('wmap-btn-go')?.addEventListener('click', _wmExecuteTravel);
   document.getElementById('wmap-btn-cancel')?.addEventListener('click', () => {
     _wmap.confirm.setAttribute('hidden', '');
