@@ -506,13 +506,16 @@ async function loadCampaigns() {
 
 function renderCampaigns(campaigns) {
     elements.campaignsList.innerHTML = '';
+    const sectionLabel = document.getElementById('campaigns-section-label');
 
     if (!campaigns || campaigns.length === 0) {
-        elements.campaignsEmpty.style.display = 'block';
+        if (elements.campaignsEmpty) elements.campaignsEmpty.style.display = '';
+        if (sectionLabel) sectionLabel.style.display = 'none';
         return;
     }
 
-    elements.campaignsEmpty.style.display = 'none';
+    if (elements.campaignsEmpty) elements.campaignsEmpty.style.display = 'none';
+    if (sectionLabel) sectionLabel.style.display = '';
 
     campaigns.forEach(campaign => {
         const wrapper = document.createElement('div');
@@ -683,9 +686,54 @@ async function selectCampaign(campaign) {
 }
 
 function showNewCampaignScreen() {
+    // If we already have a hero, skip the title screen entirely
+    if (currentHero && currentHero.id) {
+        handleNewCampaignWithHero();
+        return;
+    }
     elements.campaignNameInput.value = '';
     elements.campaignNameCount.textContent = '0';
     showScreen('newCampaign');
+}
+
+async function handleNewCampaignWithHero() {
+    if (!currentHero || !currentUser?.id) return;
+    const loadingToast = showToast('Tworzę kampanię…', 'info', 0);
+    try {
+        // Auto-generate a working title — GM plan will rename it properly
+        const heroName = currentHero.name || 'Bohater';
+        const title = `Przygoda ${heroName}`;
+        const campaign = await apiRequest('POST', '/campaigns', {
+            title,
+            system_id: 'fantasy',
+            model_id: 'default',
+            owner_user_id: currentUser.id,
+            language: 'pl',
+            mode: 'solo',
+            status: 'active',
+        });
+        currentCampaignId = campaign.id;
+        currentCampaign = campaign;
+
+        // If hero is standalone (no campaign yet), assign them directly
+        if (!currentHero.campaign_id) {
+            await apiRequest('POST', `/characters/${currentHero.id}/assign-campaign`, {
+                campaign_id: campaign.id,
+                user_id: currentUser.id,
+            });
+            // Reload hero data after assignment
+            const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
+            currentHero = heroResp.character || heroResp;
+            characterData = currentHero;
+        }
+
+        loadingToast?.remove?.();
+        // Go directly to game — opening scene will be generated
+        await enterGame(campaign);
+    } catch (err) {
+        loadingToast?.remove?.();
+        showToast(err.message || 'Błąd tworzenia kampanii', 'error');
+    }
 }
 
 async function handleCreateCampaign(e) {

@@ -105,23 +105,41 @@
     </header>
 
     <main class="campaigns">
-      <button type="button" class="campaign-card campaign-card--new" id="new-campaign-btn">
-        <div class="campaign-card__icon">
-          <span>+</span>
-        </div>
-        <div class="campaign-card__content">
-          <h3>Nowa kampania</h3>
-          <p>Rozpocznij nową przygodę w mrocznych krainach</p>
-        </div>
-        <span class="campaign-card__arrow">›</span>
-      </button>
+      <!-- Adventure type selector -->
+      <div class="adv-options">
+        <button type="button" class="adv-card adv-card--primary" id="new-campaign-btn">
+          <div class="adv-card__icon">⚔️</div>
+          <div class="adv-card__body">
+            <h3>Nowa Kampania</h3>
+            <p>Unikalna przygoda generowana przez AI na podstawie twojego bohatera</p>
+          </div>
+          <span class="adv-card__arrow">›</span>
+        </button>
+        <button type="button" class="adv-card adv-card--disabled" disabled>
+          <div class="adv-card__icon">📖</div>
+          <div class="adv-card__body">
+            <h3>Gotowa Kampania</h3>
+            <p>Wybierz spośród scenariuszy przygotowanych przez administratora</p>
+          </div>
+          <span class="adv-card__tag">Wkrótce</span>
+        </button>
+        <button type="button" class="adv-card adv-card--disabled" disabled>
+          <div class="adv-card__icon">⛏</div>
+          <div class="adv-card__body">
+            <h3>Loch</h3>
+            <p>Ekspedycja do losowego lochu — szybka walka, łupy, bez fabuły</p>
+          </div>
+          <span class="adv-card__tag">Wkrótce</span>
+        </button>
+      </div>
 
+      <!-- Active campaigns -->
+      <div class="campaigns-section-label" id="campaigns-section-label" style="display:none">Aktywne kampanie</div>
       <div id="campaigns-list"></div>
-
-      <div id="campaigns-empty" class="empty-state">
+      <div id="campaigns-empty" class="empty-state" style="display:none">
         <span class="empty-state__icon">📜</span>
-        <h3>Nie masz jeszcze żadnych kampanii</h3>
-        <p>Stwórz swoją pierwszą przygodę</p>
+        <h3>Brak aktywnych kampanii</h3>
+        <p>Rozpocznij nową przygodę powyżej</p>
       </div>
     </main>
   </div>
