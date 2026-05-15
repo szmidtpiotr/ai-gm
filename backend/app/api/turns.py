@@ -3028,3 +3028,147 @@ def resolve_skill_test_endpoint(
         }
     finally:
         conn.close()
+
+
+# ── Player World Map — Task 43 ────────────────────────────────────────────────
+
+@router.get("/campaigns/{campaign_id}/world-map")
+def get_campaign_world_map(campaign_id: int, character_id: int = 0):
+    """
+    Player-facing hex world map with fog of war.
+    Returns only discovered hexes + empty outlines for adjacent unvisited.
+    Also includes current hex position from session_flags.
+    """
+    import json as _j
+    import sqlite3 as _sq
+
+    DB_PATH = "/data/ai_gm.db"
+    conn = _sq.connect(DB_PATH)
+    conn.row_factory = _sq.Row
+    try:
+        # Hex neighbour directions (flat-top)
+        _DIRS = [(1,0),(-1,0),(0,1),(0,-1),(1,-1),(-1,1)]
+
+        # All placed hexes (global layer)
+        all_hexes = {
+            (int(r["q"]), int(r["r"])): dict(r)
+            for r in conn.execute(
+                "SELECT q, r, hex_type, label, atmosphere, encounter_chance FROM world_hexes WHERE is_active = 1"
+            ).fetchall()
+        }
+
+        # Campaign-specific discovered hexes
+        discovered_coords = set()
+        campaign_data = {}
+        for row in conn.execute(
+            "SELECT hex_q, hex_r, campaign_label, discovered FROM campaign_hex_data WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchall():
+            q, r = int(row["hex_q"]), int(row["hex_r"])
+            if row["discovered"]:
+                discovered_coords.add((q, r))
+            campaign_data[(q, r)] = dict(row)
+
+        # Build result: discovered hexes + adjacent outlines
+        result_hexes = []
+        outline_coords = set()
+
+        for coord in discovered_coords:
+            hdata = all_hexes.get(coord, {})
+            cd = campaign_data.get(coord, {})
+            h = {
+                "q": coord[0], "r": coord[1],
+                "hex_type": hdata.get("hex_type", "plains"),
+                "label": cd.get("campaign_label") or hdata.get("label"),
+                "status": "discovered",
+            }
+            result_hexes.append(h)
+            # Build adjacent unvisited outlines
+            for dq, dr in _DIRS:
+                nb = (coord[0]+dq, coord[1]+dr)
+                if nb not in discovered_coords and nb in all_hexes:
+                    outline_coords.add(nb)
+
+        for coord in outline_coords:
+            result_hexes.append({"q": coord[0], "r": coord[1], "status": "outline",
+                                  "hex_type": None, "label": None})
+
+        # Teleport connections (only where at least one endpoint is discovered)
+        teleports = [dict(t) for t in conn.execute(
+            "SELECT * FROM hex_teleport_connections WHERE is_active = 1"
+        ).fetchall()]
+        visible_teleports = [
+            t for t in teleports
+            if (t["from_q"], t["from_r"]) in discovered_coords
+            or (t["to_q"], t["to_r"]) in discovered_coords
+        ]
+
+        # Current hex from session_flags
+        current_hex = None
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if gs:
+            flags = _j.loads(gs["session_flags"] or "{}")
+            current_hex = flags.get("current_hex")  # {q, r}
+
+        # Hex type config for colours/icons
+        hex_types = {r["hex_type"]: dict(r) for r in conn.execute(
+            "SELECT hex_type, label, map_color, map_icon FROM hex_type_config WHERE is_active = 1"
+        ).fetchall()}
+
+        return {
+            "hexes": result_hexes,
+            "teleport_connections": visible_teleports,
+            "current_hex": current_hex,
+            "hex_types": hex_types,
+        }
+    finally:
+        conn.close()
+
+
+@router.post("/campaigns/{campaign_id}/hex-travel")
+def player_hex_travel(campaign_id: int, payload: dict = None):
+    """Player-initiated hex chain travel."""
+    import json as _j, sqlite3 as _sq
+    from app.services.hex_travel_service import resolve_chain_travel
+    if payload is None:
+        from fastapi import Body
+        raise HTTPException(status_code=400, detail="body required")
+
+    character_id = int(payload.get("character_id") or 0)
+    dest_q = int(payload.get("destination_q") or 0)
+    dest_r = int(payload.get("destination_r") or 0)
+
+    DB_PATH = "/data/ai_gm.db"
+    conn = _sq.connect(DB_PATH)
+    conn.row_factory = _sq.Row
+    try:
+        char = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ? AND campaign_id = ?",
+            (character_id, campaign_id),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="Character not found")
+        sheet = _j.loads(char["sheet_json"] or "{}")
+
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        flags = _j.loads((gs["session_flags"] if gs else None) or "{}")
+        ch = flags.get("current_hex")
+        origin_exists = conn.execute(
+            "SELECT 1 FROM world_hexes WHERE q=0 AND r=0 AND is_active=1"
+        ).fetchone()
+        from_hex = (int(ch["q"]), int(ch["r"])) if ch else ((0,0) if origin_exists else (dest_q, dest_r))
+
+        result = resolve_chain_travel(
+            campaign_id=campaign_id, character_id=character_id,
+            from_hex=from_hex, to_hex=(dest_q, dest_r),
+            character_sheet=sheet, conn=conn,
+        )
+        return result
+    finally:
+        conn.close()

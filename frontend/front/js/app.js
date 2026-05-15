@@ -3636,6 +3636,9 @@ function initEventListeners() {
     // Swipe left/right to switch sheet tabs
     initSheetTabSwipe(elements.sheetPanel);
 
+    // World map panel
+    initWorldMap();
+
     // Journal regen
     elements.btnJournalRegen?.addEventListener('click', () => loadJournalContent(true));
 
@@ -4008,3 +4011,222 @@ document.addEventListener('DOMContentLoaded', () => {
     loadBgSettings();
     init();
 });
+
+// ── World Map Panel — Task 43 ─────────────────────────────────────────────────
+
+const _wmap = {
+  panel:   null,
+  svg:     null,
+  confirm: null,
+  zoom: 1.4,
+  pan:  { x: 180, y: 200 },
+  hexTypes: {},
+  hexes: [],
+  teleports: [],
+  currentHex: null,
+  pendingTravel: null,   // { q, r, label }
+  _ds: null,             // drag state
+};
+
+const _WH = 32; // hex size px
+
+function _wmHexToPixel(q, r) {
+  return { x: _WH * 1.5 * q, y: _WH * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r) };
+}
+
+function _wmCorners(cx, cy, size) {
+  return Array.from({length:6}, (_,i) => {
+    const a = Math.PI / 180 * 60 * i;
+    return `${cx + size * Math.cos(a)},${cy + size * Math.sin(a)}`;
+  }).join(' ');
+}
+
+function _wmWorld(wx, wy) {
+  return { x: wx * _wmap.zoom + _wmap.pan.x, y: wy * _wmap.zoom + _wmap.pan.y };
+}
+
+function _wmRender() {
+  const svg = _wmap.svg;
+  if (!svg) return;
+  let html = '';
+  const rz = _WH * _wmap.zoom;
+
+  for (const hex of _wmap.hexes) {
+    const {x, y} = _wmHexToPixel(hex.q, hex.r);
+    const {x:sx, y:sy} = _wmWorld(x, y);
+    const discovered = hex.status === 'discovered';
+    const isCurrent = _wmap.currentHex && _wmap.currentHex.q === hex.q && _wmap.currentHex.r === hex.r;
+    const cfg = _wmap.hexTypes[hex.hex_type] || {};
+
+    if (discovered) {
+      const fill = cfg.map_color || '#4a6a4a';
+      const stroke = isCurrent ? '#f0c040' : '#1a1612';
+      const sw = isCurrent ? 2.5 : 0.8;
+      html += `<polygon class="wm-hex" data-q="${hex.q}" data-r="${hex.r}"
+        points="${_wmCorners(sx, sy, rz-1)}"
+        fill="${fill}" stroke="${stroke}" stroke-width="${sw}" style="cursor:pointer"/>`;
+      if (_wmap.zoom >= 0.9 && cfg.map_icon)
+        html += `<text x="${sx}" y="${sy-rz*0.05}" text-anchor="middle"
+          font-size="${Math.max(10, 13*_wmap.zoom)}" style="pointer-events:none">${cfg.map_icon}</text>`;
+      if (_wmap.zoom >= 1.0 && hex.label)
+        html += `<text x="${sx}" y="${sy+rz*0.38}" text-anchor="middle"
+          font-size="${Math.max(7, 9*_wmap.zoom)}" fill="#c8b87a" style="pointer-events:none">${escapeHtml(hex.label.slice(0,14))}</text>`;
+      if (isCurrent)
+        html += `<text x="${sx}" y="${sy-rz*0.52}" text-anchor="middle"
+          font-size="${Math.max(11, 14*_wmap.zoom)}" style="pointer-events:none">📍</text>`;
+    } else {
+      // Outline: unvisited adjacent hex
+      html += `<polygon class="wm-hex wm-hex--outline" data-q="${hex.q}" data-r="${hex.r}"
+        points="${_wmCorners(sx, sy, rz-1)}"
+        fill="transparent" stroke="#2a2218" stroke-width="0.6" stroke-dasharray="3,2"
+        style="cursor:pointer"/>`;
+    }
+  }
+
+  // Teleport connections
+  for (const t of _wmap.teleports) {
+    const p1 = _wmHexToPixel(t.from_q, t.from_r), p2 = _wmHexToPixel(t.to_q, t.to_r);
+    const s1 = _wmWorld(p1.x, p1.y), s2 = _wmWorld(p2.x, p2.y);
+    const mx = (s1.x+s2.x)/2, my = (s1.y+s2.y)/2 - 20*_wmap.zoom;
+    const col = t.travel_type === 'boat' ? '#3a8aaa' : '#8a3aaa';
+    html += `<path d="M${s1.x},${s1.y} Q${mx},${my} ${s2.x},${s2.y}"
+      fill="none" stroke="${col}" stroke-width="${1.2*_wmap.zoom}" stroke-dasharray="4,2"
+      style="pointer-events:none"/>`;
+  }
+
+  svg.innerHTML = html;
+  svg.querySelectorAll('.wm-hex').forEach(el => {
+    el.addEventListener('click', _wmOnHexClick);
+  });
+}
+
+function _wmOnHexClick(e) {
+  const q = parseInt(e.target.dataset.q), r = parseInt(e.target.dataset.r);
+  const hex = _wmap.hexes.find(h => h.q === q && h.r === r);
+  if (!hex) return;
+
+  const label = hex.label || `(${q},${r})`;
+  const cfg = _wmap.hexTypes[hex.hex_type] || {};
+  const typeName = cfg.label || hex.hex_type || '';
+  const info = hex.status === 'discovered'
+    ? typeName
+    : `${typeName} — nieznany teren`;
+
+  _wmap.pendingTravel = { q, r, label };
+  const confirm = _wmap.confirm;
+  confirm.querySelector('#wmap-confirm-title').textContent = `Podróżujesz do ${label}`;
+  confirm.querySelector('#wmap-confirm-info').textContent = info;
+  confirm.removeAttribute('hidden');
+}
+
+async function _wmExecuteTravel() {
+  const t = _wmap.pendingTravel;
+  if (!t) return;
+  _wmap.confirm.setAttribute('hidden', '');
+  _wmClose();
+
+  // Dispatch hex travel to turn pipeline
+  if (!currentCampaignId || !characterData?.id) return;
+  try {
+    const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/hex-travel`, {
+      character_id: characterData.id,
+      destination_q: t.q,
+      destination_r: t.r,
+    });
+
+    const enc = response.encounter;
+    const hours = response.total_hours || 0;
+    const label = t.label;
+
+    let prose = hours > 0
+      ? `Podróżujesz do ${label} (${hours}h drogi).`
+      : `Przybyłeś do ${label}.`;
+    if (enc) prose += ` Na drodze natykasz się na ${enc.enemy_key}!`;
+
+    appendMessage({ role: 'assistant', content: prose, created_at: new Date() });
+
+    // If encounter → start combat automatically
+    if (enc?.enemy_key) {
+      // Send attack intent to trigger combat start
+      setTimeout(() => sendMessage(`[Napotkałem wroga: ${enc.enemy_key}]`), 300);
+    }
+
+    await refreshCharacterData();
+    scrollToBottom();
+  } catch (err) {
+    showToast(err.message || 'Błąd podróży', 'error');
+  }
+}
+
+async function _wmOpen() {
+  if (!currentCampaignId || !characterData?.id) {
+    showToast('Wybierz postać aby otworzyć mapę.', 'info'); return;
+  }
+  _wmap.panel.removeAttribute('hidden');
+  _wmap.panel.style.transform = 'translateX(0)';
+
+  try {
+    const data = await apiRequest('GET', `/campaigns/${currentCampaignId}/world-map?character_id=${characterData.id}`);
+    _wmap.hexes = data.hexes || [];
+    _wmap.teleports = data.teleport_connections || [];
+    _wmap.currentHex = data.current_hex;
+    _wmap.hexTypes = data.hex_types || {};
+
+    // Center on discovered hexes
+    const disc = _wmap.hexes.filter(h => h.status === 'discovered');
+    if (disc.length) {
+      const pixels = disc.map(h => _wmHexToPixel(h.q, h.r));
+      const cx = pixels.reduce((s,p)=>s+p.x,0)/pixels.length;
+      const cy = pixels.reduce((s,p)=>s+p.y,0)/pixels.length;
+      const rect = _wmap.svg.getBoundingClientRect();
+      _wmap.pan = { x: (rect.width||360)/2 - cx*_wmap.zoom, y: (rect.height||500)/2 - cy*_wmap.zoom };
+    }
+    _wmRender();
+  } catch (err) {
+    showToast(err.message || 'Błąd ładowania mapy', 'error');
+  }
+}
+
+function _wmClose() {
+  _wmap.panel.style.transform = 'translateX(100%)';
+  setTimeout(() => _wmap.panel.setAttribute('hidden', ''), 280);
+  _wmap.confirm.setAttribute('hidden', '');
+  _wmap.pendingTravel = null;
+}
+
+function initWorldMap() {
+  _wmap.panel   = document.getElementById('world-map-panel');
+  _wmap.svg     = document.getElementById('wmap-svg');
+  _wmap.confirm = document.getElementById('wmap-confirm');
+  if (!_wmap.panel) return;
+
+  document.getElementById('open-map-btn')?.addEventListener('click', _wmOpen);
+  document.getElementById('wmap-close-btn')?.addEventListener('click', _wmClose);
+  document.getElementById('wmap-btn-go')?.addEventListener('click', _wmExecuteTravel);
+  document.getElementById('wmap-btn-cancel')?.addEventListener('click', () => {
+    _wmap.confirm.setAttribute('hidden', '');
+    _wmap.pendingTravel = null;
+  });
+
+  // Zoom
+  _wmap.svg.addEventListener('wheel', e => {
+    e.preventDefault();
+    const r = _wmap.svg.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const f = e.deltaY < 0 ? 1.15 : 0.87;
+    const nz = Math.max(0.4, Math.min(5, _wmap.zoom * f));
+    _wmap.pan.x = mx - (mx - _wmap.pan.x) * (nz / _wmap.zoom);
+    _wmap.pan.y = my - (my - _wmap.pan.y) * (nz / _wmap.zoom);
+    _wmap.zoom = nz;
+    _wmRender();
+  }, { passive: false });
+
+  // Pan (left-click drag)
+  _wmap.svg.addEventListener('mousedown', e => {
+    if (e.button === 0) _wmap._ds = { x: e.clientX - _wmap.pan.x, y: e.clientY - _wmap.pan.y };
+  });
+  window.addEventListener('mousemove', e => {
+    if (_wmap._ds) { _wmap.pan = { x: e.clientX - _wmap._ds.x, y: e.clientY - _wmap._ds.y }; _wmRender(); }
+  });
+  window.addEventListener('mouseup', () => { _wmap._ds = null; });
+}

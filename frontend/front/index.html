@@ -219,6 +219,12 @@
           <div class="header-hp-bar__fill" id="header-hp-bar-fill" style="width:100%"></div>
         </div>
       </div>
+      <button type="button" class="header__action" id="open-map-btn" title="Mapa świata">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+          <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+        </svg>
+      </button>
       <button type="button" class="header__action" id="open-journal-btn" title="Dziennik podróżnika">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
@@ -723,6 +729,26 @@
             Powrót do kampanii
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- World Map Panel — Task 43 -->
+  <div id="world-map-panel" class="wmap-panel" hidden>
+    <div class="wmap-header">
+      <span class="wmap-title">🗺 Mapa Świata</span>
+      <button type="button" class="wmap-close" id="wmap-close-btn">✕</button>
+    </div>
+    <div class="wmap-canvas-wrap">
+      <svg id="wmap-svg" class="wmap-svg"></svg>
+    </div>
+    <!-- Travel confirmation overlay (shown inside the map panel) -->
+    <div id="wmap-confirm" class="wmap-confirm" hidden>
+      <div class="wmap-confirm-title" id="wmap-confirm-title">Podróżujesz do…</div>
+      <div class="wmap-confirm-info" id="wmap-confirm-info"></div>
+      <div class="wmap-confirm-btns">
+        <button class="wmap-btn-go" id="wmap-btn-go">Wyrusz</button>
+        <button class="wmap-btn-cancel" id="wmap-btn-cancel">Anuluj</button>
       </div>
     </div>
   </div>
