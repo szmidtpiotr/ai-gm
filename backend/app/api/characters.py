@@ -755,12 +755,12 @@ def delete_character(character_id: int, user_id: int):
             raise HTTPException(status_code=404, detail="Hero not found")
         if int(row["user_id"]) != int(user_id):
             raise HTTPException(status_code=403, detail="Cannot delete another user's hero")
-        # If hero is in a campaign, deactivate the campaign too (cascade delete)
-        if row["status"] == "in_campaign" and row["campaign_id"]:
-            conn.execute(
-                "UPDATE campaigns SET status = 'ended' WHERE id = ?",
-                (row["campaign_id"],),
-            )
+        # Cascade: deactivate ALL campaigns this hero was ever part of
+        conn.execute(
+            "UPDATE campaigns SET status = 'ended' WHERE id IN "
+            "(SELECT DISTINCT campaign_id FROM characters WHERE id = ? AND campaign_id IS NOT NULL)",
+            (character_id,),
+        )
         conn.execute("UPDATE characters SET is_active = 0 WHERE id = ?", (character_id,))
         conn.commit()
         return {"ok": True, "deleted_id": character_id, "name": row["name"]}
