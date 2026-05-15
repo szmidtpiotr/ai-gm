@@ -1328,7 +1328,7 @@ def _require_gm_plan_before_narrative_llm(
 
         # Find the character for this campaign to build char summary
         char_row = conn.execute(
-            "SELECT user_id, name, sheet_json, location FROM characters WHERE campaign_id = ? AND is_active = 1 LIMIT 1",
+            "SELECT id, user_id, name, sheet_json, location FROM characters WHERE campaign_id = ? AND is_active = 1 LIMIT 1",
             (campaign_id,),
         ).fetchone()
         if not char_row:
@@ -1349,7 +1349,7 @@ def _require_gm_plan_before_narrative_llm(
             + (f", Statystyki: {stat_lines}" if stat_lines else "")
             + f", Lokalizacja: {char_row['location'] or 'nieznane miejsce'}."
         )
-        generate_initial_gm_plan_with_retries(
+        gm_ready, _ = generate_initial_gm_plan_with_retries(
             conn,
             campaign_id=campaign_id,
             campaign_title=str(campaign["title"] or f"Kampania {campaign_id}"),
@@ -1362,6 +1362,39 @@ def _require_gm_plan_before_narrative_llm(
             max_attempts=2,
         )
         logger.info("gm_plan_auto_generated_on_first_turn", campaign_id=campaign_id)
+
+        # Also generate opening scene so player sees a welcome message
+        if gm_ready:
+            try:
+                from app.services.llm_service import generate_chat as _gen
+                from app.system_prompt_loader import SYSTEM_PROMPT_TEXT as _OPENING_SYS
+                _opening_prompt = (
+                    f"{char_summary}\n\n"
+                    "To jest pierwsza chwila przygody. Zacznij sesję od klimatycznego opisu miejsca, "
+                    "w którym bohater się znajduje. Nie pytaj gracza o plany - po prostu opisz scenę "
+                    "i zostaw otwarte zakończenie zachęcające do działania."
+                )
+                _opening = (_gen(
+                    messages=[{"role": "system", "content": _OPENING_SYS},
+                               {"role": "user", "content": _opening_prompt}],
+                    model=model, llm_config=llm_config,
+                ) or "").strip()
+                if _opening:
+                    _nt = int((conn.execute(
+                        "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                        (campaign_id,),
+                    ).fetchone()[0]) or 1)
+                    conn.execute(
+                        """INSERT INTO campaign_turns
+                           (campaign_id, character_id, turn_number, user_text, route, assistant_text)
+                           VALUES (?,?,?,?,?,?)""",
+                        (campaign_id, int(char_row["id"] or 0),
+                         _nt, "", "narrative", _opening),
+                    )
+                    conn.commit()
+                    logger.info("opening_scene_generated_on_first_turn", campaign_id=campaign_id)
+            except Exception as _oe:
+                logger.warning("opening_scene_auto_failed", campaign_id=campaign_id, error=str(_oe))
     except Exception as _plan_err:
         logger.warning("gm_plan_auto_generation_failed", campaign_id=campaign_id, error=str(_plan_err))
         # Don't block — let the turn proceed without a plan rather than permanent error
@@ -1576,6 +1609,19 @@ def create_turn(
         character = get_character_or_404(conn, campaign_id, payload.character_id)
         llm_config = get_user_llm_settings_full(character["user_id"])
         text = (payload.text or "").strip()
+
+        # Special opening turn — trigger plan gen + return opening scene
+        if text == "__AI_GM_OPEN":
+            _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
+            _opening_turn = conn.execute(
+                "SELECT assistant_text FROM campaign_turns WHERE campaign_id = ? "
+                "AND (user_text = '' OR user_text IS NULL) AND route = 'narrative' LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _opening_turn:
+                return {"prose": _opening_turn["assistant_text"], "turn_number": 1,
+                        "route": "narrative", "result": {"message": _opening_turn["assistant_text"]}}
+            return {"prose": None, "turn_number": 0, "route": "narrative", "result": {}}
 
         if not text:
             raise HTTPException(status_code=400, detail="Text is required")
