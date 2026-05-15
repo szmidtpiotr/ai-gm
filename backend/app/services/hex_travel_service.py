@@ -332,3 +332,161 @@ def resolve_chain_travel(
         "item_blocked": None,
         "hex_data": hexes.get(arrived_hex, {}),
     }
+
+
+# ── Starting hex resolution ───────────────────────────────────────────────────
+
+def _normalize(s: str) -> str:
+    """Lowercase, strip Polish diacritics, keep only alnum."""
+    _PL = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+    return s.lower().translate(_PL).replace("-", " ")
+
+
+def _label_similarity(a: str, b: str) -> float:
+    """Word-overlap score between two location label strings (0.0–1.0)."""
+    wa = set(_normalize(a).split())
+    wb = set(_normalize(b).split())
+    if not wa or not wb:
+        return 0.0
+    return len(wa & wb) / max(len(wa), len(wb))
+
+
+def _infer_hex_type_from_name(name: str) -> str:
+    """Guess terrain type from a location name."""
+    n = _normalize(name)
+    for word, htype in [
+        ("miasto", "town"), ("wioska", "town"), ("wies", "town"), ("osada", "town"),
+        ("zamek", "castle"), ("twierdza", "castle"), ("fort", "castle"),
+        ("las", "forest"), ("puszcza", "forest"), ("bor", "forest"),
+        ("ruiny", "ruins"), ("ruina", "ruins"), ("zgliszcza", "ruins"),
+        ("jaskinia", "cave"), ("grota", "cave"),
+        ("dungeon", "dungeon"), ("loch", "dungeon"), ("podziemia", "dungeon"),
+        ("gory", "mountains"), ("szczyt", "mountains"),
+        ("bagno", "swamp"), ("trzesawisko", "swamp"),
+        ("droga", "road"), ("trakt", "road"),
+    ]:
+        if word in n:
+            return htype
+    return "plains"
+
+
+def _find_nearby_empty_hex(
+    conn: sqlite3.Connection,
+    max_distance: int = 4,
+    avoid: set | None = None,
+) -> tuple[int, int]:
+    """
+    Find an empty hex coordinate near the existing world (within max_distance).
+    Returns (q, r) that is not yet in world_hexes.
+    """
+    rows = conn.execute("SELECT q, r FROM world_hexes WHERE is_active = 1").fetchall()
+    if not rows:
+        return (0, 0)
+
+    occupied = {(int(r["q"]), int(r["r"])) for r in rows}
+    if avoid:
+        occupied |= avoid
+
+    # Try candidates adjacent to existing hexes at increasing distance
+    for dist in range(1, max_distance + 1):
+        candidates = set()
+        for (q, r) in occupied:
+            for dq, dr in _DIRECTIONS:
+                nb = (q + dist * dq, r + dist * dr)
+                if nb not in occupied:
+                    candidates.add(nb)
+        if candidates:
+            return random.choice(list(candidates))
+
+    # Fallback: just use (0,0) or (-max_distance, 0)
+    for q in range(-max_distance, max_distance + 1):
+        for r in range(-max_distance, max_distance + 1):
+            if (q, r) not in occupied:
+                return (q, r)
+    return (0, 0)
+
+
+def resolve_starting_hex(
+    campaign_id: int,
+    character_id: int,
+    starting_location_name: str | None,
+    conn: sqlite3.Connection,
+) -> dict:
+    """
+    Find or create the starting hex for a new campaign character.
+
+    Priority:
+    1. Match starting_location_name to an existing global hex by label similarity
+    2. No match → create new hex near existing world (within 3-5 hexes)
+    3. No world at all → create default town at (0,0)
+
+    Always adds a campaign_hex_data row (discovered=1) and updates session_flags.
+    Returns the hex dict {q, r, hex_type, label, is_new}.
+    """
+    import json as _json
+
+    # Try to match existing hex by label
+    matched_hex = None
+    if starting_location_name and starting_location_name.strip():
+        rows = conn.execute(
+            "SELECT q, r, hex_type, label FROM world_hexes WHERE is_active = 1 AND label IS NOT NULL"
+        ).fetchall()
+        best_score, best_row = 0.0, None
+        for row in rows:
+            score = _label_similarity(starting_location_name, row["label"] or "")
+            if score > best_score:
+                best_score = score
+                best_row = row
+        if best_score >= 0.4:
+            matched_hex = dict(best_row)
+
+    is_new = False
+    if matched_hex:
+        sq, sr = int(matched_hex["q"]), int(matched_hex["r"])
+        hex_type = matched_hex["hex_type"]
+        label = matched_hex["label"]
+    else:
+        # Create new hex near existing world
+        sq, sr = _find_nearby_empty_hex(conn, max_distance=4)
+        hex_type = _infer_hex_type_from_name(starting_location_name or "")
+        label = None  # global label stays empty — campaign layer will hold the specific name
+        is_new = True
+
+        # Insert into world_hexes
+        conn.execute(
+            """INSERT OR IGNORE INTO world_hexes
+               (q, r, hex_type, label, encounter_chance, encounter_pool,
+                created_by_gm, created_by_campaign_id, discovered_in_campaign_id)
+               VALUES (?,?,?,?,?,?,0,?,?)""",
+            (sq, sr, hex_type, label, 0.15 if hex_type not in ("town", "castle") else 0.0,
+             "[]", campaign_id, campaign_id),
+        )
+
+    # Campaign-specific overlay: store the specific location name as campaign_label
+    campaign_label = starting_location_name if is_new or starting_location_name else None
+    conn.execute(
+        """INSERT INTO campaign_hex_data
+           (campaign_id, hex_q, hex_r, campaign_label, discovered)
+           VALUES (?,?,?,?,1)
+           ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET
+             discovered = 1,
+             campaign_label = COALESCE(excluded.campaign_label, campaign_label)""",
+        (campaign_id, sq, sr, campaign_label),
+    )
+
+    # Update session_flags with current_hex
+    gs = conn.execute(
+        "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if gs:
+        flags = _json.loads(gs["session_flags"] or "{}")
+        flags["current_hex"] = {"q": sq, "r": sr}
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (_json.dumps(flags, ensure_ascii=False), gs["id"]),
+        )
+
+    conn.commit()
+
+    return {"q": sq, "r": sr, "hex_type": hex_type, "label": label or starting_location_name, "is_new": is_new}

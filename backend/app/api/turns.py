@@ -3066,26 +3066,14 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0):
         if gs:
             flags = _j.loads(gs["session_flags"] or "{}")
             current_hex = flags.get("current_hex")
-            if not current_hex and all_hexes:
-                start = next(
-                    ((q, r) for (q, r), h in all_hexes.items() if h.get("hex_type") == "town"),
-                    next(iter(all_hexes), None),
-                )
-                if start:
-                    sq, sr = start
-                    current_hex = {"q": sq, "r": sr}
-                    flags["current_hex"] = current_hex
-                    conn.execute(
-                        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
-                        (_j.dumps(flags, ensure_ascii=False), campaign_id),
-                    )
-                    conn.execute(
-                        """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, discovered)
-                           VALUES (?,?,?,1)
-                           ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1""",
-                        (campaign_id, sq, sr),
-                    )
-                    conn.commit()
+            if not current_hex:
+                # Auto-place: use proper resolve_starting_hex logic
+                try:
+                    from app.services.hex_travel_service import resolve_starting_hex
+                    result = resolve_starting_hex(campaign_id, character_id, None, conn)
+                    current_hex = {"q": result["q"], "r": result["r"]}
+                except Exception:
+                    pass
 
         # Campaign-specific discovered hexes
         discovered_coords = set()

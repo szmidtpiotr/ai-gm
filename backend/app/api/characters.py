@@ -1468,44 +1468,19 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
     except Exception as e:
         logger.warning("[finalize_sheet] gm_plan/opening_scene failed (non-fatal): %s", str(e))
 
-    # ── Auto-place player on starting hex ────────────────────────────────────
+    # ── Place player on starting hex (match global hex or create nearby) ─────
     try:
-        gs = conn.execute(
-            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        from app.services.hex_travel_service import resolve_starting_hex
+        # Get starting location from the character's sheet
+        _start_loc = str(rebuilt.get("location") or "")
+        gs_check = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
             (campaign_id,),
         ).fetchone()
-        if gs:
-            flags = json.loads(gs["session_flags"] or "{}")
-            if not flags.get("current_hex"):
-                start_hex = conn.execute(
-                    "SELECT q, r FROM world_hexes WHERE hex_type = 'town' AND is_active = 1 LIMIT 1"
-                ).fetchone()
-                if not start_hex:
-                    start_hex = conn.execute(
-                        "SELECT q, r FROM world_hexes WHERE is_active = 1 ORDER BY id LIMIT 1"
-                    ).fetchone()
-                if not start_hex:
-                    conn.execute(
-                        """INSERT OR IGNORE INTO world_hexes
-                           (q, r, hex_type, label, encounter_chance, encounter_pool, created_by_gm)
-                           VALUES (0, 0, 'town', 'Miasto startowe', 0.0, '[]', 0)"""
-                    )
-                    conn.commit()
-                    start_hex = conn.execute("SELECT q, r FROM world_hexes WHERE q=0 AND r=0").fetchone()
-                if start_hex:
-                    sq, sr = int(start_hex["q"]), int(start_hex["r"])
-                    flags["current_hex"] = {"q": sq, "r": sr}
-                    conn.execute(
-                        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
-                        (json.dumps(flags, ensure_ascii=False), gs["id"]),
-                    )
-                    conn.execute(
-                        """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, discovered)
-                           VALUES (?,?,?,1)
-                           ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1""",
-                        (campaign_id, sq, sr),
-                    )
-                    conn.commit()
+        _flags_check = json.loads((gs_check["session_flags"] if gs_check else None) or "{}")
+        if not _flags_check.get("current_hex"):
+            resolve_starting_hex(campaign_id, character_id, _start_loc or None, conn)
+            logger.info("[finalize_sheet] starting hex resolved for campaign %d", campaign_id)
     except Exception as e:
         logger.warning("[finalize_sheet] starting hex placement failed (non-fatal): %s", str(e))
 
@@ -1930,50 +1905,18 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
             logger.warning("[create_character] opening message failed (non-fatal): %s", str(e))
             opening_message = None
 
-    # ── Auto-place player on starting hex ────────────────────────────────────
-    # Find or create a starting town hex so the player map isn't empty.
+    # ── Place player on starting hex (match global or create nearby) ─────────
     try:
-        gs = conn.execute(
-            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        from app.services.hex_travel_service import resolve_starting_hex
+        gs_check2 = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
             (campaign_id,),
         ).fetchone()
-        if gs:
-            flags = json.loads(gs["session_flags"] or "{}")
-            if not flags.get("current_hex"):
-                # Find best starting hex: prefer town type, fallback to any
-                start_hex = conn.execute(
-                    "SELECT q, r FROM world_hexes WHERE hex_type = 'town' AND is_active = 1 LIMIT 1"
-                ).fetchone()
-                if not start_hex:
-                    start_hex = conn.execute(
-                        "SELECT q, r FROM world_hexes WHERE is_active = 1 ORDER BY id LIMIT 1"
-                    ).fetchone()
-                if not start_hex:
-                    # World is empty — create a default starting town at (0,0)
-                    conn.execute(
-                        """INSERT OR IGNORE INTO world_hexes
-                           (q, r, hex_type, label, encounter_chance, encounter_pool, created_by_gm)
-                           VALUES (0, 0, 'town', 'Miasto startowe', 0.0, '[]', 0)"""
-                    )
-                    conn.commit()
-                    start_hex = conn.execute("SELECT q, r FROM world_hexes WHERE q=0 AND r=0").fetchone()
-
-                if start_hex:
-                    sq, sr = int(start_hex["q"]), int(start_hex["r"])
-                    flags["current_hex"] = {"q": sq, "r": sr}
-                    conn.execute(
-                        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
-                        (json.dumps(flags, ensure_ascii=False), gs["id"]),
-                    )
-                    # Mark starting hex as discovered for this campaign
-                    conn.execute(
-                        """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, discovered)
-                           VALUES (?,?,?,1)
-                           ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1""",
-                        (campaign_id, sq, sr),
-                    )
-                    conn.commit()
-                    logger.info("[create_character] starting hex set to (%d,%d)", sq, sr)
+        _f2 = json.loads((gs_check2["session_flags"] if gs_check2 else None) or "{}")
+        if not _f2.get("current_hex"):
+            _start_loc2 = str(req.location or "").strip() or None
+            resolve_starting_hex(campaign_id, character_id, _start_loc2, conn)
+            logger.info("[create_character] starting hex resolved for campaign %d", campaign_id)
     except Exception as e:
         logger.warning("[create_character] starting hex placement failed (non-fatal): %s", str(e))
 
