@@ -4536,3 +4536,19 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   justify-content: center;
   font-size: 1.3rem;
 }
+
+/* ── Travel event bubble — centered, amber tint ──────────────────────────── */
+.chat-bubble--travel {
+  align-self: center;
+  max-width: 80%;
+  background: rgba(180, 140, 30, 0.12);
+  border: 1px solid rgba(201, 165, 74, 0.35);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  text-align: center;
+  font-size: var(--font-size-sm);
+  color: #d4b870;
+  margin: 4px auto;
+}
+.chat-bubble--travel strong { color: #e8c860; }
+.chat-bubble--travel em { color: #b89a50; font-style: italic; }

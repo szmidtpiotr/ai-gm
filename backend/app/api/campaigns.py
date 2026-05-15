@@ -129,7 +129,8 @@ def list_campaigns():
             c.mode,
             c.status,
             c.created_at,
-            (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count
+            (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count,
+            (SELECT ch.id FROM characters ch WHERE ch.campaign_id = c.id AND ch.is_active = 1 LIMIT 1) AS character_id
         FROM campaigns c
         WHERE NOT (
             c.status = 'active'

@@ -343,6 +343,34 @@ async function handleLogin(e) {
             updateAdminSettingsVisibility();
             try {
                 await loadHeroes();
+                // Restore hero context from session (survives F5)
+                try {
+                    const savedHeroId = sessionStorage.getItem('aigm_hero_id');
+                    if (savedHeroId) {
+                        const heroResp = await apiRequest('GET', `/characters/${savedHeroId}`);
+                        const restored = heroResp.character || heroResp;
+                        if (restored?.id && Number(restored.user_id) === Number(currentUser.id)) {
+                            currentHero = restored;
+                            if (elements.welcomeUser) elements.welcomeUser.textContent = `Bohater: ${restored.name}`;
+                            // If hero was in active campaign, restore game state
+                            if (restored.campaign_id && restored.status === 'in_campaign') {
+                                const chars = await apiRequest('GET', `/campaigns/${restored.campaign_id}/characters`);
+                                const myChar = (chars.characters || []).find(c => c.id === restored.id);
+                                if (myChar) {
+                                    characterData = myChar;
+                                    currentCampaignId = restored.campaign_id;
+                                    const camp = await apiRequest('GET', `/campaigns/${restored.campaign_id}`);
+                                    currentCampaign = camp;
+                                    await enterGame(camp);
+                                    return;
+                                }
+                            }
+                            await loadCampaigns();
+                            showScreen('campaigns');
+                            return;
+                        }
+                    }
+                } catch (e) { console.warn('[Restore] Failed:', e); }
             } catch (e) {
                 console.error('[Login] loadHeroes failed:', e);
             }
@@ -441,7 +469,8 @@ function renderHeroes(heroes) {
             delBtn.textContent = '🗑';
             delBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                if (!confirm(`Usunąć bohatera "${hero.name}"? Ta operacja jest nieodwracalna.`)) return;
+                const input = window.prompt(`Aby usunąć bohatera "${hero.name}", wpisz słowo DELETE.\nTa operacja jest nieodwracalna.`);
+                if (input !== 'DELETE') return;
                 try {
                     await apiRequest('DELETE', `/characters/${hero.id}?user_id=${currentUser.id}`);
                     showToast('Bohater usunięty', 'success');
@@ -462,20 +491,12 @@ function renderHeroes(heroes) {
 
 async function selectHero(hero) {
     currentHero = hero;
-    // If hero has an active campaign, load into it directly
-    if (hero.campaign_id && hero.status === 'in_campaign') {
-        try {
-            const campaign = await apiRequest('GET', `/campaigns/${hero.campaign_id}`);
-            await selectCampaign(campaign);
-            return;
-        } catch (e) {
-            console.warn('[Hero] Could not load active campaign:', e);
-        }
-    }
-    // Otherwise show campaigns screen filtered to this hero
+    // Always show campaigns chooser — let player decide (dungeon, new campaign, etc.)
     if (elements.welcomeUser) {
         elements.welcomeUser.textContent = `Bohater: ${hero.name}`;
     }
+    // Save hero to session so F5 restores context
+    try { sessionStorage.setItem('aigm_hero_id', hero.id); } catch {}
     await loadCampaigns();
     showScreen('campaigns');
 }
@@ -490,10 +511,16 @@ async function loadCampaigns() {
         console.log('[Campaigns] Raw response:', response);
         const allCampaigns = response.campaigns || (Array.isArray(response) ? response : []);
 
-        // Filter to show only current user's campaigns
+        // Filter to current user + current hero only (don't show other heroes' campaigns)
         const campaigns = allCampaigns.filter(c => {
             const ownerId = c.owner_user_id ?? c.owneruserid;
-            return Number(ownerId) === Number(currentUser?.id);
+            if (Number(ownerId) !== Number(currentUser?.id)) return false;
+            // If we have a hero, only show campaigns that belong to this hero
+            if (currentHero?.id) {
+                const campCharId = c.character_id ?? c.char_id;
+                if (campCharId && Number(campCharId) !== Number(currentHero.id)) return false;
+            }
+            return true;
         });
 
         console.log('[Campaigns] Filtered:', campaigns.length, 'of', allCampaigns.length);
@@ -4270,8 +4297,8 @@ async function _wmExecuteTravel() {
     if (enc) prose += `<br><strong>Na drodze natykasz się na wroga!</strong>`;
 
     const travelBubble = document.createElement('div');
-    travelBubble.className = 'chat-bubble chat-bubble--gm';
-    travelBubble.innerHTML = `<div class="chat-bubble__content">${prose}</div>`;
+    travelBubble.className = 'chat-bubble chat-bubble--travel';
+    travelBubble.innerHTML = prose;
     elements.chatMessages.appendChild(travelBubble);
 
     // Update current hex on map
