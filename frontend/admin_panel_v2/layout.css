@@ -425,7 +425,8 @@ html, body {
 .section-panel[data-section="content"].active,
 .section-panel[data-section="players"].active,
 .section-panel[data-section="campaigns"].active,
-.section-panel[data-section="system"].active {
+.section-panel[data-section="system"].active,
+.section-panel[data-section="world"].active {
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -1377,15 +1378,19 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   border-bottom-color: var(--bg-elevated);
 }
 
-.subtab-panels { flex: 1; overflow: auto; }
+.subtab-panels { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 
 .subtab-panel {
   display: none;
   padding: 20px;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
-.subtab-panel.active { display: block; }
+.subtab-panel.active { display: flex; flex-direction: column; }
+
+/* Builder tab fills the full canvas — no padding */
+.subtab-panel[data-tab="builder"].active { padding: 0; overflow: hidden; }
 
 /* ── Modal form ── */
 
@@ -3325,6 +3330,7 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 /* ── Hex World Builder (Task 40) ─────────────────────────────────────────── */
 .wb-layout {
   display: flex;
+  flex: 1;
   height: 100%;
   min-height: 0;
   overflow: hidden;
