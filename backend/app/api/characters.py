@@ -755,10 +755,11 @@ def delete_character(character_id: int, user_id: int):
             raise HTTPException(status_code=404, detail="Hero not found")
         if int(row["user_id"]) != int(user_id):
             raise HTTPException(status_code=403, detail="Cannot delete another user's hero")
-        if row["status"] == "in_campaign":
-            raise HTTPException(
-                status_code=409,
-                detail="Hero is currently in an active campaign. End or leave the campaign first."
+        # If hero is in a campaign, deactivate the campaign too (cascade delete)
+        if row["status"] == "in_campaign" and row["campaign_id"]:
+            conn.execute(
+                "UPDATE campaigns SET status = 'ended' WHERE id = ?",
+                (row["campaign_id"],),
             )
         conn.execute("UPDATE characters SET is_active = 0 WHERE id = ?", (character_id,))
         conn.commit()
@@ -1438,6 +1439,37 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         (json.dumps(rebuilt, ensure_ascii=False), character_id),
     )
     conn.commit()
+
+    # ── Grant starter items if not already done ──────────────────────────────
+    # Covers both the hero-first flow and the campaign wizard flow
+    try:
+        already_has_items = conn.execute(
+            "SELECT 1 FROM character_inventory WHERE character_id = ? LIMIT 1",
+            (character_id,),
+        ).fetchone()
+        if not already_has_items:
+            arch_key = str(rebuilt.get("archetype", "warrior")).strip().lower()
+            arch_row = conn.execute(
+                "SELECT starter_items_json, starter_gold_gp FROM game_config_archetypes WHERE key = ?",
+                (arch_key,),
+            ).fetchone()
+            if arch_row:
+                raw_items = arch_row["starter_items_json"] or "[]"
+                try:
+                    starter_items = json.loads(raw_items) if isinstance(raw_items, str) else raw_items
+                except Exception:
+                    starter_items = []
+                if isinstance(starter_items, list) and starter_items:
+                    grant_loot_to_character(character_id, starter_items, source="start")
+                ggp = int(arch_row["starter_gold_gp"] or 0)
+                if ggp > 0:
+                    conn.execute(
+                        "UPDATE characters SET gold_gp = COALESCE(gold_gp, 0) + ? WHERE id = ?",
+                        (ggp, character_id),
+                    )
+                    conn.commit()
+    except Exception as e:
+        logger.warning("[finalize_sheet] starter items grant failed (non-fatal): %s", str(e))
 
     # ── Generate GM plan + opening scene if not already done ─────────────────
     # finalize-sheet is the final step of character creation; trigger plan

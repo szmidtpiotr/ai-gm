@@ -343,10 +343,12 @@ async function handleLogin(e) {
             updateAdminSettingsVisibility();
             try {
                 await loadHeroes();
-                // Restore hero context from session (survives F5)
+                // Restore hero context only after F5 (not fresh login)
+                // Flag is set when user explicitly selects a hero in this session
                 try {
                     const savedHeroId = sessionStorage.getItem('aigm_hero_id');
-                    if (savedHeroId) {
+                    const wasActiveSession = sessionStorage.getItem('aigm_active_session');
+                    if (savedHeroId && wasActiveSession) {  // only restore after F5, not fresh login
                         const heroResp = await apiRequest('GET', `/characters/${savedHeroId}`);
                         const restored = heroResp.character || heroResp;
                         if (restored?.id && Number(restored.user_id) === Number(currentUser.id)) {
@@ -391,8 +393,10 @@ async function handleLogin(e) {
 function handleLogout() {
     authToken = null;
     currentUser = null;
+    currentHero = null;
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    try { sessionStorage.removeItem('aigm_hero_id'); sessionStorage.removeItem('aigm_active_session'); } catch {}
     showScreen('login');
 }
 
@@ -442,7 +446,7 @@ function renderHeroes(heroes) {
         const status = hero.status || 'idle';
         const statusLabel = { idle: 'Wolny', in_campaign: 'W kampanii', in_dungeon: 'W lochu' }[status] || status;
         const campaignTitle = hero.campaign_title || '';
-        const canDelete = status !== 'in_campaign';
+        const canDelete = true;  // always show — backend enforces safety
 
         const wrapper = document.createElement('div');
         wrapper.style.cssText = 'position:relative;display:flex;align-items:stretch;margin-bottom:8px';
@@ -496,7 +500,7 @@ async function selectHero(hero) {
         elements.welcomeUser.textContent = `Bohater: ${hero.name}`;
     }
     // Save hero to session so F5 restores context
-    try { sessionStorage.setItem('aigm_hero_id', hero.id); } catch {}
+    try { sessionStorage.setItem('aigm_hero_id', hero.id); sessionStorage.setItem('aigm_active_session', '1'); } catch {}
     await loadCampaigns();
     showScreen('campaigns');
 }
