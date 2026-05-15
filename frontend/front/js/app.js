@@ -519,10 +519,15 @@ async function loadCampaigns() {
         const campaigns = allCampaigns.filter(c => {
             const ownerId = c.owner_user_id ?? c.owneruserid;
             if (Number(ownerId) !== Number(currentUser?.id)) return false;
-            // If we have a hero, only show campaigns that belong to this hero
+            // Hide ended/archived campaigns
+            if (c.status === 'ended' || c.status === 'archived' || c.status === 'discarded') return false;
+            // If we have a hero, only show campaigns that have this hero as character
             if (currentHero?.id) {
                 const campCharId = c.character_id ?? c.char_id;
-                if (campCharId && Number(campCharId) !== Number(currentHero.id)) return false;
+                // If campaign has a character assigned and it's not this hero → hide
+                // Also hide if campaign has NO active character (hero was deleted)
+                if (campCharId === null || campCharId === undefined) return false; // no active char
+                if (Number(campCharId) !== Number(currentHero.id)) return false;
             }
             return true;
         });
@@ -1349,6 +1354,31 @@ async function enterGame(campaign) {
                     }
                 }
             });
+        } else {
+            // No turns yet — new campaign. Send an empty opening turn to trigger plan gen + opening scene
+            showScreen('game');
+            updateAdminSettingsVisibility();
+            if (characterData) populateCharacterSheet(characterData);
+            scrollToBottom();
+            startCombatPolling();
+            const typingIndicator = showTypingIndicator();
+            try {
+                const openingResp = await apiRequest('POST', `/campaigns/${campaign.id}/turns`, {
+                    text: '__AI_GM_OPEN',
+                    character_id: characterData?.id,
+                });
+                typingIndicator.remove();
+                const gmText = openingResp.prose || openingResp.result?.message || openingResp.assistant_text || '';
+                if (gmText) {
+                    const { narrative: gmContent } = parseGmFull(gmText);
+                    if (gmContent) appendMessage({ role: 'assistant', content: gmContent, created_at: new Date() });
+                }
+            } catch (_e) {
+                typingIndicator.remove();
+                appendMessage({ role: 'assistant', content: 'Witaj, bohaterze. Twoja przygoda się zaczyna…', created_at: new Date() });
+            }
+            scrollToBottom();
+            return; // already called showScreen + startCombatPolling above
         }
     } catch (error) {
         console.error('Failed to load chat history:', error);
