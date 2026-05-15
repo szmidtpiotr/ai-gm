@@ -3057,6 +3057,36 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0):
             ).fetchall()
         }
 
+        # Current hex + auto-placement (must happen BEFORE building result_hexes)
+        current_hex = None
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if gs:
+            flags = _j.loads(gs["session_flags"] or "{}")
+            current_hex = flags.get("current_hex")
+            if not current_hex and all_hexes:
+                start = next(
+                    ((q, r) for (q, r), h in all_hexes.items() if h.get("hex_type") == "town"),
+                    next(iter(all_hexes), None),
+                )
+                if start:
+                    sq, sr = start
+                    current_hex = {"q": sq, "r": sr}
+                    flags["current_hex"] = current_hex
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                        (_j.dumps(flags, ensure_ascii=False), campaign_id),
+                    )
+                    conn.execute(
+                        """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, discovered)
+                           VALUES (?,?,?,1)
+                           ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1""",
+                        (campaign_id, sq, sr),
+                    )
+                    conn.commit()
+
         # Campaign-specific discovered hexes
         discovered_coords = set()
         campaign_data = {}
@@ -3102,16 +3132,6 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0):
             if (t["from_q"], t["from_r"]) in discovered_coords
             or (t["to_q"], t["to_r"]) in discovered_coords
         ]
-
-        # Current hex from session_flags
-        current_hex = None
-        gs = conn.execute(
-            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
-            (campaign_id,),
-        ).fetchone()
-        if gs:
-            flags = _j.loads(gs["session_flags"] or "{}")
-            current_hex = flags.get("current_hex")  # {q, r}
 
         # Hex type config for colours/icons
         hex_types = {r["hex_type"]: dict(r) for r in conn.execute(
