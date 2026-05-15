@@ -52,37 +52,27 @@ const LOCATION_RULES = [
   { key: "reason",           label: "Reason",           type: "text",    default: "Sacred ground", description: "Reason shown to player" },
 ];
 
-const TABS = ["locations", "npcs", "enemies", "dungeons", "rules", "pending", "builder"];
+const TABS = ["builder", "npcs", "enemies", "dungeons", "pending"];
 const _rendered = new Set();
-let _aiTrigger = null;  // updated by each tab render; called by the bubble
+let _aiTrigger = null;
 
 export async function init(panel) {
   panel.innerHTML = `
     <div class="section-content">
       <div class="subtab-bar">
-        <button class="subtab-btn active" data-tab="locations">${LABELS.locations}</button>
+        <button class="subtab-btn active" data-tab="builder">🗺 Mapa Świata</button>
         <button class="subtab-btn" data-tab="npcs">${LABELS.npcs}</button>
         <button class="subtab-btn" data-tab="enemies">${LABELS.enemies}</button>
         <button class="subtab-btn" data-tab="dungeons">⚔️ Lochy</button>
-        <button class="subtab-btn" data-tab="rules">📋 Reguły</button>
         <button class="subtab-btn" data-tab="pending">⏳ Oczekujące <span id="pending-nav-badge" class="admin-badge admin-badge-gold" style="display:none"></span></button>
-        <button class="subtab-btn" data-tab="builder">🗺 Mapa Świata</button>
       </div>
       <div class="subtab-panels">
-        ${TABS.map((t) => `<div class="subtab-panel${t === "locations" ? " active" : ""}" data-tab="${t}"></div>`).join("")}
+        ${TABS.map((t) => `<div class="subtab-panel${t === "builder" ? " active" : ""}" data-tab="${t}"></div>`).join("")}
       </div>
     </div>`;
 
   _rendered.clear();
   _aiTrigger = null;
-
-  // Floating AI bubble
-  const aiBubble = document.createElement("button");
-  aiBubble.className = "ai-bubble-btn";
-  aiBubble.title = "Generuj z AI";
-  aiBubble.textContent = "✨";
-  aiBubble.addEventListener("click", () => { if (_aiTrigger) _aiTrigger(); });
-  panel.appendChild(aiBubble);
 
   panel.querySelectorAll(".subtab-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -92,13 +82,11 @@ export async function init(panel) {
       const tab = btn.dataset.tab;
       panel.querySelector(`.subtab-panel[data-tab="${tab}"]`).classList.add("active");
       _aiTrigger = null;
-      const bubble = panel.querySelector(".ai-bubble-btn");
-      if (bubble) bubble.style.display = (tab === "rules" || tab === "pending" || tab === "builder") ? "none" : "";
       _activateTab(panel, tab);
     });
   });
 
-  await _activateTab(panel, "locations");
+  await _activateTab(panel, "builder");
 }
 
 async function _activateTab(panel, tab) {
@@ -106,17 +94,12 @@ async function _activateTab(panel, tab) {
   _rendered.add(tab);
   const container = panel.querySelector(`.subtab-panel[data-tab="${tab}"]`);
   if (!container) return;
-  // Hide AI bubble on Rules tab (it has its own AI UI)
-  const bubble = panel.querySelector(".ai-bubble-btn");
-  if (bubble) bubble.style.display = tab === "rules" ? "none" : "";
-  if      (tab === "locations") await _renderLocations(container);
-  else if (tab === "npcs")      await _renderNpcs(container);
+  if      (tab === "npcs")      await _renderNpcs(container);
   else if (tab === "enemies")   await _renderEnemies(container);
   else if (tab === "dungeons")  await _renderDungeons(container);
-  else if (tab === "rules")     await _renderRules(container);
   else if (tab === "pending")   await _renderPendingReview(container, panel);
   else if (tab === "builder") {
-    const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=2");
+    const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=3");
     await initBuilder(container);
   }
 }
