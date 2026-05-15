@@ -650,30 +650,23 @@ async function selectCampaign(campaign) {
             characterData = myCharacter;
             await enterGame(campaign);
         } else if (currentHero && currentHero.status === 'idle' && !currentHero.campaign_id) {
-            // Hero is unassigned — offer to bring them into this campaign
-            const confirmed = confirm(
-                `Przypisać bohatera "${currentHero.name}" do kampanii "${campaign.title || ''}"?\n\nBohater wejdzie do tej kampanii i zachowa swoje statystyki.`
-            );
-            if (confirmed) {
-                try {
-                    await apiRequest('POST', `/characters/${currentHero.id}/assign-campaign`, {
-                        campaign_id: campaign.id,
-                        user_id: currentUser.id,
-                    });
-                    // Reload character data
-                    const refetch = await apiRequest('GET', `/campaigns/${campaign.id}/characters`);
-                    const assigned = (refetch.characters || []).find(c => c.id === currentHero.id);
-                    if (assigned) {
-                        characterData = assigned;
-                        currentHero = assigned;
-                        await enterGame(campaign);
-                        return;
-                    }
-                } catch (err) {
-                    showToast(err.message || 'Nie można przypisać bohatera', 'error');
+            // Hero is unassigned — auto-assign (no prompt needed when creating campaign inside hero context)
+            try {
+                await apiRequest('POST', `/characters/${currentHero.id}/assign-campaign`, {
+                    campaign_id: campaign.id,
+                    user_id: currentUser.id,
+                });
+                const refetch = await apiRequest('GET', `/campaigns/${campaign.id}/characters`);
+                const assigned = (refetch.characters || []).find(c => c.id === currentHero.id);
+                if (assigned) {
+                    characterData = assigned;
+                    currentHero = assigned;
+                    await enterGame(campaign);
+                    return;
                 }
+            } catch (err) {
+                showToast(err.message || 'Nie można przypisać bohatera', 'error');
             }
-            // Fall through to wizard if declined or error
             startCharacterWizard();
         } else {
             // No character — start creation wizard
@@ -4240,26 +4233,42 @@ async function _wmExecuteTravel() {
 
     const enc = response.encounter;
     const hours = response.total_hours || 0;
-    // Build readable destination: use label, fallback to hex type name, never show coords
     const arrivedHex = response.arrived_hex || {};
     const arrivedData = response.hex_data || {};
-    const hexTypeName = (_wmap.hexTypes?.[arrivedData.hex_type]?.label) || arrivedData.hex_type || 'nieznane miejsce';
-    const destLabel = t.label || arrivedData.label || hexTypeName;
 
-    // Travel narrative — no coordinates, clean Polish prose
+    // Build readable destination — never show coordinates
+    const hexTypeName = (_wmap.hexTypes?.[arrivedData.hex_type]?.label) || arrivedData.hex_type || '';
+    // Only use a name if it's a real label, not a fallback coord string
+    const rawLabel = t.label && !t.label.match(/^\([-\d]+,[-\d]+\)$/) ? t.label : null;
+    const destLabel = rawLabel || arrivedData.label || null;
+
+    // Travel animation: brief walking indicator then message
+    const travelAnim = document.createElement('div');
+    travelAnim.className = 'chat-bubble chat-bubble--system';
+    travelAnim.innerHTML = `<div class="chat-bubble__content" style="display:flex;align-items:center;gap:8px"><span style="animation:pulse 0.8s infinite">🚶</span> <em>Podróżujesz…</em></div>`;
+    elements.chatMessages.appendChild(travelAnim);
+    scrollToBottom();
+    await new Promise(r => setTimeout(r, 900));
+    travelAnim.remove();
+
+    // Arrival message
     let prose;
     if (hours > 0) {
       const hStr = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
-      prose = `Podróżujesz do <strong>${escapeHtml(destLabel)}</strong> — droga zajmuje ${hStr} ${hours === 1 ? 'godzinę' : 'godzin'}.`;
+      const hWord = hours === 1 ? 'godzinę' : (hours < 5 ? 'godziny' : 'godzin');
+      if (destLabel) {
+        prose = `Dotarłeś do <strong>${escapeHtml(destLabel)}</strong>. Droga zajęła ${hStr} ${hWord}.`;
+      } else if (hexTypeName) {
+        prose = `Wkraczasz na teren — ${escapeHtml(hexTypeName)}. Droga zajęła ${hStr} ${hWord}.`;
+      } else {
+        prose = `Dotarłeś do celu. Droga zajęła ${hStr} ${hWord}.`;
+      }
     } else {
-      prose = `Przybyłeś do <strong>${escapeHtml(destLabel)}</strong>.`;
+      prose = destLabel ? `Jesteś w ${escapeHtml(destLabel)}.` : 'Przybyłeś na miejsce.';
     }
-    if (arrivedData.atmosphere) {
-      prose += ` <em>${escapeHtml(arrivedData.atmosphere)}</em>`;
-    }
-    if (enc) prose += ` Na drodze natykasz się na wroga!`;
+    if (arrivedData.atmosphere) prose += ` <em>${escapeHtml(arrivedData.atmosphere)}</em>`;
+    if (enc) prose += `<br><strong>Na drodze natykasz się na wroga!</strong>`;
 
-    // Append as GM message (innerHTML so bold/em render)
     const travelBubble = document.createElement('div');
     travelBubble.className = 'chat-bubble chat-bubble--gm';
     travelBubble.innerHTML = `<div class="chat-bubble__content">${prose}</div>`;
@@ -4271,16 +4280,30 @@ async function _wmExecuteTravel() {
       if (!_wmap.panel.hasAttribute('hidden')) _wmRender();
     }
 
-    // If encounter → trigger combat via proper COMBAT_START mechanism
+    // If encounter → trigger combat via turn API (narrator will add [COMBAT_START:key])
     if (enc?.enemy_key) {
       setTimeout(async () => {
         try {
-          // Send as structured action that WSM can parse directly
-          await sendMessage(`__ACTION:ATTACK:${enc.enemy_key}`);
-        } catch {
-          await sendMessage(`Natykam się na ${enc.enemy_key} i przygotowuję się do walki.`);
+          const typingIndicator = showTypingIndicator();
+          const combatResponse = await apiRequest('POST', `/campaigns/${currentCampaignId}/turns`, {
+            text: `Spotykam ${enc.enemy_key} na drodze! Przygotowuję się do walki!`,
+            character_id: characterData.id,
+          });
+          typingIndicator.remove();
+          const gmText = combatResponse.prose
+            || combatResponse.result?.message
+            || combatResponse.assistant_text || '';
+          if (gmText) {
+            const { narrative: gmContent } = parseGmFull(gmText);
+            if (gmContent) appendMessage({ role: 'assistant', content: gmContent, created_at: new Date() });
+          }
+          if (combatResponse.skill_test_pending) showSkillTestPopup(combatResponse.skill_test_pending);
+          await pollCombatState();
+          scrollToBottom();
+        } catch (err) {
+          console.warn('Encounter combat trigger failed:', err);
         }
-      }, 500);
+      }, 600);
     }
 
     await refreshCharacterData();

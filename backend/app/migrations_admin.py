@@ -1991,6 +1991,8 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     """, "v2-campaign-hex-data")
     _exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_hex_unique ON campaign_hex_data(campaign_id, hex_q, hex_r)",
           "v2-campaign-hex-idx")
+    _exec("ALTER TABLE campaign_hex_data ADD COLUMN encounter_cleared INTEGER NOT NULL DEFAULT 0",
+          "v2-campaign-hex-encounter-cleared")
 
     _exec("""
         CREATE TABLE IF NOT EXISTS hex_type_config (
