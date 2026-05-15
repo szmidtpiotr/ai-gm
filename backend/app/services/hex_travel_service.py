@@ -265,8 +265,22 @@ def resolve_chain_travel(
     encounter_hex = None
     arrived_hex = to_hex  # assume full travel unless interrupted
 
+    # Load cleared encounters for this campaign (won't re-trigger)
+    cleared_coords: set[tuple[int, int]] = set()
+    try:
+        cleared_rows = conn.execute(
+            "SELECT hex_q, hex_r FROM campaign_hex_data WHERE campaign_id = ? AND encounter_cleared = 1",
+            (campaign_id,),
+        ).fetchall()
+        cleared_coords = {(int(r["hex_q"]), int(r["hex_r"])) for r in cleared_rows}
+    except Exception:
+        pass
+
     for step_hex in path[1:]:
         hex_data = hexes.get(step_hex, {})
+        # Skip encounter if already cleared at this hex
+        if step_hex in cleared_coords:
+            continue
         if _roll_encounter(hex_data, hex_type_cfg):
             enemy_key = _pick_encounter_enemy(hex_data)
             if enemy_key:

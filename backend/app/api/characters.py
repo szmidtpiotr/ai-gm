@@ -847,7 +847,7 @@ def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
                 char_summary = (
                     f"Postać: {char_name}, Archetyp: {archetype_label}"
                     + (f", Statystyki: {stat_lines}" if stat_lines else "")
-                    + f", Lokalizacja: {hero.get('location') or 'nieznane miejsce'}."
+                    + f", Lokalizacja: {hero['location'] or 'nieznane miejsce'}."
                 )
 
                 has_v2 = bool(identity_block.get("bonds") or identity_block.get("weaknesses"))
@@ -900,7 +900,7 @@ def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
                             _fc = json.loads((gs_ch["session_flags"] if gs_ch else None) or "{}")
                             if not _fc.get("current_hex"):
                                 resolve_starting_hex(int(campaign_id), character_id,
-                                                     hero.get("location") or None, conn)
+                                                     hero["location"] or None, conn)
                         except Exception:
                             pass
         except Exception as e:
@@ -1526,8 +1526,8 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
             "SELECT campaign_id, user_id, name, location FROM characters WHERE id = ?",
             (character_id,),
         ).fetchone()
-        campaign_id = int(char_row["campaign_id"]) if char_row else None
-        user_id = int(char_row["user_id"]) if char_row else None
+        campaign_id = int(char_row["campaign_id"]) if char_row and char_row["campaign_id"] else None
+        user_id = int(char_row["user_id"]) if char_row and char_row["user_id"] else None
 
         if campaign_id:
             campaign = conn.execute(

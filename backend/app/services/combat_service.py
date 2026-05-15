@@ -1735,6 +1735,27 @@ def resolve_attack(
                             loot_pool=loot_pool_accum,
                         )
                         conn.commit()
+                        # Mark current hex encounter as cleared for this campaign
+                        try:
+                            gs_hex = conn.execute(
+                                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                                (campaign_id,),
+                            ).fetchone()
+                            if gs_hex:
+                                _sf_hex = json.loads(gs_hex["session_flags"] or "{}")
+                                ch = _sf_hex.get("current_hex")
+                                if ch:
+                                    conn.execute(
+                                        """INSERT INTO campaign_hex_data
+                                           (campaign_id, hex_q, hex_r, discovered)
+                                           VALUES (?,?,?,1)
+                                           ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET
+                                             encounter_cleared = 1, discovered = 1""",
+                                        (campaign_id, int(ch["q"]), int(ch["r"])),
+                                    )
+                                    conn.commit()
+                        except Exception:
+                            pass
                         out["combat_state"] = load_combat_snapshot(campaign_id)
                         return out
             else:
