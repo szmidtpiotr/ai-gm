@@ -4936,3 +4936,36 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted);
   font-size: 0.65rem; font-family: monospace; padding: 6px; resize: none;
   box-sizing: border-box; }
+
+/* ── T33: Suggested Actions (Hybrid Input UI) ────────────────────────────── */
+#suggested-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 10px 2px;
+}
+.suggested-action-btn {
+  font-size: 0.78rem;
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(180,140,100,0.35);
+  background: rgba(30,20,10,0.6);
+  color: rgba(220,200,170,0.85);
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.suggested-action-btn:hover:not(.disabled) {
+  background: rgba(80,55,30,0.7);
+}
+.suggested-action-btn.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.char-counter {
+  font-size: 0.72rem;
+  color: rgba(200,150,100,0.6);
+  text-align: right;
+  display: block;
+  padding: 0 10px 2px;
+}

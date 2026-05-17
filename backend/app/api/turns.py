@@ -49,6 +49,8 @@ from app.services.location_intent_parser import LocationIntent, parse as parse_l
 from app.services.location_validator import validate_move, log_integrity_violation
 from app.services.weapon_rules import is_attack_test, resolve_attack_roll_for_weapon, resolve_sheet_weapon
 from app.services.world_service import process_create_tags, get_current_location_info
+from app.services.suggested_actions import build_suggested_actions
+from app.services.intent_parser import ParsedIntent
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
@@ -501,6 +503,7 @@ class TurnCreate(BaseModel):
     system: str | None = None
     engine: str | None = None
     game_id: int | None = None
+    input_type: str = "free_text"   # "free_text" | "structured"
 
 
 class SearchPayload(BaseModel):
@@ -524,6 +527,44 @@ def _start_turn_trace(campaign_id: int, character_id: int | None, route: str) ->
 
 def _with_turn_trace(payload: dict, turn_id: str) -> dict:
     return {**payload, "turn_id": turn_id}
+
+
+def _structured_action_to_tag(action_str: str) -> str:
+    """
+    T33: Convert a structured button-click payload into an [ACTION:...] tag
+    that the intent parser / turn pipeline already understands.
+
+    Examples:
+      "MOVEMENT:forest_clearing" → "[ACTION:MOVEMENT:target=forest_clearing]"
+      "DIALOGUE:innkeeper_boris" → "[ACTION:DIALOGUE:target=innkeeper_boris]"
+      "REST:long"               → "[ACTION:REST:type=long]"
+      "SEARCH"                  → "[ACTION:SEARCH]"
+      "ATTACK"                  → "[ACTION:ATTACK]"
+      "FLEE"                    → "[ACTION:FLEE]"
+      "ITEM_USE"                → "[ACTION:ITEM_USE]"
+    Unknown payloads are returned unchanged (fall through to normal parse).
+    """
+    s = (action_str or "").strip()
+    if ":" in s:
+        head, _, tail = s.partition(":")
+        head = head.upper()
+        tail = tail.strip()
+        if head == "MOVEMENT":
+            return f"[ACTION:MOVEMENT:destination_key={tail}]"
+        if head == "DIALOGUE":
+            return f"[ACTION:DIALOGUE:npc_key={tail}]"
+        if head == "REST":
+            return f"[ACTION:REST:rest_type={tail}]"
+        if head == "EXAMINE":
+            return f"[ACTION:EXAMINE:target={tail}]"
+        # Generic fallback with param
+        return f"[ACTION:{head}:target={tail}]"
+    # No-param actions
+    upper = s.upper()
+    if upper in ("SEARCH", "ATTACK", "FLEE", "ITEM_USE", "ITEM_PICKUP"):
+        return f"[ACTION:{upper}]"
+    # Unknown — return as-is
+    return s
 
 
 def _safe_int(value, fallback: int) -> int:
@@ -2375,11 +2416,17 @@ def create_turn(
         if blocked_turn is not None:
             return blocked_turn
 
+        # ── T33: Structured action bypass — convert button-click payload to ACTION tag ──
+        narrative_text = text
+        if payload.input_type == "structured" and not roll_request:
+            narrative_text = _structured_action_to_tag(text)
+            logger.info("structured_action_converted", original=text, converted=narrative_text)
+
         result = run_narrative_turn(
             conn=conn,
             campaign=campaign,
             character=character,
-            user_text=text,
+            user_text=narrative_text,
             model=model,
             ollama_base_url=x_ollama_base_url,
             llm_config=llm_config,
@@ -2587,6 +2634,37 @@ def create_turn(
             {**result, "message": clean_assistant} if isinstance(result, dict) else result
         )
 
+        # ── T33: Build suggested actions for hybrid input UI ─────────────────
+        _suggested_actions: list[dict] = []
+        try:
+            _sf_for_sa = {}
+            _gs_for_sa = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _gs_for_sa:
+                _sf_for_sa = json.loads(_gs_for_sa["session_flags"] or "{}")
+            _game_state_for_sa = _sf_for_sa.get("state", "NARRATIVE")
+            # If combat just started, use COMBAT state
+            if new_combat:
+                _game_state_for_sa = "COMBAT"
+            # Parse LLM-suggested actions from GM JSON if present
+            _llm_suggested: list[dict] | None = None
+            if isinstance(_parsed_json, dict):
+                _raw_llm_sa = _parsed_json.get("suggested_actions")
+                if isinstance(_raw_llm_sa, list):
+                    _llm_suggested = _raw_llm_sa
+            _suggested_actions = build_suggested_actions(
+                conn=conn,
+                campaign_id=campaign_id,
+                character_id=payload.character_id,
+                game_state=_game_state_for_sa,
+                session_flags=_sf_for_sa,
+                llm_suggested=_llm_suggested,
+            )
+        except Exception as _sa_err:
+            logger.warning("suggested_actions_build_error", error=str(_sa_err))
+
         out: dict = {
             "id": log["id"],
             "campaign_id": log["campaign_id"],
@@ -2596,6 +2674,7 @@ def create_turn(
             "result": result_out,
             "prose": clean_assistant,
             "turn_id": turn_id,
+            "suggested_actions": _suggested_actions,
         }
         if _skill_pending_narrator:
             out["skill_test_pending"] = _skill_pending_narrator

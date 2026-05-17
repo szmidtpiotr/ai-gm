@@ -288,6 +288,24 @@ Ustaw `location_intent: null`.
 - Jeśli mechanika walki nie potwierdzi dropu — NIE opisuj łupów.
 - Alternatywnie (kompatybilny stary format): umieść `Grant Item <nazwa>` jako ostatnią linię narracji.
 
+## SUGEROWANE AKCJE (SUGGESTED ACTIONS) — OPCJONALNE
+
+Możesz opcjonalnie dodać pole `suggested_actions` w odpowiedzi JSON — tablicę 1-2 przycisków kontekstowych dla gracza.
+
+- Używaj **tylko** gdy scena zawiera konkretny, unikalny element do interakcji (konkretny obiekt, NPC, tajemnica).
+- **NIE dodawaj** ogólnych akcji jak "rozejrzyj się", "chodź dalej" — te obsługuje system automatycznie.
+- Każda akcja ma: `label` (tekst PO POLSKU), `action` (klucz akcji), `enabled` (true/false).
+
+Format:
+```json
+"suggested_actions": [
+  {"label": "Zbadaj ołtarz", "action": "EXAMINE:altar", "enabled": true},
+  {"label": "Zapytaj o medalion", "action": "DIALOGUE:npc_key", "enabled": true}
+]
+```
+
+Jeśli nie ma nic szczególnie interesującego — pomiń pole `suggested_actions` lub ustaw `null`.
+
 ## ZŁOTO FABULARNE (GRANT GOLD)
 - Aby nadać graczowi złoto fabularne, użyj cue jako OSTATNIĄ linię odpowiedzi:
   Grant Gold <liczba>
