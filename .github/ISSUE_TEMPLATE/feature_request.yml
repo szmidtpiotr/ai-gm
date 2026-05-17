@@ -1,0 +1,60 @@
+name: "✨ Feature Request"
+description: "Propose a new feature or improvement to the game."
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe what you want built. The more context, the better.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Player UI (frontend)
+        - Admin Panel
+        - Combat system
+        - Dungeon runs
+        - Campaign / GM Plan
+        - LLM / Narration
+        - Loot system
+        - Character / Hero
+        - Scholar / Spell system
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Why do you want this? What's missing or frustrating right now?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How should it work? Describe the behaviour from the player/admin perspective.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other ways to solve this? Why prefer your proposal?
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - "🔥 High — core gameplay / blocking"
+        - "📌 Medium — noticeable improvement"
+        - "💡 Low — nice to have"
+    validations:
+      required: true
