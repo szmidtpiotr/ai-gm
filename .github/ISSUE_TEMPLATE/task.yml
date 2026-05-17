@@ -1,0 +1,53 @@
+name: "📋 Task / Tech Debt"
+description: "Refactor, cleanup, migration, documentation, or a defined dev task."
+title: "[TASK] "
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for planned dev work that isn't a bug or feature — refactors, migrations, tests, docs, etc.
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Task type
+      options:
+        - Refactor
+        - DB migration
+        - Tests
+        - Documentation
+        - Performance
+        - Security
+        - DevOps / deployment
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What needs to be done?
+      description: Clear description of the work. Link related issues/PRs if relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Done when…
+      description: How do we know this task is complete? What does success look like?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: effort
+    attributes:
+      label: Estimated effort
+      options:
+        - "S — a few lines / < 1h"
+        - "M — under half a day"
+        - "L — half to full day"
+        - "XL — multiple days"
+    validations:
+      required: true

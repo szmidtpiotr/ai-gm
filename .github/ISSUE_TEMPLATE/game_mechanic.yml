@@ -1,0 +1,59 @@
+name: "🎲 Game Mechanic Change"
+description: "Propose a change to rules, balancing, stats, or the system prompt."
+title: "[MECHANIC] "
+labels: ["game-design"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ Core mechanics (roll formula, DC scale, HP formula) are locked — changes require explicit approval.
+        Use this template to propose balancing tweaks, new mechanics, or rules clarifications.
+
+  - type: dropdown
+    id: mechanic_type
+    attributes:
+      label: Mechanic type
+      options:
+        - Combat (damage, hit chance, conditions)
+        - Stats / skills
+        - HP / Mana scaling
+        - Spells (Scholar)
+        - Loot / rewards
+        - Dungeon difficulty
+        - DC scale
+        - System prompt / narration rules
+        - New mechanic (not listed above)
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behaviour
+      description: How does it work right now?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed change
+      description: What exactly should change? Be specific — numbers, formulas, rules text.
+    validations:
+      required: true
+
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why this change?
+      description: Balance problem? Player feedback? Design goal?
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: touches_locked
+    attributes:
+      label: Does this touch locked mechanics?
+      options:
+        - label: "Yes — this modifies the roll formula, DC scale, or HP formula (requires extra approval)"
+        - label: "No — this is a balance tweak or new system only"

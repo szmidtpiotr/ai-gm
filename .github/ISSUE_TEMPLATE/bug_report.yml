@@ -1,0 +1,67 @@
+name: "🐛 Bug Report"
+description: "Something is broken — backend, frontend, or game logic."
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the bug clearly so it can be reproduced and fixed. Screenshots or logs welcome.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where does the bug occur?
+      options:
+        - Player UI (frontend)
+        - Admin Panel
+        - Backend / API
+        - Combat system
+        - Dungeon runs
+        - Campaign / GM Plan
+        - LLM / Narration
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you see? What did you expect?
+      placeholder: |
+        Expected: ...
+        Got: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to ...
+        2. Click ...
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error messages
+      description: Paste any relevant console errors, backend logs, or screenshots.
+      render: shell
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - "🔴 Critical — game breaking / data loss"
+        - "🟠 High — major feature broken"
+        - "🟡 Medium — workaround exists"
+        - "🟢 Low — cosmetic / minor"
+    validations:
+      required: true
