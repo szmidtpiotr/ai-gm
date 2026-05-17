@@ -48,10 +48,28 @@ body:
       required: true
 
   - type: textarea
+    id: debug_log
+    attributes:
+      label: "🐛 Debug Log (AI-GM)"
+      description: |
+        In the game: Settings → "Kopiuj log" → paste here.
+        Includes raw GM responses, inventory events, combat data, and JSON block for analysis.
+      placeholder: |
+        AI-GM DEBUG LOG | Campaign #... | Hero: ... | ...
+        ================================================================
+        [T12 | id:4521 | narrative | ...]
+        GRACZ: ...
+        GM_RAW: {...}
+        ...
+        ```json
+        {...full structured data...}
+        ```
+
+  - type: textarea
     id: logs
     attributes:
-      label: Logs / error messages
-      description: Paste any relevant console errors, backend logs, or screenshots.
+      label: Other logs / errors
+      description: Console errors, backend logs, screenshots — anything else useful.
       render: shell
 
   - type: dropdown
