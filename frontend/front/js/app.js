@@ -2320,11 +2320,14 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
 
         // Show the roll result as a user message in chat history
         const sr = response.skill_test_result || {};
+        let rollBubbleEl = null;
         if (sr.skill_label || sr.skill_key) {
             const skillName = sr.skill_label || sr.skill_key || 'Test';
             const outcome = sr.nat20 ? ' — Naturalny 20!' : sr.nat1 ? ' — Naturalny 1' : sr.success ? ' — Sukces' : ' — Porażka';
             const rollLine = `🎲 ${skillName}: ${sr.d20_roll} +${sr.modifier} = ${sr.player_total}${outcome}`;
             appendMessage({ role: 'user', content: rollLine, created_at: new Date() });
+            // Keep reference to roll bubble so we can scroll to it (not the very bottom)
+            rollBubbleEl = elements.chatMessages.lastElementChild;
         }
 
         if (response.prose) {
@@ -2340,7 +2343,12 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
         // Update HP if trap dealt damage
         await refreshCharacterData();
         await pollCombatState();
-        scrollToBottom();
+        // Scroll to the roll bubble (not the very bottom) so the triggering action is visible above
+        if (rollBubbleEl) {
+            rollBubbleEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+            scrollToBottom();
+        }
 
         // Re-enable input
         if (elements.btnSend) elements.btnSend.disabled = false;
