@@ -3758,8 +3758,10 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   display: flex;
   gap: var(--space-md);
   padding: var(--space-md) var(--space-lg);
+  padding-bottom: calc(var(--space-md) + var(--safe-bottom));
   background: linear-gradient(180deg, rgba(20, 14, 18, 0.98) 0%, rgba(15, 10, 14, 0.98) 100%);
   border-top: 1px solid rgba(220, 80, 80, 0.3);
+  flex-shrink: 0;
 }
 
 .combat-composer[hidden] {
@@ -3767,7 +3769,8 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
 }
 
 .combat-btn {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3782,6 +3785,51 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   text-transform: uppercase;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+
+.combat-btn svg {
+  flex-shrink: 0;
+}
+
+.combat-btn span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* Mobile: compress padding/typography so all 3 buttons fit on narrow screens */
+@media (max-width: 480px) {
+  .combat-composer {
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-sm);
+    padding-bottom: calc(var(--space-sm) + var(--safe-bottom));
+  }
+  .combat-btn {
+    padding: 10px 6px;
+    gap: 6px;
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
+    border-radius: 10px;
+  }
+  .combat-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+/* Very narrow phones (<360px): hide labels, keep icons only */
+@media (max-width: 359px) {
+  .combat-btn span {
+    display: none;
+  }
+  .combat-btn {
+    padding: 12px 4px;
+  }
+  .combat-btn svg {
+    width: 22px;
+    height: 22px;
+  }
 }
 
 .combat-btn:active {
