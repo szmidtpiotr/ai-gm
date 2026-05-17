@@ -1,218 +1,210 @@
-# AI-GM - RPG Game Project
+# AI-GM — Dark Fantasy RPG with AI Game Master
 
-AI-GM is a browser-based RPG where the backend LLM acts as Game Master.  
-The project includes player gameplay UI, admin configuration UI, per-user LLM settings, and observability tooling.
+A browser-based single-player RPG where a Large Language Model acts as the Game Master. Players create heroes, embark on campaigns, engage in tactical combat, explore a hex world map, and run standalone dungeons — all narrated in real-time by the AI.
 
-## Quick Start
+> **Language:** Game narration in **Polish**. Code and docs in English.
 
-```bash
-# Fresh Ubuntu host may need:
-# sudo apt-get update && sudo apt-get install -y git
-git clone https://github.com/szmidtpiotr/ai-gm.git
-cd ai-gm
-chmod +x install.sh
-./install.sh
+---
+
+## Features
+
+### Player Experience
+- **Hero-first flow** — create a hero independently, then pick campaigns or dungeons
+- **3 archetypes**: Wojownik (Warrior), Uczony (Scholar/Mage), Łotrzyk (Rogue)
+- **7 stats**: STR, DEX, CON, INT, WIS, CHA, LCK with archetype bonuses and modifiers
+- **Skill system** — 16 skills with trigger keywords; pre-LLM scan fires before the LLM call
+- **Turn-based narrative** — GM narrates every action, move, conversation, and event in Polish
+- **Character sheet** — stats with modifiers, mana bar, conditions, XP, spells (Scholar), inventory
+
+### Combat
+- **Tactical combat engine** — initiative, range zones (engaged/ranged/distant), enemy AI behavior profiles
+- **Dice roll popup** — animated d20 with parchment background; results saved to campaign history
+- **Scholar spell picker** — select from learned spells mid-combat, mana-checked overlay
+- **13 conditions** — stat penalties, auto-remove turn counters (Krwawiący, Zatruty, Ogłuszony…)
+- **Critical hits** — nat 20 = double damage; nat 1 = complications
+- **Death saves** — escalating DC per failure; flee mechanic with loot abandon
+
+### World
+- **Hex world map** — fog-of-war, click-to-travel, terrain types, encounter rolls, A* pathfinding
+- **Location system** — GM creates locations narratively; pending admin review queue
+- **NPC system** — personality profiles, keyword dialogue triggers
+
+### Dungeon Runs (standalone farmable content)
+- **Room types**: combat · chest · trap · riddle · rest · boss
+- **Riddle bank** — 12 Polish dark-fantasy riddles, Levenshtein fuzzy answer checking
+- **Square tile map** (Betrayal at House on the Hill style) — rooms revealed on entry
+- **3-tier loot**: enemy drops · chest table · guaranteed boss drop
+- **Dungeon-exclusive items** — `source_exclusive` flag (dungeon/boss only)
+- **Cooldown system** — per-character, per-dungeon, admin-configurable hours
+
+### Economy & Inventory
+- **Inventory** — equipment slots (main_hand/off_hand/armor), backpack, quest/lore items, gold
+- **Loot system** — 3-way item type (item/consumable/weapon), per-enemy loot tables with weights
+- **Shop system** — narrative-embedded merchant encounters
+- **XP progression** — WFRP-style: spend XP to upgrade stats and skills
+- **Scholar spells** — 9 spells (tiers 1–5), mana, arcane points, rank 2/3 upgrades, miscast on nat 1
+
+---
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | FastAPI + SQLite |
+| Frontend (Player) | Static HTML/CSS/JS served by Nginx |
+| Frontend (Admin) | Modular JS sections at `/admin2/` |
+| LLM | Ollama (local) or any OpenAI-compatible endpoint |
+| Runtime config | SQLite (`/data/ai_gm.db`) |
+| Voice (optional) | Piper TTS |
+| Observability (opt) | Grafana + Loki + Prometheus |
+
+---
+
+## Architecture
+
+```
+Player Browser
+  └─ /front/         Player UI (login → hero → campaigns/dungeons → gameplay)
+  └─ /admin2/        Admin Panel v2 (modular JS sections)
+
+Backend (FastAPI)
+  ├─ /api/           Player-facing endpoints
+  │    ├─ campaigns, characters, turns, combat, inventory, dungeons
+  │    ├─ world-map, skill-tests, mechanics, shop, npcs
+  │    └─ characters/{id}/spells, dungeons/{key}/enter, resolve-room
+  ├─ /api/admin/     Admin endpoints (token-protected)
+  │    ├─ weapons, items, enemies, conditions, skills, dc, archetypes
+  │    ├─ loot-tables, dungeons, riddles, campaigns/hex-map
+  │    └─ llm-presets, config export/import, assistant/draft
+  └─ Services
+       ├─ combat_service.py         — turn resolution, spell attacks, conditions
+       ├─ dungeon_service.py        — room gen, riddles, loot tiers, death handling
+       ├─ loot_service.py           — inventory, item effects, dice roller
+       ├─ spell_service.py          — mana, miscast, arcane points, rank upgrades
+       ├─ world_service.py          — locations, NPCs, enemies (pending review pipeline)
+       ├─ hex_travel_service.py     — A* pathfinding, fog-of-war, encounter clearing
+       └─ turns.py                  — 9-step turn pipeline, skill test interception
 ```
 
-Services:
+---
 
-- Frontend: `http://localhost:3001`
-- Backend API: `http://localhost:8000/api`
-- Swagger docs: `http://localhost:8000/docs`
+## Development
 
-Installer notes:
+### Environment
 
-- `install.sh` now runs with interactive checkpoints before destructive/mid-configuration steps.
-- For CI/automation use non-interactive mode: `./install.sh --yes`.
-- At the end, installer prints and saves a full status summary to `install-summary.txt` (URLs, LLM mode, DB path, runtime container status).
-- Dedicated PROD host recommended bootstrap: `GRAFANA_ADMIN_PASSWORD='...' ./install.sh --with-observability --no-ollama`
-- `--no-ollama` is the recommended first boot mode when the final custom LLM URL / API key / model will be configured later from `Admin Panel -> Accounts`.
+| Role | Host | Branch | Ports |
+|---|---|---|---|
+| **DEV** | `192.168.1.61` | `main` | frontend `:3002`, backend `:8100` |
+| **PROD** | `192.168.1.63` | `main` | frontend `:3001`, backend `:8000` |
 
-## Remote Workspace Operation
+> All commits go directly to **`main`**. No separate develop branch.
 
-In the current team setup, `/home/piotrszmidt/remote_mount/ai-gm` is an NFS-mounted view of the repo hosted on `192.168.1.61`.
-
-- Edit files in the mounted workspace as needed, but run Docker, tests, restarts, and rebuilds only on `piotrszmidt@192.168.1.61`.
-- Do not use the local machine as the AI-GM dev runtime.
-- Validate deployed dev changes via `https://aigm-dev.studio-colorbox.com/`.
-- Restart or rebuild the relevant remote services after code changes when required.
-
-## Environment Roles
-
-- DEV host: `192.168.1.61`
-  - development runtime only
-  - branch flow centered on `develop`
-- PROD host: `192.168.1.63`
-  - production runtime only
-  - deploy only from `main`
-  - observability stack lives there together with PROD
-
-Current recommended production flow:
-
-1. Finish and validate work on DEV
-2. Promote `develop` -> `main`
-3. SSH to `192.168.1.63`
-4. Run `./scripts/deploy_prod.sh`
-
-`scripts/promote_and_deploy_prod.sh` is kept only as a legacy helper and should not be the default production path for the dedicated PROD host model.
-
-## Current Stack
-
-- Backend: FastAPI + SQLite
-- Frontend: static HTML/CSS/JS served by Nginx
-- LLM providers: Ollama and OpenAI-compatible endpoints
-- Runtime config storage: SQLite (`/data/ai_gm.db`)
-
-## Implemented Features
-
-### Player Side
-
-- Login gate before loading gameplay data.
-- Campaign/character/turn flow with streaming and non-streaming responses.
-- Player UI no longer edits provider / base URL / API key; those are managed from admin only.
-- LLM panel collapsed by default, toggleable in UI.
-- Mechanics metadata endpoint for skill/DC descriptions and roll hints.
-
-### Admin Side
-
-- Token-protected `/api/admin/*` API.
-- Admin dev login endpoint for local development.
-- Global LLM settings and saved presets in `Admin Panel -> Accounts`.
-- Tabbed admin panel with inline CRUD:
-  - stats
-  - skills
-  - dc tiers
-  - weapons
-  - enemies
-  - conditions
-  - accounts
-  - user LLM settings
-- Lock guard support (`locked_at` + `force=true`).
-- Audit log on create/update/delete operations.
-- Config export/import with dry-run and version checks.
-
-### Config Tables (seeded)
-
-- `game_config_stats`
-- `game_config_skills`
-- `game_config_dc`
-- `game_config_weapons` (example row: `shortsword`)
-- `game_config_enemies` (example row: `goblin`)
-- `game_config_conditions` (example row: `poisoned`)
-
-## Key API Groups
-
-- Gameplay:
-  - `/api/campaigns/*`
-  - `/api/characters/*`
-  - `/api/turns/*`
-- Player auth:
-  - `POST /api/auth/login`
-- LLM settings:
-  - `/api/users/{user_id}/llm-settings`
-- Admin:
-  - `/api/admin/*`
-- Mechanics metadata:
-  - `GET /api/mechanics/metadata`
-
-## LLM Resolution
-
-The backend resolves effective LLM config in one place:
-
-- **Server default**: active admin preset / runtime override if present, otherwise `LLM_*` environment variables.
-- **User custom**: `/api/users/{user_id}/llm-settings` with `mode="custom"` overrides the server default.
-- **User default**: `/api/users/{user_id}/llm-settings` with `mode="default"` falls back to the resolved server default.
-
-Relevant environment variables:
-
-- `LLM_PROVIDER`
-- `LLM_BASE_URL`
-- `LLM_MODEL`
-- `LLM_API_KEY`
-- `LLM_TEMPERATURE`
-- `LLM_TOP_P`
-- `LLM_TOP_K`
-- `LLM_REPEAT_PENALTY`
-- `LLM_MAX_TOKENS`
-
-Notes:
-
-- Global provider / API credentials are edited from `Admin Panel -> Accounts`, not from the player frontend.
-- Saved global presets can be activated later and deleted once inactive.
-
-- Player UI now saves only the player profile LLM mode/config and no longer overwrites the global server runtime on normal "Connect".
-- Tests/CI should use the same `LLM_*` env path or explicit request override fixtures instead of assuming a separate LLM config mechanism.
-
-## Figma Handoff Docs
-
-Design-to-code handoff documents are tracked in:
-
-- `docs/figma-handoff/README.md`
-- `docs/figma-handoff/FIGMA_BRIEF.md`
-- `docs/figma-handoff/COMPONENT_MAP.md`
-- `docs/figma-handoff/UI_SPEC.md`
-
-## Observability
-
-Observability assets (Grafana/Loki/Promtail + MCP connector docs) are in:
-
-- `observability/`
-
-The Notion page `Debug Platform` is the operational source of truth; keep docs and repo synchronized.
-
-## Development Notes
-
-- Main branch is the source of truth for shipped features.
-- Use feature branches for isolated work, then merge when smoke tests pass.
-- Do not commit secrets (`.env`, `.secrets/`, credentials files).
-
-## Database Backup & Restore
-
-The SQLite database is stored at `./data/ai_gm.db` (bind-mounted into the backend
-container at `/data/ai_gm.db`).
-
-**Backup:**
+### Run on DEV
 
 ```bash
-./scripts/backup.sh
-# Saves timestamped copy to ./backups/
+ssh claude@192.168.1.61
+cd /home/piotrszmidt/ai-gm
+
+# Rebuild and start
+docker compose -f docker-compose.dev.yml up -d --build --remove-orphans
+# or
+./scripts/deploy_dev.sh
 ```
 
-**Automatic pre-import backups:**
-
-- `POST /api/admin/config/import`
-- `POST /api/admin/config/catalog-snapshot/import`
-
-When `dry_run=false`, backend creates a DB snapshot in `./backups/imports/` before
-replacing config/catalog rows. Retention keeps recent backups for 30 days, always
-preserves at least the latest 3 older snapshots, and caps the import-backup pool at 10 files.
-
-**Restore:**
+### Deploy to PROD
 
 ```bash
-./scripts/restore.sh ai_gm_20260420_143000.db
-# Auto-backs up current DB before replacing
-# Restart backend after: docker compose restart backend
+ssh claude@192.168.1.63
+cd ~/ai-gm
+./scripts/deploy_prod.sh
 ```
 
-**Manual one-liner:**
+### Database
 
 ```bash
-cp ./data/ai_gm.db ./backups/ai_gm_$(date +%Y%m%d_%H%M%S).db
+./scripts/backup.sh                              # → ./backups/ai_gm_<timestamp>.db
+./scripts/restore.sh ai_gm_20260517_143000.db   # auto-backs up current first
+
+docker compose -f docker-compose.dev.yml logs backend --tail=50
 ```
 
-### Migrating from a named Docker volume
+---
 
-If you have existing data in the named Docker volume (`ai_gm_data` or similar),
-extract it before switching:
+## LLM Configuration
 
-```bash
-docker compose down
-docker run --rm \
-  -v <project>_ai_gm_data:/source \
-  -v "$(pwd)/data":/dest \
-  alpine cp /source/ai_gm.db /dest/ai_gm.db
-docker compose up -d
+Resolution order (first match wins):
+
+1. **Admin preset** — active preset in `Admin Panel → System`
+2. **User custom** — `/api/users/{id}/llm-settings` with `mode="custom"`
+3. **Environment vars** — `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`
+
+Configure from `Admin Panel → System → LLM` or via `docker-compose.dev.yml` env vars.
+
+---
+
+## Admin Panel (`/admin2/`)
+
+| Section | Description |
+|---|---|
+| **Mechaniki** | Stats, skills, DC tiers, conditions, archetypes |
+| **Zawartość** | Weapons, armor, items, consumables, loot tables + AI Kreator |
+| **Świat** | Locations, NPCs, enemies, dungeons, riddle bank, pending review |
+| **Narracja** | System prompt tuning |
+| **Gracze** | User accounts, per-user LLM settings |
+| **Kampanie** | Campaign monitor, GM plan workshop, hex map editor per campaign |
+| **System** | LLM presets, config export/import |
+
+---
+
+## Game Reference
+
+### Archetypes
+
+| Key | Name | HP | Bonus |
+|---|---|---|---|
+| `warrior` | Wojownik | 12 + CON | +2 STR, +1 CON |
+| `scholar` | Uczony | 6 + CON | +2 INT, +1 WIS · Mana: 8 + INT_mod |
+| `rogue` | Łotrzyk | 8 + CON | +2 DEX, +1 LCK |
+
+### Difficulty Classes
+
+| Label | DC |
+|---|---|
+| Łatwe | 9 |
+| Średnie | 12 |
+| Trudne | 16 |
+| Ekstremalne | 20 |
+| Legendarne | 24+ |
+
+### Core Roll Formula
+
 ```
+d20 + stat_modifier + skill_rank + proficiency_bonus ≥ DC
+```
+- Proficiency bonus: +2 when `skill_rank ≥ 3`
+- Nat 20: auto-success + double damage
+- Nat 1: auto-fail + complication
 
-Then verify: `ls -lh ./data/ai_gm.db`
+---
+
+## Roadmap
+
+See [`ROADMAP.md`](./ROADMAP.md) for the full task tree with completion checkboxes.
+
+**Current: ~78% complete** (42 of 54 planned tasks done).
+
+Key remaining tasks:
+- **T46** — Narrative Items (LLM-invented items tracked in inventory, weapon review pipeline)
+- **T33** — Hybrid Input UI (suggested actions from backend)
+- **T34** — Combat UI polish (initiative panel, zone display)
+- **T38** — Campaign End/Death screens
+- **T45** — Hero Journal (cross-campaign chronicle)
+
+---
+
+## Security
+
+- Do not commit `.env`, secrets, or credentials
+- Admin token is separate from player auth
+- LLM API keys stored server-side, never returned via API
+- Player UI cannot modify global LLM runtime — admin-only
