@@ -120,6 +120,11 @@ def _normalize_base_url(base_url: str, provider: str) -> str:
         value = re.sub(r"/api/chat/?$", "", value, flags=re.I)
         value = re.sub(r"/api/tags/?$", "", value, flags=re.I)
         value = re.sub(r"/api/?$", "", value, flags=re.I)
+    elif provider == "azure":
+        # Strip if user pasted the full deployment or completions URL
+        value = re.sub(r"/openai/deployments/[^/]+/chat/completions/?$", "", value, flags=re.I)
+        value = re.sub(r"/openai/deployments/[^/]+/?$", "", value, flags=re.I)
+        value = re.sub(r"/openai/?$", "", value, flags=re.I)
     return value.rstrip("/")
 
 
@@ -318,6 +323,91 @@ class OpenAIDriver:
         return {"reachable": True, "model_count": len(models), "models": models}
 
 
+class AzureDriver:
+    """Azure OpenAI Service / Azure AI Foundry driver.
+
+    base_url: https://<resource>.openai.azure.com  (resource endpoint, no deployment path)
+    model:    deployment name, e.g. "gpt-4.1"
+    api_key:  Azure API key (sent as 'api-key' header, not Bearer)
+    """
+
+    _API_VERSION = "2024-02-01"
+
+    @staticmethod
+    def _headers(api_key: str) -> dict[str, str]:
+        h = {"Content-Type": "application/json"}
+        if api_key:
+            h["api-key"] = api_key
+        return h
+
+    @staticmethod
+    def _url(base_url: str, model: str) -> str:
+        return (
+            f"{base_url}/openai/deployments/{model}/chat/completions"
+            f"?api-version={AzureDriver._API_VERSION}"
+        )
+
+    @staticmethod
+    def generate_chat(base_url: str, model: str, messages: list[dict], api_key: str) -> str:
+        payload = {"messages": messages, "stream": False, "temperature": 0.8}
+        with httpx.Client(timeout=float(os.getenv("OLLAMA_TIMEOUT", "120"))) as client:
+            resp = client.post(
+                AzureDriver._url(base_url, model),
+                json=payload,
+                headers=AzureDriver._headers(api_key),
+            )
+            resp.raise_for_status()
+            try:
+                data = resp.json()
+            except ValueError as e:
+                peek = (resp.text or "")[:800]
+                raise RuntimeError(f"Azure returned non-JSON (status {resp.status_code}): {peek}") from e
+        choices = data.get("choices") or []
+        content = (((choices[0] or {}).get("message") or {}).get("content") or "").strip() if choices else ""
+        if not content:
+            raise RuntimeError("Azure returned empty response")
+        return content
+
+    @staticmethod
+    def generate_stream(base_url: str, model: str, messages: list[dict], api_key: str) -> Generator[str, None, None]:
+        started_at = time.perf_counter()
+        try:
+            content = AzureDriver.generate_chat(base_url, model, messages, api_key)
+            yield f"data: {content.replace(chr(10), chr(10))}\n\n"
+            yield "data: [DONE]\n\n"
+        except httpx.TimeoutException as exc:
+            logger.error("llm_timeout", model=model, llm_provider="azure",
+                         duration_ms=_duration_ms(started_at), error_message=str(exc))
+            yield f"data: [ERROR] LLM timeout: {exc}\n\n"
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text if exc.response is not None else str(exc)
+            logger.error("llm_error", model=model, llm_provider="azure",
+                         duration_ms=_duration_ms(started_at), error_message=_trim_error_message(detail))
+            yield f"data: [ERROR] LLM HTTP error: {detail}\n\n"
+        except httpx.RequestError as exc:
+            logger.error("llm_error", model=model, llm_provider="azure",
+                         duration_ms=_duration_ms(started_at), error_message=str(exc))
+            yield f"data: [ERROR] LLM connection error: {exc}\n\n"
+        except Exception as exc:
+            logger.error("llm_error", model=model, llm_provider="azure",
+                         duration_ms=_duration_ms(started_at), error_message=str(exc))
+            yield f"data: [ERROR] LLM error: {exc}\n\n"
+
+    @staticmethod
+    def health(base_url: str, api_key: str) -> dict[str, Any]:
+        with httpx.Client(timeout=10) as client:
+            resp = client.get(
+                f"{base_url}/openai/models",
+                headers=AzureDriver._headers(api_key),
+                params={"api-version": AzureDriver._API_VERSION},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        items = data.get("data") or []
+        models = [m.get("id") for m in items if isinstance(m, dict) and m.get("id")]
+        return {"reachable": True, "model_count": len(models), "models": models}
+
+
 def _resolve_model(model: str | None, effective: dict[str, str]) -> str:
     v = (model or "").strip()
     if v and v != "default":
@@ -347,15 +437,17 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
     provider = effective["provider"]
     started_at = time.perf_counter()
     logger.info("llm_called", model=resolved_model, llm_provider=provider, stream=False)
-    if provider == "openai" and not (effective.get("api_key") or "").strip():
+    if provider in ("openai", "azure") and not (effective.get("api_key") or "").strip():
         raise RuntimeError(
-            "OpenAI API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
+            f"{provider.title()} API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
         )
     try:
         if provider == "ollama":
             return OllamaDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
         if provider == "openai":
             return OpenAIDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+        if provider == "azure":
+            return AzureDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
     except httpx.TimeoutException as exc:
         logger.error(
             "llm_timeout",
@@ -411,15 +503,18 @@ def generate_chat_stream(
         return
     provider = effective["provider"]
     logger.info("llm_called", model=resolved_model, llm_provider=provider, stream=True)
-    if provider == "openai" and not (effective.get("api_key") or "").strip():
+    if provider in ("openai", "azure") and not (effective.get("api_key") or "").strip():
         raise RuntimeError(
-            "OpenAI API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
+            f"{provider.title()} API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
         )
     if provider == "ollama":
         yield from OllamaDriver.generate_stream(effective["base_url"], resolved_model, messages, effective["api_key"])
         return
     if provider == "openai":
         yield from OpenAIDriver.generate_stream(effective["base_url"], resolved_model, messages, effective["api_key"])
+        return
+    if provider == "azure":
+        yield from AzureDriver.generate_stream(effective["base_url"], resolved_model, messages, effective["api_key"])
         return
     raise RuntimeError(f"Unknown LLM provider: {provider}")
 
@@ -432,6 +527,8 @@ def get_health(llm_config: dict[str, str] | None = None) -> dict[str, Any]:
             details = OllamaDriver.health(effective["base_url"], effective["api_key"])
         elif provider == "openai":
             details = OpenAIDriver.health(effective["base_url"], effective["api_key"])
+        elif provider == "azure":
+            details = AzureDriver.health(effective["base_url"], effective["api_key"])
         else:
             raise RuntimeError(f"Unknown LLM provider: {provider}")
         return {
