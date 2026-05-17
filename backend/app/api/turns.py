@@ -3539,12 +3539,26 @@ def resolve_skill_test_endpoint(
             (campaign_id,),
         ).fetchone()[0]
         skill_label = pending.get("skill_label", pending.get("skill_key", "skill"))
+        _mod = int(result.get("modifier") or 0)
+        _total = int(result.get("player_total") or payload.d20_roll)
+        if result.get("nat20"):
+            _outcome = "Naturalny 20"
+        elif result.get("nat1"):
+            _outcome = "Naturalny 1"
+        elif result.get("success"):
+            _outcome = "Sukces"
+        else:
+            _outcome = "Porażka"
+        _sign = "+" if _mod >= 0 else "−"
+        _persisted_roll = (
+            f"[Rzut: {skill_label} — {payload.d20_roll} {_sign}{abs(_mod)} = {_total} — {_outcome}]"
+        )
         conn.execute(
             """INSERT INTO campaign_turns
                (campaign_id, character_id, turn_number, user_text, assistant_text, route, created_at)
                VALUES (?,?,?,?,?,?,datetime('now'))""",
             (campaign_id, payload.character_id, turn_number,
-             f"[Rzut: {skill_label} — {payload.d20_roll}]", prose, "skill_test"),
+             _persisted_roll, prose, "skill_test"),
         )
         conn.commit()
 
