@@ -2941,6 +2941,9 @@ let sheetOpenedAt = 0;
 function toggleCharacterSheet() {
     isSheetOpen = !isSheetOpen;
     elements.sheetPanel.classList.toggle('sheet-panel--open', isSheetOpen);
+    // Hide dungeon HUD so it doesn't cover sheet tabs
+    const hud = document.getElementById('dungeon-hud');
+    if (hud && !hud.hidden) hud.style.visibility = isSheetOpen ? 'hidden' : '';
     if (isSheetOpen) {
         sheetOpenedAt = Date.now();
         setTimeout(() => {
@@ -2954,6 +2957,8 @@ function toggleCharacterSheet() {
 function closeCharacterSheet() {
     isSheetOpen = false;
     elements.sheetPanel.classList.remove('sheet-panel--open');
+    const hud = document.getElementById('dungeon-hud');
+    if (hud && !hud.hidden) hud.style.visibility = '';
     if (!isSettingsOpen && !isJournalOpen) {
         elements.overlay.classList.remove('panel-overlay--active');
     }
