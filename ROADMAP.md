@@ -200,6 +200,23 @@
 
 ---
 
+## Phase 12 — AI Test Agent _(after all phases complete)_
+
+> Rework the existing `ai_test_agent/` (Playwright + Express + LLM orchestrator) to run automated adversarial and regression tests against the full game.
+> The agent uses an LLM to play the game autonomously — reading UI snapshots, deciding what to type/click, Playwright executes it.
+
+- [ ] **T51 Update agent for current UI** — rewrite selectors for hero-first flow (no legacy `#campaign-select`)
+- [ ] **T52 Regression scenario: baseline flow** — login → create hero → start campaign → complete first turn → verify GM responds
+- [ ] **T53 Regression scenario: dungeon run** — enter dungeon → clear 3 rooms → boss → exit → verify loot in inventory
+- [ ] **T54 Adversarial: inventory exploit** — LLM tries to duplicate items via GM dialogue → verify economy integrity
+- [ ] **T55 Adversarial: economy cheat** — LLM tries to get gold/XP illegitimately → verify system resists
+- [ ] **T56 Adversarial: prompt injection** — LLM sends malicious player text → verify GM doesn't break system prompt
+- [ ] **T57 LLM consistency test** — run `honest_player_flow` scenario 10× → compare XP, location, quest outcomes for drift
+- [ ] **T58 Admin panel: Test Runner UI** — update the test runner section in admin to trigger scenarios and show results
+- [ ] **T59 CI integration** — run baseline regression automatically after each deploy on DEV
+
+---
+
 ## Progress Summary
 
 ```
@@ -214,6 +231,7 @@ Phase 08  Admin             ████████████  5/5   100%  (+
 Phase 09  Frontend          ████████░░░░  3/5    60%  (T33, T34 partial, T44 pending)
 Phase 10  Polish            ░░░░░░░░░░░░  0/5     0%
 Phase 11  Observability     ░░░░░░░░░░░░  0/4     0%
+Phase 12  AI Test Agent     ░░░░░░░░░░░░  0/9     0%  (after all phases)
 
-Overall:  ~~~~~~~~~~~~~~~~  42/54   78%
+Overall:  ~~~~~~~~~~~~~~~~  42/63   67%
 ```
