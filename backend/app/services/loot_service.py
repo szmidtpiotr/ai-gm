@@ -496,9 +496,10 @@ def get_character_inventory(character_id: int) -> list[dict]:
 
     out: list[dict] = []
     for r in rows:
-        # T46: Narrative item — label stored directly, no catalog key
+        # T46: Narrative item — label stored directly, no catalog key.
+        # item_key may be '__narrative__' sentinel (satisfies inv_xor CHECK constraint).
         narrative_label = r["narrative_label"] if "narrative_label" in r.keys() else None
-        if narrative_label and not r["item_key"] and not r["weapon_key"] and not r["consumable_key"]:
+        if narrative_label and r["item_key"] in (None, "__narrative__") and not r["weapon_key"] and not r["consumable_key"]:
             try:
                 meta = json.loads(r["ci_meta_json"] or "{}") if "ci_meta_json" in r.keys() else {}
             except Exception:

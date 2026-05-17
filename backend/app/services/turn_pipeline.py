@@ -99,10 +99,13 @@ def process_v2_turn(
             "SELECT sheet_json FROM characters WHERE id = ?", (character_id,)
         ).fetchone()
         sheet = json.loads((char_row or {}).get("sheet_json") or "{}") if char_row else {}
-        inv_keys = [r["item_key"] or r["weapon_key"] for r in conn.execute(
-            "SELECT item_key, weapon_key FROM character_inventory WHERE character_id = ?",
-            (character_id,)
-        ).fetchall() if (r["item_key"] or r["weapon_key"])] if character_id else []
+        inv_keys = [
+            k for k in (r["item_key"] or r["weapon_key"] for r in conn.execute(
+                "SELECT item_key, weapon_key FROM character_inventory WHERE character_id = ?",
+                (character_id,)
+            ).fetchall())
+            if k and k != "__narrative__"
+        ] if character_id else []
 
         dest_keys = [r[0] for r in conn.execute(
             """SELECT to_location_key FROM location_connections WHERE from_location_key = ? AND is_active=1
