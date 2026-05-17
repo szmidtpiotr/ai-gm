@@ -1663,6 +1663,193 @@ def list_campaign_turns(
 
 
 # ---------------------------------------------------------------------------
+# Debug log endpoint — T44 / Bug reporting
+# ---------------------------------------------------------------------------
+
+@router.get("/campaigns/{campaign_id}/turns/debug-log")
+def get_debug_log(campaign_id: int, limit: int = Query(default=5, ge=1, le=20)):
+    """
+    Returns last N turns enriched with inventory events, combat events and hero state.
+    Includes both machine-readable JSON and pre-formatted human text for GitHub issues.
+    """
+    conn = get_db()
+    try:
+        campaign = get_active_campaign_or_gone(conn, campaign_id)
+
+        # Hero state
+        char_row = conn.execute(
+            "SELECT id, name, sheet_json, gold_gp FROM characters WHERE campaign_id = ? AND is_active = 1 LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        hero = {}
+        if char_row:
+            try:
+                sh = json.loads(char_row["sheet_json"] or "{}")
+            except Exception:
+                sh = {}
+            hero = {
+                "id": char_row["id"],
+                "name": char_row["name"],
+                "archetype": sh.get("archetype", "?"),
+                "level": sh.get("level", 1),
+                "hp": sh.get("current_hp"),
+                "max_hp": sh.get("max_hp"),
+                "gold_gp": char_row["gold_gp"],
+                "conditions": sh.get("conditions", []),
+            }
+
+        # Turns
+        turn_rows = conn.execute(
+            """SELECT t.id, t.turn_number, t.user_text, t.assistant_text, t.route, t.created_at
+               FROM campaign_turns t
+               WHERE t.campaign_id = ?
+               ORDER BY t.turn_number DESC LIMIT ?""",
+            (campaign_id, limit),
+        ).fetchall()
+        turn_rows = list(reversed(turn_rows))
+
+        # Inventory changes — items acquired/removed near each turn
+        inv_rows = conn.execute(
+            """SELECT id, label, item_key, weapon_key, consumable_key, quantity, source,
+                      acquired_at, meta_json
+               FROM character_inventory
+               WHERE character_id = ?
+               ORDER BY id DESC LIMIT 50""",
+            (hero.get("id", 0),),
+        ).fetchall() if hero else []
+
+        # Combat turns for this campaign
+        combat_rows = conn.execute(
+            """SELECT turn_number, actor, event_type, roll_value, damage, hp_after,
+                      target_name, hit, narrative
+               FROM combat_turns
+               WHERE campaign_id = ?
+               ORDER BY turn_number ASC, id ASC""",
+            (campaign_id,),
+        ).fetchall() if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='combat_turns'"
+        ).fetchone() else []
+
+        # Index combat rows by turn_number
+        combat_by_turn: dict[int, list] = {}
+        for cr in combat_rows:
+            tn = int(cr["turn_number"] or 0)
+            combat_by_turn.setdefault(tn, []).append(dict(cr))
+
+        # Parse assistant_text cues
+        def _parse_cues(raw: str) -> dict:
+            cues: dict = {}
+            if not raw:
+                return cues
+            # JSON wrapper
+            try:
+                d = json.loads(raw)
+                if isinstance(d, dict):
+                    if d.get("roll_cue"):
+                        rc = str(d["roll_cue"])
+                        if rc.lower().startswith("grant item "):
+                            cues["grant_item"] = rc[11:].strip()
+                        elif rc.lower().startswith("grant gold "):
+                            cues["grant_gold"] = rc[11:].strip()
+                        else:
+                            cues["roll_cue"] = rc
+                    li = d.get("location_intent")
+                    if li and isinstance(li, dict) and li.get("action"):
+                        cues["location"] = f"{li['action']}→{li.get('target_label','?')}"
+            except Exception:
+                pass
+            # Inline tags
+            import re as _re
+            m = _re.search(r'\[COMBAT_START:([^\]]+)\]', raw)
+            if m:
+                cues["combat_start"] = m.group(1)
+            if raw.startswith("[Rzut:") or "[Rzut:" in raw[:40]:
+                m2 = _re.search(r'\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\]', raw)
+                if m2:
+                    cues["skill_roll"] = f"{m2.group(1)} d20={m2.group(2)}"
+            return cues
+
+        # Build turn objects
+        turns_out = []
+        for tr in turn_rows:
+            tn = int(tr["turn_number"] or 0)
+            raw = tr["assistant_text"] or ""
+            cues = _parse_cues(raw)
+
+            # Inventory events near this turn (by source=gm and timing heuristic)
+            inv_events = []
+            for inv in inv_rows:
+                src = str(inv["source"] or "")
+                if src in ("gm", "gm_grant_item", "loot", "dungeon"):
+                    label = inv["label"] or inv["item_key"] or inv["weapon_key"] or "?"
+                    qty = int(inv["quantity"] or 1)
+                    try:
+                        meta = json.loads(inv["meta_json"] or "{}")
+                    except Exception:
+                        meta = {}
+                    inv_events.append({
+                        "action": "added",
+                        "label": label,
+                        "quantity": qty,
+                        "source": src,
+                        "item_type": meta.get("item_type", "item"),
+                    })
+
+            turn_obj = {
+                "turn_id": tr["id"],
+                "turn_number": tn,
+                "timestamp": tr["created_at"],
+                "route": tr["route"],
+                "player_input": tr["user_text"],
+                "gm_raw": raw,
+                "cues": cues,
+                "combat_events": combat_by_turn.get(tn, []),
+                "inventory_events": inv_events,
+            }
+            turns_out.append(turn_obj)
+            # Only attach inventory once (for last turn batch)
+            inv_rows = []
+
+        # Human-readable text
+        lines = [
+            f"AI-GM DEBUG LOG | Campaign #{campaign_id} | {hero.get('name','?')} ({hero.get('archetype','?')} Poz.{hero.get('level',1)}) | {__import__('datetime').datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC",
+            f"HP: {hero.get('hp','?')}/{hero.get('max_hp','?')} | Gold: {hero.get('gold_gp','?')} GP | Last {len(turns_out)} turns",
+            "=" * 64,
+        ]
+        for t in turns_out:
+            lines.append(f"\n[T{t['turn_number']} | id:{t['turn_id']} | {t['route']} | {t['timestamp']}]")
+            pi = str(t["player_input"] or "").replace("\n", " ")
+            if not pi.startswith("__AI_GM"):
+                lines.append(f"GRACZ: {pi}")
+            if t["cues"]:
+                for k, v in t["cues"].items():
+                    lines.append(f"CUE/{k.upper()}: {v}")
+            for ce in t["combat_events"]:
+                hit_str = "HIT" if ce.get("hit") else "MISS"
+                dmg = f" dmg={ce.get('damage','?')}" if ce.get("damage") else ""
+                hp = f" hp_after={ce.get('hp_after','?')}" if ce.get("hp_after") else ""
+                lines.append(f"COMBAT [{ce.get('event_type','?')}] {ce.get('actor','?')} vs {ce.get('target_name','?')} roll={ce.get('roll_value','?')} {hit_str}{dmg}{hp}")
+            for ie in t["inventory_events"]:
+                qty = f" ×{ie['quantity']}" if ie.get("quantity", 1) > 1 else ""
+                lines.append(f"ITEM+: {ie['label']}{qty} [{ie.get('item_type','?')} source:{ie['source']}]")
+            if t["gm_raw"]:
+                lines.append(f"GM_RAW: {t['gm_raw'][:500]}{'...' if len(t['gm_raw'])>500 else ''}")
+        lines.append("\n" + "=" * 64)
+        lines.append(f"HERO_STATE: {json.dumps(hero)}")
+
+        human_text = "\n".join(lines)
+
+        return {
+            "campaign_id": campaign_id,
+            "hero": hero,
+            "turns": turns_out,
+            "human_text": human_text,
+        }
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
 # Export session endpoint
 # ---------------------------------------------------------------------------
 
