@@ -196,15 +196,22 @@ def delete_hex(q: int, r: int, authorization: str | None = Header(default=None))
         if not existing:
             raise HTTPException(status_code=404, detail="Hex not found")
 
-        # Check campaign references
+        # Check campaign references — only block if the referencing campaigns still exist
         refs = conn.execute(
-            "SELECT COUNT(*) AS n FROM campaign_hex_data WHERE hex_q = ? AND hex_r = ?", (q, r)
+            """SELECT COUNT(*) AS n FROM campaign_hex_data chd
+               INNER JOIN campaigns c ON c.id = chd.campaign_id
+               WHERE chd.hex_q = ? AND chd.hex_r = ?""",
+            (q, r),
         ).fetchone()
         if refs and int(refs["n"]) > 0:
             raise HTTPException(
                 status_code=409,
-                detail=f"Hex ({q},{r}) is referenced by {refs['n']} campaign(s). Remove campaign data first.",
+                detail=f"Hex ({q},{r}) is referenced by {refs['n']} active campaign(s). Remove campaign data first.",
             )
+        # Clean up orphaned hex data (campaigns deleted but data remains)
+        conn.execute(
+            "DELETE FROM campaign_hex_data WHERE hex_q = ? AND hex_r = ?", (q, r)
+        )
 
         conn.execute("DELETE FROM world_hexes WHERE q = ? AND r = ?", (q, r))
         conn.commit()
