@@ -1075,48 +1075,53 @@ def maybe_append_open_shop_fallback(
     return _repack_narrative(raw, new_narr.strip(), parsed)
 
 
-def extract_grant_cues(assistant_text: str) -> tuple[str, str | None, int | None, str | None]:
+def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None, str | None]:
     """
     Collect GM grant cues from the end of assistant text.
-    Supports both cue kinds and both orders when they are in trailing lines.
-    Returns cleaned_text, grant_item_label, grant_gold_amount, open_shop_npc_key.
+    Returns cleaned_text, grant_item_labels (list), grant_gold_amount, open_shop_npc_key.
+    Handles: roll_cue "Grant Item X", grant_item "X", grant_item ["X","Y"], last-line cues.
     """
     clean_text = (assistant_text or "").rstrip()
-    grant_item_label: str | None = None
+    grant_item_labels: list[str] = []
     grant_gold_amount: int | None = None
     open_shop_npc_key: str | None = None
 
-    # JSON-mode GM response may carry Grant cue in `roll_cue` instead of last text line.
+    # JSON-mode GM response
     try:
         payload = json.loads(_strip_json_code_fence(clean_text))
     except Exception:
         payload = None
     if isinstance(payload, dict):
+        # Check dedicated grant_item field (string or array) — LLM alternate format
+        raw_gi = payload.get("grant_item")
+        if raw_gi:
+            if isinstance(raw_gi, list):
+                grant_item_labels.extend(str(x).strip() for x in raw_gi if str(x).strip())
+            elif isinstance(raw_gi, str) and raw_gi.strip():
+                grant_item_labels.append(raw_gi.strip())
+            if grant_item_labels:
+                payload["grant_item"] = None
+                clean_text = json.dumps(payload, ensure_ascii=False)
+
         roll_cue = str(payload.get("roll_cue") or "").strip()
         if roll_cue:
-            if grant_item_label is None:
-                grant_item_label = parse_grant_item_cue(roll_cue)
+            rc_item = parse_grant_item_cue(roll_cue)
+            if rc_item and rc_item not in grant_item_labels:
+                grant_item_labels.append(rc_item)
             if grant_gold_amount is None:
                 grant_gold_amount = parse_grant_gold_cue(roll_cue)
             if open_shop_npc_key is None:
                 open_shop_npc_key = parse_open_shop_cue(roll_cue)
-            if open_shop_npc_key is None:
-                open_shop_npc_key = parse_open_shop_cue(roll_cue)
-            if (
-                grant_item_label is not None
-                or grant_gold_amount is not None
-                or open_shop_npc_key is not None
-            ):
+            if rc_item or grant_gold_amount is not None or open_shop_npc_key:
                 payload["roll_cue"] = None
                 clean_text = json.dumps(payload, ensure_ascii=False)
 
     for _ in range(4):
-        if grant_item_label is None:
-            maybe_item = parse_grant_item_cue(clean_text)
-            if maybe_item:
-                grant_item_label = maybe_item
-                clean_text = strip_last_grant_item_cue(clean_text)
-                continue
+        maybe_item = parse_grant_item_cue(clean_text)
+        if maybe_item and maybe_item not in grant_item_labels:
+            grant_item_labels.append(maybe_item)
+            clean_text = strip_last_grant_item_cue(clean_text)
+            continue
         if grant_gold_amount is None:
             maybe_gold = parse_grant_gold_cue(clean_text)
             if maybe_gold is not None:
@@ -1130,7 +1135,7 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, str | None, int | None
                 clean_text = strip_last_open_shop_cue(clean_text)
                 continue
         break
-    return clean_text, grant_item_label, grant_gold_amount, open_shop_npc_key
+    return clean_text, grant_item_labels, grant_gold_amount, open_shop_npc_key
 
 
 def _resolve_grant_catalog_item(conn: sqlite3.Connection, label: str) -> dict[str, str] | None:
@@ -2431,9 +2436,10 @@ def create_turn(
         clean_assistant = DUNGEON_CLEAR_RE.sub("", clean_assistant).rstrip()
         clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
         _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
-        _narrative_for_cues, grant_item_label, grant_gold_amount, open_shop_npc_key = extract_grant_cues(
+        _narrative_for_cues, grant_item_labels, grant_gold_amount, open_shop_npc_key = extract_grant_cues(
             _narrative_for_cues
         )
+        grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
         clean_assistant = _repack_narrative(clean_assistant, _narrative_for_cues, _parsed_json)
         validate_roll_cue_name(clean_assistant.strip())
 
@@ -2534,25 +2540,23 @@ def create_turn(
             user_text=user_text_stored if roll_request else text,
             assistant_text=clean_assistant,
         )
-        if grant_item_label:
-            resolved = _resolve_grant_catalog_item(conn, grant_item_label)
-            if resolved:
+        for _gil in grant_item_labels:
+            _resolved = _resolve_grant_catalog_item(conn, _gil)
+            if _resolved:
                 from app.services.loot_service import grant_loot_to_character
-                grant_loot_to_character(
-                    int(payload.character_id),
-                    [{"item_key": resolved["item_key"], "quantity": 1}],
-                    source="gm_grant_item",
-                )
+                grant_loot_to_character(int(payload.character_id),
+                                        [{"item_key": _resolved["item_key"], "quantity": 1}],
+                                        source="gm_grant_item")
                 logger.info("grant_item_catalog", character_id=payload.character_id,
-                            item_key=resolved["item_key"], label=grant_item_label)
-            elif _is_weapon_label(grant_item_label):
+                            item_key=_resolved["item_key"], label=_gil)
+            elif _is_weapon_label(_gil):
                 _grant_narrative_weapon(conn, campaign_id=campaign_id,
-                                        character_id=payload.character_id,
-                                        label=grant_item_label, source="gm")
+                                        character_id=payload.character_id, label=_gil, source="gm")
             else:
                 _grant_narrative_item_to_inventory(conn, character_id=payload.character_id,
-                                                   label=grant_item_label, source="gm",
+                                                   label=_gil, source="gm",
                                                    given_at=f"turn:{log['turn_number']}")
+        if grant_item_labels:
             conn.commit()
         if grant_gold_amount is not None:
             new_total = apply_grant_gold_to_character(
@@ -3125,10 +3129,11 @@ def create_turn_stream(
                 _narrative_for_cues_s, _parsed_json_s = _extract_narrative_for_cues(clean_text)
                 (
                     _narrative_for_cues_s,
-                    grant_item_label,
+                    grant_item_labels,
                     grant_gold_amount,
                     open_shop_npc_key,
                 ) = extract_grant_cues(_narrative_for_cues_s)
+                grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
                 clean_text = _repack_narrative(clean_text, _narrative_for_cues_s, _parsed_json_s)
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
@@ -3163,26 +3168,23 @@ def create_turn_stream(
                         user_text=user_text_val,
                         assistant_text=clean_text,
                     )
-                    if grant_item_label:
-                        resolved = _resolve_grant_catalog_item(save_conn, grant_item_label)
-                        if resolved:
+                    for _gil in grant_item_labels:
+                        _resolved = _resolve_grant_catalog_item(save_conn, _gil)
+                        if _resolved:
                             from app.services.loot_service import grant_loot_to_character
-                            grant_loot_to_character(
-                                int(character_id_val),
-                                [{"item_key": resolved["item_key"], "quantity": 1}],
-                                source="gm_grant_item",
-                            )
+                            grant_loot_to_character(int(character_id_val),
+                                                    [{"item_key": _resolved["item_key"], "quantity": 1}],
+                                                    source="gm_grant_item")
                             logger.info("grant_item_catalog", character_id=character_id_val,
-                                        item_key=resolved["item_key"], label=grant_item_label)
-                        elif _is_weapon_label(grant_item_label):
+                                        item_key=_resolved["item_key"], label=_gil)
+                        elif _is_weapon_label(_gil):
                             _grant_narrative_weapon(save_conn, campaign_id=campaign_id_val,
-                                                    character_id=character_id_val,
-                                                    label=grant_item_label, source="gm")
+                                                    character_id=character_id_val, label=_gil, source="gm")
                         else:
                             _grant_narrative_item_to_inventory(
-                                save_conn, character_id=character_id_val,
-                                label=grant_item_label, source="gm",
+                                save_conn, character_id=character_id_val, label=_gil, source="gm",
                                 given_at=f"turn:{stream_log['turn_number']}")
+                    if grant_item_labels:
                         save_conn.commit()
                     if grant_gold_amount is not None:
                         new_total = apply_grant_gold_to_character(
