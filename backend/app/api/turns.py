@@ -1235,11 +1235,14 @@ def _grant_narrative_item_to_inventory(
         meta["description"] = description
     if given_at:
         meta["given_at"] = given_at
+    # inv_xor CHECK constraint requires exactly one key to be non-NULL.
+    # Use '__narrative__' sentinel so narrative items satisfy the constraint
+    # without needing a real game_config_items entry.
     conn.execute(
         """INSERT INTO character_inventory
            (character_id, label, item_key, weapon_key, consumable_key,
             quantity, equipped, source, meta_json)
-           VALUES (?, ?, NULL, NULL, NULL, 1, 0, ?, ?)""",
+           VALUES (?, ?, '__narrative__', NULL, NULL, 1, 0, ?, ?)""",
         (int(character_id), str(label).strip(), str(source or "gm"),
          json.dumps(meta, ensure_ascii=False)),
     )
