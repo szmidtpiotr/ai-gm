@@ -279,6 +279,7 @@
     </main>
 
     <footer class="composer" id="composer">
+      <div id="suggested-actions" style="display:none"></div>
       <div class="composer__input-wrap">
         <button type="button" class="composer__mic" id="stt-input-mic" title="Mikrofon (STT)" aria-pressed="false">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -288,7 +289,7 @@
             <line x1="8" y1="23" x2="16" y2="23"/>
           </svg>
         </button>
-        <input type="text" id="chat-input" class="composer__input" placeholder="Wpisz akcję lub /komenda...">
+        <input type="text" id="chat-input" class="composer__input" placeholder="Co robisz? Możesz pisać swobodnie...">
         <div class="composer__tts-reading" id="tts-reading-overlay" hidden title="Dotknij, aby zatrzymać">
           <span></span><span></span><span></span><span></span><span></span>
           <span></span><span></span><span></span><span></span><span></span>
@@ -300,6 +301,7 @@
           </svg>
         </button>
       </div>
+      <span id="char-counter" class="char-counter" style="display:none"></span>
       <div class="composer__voice-status" id="voice-status" hidden></div>
     </footer>
 
@@ -923,6 +925,6 @@
 
   <script src="./js/clog.js?v=combat-v35"></script>
   <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
-  <script src="./js/app.js?v=fix-hud-sheet-2026-05-17"></script>
+  <script src="./js/app.js?v=t33-hybrid-input-2026-05-17"></script>
 </body>
 </html>

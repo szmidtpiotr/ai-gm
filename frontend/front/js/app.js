@@ -154,6 +154,9 @@ function applyBubblePrefs() {
 let currentScreen = 'login';
 let currentCampaignId = null;
 let currentCampaign = null;
+
+// T33: Suggested actions state
+let _suggestedActions = [];
 let wizardStepNum = 0;
 let isSheetOpen = false;
 let isSettingsOpen = false;
@@ -2007,30 +2010,83 @@ async function handleHelpmeCommand(topic, fullText) {
     scrollToBottom();
 }
 
-async function handleSendMessage() {
-    const content = elements.chatInput.value.trim();
-    if (!content) return;
+// T33: Render suggested action buttons
+function renderSuggestedActions(actions) {
+    const container = document.getElementById('suggested-actions');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!actions || !actions.length) {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'flex';
+    actions.forEach(a => {
+        const btn = document.createElement('button');
+        btn.className = 'suggested-action-btn' + (a.enabled ? '' : ' disabled');
+        btn.textContent = (a.icon ? a.icon + ' ' : '') + a.label;
+        if (!a.enabled) {
+            btn.disabled = true;
+            btn.title = a.reason || '';
+        } else {
+            btn.addEventListener('click', () => sendStructuredAction(a.action));
+        }
+        container.appendChild(btn);
+    });
+}
 
+// T33: Send a structured action (button click)
+async function sendStructuredAction(actionStr) {
+    const input = elements.chatInput;
+    if (input) input.value = '';
+    hideCharCounter();
+    await sendTurn(actionStr, 'structured');
+}
+
+// T33: Update input placeholder based on game/combat state
+function updateInputPlaceholder() {
+    const input = elements.chatInput;
+    if (!input) return;
+    if (combatActive) {
+        input.placeholder = 'Twoja akcja... (lub użyj przycisków powyżej)';
+    } else {
+        input.placeholder = 'Co robisz? Możesz pisać swobodnie...';
+    }
+}
+
+// T33: Character counter
+function updateCharCounter() {
+    const input = elements.chatInput;
+    const counter = document.getElementById('char-counter');
+    if (!input || !counter) return;
+    const len = input.value.length;
+    if (len > 400) {
+        counter.textContent = `${len}/500`;
+        counter.style.display = 'block';
+    } else {
+        counter.style.display = 'none';
+    }
+}
+
+function hideCharCounter() {
+    const counter = document.getElementById('char-counter');
+    if (counter) counter.style.display = 'none';
+}
+
+// T33: Core send function used by both free text and structured actions
+async function sendTurn(text, inputType = 'free_text') {
     if (!characterData?.id) {
         showToast('Brak postaci - odśwież stronę', 'error');
         return;
     }
 
-    // Unlock audio from this user gesture (before any awaits lose gesture context)
+    // Unlock audio from this user gesture
     window.voiceUI?.unlockAudio?.();
 
-    elements.chatInput.value = '';
     elements.btnSend.disabled = true;
+    renderSuggestedActions([]);  // Clear buttons while waiting
 
-    if (content.startsWith('/')) {
-        const handled = await handleSlashCommand(content);
-        if (handled) {
-            elements.btnSend.disabled = false;
-            return;
-        }
-    }
-
-    const userMsgPlaceholder = { role: 'user', content, created_at: new Date() };
+    const displayText = inputType === 'structured' ? `[${text}]` : text;
+    const userMsgPlaceholder = { role: 'user', content: displayText, created_at: new Date() };
     appendMessage(userMsgPlaceholder);
     scrollToBottom();
 
@@ -2039,11 +2095,16 @@ async function handleSendMessage() {
 
     try {
         const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/turns`, {
-            text: content,
-            character_id: characterData.id
+            text: text,
+            character_id: characterData.id,
+            input_type: inputType,
         });
 
         typingIndicator.remove();
+
+        // Store and render suggested actions
+        _suggestedActions = response.suggested_actions || [];
+        renderSuggestedActions(_suggestedActions);
 
         // ── Skill test pending? Show Roll Popup instead of (or before) prose ──
         if (response.skill_test_pending) {
@@ -2085,14 +2146,32 @@ async function handleSendMessage() {
         await pollCombatState();
         // Update stale debug blocks with fresh combat state
         _refreshDebugBlocks();
+        // Update input placeholder based on current combat state
+        updateInputPlaceholder();
     } catch (error) {
         typingIndicator.remove();
+        renderSuggestedActions(_suggestedActions);  // Restore previous buttons on error
         console.error('Send message error:', error);
         showToast(error.message || 'Nie udało się wysłać wiadomości', 'error');
     } finally {
         if (!_skillTestPending) elements.btnSend.disabled = false;
         scrollToBottom();
     }
+}
+
+async function handleSendMessage() {
+    const content = elements.chatInput.value.trim();
+    if (!content) return;
+
+    elements.chatInput.value = '';
+    hideCharCounter();
+
+    if (content.startsWith('/')) {
+        const handled = await handleSlashCommand(content);
+        if (handled) return;
+    }
+
+    await sendTurn(content, 'free_text');
 }
 
 // ── Skill Test Roll Popup v3 — compact staged ────────────────────────────────
@@ -2562,6 +2641,7 @@ function showCombatUI() {
     const parsedSheet = typeof sheet === 'string' ? JSON.parse(sheet) : sheet;
     const spellBtn = document.getElementById('combat-spell-btn');
     if (spellBtn) spellBtn.style.display = parsedSheet.archetype === 'scholar' ? '' : 'none';
+    updateInputPlaceholder();
 }
 
 function hideCombatUI() {
@@ -2574,6 +2654,7 @@ function hideCombatUI() {
     elements.combatComposer.hidden = true;
     elements.composer?.classList.remove('composer--hidden');
     setCombatMsg('');
+    updateInputPlaceholder();
 }
 
 function setCombatMsg(text, isError) {
@@ -4071,6 +4152,7 @@ function initEventListeners() {
     elements.combatEndBtn?.addEventListener('click', hideCombatEndOverlay);
     elements.btnSend?.addEventListener('click', handleSendMessage);
     elements.chatInput?.addEventListener('keypress', handleKeyPress);
+    elements.chatInput?.addEventListener('input', updateCharCounter);
     initSlashAutocomplete(elements.chatInput);
 
     // Sheet tabs
