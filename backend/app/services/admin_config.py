@@ -580,9 +580,13 @@ def list_weapons() -> list[dict]:
     rows = _fetch_all(
         """
         SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-               two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note, effect_json,
-               effect_json, is_active, locked_at, created_at, updated_at
+               two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg,
+               description, note, effect_json, source_exclusive,
+               is_active, locked_at, created_at, updated_at,
+               COALESCE(campaign_id, NULL) AS campaign_id,
+               COALESCE(review_status, 'permanent') AS review_status
         FROM game_config_weapons
+        WHERE COALESCE(review_status, 'permanent') = 'permanent' OR is_active = 0
         ORDER BY key ASC
         """
     )

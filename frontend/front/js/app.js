@@ -3215,7 +3215,7 @@ function _invPickEquipSlot(item, occupied) {
 
 function _invIsLore(item) {
     const t = String(item.item_type || '').toLowerCase();
-    return t === 'misc' || t === 'quest';
+    return t === 'misc' || t === 'quest' || t === 'narrative';
 }
 
 // ── Spells Tab (Scholar) ──────────────────────────────────────────────────────
@@ -3389,12 +3389,19 @@ function _renderBackpackRow(item, occupied) {
 
 function _renderLoreRow(item) {
     const qty = item.quantity > 1 ? `<span class="inv-row__qty">×${item.quantity}</span>` : '';
+    const desc = item.description ? ` data-tooltip="${escapeHtml(item.description)}"` : '';
+    const isNarrative = item.is_narrative || item.item_type === 'narrative';
+    const dropBtn = isNarrative
+        ? `<button class="inv-row__drop-btn" data-action="drop" data-inventory-id="${item.id}" title="Wyrzuć przedmiot">✕</button>`
+        : '';
     return `
-        <div class="inv-row" data-inventory-id="${item.id}">
+        <div class="inv-row" data-inventory-id="${item.id}"${desc}>
             <div class="inv-row__icon">${INV_ICONS.scroll}</div>
             <div class="inv-row__info">
                 <div class="inv-row__name">${escapeHtml(item.label || item.key || '?')}${qty}</div>
+                ${item.description ? `<div class="inv-row__desc">${escapeHtml(item.description)}</div>` : ''}
             </div>
+            ${dropBtn}
         </div>`;
 }
 
@@ -3408,7 +3415,17 @@ function _wireInventoryActions() {
             if (!id || !characterData?.id) return;
             btn.disabled = true;
             try {
-                if (action === 'use') {
+                if (action === 'drop') {
+                    const r = await fetch(`/api/inventory/${characterData.id}/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'błąd usuwania');
+                    btn.closest('.inv-row')?.remove();
+                    showToast('Przedmiot wyrzucony.', 'info');
+                    await refreshCharacterData();
+                    return;
+                } else if (action === 'use') {
                     const r = await fetch(`/api/inventory/${characterData.id}/use`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },

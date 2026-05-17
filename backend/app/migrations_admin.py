@@ -2221,6 +2221,82 @@ def _ensure_dungeon_v2_schema(conn: sqlite3.Connection) -> None:
     logger.info("admin_migration_dungeon_v2_schema_done")
 
 
+def _ensure_narrative_items_schema(conn: sqlite3.Connection) -> None:
+    """T46: narrative items stored in character_inventory; narrative weapons in game_config_weapons."""
+    # character_inventory.label for free-form narrative item names
+    try:
+        conn.execute("ALTER TABLE character_inventory ADD COLUMN label TEXT DEFAULT NULL")
+        conn.commit()
+        logger.info("admin_migration_t46_character_inventory_label")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise
+
+    # game_config_weapons.campaign_id for campaign-scoped narrative weapons
+    try:
+        conn.execute(
+            "ALTER TABLE game_config_weapons ADD COLUMN campaign_id INTEGER REFERENCES campaigns(id) ON DELETE SET NULL"
+        )
+        conn.commit()
+        logger.info("admin_migration_t46_weapons_campaign_id")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise
+
+    # game_config_weapons.review_status mirrors world entity review pipeline
+    try:
+        conn.execute("ALTER TABLE game_config_weapons ADD COLUMN review_status TEXT DEFAULT 'permanent'")
+        conn.commit()
+        logger.info("admin_migration_t46_weapons_review_status")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise
+
+    # Migrate existing sheet_json.narrative_items → character_inventory rows
+    try:
+        chars = conn.execute(
+            "SELECT id, sheet_json FROM characters WHERE is_active = 1"
+        ).fetchall()
+        migrated = 0
+        for char in chars:
+            try:
+                sheet = __import__("json").loads(char["sheet_json"] or "{}")
+            except Exception:
+                continue
+            old_items = sheet.get("narrative_items")
+            if not old_items or not isinstance(old_items, list):
+                continue
+            for entry in old_items:
+                if not isinstance(entry, dict):
+                    continue
+                label = str(entry.get("label") or "").strip()
+                if not label:
+                    continue
+                meta = {"item_type": "narrative"}
+                if entry.get("given_at"):
+                    meta["given_at"] = str(entry["given_at"])
+                conn.execute(
+                    """INSERT OR IGNORE INTO character_inventory
+                       (character_id, label, item_key, weapon_key, consumable_key,
+                        quantity, equipped, source, meta_json)
+                       VALUES (?, ?, NULL, NULL, NULL, 1, 0, ?, ?)""",
+                    (char["id"], label, str(entry.get("source") or "gm"),
+                     __import__("json").dumps(meta, ensure_ascii=False))
+                )
+                migrated += 1
+            # Clear migrated array
+            sheet["narrative_items"] = []
+            conn.execute(
+                "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                (__import__("json").dumps(sheet, ensure_ascii=False), char["id"]),
+            )
+        if migrated:
+            conn.commit()
+            logger.info("admin_migration_t46_narrative_items_migrated", count=migrated)
+    except Exception as e:
+        logger.warning("admin_migration_t46_narrative_items_migrate_failed", error=str(e))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -2290,7 +2366,8 @@ def run_admin_migrations() -> None:
         _ensure_user_llm_settings_mode(conn)
         _run_v2_schema_migrations(conn)
         _ensure_dungeon_v2_schema(conn)
+        _ensure_narrative_items_schema(conn)
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="12.1")
+    logger.info("admin_migration_complete", phase="12.2")

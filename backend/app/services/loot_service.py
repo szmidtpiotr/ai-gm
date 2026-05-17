@@ -30,6 +30,7 @@ def _inventory_rows_sql(effect_json_col_sql: str, effect_type_col_sql: str, effe
     return f"""
             SELECT ci.id, ci.slot, ci.equipped, ci.quantity, ci.source, ci.acquired_at,
                    ci.item_key, ci.weapon_key, ci.consumable_key,
+                   ci.label AS narrative_label, ci.meta_json AS ci_meta_json,
                    gi.label AS item_label, gi.item_type AS item_kind,
                    {effect_json_col_sql}, {effect_type_col_sql}, {effect_dice_col_sql},
                    gw.label AS weapon_label,
@@ -495,6 +496,29 @@ def get_character_inventory(character_id: int) -> list[dict]:
 
     out: list[dict] = []
     for r in rows:
+        # T46: Narrative item — label stored directly, no catalog key
+        narrative_label = r["narrative_label"] if "narrative_label" in r.keys() else None
+        if narrative_label and not r["item_key"] and not r["weapon_key"] and not r["consumable_key"]:
+            try:
+                meta = json.loads(r["ci_meta_json"] or "{}") if "ci_meta_json" in r.keys() else {}
+            except Exception:
+                meta = {}
+            item_type = str(meta.get("item_type") or "narrative").strip().lower() or "narrative"
+            out.append({
+                "id": int(r["id"]),
+                "slot": None,
+                "equipped": 0,
+                "quantity": int(r["quantity"] or 1),
+                "source": r["source"],
+                "acquired_at": r["acquired_at"],
+                "label": narrative_label,
+                "item_type": item_type,
+                "key": None,
+                "can_use": False,
+                "description": meta.get("description"),
+                "is_narrative": True,
+            })
+            continue
         if r["weapon_key"]:
             label = str(r["weapon_label"] or r["weapon_key"])
             item_type = "weapon"

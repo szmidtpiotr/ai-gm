@@ -109,17 +109,17 @@
   - [x] Admin: Riddle Bank CRUD (Świat → Zagadki tab)
   - [x] Admin: AI Kreator dla Lochu (floating 🤖 FAB)
   - [x] 34 dungeon/boss-exclusive items created
-- [ ] **T46 Narrative Items** ← **NEXT**
-  - [ ] `character_inventory.label` column (free-form items)
-  - [ ] Narrative items (notes, amulets) → inventory rows, visible in lore section
-  - [ ] Drop button for narrative items
-  - [ ] `game_config_weapons.campaign_id` + `review_status` columns
-  - [ ] Narrative weapons → pending DB weapon, equippable immediately
-  - [ ] Admin review: approve (global) · reject/modify (campaign-scoped)
-  - [ ] Pending weapons in Oczekujące → Broń section
-  - [ ] Migrate old `sheet_json.narrative_items` to inventory rows
-  - [ ] System prompt reinforced: always `Grant Item` on pickup
-  - [ ] Spec: `docs/V2_ARCHITECTURE/TASK_NARRATIVE_ITEMS.md`
+- [x] **T46 Narrative Items**
+  - [x] `character_inventory.label` column (free-form items)
+  - [x] Narrative items (notes, amulets) → inventory rows, visible in lore section
+  - [x] Drop button (✕) for narrative items with description tooltip
+  - [x] `game_config_weapons.campaign_id` + `review_status` columns
+  - [x] Narrative weapons detected by label keywords → pending DB weapon, equippable immediately
+  - [x] Admin review: Zatwierdź (global) · Zachowaj (campaign-scoped) · Odrzuć
+  - [x] Pending weapons in Oczekujące → ⚔ Broń section with edit modal
+  - [x] Migrate old `sheet_json.narrative_items` to inventory rows on startup
+  - [x] System prompt reinforced: always `Grant Item` on ANY physical pickup
+  - [x] Spec: `docs/V2_ARCHITECTURE/TASK_NARRATIVE_ITEMS.md`
 
 ---
 

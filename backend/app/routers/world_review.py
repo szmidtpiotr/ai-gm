@@ -9,11 +9,13 @@ import sqlite3
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from pydantic import BaseModel as _BaseModel
 from app.services.world_service import (
     get_pending_review_counts,
     get_pending_locations,
     get_pending_npcs,
     get_pending_enemies,
+    get_pending_weapons,
     approve_entity,
     discard_entity,
 )
@@ -68,18 +70,55 @@ def pending_enemies():
         conn.close()
 
 
+@router.get("/pending/weapons")
+def pending_weapons():
+    conn = _get_db()
+    try:
+        return {"items": get_pending_weapons(conn)}
+    finally:
+        conn.close()
+
+
 class ReviewAction(BaseModel):
     action: str  # "approve" or "discard"
+
+
+class WeaponPatchReq(_BaseModel):
+    label: str | None = None
+    damage_die: str | None = None
+    weapon_type: str | None = None
+    linked_stat: str | None = None
+    attack_bonus: int | None = None
+    description: str | None = None
+    note: str | None = None
+
+
+@router.patch("/pending/weapons/{key}")
+def patch_pending_weapon(key: str, req: WeaponPatchReq):
+    """Edit a pending narrative weapon before approving/discarding."""
+    conn = _get_db()
+    try:
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not updates:
+            return {"ok": True}
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        conn.execute(f"UPDATE game_config_weapons SET {sets} WHERE key = ? AND review_status = 'pending_review'",
+                     list(updates.values()) + [key])
+        conn.commit()
+        row = conn.execute("SELECT key, label, damage_die, weapon_type, description FROM game_config_weapons WHERE key = ?", (key,)).fetchone()
+        return {"ok": True, "weapon": dict(row) if row else {}}
+    finally:
+        conn.close()
 
 
 @router.post("/review/{entity_type}/{key}")
 def review_entity(entity_type: str, key: str, req: ReviewAction):
     """
     Approve or discard a pending_review entity.
-    entity_type: location | npc | enemy
+    entity_type: location | npc | enemy | weapon
     action: approve | discard
     """
-    if entity_type not in ("location", "npc", "enemy"):
+    if entity_type not in ("location", "npc", "enemy", "weapon"):
         raise HTTPException(status_code=400, detail=f"Unknown entity type: {entity_type}")
     if req.action not in ("approve", "discard"):
         raise HTTPException(status_code=400, detail="action must be 'approve' or 'discard'")

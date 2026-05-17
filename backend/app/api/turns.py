@@ -1185,6 +1185,7 @@ def apply_grant_gold_to_character(
     return int(row["gold_gp"] or 0)
 
 
+# Keep for backward compat — no longer called for new items
 def append_narrative_item_to_sheet(
     conn: sqlite3.Connection,
     *,
@@ -1193,30 +1194,115 @@ def append_narrative_item_to_sheet(
     source: str = "gm",
     given_at: str | None = None,
 ) -> None:
-    row = conn.execute(
-        "SELECT sheet_json FROM characters WHERE id = ?",
-        (character_id,),
-    ).fetchone()
-    if not row:
-        return
-    try:
-        sheet = json.loads(row["sheet_json"] or "{}") if row["sheet_json"] else {}
-    except Exception:
-        sheet = {}
-    if not isinstance(sheet, dict):
-        sheet = {}
-    items = sheet.get("narrative_items")
-    if not isinstance(items, list):
-        items = []
-    entry = {"label": str(label).strip(), "source": str(source or "gm").strip() or "gm"}
+    """Deprecated: use _grant_narrative_item_to_inventory instead."""
+    _grant_narrative_item_to_inventory(conn, character_id=character_id, label=label,
+                                       source=source, given_at=given_at)
+
+
+# ── Narrative Items — T46 ─────────────────────────────────────────────────────
+
+WEAPON_LABEL_KEYWORDS = [
+    "miecz", "sztylet", "włócznia", "topór", "łuk", "kusza",
+    "nóż", "halabarda", "buzdygan", "rapier", "laska", "różdżka",
+    "broń", "ostrze", "spear", "sword", "dagger", "axe", "bow",
+    "siekiera", "oszczep", "bełt", "pika", "kopja",
+]
+
+
+def _is_weapon_label(label: str) -> bool:
+    l = label.lower()
+    return any(kw in l for kw in WEAPON_LABEL_KEYWORDS)
+
+
+def _grant_narrative_item_to_inventory(
+    conn: sqlite3.Connection,
+    *,
+    character_id: int,
+    label: str,
+    source: str = "gm",
+    item_type: str = "narrative",
+    description: str | None = None,
+    given_at: str | None = None,
+) -> None:
+    """Store a free-form narrative item directly in character_inventory (T46)."""
+    meta: dict = {"item_type": item_type}
+    if description:
+        meta["description"] = description
     if given_at:
-        entry["given_at"] = str(given_at).strip()
-    items.append(entry)
-    sheet["narrative_items"] = items
+        meta["given_at"] = given_at
     conn.execute(
-        "UPDATE characters SET sheet_json = ? WHERE id = ?",
-        (json.dumps(sheet, ensure_ascii=False), character_id),
+        """INSERT INTO character_inventory
+           (character_id, label, item_key, weapon_key, consumable_key,
+            quantity, equipped, source, meta_json)
+           VALUES (?, ?, NULL, NULL, NULL, 1, 0, ?, ?)""",
+        (int(character_id), str(label).strip(), str(source or "gm"),
+         json.dumps(meta, ensure_ascii=False)),
     )
+    logger.info("narrative_item_granted_to_inventory", character_id=character_id, label=label)
+
+
+def _grant_narrative_weapon(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: int,
+    character_id: int,
+    label: str,
+    source: str = "gm",
+) -> str | None:
+    """
+    Create a pending game_config_weapons entry for a narrative weapon and grant it
+    to character_inventory via weapon_key so the player can equip it immediately.
+    Returns the new weapon key, or None on failure.
+    """
+    import re as _re
+    import time as _time
+    # Normalise label to a safe key
+    slug = _re.sub(r"[^a-z0-9]+", "_", label.lower().strip())[:30].strip("_")
+    key = f"narrative_{slug}_{campaign_id}_{int(_time.time()) % 100000}"
+
+    try:
+        # Check if weapon table has campaign_id column yet
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(game_config_weapons)").fetchall()}
+        has_campaign_col = "campaign_id" in cols
+        has_review_col = "review_status" in cols
+
+        if has_campaign_col and has_review_col:
+            conn.execute(
+                """INSERT OR IGNORE INTO game_config_weapons
+                   (key, label, weapon_type, damage_die, linked_stat, allowed_classes,
+                    description, ai_generated, approved, campaign_id, review_status,
+                    is_active, value_gp, weight_kg)
+                   VALUES (?, ?, 'melee', '1d6', 'STR', '[]', ?, 1, 0, ?, 'pending_review', 1, 0, 1.0)""",
+                (key, label, f"Narracyjna broń: {label}", int(campaign_id)),
+            )
+        else:
+            # Fallback if migration hasn't run yet
+            conn.execute(
+                """INSERT OR IGNORE INTO game_config_weapons
+                   (key, label, weapon_type, damage_die, linked_stat, allowed_classes,
+                    description, ai_generated, approved, is_active, value_gp, weight_kg)
+                   VALUES (?, ?, 'melee', '1d6', 'STR', '[]', ?, 1, 0, 1, 0, 1.0)""",
+                (key, label, f"Narracyjna broń: {label}"),
+            )
+
+        # Grant via normal weapon_key path
+        conn.execute(
+            """INSERT INTO character_inventory
+               (character_id, weapon_key, item_key, consumable_key, label,
+                quantity, equipped, source, meta_json)
+               VALUES (?, ?, NULL, NULL, NULL, 1, 0, ?, ?)""",
+            (int(character_id), key, str(source or "gm"),
+             json.dumps({"narrative_weapon": True, "original_label": label}, ensure_ascii=False)),
+        )
+        logger.info("narrative_weapon_created", key=key, label=label, campaign_id=campaign_id)
+        return key
+    except Exception as e:
+        logger.warning("narrative_weapon_create_failed", label=label, error=str(e))
+        # Fall back to plain narrative item
+        _grant_narrative_item_to_inventory(conn, character_id=character_id, label=label,
+                                           source=source, item_type="narrative",
+                                           description="Znaleziona broń")
+        return None
 
 
 def _sheet_current_hp(sheet: dict) -> int | None:
@@ -2265,26 +2351,21 @@ def create_turn(
             resolved = _resolve_grant_catalog_item(conn, grant_item_label)
             if resolved:
                 from app.services.loot_service import grant_loot_to_character
-
                 grant_loot_to_character(
                     int(payload.character_id),
                     [{"item_key": resolved["item_key"], "quantity": 1}],
                     source="gm_grant_item",
                 )
-                logger.info(
-                    "grant_item_catalog",
-                    character_id=payload.character_id,
-                    item_key=resolved["item_key"],
-                    label=grant_item_label,
-                )
+                logger.info("grant_item_catalog", character_id=payload.character_id,
+                            item_key=resolved["item_key"], label=grant_item_label)
+            elif _is_weapon_label(grant_item_label):
+                _grant_narrative_weapon(conn, campaign_id=campaign_id,
+                                        character_id=payload.character_id,
+                                        label=grant_item_label, source="gm")
             else:
-                append_narrative_item_to_sheet(
-                    conn,
-                    character_id=payload.character_id,
-                    label=grant_item_label,
-                    source="gm",
-                    given_at=f"turn:{log['turn_number']}",
-                )
+                _grant_narrative_item_to_inventory(conn, character_id=payload.character_id,
+                                                   label=grant_item_label, source="gm",
+                                                   given_at=f"turn:{log['turn_number']}")
             conn.commit()
         if grant_gold_amount is not None:
             new_total = apply_grant_gold_to_character(
@@ -2899,26 +2980,22 @@ def create_turn_stream(
                         resolved = _resolve_grant_catalog_item(save_conn, grant_item_label)
                         if resolved:
                             from app.services.loot_service import grant_loot_to_character
-
                             grant_loot_to_character(
                                 int(character_id_val),
                                 [{"item_key": resolved["item_key"], "quantity": 1}],
                                 source="gm_grant_item",
                             )
-                            logger.info(
-                                "grant_item_catalog",
-                                character_id=character_id_val,
-                                item_key=resolved["item_key"],
-                                label=grant_item_label,
-                            )
+                            logger.info("grant_item_catalog", character_id=character_id_val,
+                                        item_key=resolved["item_key"], label=grant_item_label)
+                        elif _is_weapon_label(grant_item_label):
+                            _grant_narrative_weapon(save_conn, campaign_id=campaign_id_val,
+                                                    character_id=character_id_val,
+                                                    label=grant_item_label, source="gm")
                         else:
-                            append_narrative_item_to_sheet(
-                                save_conn,
-                                character_id=character_id_val,
-                                label=grant_item_label,
-                                source="gm",
-                                given_at=f"turn:{stream_log['turn_number']}",
-                            )
+                            _grant_narrative_item_to_inventory(
+                                save_conn, character_id=character_id_val,
+                                label=grant_item_label, source="gm",
+                                given_at=f"turn:{stream_log['turn_number']}")
                         save_conn.commit()
                     if grant_gold_amount is not None:
                         new_total = apply_grant_gold_to_character(
