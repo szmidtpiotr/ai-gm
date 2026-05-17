@@ -257,26 +257,36 @@ NIE potwierdzaj zmiany lokalizacji w `location_intent`.
 Narruj w polu `narrative` dlaczego postać nie może się tam dostać.
 Ustaw `location_intent: null`.
 
-## PRZEDMIOTY FABULARNE (GRANT ITEM)
-- Gdy bohater **zdobywa, podnosi lub otrzymuje** dowolny fizyczny przedmiot
-  (broń, narzędzie, dokument, zwój, amulet, klucz, fiolkę itd.) —
-  ZAWSZE dodaj cue jako OSTATNIĄ linię odpowiedzi:
-  Grant Item <polska nazwa przedmiotu>
+## PRZEDMIOTY FABULARNE (GRANT ITEM) — OBOWIĄZKOWE
+- Gdy bohater **zdobywa, podnosi, bierze lub trzyma** dowolny fizyczny przedmiot —
+  ZAWSZE umieszczaj w polu `grant_item` (JSON array). Dotyczy to KAŻDEJ z poniższych sytuacji:
+
+  1. Bohater wyraźnie mówi że podnosi coś ("biorę torbę", "podnoszę księgę", "chwytam klucz")
+  2. Narracja opisuje że bohater MA przedmiot ("Twoje rzeczy leżą obok: torba i księga")
+  3. Znajdowanie czegoś podczas przeszukiwania
+  4. Otrzymanie od NPC
+
+- Format w odpowiedzi JSON:
+  ```
+  "grant_item": ["Torba z notatkami", "Stara Księga"]
+  ```
+  lub dla jednego przedmiotu:
+  ```
+  "grant_item": "Żelazny klucz"
+  ```
+
 - Przykłady:
-    Grant Item Zardzewiała włócznia
-    Grant Item Pogięta kartka z mapą
-    Grant Item Drewniany amulet
-    Grant Item Żelazny klucz
-    Grant Item Złamany Amulet
-    Grant Item Tajna Mapa Krypty
+  * "biorę torbę i księgę" → `"grant_item": ["Torba z notatkami", "Stara Księga"]`
+  * "podnosisz zardzewiałą włócznię" → `"grant_item": "Zardzewiała włócznia"`
+  * "twoje rzeczy: notatki i fiolka" → `"grant_item": ["Notatnik badacza", "Tajemnicza fiolka"]`
+  * "kupiec daje ci pergamin" → `"grant_item": "Zwój z mapą"`
+
+- **NIGDY nie pomijaj grant_item gdy bohater fizycznie zdobywa przedmiot.**
 - System automatycznie rozpoznaje typ:
-  * Broń (miecz, włócznia, nóż, topór…) → trafia do ekwipunku jako broń do zweryfikowania
-  * Reszta → trafia do "Przedmiotów fabularnych" w plecaku
-- Stosuj ZAWSZE gdy fabularnie uzasadnione; maksymalnie raz na turę.
-- Jeśli mechanika walki nie potwierdzi dropu (itemów lub złota),
-  NIE opisuj znalezionych łupów ani sakiewek.
-- Jeśli chcesz dodać czysto fabularny trop/przedmiot poza loot_table,
-  użyj wyłącznie cue Grant Item <nazwa>.
+  * Broń (miecz, włócznia, nóż, topór, łuk…) → ekwipunek do weryfikacji
+  * Reszta → "Przedmioty fabularne" w plecaku
+- Jeśli mechanika walki nie potwierdzi dropu — NIE opisuj łupów.
+- Alternatywnie (kompatybilny stary format): umieść `Grant Item <nazwa>` jako ostatnią linię narracji.
 
 ## ZŁOTO FABULARNE (GRANT GOLD)
 - Aby nadać graczowi złoto fabularne, użyj cue jako OSTATNIĄ linię odpowiedzi:
