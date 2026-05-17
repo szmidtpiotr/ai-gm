@@ -2028,18 +2028,18 @@ function renderSuggestedActions(actions) {
             btn.disabled = true;
             btn.title = a.reason || '';
         } else {
-            btn.addEventListener('click', () => sendStructuredAction(a.action));
+            btn.addEventListener('click', () => sendStructuredAction(a.action, a.label));
         }
         container.appendChild(btn);
     });
 }
 
 // T33: Send a structured action (button click)
-async function sendStructuredAction(actionStr) {
+async function sendStructuredAction(actionStr, displayLabel) {
     const input = elements.chatInput;
     if (input) input.value = '';
     hideCharCounter();
-    await sendTurn(actionStr, 'structured');
+    await sendTurn(actionStr, 'structured', displayLabel);
 }
 
 // T33: Update input placeholder based on game/combat state
@@ -2073,7 +2073,7 @@ function hideCharCounter() {
 }
 
 // T33: Core send function used by both free text and structured actions
-async function sendTurn(text, inputType = 'free_text') {
+async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
     if (!characterData?.id) {
         showToast('Brak postaci - odśwież stronę', 'error');
         return;
@@ -2085,7 +2085,7 @@ async function sendTurn(text, inputType = 'free_text') {
     elements.btnSend.disabled = true;
     renderSuggestedActions([]);  // Clear buttons while waiting
 
-    const displayText = inputType === 'structured' ? `[${text}]` : text;
+    const displayText = displayLabel || text;
     const userMsgPlaceholder = { role: 'user', content: displayText, created_at: new Date() };
     appendMessage(userMsgPlaceholder);
     scrollToBottom();
