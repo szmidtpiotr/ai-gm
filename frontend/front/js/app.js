@@ -1378,12 +1378,12 @@ async function enterGame(campaign) {
                     let displayText = turn.user_text;
                     const rzutM = displayText.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\]$/);
                     if (rzutM) displayText = `🎲 ${rzutM[1]}: rzut ${rzutM[2]}`;
-                    appendMessage({ role: 'user', content: displayText, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route }, { autoSpeak: false });
+                    appendMessage({ role: 'user', content: displayText, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, turn_id: turn.id }, { autoSpeak: false });
                 }
                 if (turn.assistant_text) {
                     const { narrative: gmContent, ...gmMeta } = parseGmFull(turn.assistant_text);
                     if (gmContent && gmContent.trim()) {
-                        appendMessage({ role: 'assistant', content: gmContent, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, debugMeta: gmMeta }, { autoSpeak: false });
+                        appendMessage({ role: 'assistant', content: gmContent, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, debugMeta: gmMeta, turn_id: turn.id }, { autoSpeak: false });
                     }
                 }
             });
@@ -1448,6 +1448,9 @@ function appendMessage(msg, opts = {}) {
         const turnPart = turnNum ? `<span class="bubble-meta__turn">TURA ${escapeHtml(turnNum)}</span>` : '';
         const routePart = route && route !== 'NARRATIVE' ? `<span class="bubble-meta__route">${escapeHtml(route)}</span>` : '';
         const dtPart = dt ? `<span class="bubble-meta__datetime">${escapeHtml(dt)}</span>` : '';
+        // Debug mode: show DB turn id as clickable chip
+        const turnId = msg.turn_id || msg.id || null;
+        const dbIdPart = (debugMode && turnId) ? `<span class="bubble-debug-id" data-turn-id="${turnId}" title="Kliknij aby skopiować turn id">#${turnId}</span>` : '';
 
         const rereadBtn = isGm ? `<button type="button" class="bubble-reread-btn" title="Przeczytaj ponownie">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1458,10 +1461,17 @@ function appendMessage(msg, opts = {}) {
         bubble.innerHTML = `
             <div class="chat-bubble__content">${isGm ? formatGmNarrative(msg.content || msg.text || '') : formatMessageContent(msg.content || msg.text || '')}</div>
             <div class="chat-bubble__meta">
-                <span class="bubble-meta__left">${namePart}${turnPart ? ' ' + turnPart : ''}</span>
+                <span class="bubble-meta__left">${namePart}${turnPart ? ' ' + turnPart : ''}${dbIdPart}</span>
                 <span class="bubble-meta__right">${routePart}${dtPart}${rereadBtn}</span>
             </div>
         `;
+
+        // Debug id chip — click to copy turn id
+        bubble.querySelector('.bubble-debug-id')?.addEventListener('click', function() {
+            navigator.clipboard?.writeText(`turn_id:${this.dataset.turnId}`).then(() =>
+                showToast(`Skopiowano #${this.dataset.turnId}`, 'info', 1500)
+            );
+        });
 
         if (isGm) {
             const btn = bubble.querySelector('.bubble-reread-btn');
@@ -4237,8 +4247,40 @@ function initBubblePrefs() {
             document.querySelectorAll('.debug-block').forEach(el => {
                 el.style.display = debugMode ? 'block' : 'none';
             });
+            // Re-render debug id chips (requires reload — hint user)
+            if (debugMode) showToast('Debug mode ON — odśwież stronę aby zobaczyć ID tur', 'info', 3000);
         });
     }
+
+    // Debug log copy
+    let _debugTurnsN = 3;
+    document.querySelectorAll('.debug-turns-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.debug-turns-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            _debugTurnsN = parseInt(btn.dataset.n);
+        });
+    });
+
+    document.getElementById('debug-copy-btn')?.addEventListener('click', async () => {
+        if (!currentCampaignId) { showToast('Brak aktywnej kampanii', 'error'); return; }
+        const btn = document.getElementById('debug-copy-btn');
+        const preview = document.getElementById('debug-log-preview');
+        btn.disabled = true; btn.textContent = 'Ładuję…';
+        try {
+            const resp = await apiRequest('GET', `/campaigns/${currentCampaignId}/turns/debug-log?limit=${_debugTurnsN}`);
+            const humanText = resp.human_text || '';
+            const jsonBlock = '\n\n```json\n' + JSON.stringify({campaign_id: resp.campaign_id, hero: resp.hero, turns: resp.turns}, null, 2) + '\n```';
+            const full = humanText + jsonBlock;
+            if (preview) preview.value = full.slice(0, 800) + (full.length > 800 ? '\n...[skrócono]' : '');
+            await navigator.clipboard.writeText(full);
+            showToast('Log skopiowany do schowka ✓', 'success', 2500);
+        } catch (e) {
+            showToast('Błąd: ' + (e.message || '?'), 'error');
+        } finally {
+            btn.disabled = false; btn.textContent = 'Kopiuj';
+        }
+    });
 }
 
 function initVoiceSettings() {
