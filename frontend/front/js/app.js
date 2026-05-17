@@ -2020,9 +2020,10 @@ function renderSuggestedActions(actions) {
         return;
     }
     container.style.display = 'flex';
-    actions.forEach(a => {
+    actions.forEach((a, i) => {
         const btn = document.createElement('button');
         btn.className = 'suggested-action-btn' + (a.enabled ? '' : ' disabled');
+        btn.style.setProperty('--i', i);
         btn.textContent = (a.icon ? a.icon + ' ' : '') + a.label;
         if (!a.enabled) {
             btn.disabled = true;
