@@ -1372,15 +1372,52 @@ async function enterGame(campaign) {
     elements.chatMessages.innerHTML = '';
 
     try {
-        const response = await apiRequest('GET', `/campaigns/${campaign.id}/turns`);
+        const [response, combatHist] = await Promise.all([
+            apiRequest('GET', `/campaigns/${campaign.id}/turns`),
+            fetch(`/api/campaigns/${campaign.id}/combat/turns/history`).then(r => r.ok ? r.json() : { turns: [] }).catch(() => ({ turns: [] })),
+        ]);
         const turns = response.turns || (Array.isArray(response) ? response : []);
-        if (turns && turns.length > 0) {
-            turns.forEach(turn => {
-                if (turn.user_text && !turn.user_text.startsWith('__AI_GM')) {
-                    // Format stored skill test turns nicely: "[Rzut: Skradanie — 14]" → "🎲 ..."
-                    let displayText = turn.user_text;
-                    const rzutM = displayText.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\]$/);
-                    if (rzutM) displayText = `🎲 ${rzutM[1]}: rzut ${rzutM[2]}`;
+        const combatRows = Array.isArray(combatHist.turns) ? combatHist.turns : [];
+
+        // Build interleaved timeline by created_at. campaign_turns are wrapped, combat_turns flow
+        // in between. Combat-roll player turns ("__AI_GM_COMBAT_ROLL_V1__") render GM narrative only —
+        // the visual roll card comes from the corresponding combat_turns row.
+        const timeline = [];
+        for (const t of turns) timeline.push({ kind: 'turn', at: t.created_at || '', data: t });
+        for (const c of combatRows) timeline.push({ kind: 'combat', at: c.created_at || '', data: c });
+        timeline.sort((a, b) => {
+            const ta = String(a.at || ''), tb = String(b.at || '');
+            if (ta !== tb) return ta < tb ? -1 : 1;
+            // Same timestamp: combat events first (they fired before the wrapping campaign turn)
+            if (a.kind !== b.kind) return a.kind === 'combat' ? -1 : 1;
+            return Number(a.data.id || 0) - Number(b.data.id || 0);
+        });
+
+        if (timeline.length > 0) {
+            for (const item of timeline) {
+                if (item.kind === 'combat') {
+                    const row = item.data;
+                    const evt = String(row.event_type || '');
+                    // Re-use live renderer for attack/death; skip system events (start/end/initiative)
+                    if (evt === 'attack' || evt === 'death') {
+                        appendCombatTurnCard(row);
+                        lastRenderedCombatTurnId = Math.max(lastRenderedCombatTurnId, Number(row.id) || 0);
+                    }
+                    continue;
+                }
+                const turn = item.data;
+                const utext = turn.user_text || '';
+                if (utext && !utext.startsWith('__AI_GM')) {
+                    // Skill test rich format: "[Rzut: Skill — d20 +mod = total — Outcome]"
+                    let displayText = utext;
+                    const richM = utext.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\s*([+\-−])\s*(\d+)\s*=\s*(\d+)\s*[—-]\s*(.+?)\]$/);
+                    const simpleM = !richM && utext.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\]$/);
+                    if (richM) {
+                        const sign = richM[3] === '−' ? '−' : richM[3];
+                        displayText = `🎲 ${richM[1]}: ${richM[2]} ${sign}${richM[4]} = ${richM[5]} — ${richM[6]}`;
+                    } else if (simpleM) {
+                        displayText = `🎲 ${simpleM[1]}: rzut ${simpleM[2]}`;
+                    }
                     appendMessage({ role: 'user', content: displayText, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, turn_id: turn.id }, { autoSpeak: false });
                 }
                 if (turn.assistant_text) {
@@ -1389,7 +1426,7 @@ async function enterGame(campaign) {
                         appendMessage({ role: 'assistant', content: gmContent, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, debugMeta: gmMeta, turn_id: turn.id }, { autoSpeak: false });
                     }
                 }
-            });
+            }
         } else {
             // No turns yet — new campaign. Send an empty opening turn to trigger plan gen + opening scene
             showScreen('game');

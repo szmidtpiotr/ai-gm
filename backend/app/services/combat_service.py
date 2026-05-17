@@ -1027,6 +1027,22 @@ def list_combat_turns_for_campaign(campaign_id: int, limit: int = 50) -> list[di
     return [dict(r) for r in rows]
 
 
+def list_all_combat_turns_for_campaign(campaign_id: int, limit: int = 500) -> list[dict[str, Any]]:
+    """All combat_turns rows for the campaign across every combat (active + ended).
+    Used by the player UI to rehydrate roll bubbles after F5."""
+    with _conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM combat_turns
+            WHERE campaign_id = ?
+            ORDER BY id ASC
+            LIMIT ?
+            """,
+            (campaign_id, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def get_combat_turns_context_for_prompt(campaign_id: int, last_n: int = 8) -> str | None:
     """Last N combat log rows for LLM (active combat only — caller should gate)."""
     st = get_active_combat(campaign_id)

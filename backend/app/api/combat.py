@@ -86,6 +86,13 @@ def get_combat_turns(campaign_id: int, limit: int = Query(50, ge=1, le=200)):
     return {"turns": rows, "count": len(rows)}
 
 
+@router.get("/campaigns/{campaign_id}/combat/turns/history")
+def get_combat_turns_history(campaign_id: int, limit: int = Query(500, ge=1, le=2000)):
+    """All combat_turns rows for the campaign across every combat (used to rehydrate chat after F5)."""
+    rows = combat.list_all_combat_turns_for_campaign(campaign_id, limit=limit)
+    return {"turns": rows, "count": len(rows)}
+
+
 @router.post("/campaigns/{campaign_id}/combat/resolve-attack")
 def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest):
     try:
