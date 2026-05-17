@@ -22,7 +22,10 @@ This workspace is an **NFS mount** of `192.168.1.61:/home/piotrszmidt`. The loca
 
 ```bash
 # DEV restart/rebuild (on .61)
-docker compose -f docker-compose.dev.yml up -d --build --remove-orphans
+# IMPORTANT: backend code is baked into the image — docker compose restart alone does NOT
+# pick up Python changes. Always use --build for backend code changes.
+docker compose -f docker-compose.dev.yml up -d --build backend   # rebuild backend only (faster)
+docker compose -f docker-compose.dev.yml up -d --build --remove-orphans  # rebuild everything
 ./scripts/deploy_dev.sh   # pulls develop, rebuilds, healthchecks :8100
 
 # PROD deploy (on .63)
