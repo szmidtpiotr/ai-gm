@@ -218,6 +218,39 @@ def parse_option_b(narrative_text: str, session_id: Optional[int] = None) -> Opt
         return None
 
 
+def _parse_location_tag_format(text: str) -> Optional[LocationIntent]:
+    """
+    Parse the ▼ LOCATION: action → label\\n{json} format emitted by the LLM.
+    Example:
+      ▼ LOCATION: create → Opuszczona biblioteka
+      {"action": "create", "target_label": "...", "description": "..."}
+    """
+    # Match ▼ LOCATION: (create|move) → label
+    m = re.search(r'[▼▶]\s*LOCATION\s*:\s*(create|move)\s*[→>\-]+\s*(.+?)(?:\n|$)', text, re.IGNORECASE)
+    if not m:
+        return None
+    action = m.group(1).strip().lower()
+    label_from_tag = m.group(2).strip()
+
+    # Try to find a JSON block after the tag
+    json_m = re.search(r'\{[^{}]*"action"[^{}]*\}', text[m.end():m.end()+800], re.DOTALL)
+    if json_m:
+        try:
+            data = json.loads(json_m.group(0))
+            return LocationIntent(
+                action=data.get("action", action),
+                target_label=data.get("target_label") or label_from_tag,
+                target_key=data.get("target_key"),
+                parent_key=data.get("parent_key"),
+                description=data.get("description"),
+            )
+        except Exception:
+            pass
+
+    # Fallback: use just the tag info
+    return LocationIntent(action=action, target_label=label_from_tag)
+
+
 def parse(gm_response_text: str, session_id: Optional[int] = None) -> Optional[LocationIntent]:
     """
     Główna funkcja parsera zgodna z D-LOC-06.
@@ -244,6 +277,14 @@ def parse(gm_response_text: str, session_id: Optional[int] = None) -> Optional[L
         option_a_enabled = get_bool_flag("location_parser_json_enabled", session_id, default=True)
         option_b_enabled = get_bool_flag("location_parser_fallback_enabled", session_id, default=True)
         
+        # Opcja 0: ▼ LOCATION: tag format (LLM native output)
+        tag_intent = _parse_location_tag_format(gm_response_text)
+        if tag_intent:
+            logger.info("location_intent_parsed_tag_format",
+                        action=tag_intent.action, target_label=tag_intent.target_label,
+                        session_id=session_id)
+            return tag_intent
+
         # Opcja A: JSON wrapper
         if option_a_enabled:
             intent = parse_option_a(gm_response_text, session_id)

@@ -228,12 +228,14 @@ async function _renderWeapons(container, panel) {
       { key: "linked_stat",   label: "Stat",            type: "select-dropdown", editable: true, editOptions: statOpts },
       { key: "two_handed",    label: "Oburącz",         type: "boolean", editable: true },
       { key: "finesse",       label: "Finezja",         type: "boolean", editable: true },
-      { key: "magic_school",  label: "Szkoła magii",    editable: true },
       { key: "range_m",       label: "Zasięg (m)",      type: "number",  editable: true },
       { key: "targeting",     label: "Cel",             editable: true },
       { key: "aoe",           label: "AoE",             editable: true },
       { key: "value_gp",      label: "Cena (gp)",       type: "number",  editable: true },
       { key: "weight_kg",     label: "Waga (kg)",       type: "number",  editable: true },
+      { key: "source_exclusive", label: "Źródło", editable: true, type: "select-dropdown",
+        editOptions: [{value:"",label:"— wszędzie —"},{value:"dungeon",label:"Dungeon"},{value:"boss",label:"Boss"}],
+        formatDisplay: (r) => r.source_exclusive ? `🔒 ${r.source_exclusive}` : "—" },
       { key: "description",   label: "Opis",            editable: true, popup: true },
       { key: "note",          label: "Notatka",         editable: true, popup: true },
       { key: "effect_json",   label: "Efekty bojowe",   editable: true, popup: true },
@@ -366,9 +368,11 @@ async function _renderEnemies(container, panel) {
       },
       { key: "hp_base",     label: "HP bazowe",  type: "number", editable: true },
       { key: "damage_die",  label: "Kość",       editable: true },
-      { key: "xp_award",    label: "XP",         type: "number", editable: true },
-      { key: "is_active",   label: LABELS.isActive, type: "boolean", editable: true },
-      { key: "locked_at",   label: LABELS.locked,   type: "locked", editable: false },
+      { key: "xp_award",      label: "XP",            type: "number",  editable: true },
+      { key: "loot_table_key", label: "Łupy",                           editable: false, formatDisplay: (r) => r.loot_table_key || "—" },
+      { key: "drop_chance",  label: "Szansa",        type: "number",  editable: false, formatDisplay: (r) => r.loot_table_key ? `${Math.round((r.drop_chance??1)*100)}%` : "—" },
+      { key: "is_active",    label: LABELS.isActive, type: "boolean", editable: true },
+      { key: "locked_at",    label: LABELS.locked,   type: "locked",  editable: false },
     ];
 
     renderTable(tableHost, cols, rows, {
@@ -391,8 +395,16 @@ async function _renderEnemies(container, panel) {
   await load();
 }
 
-function _openEnemyModal(row, onDone) {
+async function _openEnemyModal(row, onDone) {
   const isEdit = !!row;
+  let lootTables = [];
+  try { lootTables = (await adminFetch("/api/admin/loot-tables")).items || []; } catch {}
+
+  const lootTableOpts = `<option value="">— brak —</option>` +
+    lootTables.map((t) => `<option value="${t.key}"${row?.loot_table_key === t.key ? " selected" : ""}>${_esc(t.label || t.key)}</option>`).join("");
+
+  const dropChancePct = Math.round((row?.drop_chance ?? 1.0) * 100);
+
   const form = document.createElement("div");
   form.className = "modal-form";
   form.innerHTML = `
@@ -407,6 +419,10 @@ function _openEnemyModal(row, onDone) {
     <label class="modal-field"><span>Ataki/turę</span><input name="attacks_per_turn" type="number" value="${row?.attacks_per_turn??1}" min="1"/></label>
     <label class="modal-field"><span>Typ obrażeń</span><select name="damage_type">${Object.entries(LABELS.damageTypes).map(([v,l])=>`<option value="${v}"${(row?.damage_type??"physical")===v?" selected":""}>${l}</option>`).join("")}</select></label>
     <label class="modal-field"><span>Nagroda XP</span><input name="xp_award" type="number" value="${row?.xp_award??10}" min="0"/></label>
+    <div class="modal-field-divider"></div>
+    <label class="modal-field"><span>Tabela łupów</span><select name="loot_table_key">${lootTableOpts}</select></label>
+    <label class="modal-field"><span>Szansa na łup (%)</span><input name="drop_chance_pct" type="number" value="${dropChancePct}" min="0" max="100" title="0 = nigdy, 100 = zawsze"/></label>
+    <div class="modal-field-divider"></div>
     <label class="modal-field"><span>Opis</span><textarea name="description" rows="3">${_esc(row?.description??"")}</textarea></label>
     <label class="modal-checkbox-row"><input name="is_active" type="checkbox" ${(row?.is_active??true)?"checked":""}><span>${LABELS.isActive}</span></label>`;
 
@@ -424,6 +440,8 @@ function _openEnemyModal(row, onDone) {
           const label = g("label").value.trim();
           if (!key) { showToast("Klucz jest wymagany.", "error"); return; }
           if (!label) { showToast("Nazwa jest wymagana.", "error"); return; }
+          const lootKey = g("loot_table_key").value.trim() || null;
+          const dropPct = Number(g("drop_chance_pct").value);
           const body = {
             key, label,
             tier: g("tier").value,
@@ -437,6 +455,8 @@ function _openEnemyModal(row, onDone) {
             xp_award: Number(g("xp_award").value),
             description: g("description").value.trim(),
             is_active: g("is_active").checked,
+            loot_table_key: lootKey,
+            drop_chance: Math.min(1, Math.max(0, dropPct / 100)),
           };
           try {
             if (isEdit) {
@@ -654,10 +674,16 @@ async function _renderItems(container, panel) {
         badgeClass: (r) => ({ weapon:"admin-badge-red", armor:"admin-badge-blue", consumable:"admin-badge-green", quest:"admin-badge-gold", narrative:"admin-badge-muted", misc:"admin-badge-muted" }[r.item_type] ?? "admin-badge-muted"),
         filterOptions: Object.entries(LABELS.itemTypes).map(([v,l])=>({value:v,label:l})),
       },
-      { key: "value_gp",  label: "Cena (gp)",  type: "number", editable: true },
-      { key: "weight_kg", label: "Waga (kg)",  type: "number", editable: true },
-      { key: "is_active", label: LABELS.isActive, type: "boolean", editable: true },
-      { key: "locked_at", label: LABELS.locked,   type: "locked",  editable: false },
+      { key: "value_gp",    label: "Cena (gp)",  type: "number", editable: true },
+      { key: "weight_kg",   label: "Waga (kg)",  type: "number", editable: true },
+      { key: "description", label: "Opis",        editable: true, popup: true },
+      { key: "effect_json", label: "Efekt",       editable: true, popup: true,
+        formatDisplay: (r) => r.effect_json ? "✓" : "—" },
+      { key: "source_exclusive", label: "Źródło", editable: true, type: "select-dropdown",
+        editOptions: [{value:"",label:"— wszędzie —"},{value:"dungeon",label:"Dungeon"},{value:"boss",label:"Boss"}],
+        formatDisplay: (r) => r.source_exclusive ? `🔒 ${r.source_exclusive}` : "—" },
+      { key: "is_active",   label: LABELS.isActive, type: "boolean", editable: true },
+      { key: "locked_at",   label: LABELS.locked,   type: "locked",  editable: false },
     ];
 
     renderTable(tableHost, cols, rows, {
@@ -693,6 +719,8 @@ function _openItemModal(row, onDone, forceNew = false) {
     <label class="modal-field"><span>Waga (kg)</span><input name="weight_kg" type="number" value="${row?.weight_kg??0}" step="0.1" min="0"/></label>
     <label class="modal-field"><span>Bonus AC</span><input name="ac_bonus" type="number" value="${row?.ac_bonus??0}"/></label>
     <label class="modal-field"><span>Opis</span><textarea name="description" rows="3">${_esc(row?.description??"")}</textarea></label>
+    <label class="modal-field"><span>Efekt (effect_json)</span><textarea name="effect_json" rows="3" placeholder='{"effects":[{"type":"heal_hp","value":"2d6"}]}'>${_esc(row?.effect_json??"")}</textarea></label>
+    <label class="modal-field"><span>Źródło dropu</span><select name="source_exclusive"><option value="">— wszędzie —</option><option value="dungeon" ${row?.source_exclusive==="dungeon"?"selected":""}>Dungeon only</option><option value="boss" ${row?.source_exclusive==="boss"?"selected":""}>Boss only</option></select></label>
     <label class="modal-checkbox-row"><input name="is_active" type="checkbox" ${(row?.is_active??true)?"checked":""}><span>${LABELS.isActive}</span></label>`;
 
   openModal({
@@ -716,6 +744,8 @@ function _openItemModal(row, onDone, forceNew = false) {
             weight_kg: Number(g("weight_kg").value),
             ac_bonus: Number(g("ac_bonus").value),
             description: g("description").value.trim(),
+            effect_json: g("effect_json").value.trim() || null,
+            source_exclusive: g("source_exclusive").value || null,
             is_active: g("is_active").checked,
           };
           try {
@@ -905,6 +935,22 @@ async function _renderLootTables(container, panel) {
       ...consumables.map((c) => `<option value="consumable:${c.key}">Materiał: ${_esc(c.label)}</option>`),
     ].join("");
 
+    const buildEntryRow = (e) => {
+      const typeLabel = e.source_type === "item" ? "Przedmiot" : e.source_type === "consumable" ? "Materiał" : "Broń";
+      const name = e.source_label || e.source_key || e.item_key || e.consumable_key || e.weapon_key || "?";
+      const tr = document.createElement("tr");
+      tr.dataset.id = e.id;
+      tr.dataset.sourceType = e.source_type;
+      tr.dataset.sourceKey = e.source_key || e.item_key || e.consumable_key || e.weapon_key || "";
+      tr.innerHTML = `
+        <td><span class="loot-type-badge loot-type-${e.source_type}">${typeLabel}</span> ${_esc(name)}</td>
+        <td class="loot-inline-cell" data-field="weight" data-val="${e.weight ?? 10}">${e.weight ?? 10}%</td>
+        <td class="loot-inline-cell" data-field="qty_min" data-val="${e.qty_min ?? 1}">${e.qty_min ?? 1}</td>
+        <td class="loot-inline-cell" data-field="qty_max" data-val="${e.qty_max ?? 1}">${e.qty_max ?? 1}</td>
+        <td><button class="danger-btn small-btn del-entry-btn">Usuń</button></td>`;
+      return tr;
+    };
+
     editor.innerHTML = `
       <div class="loot-editor-header">
         <h3>${_esc(table.label || table.key)}</h3>
@@ -915,26 +961,87 @@ async function _renderLootTables(container, panel) {
         <label>Złoto max <input name="gold_max" type="number" value="${table.gold_max ?? 0}" min="0"/></label>
         <button class="secondary-btn small-btn" id="save-meta-btn">Zapisz</button>
       </div>
+      <div class="loot-entries-search-row">
+        <input type="text" id="entries-search" class="field-input" placeholder="Szukaj wpisu…" style="flex:1;font-size:0.78rem;padding:4px 8px"/>
+        <span id="entries-count" class="section-note" style="white-space:nowrap;font-size:0.75rem;padding:4px 0"></span>
+      </div>
+      <div class="loot-entries-scroll">
       <table class="admin-table">
-        <thead><tr><th>Źródło</th><th>Waga (%)</th><th>Min szt.</th><th>Max szt.</th><th></th></tr></thead>
-        <tbody id="entries-tbody">
-          ${entries.map((e) => `
-            <tr data-id="${e.id}">
-              <td>${_esc(e.source_type)}: ${_esc(e.source_key)}</td>
-              <td>${e.weight ?? 0}</td>
-              <td>${e.qty_min ?? 1}</td>
-              <td>${e.qty_max ?? 1}</td>
-              <td><button class="danger-btn small-btn del-entry-btn">Usuń</button></td>
-            </tr>`).join("")}
-        </tbody>
+        <thead><tr><th>Źródło</th><th title="Kliknij aby edytować">Waga % ✎</th><th title="Kliknij aby edytować">Min ✎</th><th title="Kliknij aby edytować">Max ✎</th><th></th></tr></thead>
+        <tbody id="entries-tbody"></tbody>
       </table>
+      </div>
       <div class="loot-add-entry">
         <select id="entry-source">${sourceOpts}</select>
-        <label>Waga <input id="entry-weight" type="number" value="10" min="1"/></label>
+        <label>Waga <input id="entry-weight" type="number" value="10" min="1" max="100"/></label>
         <label>Min <input id="entry-qty-min" type="number" value="1" min="1"/></label>
         <label>Max <input id="entry-qty-max" type="number" value="1" min="1"/></label>
-        <button class="primary-btn small-btn" id="add-entry-btn">Dodaj</button>
+        <button class="primary-btn small-btn" id="add-entry-btn">+ Dodaj</button>
       </div>`;
+
+    const tbody = editor.querySelector("#entries-tbody");
+    entries.forEach((e) => tbody.appendChild(buildEntryRow(e)));
+
+    // Search/filter entries
+    const searchEl = editor.querySelector("#entries-search");
+    const countEl  = editor.querySelector("#entries-count");
+    const updateCount = () => {
+      const vis = tbody.querySelectorAll("tr:not([hidden])").length;
+      countEl.textContent = `${vis} / ${tbody.querySelectorAll("tr").length} wpisów`;
+    };
+    updateCount();
+    searchEl?.addEventListener("input", () => {
+      const q = searchEl.value.trim().toLowerCase();
+      tbody.querySelectorAll("tr").forEach(tr => {
+        tr.hidden = q && !tr.textContent.toLowerCase().includes(q);
+      });
+      updateCount();
+    });
+
+    // Inline cell editing
+    const saveEntry = async (tr, field, newVal) => {
+      const srcType  = tr.dataset.sourceType;
+      const srcKey   = tr.dataset.sourceKey;
+      const cells    = tr.querySelectorAll(".loot-inline-cell");
+      const getVal   = (f) => Number(tr.querySelector(`[data-field="${f}"]`).dataset.val);
+      const weight   = field === "weight"  ? Number(newVal) : getVal("weight");
+      const qty_min  = field === "qty_min" ? Number(newVal) : getVal("qty_min");
+      const qty_max  = field === "qty_max" ? Number(newVal) : getVal("qty_max");
+      await adminFetch(`/api/admin/loot-tables/${key}/entries`, {
+        method: "POST",
+        body: JSON.stringify({ source_type: srcType, source_key: srcKey, weight, qty_min, qty_max }),
+      });
+    };
+
+    tbody.addEventListener("click", (evt) => {
+      const cell = evt.target.closest(".loot-inline-cell");
+      if (!cell || cell.querySelector("input")) return;
+      const field   = cell.dataset.field;
+      const origVal = cell.dataset.val;
+      const suffix  = field === "weight" ? "%" : "";
+      cell.innerHTML = `<input class="loot-inline-input" type="number" value="${origVal}" min="1"${field === "weight" ? ' max="100"' : ""}/>`;
+      const input = cell.querySelector("input");
+      input.focus(); input.select();
+      const commit = async () => {
+        const v = input.value.trim();
+        if (v === "" || isNaN(Number(v))) { cell.textContent = origVal + suffix; cell.dataset.val = origVal; return; }
+        const tr = cell.closest("tr");
+        try {
+          await saveEntry(tr, field, v);
+          cell.dataset.val = v;
+          cell.textContent = v + suffix;
+        } catch (e) {
+          showToast("Błąd: " + (e.message || "?"), "error");
+          cell.textContent = origVal + suffix;
+          cell.dataset.val = origVal;
+        }
+      };
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); input.blur(); }
+        if (e.key === "Escape") { cell.textContent = origVal + suffix; cell.dataset.val = origVal; }
+      });
+      input.addEventListener("blur", commit);
+    });
 
     editor.querySelector("#save-meta-btn").addEventListener("click", async () => {
       try {
@@ -953,20 +1060,21 @@ async function _renderLootTables(container, panel) {
       const ok = await showConfirm(`Usunąć tabelę "${key}"?`, { dangerous: true });
       if (!ok) return;
       try {
-        await adminFetch(`/api/admin/loot-tables/${key}`, { method: "DELETE" });
+        await adminFetch(`/api/admin/loot-tables/${key}`, { method: "DELETE", body: JSON.stringify({force: false}) });
         showToast("Usunięto.", "success"); selectedKey = null; await loadTables();
         container.querySelector("#loot-editor").innerHTML = `<p class="section-note">Wybierz tabelę po lewej.</p>`;
       } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); }
     });
 
-    editor.querySelectorAll(".del-entry-btn").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const id = btn.closest("tr").dataset.id;
-        try {
-          await adminFetch(`/api/admin/loot-tables/${key}/entries/${id}`, { method: "DELETE" });
-          showToast("Usunięto wpis.", "success"); openEditor(key);
-        } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); }
-      });
+    tbody.addEventListener("click", async (evt) => {
+      const btn = evt.target.closest(".del-entry-btn");
+      if (!btn) return;
+      const id = btn.closest("tr").dataset.id;
+      try {
+        await adminFetch(`/api/admin/loot-tables/${key}/entries/by-id/${id}`, { method: "DELETE" });
+        btn.closest("tr").remove();
+        showToast("Usunięto wpis.", "success");
+      } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); }
     });
 
     editor.querySelector("#add-entry-btn").addEventListener("click", async () => {
@@ -977,11 +1085,20 @@ async function _renderLootTables(container, panel) {
       const qty_max  = Number(editor.querySelector("#entry-qty-max").value);
       if (!srcKey) { showToast("Wybierz źródło.", "error"); return; }
       try {
-        await adminFetch(`/api/admin/loot-tables/${key}/entries`, {
+        const res = await adminFetch(`/api/admin/loot-tables/${key}/entries`, {
           method: "POST",
           body: JSON.stringify({ source_type: srcType, source_key: srcKey, weight, qty_min, qty_max }),
         });
-        showToast("Dodano wpis.", "success"); openEditor(key);
+        const newEntry = res.item;
+        if (newEntry) {
+          // replace existing row if present (upsert updated it)
+          const existing = tbody.querySelector(`tr[data-source-key="${newEntry.source_key}"]`);
+          if (existing) existing.remove();
+          tbody.appendChild(buildEntryRow(newEntry));
+        } else {
+          openEditor(key);
+        }
+        showToast("Dodano wpis.", "success");
       } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); }
     });
   };

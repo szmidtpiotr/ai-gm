@@ -145,6 +145,28 @@ ADMIN_ASSISTANT_RESOURCE_PROMPTS: dict[str, dict[str, Any]] = {
         ],
         "fields": ["key", "label", "description", "is_active", "gold_min", "gold_max"],
     },
+    "game_dungeons": {
+        "title": "Dungeon",
+        "summary": "Create a farmable dungeon seed for standalone dungeon runs.",
+        "rules": [
+            "Use lowercase snake_case for `key` (e.g. spider_caverns, bandit_hideout).",
+            "Set `rooms` between 3 and 8. Boss room is always the last room.",
+            "`enemy_pool` is a JSON array of enemy keys (strings). Use existing enemy keys like goblin, rat, skeleton, zombie, bandit.",
+            "`boss_enemy` is a single enemy key for the final boss room.",
+            "`loot_tier` must be one of: poor, standard, rich.",
+            "`cooldown_hours` is how long before the player can re-enter: 24–168.",
+            "`min_level` is the minimum hero level recommended: 1–10.",
+            "`atmosphere` is a short atmospheric description in Polish (1–2 sentences).",
+            "`room_loot_chance` is a float 0.0–1.0 for ambient post-combat item finds.",
+            "Return `riddle_source` as 'database' (default).",
+        ],
+        "fields": [
+            "key", "label", "rooms", "enemy_pool", "boss_enemy",
+            "loot_tier", "cooldown_hours", "min_level",
+            "atmosphere", "room_loot_chance", "riddle_source",
+            "chest_loot_table_key", "boss_loot_table_key", "is_active",
+        ],
+    },
 }
 
 

@@ -64,12 +64,14 @@ def _conn() -> sqlite3.Connection:
 
 def _roll_dice_value(expr: str) -> int:
     raw = str(expr or "").strip().lower()
-    m = re.match(r"^(\d*)d(\d+)$", raw)
+    # Supports: "2d6", "d8", "2d6+4", "1d4-1"
+    m = re.match(r"^(\d*)d(\d+)([+-]\d+)?$", raw)
     if not m:
         raise ValueError("invalid_effect_value")
     n = int(m.group(1) or 1)
     sides = int(m.group(2))
-    return sum(random.randint(1, sides) for _ in range(max(1, n)))
+    bonus = int(m.group(3) or 0)
+    return sum(random.randint(1, sides) for _ in range(max(1, n))) + bonus
 
 
 def _normalize_sheet_conditions(sheet: dict[str, Any]) -> list[dict[str, Any]]:

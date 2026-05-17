@@ -65,6 +65,7 @@ export async function init(panel) {
           <button class="camp-tab-btn active" data-tab="overview" type="button">Przegląd</button>
           <button class="camp-tab-btn" data-tab="plan" type="button">Plan GM</button>
           <button class="camp-tab-btn" data-tab="turns" type="button">Tury</button>
+          <button class="camp-tab-btn" data-tab="map" type="button">🗺 Mapa</button>
           <button class="camp-tab-btn" data-tab="workshop" type="button">🔧 Warsztat</button>
         </div>
         <div class="camp-modal-body" id="camp-modal-body">
@@ -111,7 +112,17 @@ export async function init(panel) {
 
     filtered.forEach(c => {
       const card = grid.querySelector(`.camp-card[data-id="${c.id}"]`);
-      if (card) card.addEventListener("click", () => openModal(c));
+      if (!card) return;
+      card.addEventListener("click", () => openModal(c));
+      card.querySelector(".camp-card-delete-btn")?.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(`Usunąć kampanię "${c.title}"? Operacja nieodwracalna.`)) return;
+        try {
+          await adminFetch(`/api/campaigns/${c.id}`, { method: "DELETE" });
+          showToast("Kampania usunięta.", "success");
+          await load();
+        } catch (err) { showToast(err.message || "Błąd", "error"); }
+      });
     });
   }
 
@@ -155,6 +166,7 @@ export async function init(panel) {
         <div class="camp-card-header">
           <span class="camp-title">${escHtml(c.title)}</span>
           ${statusBadge}
+          <button class="camp-card-delete-btn" data-id="${c.id}" title="Usuń kampanię" type="button" style="margin-left:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:0.85rem;padding:2px 6px;border-radius:4px;line-height:1" onclick="event.stopPropagation()">🗑</button>
         </div>
         <div class="camp-card-body">
           <div class="camp-char-row">
@@ -214,6 +226,8 @@ export async function init(panel) {
       await renderPlanTab(c);
     } else if (currentTab === "turns") {
       await renderTurnsTab(c);
+    } else if (currentTab === "map") {
+      await renderMapTab(c);
     } else if (currentTab === "workshop") {
       await renderWorkshopTab(c);
     }
@@ -513,6 +527,145 @@ export async function init(panel) {
 
 function escHtml(str) {
   return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ── Campaign Hex Map Tab ──────────────────────────────────────────────────────
+
+async function renderMapTab(c) {
+  const body = document.getElementById("camp-modal-body");
+  if (!body) return;
+  body.innerHTML = `<div style="padding:16px;color:var(--text-muted)">Ładowanie mapy…</div>`;
+
+  let data;
+  try {
+    data = await adminFetch(`/api/admin/campaigns/${c.id}/hex-map`);
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px;color:var(--accent-red)">${e.message}</div>`;
+    return;
+  }
+
+  const hexes = data.hexes || [];
+  const hexTypes = data.hex_types || {};
+
+  if (!hexes.length) {
+    body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-muted)">Brak heksów na mapie świata.</div>`;
+    return;
+  }
+
+  // Hex geometry (flat-top)
+  const S = 26; // hex size
+  const W = S * 2, H = Math.sqrt(3) * S;
+  const toPixel = (q, r) => ({ x: S * 1.5 * q, y: H * (r + q * 0.5) });
+
+  const pixels = hexes.map(h => toPixel(h.q, h.r));
+  const minX = Math.min(...pixels.map(p => p.x)) - S;
+  const minY = Math.min(...pixels.map(p => p.y)) - H / 2;
+  const maxX = Math.max(...pixels.map(p => p.x)) + S;
+  const maxY = Math.max(...pixels.map(p => p.y)) + H / 2;
+  const svgW = maxX - minX + 20, svgH = maxY - minY + 20;
+
+  const TYPE_COLORS = { plains: "#2a3a1a", forest: "#1a2e1a", mountain: "#2d2820", water: "#102030", desert: "#3a2e10", swamp: "#1a2a20", dungeon: "#1a1020", ruins: "#2a2220", town: "#2a2215", road: "#2a2a1a" };
+  // Merge with API colors (darken them for SVG background)
+  Object.entries(hexTypes).forEach(([k, v]) => { if (v.map_color) TYPE_COLORS[k] = v.map_color; });
+  const hexPath = (cx, cy) => {
+    const pts = [];
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI / 180 * (60 * i);
+      pts.push(`${cx + S * Math.cos(a)},${cy + S * Math.sin(a)}`);
+    }
+    return `M${pts.join("L")}Z`;
+  };
+
+  let selectedHex = null;
+
+  const svgHtml = hexes.map((h) => {
+    const { x, y } = toPixel(h.q, h.r);
+    const cx = x - minX + 10, cy = y - minY + 10;
+    const col = TYPE_COLORS[h.hex_type] || "#1a1a1a";
+    const discStroke = h.discovered ? "#c9a62a" : "#333";
+    const discSw = h.discovered ? 1.5 : 0.5;
+    const clearedIcon = h.encounter_cleared ? "✓" : "";
+    const lbl = h.campaign_label || h.label || "";
+    const icon = hexTypes[h.hex_type]?.map_icon || "";
+    return `<g class="adm-hex" data-q="${h.q}" data-r="${h.r}" style="cursor:pointer">
+      <path d="${hexPath(cx, cy)}" fill="${col}" stroke="${discStroke}" stroke-width="${discSw}" opacity="${h.discovered ? 1 : 0.45}"/>
+      ${h.discovered ? `<text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="11" fill="#c8b87a" style="pointer-events:none">${escHtml(icon)}</text>` : ""}
+      ${lbl ? `<text x="${cx}" y="${cy + 10}" text-anchor="middle" font-size="6" fill="#c8b87a" style="pointer-events:none">${escHtml(lbl.slice(0, 12))}</text>` : ""}
+      ${clearedIcon ? `<text x="${cx + S * 0.6}" y="${cy - S * 0.5}" text-anchor="middle" font-size="8" fill="#5ec88a" style="pointer-events:none">${clearedIcon}</text>` : ""}
+    </g>`;
+  }).join("");
+
+  body.innerHTML = `
+    <div class="camp-map-layout">
+      <div class="camp-map-canvas-wrap">
+        <svg id="camp-map-svg" width="${Math.round(svgW)}" height="${Math.round(svgH)}" style="display:block;min-width:${Math.round(svgW)}px">
+          ${svgHtml}
+        </svg>
+      </div>
+      <div class="camp-map-editor" id="camp-map-editor">
+        <div class="camp-map-hint">Kliknij hex aby edytować pola kampanii</div>
+      </div>
+    </div>`;
+
+  const editor = body.querySelector("#camp-map-editor");
+  const svg = body.querySelector("#camp-map-svg");
+
+  const openHexEditor = (h) => {
+    selectedHex = h;
+    svg.querySelectorAll(".adm-hex path").forEach(p => p.setAttribute("stroke-width", "0.5"));
+    const sel = svg.querySelector(`.adm-hex[data-q="${h.q}"][data-r="${h.r}"] path`);
+    if (sel) { sel.setAttribute("stroke", "#fff"); sel.setAttribute("stroke-width", "2"); }
+
+    editor.innerHTML = `
+      <div class="camp-map-editor-title">(${h.q}, ${h.r}) ${escHtml(h.label || h.hex_type || "")}</div>
+      <div class="camp-map-field-group">
+        <div class="camp-map-field-label">Odkryty przez gracza</div>
+        <label class="camp-map-toggle"><input type="checkbox" id="cme-discovered" ${h.discovered ? "checked" : ""}><span>Odkryty</span></label>
+      </div>
+      <div class="camp-map-field-group">
+        <div class="camp-map-field-label">Encounter wyczyszczony</div>
+        <label class="camp-map-toggle"><input type="checkbox" id="cme-cleared" ${h.encounter_cleared ? "checked" : ""}><span>Wyczyszczony</span></label>
+      </div>
+      <div class="camp-map-field-group">
+        <div class="camp-map-field-label">Etykieta kampanii</div>
+        <input id="cme-label" class="camp-map-input" type="text" value="${escHtml(h.campaign_label || "")}" placeholder="np. Wioska Aelwyna"/>
+      </div>
+      <div class="camp-map-field-group">
+        <div class="camp-map-field-label">Notatki GM</div>
+        <textarea id="cme-notes" class="camp-map-input" rows="4" placeholder="Prywatne notatki GM o tym hexie…">${escHtml(h.campaign_notes || "")}</textarea>
+      </div>
+      <button class="primary-btn camp-map-save-btn" id="cme-save">Zapisz</button>`;
+
+    editor.querySelector("#cme-save").addEventListener("click", async () => {
+      const btn = editor.querySelector("#cme-save");
+      btn.disabled = true; btn.textContent = "Zapisuję…";
+      const payload = {
+        discovered: editor.querySelector("#cme-discovered").checked,
+        encounter_cleared: editor.querySelector("#cme-cleared").checked,
+        campaign_label: editor.querySelector("#cme-label").value.trim(),
+        campaign_notes: editor.querySelector("#cme-notes").value.trim(),
+      };
+      try {
+        await adminFetch(`/api/admin/campaigns/${c.id}/hex-map/${h.q}/${h.r}`, { method: "PATCH", body: JSON.stringify(payload) });
+        // Update local hex data
+        Object.assign(h, payload);
+        showToast("Zapisano.", "success");
+        // Refresh hex visuals
+        await renderMapTab(c);
+      } catch (err) {
+        showToast(err.message || "Błąd", "error");
+        btn.disabled = false; btn.textContent = "Zapisz";
+      }
+    });
+  };
+
+  svg.querySelectorAll(".adm-hex").forEach(g => {
+    g.addEventListener("click", () => {
+      const q = parseInt(g.dataset.q), r = parseInt(g.dataset.r);
+      const hex = hexes.find(h => h.q === q && h.r === r);
+      if (hex) openHexEditor(hex);
+    });
+  });
 }
 
 // ── Campaign Workshop ──────────────────────────────────────────────────────

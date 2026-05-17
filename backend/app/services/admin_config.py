@@ -1261,6 +1261,15 @@ def create_enemy(
             if not lt:
                 raise ValueError("invalid_loot_table_key")
             loot_table_key = lk
+        else:
+            # auto-create a loot table for this enemy
+            auto_lt_key = f"loot_{safe_key}"
+            if not _fetch_one(conn, "SELECT key FROM game_config_loot_tables WHERE key = ?", (auto_lt_key,)):
+                conn.execute(
+                    "INSERT INTO game_config_loot_tables (key, label, description, is_active) VALUES (?, ?, '', 1)",
+                    (auto_lt_key, f"Łupy: {label}"),
+                )
+            loot_table_key = auto_lt_key
         conn.execute(
             """
             INSERT INTO game_config_enemies (
@@ -2305,19 +2314,26 @@ def delete_loot_table(key: str, *, force: bool) -> None:
         conn.close()
 
 
-def _loot_entry_item_and_weapon_keys(
-    item_key: str | None,
-    consumable_key: str | None,
-    weapon_key: str | None = None,
-) -> tuple[str | None, str | None]:
-    """Resolve loot source: deprecated consumable_key is treated as item_key (8H catalog)."""
-    ik = _validate_key(item_key) if item_key and str(item_key).strip() else None
-    if ik is None and consumable_key and str(consumable_key).strip():
-        ik = _validate_key(consumable_key)
-    wk = _validate_key(weapon_key) if weapon_key and str(weapon_key).strip() else None
-    if sum(1 for x in (ik, wk) if x is not None) != 1:
-        raise ValueError("invalid_loot_entry_source")
-    return ik, wk
+_LOOT_ENTRY_SELECT = """
+    SELECT e.id, e.loot_table_key, e.item_key, e.consumable_key, e.weapon_key,
+           e.weight, e.qty_min, e.qty_max,
+           i.label AS item_label,
+           c.label AS consumable_label,
+           w.label AS weapon_label,
+           COALESCE(i.label, c.label, w.label) AS source_label,
+           CASE
+               WHEN e.weapon_key IS NOT NULL THEN 'weapon'
+               WHEN e.consumable_key IS NOT NULL THEN 'consumable'
+               WHEN i.item_type = 'consumable' THEN 'consumable'
+               WHEN e.item_key IS NOT NULL THEN 'item'
+               ELSE 'item'
+           END AS source_type,
+           COALESCE(e.item_key, e.consumable_key, e.weapon_key) AS source_key
+    FROM game_config_loot_entries e
+    LEFT JOIN game_config_items i ON i.key = e.item_key
+    LEFT JOIN game_config_consumables c ON c.key = e.consumable_key
+    LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
+"""
 
 
 def list_loot_entries(loot_table_key: str) -> list[dict]:
@@ -2328,22 +2344,8 @@ def list_loot_entries(loot_table_key: str) -> list[dict]:
         parent = _fetch_one(conn, "SELECT key FROM game_config_loot_tables WHERE key = ?", (safe_key,))
         if not parent:
             raise ValueError("loot_table_not_found")
-        cols = {r[1] for r in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
-        currency_select = ", e.currency_code" if "currency_code" in cols else ""
         rows = conn.execute(
-            f"""
-            SELECT e.id, e.loot_table_key, e.item_key, e.weapon_key, e.weight, e.qty_min, e.qty_max{currency_select},
-                   i.label AS item_label,
-                   w.label AS weapon_label,
-                   COALESCE(i.label, w.label) AS source_label,
-                   CASE WHEN e.item_key IS NOT NULL THEN 'item' ELSE 'weapon' END AS source_type
-            FROM game_config_loot_entries e
-            LEFT JOIN game_config_items i ON i.key = e.item_key
-            LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
-            WHERE e.loot_table_key = ?
-            ORDER BY source_label COLLATE NOCASE ASC,
-                     COALESCE(e.item_key, e.weapon_key) ASC
-            """,
+            _LOOT_ENTRY_SELECT + " WHERE e.loot_table_key = ? ORDER BY source_label COLLATE NOCASE ASC, source_key ASC",
             (safe_key,),
         ).fetchall()
         return [dict(r) for r in rows]
@@ -2362,7 +2364,11 @@ def upsert_loot_entry(
     qty_max: int,
 ) -> dict:
     lt = _validate_key(loot_table_key)
-    ik, wk = _loot_entry_item_and_weapon_keys(item_key, consumable_key, weapon_key)
+    ik = _validate_key(item_key) if item_key and str(item_key).strip() else None
+    ck = _validate_key(consumable_key) if consumable_key and str(consumable_key).strip() else None
+    wk = _validate_key(weapon_key) if weapon_key and str(weapon_key).strip() else None
+    if sum(1 for x in (ik, ck, wk) if x is not None) != 1:
+        raise ValueError("invalid_loot_entry_source")
     if weight < 1 or weight > 100:
         raise ValueError("invalid_weight")
     if qty_min < 1 or qty_max < 1 or qty_min > qty_max:
@@ -2375,67 +2381,65 @@ def upsert_loot_entry(
         if not parent:
             raise ValueError("loot_table_not_found")
         if ik is not None:
-            item = _fetch_one(conn, "SELECT key FROM game_config_items WHERE key = ?", (ik,))
-            if not item:
+            if not _fetch_one(conn, "SELECT key FROM game_config_items WHERE key = ?", (ik,)):
                 raise ValueError("item_not_found")
             conn.execute(
                 """
-                INSERT INTO game_config_loot_entries (loot_table_key, item_key, weapon_key, weight, qty_min, qty_max)
-                VALUES (?, ?, NULL, ?, ?, ?)
+                INSERT INTO game_config_loot_entries (loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
+                VALUES (?, ?, NULL, NULL, ?, ?, ?)
                 ON CONFLICT(loot_table_key, item_key) WHERE item_key IS NOT NULL DO UPDATE SET
-                    weight = excluded.weight,
-                    qty_min = excluded.qty_min,
-                    qty_max = excluded.qty_max
+                    weight = excluded.weight, qty_min = excluded.qty_min, qty_max = excluded.qty_max
                 """,
                 (lt, ik, weight, qty_min, qty_max),
             )
-            row = _fetch_one(
-                conn,
+            row = _fetch_one(conn, _LOOT_ENTRY_SELECT + " WHERE e.loot_table_key = ? AND e.item_key = ?", (lt, ik))
+        elif ck is not None:
+            if not _fetch_one(conn, "SELECT key FROM game_config_consumables WHERE key = ?", (ck,)):
+                raise ValueError("consumable_not_found")
+            conn.execute(
                 """
-                SELECT e.id, e.loot_table_key, e.item_key, e.weapon_key, e.weight, e.qty_min, e.qty_max,
-                       i.label AS item_label,
-                       w.label AS weapon_label,
-                       COALESCE(i.label, w.label) AS source_label,
-                       CASE WHEN e.item_key IS NOT NULL THEN 'item' ELSE 'weapon' END AS source_type
-                FROM game_config_loot_entries e
-                LEFT JOIN game_config_items i ON i.key = e.item_key
-                LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
-                WHERE e.loot_table_key = ? AND e.item_key = ?
+                INSERT INTO game_config_loot_entries (loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
+                VALUES (?, NULL, ?, NULL, ?, ?, ?)
+                ON CONFLICT(loot_table_key, consumable_key) WHERE consumable_key IS NOT NULL DO UPDATE SET
+                    weight = excluded.weight, qty_min = excluded.qty_min, qty_max = excluded.qty_max
                 """,
-                (lt, ik),
+                (lt, ck, weight, qty_min, qty_max),
             )
+            row = _fetch_one(conn, _LOOT_ENTRY_SELECT + " WHERE e.loot_table_key = ? AND e.consumable_key = ?", (lt, ck))
         else:
-            weap = _fetch_one(conn, "SELECT key FROM game_config_weapons WHERE key = ?", (wk,))
-            if not weap:
+            if not _fetch_one(conn, "SELECT key FROM game_config_weapons WHERE key = ?", (wk,)):
                 raise ValueError("weapon_not_found")
             conn.execute(
                 """
-                INSERT INTO game_config_loot_entries (loot_table_key, item_key, weapon_key, weight, qty_min, qty_max)
-                VALUES (?, NULL, ?, ?, ?, ?)
+                INSERT INTO game_config_loot_entries (loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
+                VALUES (?, NULL, NULL, ?, ?, ?, ?)
                 ON CONFLICT(loot_table_key, weapon_key) WHERE weapon_key IS NOT NULL DO UPDATE SET
-                    weight = excluded.weight,
-                    qty_min = excluded.qty_min,
-                    qty_max = excluded.qty_max
+                    weight = excluded.weight, qty_min = excluded.qty_min, qty_max = excluded.qty_max
                 """,
                 (lt, wk, weight, qty_min, qty_max),
             )
-            row = _fetch_one(
-                conn,
-                """
-                SELECT e.id, e.loot_table_key, e.item_key, e.weapon_key, e.weight, e.qty_min, e.qty_max,
-                       i.label AS item_label,
-                       w.label AS weapon_label,
-                       COALESCE(i.label, w.label) AS source_label,
-                       CASE WHEN e.item_key IS NOT NULL THEN 'item' ELSE 'weapon' END AS source_type
-                FROM game_config_loot_entries e
-                LEFT JOIN game_config_items i ON i.key = e.item_key
-                LEFT JOIN game_config_weapons w ON w.key = e.weapon_key
-                WHERE e.loot_table_key = ? AND e.weapon_key = ?
-                """,
-                (lt, wk),
-            )
+            row = _fetch_one(conn, _LOOT_ENTRY_SELECT + " WHERE e.loot_table_key = ? AND e.weapon_key = ?", (lt, wk))
         conn.commit()
-        return row or {}
+        return dict(row) if row else {}
+    finally:
+        conn.close()
+
+
+def delete_loot_entry_by_id(loot_table_key: str, entry_id: int) -> None:
+    lt = _validate_key(loot_table_key)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        cur = _fetch_one(
+            conn,
+            "SELECT id, loot_table_key, item_key, consumable_key, weapon_key FROM game_config_loot_entries WHERE id = ? AND loot_table_key = ?",
+            (int(entry_id), lt),
+        )
+        if not cur:
+            raise KeyError("not_found")
+        conn.execute("DELETE FROM game_config_loot_entries WHERE id = ? AND loot_table_key = ?", (int(entry_id), lt))
+        _audit(conn, "game_config_loot_entries", f"{lt}:id:{entry_id}", "DELETE", dict(cur), None)
+        conn.commit()
     finally:
         conn.close()
 
@@ -2447,42 +2451,26 @@ def delete_loot_entry(
     weapon_key: str | None = None,
 ) -> None:
     lt = _validate_key(loot_table_key)
-    ik, wk = _loot_entry_item_and_weapon_keys(item_key, consumable_key, weapon_key)
+    ik = _validate_key(item_key) if item_key and str(item_key).strip() else None
+    ck = _validate_key(consumable_key) if consumable_key and str(consumable_key).strip() else None
+    wk = _validate_key(weapon_key) if weapon_key and str(weapon_key).strip() else None
+    if sum(1 for x in (ik, ck, wk) if x is not None) != 1:
+        raise ValueError("invalid_loot_entry_source")
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
         if ik is not None:
-            cur = _fetch_one(
-                conn,
-                """
-                SELECT id, loot_table_key, item_key, weapon_key, weight, qty_min, qty_max
-                FROM game_config_loot_entries WHERE loot_table_key = ? AND item_key = ?
-                """,
-                (lt, ik),
-            )
+            cur = _fetch_one(conn, "SELECT id, loot_table_key, item_key, consumable_key, weapon_key FROM game_config_loot_entries WHERE loot_table_key = ? AND item_key = ?", (lt, ik))
             audit_id = f"{lt}:item:{ik}"
+        elif ck is not None:
+            cur = _fetch_one(conn, "SELECT id, loot_table_key, item_key, consumable_key, weapon_key FROM game_config_loot_entries WHERE loot_table_key = ? AND consumable_key = ?", (lt, ck))
+            audit_id = f"{lt}:consumable:{ck}"
         else:
-            cur = _fetch_one(
-                conn,
-                """
-                SELECT id, loot_table_key, item_key, weapon_key, weight, qty_min, qty_max
-                FROM game_config_loot_entries WHERE loot_table_key = ? AND weapon_key = ?
-                """,
-                (lt, wk),
-            )
+            cur = _fetch_one(conn, "SELECT id, loot_table_key, item_key, consumable_key, weapon_key FROM game_config_loot_entries WHERE loot_table_key = ? AND weapon_key = ?", (lt, wk))
             audit_id = f"{lt}:weapon:{wk}"
         if not cur:
             raise KeyError("not_found")
-        if ik is not None:
-            conn.execute(
-                "DELETE FROM game_config_loot_entries WHERE loot_table_key = ? AND item_key = ?",
-                (lt, ik),
-            )
-        else:
-            conn.execute(
-                "DELETE FROM game_config_loot_entries WHERE loot_table_key = ? AND weapon_key = ?",
-                (lt, wk),
-            )
+        conn.execute("DELETE FROM game_config_loot_entries WHERE id = ?", (cur["id"],))
         _audit(conn, "game_config_loot_entries", audit_id, "DELETE", dict(cur), None)
         conn.commit()
     finally:

@@ -68,6 +68,7 @@ from app.services.admin_config import (
     delete_enemy,
     delete_item,
     delete_loot_entry,
+    delete_loot_entry_by_id,
     delete_loot_table,
     delete_weapon,
     delete_skill,
@@ -476,26 +477,22 @@ class LootTableDeleteReq(BaseModel):
 
 class LootEntryReq(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    item_key: str | None = None
-    consumable_key: str | None = None  # DEPRECATED 8H — traktowane jak item_key (katalog consumable)
-    weapon_key: str | None = None
+    source_type: str  # "item" | "weapon" | "consumable"
+    source_key: str
     weight: int = 10
     qty_min: int = 1
     qty_max: int = 1
 
     @model_validator(mode="after")
-    def _xor_loot_source(self) -> "LootEntryReq":
-        ik = (self.item_key or "").strip() or None
-        ck = (self.consumable_key or "").strip() or None
-        wk = (self.weapon_key or "").strip() or None
-        if ck and not ik:
-            ik = ck
-            ck = None
-        if sum(1 for x in (ik, wk) if x is not None) != 1:
-            raise ValueError("invalid_loot_entry_source")
-        self.item_key = ik
-        self.consumable_key = ck
-        self.weapon_key = wk
+    def _validate_source(self) -> "LootEntryReq":
+        st = (self.source_type or "").strip().lower()
+        sk = (self.source_key or "").strip()
+        if st not in ("item", "weapon", "consumable"):
+            raise ValueError("source_type must be item, weapon, or consumable")
+        if not sk:
+            raise ValueError("source_key is required")
+        self.source_type = st
+        self.source_key = sk
         return self
 
 
@@ -569,6 +566,7 @@ AssistantResourceLiteral = Literal[
     "items",
     "consumables",
     "loot-tables",
+    "game_dungeons",
 ]
 
 
@@ -589,7 +587,11 @@ class AdminAssistantSaveReq(BaseModel):
 
 
 def _assistant_resource_model(resource: AssistantResourceLiteral) -> type[BaseModel]:
-    mapping: dict[AssistantResourceLiteral, type[BaseModel]] = {
+    class _DungeonDraft(BaseModel):
+        model_config = ConfigDict(extra="allow")
+        key: str
+        label: str
+    mapping: dict[str, type[BaseModel]] = {
         "skills": SkillCreateReq,
         "weapons": WeaponCreateReq,
         "enemies": EnemyCreateReq,
@@ -597,6 +599,7 @@ def _assistant_resource_model(resource: AssistantResourceLiteral) -> type[BaseMo
         "items": ItemCreateReq,
         "consumables": ConsumableCreateReq,
         "loot-tables": LootTableCreateReq,
+        "game_dungeons": _DungeonDraft,
     }
     return mapping[resource]
 
@@ -646,6 +649,13 @@ def _assistant_prepare_payload(resource: AssistantResourceLiteral, draft: dict) 
             payload["conditions_immune"] = _assistant_coerce_list_of_strings(payload.get("conditions_immune"))
         if "skills_json" in payload:
             payload["skills_json"] = _assistant_coerce_object(payload.get("skills_json"))
+    if resource == "game_dungeons":
+        # enemy_pool: LLM may return list, DB needs JSON string
+        ep = payload.get("enemy_pool")
+        if isinstance(ep, list):
+            payload["enemy_pool"] = json.dumps(ep, ensure_ascii=False)
+        elif ep is None:
+            payload["enemy_pool"] = "[]"
     return payload
 
 
@@ -683,6 +693,8 @@ def _assistant_save_validated_payload(resource: AssistantResourceLiteral, payloa
         return admin_create_consumable(ConsumableCreateReq.model_validate(payload), None)
     if resource == "loot-tables":
         return admin_create_loot_table(LootTableCreateReq.model_validate(payload), None)
+    if resource == "game_dungeons":
+        return admin_create_dungeon(payload, None)
     raise HTTPException(status_code=404, detail="Unsupported assistant resource")
 
 
@@ -1868,77 +1880,39 @@ def admin_loot_table_entries(key: str, _: None = Depends(require_admin_token)):
 @router.post("/admin/loot-tables/{key}/entries")
 def admin_upsert_loot_entry(key: str, req: LootEntryReq, _: None = Depends(require_admin_token)):
     try:
+        # consumables live in game_config_items (item_type='consumable') → stored as item_key
+        item_key = req.source_key if req.source_type in ("item", "consumable") else None
+        weapon_key = req.source_key if req.source_type == "weapon" else None
         row = upsert_loot_entry(
             key,
-            item_key=req.item_key,
-            consumable_key=req.consumable_key,
-            weapon_key=req.weapon_key,
+            item_key=item_key,
+            weapon_key=weapon_key,
             weight=req.weight,
             qty_min=req.qty_min,
             qty_max=req.qty_max,
         )
         return {"item": row}
     except ValueError as e:
-        if str(e) == "loot_table_not_found":
+        err = str(e)
+        if err == "loot_table_not_found":
             raise HTTPException(status_code=404, detail="Loot table not found") from None
-        if str(e) == "item_not_found":
-            raise HTTPException(status_code=422, detail="item_key must reference an existing item") from None
-        if str(e) == "invalid_loot_entry_source":
-            raise HTTPException(
-                status_code=422,
-                detail="Exactly one of item_key or weapon_key must be set (consumable_key is deprecated: use item_key).",
-            ) from None
-        if str(e) == "weapon_not_found":
-            raise HTTPException(status_code=422, detail="weapon_key must reference an existing weapon") from None
-        if str(e) == "invalid_weight":
-            raise HTTPException(status_code=422, detail="weight must be >= 1") from None
-        if str(e) == "invalid_qty_range":
+        if err == "item_not_found":
+            raise HTTPException(status_code=422, detail="source_key must reference an existing item or consumable") from None
+        if err == "weapon_not_found":
+            raise HTTPException(status_code=422, detail="source_key must reference an existing weapon") from None
+        if err == "invalid_loot_entry_source":
+            raise HTTPException(status_code=422, detail="Invalid loot entry source") from None
+        if err == "invalid_weight":
+            raise HTTPException(status_code=422, detail="weight must be 1–100") from None
+        if err == "invalid_qty_range":
             raise HTTPException(status_code=422, detail="qty_min and qty_max must be >= 1 and qty_min <= qty_max") from None
-        if str(e) == "invalid_key":
-            raise HTTPException(status_code=422, detail="Invalid key format") from None
         raise HTTPException(status_code=422, detail="Invalid loot entry payload") from None
 
 
-@router.delete("/admin/loot-tables/{key}/entries/weapon/{weapon_key}")
-def admin_delete_loot_entry_weapon(key: str, weapon_key: str, _: None = Depends(require_admin_token)):
+@router.delete("/admin/loot-tables/{key}/entries/by-id/{entry_id}")
+def admin_delete_loot_entry_by_id(key: str, entry_id: int, _: None = Depends(require_admin_token)):
     try:
-        delete_loot_entry(key, weapon_key=weapon_key)
-        return {"ok": True}
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Loot entry not found") from None
-    except ValueError as e:
-        if str(e) == "invalid_key":
-            raise HTTPException(status_code=422, detail="Invalid key format") from None
-        if str(e) == "invalid_loot_entry_source":
-            raise HTTPException(
-                status_code=422,
-                detail="Exactly one of item_key or weapon_key must be set (consumable_key is deprecated: use item_key).",
-            ) from None
-        raise
-
-
-@router.delete("/admin/loot-tables/{key}/entries/consumable/{consumable_key}")
-def admin_delete_loot_entry_consumable(key: str, consumable_key: str, _: None = Depends(require_admin_token)):
-    try:
-        delete_loot_entry(key, consumable_key=consumable_key)
-        return {"ok": True}
-    except KeyError:
-        raise HTTPException(status_code=404, detail="Loot entry not found") from None
-    except ValueError as e:
-        if str(e) == "invalid_key":
-            raise HTTPException(status_code=422, detail="Invalid key format") from None
-        if str(e) == "invalid_loot_entry_source":
-            raise HTTPException(
-                status_code=422,
-                detail="Exactly one of item_key or weapon_key must be set (consumable_key is deprecated: use item_key).",
-            ) from None
-        raise
-
-
-@router.delete("/admin/loot-tables/{key}/entries/{item_key}")
-def admin_delete_loot_entry(key: str, item_key: str, _: None = Depends(require_admin_token)):
-    try:
-        delete_loot_entry(key, item_key)
+        delete_loot_entry_by_id(key, entry_id)
         return {"ok": True}
     except KeyError:
         raise HTTPException(status_code=404, detail="Loot entry not found") from None
@@ -3323,6 +3297,139 @@ def admin_delete_dungeon(dungeon_key: str, _: None = Depends(require_admin_token
             raise HTTPException(
                 status_code=404, detail=f"Dungeon not found: {dungeon_key}"
             )
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+# ── Admin: Campaign Hex Map ───────────────────────────────────────────────────
+
+@router.get("/admin/campaigns/{campaign_id}/hex-map")
+def admin_get_campaign_hex_map(campaign_id: int, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        hexes = conn.execute("SELECT q, r, hex_type, label, atmosphere, location_key FROM world_hexes WHERE is_active = 1").fetchall()
+        overlay = {(int(rv["hex_q"]), int(rv["hex_r"])): dict(rv) for rv in conn.execute("SELECT * FROM campaign_hex_data WHERE campaign_id = ?", (campaign_id,)).fetchall()}
+        ht_rows = conn.execute("SELECT hex_type, label, map_icon, map_color FROM hex_type_config WHERE is_active = 1").fetchall() if conn.execute("SELECT 1 FROM sqlite_master WHERE name='hex_type_config'").fetchone() else []
+        result = []
+        for h in hexes:
+            q2, r2 = int(h["q"]), int(h["r"])
+            ov = overlay.get((q2, r2), {})
+            result.append({"q": q2, "r": r2, "hex_type": h["hex_type"], "label": h["label"], "location_key": h["location_key"],
+                "discovered": bool(ov.get("discovered", 0)), "encounter_cleared": bool(ov.get("encounter_cleared", 0)),
+                "campaign_label": ov.get("campaign_label") or "", "campaign_notes": ov.get("campaign_notes") or "",
+                "narrative_encounter": ov.get("narrative_encounter") or "", "has_overlay": bool(ov)})
+        return {"hexes": result, "hex_types": {r["hex_type"]: dict(r) for r in ht_rows}, "campaign_id": campaign_id}
+    finally:
+        conn.close()
+
+
+class HexOverlayPatchReq(BaseModel):
+    discovered: bool | None = None
+    encounter_cleared: bool | None = None
+    campaign_label: str | None = None
+    campaign_notes: str | None = None
+
+
+@router.patch("/admin/campaigns/{campaign_id}/hex-map/{q}/{r}")
+def admin_patch_campaign_hex(campaign_id: int, q: int, r: int, req: HexOverlayPatchReq, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        existing = conn.execute("SELECT id FROM campaign_hex_data WHERE campaign_id=? AND hex_q=? AND hex_r=?", (campaign_id, q, r)).fetchone()
+        if existing:
+            fields, vals = [], []
+            if req.discovered is not None: fields.append("discovered=?"); vals.append(1 if req.discovered else 0)
+            if req.encounter_cleared is not None: fields.append("encounter_cleared=?"); vals.append(1 if req.encounter_cleared else 0)
+            if req.campaign_label is not None: fields.append("campaign_label=?"); vals.append(req.campaign_label)
+            if req.campaign_notes is not None: fields.append("campaign_notes=?"); vals.append(req.campaign_notes)
+            if fields: conn.execute(f"UPDATE campaign_hex_data SET {','.join(fields)} WHERE campaign_id=? AND hex_q=? AND hex_r=?", vals+[campaign_id, q, r])
+        else:
+            conn.execute("INSERT INTO campaign_hex_data (campaign_id,hex_q,hex_r,discovered,encounter_cleared,campaign_label,campaign_notes) VALUES (?,?,?,?,?,?,?)",
+                (campaign_id, q, r, 1 if req.discovered else 0, 1 if req.encounter_cleared else 0, req.campaign_label or "", req.campaign_notes or ""))
+        conn.commit()
+        row = conn.execute("SELECT * FROM campaign_hex_data WHERE campaign_id=? AND hex_q=? AND hex_r=?", (campaign_id, q, r)).fetchone()
+        return {"ok": True, "hex": dict(row) if row else {}}
+    finally:
+        conn.close()
+
+
+# ── Admin: Riddle Bank ────────────────────────────────────────────────────────
+
+class RiddleReq(BaseModel):
+    key: str | None = None
+    text: str
+    answer: str
+    answer_alts: list[str] = []
+    hints: list[str] = []
+    difficulty: int = 1
+    theme: str = "general"
+    is_active: bool = True
+
+
+@router.get("/admin/riddles")
+def admin_list_riddles(_: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute("SELECT * FROM game_config_riddles ORDER BY difficulty, theme, key").fetchall()
+        import json as _j
+        result = []
+        for r in rows:
+            d = dict(r)
+            try: d["answer_alts"] = _j.loads(d.get("answer_alts") or "[]")
+            except: d["answer_alts"] = []
+            try: d["hints"] = _j.loads(d.get("hints") or "[]")
+            except: d["hints"] = []
+            result.append(d)
+        return {"items": result}
+    finally:
+        conn.close()
+
+
+@router.post("/admin/riddles")
+def admin_create_riddle(req: RiddleReq, _: None = Depends(require_admin_token)):
+    import json as _j, re as _re
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        key = req.key or "riddle_" + _re.sub(r"[^a-z0-9]", "_", req.text[:20].lower().strip())
+        conn.execute(
+            "INSERT INTO game_config_riddles (key, text, answer, answer_alts, hints, difficulty, theme, is_active) VALUES (?,?,?,?,?,?,?,?)",
+            (key, req.text, req.answer, _j.dumps(req.answer_alts, ensure_ascii=False),
+             _j.dumps(req.hints, ensure_ascii=False), int(req.difficulty), req.theme, 1 if req.is_active else 0)
+        )
+        conn.commit()
+        return {"ok": True, "key": key}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/riddles/{key}")
+def admin_patch_riddle(key: str, req: RiddleReq, _: None = Depends(require_admin_token)):
+    import json as _j
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            "UPDATE game_config_riddles SET text=?, answer=?, answer_alts=?, hints=?, difficulty=?, theme=?, is_active=? WHERE key=?",
+            (req.text, req.answer, _j.dumps(req.answer_alts, ensure_ascii=False),
+             _j.dumps(req.hints, ensure_ascii=False), int(req.difficulty), req.theme, 1 if req.is_active else 0, key)
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/riddles/{key}")
+def admin_delete_riddle(key: str, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        cur = conn.execute("DELETE FROM game_config_riddles WHERE key=?", (key,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Riddle not found")
         return {"ok": True}
     finally:
         conn.close()

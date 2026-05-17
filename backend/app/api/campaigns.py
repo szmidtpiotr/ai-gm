@@ -541,8 +541,9 @@ def delete_campaign(campaign_id: int):
             (campaign_id,),
         )
 
+        # Free heroes — keep them, just unlink from this campaign
         conn.execute(
-            "DELETE FROM characters WHERE campaign_id = ?",
+            "UPDATE characters SET campaign_id = NULL, status = 'idle' WHERE campaign_id = ?",
             (campaign_id,),
         )
 

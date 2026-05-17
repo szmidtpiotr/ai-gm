@@ -995,6 +995,28 @@ body {
   transition: font-size 0.2s ease;
 }
 
+/* ── GM Narrative paragraph formatting ──────────────────────────────────── */
+.chat-bubble--gm .gm-p {
+  margin: 0 0 0.55em 0;
+  line-height: 1.72;
+}
+.chat-bubble--gm .gm-p:last-child { margin-bottom: 0; }
+
+/* Em-dash dialog paragraph: — "Czego chcesz od nas?" */
+.chat-bubble--gm .gm-p--speech {
+  font-style: italic;
+  color: #d4a565;
+  padding-left: 10px;
+  border-left: 2px solid rgba(212, 165, 101, 0.4);
+  margin-left: 2px;
+}
+
+/* Inline quoted speech „..." */
+.chat-bubble--gm .gm-speech {
+  font-style: italic;
+  color: #d4a565;
+}
+
 /* Bubble metadata row */
 .chat-bubble__meta {
   display: flex;
@@ -3077,6 +3099,46 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   font-weight: 700;
   color: var(--accent);
 }
+.stat-item__mod { font-size: 0.7rem; font-weight: 700; margin-top: 1px; }
+.stat-item__mod.mod--pos { color: #4ade80; }
+.stat-item__mod.mod--neg { color: #f87171; }
+.stat-item__mod.mod--zero { color: var(--text-muted); }
+
+/* Vitals row (HP + Mana) */
+.sheet-vitals-row { display: flex; gap: 10px; }
+.sheet-vitals-row .stat-card { flex: 1; }
+.stat-card__bar--mana { background: rgba(99,102,241,0.15); }
+.stat-card__bar-fill--mana { background: linear-gradient(90deg,#6366f1,#8b5cf6); }
+
+/* Meta row (Level, XP, Arcane) */
+.sheet-meta-row { display: flex; gap: 8px; margin-top: 10px; margin-bottom: 10px; }
+.sheet-meta-row .stat-card--small { flex: 1; padding: 8px; }
+.sheet-meta-row .stat-card--small .stat-card__value { font-size: 1.1rem; }
+
+/* Conditions */
+.conditions-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.condition-chip { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.35);
+  color: #fca5a5; border-radius: 12px; padding: 3px 10px; font-size: 0.75rem; font-weight: 600; }
+
+/* Spells Tab */
+.sheet-mana-summary { display: flex; gap: 12px; padding: 10px 0 14px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.spell-resource { display: flex; flex-direction: column; align-items: center; flex: 1; }
+.spell-resource__label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.spell-resource__val { font-size: 1.1rem; font-weight: 700; color: #818cf8; }
+.spells-list { display: flex; flex-direction: column; gap: 8px; }
+.spell-card { background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 10px 12px; }
+.spell-card__header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.spell-card__icon { font-size: 1rem; }
+.spell-card__name { flex: 1; font-weight: 700; font-size: 0.9rem; color: var(--text-primary); }
+.spell-card__mana { font-size: 0.78rem; color: #818cf8; font-weight: 600; }
+.spell-card__meta { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.spell-card__die { font-size: 0.75rem; color: #f87171; font-weight: 600; }
+.spell-card__die.heal { color: #4ade80; }
+.spell-card__ranks { display: flex; gap: 3px; }
+.spell-rank-pip { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.spell-rank-pip.active { background: #818cf8; }
+.spell-card__desc { font-size: 0.75rem; color: var(--text-muted); margin: 0; line-height: 1.4; }
 
 /* Skills & Inventory Items */
 .skill-item,
@@ -4060,34 +4122,50 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
 /* Archetype cards (new simpler style) */
 .archetype-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: var(--space-sm);
 }
 .archetype-card {
-  background: rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.04);
   border: 2px solid rgba(255,255,255,0.1);
   border-radius: 12px;
-  padding: 14px 10px;
+  padding: 12px 14px;
   cursor: pointer;
   text-align: left;
   color: var(--text-primary);
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background 0.15s;
+  display: grid;
+  grid-template-columns: 2rem 1fr;
+  grid-template-rows: auto auto auto;
+  column-gap: 10px;
+  align-items: start;
 }
+.archetype-card:hover { background: rgba(255,255,255,0.07); }
 .archetype-card--selected {
   border-color: var(--accent);
-  background: rgba(var(--accent-rgb, 212,160,89), 0.12);
+  background: rgba(var(--accent-rgb, 212,160,89), 0.10);
 }
+.archetype-icon { font-size: 1.4rem; grid-row: 1 / 3; align-self: center; }
 .archetype-title {
   display: block;
   font-weight: 700;
-  font-size: 0.95rem;
-  margin-bottom: 4px;
+  font-size: 0.92rem;
+  margin-bottom: 2px;
+}
+.archetype-bonus {
+  grid-column: 2;
+  display: block;
+  font-size: 0.7rem;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  margin-top: 4px;
 }
 .archetype-desc {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   color: var(--text-muted);
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
 /* Skill row — swap select + level +/- side by side */
@@ -4135,10 +4213,17 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   border-radius: 10px;
   padding: 10px 14px;
 }
+.wizard-stat-label-wrap { display: flex; align-items: center; gap: 4px; min-width: 42px; }
 .wizard-stat-label {
   font-weight: 700;
   font-size: 0.9rem;
-  min-width: 34px;
+}
+.wizard-stat-hint {
+  width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.08); color: var(--text-muted);
+  font-size: 0.62rem; font-weight: 700; cursor: help;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
 }
 .wizard-stat-mod {
   font-size: 0.82rem;
@@ -4259,23 +4344,24 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
 
 /* ── Skill Test Roll Popup v3 ─────────────────────────────────────────────── */
 .skill-roll-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  background: rgba(5,4,3,0.88);
+  background: rgba(5,4,3,0.82);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9000;
 }
 .srp-card {
-  background: #0e0c09;
-  border: 1px solid #4a3510;
-  box-shadow: 0 4px 32px rgba(0,0,0,0.8), inset 0 1px 0 rgba(180,130,30,0.05);
-  width: 260px;
+  background: #fef6e4;
+  border: 1px solid #c9a050;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7), 0 0 0 1px rgba(201,160,80,0.3);
+  width: 280px;
   display: flex;
   flex-direction: column;
   font-family: Cinzel,"Palatino Linotype",serif;
   overflow: hidden;
+  border-radius: 10px;
 }
 .srp-head {
   padding: 12px 16px 10px;
@@ -4364,21 +4450,21 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
 .srp-res-val {
   font-size: 1.6rem;
   font-weight: 700;
-  color: #ddd4b8;
+  color: #3a2510;
   font-family: Cinzel,serif;
   line-height: 1;
 }
-.srp-res-sep { font-size: 0.75rem; color: #4a3510; }
+.srp-res-sep { font-size: 0.75rem; color: #7a5520; }
 .srp-res-total {
   font-size: 1.6rem;
   font-weight: 700;
-  color: #c9961a;
+  color: #8a6010;
   font-family: Cinzel,serif;
   line-height: 1;
 }
-.srp-res-total.nat20 { color: #f0c040; }
-.srp-res-total.nat1  { color: #c04040; }
-.srp-res-label { font-size: 0.9rem; color: #c9961a; align-self: flex-end; padding-bottom: 2px; }
+.srp-res-total.nat20 { color: #b07800; }
+.srp-res-total.nat1  { color: #a02020; }
+.srp-res-label { font-size: 0.9rem; color: #8a6010; align-self: flex-end; padding-bottom: 2px; }
 .srp-nat {
   font-size: 0.52rem;
   letter-spacing: 0.25em;
@@ -4406,11 +4492,11 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   transition: background 0.15s, color 0.15s;
   text-align: center;
 }
-.srp-btn-roll { color: #c9961a; border-bottom: 1px solid rgba(74,53,16,0.2); }
-.srp-btn-roll:hover:not(:disabled) { background: rgba(201,150,26,0.07); color: #e8b830; }
+.srp-btn-roll { color: #7a5010; border-bottom: 1px solid rgba(74,53,16,0.2); }
+.srp-btn-roll:hover:not(:disabled) { background: rgba(201,150,26,0.12); color: #5a3a08; }
 .srp-btn-roll:disabled { opacity: 0.35; cursor: not-allowed; }
-.srp-btn-confirm { color: #7a6030; }
-.srp-btn-confirm:hover:not(:disabled) { background: rgba(201,150,26,0.05); color: #a08040; }
+.srp-btn-confirm { color: #3a2510; background: rgba(201,150,26,0.15); }
+.srp-btn-confirm:hover:not(:disabled) { background: rgba(201,150,26,0.25); color: #1a1008; }
 .srp-btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ── World Map Panel — Task 43 ───────────────────────────────────────────── */
@@ -4658,3 +4744,167 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   padding: 10px 0 2px; display: flex; align-items: center; gap: 6px;
 }
 .wiz-identity-hint::before { content: '🔒'; font-size: 0.75rem; }
+
+/* ── Dungeon System ──────────────────────────────────────────────────────── */
+
+/* Dungeon picker button */
+.adv-card--dungeon { border-color: rgba(201,100,30,0.4); }
+.adv-card--dungeon:hover { border-color: rgba(201,100,30,0.8); background: rgba(201,100,30,0.06); }
+
+/* Picker overlay */
+.dungeon-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75); display: flex;
+  align-items: center; justify-content: center; z-index: 1200; padding: 20px; }
+.dungeon-overlay[hidden] { display: none; }
+
+.dungeon-picker-box { background: #0d0b08; border: 1px solid #3a2510;
+  border-radius: 12px; width: 100%; max-width: 480px; max-height: 80vh;
+  display: flex; flex-direction: column; box-shadow: 0 8px 40px rgba(0,0,0,0.8); }
+
+.dungeon-picker-header { display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid #2a1a0a; }
+.dungeon-picker-title { font-family: Cinzel, serif; font-size: 0.95rem; color: #c9751a; letter-spacing: 0.08em; }
+.dungeon-picker-close { background: none; border: none; color: #666; cursor: pointer; font-size: 1rem; padding: 4px 8px; }
+.dungeon-picker-close:hover { color: #eee; }
+
+.dungeon-picker-list { overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.dungeon-picker-loading, .dungeon-picker-empty { padding: 20px; text-align: center; color: #666; font-size: 0.85rem; }
+
+.dungeon-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+  background: #12100c; border: 1px solid #2a1a0a; border-radius: 8px;
+  cursor: pointer; width: 100%; text-align: left; transition: border-color 0.15s; }
+.dungeon-card:hover:not(:disabled) { border-color: #c9751a; background: #1a1208; }
+.dungeon-card--cooldown { opacity: 0.5; cursor: not-allowed; }
+.dungeon-card__icon { font-size: 1.5rem; flex-shrink: 0; }
+.dungeon-card__body { flex: 1; min-width: 0; }
+.dungeon-card__name { font-weight: 600; color: #d4b07a; font-size: 0.9rem; margin-bottom: 2px; }
+.dungeon-card__meta { font-size: 0.75rem; color: #8a7a5a; }
+.dungeon-card__atm { font-size: 0.73rem; color: #6a6050; margin-top: 4px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.dungeon-card__arrow { color: #c9751a; font-size: 1.2rem; }
+.dungeon-card__cooldown { font-size: 0.78rem; color: #8a7050; white-space: nowrap; }
+
+/* Dungeon HUD (top strip in game screen) */
+.dungeon-hud { position: fixed; top: var(--dungeon-hud-top, 64px);
+  left: var(--dungeon-hud-left, 0); width: var(--dungeon-hud-width, 100%);
+  z-index: 200;
+  background: linear-gradient(180deg, #211608 0%, #1a1206 100%);
+  border-top: 1px solid #5a3518;
+  border-bottom: 1px solid #5a3518;
+  padding: 7px 16px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
+  box-shadow: 0 2px 12px rgba(201,117,26,0.12); }
+.dungeon-hud[hidden] { display: none; }
+/* Shift game chat down when dungeon HUD is active */
+.game-screen--dungeon #chat-container { padding-top: var(--dungeon-hud-h, 41px); }
+.dungeon-hud__label { font-family: Cinzel, serif; font-size: 0.78rem; color: #e09030;
+  letter-spacing: 0.06em; flex-shrink: 0; text-shadow: 0 0 8px rgba(201,117,26,0.4); }
+.dungeon-hud__progress { display: flex; gap: 5px; flex: 1; align-items: center; }
+.dungeon-pip { font-size: 0.8rem; opacity: 0.35; transition: opacity 0.2s, transform 0.15s; }
+.dungeon-pip.cleared { opacity: 0.55; }
+.dungeon-pip.current { opacity: 1; transform: scale(1.25); filter: drop-shadow(0 0 4px #c9751a); }
+.dungeon-hud__room-type { font-size: 0.7rem; color: #a08060; text-transform: uppercase;
+  letter-spacing: 0.1em; white-space: nowrap; }
+.dungeon-hud__advance { background: #c9751a; border: none; border-radius: 6px;
+  color: #0d0904; font-weight: 700; font-size: 0.78rem; padding: 5px 12px; cursor: pointer; }
+.dungeon-hud__advance:hover { background: #e8951a; }
+.dungeon-hud__exit { background: none; border: 1px solid #3a2510; border-radius: 6px;
+  color: #6a5040; font-size: 0.75rem; padding: 4px 8px; cursor: pointer; }
+.dungeon-hud__exit:hover { color: #c06040; border-color: #c06040; }
+
+/* Riddle panel (shown below HUD during riddle rooms) */
+.dungeon-riddle-panel { position: fixed; top: 54px; left: 50%; transform: translateX(-50%);
+  width: min(420px, 90vw); background: #0d0904; border: 1px solid #4a2510;
+  border-radius: 10px; padding: 16px; z-index: 190;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.7); }
+.dungeon-riddle-panel[hidden] { display: none; }
+.dungeon-riddle-title { font-family: Cinzel, serif; font-size: 0.82rem; color: #c9751a;
+  margin-bottom: 10px; }
+.dungeon-riddle-text { font-size: 0.88rem; color: #d4c09a; line-height: 1.55;
+  margin-bottom: 12px; font-style: italic; }
+.dungeon-riddle-hint { font-size: 0.78rem; color: #8a9060; margin-bottom: 10px;
+  padding: 6px 10px; background: rgba(138,144,96,0.1); border-radius: 4px; }
+.dungeon-riddle-hint[hidden] { display: none; }
+.dungeon-riddle-input-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.dungeon-riddle-input { flex: 1; background: #12100c; border: 1px solid #3a2510;
+  border-radius: 6px; color: #d4c09a; padding: 7px 10px; font-size: 0.85rem; }
+.dungeon-riddle-input:focus { outline: none; border-color: #c9751a; }
+.dungeon-riddle-submit { background: #c9751a; border: none; border-radius: 6px;
+  color: #0d0904; font-weight: 700; font-size: 0.82rem; padding: 7px 14px; cursor: pointer; }
+.dungeon-riddle-hint-btn { background: none; border: none; color: #6a6050;
+  font-size: 0.75rem; cursor: pointer; padding: 0; text-decoration: underline; }
+.dungeon-riddle-hint-btn:hover { color: #c9a060; }
+
+/* Dungeon complete overlay */
+.dungeon-complete-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+  display: flex; align-items: center; justify-content: center; z-index: 1100; }
+.dungeon-complete-overlay[hidden] { display: none; }
+.dungeon-complete-box { background: #0d0904; border: 1px solid #4a2510;
+  border-radius: 14px; padding: 32px 28px; text-align: center;
+  max-width: 340px; width: 90%; box-shadow: 0 8px 40px rgba(201,117,26,0.2); }
+.dungeon-complete-icon { font-size: 2.5rem; margin-bottom: 10px; }
+.dungeon-complete-title { font-family: Cinzel, serif; font-size: 1.1rem; color: #c9751a;
+  margin-bottom: 14px; }
+.dungeon-complete-loot { font-size: 0.82rem; color: #a09070; margin-bottom: 10px;
+  text-align: left; }
+.dungeon-complete-loot ul { list-style: none; padding: 0; margin: 0; }
+.dungeon-complete-loot li { padding: 3px 0; }
+.dungeon-complete-cooldown { font-size: 0.75rem; color: #6a5040; margin-bottom: 18px; }
+.dungeon-complete-btn { background: #c9751a; border: none; border-radius: 8px;
+  color: #0d0904; font-weight: 700; padding: 10px 28px; cursor: pointer; font-size: 0.9rem; }
+.dungeon-complete-btn:hover { background: #e8951a; }
+
+/* ── Dungeon Map ─────────────────────────────────────────────────────────── */
+.dmap-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  display: flex; align-items: flex-end; justify-content: center;
+  z-index: 1050; padding-bottom: 0; }
+.dmap-overlay[hidden] { display: none; }
+
+.dmap-box { background: #0d0904; border: 1px solid #3a2510; border-bottom: none;
+  border-radius: 14px 14px 0 0; width: 100%; max-width: 600px;
+  box-shadow: 0 -4px 40px rgba(0,0,0,0.8); }
+
+.dmap-header { display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 18px 10px; border-bottom: 1px solid #2a1a08; }
+.dmap-title { font-family: Cinzel, serif; font-size: 0.82rem; color: #c9751a; letter-spacing: 0.08em; }
+.dmap-close { background: none; border: none; color: #666; cursor: pointer; font-size: 1rem; padding: 4px 8px; }
+.dmap-close:hover { color: #eee; }
+
+.dmap-canvas-wrap { overflow-x: auto; padding: 16px 18px 12px; }
+.dmap-svg { display: block; min-height: 90px; }
+
+.dmap-legend { display: flex; gap: 14px; padding: 8px 18px 14px;
+  font-size: 0.68rem; color: #4a3a20; }
+.dmap-leg--current { color: #c9751a; }
+.dmap-leg--cleared { color: #5a8040; }
+
+/* Map toggle button in HUD */
+.dungeon-hud__map-btn { background: none; border: 1px solid #3a2510; border-radius: 5px;
+  font-size: 0.85rem; padding: 3px 7px; cursor: pointer; color: #7a6040; line-height: 1; }
+.dungeon-hud__map-btn:hover { border-color: #c9751a; color: #c9a060; }
+
+/* ── Spell Picker ────────────────────────────────────────────────────────── */
+.combat-btn--spell { background: linear-gradient(135deg, #3730a3, #6d28d9); border-color: #818cf8; }
+.combat-btn--spell:hover:not(:disabled) { background: linear-gradient(135deg, #4338ca, #7c3aed); }
+.spell-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+  display: flex; align-items: flex-end; justify-content: center; z-index: 1100; padding-bottom: 80px; }
+.spell-picker-overlay[hidden] { display: none; }
+.spell-picker-box { background: #0d0b0e; border: 1px solid #4c1d95;
+  border-radius: 14px; width: min(440px, 94vw); max-height: 60vh; overflow-y: auto;
+  box-shadow: 0 -4px 40px rgba(109,40,217,0.3); }
+.spell-picker-header { display: flex; align-items: center; gap: 8px;
+  padding: 12px 16px; border-bottom: 1px solid #2d1b69; position: sticky; top: 0;
+  background: #0d0b0e; }
+.spell-picker-title { font-family: Cinzel, serif; font-size: 0.82rem; color: #a78bfa; letter-spacing: 0.08em; flex: 1; }
+.spell-picker-mana { font-size: 0.78rem; color: #818cf8; font-weight: 700; }
+.spell-picker-close { background: none; border: none; color: #666; cursor: pointer; font-size: 1rem; }
+.spell-picker-list { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.spell-pick-btn { display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  background: #1a1428; border: 1px solid #3730a3; border-radius: 8px;
+  cursor: pointer; width: 100%; text-align: left; transition: border-color 0.15s; }
+.spell-pick-btn:hover:not(:disabled) { border-color: #818cf8; background: #1e1835; }
+.spell-pick-btn--nomana { opacity: 0.4; cursor: not-allowed; }
+.spell-pick-icon { font-size: 1.1rem; flex-shrink: 0; }
+.spell-pick-name { flex: 1; font-size: 0.88rem; font-weight: 600; color: #e2e8f0; }
+.spell-pick-cost { font-size: 0.75rem; color: #818cf8; font-weight: 700; white-space: nowrap; }
+.spell-pick-die { font-size: 0.72rem; color: #f87171; }
+.spell-pick-die.heal { color: #4ade80; }

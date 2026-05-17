@@ -109,11 +109,14 @@ Form-first AI record creator. Opens as overlay on any content tab.
 
 ### Campaign Monitor & Warsztat — `sections/campaigns.js`
 
-Campaign modal has 4 tabs:
+Campaign cards: delete (🗑) button on each card. Status filter (Aktywne/Zakończone/Wszystkie).
+
+Campaign modal has 5 tabs:
 1. **Przegląd** — character stats, HP bar, conditions, last turn snippets
 2. **Plan GM** — all arcs (not just active), full scene goals, hooks (NPCs/locations/items), roadmap — **read-only, does not affect player**. "Następna scena" button in the actions bar advances the GM plan scene pointer (affects AI narration of next turn).
 3. **Tury** — last 10 turns
-4. **🔧 Warsztat** — Campaign workshop: chat with LLM about the campaign, propose changes to `gm_plan_json`. Right panel shows "PROPONOWANE ZMIANY" cards with ✓ Zatwierdź buttons — each approval writes that field patch to DB. Raw JSON stripped from chat display.
+4. **🗺 Mapa** — SVG hex grid of all world hexes with campaign overlay. Click any hex to edit: `discovered` (fog of war), `encounter_cleared`, `campaign_label`, `campaign_notes`. PATCH: `GET /api/admin/campaigns/{id}/hex-map`, `PATCH /api/admin/campaigns/{id}/hex-map/{q}/{r}`
+5. **🔧 Warsztat** — Campaign workshop: chat with LLM about the campaign, propose changes to `gm_plan_json`. Right panel shows "PROPONOWANE ZMIANY" cards with ✓ Zatwierdź buttons — each approval writes that field patch to DB. Raw JSON stripped from chat display.
 
 ### Bank pomysłów (Ideas Bank) — `sections/workshops.js`
 
@@ -145,6 +148,23 @@ Standalone farmable dungeons separate from campaign story content.
 - Advance: `POST /api/dungeons/advance-room` — marks room cleared, moves to next, records completion on last room
 - Enemy scaling: ×0.75–×2.0 by hero level; boss always one tier above regular enemies
 - Admin: Świat → Lochy tab in admin panel v2
+
+### Loot System
+
+- `game_config_loot_tables` — loot table definitions (key, label, gold_min, gold_max)
+- `game_config_loot_entries` — entries with 3-way XOR: exactly one of `item_key`, `consumable_key`, `weapon_key` must be set; `weight` (1–100 = % drop chance), `qty_min`/`qty_max`
+- Every enemy has an auto-created `loot_{enemy_key}` table (on create or on approve-pending)
+- Enemy has `loot_table_key` (FK) + `drop_chance` (float 0–1) columns
+- Admin endpoints: `POST/DELETE /api/admin/loot-tables`, `POST /api/admin/loot-tables/{key}/entries` (upsert via `source_type`/`source_key`), `DELETE /api/admin/loot-tables/{key}/entries/by-id/{id}`
+- Frontend: Zawartość → Tabele łupów — inline edit (click weight/min/max), type badges (item/consumable/weapon), delete by ID
+- `loot_service.py`: `get_loot_table()`, `roll_loot()`, `grant_loot_to_character()`, `roll_gold_drop()`
+
+### Hero-First Model (Character First Flow)
+
+- Heroes (`characters` table) are independent entities with `status` (`idle`/`active`) and optional `campaign_id`
+- Deleting a campaign sets `characters.campaign_id = NULL, status = 'idle'` — hero is freed, NOT deleted
+- `handleNewCampaignWithHero()` always reassigns the hero (no stale campaign_id check)
+- `selectCampaign()` auto-assigns the current hero to any campaign it's not already in
 
 ## Locked Game Mechanics (do not modify without explicit approval)
 

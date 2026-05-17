@@ -22,9 +22,9 @@ class ResolveAttackRequest(BaseModel):
     roll_result: int | None = None
     raw_d20: int | None = None
     attacker: str = "player"
-    # Opcjonalne — cel nadal wg tury w silniku; pola dla klienta (log / zgodność kontraktu).
     enemy_key: str | None = None
     target_id: str | None = None
+    spell_key: str | None = None  # Scholar: which spell to cast
 
 
 class ClaimLootRequest(BaseModel):
@@ -94,6 +94,7 @@ def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest):
             body.roll_result,
             attacker=body.attacker,
             raw_d20=body.raw_d20,
+            spell_key=body.spell_key,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
