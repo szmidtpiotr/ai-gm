@@ -2489,6 +2489,19 @@ def create_turn(
         _narrative_for_cues, grant_item_labels, grant_gold_amount, open_shop_npc_key = extract_grant_cues(
             _narrative_for_cues
         )
+        # Also check top-level grant_item in parsed JSON — extract_grant_cues only sees
+        # the plain narrative text and can't find fields in the outer JSON object.
+        if isinstance(_parsed_json, dict):
+            _raw_gi_json = _parsed_json.get("grant_item")
+            if isinstance(_raw_gi_json, list):
+                for _x in _raw_gi_json:
+                    _s = str(_x).strip()
+                    if _s and _s not in grant_item_labels:
+                        grant_item_labels.append(_s)
+            elif isinstance(_raw_gi_json, str) and _raw_gi_json.strip():
+                _s = _raw_gi_json.strip()
+                if _s not in grant_item_labels:
+                    grant_item_labels.append(_s)
         grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
         clean_assistant = _repack_narrative(clean_assistant, _narrative_for_cues, _parsed_json)
         validate_roll_cue_name(clean_assistant.strip())
@@ -2573,6 +2586,12 @@ def create_turn(
                                 conn.commit()
                         except Exception as _e3:
                             logger.warning("roll_cue_session_store_error: %s", str(_e3))
+
+        # T10: Process [CREATE_LOCATION/NPC/ENEMY] tags → pending_review queue
+        try:
+            process_create_tags(assistant_text or "", conn, campaign_id)
+        except Exception as _pct_err:
+            logger.warning("process_create_tags_error", error=str(_pct_err))
 
         log = create_turn_log(
             conn=conn,
@@ -3215,6 +3234,18 @@ def create_turn_stream(
                     grant_gold_amount,
                     open_shop_npc_key,
                 ) = extract_grant_cues(_narrative_for_cues_s)
+                # Also check top-level grant_item in parsed JSON (same fix as non-streaming path)
+                if isinstance(_parsed_json_s, dict):
+                    _raw_gi_s = _parsed_json_s.get("grant_item")
+                    if isinstance(_raw_gi_s, list):
+                        for _xs in _raw_gi_s:
+                            _ss = str(_xs).strip()
+                            if _ss and _ss not in grant_item_labels:
+                                grant_item_labels.append(_ss)
+                    elif isinstance(_raw_gi_s, str) and _raw_gi_s.strip():
+                        _ss = _raw_gi_s.strip()
+                        if _ss not in grant_item_labels:
+                            grant_item_labels.append(_ss)
                 grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
                 clean_text = _repack_narrative(clean_text, _narrative_for_cues_s, _parsed_json_s)
                 validate_roll_cue_name(clean_text.strip())
@@ -3486,8 +3517,19 @@ def resolve_skill_test_endpoint(
             ) or ""
         except Exception as e:
             logger.warning("skill_test_narrator_error", error=str(e))
-            outcome = result.get("outcome", "")
-            prose_raw = "Sukces!" if "SUCCESS" in outcome else "Niepowodzenie."
+            # Retry with server default (Ollama) if user config fails (e.g. quota/rate limit)
+            try:
+                from app.services.llm_service import get_effective_config as _get_eff
+                _fallback_cfg = {"provider": "ollama", **_get_eff()}
+                prose_raw = _gen_chat(
+                    messages=[{"role": "user", "content": narrator_prompt}],
+                    llm_config=_fallback_cfg,
+                ) or ""
+                logger.info("skill_test_narrator_fallback_ok")
+            except Exception as e2:
+                logger.warning("skill_test_narrator_fallback_error", error=str(e2))
+                outcome = result.get("outcome", "")
+                prose_raw = "Sukces!" if "SUCCESS" in outcome else "Niepowodzenie."
 
         prose, _ = _proc_tags(prose_raw, conn, campaign_id)
 
