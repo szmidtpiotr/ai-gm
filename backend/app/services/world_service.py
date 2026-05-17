@@ -496,6 +496,7 @@ def get_pending_review_counts(conn: sqlite3.Connection) -> dict[str, int]:
         ("game_locations", "locations"),
         ("npcs", "npcs"),
         ("game_config_enemies", "enemies"),
+        ("game_config_weapons", "weapons"),
     ]:
         try:
             row = conn.execute(
@@ -505,6 +506,21 @@ def get_pending_review_counts(conn: sqlite3.Connection) -> dict[str, int]:
         except Exception:
             counts[label] = 0
     return counts
+
+
+def get_pending_weapons(conn: sqlite3.Connection) -> list[dict]:
+    """Return narrative weapons awaiting admin review."""
+    try:
+        rows = conn.execute(
+            """SELECT key, label, weapon_type, damage_die, linked_stat, description,
+                      campaign_id, review_status, ai_generated
+               FROM game_config_weapons
+               WHERE review_status = 'pending_review'
+               ORDER BY rowid DESC LIMIT 100"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
 
 
 def get_pending_locations(conn: sqlite3.Connection) -> list[dict]:
@@ -544,13 +560,21 @@ def get_pending_enemies(conn: sqlite3.Connection) -> list[dict]:
 
 
 def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool:
-    table = {"location": "game_locations", "npc": "npcs", "enemy": "game_config_enemies"}.get(entity_type)
+    table = {
+        "location": "game_locations", "npc": "npcs",
+        "enemy": "game_config_enemies", "weapon": "game_config_weapons",
+    }.get(entity_type)
     if not table:
         return False
     try:
         conn.execute(f"UPDATE {table} SET review_status = 'permanent' WHERE key = ?", (key,))
         if entity_type == "enemy":
             _ensure_enemy_loot_table(conn, key)
+        if entity_type == "weapon":
+            # Approve globally: clear campaign_id so weapon is available everywhere
+            conn.execute(
+                "UPDATE game_config_weapons SET approved = 1, campaign_id = NULL WHERE key = ?", (key,)
+            )
         conn.commit()
         return True
     except Exception:
@@ -586,7 +610,10 @@ def _ensure_enemy_loot_table(conn: sqlite3.Connection, enemy_key: str) -> None:
 
 
 def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool:
-    table = {"location": "game_locations", "npc": "npcs", "enemy": "game_config_enemies"}.get(entity_type)
+    table = {
+        "location": "game_locations", "npc": "npcs",
+        "enemy": "game_config_enemies", "weapon": "game_config_weapons",
+    }.get(entity_type)
     if not table:
         return False
     try:

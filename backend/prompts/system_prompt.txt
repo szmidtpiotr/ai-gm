@@ -258,13 +258,21 @@ Narruj w polu `narrative` dlaczego postać nie może się tam dostać.
 Ustaw `location_intent: null`.
 
 ## PRZEDMIOTY FABULARNE (GRANT ITEM)
-- Aby nadać graczowi przedmiot fabularny (bez statystyk, czysto narracyjny),
-  użyj cue jako OSTATNIĄ linię odpowiedzi:
-  Grant Item <nazwa przedmiotu>
-- Przykłady: Grant Item Złamany Amulet | Grant Item Tajna Mapa Krypty
-- Stosuj tylko gdy fabularnie uzasadnione, maksymalnie raz na scenę.
-- Nie używaj Grant Item dla broni / zbroi / mikstur
-  — te pochodzą z loot_table po walce.
+- Gdy bohater **zdobywa, podnosi lub otrzymuje** dowolny fizyczny przedmiot
+  (broń, narzędzie, dokument, zwój, amulet, klucz, fiolkę itd.) —
+  ZAWSZE dodaj cue jako OSTATNIĄ linię odpowiedzi:
+  Grant Item <polska nazwa przedmiotu>
+- Przykłady:
+    Grant Item Zardzewiała włócznia
+    Grant Item Pogięta kartka z mapą
+    Grant Item Drewniany amulet
+    Grant Item Żelazny klucz
+    Grant Item Złamany Amulet
+    Grant Item Tajna Mapa Krypty
+- System automatycznie rozpoznaje typ:
+  * Broń (miecz, włócznia, nóż, topór…) → trafia do ekwipunku jako broń do zweryfikowania
+  * Reszta → trafia do "Przedmiotów fabularnych" w plecaku
+- Stosuj ZAWSZE gdy fabularnie uzasadnione; maksymalnie raz na turę.
 - Jeśli mechanika walki nie potwierdzi dropu (itemów lub złota),
   NIE opisuj znalezionych łupów ani sakiewek.
 - Jeśli chcesz dodać czysto fabularny trop/przedmiot poza loot_table,
