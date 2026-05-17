@@ -1419,6 +1419,18 @@ def resolve_attack(
                     }
                 else:
                     weapon_row = resolve_sheet_weapon(conn, sheet, ch_id)
+            elif str(sheet.get("archetype") or "").strip().lower() == "scholar":
+                # Scholar cantrip: free basic magic attack (1d4, INT-based, no mana cost)
+                weapon_row = {
+                    "key": "scholar_cantrip",
+                    "label": "Atak Magiczny (kant.)",
+                    "weapon_type": "spell",
+                    "damage_die": "1d4",
+                    "mana_cost": 0,        # FREE — this is the key balance fix
+                    "linked_stat": "INT",
+                    "attack_bonus": 0,
+                    "damage_bonus": 0,
+                }
             else:
                 weapon_row = resolve_sheet_weapon(conn, sheet, ch_id)
             attack_roll: dict[str, Any] | None = None
@@ -1510,7 +1522,7 @@ def resolve_attack(
                         "attack_label": {
                             "melee_attack": "ATAK WRĘCZ",
                             "ranged_attack": "ATAK DYSTANSOWY",
-                            "spell_attack": "ATAK MAGICZNY",
+                            "spell_attack": "KANTRYP MAGICZNY" if (weapon_row or {}).get("key") == "scholar_cantrip" else "ATAK MAGICZNY",
                         }.get(str(attack_roll.get("test") or ""), "ATAK"),
                         "modifier": int(attack_roll.get("modifier") or 0),
                         "total": int(attack_roll.get("total") or roll_result or 0),
@@ -1526,9 +1538,11 @@ def resolve_attack(
                 (attack_roll or {}).get("weapon_type")
                 or (str(weapon_row.get("weapon_type")) if weapon_row else "")
             ).lower() == "spell"
-            _spell_mana_cost = int(weapon_row.get("mana_cost") or 2) if (_is_spell and weapon_row) else 2
+            # Cantrip (mana_cost=0) is free — skip mana check entirely
+            _spell_mana_cost = int(weapon_row.get("mana_cost") or 0) if (_is_spell and weapon_row) else 0
+            _is_free_cantrip = _is_spell and _spell_mana_cost == 0
             _mana_ok = True
-            if _is_spell:
+            if _is_spell and not _is_free_cantrip:
                 from app.services.spell_service import check_and_deduct_mana
                 _mana_ok, _new_mana = check_and_deduct_mana(sheet, _spell_mana_cost)
                 if not _mana_ok:
@@ -1756,6 +1770,8 @@ def resolve_attack(
                             loot_pool=loot_pool_accum,
                         )
                         conn.commit()
+                        # Scholar mana regen on victory: max(1, INT_mod * 2)
+                        _scholar_restore_mana_after_combat(conn, ch_id, sheet, "victory")
                         # Mark current hex encounter as cleared for this campaign
                         try:
                             gs_hex = conn.execute(
@@ -2115,6 +2131,35 @@ def advance_turn(
         return None
 
 
+def _scholar_restore_mana_after_combat(
+    conn: sqlite3.Connection, character_id: int, sheet: dict, reason: str
+) -> None:
+    """Layer 2 balance fix: Scholar recovers mana after each combat (victory or flee)."""
+    try:
+        archetype = str(sheet.get("archetype") or "").strip().lower()
+        if archetype != "scholar":
+            return
+        current = int(sheet.get("current_mana", 0) or 0)
+        maximum = int(sheet.get("max_mana", 0) or 0)
+        if maximum <= 0 or current >= maximum:
+            return
+        int_stat = int((sheet.get("stats") or {}).get("INT", 10) or 10)
+        int_mod = (int_stat - 10) // 2
+        restore = max(1, int_mod * 2)
+        new_mana = min(maximum, current + restore)
+        sheet["current_mana"] = new_mana
+        conn.execute(
+            "UPDATE characters SET sheet_json = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), int(character_id)),
+        )
+        conn.commit()
+        logger.info("scholar_mana_restored_after_combat",
+                    character_id=character_id, restored=new_mana - current,
+                    new_mana=new_mana, max_mana=maximum, reason=reason)
+    except Exception as e:
+        logger.warning("scholar_mana_restore_failed", error=str(e))
+
+
 def end_combat(campaign_id: int, reason: str, *, defeated_by: str | None = None) -> None:
     """End combat row (``status='ended'``, ``ended_reason``). For ``player_dead``, also ends solo campaign via :func:`solo_death_service.end_solo_campaign_on_death`."""
     char_id: int | None = None
@@ -2138,6 +2183,17 @@ def end_combat(campaign_id: int, reason: str, *, defeated_by: str | None = None)
             (reason, _now_iso(), campaign_id),
         )
         conn.commit()
+        # Scholar mana regen on flee
+        if reason == "fled" and char_id:
+            try:
+                ch_row = conn.execute(
+                    "SELECT sheet_json FROM characters WHERE id = ?", (char_id,)
+                ).fetchone()
+                if ch_row:
+                    _sh = json.loads(ch_row["sheet_json"] or "{}")
+                    _scholar_restore_mana_after_combat(conn, char_id, _sh, "fled")
+            except Exception:
+                pass
 
     if reason != "player_dead" or char_id is None:
         return
