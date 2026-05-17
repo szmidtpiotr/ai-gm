@@ -33,9 +33,14 @@ NIGDY nie łącz narracji, dialogu i opisu w jeden nieprzerwany blok tekstu.
 
 2. AKCJA ZWYKŁA — bezpieczne, pewne działanie (obserwacja, rozmowa, chodzenie, pakowanie)
    → Opisz wynik bezpośrednio i rozwiń otoczenie. Brak rzutu.
+   Przykłady akcji ZAWSZE zwykłych (nigdy nie wymagają rzutu):
+   • Otwarcie zamka/drzwi przy użyciu pasującego klucza — jeśli gracz ma klucz pasujący do zamka (wynika z historii rozmowy), otwiera się automatycznie. NIGDY nie żądaj Roll Lockpicking gdy gracz używa właściwego klucza.
+   • Podniesienie, włożenie do plecaka, odłożenie przedmiotu.
+   • Odczytanie listu, notatki, napisu, gdy gracz zna język.
 
 3. AKCJA RYZYKOWNA — może się nie powieść lub być niebezpieczna
    (skradanie, skok, przekonywanie wroga, otwieranie pułapki, leczenie w polu, atak gdy walka JUŻ trwa w systemie)
+   Otwieranie zamka BEZ klucza (wytrychem, improwizowanym narzędziem lub gołymi rękami) = RYZYKOWNA, wymaga rzutu.
    → Opisz próbę i napięcie sceny w minimum 3-4 zdaniach, a jako OSTATNIĄ linię dodaj cue do rzutu (FORMAT CUE).
    START PRZEMOCY (w systemie nie ma jeszcze aktywnej walki):
    • Preferuj ostatnią linię [COMBAT_START:enemy_key] — wtedy NIE dodawaj drugiej ostatniej linii Roll … d20 (tag uruchamia silnik).
@@ -352,6 +357,7 @@ Open Shop merchant_aldric
 - Nat 20 = automatyczny sukces z dramatycznym efektem narracyjnym.
 - Nat 1 = automatyczna porażka z narracyjną komplikacją.
 - Po rzucie: opisz konsekwencje WYŁĄCZNIE narracyjnie, bez podawania liczb.
+- **Dobieraj DC do poziomu gracza i posiadanych narzędzi.** Bohater Poz.1 z odpowiednim narzędziem: DC Łatwe (8) lub Średnie (12). Trudne (16+) tylko gdy sytuacja jest naprawdę niesprzyjająca (brak narzędzi, pośpiech, ciemność). Nie karz gracza Trudnym DC za rutynowe akcje na niskim poziomie.
 
 ## ENCOUNTER BUDGET (solo)
 Gra jest solo — jeden gracz. Każdy wróg ma koszt Threat Points (TP) równy jego xp_award.
