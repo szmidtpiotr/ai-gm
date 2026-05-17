@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=tts-eq-2026-05-10">
+  <link rel="stylesheet" href="./css/styles.css?v=roll-popup-2026-05-17">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -123,13 +123,13 @@
           </div>
           <span class="adv-card__tag">Wkrótce</span>
         </button>
-        <button type="button" class="adv-card adv-card--disabled" disabled>
+        <button type="button" class="adv-card adv-card--dungeon" id="dungeon-picker-btn">
           <div class="adv-card__icon">⛏</div>
           <div class="adv-card__body">
             <h3>Loch</h3>
             <p>Ekspedycja do losowego lochu — szybka walka, łupy, bez fabuły</p>
           </div>
-          <span class="adv-card__tag">Wkrótce</span>
+          <span class="adv-card__arrow">›</span>
         </button>
       </div>
 
@@ -314,6 +314,12 @@
         </svg>
         <span>Atak</span>
       </button>
+      <button type="button" class="combat-btn combat-btn--spell" id="combat-spell-btn" style="display:none" data-clog="combat_spell_button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+        </svg>
+        <span>Zaklęcie</span>
+      </button>
       <button type="button" class="combat-btn combat-btn--flee" id="combat-flee-btn" data-clog="combat_flee_button">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M13 19l9-7-9-7v14z"/>
@@ -322,6 +328,18 @@
         <span>Ucieczka</span>
       </button>
     </footer>
+
+    <!-- Spell Picker (Scholar combat) -->
+    <div id="spell-picker-overlay" class="spell-picker-overlay" hidden>
+      <div class="spell-picker-box">
+        <div class="spell-picker-header">
+          <span class="spell-picker-title">✨ Wybierz zaklęcie</span>
+          <span class="spell-picker-mana" id="spell-picker-mana"></span>
+          <button type="button" class="spell-picker-close" id="spell-picker-close">✕</button>
+        </div>
+        <div id="spell-picker-list" class="spell-picker-list"></div>
+      </div>
+    </div>
 
     <!-- Character Sheet Panel -->
     <div id="sheet-panel" class="sheet-panel">
@@ -346,6 +364,11 @@
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
             </svg>
           </button>
+          <button type="button" class="sheet-tab" id="sheet-tab-spells" data-tab="spells" style="display:none">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+          </button>
           <button type="button" class="sheet-tab" data-tab="appearance">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
@@ -358,21 +381,45 @@
       <div class="sheet-panel__content">
         <!-- Stats Tab -->
         <div id="tab-stats" class="sheet-tab-content sheet-tab-content--active">
-          <div class="stat-card stat-card--hp">
-            <span class="stat-card__label">PUNKTY ŻYCIA</span>
-            <span class="stat-card__value" id="sheet-hp">29 / 29</span>
-            <div class="stat-card__bar">
-              <div class="stat-card__bar-fill" id="sheet-hp-bar" style="width: 100%"></div>
+          <div class="sheet-vitals-row">
+            <div class="stat-card stat-card--hp">
+              <span class="stat-card__label">PUNKTY ŻYCIA</span>
+              <span class="stat-card__value" id="sheet-hp">29 / 29</span>
+              <div class="stat-card__bar">
+                <div class="stat-card__bar-fill" id="sheet-hp-bar" style="width: 100%"></div>
+              </div>
+            </div>
+            <div class="stat-card stat-card--mana" id="sheet-mana-card" style="display:none">
+              <span class="stat-card__label">MANA</span>
+              <span class="stat-card__value" id="sheet-mana">0 / 0</span>
+              <div class="stat-card__bar stat-card__bar--mana">
+                <div class="stat-card__bar-fill stat-card__bar-fill--mana" id="sheet-mana-bar" style="width: 100%"></div>
+              </div>
             </div>
           </div>
 
-          <div class="stat-card">
-            <span class="stat-card__label">POZIOM</span>
-            <span class="stat-card__value" id="sheet-level">1</span>
+          <div class="sheet-meta-row">
+            <div class="stat-card stat-card--small">
+              <span class="stat-card__label">POZIOM</span>
+              <span class="stat-card__value" id="sheet-level">1</span>
+            </div>
+            <div class="stat-card stat-card--small">
+              <span class="stat-card__label">XP</span>
+              <span class="stat-card__value" id="sheet-xp">0</span>
+            </div>
+            <div class="stat-card stat-card--small" id="sheet-ap-card" style="display:none">
+              <span class="stat-card__label">ARKANA</span>
+              <span class="stat-card__value" id="sheet-arcane-points">0</span>
+            </div>
           </div>
 
           <div class="stats-grid" id="sheet-stats">
-            <!-- Stats will be inserted here -->
+            <!-- Stats inserted by JS -->
+          </div>
+
+          <div id="sheet-conditions-section" style="display:none">
+            <h3 class="sheet-section-title">Aktywne Stany</h3>
+            <div id="sheet-conditions" class="conditions-list"></div>
           </div>
         </div>
 
@@ -415,6 +462,12 @@
           </div>
           <div class="inv-list inv-list--lore" id="sheet-lore"></div>
 
+        </div>
+
+        <!-- Spells Tab (Scholar only) -->
+        <div id="tab-spells" class="sheet-tab-content">
+          <div class="sheet-mana-summary" id="spells-mana-summary"></div>
+          <div id="sheet-spells-list" class="spells-list"></div>
         </div>
 
         <!-- Appearance + History Tab (combined) -->
@@ -788,8 +841,72 @@
     </div>
   </div>
 
+  <!-- Dungeon Picker Modal -->
+  <div id="dungeon-picker-overlay" class="dungeon-overlay" hidden>
+    <div class="dungeon-picker-box">
+      <div class="dungeon-picker-header">
+        <span class="dungeon-picker-title">⛏ Wybierz Loch</span>
+        <button type="button" class="dungeon-picker-close" id="dungeon-picker-close">✕</button>
+      </div>
+      <div id="dungeon-picker-list" class="dungeon-picker-list">
+        <div class="dungeon-picker-loading">Ładowanie lochów…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dungeon HUD (shown inside game screen during dungeon run) -->
+  <div id="dungeon-hud" class="dungeon-hud" hidden>
+    <div class="dungeon-hud__label" id="dungeon-hud-label">⛏ Loch</div>
+    <div class="dungeon-hud__progress" id="dungeon-hud-progress"></div>
+    <div class="dungeon-hud__room-type" id="dungeon-hud-room-type"></div>
+    <button type="button" class="dungeon-hud__advance" id="dungeon-advance-btn" hidden>Przejdź dalej →</button>
+    <button type="button" class="dungeon-hud__map-btn" id="dungeon-map-btn" title="Pokaż mapę lochu">🗺</button>
+    <button type="button" class="dungeon-hud__exit" id="dungeon-exit-btn">✕ Wyjdź</button>
+  </div>
+
+  <!-- Dungeon Riddle Panel -->
+  <div id="dungeon-riddle-panel" class="dungeon-riddle-panel" hidden>
+    <div class="dungeon-riddle-title">🔮 Zagadka</div>
+    <div class="dungeon-riddle-text" id="dungeon-riddle-text"></div>
+    <div class="dungeon-riddle-hint" id="dungeon-riddle-hint" hidden></div>
+    <div class="dungeon-riddle-input-row">
+      <input type="text" id="dungeon-riddle-input" class="dungeon-riddle-input" placeholder="Twoja odpowiedź…" autocomplete="off"/>
+      <button type="button" class="dungeon-riddle-submit" id="dungeon-riddle-submit">Odpowiedz</button>
+    </div>
+    <button type="button" class="dungeon-riddle-hint-btn" id="dungeon-riddle-hint-btn">Podpowiedź</button>
+  </div>
+
+  <!-- Dungeon Map Overlay -->
+  <div id="dungeon-map-overlay" class="dmap-overlay" hidden>
+    <div class="dmap-box">
+      <div class="dmap-header">
+        <span class="dmap-title">🗺 Mapa Lochu</span>
+        <button type="button" class="dmap-close" id="dmap-close-btn">✕</button>
+      </div>
+      <div class="dmap-canvas-wrap">
+        <svg id="dmap-svg" class="dmap-svg"></svg>
+      </div>
+      <div class="dmap-legend">
+        <span>■ Nieznane</span>
+        <span class="dmap-leg--current">■ Obecna</span>
+        <span class="dmap-leg--cleared">■ Wyczyszczona</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dungeon Complete Overlay -->
+  <div id="dungeon-complete-overlay" class="dungeon-complete-overlay" hidden>
+    <div class="dungeon-complete-box">
+      <div class="dungeon-complete-icon" id="dungeon-complete-icon">⚔️</div>
+      <div class="dungeon-complete-title" id="dungeon-complete-title">Loch Ukończony!</div>
+      <div class="dungeon-complete-loot" id="dungeon-complete-loot"></div>
+      <div class="dungeon-complete-cooldown" id="dungeon-complete-cooldown"></div>
+      <button type="button" class="dungeon-complete-btn" id="dungeon-complete-btn">Wyjdź z lochu</button>
+    </div>
+  </div>
+
   <script src="./js/clog.js?v=combat-v35"></script>
   <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
-  <script src="./js/app.js?v=tts-eq-overlay-2026-05-10"></script>
+  <script src="./js/app.js?v=spell-picker-2026-05-16"></script>
 </body>
 </html>

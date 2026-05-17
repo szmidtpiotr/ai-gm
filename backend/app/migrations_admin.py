@@ -1135,15 +1135,8 @@ def _finalize_t25_effect_json_schema(conn: sqlite3.Connection) -> None:
 
 
 def _finalize_phase_8h_loot_entries(conn: sqlite3.Connection) -> None:
-    """Collapse loot entries to item/weapon XOR after consumables migrate into items."""
-    row = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_config_loot_entries'"
-    ).fetchone()
-    if not row:
-        return
-    cols = {r[1]: r for r in conn.execute("PRAGMA table_info(game_config_loot_entries)").fetchall()}
-    if "consumable_key" not in cols:
-        return
+    """No-op: superseded by _ensure_loot_entries_full_schema which keeps consumable_key."""
+    return
 
     has_currency_code = "currency_code" in cols
     logger.info("admin_migration_phase_8h_rebuild_loot_entries")
@@ -1358,6 +1351,40 @@ def _ensure_enemy_loot_table_and_drop_chance(conn: sqlite3.Connection) -> None:
             if "duplicate column" in msg or "already exists" in msg:
                 continue
             raise
+
+
+def _backfill_enemy_loot_tables(conn: sqlite3.Connection) -> None:
+    """Create and assign loot tables for active enemies that don't have one."""
+    try:
+        rows = conn.execute(
+            """
+            SELECT key, label FROM game_config_enemies
+            WHERE is_active = 1
+              AND (loot_table_key IS NULL OR loot_table_key = '')
+            """
+        ).fetchall()
+        if not rows:
+            return
+        for row in rows:
+            ek = row[0]
+            label = row[1] or ek
+            lt_key = f"loot_{ek}"
+            exists = conn.execute(
+                "SELECT key FROM game_config_loot_tables WHERE key = ?", (lt_key,)
+            ).fetchone()
+            if not exists:
+                conn.execute(
+                    "INSERT INTO game_config_loot_tables (key, label, description, is_active) VALUES (?, ?, '', 1)",
+                    (lt_key, f"Łupy: {label}"),
+                )
+            conn.execute(
+                "UPDATE game_config_enemies SET loot_table_key = ? WHERE key = ?",
+                (lt_key, ek),
+            )
+        conn.commit()
+        logger.info("admin_migration_backfill_enemy_loot_tables", count=len(rows))
+    except Exception as e:
+        logger.warning("admin_migration_backfill_enemy_loot_tables_failed", error=str(e))
 
 
 def _ensure_user_llm_settings_mode(conn: sqlite3.Connection) -> None:
@@ -2042,6 +2069,158 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     logger.info("v2_schema_migrations_complete")
 
 
+def _ensure_loot_entries_full_schema(conn: sqlite3.Connection) -> None:
+    """Rebuild loot_entries with consumable_key + 3-way XOR if ux_loot_entries_consumable index is missing."""
+    if not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='game_config_loot_entries'"
+    ).fetchone():
+        return
+    if conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name='ux_loot_entries_consumable'"
+    ).fetchone():
+        return
+    logger.info("admin_migration_ensure_loot_entries_full_schema")
+    conn.execute("PRAGMA foreign_keys=OFF")
+    try:
+        conn.executescript(
+            """
+            DROP INDEX IF EXISTS idx_loot_entries_table;
+            DROP INDEX IF EXISTS ux_loot_entries_item;
+            DROP INDEX IF EXISTS ux_loot_entries_consumable;
+            DROP INDEX IF EXISTS ux_loot_entries_weapon;
+            CREATE TABLE game_config_loot_entries_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                loot_table_key TEXT NOT NULL REFERENCES game_config_loot_tables(key) ON DELETE CASCADE,
+                item_key TEXT REFERENCES game_config_items(key) ON DELETE CASCADE,
+                consumable_key TEXT REFERENCES game_config_consumables(key) ON DELETE CASCADE,
+                weapon_key TEXT REFERENCES game_config_weapons(key) ON DELETE CASCADE,
+                weight INTEGER NOT NULL DEFAULT 10,
+                qty_min INTEGER NOT NULL DEFAULT 1,
+                qty_max INTEGER NOT NULL DEFAULT 1,
+                CHECK (
+                    (CASE WHEN item_key IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN consumable_key IS NOT NULL THEN 1 ELSE 0 END)
+                  + (CASE WHEN weapon_key IS NOT NULL THEN 1 ELSE 0 END) = 1
+                )
+            );
+            INSERT INTO game_config_loot_entries_new
+                (id, loot_table_key, item_key, consumable_key, weapon_key, weight, qty_min, qty_max)
+            SELECT id, loot_table_key, item_key, NULL,
+                   CASE WHEN typeof(weapon_key) = 'null' THEN NULL ELSE weapon_key END,
+                   weight, qty_min, qty_max
+            FROM game_config_loot_entries
+            WHERE item_key IS NOT NULL OR weapon_key IS NOT NULL;
+            DROP TABLE game_config_loot_entries;
+            ALTER TABLE game_config_loot_entries_new RENAME TO game_config_loot_entries;
+            CREATE INDEX IF NOT EXISTS idx_loot_entries_table
+                ON game_config_loot_entries(loot_table_key);
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_item
+                ON game_config_loot_entries(loot_table_key, item_key) WHERE item_key IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_consumable
+                ON game_config_loot_entries(loot_table_key, consumable_key) WHERE consumable_key IS NOT NULL;
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_loot_entries_weapon
+                ON game_config_loot_entries(loot_table_key, weapon_key) WHERE weapon_key IS NOT NULL;
+            """
+        )
+        conn.commit()
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
+
+
+def _ensure_dungeon_v2_schema(conn: sqlite3.Connection) -> None:
+    """Dungeon V2: room types, riddle bank, loot tiers, source_exclusive on items/weapons."""
+    # game_dungeons new columns
+    for sql in [
+        "ALTER TABLE game_dungeons ADD COLUMN chest_loot_table_key TEXT",
+        "ALTER TABLE game_dungeons ADD COLUMN boss_loot_table_key TEXT",
+        "ALTER TABLE game_dungeons ADD COLUMN room_loot_chance REAL NOT NULL DEFAULT 0.15",
+        "ALTER TABLE game_dungeons ADD COLUMN room_types_json TEXT NOT NULL DEFAULT '{\"combat\":50,\"chest\":15,\"trap\":15,\"riddle\":10,\"rest\":10}'",
+        "ALTER TABLE game_dungeons ADD COLUMN riddle_source TEXT NOT NULL DEFAULT 'database'",
+        "ALTER TABLE game_dungeons ADD COLUMN riddle_max_hints INTEGER NOT NULL DEFAULT 2",
+    ]:
+        try:
+            conn.execute(sql); conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower(): raise
+
+    # source_exclusive on items and weapons
+    for sql in [
+        "ALTER TABLE game_config_items ADD COLUMN source_exclusive TEXT DEFAULT NULL",
+        "ALTER TABLE game_config_weapons ADD COLUMN source_exclusive TEXT DEFAULT NULL",
+    ]:
+        try:
+            conn.execute(sql); conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower(): raise
+
+    # Riddle bank table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS game_config_riddles (
+            key          TEXT PRIMARY KEY,
+            text         TEXT NOT NULL,
+            answer       TEXT NOT NULL,
+            answer_alts  TEXT NOT NULL DEFAULT '[]',
+            hints        TEXT NOT NULL DEFAULT '[]',
+            difficulty   INTEGER NOT NULL DEFAULT 1,
+            theme        TEXT NOT NULL DEFAULT 'general',
+            is_active    INTEGER NOT NULL DEFAULT 1,
+            created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+
+    # game_config_meta: dungeon settings
+    conn.execute(
+        "INSERT OR IGNORE INTO game_config_meta (key, value) VALUES ('dungeon_death_hp_mode', 'campaign_state')"
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO game_config_meta (key, value) VALUES ('dungeon_riddle_max_hints', '2')"
+    )
+    conn.commit()
+
+    # Seed riddles if none exist
+    riddle_count = conn.execute("SELECT COUNT(*) FROM game_config_riddles").fetchone()[0]
+    if riddle_count == 0:
+        riddles = [
+            ("riddle_shadow", "Podążam za tobą w dzień, znikam w nocy. Czym jestem?", "cień",
+             '["shadow","twój cień","mój cień"]', '["Jestem czarny","Znikam gdy nie ma słońca","To twój..."]', 1, "general"),
+            ("riddle_echo", "Mówię wszystko co powiesz, a nie mam ust. Czym jestem?", "echo",
+             '["głos","echo głosu"]', '["Mieszkam w górach i jaskiniach","Powtarzam twoje słowa","Nie mam ciała"]', 1, "dungeon"),
+            ("riddle_fire", "Jem i rosnę, ale woda mnie zabija. Czym jestem?", "ogień",
+             '["płomień","fire","żar"]', '["Świecę w ciemności","Potrzebuję drewna","Gasisz mnie wodą"]', 1, "dungeon"),
+            ("riddle_time", "Stale idę naprzód, nie można mnie cofnąć. Czym jestem?", "czas",
+             '["upływ czasu","godziny","wieczność"]', '["Wszystko niszczę","Królowie się mnie boją","Nie mam początku ani końca"]', 2, "magic"),
+            ("riddle_key", "Mam zęby, ale nie gryzę. Czym jestem?", "klucz",
+             '["klucz do drzwi","zamkowy klucz"]', '["Otwieram zamki","Noszę mnie przy pasie","Bez mnie drzwi pozostają zamknięte"]', 1, "dungeon"),
+            ("riddle_death", "Bogaci go pragną, biedni go mają, a zniszczy tego kto je spożyje. Czym jestem?", "nic",
+             '["nicość","pustka","zero"]', '["Bogaci chcą więcej tego czego nie mają","Biedni nic nie mają","Jeśli to zjesz..."]', 3, "death"),
+            ("riddle_river", "Zawsze biegnę, a nóg nie mam. Czym jestem?", "rzeka",
+             '["woda","strumień","potok"]', '["Mam brzegi","Płynę do morza","Możesz mnie przepłynąć"]', 1, "nature"),
+            ("riddle_mirror", "Pokazuję twarz, ale nią nie jestem. Czym jestem?", "lustro",
+             '["zwierciadło","odbicie"]', '["Odbijam światło","Znajdziesz mnie w komnacie","Odwracam lewo i prawo"]', 2, "magic"),
+            ("riddle_book", "Mam wiele historii, lecz ust nie mam. Czym jestem?", "księga",
+             '["książka","tom","pergamin","pismo"]', '["Mam strony","Możesz mnie czytać","Noszę wiedzę"]', 1, "magic"),
+            ("riddle_night", "Im więcej mnie zabierasz, tym większy się staję. Czym jestem?", "dół",
+             '["dziura","jama","wykop"]', '["Kopiesz mnie w ziemi","Chowasz mnie w ziemi","Wyrasta ze mnie coraz więcej"]', 2, "dungeon"),
+            ("riddle_bones", "Żywych niosę, umarłym nie służę. Czym jestem?", "statek",
+             '["łódź","okręt","tratwa"]', '["Pływam po wodzie","Przewożę ludzi","Rozsypuję się gdy umrę"]', 2, "death"),
+            ("riddle_sword", "Tnę bez ostrzy, jestem ostry lecz nie ze stali. Czym jestem?", "wiatr",
+             '["wicher","podmuch","burza"]', '["Nie mam ciała","Możesz mnie poczuć ale nie dotknąć","Poruszam drzewami"]', 2, "nature"),
+        ]
+        for r in riddles:
+            try:
+                conn.execute(
+                    "INSERT OR IGNORE INTO game_config_riddles (key,text,answer,answer_alts,hints,difficulty,theme) VALUES (?,?,?,?,?,?,?)",
+                    r
+                )
+            except Exception:
+                pass
+        conn.commit()
+        logger.info("admin_migration_dungeon_v2_riddles_seeded", count=len(riddles))
+
+    logger.info("admin_migration_dungeon_v2_schema_done")
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -2080,6 +2259,7 @@ def run_admin_migrations() -> None:
 
         _rebuild_loot_entries_for_consumable_support(conn)
         _upgrade_loot_entries_three_way_xor(conn)
+        _ensure_loot_entries_full_schema(conn)
         _finalize_phase_8h_items_schema(conn)
         _finalize_t25_effect_json_schema(conn)
         _finalize_phase_8h_loot_entries(conn)
@@ -2106,9 +2286,11 @@ def run_admin_migrations() -> None:
         _migrate_legacy_archetype_json(conn)
         _ensure_campaign_ai_summaries_audience(conn)
         _ensure_enemy_loot_table_and_drop_chance(conn)
+        _backfill_enemy_loot_tables(conn)
         _ensure_user_llm_settings_mode(conn)
         _run_v2_schema_migrations(conn)
+        _ensure_dungeon_v2_schema(conn)
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="12.0")
+    logger.info("admin_migration_complete", phase="12.1")

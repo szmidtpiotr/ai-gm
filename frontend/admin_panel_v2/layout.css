@@ -1391,6 +1391,8 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 
 /* Builder tab fills the full canvas — no padding */
 .subtab-panel[data-tab="builder"].active { padding: 0; overflow: hidden; }
+/* Loot tables tab — sidebar + editor need full height */
+.subtab-panel[data-tab="loot-tables"].active { padding: 0; overflow: hidden; }
 
 /* ── Modal form ── */
 
@@ -1629,6 +1631,8 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
+  min-height: 0;
 }
 
 .loot-table-list {
@@ -1677,6 +1681,20 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 }
 .loot-add-entry select { flex: 1; min-width: 180px; }
 .loot-add-entry label { display: flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--text-muted); }
+.loot-entries-search-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.loot-entries-scroll { overflow-y: auto; max-height: 340px; border: 1px solid var(--border); border-radius: 5px; margin-bottom: 12px; }
+.loot-entries-scroll .admin-table { margin: 0; border: none; }
+
+.loot-type-badge { display: inline-block; font-size: 0.68rem; font-weight: 600; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.04em; }
+.loot-type-item { background: rgba(74,144,226,0.15); color: #6ab0f5; }
+.loot-type-consumable { background: rgba(80,200,120,0.15); color: #5ec88a; }
+.loot-type-weapon { background: rgba(230,100,100,0.15); color: #e06060; }
+
+.loot-inline-cell { cursor: pointer; user-select: none; }
+.loot-inline-cell:hover { background: rgba(255,255,255,0.05); }
+.loot-inline-input { width: 60px; background: var(--bg-base); border: 1px solid var(--accent-gold); border-radius: 4px; color: var(--text-primary); padding: 2px 6px; font-size: 0.82rem; text-align: center; }
+
+.modal-field-divider { height: 1px; background: var(--border); margin: 8px 0; }
 
 /* ── Prompt Studio (Narracja) ─────────────────────────────────────── */
 .prompts-editor-wrap {
@@ -2188,7 +2206,21 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .camp-tab-btn.active { color: var(--accent-gold); border-bottom-color: var(--accent-gold); }
 
 .camp-modal-body { flex: 1; overflow-y: auto; padding: 20px; }
+.camp-modal-body:has(.camp-map-layout) { padding: 0; overflow: hidden; }
 .camp-modal-actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 20px; border-top: 1px solid var(--border); background: var(--bg-elevated); }
+
+/* Map tab */
+.camp-map-layout { display: flex; height: 100%; min-height: 0; }
+.camp-map-canvas-wrap { flex: 1; overflow: auto; background: #080608; padding: 12px; border-right: 1px solid var(--border); }
+.camp-map-editor { width: 240px; flex-shrink: 0; padding: 16px; overflow-y: auto; background: var(--bg-elevated); display: flex; flex-direction: column; gap: 12px; }
+.camp-map-editor-title { font-family: Cinzel, serif; font-size: 0.82rem; color: var(--accent-gold); border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-bottom: 4px; }
+.camp-map-hint { font-size: 0.78rem; color: var(--text-muted); text-align: center; padding: 20px 0; }
+.camp-map-field-group { display: flex; flex-direction: column; gap: 4px; }
+.camp-map-field-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.camp-map-toggle { display: flex; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--text-primary); cursor: pointer; }
+.camp-map-input { width: 100%; background: var(--bg-base); border: 1px solid var(--border); border-radius: 5px; color: var(--text-primary); padding: 6px 8px; font-size: 0.82rem; resize: vertical; }
+.camp-map-input:focus { outline: none; border-color: var(--accent-gold); }
+.camp-map-save-btn { margin-top: auto; }
 
 /* Overview tab */
 .camp-overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -3326,6 +3358,40 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .wb-detail-desc { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 10px; }
 .wb-detail-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .wb-conn-row { font-size: 0.8rem; color: var(--text-secondary); padding: 4px 0; border-bottom: 1px solid var(--border); }
+
+/* ── Dungeon Workshop (Lochy tab) ────────────────────────────────────────── */
+.dungeon-list-toolbar { padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+
+/* Floating AI button */
+.dungeon-ai-fab { position: absolute; bottom: 20px; right: 20px; width: 48px; height: 48px;
+  border-radius: 50%; background: var(--accent-gold); border: none; font-size: 1.3rem;
+  cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,0.5); z-index: 50;
+  display: flex; align-items: center; justify-content: center; transition: transform 0.15s; }
+.dungeon-ai-fab:hover { transform: scale(1.1); }
+
+/* Chat panel (slide up from bottom-right) */
+.dungeon-ai-chat { position: absolute; bottom: 78px; right: 20px; width: 340px; max-height: 480px;
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6); display: flex; flex-direction: column; z-index: 50; }
+.dungeon-ai-chat[hidden] { display: none; }
+.dungeon-ai-chat-header { display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  font-size: 0.8rem; font-weight: 700; color: var(--accent-gold); }
+.dungeon-ai-chat-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem; }
+.dungeon-ai-messages { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.dungeon-ai-msg { font-size: 0.75rem; line-height: 1.45; }
+.dungeon-ai-msg-role { font-weight: 700; margin-right: 5px; color: var(--text-muted); }
+.dungeon-ai-msg--user { color: var(--text-secondary); }
+.dungeon-ai-msg--assistant { color: var(--text-primary); }
+.dungeon-ai-draft { background: rgba(201,165,74,0.08); border: 1px solid rgba(201,165,74,0.25);
+  border-radius: 6px; padding: 10px; font-size: 0.75rem; margin-top: 4px; }
+.dungeon-ai-draft-title { font-weight: 700; color: var(--accent-gold); margin-bottom: 4px; }
+.dungeon-ai-draft-info { color: var(--text-muted); margin-bottom: 8px; line-height: 1.4; }
+.dungeon-ai-draft-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.dungeon-ai-input-row { padding: 8px 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.dungeon-ai-textarea { background: var(--bg-base); border: 1px solid var(--border); border-radius: 5px;
+  color: var(--text-primary); padding: 6px 8px; font-size: 0.75rem; resize: none; width: 100%; box-sizing: border-box; }
+.dungeon-ai-textarea:focus { outline: none; border-color: var(--accent-gold); }
 
 /* ── Hex World Builder (Task 40) ─────────────────────────────────────────── */
 .wb-layout {

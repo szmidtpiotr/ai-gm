@@ -2016,6 +2016,67 @@ def create_turn(
                 conn.commit()
             return _with_turn_trace({"skill_test_pending": _pending, "prose": None, "route": "skill_test"}, turn_id)
 
+        # ── Pre-LLM: scan player text against trigger_keywords ───────────────
+        # If a keyword matches and we're not in combat, trigger skill test immediately.
+        if not text.startswith("__AI_GM"):
+            try:
+                _PL_MAP_PRE = str.maketrans(
+                    "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
+                    "acelnoszzACELNOSZZ"
+                )
+                _txt_pre = text.lower().translate(_PL_MAP_PRE)
+                _kw_rows_pre = conn.execute(
+                    "SELECT key, trigger_keywords FROM game_config_skills "
+                    "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != ''"
+                ).fetchall()
+                # Wrap text with spaces for word-boundary matching
+                _txt_padded = " " + _txt_pre + " "
+                _pre_match = None
+                for _kr_pre in _kw_rows_pre:
+                    raw_kws = (_kr_pre["trigger_keywords"] or "").replace(",", " ")
+                    # Only use keywords ≥5 chars to avoid common particles like "sie", "cel"
+                    _kws_pre = [k.strip().lower().translate(_PL_MAP_PRE)
+                                for k in raw_kws.split()
+                                if k.strip() and len(k.strip()) >= 5]
+                    # Word-boundary match: keyword must appear as a whole word
+                    if any(kw and f" {kw}" in _txt_padded for kw in _kws_pre):
+                        _pre_match = _kr_pre["key"]
+                        break
+                if _pre_match and not is_attack_test(_pre_match):
+                    # Check not already in combat
+                    _active_combat_pre = conn.execute(
+                        "SELECT id FROM active_combat WHERE campaign_id = ? LIMIT 1",
+                        (campaign_id,),
+                    ).fetchone()
+                    if not _active_combat_pre:
+                        from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+                        import uuid as _uuid_pre
+                        _char_sh_pre = json.loads(character["sheet_json"] or "{}")
+                        _pending_pre = {
+                            "skill_test_id": f"st-{_uuid_pre.uuid4().hex[:8]}",
+                            "skill_key": _pre_match,
+                            "skill_label": _skill_label(_pre_match),
+                            "counter": _get_counter(conn, _pre_match),
+                            "modifier_breakdown": calc_skill_modifier_info(_char_sh_pre, _pre_match),
+                        }
+                        gs_row_pre = conn.execute(
+                            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                            (campaign_id,),
+                        ).fetchone()
+                        if gs_row_pre:
+                            _sf_pre = json.loads(gs_row_pre["session_flags"] or "{}")
+                            _sf_pre["pending_skill_test"] = _pending_pre
+                            _sf_pre["state"] = "SKILL_TEST_PENDING"
+                            conn.execute(
+                                "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                                (json.dumps(_sf_pre, ensure_ascii=False), campaign_id),
+                            )
+                            conn.commit()
+                        logger.info("skill_test_triggered_by_keywords", skill=_pre_match, text_snippet=text[:40])
+                        return _with_turn_trace({"skill_test_pending": _pending_pre, "prose": None, "route": "skill_test_keyword"}, turn_id)
+            except Exception as _pre_err:
+                logger.warning("pre_llm_keyword_scan_error: %s", str(_pre_err))
+
         route = "narrative"
         model = resolve_model_name(
             requested_model=payload.engine,
@@ -2140,10 +2201,13 @@ def create_turn(
                             "SELECT key, trigger_keywords FROM game_config_skills "
                             "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != ''"
                         ).fetchall()
+                        _txt_norm_padded = " " + _txt_norm + " "
                         for _kr in _kw_rows:
+                            _raw_kws = (_kr["trigger_keywords"] or "").replace(",", " ")
                             _kws = [k.strip().lower().translate(_PL_MAP)
-                                    for k in (_kr["trigger_keywords"] or "").split(",") if k.strip()]
-                            if any(kw and kw in _txt_norm for kw in _kws):
+                                    for k in _raw_kws.split()
+                                    if k.strip() and len(k.strip()) >= 5]
+                            if any(kw and f" {kw}" in _txt_norm_padded for kw in _kws):
                                 _canonical = _kr["key"]
                                 break
                     except Exception as _kw_err:

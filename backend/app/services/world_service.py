@@ -549,10 +549,40 @@ def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
         return False
     try:
         conn.execute(f"UPDATE {table} SET review_status = 'permanent' WHERE key = ?", (key,))
+        if entity_type == "enemy":
+            _ensure_enemy_loot_table(conn, key)
         conn.commit()
         return True
     except Exception:
         return False
+
+
+def _ensure_enemy_loot_table(conn: sqlite3.Connection, enemy_key: str) -> None:
+    """Create and assign a loot table for an enemy if it doesn't already have one."""
+    try:
+        row = conn.execute(
+            "SELECT label, loot_table_key FROM game_config_enemies WHERE key = ?", (enemy_key,)
+        ).fetchone()
+        if not row:
+            return
+        if row["loot_table_key"]:
+            return
+        lt_key = f"loot_{enemy_key}"
+        label = row["label"] or enemy_key
+        exists = conn.execute(
+            "SELECT key FROM game_config_loot_tables WHERE key = ?", (lt_key,)
+        ).fetchone()
+        if not exists:
+            conn.execute(
+                "INSERT INTO game_config_loot_tables (key, label, description, is_active) VALUES (?, ?, '', 1)",
+                (lt_key, f"Łupy: {label}"),
+            )
+        conn.execute(
+            "UPDATE game_config_enemies SET loot_table_key = ? WHERE key = ?",
+            (lt_key, enemy_key),
+        )
+    except Exception:
+        pass
 
 
 def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool:

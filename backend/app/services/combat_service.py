@@ -1329,6 +1329,7 @@ def resolve_attack(
     roll_result: int | None,
     attacker: str = "player",
     raw_d20: int | None = None,
+    spell_key: str | None = None,
 ) -> dict[str, Any]:
     """
     attacker: 'player' uses roll_result as total attack vs enemy dodge roll.
@@ -1399,7 +1400,27 @@ def resolve_attack(
             if old_nm in ("", "wróg", "wrog", "enemy"):
                 enemy["name"] = card_name
 
-            weapon_row = resolve_sheet_weapon(conn, sheet, ch_id)
+            # If spell_key provided, override weapon with spell stats
+            if spell_key:
+                spell_weapon = conn.execute(
+                    "SELECT key, label, mana_cost, damage_die, spell_type, tier FROM game_config_spells WHERE key = ? AND is_active = 1",
+                    (spell_key,),
+                ).fetchone()
+                if spell_weapon:
+                    weapon_row = {
+                        "key": spell_weapon["key"],
+                        "label": spell_weapon["label"],
+                        "weapon_type": "spell",
+                        "damage_die": spell_weapon["damage_die"] or "2d6",
+                        "mana_cost": spell_weapon["mana_cost"] or 2,
+                        "linked_stat": "INT",
+                        "attack_bonus": 0,
+                        "damage_bonus": 0,
+                    }
+                else:
+                    weapon_row = resolve_sheet_weapon(conn, sheet, ch_id)
+            else:
+                weapon_row = resolve_sheet_weapon(conn, sheet, ch_id)
             attack_roll: dict[str, Any] | None = None
             player_raw = int(raw_d20) if raw_d20 is not None else None
             if player_raw is not None:

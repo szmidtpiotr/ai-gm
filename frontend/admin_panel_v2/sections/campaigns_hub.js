@@ -2,7 +2,7 @@ import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
 
 const TABS = [
-  { key: "monitor", label: "🗺 Monitor", module: "/admin_panel_v2/sections/campaigns.js?v=2" },
+  { key: "monitor", label: "🗺 Monitor", module: "/admin_panel_v2/sections/campaigns.js?v=4" },
 ];
 
 export async function init(panel) {

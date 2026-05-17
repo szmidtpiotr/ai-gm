@@ -194,7 +194,7 @@ def _build_character_sheet(
     skills = dict(sheet.get("skills") or {})
 
     normalized_archetype = (archetype or sheet.get("archetype") or "").strip().lower()
-    if normalized_archetype not in ("warrior", "scholar"):
+    if normalized_archetype not in ("warrior", "scholar", "rogue"):
         normalized_archetype = "warrior"
     sheet["archetype"] = normalized_archetype
 
@@ -257,7 +257,7 @@ def _strip_hidden_fields(sheet: dict) -> dict:
 
 # --- finalize-sheet (Phase 7.6): stat/skill redistribution + identity (player review) ---
 
-SIX_CORE_STATS = ("STR", "DEX", "CON", "INT", "WIS", "CHA")
+SIX_CORE_STATS = ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
 STAT_ROLL_MIN = 8
 STAT_ROLL_MAX = 18
 _STAT_OVERRIDE_ALIASES = {
@@ -273,12 +273,16 @@ _STAT_OVERRIDE_ALIASES = {
     "wisdom": "WIS",
     "cha": "CHA",
     "charisma": "CHA",
+    "lck": "LCK",
+    "luck": "LCK",
+    "szczescie": "LCK",
     "STR": "STR",
     "DEX": "DEX",
     "CON": "CON",
     "INT": "INT",
     "WIS": "WIS",
     "CHA": "CHA",
+    "LCK": "LCK",
 }
 
 
@@ -665,7 +669,7 @@ def create_standalone_character(req: dict = Body(...)):
         raise HTTPException(status_code=400, detail="user_id and name are required")
 
     archetype = str(base_sheet.get("archetype") or "warrior").strip().lower()
-    if archetype not in ("warrior", "scholar"):
+    if archetype not in ("warrior", "scholar", "rogue"):
         archetype = "warrior"
 
     # Roll stats and skills exactly as the campaign-scoped endpoint does
@@ -798,14 +802,15 @@ def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
         if campaign["status"] not in ("active", "pending"):
             raise HTTPException(status_code=409, detail="Campaign is not active")
 
-        # Check campaign has no character yet
+        # Free any existing hero in this campaign (except if it's the same hero being re-assigned)
         existing = conn.execute(
-            "SELECT id FROM characters WHERE campaign_id = ? AND is_active = 1", (campaign_id,)
+            "SELECT id FROM characters WHERE campaign_id = ? AND is_active = 1 AND id != ?",
+            (campaign_id, character_id),
         ).fetchone()
         if existing:
-            raise HTTPException(
-                status_code=409,
-                detail="Campaign already has a character. Each campaign supports one hero."
+            conn.execute(
+                "UPDATE characters SET campaign_id = NULL, status = 'idle' WHERE id = ?",
+                (existing["id"],),
             )
 
         # Link hero to campaign and ensure game session exists
@@ -815,6 +820,33 @@ def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
         )
         # Ensure game session exists for this campaign
         _ensure_game_session(conn, int(campaign_id))
+
+        # Clear stale session flags from previous hero (dungeon run, pending tests, etc.)
+        gs_row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (int(campaign_id),),
+        ).fetchone()
+        if gs_row:
+            try:
+                _flags = json.loads(gs_row["session_flags"] or "{}")
+                _dirty = False
+                # Remove dungeon_run if its character differs or if new hero is coming in
+                if _flags.get("dungeon_run"):
+                    _flags.pop("dungeon_run", None)
+                    _dirty = True
+                if _flags.get("pending_skill_test"):
+                    _flags.pop("pending_skill_test", None)
+                    _dirty = True
+                if _flags.get("dungeon_previous_campaign_id"):
+                    _flags.pop("dungeon_previous_campaign_id", None)
+                    _dirty = True
+                if _dirty:
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                        (json.dumps(_flags, ensure_ascii=False), int(campaign_id)),
+                    )
+            except Exception:
+                pass
         conn.commit()
 
         # Place on starting hex (fast — no LLM call)
@@ -1333,7 +1365,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
         sheet = {}
 
     archetype = str(sheet.get("archetype") or "warrior").strip().lower()
-    if archetype not in ("warrior", "scholar"):
+    if archetype not in ("warrior", "scholar", "rogue"):
         archetype = "warrior"
     sheet["archetype"] = archetype
 
@@ -1349,12 +1381,12 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                 raise HTTPException(
                     status_code=400,
                     detail=f"Unknown stat key in stat_overrides: {key!r}. "
-                    f"Use strength/dexterity/… or STR/DEX/… for the six core stats.",
+                    f"Use STR/DEX/CON/INT/WIS/CHA/LCK.",
                 )
             if sk not in SIX_CORE_STATS:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"stat_overrides supports only the six core stats (STR–CHA), not {sk!r}.",
+                    detail=f"stat_overrides supports STR/DEX/CON/INT/WIS/CHA/LCK, not {sk!r}.",
                 )
             try:
                 merged[sk] = int(val)
@@ -1758,14 +1790,16 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
         conn.close()
         raise HTTPException(status_code=404, detail="Campaign not found")
 
-    existing = conn.execute(
-        "SELECT COUNT(*) AS n FROM characters WHERE campaign_id = ?",
+    # Free any existing hero in this campaign before creating a new one
+    existing_hero = conn.execute(
+        "SELECT id FROM characters WHERE campaign_id = ? AND is_active = 1",
         (campaign_id,),
     ).fetchone()
-    if existing and int(existing["n"] or 0) >= 1:
-        conn.rollback()
-        conn.close()
-        raise HTTPException(status_code=409, detail="Campaign already has a character.")
+    if existing_hero:
+        conn.execute(
+            "UPDATE characters SET campaign_id = NULL, status = 'idle' WHERE id = ?",
+            (existing_hero["id"],),
+        )
 
     if req.system_id != campaign["system_id"]:
         conn.rollback()
@@ -2081,7 +2115,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
 def _default_playtest_sheet(name: str, archetype: str, old_sheet: dict) -> dict:
     """Minimal combat-ready sheet aligned with solo character wizard defaults."""
     arc = str(archetype or "").lower()
-    if arc not in ("warrior", "scholar"):
+    if arc not in ("warrior", "scholar", "rogue"):
         arc = "warrior"
     if arc == "warrior":
         stats = {"STR": 12, "DEX": 12, "CON": 12, "INT": 10, "WIS": 11, "CHA": 10, "LCK": 10}
@@ -2194,3 +2228,9 @@ def reset_character_progress(character_id: int):
         raise HTTPException(status_code=500, detail=f"Character reset failed: {e}") from None
     finally:
         conn.close()
+
+@router.get("/characters/{character_id}/spells")
+def get_character_spells_public(character_id: int):
+    """Player-facing: return spell book for a character."""
+    from app.services.spell_service import get_character_spells
+    return {"spells": get_character_spells(character_id)}

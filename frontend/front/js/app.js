@@ -176,24 +176,24 @@ let wizardIdentityPreview = null;
 const WIZARD_MAX_SWAPS = 4;
 const WIZARD_STAT_MIN = 8;
 const WIZARD_STAT_MAX = 18;
-const ARCHETYPE_BONUS = { warrior: { STR: 2, CON: 1 }, scholar: { INT: 2, WIS: 1 } };
+const ARCHETYPE_BONUS = { warrior: { STR: 2, CON: 1 }, scholar: { INT: 2, WIS: 1 }, rogue: { DEX: 2, LCK: 1 } };
 const ALL_SKILL_ROWS = [
-    { key: 'athletics',       label: 'Athletics',        stat: 'STR' },
-    { key: 'endurance',       label: 'Endurance',        stat: 'CON' },
-    { key: 'stealth',         label: 'Stealth',          stat: 'DEX' },
-    { key: 'sleight_of_hand', label: 'Sleight of Hand',  stat: 'DEX' },
-    { key: 'arcana',          label: 'Arcana',           stat: 'INT' },
-    { key: 'investigation',   label: 'Investigation',    stat: 'INT' },
-    { key: 'lore',            label: 'Lore',             stat: 'INT' },
-    { key: 'awareness',       label: 'Awareness',        stat: 'WIS' },
-    { key: 'survival',        label: 'Survival',         stat: 'WIS' },
-    { key: 'medicine',        label: 'Medicine',         stat: 'WIS' },
-    { key: 'persuasion',      label: 'Persuasion',       stat: 'CHA' },
-    { key: 'intimidation',    label: 'Intimidation',     stat: 'CHA' },
-    { key: 'melee_attack',    label: 'Melee Attack',     stat: 'STR' },
-    { key: 'ranged_attack',   label: 'Ranged Attack',    stat: 'DEX' },
-    { key: 'spell_attack',    label: 'Spell Attack',     stat: 'INT' },
-    { key: 'alchemy',         label: 'Alchemy',          stat: 'INT' },
+    { key: 'athletics',       label: 'Atletyka',          stat: 'STR', hint: 'Wspinaczka, sprint, skoki, siłowe wyczyny. Wymagana przy pogoni i ucieczkach.' },
+    { key: 'endurance',       label: 'Wytrzymałość',      stat: 'CON', hint: 'Odporność na ból, zmęczenie, trucizny i choroby. Decyduje o przetrwaniu ekstremalnych warunków.' },
+    { key: 'stealth',         label: 'Skradanie',         stat: 'DEX', hint: 'Poruszanie się bez hałasu, ukrywanie się, zasadzki. Kluczowe dla złodziei i łowców.' },
+    { key: 'sleight_of_hand', label: 'Zręczne Dłonie',   stat: 'DEX', hint: 'Kieszonkowanie, sztuczki karcianie, ukrywanie przedmiotów. Finezja drobnych manipulacji.' },
+    { key: 'arcana',          label: 'Magia Arkanów',    stat: 'INT', hint: 'Wiedza o zaklęciach, artefaktach i rytuałach. Identyfikacja magicznych przedmiotów.' },
+    { key: 'investigation',   label: 'Badanie',           stat: 'INT', hint: 'Szukanie wskazówek, analiza śladów, rozwiązywanie zagadek i tajemnic.' },
+    { key: 'lore',            label: 'Wiedza',            stat: 'INT', hint: 'Historia, legendy, fakty o świecie. Znajomość krain, frakcji i dawnych wydarzeń.' },
+    { key: 'awareness',       label: 'Spostrzegawczość',  stat: 'WIS', hint: 'Zauważanie ukrytych wrogów, pułapek i szczegółów. Trudno zaskoczyć kogoś z dobrą percepcją.' },
+    { key: 'survival',        label: 'Przetrwanie',       stat: 'WIS', hint: 'Tropienie, orientacja w terenie, rozbijanie obozu, zdobywanie pożywienia w dziczy.' },
+    { key: 'medicine',        label: 'Medycyna',          stat: 'WIS', hint: 'Opatrywanie ran, zatrzymywanie krwawienia, diagnozowanie chorób i zatruć.' },
+    { key: 'persuasion',      label: 'Perswazja',         stat: 'CHA', hint: 'Przekonywanie, negocjacje i dyplomacja. Zmiana zdania rozmówcy bez użycia siły.' },
+    { key: 'intimidation',    label: 'Zastraszanie',      stat: 'CHA', hint: 'Wywoływanie strachu, wymuszanie posłuszeństwa. Może skłonić wroga do ucieczki.' },
+    { key: 'melee_attack',    label: 'Atak Wręcz',       stat: 'STR', hint: 'Precyzja i technika w walce mieczem, toporem lub pięściami. Trafienie i siła ciosu.' },
+    { key: 'ranged_attack',   label: 'Atak Dystansowy',  stat: 'DEX', hint: 'Celność z łukiem, kuszą i bronią miotaną. Ataki z ukrycia i na dalekie dystanse.' },
+    { key: 'spell_attack',    label: 'Atak Magiczny',    stat: 'INT', hint: 'Precyzja rzucania ofensywnych zaklęć. Trafienie celem i kontrola energii arkanów.' },
+    { key: 'alchemy',         label: 'Alchemia',          stat: 'INT', hint: 'Tworzenie mikstur, trucizn i eliksirów. Identyfikacja substancji i składników.' },
 ].sort((a, b) => a.key.localeCompare(b.key));
 const RANK_LABEL = ['—', 'Trained', 'Skilled'];
 const WIZARD_STEPS = [
@@ -274,6 +274,15 @@ function showScreen(screenName) {
             stopCombatPolling();
             if (typeof hideCombatUI === 'function') hideCombatUI();
         }
+        // Hide dungeon HUD on any screen except game
+        if (screenName !== 'game') {
+            document.getElementById('dungeon-hud')?.setAttribute('hidden', '');
+            document.getElementById('dungeon-riddle-panel')?.setAttribute('hidden', '');
+            document.getElementById('dungeon-map-overlay')?.setAttribute('hidden', '');
+        } else if (_activeDungeonRun && !_activeDungeonRun.completed && !_activeDungeonRun.failed) {
+            // Restore HUD when back on game screen with active run
+            showDungeonHUD(true);
+        }
     } else {
         window.clog?.error('screen_not_found', { name: screenName });
     }
@@ -343,36 +352,7 @@ async function handleLogin(e) {
             updateAdminSettingsVisibility();
             try {
                 await loadHeroes();
-                // Restore hero context only after F5 (not fresh login)
-                // Flag is set when user explicitly selects a hero in this session
-                try {
-                    const savedHeroId = sessionStorage.getItem('aigm_hero_id');
-                    const wasActiveSession = sessionStorage.getItem('aigm_active_session');
-                    if (savedHeroId && wasActiveSession) {  // only restore after F5, not fresh login
-                        const heroResp = await apiRequest('GET', `/characters/${savedHeroId}`);
-                        const restored = heroResp.character || heroResp;
-                        if (restored?.id && Number(restored.user_id) === Number(currentUser.id)) {
-                            currentHero = restored;
-                            if (elements.welcomeUser) elements.welcomeUser.textContent = `Bohater: ${restored.name}`;
-                            // If hero was in active campaign, restore game state
-                            if (restored.campaign_id && restored.status === 'in_campaign') {
-                                const chars = await apiRequest('GET', `/campaigns/${restored.campaign_id}/characters`);
-                                const myChar = (chars.characters || []).find(c => c.id === restored.id);
-                                if (myChar) {
-                                    characterData = myChar;
-                                    currentCampaignId = restored.campaign_id;
-                                    const camp = await apiRequest('GET', `/campaigns/${restored.campaign_id}`);
-                                    currentCampaign = camp;
-                                    await enterGame(camp);
-                                    return;
-                                }
-                            }
-                            await loadCampaigns();
-                            showScreen('campaigns');
-                            return;
-                        }
-                    }
-                } catch (e) { console.warn('[Restore] Failed:', e); }
+                if (await tryRestoreSession()) return;
             } catch (e) {
                 console.error('[Login] loadHeroes failed:', e);
             }
@@ -396,6 +376,8 @@ function handleLogout() {
     currentHero = null;
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('aigm_hero_id');
+    localStorage.removeItem('aigm_campaign_id');
     try { sessionStorage.removeItem('aigm_hero_id'); sessionStorage.removeItem('aigm_active_session'); } catch {}
     showScreen('login');
 }
@@ -500,7 +482,7 @@ async function selectHero(hero) {
         elements.welcomeUser.textContent = `Bohater: ${hero.name}`;
     }
     // Save hero to session so F5 restores context
-    try { sessionStorage.setItem('aigm_hero_id', hero.id); sessionStorage.setItem('aigm_active_session', '1'); } catch {}
+    try { localStorage.setItem('aigm_hero_id', hero.id); localStorage.removeItem('aigm_campaign_id'); } catch {}
     await loadCampaigns();
     showScreen('campaigns');
 }
@@ -662,6 +644,13 @@ async function handleDeleteCampaignFromList(campaign, skipConfirm = false) {
     try {
         await apiRequest('DELETE', `/campaigns/${campaign.id}`);
         showToast('Kampania usunięta', 'success');
+        // Refresh hero so its campaign_id reflects the unlink
+        if (currentHero?.id) {
+            try {
+                const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
+                currentHero = heroResp.character || heroResp;
+            } catch {}
+        }
         await loadCampaigns();
     } catch (error) {
         console.error('[Delete] Campaign error:', error);
@@ -685,27 +674,36 @@ async function selectCampaign(campaign) {
         if (myCharacter) {
             characterData = myCharacter;
             await enterGame(campaign);
-        } else if (currentHero && currentHero.status === 'idle' && !currentHero.campaign_id) {
-            // Hero is unassigned — auto-assign (no prompt needed when creating campaign inside hero context)
+            // Restore dungeon HUD if this is a dungeon campaign
+            if (campaign.mode === 'dungeon') {
+                try {
+                    const runResp = await apiRequest('GET', `/campaigns/${campaign.id}/dungeon-run`);
+                    if (runResp.dungeon_run && !runResp.dungeon_run.completed && !runResp.dungeon_run.failed) {
+                        _activeDungeonRun = runResp.dungeon_run;
+                        _dungeonCampaignId = campaign.id;
+                        updateDungeonHUD();
+                        showDungeonHUD(true);
+                        renderCurrentRoom();
+                    }
+                } catch {}
+            }
+        } else if (currentHero?.id) {
+            // Hero exists but not in this campaign — assign them
             try {
                 await apiRequest('POST', `/characters/${currentHero.id}/assign-campaign`, {
                     campaign_id: campaign.id,
                     user_id: currentUser.id,
                 });
-                const refetch = await apiRequest('GET', `/campaigns/${campaign.id}/characters`);
-                const assigned = (refetch.characters || []).find(c => c.id === currentHero.id);
-                if (assigned) {
-                    characterData = assigned;
-                    currentHero = assigned;
-                    await enterGame(campaign);
-                    return;
-                }
+                const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
+                currentHero = heroResp.character || heroResp;
+                characterData = currentHero;
+                await enterGame(campaign);
+                return;
             } catch (err) {
                 showToast(err.message || 'Nie można przypisać bohatera', 'error');
             }
             startCharacterWizard();
         } else {
-            // No character — start creation wizard
             startCharacterWizard();
         }
     } catch (error) {
@@ -744,17 +742,15 @@ async function handleNewCampaignWithHero() {
         currentCampaignId = campaign.id;
         currentCampaign = campaign;
 
-        // If hero is standalone (no campaign yet), assign them directly
-        if (!currentHero.campaign_id) {
-            await apiRequest('POST', `/characters/${currentHero.id}/assign-campaign`, {
-                campaign_id: campaign.id,
-                user_id: currentUser.id,
-            });
-            // Reload hero data after assignment
-            const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
-            currentHero = heroResp.character || heroResp;
-            characterData = currentHero;
-        }
+        // Always assign hero to the new campaign (hero may have been freed from a deleted campaign)
+        await apiRequest('POST', `/characters/${currentHero.id}/assign-campaign`, {
+            campaign_id: campaign.id,
+            user_id: currentUser.id,
+        });
+        // Reload hero data after assignment
+        const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
+        currentHero = heroResp.character || heroResp;
+        characterData = currentHero;
 
         loadingToast?.remove?.();
         showToast(`Kampania "${title}" gotowa! Wkraczasz do gry…`, 'success', 3000);
@@ -864,12 +860,22 @@ function _renderStep1(c) {
                 <label>Archetyp</label>
                 <div class="archetype-grid">
                     <button type="button" class="archetype-card${savedArch === 'warrior' ? ' archetype-card--selected' : ''}" data-arch="warrior">
-                        <span class="archetype-title">Warrior</span>
-                        <span class="archetype-desc">Frontowy wojownik: wytrzymały, pewny stali, silny w bezpośrednim starciu.</span>
+                        <span class="archetype-icon">⚔️</span>
+                        <span class="archetype-title">Wojownik</span>
+                        <span class="archetype-desc">Frontowy wojownik w ciężkiej zbroi. Wysoki HP, silne ciosy, mistrz broni wręcz.</span>
+                        <span class="archetype-bonus">+2 STR · +1 KON · HP: 12</span>
+                    </button>
+                    <button type="button" class="archetype-card${savedArch === 'rogue' ? ' archetype-card--selected' : ''}" data-arch="rogue">
+                        <span class="archetype-icon">🏹</span>
+                        <span class="archetype-title">Łotrzyk</span>
+                        <span class="archetype-desc">Zwinny cień: snajper z ukrycia lub złodziej w ciemnościach. Skradanie, łuk, inteligentna walka.</span>
+                        <span class="archetype-bonus">+2 ZRĘ · +1 SZCZ · HP: 8</span>
                     </button>
                     <button type="button" class="archetype-card${savedArch === 'scholar' ? ' archetype-card--selected' : ''}" data-arch="scholar">
-                        <span class="archetype-title">Scholar</span>
-                        <span class="archetype-desc">Tkacz arkanów: kruchy, ale groźny dzięki zaklęciom i mistycznej wiedzy.</span>
+                        <span class="archetype-icon">📜</span>
+                        <span class="archetype-title">Uczony</span>
+                        <span class="archetype-desc">Tkacz arkanów: kruchy, ale niszczycielski dzięki zaklęciom. Zarządza maną i ryzykiem Omylenia.</span>
+                        <span class="archetype-bonus">+2 INT · +1 MĄD · HP: 6 · Mana</span>
                     </button>
                 </div>
             </div>
@@ -885,7 +891,7 @@ function _renderStep1(c) {
 
 // Step 2 — Stat redistribution (pool model matching original frontend)
 function _wizardCalcHP(archetype, con, level = 1) {
-    const base = archetype === 'warrior' ? 10 : (archetype === 'scholar' ? 6 : 8);
+    const base = archetype === 'warrior' ? 12 : archetype === 'rogue' ? 8 : archetype === 'scholar' ? 6 : 8;
     const mod = Math.floor((con - 10) / 2);
     return Math.max(1, base + mod * level);
 }
@@ -896,21 +902,35 @@ function _wizardCalcMana(archetype, int_, level = 1) {
     return Math.max(1, 8 + mod * level);
 }
 
+const STAT_HINTS = {
+    STR: 'Siła — obrażenia wręcz, atletyka, dźwiganie, forsowanie drzwi',
+    DEX: 'Zręczność — inicjatywa, skradanie, uniki, ataki finezyjne i dystansowe',
+    CON: 'Kondycja — punkty życia, odporność na trucizny i ból, wytrzymałość',
+    INT: 'Inteligencja — magia arkanów, wiedza, badanie, alchemia',
+    WIS: 'Mądrość — percepcja, przetrwanie, medycyna, odporność na strach',
+    CHA: 'Charyzma — perswazja, zastraszanie, negocjacje, przywódcze zdolności',
+    LCK: 'Szczęście — wpływa na rzuty losowe, jakość łupów, szanse ucieczki i zdarzenia losowe',
+};
+
 function _renderStep2(c) {
     const archetype = wizardCreatedChar?.sheet_json?.archetype || 'warrior';
     const bonus = ARCHETYPE_BONUS[archetype] || {};
     const bonusStr = Object.entries(bonus).map(([k, v]) => `+${v} ${k}`).join(', ');
 
     let rows = '';
-    for (const stat of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']) {
-        const v = wizardStatBases[stat] ?? 10;
+    for (const stat of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'LCK']) {
+        const v = wizardStatBases[stat] ?? (stat === 'LCK' ? 8 : 10);
         const mod = Math.floor((v - 10) / 2);
         const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
         const canMinus = v > WIZARD_STAT_MIN;
         const canPlus = v < WIZARD_STAT_MAX && wizardStatUnassigned > 0;
+        const hint = STAT_HINTS[stat] || stat;
         rows += `
             <div class="wizard-stat-row" data-stat="${stat}">
-                <span class="wizard-stat-label">${stat}</span>
+                <div class="wizard-stat-label-wrap">
+                    <span class="wizard-stat-label">${stat}</span>
+                    <span class="wizard-stat-hint" data-tooltip="${hint}">?</span>
+                </div>
                 <span class="wizard-stat-mod">${modStr}</span>
                 <div class="wizard-stat-controls">
                     <button type="button" class="wizard-stat-btn" data-dir="-" ${canMinus ? '' : 'disabled'}>−</button>
@@ -990,7 +1010,7 @@ function _renderStep3(c) {
 
         if (inSwapMode) {
             const opts = candidates.map(cd =>
-                `<option value="${cd.key}">${_esc(cd.label)} — ${cd.stat}</option>`
+                `<option value="${cd.key}" title="${_esc(cd.hint||'')}">${_esc(cd.label)} — ${cd.stat}</option>`
             ).join('');
             return `
                 <div class="wizard-skill-row wizard-skill-row--swapping" data-orig="${origKey}">
@@ -1012,10 +1032,12 @@ function _renderStep3(c) {
             ? `<button type="button" class="wizard-skill-swap-btn wizard-skill-swap-btn--revert" data-revert="${origKey}" title="Cofnij zamianę">↩</button>`
             : `<button type="button" class="wizard-skill-swap-btn" data-swap="${origKey}" title="Zamień skill">↔</button>`;
 
+        const skillHint = curRow.hint || '';
         return `
             <div class="wizard-skill-row${changed ? ' wizard-skill-row--changed' : ''}" data-orig="${origKey}">
                 <span class="wizard-skill-name">
                     ${_esc(curRow.label)} <span class="wizard-skill-stat">— ${curRow.stat}</span>
+                    ${skillHint ? `<span class="wizard-stat-hint" data-tooltip="${_esc(skillHint)}">?</span>` : ''}
                     ${swapBtn}
                 </span>
                 <div class="wizard-stat-controls wizard-skill-controls">
@@ -1226,10 +1248,11 @@ async function _wizardStep1Submit() {
     const bonus = ARCHETYPE_BONUS[archKey] || {};
     const storedStats = sheet.stats || {};
 
-    // Reverse-engineer pre-bonus base values
-    for (const k of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']) {
+    // Reverse-engineer pre-bonus base values (LCK defaults to 8)
+    for (const k of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'LCK']) {
         const bonVal = bonus[k] || 0;
-        wizardStatBases[k] = Math.max(WIZARD_STAT_MIN, (storedStats[k] || 10) - bonVal);
+        const defVal = k === 'LCK' ? 8 : 10;
+        wizardStatBases[k] = Math.max(WIZARD_STAT_MIN, (storedStats[k] || defVal) - bonVal);
     }
     wizardStatOriginal = { ...wizardStatBases };
     wizardStatUnassigned = 0;
@@ -1331,6 +1354,12 @@ async function _wizardFinalizeAndEnter() {
 // Game Screen
 // ============================================================================
 async function enterGame(campaign) {
+    // Persist session so F5 restores to this exact state
+    try {
+        if (currentHero?.id) localStorage.setItem('aigm_hero_id', currentHero.id);
+        if (campaign?.id) localStorage.setItem('aigm_campaign_id', campaign.id);
+    } catch {}
+
     const sheet = characterData?.sheet_json || characterData || {};
     elements.characterNameDisplay.textContent = characterData?.name || 'Bohater';
     const level = sheet.level || characterData?.level || 1;
@@ -1345,7 +1374,11 @@ async function enterGame(campaign) {
         if (turns && turns.length > 0) {
             turns.forEach(turn => {
                 if (turn.user_text && !turn.user_text.startsWith('__AI_GM')) {
-                    appendMessage({ role: 'user', content: turn.user_text, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route }, { autoSpeak: false });
+                    // Format stored skill test turns nicely: "[Rzut: Skradanie — 14]" → "🎲 ..."
+                    let displayText = turn.user_text;
+                    const rzutM = displayText.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\]$/);
+                    if (rzutM) displayText = `🎲 ${rzutM[1]}: rzut ${rzutM[2]}`;
+                    appendMessage({ role: 'user', content: displayText, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route }, { autoSpeak: false });
                 }
                 if (turn.assistant_text) {
                     const { narrative: gmContent, ...gmMeta } = parseGmFull(turn.assistant_text);
@@ -1423,7 +1456,7 @@ function appendMessage(msg, opts = {}) {
         </button>` : '';
 
         bubble.innerHTML = `
-            <div class="chat-bubble__content">${formatMessageContent(msg.content || msg.text || '')}</div>
+            <div class="chat-bubble__content">${isGm ? formatGmNarrative(msg.content || msg.text || '') : formatMessageContent(msg.content || msg.text || '')}</div>
             <div class="chat-bubble__meta">
                 <span class="bubble-meta__left">${namePart}${turnPart ? ' ' + turnPart : ''}</span>
                 <span class="bubble-meta__right">${routePart}${dtPart}${rereadBtn}</span>
@@ -1591,6 +1624,33 @@ function formatMessageContent(content) {
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`([^`]+)`/g, '<code>$1</code>')
         .replace(/\n/g, '<br>');
+}
+
+function formatGmNarrative(content) {
+    const paragraphs = content.split(/\n+/);
+    return paragraphs.map(para => {
+        if (!para.trim()) return '';
+
+        // Escape HTML first
+        let html = escapeHtml(para)
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Em-dash dialog line (Polish direct speech: — Coś mówi.)
+        if (/^—\s/.test(para.trim())) {
+            return `<p class="gm-p gm-p--speech">${html}</p>`;
+        }
+
+        // Inline Polish quotes „..." → speech span
+        html = html.replace(/„([^”]{1,300})”/g,
+            '<span class="gm-speech">„$1”</span>');
+
+        // Inline English curly quotes "..." (not escaped since we escape " → &quot; before)
+        // These survived as &quot; so won't match — no action needed for straight quotes
+
+        return `<p class="gm-p">${html}</p>`;
+    }).filter(Boolean).join('');
 }
 
 // Returns true if the command was handled (do not send to turns API)
@@ -1965,6 +2025,7 @@ async function handleSendMessage() {
     scrollToBottom();
 
     const typingIndicator = showTypingIndicator();
+    let _skillTestPending = false;
 
     try {
         const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/turns`, {
@@ -1977,13 +2038,13 @@ async function handleSendMessage() {
         // ── Skill test pending? Show Roll Popup instead of (or before) prose ──
         if (response.skill_test_pending) {
             if (response.prose) {
-                // Narrator already produced some prose before the pending test
                 const { narrative: preText } = parseGmFull(response.prose);
                 appendMessage({ role: 'assistant', content: preText, created_at: new Date() });
             }
+            _skillTestPending = true;  // prevent finally from re-enabling send
             showSkillTestPopup(response.skill_test_pending);
             scrollToBottom();
-            return;  // don't refresh yet — will refresh after resolve
+            return;  // resolveSkillTest will re-enable send when done
         }
 
         // Backend returns: { result: { message: "..." } } or { result: "..." }
@@ -2019,7 +2080,7 @@ async function handleSendMessage() {
         console.error('Send message error:', error);
         showToast(error.message || 'Nie udało się wysłać wiadomości', 'error');
     } finally {
-        elements.btnSend.disabled = false;
+        if (!_skillTestPending) elements.btnSend.disabled = false;
         scrollToBottom();
     }
 }
@@ -2199,6 +2260,40 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
         if (elements.btnSend) elements.btnSend.disabled = false;
     }
 }
+
+// ── UI state recovery ─────────────────────────────────────────────────────────
+
+function _resetInputState() {
+    // Re-enable send button if stuck
+    if (elements.btnSend) elements.btnSend.disabled = false;
+    // Hide TTS overlay if stuck visible
+    const ttsOverlay = document.getElementById('tts-reading-overlay');
+    if (ttsOverlay && !ttsOverlay.hidden) {
+        window.voiceUI?.stopPlayback?.();
+        ttsOverlay.hidden = true;
+    }
+    // Remove any orphaned skill test popup
+    document.getElementById('skill-roll-popup')?.remove();
+}
+
+// Escape key: dismiss skill test popup or reset stuck input state
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const popup = document.getElementById('skill-roll-popup');
+    if (popup) { popup.remove(); _resetInputState(); return; }
+    // If send is stuck disabled and we're in game screen, reset
+    if (elements.btnSend?.disabled) _resetInputState();
+});
+
+// Tab refocus: recover from any stuck state (e.g. async call hung in background)
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && elements.btnSend?.disabled) {
+        // Only reset if we're in the game screen (not mid-login or wizard)
+        if (document.getElementById('game-screen')?.classList.contains('screen--active')) {
+            _resetInputState();
+        }
+    }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -2452,6 +2547,11 @@ function showCombatUI() {
     elements.combatBanner.hidden = false;
     elements.combatComposer.hidden = false;
     elements.composer?.classList.add('composer--hidden');
+    // Show spell button for Scholar
+    const sheet = characterData?.sheet_json || characterData || {};
+    const parsedSheet = typeof sheet === 'string' ? JSON.parse(sheet) : sheet;
+    const spellBtn = document.getElementById('combat-spell-btn');
+    if (spellBtn) spellBtn.style.display = parsedSheet.archetype === 'scholar' ? '' : 'none';
 }
 
 function hideCombatUI() {
@@ -2685,59 +2785,65 @@ async function handleCombatAttack() {
         window.clog?.event('combat_resolve_attack_response', { status: r.status, hit: !!data.hit, damage: data.damage ?? 0, enemy_dead: !!data.enemy_dead });
         if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
 
-        const atkRoll = data.attack_roll || {};
-        const total = Number(atkRoll.total ?? data.total ?? d20);
-        const mod = Number(atkRoll.modifier ?? 0);
-        const dmg = data.damage ?? 0;
-        const hit = !!data.hit;
-        const targetName = data.target_name || target?.name || 'wróg';
-
-        if (hit) { setCombatMsg(`Trafienie! ${dmg} obrażeń.`); }
-        else if (data.player_nat1) { setCombatMsg('Fatalne pudło!', true); }
-        else { setCombatMsg('Pudło.'); }
-
-        const cs = data.combat_state || null;
-        const endedNow = cs && cs.status === 'ended';
-        const victoryNow = endedNow && cs.ended_reason === 'victory';
-
-        if (data.enemy_dead) {
-            pendingLoot = Array.isArray(data.loot) ? data.loot : [];
-            pendingGold = Math.max(0, Number(data.gold_drop || 0));
-        }
-
-        if (cs) { lastCombatState = cs; renderCombatUI(cs); }
-
-        await fetchAndAppendNewCombatTurns();
-
-        const payload = {
-            kind: 'player_attack',
-            character_name: characterData?.name || 'Bohater',
-            d20,
-            modifiers: mod !== 0 ? [{ name: String(atkRoll.attack_stat || 'STR').toUpperCase(), value: mod }] : [],
-            total,
-            hit,
-            damage: dmg,
-            target_name: targetName,
-            enemy_key: body.enemy_key || '',
-            dodged: !!data.dodged,
-            player_nat1: !!data.player_nat1,
-            enemy_dead: !!data.enemy_dead,
-            combat_victory: !!victoryNow,
-        };
-        const dbLine = `${COMBAT_ROLL_PREFIX}\n${JSON.stringify(payload)}`;
-        await sendCombatNarration(dbLine);
-
-        if (endedNow) {
-            await handleCombatEnded(cs);
-        } else {
-            await refreshCharacterData();
-        }
+        await _handleCombatAttackResult(data, d20, body.enemy_key, target);
     } catch (e) {
         window.clog?.error('combat_attack_exception', { message: String(e?.message || e) });
         setCombatMsg(`Błąd ataku: ${e.message || e}`, true);
     } finally {
         combatBusy = false;
         if (lastCombatState && elements.combatEndOverlay?.hidden !== false) renderCombatUI(lastCombatState);
+        elements.btnCombatAttack.disabled = false;
+        document.getElementById('combat-spell-btn').disabled = false;
+        elements.btnCombatFlee.disabled = false;
+    }
+}
+
+async function _handleCombatAttackResult(data, d20, enemyKey, target) {
+    const atkRoll = data.attack_roll || {};
+    const total = Number(atkRoll.total ?? data.total ?? d20);
+    const mod = Number(atkRoll.modifier ?? 0);
+    const dmg = data.damage ?? 0;
+    const hit = !!data.hit;
+    const targetName = data.target_name || target?.name || 'wróg';
+
+    if (data.mana_insufficient) { setCombatMsg(data.message || 'Brak many!', true); return; }
+    if (hit) { setCombatMsg(`Trafienie! ${dmg} obrażeń.`); }
+    else if (data.player_nat1) { setCombatMsg('Fatalne pudło!', true); }
+    else { setCombatMsg('Pudło.'); }
+
+    const cs = data.combat_state || null;
+    const endedNow = cs && cs.status === 'ended';
+    const victoryNow = endedNow && cs.ended_reason === 'victory';
+
+    if (data.enemy_dead) {
+        pendingLoot = Array.isArray(data.loot) ? data.loot : [];
+        pendingGold = Math.max(0, Number(data.gold_drop || 0));
+    }
+
+    if (cs) { lastCombatState = cs; renderCombatUI(cs); }
+
+    await fetchAndAppendNewCombatTurns();
+
+    const payload = {
+        kind: 'player_attack',
+        character_name: characterData?.name || 'Bohater',
+        d20,
+        modifiers: mod !== 0 ? [{ name: String(atkRoll.attack_stat || 'STR').toUpperCase(), value: mod }] : [],
+        total, hit, damage: dmg,
+        target_name: targetName,
+        enemy_key: enemyKey || '',
+        dodged: !!data.dodged,
+        player_nat1: !!data.player_nat1,
+        enemy_dead: !!data.enemy_dead,
+        combat_victory: !!victoryNow,
+    };
+    const dbLine = `${COMBAT_ROLL_PREFIX}\n${JSON.stringify(payload)}`;
+    await sendCombatNarration(dbLine);
+
+    if (endedNow) {
+        await handleCombatEnded(cs);
+    } else {
+        await refreshCharacterData();
     }
 }
 
@@ -2860,27 +2966,83 @@ function handleSheetTabClick(e) {
 function populateCharacterSheet(character) {
     if (!character) return;
 
-    const sheet = character.sheet_json || character;
+    let sheet = character.sheet_json || character;
+    if (typeof sheet === 'string') { try { sheet = JSON.parse(sheet); } catch { sheet = {}; } }
     elements.sheetCharacterName.textContent = character.name || 'Bohater';
 
+    // HP
     const hp = sheet.current_hp ?? character.hp ?? 29;
-    const maxHp = sheet.max_hp ?? character.max_hp ?? 29;
+    const maxHp = Math.max(1, sheet.max_hp ?? character.max_hp ?? 29);
     elements.sheetHp.textContent = `${hp} / ${maxHp}`;
-    elements.sheetHpBar.style.width = `${(hp / maxHp) * 100}%`;
+    elements.sheetHpBar.style.width = `${Math.max(0, Math.min(100, (hp / maxHp) * 100))}%`;
 
+    // Mana (Scholar)
+    const mana = sheet.current_mana ?? 0;
+    const maxMana = sheet.max_mana ?? 0;
+    const manaCard = document.getElementById('sheet-mana-card');
+    if (manaCard) {
+        manaCard.style.display = maxMana > 0 ? '' : 'none';
+        const manaEl = document.getElementById('sheet-mana');
+        const manaBar = document.getElementById('sheet-mana-bar');
+        if (manaEl) manaEl.textContent = `${mana} / ${maxMana}`;
+        if (manaBar) manaBar.style.width = `${maxMana > 0 ? (mana / maxMana) * 100 : 0}%`;
+    }
+
+    // Level, XP
     elements.sheetLevel.textContent = sheet.level || character.level || 1;
+    const xpEl = document.getElementById('sheet-xp');
+    if (xpEl) xpEl.textContent = sheet.xp_available ?? 0;
 
+    // Arcane Points (Scholar)
+    const apCard = document.getElementById('sheet-ap-card');
+    const apEl = document.getElementById('sheet-arcane-points');
+    if (apCard && apEl) {
+        const ap = sheet.arcane_points ?? 0;
+        apCard.style.display = sheet.archetype === 'scholar' ? '' : 'none';
+        apEl.textContent = ap;
+    }
+
+    // Stats grid with modifiers
     const stats = sheet.stats || character.stats || {};
-    const statNames = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
-    elements.sheetStats.innerHTML = statNames.map(stat => `
-        <div class="stat-item">
-            <span class="stat-item__label">${stat}</span>
-            <span class="stat-item__value">${stats[stat] || stats[stat.toLowerCase()] || 10}</span>
-        </div>
-    `).join('');
+    const mods = sheet.stat_modifiers || {};
+    const STAT_LABELS = { STR:'Siła', DEX:'Zręczność', CON:'Kondycja', INT:'Inteligencja', WIS:'Mądrość', CHA:'Charyzma', LCK:'Szczęście' };
+    const statNames = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'LCK'];
+    elements.sheetStats.innerHTML = statNames.map(stat => {
+        const val = stats[stat] ?? stats[stat.toLowerCase()] ?? 10;
+        const mod = mods[stat] ?? Math.floor((val - 10) / 2);
+        const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
+        const modCls = mod > 0 ? 'mod--pos' : mod < 0 ? 'mod--neg' : 'mod--zero';
+        return `<div class="stat-item">
+            <span class="stat-item__label" title="${STAT_LABELS[stat] || stat}">${stat}</span>
+            <span class="stat-item__value">${val}</span>
+            <span class="stat-item__mod ${modCls}">${modStr}</span>
+        </div>`;
+    }).join('');
+
+    // Conditions
+    const conditions = sheet.conditions || [];
+    const condSection = document.getElementById('sheet-conditions-section');
+    const condEl = document.getElementById('sheet-conditions');
+    if (condSection && condEl) {
+        if (conditions.length > 0) {
+            condSection.style.display = '';
+            condEl.innerHTML = conditions.map(c => {
+                const label = typeof c === 'string' ? c : (c.label || c.key || c);
+                return `<span class="condition-chip">${escapeHtml(label)}</span>`;
+            }).join('');
+        } else {
+            condSection.style.display = 'none';
+        }
+    }
+
+    // Show/hide spells tab for Scholar
+    const spellsTabBtn = document.getElementById('sheet-tab-spells');
+    if (spellsTabBtn) {
+        spellsTabBtn.style.display = sheet.archetype === 'scholar' ? '' : 'none';
+    }
 
     renderSkillsTab(sheet);
-
+    renderSpellsTab(character, sheet);
     renderInventoryTab(character);
 
     // Combined lore tab — data from GM-generated identity block
@@ -3054,6 +3216,61 @@ function _invPickEquipSlot(item, occupied) {
 function _invIsLore(item) {
     const t = String(item.item_type || '').toLowerCase();
     return t === 'misc' || t === 'quest';
+}
+
+// ── Spells Tab (Scholar) ──────────────────────────────────────────────────────
+
+async function renderSpellsTab(character, sheet) {
+    const listEl = document.getElementById('sheet-spells-list');
+    const summaryEl = document.getElementById('spells-mana-summary');
+    if (!listEl) return;
+    if (sheet.archetype !== 'scholar') { listEl.innerHTML = ''; return; }
+
+    const mana = sheet.current_mana ?? 0;
+    const maxMana = sheet.max_mana ?? 0;
+    const ap = sheet.arcane_points ?? 0;
+    if (summaryEl) {
+        summaryEl.innerHTML = `
+            <div class="spell-resource">
+                <span class="spell-resource__label">Mana</span>
+                <span class="spell-resource__val">${mana} / ${maxMana}</span>
+            </div>
+            <div class="spell-resource">
+                <span class="spell-resource__label">Punkty Arkanów</span>
+                <span class="spell-resource__val">${ap}</span>
+            </div>`;
+    }
+
+    try {
+        const resp = await apiRequest('GET', `/characters/${character.id}/spells`);
+        const spells = resp.spells || [];
+        if (!spells.length) {
+            listEl.innerHTML = '<p class="sheet-lore-text">Brak wyuczonych zaklęć.</p>';
+            return;
+        }
+        const TYPE_ICONS = { attack:'⚔', heal:'💚', defense:'🛡', effect:'✨', attack_aoe:'💥' };
+        listEl.innerHTML = spells.map(s => {
+            const icon = TYPE_ICONS[s.spell_type] || '✨';
+            const rankPips = Array.from({length: 3}, (_, i) =>
+                `<span class="spell-rank-pip${i < (s.rank || 1) ? ' active' : ''}"></span>`
+            ).join('');
+            return `<div class="spell-card">
+                <div class="spell-card__header">
+                    <span class="spell-card__icon">${icon}</span>
+                    <span class="spell-card__name">${escapeHtml(s.label || s.spell_key)}</span>
+                    <span class="spell-card__mana">🔮 ${s.mana_cost}</span>
+                </div>
+                <div class="spell-card__meta">
+                    ${s.damage_die ? `<span class="spell-card__die">⚔ ${escapeHtml(s.damage_die)}</span>` : ''}
+                    ${s.heal_die ? `<span class="spell-card__die heal">💚 ${escapeHtml(s.heal_die)}</span>` : ''}
+                    <span class="spell-card__ranks" title="Ranga">${rankPips}</span>
+                </div>
+                ${s.description ? `<p class="spell-card__desc">${escapeHtml(s.description)}</p>` : ''}
+            </div>`;
+        }).join('');
+    } catch {
+        listEl.innerHTML = '<p class="sheet-lore-text">Błąd ładowania zaklęć.</p>';
+    }
 }
 
 async function renderInventoryTab(character) {
@@ -3732,6 +3949,34 @@ function handleKeyPress(e) {
 // ============================================================================
 // Event Listeners
 // ============================================================================
+// ── Fast custom tooltip (replaces slow native title= delay) ──────────────────
+(function _initFastTooltip() {
+    const tip = document.createElement('div');
+    tip.id = 'fast-tooltip';
+    tip.style.cssText = 'position:fixed;z-index:99999;background:#1a1208;border:1px solid #5a3a10;color:#d4c09a;font-size:0.72rem;line-height:1.45;padding:6px 10px;border-radius:6px;max-width:220px;pointer-events:none;display:none;box-shadow:0 4px 16px rgba(0,0,0,0.7);';
+    document.body.appendChild(tip);
+
+    document.addEventListener('mouseover', e => {
+        const el = e.target.closest('[data-tooltip]');
+        if (!el) return;
+        tip.textContent = el.dataset.tooltip;
+        tip.style.display = 'block';
+    });
+    document.addEventListener('mousemove', e => {
+        if (tip.style.display === 'none') return;
+        const x = e.clientX + 12, y = e.clientY + 12;
+        const { innerWidth: W, innerHeight: H } = window;
+        tip.style.left = (x + 230 > W ? x - 242 : x) + 'px';
+        tip.style.top  = (y + 80 > H ? y - 70 : y) + 'px';
+    });
+    document.addEventListener('mouseout', e => {
+        if (!e.target.closest('[data-tooltip]')) return;
+        tip.style.display = 'none';
+    });
+    // Also hide on touch
+    document.addEventListener('touchstart', () => { tip.style.display = 'none'; }, { passive: true });
+})();
+
 function initEventListeners() {
     // Login
     elements.loginForm?.addEventListener('submit', handleLogin);
@@ -3739,6 +3984,9 @@ function initEventListeners() {
     // Heroes
     elements.btnNewHero?.addEventListener('click', () => {
         currentHero = null;
+        currentCampaignId = null;
+        currentCampaign = null;
+        characterData = null;
         startCharacterWizard();
     });
     elements.btnHeroesLogout?.addEventListener('click', handleLogout);
@@ -3783,6 +4031,11 @@ function initEventListeners() {
     // Combat
     elements.btnCombatAttack?.addEventListener('click', handleCombatAttack);
     elements.btnCombatFlee?.addEventListener('click', handleCombatFlee);
+    document.getElementById('combat-spell-btn')?.addEventListener('click', openSpellPicker);
+    document.getElementById('spell-picker-close')?.addEventListener('click', closeSpellPicker);
+    document.getElementById('spell-picker-overlay')?.addEventListener('click', e => {
+        if (e.target === document.getElementById('spell-picker-overlay')) closeSpellPicker();
+    });
     elements.combatEndBtn?.addEventListener('click', hideCombatEndOverlay);
     elements.btnSend?.addEventListener('click', handleSendMessage);
     elements.chatInput?.addEventListener('keypress', handleKeyPress);
@@ -3809,6 +4062,7 @@ function initEventListeners() {
 
     // World map panel
     initWorldMap();
+    initDungeon();
 
     // Journal regen
     elements.btnJournalRegen?.addEventListener('click', () => loadJournalContent(true));
@@ -4155,6 +4409,58 @@ function initSlashAutocomplete(inputEl) {
 // ============================================================================
 // Initialization
 // ============================================================================
+// Returns true if session was restored (caller should return early)
+async function tryRestoreSession() {
+    try {
+        const savedHeroId = localStorage.getItem('aigm_hero_id');
+        const savedCampaignId = localStorage.getItem('aigm_campaign_id');
+        if (!savedHeroId) return false;
+
+        const heroResp = await apiRequest('GET', `/characters/${savedHeroId}`);
+        const restored = heroResp.character || heroResp;
+        if (!restored?.id || Number(restored.user_id) !== Number(currentUser?.id)) return false;
+
+        currentHero = restored;
+        if (elements.welcomeUser) elements.welcomeUser.textContent = `Bohater: ${restored.name}`;
+
+        // Restore to game screen if hero had an active campaign
+        const campId = savedCampaignId || restored.campaign_id;
+        if (campId && (restored.status === 'in_campaign' || savedCampaignId)) {
+            const chars = await apiRequest('GET', `/campaigns/${campId}/characters`);
+            const myChar = (chars.characters || []).find(c => c.id === restored.id);
+            if (myChar) {
+                characterData = myChar;
+                currentCampaignId = campId;
+                const camp = await apiRequest('GET', `/campaigns/${campId}`);
+                currentCampaign = camp;
+                await enterGame(camp);
+                // Restore dungeon HUD if dungeon campaign
+                if (camp.mode === 'dungeon') {
+                    try {
+                        const runResp = await apiRequest('GET', `/campaigns/${campId}/dungeon-run`);
+                        if (runResp.dungeon_run && !runResp.dungeon_run.completed && !runResp.dungeon_run.failed) {
+                            _activeDungeonRun = runResp.dungeon_run;
+                            _dungeonCampaignId = campId;
+                            updateDungeonHUD();
+                            showDungeonHUD(true);
+                            renderCurrentRoom();
+                        }
+                    } catch {}
+                }
+                return true;
+            }
+        }
+
+        // Hero found but no active campaign — go to campaign chooser
+        await loadCampaigns();
+        showScreen('campaigns');
+        return true;
+    } catch (e) {
+        console.warn('[Restore] Failed:', e);
+        return false;
+    }
+}
+
 async function init() {
     initEventListeners();
 
@@ -4164,6 +4470,7 @@ async function init() {
         if (elements.heroesWelcome) elements.heroesWelcome.textContent = `Witaj, ${displayName}`;
         if (elements.welcomeUser) elements.welcomeUser.textContent = `Witaj, ${displayName}`;
         await loadHeroes();
+        if (await tryRestoreSession()) return;
         showScreen('heroes');
     } else {
         showScreen('login');
@@ -4476,6 +4783,610 @@ function initWorldMap() {
     if (_wmap._ds) { _wmap.pan = { x: e.clientX - _wmap._ds.x, y: e.clientY - _wmap._ds.y }; _wmRender(); }
   });
   window.addEventListener('mouseup', () => { _wmap._ds = null; });
+}
+
+// ── Spell Picker (Scholar combat) ─────────────────────────────────────────────
+
+let _cachedSpells = null;
+
+async function openSpellPicker() {
+    if (!combatActive || lastCombatState?.current_turn !== 'player') {
+        setCombatMsg('Nie twoja tura.', true); return;
+    }
+    const overlay = document.getElementById('spell-picker-overlay');
+    const list = document.getElementById('spell-picker-list');
+    const manaEl = document.getElementById('spell-picker-mana');
+    if (!overlay) return;
+
+    const sheet = (() => { const s = characterData?.sheet_json || characterData || {}; return typeof s === 'string' ? JSON.parse(s) : s; })();
+    const mana = sheet.current_mana ?? 0;
+    const maxMana = sheet.max_mana ?? 0;
+    if (manaEl) manaEl.textContent = `🔮 ${mana} / ${maxMana}`;
+
+    overlay.removeAttribute('hidden');
+    list.innerHTML = '<div style="padding:12px;color:#888;font-size:0.8rem">Ładowanie zaklęć…</div>';
+
+    try {
+        if (!_cachedSpells || _cachedSpells._charId !== characterData?.id) {
+            const resp = await apiRequest('GET', `/characters/${characterData.id}/spells`);
+            _cachedSpells = resp.spells || [];
+            _cachedSpells._charId = characterData.id;
+        }
+        const spells = _cachedSpells;
+        if (!spells.length) {
+            list.innerHTML = '<div style="padding:12px;color:#888;font-size:0.8rem">Brak wyuczonych zaklęć.</div>';
+            return;
+        }
+        const TYPE_ICONS = { attack:'⚔', heal:'💚', defense:'🛡', effect:'✨', attack_aoe:'💥' };
+        list.innerHTML = spells.map(s => {
+            const canCast = mana >= (s.mana_cost || 2);
+            return `<button class="spell-pick-btn${canCast ? '' : ' spell-pick-btn--nomana'}"
+                data-spell-key="${s.spell_key}" ${canCast ? '' : 'disabled'}>
+                <span class="spell-pick-icon">${TYPE_ICONS[s.spell_type] || '✨'}</span>
+                <span class="spell-pick-name">${escapeHtml(s.label || s.spell_key)}</span>
+                <span class="spell-pick-cost">🔮 ${s.mana_cost || 2}</span>
+                ${s.damage_die ? `<span class="spell-pick-die">⚔ ${s.damage_die}</span>` : ''}
+                ${s.heal_die ? `<span class="spell-pick-die heal">💚 ${s.heal_die}</span>` : ''}
+            </button>`;
+        }).join('');
+
+        list.querySelectorAll('.spell-pick-btn:not(:disabled)').forEach(btn => {
+            btn.addEventListener('click', () => {
+                closeSpellPicker();
+                handleCombatSpellAttack(btn.dataset.spellKey);
+            });
+        });
+    } catch {
+        list.innerHTML = '<div style="padding:12px;color:#f87171;font-size:0.8rem">Błąd ładowania zaklęć.</div>';
+    }
+}
+
+function closeSpellPicker() {
+    document.getElementById('spell-picker-overlay')?.setAttribute('hidden', '');
+}
+
+async function handleCombatSpellAttack(spellKey) {
+    if (!combatActive || !currentCampaignId || combatBusy) return;
+    combatBusy = true;
+    elements.btnCombatAttack.disabled = true;
+    document.getElementById('combat-spell-btn').disabled = true;
+    elements.btnCombatFlee.disabled = true;
+    setCombatMsg(`Rzucam zaklęcie…`);
+
+    try {
+        const diceResp = await fetch('/api/gm/dice', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dice: '1d20' })
+        });
+        const diceData = await diceResp.json();
+        const d20 = Number(diceData.total ?? 0);
+
+        const target = pickEnemyTarget(lastCombatState);
+        const body = { raw_d20: d20, attacker: 'player', spell_key: spellKey };
+        if (target?.enemy_key) body.enemy_key = String(target.enemy_key);
+        if (target?.id) body.target_id = String(target.id);
+
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/resolve-attack`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
+
+        _cachedSpells = null; // Invalidate cache (mana changed)
+        await _handleCombatAttackResult(data);
+    } catch (err) {
+        setCombatMsg(err.message || 'Błąd zaklęcia.', true);
+        combatBusy = false;
+        elements.btnCombatAttack.disabled = false;
+        document.getElementById('combat-spell-btn').disabled = false;
+        elements.btnCombatFlee.disabled = false;
+    }
+}
+
+// ── Dungeon System ────────────────────────────────────────────────────────────
+
+let _activeDungeonRun = null;
+let _dungeonCampaignId = null;
+
+const ROOM_TYPE_ICONS = {
+    combat: '⚔', boss: '💀', riddle: '🔮', trap: '⚙', chest: '🎁', rest: '🕯'
+};
+
+async function openDungeonPicker() {
+    if (!currentHero?.id) { showToast('Wybierz bohatera aby wejść do lochu', 'error'); return; }
+    const overlay = document.getElementById('dungeon-picker-overlay');
+    const list = document.getElementById('dungeon-picker-list');
+    overlay.removeAttribute('hidden');
+    list.innerHTML = '<div class="dungeon-picker-loading">Ładowanie lochów…</div>';
+
+    try {
+        const data = await apiRequest('GET', `/dungeons?character_id=${currentHero.id}`);
+        const dungeons = data.dungeons || [];
+        if (!dungeons.length) {
+            list.innerHTML = '<p class="dungeon-picker-empty">Brak dostępnych lochów.</p>';
+            return;
+        }
+        list.innerHTML = '';
+        dungeons.forEach(d => {
+            const cd = d.cooldown || {};
+            const onCooldown = cd.on_cooldown;
+            const hoursLeft = cd.hours_remaining ? `${cd.hours_remaining}h` : '';
+            const card = document.createElement('button');
+            card.className = 'dungeon-card' + (onCooldown ? ' dungeon-card--cooldown' : '');
+            card.disabled = !!onCooldown;
+            card.innerHTML = `
+                <div class="dungeon-card__icon">⛏</div>
+                <div class="dungeon-card__body">
+                    <div class="dungeon-card__name">${escapeHtml(d.label || d.key)}</div>
+                    <div class="dungeon-card__meta">${d.rooms || '?'} komnat · Poz. ${d.min_level || 1}+</div>
+                    <div class="dungeon-card__atm">${escapeHtml((d.atmosphere || '').slice(0, 80))}</div>
+                </div>
+                ${onCooldown
+                    ? `<div class="dungeon-card__cooldown">⏳ ${hoursLeft}</div>`
+                    : `<div class="dungeon-card__arrow">›</div>`
+                }`;
+            if (!onCooldown) {
+                card.addEventListener('click', () => {
+                    overlay.setAttribute('hidden', '');
+                    enterDungeon(d.key);
+                });
+            }
+            list.appendChild(card);
+        });
+    } catch (err) {
+        list.innerHTML = `<p class="dungeon-picker-empty">Błąd: ${escapeHtml(err.message || '?')}</p>`;
+    }
+}
+
+async function enterDungeon(dungeonKey) {
+    if (!currentHero?.id || !currentUser?.id) return;
+    showToast('Wkraczasz do lochu…', 'info', 2000);
+
+    try {
+        // Create disposable dungeon campaign
+        const dungeonCampaign = await apiRequest('POST', '/campaigns', {
+            title: `Ekspedycja: ${dungeonKey}`,
+            system_id: 'fantasy',
+            model_id: 'default',
+            owner_user_id: currentUser.id,
+            language: 'pl',
+            mode: 'dungeon',
+            status: 'active',
+        });
+
+        // Assign hero to dungeon campaign
+        await apiRequest('POST', `/characters/${currentHero.id}/assign-campaign`, {
+            campaign_id: dungeonCampaign.id,
+            user_id: currentUser.id,
+        });
+
+        _dungeonCampaignId = dungeonCampaign.id;
+        currentCampaignId = dungeonCampaign.id;
+        currentCampaign = dungeonCampaign;
+
+        // Reload hero data
+        const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
+        currentHero = heroResp.character || heroResp;
+        characterData = currentHero;
+
+        // Enter the dungeon
+        const resp = await apiRequest('POST', `/dungeons/${dungeonKey}/enter`, {
+            character_id: currentHero.id,
+            campaign_id: dungeonCampaign.id,
+            previous_campaign_id: null,
+        });
+
+        _activeDungeonRun = resp.dungeon_run;
+        await enterGame(dungeonCampaign);
+        updateDungeonHUD();
+        showDungeonHUD(true);
+
+        if (resp.room_narrative) {
+            appendMessage({ role: 'assistant', content: resp.room_narrative, created_at: new Date() });
+            scrollToBottom();
+        }
+        renderCurrentRoom();
+    } catch (err) {
+        showToast(err.message || 'Błąd wejścia do lochu', 'error');
+    }
+}
+
+function updateDungeonHUD() {
+    const run = _activeDungeonRun;
+    if (!run) return;
+    const label = document.getElementById('dungeon-hud-label');
+    const progress = document.getElementById('dungeon-hud-progress');
+    const roomType = document.getElementById('dungeon-hud-room-type');
+    const advBtn = document.getElementById('dungeon-advance-btn');
+
+    if (label) label.textContent = `⛏ ${run.dungeon_label || 'Loch'}`;
+
+    if (progress) {
+        const total = run.total_rooms || 1;
+        const cur = run.current_room || 1;
+        const pips = Array.from({length: total}, (_, i) => {
+            const room = run.rooms?.[i];
+            const cleared = room?.cleared;
+            const isCurrent = i + 1 === cur;
+            const icon = ROOM_TYPE_ICONS[room?.room_type] || '●';
+            return `<span class="dungeon-pip${cleared ? ' cleared' : ''}${isCurrent ? ' current' : ''}" title="${room?.room_type || ''}">${icon}</span>`;
+        }).join('');
+        progress.innerHTML = pips;
+    }
+
+    const currentRoom = run.rooms?.find(r => r.room_id === run.current_room);
+    if (roomType && currentRoom) {
+        const typeNames = {combat:'Walka', boss:'BOSS', riddle:'Zagadka', trap:'Pułapka', chest:'Skrzynia', rest:'Odpoczynek'};
+        roomType.textContent = typeNames[currentRoom.room_type] || currentRoom.room_type;
+    }
+
+    // Show advance button only if current room is cleared and dungeon not complete
+    const cleared = currentRoom?.cleared;
+    if (advBtn) advBtn.hidden = !cleared || run.completed;
+
+    // Refresh map if it's open
+    if (!document.getElementById('dungeon-map-overlay')?.hidden) {
+        renderDungeonMap(run);
+    }
+}
+
+function _positionDungeonHUD() {
+    const hud = document.getElementById('dungeon-hud');
+    const gameScreen = document.getElementById('game-screen');
+    if (!hud || !gameScreen) return;
+    const gr = gameScreen.getBoundingClientRect();
+    const header = gameScreen.querySelector('.header');
+    const headerH = header ? header.getBoundingClientRect().height : 64;
+    document.documentElement.style.setProperty('--dungeon-hud-top', `${headerH}px`);
+    document.documentElement.style.setProperty('--dungeon-hud-left', `${gr.left}px`);
+    document.documentElement.style.setProperty('--dungeon-hud-width', `${gr.width}px`);
+    requestAnimationFrame(() => {
+        const hudH = hud.getBoundingClientRect().height;
+        document.documentElement.style.setProperty('--dungeon-hud-h', `${hudH}px`);
+    });
+}
+
+function showDungeonHUD(show) {
+    const hud = document.getElementById('dungeon-hud');
+    if (!hud) return;
+    hud.hidden = !show;
+    const gameScreen = document.getElementById('game-screen');
+    if (show) {
+        _positionDungeonHUD();
+        gameScreen?.classList.add('game-screen--dungeon');
+    } else {
+        gameScreen?.classList.remove('game-screen--dungeon');
+    }
+}
+
+// Reposition HUD on window resize
+window.addEventListener('resize', () => {
+    if (!document.getElementById('dungeon-hud')?.hidden) _positionDungeonHUD();
+});
+
+function renderCurrentRoom() {
+    const run = _activeDungeonRun;
+    if (!run) return;
+    const room = run.rooms?.find(r => r.room_id === run.current_room);
+    if (!room) return;
+
+    const riddlePanel = document.getElementById('dungeon-riddle-panel');
+
+    if (room.room_type === 'riddle' && !room.cleared) {
+        if (riddlePanel) {
+            riddlePanel.removeAttribute('hidden');
+            const txt = document.getElementById('dungeon-riddle-text');
+            if (txt) txt.textContent = room.riddle_text || '…';
+            const hint = document.getElementById('dungeon-riddle-hint');
+            if (hint) { hint.textContent = ''; hint.setAttribute('hidden', ''); }
+        }
+    } else {
+        riddlePanel?.setAttribute('hidden', '');
+    }
+}
+
+async function _dungeonAdvance() {
+    if (!_dungeonCampaignId || !characterData?.id) return;
+    try {
+        const resp = await apiRequest('POST', '/dungeons/advance-room', {
+            campaign_id: _dungeonCampaignId,
+            character_id: characterData.id,
+        });
+        _activeDungeonRun = resp.dungeon_run;
+
+        if (resp.narrative) {
+            appendMessage({ role: 'assistant', content: resp.narrative, created_at: new Date() });
+            scrollToBottom();
+        }
+
+        if (resp.completed) {
+            _showDungeonComplete(resp);
+        } else {
+            updateDungeonHUD();
+            renderCurrentRoom();
+            // Auto-open map on first advance (room 2) so player learns the layout exists
+            const newRoom = _activeDungeonRun?.current_room;
+            if (newRoom === 2) openDungeonMap(true);
+        }
+    } catch (err) {
+        showToast(err.message || 'Błąd', 'error');
+    }
+}
+
+async function _dungeonResolveRoom(playerInput) {
+    if (!_dungeonCampaignId || !characterData?.id) return;
+    try {
+        const resp = await apiRequest('POST', '/dungeons/resolve-room', {
+            campaign_id: _dungeonCampaignId,
+            character_id: characterData.id,
+            player_input: playerInput || null,
+        });
+
+        if (resp.narrative) {
+            appendMessage({ role: 'assistant', content: resp.narrative, created_at: new Date() });
+            scrollToBottom();
+        }
+
+        if (resp.hint) {
+            const hintEl = document.getElementById('dungeon-riddle-hint');
+            if (hintEl) { hintEl.textContent = `💡 ${resp.hint}`; hintEl.removeAttribute('hidden'); }
+        }
+
+        // Reload run state
+        const runResp = await apiRequest('GET', `/campaigns/${_dungeonCampaignId}/dungeon-run`);
+        if (runResp.dungeon_run) _activeDungeonRun = runResp.dungeon_run;
+        updateDungeonHUD();
+        renderCurrentRoom();
+
+        if (resp.advance_available && resp.success !== false) {
+            document.getElementById('dungeon-riddle-panel')?.setAttribute('hidden', '');
+            document.getElementById('dungeon-advance-btn')?.removeAttribute('hidden');
+        }
+
+        // Heal on rest room
+        if (resp.heal_pct && resp.heal_pct > 0) {
+            await refreshCharacterData();
+        }
+    } catch (err) {
+        showToast(err.message || 'Błąd', 'error');
+    }
+}
+
+function _showDungeonComplete(resp) {
+    const overlay = document.getElementById('dungeon-complete-overlay');
+    if (!overlay) return;
+    const icon = document.getElementById('dungeon-complete-icon');
+    const title = document.getElementById('dungeon-complete-title');
+    const lootEl = document.getElementById('dungeon-complete-loot');
+    const cooldownEl = document.getElementById('dungeon-complete-cooldown');
+
+    if (icon) icon.textContent = '⚔️';
+    if (title) title.textContent = `Loch ukończony!`;
+
+    const loot = resp.loot || [];
+    if (lootEl) {
+        lootEl.innerHTML = loot.length
+            ? '<ul>' + loot.map(l => `<li>📦 ${escapeHtml(l.label || l.key || '?')} ×${l.quantity || 1}</li>`).join('') + '</ul>'
+            : '<p>Brak łupów z bossa.</p>';
+    }
+
+    if (cooldownEl && _activeDungeonRun?.cooldown_hours) {
+        cooldownEl.textContent = `Następna ekspedycja za ${_activeDungeonRun.cooldown_hours}h`;
+    }
+
+    overlay.removeAttribute('hidden');
+    showDungeonHUD(false);
+}
+
+async function _exitDungeon() {
+    if (!_dungeonCampaignId || !characterData?.id) { showScreen('campaigns'); return; }
+    try {
+        const resp = await apiRequest('POST', '/dungeons/exit', {
+            campaign_id: _dungeonCampaignId,
+            character_id: characterData.id,
+        });
+        // Delete the disposable dungeon campaign
+        try { await apiRequest('DELETE', `/campaigns/${_dungeonCampaignId}`); } catch {}
+        _activeDungeonRun = null;
+        _dungeonCampaignId = null;
+        currentCampaignId = null;
+        characterData = null;
+        try { localStorage.removeItem('aigm_campaign_id'); } catch {}
+        showDungeonHUD(false);
+        document.getElementById('dungeon-complete-overlay')?.setAttribute('hidden', '');
+        document.getElementById('dungeon-riddle-panel')?.setAttribute('hidden', '');
+        // Reload hero and go to campaign screen
+        if (currentHero?.id) {
+            const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
+            currentHero = heroResp.character || heroResp;
+        }
+        await loadCampaigns();
+        showScreen('campaigns');
+    } catch (err) {
+        showToast(err.message || 'Błąd', 'error');
+        showScreen('campaigns');
+    }
+}
+
+// ── Dungeon Map (square tile grid) ───────────────────────────────────────────
+
+const ROOM_TYPE_LABELS = {
+    combat: 'Walka', boss: 'BOSS', riddle: 'Zagadka',
+    trap: 'Pułapka', chest: 'Skrzynia', rest: 'Odpoczynek'
+};
+
+function renderDungeonMap(run) {
+    const svg = document.getElementById('dmap-svg');
+    if (!svg || !run) return;
+
+    const rooms = run.rooms || [];
+    const currentRoomId = run.current_room || 1;
+
+    // Grid metrics
+    const S = 52;          // tile size
+    const GAP = 28;        // corridor length
+    const PAD = 20;        // padding
+    const R = 8;           // corner radius
+    const STEP = S + GAP;
+
+    // Ensure all rooms have coordinates (fallback: linear layout by room_id)
+    rooms.forEach((r, i) => {
+        if (r.map_col == null) r.map_col = i;
+        if (r.map_row == null) r.map_row = 0;
+    });
+
+    // Determine grid bounds
+    const maxCol = Math.max(...rooms.map(r => r.map_col));
+    const maxRow = Math.max(...rooms.map(r => r.map_row));
+    const svgW = (maxCol + 1) * STEP + GAP + PAD * 2;
+    const svgH = (maxRow + 1) * STEP + GAP + PAD * 2;
+
+    svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+    svg.setAttribute('width', svgW);
+    svg.setAttribute('height', svgH);
+
+    const tileX = (col) => PAD + col * STEP;
+    const tileY = (row) => PAD + row * STEP;
+    const cx = (col) => tileX(col) + S / 2;
+    const cy = (row) => tileY(row) + S / 2;
+
+    let html = '';
+
+    // Draw corridors first (behind tiles)
+    for (let i = 0; i < rooms.length; i++) {
+        const room = rooms[i];
+        const next = rooms[i + 1];
+        if (!next) continue;
+
+        const x1 = tileX(room.map_col) + S;
+        const y1 = cy(room.map_row);
+        const x2 = tileX(next.map_col);
+        const y2 = cy(next.map_row);
+
+        const bothKnown = room.cleared || room.room_id === currentRoomId;
+        const corridorOpacity = bothKnown ? 0.6 : 0.15;
+
+        html += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+            stroke="#4a3010" stroke-width="3" opacity="${corridorOpacity}"/>`;
+    }
+
+    // Draw tiles
+    rooms.forEach(room => {
+        const col = room.map_col || 0;
+        const row = room.map_row || 0;
+        const x = tileX(col);
+        const y = tileY(row);
+        const isCurrent = room.room_id === currentRoomId;
+        const isCleared = room.cleared;
+        const isRevealed = isCurrent || isCleared;
+        const isBoss = room.room_type === 'boss';
+
+        // Determine colors
+        let fill, stroke, strokeW, textColor, opacity;
+        if (!isRevealed) {
+            fill = '#0d0904'; stroke = '#2a1a08'; strokeW = 1;
+            textColor = '#4a3a20'; opacity = '0.7';
+        } else if (isCurrent) {
+            fill = '#1a1005'; stroke = '#c9751a'; strokeW = 2;
+            textColor = '#d4a060'; opacity = '1';
+        } else if (isCleared) {
+            fill = '#100e08'; stroke = '#3a2808'; strokeW = 1;
+            textColor = '#5a4a28'; opacity = '0.85';
+        }
+
+        if (isBoss && isRevealed) { stroke = '#8a2010'; fill = '#140802'; }
+
+        // Tile background
+        html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="${R}"
+            fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}" opacity="${opacity}"/>`;
+
+        if (isCurrent) {
+            // Subtle glow ring
+            html += `<rect x="${x - 2}" y="${y - 2}" width="${S + 4}" height="${S + 4}" rx="${R + 2}"
+                fill="none" stroke="#c9751a" stroke-width="1" opacity="0.25"/>`;
+        }
+
+        // Icon or ?
+        const icon = isRevealed ? (ROOM_TYPE_ICONS[room.room_type] || '●') : '?';
+        const iconSize = isRevealed ? 18 : 16;
+        const iconY = y + S / 2 - (isRevealed ? 6 : 4);
+
+        html += `<text x="${cx(col)}" y="${iconY}" text-anchor="middle"
+            dominant-baseline="middle" font-size="${iconSize}"
+            fill="${textColor}" style="pointer-events:none">${icon}</text>`;
+
+        // Room label (revealed only)
+        if (isRevealed) {
+            const label = isBoss ? 'BOSS' : (ROOM_TYPE_LABELS[room.room_type] || room.room_type || '');
+            const labelY = y + S - 10;
+            html += `<text x="${cx(col)}" y="${labelY}" text-anchor="middle"
+                font-size="7" fill="${textColor}" font-family="sans-serif"
+                style="pointer-events:none;text-transform:uppercase;letter-spacing:0.08em">${label}</text>`;
+        }
+
+        // Cleared checkmark
+        if (isCleared && !isCurrent) {
+            html += `<text x="${x + S - 10}" y="${y + 12}" text-anchor="middle"
+                font-size="9" fill="#5a8040" style="pointer-events:none">✓</text>`;
+        }
+
+        // Room number
+        html += `<text x="${x + 8}" y="${y + 12}" text-anchor="middle"
+            font-size="8" fill="${isRevealed ? '#6a5a30' : '#2a2010'}"
+            style="pointer-events:none">${room.room_id}</text>`;
+    });
+
+    svg.innerHTML = html;
+}
+
+function openDungeonMap(autoClose = false) {
+    const overlay = document.getElementById('dungeon-map-overlay');
+    if (!overlay) return;
+    renderDungeonMap(_activeDungeonRun);
+    overlay.removeAttribute('hidden');
+    if (autoClose) {
+        setTimeout(() => overlay.setAttribute('hidden', ''), 3500);
+    }
+}
+
+function closeDungeonMap() {
+    document.getElementById('dungeon-map-overlay')?.setAttribute('hidden', '');
+}
+
+function initDungeon() {
+    document.getElementById('dungeon-picker-btn')?.addEventListener('click', openDungeonPicker);
+    document.getElementById('dungeon-picker-close')?.addEventListener('click', () => {
+        document.getElementById('dungeon-picker-overlay')?.setAttribute('hidden', '');
+    });
+    document.getElementById('dungeon-advance-btn')?.addEventListener('click', _dungeonAdvance);
+    document.getElementById('dungeon-exit-btn')?.addEventListener('click', _exitDungeon);
+    document.getElementById('dungeon-complete-btn')?.addEventListener('click', _exitDungeon);
+    document.getElementById('dungeon-map-btn')?.addEventListener('click', () => openDungeonMap());
+    document.getElementById('dmap-close-btn')?.addEventListener('click', closeDungeonMap);
+    document.getElementById('dungeon-map-overlay')?.addEventListener('click', (e) => {
+        if (e.target === document.getElementById('dungeon-map-overlay')) closeDungeonMap();
+    });
+
+    // Riddle submit
+    const riddleInput = document.getElementById('dungeon-riddle-input');
+    document.getElementById('dungeon-riddle-submit')?.addEventListener('click', () => {
+        const val = riddleInput?.value.trim();
+        if (!val) return;
+        if (riddleInput) riddleInput.value = '';
+        _dungeonResolveRoom(val);
+    });
+    riddleInput?.addEventListener('keypress', e => {
+        if (e.key === 'Enter') {
+            const val = riddleInput.value.trim();
+            if (!val) return;
+            riddleInput.value = '';
+            _dungeonResolveRoom(val);
+        }
+    });
+    document.getElementById('dungeon-riddle-hint-btn')?.addEventListener('click', () => {
+        _dungeonResolveRoom(null); // null = request hint
+    });
 }
 
 // ── Custom DELETE hero confirmation modal ────────────────────────────────────

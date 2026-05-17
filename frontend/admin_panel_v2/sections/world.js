@@ -52,7 +52,7 @@ const LOCATION_RULES = [
   { key: "reason",           label: "Reason",           type: "text",    default: "Sacred ground", description: "Reason shown to player" },
 ];
 
-const TABS = ["builder", "npcs", "enemies", "dungeons", "pending"];
+const TABS = ["builder", "npcs", "enemies", "dungeons", "riddles", "pending"];
 const _rendered = new Set();
 let _aiTrigger = null;
 
@@ -64,6 +64,7 @@ export async function init(panel) {
         <button class="subtab-btn" data-tab="npcs">${LABELS.npcs}</button>
         <button class="subtab-btn" data-tab="enemies">${LABELS.enemies}</button>
         <button class="subtab-btn" data-tab="dungeons">⚔️ Lochy</button>
+        <button class="subtab-btn" data-tab="riddles">🔮 Zagadki</button>
         <button class="subtab-btn" data-tab="pending">⏳ Oczekujące <span id="pending-nav-badge" class="admin-badge admin-badge-gold" style="display:none"></span></button>
       </div>
       <div class="subtab-panels">
@@ -97,6 +98,7 @@ async function _activateTab(panel, tab) {
   if      (tab === "npcs")      await _renderNpcs(container);
   else if (tab === "enemies")   await _renderEnemies(container);
   else if (tab === "dungeons")  await _renderDungeons(container);
+  else if (tab === "riddles")   await _renderRiddles(container);
   else if (tab === "pending")   await _renderPendingReview(container, panel);
   else if (tab === "builder") {
     const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=3");
@@ -999,8 +1001,15 @@ function _openPresetModal(preset, idx, onDone) {
   });
 }
 
-function _openEnemyModal(row, onDone) {
+async function _openEnemyModal(row, onDone) {
   const isEdit = !!row;
+  let lootTables = [];
+  try { lootTables = (await adminFetch("/api/admin/loot-tables")).items || []; } catch {}
+
+  const lootTableOpts = `<option value="">— brak —</option>` +
+    lootTables.map((t) => `<option value="${t.key}"${row?.loot_table_key === t.key ? " selected" : ""}>${_esc(t.label || t.key)}</option>`).join("");
+  const dropChancePct = Math.round((row?.drop_chance ?? 1.0) * 100);
+
   const form = document.createElement("div");
   form.className = "modal-form";
   form.innerHTML = `
@@ -1015,6 +1024,10 @@ function _openEnemyModal(row, onDone) {
     <label class="modal-field"><span>Ataki/turę</span><input name="attacks_per_turn" type="number" value="${row?.attacks_per_turn??1}" min="1"/></label>
     <label class="modal-field"><span>Typ obrażeń</span><select name="damage_type">${Object.entries(LABELS.damageTypes).map(([v,l])=>`<option value="${v}"${(row?.damage_type??"physical")===v?" selected":""}>${l}</option>`).join("")}</select></label>
     <label class="modal-field"><span>Nagroda XP</span><input name="xp_award" type="number" value="${row?.xp_award??10}" min="0"/></label>
+    <div class="modal-field-divider"></div>
+    <label class="modal-field"><span>Tabela łupów</span><select name="loot_table_key">${lootTableOpts}</select></label>
+    <label class="modal-field"><span>Szansa na łup (%)</span><input name="drop_chance_pct" type="number" value="${dropChancePct}" min="0" max="100" title="0 = nigdy, 100 = zawsze"/></label>
+    <div class="modal-field-divider"></div>
     <label class="modal-field"><span>Opis</span><textarea name="description" rows="3">${_esc(row?.description??"")}</textarea></label>
     <label class="modal-checkbox-row"><input name="is_active" type="checkbox" ${(row?.is_active??true)?"checked":""}><span>${LABELS.isActive}</span></label>`;
 
@@ -1032,6 +1045,8 @@ function _openEnemyModal(row, onDone) {
           const label = g("label").value.trim();
           if (!key) { showToast("Klucz jest wymagany.", "error"); return; }
           if (!label) { showToast("Nazwa jest wymagana.", "error"); return; }
+          const lootKey = g("loot_table_key").value.trim() || null;
+          const dropPct = Number(g("drop_chance_pct").value);
           const body = {
             key, label,
             tier: g("tier").value,
@@ -1045,6 +1060,8 @@ function _openEnemyModal(row, onDone) {
             xp_award: Number(g("xp_award").value),
             description: g("description").value.trim(),
             is_active: g("is_active").checked,
+            loot_table_key: lootKey,
+            drop_chance: Math.min(1, Math.max(0, dropPct / 100)),
           };
           try {
             if (isEdit) {
@@ -1171,11 +1188,32 @@ async function _loadPendingType(container, type, panelId, badgeId, panel) {
 // ── Dungeons ──────────────────────────────────────────────────────────────────
 
 async function _renderDungeons(container) {
-  const tableHost = document.createElement("div");
-  const addBtn = document.createElement("button");
-  addBtn.className = "primary-btn";
-  addBtn.textContent = "+ Dodaj loch";
-  addBtn.style.marginBottom = "12px";
+  container.innerHTML = `
+    <div class="dungeon-list-panel" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
+      <div class="dungeon-list-toolbar">
+        <button class="primary-btn" id="dungeon-add-btn">+ Dodaj loch</button>
+      </div>
+      <div id="dungeon-table-host" style="flex:1;overflow-y:auto;padding:12px 16px"></div>
+    </div>
+    <!-- Floating AI bubble -->
+    <button class="dungeon-ai-fab" id="dungeon-ai-fab" title="AI Kreator Lochu">🤖</button>
+    <div class="dungeon-ai-chat" id="dungeon-ai-chat" hidden>
+      <div class="dungeon-ai-chat-header">
+        <span>🤖 Kreator Lochu</span>
+        <button class="dungeon-ai-chat-close" id="dungeon-ai-close">✕</button>
+      </div>
+      <div class="dungeon-ai-messages" id="dungeon-ai-msgs"></div>
+      <div class="dungeon-ai-input-row">
+        <textarea id="dungeon-ai-prompt" class="dungeon-ai-textarea" rows="3"
+          placeholder="Opisz loch… (Ctrl+Enter = wyślij)"></textarea>
+        <button class="primary-btn small-btn" id="dungeon-ai-btn">Generuj</button>
+      </div>
+    </div>`;
+
+  const tableHost = container.querySelector("#dungeon-table-host");
+  const msgsEl = container.querySelector("#dungeon-ai-msgs");
+  let aiHistory = [];
+  let aiDraft = null;
 
   const load = async () => {
     renderTable(tableHost, null, null, {});
@@ -1184,45 +1222,104 @@ async function _renderDungeons(container) {
     catch (e) { showToast("Błąd ładowania lochów: " + (e.message || "?"), "error"); return; }
 
     const cols = [
-      { key: "key",           label: "Klucz",        editable: false },
-      { key: "label",         label: "Nazwa",         editable: true },
-      { key: "rooms",         label: "Pokoje",        type: "number", editable: true },
-      { key: "cooldown_hours",label: "Cooldown (h)",  type: "number", editable: true },
-      { key: "min_level",     label: "Min. poziom",   type: "number", editable: true },
+      { key: "key",           label: "Klucz",     editable: false },
+      { key: "label",         label: "Nazwa",      editable: true },
+      { key: "rooms",         label: "Pokoje",     type: "number", editable: true },
+      { key: "cooldown_hours",label: "Cooldown(h)",type: "number", editable: true },
+      { key: "min_level",     label: "Poziom",     type: "number", editable: true },
       { key: "loot_tier",     label: "Łupy",
         type: "badge", editType: "select",
-        editOptions: ["poor", "standard", "rich"],
-        badgeClass: (r) => ({ poor: "admin-badge-blue", standard: "admin-badge-green", rich: "admin-badge-gold" }[r.loot_tier] || "admin-badge-blue"),
-        formatDisplay: (r) => ({ poor: "Słabe", standard: "Standardowe", rich: "Bogate" }[r.loot_tier] || r.loot_tier),
+        editOptions: ["poor","standard","rich"],
+        badgeClass: (r) => ({poor:"admin-badge-blue",standard:"admin-badge-green",rich:"admin-badge-gold"}[r.loot_tier]||"admin-badge-blue"),
+        formatDisplay: (r) => ({poor:"Słabe",standard:"Standardowe",rich:"Bogate"}[r.loot_tier]||r.loot_tier),
       },
-      { key: "boss_enemy",    label: "Boss",          editable: true },
-      { key: "atmosphere",    label: "Atmosfera",     editable: true, popup: true },
-      { key: "is_active",     label: "Aktywny",       type: "boolean", editable: true },
+      { key: "boss_enemy",   label: "Boss",       editable: true },
+      { key: "is_active",    label: "Aktywny",    type: "boolean", editable: true },
     ];
 
     renderTable(tableHost, cols, rows, {
-      tableId: "dungeons",
-      showTextSearch: true,
-      searchPlaceholder: "Szukaj lochów…",
+      tableId: "dungeons", showTextSearch: true, searchPlaceholder: "Szukaj lochów…",
       async onEdit(row, colKey, newVal) {
         try {
-          await adminFetch(`/api/admin/dungeons/${row.key}`, { method: "PATCH", body: JSON.stringify({ [colKey]: newVal }) });
+          await adminFetch(`/api/admin/dungeons/${row.key}`, { method:"PATCH", body:JSON.stringify({[colKey]:newVal}) });
           showToast("Zapisano.", "success"); await load();
-        } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); throw e; }
+        } catch (e) { showToast("Błąd: " + (e.message||"?"), "error"); throw e; }
       },
       async onDelete(row) {
         try {
-          await adminFetch(`/api/admin/dungeons/${row.key}`, { method: "DELETE" });
+          await adminFetch(`/api/admin/dungeons/${row.key}`, { method:"DELETE" });
           showToast("Usunięto.", "success"); await load();
-        } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); throw e; }
+        } catch (e) { showToast("Błąd: " + (e.message||"?"), "error"); throw e; }
       },
-      extraActions: (row) => [{ label: "Edytuj", class: "secondary-btn", onClick: () => _openDungeonModal(row, load) }],
+      extraActions: (row) => [{ label:"Edytuj", class:"secondary-btn", onClick:() => _openDungeonModal(row, load) }],
     });
   };
 
-  addBtn.addEventListener("click", () => _openDungeonModal(null, load));
-  container.appendChild(addBtn);
-  container.appendChild(tableHost);
+  container.querySelector("#dungeon-add-btn").addEventListener("click", () => _openDungeonModal(null, load));
+
+  // FAB toggle
+  const fab = container.querySelector("#dungeon-ai-fab");
+  const chat = container.querySelector("#dungeon-ai-chat");
+  fab.addEventListener("click", () => { chat.hidden = !chat.hidden; if (!chat.hidden) container.querySelector("#dungeon-ai-prompt")?.focus(); });
+  container.querySelector("#dungeon-ai-close").addEventListener("click", () => { chat.hidden = true; });
+
+  // AI generator
+  const renderAiMsgs = () => {
+    msgsEl.innerHTML = aiHistory.map(m => `
+      <div class="dungeon-ai-msg dungeon-ai-msg--${m.role}">
+        <span class="dungeon-ai-msg-role">${m.role === "user" ? "Ty" : "AI"}</span>
+        <span>${m.content}</span>
+      </div>`).join("") +
+      (aiDraft ? `<div class="dungeon-ai-draft">
+        <div class="dungeon-ai-draft-title">Gotowy szkic: <strong>${aiDraft.label || aiDraft.key}</strong></div>
+        <div class="dungeon-ai-draft-info">${aiDraft.rooms || "?"} pokoi · Boss: ${aiDraft.boss_enemy || "brak"} · ${aiDraft.atmosphere?.slice(0,60)||""}…</div>
+        <div class="dungeon-ai-draft-btns">
+          <button class="primary-btn small-btn" id="dungeon-ai-open-modal">Edytuj i dodaj</button>
+          <button class="secondary-btn small-btn" id="dungeon-ai-save-direct">Zapisz od razu</button>
+        </div>
+      </div>` : "");
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+
+    if (aiDraft) {
+      container.querySelector("#dungeon-ai-open-modal")?.addEventListener("click", () => {
+        _openDungeonModal(aiDraft, load);
+      });
+      container.querySelector("#dungeon-ai-save-direct")?.addEventListener("click", async () => {
+        try {
+          await adminFetch("/api/admin/dungeons", { method:"POST", body:JSON.stringify(aiDraft) });
+          showToast("Loch dodany!", "success"); aiDraft = null; aiHistory = []; renderAiMsgs(); await load();
+        } catch (e) { showToast(e.message||"Błąd", "error"); }
+      });
+    }
+  };
+
+  const genBtn = container.querySelector("#dungeon-ai-btn");
+  const promptEl = container.querySelector("#dungeon-ai-prompt");
+
+  genBtn.addEventListener("click", async () => {
+    const msg = promptEl.value.trim();
+    if (!msg) { showToast("Opisz loch.", "info"); return; }
+    genBtn.disabled = true; genBtn.textContent = "Generuję…";
+    try {
+      const res = await adminFetch("/api/admin/assistant/draft", {
+        method:"POST",
+        body: JSON.stringify({ resource:"game_dungeons", message:msg, history:aiHistory }),
+      });
+      aiHistory.push({ role:"user", content:msg });
+      aiHistory.push({ role:"assistant", content: res.assistant_reply || "Gotowe." });
+      aiDraft = res.draft || null;
+      promptEl.value = "";
+      renderAiMsgs();
+    } catch (e) {
+      showToast("Błąd AI: " + (e.message||"?"), "error");
+    } finally {
+      genBtn.disabled = false; genBtn.textContent = "Generuj";
+    }
+  });
+  promptEl.addEventListener("keydown", e => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) genBtn.click();
+  });
+
   await load();
 }
 
@@ -1263,6 +1360,25 @@ function _openDungeonModal(row, onDone) {
     <label class="modal-field"><span>Atmosfera (opis klimatu)</span>
       <textarea name="atmosphere" rows="3" placeholder="Ciasne tunele, smród gnijącego mięsa…">${_esc(row?.atmosphere ?? "")}</textarea>
     </label>
+    <div class="modal-field-divider"></div>
+    <label class="modal-field"><span>Tabela łupów — skrzynie</span>
+      <input name="chest_loot_table_key" type="text" value="${_esc(row?.chest_loot_table_key ?? "")}" placeholder="np. chest_goblin_warren"/>
+    </label>
+    <label class="modal-field"><span>Tabela łupów — boss</span>
+      <input name="boss_loot_table_key" type="text" value="${_esc(row?.boss_loot_table_key ?? "")}" placeholder="np. chest_goblin_warren"/>
+    </label>
+    <label class="modal-field"><span>Szansa na łup z komnaty (0.0–1.0)</span>
+      <input name="room_loot_chance" type="number" value="${row?.room_loot_chance ?? 0.15}" min="0" max="1" step="0.05"/>
+    </label>
+    <div class="modal-field-divider"></div>
+    <label class="modal-field"><span>Źródło zagadek</span>
+      <select name="riddle_source">
+        ${["database","llm","mixed"].map(s=>`<option value="${s}" ${(row?.riddle_source??"database")===s?"selected":""}>${{database:"Baza danych (bezpieczne)",llm:"LLM (eksperymentalne)",mixed:"Mieszane"}[s]}</option>`).join("")}
+      </select>
+    </label>
+    <label class="modal-field"><span>Maks. podpowiedzi do zagadki</span>
+      <input name="riddle_max_hints" type="number" value="${row?.riddle_max_hints ?? 2}" min="0" max="5"/>
+    </label>
     <label class="modal-checkbox-row">
       <input name="is_active" type="checkbox" ${(row?.is_active ?? 1) ? "checked" : ""}>
       <span>Aktywny</span>
@@ -1281,15 +1397,20 @@ function _openDungeonModal(row, onDone) {
           if (!key || !label) { showToast("Klucz i nazwa są wymagane.", "error"); return; }
           const body = {
             key, label,
-            location_key:   g("location_key").value.trim() || key,
-            rooms:          parseInt(g("rooms").value) || 5,
-            enemy_pool:     g("enemy_pool").value.trim() || "[]",
-            boss_enemy:     g("boss_enemy").value.trim() || null,
-            loot_tier:      g("loot_tier").value,
-            cooldown_hours: parseInt(g("cooldown_hours").value) || 72,
-            min_level:      parseInt(g("min_level").value) || 1,
-            atmosphere:     g("atmosphere").value.trim() || null,
-            is_active:      g("is_active").checked ? 1 : 0,
+            location_key:         g("location_key").value.trim() || key,
+            rooms:                parseInt(g("rooms").value) || 5,
+            enemy_pool:           g("enemy_pool").value.trim() || "[]",
+            boss_enemy:           g("boss_enemy").value.trim() || null,
+            loot_tier:            g("loot_tier").value,
+            cooldown_hours:       parseInt(g("cooldown_hours").value) || 72,
+            min_level:            parseInt(g("min_level").value) || 1,
+            atmosphere:           g("atmosphere").value.trim() || null,
+            chest_loot_table_key: g("chest_loot_table_key").value.trim() || null,
+            boss_loot_table_key:  g("boss_loot_table_key").value.trim() || null,
+            room_loot_chance:     parseFloat(g("room_loot_chance").value) || 0.15,
+            riddle_source:        g("riddle_source").value,
+            riddle_max_hints:     parseInt(g("riddle_max_hints").value) || 2,
+            is_active:            g("is_active").checked ? 1 : 0,
           };
           try {
             if (isEdit) await adminFetch(`/api/admin/dungeons/${row.key}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -1298,6 +1419,117 @@ function _openDungeonModal(row, onDone) {
             c(); await onDone();
           } catch (e) { showToast(e.message || "Błąd zapisu", "error"); }
         }},
+    ],
+  });
+}
+
+// ── Riddle Bank ───────────────────────────────────────────────────────────────
+
+async function _renderRiddles(container) {
+  const addBtn = document.createElement("button");
+  addBtn.className = "primary-btn";
+  addBtn.textContent = "+ Dodaj zagadkę";
+  container.appendChild(addBtn);
+  const tableHost = document.createElement("div");
+  tableHost.style.marginTop = "12px";
+  container.appendChild(tableHost);
+
+  const DIFF_LABELS = {1:"Łatwa",2:"Średnia",3:"Trudna"};
+  const THEMES = ["general","dungeon","magic","nature","death"];
+
+  const load = async () => {
+    renderTable(tableHost, null, null, {});
+    let rows;
+    try { rows = (await adminFetch("/api/admin/riddles")).items || []; }
+    catch (e) { showToast("Błąd: " + (e.message||"?"), "error"); return; }
+
+    const cols = [
+      { key: "key",        label: "Klucz",      editable: false },
+      { key: "text",       label: "Treść zagadki", editable: false,
+        formatDisplay: (r) => r.text?.slice(0,60) + (r.text?.length > 60 ? "…" : "") },
+      { key: "answer",     label: "Odpowiedź",  editable: true },
+      { key: "difficulty", label: "Trudność",
+        type: "badge", editType: "select", editOptions: [1,2,3],
+        badgeClass: (r) => ({1:"admin-badge-green",2:"admin-badge-gold",3:"admin-badge-red"}[r.difficulty]||"admin-badge-muted"),
+        formatDisplay: (r) => DIFF_LABELS[r.difficulty] || r.difficulty,
+      },
+      { key: "theme",      label: "Motyw",      editable: true, type: "select-dropdown",
+        editOptions: THEMES.map(t => ({value:t,label:t})) },
+      { key: "is_active",  label: "Aktywna",    type: "boolean", editable: true },
+    ];
+
+    renderTable(tableHost, cols, rows, {
+      showTextSearch: true, searchPlaceholder: "Szukaj zagadek…",
+      async onEdit(row, colKey, newVal) {
+        const updated = {...row, [colKey]: newVal,
+          answer_alts: Array.isArray(row.answer_alts) ? row.answer_alts : [],
+          hints: Array.isArray(row.hints) ? row.hints : [] };
+        try {
+          await adminFetch(`/api/admin/riddles/${row.key}`, { method:"PATCH", body: JSON.stringify(updated) });
+          showToast("Zapisano.", "success"); await load();
+        } catch (e) { showToast("Błąd: " + (e.message||"?"), "error"); throw e; }
+      },
+      async onDelete(row) {
+        try {
+          await adminFetch(`/api/admin/riddles/${row.key}`, { method:"DELETE" });
+          showToast("Usunięto.", "success"); await load();
+        } catch (e) { showToast("Błąd: " + (e.message||"?"), "error"); throw e; }
+      },
+      extraActions: (row) => [{ label: "Edytuj", class: "secondary-btn", onClick: () => _openRiddleModal(row, load) }],
+    });
+  };
+
+  addBtn.addEventListener("click", () => _openRiddleModal(null, load));
+  await load();
+}
+
+function _openRiddleModal(row, onDone) {
+  const isEdit = !!row;
+  const THEMES = ["general","dungeon","magic","nature","death"];
+  const form = document.createElement("div");
+  form.className = "modal-form";
+  const alts = Array.isArray(row?.answer_alts) ? row.answer_alts.join("\n") : "";
+  const hints = Array.isArray(row?.hints) ? row.hints.join("\n") : "";
+  form.innerHTML = `
+    <label class="modal-field"><span>Klucz</span><input name="key" type="text" value="${_esc(row?.key??'')}" ${isEdit?"readonly":""} placeholder="np. riddle_shadow" autocomplete="off"/></label>
+    <label class="modal-field"><span>Treść zagadki *</span><textarea name="text" rows="3" placeholder="Podążam za tobą w dzień, znikam w nocy. Czym jestem?">${_esc(row?.text??"")}</textarea></label>
+    <label class="modal-field"><span>Poprawna odpowiedź *</span><input name="answer" type="text" value="${_esc(row?.answer??"")}" placeholder="np. cień"/></label>
+    <label class="modal-field"><span>Alternatywne odpowiedzi (jedna per linia)</span><textarea name="answer_alts" rows="3" placeholder="shadow\ntwój cień\nmój cień">${_esc(alts)}</textarea></label>
+    <label class="modal-field"><span>Podpowiedzi (jedna per linia, od najogólniejszej)</span><textarea name="hints" rows="4" placeholder="Jestem czarny\nZnikam gdy nie ma słońca\nTo twój...">${_esc(hints)}</textarea></label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <label class="modal-field"><span>Trudność (1–3)</span><input name="difficulty" type="number" value="${row?.difficulty??1}" min="1" max="3"/></label>
+      <label class="modal-field"><span>Motyw</span>
+        <select name="theme">${THEMES.map(t=>`<option value="${t}"${(row?.theme??'general')===t?' selected':''}>${t}</option>`).join('')}</select>
+      </label>
+    </div>
+    <label class="modal-checkbox-row"><input name="is_active" type="checkbox" ${(row?.is_active??true)?"checked":""}><span>Aktywna</span></label>`;
+
+  openModal({
+    title: isEdit ? `Edytuj zagadkę: ${row.key}` : "Nowa zagadka",
+    content: form,
+    footer: [
+      { label: "Anuluj", class: "secondary-btn", onClick: c => c() },
+      { label: isEdit ? "Zapisz" : "Dodaj", class: "primary-btn", onClick: async c => {
+        const g = n => form.querySelector(`[name="${n}"]`);
+        const text = g("text").value.trim();
+        const answer = g("answer").value.trim();
+        if (!text || !answer) { showToast("Treść i odpowiedź są wymagane.", "error"); return; }
+        const alts = g("answer_alts").value.trim().split("\n").map(s=>s.trim()).filter(Boolean);
+        const hintsList = g("hints").value.trim().split("\n").map(s=>s.trim()).filter(Boolean);
+        const body = {
+          key: isEdit ? row.key : g("key").value.trim() || undefined,
+          text, answer, answer_alts: alts, hints: hintsList,
+          difficulty: parseInt(g("difficulty").value)||1,
+          theme: g("theme").value,
+          is_active: g("is_active").checked,
+        };
+        try {
+          if (isEdit) await adminFetch(`/api/admin/riddles/${row.key}`, { method:"PATCH", body:JSON.stringify(body) });
+          else        await adminFetch("/api/admin/riddles",             { method:"POST",  body:JSON.stringify(body) });
+          showToast(isEdit?"Zapisano.":"Dodano zagadkę.", "success");
+          c(); await onDone();
+        } catch (e) { showToast(e.message||"Błąd", "error"); }
+      }},
     ],
   });
 }

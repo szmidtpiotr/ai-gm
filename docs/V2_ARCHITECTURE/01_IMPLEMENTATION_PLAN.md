@@ -49,7 +49,7 @@
 | 05 | TASK_05_HP_MANA_FORMULAS | ✅ | HP = base + CON_mod × level. Mana = 8 + INT_mod × level (Scholar) |
 | 06 | TASK_06_CHARACTER_WIZARD | ✅ | 4-step wizard, GM identity generation, secret predisposition |
 | 07 | TASK_07_CAMPAIGN_PLAN_GENERATION | ✅ | LLM generates from character + Ideas Bank |
-| 42 | TASK_42_PERSISTENT_HERO | ❌ | Hero lives across campaigns, rest state, adventure selection |
+| 42 | TASK_42_PERSISTENT_HERO | ✅ | Hero-first model: hero persists across campaigns, idle/active status, campaign unlink on delete |
 
 ### Phase 03 — World
 > Depends on Phase 01.
@@ -94,8 +94,8 @@
 | 24 | TASK_24_WOUND_LABELS | ✅ | HP% thresholds, narrator injection, HP bar colour |
 | 25V2 | TASK_25_XP_PROGRESSION_V2 | ✅ | WFRP style: everything purchased with XP, magic tied to INT |
 | 26 | TASK_26_SCHOLAR_SPELLS | ✅ | Spell list, Arcane Points, upgrade tiers, miscast scaling, rank-by-usage |
-| 42 | TASK_42_CHARACTER_FIRST_FLOW | ❌ | **PREREQUISITE for 41** — invert campaign→character to character→campaign/dungeon |
-| 41 | TASK_41_DUNGEON_RUNS | ✅ | Standalone farmable dungeons, cooldown, scaling — requires Task 42 |
+| 42 | TASK_42_CHARACTER_FIRST_FLOW | ✅ | Hero-first model complete — hero→campaign selection, cascade unlink on delete, session restore |
+| 41 | TASK_41_DUNGEON_RUNS | ✅ | Backend + full player UI: picker modal, room types, riddle bank, square tile map, death handling, F5 restore |
 
 ### Phase 07 — Narrator
 > Depends on Phase 04, 05.
@@ -116,7 +116,7 @@
 | 31 | TASK_31_CAMPAIGN_WORKSHOP | ✅ | Campaign workshop tab inside campaign detail modal |
 | 32 | TASK_32_WORLD_REVIEW_QUEUE | ✅ | Approve/reject pending world entries — Lokacje/NPC/Przeciwnicy |
 | 33SA | TASK_33_SMART_ENTRY_AGENT | ⚠️ | Form-first approach built; Q&A questionnaire mode missing |
-| 40 | TASK_40_WORLD_BUILDER | ❌ | **Hex grid map** — Honeycomb.js + SVG, terrain painting, 1h-per-hex travel, encounter rolls |
+| 40 | TASK_40_WORLD_BUILDER | ✅ | Hex grid SVG, axial coords, A* travel, encounter rolls, terrain types, world builder admin tab |
 
 ### Phase 09 — Frontend
 > Depends on Phase 04, 05, 06.
@@ -124,10 +124,11 @@
 | Task | File | Status | Notes |
 |------|------|--------|-------|
 | 33 | TASK_33_HYBRID_INPUT_UI | ❌ | Context buttons + free text, suggested_actions[] API |
-| 34 | TASK_34_COMBAT_UI | ❌ | Initiative panel, zone display, crit flash, roll popups |
-| 35 | TASK_35_CHARACTER_SHEET_UI | ❌ | Stats, skills, spells, equipment slots, conditions |
-| 43 | TASK_43_PLAYER_WORLD_MAP | ❌ | Fog-of-war world map, click-to-travel |
+| 34 | TASK_34_COMBAT_UI | ⚠️ | Spell picker done; initiative panel, zone display, crit flash still missing |
+| 35 | TASK_35_CHARACTER_SHEET_UI | ✅ | Stats+mods, mana, XP, conditions, spells tab (Scholar), LCK |
+| 43 | TASK_43_PLAYER_WORLD_MAP | ✅ | Fog-of-war world map, click-to-travel, swipe-close |
 | 44 | TASK_44_DEBUG_SYSTEM | ❌ | Admin debug drawer, /debug commands, DB key display |
+| 46 | TASK_46_NARRATIVE_ITEMS | ❌ | **Spec complete** — see `docs/V2_ARCHITECTURE/TASK_NARRATIVE_ITEMS.md` |
 
 ### Phase 10 — Polish
 > Depends on everything.
@@ -441,3 +442,169 @@ Work completed as of 2026-05-14 that was not in the original V2 plan:
 - Campaign detail modal: 4 tabs — Przegląd, Plan GM, Tury, Warsztat
 - Plan GM tab: all arcs shown read-only, hooks rendered as lists (NPCs / Lokacje / Przedmioty)
 - Świat section: builder tab placeholder + Oczekujące (pending review) sub-tab
+
+### Session 2026-05-15 — Loot System, Admin Map, Bug Fixes
+
+**Loot System Rework:**
+- `game_config_loot_entries` rebuilt with `consumable_key` column + 3-way XOR constraint (item_key | consumable_key | weapon_key = exactly 1)
+- Fixed `_finalize_phase_8h_loot_entries` that was stripping consumable_key on every restart
+- New `source_type`/`source_key` API for loot entry create (frontend-driven)
+- `delete_loot_entry_by_id` endpoint (`DELETE /api/admin/loot-tables/{key}/entries/by-id/{id}`)
+- Admin frontend: inline editing (click weight/min/max to edit in place), source type badges
+
+**Enemy Loot Auto-Creation:**
+- `create_enemy()` in admin_config.py auto-creates `loot_{key}` table and assigns it
+- `approve_entity()` in world_service.py creates loot table when pending enemy is approved
+- `_backfill_enemy_loot_tables()` migration: 53 existing enemies got loot tables on restart
+- Enemy edit modal (world.js + content.js): "Tabela łupów" dropdown + "Szansa na łup %" field
+
+**Bug Fixes:**
+- Campaign deletion cascade: `DELETE FROM characters` → `UPDATE SET campaign_id=NULL, status='idle'` — hero no longer deleted with its campaign
+- Hero data refreshed in frontend after campaign deletion (stale campaign_id was blocking re-assignment)
+- `handleNewCampaignWithHero`: always reassigns hero regardless of stale campaign_id
+- `selectCampaign`: hero in wrong campaign now gets properly re-assigned instead of falling back to wizard
+- Input stuck disabled: Escape key + visibilitychange recovery handler; `_skillTestPending` flag prevents premature re-enable
+
+**Admin Campaign Monitor:**
+- Delete (🗑) button on each campaign card
+- New "🗺 Mapa" tab: SVG hex grid of all world hexes with campaign overlay, click-to-edit campaign-specific fields (discovered, encounter_cleared, campaign_label, campaign_notes)
+- Backend: `GET /api/admin/campaigns/{id}/hex-map`, `PATCH /api/admin/campaigns/{id}/hex-map/{q}/{r}`
+
+### Dungeon Runs — Full Design (2026-05-15)
+
+Task 41 backend is complete. Player UI not yet built. Full design agreed:
+
+**Flow:**
+- Entry: "Loch" card on campaign selection screen (currently "Wkrótce") → Dungeon Picker modal
+- Mid-campaign access: `/loch` slash command or header icon; saves `session_flags.dungeon_previous_campaign_id`, restores on exit
+- Session model: Option B — disposable campaign (`mode: "dungeon"`) created on entry, deleted/ended on completion
+- Hero returns to previous campaign automatically after dungeon ends
+
+**Death:**
+- Soft fail: run ends, cooldown starts, hero exits with HP = campaign state (HP they had when entering)
+- Admin switch: `dungeon_death_hp_mode` in game_config: `"campaign_state"` (default) | `"one_hp"` (punishing mode)
+- Future: tie to dungeon difficulty level
+
+**Loot — Three tiers:**
+- Combat rooms: `enemy.loot_table_key` (existing) + `room_loot_chance` (float) for ambient post-combat find
+- Chest rooms: `chest_loot_table_key` on `game_dungeons`
+- Boss room: `boss_loot_table_key` on `game_dungeons` — guaranteed drop, should include dungeon-exclusive items
+
+**Dungeon-exclusive items:**
+- `source_exclusive` TEXT column on `game_config_items` AND `game_config_weapons`
+- `NULL` = everywhere, `'dungeon'` = dungeon drops only, `'boss'` = boss drops only
+- Shops and regular world loot auto-filter `source_exclusive IS NOT NULL`
+
+**Room types (configurable via `room_types_json` on dungeon):**
+| Type | Frequency | Mechanic |
+|------|-----------|---------|
+| `combat` | ~50% | Standard fight |
+| `chest` | ~15% | Auto-loot from chest_loot_table, advance immediately |
+| `trap` | ~15% | Skill check (DEX/WIS), fail = damage/debuff, can still advance |
+| `riddle` | ~10% | Riddle from DB bank, deterministic answer check |
+| `rest` | ~5% | HP recovery, atmospheric narration |
+| `boss` | Last room always | Combat, drops from boss_loot_table |
+
+**Riddle system — Riddle Bank:**
+- `game_config_riddles` table: `key`, `text`, `answer`, `answer_alts` (JSON), `hints` (JSON array), `difficulty` (1–3), `theme`, `is_active`
+- Answer checking: normalize (lowercase, strip diacritics) → Levenshtein fuzzy match ~80% threshold — NO LLM for answer judging
+- `dungeon_riddle_source` per dungeon: `"database"` (safe/default) | `"llm"` (experimental) | `"mixed"`
+- `dungeon_riddle_max_hints` global + per-dungeon override
+- LLM only narrates atmosphere, does NOT generate or judge riddles in database mode
+- Admin: Riddle Bank CRUD (World section or System section), 10–15 Polish dark-fantasy seeds
+
+**XP/Items carry-over:** Yes — `character_inventory` and `sheet_json` are `character_id`-scoped, not campaign-scoped. Dungeon loot automatically appears in main campaign.
+
+**Schema additions needed:**
+- `game_dungeons`: + `chest_loot_table_key`, `boss_loot_table_key`, `room_loot_chance`, `room_types_json`, `riddle_source`, `riddle_max_hints`
+- `game_config_riddles`: new table
+- `game_config_items` + `game_config_weapons`: + `source_exclusive TEXT`
+- `game_config` key: `dungeon_death_hp_mode`
+
+### GM Narrative Formatting (2026-05-15)
+
+Distinguish narrative types inside GM chat bubbles:
+- **Dialog** (`„..."` Polish quotes, `—` em-dash lines): italic + warm amber color `#d4a565`, left border accent on em-dash paragraphs
+- **Description**: unchanged default styling
+- **Inline mixing**: single paragraph can have both — quoted spans get italic/amber, surrounding text stays default
+- Implemented in `formatGmNarrative()` replacing `formatMessageContent()` for GM bubbles only
+- No new fonts — italic + color is sufficient for the dark fantasy context
+
+### Dungeon V2 — Final State (2026-05-16)
+
+**What was built (complete):**
+
+#### Backend
+- `game_dungeons` extended: `chest_loot_table_key`, `boss_loot_table_key`, `room_loot_chance`, `room_types_json`, `riddle_source`, `riddle_max_hints`
+- `game_config_riddles` table: `key`, `text`, `answer`, `answer_alts` (JSON), `hints` (JSON), `difficulty` (1–3), `theme`, `is_active`
+- 12 Polish dark-fantasy riddles seeded (difficulties 1–3, themes: general/dungeon/magic/nature/death)
+- `source_exclusive` on `game_config_items` + `game_config_weapons`: NULL=everywhere, `'dungeon'`=dungeon only, `'boss'`=boss only
+- `game_config_meta` keys: `dungeon_death_hp_mode` (campaign_state|one_hp), `dungeon_riddle_max_hints` (default 2)
+- `dungeon_service.py`: room type generation (combat/chest/trap/riddle/rest/boss), riddle pick from DB, deterministic fuzzy answer check (Levenshtein 80%), chest/boss loot rolling, death handling
+- New API endpoints: `POST /dungeons/resolve-room` (riddle/trap/chest/rest), `POST /dungeons/death`, `POST /dungeons/exit`
+- Admin API: `GET/POST/PATCH/DELETE /api/admin/riddles`
+
+#### Player Frontend (`frontend/front/`)
+- **"Loch" card** on campaign selection (amber styled, active)
+- **Dungeon Picker modal**: lists all dungeons with cooldown badges and atmosphere preview
+- **Dungeon HUD**: fixed bar below game header showing dungeon name + room progress pips (icons per type) + advance/map/exit buttons. Hidden on all non-game screens.
+- **Dungeon Map** (`#dungeon-map-overlay`): slide-up square tile grid, revealed room by room, auto-opens on first advance
+- **Riddle panel** (`#dungeon-riddle-panel`): text input + submit + hint button
+- **Dungeon Complete overlay**: boss loot list + cooldown timer + exit
+- F5 restore: detects `mode='dungeon'` on campaign, restores `_activeDungeonRun` + HUD
+- Disposable campaign model: dungeon creates tmp campaign (`mode='dungeon'`), deleted on exit
+
+#### Admin Panel (`frontend/admin_panel_v2/`)
+- **Świat → Lochy tab**: dungeon editor now includes chest/boss loot table keys, room_loot_chance, riddle_source, riddle_max_hints
+- **Świat → Zagadki tab** (NEW): full CRUD for `game_config_riddles` — list/add/edit/delete riddles with multi-line answer_alts and hints editors
+- Loot tables: 3 dungeon chest tables created (`chest_goblin_warren`, `chest_rat_tunnels`, `chest_crypt_of_bones`)
+
+#### Riddle System Design
+- Riddle bank (`game_config_riddles`) is the default mode — answers checked deterministically
+- `riddle_source` per dungeon: `"database"` (safe, default), `"llm"` (experimental), `"mixed"`
+- Answer normalization: lowercase + strip diacritics → exact match OR Levenshtein ≤ 20% edit distance
+- `riddle_max_hints` (global default: 2, per-dungeon override): LLM reveals hints from `hints[]` array in order
+- On hints exhausted: automatic fail penalty (1d4 damage) but player can still advance
+- LLM only narrates the room atmosphere — does NOT generate or judge riddle answers in database mode
+
+#### 34 Dungeon/Boss-Exclusive Items Created
+- 4 boss weapons (on-hit conditions), 2 dungeon weapons
+- 11 boss items (armor, misc, consumables — boss quality)
+- 17 dungeon items (consumables, armor, misc)
+- All items use only supported effects: `heal_hp`, `restore_mana`, `remove_condition`, `apply_condition`, `narrative_only`
+- `stat_buff`, `death_ward`, `passive`, `aoe` effects are NOT supported by the engine and were converted
+
+### Session 2026-05-16 — Dungeon Polish, Skill Tests, Data Cleanup
+
+**Dungeon runs — final polish:**
+- Dungeon HUD hidden on all non-game screens (wizard, heroes, campaigns); restored on return to game
+- Pre-LLM skill test keyword scan: player text checked against `trigger_keywords` BEFORE the LLM is called — no longer depends on LLM generating a `[SKILL_TEST:]` tag
+- Fixed trigger_keywords split: was comma-split, keywords are space-separated — now supports both
+- `_roll_dice_value` extended to handle `NdN+bonus` format (e.g. `"2d6+2"`) — was breaking healing potions
+- Rogue archetype added to character creation wizard: 🏹 card with `+2 ZRĘ · +1 SZCZ · HP: 8`, shortbow + dagger starter kit
+- Lockpicking skill added: `Otwieranie Zamków` (DEX), trigger keywords for locks/doors/chests
+
+**Admin panel — dungeon editor:**
+- Riddle Bank CRUD: `Świat → 🔮 Zagadki` — full add/edit/delete with multi-line answer_alts and hints
+- Backend: `GET/POST/PATCH/DELETE /api/admin/riddles`
+- Dungeon modal updated with V2 fields: chest/boss loot table keys, room_loot_chance, riddle_source, riddle_max_hints
+- Dungeon AI generator: floating 🤖 FAB in bottom-right corner → slide-up chat panel; generates dungeon from plain Polish description; AI pre-fills form or saves directly
+- Backend: `game_dungeons` added as `AssistantResourceLiteral` resource type
+
+**Game data cleanup:**
+- Stats: all 6 translated to Polish (Siła, Zręczność, Kondycja, Inteligencja, Mądrość, Charyzma)
+- Skills: all 16 translated to Polish + trigger_keywords filled for all
+- Conditions: 7 existing + 6 new (Spowolniony, Osłabiony, Ogarnięty Paniką, Sparaliżowany, Uciszony, Niewidzialny); `auto_remove` turn counts filled; `poisoned` → Polish
+- DC: all 5 descriptions filled
+- Spells: all 9 have Rank 2 + Rank 3 JSON
+- Items: `effect_json` filled for all healing potions, mana potions, bandages, antidotes, consumables
+- Archetypes: JSON fixed (was malformed), `hp_base` + `starter_gold_gp` editable
+- Dungeon/boss items: 34 exclusive items created (4 boss weapons, 2 dungeon weapons, 11 boss items, 17 dungeon items), all using only supported effects
+- `source_exclusive` column added to items + weapons (NULL/dungeon/boss)
+
+**Admin UI fixes:**
+- Items table: added `Opis`, `Efekt`, `Źródło` columns; modal includes `effect_json` + `source_exclusive`
+- Weapons table: `Szkoła Magii` column hidden (spells moved to separate tab)
+- Loot table sidebar: scrollable (fixed `height: 100%` + `overflow: hidden` on panel)
+- Loot entries: scrollable (max-height: 340px) + search filter with count
+- Archetypes: `hp_base`, `starter_gold_gp`, `starter_items_json` now visible and editable

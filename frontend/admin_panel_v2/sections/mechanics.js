@@ -608,14 +608,34 @@ async function _renderArchetypes(container) {
   catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); return; }
 
   const cols = [
-    { key: "key",         label: LABELS.key,         editable: false },
-    { key: "label",       label: LABELS.label,        editable: false },
-    { key: "hp_base",     label: "HP bazowe",         editable: false },
-    { key: "description", label: LABELS.description,  editable: false },
-    { key: "locked_at",   label: LABELS.locked,       type: "locked", editable: false },
+    { key: "key",               label: LABELS.key,         editable: false },
+    { key: "label",             label: LABELS.label,       editable: true },
+    { key: "hp_base",           label: "HP bazowe",        editable: true, type: "number" },
+    { key: "starter_gold_gp",   label: "Złoto startowe",   editable: true, type: "number" },
+    { key: "description",       label: LABELS.description, editable: true, popup: true },
+    { key: "starter_items_json",label: "Ekwipunek startowy", editable: true, popup: true,
+      formatDisplay: (r) => {
+        try { const items = JSON.parse(r.starter_items_json||"[]"); return `${items.length} przedm.`; } catch { return "—"; }
+      }},
+    { key: "locked_at",         label: LABELS.locked,      type: "locked", editable: false },
   ];
 
-  renderTable(tableHost, cols, rows, { showTextSearch: true, searchPlaceholder: "Szukaj archetypów…" });
+  renderTable(tableHost, cols, rows, {
+    showTextSearch: true,
+    searchPlaceholder: "Szukaj archetypów…",
+    async onEdit(row, colKey, newVal, { force } = {}) {
+      try {
+        await adminFetch(`/api/admin/archetypes/${row.key}`, {
+          method: "PATCH",
+          body: JSON.stringify({ [colKey]: newVal, ...(force ? { force: true } : {}) }),
+        });
+        showToast("Zapisano.", "success");
+        rows = (await adminFetch("/api/admin/archetypes")).items || [];
+        renderTable(tableHost, cols, rows, opts);
+      } catch (e) { showToast("Błąd: " + (e.message || "?"), "error"); throw e; }
+    },
+  });
+  const opts = {};
 }
 
 // ── AI Assistant ──────────────────────────────────────────────────────────────
