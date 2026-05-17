@@ -703,6 +703,15 @@ def create_standalone_character(req: dict = Body(...)):
         )
         conn.commit()
         char_id = cur.lastrowid
+
+        if archetype == "scholar":
+            try:
+                from app.services.spell_service import grant_starting_spells
+                grant_starting_spells(char_id, conn)
+                conn.commit()
+            except Exception as e:
+                logger.warning("[create_standalone_character] scholar starting spells failed (non-fatal): %s", str(e))
+
         row = conn.execute("SELECT * FROM characters WHERE id = ?", (char_id,)).fetchone()
         item = dict(row)
         try:
