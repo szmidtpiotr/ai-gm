@@ -3738,6 +3738,179 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   background: linear-gradient(90deg, #8a3030, #a04040);
 }
 
+/* ── Initiative Track (T34) ─────────────────────────────────────────────── */
+.initiative-track {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 4px 10px;
+  margin: -4px 0 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(201, 165, 74, 0.3) transparent;
+  position: relative;
+}
+.initiative-track:empty { display: none; }
+.initiative-track::-webkit-scrollbar { height: 4px; }
+.initiative-track::-webkit-scrollbar-thumb { background: rgba(201, 165, 74, 0.3); border-radius: 2px; }
+
+.init-chip {
+  flex: 0 0 auto;
+  min-width: 64px;
+  max-width: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 5px 8px 7px;
+  border: 1px solid rgba(120, 90, 60, 0.4);
+  border-radius: 7px;
+  background: linear-gradient(180deg, rgba(35, 25, 22, 0.7) 0%, rgba(22, 16, 14, 0.7) 100%);
+  position: relative;
+  cursor: default;
+  transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1),
+              box-shadow 220ms ease,
+              border-color 220ms ease,
+              opacity 320ms ease,
+              filter 600ms ease;
+}
+
+.init-chip__portrait {
+  font-size: 18px;
+  line-height: 1;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.5));
+}
+
+.init-chip__name {
+  font-family: 'IM Fell English', Georgia, serif;
+  font-size: 0.72rem;
+  line-height: 1.1;
+  color: rgba(232, 228, 220, 0.85);
+  margin-top: 3px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  letter-spacing: 0.02em;
+}
+
+.init-chip__ini {
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: rgba(201, 165, 74, 0.75);
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+.init-chip__hp {
+  width: 100%;
+  height: 3px;
+  margin-top: 5px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.init-chip__hp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6da64a, #9bc965);
+  transition: width 320ms ease, background 320ms ease;
+}
+.init-chip__hp-fill--mid { background: linear-gradient(90deg, #d49b30, #e8c155); }
+.init-chip__hp-fill--low { background: linear-gradient(90deg, #b03030, #d45050); }
+
+/* Player vs enemy border tint */
+.init-chip--player { border-color: rgba(120, 180, 100, 0.45); }
+.init-chip--enemy  { border-color: rgba(200, 80, 80, 0.45); }
+
+/* Active chip — gold glow, lift, caret */
+.init-chip--active {
+  transform: translateY(-3px) scale(1.06);
+  border-color: rgba(255, 215, 106, 0.85);
+  box-shadow:
+    0 0 0 1px rgba(255, 215, 106, 0.35),
+    0 6px 18px rgba(255, 180, 50, 0.25),
+    inset 0 1px 0 rgba(255, 215, 106, 0.25);
+  background: linear-gradient(180deg, rgba(60, 42, 24, 0.85) 0%, rgba(35, 25, 14, 0.85) 100%);
+}
+.init-chip--active .init-chip__name { color: #fff3d6; }
+.init-chip--active .init-chip__ini  { color: #ffd76a; }
+.init-chip--active::after {
+  content: '';
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #ffd76a;
+  filter: drop-shadow(0 0 4px rgba(255, 180, 50, 0.6));
+}
+
+/* Acted this round — dim */
+.init-chip--acted:not(.init-chip--active) {
+  opacity: 0.45;
+  filter: saturate(0.6);
+}
+.init-chip--acted:not(.init-chip--active) .init-chip__name { color: rgba(180, 175, 165, 0.65); }
+
+/* Downed — greyscale + diagonal slash */
+.init-chip--downed {
+  opacity: 0.55;
+  filter: grayscale(1) brightness(0.7);
+}
+.init-chip--downed .init-chip__name {
+  text-decoration: line-through;
+  text-decoration-color: rgba(220, 80, 80, 0.6);
+  color: rgba(160, 155, 145, 0.6);
+}
+.init-chip--downed::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0%,
+    transparent 47%,
+    rgba(220, 80, 80, 0.45) 49%,
+    rgba(220, 80, 80, 0.45) 51%,
+    transparent 53%,
+    transparent 100%
+  );
+  border-radius: 7px;
+  pointer-events: none;
+}
+
+/* New-round sweep */
+.initiative-track--new-round::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 215, 106, 0.18) 50%,
+    transparent 100%
+  );
+  pointer-events: none;
+  animation: initRoundSweep 600ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+}
+@keyframes initRoundSweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+/* Mobile: tighter chips */
+@media (max-width: 480px) {
+  .initiative-track { gap: 4px; padding: 6px 2px 8px; }
+  .init-chip { min-width: 54px; max-width: 84px; padding: 4px 6px 6px; }
+  .init-chip__portrait { font-size: 15px; }
+  .init-chip__name { font-size: 0.66rem; }
+  .init-chip__ini  { font-size: 0.56rem; }
+}
+
 .combat-banner__msg {
   margin-top: var(--space-sm);
   padding: var(--space-xs) var(--space-sm);
