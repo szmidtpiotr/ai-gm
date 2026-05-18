@@ -89,6 +89,7 @@ Global provider/credentials edited from `Admin Panel → Accounts`. Player UI "C
 | `campaigns` | `sections/campaigns_hub.js` → `campaigns.js` | Campaign monitor + Warsztat tab |
 | `analytics` | `sections/analytics.js` | Stats/usage charts |
 | `workshops` | `sections/workshops.js` | Bank pomysłów (Ideas Bank) |
+| `sandbox` | `sections/sandbox.js` | ⚔ Combat Sandbox — admin harness for testing combat mechanics on an isolated hero clone (issue #21) |
 | `voice` | `sections/voice.js` | Piper TTS settings |
 | `system` | `sections/system.js` | LLM presets, config export/import |
 
@@ -168,6 +169,32 @@ Standalone farmable dungeons separate from campaign story content.
 - Deleting a campaign sets `characters.campaign_id = NULL, status = 'idle'` — hero is freed, NOT deleted
 - `handleNewCampaignWithHero()` always reassigns the hero (no stale campaign_id check)
 - `selectCampaign()` auto-assigns the current hero to any campaign it's not already in
+
+### Combat Sandbox (admin testing harness)
+
+Admin-only feature at `/admin2/` → ⚔ Sandbox. Reuses the production combat engine — anything verified there matches real gameplay behavior. Use it to test combat mechanics without playing through narrative.
+
+- Router: `backend/app/routers/sandbox.py` at `/api/admin/sandbox/*`
+  - `GET /heroes`, `GET /enemies`, `GET /character/{id}`
+  - `POST /setup` — creates a disposable clone of the chosen hero (name `[SBX] <orig>`, sheet tagged `__sandbox_clone__=true`). Inventory + spells cloned via `character_inventory` / `character_spells` copy. **Original hero never touched**, even if the clone dies in sandbox combat. Prior clones purged on each setup.
+  - `POST /start-combat`, `POST /reset-hero`, `POST /end-combat`, `POST /advance-turn`
+- Frontend section: `frontend/admin_panel_v2/sections/sandbox.js`
+  - 3-column layout: Setup + Character Sheet card / Live combat state + actions / Log + Kopiuj raport
+  - Auto-processes enemy turns (750 ms delay); manual override button retained
+  - Combat events feed mirrors player UI roll cards, filtered to active combat_id only
+  - 📋 Kopiuj raport — bundles hero + inventory + spells + combat state + events + log into clipboard markdown for bug reports
+- Heroes are filtered out of the picker via `name NOT LIKE '[SBX] %' AND sheet_json.__sandbox_clone__ != 1` so admins never accidentally pick a clone as the source.
+- Implementation record: issue #21. Companion #22 tracks future Playwright autotest integration.
+
+### Combat Zones (T34 — engaged/ranged)
+
+Per `docs/V2_ARCHITECTURE/04_MAGIC_RANGE_MAP.md §4`. Each combatant has `zone: 'engaged' | 'ranged'` in the `combatants` JSON.
+
+- **Defaults at combat start**: Warrior → engaged, Scholar → ranged. Enemy zone via keyword heuristic in `combat_service._default_zone_for_enemy()` (archer/mage/shaman/łucznik/kusznik/etc. → ranged; default → engaged).
+- **Player melee gating**: if attacker has a melee weapon and target is in a different zone, `resolve_attack` returns `{blocked: true, block_reason: 'out_of_range'}` **without consuming the turn**. Player must close (use the Zbliż się button) or switch to a ranged option.
+- **Enemy AI charging**: melee enemy in wrong zone uses its turn to close (zone-change to player's zone), no attack that round. Tracked via `combat_turns.event_type='zone_change'`.
+- **Zone change action**: `POST /api/campaigns/{id}/combat/zone-change` calls `change_player_zone(campaign_id)` which toggles the player's zone and advances the turn.
+- Frontend combat banner splits into DYSTANS / ZWARCIE columns. Composer gets a Zbliż się / Cofnij się button. Initiative chips show 🏹 (ranged) or ⚔ (engaged) glyph.
 
 ## Locked Game Mechanics (do not modify without explicit approval)
 
