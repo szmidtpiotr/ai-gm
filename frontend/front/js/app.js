@@ -2870,6 +2870,7 @@ function renderCombatUI(cs) {
         const ini = c.initiative_roll != null ? `INI ${c.initiative_roll}` : '';
         if (isPlayer) {
             const hpPct = pct > 60 ? 'high' : (pct > 25 ? 'mid' : 'low');
+            const woundHTML = renderWoundLabelHTML(hpCur, hpMax);
             return `
                 <div class="combat-combatant combat-combatant--player">
                     <div class="combat-combatant__icon">🛡️</div>
@@ -2885,6 +2886,7 @@ function renderCombatUI(cs) {
                         <div class="combat-enemy__bar">
                             <div class="combat-enemy__bar-fill combat-player__bar-fill--${hpPct}" style="width: ${pct}%"></div>
                         </div>
+                        ${woundHTML}
                     </div>
                 </div>`;
         }
@@ -3335,6 +3337,19 @@ function populateCharacterSheet(character) {
     const maxHp = Math.max(1, sheet.max_hp ?? character.max_hp ?? 29);
     elements.sheetHp.textContent = `${hp} / ${maxHp}`;
     elements.sheetHpBar.style.width = `${Math.max(0, Math.min(100, (hp / maxHp) * 100))}%`;
+
+    // Wound label (T24 / W1) — appears below HP bar when HP ≤ 75%
+    const hpCard = elements.sheetHp?.closest('.stat-card--hp');
+    if (hpCard) {
+        let woundEl = hpCard.querySelector('.wound-label');
+        const html = renderWoundLabelHTML(hp, maxHp);
+        if (html) {
+            if (!woundEl) { hpCard.insertAdjacentHTML('beforeend', html); }
+            else { woundEl.outerHTML = html; }
+        } else if (woundEl) {
+            woundEl.remove();
+        }
+    }
 
     // Mana (Scholar)
     const mana = sheet.current_mana ?? 0;
@@ -3986,6 +4001,27 @@ function showJournalText(text) {
     elements.journalBody.innerHTML = renderJournalMarkdown(text);
     elements.journalBody.style.display = 'block';
     elements.journalEmpty.style.display = 'none';
+}
+
+// Wound label — mirrors backend get_wound_label() in economy_service.py.
+// Returns { label, tier, color } or null when HP > 75% (no label).
+// Tiers map to CSS classes so styling is decoupled from numbers.
+function getWoundLabel(currentHp, maxHp) {
+    const hp = Math.max(0, Number(currentHp) || 0);
+    const max = Math.max(1, Number(maxHp) || 1);
+    const pct = (hp / max) * 100;
+    if (pct >= 76) return null;
+    if (pct >= 51) return { label: 'Ranny',             tier: 'minor',    color: '#ffc107' };
+    if (pct >= 26) return { label: 'Ciężko Ranny',      tier: 'impaired', color: '#ff9800' };
+    if (pct >= 11) return { label: 'Poważnie Ranny',    tier: 'desperate',color: '#f44336' };
+    return            { label: 'Na Skraju Śmierci', tier: 'near_death',color: '#7f0000' };
+}
+
+// Render markup for a wound label, or empty string when above threshold.
+function renderWoundLabelHTML(currentHp, maxHp) {
+    const w = getWoundLabel(currentHp, maxHp);
+    if (!w) return '';
+    return `<div class="wound-label wound-label--${w.tier}" aria-label="${w.label}"><span class="wound-label__orn">❦</span><span class="wound-label__text">${w.label}</span><span class="wound-label__orn">❦</span></div>`;
 }
 
 function escapeHtml(s) {
