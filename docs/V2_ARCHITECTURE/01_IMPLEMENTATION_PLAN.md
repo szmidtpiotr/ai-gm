@@ -124,7 +124,7 @@
 | Task | File | Status | Notes |
 |------|------|--------|-------|
 | 33 | TASK_33_HYBRID_INPUT_UI | ✅ | Context buttons + free text, suggested_actions[] API, structured bypass |
-| 34 | TASK_34_COMBAT_UI | ⚠️ | Spell picker ✅, initiative panel ✅ (#18), zone system ✅ (#19); crit flash still missing |
+| 34 | TASK_34_COMBAT_UI | ✅ | Spell picker, initiative panel (#18), zone system (#19), crit flash (#23) — all sub-tasks complete |
 | 35 | TASK_35_CHARACTER_SHEET_UI | ✅ | Stats+mods, mana, XP, conditions, spells tab (Scholar), LCK |
 | 43 | TASK_43_PLAYER_WORLD_MAP | ✅ | Fog-of-war world map, click-to-travel, swipe-close |
 | 44 | TASK_44_DEBUG_SYSTEM | ❌ | Admin debug drawer, /debug commands, DB key display |
