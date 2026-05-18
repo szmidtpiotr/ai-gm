@@ -1,9 +1,17 @@
 # TASK 26 — XP Configuration Panel + XP Log
 
-**Status:** ✅ Done — commit `5fb1b9a` (2026-05-13)
+**Status:** ⚠ Admin side ✅, **player UI niezaimplementowany, 21/22 źródeł niepodpiętych** — patrz `AUDIT_2026_05_18.md`.
+
 **Phase:** 06 — Economy
 **Depends on:** Task 25V2 (XP system design), Task 01 (DB Schema)
 **Unlocks:** Admin can tune XP economy without code changes; players can trace their earnings
+
+> **2026-05-18 audit:** Seed danych (22 źródeł XP) + admin endpointy ✅ (commit `5fb1b9a`). ALE:
+> - **Tylko `combat.kill_*` faktycznie wywołuje `grant_character_xp`** w aplikacji. Pozostałe 21 źródeł (campaign tags, exploration triggers, skill DC bonuses, narrative XP_GRANT, session) **są seeded w bazie ale nigdy nie strzelają** — martwy kod do podpięcia w Stage 2D ROADMAP.md.
+> - **Player "Historia PD" view** nie zaimplementowane (endpoint istnieje, frontend nie czyta).
+> - **Admin XP Report endpoint** istnieje, używany w admin panel.
+>
+> Stage 2D w roadmap rozbija wpięcie 22 źródeł na 15 sub-itemów (XS1–XS15).
 
 ---
 
