@@ -3850,3 +3850,22 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .sandbox-row-bar-fill--mid  { background: linear-gradient(90deg, #d49b30, #e8c155); }
 .sandbox-row-bar-fill--low  { background: linear-gradient(90deg, #b03030, #d45050); }
 .sandbox-row--down .sandbox-row-bar-fill { background: rgba(80, 80, 80, 0.4); }
+
+/* Sandbox log column header with copy button */
+.sandbox-log-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; margin-bottom: 6px;
+}
+.sandbox-copy-btn {
+  padding: 4px 9px;
+  font-size: 0.72rem;
+  background: rgba(201, 165, 74, 0.12);
+  color: var(--accent-gold);
+  border: 1px solid rgba(201, 165, 74, 0.35);
+  border-radius: 4px;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: background 0.15s, border-color 0.15s;
+}
+.sandbox-copy-btn:hover { background: rgba(201, 165, 74, 0.25); border-color: var(--accent-gold); }
+.sandbox-copy-btn:active { transform: translateY(1px); }
