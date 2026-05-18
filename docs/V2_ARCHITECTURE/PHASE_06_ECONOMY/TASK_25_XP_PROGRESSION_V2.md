@@ -1,8 +1,30 @@
 # TASK 25 (V2) — XP and Progression
 
 **Phase:** 06 — Economy
-**Status:** ✅ Done — commit `5fb1b9a` (2026-05-13)
-**Related tasks:** TASK 11 (Turn Pipeline — Resolver grants XP), TASK 05 (HP/Mana formulas — magic tied to INT/WIS), TASK 42 (Persistent Hero — XP persists across campaigns)
+**Status:** ⚠ Backend działa, **frontend i pełny loop niezaimplementowany** — patrz `AUDIT_2026_05_18.md` § T25V2 + `DECISIONS_2026_05_18.md` [D7, D12-D16].
+
+**Related tasks:** TASK 11 (Turn Pipeline — Resolver grants XP), TASK 05 (HP/Mana formulas — magic tied to INT/WIS), TASK 42 (Persistent Hero — XP persists across campaigns), TASK 23 (Healing — krótki/długi odpoczynek), `12_TRAVEL_SYSTEM.md` (zegar gry).
+
+> **2026-05-18 audit re-design:** Original ✅ commit `5fb1b9a` shipped the backend (`grant_character_xp`, `spend_skill_rank_up`, `spend_stat_point_up`) but no player UI calls the spending endpoints and only `combat.kill_*` actually fires `grant_character_xp`. 5 of 6 XP source categories are dead seed. Stage 2 in ROADMAP.md rebuilds the loop in 4 sub-stages (2A zegar → 2B safe-rest → 2D 22 źródeł XP → 2C UI) per [D13].
+
+---
+
+## Implementation status (post 2026-05-18 audit)
+
+| Element | Backend | Frontend | Wired? |
+|---|---|---|---|
+| Level = `floor(xp_total / 100)` display | ✅ | ❌ | computed but not shown |
+| XP earning — combat kills | ✅ | ❌ | fires; player sees nothing |
+| XP earning — 21 other sources | ⚠ seeded | ❌ | **dead code, none fire** |
+| XP spending endpoints (`spend_skill_rank_up`, `spend_stat_point_up`) | ✅ | ❌ | no UI calls them |
+| Long rest endpoint | ❌ | ❌ | doesn't exist |
+| Short rest endpoint | ❌ | ❌ | doesn't exist |
+| `safe_for_rest` location gating | column exists | ❌ | not enforced |
+| In-game clock (`ingame_hours` advance) | ❌ | ❌ | column read-only |
+| Pending XP → spendable on long rest | ❌ | ❌ | not implemented |
+| Player "Historia PD" log view | endpoint exists | ❌ | not rendered |
+
+**Per [D12]:** brak banner level-up. Pasek PD wypełnia się i resetuje cicho. Poziom to wyłącznie etykieta — żadnych automatycznych bonusów.
 
 ---
 

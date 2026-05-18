@@ -1,8 +1,31 @@
 # TASK 23 — Healing System
 
-**Phase:** 06 — Economy  
-**Status:** ✅ Done — commit `5fb1b9a` (2026-05-13)  
-**Related tasks:** TASK 20 (inventory/consumables), TASK 25 (XP/progression)
+**Phase:** 06 — Economy
+**Status:** ⚠ Items + Mend Wounds + rest counters działają, **endpointy `POST /rest` (krótki/długi) niezaimplementowane** — patrz `AUDIT_2026_05_18.md`.
+**Related tasks:** TASK 20 (inventory/consumables), TASK 25V2 (XP loop), `12_TRAVEL_SYSTEM.md` (zegar), `DECISIONS_2026_05_18.md` [D13–D16]
+
+> **2026-05-18 audit corrections** — odpoczynek to fundament XP loop. Stage 2C ROADMAP.md ma zaimplementować:
+>
+> **`POST /api/characters/{id}/rest?type=long`:**
+> - Walidacja: bohater w lokacji z `safe_for_rest=1` LUB w `temp_camp` (po akcji "Rozbij obóz") LUB hex dziedziczy safe z lokacji
+> - +8h zegara gry (`advance_clock(8, "long_rest")`)
+> - Full HP + full mana
+> - Reset `mend_wounds_used_this_rest`, krótkie odpoczynki counter, death save counter
+> - **Flip pending XP → spendable** (kluczowe dla XP loop per [D7])
+> - Out of combat only (409 jeśli `active_combat.status='active'`)
+>
+> **`POST /api/characters/{id}/rest?type=short`:**
+> - Walidacja: max 2 krótkie między długimi
+> - +1h zegara (`advance_clock(1, "short_rest")`)
+> - Regen HP `1d6 + CON_mod`
+> - Mend Wounds użyte w tej "rundzie odpoczynku" blokuje (`mend_wounds_used_this_rest=1`)
+> - Out of combat only
+>
+> **Akcja "Rozbij obóz"** ([D15]):
+> - Tworzy tymczasową sub-lokację `temp_camp` na bieżącym hex'ie z `safe_for_rest=1`
+> - +1h zegara (sam akt rozbijania)
+> - Encounter chance +20% podczas snu (ambush risk)
+> - Niedozwolone na: ulicach miasta, środku lochu, terenach niesprzyjających (woda otwarta)
 
 ---
 

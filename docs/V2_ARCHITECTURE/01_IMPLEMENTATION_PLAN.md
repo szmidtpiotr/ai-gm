@@ -117,11 +117,11 @@ Implementation order locked in `DECISIONS_2026_05_18.md` § "Implementation orde
 | 20 | TASK_20_INVENTORY_EQUIPMENT | ⚠️ | 3 functional slots shipped (`main_hand`/`off_hand`/`armor`); **8-slot anatomical model agreed** (6 armor body parts + 2 weapon — see [DECISIONS D1]) not yet built. |
 | 21 | TASK_21_SHOP_SYSTEM | ✅ | Narrative-embedded entry, buy/sell, merchant NPCs |
 | 22 | TASK_22_LOOT_SYSTEM | ✅ | Location-tied, expiry rules, partial claim |
-| 23 | TASK_23_HEALING_SYSTEM | ✅ | Items, rest, Scholar Mend Wounds |
+| 23 | TASK_23_HEALING_SYSTEM | ⚠️ | Items + Mend Wounds + counters ✅. **Endpointy `POST /rest?type=long|short` ❌** — wymóg dla XP loop per [D14]. Implementacja w Stage 2C (X3, X4). |
 | 24 | TASK_24_WOUND_LABELS | ⚠️ | Backend `get_wound_label()` + narrator injection done. **Frontend wound-label text below player HP bar not rendered**. |
-| 25V2 | TASK_25_XP_PROGRESSION_V2 | ⚠️ | Earning side ✅ (`grant_character_xp` fires on enemy defeat). **Spending side ❌** — no player UI calls `spend_skill_rank_up`/`spend_stat_point_up`; **no long-rest endpoint** to flip pending XP to spendable. **NEXT PRIORITY** per [DECISIONS D7]. |
+| 25V2 | TASK_25_XP_PROGRESSION_V2 | ⚠️ | Earning side ✅ (`grant_character_xp` fires on **combat.kill_*** only — 5/6 categories dead seed). Spending side ❌ (no UI). No `/rest` endpoint, no clock advance, no XP→spendable flip. **Stage 2 (4 sub-stages: 2A clock → 2B safe-rest → 2D 22 XP sources → 2C UI) per [D7+D13]. NEXT PRIORITY.** |
 | 26 | TASK_26_SCHOLAR_SPELLS | ✅ | Spell list, Arcane Points, upgrade tiers, miscast scaling, rank-by-usage |
-| 26X | TASK_26_XP_CONFIG_AND_LOG | ⚠️ | Admin endpoints + tuning ✅. **Player-facing "Historia PD" view ❌** — character sheet doesn't show per-source XP log. |
+| 26X | TASK_26_XP_CONFIG_AND_LOG | ⚠️ | 22 sources seeded ✅, admin endpoints ✅. **Only 1/22 fires in code** (`combat.kill_*`). Player "Historia PD" view ❌. Wiring planned in Stage 2D (XS1–XS15). |
 | 42 | TASK_42_CHARACTER_FIRST_FLOW | ✅ | Hero-first model complete — hero→campaign selection, cascade unlink on delete, session restore |
 | 41 | TASK_41_DUNGEON_RUNS | ✅ | Backend + full player UI: picker modal, room types, riddle bank, square tile map, death handling, F5 restore |
 

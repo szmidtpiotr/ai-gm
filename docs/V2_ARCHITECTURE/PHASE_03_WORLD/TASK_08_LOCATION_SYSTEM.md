@@ -53,9 +53,13 @@ New field on `game_locations`: `safe_for_rest INTEGER DEFAULT 0`.
 | 1     | Character can rest here (inn, shelter, secured room)  |
 | 0     | No rest allowed (outdoors, dungeon, hostile area)     |
 
-Admin-configurable per location in the admin panel (checkbox on location edit form).
+**Edit paths** (per `DECISIONS_2026_05_18.md` [D14, D15]):
+- **Admin UI** — checkbox on location edit form (current) **and** on the hex map editor (new in Stage 2B R3)
+- **LLM (GM) dynamic** — tag `[SET_SAFE_FOR_REST:location_key:on|off]` so the narrator can flip a location after a story event (e.g. "oczyściłeś karczmę z bandytów" → bezpieczna od teraz). New in Stage 2B R1.
+- **Hex dziedziczy** — hex is safe ⇔ has any `game_location` on it with `safe_for_rest=1` (Stage 2B R2 helper `_hex_is_safe_for_rest`).
+- **Player action "Rozbij obóz"** — creates a temporary sub-location `temp_camp` on the current hex with `safe_for_rest=1` and `temporary=1` flag. +1h game clock cost, +20% encounter risk during the long rest that follows (Stage 2B R4).
 
-Rest mechanics (implemented elsewhere) check this flag before allowing a rest action. This task only adds the field and exposes it in the API.
+Rest endpoints `POST /api/characters/{id}/rest?type=long|short` check this flag before allowing the rest action. Implementation in Stage 2C per `ROADMAP.md`.
 
 ---
 

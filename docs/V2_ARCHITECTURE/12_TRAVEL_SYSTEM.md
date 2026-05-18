@@ -1,6 +1,16 @@
 # AI-GM V2 — Travel System
 
 > Covers: macro-location travel, in-game time clock, random encounters, fast travel, rest on the road.
+>
+> **2026-05-18 status (post-audit):** Zegar gry (`ingame_hours`) **istnieje w bazie i narrator go czyta**, ale **nikt go nie zwiększa** — startuje o 9:00 i stoi. Stage 2A w ROADMAP.md (sub-itemy T1–T5) odblokowuje zegar:
+>
+> - **T1** `advance_clock(campaign_id, hours, reason)` — funkcja zwiększająca `ingame_hours` + audit log
+> - **T2** Travel hook — przy każdym wpisie nowego hex'a/lokacji wywołać `advance_clock(travel_hours)`
+> - **T3** Krótki odpoczynek hook — `advance_clock(1, "short_rest")`
+> - **T4** Długi odpoczynek hook — `advance_clock(8, "long_rest")`
+> - **T5** Nagłówek UI — pokazać "Dzień N, HH:MM Pora"
+>
+> Patrz: `DECISIONS_2026_05_18.md` [D13, D16].
 
 ---
 

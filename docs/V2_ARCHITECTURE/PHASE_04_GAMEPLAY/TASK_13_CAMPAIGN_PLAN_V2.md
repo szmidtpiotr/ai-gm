@@ -114,6 +114,17 @@ For `catastrophic`: narrator receives instruction: *"This deviation requires a n
 
 The narrator LLM may embed these tags anywhere in its prose response. Backend intercepts all tags post-generation using regex before delivering text to frontend. Tags are stripped from displayed prose.
 
+> **2026-05-18 status** — `[BEAT_COMPLETE]` and `[CAMPAIGN_END]` are parsed but XP rewards from `game_config_xp_awards` don't fire (5/6 categories dead seed). Per `DECISIONS_2026_05_18.md` [D14], Stage 2D ROADMAP.md wires all 22 sources, including:
+>
+> - `[BEAT_COMPLETE:beat_key]` → `campaign.beat_complete` (30 XP)
+> - `[QUEST_COMPLETE:quest_key]` → `campaign.side_quest` (40 XP)
+> - `[DUNGEON_CLEAR:dungeon_key]` → `campaign.dungeon_cleared` (75 XP)
+> - `[CAMPAIGN_END:ending_id]` → `campaign.campaign_ending` (200 XP)
+> - `[DISCOVERY:lore_key]` → `exploration.secret` (10 XP)
+> - `[DISCOVERY:secret_location]` → `exploration.hidden_room` (10 XP)
+> - `[XP_GRANT:reason:amount]` → `narrative.*` (cap 50 XP per session)
+> - `[SET_SAFE_FOR_REST:location_key:on|off]` (new, per [D14] — toggles `game_locations.safe_for_rest` dynamically; no XP)
+
 ### `[BEAT_COMPLETE:beat_key]`
 
 **Emitted when:** narrator recognizes that a key story beat has concluded (player met the informant, secured the artifact, survived the ambush, etc.).
