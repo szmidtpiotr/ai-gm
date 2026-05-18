@@ -118,7 +118,10 @@ function layout() {
 
         <!-- Column 3: log -->
         <section class="sandbox-col sandbox-log-col">
-          <h3>Log</h3>
+          <div class="sandbox-log-header">
+            <h3 style="margin:0">Log</h3>
+            <button type="button" class="sandbox-copy-btn" id="sbx-copy-btn" title="Skopiuj pełny raport (hero + ekwipunek + walka + log) do zgłoszenia">📋 Kopiuj raport</button>
+          </div>
           <pre class="sandbox-log" id="sbx-log"></pre>
         </section>
       </div>
@@ -232,6 +235,130 @@ function bind(panel) {
   panel.querySelector("#sbx-enemy-btn")?.addEventListener("click", () => doEnemyTurn(panel, /*manual*/ true));
   panel.querySelector("#sbx-reset-btn")?.addEventListener("click", () => doResetHero(panel));
   panel.querySelector("#sbx-end-btn")?.addEventListener("click", () => doEndCombat(panel));
+  panel.querySelector("#sbx-copy-btn")?.addEventListener("click", () => doCopyReport(panel));
+}
+
+// ── Bug-report bundle ─────────────────────────────────────────────────────
+function buildReport() {
+  const ts = new Date().toISOString();
+  const ch = state.characterFull;
+  const cs = state.combatState;
+  const lines = [];
+
+  lines.push("# AI-GM Combat Sandbox — Raport");
+  lines.push(`*Wygenerowano: ${ts}*`);
+  lines.push("");
+
+  lines.push("## Środowisko");
+  lines.push(`- Campaign: \`${state.campaignId ?? "—"}\`  ·  Hero: \`${state.characterId ?? "—"}\``);
+  lines.push(`- d20 mode: \`${state.d20Mode}\`${state.d20Mode === "manual" ? ` (value=${state.d20Manual})` : ""}`);
+  lines.push(`- Wybrani przeciwnicy: ${state.selectedEnemies.size ? Array.from(state.selectedEnemies).map((k) => "`" + k + "`").join(", ") : "—"}`);
+  lines.push("");
+
+  if (ch) {
+    lines.push("## Bohater");
+    lines.push(`**${ch.name}** — ${ch.archetype || "?"} Lv${ch.level} · 💰 ${ch.gold_gp || 0} GP`);
+    lines.push(`HP: ${ch.hp}/${ch.max_hp}${ch.max_mana ? `  ·  Mana: ${ch.mana}/${ch.max_mana}` : ""}`);
+    const statParts = Object.entries(ch.stats || {}).map(([k, v]) => `${k} ${v}`);
+    if (statParts.length) lines.push(`Stats: ${statParts.join(" · ")}`);
+    if (Array.isArray(ch.conditions) && ch.conditions.length) {
+      lines.push(`Conditions: ${ch.conditions.map((c) => typeof c === "string" ? c : (c.key || c.label || "?")).join(", ")}`);
+    }
+    lines.push("");
+
+    const inv = Array.isArray(ch.inventory) ? ch.inventory : [];
+    if (inv.length) {
+      lines.push("### Ekwipunek");
+      for (const it of inv) {
+        const tag = it.equipped ? ` **[${it.slot}]**` : "";
+        const qty = it.quantity > 1 ? ` ×${it.quantity}` : "";
+        const itemType = it.item_type || "?";
+        lines.push(`- (${itemType}) ${it.label || it.key || "?"}${qty}${tag}  \`#${it.id}\``);
+      }
+      lines.push("");
+    }
+
+    const spells = Array.isArray(ch.spells) ? ch.spells : [];
+    if (spells.length) {
+      lines.push("### Zaklęcia");
+      for (const s of spells) {
+        lines.push(`- ${s.label || s.spell_key} (R${s.rank || 1}) — ${s.spell_type || "?"} · koszt ${s.mana_cost ?? "?"}M · ${s.damage_die || s.heal_die || ""}`);
+      }
+      lines.push("");
+    }
+  } else {
+    lines.push("## Bohater\n_nie załadowany_\n");
+  }
+
+  if (cs) {
+    lines.push("## Stan walki");
+    lines.push(`Status: \`${cs.status}\`${cs.ended_reason ? ` (${cs.ended_reason})` : ""}  ·  Runda: ${cs.round}  ·  Tura: \`${cs.current_turn}\``);
+    lines.push(`Kolejność inicjatywy: ${(cs.turn_order || []).map((id) => "`" + id + "`").join(" → ")}`);
+    lines.push("");
+    lines.push("### Combatants");
+    for (const c of (cs.combatants || [])) {
+      lines.push(`- \`${c.id}\` ${c.name || ""} (${c.type}) — HP ${c.hp_current}/${c.hp_max} · AC ${c.defense ?? "?"} · zone ${c.zone || "?"} · INI ${c.initiative_roll ?? "?"}${(c.conditions || []).length ? ` · cond: ${(c.conditions || []).map((x) => typeof x === "string" ? x : (x.key || "?")).join(",")}` : ""}`);
+    }
+    lines.push("");
+  }
+
+  if (state.rollEvents.length) {
+    lines.push("## Wydarzenia walki");
+    for (const r of state.rollEvents) {
+      const evt = r.event_type;
+      let meta = {};
+      try { meta = typeof r.narrative === "string" ? JSON.parse(r.narrative) : (r.narrative || {}); } catch {}
+      if (evt === "attack" && r.actor === "player") {
+        lines.push(`- [#${r.id}] PLAYER attack → ${r.target_name || "?"} · d20=${r.roll_value} mod=${meta.modifier ?? "?"} total=${meta.total ?? "?"} vs AC=${meta.target_ac ?? "?"} · ${r.hit ? "HIT" : "MISS"}${r.damage != null ? ` dmg=${r.damage}` : ""} · weapon=${meta.weapon_key || "?"}`);
+      } else if (evt === "attack" && r.actor === "enemy") {
+        lines.push(`- [#${r.id}] ENEMY ${meta.enemy_name || r.target_name || "?"} attack · raw_d20=${meta.raw_d20 ?? r.roll_value} bonus=${meta.attack_bonus ?? "?"} total=${meta.attack_roll ?? r.roll_value} vs AC=${meta.target_ac ?? "?"} · ${r.hit ? "HIT" : "MISS"}${r.damage != null ? ` dmg=${r.damage}` : ""}`);
+      } else if (evt === "zone_change") {
+        lines.push(`- [#${r.id}] ZONE_CHANGE ${r.actor} ${meta.enemy_name || ""} ${meta.from} → ${meta.to}${meta.charged ? " (charged)" : ""}`);
+      } else if (evt === "death") {
+        lines.push(`- [#${r.id}] DEATH ${r.target_name || "?"}`);
+      } else if (evt === "initiative") {
+        lines.push(`- [#${r.id}] INITIATIVE ${r.actor} → ${r.roll_value}`);
+      } else if (evt === "start" || evt === "end") {
+        lines.push(`- [#${r.id}] ${evt.toUpperCase()} ${r.narrative || ""}`);
+      } else {
+        lines.push(`- [#${r.id}] ${evt} ${r.narrative || ""}`);
+      }
+    }
+    lines.push("");
+  }
+
+  if (state.log.length) {
+    lines.push("## Log sesji (sandbox)");
+    lines.push("```");
+    // Log is newest-first internally; reverse for chronological reading
+    lines.push(...[...state.log].reverse());
+    lines.push("```");
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+async function doCopyReport(panel) {
+  const text = buildReport();
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      // Fallback for older browsers / non-https contexts
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    showToast(`Skopiowano raport (${text.length} znaków).`, "success", 2500);
+    logMsg(panel, `[Raport] skopiowano do schowka — ${text.length} znaków`);
+  } catch (e) {
+    showToast("Błąd kopiowania: " + (e.message || "?"), "error");
+  }
 }
 
 // ── Setup / lifecycle ─────────────────────────────────────────────────────
@@ -268,9 +395,10 @@ async function doStartCombat(panel) {
     state.rollEvents = [];
     state.lastRenderedTurnId = 0;
     state.autoEnemyTurnInFlight = false;
+    state.log = [];
     renderEvents(panel);
-    // Visual separator in the right-side session log
-    if (state.log.length) state.log.unshift("─── nowa walka ───");
+    const logEl = panel.querySelector("#sbx-log");
+    if (logEl) logEl.textContent = "";
 
     const res = await adminFetch("/api/admin/sandbox/start-combat", {
       method: "POST",
