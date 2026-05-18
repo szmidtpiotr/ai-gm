@@ -255,24 +255,23 @@ async function doStartCombat(panel) {
   if (!state.campaignId || !state.characterId) { showToast("Najpierw setup.", "error"); return; }
   const enemies = Array.from(state.selectedEnemies);
   if (!enemies.length) { showToast("Wybierz przeciwników.", "error"); return; }
+  state.busy = true;
   try {
-    state.busy = true;
     const res = await adminFetch("/api/admin/sandbox/start-combat", {
       method: "POST",
       body: JSON.stringify({ campaign_id: state.campaignId, character_id: state.characterId, enemy_keys: enemies }),
     });
     state.combatState = res.combat_state;
     logMsg(panel, `Walka rozpoczęta — runda ${res.combat_state?.round || 1}, kolejność: ${(res.combat_state?.turn_order || []).join(" → ")}`);
-    // Auto-collapse setup once combat starts so the sheet card gets the space
     const det = panel.querySelector("#sbx-setup-details");
     if (det) det.open = false;
-    renderCombat(panel);
     await refreshCharacterSheet(panel);
-    maybeAutoEnemyTurn(panel);
   } catch (e) {
     showToast("Start error: " + (e.message || "?"), "error");
   } finally {
     state.busy = false;
+    renderCombat(panel);
+    maybeAutoEnemyTurn(panel);
   }
 }
 
@@ -282,8 +281,9 @@ async function refreshCombatState(panel) {
     const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat`);
     state.combatState = res?.active ? res.combat : (state.combatState && state.combatState.status === "ended" ? state.combatState : null);
   } catch {}
-  renderCombat(panel);
-  maybeAutoEnemyTurn(panel);
+  // Note: caller is responsible for triggering renderCombat after busy is
+  // reset; we deliberately don't render here to avoid drawing stale
+  // disabled-button states while busy=true.
 }
 
 async function refreshCharacterSheet(panel) {
@@ -306,8 +306,8 @@ async function doAttack(panel, spellKey = null) {
   const d20 = rollD20();
   const body = { roll_result: d20, raw_d20: d20, attacker: "player" };
   if (spellKey) body.spell_key = spellKey;
+  state.busy = true;
   try {
-    state.busy = true;
     const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat/resolve-attack`, { method: "POST", body: JSON.stringify(body) });
     state.combatState = res.combat_state;
     const kind = spellKey ? `Czar:${spellKey}` : "Atak";
@@ -318,36 +318,36 @@ async function doAttack(panel, spellKey = null) {
     else line = `Pudło (rzut ${d20})${res.player_nat1 ? " — Nat 1!" : ""}`;
     logMsg(panel, `[${kind}] ${line}`);
     if (res.combat_state?.status === "ended") logMsg(panel, `Walka: ${res.combat_state.ended_reason}.`);
-    renderCombat(panel);
     await refreshCharacterSheet(panel);
-    maybeAutoEnemyTurn(panel);
   } catch (e) {
     logMsg(panel, "Błąd: " + (e.message || "?"));
   } finally {
     state.busy = false;
+    renderCombat(panel);
+    maybeAutoEnemyTurn(panel);
   }
 }
 
 async function doZoneChange(panel) {
+  state.busy = true;
   try {
-    state.busy = true;
     const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat/zone-change`, { method: "POST" });
     state.combatState = res.combat_state;
     logMsg(panel, `[Zone] ${res.from} → ${res.to}`);
-    renderCombat(panel);
-    maybeAutoEnemyTurn(panel);
   } catch (e) {
     logMsg(panel, "Zone error: " + (e.message || "?"));
   } finally {
     state.busy = false;
+    renderCombat(panel);
+    maybeAutoEnemyTurn(panel);
   }
 }
 
 async function doEnemyTurn(panel, manual = false) {
   if (state.autoEnemyTurnInFlight && !manual) return;
   state.autoEnemyTurnInFlight = true;
+  state.busy = true;
   try {
-    state.busy = true;
     const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat/enemy-turn`, { method: "POST" });
     state.combatState = res.combat_state || state.combatState;
     if (res.zone_change) {
@@ -366,6 +366,8 @@ async function doEnemyTurn(panel, manual = false) {
   } finally {
     state.autoEnemyTurnInFlight = false;
     state.busy = false;
+    renderCombat(panel);
+    maybeAutoEnemyTurn(panel);
   }
 }
 
