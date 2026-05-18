@@ -2347,9 +2347,13 @@ def create_turn(
                     "acelnoszzACELNOSZZ"
                 )
                 _txt_pre = text.lower().translate(_PL_MAP_PRE)
+                # 'attack' is combat intent, not a skill check — exclude from pre-LLM
+                # trigger scan so "atakuje goblina" routes through combat_start, not a
+                # phantom Atak skill test. Fix for issue #20.
                 _kw_rows_pre = conn.execute(
                     "SELECT key, trigger_keywords FROM game_config_skills "
-                    "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != ''"
+                    "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
+                    "AND key != 'attack'"
                 ).fetchall()
                 # Wrap text with spaces for word-boundary matching
                 _txt_padded = " " + _txt_pre + " "
@@ -2539,9 +2543,11 @@ def create_turn(
                             "acelnoszzACELNOSZZ"
                         )
                         _txt_norm = (text or "").lower().translate(_PL_MAP)
+                        # Exclude 'attack' — see comment near _kw_rows_pre (issue #20)
                         _kw_rows = conn.execute(
                             "SELECT key, trigger_keywords FROM game_config_skills "
-                            "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != ''"
+                            "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
+                            "AND key != 'attack'"
                         ).fetchall()
                         _txt_norm_padded = " " + _txt_norm + " "
                         for _kr in _kw_rows:
