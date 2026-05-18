@@ -103,8 +103,10 @@ function layout() {
           </div>
           <div class="sandbox-meta-actions" id="sbx-meta-actions" hidden>
             <button id="sbx-enemy-btn">⏭ Tura wroga</button>
-            <button id="sbx-reset-btn">↻ Pełne HP/Mana</button>
             <button id="sbx-end-btn">⏹ Zakończ</button>
+          </div>
+          <div class="sandbox-meta-actions sandbox-meta-actions--hero" id="sbx-hero-actions" hidden>
+            <button id="sbx-reset-btn">↻ Pełne HP/Mana</button>
           </div>
         </section>
 
@@ -196,7 +198,9 @@ function renderEnemySummary(panel) {
 function updateStartButton(panel) {
   const btn = panel.querySelector("#sbx-start-btn");
   if (!btn) return;
-  btn.disabled = !(state.campaignId && state.characterId && state.selectedEnemies.size > 0 && !state.busy);
+  const ready = state.campaignId && state.characterId && state.selectedEnemies.size > 0 && !state.busy;
+  btn.disabled = !ready;
+  btn.classList.toggle("is-ready", !!ready);
 }
 
 // ── Bindings ──────────────────────────────────────────────────────────────
@@ -229,12 +233,16 @@ async function doSetup(panel) {
   if (!state.selectedHero) { showToast("Wybierz bohatera.", "error"); return; }
   try {
     state.busy = true;
+    // Clear any stale combat state from a prior session — backend ends it too
+    state.combatState = null;
+    state.autoEnemyTurnInFlight = false;
     const res = await adminFetch("/api/admin/sandbox/setup", { method: "POST", body: JSON.stringify({ hero_id: state.selectedHero }) });
     state.campaignId = res.campaign_id;
     state.characterId = res.character_id;
-    logMsg(panel, `Setup ✓ — campaign #${res.campaign_id}, hero #${res.character_id} (${res.hero?.name}, ${res.hero?.archetype} Lv${res.hero?.level})`);
+    logMsg(panel, `Setup ✓ — campaign #${res.campaign_id}, hero #${res.character_id} (${res.hero?.name}, ${res.hero?.archetype} Lv${res.hero?.level}). Wybierz wrogów i naciśnij Rozpocznij walkę.`);
     await refreshCharacterSheet(panel);
-    showToast("Sandbox gotowy.", "success");
+    renderCombat(panel);
+    showToast("Sandbox gotowy. Wybierz przeciwników → Rozpocznij walkę.", "success");
   } catch (e) {
     showToast("Setup error: " + (e.message || "?"), "error");
   } finally {
@@ -470,13 +478,29 @@ function renderCombat(panel) {
   if (sheetCard) sheetCard.hidden = !state.characterId;
 
   if (!cs || cs.status !== "active") {
-    host.innerHTML = `<p class="section-note sandbox-idle">${cs?.status === "ended" ? `Walka zakończona (${esc(cs.ended_reason || "?")}).` : "Brak aktywnej walki."}</p>`;
-    if (actions) actions.hidden = !cs;
-    if (meta) meta.hidden = !state.characterId;
+    let hint;
+    if (cs?.status === "ended") {
+      hint = `Walka zakończona (${esc(cs.ended_reason || "?")}). Naciśnij <em>Rozpocznij walkę</em>, aby zacząć kolejną.`;
+    } else if (state.characterId && state.selectedEnemies.size > 0) {
+      hint = `<span class="sandbox-idle--ready">Sandbox gotowy. Naciśnij <em>Rozpocznij walkę</em> ↖</span>`;
+    } else if (state.characterId) {
+      hint = `Sandbox przygotowany. Wybierz przeciwników po lewej i naciśnij <em>Rozpocznij walkę</em>.`;
+    } else {
+      hint = `Brak aktywnej walki. Wybierz bohatera + przeciwników i naciśnij <em>Rozpocznij walkę</em>.`;
+    }
+    host.innerHTML = `<p class="section-note sandbox-idle">${hint}</p>`;
+    // Combat-time buttons stay hidden until combat is genuinely active
+    if (actions) actions.hidden = true;
+    if (meta) meta.hidden = true;
+    // Hero-action (Reset) is available whenever a hero is bound to the sandbox
+    const heroActions = panel.querySelector("#sbx-hero-actions");
+    if (heroActions) heroActions.hidden = !state.characterId;
     return;
   }
   actions.hidden = false;
   meta.hidden = false;
+  const heroActions = panel.querySelector("#sbx-hero-actions");
+  if (heroActions) heroActions.hidden = !state.characterId;
 
   const cmb = Array.isArray(cs.combatants) ? cs.combatants : [];
   const player = cmb.find((c) => c.type === "player") || {};
