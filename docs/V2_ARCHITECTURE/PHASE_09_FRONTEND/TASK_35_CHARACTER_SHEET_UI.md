@@ -114,14 +114,24 @@ Wiedza Tajemna        ●●●●○  [INT]
 
 ### 7. Equipment (Slot Diagram)
 
+> **Updated 2026-05-18 per [DECISIONS D1].** Spec now reflects the 8-slot anatomical model agreed during the audit pass.
+
 ```
-        [Głowa]
-[L Ręka] [Tors] [P Ręka]
-        [Nogi]
-  [Stopy]  [Ręce]
+              [Głowa]
+   [L Ramię] [Tors]  [P Ramię]
+   [L Noga]          [P Noga]
+
+   [Główna ręka] [Pomocnicza ręka]
 ```
 
-- Visual slot grid — 6 slots: Head, Torso, Left Hand, Right Hand, Feet, Hands
+- **8 slots total:** 6 anatomical armor (`head`, `torso`, `l_arm`, `r_arm`, `l_leg`, `r_leg`) + 2 weapon (`main_hand`, `off_hand`)
+- **Armor coverage values** (controlled by `game_config_items.armor_coverage`):
+  - `head` — occupies head slot only
+  - `torso` — occupies torso slot only
+  - `limb_arm` — occupies one arm slot (mirror item or paired pair)
+  - `limb_leg` — occupies one leg slot
+  - `full` — occupies torso + l_arm + r_arm + l_leg + r_leg (everything except head)
+- **No gloves/boots as separate item types** — boots are leg armor (`limb_leg`), gloves are arm armor (`limb_arm`)
 - Each slot shows: item name if equipped, "—" if empty
 - Click an equipped slot: opens item detail with [Zdejmij] button
 - Click an empty slot: opens inventory filtered to equippable items for that slot

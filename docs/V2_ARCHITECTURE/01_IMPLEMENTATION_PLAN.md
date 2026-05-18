@@ -2,7 +2,34 @@
 
 > **Rule:** One task at a time. Test after each task. Discuss before moving to next.
 > No task starts until the previous one passes its test checklist.
-> All decisions recorded in session docs 00–05.
+> All decisions recorded in session docs 00–05 + dated decision logs.
+>
+> **2026-05-18 audit pass** — full spec-vs-code audit (`AUDIT_2026_05_18.md`) corrected many ✅/❌ markers in this file; resolutions captured in `DECISIONS_2026_05_18.md`. The status markers below are now honest as of that date. **Next priority: XP loop ([D7]).**
+
+---
+
+## Current state snapshot (2026-05-18)
+
+After today's audit pass:
+
+**Fully done ✅ (per spec, no gaps):**
+T01 T02 T03 T04 · T05 T06 T07 · T10 · T11 T13 · T14 T15 T17 T18 T19 · T21 T22 T23 T26 (spells) T41 · T26N T27 T29 · T30 T31 T40 · T33 (UI) T34 T43 · T46
+
+**Partially done ⚠️ (functional but with spec gaps — see DECISIONS_2026_05_18.md):**
+T08 T09 (review queue details) · T04B T12 (frontend popup) · T16 (condition rename pending) · T20 (3-slot → 8-slot pending) · T24 (no frontend label) · T25V2 T26X (no player UI for spending/log) · T28 (deceased context) · T32 T33SA · T35 (see #24) · T44 (player UI missing) · T36 T37 T38 T39 · T42
+
+**Not started ❌:**
+T45 Hero Journal
+
+**Next priority:** XP loop ([D7]) — earning works, spending UI completely missing, no long-rest endpoint. Player progression is mechanically frozen.
+
+**New work agreed today (not yet shipped):**
+- D11 — new condition `zaskoczony` (Surprised) for stealth-ambush combat bonuses
+- D2 — rename combat conditions to spec terminology (`FRIGHTENED`, `PANICKED`, `BREAK`)
+- D1 — 8-slot anatomical equipment model (replaces current 3-slot)
+- D6 — auth security baseline (JWT + bcrypt + lockout + roles + onboarding modal)
+
+Implementation order locked in `DECISIONS_2026_05_18.md` § "Implementation order proposed".
 
 ---
 
@@ -49,7 +76,7 @@
 | 05 | TASK_05_HP_MANA_FORMULAS | ✅ | HP = base + CON_mod × level. Mana = 8 + INT_mod × level (Scholar) |
 | 06 | TASK_06_CHARACTER_WIZARD | ✅ | 4-step wizard, GM identity generation, secret predisposition |
 | 07 | TASK_07_CAMPAIGN_PLAN_GENERATION | ✅ | LLM generates from character + Ideas Bank |
-| 42 | TASK_42_PERSISTENT_HERO | ✅ | Hero-first model: hero persists across campaigns, idle/active status, campaign unlink on delete |
+| 42 | TASK_42_PERSISTENT_HERO | ⚠️ | Schema done (`hero_status`, `visited_location_keys`, `character_campaign_history`). Endpoints + UI **missing**: `GET /api/heroes`, `GET /characters/{id}/history`, `POST /characters/{id}/rest`, between-campaigns REST UI. See [AUDIT_2026_05_18 → D4]. |
 
 ### Phase 03 — World
 > Depends on Phase 01.
@@ -87,13 +114,14 @@
 
 | Task | File | Status | Notes |
 |------|------|--------|-------|
-| 20 | TASK_20_INVENTORY_EQUIPMENT | ✅ | Slots, click-to-equip, combat restrictions |
+| 20 | TASK_20_INVENTORY_EQUIPMENT | ⚠️ | 3 functional slots shipped (`main_hand`/`off_hand`/`armor`); **8-slot anatomical model agreed** (6 armor body parts + 2 weapon — see [DECISIONS D1]) not yet built. |
 | 21 | TASK_21_SHOP_SYSTEM | ✅ | Narrative-embedded entry, buy/sell, merchant NPCs |
 | 22 | TASK_22_LOOT_SYSTEM | ✅ | Location-tied, expiry rules, partial claim |
 | 23 | TASK_23_HEALING_SYSTEM | ✅ | Items, rest, Scholar Mend Wounds |
-| 24 | TASK_24_WOUND_LABELS | ✅ | HP% thresholds, narrator injection, HP bar colour |
-| 25V2 | TASK_25_XP_PROGRESSION_V2 | ✅ | WFRP style: everything purchased with XP, magic tied to INT |
+| 24 | TASK_24_WOUND_LABELS | ⚠️ | Backend `get_wound_label()` + narrator injection done. **Frontend wound-label text below player HP bar not rendered**. |
+| 25V2 | TASK_25_XP_PROGRESSION_V2 | ⚠️ | Earning side ✅ (`grant_character_xp` fires on enemy defeat). **Spending side ❌** — no player UI calls `spend_skill_rank_up`/`spend_stat_point_up`; **no long-rest endpoint** to flip pending XP to spendable. **NEXT PRIORITY** per [DECISIONS D7]. |
 | 26 | TASK_26_SCHOLAR_SPELLS | ✅ | Spell list, Arcane Points, upgrade tiers, miscast scaling, rank-by-usage |
+| 26X | TASK_26_XP_CONFIG_AND_LOG | ⚠️ | Admin endpoints + tuning ✅. **Player-facing "Historia PD" view ❌** — character sheet doesn't show per-source XP log. |
 | 42 | TASK_42_CHARACTER_FIRST_FLOW | ✅ | Hero-first model complete — hero→campaign selection, cascade unlink on delete, session restore |
 | 41 | TASK_41_DUNGEON_RUNS | ✅ | Backend + full player UI: picker modal, room types, riddle bank, square tile map, death handling, F5 restore |
 
@@ -127,7 +155,7 @@
 | 34 | TASK_34_COMBAT_UI | ✅ | Spell picker, initiative panel (#18), zone system (#19), crit flash (#23) — all sub-tasks complete |
 | 35 | TASK_35_CHARACTER_SHEET_UI | ⚠️ | Basics shipped (header, HP/mana bars, gold, stats grid, skills, 3-slot equipment, inventory, conditions, identity, spells tab). **Spec gaps remain** — see #24: location badge, wound label, XP progress bar, level-up banner, XP spending UI, long rest, skill rank dots, mobile bottom tabs, real-time animations. |
 | 43 | TASK_43_PLAYER_WORLD_MAP | ✅ | Fog-of-war world map, click-to-travel, swipe-close |
-| 44 | TASK_44_DEBUG_SYSTEM | ❌ | Admin debug drawer, /debug commands, DB key display |
+| 44 | TASK_44_DEBUG_SYSTEM | ⚠️ | Admin-only backend exists (`routers/debug.py`: `/player_state`, `/gm_decisions`, `/validation_flags`). **Missing:** player-facing debug drawer, `/debug` slash commands, admin panel "🐛 Debug" section. Per [DECISIONS D5] both player+admin sides to ship. |
 | 46 | TASK_46_NARRATIVE_ITEMS | ✅ | LLM-invented items grant to inventory with `item_type='narrative'`; inv_xor constraint patched (commits c4b2d12 + 232722f) |
 
 ### Phase 10 — Polish
@@ -135,11 +163,11 @@
 
 | Task | File | Status | Notes |
 |------|------|--------|-------|
-| 36 | TASK_36_MEMORY_HISTORY | ❌ | /mem command, AI summary (superseded by Hero Journal) |
-| 37 | TASK_37_COMMAND_PALETTE | ❌ | /help modal, admin command toggles |
-| 38 | TASK_38_CAMPAIGN_END_DEATH | ❌ | Victory screen, death screen, post-death options |
-| 39 | TASK_39_AUTH_ONBOARDING | ❌ | Auth flow, first-time UX |
-| 45 | TASK_45_HERO_JOURNAL | ❌ | Cross-campaign chronicle, chapter summaries, /mem cross-campaign |
+| 36 | TASK_36_MEMORY_HISTORY | ⚠️ | `/mem` semantic search ✅, `/helpme` ✅, `campaign_history` summary generator ✅. **Missing:** dual summaries (player vs gm), session-start GM continuity injection wiring, Historia cooldown enforcement. |
+| 37 | TASK_37_COMMAND_PALETTE | ⚠️ | `/help` lists commands in system bubble ✅. **Missing:** full modal with search, click-to-insert, per-command admin toggle. |
+| 38 | TASK_38_CAMPAIGN_END_DEATH | ⚠️ | Death screen overlay ✅, epitaph LLM (`solo_death_service.generate_epitaph_llm`) ✅. **Missing:** epitaph wiring into UI, victory screen ending content, post-end "Nowa Przygoda/Nowy Świat" options. |
+| 39 | TASK_39_AUTH_ONBOARDING | ⚠️ | Basic login + admin token works. **Missing per [DECISIONS D6]:** JWT migration, bcrypt verification, brute-force lockout, role-based access (player/gm/admin), onboarding overlay. Ship as one bundle. |
+| 45 | TASK_45_HERO_JOURNAL | ❌ | Cross-campaign chronicle, chapter summaries, /mem cross-campaign, XP timeline, cross-campaign minimap. Schema for `character_campaign_history` exists from T42 — UI work starts here. |
 
 ---
 
