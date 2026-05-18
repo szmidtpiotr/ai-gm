@@ -1644,6 +1644,32 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   gap: 2px;
 }
 
+.loot-search-wrap {
+  padding: 0 10px 6px;
+  flex-shrink: 0;
+}
+
+.loot-search-input {
+  width: 100%;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.loot-search-input::placeholder { color: var(--text-muted); }
+.loot-search-input:focus { border-color: var(--accent-gold); }
+
+.loot-table-empty {
+  padding: 14px 10px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
 .loot-table-btn {
   display: block;
   width: 100%;
