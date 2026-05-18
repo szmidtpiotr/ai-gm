@@ -263,10 +263,14 @@ async function doStartCombat(panel) {
   if (!enemies.length) { showToast("Wybierz przeciwników.", "error"); return; }
   state.busy = true;
   try {
-    // Reset events feed for the new fight
+    // Clear per-fight state so the previous combat's events / autoturn
+    // flag don't leak into the new one.
     state.rollEvents = [];
     state.lastRenderedTurnId = 0;
+    state.autoEnemyTurnInFlight = false;
     renderEvents(panel);
+    // Visual separator in the right-side session log
+    if (state.log.length) state.log.unshift("─── nowa walka ───");
 
     const res = await adminFetch("/api/admin/sandbox/start-combat", {
       method: "POST",
@@ -313,8 +317,14 @@ async function refreshRollEvents(panel) {
   try {
     const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat/turns/history?limit=200`);
     const rows = Array.isArray(res?.turns) ? res.turns : [];
-    // Render only events newer than what we've already shown
-    const fresh = rows.filter((r) => Number(r.id) > state.lastRenderedTurnId);
+    // Scope to the active combat only — /combat/turns/history returns every
+    // combat_turns row for the campaign (including past fights), so we filter
+    // by current combat_id to keep the feed bound to "this fight only".
+    const activeCombatId = state.combatState?.id;
+    const fresh = rows.filter((r) =>
+      Number(r.id) > state.lastRenderedTurnId &&
+      (activeCombatId == null || Number(r.combat_id) === Number(activeCombatId))
+    );
     if (fresh.length) {
       for (const r of fresh) {
         state.rollEvents.push(r);
