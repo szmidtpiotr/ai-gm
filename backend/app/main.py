@@ -171,6 +171,17 @@ RAW_MIGRATIONS = [
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """,
+    # Trim trigger_keywords for skills that were too-broadly matching narrative
+    # text and spawning phantom skill tests (audit follow-up to issue #20).
+    # 'kowalstwo': weapon nouns (miecz/ostrze/zbroja/metal/jakość) matched any
+    # mention of a sword, not actual blacksmithing intent. Keep only craft-
+    # intent verbs and the role noun "kowal".
+    "UPDATE game_config_skills SET trigger_keywords = 'kowal kuje kuję naprawiam oceniam' WHERE key = 'kowalstwo' AND trigger_keywords LIKE '%miecz%'",
+    # 'initiative': meta-combat mechanic — rolled inside start_combat, never
+    # as a standalone check. Its keywords (szybko/refleks/pierwszy) were also
+    # generic enough to match unrelated narration. Clear entirely; the code-
+    # level _COMBAT_CLASS_SKILLS guard backs this up.
+    "UPDATE game_config_skills SET trigger_keywords = '' WHERE key = 'initiative'",
 ]
 
 
