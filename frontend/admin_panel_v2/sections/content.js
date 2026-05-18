@@ -884,6 +884,9 @@ async function _renderLootTables(container, panel) {
     <div class="loot-tables-layout">
       <div class="loot-sidebar">
         <div class="tab-toolbar"><button class="primary-btn" id="add-table-btn">+ Dodaj tabelę</button></div>
+        <div class="loot-search-wrap">
+          <input type="search" id="loot-table-search" class="loot-search-input" placeholder="Szukaj tabeli…" autocomplete="off" />
+        </div>
         <div id="loot-table-list" class="loot-table-list"></div>
       </div>
       <div class="loot-editor" id="loot-editor">
@@ -893,6 +896,7 @@ async function _renderLootTables(container, panel) {
 
   let tables = [];
   let selectedKey = null;
+  let searchQuery = "";
 
   const loadTables = async () => {
     try { tables = (await adminFetch("/api/admin/loot-tables")).items || []; }
@@ -904,7 +908,18 @@ async function _renderLootTables(container, panel) {
   const renderTableList = () => {
     const list = container.querySelector("#loot-table-list");
     list.innerHTML = "";
-    tables.forEach((t) => {
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = q
+      ? tables.filter((t) => (t.label || "").toLowerCase().includes(q) || (t.key || "").toLowerCase().includes(q))
+      : tables;
+    if (filtered.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "loot-table-empty";
+      empty.textContent = q ? "Brak dopasowań." : "Brak tabel.";
+      list.appendChild(empty);
+      return;
+    }
+    filtered.forEach((t) => {
       const btn = document.createElement("button");
       btn.className = "loot-table-btn" + (t.key === selectedKey ? " active" : "");
       btn.textContent = t.label || t.key;
@@ -912,6 +927,12 @@ async function _renderLootTables(container, panel) {
       list.appendChild(btn);
     });
   };
+
+  const searchInput = container.querySelector("#loot-table-search");
+  searchInput?.addEventListener("input", (e) => {
+    searchQuery = e.target.value || "";
+    renderTableList();
+  });
 
   const openEditor = async (key) => {
     const editor = container.querySelector("#loot-editor");
