@@ -118,6 +118,9 @@ const elements = {
 
     // Combat End Overlays
     combatEndOverlay: document.getElementById('combat-end-overlay'),
+    critFlash: document.getElementById('crit-flash'),
+    critFlashTitle: document.getElementById('crit-flash-title'),
+    critFlashSub: document.getElementById('crit-flash-sub'),
     combatEndTitle: document.getElementById('combat-end-title'),
     combatEndIcon: document.getElementById('combat-end-icon'),
     combatEndLoot: document.getElementById('combat-end-loot'),
@@ -2371,6 +2374,9 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
             // Keep reference to roll bubble so we can scroll to it (not the very bottom)
             rollBubbleEl = elements.chatMessages.lastElementChild;
         }
+        // Crit flash (T34) — skill-test path
+        if (sr.nat20) triggerCritFlash('crit');
+        else if (sr.nat1) triggerCritFlash('fumble');
 
         if (response.prose) {
             const { narrative: gmContent } = parseGmFull(response.prose);
@@ -2719,6 +2725,37 @@ function setCombatMsg(text, isError) {
     el.textContent = text;
     el.hidden = false;
     el.classList.toggle('combat-banner__msg--error', !!isError);
+}
+
+// ── Crit flash (T34) — Nat 20 / Nat 1 theatrical overlay ─────────────────
+let _critFlashTimer = null;
+const CRIT_FLASH_COPY = {
+    crit:   { title: 'Cios Krytyczny', sub: 'Naturalny 20 — podwójne obrażenia' },
+    fumble: { title: 'Fatalne Pudło',  sub: 'Naturalny 1 — coś poszło nie tak' },
+};
+function triggerCritFlash(kind) {
+    const el = elements.critFlash;
+    if (!el) return;
+    const copy = CRIT_FLASH_COPY[kind];
+    if (!copy) return;
+    if (elements.critFlashTitle) elements.critFlashTitle.textContent = copy.title;
+    if (elements.critFlashSub)   elements.critFlashSub.textContent   = copy.sub;
+    // Clear prior state so re-triggers restart the animation cleanly
+    el.classList.remove('crit-flash--active', 'crit-flash--crit', 'crit-flash--fumble');
+    document.body.classList.remove('crit-shake');
+    if (_critFlashTimer) { clearTimeout(_critFlashTimer); _critFlashTimer = null; }
+    // Force reflow so adding the class re-fires the keyframe animation
+    void el.offsetWidth;
+    el.classList.add('crit-flash--active', kind === 'crit' ? 'crit-flash--crit' : 'crit-flash--fumble');
+    if (kind === 'fumble') {
+        document.body.classList.add('crit-shake');
+        setTimeout(() => document.body.classList.remove('crit-shake'), 220);
+    }
+    _critFlashTimer = setTimeout(() => {
+        el.classList.remove('crit-flash--active', 'crit-flash--crit', 'crit-flash--fumble');
+        _critFlashTimer = null;
+    }, 720);
+    window.clog?.event('crit_flash', { kind });
 }
 
 // ── Initiative track state (T34) ────────────────────────────────────────
@@ -3085,6 +3122,10 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
     if (hit) { setCombatMsg(`Trafienie! ${dmg} obrażeń.`); }
     else if (data.player_nat1) { setCombatMsg('Fatalne pudło!', true); }
     else { setCombatMsg('Pudło.'); }
+
+    // Crit flash (T34) — fire after setCombatMsg so the message also lands
+    if (data.player_nat20) triggerCritFlash('crit');
+    else if (data.player_nat1) triggerCritFlash('fumble');
 
     const cs = data.combat_state || null;
     const endedNow = cs && cs.status === 'ended';

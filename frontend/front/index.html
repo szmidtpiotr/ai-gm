@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=t34-zones-2026-05-18">
+  <link rel="stylesheet" href="./css/styles.css?v=t34-crit-flash-2026-05-18">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -259,6 +259,17 @@
         </svg>
       </button>
     </header>
+
+    <!-- Crit-flash overlay (Nat 20 / Nat 1) — T34 -->
+    <div id="crit-flash" class="crit-flash" aria-hidden="true">
+      <div class="crit-flash__veil"></div>
+      <div class="crit-flash__beam crit-flash__beam--top"></div>
+      <div class="crit-flash__beam crit-flash__beam--bottom"></div>
+      <div class="crit-flash__beam crit-flash__beam--left"></div>
+      <div class="crit-flash__beam crit-flash__beam--right"></div>
+      <div class="crit-flash__title" id="crit-flash-title"></div>
+      <div class="crit-flash__sub"   id="crit-flash-sub"></div>
+    </div>
 
     <!-- Combat Banner (hidden when no combat) -->
     <div id="combat-banner" class="combat-banner" hidden>
@@ -944,6 +955,6 @@
 
   <script src="./js/clog.js?v=combat-v35"></script>
   <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
-  <script src="./js/app.js?v=t34-zones-2026-05-18"></script>
+  <script src="./js/app.js?v=t34-crit-flash-2026-05-18"></script>
 </body>
 </html>
