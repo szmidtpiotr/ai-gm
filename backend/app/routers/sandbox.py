@@ -263,6 +263,21 @@ def get_character_full(character_id: int) -> dict[str, Any]:
     }
 
 
+@router.post("/advance-turn")
+def advance_turn_endpoint(payload: dict = Body(...)) -> dict[str, Any]:
+    """Advance the turn pointer to the next combatant. In real gameplay this
+    happens inside the narration pipeline; the sandbox skips narration so it
+    needs an explicit way to end the player's turn after an attack."""
+    cid = int(payload.get("campaign_id") or 0)
+    if not cid:
+        raise HTTPException(status_code=400, detail="campaign_id required")
+    try:
+        new_turn = combat.advance_turn(cid)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"ok": True, "current_turn": new_turn, "combat_state": combat.load_combat_snapshot(cid)}
+
+
 @router.post("/end-combat")
 def end_combat(payload: dict = Body(...)) -> dict[str, Any]:
     """Force-end the active combat for this sandbox campaign. Body: `{campaign_id, reason?}`."""

@@ -435,7 +435,23 @@ async function doAttack(panel, spellKey = null) {
     else if (res.hit) line = `Trafienie! ${res.damage || 0} obrażeń → ${res.target_name || "wróg"} (rzut ${d20})`;
     else line = `Pudło (rzut ${d20})${res.player_nat1 ? " — Nat 1!" : ""}`;
     logMsg(panel, `[${kind}] ${line}`);
-    if (res.combat_state?.status === "ended") logMsg(panel, `Walka: ${res.combat_state.ended_reason}.`);
+
+    // resolve-attack does NOT advance the turn server-side (real gameplay relies
+    // on the narration pipeline to do it). Sandbox has no narration, so we
+    // advance the turn explicitly whenever the player's action wasn't blocked.
+    // out_of_range / mana_insufficient leave the turn with the player.
+    const consumedTurn = !res.blocked && !res.mana_insufficient
+      && state.combatState && state.combatState.status === "active";
+    if (consumedTurn) {
+      try {
+        const adv = await adminFetch("/api/admin/sandbox/advance-turn", { method: "POST", body: JSON.stringify({ campaign_id: state.campaignId }) });
+        if (adv.combat_state) state.combatState = adv.combat_state;
+      } catch (e) {
+        logMsg(panel, "Advance-turn error: " + (e.message || "?"));
+      }
+    }
+
+    if (state.combatState?.status === "ended") logMsg(panel, `Walka: ${state.combatState.ended_reason}.`);
     await refreshCharacterSheet(panel);
     await refreshRollEvents(panel);
   } catch (e) {
