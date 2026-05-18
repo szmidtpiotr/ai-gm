@@ -39,7 +39,8 @@ def _conn() -> sqlite3.Connection:
 
 @router.get("/heroes")
 def list_heroes() -> dict[str, Any]:
-    """All active heroes the admin can sandbox-test against."""
+    """All active heroes the admin can sandbox-test against.
+    Excludes the sandbox clones themselves (name prefixed '[SBX] ')."""
     with _conn() as c:
         rows = c.execute(
             """
@@ -50,11 +51,87 @@ def list_heroes() -> dict[str, Any]:
                    json_extract(sheet_json,'$.max_hp')     AS max_hp
             FROM characters
             WHERE is_active = 1
+              AND (name NOT LIKE '[SBX] %' OR name IS NULL)
+              AND COALESCE(json_extract(sheet_json,'$.__sandbox_clone__'), 0) = 0
             ORDER BY id DESC
             LIMIT 50
             """,
         ).fetchall()
     return {"heroes": [dict(r) for r in rows]}
+
+
+def _purge_prior_sandbox_clones(c: sqlite3.Connection, user_id: int) -> int:
+    """Hard-delete any sandbox clones owned by this user. FK CASCADE drops
+    their inventory + spells. Returns count of clones removed."""
+    priors = c.execute(
+        "SELECT id FROM characters WHERE user_id = ? AND name LIKE '[SBX] %'",
+        (user_id,),
+    ).fetchall()
+    for p in priors:
+        c.execute("DELETE FROM characters WHERE id = ?", (int(p["id"]),))
+    return len(priors)
+
+
+def _clone_hero_for_sandbox(
+    c: sqlite3.Connection, source_hero_id: int, campaign_id: int
+) -> int:
+    """Create a disposable copy of `source_hero_id` for sandbox combat.
+
+    Copies the `characters` row, `character_inventory` rows, and
+    `character_spells` rows. Tags the clone with name prefix '[SBX] ' and
+    `sheet_json.__sandbox_clone__ = true` so it can be detected and
+    filtered out elsewhere. Returns the new clone's character id.
+    """
+    orig = c.execute(
+        "SELECT * FROM characters WHERE id = ? AND is_active = 1",
+        (source_hero_id,),
+    ).fetchone()
+    if not orig:
+        raise HTTPException(status_code=404, detail="hero not found")
+
+    sheet = json.loads(orig["sheet_json"] or "{}")
+    sheet["__sandbox_clone__"] = True
+    sheet["__sandbox_source_id__"] = int(source_hero_id)
+    sheet_json = json.dumps(sheet, ensure_ascii=False)
+    clone_name = f"[SBX] {orig['name']}"
+
+    cur = c.execute(
+        """
+        INSERT INTO characters
+            (campaign_id, user_id, name, system_id, sheet_json, location, is_active,
+             created_at, backstory, appearance, personality, motivation, note,
+             gold, gold_gp, hero_status, visited_location_keys, status)
+        SELECT ?, user_id, ?, system_id, ?, location, 1,
+               datetime('now'), backstory, appearance, personality, motivation, note,
+               gold, gold_gp, hero_status, visited_location_keys, 'in_campaign'
+        FROM characters WHERE id = ?
+        """,
+        (campaign_id, clone_name, sheet_json, source_hero_id),
+    )
+    clone_id = int(cur.lastrowid)
+
+    c.execute(
+        """
+        INSERT INTO character_inventory
+            (character_id, item_key, weapon_key, consumable_key, quantity, equipped,
+             slot, acquired_at, source, meta_json, label)
+        SELECT ?, item_key, weapon_key, consumable_key, quantity, equipped,
+               slot, acquired_at, source, meta_json, label
+        FROM character_inventory WHERE character_id = ?
+        """,
+        (clone_id, source_hero_id),
+    )
+
+    c.execute(
+        """
+        INSERT INTO character_spells (character_id, spell_key, rank, use_count)
+        SELECT ?, spell_key, rank, use_count
+        FROM character_spells WHERE character_id = ?
+        """,
+        (clone_id, source_hero_id),
+    )
+
+    return clone_id
 
 
 @router.get("/enemies")
@@ -100,24 +177,40 @@ def _ensure_sandbox_campaign(conn: sqlite3.Connection, user_id: int) -> int:
 
 @router.post("/setup")
 def setup_sandbox(payload: dict = Body(...)) -> dict[str, Any]:
-    """Prepare the sandbox: ensure a sandbox campaign exists for this hero's
-    owner and assign the hero to it (campaign_id update on the hero row).
-    Body: `{hero_id: int}`. Returns `{campaign_id, character_id, hero}`."""
-    hero_id = int(payload.get("hero_id") or 0)
-    if not hero_id:
+    """Prepare an isolated sandbox session against a copy of the chosen hero.
+
+    Critical isolation guarantee: the sandbox NEVER modifies the original
+    hero. On setup we (1) end any lingering sandbox combat, (2) hard-delete
+    any prior sandbox clones for this owner (cascade drops their inventory
+    and spells), (3) clone the chosen hero into a new disposable character
+    row (`name = "[SBX] <orig>"`, `sheet_json.__sandbox_clone__ = true`),
+    and (4) bind the clone to the sandbox campaign. All subsequent attacks,
+    HP/mana decrements, death-saves, equipment changes etc. happen on the
+    clone — the original hero stays untouched even if the sandbox combat
+    ends in player_dead.
+
+    Body: `{hero_id: int}` — id of the **original** hero to copy from.
+    Returns: `{campaign_id, character_id, source_hero_id, hero summary}`.
+    """
+    source_hero_id = int(payload.get("hero_id") or 0)
+    if not source_hero_id:
         raise HTTPException(status_code=400, detail="hero_id required")
 
     with _conn() as c:
-        hero = c.execute(
-            "SELECT id, user_id, name, campaign_id, sheet_json FROM characters WHERE id = ? AND is_active = 1",
-            (hero_id,),
+        # Foreign-key cascade for the clone deletion needs to be enabled
+        c.execute("PRAGMA foreign_keys = ON")
+
+        orig = c.execute(
+            "SELECT id, user_id, name FROM characters WHERE id = ? AND is_active = 1",
+            (source_hero_id,),
         ).fetchone()
-        if not hero:
+        if not orig:
             raise HTTPException(status_code=404, detail="hero not found")
 
-        campaign_id = _ensure_sandbox_campaign(c, int(hero["user_id"]))
+        user_id = int(orig["user_id"])
+        campaign_id = _ensure_sandbox_campaign(c, user_id)
 
-        # Force-end any active combat lingering on this campaign
+        # End any lingering active combat from a previous sandbox session
         ac = c.execute(
             "SELECT id FROM active_combat WHERE campaign_id = ? AND status = 'active'",
             (campaign_id,),
@@ -128,13 +221,14 @@ def setup_sandbox(payload: dict = Body(...)) -> dict[str, Any]:
                 (int(ac["id"]),),
             )
 
-        # Bind hero to the sandbox campaign for the duration
-        c.execute(
-            "UPDATE characters SET campaign_id = ?, status = 'in_campaign' WHERE id = ?",
-            (campaign_id, hero_id),
-        )
+        # Wipe prior sandbox clones for this owner — FK cascade clears their
+        # inventory + spells too.
+        purged = _purge_prior_sandbox_clones(c, user_id)
 
-        # Ensure a game_sessions row exists so combat_service helpers don't trip
+        # Fresh clone of the chosen hero (original row untouched).
+        clone_id = _clone_hero_for_sandbox(c, source_hero_id, campaign_id)
+
+        # game_sessions row so combat_service helpers don't trip.
         gs = c.execute(
             "SELECT id FROM game_sessions WHERE campaign_id = ? LIMIT 1",
             (campaign_id,),
@@ -148,19 +242,21 @@ def setup_sandbox(payload: dict = Body(...)) -> dict[str, Any]:
 
         c.commit()
 
-        hero_row = c.execute(
-            "SELECT id, name, json_extract(sheet_json,'$.archetype') AS archetype, sheet_json FROM characters WHERE id = ?",
-            (hero_id,),
+        clone_row = c.execute(
+            "SELECT id, name, sheet_json FROM characters WHERE id = ?",
+            (clone_id,),
         ).fetchone()
-        sheet = json.loads(hero_row["sheet_json"] or "{}")
+        sheet = json.loads(clone_row["sheet_json"] or "{}")
 
     return {
         "campaign_id": campaign_id,
-        "character_id": hero_id,
+        "character_id": clone_id,
+        "source_hero_id": source_hero_id,
+        "prior_clones_purged": purged,
         "hero": {
-            "id": hero_row["id"],
-            "name": hero_row["name"],
-            "archetype": hero_row["archetype"],
+            "id": clone_row["id"],
+            "name": clone_row["name"],
+            "archetype": sheet.get("archetype"),
             "level": int(sheet.get("level") or 1),
             "hp": int(sheet.get("current_hp") or sheet.get("max_hp") or 0),
             "max_hp": int(sheet.get("max_hp") or 0),
