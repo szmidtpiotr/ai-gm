@@ -107,6 +107,15 @@ def post_resolve_attack(campaign_id: int, body: ResolveAttackRequest):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@router.post("/campaigns/{campaign_id}/combat/zone-change")
+def post_zone_change(campaign_id: int):
+    """T34 — Player toggles their combat zone (engaged ↔ ranged). Consumes the turn."""
+    try:
+        return combat.change_player_zone(campaign_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @router.post("/campaigns/{campaign_id}/combat/enemy-turn")
 def post_enemy_turn(campaign_id: int):
     try:

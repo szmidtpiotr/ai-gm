@@ -354,6 +354,63 @@ def _parse_enemy_skills(raw: Any) -> dict[str, int]:
     return out
 
 
+# ── Zone system (T34) ───────────────────────────────────────────────────────
+# Two-zone combat model per docs/V2_ARCHITECTURE/04_MAGIC_RANGE_MAP.md §4:
+#   ENGAGED — front line (melee scrum)
+#   RANGED  — back line (archers, casters, kiters)
+# Melee attacks require attacker and target in the same zone.
+# Ranged attacks/spells work regardless (spell-specific target_zone still applies).
+
+ZONE_ENGAGED = "engaged"
+ZONE_RANGED = "ranged"
+
+_RANGED_ENEMY_KEYWORDS = (
+    "archer", "arch", "bowman", "crossbow", "mage", "magus", "wizard",
+    "sorcerer", "warlock", "shaman", "priest", "cleric", "caster",
+    "necromancer", "warlock", "witch", "scout_ranged", "sniper", "ranger",
+    "łucznik", "kusznik", "mag", "czarodziej", "kapłan", "łucznicz",
+)
+
+
+def _default_zone_for_player(sheet: dict) -> str:
+    """Warrior/melee builds start in engaged; Scholar/casters start in ranged."""
+    arch = str((sheet or {}).get("archetype") or "").strip().lower()
+    if arch == "scholar":
+        return ZONE_RANGED
+    return ZONE_ENGAGED
+
+
+def _default_zone_for_enemy(enemy_key: str, label: str | None = None) -> str:
+    """Heuristic: ranged enemies have keywords like archer/mage/shaman in key or label.
+    Everything else is engaged (default melee combatant).
+
+    Follow-up: replace with explicit game_config_enemies.default_zone column.
+    """
+    needle = f"{enemy_key or ''} {label or ''}".lower()
+    return ZONE_RANGED if any(k in needle for k in _RANGED_ENEMY_KEYWORDS) else ZONE_ENGAGED
+
+
+def _opposite_zone(z: str) -> str:
+    return ZONE_RANGED if str(z) == ZONE_ENGAGED else ZONE_ENGAGED
+
+
+def _ensure_zones(combatants: list[dict]) -> bool:
+    """Backfill `zone` on existing combatant rows that pre-date the zone system.
+    Returns True if any combatant was mutated (caller should persist)."""
+    mutated = False
+    for c in combatants:
+        if not isinstance(c, dict):
+            continue
+        if c.get("zone"):
+            continue
+        if c.get("type") == "player":
+            c["zone"] = ZONE_ENGAGED
+        else:
+            c["zone"] = _default_zone_for_enemy(c.get("enemy_key") or c.get("id") or "", c.get("name"))
+        mutated = True
+    return mutated
+
+
 def _fetch_enemy_row(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
     return conn.execute(
         """
@@ -467,6 +524,8 @@ def _preview_loot_from_roll_items(loot_items: list[dict[str, Any]]) -> list[dict
 
 
 def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
+    _combatants = json.loads(row["combatants"] or "[]")
+    _ensure_zones(_combatants)  # backfill zone for pre-T34 combats; harmless if all set
     d: dict[str, Any] = {
         "id": row["id"],
         "campaign_id": row["campaign_id"],
@@ -474,7 +533,7 @@ def _row_to_combat_dict(row: sqlite3.Row) -> dict[str, Any]:
         "round": int(row["round"] or 1),
         "turn_order": json.loads(row["turn_order"] or "[]"),
         "current_turn": row["current_turn"],
-        "combatants": json.loads(row["combatants"] or "[]"),
+        "combatants": _combatants,
         "status": row["status"],
         "ended_reason": row["ended_reason"],
         "location_tag": row["location_tag"] if "location_tag" in row.keys() else None,
@@ -1170,6 +1229,7 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                 "stats": ability_stats,
                 "initiative_roll": init_player,
                 "conditions": _sheet_conditions(sheet),
+                "zone": _default_zone_for_player(sheet),
             }
         ]
 
@@ -1222,6 +1282,7 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                     "drop_chance": float(er["drop_chance"] if er["drop_chance"] is not None else 1.0),
                     "xp_award": xp_award_e,
                     "tier": str(er["tier"] or "standard"),
+                    "zone": _default_zone_for_enemy(er["key"], er["label"]),
                     # Stored now for opposed checks in upcoming [S1b] formulas (T30).
                     "skills": _parse_enemy_skills(er["skills_json"]),
                 }
@@ -1395,14 +1456,41 @@ def resolve_attack(
                 out["combat_state"] = _row_to_combat_dict(row)
                 return out
 
+            # ── Zone gating: prefer same-zone targets for melee, any-zone for ranged ──
+            _ensure_zones(combatants)
+            p_zone = str((_find_combatant(combatants, "player") or {}).get("zone") or ZONE_ENGAGED)
+            _resolved_weapon_for_zone = (
+                "spell" if spell_key else (
+                    "spell" if str(sheet.get("archetype") or "").strip().lower() == "scholar"
+                    else str((resolve_sheet_weapon(conn, sheet, ch_id) or {}).get("weapon_type") or "melee").lower()
+                )
+            )
+            _melee = _resolved_weapon_for_zone == "melee"
+
             order = json.loads(row["turn_order"] or "[]")
             target_id = None
-            for tid in order:
-                if tid in living:
-                    target_id = tid
-                    break
-            if not target_id:
-                target_id = living[0]
+            if _melee:
+                for tid in order:
+                    if tid not in living:
+                        continue
+                    c = _find_combatant(combatants, tid)
+                    if c and str(c.get("zone") or ZONE_ENGAGED) == p_zone:
+                        target_id = tid
+                        break
+                if not target_id:
+                    out["hit"] = False
+                    out["blocked"] = True
+                    out["block_reason"] = "out_of_range"
+                    out["message"] = "Cele są poza zasięgiem walki wręcz. Zbliż się lub użyj broni dystansowej."
+                    out["combat_state"] = _row_to_combat_dict(row)
+                    return out
+            else:
+                for tid in order:
+                    if tid in living:
+                        target_id = tid
+                        break
+                if not target_id:
+                    target_id = living[0]
 
             enemy = _find_combatant(combatants, target_id)
             if not enemy:
@@ -1871,6 +1959,48 @@ def resolve_attack(
         if not enemy or enemy.get("type") != "enemy":
             raise ValueError("current turn is not a valid enemy")
 
+        # ── Zone AI: melee enemy in different zone charges instead of attacking ──
+        _ensure_zones(combatants)
+        player_c = _find_combatant(combatants, "player") or {}
+        p_zone_e = str(player_c.get("zone") or ZONE_ENGAGED)
+        e_zone = str(enemy.get("zone") or ZONE_ENGAGED)
+        _prefers_ranged = _default_zone_for_enemy(
+            str(enemy.get("enemy_key") or ""), str(enemy.get("name") or "")
+        ) == ZONE_RANGED
+        if not _prefers_ranged and e_zone != p_zone_e:
+            # Melee enemy charges to player's zone — consumes the turn, no attack
+            old_zone = e_zone
+            enemy["zone"] = p_zone_e
+            out["hit"] = False
+            out["damage"] = 0
+            out["zone_change"] = {"actor_id": str(cur), "from": old_zone, "to": p_zone_e, "charged": True}
+            out["enemy_name"] = str(enemy.get("name") or enemy.get("enemy_key") or "Wróg").strip()
+            cid_zc = int(row["id"])
+            tn_zc = _next_combat_log_sequence(conn, cid_zc)
+            log_combat_turn(
+                conn,
+                combat_id=cid_zc,
+                campaign_id=campaign_id,
+                turn_number=tn_zc,
+                actor="enemy",
+                event_type="zone_change",
+                roll_value=None,
+                damage=None,
+                hp_after=int(enemy.get("hp_current", 0) or 0),
+                target_id=str(cur),
+                target_name=out["enemy_name"],
+                hit=None,
+                narrative=json.dumps(
+                    {"enemy_name": out["enemy_name"], "from": old_zone, "to": p_zone_e, "charged": True},
+                    ensure_ascii=False,
+                ),
+            )
+            _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
+            conn.commit()
+            advance_turn(campaign_id)
+            out["combat_state"] = load_combat_snapshot(campaign_id)
+            return out
+
         raw = roll_d20()
         atk_b = int(enemy.get("attack_bonus") or 0)
         attack_roll = raw + atk_b
@@ -1970,6 +2100,58 @@ def resolve_enemy_attack(
     """Step 4.2 — alias for :func:`resolve_attack` with ``attacker='enemy'``. ``roll_result`` / ``raw_d20`` ignored."""
     _ = (roll_result, raw_d20)
     return resolve_attack(campaign_id, 0, attacker="enemy", raw_d20=None)
+
+
+def change_player_zone(campaign_id: int) -> dict[str, Any]:
+    """T34 — Player zone-change action. Toggles engaged ↔ ranged and consumes the turn.
+
+    Returns dict with from/to zones and the updated combat_state."""
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("no active combat")
+        if str(row["current_turn"]) != "player":
+            raise ValueError("zone change only on player's turn")
+
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        _ensure_zones(combatants)
+        p = _find_combatant(combatants, "player")
+        if not p:
+            raise ValueError("player combatant missing")
+        old = str(p.get("zone") or ZONE_ENGAGED)
+        new = _opposite_zone(old)
+        p["zone"] = new
+
+        cid = int(row["id"])
+        tn = _next_combat_log_sequence(conn, cid)
+        log_combat_turn(
+            conn,
+            combat_id=cid,
+            campaign_id=campaign_id,
+            turn_number=tn,
+            actor="player",
+            event_type="zone_change",
+            roll_value=None,
+            damage=None,
+            hp_after=int(p.get("hp_current", 0) or 0),
+            target_id="player",
+            target_name=str(p.get("name") or "Bohater"),
+            hit=None,
+            narrative=json.dumps({"from": old, "to": new}, ensure_ascii=False),
+        )
+        _persist_combatants(conn, row, combatants)
+        conn.commit()
+
+    advance_turn(campaign_id)
+    return {
+        "ok": True,
+        "from": old,
+        "to": new,
+        "combat_state": load_combat_snapshot(campaign_id),
+    }
 
 
 def _persist_combatants(
