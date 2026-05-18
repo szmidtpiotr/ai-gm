@@ -15,9 +15,9 @@
 
 ### Stage 1 — Quick wins (close audit gaps fast, ~half day total)
 
-- [ ] **W1** Wound label text rendered under HP bar in character sheet (T24)
-- [ ] **W2** Wound label text rendered under HP bar in combat banner (T24)
-- [ ] **W3** Verify enemy HP shows both bar **and** number per [D3]
+- [x] **W1** Wound label text rendered under HP bar in character sheet (T24) — commit `66d40e0`
+- [x] **W2** Wound label text rendered under HP bar in combat banner (T24) — commit `66d40e0`
+- [x] **W3** Verified enemy HP shows both bar **and** number per [D3] (already correct in code at `app.js:2903`) — commit `66d40e0`
 - [ ] **W4** Condition rename migration: `fear_shaken` → `FRIGHTENED`, `terror` → `PANICKED`, `break` → `BREAK` (idempotent RAW_MIGRATION; rename in `combat_service.py`; update frontend labels) [D2]
 - [ ] **W5** TASK_28 deceased NPC `relationship` field in dataclass (ally/enemy/neutral)
 
