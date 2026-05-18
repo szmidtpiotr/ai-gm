@@ -3826,3 +3826,23 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .sbx-evt--death  { border-left-color: #888;    background: rgba(255,255,255,0.04); color: var(--text-primary); font-weight: 600; }
 .sbx-evt--sys    { border-left-color: rgba(201, 165, 74, 0.4); color: var(--text-secondary); font-style: italic; }
 .sbx-evt--quiet  { opacity: 0.55; font-size: 0.72rem; padding: 3px 9px; }
+
+/* Sandbox combatant rows — HP bar (replaces single-line layout) */
+.sandbox-row { display: block; padding: 6px 10px; }
+.sandbox-row-line {
+  display: grid; grid-template-columns: 24px 1fr auto auto;
+  gap: 8px; align-items: center;
+}
+.sandbox-row-bar {
+  height: 5px; margin-top: 5px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 3px; overflow: hidden;
+}
+.sandbox-row-bar-fill {
+  height: 100%;
+  transition: width 0.35s cubic-bezier(0.32, 0.72, 0, 1), background 0.3s;
+}
+.sandbox-row-bar-fill--high { background: linear-gradient(90deg, #6da64a, #9bc965); }
+.sandbox-row-bar-fill--mid  { background: linear-gradient(90deg, #d49b30, #e8c155); }
+.sandbox-row-bar-fill--low  { background: linear-gradient(90deg, #b03030, #d45050); }
+.sandbox-row--down .sandbox-row-bar-fill { background: rgba(80, 80, 80, 0.4); }

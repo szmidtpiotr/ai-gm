@@ -623,17 +623,23 @@ function renderCombat(panel) {
   const playerTurn = cur === "player";
 
   const renderRow = (c) => {
-    const hp = `${c.hp_current ?? "?"}/${c.hp_max ?? "?"}`;
+    const hpCur = Math.max(0, Number(c.hp_current ?? 0));
+    const hpMax = Math.max(1, Number(c.hp_max ?? hpCur ?? 1));
+    const pct = Math.max(0, Math.min(100, Math.round((hpCur / hpMax) * 100)));
+    const tier = pct > 60 ? "high" : (pct > 25 ? "mid" : "low");
     const isCur = String(c.id) === cur;
     const zone = ZONE_LABEL[c.zone] || c.zone || "";
     const ini = c.initiative_roll != null ? `INI ${c.initiative_roll}` : "";
-    const downed = (c.hp_current ?? 0) <= 0;
+    const downed = hpCur <= 0;
     return `
       <div class="sandbox-row${isCur ? " sandbox-row--active" : ""}${downed ? " sandbox-row--down" : ""}">
-        <span class="sandbox-row-icon">${c.type === "player" ? "🛡" : (downed ? "💀" : "⚔")}</span>
-        <span class="sandbox-row-name">${esc(c.name || c.id || "?")}</span>
-        <span class="sandbox-row-meta">${ini} · ${esc(zone)} · AC ${c.defense ?? "?"}</span>
-        <span class="sandbox-row-hp">${hp}</span>
+        <div class="sandbox-row-line">
+          <span class="sandbox-row-icon">${c.type === "player" ? "🛡" : (downed ? "💀" : "⚔")}</span>
+          <span class="sandbox-row-name">${esc(c.name || c.id || "?")}</span>
+          <span class="sandbox-row-meta">${ini} · ${esc(zone)} · AC ${c.defense ?? "?"}</span>
+          <span class="sandbox-row-hp">${hpCur} / ${hpMax}</span>
+        </div>
+        <div class="sandbox-row-bar"><div class="sandbox-row-bar-fill sandbox-row-bar-fill--${tier}" style="width:${pct}%"></div></div>
       </div>`;
   };
 
