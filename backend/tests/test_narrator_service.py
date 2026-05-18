@@ -347,6 +347,42 @@ class TestNPCDialogue:
             user_content = call_args[1]["content"]
             assert "martwy" in user_content
 
+    def test_deceased_npc_relationship_ally(self):
+        with patch("app.services.narrator_service.generate_chat") as mock_llm:
+            mock_llm.return_value = "Heinz... mój brat. Kto to zrobił?!"
+            req = self._make_req(
+                deceased_npc_context="Heinz jest martwy.",
+                deceased_npc_relationship="ally",
+            )
+            narrate_npc_dialogue(req)
+            user_content = mock_llm.call_args[0][0][1]["content"]
+            assert "stosunek do tej postaci: ally" in user_content
+            assert "żalem" in user_content or "gniewem" in user_content
+
+    def test_deceased_npc_relationship_enemy(self):
+        with patch("app.services.narrator_service.generate_chat") as mock_llm:
+            mock_llm.return_value = "Heinz? Dobrze. Należał mu się."
+            req = self._make_req(
+                deceased_npc_context="Heinz jest martwy.",
+                deceased_npc_relationship="enemy",
+            )
+            narrate_npc_dialogue(req)
+            user_content = mock_llm.call_args[0][0][1]["content"]
+            assert "stosunek do tej postaci: enemy" in user_content
+            assert "lekceważąco" in user_content or "satysfakcji" in user_content
+
+    def test_deceased_npc_relationship_defaults_to_neutral(self):
+        """When relationship is None, prompt falls back to neutral wording."""
+        with patch("app.services.narrator_service.generate_chat") as mock_llm:
+            mock_llm.return_value = "Tak, słyszałem o jego śmierci."
+            req = self._make_req(
+                deceased_npc_context="Heinz jest martwy.",
+                # deceased_npc_relationship not set → defaults to neutral
+            )
+            narrate_npc_dialogue(req)
+            user_content = mock_llm.call_args[0][0][1]["content"]
+            assert "stosunek do tej postaci: neutral" in user_content
+
 
 # ---------------------------------------------------------------------------
 # Task 29 — Scene narration
