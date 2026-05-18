@@ -125,7 +125,7 @@
 |------|------|--------|-------|
 | 33 | TASK_33_HYBRID_INPUT_UI | ✅ | Context buttons + free text, suggested_actions[] API, structured bypass |
 | 34 | TASK_34_COMBAT_UI | ✅ | Spell picker, initiative panel (#18), zone system (#19), crit flash (#23) — all sub-tasks complete |
-| 35 | TASK_35_CHARACTER_SHEET_UI | ✅ | Stats+mods, mana, XP, conditions, spells tab (Scholar), LCK |
+| 35 | TASK_35_CHARACTER_SHEET_UI | ⚠️ | Basics shipped (header, HP/mana bars, gold, stats grid, skills, 3-slot equipment, inventory, conditions, identity, spells tab). **Spec gaps remain** — see #24: location badge, wound label, XP progress bar, level-up banner, XP spending UI, long rest, skill rank dots, mobile bottom tabs, real-time animations. |
 | 43 | TASK_43_PLAYER_WORLD_MAP | ✅ | Fog-of-war world map, click-to-travel, swipe-close |
 | 44 | TASK_44_DEBUG_SYSTEM | ❌ | Admin debug drawer, /debug commands, DB key display |
 | 46 | TASK_46_NARRATIVE_ITEMS | ✅ | LLM-invented items grant to inventory with `item_type='narrative'`; inv_xor constraint patched (commits c4b2d12 + 232722f) |
