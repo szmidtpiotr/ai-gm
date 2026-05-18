@@ -182,6 +182,20 @@ RAW_MIGRATIONS = [
     # generic enough to match unrelated narration. Clear entirely; the code-
     # level _COMBAT_CLASS_SKILLS guard backs this up.
     "UPDATE game_config_skills SET trigger_keywords = '' WHERE key = 'initiative'",
+    # 2026-05-18 W4: rename fear conditions to spec terminology and collapse
+    # 4 stages (fear_shaken/fear_frightened/terror/break) to 3 (frightened/
+    # panicked/break) per [D2]. Idempotent — re-runs are no-ops once data is
+    # already in the new state.
+    "UPDATE character_conditions SET condition_type = 'frightened' "
+        "WHERE condition_type IN ('fear_shaken', 'fear_frightened')",
+    "UPDATE character_conditions SET condition_type = 'panicked' "
+        "WHERE condition_type = 'terror'",
+    # Add the missing 'break' registry row (referenced by code but never seeded).
+    "INSERT OR IGNORE INTO game_config_conditions (key, label, effect_json, description) VALUES ("
+        "'break', 'Złamany', "
+        "'{\"forced_action\":\"flee\",\"duration\":\"encounter\"}', "
+        "'Pęknięcie psychiczne. Bohater musi próbować ucieczki każdej rundy aż do końca starcia.'"
+    ")",
 ]
 
 

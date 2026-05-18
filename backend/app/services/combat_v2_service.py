@@ -217,7 +217,7 @@ def check_fear_trigger(
     # Check if player is already immune (has frightened/panicked/break from this combat)
     existing = conn.execute(
         """SELECT condition_type FROM character_conditions
-           WHERE character_id = ? AND condition_type IN ('fear_frightened','terror','break')""",
+           WHERE character_id = ? AND condition_type IN ('frightened','panicked','break')""",
         (character_id,)
     ).fetchone()
     if existing:
@@ -242,15 +242,16 @@ def resolve_fear_save(
     Resolve a Fear/Terror WIS saving throw.
     d20_roll: the player's pure d20 (no modifiers — pure fate per design decisions).
     """
-    # Check current fear state for escalation
+    # Check current fear state for escalation. Three stages per spec T16
+    # (after 2026-05-18 W4 merge): frightened → panicked → break.
     existing_fear = conn.execute(
         """SELECT condition_type FROM character_conditions
            WHERE character_id = ?
-           AND condition_type IN ('fear_shaken','fear_frightened','terror')
+           AND condition_type IN ('frightened','panicked')
            ORDER BY CASE condition_type
-             WHEN 'terror' THEN 3
-             WHEN 'fear_frightened' THEN 2
-             ELSE 1 END DESC LIMIT 1""",
+             WHEN 'panicked'   THEN 2
+             WHEN 'frightened' THEN 1
+             END DESC LIMIT 1""",
         (character_id,)
     ).fetchone()
     current_fear = existing_fear[0] if existing_fear else None
@@ -268,21 +269,20 @@ def resolve_fear_save(
             "nat20": nat20,
         }
 
-    # Failed — determine new condition
-    if nat1 or current_fear == "fear_frightened":
-        new_condition = "terror"
-        duration = 3
-    elif current_fear == "fear_shaken":
-        new_condition = "fear_frightened"
+    # Failed — determine new condition. Spec T16: failed Fear save → frightened;
+    # escalation paths land on panicked. (`break` is reserved for Nat 1 on
+    # Terror save — separate flow not covered here.)
+    if nat1 or current_fear == "frightened":
+        new_condition = "panicked"
         duration = 2
     else:
-        new_condition = "fear_shaken"
-        duration = 3
+        new_condition = "frightened"
+        duration = 2
 
     expires_at = str(current_round + duration)
     try:
         conn.execute(
-            "DELETE FROM character_conditions WHERE character_id = ? AND condition_type LIKE 'fear_%'",
+            "DELETE FROM character_conditions WHERE character_id = ? AND condition_type IN ('frightened','panicked')",
             (character_id,)
         )
         conn.execute(
