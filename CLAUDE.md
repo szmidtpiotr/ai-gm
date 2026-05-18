@@ -191,6 +191,25 @@ Standalone farmable dungeons separate from campaign story content.
 - Frontend change: edit under `frontend/` → verify in browser at `https://aigm-dev.studio-colorbox.com/` → check console.
 - JS version strings in imports (`?v=N`) must be bumped when a shared module changes to bust browser cache.
 
+### Implementation record issues (mandatory)
+
+Every time a new feature or task is implemented, file a GitHub issue documenting it. **Template reference: https://github.com/szmidtpiotr/ai-gm/issues/18** — match that structure exactly.
+
+Required sections:
+1. **Title**: `[TASK] <task code if any> — <short description>`
+2. **Labels**: `enhancement` + `needs-testing` (verification flag — keep open until tested)
+3. **Body**:
+   - `## Task` — task name + companion feature-request link if one exists + implementation commit SHA
+   - `## What was implemented` — concrete behavior, visual states table where relevant, motion timings, client-side state tracking
+   - `## Files changed` — list every modified path with one-line rationale
+   - `## Backend` — explicitly state "No changes" if frontend-only, else summarize endpoints / migrations
+   - `## Numbers Policy` — each timing/threshold labeled as starting value with test plan (per game-design framework)
+   - `## Acceptance` — checkbox list of verification steps to run in the browser
+   - `## Out of scope` — sibling tasks deferred for separate issues
+4. **Close only after** visual verification on DEV; the `needs-testing` label flags pending verification.
+
+This applies to every implementation, no matter how small.
+
 ## Reference Files
 
 - Backend entry: `backend/app/main.py`
