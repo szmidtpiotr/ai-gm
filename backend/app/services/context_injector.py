@@ -49,11 +49,13 @@ _WOUND_LABELS = [
     (0,   "Nieprzytomny/a — rzuty na śmierć"),
 ]
 
-# Fear condition → label
+# Fear condition → label. Three stages per spec T16 (post 2026-05-18 W4 merge):
+# frightened (failed Fear save) → panicked (failed Terror save) → break (Nat 1
+# on Terror save, forced auto-flee).
 _FEAR_LABELS = {
-    "fear_shaken":    "Zdenerwowany/a — lekki niepokój",
-    "fear_frightened":"Przestraszony/a — trudno skupić myśli",
-    "terror":         "Opanowany/a przez terror — ciało nie słucha",
+    "frightened": "Przerażony/a — trudno skupić myśli",
+    "panicked":   "Ogarnięty/a paniką — ciało nie słucha",
+    "break":      "Złamany/a — musi uciekać",
 }
 
 # Polish honorifics / common titles — NOT treated as invented proper nouns
