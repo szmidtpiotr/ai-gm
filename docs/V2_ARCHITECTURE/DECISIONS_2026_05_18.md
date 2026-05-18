@@ -183,6 +183,60 @@ Already covered in D2. Worth the ~30 min cost.
 
 ---
 
+## D12 — Levels are display-only (re-confirmed, kasuje moją błędną propozycję bannera)
+
+**Decision:** zgodnie ze spec TASK_25V2 — poziomy są **wyłącznie wizualnym wskaźnikiem**. **Brak automatycznych bonusów** za przekroczenie 100 / 200 / ... PD. HP i mana rosną tylko przez świadomy zakup w panelu Awansuj.
+
+**Co to zmienia:**
+- ❌ "Level-up notification banner" usunięty z planu Stage 2 (X9)
+- Pasek PD wypełnia się i resetuje cicho po przekroczeniu 100 PD
+- Etykieta "Poz. N" w nagłówku może być, ale nie towarzyszy jej fanfara
+
+## D13 — Stage 2 XP loop ma cztery podetapy, kolejność A → B → D → C
+
+**Decision:** rozbicie XP loop na fundamenty zanim zbudujemy UI:
+
+1. **2A — Zegar gry** (advance_clock, podpięty do travel/rest)
+2. **2B — Bezpieczne miejsca** (LLM tag + admin UI + dziedziczenie na hex'y)
+3. **2D — Wpięcie 22 źródeł XP** (campaign tags, exploration, skills, narrative)
+4. **2C — Panel Awansuj + endpointy `/rest`** (UI wydawania PD)
+
+**Dlaczego ta kolejność:** bez zegara odpoczynek nie ma sensu. Bez safe-for-rest endpoint /rest by się rozsypał na walidacji. Bez 22 źródeł XP odpoczynek po walce daje mało powodów do wydawania. Panel Awansuj jako ostatni — wieńczy pętlę.
+
+## D14 — Wpięcie 22 źródeł XP do faktycznych wywołań `grant_character_xp`
+
+**Decision:** Backend już ma 22 źródła w `game_config_xp_awards` (combat, campaign, exploration, skills, narrative, session) — ale tylko **combat.kill_*** jest podpięty w kodzie. Reszta to martwy seed.
+
+Wszystkie 22 muszą zostać podłączone w Stage 2D, w tym:
+- **campaign** tags ([BEAT_COMPLETE], [QUEST_COMPLETE], [DUNGEON_CLEAR], [CAMPAIGN_END])
+- **exploration**: pierwsza wizyta w lokacji, pierwsza rozmowa z NPC, [DISCOVERY:lore_key]
+- **skills**: sukces w teście DC 12-15 (3 XP), DC 16-19 (8 XP), DC 20+ (15 XP)
+- **narrative**: [XP_GRANT:reason:amount] od LLM (cap 50 XP per session)
+- **session**: rozpoczęcie sesji, długi odpoczynek
+
+## D15 — 'Rozbij obóz' w MVP
+
+**Decision:** odpoczynek poza lokacjami z `safe_for_rest=1` jest możliwy przez akcję `Rozbij obóz`:
+- Tworzy tymczasową sub-lokację (`temp_camp`) na bieżącym hex'ie z `safe_for_rest=1`
+- Kosztuje 1 godzinę zegara
+- **Encounter chance +20%** podczas odpoczynku w obozie (ambush risk)
+- Wymaga sprzyjającego terenu (nie da się w bagnie, na ulicy miasta, w lochu)
+
+Wprowadza wybór: wracać do karczmy (bezpiecznie, dłużej) vs obozować (szybciej, ryzyko).
+
+## D16 — Zegar gry musi rosnąć (zerowy stan)
+
+**Decision:** `ingame_hours` w bazie istnieje, narrator go czyta — ale nikt go nie zwiększa. Stage 2A wprowadza `advance_clock(hours, reason)` wywoływany przez:
+- Travel między hex'ami: `+travel_hours` per hex (z `location_connections`)
+- Krótki odpoczynek: `+1h`
+- Długi odpoczynek: `+8h`
+- Rozbij obóz: `+1h` (akcja samej rozbiórki) + `+8h` (odpoczynek)
+- Walka / dialog / kupowanie / krótkie akcje: **0h** (czas nie płynie)
+
+UI: nagłówek pokazuje "Dzień 3, 14:30 Popołudnie".
+
+---
+
 ## D11 — New condition: `zaskoczony` (Surprised)
 
 **Decision:** Add to `game_config_conditions` table.

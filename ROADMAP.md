@@ -21,18 +21,54 @@
 - [x] **W4** Condition rename migration: `fear_shaken`+`fear_frightened` → `frightened`, `terror` → `panicked`, added `break` to registry — commit `97fcba3` (lowercase per DB convention; spec uppercase = rhetorical)
 - [x] **W5** TASK_28 deceased NPC `relationship` field — commit `10072e8`
 
-### Stage 2 — XP Loop [D7 — locked priority]
+### Stage 2 — XP Loop [D7 + D13 — locked priority]
 
-- [ ] **X1** Add `xp_to_next_level` calculation in `xp_service.get_xp_snapshot()` if not already present
-- [ ] **X2** XP progress bar in character sheet header (gold/amber tone, `{current}/{next_level}`)
-- [ ] **X3** Level display computed from `floor(xp_total / 100)` shown in header
-- [ ] **X4** `POST /api/characters/{id}/rest` long-rest endpoint — restores HP/mana, clears short-rest counter, **flips pending XP → spendable**, resets death save counter, `safe_for_rest` location check
-- [ ] **X5** Rest button + confirmation flow in character sheet (only enabled when `safe_for_rest = true`)
-- [ ] **X6** Player "Awansuj" panel — skill rank-up cards (cost = `max(30, 30 × current_rank)`, click → confirm → calls existing `spend_skill_rank_up`)
-- [ ] **X7** Player "Awansuj" panel — stat point-up cards (cost = `max(30, 50 × current_modifier)`, calls existing `spend_stat_point_up`)
-- [ ] **X8** Player "Awansuj" panel — spell learn (75 XP) / upgrade (R2 = 50, R3 = 100) cards for Scholar
-- [ ] **X9** Level-up notification banner — animated full-width slide-down on `level_up: true`, gold glow, auto-dismiss 5s
-- [ ] **X10** Player "Historia PD" view in character sheet — paginated grant log from `character_xp_grants`, grouped by category, shown in stats tab
+> **Przeprojektowany 2026-05-18 po dyskusji z user'em.** Cztery podetapy w kolejności: zegar → bezpieczne miejsca → źródła XP → UI wydawania. Spec D12: poziomy są display-only (brak bannera level-up — paseksilent fill+reset).
+
+#### Stage 2A — Zegar gry (fundament, niczego widocznego dla gracza bez tego)
+
+- [ ] **T1** `advance_clock(campaign_id, hours, reason)` — zwiększa `ingame_hours` w `game_sessions.session_flags`, loguje powód do audit
+- [ ] **T2** Travel między hex'ami / lokacjami → `advance_clock(travel_hours)` z `location_connections`
+- [ ] **T3** Krótki odpoczynek → `advance_clock(1)`
+- [ ] **T4** Długi odpoczynek → `advance_clock(8)`
+- [ ] **T5** Nagłówek UI: "**Dzień 3, 14:30 Popołudnie**" (czyta z `ingame_hours`, formatuje przez `_time_of_day()`)
+
+#### Stage 2B — Bezpieczne miejsca (safe_for_rest edytowalne dynamicznie)
+
+- [ ] **R1** LLM tag `[SET_SAFE_FOR_REST:location_key:on|off]` — GM dynamicznie oznacza miejsca (np. po misji "oczyszczono karczmę" → bezpieczna)
+- [ ] **R2** Dziedziczenie: hex jest safe ⇔ ma lokację z `safe_for_rest=1`. Implementacja: helper `_hex_is_safe_for_rest(q, r)` używany przez endpointy /rest
+- [ ] **R3** Admin UI: edytuj `safe_for_rest` z karty lokacji (już istnieje?) **i** z edytora hexa na mapie kampanii
+- [ ] **R4** Akcja gracza "**Rozbij obóz**" [D15] — tworzy tymczasową sub-lokację `temp_camp` z `safe_for_rest=1`, +1h zegara, +20% encounter chance podczas odpoczynku
+
+#### Stage 2D — Wpięcie 22 źródeł XP [D14] (najważniejsze dla różnorodności gry)
+
+- [ ] **XS1** `[BEAT_COMPLETE:beat_key]` tag → grant XP z `campaign.beat_complete` (30 XP)
+- [ ] **XS2** `[QUEST_COMPLETE:quest_key]` → `campaign.side_quest` (40 XP)
+- [ ] **XS3** `[DUNGEON_CLEAR:dungeon_key]` → `campaign.dungeon_cleared` (75 XP)
+- [ ] **XS4** `[CAMPAIGN_END:ending_id]` → `campaign.campaign_ending` (200 XP)
+- [ ] **XS5** Pierwsza wizyta w macro-lokacji → `exploration.location_new` (15 XP). Tracking via `characters.visited_location_keys`
+- [ ] **XS6** Pierwsza rozmowa z NPC (DIALOGUE z nowym npc_key) → `exploration.npc_first_talk` (5 XP)
+- [ ] **XS7** `[DISCOVERY:lore_key]` → `exploration.secret` (10 XP)
+- [ ] **XS8** `[DISCOVERY:secret_location]` → `exploration.hidden_room` (10 XP)
+- [ ] **XS9** Sukces w teście DC ∈ [12-15] → `skills.skill_dc_12` (3 XP)
+- [ ] **XS10** Sukces w teście DC ∈ [16-19] → `skills.skill_dc_16` (8 XP)
+- [ ] **XS11** Sukces w teście DC ≥ 20 → `skills.skill_dc_20` (15 XP)
+- [ ] **XS12** LLM tag `[XP_GRANT:reason:amount]` → `narrative.*` (cap 50 XP per session)
+- [ ] **XS13** `outnumbered_victory` — wygrana walka z 3+ wrogami → 20 XP (combat extra, łatwy add-on)
+- [ ] **XS14** `death_save_survived` — przeżycie rzutu na śmierć → 15 XP (combat extra)
+- [ ] **XS15** Session start trigger (po hydration F5 → +0, ale rozpoczęcie nowej sesji w >30 min gap → bonus)
+
+#### Stage 2C — UI wydawania PD + endpointy /rest (wieńczy pętlę)
+
+- [ ] **X1** Pasek PD w karcie postaci — "47/100 do milestone 100" (czysto wizualny, bez bannera per [D12])
+- [ ] **X2** Etykieta "Poz. N" w nagłówku (computed `floor(xp_total/100)`, max 10) — bez fanfar
+- [ ] **X3** `POST /api/characters/{id}/rest?type=long` — waliduje `safe_for_rest`, +8h zegara, full HP/mana, **flip pending XP → spendable**, reset death save counter
+- [ ] **X4** `POST /api/characters/{id}/rest?type=short` — +1h, regen 1d6+CON HP, max 2 między długimi (T23 spec)
+- [ ] **X5** UI: dwa przyciski w karcie (krótki / długi odpoczynek) z confirmation, gated na safe_for_rest
+- [ ] **X6** Panel "Awansuj" — skill rank-up cards (cost `max(30, 30 × rank)`, calls `spend_skill_rank_up`)
+- [ ] **X7** Panel "Awansuj" — stat point-up cards (cost `max(30, 50 × modifier)`, calls `spend_stat_point_up`)
+- [ ] **X8** Panel "Awansuj" — spell learn (75 XP) / upgrade (R2=50, R3=100) cards dla Scholar
+- [ ] **X9** "Historia PD" view — paginated `character_xp_grants` log, grouped by category, w karcie postaci
 
 ### Stage 3 — New surprise condition [D11]
 
