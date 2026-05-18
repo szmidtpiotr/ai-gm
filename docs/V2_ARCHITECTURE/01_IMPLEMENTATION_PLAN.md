@@ -128,7 +128,7 @@
 | 35 | TASK_35_CHARACTER_SHEET_UI | ✅ | Stats+mods, mana, XP, conditions, spells tab (Scholar), LCK |
 | 43 | TASK_43_PLAYER_WORLD_MAP | ✅ | Fog-of-war world map, click-to-travel, swipe-close |
 | 44 | TASK_44_DEBUG_SYSTEM | ❌ | Admin debug drawer, /debug commands, DB key display |
-| 46 | TASK_46_NARRATIVE_ITEMS | ❌ | **Spec complete** — see `docs/V2_ARCHITECTURE/TASK_NARRATIVE_ITEMS.md` |
+| 46 | TASK_46_NARRATIVE_ITEMS | ✅ | LLM-invented items grant to inventory with `item_type='narrative'`; inv_xor constraint patched (commits c4b2d12 + 232722f) |
 
 ### Phase 10 — Polish
 > Depends on everything.
@@ -608,3 +608,34 @@ Distinguish narrative types inside GM chat bubbles:
 - Loot table sidebar: scrollable (fixed `height: 100%` + `overflow: hidden` on panel)
 - Loot entries: scrollable (max-height: 340px) + search filter with count
 - Archetypes: `hp_base`, `starter_gold_gp`, `starter_items_json` now visible and editable
+
+### Session 2026-05-17/18 — T34 Combat UI completed, Combat Sandbox, bug audit
+
+**T34 Combat UI — all sub-tasks shipped:**
+- **Initiative panel** (issue #18, commit `6d9ba8a`): horizontal chip track above combat banner; player + enemies in initiative order; active chip gold-glow + downward caret; "acted this round" dims to 0.45 opacity; round-end sweep animation resets state; downed combatants greyscale + diagonal slash; mobile horizontal scroll.
+- **Zone system** (issue #19, commits `b8bbf11` backend + `d57953f` frontend): two-zone model per `04_MAGIC_RANGE_MAP.md §4`. Combatants get `zone: 'engaged' | 'ranged'` on combat start (scholar→ranged, warrior→engaged, enemies via keyword heuristic). Player melee gating: out-of-range targets return `{blocked, block_reason: 'out_of_range'}` without consuming the turn. Enemy AI: melee enemy in wrong zone charges (consumes turn, no attack). New `POST /api/campaigns/{id}/combat/zone-change` endpoint. Frontend splits combat banner into DYSTANS/ZWARCIE columns + composer Zbliż się/Cofnij się button + initiative-chip zone glyph.
+- **Crit flash** (issue #23, commit `74c350a`): theatrical full-viewport overlay on Nat 20 / Nat 1 from both attacks and skill tests. Crit = inverse vignette with four gold beams + "CIOS KRYTYCZNY" in Cinzel. Fumble = blood-red vignette closing in + "FATALNE PUDŁO" with cracked text shadow + 180 ms viewport shake. CSS-only motion, `pointer-events: none`, honors `prefers-reduced-motion`.
+
+**Combat Sandbox** (issue #21, commits `6fa73bf` → `f91e45f` → many follow-ups):
+- New admin panel section at `/admin2/` → ⚔ Sandbox. Reuses production combat engine — anything verified there matches real gameplay.
+- Backend router `backend/app/routers/sandbox.py` at `/api/admin/sandbox/*`: `/heroes`, `/enemies`, `/setup`, `/start-combat`, `/reset-hero`, `/end-combat`, `/advance-turn`, `/character/{id}`.
+- **Hero isolation**: every `/setup` creates a disposable clone of the chosen hero (`name='[SBX] <orig>'`, `sheet_json.__sandbox_clone__=true`). Inventory + spells cloned via `character_inventory` and `character_spells` copy. Original hero never touched even on sandbox death. Prior clones purged on each setup (FK cascade drops their data). `/heroes` filters clones from the picker.
+- **Layout**: 3-column responsive — Setup + Character Sheet card / Live combat state + actions / Log + 📋 Kopiuj raport. Sheet card shows HP+mana bars, 7-stat grid, conditions, inventory grouped by type with Załóż/Zdejmij/Użyj buttons (shield routes to `off_hand`, second weapon auto-routes to dual-wield), spells chip row, ✨ Czar picker for Scholar.
+- **Combat events feed**: mirrors player UI roll cards (d20 + modifier vs AC, hit/miss, damage, weapon used) — filtered to the active combat's `combat_id` so prior fights don't leak.
+- **Auto-enemy-turn**: 750 ms after every player action; manual ⏭ Tura wroga retained as override.
+- **Copy report**: structured markdown bundle (hero + inventory + spells + combat state + events + log) for pasting into bug reports.
+- **Companion issue #22** filed for Playwright autotest harness scaling this to scripted scenarios.
+
+**Bug fixes & audits:**
+- Issue #20 (phantom skill tests) — narrowed at first (excluded `key='attack'` from pre-LLM keyword scan), then broadened on Geralt regression. New `_COMBAT_CLASS_SKILLS` sentinel covers `attack / ranged_attack / two_handed / melee_attack / spell_attack / initiative`. RAW_MIGRATIONS trimmed `kowalstwo` trigger_keywords (removed weapon nouns `metal ostrze zbroja miecz jakość`) and cleared `initiative` entirely. Full skill-by-skill audit posted on issue.
+- Issue #15 (F5 roll persistence) — new `GET /api/campaigns/{id}/combat/turns/history` endpoint returns every `combat_turns` row for the campaign across all combats (not just active). Skill-test persistence extended with full `[Rzut: skill — d20 ±mod = total — Outcome]` format so hydration reconstructs the rich roll card. Frontend interleaves campaign turns + combat history by `created_at`.
+- Issue #10 (Scholar offensive spells) — `create_standalone_character` (modern hero-first flow) now calls `grant_starting_spells(char_id, conn)` for `archetype='scholar'`. Was previously only on the legacy campaign-scoped path; affected scholars backfilled.
+- Issue #16 (loot table search) — new search input + client-side filter on the loot-tables sidebar.
+- Combat banner buttons mobile fix: `.combat-composer` padding-bottom adds `env(safe-area-inset-bottom)` and `@media (max-width: 480px)` compresses padding/font/icons so all three buttons fit on phones.
+
+**Documentation:**
+- T34 line in this file flipped to ✅ with sub-task issue links.
+- T46 line flipped to ✅ — narrative items shipped commit `c4b2d12`.
+- T33 line flipped to ✅ for structured action bypass.
+
+**Workflow rule codified in CLAUDE.md** — every implementation now requires a GitHub issue with structured sections (Task / What was implemented / Files changed / Backend / Numbers Policy / Acceptance / Out of scope) and `needs-testing` label until visually verified.
