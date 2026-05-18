@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin 2.0</title>
-    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=38" />
+    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=39" />
   </head>
   <body>
     <div class="admin-shell" id="admin-shell">
@@ -69,6 +69,10 @@
 
           <!-- SYSTEM group -->
           <div class="nav-group-label">System</div>
+          <button type="button" data-section="sandbox" title="Combat Sandbox">
+            <span class="nav-icon">⚔</span>
+            <span class="nav-label">Sandbox</span>
+          </button>
           <button type="button" data-section="voice" title="Głos">
             <span class="nav-icon">🔊</span>
             <span class="nav-label">Głos</span>
@@ -115,6 +119,7 @@
           <div class="section-panel" data-section="analytics"></div>
           <div class="section-panel" data-section="workshops"></div>
           <div class="section-panel" data-section="knowledge"></div>
+          <div class="section-panel" data-section="sandbox"></div>
           <div class="section-panel" data-section="voice"></div>
           <div class="section-panel" data-section="system"></div>
         </div>
@@ -378,6 +383,7 @@
           "analytics":  "/admin_panel_v2/sections/analytics.js?v=1",
           "workshops":  "/admin_panel_v2/sections/workshops.js?v=3",
           "knowledge":  "/admin_panel_v2/sections/knowledge.js?v=1",
+          "sandbox":    "/admin_panel_v2/sections/sandbox.js?v=1",
           "voice":      "/admin_panel_v2/sections/voice.js?v=1",
           "system":     "/admin_panel_v2/sections/system.js?v=5",
         };
