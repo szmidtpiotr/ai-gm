@@ -858,6 +858,25 @@ function renderSheet(panel) {
     const t = String(r.item_type || "item");
     (groups[t] || groups.item).push(r);
   }
+
+  // Track which slots are already occupied so weapons fall through to off_hand.
+  // Same algorithm as the player UI's _invPickEquipSlot (frontend/front/js/app.js).
+  const occupied = { main_hand: false, off_hand: false, armor: false };
+  for (const r of invList) {
+    if (r.equipped && r.slot && occupied.hasOwnProperty(r.slot)) occupied[r.slot] = true;
+  }
+  const pickSlotForItem = (r) => {
+    const t = String(r.item_type || "").toLowerCase();
+    const k = String(r.key || r.label || "").toLowerCase();
+    if (t === "armor") return /shield|tarcz/.test(k) ? "off_hand" : "armor";
+    if (t === "weapon") {
+      if (!occupied.main_hand) return "main_hand";
+      if (!occupied.off_hand) return "off_hand";
+      return "main_hand";  // both full → user must unequip first; server may reject
+    }
+    return null;
+  };
+
   const renderInvSection = (title, rows, type) => {
     if (!rows || !rows.length) return "";
     return `
@@ -870,14 +889,13 @@ function renderSheet(panel) {
           const equippedSlot = r.equipped ? (r.slot || "—") : null;
           const equippedTag = equippedSlot ? `<span class="sbx-eq">${esc(equippedSlot)}</span>` : "";
           let actions = "";
-          if (type === "weapon") {
-            actions = r.equipped
-              ? `<button data-action="unequip" data-id="${id}">Zdejmij</button>`
-              : `<button data-action="equip" data-id="${id}" data-slot="main_hand">Załóż</button>`;
-          } else if (type === "armor") {
-            actions = r.equipped
-              ? `<button data-action="unequip" data-id="${id}">Zdejmij</button>`
-              : `<button data-action="equip" data-id="${id}" data-slot="${esc(r.slot || "body")}">Załóż</button>`;
+          if (type === "weapon" || type === "armor") {
+            if (r.equipped) {
+              actions = `<button data-action="unequip" data-id="${id}">Zdejmij</button>`;
+            } else {
+              const targetSlot = pickSlotForItem(r) || "main_hand";
+              actions = `<button data-action="equip" data-id="${id}" data-slot="${esc(targetSlot)}" title="Slot: ${esc(targetSlot)}">Załóż</button>`;
+            }
           } else if (type === "consumable" && r.can_use !== false) {
             actions = `<button data-action="use" data-id="${id}" data-label="${esc(r.label || r.key)}">Użyj</button>`;
           }
