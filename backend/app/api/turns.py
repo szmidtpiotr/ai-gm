@@ -54,6 +54,18 @@ from app.services.intent_parser import ParsedIntent
 
 router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
+
+# Skill keys that represent combat-class weapon modifiers / catch-all combat
+# verbs rather than standalone skill checks. Their trigger_keywords are combat
+# verbs ("atakuję", "uderzam") or weapon names ("miecz dwuręczny", "łucznik"),
+# so any pre-LLM or post-cue keyword scan that returned these would spawn a
+# phantom skill test with hallucinated combat narration when no enemy is in the
+# location. Combat intent must route through the intent parser → combat_start,
+# never through skill_test. (Issue #20 + Geralt two_handed regression.)
+_COMBAT_CLASS_SKILLS = frozenset({"attack", "ranged_attack", "two_handed", "melee_attack", "spell_attack"})
+
+def _is_combat_class_skill(skill_key: str | None) -> bool:
+    return str(skill_key or "").strip().lower() in _COMBAT_CLASS_SKILLS
 logger = get_logger(__name__)
 
 
@@ -2347,13 +2359,18 @@ def create_turn(
                     "acelnoszzACELNOSZZ"
                 )
                 _txt_pre = text.lower().translate(_PL_MAP_PRE)
-                # 'attack' is combat intent, not a skill check — exclude from pre-LLM
-                # trigger scan so "atakuje goblina" routes through combat_start, not a
-                # phantom Atak skill test. Fix for issue #20.
+                # Combat-class skills (attack / ranged_attack / two_handed) represent
+                # weapon-modifier stats used during real combat resolution, not
+                # standalone skill checks. Their trigger_keywords are combat verbs
+                # and weapon names ("atakuję", "uderzam", "miecz dwuręczny", "łucznik")
+                # which would otherwise spawn phantom skill tests outside combat,
+                # producing GM narration that hallucinates an enemy. Exclude them
+                # so player input routes through the intent parser → combat_start
+                # path instead (issue #20 + Geralt two_handed regression).
                 _kw_rows_pre = conn.execute(
                     "SELECT key, trigger_keywords FROM game_config_skills "
                     "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
-                    "AND key != 'attack'"
+                    "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack')"
                 ).fetchall()
                 # Wrap text with spaces for word-boundary matching
                 _txt_padded = " " + _txt_pre + " "
@@ -2460,6 +2477,15 @@ def create_turn(
                 assistant_text, _skill_pending_narrator = intercept_trap_tag(
                     assistant_text, conn, campaign_id, payload.character_id, _char_sh
                 )
+            # Drop the pending test if the narrator hallucinated a combat-class
+            # skill outside actual combat (the user typed "uderzam toporem", LLM
+            # picked two_handed, but no enemy exists). Same guard as the keyword
+            # scans above.
+            if _skill_pending_narrator and _is_combat_class_skill(_skill_pending_narrator.get("skill_key")):
+                logger.info("combat_class_skill_test_suppressed",
+                            skill=_skill_pending_narrator.get("skill_key"),
+                            source="narrator_tag")
+                _skill_pending_narrator = None
             if _skill_pending_narrator:
                 gs_row2 = conn.execute(
                     "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
@@ -2543,11 +2569,11 @@ def create_turn(
                             "acelnoszzACELNOSZZ"
                         )
                         _txt_norm = (text or "").lower().translate(_PL_MAP)
-                        # Exclude 'attack' — see comment near _kw_rows_pre (issue #20)
+                        # Same combat-class exclusion as the pre-LLM scan above.
                         _kw_rows = conn.execute(
                             "SELECT key, trigger_keywords FROM game_config_skills "
                             "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
-                            "AND key != 'attack'"
+                            "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack')"
                         ).fetchall()
                         _txt_norm_padded = " " + _txt_norm + " "
                         for _kr in _kw_rows:
@@ -2562,8 +2588,10 @@ def create_turn(
                         logger.warning("trigger_keywords_error: %s", str(_kw_err))
                     logger.info("skill_test_canonical_resolved",
                                 cue=_cue_name, canonical=_canonical, txt_norm=_txt_norm[:40])
-                    if _canonical and not is_attack_test(_canonical):
-                        # It's a skill, not an attack — show Roll Popup
+                    if _canonical and not is_attack_test(_canonical) and not _is_combat_class_skill(_canonical):
+                        # It's a non-combat skill — show Roll Popup. Combat-class
+                        # skills (attack/ranged_attack/two_handed/...) skip this path;
+                        # they belong in real combat resolution, not phantom skill tests.
                         from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
                         import uuid as _uuid3
                         _char_sh2 = json.loads(character["sheet_json"] or "{}")
