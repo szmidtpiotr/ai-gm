@@ -210,16 +210,12 @@ def setup_sandbox(payload: dict = Body(...)) -> dict[str, Any]:
         user_id = int(orig["user_id"])
         campaign_id = _ensure_sandbox_campaign(c, user_id)
 
-        # End any lingering active combat from a previous sandbox session
-        ac = c.execute(
-            "SELECT id FROM active_combat WHERE campaign_id = ? AND status = 'active'",
-            (campaign_id,),
-        ).fetchone()
-        if ac:
-            c.execute(
-                "UPDATE active_combat SET status='ended', ended_reason='sandbox_reset', updated_at=datetime('now') WHERE id = ?",
-                (int(ac["id"]),),
-            )
+        # Drop any active_combat row for this sandbox campaign — the existing
+        # row references the prior clone via FK (character_id) and would block
+        # the upcoming clone purge. Also wipe combat_turns history so the
+        # events feed starts clean. Both are sandbox-only data, safe to discard.
+        c.execute("DELETE FROM combat_turns WHERE campaign_id = ?", (campaign_id,))
+        c.execute("DELETE FROM active_combat WHERE campaign_id = ?", (campaign_id,))
 
         # Wipe prior sandbox clones for this owner — FK cascade clears their
         # inventory + spells too.
