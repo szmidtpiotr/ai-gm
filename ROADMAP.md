@@ -1,13 +1,31 @@
 # AI-GM V2 — Roadmap
 
-> Tree of all tasks ordered by implementation sequence.  
-> **Legend:** `[x]` = done · `[-]` = partial/in-progress · `[ ]` = pending  
-> **Auto-updated** by Claude after each completed task/subtask.  
+> Tree of all tasks ordered by implementation sequence.
+> **Legend:** `[x]` = done · `[-]` = partial/in-progress · `[ ]` = pending
+> **Auto-updated** by Claude after each completed task/subtask.
 > Spec details → `docs/V2_ARCHITECTURE/01_IMPLEMENTATION_PLAN.md`
+> **2026-05-18 audit** corrected several boxes — see `docs/V2_ARCHITECTURE/AUDIT_2026_05_18.md` + `DECISIONS_2026_05_18.md`.
+
+---
+
+## 📍 Next priority (per [DECISIONS D7])
+
+**XP loop** — earning works, spending UI completely missing. Player progression is mechanically frozen.
+
+Minimum viable order:
+1. XP progress bar + level display in character sheet
+2. `POST /api/characters/{id}/rest` long-rest endpoint (flips pending XP → spendable)
+3. Skill rank-up UI (cards, cost shown, click → spend → confirm)
+4. Stat point-up UI (same UX)
+5. Level-up notification banner per spec
+6. Player "Historia PD" XP log view
+
+After XP loop, queue continues in `DECISIONS_2026_05_18.md` § "Implementation order".
 
 ---
 
 ## Phase 01 — Foundation
+
 - [x] **T01 DB Schema** — all tables, state definitions, location_connections
 - [x] **T02 Intent Parser** — player text → ACTION tag
 - [x] **T03 World State Machine** — validate actions, transition states
@@ -17,27 +35,30 @@
 ---
 
 ## Phase 02 — Character
+
 - [x] **T05 HP/Mana Formulas** — HP = base + CON_mod × level · Mana = 8 + INT_mod × level
 - [x] **T06 Character Wizard**
   - [x] 4-step wizard (name/archetype → stats → skills → identity)
-  - [x] Warrior · Scholar archetypes
-  - [x] Łotrzyk (Rogue) archetype — DEX+2 · LCK+1 · HP 8 · shortbow starter
-  - [x] LCK (Szczęście) as 7th stat in wizard + sheet
-  - [x] Stat tooltips on `?` hover — instant custom tooltip (no native delay)
-  - [x] Skill descriptions with Polish labels and hints in wizard
-  - [x] Rogue accepted by backend (was silently converting to warrior)
+  - [x] Warrior · Scholar · Rogue (Łotrzyk) archetypes
+  - [x] LCK (Szczęście) as 7th stat
+  - [x] Stat/skill tooltips
 - [x] **T07 Campaign Plan Generation** — LLM generates from character + Ideas Bank
-- [x] **T42 Persistent Hero / Character-First Flow**
+- [-] **T42 Persistent Hero / Character-First Flow**
   - [x] Hero exists independently of campaigns (status: idle/in_campaign)
   - [x] Campaign deletion frees hero (SET NULL, not DELETE)
-  - [x] Hero refreshed in frontend after campaign deletion
-  - [x] Wizard always clears stale `currentCampaignId` when creating new hero
-  - [x] `assign-campaign` frees previous hero before assigning new one
-  - [x] Session flags cleared when new hero assigned to campaign
+  - [x] `hero_status`, `visited_location_keys` columns
+  - [x] `character_campaign_history` table
+  - [x] Session flags cleared when new hero assigned
+  - [ ] `GET /api/heroes` endpoint (list heroes across users)
+  - [ ] `GET /api/characters/{id}/history` endpoint
+  - [ ] `POST /api/characters/{id}/rest` endpoint (long rest)
+  - [ ] Between-campaigns REST state UI (XP spending, hero journal access)
+  - [ ] Fallen Hero → NPC promotion admin flow
 
 ---
 
 ## Phase 03 — World
+
 - [x] **T08 Location System** — badge, safe_for_rest, connections
 - [x] **T09 NPC System** — personality DB, keyword triggers, dialogue hooks
 - [x] **T10 Data Tables** — lookup-before-create, pending_review queue
@@ -45,154 +66,220 @@
 ---
 
 ## Phase 04 — Gameplay Loop
+
 - [x] **T11 Turn Pipeline** — 9-step pipeline in turn_pipeline.py
 - [x] **T12 Skill Tests**
   - [x] Non-combat rolls, roll popup with d20 animation
   - [x] Pre-LLM keyword scan — triggers test before LLM call
-  - [x] Word-boundary matching + min 5-char keywords (fixes "się" matching everything)
+  - [x] Word-boundary matching + min 5-char keywords
   - [x] Skill test result saved to campaign_turns (survives F5)
-  - [x] Roll result shown in chat after confirmation
+  - [x] Combat-class skills (`attack`/`ranged_attack`/`two_handed`/`initiative`) excluded from keyword scan
+  - [x] `kowalstwo` trigger_keywords trimmed of weapon nouns
 - [x] **T13 Campaign Plan V2** — runtime schema, deviation detection, GM tags
 - [x] **T04B Opening Scene** _(listed above)_
 
 ---
 
 ## Phase 05 — Combat
+
 - [x] **T14 Combat State Machine** — initiative, round flow, range zones, enemy auto-turn
 - [x] **T15 Enemy AI Rules** — behavior profiles in DB, rule-based decisions
-- [x] **T16 Fear/Terror** — WIS save, FRIGHTENED/PANICKED/BREAK conditions
+- [-] **T16 Fear/Terror** — WIS save, escalating conditions
+  - [x] Trigger logic + DC ladder + Nat 1 escalation
+  - [x] FEAR_IMMUNE tracking per entity type
+  - [x] BREAK forced-flee logic
+  - [ ] **Rename condition keys** `fear_shaken` → `FRIGHTENED`, `terror` → `PANICKED`, `break` → `BREAK` per [D2] (idempotent migration on startup)
 - [x] **T17 Critical Hits** — threshold + hit location table + lasting effects
-- [x] **T18 Death Saves** — escalating DC 10/13/16/19, CON modifier
+- [x] **T18 Death Saves** — escalating DC 10/13/16/19, pure d20
 - [x] **T19 Flee Mechanic** — opposed DEX, loot abandoned, zone change
+- [ ] **🆕 `zaskoczony` (Surprised) condition** _(added 2026-05-18 per [D11])_
+  - [ ] DB row in `game_config_conditions` with Polish label
+  - [ ] Backend: +2 ATK + first hit ×2 damage hooks in `combat_service`
+  - [ ] Auto-clear on damage taken OR round expiry
+  - [ ] Frontend: ⚡ badge on initiative chip + combatant row
+  - [ ] Triggered by player Stealth success (Easy DC 8 alone / Hard DC 16 group)
 
 ---
 
 ## Phase 06 — Economy
-- [x] **T20 Inventory & Equipment** — slots, click-to-equip, combat restrictions
+
+- [-] **T20 Inventory & Equipment** — _3-slot shipped, 8-slot anatomical model agreed per [D1]_
+  - [x] 3-slot functional system (main_hand · off_hand · armor) shipped
+  - [x] Click-to-equip, combat restrictions, auto-pick (shield→off_hand, dual-wield→off_hand)
+  - [ ] **Migrate to 8 slots**: head · torso · l_arm · r_arm · l_leg · r_leg · main_hand · off_hand
+  - [ ] `game_config_items.armor_coverage` column (`head`/`torso`/`limb_arm`/`limb_leg`/`full`)
+  - [ ] No new gloves/boots types — boots = leg armor, gloves = arm armor
+  - [ ] Anatomical slot diagram in character sheet (replaces 3-card triptych)
 - [x] **T21 Shop System** — narrative-embedded entry, buy/sell, merchant NPCs
 - [x] **T22 Loot System**
-  - [x] 3-way XOR entries (item_key · consumable_key · weapon_key)
-  - [x] Admin inline editing (click weight/qty to edit)
-  - [x] Type badges (Przedmiot · Materiał · Broń)
-  - [x] Delete by ID endpoint
-  - [x] Enemy loot tables auto-created on create/approve
-  - [x] 55 enemy loot tables backfilled
+  - [x] 3-way XOR entries, admin inline editing, type badges
+  - [x] Enemy loot tables auto-created on create/approve (55 backfilled)
   - [x] Dungeon chest + boss loot tables
+  - [x] Loot table sidebar search ([#16])
 - [x] **T23 Healing System** — items, rest, Scholar Mend Wounds
-- [x] **T24 Wound Labels** — HP% thresholds, narrator injection, HP bar color
-- [x] **T25 XP Progression V2** — WFRP style, everything purchased with XP
+- [-] **T24 Wound Labels** — backend done, frontend rendering missing
+  - [x] `get_wound_label()` helper with 5 thresholds + colors
+  - [x] Narrator injection (`wound_label` in turn response)
+  - [ ] Render wound-label text below player HP bar in character sheet
+  - [ ] Render wound-label text below player HP bar in combat banner
+- [-] **T25V2 XP Progression V2** — _**earning works · spending UI missing — NEXT PRIORITY [D7]**_
+  - [x] `grant_character_xp` fires on enemy defeat
+  - [x] XP awards table seeded (22 sources, 6 categories)
+  - [x] Backend endpoints: `spend_skill_rank_up`, `spend_stat_point_up`
+  - [x] Admin "mg" manual grant
+  - [ ] Player XP progress bar (current / next-level)
+  - [ ] Level display in header (`floor(xp_total / 100)`)
+  - [ ] `POST /api/characters/{id}/rest` long-rest endpoint
+  - [ ] Player "Awansuj" panel — skill cards, stat cards, spell cards
+  - [ ] Level-up notification banner
+- [-] **T26X XP Config + Log** — admin done, player Historia PD missing
+  - [x] `game_config_xp_awards` editable by admin
+  - [x] `character_xp_grants` audit log
+  - [x] Admin `/xp-report` aggregated by category
+  - [ ] Player-facing "Historia PD" view in character sheet
 - [x] **T26 Scholar Spells**
   - [x] 9 spells (tiers 1–5), mana system, miscast scaling
   - [x] Rank 2 + Rank 3 JSON for all spells
-  - [x] Arcane Points tracking
   - [x] Spell tab in character sheet (Scholar only)
-  - [x] Spell picker in combat (Scholar — "Zaklęcie" button)
-  - [x] `spell_key` flows through resolve-attack to combat service
+  - [x] Spell picker in combat (Zaklęcie button)
+  - [x] Standalone hero flow grants starting spells (`magic_bolt` + `mend_wounds`)
 - [x] **T41 Dungeon Runs**
-  - [x] Backend: room types (combat/chest/trap/riddle/rest/boss)
-  - [x] Riddle bank (12 Polish riddles, deterministic answer checking)
-  - [x] Loot tiers (enemy · chest · boss)
-  - [x] `source_exclusive` on items/weapons (NULL · dungeon · boss)
-  - [x] Death handling + session isolation
-  - [x] Player UI: dungeon picker modal
-  - [x] Player UI: dungeon HUD (room progress pips, icons per type)
-  - [x] Player UI: square tile map (Betrayal at House on the Hill style)
-    - [x] Tiles hidden until entered
-    - [x] Auto-opens on first advance (teaches the mechanic)
-    - [x] 🗺 button in HUD to reopen anytime
-  - [x] Player UI: riddle input panel with hints
-  - [x] Player UI: dungeon complete overlay with boss loot
-  - [x] F5 restore (detects mode='dungeon', restores HUD)
-  - [x] HUD aligned to game column width (not full browser)
-  - [x] HUD hidden on non-game screens (wizard, hero/campaign select)
-  - [x] Admin: dungeon editor updated (chest/boss loot, riddle settings)
-  - [x] Admin: Riddle Bank CRUD (Świat → Zagadki tab)
-  - [x] Admin: AI Kreator dla Lochu (floating 🤖 FAB)
-  - [x] 34 dungeon/boss-exclusive items created
+  - [x] Backend: room types, riddle bank, loot tiers, `source_exclusive`
+  - [x] Player UI: picker modal, HUD, square tile map, riddle panel, complete overlay
+  - [x] F5 restore + HUD scope rules + admin editor + AI Kreator
 - [x] **T46 Narrative Items**
-  - [x] `character_inventory.label` column (free-form items)
-  - [x] Narrative items (notes, amulets) → inventory rows, visible in lore section
-  - [x] Drop button (✕) for narrative items with description tooltip
-  - [x] `game_config_weapons.campaign_id` + `review_status` columns
-  - [x] Narrative weapons detected by label keywords → pending DB weapon, equippable immediately
-  - [x] Admin review: Zatwierdź (global) · Zachowaj (campaign-scoped) · Odrzuć
-  - [x] Pending weapons in Oczekujące → ⚔ Broń section with edit modal
-  - [x] Migrate old `sheet_json.narrative_items` to inventory rows on startup
-  - [x] System prompt reinforced: always `Grant Item` on ANY physical pickup
-  - [x] Spec: `docs/V2_ARCHITECTURE/TASK_NARRATIVE_ITEMS.md`
+  - [x] `character_inventory.label` column + frontend lore section
+  - [x] Narrative weapon detection + pending review flow
+  - [x] Admin review: Zatwierdź (global) · Zachowaj (campaign) · Odrzuć
 
 ---
 
 ## Phase 07 — Narrator
+
 - [x] **T26N Narrator Engine** — system prompt, constraints, post-processing
 - [x] **T27 Combat Narration** — per-action, parallelised, fallback templates
-- [x] **T28 NPC Dialogue** — in-character, keyword triggers, session memory
+- [-] **T28 NPC Dialogue** — in-character, keyword triggers, session memory
+  - [x] Core dialogue request schema + LLM prompt
+  - [x] `must_reveal_info` enforcement + reluctance markers
+  - [ ] Deceased NPC `relationship` field (ally/enemy/neutral) in dataclass — referenced in code but not defined
 - [x] **T29 Scene Narration** — exploration, movement, rest, skill outcomes
 
 ---
 
 ## Phase 08 — Admin
+
 - [x] **T30 Ideas Workshop** — AI agent co-authoring for Ideas Bank
 - [x] **T31 Campaign Workshop** — chat tab inside campaign modal
-- [x] **T32 World Review Queue** — approve/reject Lokacje · NPC · Przeciwnicy
-- [-] **T33SA Smart Entry Agent** — form-first built; Q&A guided mode missing
+- [-] **T32 World Review Queue** — approve/reject working, polish missing
+  - [x] Approve · Discard per row
+  - [x] Pending counts badge
+  - [ ] Inline "Edytuj i Zatwierdź" modal
+  - [ ] Batch select / bulk approve
+- [-] **T33SA Smart Entry Agent** — form-first shipped per [D8]
+  - [x] Form-first one-shot fill via chat
+  - [x] Tables supported: weapons, items, consumables, enemies, spells
+  - [x] Effect Builder UI for `effect_json`
+  - [ ] Conversational refinement: AI keeps draft state, applies incremental edits, shows delta line ("Zmieniłem: damage 1d6 → 1d10")
+  - [ ] Form fields highlight which ones changed in last AI response
 - [x] **T40 World Builder (Hex Grid)**
-  - [x] SVG hex grid, axial coords, A* travel
-  - [x] Terrain types, encounter rolls, atmosphere
-  - [x] World builder admin tab
-  - [x] Admin campaign map tab (Mapa in campaign modal)
-  - [x] Click hex to edit campaign overlay fields (discovered, label, notes)
+  - [x] SVG hex grid, axial coords, A* travel, terrain types
+  - [x] Admin campaign map tab + click-to-edit campaign overlay
+- [x] **🆕 Combat Sandbox** _(2026-05-17/18, [#21])_
+  - [x] Hero clone isolation (`[SBX]` prefix), inventory + spells cloned
+  - [x] Character sheet card, auto-enemy-turn, events feed mirroring player UI
+  - [x] HP bars, copy-report-to-clipboard, per-fight state reset
+  - [ ] Companion: Playwright autotest harness ([#22])
 
 ### Extra Admin work (not in original plan)
-- [x] **Admin data cleanup** — Polish labels for all stats/skills/conditions/DC
-- [x] **Loot table admin** — inline editing, scrollable sidebar with search
-- [x] **Enemy modal** — loot table + drop chance fields (world.js + content.js)
-- [x] **Archetype admin** — hp_base + starter_gold editable, starter_items visible
-- [x] **Items table** — effect_json · source_exclusive columns shown + editable
-- [x] **Weapons table** — magic_school column hidden
-- [x] **Campaign monitor** — delete button on cards, Mapa tab with hex editor
-- [x] **Dungeon admin** — AI Kreator (floating FAB), riddle bank, full V2 fields
+
+- [x] Admin data cleanup, loot table admin, enemy modal, archetype admin
+- [x] Items + weapons + campaign monitor + dungeon admin polish
+- [x] Combat Sandbox admin section ([#21])
 
 ---
 
 ## Phase 09 — Frontend (Player UI)
-- [ ] **T33 Hybrid Input UI** — context buttons, suggested_actions[] from backend
-- [-] **T34 Combat UI**
+
+- [x] **T33 Hybrid Input UI** — context buttons, suggested_actions[] from backend
+  - [x] Backend `suggested_actions.py` + dataclass
+  - [x] Frontend `renderSuggestedActions` + disabled-state styling
+  - [x] Structured-action bypass (`input_type: "structured"`)
+  - [x] Combat composer integration ([#17] series)
+- [x] **T34 Combat UI**
   - [x] Spell picker (Scholar — floating overlay, mana check)
-  - [ ] Initiative panel showing turn order
-  - [ ] Zone display (engaged/ranged/distant)
-  - [ ] Crit flash animation
-- [x] **T35 Character Sheet UI**
-  - [x] Stats tab: HP bar · Mana bar (Scholar) · Level · XP · LCK
-  - [x] Stat modifiers (+2 green / -1 red / +0 grey)
-  - [x] Conditions section (active conditions with chip badges)
-  - [x] Arcane Points (Scholar)
-  - [x] Skills tab (trained skills with rank/ceiling, tap for description)
-  - [x] Inventory tab (equipment slots, backpack, lore items, gold)
-  - [x] Spells tab (Scholar only — spell cards with mana cost, rank pips)
-  - [x] Identity/lore tab (backstory, appearance, personality, bonds)
+  - [x] Initiative panel ([#18], commit `6d9ba8a`)
+  - [x] Zone system (engaged/ranged) — display, gating, AI charging, zone-change ([#19], `b8bbf11` + `d57953f`)
+  - [x] Crit flash overlay (Nat 20 / Nat 1) ([#23], `74c350a`)
+  - [ ] Enemy HP: show bar **AND** number per [D3] _(currently shows both — verify rendered correctly)_
+  - [ ] Fear/condition badge icons on combatant rows (⚠ Przerażony, ☠ Zatruty, ⚡ Zaskoczony)
+  - [ ] Wound label text below player HP bar in combat panel
+- [-] **T35 Character Sheet UI** — _basics shipped, ~9 spec items missing per [#24]_
+  - [x] HP bar · Mana bar (Scholar) · Level · gold · LCK
+  - [x] Stat modifiers (color-coded), conditions chip row, Arcane Points
+  - [x] Skills tab, Inventory tab (3-slot), Spells tab (Scholar), Identity tab
+  - [ ] Location badge 📍 in header
+  - [ ] Wound label text under HP bar (color-coded per HP%)
+  - [ ] XP progress bar + level-up banner _(part of XP loop)_
+  - [ ] Skill rank dots (●●●○○) + proficiency badge at rank 3+
+  - [ ] Stat tooltip on tap (full name + description)
+  - [ ] Condition tooltip with mechanical effect
+  - [ ] Auto-expand Conditions section when active
+  - [ ] Quest item drop blocker (hide Porzuć button)
+  - [ ] Mobile bottom tab bar (Gra | Postać | Ekwipunek)
+  - [ ] Real-time animations (HP flash, gold pulse, XP fill, condition fade)
+  - [ ] **8-slot equipment diagram** per [D1] _(replaces current 3-card triptych)_
 - [x] **T43 Player World Map** — fog-of-war hex grid, click-to-travel, swipe-close
-- [ ] **T44 Debug System** — admin debug drawer, /debug commands, DB key display
+- [-] **T44 Debug System** — _admin backend exists, full spec'd UI missing per [D5]_
+  - [x] Admin endpoints (`routers/debug.py`): `/player_state`, `/gm_decisions`, `/validation_flags`, `/settings/feature_flags`, `/reset_test_env`
+  - [ ] Player-facing debug drawer (right panel, 420px)
+  - [ ] Section tabs (game_state, last_intent, mechanic_result, llm_prompts, narrator_output)
+  - [ ] Slash commands: `/debug set-hp`, `/debug set-state`, `/debug reset-cooldowns`
+  - [ ] `debug_mode=True` in turn response payload for inline introspection
+  - [ ] Admin Panel "🐛 Debug" section that surfaces the existing endpoints in UI
 
 ### Extra Frontend work
-- [x] **GM narrative formatting** — dialog italic amber · em-dash speech border
-- [x] **Skill test roll popup** — centered, light yellow parchment background
-- [x] **Fast custom tooltip** — instant `data-tooltip` (replaces 750ms native delay)
-- [x] **F5 session restore** — localStorage (hero_id + campaign_id), works cross-refresh
-- [x] **Input stuck fix** — Escape + visibilitychange recovery, `_skillTestPending` flag
+
+- [x] GM narrative formatting, skill test roll popup, fast custom tooltip
+- [x] F5 session restore (localStorage), input stuck recovery
+- [x] F5 roll-bubble rehydration ([#15], full d20+mod+total+outcome reconstruction)
+- [x] Combat composer mobile-friendly (safe-area-inset-bottom, narrow-viewport scaling)
 
 ---
 
 ## Phase 10 — Polish
-- [ ] **T36 Memory/History** — /mem command (superseded by Hero Journal below)
-- [ ] **T37 Command Palette** — /help modal, admin command toggles
-- [ ] **T38 Campaign End/Death** — victory screen, death screen, post-death options
-- [ ] **T39 Auth/Onboarding** — auth flow, first-time UX
-- [ ] **T45 Hero Journal** — cross-campaign chronicle, chapter summaries, /mem
+
+- [-] **T36 Memory/History**
+  - [x] `/mem` semantic search over campaign turns
+  - [x] `/helpme` hint command
+  - [x] Campaign history summary generator
+  - [ ] Dual summaries (player_summary vs gm_summary)
+  - [ ] GM continuity injection at session start (30+ min gap)
+  - [ ] Historia cooldown enforcement (20 turns)
+- [-] **T37 Command Palette**
+  - [x] `/help` lists commands in chat system bubble
+  - [x] Admin-only commands hidden from non-admin players
+  - [ ] Full modal with search field + click-to-insert
+  - [ ] Per-command admin toggle (enabled_for_players setting)
+- [-] **T38 Campaign End/Death**
+  - [x] Death screen overlay
+  - [x] Epitaph LLM generator (`solo_death_service.generate_epitaph_llm`)
+  - [ ] Epitaph wiring into death screen UI
+  - [ ] Victory screen with ending title/summary content
+  - [ ] Post-end "Nowa Przygoda / Nowy Świat" options
+- [-] **T39 Auth/Onboarding** — _ship as full security baseline per [D6]_
+  - [x] Basic login + admin token
+  - [ ] **JWT bearer tokens** (HS256, 7-day expiry, refresh endpoint)
+  - [ ] **bcrypt password hashing** (cost 12) — verify, migrate if not
+  - [ ] **Brute-force lockout** (10 fails → 15 min lock)
+  - [ ] **Role-based access** (`player` / `gm` / `admin`)
+  - [ ] **Multi-device sessions** (natural via JWT)
+  - [ ] **Onboarding overlay** (first-login modal: welcome + theme picker + accept rules)
+- [ ] **T45 Hero Journal** — cross-campaign chronicle, chapter summaries, /mem cross-campaign
 
 ---
 
 ## Phase 11 — Observability
+
 - [ ] **T47 Game Event Logging** — `game_events` table, event_logger service
 - [ ] **T48 LLM Call Log** — `llm_call_log` table, admin viewer
 - [ ] **T49 Admin Analytics Panel** — dashboard/events/LLM tabs
@@ -203,35 +290,39 @@
 ## Phase 12 — AI Test Agent _(after all phases complete)_
 
 > Rework the existing `ai_test_agent/` (Playwright + Express + LLM orchestrator) to run automated adversarial and regression tests against the full game.
-> The agent uses an LLM to play the game autonomously — reading UI snapshots, deciding what to type/click, Playwright executes it.
 
-- [ ] **T51 Update agent for current UI** — rewrite selectors for hero-first flow (no legacy `#campaign-select`)
-- [ ] **T52 Regression scenario: baseline flow** — login → create hero → start campaign → complete first turn → verify GM responds
-- [ ] **T53 Regression scenario: dungeon run** — enter dungeon → clear 3 rooms → boss → exit → verify loot in inventory
-- [ ] **T54 Adversarial: inventory exploit** — LLM tries to duplicate items via GM dialogue → verify economy integrity
-- [ ] **T55 Adversarial: economy cheat** — LLM tries to get gold/XP illegitimately → verify system resists
-- [ ] **T56 Adversarial: prompt injection** — LLM sends malicious player text → verify GM doesn't break system prompt
-- [ ] **T57 LLM consistency test** — run `honest_player_flow` scenario 10× → compare XP, location, quest outcomes for drift
-- [ ] **T58 Admin panel: Test Runner UI** — update the test runner section in admin to trigger scenarios and show results
-- [ ] **T59 CI integration** — run baseline regression automatically after each deploy on DEV
+- [ ] **T51 Update agent for current UI** — rewrite selectors for hero-first flow
+- [ ] **T52 Regression: baseline flow** — login → hero → campaign → first turn → verify
+- [ ] **T53 Regression: dungeon run** — enter → 3 rooms → boss → exit → loot
+- [ ] **T54 Adversarial: inventory exploit** — duplicate items via GM dialogue
+- [ ] **T55 Adversarial: economy cheat** — illegitimate gold/XP attempts
+- [ ] **T56 Adversarial: prompt injection** — malicious player text
+- [ ] **T57 LLM consistency test** — 10× same scenario, drift comparison
+- [ ] **T58 Admin panel: Test Runner UI** — trigger scenarios, show results
+- [ ] **T59 CI integration** — baseline regression after each deploy
+- [ ] **T60 Combat Sandbox autotest harness** ([#22]) — YAML scenarios via `/api/admin/sandbox/run-scenario`
 
 ---
 
 ## Progress Summary
 
-```
-Phase 01  Foundation        ████████████  5/5   100%
-Phase 02  Character         ████████████  4/4   100%  (incl. T42)
-Phase 03  World             ████████████  3/3   100%
-Phase 04  Gameplay Loop     ████████████  4/4   100%
-Phase 05  Combat            ████████████  6/6   100%
-Phase 06  Economy           ████████░░░░  8/9    89%  (T46 pending)
-Phase 07  Narrator          ████████████  4/4   100%
-Phase 08  Admin             ████████████  5/5   100%  (+extras)
-Phase 09  Frontend          ████████░░░░  3/5    60%  (T33, T34 partial, T44 pending)
-Phase 10  Polish            ░░░░░░░░░░░░  0/5     0%
-Phase 11  Observability     ░░░░░░░░░░░░  0/4     0%
-Phase 12  AI Test Agent     ░░░░░░░░░░░░  0/9     0%  (after all phases)
+After 2026-05-18 audit corrections:
 
-Overall:  ~~~~~~~~~~~~~~~~  42/63   67%
 ```
+Phase 01  Foundation        ████████████  5/5    100%
+Phase 02  Character         █████████░░░  3.5/4   88%   (T42 partial)
+Phase 03  World             ████████████  3/3    100%
+Phase 04  Gameplay Loop     ████████████  4/4    100%
+Phase 05  Combat            ███████████░  5.5/7   79%   (T16 rename + zaskoczony pending)
+Phase 06  Economy           ████████░░░░  6.5/10  65%   (T20/T24/T25V2/T26X partial)
+Phase 07  Narrator          ███████████░  3.5/4   88%   (T28 deceased context)
+Phase 08  Admin             ██████████░░  4.5/5   90%   (+sandbox bonus, T32/T33SA partial)
+Phase 09  Frontend          █████████░░░  3.5/5   70%   (T35 partial, T44 partial)
+Phase 10  Polish            ███░░░░░░░░░  1.5/5   30%   (T36-T39 partial, T45 not started)
+Phase 11  Observability     ░░░░░░░░░░░░  0/4      0%
+Phase 12  AI Test Agent     ░░░░░░░░░░░░  0/10     0%
+
+Overall:  ~~~~~~~~~~~~~~~~  40.5/64  63%
+```
+
+_The numbers dropped slightly vs the pre-audit estimate (67% → 63%) because partial completions are now scored at 0.5 instead of 1.0. The work itself didn't regress — we just have honest accounting._

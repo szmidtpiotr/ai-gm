@@ -1,6 +1,8 @@
 # TASK 16: Fear & Terror System
 
-**Status:** ✅ Done — commit `b22299d` (2026-05-13)
+**Status:** ⚠ Mostly done — commit `b22299d` (2026-05-13). **2026-05-18 audit** found condition naming divergence: backend uses `fear_shaken`/`terror`/`break`; spec uses `FRIGHTENED`/`PANICKED`/`BREAK`. Per [DECISIONS D2] code will be renamed to match spec. Idempotent DB migration in `RAW_MIGRATIONS` flips condition keys on startup.
+
+Additionally, a related condition **`zaskoczony` (Surprised)** is being added per [DECISIONS D11] — see § 11 below.
 
 ## Overview
 
@@ -350,3 +352,40 @@ Key test cases:
 - FEAR_IMMUNE prevents second fear check from same entity type
 - Skeleton (fear_aura=true) triggers check; goblin (fear_aura=false) does not
 - BREAK auto-flee fires: confirm flee action generated without player input
+
+---
+
+## 11. Related condition: `zaskoczony` (Surprised) — added 2026-05-18
+
+A separate condition with similar mechanical hooks (status applied to a combatant, affects subsequent rolls, time-limited). Lives in the same `game_config_conditions` registry.
+
+**Trigger:** Player passes a Stealth skill check meeting surprise-ambush criteria — DC scales by enemy count: Easy (DC 8) for a single enemy, Hard (DC 16) for multiple. LLM narrator emits `[APPLY_CONDITION:zaskoczony:enemy_key]` tag on a successful stealth narrative.
+
+**Mechanical effect** (target = enemy):
+
+| Aspect | Value |
+|---|---|
+| ATK roll bonus for attackers | **+2** |
+| First successful hit damage multiplier | **×2** |
+| Auto-clear (whichever first) | round counter reaches 0 **OR** target takes any damage |
+| Initial duration | 1 round |
+
+**Backend changes** (in code work):
+- `combat_service._apply_attack_bonuses(attacker, target)` — read `zaskoczony` on target, return `{atk_bonus: 2, first_hit_doubled: true}`.
+- After a successful hit, decrement `first_hit_doubled` flag (one-shot per condition instance).
+- After any damage to target, remove `zaskoczony` immediately.
+
+**Frontend changes:**
+- Initiative chip + combatant row show ⚡ badge with tooltip "Zaskoczony — pierwszy cios trafia podwójnie".
+- Crit-flash style brief sparkle on the chip when condition is applied (reuse `triggerCritFlash`-style overlay scoped to the chip).
+
+**Seed row for `game_config_conditions`:**
+
+```sql
+INSERT INTO game_config_conditions (key, label_pl, label_en, category, applies_to, description, default_duration)
+VALUES (
+  'zaskoczony', 'Zaskoczony', 'Surprised', 'tactical', 'enemy',
+  'Cel zaskoczony — atakujący otrzymują +2 do trafienia, pierwsze trafienie zadaje podwójne obrażenia.',
+  1
+);
+```
