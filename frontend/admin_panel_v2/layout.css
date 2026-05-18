@@ -3753,3 +3753,24 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .sandbox-spell-name { color: var(--text-primary); }
 .sandbox-spell-cost { color: #b89ce8; font-weight: 600; font-size: 0.74rem; }
 .sandbox-spell-tag { font-size: 0.66rem; color: var(--text-muted); }
+
+/* Hidden attribute must override flex containers in the sandbox.
+   Without this, [hidden] is silently ignored on .sandbox-actions etc. */
+.sandbox-actions[hidden],
+.sandbox-meta-actions[hidden],
+.sandbox-sheet-card[hidden],
+.sandbox-spell-picker[hidden],
+#sbx-spell-btn[hidden] { display: none !important; }
+
+/* Visual cue: pulse the Start button once setup completes */
+.sandbox-setup-actions .primary-btn.is-ready {
+  animation: sbxPulse 1.4s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(201, 165, 74, 0.6);
+}
+@keyframes sbxPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 165, 74, 0.4); }
+  50%      { box-shadow: 0 0 0 6px rgba(201, 165, 74, 0); }
+}
+
+/* Idle-state hint with arrow up to Start button */
+.sandbox-idle--ready { color: var(--accent-gold); font-style: normal; }
