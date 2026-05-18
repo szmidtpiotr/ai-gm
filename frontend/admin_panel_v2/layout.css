@@ -1645,8 +1645,12 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 }
 
 .loot-table-btn {
+  display: block;
+  width: 100%;
+  flex-shrink: 0;
   padding: 7px 10px;
   font-size: 0.82rem;
+  line-height: 1.4;
   text-align: left;
   background: transparent;
   border: none;
