@@ -3738,6 +3738,77 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   background: linear-gradient(90deg, #8a3030, #a04040);
 }
 
+/* ── Wound Label (T24 / W1+W2) ───────────────────────────────────────────
+   Atmospheric dark-fantasy severity stamp under HP bars. Italic IM Fell
+   English with flanking ornament. Pulses on the most severe tier. */
+.wound-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-family: 'IM Fell English', Georgia, serif;
+  font-style: italic;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;     /* IM Fell has elegant lowercase glyphs */
+  line-height: 1;
+  opacity: 0;
+  animation: woundFade 380ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+  user-select: none;
+}
+.wound-label__text {
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6), 0 0 8px currentColor;
+  letter-spacing: 0.14em;
+}
+.wound-label__orn {
+  font-size: 0.72rem;
+  opacity: 0.65;
+  letter-spacing: 0;
+  transform: translateY(-1px);
+}
+
+/* Severity tiers — colour ladder matches backend WOUND_LABELS */
+.wound-label--minor     { color: #ffc107; }
+.wound-label--impaired  { color: #ff9800; }
+.wound-label--desperate { color: #f44336; }
+.wound-label--near_death {
+  color: #b71c1c;
+  font-weight: 600;
+  font-style: italic;
+  animation: woundFade 380ms cubic-bezier(0.32, 0.72, 0, 1) forwards,
+             woundPulse 1.4s ease-in-out 600ms infinite;
+}
+.wound-label--near_death .wound-label__text {
+  text-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.8),
+    0 0 10px rgba(220, 40, 40, 0.55),
+    0 0 22px rgba(220, 40, 40, 0.25);
+}
+
+@keyframes woundFade {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes woundPulse {
+  0%, 100% { opacity: 0.65; }
+  50%      { opacity: 1; }
+}
+
+/* Compact variant — combat banner has less vertical room */
+.combat-combatant .wound-label {
+  margin-top: 4px;
+  font-size: 0.7rem;
+  gap: 6px;
+}
+.combat-combatant .wound-label__orn { font-size: 0.62rem; }
+
+/* Honor reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .wound-label { animation: none; opacity: 1; }
+  .wound-label--near_death { animation: none; }
+}
+
 /* ── Crit Flash (T34) ─────────────────────────────────────────────────────
    Theatrical overlay for Nat 20 / Nat 1 moments. Pointer-events: none so
    combat input stays live. CSS-only animation. Triggered by JS adding
