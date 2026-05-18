@@ -3564,7 +3564,7 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .sandbox-setup-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
 
 /* Combat state pane — natural height (combatant rows), events feed below gets the rest */
-.sandbox-combat-state { flex: 0 0 auto; overflow-y: auto; max-height: 260px; padding: 4px; }
+.sandbox-combat-state { flex: 0 0 auto; padding: 4px 4px 0; margin: 0; }
 .sandbox-idle { padding: 24px 12px; text-align: center; }
 .sandbox-summary {
   display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
@@ -3777,12 +3777,12 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 
 /* Sandbox combat events feed (mirrors player UI roll cards) */
 .sandbox-events {
-  margin-top: 12px;
+  margin-top: 8px;
   border-top: 1px solid var(--border);
-  padding-top: 8px;
+  padding-top: 6px;
   display: flex; flex-direction: column;
   flex: 1 1 auto;
-  min-height: 240px;
+  min-height: 0;  /* let it shrink/grow freely inside its flex parent */
 }
 .sandbox-events[hidden] { display: none !important; }
 .sandbox-events-header {
