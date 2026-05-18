@@ -19,7 +19,7 @@
 - [x] **W2** Wound label text rendered under HP bar in combat banner (T24) — commit `66d40e0`
 - [x] **W3** Verified enemy HP shows both bar **and** number per [D3] (already correct in code at `app.js:2903`) — commit `66d40e0`
 - [x] **W4** Condition rename migration: `fear_shaken`+`fear_frightened` → `frightened`, `terror` → `panicked`, added `break` to registry — commit `97fcba3` (lowercase per DB convention; spec uppercase = rhetorical)
-- [ ] **W5** TASK_28 deceased NPC `relationship` field in dataclass (ally/enemy/neutral)
+- [x] **W5** TASK_28 deceased NPC `relationship` field — commit `10072e8`
 
 ### Stage 2 — XP Loop [D7 — locked priority]
 
