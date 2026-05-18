@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=t34-initiative-2026-05-18">
+  <link rel="stylesheet" href="./css/styles.css?v=t34-zones-2026-05-18">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -269,8 +269,18 @@
         <span class="combat-banner__round" id="combat-round">Runda 1</span>
         <span class="combat-banner__turn" id="combat-turn-label">Twoja tura</span>
       </div>
-      <div class="combat-banner__enemies" id="combat-enemies">
-        <!-- Enemy entries inserted here -->
+      <div class="combat-zones" id="combat-zones">
+        <div class="combat-zone combat-zone--ranged" data-zone="ranged">
+          <div class="combat-zone__label">DYSTANS</div>
+          <div class="combat-zone__list" id="combat-zone-ranged"></div>
+        </div>
+        <div class="combat-zone combat-zone--engaged" data-zone="engaged">
+          <div class="combat-zone__label">ZWARCIE</div>
+          <div class="combat-zone__list" id="combat-zone-engaged"></div>
+        </div>
+      </div>
+      <div class="combat-banner__enemies" id="combat-enemies" hidden>
+        <!-- Legacy mount, kept hidden for backward-compat -->
       </div>
       <div class="combat-banner__msg" id="combat-msg" hidden></div>
     </div>
@@ -324,6 +334,12 @@
           <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
         </svg>
         <span>Zaklęcie</span>
+      </button>
+      <button type="button" class="combat-btn combat-btn--move" id="combat-move-btn" data-clog="combat_move_button">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="combat-move-icon">
+          <path d="M5 12h14M13 6l6 6-6 6"/>
+        </svg>
+        <span id="combat-move-label">Zbliż się</span>
       </button>
       <button type="button" class="combat-btn combat-btn--flee" id="combat-flee-btn" data-clog="combat_flee_button">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -928,6 +944,6 @@
 
   <script src="./js/clog.js?v=combat-v35"></script>
   <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
-  <script src="./js/app.js?v=t34-initiative-2026-05-18"></script>
+  <script src="./js/app.js?v=t34-zones-2026-05-18"></script>
 </body>
 </html>
