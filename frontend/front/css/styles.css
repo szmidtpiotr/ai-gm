@@ -3738,6 +3738,95 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   background: linear-gradient(90deg, #8a3030, #a04040);
 }
 
+/* ── Combat Zones (T34) ─────────────────────────────────────────────────── */
+.combat-zones {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  gap: 0;
+  margin-top: 6px;
+  position: relative;
+}
+.combat-zones::before {
+  /* central divider */
+  content: '';
+  grid-column: 2;
+  grid-row: 1;
+  background: linear-gradient(180deg,
+    rgba(220, 80, 80, 0.05) 0%,
+    rgba(220, 80, 80, 0.35) 50%,
+    rgba(220, 80, 80, 0.05) 100%);
+}
+
+.combat-zone {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 4px 8px;
+}
+
+.combat-zone__label {
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: center;
+  color: rgba(220, 180, 100, 0.55);
+  padding: 2px 0 4px;
+  border-bottom: 1px solid rgba(120, 90, 60, 0.25);
+  margin-bottom: 4px;
+}
+
+.combat-zone--ranged .combat-zone__label::before { content: '🏹  '; }
+.combat-zone--engaged .combat-zone__label::before { content: '⚔️  '; }
+
+.combat-zone__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 30px;
+}
+.combat-zone__list:empty::after {
+  content: '— pusto —';
+  display: block;
+  text-align: center;
+  font-size: 0.68rem;
+  color: rgba(150, 145, 135, 0.35);
+  font-style: italic;
+  padding: 6px 0;
+}
+
+/* Mobile: stack zones vertically */
+@media (max-width: 540px) {
+  .combat-zones { grid-template-columns: 1fr; }
+  .combat-zones::before { display: none; }
+  .combat-zone { padding: 4px 0; }
+  .combat-zone + .combat-zone { border-top: 1px solid rgba(120, 90, 60, 0.2); margin-top: 4px; padding-top: 6px; }
+}
+
+/* Move (zone-change) button styling — sits between attack and flee */
+.combat-btn--move {
+  background: linear-gradient(180deg, #2a3e5a 0%, #18243a 100%);
+  border-color: #4a6f96;
+  color: #c5d8f0;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(150, 200, 255, 0.15);
+}
+.combat-btn--move:hover:not(:disabled) {
+  background: linear-gradient(180deg, #324a6f 0%, #1c2c46 100%);
+  box-shadow: 0 4px 12px rgba(80, 130, 200, 0.35);
+}
+.combat-btn--move[data-direction="retreat"] svg { transform: scaleX(-1); }
+
+/* Initiative chip zone glyph */
+.init-chip__zone {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 9px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
 /* ── Initiative Track (T34) ─────────────────────────────────────────────── */
 .initiative-track {
   display: flex;

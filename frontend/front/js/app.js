@@ -95,6 +95,10 @@ const elements = {
     combatTurnLabel: document.getElementById('combat-turn-label'),
     combatEnemies: document.getElementById('combat-enemies'),
     initiativeTrack: document.getElementById('initiative-track'),
+    combatZoneRanged: document.getElementById('combat-zone-ranged'),
+    combatZoneEngaged: document.getElementById('combat-zone-engaged'),
+    btnCombatMove: document.getElementById('combat-move-btn'),
+    combatMoveLabel: document.getElementById('combat-move-label'),
     combatMsg: document.getElementById('combat-msg'),
     combatComposer: document.getElementById('combat-composer'),
     btnCombatAttack: document.getElementById('combat-attack-btn'),
@@ -1400,7 +1404,7 @@ async function enterGame(campaign) {
                     const row = item.data;
                     const evt = String(row.event_type || '');
                     // Re-use live renderer for attack/death; skip system events (start/end/initiative)
-                    if (evt === 'attack' || evt === 'death') {
+                    if (evt === 'attack' || evt === 'death' || evt === 'zone_change') {
                         appendCombatTurnCard(row);
                         lastRenderedCombatTurnId = Math.max(lastRenderedCombatTurnId, Number(row.id) || 0);
                     }
@@ -2771,6 +2775,8 @@ function _renderInitiativeTrack(cs) {
         const tier = pct > 60 ? 'high' : (pct > 25 ? 'mid' : 'low');
         const portrait = isPlayer ? '🛡️' : (downed ? '💀' : '⚔️');
         const ini = c.initiative_roll != null ? `INI ${c.initiative_roll}` : '';
+        const zone = String(c.zone || 'engaged');
+        const zoneGlyph = zone === 'ranged' ? '🏹' : '⚔';
         const cls = [
             'init-chip',
             isPlayer ? 'init-chip--player' : 'init-chip--enemy',
@@ -2779,8 +2785,10 @@ function _renderInitiativeTrack(cs) {
             downed ? 'init-chip--downed' : '',
         ].filter(Boolean).join(' ');
         const name = String(c.name || (isPlayer ? 'Bohater' : c.enemy_key) || '—');
+        const zoneLabel = zone === 'ranged' ? 'Dystans' : 'Zwarcie';
         return `
-            <div class="${cls}" data-combatant-id="${escapeHtml(id)}" title="${escapeHtml(name)}${ini ? ' · ' + ini : ''}">
+            <div class="${cls}" data-combatant-id="${escapeHtml(id)}" title="${escapeHtml(name)}${ini ? ' · ' + ini : ''} · ${zoneLabel}">
+                <div class="init-chip__zone" aria-label="${zoneLabel}">${zoneGlyph}</div>
                 <div class="init-chip__portrait">${portrait}</div>
                 <div class="init-chip__name">${escapeHtml(name)}</div>
                 <div class="init-chip__ini">${ini}</div>
@@ -2864,15 +2872,37 @@ function renderCombatUI(cs) {
             </div>`;
     };
 
-    const parts = [];
-    if (player) parts.push(combatantRow(player, true));
-    enemies.forEach(e => parts.push(combatantRow(e, false)));
-    elements.combatEnemies.innerHTML = parts.join('');
+    // ── Render combatants into zone columns (T34) ──
+    const playerZone = String(player?.zone || 'engaged');
+    const renderTo = (el, list) => { if (el) el.innerHTML = list.join(''); };
+    const rangedItems = [];
+    const engagedItems = [];
+    if (player) {
+        (playerZone === 'ranged' ? rangedItems : engagedItems).push(combatantRow(player, true));
+    }
+    enemies.forEach(e => {
+        const z = String(e.zone || 'engaged');
+        (z === 'ranged' ? rangedItems : engagedItems).push(combatantRow(e, false));
+    });
+    renderTo(elements.combatZoneRanged, rangedItems);
+    renderTo(elements.combatZoneEngaged, engagedItems);
+
+    // ── Zone-change button label depends on player's current zone ──
+    if (elements.btnCombatMove && elements.combatMoveLabel) {
+        if (playerZone === 'engaged') {
+            elements.combatMoveLabel.textContent = 'Cofnij się';
+            elements.btnCombatMove.dataset.direction = 'retreat';
+        } else {
+            elements.combatMoveLabel.textContent = 'Zbliż się';
+            elements.btnCombatMove.dataset.direction = 'approach';
+        }
+    }
 
     const canAct = isPlayerTurn && !combatBusy;
     elements.btnCombatAttack.disabled = !canAct;
     elements.btnCombatFlee.disabled = !canAct;
-    window.clog?.event('combat_buttons_state', { attack_disabled: !canAct, is_player_turn: isPlayerTurn, busy: combatBusy });
+    if (elements.btnCombatMove) elements.btnCombatMove.disabled = !canAct;
+    window.clog?.event('combat_buttons_state', { attack_disabled: !canAct, is_player_turn: isPlayerTurn, busy: combatBusy, zone: playerZone });
 }
 
 let lastRenderedCombatTurnId = 0;
@@ -2885,10 +2915,11 @@ async function fetchAndAppendNewCombatTurns() {
         const data = await r.json().catch(() => ({}));
         const rows = Array.isArray(data.turns) ? data.turns : [];
         const newRows = rows
-            .filter(row =>
-                row && (String(row.event_type) === 'attack' || String(row.event_type) === 'death') &&
-                Number(row.id) > lastRenderedCombatTurnId
-            )
+            .filter(row => {
+                const et = String(row?.event_type || '');
+                return row && (et === 'attack' || et === 'death' || et === 'zone_change') &&
+                    Number(row.id) > lastRenderedCombatTurnId;
+            })
             .sort((a, b) => {
                 // Death events always render after attacks in the same batch
                 const da = String(a.event_type) === 'death' ? 1 : 0;
@@ -2908,6 +2939,21 @@ function appendCombatTurnCard(row) {
     const evt = String(row.event_type || '');
     const actor = String(row.actor || '');
     let html = '';
+
+    if (evt === 'zone_change') {
+        let meta = {};
+        try { meta = typeof row.narrative === 'string' ? JSON.parse(row.narrative) : {}; } catch (_e) {}
+        const who = escapeHtml(String(meta.enemy_name || (actor === 'player' ? 'Bohater' : 'Wróg')));
+        const arrow = meta.to === 'engaged' ? '→' : '←';
+        const where = meta.to === 'engaged' ? 'zwarcie' : 'dystans';
+        const verb = meta.charged ? 'szarżuje' : (actor === 'player' ? 'przemieszcza się' : 'cofa się');
+        html = `<div class="cturn cturn--move"><span class="cturn__icon">🚶</span><span class="cturn__text">${who} ${verb} ${arrow} ${where}</span></div>`;
+        const bubble = document.createElement('div');
+        bubble.className = `chat-bubble chat-bubble--cturn-${actor === 'player' ? 'player' : 'enemy'}`;
+        bubble.innerHTML = html;
+        elements.chatMessages.appendChild(bubble);
+        return;
+    }
 
     if (evt === 'death') {
         const nar = String(row.narrative || '').trim() || 'Wróg wyeliminowany.';
@@ -3031,6 +3077,11 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
     const targetName = data.target_name || target?.name || 'wróg';
 
     if (data.mana_insufficient) { setCombatMsg(data.message || 'Brak many!', true); return; }
+    if (data.blocked && data.block_reason === 'out_of_range') {
+        setCombatMsg(data.message || 'Cel poza zasięgiem — zbliż się.', true);
+        if (data.combat_state) { lastCombatState = data.combat_state; renderCombatUI(data.combat_state); }
+        return;
+    }
     if (hit) { setCombatMsg(`Trafienie! ${dmg} obrażeń.`); }
     else if (data.player_nat1) { setCombatMsg('Fatalne pudło!', true); }
     else { setCombatMsg('Pudło.'); }
@@ -3068,6 +3119,45 @@ async function _handleCombatAttackResult(data, d20, enemyKey, target) {
         await handleCombatEnded(cs);
     } else {
         await refreshCharacterData();
+    }
+}
+
+async function handleCombatMove() {
+    window.clog?.event('combat_move_invoked', { campaign_id: currentCampaignId, current_turn: lastCombatState?.current_turn ?? null });
+    if (!combatActive || !currentCampaignId || combatBusy || enemyTurnInFlight) {
+        window.clog?.warn('combat_move_blocked', { reason: 'busy_or_inactive' });
+        return;
+    }
+    if (lastCombatState?.current_turn !== 'player') {
+        setCombatMsg('Nie twoja tura.', true);
+        return;
+    }
+    combatBusy = true;
+    if (elements.btnCombatMove) elements.btnCombatMove.disabled = true;
+    elements.btnCombatAttack.disabled = true;
+    elements.btnCombatFlee.disabled = true;
+    setCombatMsg('Zmiana pozycji…');
+    try {
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/zone-change`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data?.detail || `HTTP ${r.status}`);
+        const cs = data.combat_state;
+        const moveText = data.to === 'engaged' ? 'Zbliżasz się — wchodzisz w zwarcie.' : 'Cofasz się — przechodzisz na dystans.';
+        appendMessage({ role: 'system', content: `🚶 ${moveText}`, created_at: new Date() });
+        if (cs) { lastCombatState = cs; renderCombatUI(cs); }
+        setCombatMsg(data.to === 'engaged' ? 'Jesteś w zwarciu.' : 'Jesteś na dystansie.');
+        // Enemy may now act
+        if (cs && cs.current_turn !== 'player' && cs.status === 'active') {
+            await pollCombatState();
+        }
+    } catch (e) {
+        setCombatMsg(`Błąd ruchu: ${e.message || e}`, true);
+        window.clog?.error('combat_move_exception', { message: String(e?.message || e) });
+    } finally {
+        combatBusy = false;
+        if (lastCombatState) renderCombatUI(lastCombatState);
     }
 }
 
@@ -4277,6 +4367,7 @@ function initEventListeners() {
     // Combat
     elements.btnCombatAttack?.addEventListener('click', handleCombatAttack);
     elements.btnCombatFlee?.addEventListener('click', handleCombatFlee);
+    elements.btnCombatMove?.addEventListener('click', handleCombatMove);
     document.getElementById('combat-spell-btn')?.addEventListener('click', openSpellPicker);
     document.getElementById('spell-picker-close')?.addEventListener('click', closeSpellPicker);
     document.getElementById('spell-picker-overlay')?.addEventListener('click', e => {
