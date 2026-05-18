@@ -94,6 +94,7 @@ const elements = {
     combatRound: document.getElementById('combat-round'),
     combatTurnLabel: document.getElementById('combat-turn-label'),
     combatEnemies: document.getElementById('combat-enemies'),
+    initiativeTrack: document.getElementById('initiative-track'),
     combatMsg: document.getElementById('combat-msg'),
     combatComposer: document.getElementById('combat-composer'),
     btnCombatAttack: document.getElementById('combat-attack-btn'),
@@ -2699,6 +2700,10 @@ function hideCombatUI() {
     elements.combatBanner.hidden = true;
     elements.combatComposer.hidden = true;
     elements.composer?.classList.remove('composer--hidden');
+    if (elements.initiativeTrack) elements.initiativeTrack.innerHTML = '';
+    _initActedThisRound = new Set();
+    _initLastRound = 0;
+    _initLastCurrentTurn = null;
     setCombatMsg('');
     updateInputPlaceholder();
 }
@@ -2712,6 +2717,86 @@ function setCombatMsg(text, isError) {
     el.classList.toggle('combat-banner__msg--error', !!isError);
 }
 
+// ── Initiative track state (T34) ────────────────────────────────────────
+// Tracks which combatant ids have already acted within the current round.
+let _initActedThisRound = new Set();
+let _initLastRound = 0;
+let _initLastCurrentTurn = null;
+
+function _renderInitiativeTrack(cs) {
+    const track = elements.initiativeTrack;
+    if (!track) return;
+
+    const combatants = Array.isArray(cs.combatants) ? cs.combatants : [];
+    const order = Array.isArray(cs.turn_order) ? cs.turn_order : [];
+    const round = Number(cs.round || 1);
+    const currentTurnId = String(cs.current_turn ?? '');
+
+    // No order or empty combat → clear
+    if (order.length === 0 || combatants.length === 0) {
+        track.innerHTML = '';
+        return;
+    }
+
+    // Round changed → reset acted set and play sweep
+    if (round !== _initLastRound) {
+        _initActedThisRound = new Set();
+        _initLastRound = round;
+        track.classList.remove('initiative-track--new-round');
+        // Force reflow so animation re-triggers reliably
+        void track.offsetWidth;
+        track.classList.add('initiative-track--new-round');
+        setTimeout(() => track.classList.remove('initiative-track--new-round'), 650);
+    }
+
+    // current_turn advanced → previous actor counts as having acted
+    if (currentTurnId && _initLastCurrentTurn && currentTurnId !== _initLastCurrentTurn) {
+        _initActedThisRound.add(_initLastCurrentTurn);
+    }
+    _initLastCurrentTurn = currentTurnId;
+
+    // Build chips in initiative order
+    const byId = new Map(combatants.map(c => [String(c.id ?? ''), c]));
+    const html = order.map(rawId => {
+        const id = String(rawId);
+        const c = byId.get(id);
+        if (!c) return '';
+        const isPlayer = c.type === 'player';
+        const hpCur = Math.max(0, Number(c.hp_current ?? 0));
+        const hpMax = Math.max(1, Number(c.hp_max ?? hpCur ?? 1));
+        const pct = Math.max(0, Math.min(100, Math.round((hpCur / hpMax) * 100)));
+        const downed = hpCur <= 0;
+        const active = !downed && id === currentTurnId;
+        const acted = !active && !downed && _initActedThisRound.has(id);
+        const tier = pct > 60 ? 'high' : (pct > 25 ? 'mid' : 'low');
+        const portrait = isPlayer ? '🛡️' : (downed ? '💀' : '⚔️');
+        const ini = c.initiative_roll != null ? `INI ${c.initiative_roll}` : '';
+        const cls = [
+            'init-chip',
+            isPlayer ? 'init-chip--player' : 'init-chip--enemy',
+            active ? 'init-chip--active' : '',
+            acted ? 'init-chip--acted' : '',
+            downed ? 'init-chip--downed' : '',
+        ].filter(Boolean).join(' ');
+        const name = String(c.name || (isPlayer ? 'Bohater' : c.enemy_key) || '—');
+        return `
+            <div class="${cls}" data-combatant-id="${escapeHtml(id)}" title="${escapeHtml(name)}${ini ? ' · ' + ini : ''}">
+                <div class="init-chip__portrait">${portrait}</div>
+                <div class="init-chip__name">${escapeHtml(name)}</div>
+                <div class="init-chip__ini">${ini}</div>
+                <div class="init-chip__hp"><div class="init-chip__hp-fill init-chip__hp-fill--${tier}" style="width: ${pct}%"></div></div>
+            </div>`;
+    }).join('');
+
+    track.innerHTML = html;
+
+    // Keep the active chip visible in the scroll viewport
+    const activeEl = track.querySelector('.init-chip--active');
+    if (activeEl && typeof activeEl.scrollIntoView === 'function') {
+        try { activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); } catch {}
+    }
+}
+
 function renderCombatUI(cs) {
     const round = Number(cs.round || 1);
     elements.combatRound.textContent = `Runda ${round}`;
@@ -2720,6 +2805,8 @@ function renderCombatUI(cs) {
     const player = combatants.find(c => c && c.type === 'player');
     const enemies = combatants.filter(c => c && c.type === 'enemy');
     const isPlayerTurn = cs.current_turn === 'player';
+
+    _renderInitiativeTrack(cs);
 
     window.clog?.event('combat_render', {
         round, current_turn: String(cs.current_turn ?? 'null'), is_player_turn: isPlayerTurn, enemy_count: enemies.length,
