@@ -218,6 +218,51 @@ def start_combat(payload: dict = Body(...)) -> dict[str, Any]:
     return {"ok": True, "combat_state": combat.load_combat_snapshot(cid), "initiate": res}
 
 
+@router.get("/character/{character_id}")
+def get_character_full(character_id: int) -> dict[str, Any]:
+    """Aggregated character snapshot for the sandbox sheet card:
+    parsed sheet (stats, hp/mana, conditions) + inventory + spells.
+    Single call to keep the UI render path cheap."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT id, name, sheet_json, gold_gp FROM characters WHERE id = ? AND is_active = 1",
+            (character_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="character not found")
+        sheet = json.loads(row["sheet_json"] or "{}")
+
+    # Inventory + spells: call services directly to avoid HTTP hop
+    from app.services import loot_service
+    from app.services.spell_service import get_character_spells
+
+    try:
+        inventory = loot_service.get_character_inventory(character_id)
+    except Exception:
+        inventory = {}
+    try:
+        spells = get_character_spells(character_id)
+    except Exception:
+        spells = []
+
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "gold_gp": row["gold_gp"] or 0,
+        "archetype": sheet.get("archetype"),
+        "level": int(sheet.get("level") or 1),
+        "stats": sheet.get("stats") or {},
+        "skills": sheet.get("skills") or {},
+        "hp": int(sheet.get("current_hp") or 0),
+        "max_hp": int(sheet.get("max_hp") or 0),
+        "mana": int(sheet.get("current_mana") or 0),
+        "max_mana": int(sheet.get("max_mana") or 0),
+        "conditions": sheet.get("conditions") or [],
+        "inventory": inventory,
+        "spells": spells,
+    }
+
+
 @router.post("/end-combat")
 def end_combat(payload: dict = Body(...)) -> dict[str, Any]:
     """Force-end the active combat for this sandbox campaign. Body: `{campaign_id, reason?}`."""
