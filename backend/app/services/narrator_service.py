@@ -139,7 +139,15 @@ class NPCDialogueRequest:
     is_secret: bool = False
     tone_context: str = "WFRP grim dark"
     recent_exchanges: list[DialogueTurn] = field(default_factory=list)
+    # Per spec T28 §3 — when another NPC is asked about a deceased character,
+    # `deceased_npc_context` supplies the raw fact ("Heinz jest martwy."), and
+    # `deceased_npc_relationship` shapes the emotional response:
+    #   "ally"    → grief, anger, suspicion
+    #   "enemy"   → cold, dismissive, may hint at satisfaction
+    #   "neutral" → matter-of-fact, perhaps uncomfortable
+    # If unset, defaults to "neutral" handling.
     deceased_npc_context: Optional[str] = None
+    deceased_npc_relationship: Optional[str] = None  # "ally" | "enemy" | "neutral"
 
 
 @dataclass
@@ -423,10 +431,20 @@ def narrate_npc_dialogue(req: NPCDialogueRequest) -> str:
             )
         reveal_section += "\n"
 
-    # deceased NPC context
+    # deceased NPC context — spec T28 §3 enriches with relationship if known
     deceased_section = ""
     if req.deceased_npc_context:
-        deceased_section = f"UWAGA: {req.deceased_npc_context}\n\n"
+        rel = (req.deceased_npc_relationship or "neutral").lower().strip()
+        rel_instruction = {
+            "ally":    "Zareaguj z żalem, gniewem lub podejrzliwością — to był ktoś bliski.",
+            "enemy":   "Zareaguj chłodno, lekceważąco — być może z odrobiną satysfakcji.",
+            "neutral": "Zareaguj rzeczowo, może z odrobiną zażenowania.",
+        }.get(rel, "Zareaguj rzeczowo, może z odrobiną zażenowania.")
+        deceased_section = (
+            f"UWAGA: {req.deceased_npc_context}\n"
+            f"Twój stosunek do tej postaci: {rel}\n"
+            f"{rel_instruction}\n\n"
+        )
 
     system = (
         f"Wciel się w postać {req.npc_name}.\n"
