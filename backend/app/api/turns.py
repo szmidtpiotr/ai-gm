@@ -56,13 +56,18 @@ router = APIRouter()
 DB_PATH = "/data/ai_gm.db"
 
 # Skill keys that represent combat-class weapon modifiers / catch-all combat
-# verbs rather than standalone skill checks. Their trigger_keywords are combat
-# verbs ("atakuję", "uderzam") or weapon names ("miecz dwuręczny", "łucznik"),
-# so any pre-LLM or post-cue keyword scan that returned these would spawn a
-# phantom skill test with hallucinated combat narration when no enemy is in the
-# location. Combat intent must route through the intent parser → combat_start,
-# never through skill_test. (Issue #20 + Geralt two_handed regression.)
-_COMBAT_CLASS_SKILLS = frozenset({"attack", "ranged_attack", "two_handed", "melee_attack", "spell_attack"})
+# verbs / meta-combat mechanics rather than standalone skill checks. Their
+# trigger_keywords are combat verbs ("atakuję", "uderzam"), weapon names
+# ("miecz dwuręczny", "łucznik"), or combat-flow words ("inicjatywa",
+# "refleks") — any of which would otherwise spawn a phantom skill test with
+# hallucinated combat narration when no enemy is in the location. Combat
+# intent must route through the intent parser → combat_start (or be a no-op
+# in NARRATIVE state), never through skill_test.
+# (Issue #20 + two_handed/initiative audit regression.)
+_COMBAT_CLASS_SKILLS = frozenset({
+    "attack", "ranged_attack", "two_handed", "melee_attack", "spell_attack",
+    "initiative",
+})
 
 def _is_combat_class_skill(skill_key: str | None) -> bool:
     return str(skill_key or "").strip().lower() in _COMBAT_CLASS_SKILLS
@@ -2370,7 +2375,7 @@ def create_turn(
                 _kw_rows_pre = conn.execute(
                     "SELECT key, trigger_keywords FROM game_config_skills "
                     "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
-                    "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack')"
+                    "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
                 ).fetchall()
                 # Wrap text with spaces for word-boundary matching
                 _txt_padded = " " + _txt_pre + " "
@@ -2573,7 +2578,7 @@ def create_turn(
                         _kw_rows = conn.execute(
                             "SELECT key, trigger_keywords FROM game_config_skills "
                             "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
-                            "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack')"
+                            "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
                         ).fetchall()
                         _txt_norm_padded = " " + _txt_norm + " "
                         for _kr in _kw_rows:
