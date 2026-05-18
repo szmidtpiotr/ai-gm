@@ -24,6 +24,8 @@ let state = {
   d20Manual: 10,
   log: [],
   showSpellPicker: false,
+  rollEvents: [],            // combat_turns rows for this fight
+  lastRenderedTurnId: 0,
 };
 
 export async function init(panel) {
@@ -88,6 +90,10 @@ function layout() {
           <h3>Stan walki</h3>
           <div id="sbx-combat-state" class="sandbox-combat-state">
             <p class="section-note sandbox-idle">Brak aktywnej walki. Wybierz bohatera + przeciwników i naciśnij <em>Rozpocznij walkę</em>.</p>
+          </div>
+          <div class="sandbox-events" id="sbx-events" hidden>
+            <div class="sandbox-events-header">Wydarzenia walki</div>
+            <div class="sandbox-events-list" id="sbx-events-list"></div>
           </div>
           <div class="sandbox-actions" id="sbx-actions" hidden>
             <button class="combat-btn combat-btn--attack" id="sbx-attack-btn">⚔ Atak</button>
@@ -257,6 +263,11 @@ async function doStartCombat(panel) {
   if (!enemies.length) { showToast("Wybierz przeciwników.", "error"); return; }
   state.busy = true;
   try {
+    // Reset events feed for the new fight
+    state.rollEvents = [];
+    state.lastRenderedTurnId = 0;
+    renderEvents(panel);
+
     const res = await adminFetch("/api/admin/sandbox/start-combat", {
       method: "POST",
       body: JSON.stringify({ campaign_id: state.campaignId, character_id: state.characterId, enemy_keys: enemies }),
@@ -266,6 +277,7 @@ async function doStartCombat(panel) {
     const det = panel.querySelector("#sbx-setup-details");
     if (det) det.open = false;
     await refreshCharacterSheet(panel);
+    await refreshRollEvents(panel);
   } catch (e) {
     showToast("Start error: " + (e.message || "?"), "error");
   } finally {
@@ -296,6 +308,102 @@ async function refreshCharacterSheet(panel) {
   renderSheet(panel);
 }
 
+async function refreshRollEvents(panel) {
+  if (!state.campaignId) return;
+  try {
+    const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat/turns/history?limit=200`);
+    const rows = Array.isArray(res?.turns) ? res.turns : [];
+    // Render only events newer than what we've already shown
+    const fresh = rows.filter((r) => Number(r.id) > state.lastRenderedTurnId);
+    if (fresh.length) {
+      for (const r of fresh) {
+        state.rollEvents.push(r);
+        state.lastRenderedTurnId = Math.max(state.lastRenderedTurnId, Number(r.id) || 0);
+      }
+      renderEvents(panel);
+    }
+  } catch {}
+}
+
+function renderEvents(panel) {
+  const wrap = panel.querySelector("#sbx-events");
+  const list = panel.querySelector("#sbx-events-list");
+  if (!wrap || !list) return;
+  if (state.rollEvents.length === 0) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  // Render newest at bottom so chronological reading top→down matches play
+  list.innerHTML = state.rollEvents.map((row) => renderEventCard(row)).join("");
+  // Auto-scroll latest into view
+  list.scrollTop = list.scrollHeight;
+}
+
+function renderEventCard(row) {
+  const evt = String(row.event_type || "");
+  const actor = String(row.actor || "");
+  const rv = row.roll_value != null ? Number(row.roll_value) : null;
+  const dmg = row.damage != null ? Number(row.damage) : null;
+  const hit = row.hit === 1 || row.hit === true;
+  let meta = {};
+  try { meta = typeof row.narrative === "string" ? JSON.parse(row.narrative) : (row.narrative || {}); } catch { meta = {}; }
+
+  if (evt === "start") {
+    return `<div class="sbx-evt sbx-evt--sys"><span>⚔</span> ${esc(meta.message || row.narrative || "Walka rozpoczęta")}</div>`;
+  }
+  if (evt === "end") {
+    return `<div class="sbx-evt sbx-evt--sys"><span>🏁</span> ${esc(row.narrative || "Walka zakończona")}</div>`;
+  }
+  if (evt === "initiative") {
+    return `<div class="sbx-evt sbx-evt--sys sbx-evt--quiet"><span>🎲</span> ${esc(row.narrative || `Inicjatywa ${actor}: ${rv}`)}</div>`;
+  }
+  if (evt === "death") {
+    return `<div class="sbx-evt sbx-evt--death"><span>💀</span> ${esc(row.narrative || `${row.target_name || "wróg"} pada`)}</div>`;
+  }
+  if (evt === "zone_change") {
+    const who = esc(String(meta.enemy_name || (actor === "player" ? "Bohater" : "Wróg")));
+    const arrow = meta.to === "engaged" ? "→ zwarcie" : "← dystans";
+    const verb = meta.charged ? "szarżuje" : (actor === "player" ? "przemieszcza się" : "cofa się");
+    return `<div class="sbx-evt sbx-evt--move"><span>🚶</span> <b>${who}</b> ${esc(verb)} ${esc(arrow)}</div>`;
+  }
+  if (evt === "attack" && actor === "player") {
+    const label = esc(String(meta.attack_label || "ATAK"));
+    const stat = meta.attack_stat ? `<span class="sbx-evt-stat">${esc(String(meta.attack_stat).toUpperCase())}</span>` : "";
+    const modifier = meta.modifier != null ? Number(meta.modifier) : 0;
+    const total = meta.total != null ? Number(meta.total) : rv;
+    const sign = modifier >= 0 ? "+" : "";
+    const target = esc(String(row.target_name || "wróg"));
+    const ac = meta.target_ac != null ? ` <span class="sbx-evt-ac">vs AC ${meta.target_ac}</span>` : "";
+    const verdict = hit
+      ? `<span class="sbx-evt-hit">✅ TRAFIENIE${dmg != null ? ` · ${dmg} obrażeń` : ""}</span>`
+      : `<span class="sbx-evt-miss">❌ PUDŁO</span>`;
+    return `
+      <div class="sbx-evt sbx-evt--player">
+        <div class="sbx-evt-head">⚔️ <b>${label}</b> ${stat} → <b>${target}</b></div>
+        <div class="sbx-evt-detail">d20 <b>${rv}</b> ${sign}${modifier} = <b>${total}</b>${ac} → ${verdict}</div>
+      </div>`;
+  }
+  if (evt === "attack" && actor === "enemy") {
+    const enemyName = esc(String(meta.enemy_name || row.target_name || "Wróg"));
+    const ac = meta.target_ac != null ? ` <span class="sbx-evt-ac">vs AC ${meta.target_ac}</span>` : "";
+    const rawD20 = meta.raw_d20 != null ? meta.raw_d20 : rv;
+    const atkB = meta.attack_bonus != null ? Number(meta.attack_bonus) : null;
+    const total = meta.attack_roll != null ? Number(meta.attack_roll) : rv;
+    const bonus = atkB != null ? ` ${atkB >= 0 ? "+" : ""}${atkB}` : "";
+    const verdict = hit
+      ? `<span class="sbx-evt-hit">✅ TRAFIENIE${dmg != null ? ` · ${dmg} obrażeń` : ""}</span>`
+      : `<span class="sbx-evt-miss">❌ PUDŁO</span>`;
+    return `
+      <div class="sbx-evt sbx-evt--enemy">
+        <div class="sbx-evt-head">🗡️ <b>${enemyName}</b> atakuje</div>
+        <div class="sbx-evt-detail">d20 <b>${rawD20}</b>${bonus} = <b>${total}</b>${ac} → ${verdict}</div>
+      </div>`;
+  }
+  // Fallback for any unhandled event_type
+  return `<div class="sbx-evt sbx-evt--sys sbx-evt--quiet"><span>·</span> ${esc(evt)} ${esc(row.narrative || "")}</div>`;
+}
+
 // ── Combat actions ────────────────────────────────────────────────────────
 function rollD20() {
   return state.d20Mode === "manual" ? state.d20Manual : (Math.floor(Math.random() * 20) + 1);
@@ -319,6 +427,7 @@ async function doAttack(panel, spellKey = null) {
     logMsg(panel, `[${kind}] ${line}`);
     if (res.combat_state?.status === "ended") logMsg(panel, `Walka: ${res.combat_state.ended_reason}.`);
     await refreshCharacterSheet(panel);
+    await refreshRollEvents(panel);
   } catch (e) {
     logMsg(panel, "Błąd: " + (e.message || "?"));
   } finally {
@@ -334,6 +443,7 @@ async function doZoneChange(panel) {
     const res = await adminFetch(`/api/campaigns/${state.campaignId}/combat/zone-change`, { method: "POST" });
     state.combatState = res.combat_state;
     logMsg(panel, `[Zone] ${res.from} → ${res.to}`);
+    await refreshRollEvents(panel);
   } catch (e) {
     logMsg(panel, "Zone error: " + (e.message || "?"));
   } finally {
@@ -361,6 +471,7 @@ async function doEnemyTurn(panel, manual = false) {
     }
     await refreshCombatState(panel);
     await refreshCharacterSheet(panel);
+    await refreshRollEvents(panel);
   } catch (e) {
     logMsg(panel, "Enemy turn error: " + (e.message || "?"));
   } finally {

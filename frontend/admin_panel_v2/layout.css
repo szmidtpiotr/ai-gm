@@ -3774,3 +3774,55 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 
 /* Idle-state hint with arrow up to Start button */
 .sandbox-idle--ready { color: var(--accent-gold); font-style: normal; }
+
+/* Sandbox combat events feed (mirrors player UI roll cards) */
+.sandbox-events {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  display: flex; flex-direction: column;
+  min-height: 0;
+}
+.sandbox-events[hidden] { display: none !important; }
+.sandbox-events-header {
+  font-family: 'Cinzel', Georgia, serif;
+  font-size: 0.68rem; font-weight: 600;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: 4px;
+}
+.sandbox-events-list {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 260px; overflow-y: auto;
+  padding-right: 4px;
+}
+
+.sbx-evt {
+  padding: 6px 9px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid transparent;
+  border-left: 3px solid rgba(150,150,150,0.25);
+  border-radius: 5px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+.sbx-evt b { color: var(--text-primary); }
+.sbx-evt-head { color: var(--text-primary); margin-bottom: 2px; }
+.sbx-evt-detail {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.74rem; color: var(--text-secondary);
+}
+.sbx-evt-stat {
+  background: rgba(120, 140, 180, 0.18); color: #9bb8d9;
+  padding: 0 5px; border-radius: 6px; font-size: 0.62rem;
+  letter-spacing: 0.05em; margin: 0 2px;
+}
+.sbx-evt-ac { color: var(--text-muted); }
+.sbx-evt-hit  { color: #9bc965; font-weight: 600; }
+.sbx-evt-miss { color: #e87878; font-weight: 600; }
+
+.sbx-evt--player { border-left-color: #6da64a; background: rgba(110, 180, 70, 0.05); }
+.sbx-evt--enemy  { border-left-color: #c04040; background: rgba(192, 64, 64, 0.05); }
+.sbx-evt--move   { border-left-color: #4a6da6; background: rgba(74, 109, 166, 0.05); color: var(--text-primary); }
+.sbx-evt--death  { border-left-color: #888;    background: rgba(255,255,255,0.04); color: var(--text-primary); font-weight: 600; }
+.sbx-evt--sys    { border-left-color: rgba(201, 165, 74, 0.4); color: var(--text-secondary); font-style: italic; }
+.sbx-evt--quiet  { opacity: 0.55; font-size: 0.72rem; padding: 3px 9px; }
