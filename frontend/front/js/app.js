@@ -1686,11 +1686,14 @@ function formatDateTime(dateStr) {
 function parseGmFull(text) {
     if (!text) return { narrative: '', locationIntent: null };
     let raw = String(text).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const stripInternalTags = s => String(s || '')
+        .replace(/\s*\[LOCATION_BLOCKED:[^\]]*\]/g, '')
+        .trim();
     try {
         const data = JSON.parse(raw);
         if (data && typeof data === 'object') {
             return {
-                narrative: typeof data.narrative === 'string' ? data.narrative : '',
+                narrative: stripInternalTags(typeof data.narrative === 'string' ? data.narrative : ''),
                 locationIntent: data.location_intent || null,
                 raw: data,
             };
