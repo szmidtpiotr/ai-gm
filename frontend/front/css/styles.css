@@ -931,18 +931,51 @@ body {
   position: relative;
 }
 
-/* ── Time-of-day chat overlay (stained-glass frame) ───────────────────────
+/* ── Time-of-day overlay (continuous luminous frame) ─────────────────────
+   Treats the entire game viewport as one room with ambient lighting from
+   four corners. Header owns the top corners + bottom-edge bleed; composer
+   owns the bottom corners + top-edge bleed; chat fills the middle with
+   side edges and an optional bg wash. Together they form a single
+   atmospheric frame instead of three boxed-in halos.
+
    Driven by CSS variables set in JS by applyTimeOfDayOverlay():
-     --tod-color        — primary tint (period color)
-     --tod-accent       — light edge highlight
+     --tod-color        — primary tint (period color, applied to corners
+                          near the chat and to side edges)
+     --tod-accent       — light edge highlight (applied to far corners
+                          farthest from the chat — like sunlight on a
+                          window ledge)
      --tod-intensity    — 0..1 opacity multiplier
    And data attrs on <html>:
      data-tod-mode      — "frame" | "bg" | "both" | "off"
      data-tod-period    — "Rano" | "Popołudnie" | "Wieczór" | "Noc"
-   The frame appears as four soft luminous corners + faint top/bottom edge
-   bleeds — never a solid border. Background mode adds a top-anchored radial
-   tint. Both modes can stack.
+   Scoping: ONLY inside #game-screen — login/wizard headers stay clean.
 */
+
+#game-screen .header,
+#game-screen .composer {
+  position: relative;
+}
+
+/* Top half of the frame — header owns the top corners and faintly bleeds
+   downward along its bottom edge (toward the chat). */
+#game-screen .header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
+  transition: opacity 1.2s ease;
+  background:
+    radial-gradient(circle 90px at 0%   0%,  var(--tod-accent, transparent) 0%, transparent 65%),
+    radial-gradient(circle 90px at 100% 0%,  var(--tod-accent, transparent) 0%, transparent 65%),
+    linear-gradient(0deg, var(--tod-color, transparent) 0%, transparent 35%);
+  mix-blend-mode: screen;
+}
+/* Keep clickable controls (buttons, name, clock) above the wash */
+#game-screen .header > * { position: relative; z-index: 1; }
+
+/* Middle — chat keeps the side bleeds and an optional bg wash */
 .chat::before,
 .chat::after {
   content: '';
@@ -953,26 +986,47 @@ body {
   z-index: 1;
   transition: opacity 1.2s ease;
 }
-/* Frame: four corner glows + top/bottom edge gradients */
+/* Side edges only — no corner glows (those live on header/composer now) */
 .chat::before {
   background:
-    radial-gradient(circle 80px at 0% 0%,    var(--tod-accent, transparent) 0%, transparent 65%),
-    radial-gradient(circle 80px at 100% 0%,  var(--tod-accent, transparent) 0%, transparent 65%),
-    radial-gradient(circle 100px at 0% 100%, var(--tod-color, transparent)  0%, transparent 70%),
-    radial-gradient(circle 100px at 100% 100%, var(--tod-color, transparent) 0%, transparent 70%),
-    linear-gradient(180deg, var(--tod-color, transparent) 0%, transparent 6%),
-    linear-gradient(0deg,   var(--tod-color, transparent) 0%, transparent 8%);
+    linear-gradient(90deg,  var(--tod-color, transparent) 0%, transparent 6%),
+    linear-gradient(270deg, var(--tod-color, transparent) 0%, transparent 6%);
   mix-blend-mode: screen;
 }
-/* Background: top-anchored radial wash for "bg"/"both" modes */
 .chat::after {
   background:
     radial-gradient(ellipse 120% 50% at 50% -10%, var(--tod-color, transparent) 0%, transparent 60%);
   mix-blend-mode: soft-light;
 }
+
+/* Bottom half of the frame — composer owns the bottom corners and faintly
+   bleeds upward along its top edge (toward the chat). */
+#game-screen .composer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 0;
+  transition: opacity 1.2s ease;
+  background:
+    radial-gradient(circle 110px at 0%   100%, var(--tod-color, transparent) 0%, transparent 70%),
+    radial-gradient(circle 110px at 100% 100%, var(--tod-color, transparent) 0%, transparent 70%),
+    linear-gradient(180deg, var(--tod-color, transparent) 0%, transparent 30%);
+  mix-blend-mode: screen;
+}
+#game-screen .composer > * { position: relative; z-index: 1; }
+
+/* Mode + intensity gates — apply opacity in lockstep across all three regions */
+:root[data-tod-mode="frame"] #game-screen .header::after,
+:root[data-tod-mode="both"]  #game-screen .header::after,
+:root[data-tod-mode="frame"] #game-screen .composer::after,
+:root[data-tod-mode="both"]  #game-screen .composer::after {
+  opacity: calc(var(--tod-intensity, 0.6) * 0.55);
+}
 :root[data-tod-mode="frame"] .chat::before,
 :root[data-tod-mode="both"]  .chat::before {
-  opacity: calc(var(--tod-intensity, 0.6) * 0.55);
+  opacity: calc(var(--tod-intensity, 0.6) * 0.40);  /* side bleeds slightly subtler */
 }
 :root[data-tod-mode="bg"]    .chat::after,
 :root[data-tod-mode="both"]  .chat::after {
@@ -980,12 +1034,20 @@ body {
 }
 
 /* Period-specific atmospheric tweaks — Noc gets a darker, deeper feel */
+:root[data-tod-period="Noc"] #game-screen .header::after,
+:root[data-tod-period="Noc"] #game-screen .composer::after,
 :root[data-tod-period="Noc"] .chat::before { mix-blend-mode: overlay; }
-:root[data-tod-period="Noc"] .chat::after  { mix-blend-mode: multiply; opacity: calc(var(--tod-intensity, 0.6) * 0.22); }
+:root[data-tod-period="Noc"] .chat::after  {
+  mix-blend-mode: multiply;
+  opacity: calc(var(--tod-intensity, 0.6) * 0.22);
+}
 
 /* Respect reduced-motion — drop the slow fade transition */
 @media (prefers-reduced-motion: reduce) {
-  .chat::before, .chat::after { transition: none; }
+  #game-screen .header::after,
+  #game-screen .composer::after,
+  .chat::before,
+  .chat::after { transition: none; }
 }
 
 .chat__messages {
