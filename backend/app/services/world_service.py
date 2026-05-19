@@ -721,7 +721,10 @@ def get_pending_weapons(conn: sqlite3.Connection) -> list[dict]:
 def get_pending_locations(conn: sqlite3.Connection) -> list[dict]:
     try:
         rows = conn.execute(
-            """SELECT key, label, location_type, description, review_status
+            """SELECT key, label, location_type, description, review_status,
+                      created_by, location_subtype, biome, tier, canonical,
+                      safe_for_rest, parent_key, source_campaign_id,
+                      ai_generated, is_active, temporary
                FROM game_locations WHERE review_status = 'pending_review'
                ORDER BY rowid DESC LIMIT 100"""
         ).fetchall()
