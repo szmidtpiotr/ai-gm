@@ -170,3 +170,58 @@ These fields already likely exist in the locations router — verify and add any
 - Available content index (enemies/NPCs per location) built by `build_available_content_index()` in `world_service.py`
 - Starting location from campaign plan (TASK_07) not yet wired — pending Turn Pipeline (TASK_11)
 - 25 tests in `test_world_service.py` covering all core functions
+
+---
+
+## Provenance & Reuse (Stage 2B-Schema)
+
+**Goal:** ~60-70% of locations the GM references come from curated DB content (seeds, admin-entered, Kreator AI); the remaining ~30-40% may be minted at runtime by the LLM via `[CREATE_LOCATION]` tags. Without provenance + filtering, the GM cannot prefer canonical content over minting duplicates.
+
+### New columns (Phase 1 migration)
+
+| Column                | Type     | Default          | Purpose                                                            |
+|-----------------------|----------|------------------|--------------------------------------------------------------------|
+| `created_by`          | TEXT     | `'admin_manual'` | Enum: `seed`/`admin_manual`/`admin_kreator`/`gm_runtime`/`import`. Replaces boolean `ai_generated` for richer provenance. |
+| `location_subtype`    | TEXT     | NULL             | `tavern`/`village`/`town`/`castle`/`ruin`/`cave`/`forest_clearing`/`road`/`watchtower`/… — lets the GM filter by kind. |
+| `biome`               | TEXT     | NULL             | `forest`/`mountain`/`swamp`/`plains`/`coast`/`desert`/`urban`/… — matches `world_hexes.hex_type` for spatial coherence. |
+| `tier`                | INTEGER  | `1`              | Level gating (1–5); a lvl-1 hero should not land in a tier-4 ruin. |
+| `canonical`           | INTEGER  | `0`              | Admin-set "preferred reuse" flag. Independent of `review_status` — a `gm_runtime` location can be promoted to canonical after review. |
+| `usage_count`         | INTEGER  | `0`              | Incremented on visit. Surfaces popular vs. dead content; secondary sort key for reuse. |
+| `source_campaign_id`  | INTEGER  | NULL             | FK to `campaigns(id)`. Records which campaign minted a `gm_runtime` location — enables targeted cleanup. |
+
+### Backfill from existing data
+
+```sql
+UPDATE game_locations SET
+  created_by = CASE WHEN ai_generated = 1 THEN 'gm_runtime' ELSE 'admin_manual' END,
+  canonical  = CASE WHEN review_status = 'permanent' AND ai_generated = 0 THEN 1 ELSE 0 END;
+```
+
+`ai_generated` is kept for backward compatibility but should be considered deprecated in favor of `created_by`.
+
+### Write paths
+
+| Write path                            | `created_by`     | `canonical` | `source_campaign_id` |
+|---------------------------------------|------------------|-------------|----------------------|
+| Seed migration (initial content)      | `seed`           | `1`         | NULL                 |
+| Admin POST/PUT/PATCH (locations.py)   | `admin_manual`   | `1`         | NULL                 |
+| Smart Entry / Kreator AI save         | `admin_kreator`  | `1`         | NULL                 |
+| `[CREATE_LOCATION]` tag handler       | `gm_runtime`     | `0`         | current campaign     |
+| Config import (`config_io_service`)   | `import`         | preserved   | preserved            |
+
+### Admin UI (Lokacje table)
+
+New columns to surface:
+- **`created_by`** — color-coded badge: 🟢 seed · 🔵 admin_manual · 🟣 admin_kreator · 🟠 gm_runtime · ⚪ import
+- **`subtype`** + **`biome`** — compact text columns, filterable
+- **⭐ `canonical`** — one-click toggle for "Promote to canonical"
+- **`usage_count`** — small grey number on the right; sortable to triage popular vs. dead content
+
+Modal form gains: subtype dropdown, biome dropdown, tier dropdown (1–5), canonical checkbox.
+
+### Promotion workflow
+
+Admin Review Queue gains a "Promote to canonical" action separate from "Approve":
+- **Approve** → `review_status='permanent'` only.
+- **Promote to canonical** → also flips `canonical=1`. A canonical location enters the GM's preferred-reuse pool.
+- **Discard** → unchanged.
