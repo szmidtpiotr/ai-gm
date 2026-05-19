@@ -114,31 +114,49 @@ def _get_available_location_keys(resolved_session_id: int | str | None) -> set[s
 def _apply_create_parent_key_fallback(
     intent: LocationIntent, resolved_session_id: int | str | None
 ) -> None:
-    """LOC-3: nieistniejący parent_key → klucz bieżącej lokacji sesji lub None."""
-    if intent.action != "create" or not (intent.parent_key or "").strip():
+    """LOC-3: missing or unknown parent_key → klucz bieżącej lokacji sesji lub None.
+
+    Runs for every action='create' intent. Anchors the new location to the current
+    session location whenever the GM omits parent_key or names a non-existent one,
+    preventing orphan top-level macros (issue #39).
+    """
+    if intent.action != "create":
         return
+    pk_raw = (intent.parent_key or "").strip()
     conn = _get_db_connection()
     try:
-        pk = intent.parent_key.strip()
-        parent = conn.execute(
-            "SELECT 1 FROM game_locations WHERE key = ? AND COALESCE(is_active, 1) = 1",
-            (pk,),
-        ).fetchone()
-        if parent:
-            return
-        logger.warning(
-            "location_create_parent_fallback",
-            parent_key=pk,
-            session_id=str(resolved_session_id),
-        )
+        if pk_raw:
+            parent = conn.execute(
+                "SELECT 1 FROM game_locations WHERE key = ? AND COALESCE(is_active, 1) = 1",
+                (pk_raw,),
+            ).fetchone()
+            if parent:
+                return
+            logger.warning(
+                "location_create_parent_fallback",
+                parent_key=pk_raw,
+                session_id=str(resolved_session_id),
+            )
+            if resolved_session_id is not None:
+                log_integrity_violation(
+                    resolved_session_id,
+                    intent,
+                    "parent_key_not_found_fallback",
+                )
+        else:
+            logger.warning(
+                "location_create_parent_missing_fallback",
+                session_id=str(resolved_session_id),
+            )
+            if resolved_session_id is not None:
+                log_integrity_violation(
+                    resolved_session_id,
+                    intent,
+                    "parent_key_missing_fallback",
+                )
         if resolved_session_id is None:
             intent.parent_key = None
             return
-        log_integrity_violation(
-            resolved_session_id,
-            intent,
-            "parent_key_not_found_fallback",
-        )
         row = conn.execute(
             """
             SELECT gl.key FROM game_locations gl
@@ -153,13 +171,18 @@ def _apply_create_parent_key_fallback(
 
 
 def _find_all_locations() -> list[dict]:
-    """Pobiera aktywne i zatwierdzone lokalizacje do fuzzy match."""
+    """Pobiera aktywne lokalizacje do fuzzy match.
+
+    Issue #39: include pending_review (approved=0, ai_generated=1) rows. Otherwise
+    every GM-issued action='create' that names an already-pending place produces a
+    duplicate, since the existing copy is invisible to the fuzzy matcher.
+    """
     conn = _get_db_connection()
     try:
         rows = conn.execute(
             """
             SELECT * FROM game_locations
-            WHERE is_active = 1 AND COALESCE(approved, 1) = 1
+            WHERE is_active = 1
             ORDER BY label
             """
         ).fetchall()
@@ -316,6 +339,19 @@ def _create_new_location(
             parent = _get_location_by_key(intent.parent_key)
             if parent:
                 parent_id = parent["id"]
+
+        # Issue #39: runtime (GM-driven) creation may not produce top-level macros.
+        # Without a parent the location is unreachable from any session graph and
+        # the player gets stranded. Only admin/canonical seeding can create
+        # parentless macros.
+        if ai_generated and parent_id is None:
+            logger.warning(
+                "create_location_refused_no_parent",
+                target_label=intent.target_label,
+                target_key=intent.target_key,
+                campaign_id=campaign_id,
+            )
+            return None
 
         key = _slugify_location_key(intent.target_key or intent.target_label)
 
@@ -628,7 +664,10 @@ def validate_move(
                     matched = None
         
         if not matched:
-            if auto_create:
+            # Issue #39: only honor auto-create when GM explicitly emitted action='create'.
+            # A bare action='move' with an unknown target must not conjure a new location —
+            # that's how orphan macros land in the DB and strand the session.
+            if auto_create and intent.action == "create":
                 new_loc = _create_new_location(intent, ai_generated=True, campaign_id=campaign_id)
                 if new_loc:
                     return _result_with_log(resolved_session_id, intent, ValidationResult(
@@ -637,14 +676,19 @@ def validate_move(
                         is_new_location=True,
                         block_reason=None
                     ), "create_ok", new_loc)
-            
+
+            block_reason = (
+                "move_target_unknown"
+                if intent.action == "move"
+                else f"Nieznana lokalizacja: {intent.target_label}"
+            )
             return _result_with_log(resolved_session_id, intent, ValidationResult(
                 allowed=False,
                 resolved_location_id=None,
                 is_new_location=False,
-                block_reason=f"Nieznana lokalizacja: {intent.target_label}"
+                block_reason=block_reason
             ), "blocked")
-        
+
         # Mamy match — sprawdź reguły przechodzenia
         target_loc = matched
         
