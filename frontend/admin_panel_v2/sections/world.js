@@ -52,7 +52,7 @@ const LOCATION_RULES = [
   { key: "reason",           label: "Reason",           type: "text",    default: "Sacred ground", description: "Reason shown to player" },
 ];
 
-const TABS = ["builder", "npcs", "enemies", "dungeons", "riddles", "pending"];
+const TABS = ["builder", "locations", "npcs", "enemies", "dungeons", "riddles", "pending"];
 const _rendered = new Set();
 let _aiTrigger = null;
 
@@ -61,6 +61,7 @@ export async function init(panel) {
     <div class="section-content">
       <div class="subtab-bar">
         <button class="subtab-btn active" data-tab="builder">🗺 Mapa Świata</button>
+        <button class="subtab-btn" data-tab="locations">📍 Lokacje</button>
         <button class="subtab-btn" data-tab="npcs">${LABELS.npcs}</button>
         <button class="subtab-btn" data-tab="enemies">${LABELS.enemies}</button>
         <button class="subtab-btn" data-tab="dungeons">⚔️ Lochy</button>
@@ -95,7 +96,8 @@ async function _activateTab(panel, tab) {
   _rendered.add(tab);
   const container = panel.querySelector(`.subtab-panel[data-tab="${tab}"]`);
   if (!container) return;
-  if      (tab === "npcs")      await _renderNpcs(container);
+  if      (tab === "locations") await _renderLocations(container);
+  else if (tab === "npcs")      await _renderNpcs(container);
   else if (tab === "enemies")   await _renderEnemies(container);
   else if (tab === "dungeons")  await _renderDungeons(container);
   else if (tab === "riddles")   await _renderRiddles(container);
