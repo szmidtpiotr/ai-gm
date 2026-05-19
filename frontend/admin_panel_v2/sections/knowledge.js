@@ -1,7 +1,7 @@
 import { adminFetch }          from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast }           from "/admin_panel_v2/shared/toast.js?v=2";
 import { openModal }            from "/admin_panel_v2/shared/modal.js?v=2";
-import { renderTable }         from "/admin_panel_v2/shared/table.js?v=7";
+import { renderTable }         from "/admin_panel_v2/shared/table.js?v=8";
 
 const CATEGORIES = ["general", "magic", "combat", "mechanics", "exploration", "economy"];
 

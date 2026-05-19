@@ -1,7 +1,7 @@
 import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
 import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
-import { showConfirm } from "/admin_panel_v2/shared/table.js?v=7";
+import { showConfirm } from "/admin_panel_v2/shared/table.js?v=8";
 
 const LABELS = {
   loki:            "Loki Log Forwarding",

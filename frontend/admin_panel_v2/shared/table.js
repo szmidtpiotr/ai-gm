@@ -813,11 +813,15 @@ export function renderTable(container, columns, rows, options = {}) {
             }
           }
           pill.className = cls;
-          pill.textContent = String(row[col.key] ?? "");
+          pill.textContent = typeof col.formatDisplay === "function"
+            ? String(col.formatDisplay(row))
+            : String(row[col.key] ?? "");
           display.appendChild(pill);
 
           const applyBadge = () => {
-            pill.textContent = String(row[col.key] ?? "");
+            pill.textContent = typeof col.formatDisplay === "function"
+              ? String(col.formatDisplay(row))
+              : String(row[col.key] ?? "");
             let c = "admin-badge";
             if (col.badgeClass) {
               const ex = typeof col.badgeClass === "function" ? col.badgeClass(row) : col.badgeClass;
