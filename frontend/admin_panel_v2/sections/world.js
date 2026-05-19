@@ -1,6 +1,6 @@
 import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
-import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=7";
+import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=8";
 import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
 import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=5";
 
@@ -528,9 +528,7 @@ async function _renderLocations(container) {
       { key: "tier",           label: "Tier",  type: "number", editable: true },
       {
         key: "review_status",  label: "Status",
-        type: "badge", editType: "select",
-        editOptions: Object.keys(LOC_REVIEW_STATUS),
-        editable: true,
+        type: "badge", editable: false,
         badgeClass: (row) => (LOC_REVIEW_STATUS[row.review_status] || LOC_REVIEW_STATUS.permanent).class,
         formatDisplay: (r) => (LOC_REVIEW_STATUS[r.review_status] || LOC_REVIEW_STATUS.permanent).label,
         filterOptions: Object.entries(LOC_REVIEW_STATUS).map(([v, m]) => ({ value: v, label: m.label })),
@@ -574,15 +572,37 @@ async function _renderLocations(container) {
           throw e;
         }
       },
-      extraActions: (row) => [{
-        label: "Edytuj",
-        class: "secondary-btn",
-        onClick: () => {
-          // Pass the original location object (with rules, enemy_keys etc.)
-          const orig = locations.find(l => l.key === row.key) || row;
-          _openLocationModal(orig, locations, load);
-        },
-      }],
+      extraActions: (row) => {
+        const actions = [{
+          label: "Edytuj",
+          class: "secondary-btn",
+          onClick: () => {
+            // Pass the original location object (with rules, enemy_keys etc.)
+            const orig = locations.find(l => l.key === row.key) || row;
+            _openLocationModal(orig, locations, load);
+          },
+        }];
+        const status = row.review_status || "permanent";
+        if (status === "permanent") {
+          actions.push({
+            label: "↩ Cofnij do review",
+            class: "secondary-btn",
+            onClick: async () => {
+              try {
+                await adminFetch(`/api/locations/admin/locations/${row.key}`, {
+                  method: "PATCH",
+                  body:   JSON.stringify({ review_status: "pending_review", approved: 0 }),
+                });
+                showToast("Cofnięto do review.", "success");
+                await load();
+              } catch (e) {
+                showToast("Błąd: " + (e.message || "?"), "error");
+              }
+            },
+          });
+        }
+        return actions;
+      },
     });
   };
 

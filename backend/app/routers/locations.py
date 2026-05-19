@@ -635,6 +635,16 @@ async def patch_location(
         if "npc_keys" in data and isinstance(data["npc_keys"], list):
             updates.append("npc_keys = ?")
             params.append(json.dumps(data["npc_keys"]))
+        if "review_status" in data:
+            allowed = {"pending_review", "permanent", "discarded"}
+            val = str(data["review_status"]).strip()
+            if val not in allowed:
+                raise HTTPException(status_code=422, detail=f"review_status must be one of {sorted(allowed)}")
+            updates.append("review_status = ?")
+            params.append(val)
+        if "approved" in data:
+            updates.append("approved = ?")
+            params.append(1 if data["approved"] else 0)
 
         if not updates:
             return location
