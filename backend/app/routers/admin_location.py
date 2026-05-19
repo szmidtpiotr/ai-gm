@@ -359,6 +359,48 @@ async def approve_location(
         conn.close()
 
 
+class SafeForRestPatch(BaseModel):
+    """PATCH body — value=true → marks location safe_for_rest; false → unsets."""
+    value: bool
+
+
+@router.get("/api/admin/hex-safe/{q}/{r}")
+async def get_hex_safe_for_rest(
+    q: int,
+    r: int,
+    _admin: None = Depends(require_admin_token),
+):
+    """Stage 2B R2 — admin diagnostic: resolve safe-for-rest for hex (q, r).
+    Returns the inheritance chain + reasoning so admins can debug without SQL."""
+    from app.services.rest_service import hex_is_safe_for_rest
+
+    conn = _get_db_connection()
+    try:
+        return hex_is_safe_for_rest(q, r, conn=conn)
+    finally:
+        conn.close()
+
+
+@router.patch("/api/admin/locations/{location_key}/safe-for-rest")
+async def set_location_safe_for_rest_endpoint(
+    location_key: str,
+    body: SafeForRestPatch,
+    _admin: None = Depends(require_admin_token),
+):
+    """Stage 2B R1 — admin/dev toggle for safe_for_rest on a location.
+    Mirrors the [SET_SAFE_FOR_REST:key:on|off] LLM tag path."""
+    from app.services.world_service import set_location_safe_for_rest
+
+    conn = _get_db_connection()
+    try:
+        change = set_location_safe_for_rest(conn, location_key, 1 if body.value else 0, source="admin")
+        if not change:
+            raise HTTPException(status_code=404, detail=f"Lokalizacja '{location_key}' nie istnieje")
+        return {"status": "ok", **change}
+    finally:
+        conn.close()
+
+
 @router.post("/api/admin/locations/{location_id}/reject")
 async def reject_location(
     location_id: int,

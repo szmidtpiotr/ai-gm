@@ -35,6 +35,10 @@ _CREATE_ENEMY_RE = re.compile(
 _NPC_KILLED_RE = re.compile(
     r"\[NPC_KILLED:\s*key\s*=\s*([^\]\s,]+)\]", re.IGNORECASE
 )
+_SET_SAFE_FOR_REST_RE = re.compile(
+    r"\[SET_SAFE_FOR_REST:\s*([^\]\s:,]+)\s*:\s*(on|off|true|false|1|0)\s*\]",
+    re.IGNORECASE,
+)
 
 
 def _parse_kv(raw: str) -> dict[str, str]:
@@ -106,7 +110,56 @@ def process_create_tags(
         cleaned = cleaned.replace(m.group(0), "")
         logger.info("npc_killed_processed", npc_key=npc_key, campaign_id=campaign_id)
 
+    # [SET_SAFE_FOR_REST:location_key:on|off]
+    for m in _SET_SAFE_FOR_REST_RE.finditer(narrative):
+        location_key = m.group(1).strip()
+        raw_val = m.group(2).strip().lower()
+        new_value = 1 if raw_val in ("on", "true", "1") else 0
+        change = set_location_safe_for_rest(conn, location_key, new_value, source="llm_tag")
+        if change:
+            created.append({"type": "safe_for_rest_change", **change})
+        cleaned = cleaned.replace(m.group(0), "")
+
     return cleaned.strip(), created
+
+
+def set_location_safe_for_rest(
+    conn: sqlite3.Connection,
+    location_key: str,
+    value: int,
+    source: str = "admin",
+) -> dict | None:
+    """Toggle safe_for_rest on an existing location. Returns change dict or None
+    if the location was not found. No-op (still returns dict) if value already matches."""
+    row = conn.execute(
+        "SELECT id, key, label, safe_for_rest FROM game_locations WHERE key = ? AND is_active = 1",
+        (location_key,),
+    ).fetchone()
+    if not row:
+        logger.warning("set_safe_for_rest_unknown_location", key=location_key, source=source)
+        return None
+    prev = int(row["safe_for_rest"] or 0)
+    new_value = 1 if value else 0
+    if prev != new_value:
+        conn.execute(
+            "UPDATE game_locations SET safe_for_rest = ?, updated_at = datetime('now') WHERE id = ?",
+            (new_value, row["id"]),
+        )
+        conn.commit()
+    logger.info(
+        "safe_for_rest_set",
+        key=location_key,
+        previous=prev,
+        new=new_value,
+        source=source,
+    )
+    return {
+        "location_key": location_key,
+        "label": row["label"],
+        "previous": prev,
+        "new": new_value,
+        "source": source,
+    }
 
 
 # ── Entity create helpers ──────────────────────────────────────────────────
