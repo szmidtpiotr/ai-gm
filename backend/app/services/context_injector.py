@@ -141,6 +141,7 @@ class ContextInjector:
             self._build_mechanic_block(action_type, mechanic_result),
             self._build_character_state_block(character, active_conditions),
             self._build_tone_block(tone),
+            self._build_content_index_block(mechanic_result),
             NARRATOR_CONSTRAINTS,
         ]
 
@@ -265,6 +266,10 @@ class ContextInjector:
             lines.append("Brak postaci w tej lokacji.")
 
         return "\n".join(lines)
+
+    def _build_content_index_block(self, mechanic_result: dict) -> str:
+        """Stage 2B-Schema S14: surface AVAILABLE CONTENT + nearby places to the narrator."""
+        return (mechanic_result.get("available_content_index") or "").strip()
 
     def _build_mechanic_block(self, action_type: str, result: dict) -> str:
         builders = {

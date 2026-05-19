@@ -355,11 +355,15 @@ def _process_npc_killed(
 # ── Available content index ────────────────────────────────────────────────
 
 def build_available_content_index(
-    conn: sqlite3.Connection, location_key: str | None
+    conn: sqlite3.Connection,
+    location_key: str | None,
+    character_id: int | None = None,
 ) -> str:
     """
     Build the [AVAILABLE CONTENT] block injected into LLM context.
-    Lists NPCs and enemies for the current location.
+    Lists NPCs and enemies for the current location, plus
+    (Stage 2B-Schema S14) nearby known places of the same biome/subtype
+    that the GM should reuse before inventing new ones.
     """
     if not location_key:
         return ""
@@ -428,10 +432,93 @@ def build_available_content_index(
         for r in enemy_rows:
             lines.append(f"  - {r['key']}: {r['label']} (tier: {r['tier']})")
 
+    # Stage 2B-Schema S14: nearby known places of the same biome/subtype the GM
+    # should reuse before inventing new ones. Tier-capped by hero level so we
+    # don't dangle T5 dungeons in front of a freshly-rolled hero.
+    nearby = _nearby_known_places(conn, location_key, character_id)
+    if nearby:
+        lines.append("\nNearby known places of this type (prefer these over [CREATE_LOCATION]):")
+        for r in nearby:
+            tags = []
+            if r["canonical"]:
+                tags.append("canonical")
+            if r["usage_count"]:
+                tags.append(f"visits={r['usage_count']}")
+            tag_str = f" [{', '.join(tags)}]" if tags else ""
+            tier_str = f"T{r['tier']}" if r["tier"] is not None else "T?"
+            lines.append(f"  - {r['key']}: {r['label']} ({tier_str}){tag_str}")
+
     if len(lines) <= 2:
         return ""  # Nothing useful to inject
 
     return "\n".join(lines)
+
+
+def _nearby_known_places(
+    conn: sqlite3.Connection,
+    current_key: str,
+    character_id: int | None,
+    limit: int = 5,
+) -> list:
+    """
+    Return up to `limit` locations matching the current biome and subtype,
+    capped to the hero's effective tier scope. Ordered canonical → popular.
+    Excludes the current location itself.
+    """
+    try:
+        cur_row = conn.execute(
+            "SELECT biome, location_subtype FROM game_locations WHERE key = ? AND is_active=1 LIMIT 1",
+            (current_key,),
+        ).fetchone()
+        if not cur_row:
+            return []
+        biome = cur_row["biome"] if "biome" in cur_row.keys() else None
+        subtype = cur_row["location_subtype"] if "location_subtype" in cur_row.keys() else None
+        if not biome and not subtype:
+            return []
+
+        # Tier cap: max(1, hero_level // 2). Falls back to 5 if no character.
+        tier_cap = 5
+        if character_id is not None:
+            try:
+                ch = conn.execute(
+                    "SELECT sheet_json FROM characters WHERE id = ? LIMIT 1",
+                    (character_id,),
+                ).fetchone()
+                if ch and ch[0]:
+                    sheet = json.loads(ch[0]) if isinstance(ch[0], str) else (ch[0] or {})
+                    lvl = int(sheet.get("level") or 1)
+                    tier_cap = max(1, lvl // 2)
+            except Exception:
+                pass
+
+        def _query(use_subtype: bool):
+            clauses = ["is_active=1", "key != ?", "(tier IS NULL OR tier <= ?)"]
+            p: list = [current_key, tier_cap]
+            if biome:
+                clauses.append("biome = ?")
+                p.append(biome)
+            if subtype and use_subtype:
+                clauses.append("location_subtype = ?")
+                p.append(subtype)
+            sql = (
+                "SELECT key, label, tier, canonical, COALESCE(usage_count, 0) AS usage_count "
+                f"FROM game_locations WHERE {' AND '.join(clauses)} "
+                "ORDER BY canonical DESC, usage_count DESC, label ASC LIMIT ?"
+            )
+            p.append(limit)
+            return conn.execute(sql, p).fetchall()
+
+        # Try strict biome+subtype first; fall back to biome-only if empty so
+        # unique subtypes (e.g. the only city in the world) still surface
+        # sibling places worth reusing (taverns, temples, shops in the same biome).
+        rows = _query(use_subtype=True)
+        if not rows and subtype:
+            rows = _query(use_subtype=False)
+        return rows
+    except Exception as exc:
+        logger.warning("nearby_known_places_error", error=str(exc), current_key=current_key)
+        return []
 
 
 # ── V2 NPC context block ───────────────────────────────────────────────────

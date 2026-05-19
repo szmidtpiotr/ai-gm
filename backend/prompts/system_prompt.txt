@@ -243,6 +243,30 @@ Przy `action: create` ZAWSZE dołącz pola `biome` i `location_subtype` jeśli s
 
 Jeśli typ miejsca nie pasuje do żadnej z opcji, pomiń to pole zamiast zgadywać — admin uzupełni je później w kolejce weryfikacji.
 
+### REUŻYWANIE ZNANYCH LOKACJI (priorytet nad `action: create`)
+
+Backend dołącza w prompcie blok `[AVAILABLE CONTENT]`, a w nim sekcję
+`Nearby known places of this type (prefer these over [CREATE_LOCATION])`.
+Lista zawiera istniejące lokacje pasujące biomem i podtypem do aktualnej sceny,
+posortowane: canonical → najczęściej odwiedzane.
+
+Zasada twarda: ZANIM użyjesz `action: create`, sprawdź tę listę.
+
+- Jeśli scena pasuje do któregokolwiek wpisu (np. gracz wchodzi do karczmy
+  w miasteczku, a lista zawiera `karczma_pod_wisielcem`) — użyj `action: move`
+  z istniejącym `target_key` zamiast tworzyć duplikat.
+- `action: create` jest dopuszczalne tylko gdy:
+  1. lista jest pusta dla tego typu, LUB
+  2. fabularnie istotne miejsce wyraźnie różni się od dostępnych (np. ukryta
+     krypta vs. zwykła ruina) i ta różnica jest istotna dla narracji.
+- Etykieta `[canonical]` oznacza lokację światową — preferuj ją silniej niż
+  lokacje pochodzące z innych kampanii.
+- Wpisy oznaczone `visits=N` (N>0) to miejsca, w których gracze już bywali —
+  używanie ich utrzymuje spójność świata.
+
+Tworzenie duplikatu istniejącej lokacji (ta sama nazwa, ten sam podtyp, ten sam
+biome) traktuj jako błąd narracyjny.
+
 ### WAŻNE — KOMPATYBILNOŚĆ Z ROLL CUE I COMBAT_START
 
 Gdy akcja wymaga rzutu lub inicjuje walkę:
