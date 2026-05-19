@@ -20,6 +20,10 @@ class LocationIntent:
     target_key: Optional[str] = None
     parent_key: Optional[str] = None
     description: Optional[str] = None
+    # Stage 2B-Schema: GM can hint biome/subtype on create so the row lands fully
+    # stamped instead of NULL. Free-form strings; admin can still edit in Pending review.
+    biome: Optional[str] = None
+    location_subtype: Optional[str] = None
 
 
 # Prompt dla Opcji B (fallback parser)
@@ -131,16 +135,20 @@ def _extract_location_intent_from_json(data: dict) -> Optional[LocationIntent]:
         target_key = location_intent.get("target_key")
         parent_key = location_intent.get("parent_key")
         description = location_intent.get("description")
-        
+        biome = location_intent.get("biome")
+        location_subtype = location_intent.get("location_subtype") or location_intent.get("subtype")
+
         if target_label:
             return LocationIntent(
                 action=action,
                 target_label=target_label,
                 target_key=target_key,
                 parent_key=parent_key,
-                description=description
+                description=description,
+                biome=biome,
+                location_subtype=location_subtype,
             )
-    
+
     return None
 
 
