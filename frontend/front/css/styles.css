@@ -931,6 +931,63 @@ body {
   position: relative;
 }
 
+/* ── Time-of-day chat overlay (stained-glass frame) ───────────────────────
+   Driven by CSS variables set in JS by applyTimeOfDayOverlay():
+     --tod-color        — primary tint (period color)
+     --tod-accent       — light edge highlight
+     --tod-intensity    — 0..1 opacity multiplier
+   And data attrs on <html>:
+     data-tod-mode      — "frame" | "bg" | "both" | "off"
+     data-tod-period    — "Rano" | "Popołudnie" | "Wieczór" | "Noc"
+   The frame appears as four soft luminous corners + faint top/bottom edge
+   bleeds — never a solid border. Background mode adds a top-anchored radial
+   tint. Both modes can stack.
+*/
+.chat::before,
+.chat::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 1.2s ease;
+}
+/* Frame: four corner glows + top/bottom edge gradients */
+.chat::before {
+  background:
+    radial-gradient(circle 80px at 0% 0%,    var(--tod-accent, transparent) 0%, transparent 65%),
+    radial-gradient(circle 80px at 100% 0%,  var(--tod-accent, transparent) 0%, transparent 65%),
+    radial-gradient(circle 100px at 0% 100%, var(--tod-color, transparent)  0%, transparent 70%),
+    radial-gradient(circle 100px at 100% 100%, var(--tod-color, transparent) 0%, transparent 70%),
+    linear-gradient(180deg, var(--tod-color, transparent) 0%, transparent 6%),
+    linear-gradient(0deg,   var(--tod-color, transparent) 0%, transparent 8%);
+  mix-blend-mode: screen;
+}
+/* Background: top-anchored radial wash for "bg"/"both" modes */
+.chat::after {
+  background:
+    radial-gradient(ellipse 120% 50% at 50% -10%, var(--tod-color, transparent) 0%, transparent 60%);
+  mix-blend-mode: soft-light;
+}
+:root[data-tod-mode="frame"] .chat::before,
+:root[data-tod-mode="both"]  .chat::before {
+  opacity: calc(var(--tod-intensity, 0.6) * 0.55);
+}
+:root[data-tod-mode="bg"]    .chat::after,
+:root[data-tod-mode="both"]  .chat::after {
+  opacity: calc(var(--tod-intensity, 0.6) * 0.35);
+}
+
+/* Period-specific atmospheric tweaks — Noc gets a darker, deeper feel */
+:root[data-tod-period="Noc"] .chat::before { mix-blend-mode: overlay; }
+:root[data-tod-period="Noc"] .chat::after  { mix-blend-mode: multiply; opacity: calc(var(--tod-intensity, 0.6) * 0.22); }
+
+/* Respect reduced-motion — drop the slow fade transition */
+@media (prefers-reduced-motion: reduce) {
+  .chat::before, .chat::after { transition: none; }
+}
+
 .chat__messages {
   flex: 1;
   overflow-y: auto;

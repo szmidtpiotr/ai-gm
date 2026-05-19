@@ -1370,16 +1370,18 @@ async function _wizardFinalizeAndEnter() {
 // from clock_service.get_clock_state() — single source of truth is server.
 function renderClock(state) {
     const el = elements.headerClock;
-    if (!el) return;
-    if (!state || typeof state.display !== 'string') {
-        el.textContent = '';
-        el.hidden = true;
-        return;
+    if (el) {
+        if (!state || typeof state.display !== 'string') {
+            el.textContent = '';
+            el.hidden = true;
+        } else {
+            el.textContent = state.display;
+            el.hidden = false;
+            el.dataset.period = state.period || '';
+        }
     }
-    el.textContent = state.display;
-    el.hidden = false;
-    // Tone-aware accent: night gets cooler colour, evening warmer
-    el.dataset.period = state.period || '';
+    // Time-of-day overlay — re-apply with current period
+    applyTimeOfDayOverlay(state?.period || null);
 }
 
 async function fetchAndRenderClock(campaignId) {
@@ -1390,6 +1392,52 @@ async function fetchAndRenderClock(campaignId) {
     } catch {
         renderClock(null);
     }
+}
+
+// ── Time-of-day overlay (visual configuration) ─────────────────────────
+// Reads visual settings from `/api/visual/public` once per session, caches
+// them, and applies a discreet color frame on the chat container per the
+// current clock period. Admin-configurable in Admin → Wygląd.
+
+let _visualSettings = null;
+const _PERIOD_KEY_MAP = {
+    'Rano':       'time_of_day.rano',
+    'Popołudnie': 'time_of_day.popoludnie',
+    'Wieczór':    'time_of_day.wieczor',
+    'Noc':        'time_of_day.noc',
+};
+
+async function loadVisualSettings() {
+    try {
+        const res = await apiRequest('GET', '/visual/public');
+        _visualSettings = res?.settings || null;
+    } catch {
+        _visualSettings = null;
+    }
+}
+
+function applyTimeOfDayOverlay(period) {
+    const root = document.documentElement;
+    const settings = _visualSettings;
+    // No settings loaded or feature disabled → strip CSS vars + class
+    if (!settings || settings['time_of_day.enabled'] === false) {
+        root.style.removeProperty('--tod-color');
+        root.style.removeProperty('--tod-accent');
+        root.style.removeProperty('--tod-intensity');
+        root.dataset.todMode = 'off';
+        root.dataset.todPeriod = '';
+        return;
+    }
+    const periodKey = _PERIOD_KEY_MAP[period] || 'time_of_day.popoludnie';
+    const periodColors = settings[periodKey] || { color: '#c9a54a', accent: '#d4b65e' };
+    const mode = settings['time_of_day.mode'] || 'frame';
+    const intensity = Math.max(0, Math.min(100, Number(settings['time_of_day.intensity']) || 60));
+
+    root.style.setProperty('--tod-color', periodColors.color);
+    root.style.setProperty('--tod-accent', periodColors.accent);
+    root.style.setProperty('--tod-intensity', String(intensity / 100));
+    root.dataset.todMode = mode;
+    root.dataset.todPeriod = period || '';
 }
 
 async function enterGame(campaign) {
@@ -1408,7 +1456,10 @@ async function enterGame(campaign) {
     elements.chatMessages.innerHTML = '';
 
     // T5 — fetch initial clock state and render in header
-    fetchAndRenderClock(campaign.id);
+    // Visual overlay settings loaded in parallel; clock render also applies overlay
+    Promise.all([loadVisualSettings(), Promise.resolve()]).then(() => {
+        fetchAndRenderClock(campaign.id);
+    });
 
     try {
         const [response, combatHist] = await Promise.all([
