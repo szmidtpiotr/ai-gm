@@ -61,6 +61,31 @@ New field on `game_locations`: `safe_for_rest INTEGER DEFAULT 0`.
 
 Rest endpoints `POST /api/characters/{id}/rest?type=long|short` check this flag before allowing the rest action. Implementation in Stage 2C per `ROADMAP.md`.
 
+### Build-camp endpoint (Stage 2B R4)
+
+`POST /api/campaigns/{campaign_id}/build-camp` — player-initiated "Rozbij obóz":
+
+1. Loads the campaign's current hex (via `world_hexes` linked to active session).
+2. **Gates:** 409 if hero is in combat; 409 if current hex already `safe_for_rest=1` (no point camping in a safe place).
+3. Calls `world_service.build_camp(campaign_id, q, r)` which:
+   - Resolves parent macro location for the current hex (or NULL parent if wilderness)
+   - Inserts a new sub-location: key `temp_camp_{campaign_id}_{epoch}`, label `"Obozowisko"`, `location_type='sub'`, `safe_for_rest=1`, `temporary=1`, `created_by='gm_runtime'`, `canonical=0`, `source_campaign_id={campaign_id}`, `location_subtype='camp'`, `biome` copied from hex_type
+   - Sets `world_hexes.location_key = temp_camp_key` for the hex
+4. Advances the game clock by 1 hour via `advance_clock(reason='build_camp')`.
+5. Sets `session_flags.camp_encounter_boost = 0.20` — consumed by the next `/rest` call to raise interruption odds. Cleared on rest completion.
+
+Response:
+```json
+{
+  "ok": true,
+  "location": {"key": "temp_camp_42_1715000000", "label": "Obozowisko", "safe_for_rest": 1, "temporary": 1},
+  "current_clock": {"day": 3, "hour": 15, "label": "Popołudnie"},
+  "encounter_boost": 0.20
+}
+```
+
+**Auto-cleanup:** when a MOVEMENT action validates and the source hex has a location with `temporary=1`, the move pipeline soft-deletes that location (`is_active=0`, `safe_for_rest=0`) and unsets `world_hexes.location_key`. History stays in the DB for audit.
+
 ---
 
 ## Current Location in Session State

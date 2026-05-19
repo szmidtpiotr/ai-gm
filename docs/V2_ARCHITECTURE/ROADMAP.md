@@ -6,6 +6,8 @@
 > Spec details → `docs/V2_ARCHITECTURE/01_IMPLEMENTATION_PLAN.md`
 > **2026-05-18 audit** corrected several boxes — see `docs/V2_ARCHITECTURE/AUDIT_2026_05_18.md` + `DECISIONS_2026_05_18.md`.
 
+> **2026-05-19 sequencing note (Rest Sandbox):** R4 (Rozbij obóz) ships solo to close Stage 2B. Rest Sandbox is deliberately deferred to a new **Stage 2C+** block that lands AFTER `/rest` endpoints (X3/X4) — without those endpoints the harness has no full loop to exercise. Order: R4 → Stage 2B-Schema P2 (S14–S19) → Stage 2C (X1–X9) → Stage 2C+ (RSB1–RSB5) → Stage 2D.
+
 ---
 
 ## 🎯 EXECUTION QUEUE — strict order, check off top to bottom
@@ -39,6 +41,12 @@
 - [x] **R2** Dziedziczenie: hex jest safe ⇔ ma lokację z `safe_for_rest=1`. Implementacja: helper `_hex_is_safe_for_rest(q, r)` używany przez endpointy /rest — commit `7ee98a1`
 - [x] **R3** Admin UI: edytuj `safe_for_rest` z karty lokacji (już istnieje?) **i** z edytora hexa na mapie kampanii — commit `c40b21d` (+ wired Lokacje subtab `c277ea8`, grouped view `69fad5c`)
 - [ ] **R4** Akcja gracza "**Rozbij obóz**" [D15] — tworzy tymczasową sub-lokację `temp_camp` z `safe_for_rest=1`, +1h zegara, +20% encounter chance podczas odpoczynku
+  - [ ] **R4a** Migration: `game_locations` ADD COLUMN `temporary INTEGER NOT NULL DEFAULT 0` (marks short-lived sub-locations like camps; cleaned up on MOVEMENT away from hex)
+  - [ ] **R4b** `world_service.build_camp(campaign_id)` — resolves current hex, finds parent macro (or "wilderness" placeholder), inserts `temp_camp_{campaign_id}_{ts}` with `safe_for_rest=1`, `temporary=1`, `created_by='gm_runtime'`, `canonical=0`, `source_campaign_id={campaign_id}`; sets `world_hexes.location_key` to new key
+  - [ ] **R4c** Endpoint: `POST /api/campaigns/{id}/build-camp` — calls service, advances clock +1h via `advance_clock`, sets `session_flags.camp_encounter_boost = 0.20` (consumed by next /rest call), returns `{location, current_clock, encounter_boost}`. Gates: not in combat, current hex not already `safe_for_rest=1`
+  - [ ] **R4d** Player UI: "🔥 Rozbij obóz" button in action area, shown only when current hex `safe_for_rest=0` AND not in combat. After click → narrative line "Rozbiłeś obóz. Czujesz, że ten teren wciąż jest niespokojny..." + clock advances
+  - [ ] **R4e** Auto-cleanup: on MOVEMENT action away from a hex with a `temporary=1` location, world_service marks it `is_active=0` (soft-delete keeps history). On `/rest` end, encounter_boost flag cleared
+  - [ ] **R4f** Smoke tests: build-camp on wilderness hex → safe, +1h clock; build-camp twice → 409; move away → temp_camp deactivated
 
 #### Stage 2B-Schema — Locations source-of-truth (provenance + reuse)
 
@@ -100,6 +108,17 @@
 - [ ] **X7** Panel "Awansuj" — stat point-up cards (cost `max(30, 50 × modifier)`, calls `spend_stat_point_up`)
 - [ ] **X8** Panel "Awansuj" — spell learn (75 XP) / upgrade (R2=50, R3=100) cards dla Scholar
 - [ ] **X9** "Historia PD" view — paginated `character_xp_grants` log, grouped by category, w karcie postaci
+
+#### Stage 2C+ — Rest Sandbox (admin harness)
+
+> **Position:** ships AFTER Stage 2C delivers `/rest` endpoints (X3, X4) and BEFORE Stage 2D begins. Mirrors Combat Sandbox (issue #21) — gives admins an isolated rig to exercise the full rest loop without playing through a campaign.
+> **Why here, not earlier:** without working `/rest` endpoints the harness has nothing to exercise — would just toggle camp setup. After Stage 2C, the sandbox can validate the complete loop: build_camp → short rest → long rest → HP/mana regen → encounter rolls → XP spend.
+
+- [ ] **RSB1** Router `backend/app/routers/rest_sandbox.py` at `/api/admin/rest-sandbox/*` — mirrors `sandbox.py` structure (heroes list, setup clone, end). Clone tagged `__rest_sandbox_clone__=true` to keep it filtered from pickers.
+- [ ] **RSB2** Endpoints exercise R4 + X3 + X4: `POST /setup` (hero clone + place on test hex), `POST /set-hex-safe-for-rest` (toggle hex safety), `POST /build-camp` (proxy to R4 endpoint), `POST /short-rest` (proxy to X4), `POST /long-rest` (proxy to X3), `POST /roll-encounter` (force encounter roll given current boost), `POST /reset-hero` (HP/mana/XP back to baseline)
+- [ ] **RSB3** Frontend section `frontend/admin_panel_v2/sections/rest_sandbox.js` mounted as 💤 Rest Sandbox in admin sidebar (next to ⚔ Combat Sandbox). 3-column layout: hero state (HP/mana/XP/conditions) | rest controls (toggle safe / build camp / short / long / encounter) | event log.
+- [ ] **RSB4** 📋 Kopiuj raport button bundles hero state + log + final HP/mana into clipboard markdown for issue reports.
+- [ ] **RSB5** Implementation-record issue + companion future-Playwright tracker (mirrors #21/#22 pattern).
 
 ### Stage 3 — New surprise condition [D11]
 
