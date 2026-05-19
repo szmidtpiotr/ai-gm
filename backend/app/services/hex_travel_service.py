@@ -11,6 +11,10 @@ import random
 import sqlite3
 from typing import Any, Optional
 
+import structlog
+
+logger = structlog.get_logger()
+
 DB_PATH = "/data/ai_gm.db"
 
 
@@ -303,6 +307,14 @@ def resolve_chain_travel(
                         if e["_dest"] == cur
                     ) if is_tp else 1.0)
                 break
+
+    # Stage 2B R4: deactivate any temp_camp_* on the hex the player just left.
+    if arrived_hex != from_hex:
+        try:
+            from app.services.world_service import deactivate_temporary_location_on_hex
+            deactivate_temporary_location_on_hex(conn, from_hex[0], from_hex[1])
+        except Exception as e:
+            logger.warning("temp_camp_cleanup_failed", q=from_hex[0], r=from_hex[1], error=str(e))
 
     # Update character's current hex in session_flags
     try:

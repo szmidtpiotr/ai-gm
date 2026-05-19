@@ -2167,7 +2167,50 @@ async function sendStructuredAction(actionStr, displayLabel) {
     const input = elements.chatInput;
     if (input) input.value = '';
     hideCharCounter();
+
+    // Stage 2B R4: BUILD_CAMP goes through a dedicated endpoint, not the narrator.
+    if (actionStr === 'BUILD_CAMP') {
+        await handleBuildCamp();
+        return;
+    }
+
     await sendTurn(actionStr, 'structured', displayLabel);
+}
+
+// Stage 2B R4: client-side handler for the "Rozbij obóz" suggested action.
+async function handleBuildCamp() {
+    if (!currentCampaignId) {
+        showToast('Brak aktywnej kampanii.', 'error');
+        return;
+    }
+    renderSuggestedActions([]);
+    try {
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/build-camp`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            const msg = data?.detail || `HTTP ${r.status}`;
+            showToast(msg, 'error');
+            renderSuggestedActions(_suggestedActions);
+            return;
+        }
+        const clockStr = data?.current_clock ? ` Zegar: ${data.current_clock}.` : '';
+        appendMessage({
+            role: 'system',
+            content: `🔥 Rozbijasz tymczasowy obóz. Możesz tu teraz odpocząć, ale ogień przyciągnie uwagę.${clockStr}`,
+            created_at: new Date(),
+        });
+        scrollToBottom();
+        // Patch local suggested actions: drop BUILD_CAMP, enable REST.
+        _suggestedActions = (_suggestedActions || [])
+            .filter(a => a.action !== 'BUILD_CAMP')
+            .map(a => (a.action === 'REST:long' ? { ...a, enabled: true, reason: null } : a));
+        renderSuggestedActions(_suggestedActions);
+    } catch (e) {
+        showToast(`Błąd: ${e.message || e}`, 'error');
+        renderSuggestedActions(_suggestedActions);
+    }
 }
 
 // T33: Update input placeholder based on game/combat state

@@ -521,6 +521,74 @@ def dual_summary_preview(
     }
 
 
+@router.post("/campaigns/{campaign_id}/build-camp")
+def build_camp(campaign_id: int):
+    """Stage 2B R4 — player action "Rozbij obóz".
+
+    Creates a temporary `temp_camp_*` sub-location on the player's current hex
+    with `safe_for_rest=1`, advances clock +1h, and sets
+    `session_flags.camp_encounter_boost = 0.20` (consumed by the next /rest call).
+
+    Gates:
+      - 404 if no active session
+      - 409 if hero is in combat
+      - 409 if current hex is already `safe_for_rest=1`
+      - 404 if current hex unknown / session has no `current_hex`
+    """
+    from app.services import world_service
+    from app.services.clock_service import advance_clock
+    from app.services.combat_service import get_active_combat
+
+    if get_active_combat(campaign_id):
+        raise HTTPException(status_code=409, detail="Nie można rozbić obozu w trakcie walki.")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        session_row = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not session_row:
+            raise HTTPException(status_code=404, detail="Brak aktywnej sesji dla kampanii.")
+
+        flags = json.loads(session_row["session_flags"] or "{}")
+        current_hex = flags.get("current_hex") or {}
+        q = current_hex.get("q")
+        r = current_hex.get("r")
+        if q is None or r is None:
+            raise HTTPException(status_code=404, detail="Sesja nie ma zapisanej pozycji hex.")
+
+        try:
+            location = world_service.build_camp(conn, campaign_id, int(q), int(r))
+        except ValueError as e:
+            msg = str(e)
+            if msg == "hex_already_safe":
+                raise HTTPException(status_code=409, detail="Ten hex jest już bezpieczny do odpoczynku — obóz zbędny.")
+            if msg == "no_hex_record":
+                raise HTTPException(status_code=404, detail="Bieżący hex nie istnieje w bazie.")
+            raise HTTPException(status_code=400, detail=msg)
+
+        # Re-read flags (build_camp commits, but doesn't touch session_flags)
+        flags["camp_encounter_boost"] = 0.20
+        flags["current_location_key"] = location["key"]
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ?, current_location_id = (SELECT id FROM game_locations WHERE key = ?) WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), location["key"], session_row["id"]),
+        )
+        conn.commit()
+
+        clock = advance_clock(campaign_id, 1, reason="camp_setup")
+        return {
+            "ok": True,
+            "location": location,
+            "current_clock": clock,
+            "encounter_boost": 0.20,
+        }
+    finally:
+        conn.close()
+
+
 @router.delete("/campaigns/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_campaign(campaign_id: int):
     conn = sqlite3.connect(DB_PATH)

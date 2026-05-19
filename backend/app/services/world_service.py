@@ -518,6 +518,146 @@ def build_v2_npc_context_block(
 
 # ── Current location lookup ────────────────────────────────────────────────
 
+def build_camp(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    q: int,
+    r: int,
+) -> dict:
+    """Stage 2B R4 — create a temporary `temp_camp_*` sub-location on hex (q, r).
+
+    - Refuses if the hex already has an `is_active=1` location with `safe_for_rest=1`.
+    - Resolves parent macro via the existing hex.location_key (if any) — falls back to NULL.
+    - Inserts location with `safe_for_rest=1`, `temporary=1`, `created_by='gm_runtime'`,
+      `canonical=0`, `source_campaign_id=campaign_id`, `location_subtype='camp'`,
+      `biome` copied from world_hexes.hex_type.
+    - Points `world_hexes.location_key` at the new key.
+
+    Returns the new location dict. Raises ValueError on gate violations so the
+    router can translate into the right HTTP status.
+    """
+    import time
+    hex_row = conn.execute(
+        "SELECT hex_type, label, location_key FROM world_hexes WHERE q = ? AND r = ? AND is_active = 1",
+        (q, r),
+    ).fetchone()
+    if not hex_row:
+        raise ValueError("no_hex_record")
+
+    hex_type = hex_row["hex_type"]
+    existing_location_key = hex_row["location_key"]
+
+    if existing_location_key:
+        existing = conn.execute(
+            "SELECT id, key, safe_for_rest FROM game_locations WHERE key = ? AND is_active = 1",
+            (existing_location_key,),
+        ).fetchone()
+        if existing and int(existing["safe_for_rest"] or 0) == 1:
+            raise ValueError("hex_already_safe")
+
+    # Resolve parent macro: prefer the macro hosting the current hex's location,
+    # else nearest macro by parent_id chain — but for simplicity, just inherit
+    # whatever sits on the hex right now (likely a wilderness sub or NULL).
+    parent_id = None
+    parent_key = None
+    if existing_location_key:
+        parent_row = conn.execute(
+            "SELECT id, key, location_type, parent_id, parent_key FROM game_locations WHERE key = ? AND is_active = 1",
+            (existing_location_key,),
+        ).fetchone()
+        if parent_row:
+            if parent_row["location_type"] == "macro":
+                parent_id = parent_row["id"]
+                parent_key = parent_row["key"]
+            else:
+                parent_id = parent_row["parent_id"]
+                parent_key = parent_row["parent_key"]
+
+    # Map hex_type → biome (camp inherits surroundings)
+    BIOME_FROM_HEX = {
+        "forest": "forest", "mountain": "mountain", "swamp": "swamp",
+        "plains": "plains", "coast": "coast", "desert": "desert",
+        "tundra": "tundra", "underground": "underground", "city": "urban",
+        "road": "plains",
+    }
+    biome = BIOME_FROM_HEX.get((hex_type or "").lower(), None)
+
+    key = f"temp_camp_{campaign_id}_{int(time.time())}"
+    label = "Obozowisko"
+    description = "Twój obóz polowy. Niewielkie ognisko, koce i broń pod ręką. Nasłuchujesz odgłosów w ciemności."
+
+    conn.execute(
+        """INSERT INTO game_locations
+           (key, label, location_type, description, parent_id, parent_key,
+            is_active, safe_for_rest, temporary, review_status,
+            created_by, canonical, source_campaign_id,
+            location_subtype, biome, tier)
+           VALUES (?, ?, 'sub', ?, ?, ?,
+                   1, 1, 1, 'permanent',
+                   'gm_runtime', 0, ?,
+                   'camp', ?, 1)""",
+        (key, label, description, parent_id, parent_key, campaign_id, biome),
+    )
+    conn.execute(
+        "UPDATE world_hexes SET location_key = ? WHERE q = ? AND r = ? AND is_active = 1",
+        (key, q, r),
+    )
+    conn.commit()
+
+    logger.info(
+        "build_camp",
+        campaign_id=campaign_id,
+        q=q, r=r, key=key,
+        parent_key=parent_key, biome=biome,
+    )
+    return {
+        "key": key,
+        "label": label,
+        "location_type": "sub",
+        "safe_for_rest": 1,
+        "temporary": 1,
+        "parent_key": parent_key,
+        "biome": biome,
+        "q": q,
+        "r": r,
+    }
+
+
+def deactivate_temporary_location_on_hex(
+    conn: sqlite3.Connection, q: int, r: int
+) -> dict | None:
+    """Soft-delete any `temporary=1` location attached to a hex.
+
+    Called when MOVEMENT validates a move away from this hex. Clears
+    world_hexes.location_key so the wilderness reverts to its prior state.
+    Returns the deactivated row info, or None if no temp was present.
+    """
+    hex_row = conn.execute(
+        "SELECT location_key FROM world_hexes WHERE q = ? AND r = ? AND is_active = 1",
+        (q, r),
+    ).fetchone()
+    if not hex_row or not hex_row["location_key"]:
+        return None
+    loc_key = hex_row["location_key"]
+    loc_row = conn.execute(
+        "SELECT id, key, label, temporary FROM game_locations WHERE key = ? AND is_active = 1",
+        (loc_key,),
+    ).fetchone()
+    if not loc_row or int(loc_row["temporary"] or 0) != 1:
+        return None
+    conn.execute(
+        "UPDATE game_locations SET is_active = 0, safe_for_rest = 0, updated_at = datetime('now') WHERE id = ?",
+        (loc_row["id"],),
+    )
+    conn.execute(
+        "UPDATE world_hexes SET location_key = NULL WHERE q = ? AND r = ? AND is_active = 1",
+        (q, r),
+    )
+    conn.commit()
+    logger.info("temp_location_deactivated", key=loc_key, q=q, r=r)
+    return {"key": loc_key, "label": loc_row["label"]}
+
+
 def get_current_location_info(
     conn: sqlite3.Connection, campaign_id: int
 ) -> dict | None:
