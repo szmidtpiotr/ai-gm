@@ -22,17 +22,26 @@ For any named entity the LLM needs to reference:
    └── Found → use existing record (permanent or pending_review)
    └── Not found →
 
-2. LLM emits [CREATE_*] tag in its narrative output
+2. DB candidate lookup by attributes (locations only — Stage 2B-Schema)
+   └── Query canonical/non-discarded records matching biome + subtype + tier
+   └── Inject best candidates into LLM prompt as "[AVAILABLE CONTENT]"
+   └── Narrator should pick one of these keys instead of minting new
+
+3. LLM emits [CREATE_*] tag in its narrative output (fallback only)
    └── System parses tag, creates record with review_status='pending_review'
+   └── For locations: created_by='gm_runtime', canonical=0, source_campaign_id=current
    └── Record is used immediately in the current session
 
-3. Admin reviews the new record
+4. Admin reviews the new record
    └── Approve → review_status='permanent'
+   └── Promote to canonical → also canonical=1 (enters preferred-reuse pool)
    └── Edit + Approve → fix then permanent
    └── Discard → review_status='discarded'
 ```
 
 Records with `review_status = 'discarded'` are not injected into future sessions. Sessions where a discarded record was already used retain it (no retroactive changes).
+
+**Target ratio:** ~60-70% of locations referenced per campaign come from `created_by IN ('seed','admin_manual','admin_kreator')` (the curated set). The remaining ~30-40% may be `gm_runtime`. The candidate-injection step at priority (2) is the mechanism that pushes the ratio in this direction.
 
 ---
 
@@ -123,9 +132,33 @@ Nearby NPCs:
 Possible enemies:
 - {key}: {name} (tier: {tier})
 - ...
+
+Reusable nearby locations (prefer these before [CREATE_LOCATION]):
+- {key}: {label} ({subtype}, {biome}, tier {tier})  ★ canonical
+- ...
 ```
 
 If a needed entity is not in this list, the LLM should emit a `[CREATE_*]` tag to register it, not simply invent a key.
+
+### Reusable-locations query (Stage 2B-Schema Phase 2)
+
+When the player is on hex `(q, r)` with `hex_type = X` and hero level `L`, the injector runs:
+
+```sql
+SELECT key, label, location_subtype, biome, tier, canonical
+FROM game_locations
+WHERE review_status != 'discarded'
+  AND is_active = 1
+  AND (biome = ? OR biome IS NULL)        -- biome bound to hex_type
+  AND tier <= ?                            -- ceil(L/2) + 1
+ORDER BY
+  canonical DESC,                          -- canonical first
+  CASE WHEN created_by IN ('seed','admin_manual','admin_kreator') THEN 0 ELSE 1 END,
+  usage_count DESC                         -- popular content first within same tier
+LIMIT 5;
+```
+
+If `location_subtype` is contextually narrow (e.g., narrative beat calls for a tavern), filter by it. Otherwise return the diversified top-5 so the narrator can pick what fits.
 
 ---
 
@@ -193,6 +226,30 @@ ALTER TABLE game_config_enemies ADD COLUMN review_status TEXT DEFAULT 'permanent
 ```
 
 All new columns have safe defaults and will not break existing records.
+
+### Stage 2B-Schema additional columns (locations only)
+
+```sql
+-- game_locations — provenance & reuse fields
+ALTER TABLE game_locations ADD COLUMN created_by         TEXT    NOT NULL DEFAULT 'admin_manual';
+ALTER TABLE game_locations ADD COLUMN location_subtype   TEXT    DEFAULT NULL;
+ALTER TABLE game_locations ADD COLUMN biome              TEXT    DEFAULT NULL;
+ALTER TABLE game_locations ADD COLUMN tier               INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE game_locations ADD COLUMN canonical          INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE game_locations ADD COLUMN usage_count        INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE game_locations ADD COLUMN source_campaign_id INTEGER NULL REFERENCES campaigns(id);
+
+-- backfill from legacy ai_generated boolean
+UPDATE game_locations SET
+  created_by = CASE WHEN ai_generated = 1 THEN 'gm_runtime' ELSE 'admin_manual' END,
+  canonical  = CASE WHEN review_status = 'permanent' AND ai_generated = 0 THEN 1 ELSE 0 END;
+
+-- indexes for the candidate query
+CREATE INDEX IF NOT EXISTS idx_game_locations_biome_subtype ON game_locations(biome, location_subtype);
+CREATE INDEX IF NOT EXISTS idx_game_locations_canonical     ON game_locations(canonical);
+```
+
+See `TASK_08_LOCATION_SYSTEM.md` § "Provenance & Reuse" for the full field rationale.
 
 ---
 

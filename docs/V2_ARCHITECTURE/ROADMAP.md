@@ -35,10 +35,41 @@
 
 #### Stage 2B — Bezpieczne miejsca (safe_for_rest edytowalne dynamicznie)
 
-- [ ] **R1** LLM tag `[SET_SAFE_FOR_REST:location_key:on|off]` — GM dynamicznie oznacza miejsca (np. po misji "oczyszczono karczmę" → bezpieczna)
-- [ ] **R2** Dziedziczenie: hex jest safe ⇔ ma lokację z `safe_for_rest=1`. Implementacja: helper `_hex_is_safe_for_rest(q, r)` używany przez endpointy /rest
-- [ ] **R3** Admin UI: edytuj `safe_for_rest` z karty lokacji (już istnieje?) **i** z edytora hexa na mapie kampanii
+- [x] **R1** LLM tag `[SET_SAFE_FOR_REST:location_key:on|off]` — GM dynamicznie oznacza miejsca (np. po misji "oczyszczono karczmę" → bezpieczna) — commit `7ee98a1`
+- [x] **R2** Dziedziczenie: hex jest safe ⇔ ma lokację z `safe_for_rest=1`. Implementacja: helper `_hex_is_safe_for_rest(q, r)` używany przez endpointy /rest — commit `7ee98a1`
+- [x] **R3** Admin UI: edytuj `safe_for_rest` z karty lokacji (już istnieje?) **i** z edytora hexa na mapie kampanii — commit `c40b21d` (+ wired Lokacje subtab `c277ea8`, grouped view `69fad5c`)
 - [ ] **R4** Akcja gracza "**Rozbij obóz**" [D15] — tworzy tymczasową sub-lokację `temp_camp` z `safe_for_rest=1`, +1h zegara, +20% encounter chance podczas odpoczynku
+
+#### Stage 2B-Schema — Locations source-of-truth (provenance + reuse)
+
+> **Cel:** osiągnąć stosunek ~60-70% wykorzystywanych lokacji z DB (seedy / Kreator AI / admin manual) vs ~30-40% mintowanych runtime przez GM.
+> Dziś GM tworzy lokacje bez śladu pochodzenia — nie da się odsiać junku ani filtrować pod biom/typ.
+> Spec → `PHASE_03_WORLD/TASK_08_LOCATION_SYSTEM.md` (Provenance & Reuse) + `TASK_10_DATA_TABLES_SOURCE_OF_TRUTH.md` (Candidate Injection).
+
+##### Phase 1 — Schema migration + admin surfacing (ship before R4)
+
+- [ ] **S1** Migration: `game_locations` ALTER ADD COLUMN `created_by TEXT NOT NULL DEFAULT 'admin_manual'` (enum: `seed`/`admin_manual`/`admin_kreator`/`gm_runtime`/`import`)
+- [ ] **S2** Migration: ADD COLUMN `location_subtype TEXT DEFAULT NULL` (tavern/village/town/castle/ruin/cave/forest_clearing/road/watchtower/…)
+- [ ] **S3** Migration: ADD COLUMN `biome TEXT DEFAULT NULL` (forest/mountain/swamp/plains/coast/desert/urban/…) — matches `world_hexes.hex_type`
+- [ ] **S4** Migration: ADD COLUMN `tier INTEGER NOT NULL DEFAULT 1` (1–5, level gating)
+- [ ] **S5** Migration: ADD COLUMN `canonical INTEGER NOT NULL DEFAULT 0` (admin-promoted "preferred reuse" flag)
+- [ ] **S6** Migration: ADD COLUMN `usage_count INTEGER NOT NULL DEFAULT 0` (incremented on visit — Phase 2)
+- [ ] **S7** Migration: ADD COLUMN `source_campaign_id INTEGER NULL REFERENCES campaigns(id)` (which campaign minted gm_runtime records)
+- [ ] **S8** Backfill: `UPDATE game_locations SET created_by = CASE WHEN ai_generated=1 THEN 'gm_runtime' ELSE 'admin_manual' END, canonical = CASE WHEN review_status='permanent' AND ai_generated=0 THEN 1 ELSE 0 END`
+- [ ] **S9** `_get_or_create_location` (`world_service.py`): set `created_by='gm_runtime'`, `canonical=0`, `source_campaign_id=campaign_id`
+- [ ] **S10** Admin POST/PATCH/PUT (`locations.py`): accept + persist new fields; default `created_by='admin_manual'`, `canonical=1`
+- [ ] **S11** Smart Entry schema endpoint: expose new fields with proper enums/dropdowns; on save → `created_by='admin_kreator'`, `canonical=1`
+- [ ] **S12** Admin UI table (Lokacje): add columns `created_by` (color-coded badge), `subtype`, `biome`, ⭐ `canonical` (one-click toggle), `usage_count` (sortable)
+- [ ] **S13** Admin UI modal: add subtype + biome + tier dropdowns, canonical checkbox
+
+##### Phase 2 — Reuse engine + auto-pair starting hex (ship after Stage 2B closes)
+
+- [ ] **S14** Context injector: in `build_available_content_index()` query `WHERE biome=? AND location_subtype=? AND tier<=hero_level/2 ORDER BY canonical DESC, usage_count DESC LIMIT 5` — inject as "nearby known places of this type"
+- [ ] **S15** Prompt addendum (`system_prompt.txt` + tag-handler guidance): "prefer keys from [AVAILABLE CONTENT] before emitting [CREATE_LOCATION]"
+- [ ] **S16** `usage_count`: increment on every `game_sessions.current_location_id` change (or per-turn if location stable)
+- [ ] **S17** `resolve_starting_hex()` auto-pair: if a canonical location matches `starting_location_name` (label similarity ≥ 0.4 **or** subtype match), set `world_hexes.location_key`; otherwise create a minimal `start_{campaign_id}` location with `safe_for_rest=1`, `canonical=0`, `created_by='gm_runtime'`
+- [ ] **S18** "Promote to canonical" button in admin Review Queue → flips `canonical=1` (independent of `review_status`)
+- [ ] **S19** Telemetry endpoint `/api/admin/locations/stats` returning `{seed_count, admin_count, gm_runtime_count, canonical_count, gm_runtime_share}` for dashboard widget
 
 #### Stage 2D — Wpięcie 22 źródeł XP [D14] (najważniejsze dla różnorodności gry)
 
