@@ -197,6 +197,7 @@ function _renderDetail(hex) {
       <span>${cfg.map_icon||"⬡"} (${hex.q},${hex.r})</span>
       <button class="icon-btn" id="wbd-del">🗑</button>
     </div>
+    <div id="wbd-safe-rest" style="font-size:0.72rem;margin:2px 0 6px 0;color:var(--text-muted)">🛏 Sprawdzam…</div>
     <label class="wb-lbl">Typ terenu</label>
     <select id="wbd-type">${Object.entries(_hexTypes).map(([k,v])=>
       `<option value="${k}"${k===hex.hex_type?" selected":""}>${v.map_icon||""} ${v.label}</option>`).join("")}</select>
@@ -221,6 +222,8 @@ function _renderDetail(hex) {
       </div>`;
     }).join(""):`<span style="font-size:0.72rem;color:var(--text-muted)">Brak</span>`}`;
 
+  _renderSafeRestBadge(p.querySelector("#wbd-safe-rest"), hex.q, hex.r);
+
   p.querySelector("#wbd-del").onclick=()=>_deleteHex(hex.q,hex.r);
   p.querySelector("#wbd-save").onclick=()=>_saveHex(hex.q,hex.r,{
     hex_type:p.querySelector("#wbd-type").value,
@@ -241,6 +244,25 @@ function _renderDetail(hex) {
       showToast("Połączenie usunięte.","success");
     }catch(e){showToast(e.message,"error");}
   });
+}
+
+async function _renderSafeRestBadge(el, q, r) {
+  if(!el) return;
+  try {
+    const res = await adminFetch(`/api/admin/hex-safe/${q}/${r}`);
+    const reason = res.reason || "no_hex_record";
+    const locLabel = res.location_label || res.location_key || "—";
+    const cfg = {
+      safe_via_location:        { glyph: "✅", text: `Bezpieczne — ${locLabel}`,         color: "#7ac76e" },
+      unsafe_location_flag_off: { glyph: "⚠",  text: `Niebezpieczne — ${locLabel}`,      color: "#d97a4a" },
+      wilderness_no_location:   { glyph: "🌲", text: "Dzicz — brak lokacji na hexie",     color: "#9a9a9a" },
+      unknown_location_key:     { glyph: "❓", text: `Wskazana lokacja nie istnieje (${res.location_key || "?"})`, color: "#c95c2e" },
+      no_hex_record:            { glyph: "•",  text: "Brak rekordu hexa",                  color: "#666"    },
+    }[reason] || { glyph: "?", text: reason, color: "#888" };
+    el.innerHTML = `<span style="color:${cfg.color};font-weight:600">${cfg.glyph} ${_e(cfg.text)}</span>`;
+  } catch (e) {
+    el.innerHTML = `<span style="color:#c95c2e">⚠ Błąd diagnostyki: ${_e(e.message || "?")}</span>`;
+  }
 }
 
 function _clearDetail() {

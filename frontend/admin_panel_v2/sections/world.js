@@ -101,7 +101,7 @@ async function _activateTab(panel, tab) {
   else if (tab === "riddles")   await _renderRiddles(container);
   else if (tab === "pending")   await _renderPendingReview(container, panel);
   else if (tab === "builder") {
-    const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=3");
+    const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=4");
     await initBuilder(container);
   }
 }
@@ -383,6 +383,7 @@ async function _renderLocations(container) {
       { key: "_enemy_count",   label: "Wrogowie",         type: "number", editable: false },
       { key: "_rules_preview", label: "Reguły",           editable: false, popup: true,
         formatDisplay: (r) => r._rules_preview },
+      { key: "safe_for_rest",  label: "🛏 Odpoczynek",     type: "boolean", editable: true },
       { key: "description",    label: LABELS.description, editable: true, popup: true },
       { key: "is_active",      label: LABELS.isActive,    type: "boolean", editable: true },
       { key: "locked_at",      label: LABELS.locked,      type: "locked",  editable: false },
@@ -471,6 +472,7 @@ function _openLocationModal(row, allLocations, onDone) {
   rulesLabel.appendChild(rulesDiv);
   form.appendChild(rulesLabel);
 
+  form.appendChild(_checkbox("safe_for_rest", "🛏 Bezpieczne miejsce odpoczynku (Stage 2B)", !!row?.safe_for_rest));
   form.appendChild(_checkbox("is_active", LABELS.isActive, row?.is_active ?? true));
 
   const { close } = openModal({
@@ -488,12 +490,13 @@ function _openLocationModal(row, allLocations, onDone) {
           const parent_key  = form.querySelector('[name="parent_key"]').value || null;
           const description = form.querySelector('[name="description"]').value.trim();
           const is_active   = form.querySelector('[name="is_active"]').checked;
+          const safe_for_rest = form.querySelector('[name="safe_for_rest"]').checked;
           const rules_json  = _getRulesFromEditor(rulesDiv);  // sent as "rules" to API
 
           if (!key)   { showToast("Klucz jest wymagany.", "error"); return; }
           if (!label) { showToast("Nazwa jest wymagana.", "error"); return; }
 
-          const body = { key, label, location_type: loc_type, parent_key, description, rules: rules_json, is_active };
+          const body = { key, label, location_type: loc_type, parent_key, description, rules: rules_json, is_active, safe_for_rest };
 
           try {
             if (isEdit) {

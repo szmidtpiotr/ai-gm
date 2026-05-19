@@ -39,6 +39,7 @@ class LocationBase(BaseModel):
     rules: Optional[dict | str] = None
     enemy_keys: List[str] = Field(default_factory=list)
     npc_keys: List[str] = Field(default_factory=list)
+    safe_for_rest: bool = False
 
 
 class LocationCreate(LocationBase):
@@ -262,8 +263,8 @@ async def create_location(
         cursor = conn.execute(
             """
             INSERT INTO game_locations
-                (key, label, description, parent_id, location_type, rules, enemy_keys, npc_keys)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (key, label, description, parent_id, location_type, rules, enemy_keys, npc_keys, safe_for_rest)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 key,
@@ -274,6 +275,7 @@ async def create_location(
                 serialize_rules(data.rules),
                 enemy_keys_json,
                 npc_keys_json,
+                1 if data.safe_for_rest else 0,
             )
         )
         conn.commit()
@@ -387,6 +389,7 @@ async def update_location(
                 rules = ?,
                 enemy_keys = ?,
                 npc_keys = ?,
+                safe_for_rest = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE key = ?
             """,
@@ -396,6 +399,7 @@ async def update_location(
                 serialize_rules(data.rules),
                 enemy_keys_json,
                 npc_keys_json,
+                1 if data.safe_for_rest else 0,
                 key,
             )
         )
@@ -560,7 +564,10 @@ async def patch_location(
         if "enemy_keys" in data and isinstance(data["enemy_keys"], list):
             updates.append("enemy_keys = ?")
             params.append(json.dumps(data["enemy_keys"]))
-        
+        if "safe_for_rest" in data:
+            updates.append("safe_for_rest = ?")
+            params.append(1 if data["safe_for_rest"] else 0)
+
         if not updates:
             return location
         
