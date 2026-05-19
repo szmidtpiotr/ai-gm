@@ -360,7 +360,7 @@ async function _renderLocations(container) {
 
     // Build lookup map for parent labels (by id)
     const locById = new Map((locations).map(l => [l.id, l]));
-    const rows = locations.map(loc => ({
+    const decorated = locations.map(loc => ({
       ...loc,
       _parent_label: loc.parent_id
         ? (locById.get(loc.parent_id)?.label ?? `#${loc.parent_id}`)
@@ -371,9 +371,34 @@ async function _renderLocations(container) {
         : "",
     }));
 
+    // Grouped sort: every macro immediately followed by its sub-locations.
+    // Orphan subs (parent_id missing / unresolved) bucketed at the bottom.
+    const _byLabel = (a, b) => String(a.label || "").localeCompare(String(b.label || ""), "pl");
+    const macros  = decorated.filter(l => l.location_type === "macro").sort(_byLabel);
+    const subsByParent = new Map();
+    const orphanSubs = [];
+    for (const l of decorated) {
+      if (l.location_type === "macro") continue;
+      const parent = (l.parent_id != null) ? locById.get(l.parent_id) : null;
+      if (parent && parent.location_type === "macro") {
+        if (!subsByParent.has(parent.id)) subsByParent.set(parent.id, []);
+        subsByParent.get(parent.id).push(l);
+      } else {
+        orphanSubs.push(l);
+      }
+    }
+    const rows = [];
+    for (const m of macros) {
+      rows.push(m);
+      const subs = (subsByParent.get(m.id) || []).sort(_byLabel);
+      rows.push(...subs);
+    }
+    rows.push(...orphanSubs.sort(_byLabel));
+
     const columns = [
       { key: "key",            label: LABELS.key,         editable: false },
-      { key: "label",          label: LABELS.label,       editable: true },
+      { key: "label",          label: LABELS.label,       editable: true,
+        formatDisplay: (r) => r.location_type === "sub" ? `↳ ${r.label ?? ""}` : (r.label ?? "") },
       {
         key: "location_type",  label: LABELS.type,
         type: "badge", editType: "select",
