@@ -40,6 +40,13 @@ class LocationBase(BaseModel):
     enemy_keys: List[str] = Field(default_factory=list)
     npc_keys: List[str] = Field(default_factory=list)
     safe_for_rest: bool = False
+    # Stage 2B-Schema provenance & reuse fields
+    created_by: str = Field(default="admin_manual", pattern="^(seed|admin_manual|admin_kreator|gm_runtime|import)$")
+    location_subtype: Optional[str] = Field(default=None, max_length=50)
+    biome: Optional[str] = Field(default=None, max_length=50)
+    tier: int = Field(default=1, ge=1, le=5)
+    canonical: bool = True
+    source_campaign_id: Optional[int] = None
 
 
 class LocationCreate(LocationBase):
@@ -53,6 +60,7 @@ class LocationResponse(LocationBase):
     is_active: int = 1
     created_at: str
     updated_at: str
+    usage_count: int = 0
     children: List["LocationResponse"] = Field(default_factory=list)
 
     class Config:
@@ -263,8 +271,10 @@ async def create_location(
         cursor = conn.execute(
             """
             INSERT INTO game_locations
-                (key, label, description, parent_id, location_type, rules, enemy_keys, npc_keys, safe_for_rest)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (key, label, description, parent_id, location_type, rules,
+                 enemy_keys, npc_keys, safe_for_rest,
+                 created_by, location_subtype, biome, tier, canonical, source_campaign_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 key,
@@ -276,6 +286,12 @@ async def create_location(
                 enemy_keys_json,
                 npc_keys_json,
                 1 if data.safe_for_rest else 0,
+                data.created_by,
+                data.location_subtype,
+                data.biome,
+                data.tier,
+                1 if data.canonical else 0,
+                data.source_campaign_id,
             )
         )
         conn.commit()
@@ -390,6 +406,10 @@ async def update_location(
                 enemy_keys = ?,
                 npc_keys = ?,
                 safe_for_rest = ?,
+                location_subtype = ?,
+                biome = ?,
+                tier = ?,
+                canonical = ?,
                 updated_at = CURRENT_TIMESTAMP
             WHERE key = ?
             """,
@@ -400,6 +420,10 @@ async def update_location(
                 enemy_keys_json,
                 npc_keys_json,
                 1 if data.safe_for_rest else 0,
+                data.location_subtype,
+                data.biome,
+                data.tier,
+                1 if data.canonical else 0,
                 key,
             )
         )
@@ -567,6 +591,27 @@ async def patch_location(
         if "safe_for_rest" in data:
             updates.append("safe_for_rest = ?")
             params.append(1 if data["safe_for_rest"] else 0)
+        if "location_subtype" in data:
+            updates.append("location_subtype = ?")
+            params.append(str(data["location_subtype"]).strip() or None if data["location_subtype"] is not None else None)
+        if "biome" in data:
+            updates.append("biome = ?")
+            params.append(str(data["biome"]).strip() or None if data["biome"] is not None else None)
+        if "tier" in data:
+            try:
+                tier_val = int(data["tier"])
+                if not (1 <= tier_val <= 5):
+                    raise ValueError
+                updates.append("tier = ?")
+                params.append(tier_val)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=422, detail="tier must be an integer 1–5")
+        if "canonical" in data:
+            updates.append("canonical = ?")
+            params.append(1 if data["canonical"] else 0)
+        if "npc_keys" in data and isinstance(data["npc_keys"], list):
+            updates.append("npc_keys = ?")
+            params.append(json.dumps(data["npc_keys"]))
 
         if not updates:
             return location

@@ -197,13 +197,15 @@ def _get_or_create_location(
         conn.execute(
             """INSERT OR IGNORE INTO game_locations
                (key, label, location_type, description, parent_id, parent_key,
-                rules, review_status, ai_generated, is_active)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_review', 1, 1)""",
-            (key, label, loc_type, description, parent_id, parent_key or None, rules_json)
+                rules, review_status, ai_generated, is_active,
+                created_by, canonical, source_campaign_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending_review', 1, 1,
+                       'gm_runtime', 0, ?)""",
+            (key, label, loc_type, description, parent_id, parent_key or None, rules_json, campaign_id)
         )
         conn.commit()
-        logger.info("create_location_tag_processed", key=key, campaign_id=campaign_id)
-        return {"key": key, "label": label, "review_status": "pending_review"}
+        logger.info("create_location_tag_processed", key=key, campaign_id=campaign_id, created_by="gm_runtime")
+        return {"key": key, "label": label, "review_status": "pending_review", "created_by": "gm_runtime"}
     except Exception as e:
         logger.warning("create_location_failed", key=key, error=str(e))
         return None

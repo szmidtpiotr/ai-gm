@@ -41,6 +41,64 @@ const LOC_TYPES = [
   { value: "sub",   label: "Pod-lokacja" },
 ];
 
+// Stage 2B-Schema: enums for provenance + reuse fields
+const LOC_SUBTYPES = [
+  { value: "",                label: "— nieokreślony —" },
+  { value: "tavern",          label: "Karczma / Tawerna" },
+  { value: "inn",             label: "Zajazd" },
+  { value: "shop",            label: "Sklep" },
+  { value: "temple",          label: "Świątynia" },
+  { value: "guild",           label: "Cech / Gildia" },
+  { value: "village",         label: "Wioska" },
+  { value: "town",            label: "Miasteczko" },
+  { value: "city",            label: "Miasto" },
+  { value: "castle",          label: "Zamek / Twierdza" },
+  { value: "ruin",            label: "Ruiny" },
+  { value: "cave",            label: "Jaskinia" },
+  { value: "dungeon",         label: "Loch" },
+  { value: "tower",           label: "Wieża" },
+  { value: "watchtower",      label: "Strażnica" },
+  { value: "forest_clearing", label: "Polana leśna" },
+  { value: "camp",            label: "Obóz" },
+  { value: "road",            label: "Droga / Trakt" },
+  { value: "bridge",          label: "Most" },
+  { value: "crossroads",      label: "Rozdroże" },
+  { value: "graveyard",       label: "Cmentarz" },
+  { value: "swamp_hut",       label: "Chata na mokradłach" },
+  { value: "mine",            label: "Kopalnia" },
+  { value: "harbor",          label: "Port" },
+  { value: "other",           label: "Inne" },
+];
+
+const LOC_BIOMES = [
+  { value: "",         label: "— nieokreślony —" },
+  { value: "forest",   label: "Las" },
+  { value: "mountain", label: "Góry" },
+  { value: "swamp",    label: "Bagna" },
+  { value: "plains",   label: "Równiny" },
+  { value: "coast",    label: "Wybrzeże" },
+  { value: "desert",   label: "Pustynia" },
+  { value: "tundra",   label: "Tundra" },
+  { value: "urban",    label: "Tereny miejskie" },
+  { value: "underground", label: "Podziemia" },
+];
+
+const LOC_TIERS = [
+  { value: 1, label: "Tier 1 (lvl 1-2)" },
+  { value: 2, label: "Tier 2 (lvl 3-4)" },
+  { value: 3, label: "Tier 3 (lvl 5-6)" },
+  { value: 4, label: "Tier 4 (lvl 7-8)" },
+  { value: 5, label: "Tier 5 (lvl 9+)" },
+];
+
+const LOC_CREATED_BY = {
+  seed:          { label: "Seed",     class: "admin-badge-gold" },
+  admin_manual:  { label: "Admin",    class: "admin-badge-blue" },
+  admin_kreator: { label: "Kreator",  class: "admin-badge-purple" },
+  gm_runtime:    { label: "GM",       class: "admin-badge-orange" },
+  import:        { label: "Import",   class: "admin-badge-muted" },
+};
+
 const LOCATION_RULES = [
   { key: "no_combat",        label: "No Combat",        type: "boolean", description: "Combat forbidden (temples, safe zones)" },
   { key: "no_loot",          label: "No Loot",          type: "boolean", description: "Enemies don't drop loot" },
@@ -341,6 +399,16 @@ async function _renderLocations(container) {
   addBtn.className = "primary-btn";
   addBtn.textContent = "+ " + LABELS.addLocation;
   toolbar.appendChild(addBtn);
+
+  const kreatorBtn = document.createElement("button");
+  kreatorBtn.className = "subtab-btn";
+  kreatorBtn.id = "loc-smart-entry-btn";
+  kreatorBtn.title = "AI asystent tworzenia lokacji";
+  kreatorBtn.style.marginLeft = "auto";
+  kreatorBtn.textContent = "🤖 Kreator AI";
+  kreatorBtn.addEventListener("click", () => openSmartEntry("game_locations"));
+  toolbar.appendChild(kreatorBtn);
+
   container.appendChild(toolbar);
 
   // Pending review moved to dedicated "Oczekujące" tab
@@ -348,6 +416,19 @@ async function _renderLocations(container) {
   container.appendChild(tableHost);
 
   let locations = [];
+
+  // Auto-refresh table after Smart Entry save
+  const _onSmartSave = (e) => {
+    if (e?.detail?.table === "game_locations") load();
+  };
+  window.addEventListener("smart-entry-saved", _onSmartSave);
+  const _obs = new MutationObserver(() => {
+    if (!document.contains(container)) {
+      window.removeEventListener("smart-entry-saved", _onSmartSave);
+      _obs.disconnect();
+    }
+  });
+  _obs.observe(document.body, { childList: true, subtree: true });
 
   const load = async () => {
     renderTable(tableHost, null, null, {});
@@ -407,10 +488,44 @@ async function _renderLocations(container) {
         filterOptions: LOC_TYPES,
       },
       { key: "_parent_label",  label: "Nadrzędna",        editable: false },
-      { key: "_enemy_count",   label: "Wrogowie",         type: "number", editable: false },
-      { key: "_rules_preview", label: "Reguły",           editable: false, popup: true,
+      // Stage 2B-Schema: provenance + reuse columns
+      {
+        key: "created_by",     label: "Źródło",
+        type: "badge",
+        editable: false,
+        badgeClass: (row) => (LOC_CREATED_BY[row.created_by] || LOC_CREATED_BY.admin_manual).class,
+        formatDisplay: (r) => (LOC_CREATED_BY[r.created_by] || LOC_CREATED_BY.admin_manual).label,
+        filterOptions: Object.entries(LOC_CREATED_BY).map(([v, m]) => ({ value: v, label: m.label })),
+      },
+      {
+        key: "location_subtype", label: "Podtyp",
+        editType: "select",
+        editOptions: LOC_SUBTYPES.map((s) => s.value),
+        editable: true,
+        formatDisplay: (r) => {
+          const m = LOC_SUBTYPES.find((s) => s.value === (r.location_subtype || ""));
+          return m ? m.label : (r.location_subtype || "—");
+        },
+        filterOptions: LOC_SUBTYPES,
+      },
+      {
+        key: "biome",          label: "Biom",
+        editType: "select",
+        editOptions: LOC_BIOMES.map((b) => b.value),
+        editable: true,
+        formatDisplay: (r) => {
+          const m = LOC_BIOMES.find((b) => b.value === (r.biome || ""));
+          return m ? m.label : (r.biome || "—");
+        },
+        filterOptions: LOC_BIOMES,
+      },
+      { key: "tier",           label: "Tier",  type: "number", editable: true },
+      { key: "canonical",      label: "⭐ Kanon", type: "boolean", editable: true },
+      { key: "usage_count",    label: "Wizyt", type: "number", editable: false },
+      { key: "_enemy_count",   label: "Wrogowie", type: "number", editable: false },
+      { key: "_rules_preview", label: "Reguły", editable: false, popup: true,
         formatDisplay: (r) => r._rules_preview },
-      { key: "safe_for_rest",  label: "🛏 Odpoczynek",     type: "boolean", editable: true },
+      { key: "safe_for_rest",  label: "🛏 Odpoczynek", type: "boolean", editable: true },
       { key: "description",    label: LABELS.description, editable: true, popup: true },
       { key: "is_active",      label: LABELS.isActive,    type: "boolean", editable: true },
       { key: "locked_at",      label: LABELS.locked,      type: "locked",  editable: false },
@@ -499,8 +614,36 @@ function _openLocationModal(row, allLocations, onDone) {
   rulesLabel.appendChild(rulesDiv);
   form.appendChild(rulesLabel);
 
+  // ── Stage 2B-Schema provenance & reuse fields ──
+  form.appendChild(_field("Podtyp",
+    `<select name="location_subtype">
+      ${LOC_SUBTYPES.map((s) => `<option value="${_esc(s.value)}" ${(row?.location_subtype ?? "") === s.value ? "selected" : ""}>${_esc(s.label)}</option>`).join("")}
+    </select>`));
+
+  form.appendChild(_field("Biom",
+    `<select name="biome">
+      ${LOC_BIOMES.map((b) => `<option value="${_esc(b.value)}" ${(row?.biome ?? "") === b.value ? "selected" : ""}>${_esc(b.label)}</option>`).join("")}
+    </select>`));
+
+  form.appendChild(_field("Tier (1-5)",
+    `<select name="tier">
+      ${LOC_TIERS.map((t) => `<option value="${t.value}" ${Number(row?.tier ?? 1) === t.value ? "selected" : ""}>${_esc(t.label)}</option>`).join("")}
+    </select>`));
+
+  form.appendChild(_checkbox("canonical", "⭐ Kanoniczna (preferowana przez GM)", row?.canonical ?? !isEdit));
   form.appendChild(_checkbox("safe_for_rest", "🛏 Bezpieczne miejsce odpoczynku (Stage 2B)", !!row?.safe_for_rest));
   form.appendChild(_checkbox("is_active", LABELS.isActive, row?.is_active ?? true));
+
+  // Read-only provenance footer (when editing)
+  if (isEdit && row?.created_by) {
+    const meta = LOC_CREATED_BY[row.created_by] || LOC_CREATED_BY.admin_manual;
+    const provInfo = document.createElement("div");
+    provInfo.style.cssText = "margin-top:8px;padding:6px 10px;background:var(--bg-elevated);border-radius:4px;font-size:0.8rem;color:var(--text-secondary)";
+    const usageTxt = (row.usage_count ?? 0) > 0 ? ` · wizyt: <strong>${row.usage_count}</strong>` : "";
+    const srcCampaign = row.source_campaign_id ? ` · z kampanii #${row.source_campaign_id}` : "";
+    provInfo.innerHTML = `Źródło: <span class="admin-badge ${meta.class}">${meta.label}</span>${srcCampaign}${usageTxt}`;
+    form.appendChild(provInfo);
+  }
 
   const { close } = openModal({
     title:   isEdit ? `Edytuj lokację: ${row.key}` : LABELS.addLocation,
@@ -518,20 +661,30 @@ function _openLocationModal(row, allLocations, onDone) {
           const description = form.querySelector('[name="description"]').value.trim();
           const is_active   = form.querySelector('[name="is_active"]').checked;
           const safe_for_rest = form.querySelector('[name="safe_for_rest"]').checked;
+          const canonical   = form.querySelector('[name="canonical"]').checked;
+          const location_subtype = form.querySelector('[name="location_subtype"]').value || null;
+          const biome       = form.querySelector('[name="biome"]').value || null;
+          const tier        = parseInt(form.querySelector('[name="tier"]').value, 10) || 1;
           const rules_json  = _getRulesFromEditor(rulesDiv);  // sent as "rules" to API
 
           if (!key)   { showToast("Klucz jest wymagany.", "error"); return; }
           if (!label) { showToast("Nazwa jest wymagana.", "error"); return; }
 
-          const body = { key, label, location_type: loc_type, parent_key, description, rules: rules_json, is_active, safe_for_rest };
+          const body = {
+            key, label, location_type: loc_type, parent_key, description,
+            rules: rules_json, is_active, safe_for_rest,
+            location_subtype, biome, tier, canonical,
+          };
 
           try {
             if (isEdit) {
+              // PATCH /admin/locations/{key} handles partial updates incl. all new fields.
               await adminFetch(`/api/locations/admin/locations/${row.key}`, {
                 method: "PATCH", body: JSON.stringify(body),
               });
             } else {
-              await adminFetch("/api/locations/admin/locations", {
+              // POST canonical create endpoint (NOT /admin/locations — that's GET/PATCH only).
+              await adminFetch("/api/locations", {
                 method: "POST", body: JSON.stringify(body),
               });
             }
