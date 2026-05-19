@@ -447,39 +447,62 @@ class DeleteLocationReq(BaseModel):
 @router.delete("/{key}", status_code=204)
 async def delete_location(
     key: str,
+    force: bool = Query(default=False),
     req: DeleteLocationReq | None = None,
     _admin: None = Depends(require_admin_token),
 ):
     """
     Soft-delete lokalizacji (is_active = 0).
-    
+
     Nie usuwa fizycznie - tylko deaktywuje.
     Blokowane jeśli lokalizacja ma aktywne dzieci (chyba że force=true, wtedy deaktywujemy też dzieci).
+
+    force=true also hard-deletes a row that was already soft-deleted (is_active=0),
+    so admins can purge ghost rows the validator left behind. Session pointers
+    that referenced the row are cleared first to avoid FK orphans.
     """
     conn = get_db_connection()
     try:
-        force = req.force if req else False
-        
-        # Sprawdź czy lokalizacja istnieje
+        # Accept force from either query string (?force=true) or JSON body.
+        if req is not None and req.force:
+            force = True
+
+        # Sprawdź czy lokalizacja istnieje (active OR inactive — force can purge inactive)
         location = conn.execute(
-            "SELECT id FROM game_locations WHERE key = ? AND is_active = 1",
+            "SELECT id, is_active FROM game_locations WHERE key = ?",
             (key,)
         ).fetchone()
-        
+
         if not location:
             raise HTTPException(
                 status_code=404,
-                detail=f"Lokalizacja '{key}' nie istnieje lub jest już nieaktywna"
+                detail=f"Lokalizacja '{key}' nie istnieje"
             )
-        
+
         location_id = location["id"]
-        
+        already_inactive = not location["is_active"]
+
+        if already_inactive:
+            if not force:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Lokalizacja '{key}' jest już nieaktywna (use force=true to purge)"
+                )
+            # Hard purge: clear any session pointer that references this row, then DELETE.
+            conn.execute(
+                "UPDATE game_sessions SET current_location_id = NULL WHERE current_location_id = ?",
+                (location_id,)
+            )
+            conn.execute("DELETE FROM game_locations WHERE id = ?", (location_id,))
+            conn.commit()
+            return None
+
         # Sprawdź czy ma aktywne dzieci
         children = conn.execute(
             "SELECT key FROM game_locations WHERE parent_id = ? AND is_active = 1",
             (location_id,)
         ).fetchall()
-        
+
         if children:
             if not force:
                 raise HTTPException(
@@ -492,14 +515,14 @@ async def delete_location(
                     "UPDATE game_locations SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
                     (child["key"],)
                 )
-        
+
         # Soft delete
         conn.execute(
             "UPDATE game_locations SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE key = ?",
             (key,)
         )
         conn.commit()
-        
+
         return None
     finally:
         conn.close()

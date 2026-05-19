@@ -1,6 +1,6 @@
 import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
-import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=5";
+import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=7";
 import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
 import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=5";
 
@@ -439,7 +439,7 @@ async function _renderLocations(container) {
   const load = async () => {
     renderTable(tableHost, null, null, {});
     try {
-      locations = await adminFetch("/api/locations/admin/locations");
+      locations = await adminFetch("/api/locations/admin/locations?active_only=1");
     } catch (e) {
       showToast("Błąd ładowania lokacji: " + (e.message || "?"), "error");
       return;

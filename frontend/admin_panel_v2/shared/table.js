@@ -518,26 +518,50 @@ export function renderTable(container, columns, rows, options = {}) {
         if (!ok) {
           return;
         }
-        let success = 0;
-        const deletedIds = new Set();
-        const failures = [];
-        for (let i = 0; i < selectedRows.length; i += 1) {
-          const row = selectedRows[i];
-          const rowId = defaultRowId(row, options);
-          try {
-            await onDelete(row, { force: false, bulk: true });
-            selectedState.delete(rowId);
-            deletedIds.add(rowId);
-            success += 1;
-          } catch (err) {
-            failures.push(rowId);
+        const tryDelete = async (rowsToDelete, force) => {
+          let success = 0;
+          const deletedIds = new Set();
+          const failures = [];
+          for (let i = 0; i < rowsToDelete.length; i += 1) {
+            const row = rowsToDelete[i];
+            const rowId = defaultRowId(row, options);
+            try {
+              await onDelete(row, { force, bulk: true });
+              selectedState.delete(rowId);
+              deletedIds.add(rowId);
+              success += 1;
+            } catch (err) {
+              failures.push({ rowId, row });
+            }
+          }
+          return { success, deletedIds, failures };
+        };
+
+        const firstPass = await tryDelete(selectedRows, false);
+        let deletedIds = firstPass.deletedIds;
+
+        if (firstPass.failures.length) {
+          const failedIds = firstPass.failures.map((f) => f.rowId).join(", ");
+          const retryRes = await showConfirm(
+            `Deleted ${firstPass.success} row(s). ${firstPass.failures.length} blocked (locked / FK / pending-review): ${failedIds}\n\nRetry blocked rows with Force?`,
+            {
+              dangerous: true,
+              showForceCheckbox: true,
+              forceCheckboxLabel: "Force delete blocked rows",
+            },
+          );
+          if (retryRes && retryRes.ok && retryRes.force) {
+            const retryRows = firstPass.failures.map((f) => f.row);
+            const secondPass = await tryDelete(retryRows, true);
+            deletedIds = new Set([...deletedIds, ...secondPass.deletedIds]);
+            if (secondPass.failures.length) {
+              window.alert?.(
+                `Forced delete still failed for ${secondPass.failures.length}: ${secondPass.failures.map((f) => f.rowId).join(", ")}`,
+              );
+            }
           }
         }
-        if (failures.length) {
-          window.alert?.(
-            `Deleted ${success} row(s). Failed to delete ${failures.length}: ${failures.join(", ")}`,
-          );
-        }
+
         renderTable(container, columns, rows.filter((row) => !deletedIds.has(defaultRowId(row, options))), options);
       }, !selectedRows.length);
     }

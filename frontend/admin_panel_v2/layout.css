@@ -680,7 +680,13 @@ html, body {
 .admin-table-actions {
   text-align: right;
   white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: stretch;
+  min-width: 110px;
 }
+.admin-table-actions > button { width: 100%; }
 
 .admin-table-empty {
   text-align: center;

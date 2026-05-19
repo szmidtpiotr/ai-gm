@@ -327,6 +327,11 @@ def _create_new_location(
         # Stage 2B-Schema provenance: GM-driven auto-create vs. admin/explicit create.
         created_by = "gm_runtime" if ai_generated else "admin_manual"
         review_status = "pending_review" if ai_generated else "permanent"
+        # LLM only fills description/biome/subtype on action=create. When validator
+        # auto-creates as a fallback from action=move (unknown target), those fields
+        # are None — give the Pending review queue at least the label as description
+        # so admins aren't staring at a blank row.
+        description = intent.description or intent.target_label
         cursor = conn.execute(
             """
             INSERT INTO game_locations (
@@ -340,7 +345,7 @@ def _create_new_location(
             (
                 key,
                 intent.target_label,
-                intent.description,
+                description,
                 parent_id,
                 "sub" if parent_id else "macro",
                 1 if ai_generated else 0,
