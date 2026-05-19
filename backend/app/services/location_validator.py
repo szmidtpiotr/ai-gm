@@ -294,10 +294,14 @@ def _slugify_location_key(label: str) -> str:
     return value[:100] or f"location_{int(time.time())}"
 
 
-def _create_new_location(intent: LocationIntent, ai_generated: bool = False) -> Optional[dict]:
+def _create_new_location(
+    intent: LocationIntent,
+    ai_generated: bool = False,
+    campaign_id: int | None = None,
+) -> Optional[dict]:
     """
     Tworzy nową lokalizację (tylko gdy action='create').
-    
+
     Returns:
         Utworzona lokalizacja lub None
     """
@@ -312,20 +316,25 @@ def _create_new_location(intent: LocationIntent, ai_generated: bool = False) -> 
             parent = _get_location_by_key(intent.parent_key)
             if parent:
                 parent_id = parent["id"]
-        
+
         key = _slugify_location_key(intent.target_key or intent.target_label)
-        
+
         # Sprawdź czy klucz już istnieje
         existing = _get_location_by_key(key)
         if existing:
             key = f"{key}_{int(time.time())}"
-        
+
+        # Stage 2B-Schema provenance: GM-driven auto-create vs. admin/explicit create.
+        created_by = "gm_runtime" if ai_generated else "admin_manual"
+        review_status = "pending_review" if ai_generated else "permanent"
         cursor = conn.execute(
             """
             INSERT INTO game_locations (
-                key, label, description, parent_id, location_type, ai_generated, approved
+                key, label, description, parent_id, location_type,
+                ai_generated, approved,
+                created_by, review_status, canonical, source_campaign_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
             """,
             (
                 key,
@@ -335,6 +344,9 @@ def _create_new_location(intent: LocationIntent, ai_generated: bool = False) -> 
                 "sub" if parent_id else "macro",
                 1 if ai_generated else 0,
                 0 if ai_generated else 1,
+                created_by,
+                review_status,
+                campaign_id if ai_generated else None,
             )
         )
         conn.commit()
@@ -384,9 +396,11 @@ def persist_ai_generated_location(
         cursor = db.execute(
             """
             INSERT INTO game_locations (
-                key, label, description, parent_id, location_type, ai_generated, approved, is_active
+                key, label, description, parent_id, location_type,
+                ai_generated, approved, is_active,
+                created_by, review_status, canonical, source_campaign_id
             )
-            VALUES (?, ?, ?, ?, ?, 1, 0, 1)
+            VALUES (?, ?, ?, ?, ?, 1, 0, 1, 'gm_runtime', 'pending_review', 0, ?)
             """,
             (
                 key,
@@ -394,6 +408,7 @@ def persist_ai_generated_location(
                 intent.description,
                 parent_id,
                 location_type,
+                campaign_id,
             ),
         )
         db.commit()
@@ -573,7 +588,7 @@ def validate_move(
                 ), "move_ok", matched)
             
             if auto_create:
-                new_loc = _create_new_location(intent, ai_generated=True)
+                new_loc = _create_new_location(intent, ai_generated=True, campaign_id=campaign_id)
                 if new_loc:
                     return _result_with_log(resolved_session_id, intent, ValidationResult(
                         allowed=True,
@@ -603,7 +618,7 @@ def validate_move(
         
         if not matched:
             if auto_create:
-                new_loc = _create_new_location(intent, ai_generated=True)
+                new_loc = _create_new_location(intent, ai_generated=True, campaign_id=campaign_id)
                 if new_loc:
                     return _result_with_log(resolved_session_id, intent, ValidationResult(
                         allowed=True,

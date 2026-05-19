@@ -1912,6 +1912,32 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     except Exception as e:
         logger.warning("v2_migration_skipped", label="v2-locations-provenance-backfill", error=str(e))
 
+    # Stage 2B-Schema fix-up: catch rows the original backfill missed because they were
+    # inserted by location_validator AFTER the migration ran with stale defaults
+    # (created_by='admin_manual' + review_status='permanent' on AI-generated rows).
+    # Idempotent: guarded by ai_generated=1 plus default-only stamps; skipped silently
+    # once no rows match.
+    try:
+        cur = conn.execute("""
+            UPDATE game_locations
+               SET created_by = 'gm_runtime'
+             WHERE ai_generated = 1 AND created_by = 'admin_manual'
+        """)
+        n1 = cur.rowcount or 0
+        cur = conn.execute("""
+            UPDATE game_locations
+               SET review_status = 'pending_review'
+             WHERE ai_generated = 1 AND review_status = 'permanent' AND approved = 0
+        """)
+        n2 = cur.rowcount or 0
+        if n1 or n2:
+            conn.commit()
+            logger.info("v2_migration_applied",
+                        label="v2-locations-provenance-fixup",
+                        created_by_fixed=n1, review_status_fixed=n2)
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="v2-locations-provenance-fixup", error=str(e))
+
     # ── ALTER TABLE: npcs ─────────────────────────────────────────────────
 
     _exec("ALTER TABLE npcs ADD COLUMN personality_prompt TEXT DEFAULT NULL", "v2-npcs-personality-prompt")
