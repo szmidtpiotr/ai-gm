@@ -46,21 +46,21 @@
 > Dziś GM tworzy lokacje bez śladu pochodzenia — nie da się odsiać junku ani filtrować pod biom/typ.
 > Spec → `PHASE_03_WORLD/TASK_08_LOCATION_SYSTEM.md` (Provenance & Reuse) + `TASK_10_DATA_TABLES_SOURCE_OF_TRUTH.md` (Candidate Injection).
 
-##### Phase 1 — Schema migration + admin surfacing (ship before R4)
+##### Phase 1 — Schema migration + admin surfacing (ship before R4) ✅
 
-- [ ] **S1** Migration: `game_locations` ALTER ADD COLUMN `created_by TEXT NOT NULL DEFAULT 'admin_manual'` (enum: `seed`/`admin_manual`/`admin_kreator`/`gm_runtime`/`import`)
-- [ ] **S2** Migration: ADD COLUMN `location_subtype TEXT DEFAULT NULL` (tavern/village/town/castle/ruin/cave/forest_clearing/road/watchtower/…)
-- [ ] **S3** Migration: ADD COLUMN `biome TEXT DEFAULT NULL` (forest/mountain/swamp/plains/coast/desert/urban/…) — matches `world_hexes.hex_type`
-- [ ] **S4** Migration: ADD COLUMN `tier INTEGER NOT NULL DEFAULT 1` (1–5, level gating)
-- [ ] **S5** Migration: ADD COLUMN `canonical INTEGER NOT NULL DEFAULT 0` (admin-promoted "preferred reuse" flag)
-- [ ] **S6** Migration: ADD COLUMN `usage_count INTEGER NOT NULL DEFAULT 0` (incremented on visit — Phase 2)
-- [ ] **S7** Migration: ADD COLUMN `source_campaign_id INTEGER NULL REFERENCES campaigns(id)` (which campaign minted gm_runtime records)
-- [ ] **S8** Backfill: `UPDATE game_locations SET created_by = CASE WHEN ai_generated=1 THEN 'gm_runtime' ELSE 'admin_manual' END, canonical = CASE WHEN review_status='permanent' AND ai_generated=0 THEN 1 ELSE 0 END`
-- [ ] **S9** `_get_or_create_location` (`world_service.py`): set `created_by='gm_runtime'`, `canonical=0`, `source_campaign_id=campaign_id`
-- [ ] **S10** Admin POST/PATCH/PUT (`locations.py`): accept + persist new fields; default `created_by='admin_manual'`, `canonical=1`
-- [ ] **S11** Smart Entry schema endpoint: expose new fields with proper enums/dropdowns; on save → `created_by='admin_kreator'`, `canonical=1`
-- [ ] **S12** Admin UI table (Lokacje): add columns `created_by` (color-coded badge), `subtype`, `biome`, ⭐ `canonical` (one-click toggle), `usage_count` (sortable)
-- [ ] **S13** Admin UI modal: add subtype + biome + tier dropdowns, canonical checkbox
+- [x] **S1** Migration: `game_locations` ALTER ADD COLUMN `created_by TEXT NOT NULL DEFAULT 'admin_manual'` (enum: `seed`/`admin_manual`/`admin_kreator`/`gm_runtime`/`import`)
+- [x] **S2** Migration: ADD COLUMN `location_subtype TEXT DEFAULT NULL` (tavern/village/town/castle/ruin/cave/forest_clearing/road/watchtower/…)
+- [x] **S3** Migration: ADD COLUMN `biome TEXT DEFAULT NULL` (forest/mountain/swamp/plains/coast/desert/urban/…) — matches `world_hexes.hex_type`
+- [x] **S4** Migration: ADD COLUMN `tier INTEGER NOT NULL DEFAULT 1` (1–5, level gating)
+- [x] **S5** Migration: ADD COLUMN `canonical INTEGER NOT NULL DEFAULT 0` (admin-promoted "preferred reuse" flag)
+- [x] **S6** Migration: ADD COLUMN `usage_count INTEGER NOT NULL DEFAULT 0` (incremented on visit — Phase 2)
+- [x] **S7** Migration: ADD COLUMN `source_campaign_id INTEGER NULL REFERENCES campaigns(id)` (which campaign minted gm_runtime records)
+- [x] **S8** Backfill: `UPDATE game_locations SET created_by = CASE WHEN ai_generated=1 THEN 'gm_runtime' ELSE 'admin_manual' END, canonical = CASE WHEN review_status='permanent' AND ai_generated=0 THEN 1 ELSE 0 END`
+- [x] **S9** `_get_or_create_location` (`world_service.py`): set `created_by='gm_runtime'`, `canonical=0`, `source_campaign_id=campaign_id`
+- [x] **S10** Admin POST/PATCH/PUT (`locations.py`): accept + persist new fields; default `created_by='admin_manual'`, `canonical=1`
+- [x] **S11** Smart Entry schema endpoint: expose new fields with proper enums/dropdowns; on save → `created_by='admin_kreator'`, `canonical=1`
+- [x] **S12** Admin UI table (Lokacje): add columns `created_by` (color-coded badge), `subtype`, `biome`, ⭐ `canonical` (one-click toggle), `usage_count` (sortable)
+- [x] **S13** Admin UI modal: add subtype + biome + tier dropdowns, canonical checkbox
 
 ##### Phase 2 — Reuse engine + auto-pair starting hex (ship after Stage 2B closes)
 

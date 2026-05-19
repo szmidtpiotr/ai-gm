@@ -1877,6 +1877,38 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     except Exception as e:
         logger.warning("v2_migration_skipped", label="v2-locations-parent-key-seed", error=str(e))
 
+    # ── Stage 2B-Schema Phase 1: provenance + reuse fields (S1–S8) ────────
+    _exec("ALTER TABLE game_locations ADD COLUMN created_by TEXT NOT NULL DEFAULT 'admin_manual'", "v2-locations-created-by")
+    _exec("ALTER TABLE game_locations ADD COLUMN location_subtype TEXT DEFAULT NULL", "v2-locations-subtype")
+    _exec("ALTER TABLE game_locations ADD COLUMN biome TEXT DEFAULT NULL", "v2-locations-biome")
+    _exec("ALTER TABLE game_locations ADD COLUMN tier INTEGER NOT NULL DEFAULT 1", "v2-locations-tier")
+    _exec("ALTER TABLE game_locations ADD COLUMN canonical INTEGER NOT NULL DEFAULT 0", "v2-locations-canonical")
+    _exec("ALTER TABLE game_locations ADD COLUMN usage_count INTEGER NOT NULL DEFAULT 0", "v2-locations-usage-count")
+    _exec("ALTER TABLE game_locations ADD COLUMN source_campaign_id INTEGER NULL REFERENCES campaigns(id)", "v2-locations-source-campaign")
+    _exec("CREATE INDEX IF NOT EXISTS idx_game_locations_biome_subtype ON game_locations(biome, location_subtype)", "v2-locations-idx-biome-subtype")
+    _exec("CREATE INDEX IF NOT EXISTS idx_game_locations_canonical ON game_locations(canonical)", "v2-locations-idx-canonical")
+
+    # Backfill: derive created_by + canonical from legacy ai_generated boolean.
+    # Only runs if every row still has the default value (created_by='admin_manual' AND canonical=0),
+    # so re-runs of the migration are safe.
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM game_locations WHERE created_by != 'admin_manual' OR canonical != 0"
+        ).fetchone()
+        already_backfilled = row and int(row["n"] if isinstance(row, sqlite3.Row) else row[0]) > 0
+        if not already_backfilled:
+            conn.execute("""
+                UPDATE game_locations SET
+                    created_by = CASE WHEN ai_generated = 1 THEN 'gm_runtime' ELSE 'admin_manual' END,
+                    canonical  = CASE WHEN review_status = 'permanent' AND ai_generated = 0 THEN 1 ELSE 0 END
+            """)
+            conn.commit()
+            logger.info("v2_migration_applied", label="v2-locations-provenance-backfill")
+        else:
+            logger.debug("v2_migration_skipped", label="v2-locations-provenance-backfill", reason="already backfilled")
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="v2-locations-provenance-backfill", error=str(e))
+
     # ── ALTER TABLE: npcs ─────────────────────────────────────────────────
 
     _exec("ALTER TABLE npcs ADD COLUMN personality_prompt TEXT DEFAULT NULL", "v2-npcs-personality-prompt")

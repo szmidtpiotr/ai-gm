@@ -67,6 +67,7 @@ WRITABLE_TABLES = {
     "game_config_consumables",
     "game_config_enemies",
     "game_config_spells",
+    "game_locations",
 }
 
 READ_ONLY_TABLES = {
@@ -405,6 +406,95 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
             },
         },
     },
+    "game_locations": {
+        "required": ["key", "label", "location_type", "location_subtype", "biome", "tier", "description"],
+        "optional": ["parent_key", "safe_for_rest", "rules"],
+        "fields": {
+            "key": {
+                "type": "text",
+                "question": "Podaj unikalny klucz (slug) lokacji, np. 'karczma_pod_zlotym_krukiem'.",
+            },
+            "label": {
+                "type": "text",
+                "question": "Jak ma się nazywać ta lokacja (wyświetlana nazwa)?",
+            },
+            "location_type": {
+                "type": "single_choice",
+                "question": "Typ lokacji?",
+                "options": [
+                    {"label": "macro", "description": "Makro — duża, samodzielna lokacja (miasto, las, góry)"},
+                    {"label": "sub",   "description": "Pod-lokacja — wewnątrz makra (karczma w mieście)"},
+                ],
+            },
+            "location_subtype": {
+                "type": "single_choice",
+                "question": "Podtyp lokacji (z curated listy)?",
+                "options": [
+                    {"label": "tavern",          "description": "Karczma / Tawerna"},
+                    {"label": "inn",             "description": "Zajazd"},
+                    {"label": "shop",            "description": "Sklep"},
+                    {"label": "temple",          "description": "Świątynia"},
+                    {"label": "guild",           "description": "Cech / Gildia"},
+                    {"label": "village",         "description": "Wioska"},
+                    {"label": "town",            "description": "Miasteczko"},
+                    {"label": "city",            "description": "Miasto"},
+                    {"label": "castle",          "description": "Zamek / Twierdza"},
+                    {"label": "ruin",            "description": "Ruiny"},
+                    {"label": "cave",            "description": "Jaskinia"},
+                    {"label": "dungeon",         "description": "Loch"},
+                    {"label": "tower",           "description": "Wieża"},
+                    {"label": "watchtower",      "description": "Strażnica"},
+                    {"label": "forest_clearing", "description": "Polana leśna"},
+                    {"label": "camp",            "description": "Obóz"},
+                    {"label": "road",            "description": "Droga / Trakt"},
+                    {"label": "bridge",          "description": "Most"},
+                    {"label": "crossroads",      "description": "Rozdroże"},
+                    {"label": "graveyard",       "description": "Cmentarz"},
+                    {"label": "swamp_hut",       "description": "Chata na mokradłach"},
+                    {"label": "mine",            "description": "Kopalnia"},
+                    {"label": "harbor",          "description": "Port"},
+                    {"label": "other",           "description": "Inne"},
+                ],
+            },
+            "biome": {
+                "type": "single_choice",
+                "question": "Biom / klimat geograficzny?",
+                "options": [
+                    {"label": "forest",      "description": "Las"},
+                    {"label": "mountain",    "description": "Góry"},
+                    {"label": "swamp",       "description": "Bagna"},
+                    {"label": "plains",      "description": "Równiny"},
+                    {"label": "coast",       "description": "Wybrzeże"},
+                    {"label": "desert",      "description": "Pustynia"},
+                    {"label": "tundra",      "description": "Tundra"},
+                    {"label": "urban",       "description": "Tereny miejskie"},
+                    {"label": "underground", "description": "Podziemia"},
+                ],
+            },
+            "tier": {
+                "type": "number",
+                "question": "Poziom trudności / siły (1=lvl 1-2, 2=lvl 3-4, 3=lvl 5-6, 4=lvl 7-8, 5=lvl 9+).",
+                "min": 1,
+                "max": 5,
+            },
+            "description": {
+                "type": "textarea",
+                "question": "Klimatyczny opis lokacji dla GM (wygląd, atmosfera, dźwięki, zapachy, 2-4 zdania).",
+            },
+            "parent_key": {
+                "type": "text",
+                "question": "Klucz lokacji nadrzędnej (tylko dla 'sub'). Zostaw puste dla 'macro'.",
+            },
+            "safe_for_rest": {
+                "type": "boolean",
+                "question": "Czy bohaterowie mogą tu bezpiecznie odpocząć (karczmy, świątynie, obozy = TAK)?",
+            },
+            "rules": {
+                "type": "textarea",
+                "question": "Reguły specjalne w formacie JSON (opcjonalnie), np. '{\"no_combat\": true, \"rest_bonus\": 2}'.",
+            },
+        },
+    },
 }
 
 
@@ -504,6 +594,24 @@ TABELA game_config_spells — zaklęcia Uczonego (NIE mają effect_json):
   Dla efektu/debuffu: '{"mana_cost":3,"effect_duration":4}' (dłuższy efekt lub tańszy)
   Dla obrony: '{"mana_cost":2,"ac_bonus":5,"duration":2}'
   Jeśli naprawdę brak sensu dla wyższej rangi — wstaw null (nie placeholder tekst).
+
+TABELA game_locations — lokacje świata gry (mroczne, klimatyczne, polskie nazewnictwo):
+- 'key': slug z label (polskie znaki→ascii, spacje→_, np. "Karczma Pod Złotym Krukiem" → "karczma_pod_zlotym_krukiem")
+- 'label': polska nazwa lokacji, najlepiej z przedimkiem ("Karczma Pod...", "Ruiny Zapomnianego...", "Las Zgniłych Kości")
+- 'location_type': "macro" dla dużych lokacji (miasto, las, góry, ruiny), "sub" dla wewnętrznych (karczma w mieście, sala tronowa w zamku)
+- 'location_subtype': DOKŁADNIE jedna wartość z listy (tavern, inn, shop, temple, guild, village, town, city, castle, ruin, cave, dungeon, tower, watchtower, forest_clearing, camp, road, bridge, crossroads, graveyard, swamp_hut, mine, harbor, other)
+- 'biome': DOKŁADNIE jedna z listy (forest, mountain, swamp, plains, coast, desert, tundra, urban, underground)
+  - tawerny/sklepy/świątynie/kamienice → "urban"
+  - jaskinie/lochy/kopalnie → "underground"
+  - polany leśne → "forest"
+- 'tier': liczba 1-5 (1=peryferia/wioski, 2=miasteczka, 3=miasta, 4=elitarne lokacje, 5=legendarne ruiny i siedziby bossów)
+- 'description': 2-4 zdania, mroczna klimatyczna proza — wygląd, atmosfera, dźwięki, zapachy, sugerowane wydarzenia dla GM
+- 'parent_key': klucz lokacji-rodzica (tylko jeśli location_type=sub). Dla macro zostaw null/pusty.
+- 'safe_for_rest': 1 dla karczm, świątyń, obozów, dobrze strzeżonych miejsc; 0 dla podziemi, ruin, bagien, dzikich obszarów
+- 'rules': JSON string lub null. Przykłady:
+  - świątynia: '{"no_combat": true, "rest_bonus": 2, "reason": "Sacred ground"}'
+  - tajemna jaskinia: '{"stealth_check": true, "required_item": "torch"}'
+  - dziki teren: null (brak reguł specjalnych)
 """
 
 
@@ -606,6 +714,10 @@ def smart_entry_schema(table: str, _: None = Depends(_require_admin)):
         "description": "Opis (dla GM)", "note": "Zdolności specjalne",
         "targeting": "Rodzaj celowania", "weight_kg": "Waga (kg)",
         "effect_json": "Efekty bojowe (JSON)",
+        # Locations
+        "location_type": "Typ lokacji", "location_subtype": "Podtyp",
+        "biome": "Biom", "parent_key": "Lokacja nadrzędna",
+        "safe_for_rest": "Bezpieczna do odpoczynku", "rules": "Reguły (JSON)",
     }
 
     fields = []
@@ -765,11 +877,41 @@ def smart_entry_save(
             # Fallback: serialize any other nested object to JSON string
             record[k] = json.dumps(v, ensure_ascii=False)
 
+    # game_locations: inject provenance + resolve parent_key → parent_id
+    if table == "game_locations":
+        if not target_key:
+            record.setdefault("created_by", "admin_kreator")
+            record.setdefault("canonical", 1)
+        # Resolve parent_key → parent_id (FK still required by app)
+        pk = record.get("parent_key")
+        if pk:
+            conn = _get_db()
+            try:
+                row = conn.execute(
+                    "SELECT id FROM game_locations WHERE key = ?", (pk,)
+                ).fetchone()
+                if row:
+                    record["parent_id"] = row["id"]
+                else:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"parent_key '{pk}' nie istnieje w bazie.",
+                    )
+            finally:
+                conn.close()
+        elif record.get("location_type") == "sub":
+            raise HTTPException(
+                status_code=422,
+                detail="Pod-lokacja wymaga parent_key (klucza lokacji nadrzędnej).",
+            )
+
     if target_key:
-        # UPDATE existing record
+        # UPDATE existing record (skip immutable provenance fields)
+        immutable = {"created_by"} if table == "game_locations" else set()
         for field, value in record.items():
-            if field != "key":
-                _db_update_field(table, target_key, field, value)
+            if field == "key" or field in immutable:
+                continue
+            _db_update_field(table, target_key, field, value)
         return {"ok": True, "key": target_key, "table": table, "mode": "update"}
     else:
         # INSERT new record
