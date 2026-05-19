@@ -181,7 +181,7 @@ def process_v2_turn(
 
     # Add available content index + V2 NPC context to mechanic result for injector
     location_key = refreshed_flags.get("current_location_key", "")
-    content_index = build_available_content_index(conn, location_key)
+    content_index = build_available_content_index(conn, location_key, character_id=character_id)
     npc_context = build_v2_npc_context_block(conn, location_key,
                                               player_text=user_input,
                                               topic=params.get("topic", ""))

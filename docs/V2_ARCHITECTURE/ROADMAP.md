@@ -72,8 +72,8 @@
 
 ##### Phase 2 — Reuse engine + auto-pair starting hex (ship after Stage 2B closes)
 
-- [ ] **S14** Context injector: in `build_available_content_index()` query `WHERE biome=? AND location_subtype=? AND tier<=hero_level/2 ORDER BY canonical DESC, usage_count DESC LIMIT 5` — inject as "nearby known places of this type"
-- [ ] **S15** Prompt addendum (`system_prompt.txt` + tag-handler guidance): "prefer keys from [AVAILABLE CONTENT] before emitting [CREATE_LOCATION]"
+- [x] **S14** Context injector: extended `build_available_content_index(conn, location_key, character_id=None)` with a "Nearby known places of this type" section — biome+subtype filter capped by `max(1, hero_level // 2)`, ordered `canonical DESC, usage_count DESC, label ASC LIMIT 5`. Graceful fallback to biome-only when biome+subtype yields nothing (unique subtypes like the only city). Wired into `ContextInjector` via `_build_content_index_block` (block was dead code before — `mechanic_result["available_content_index"]` was set but never injected). Tag annotations: `[canonical]`, `[visits=N]`, `(T<tier>)`.
+- [x] **S15** Prompt addendum in `system_prompt.txt` → new section `### REUŻYWANIE ZNANYCH LOKACJI (priorytet nad action: create)`: explains the `Nearby known places` section, defines hard rule (check list before emitting `action: create`), spells out when `create` is allowed (empty list OR fabularnie distinct), notes `[canonical]` and `visits=N` semantics, declares duplicates a narrative error.
 - [ ] **S16** `usage_count`: increment on every `game_sessions.current_location_id` change (or per-turn if location stable)
 - [ ] **S17** `resolve_starting_hex()` auto-pair: if a canonical location matches `starting_location_name` (label similarity ≥ 0.4 **or** subtype match), set `world_hexes.location_key`; otherwise create a minimal `start_{campaign_id}` location with `safe_for_rest=1`, `canonical=0`, `created_by='gm_runtime'`
 - [ ] **S18** "Promote to canonical" button in admin Review Queue → flips `canonical=1` (independent of `review_status`)
