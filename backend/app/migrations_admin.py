@@ -1938,6 +1938,26 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     except Exception as e:
         logger.warning("v2_migration_skipped", label="v2-locations-provenance-fixup", error=str(e))
 
+    # Stage 2B-Schema fix-up #2: approve_entity('location') historically only flipped
+    # review_status to 'permanent' but left approved=0, so the validator's
+    # COALESCE(approved, 1) = 1 filter hid the row → next "move to X" auto-created
+    # a duplicate. Heal the existing rows once; the bug itself is fixed in
+    # world_service.approve_entity.
+    try:
+        cur = conn.execute("""
+            UPDATE game_locations
+               SET approved = 1
+             WHERE review_status = 'permanent' AND approved = 0
+        """)
+        n = cur.rowcount or 0
+        if n:
+            conn.commit()
+            logger.info("v2_migration_applied",
+                        label="v2-locations-approved-sync",
+                        approved_set=n)
+    except Exception as e:
+        logger.warning("v2_migration_skipped", label="v2-locations-approved-sync", error=str(e))
+
     # ── ALTER TABLE: npcs ─────────────────────────────────────────────────
 
     _exec("ALTER TABLE npcs ADD COLUMN personality_prompt TEXT DEFAULT NULL", "v2-npcs-personality-prompt")

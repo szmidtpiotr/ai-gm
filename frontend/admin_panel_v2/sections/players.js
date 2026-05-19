@@ -1,6 +1,6 @@
 import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
-import { renderTable } from "/admin_panel_v2/shared/table.js?v=6";
+import { renderTable } from "/admin_panel_v2/shared/table.js?v=7";
 import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
 
 const LABELS = {

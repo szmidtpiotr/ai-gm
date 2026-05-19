@@ -725,7 +725,8 @@ def get_pending_locations(conn: sqlite3.Connection) -> list[dict]:
                       created_by, location_subtype, biome, tier, canonical,
                       safe_for_rest, parent_key, source_campaign_id,
                       ai_generated, is_active, temporary
-               FROM game_locations WHERE review_status = 'pending_review'
+               FROM game_locations
+               WHERE review_status = 'pending_review' AND is_active = 1
                ORDER BY rowid DESC LIMIT 100"""
         ).fetchall()
         return [dict(r) for r in rows]
@@ -772,6 +773,12 @@ def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
             # Approve globally: clear campaign_id so weapon is available everywhere
             conn.execute(
                 "UPDATE game_config_weapons SET approved = 1, campaign_id = NULL WHERE key = ?", (key,)
+            )
+        if entity_type == "location":
+            # Location validator + injectors filter by COALESCE(approved, 1) = 1, so flipping
+            # review_status alone leaves the row invisible. Promote to globally visible.
+            conn.execute(
+                "UPDATE game_locations SET approved = 1 WHERE key = ?", (key,)
             )
         conn.commit()
         return True
