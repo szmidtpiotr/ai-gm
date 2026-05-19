@@ -91,6 +91,12 @@ const LOC_TIERS = [
   { value: 5, label: "Tier 5 (lvl 9+)" },
 ];
 
+const LOC_REVIEW_STATUS = {
+  pending_review: { label: "⏳ Oczekuje",   class: "admin-badge-gold"   },
+  permanent:      { label: "✓ Permanentna", class: "admin-badge-green"  },
+  discarded:      { label: "✕ Odrzucona",   class: "admin-badge-muted"  },
+};
+
 const LOC_CREATED_BY = {
   seed:          { label: "Seed",     class: "admin-badge-gold" },
   admin_manual:  { label: "Admin",    class: "admin-badge-blue" },
@@ -520,6 +526,15 @@ async function _renderLocations(container) {
         filterOptions: LOC_BIOMES,
       },
       { key: "tier",           label: "Tier",  type: "number", editable: true },
+      {
+        key: "review_status",  label: "Status",
+        type: "badge", editType: "select",
+        editOptions: Object.keys(LOC_REVIEW_STATUS),
+        editable: true,
+        badgeClass: (row) => (LOC_REVIEW_STATUS[row.review_status] || LOC_REVIEW_STATUS.permanent).class,
+        formatDisplay: (r) => (LOC_REVIEW_STATUS[r.review_status] || LOC_REVIEW_STATUS.permanent).label,
+        filterOptions: Object.entries(LOC_REVIEW_STATUS).map(([v, m]) => ({ value: v, label: m.label })),
+      },
       { key: "canonical",      label: "⭐ Kanon", type: "boolean", editable: true },
       { key: "usage_count",    label: "Wizyt", type: "number", editable: false },
       { key: "_enemy_count",   label: "Wrogowie", type: "number", editable: false },
@@ -1292,11 +1307,132 @@ async function _renderPendingReview(container, panel) {
   });
 
   await Promise.all([
-    _loadPendingType(container, "locations", "pr-loc-panel", "pr-loc-badge", panel),
+    _loadPendingLocations(container, panel),
     _loadPendingType(container, "npcs", "pr-npc-panel", "pr-npc-badge", panel),
     _loadPendingType(container, "enemies", "pr-enemy-panel", "pr-enemy-badge", panel),
     _loadPendingWeapons(container, panel),
   ]);
+}
+
+// Locations: full table view so admin sees subtype/biome/tier before approving.
+async function _loadPendingLocations(container, panel) {
+  const panelEl = container.querySelector("#pr-loc-panel");
+  const badge   = container.querySelector("#pr-loc-badge");
+  const navBadge = panel.querySelector("#pending-nav-badge");
+  panelEl.innerHTML = `<div class="camp-loading">Ładowanie…</div>`;
+
+  const updateBadges = (count) => {
+    badge.textContent = String(count);
+    badge.style.display = count ? "" : "none";
+    const total = ["pr-loc-badge","pr-npc-badge","pr-enemy-badge","pr-weapon-badge"]
+      .reduce((s, id) => s + (parseInt(container.querySelector(`#${id}`)?.textContent) || 0), 0);
+    if (navBadge) { navBadge.textContent = String(total); navBadge.style.display = total ? "" : "none"; }
+  };
+
+  const reload = async () => {
+    try {
+      const data = await adminFetch(`/api/admin/world/pending/locations`);
+      const items = data.items || [];
+      updateBadges(items.length);
+
+      if (!items.length) {
+        panelEl.innerHTML = `<p class="section-note">Brak oczekujących lokacji.</p>`;
+        return;
+      }
+
+      const columns = [
+        { key: "key",   label: LABELS.key,   editable: false },
+        { key: "label", label: LABELS.label, editable: true,
+          formatDisplay: (r) => r.location_type === "sub" ? `↳ ${r.label ?? ""}` : (r.label ?? "") },
+        {
+          key: "location_type", label: LABELS.type,
+          type: "badge", editType: "select",
+          editOptions: LOC_TYPES.map((t) => t.value),
+          editable: true,
+          badgeClass: (row) => row.location_type === "macro" ? "admin-badge-gold" : "admin-badge-muted",
+          filterOptions: LOC_TYPES,
+        },
+        { key: "parent_key", label: "Nadrzędna", editable: false },
+        {
+          key: "created_by", label: "Źródło",
+          type: "badge", editable: false,
+          badgeClass: (row) => (LOC_CREATED_BY[row.created_by] || LOC_CREATED_BY.admin_manual).class,
+          formatDisplay: (r) => (LOC_CREATED_BY[r.created_by] || LOC_CREATED_BY.admin_manual).label,
+        },
+        {
+          key: "location_subtype", label: "Podtyp",
+          editType: "select", editOptions: LOC_SUBTYPES.map((s) => s.value), editable: true,
+          formatDisplay: (r) => {
+            const m = LOC_SUBTYPES.find((s) => s.value === (r.location_subtype || ""));
+            return m ? m.label : (r.location_subtype || "—");
+          },
+        },
+        {
+          key: "biome", label: "Biom",
+          editType: "select", editOptions: LOC_BIOMES.map((b) => b.value), editable: true,
+          formatDisplay: (r) => {
+            const m = LOC_BIOMES.find((b) => b.value === (r.biome || ""));
+            return m ? m.label : (r.biome || "—");
+          },
+        },
+        { key: "tier",          label: "Tier", type: "number", editable: true },
+        { key: "safe_for_rest", label: "🛏 Odpoczynek", type: "boolean", editable: true },
+        { key: "description",   label: LABELS.description, editable: true, popup: true },
+        { key: "source_campaign_id", label: "Kampania", editable: false },
+      ];
+
+      renderTable(panelEl, columns, items, {
+        tableId: "pending-locations",
+        showTextSearch: true,
+        searchPlaceholder: "Szukaj…",
+        async onEdit(row, colKey, newVal) {
+          try {
+            await adminFetch(`/api/locations/admin/locations/${row.key}`, {
+              method: "PATCH",
+              body: JSON.stringify({ [colKey]: newVal }),
+            });
+            showToast("Zapisano.", "success");
+          } catch (e) {
+            showToast("Błąd zapisu: " + (e.message || "?"), "error");
+            throw e;
+          }
+        },
+        extraActions: (row) => [
+          {
+            label: "✓ Zatwierdź",
+            class: "primary-btn",
+            onClick: async () => {
+              try {
+                await adminFetch(`/api/admin/world/review/location/${row.key}`, {
+                  method: "POST", body: JSON.stringify({ action: "approve" }),
+                });
+                showToast("Zatwierdzone.", "success");
+                await reload();
+              } catch (e) { showToast(e.message, "error"); }
+            },
+          },
+          {
+            label: "✕ Odrzuć",
+            class: "secondary-btn danger-outline",
+            onClick: async () => {
+              if (!confirm(`Odrzucić "${row.label || row.key}"?`)) return;
+              try {
+                await adminFetch(`/api/admin/world/review/location/${row.key}`, {
+                  method: "POST", body: JSON.stringify({ action: "discard" }),
+                });
+                showToast("Odrzucone.", "success");
+                await reload();
+              } catch (e) { showToast(e.message, "error"); }
+            },
+          },
+        ],
+      });
+    } catch (e) {
+      panelEl.innerHTML = `<p style="color:var(--accent-red);font-size:0.82rem">${_esc(e.message)}</p>`;
+    }
+  };
+
+  await reload();
 }
 
 async function _loadPendingType(container, type, panelId, badgeId, panel) {
