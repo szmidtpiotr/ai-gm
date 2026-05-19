@@ -332,9 +332,10 @@ def _create_new_location(
             INSERT INTO game_locations (
                 key, label, description, parent_id, location_type,
                 ai_generated, approved,
-                created_by, review_status, canonical, source_campaign_id
+                created_by, review_status, canonical, source_campaign_id,
+                biome, location_subtype
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
             """,
             (
                 key,
@@ -347,6 +348,8 @@ def _create_new_location(
                 created_by,
                 review_status,
                 campaign_id if ai_generated else None,
+                intent.biome,
+                intent.location_subtype,
             )
         )
         conn.commit()
@@ -398,9 +401,10 @@ def persist_ai_generated_location(
             INSERT INTO game_locations (
                 key, label, description, parent_id, location_type,
                 ai_generated, approved, is_active,
-                created_by, review_status, canonical, source_campaign_id
+                created_by, review_status, canonical, source_campaign_id,
+                biome, location_subtype
             )
-            VALUES (?, ?, ?, ?, ?, 1, 0, 1, 'gm_runtime', 'pending_review', 0, ?)
+            VALUES (?, ?, ?, ?, ?, 1, 0, 1, 'gm_runtime', 'pending_review', 0, ?, ?, ?)
             """,
             (
                 key,
@@ -409,6 +413,8 @@ def persist_ai_generated_location(
                 parent_id,
                 location_type,
                 campaign_id,
+                intent.biome,
+                intent.location_subtype,
             ),
         )
         db.commit()

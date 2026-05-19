@@ -234,6 +234,12 @@
 - [ ] **T9** CI integration on DEV deploy
 - [ ] **T10** Combat Sandbox autotest harness ([#22]) — YAML scenarios via `/api/admin/sandbox/run-scenario`
 
+### Stage 15 — Known issues / bugs backlog
+
+Bugs discovered during gameplay that don't fit a numbered stage. Pick into the queue when prioritised.
+
+- [ ] **K1** GM hallucinates weapons / items the player doesn't own (observed during Stage 2B R4 verification, 2026-05-19). LLM narrates "wyciągasz miecz" or grants ad-hoc weapons in combat without inventory lookup. Fix direction: enforce inventory grounding — pre-turn inventory snapshot prepended to context, plus prompt guardrail "Nigdy nie zakładaj że gracz posiada przedmiot, który nie jest w [INVENTORY]". May need a `weapon_grounding_check` post-pass that scans narrative for weapon mentions vs. inventory and downgrades hallucinated weapons to "improvisedfists" damage.
+
 ---
 
 ## How to use this queue
