@@ -163,6 +163,22 @@ body {
   color: var(--text-secondary);
 }
 
+/* Game clock chip (T5) — "Dzień 3, 14:00 Popołudnie" */
+.header__clock {
+  font-family: 'IM Fell English', Georgia, serif;
+  font-style: italic;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  margin: 2px 0 0;
+  color: rgba(201, 165, 74, 0.72);
+  transition: color 0.3s ease;
+}
+.header__clock[hidden] { display: none; }
+.header__clock[data-period="Rano"]       { color: rgba(255, 215, 130, 0.85); }
+.header__clock[data-period="Popołudnie"] { color: rgba(201, 165, 74, 0.75); }
+.header__clock[data-period="Wieczór"]    { color: rgba(220, 130, 80, 0.85); }
+.header__clock[data-period="Noc"]        { color: rgba(120, 140, 200, 0.7); }
+
 .header-hp-bar {
   height: 3px;
   background: rgba(255,255,255,0.08);

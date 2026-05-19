@@ -1,0 +1,187 @@
+"""Game-clock service — Stage 2A T1.
+
+Advances `session_flags.ingame_hours` for a campaign and keeps a rolling audit
+log of every advance event. This is the single source of truth for "how much
+in-game time has passed" — readers must always use `get_clock_state()` (or
+read `session_flags.ingame_hours` directly) rather than the legacy column
+`game_sessions.ingame_hours` which is no longer maintained.
+
+Storage rationale: `context_injector` already reads from
+`session_flags.get("ingame_hours")` to inject "Pora: …" into the narrator
+prompt. Adding a parallel write path on the column would create two
+sources of truth. We keep JSON.
+
+Time-of-day buckets (mirrors `context_injector._time_of_day`):
+  06–11  Rano
+  12–17  Popołudnie
+  18–21  Wieczór
+  22–05  Noc
+
+Per `12_TRAVEL_SYSTEM.md`:
+  campaigns start at hour 9 (morning departure)
+  ingame_hours is total hours since campaign start (never resets)
+  day_number = (ingame_hours // 24) + 1
+
+Per `DECISIONS_2026_05_18.md` [D16]:
+  travel between hexes        → +travel_hours
+  short rest                  → +1h
+  long rest                   → +8h
+  Rozbij obóz                 → +1h (camp setup) + the rest that follows
+  combat / dialog / shopping  → 0 (handled outside this service)
+"""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from pathlib import Path
+from typing import Any, Optional
+
+DB_PATH = Path("/data/ai_gm.db")
+
+# Cap individual advance to a sane upper bound — defensive against bugs that
+# would accidentally fast-forward years. Tunable; 168h = 1 in-game week.
+MAX_ADVANCE_HOURS = 168
+
+# Cap retained audit-log entries per session. Older entries roll off.
+CLOCK_HISTORY_MAX_ENTRIES = 50
+
+START_HOUR_DEFAULT = 9  # 09:00 — matches 12_TRAVEL_SYSTEM.md
+
+
+def _conn() -> sqlite3.Connection:
+    c = sqlite3.connect(DB_PATH)
+    c.row_factory = sqlite3.Row
+    return c
+
+
+def _format_hour(hour: int) -> str:
+    """HH:MM string for a 0–23 hour value. Minutes always 00 (no sub-hour granularity)."""
+    return f"{hour % 24:02d}:00"
+
+
+def _time_of_day_label(hour: int) -> str:
+    """Polish label matching context_injector._time_of_day buckets."""
+    h = hour % 24
+    if 6 <= h < 12:
+        return "Rano"
+    if 12 <= h < 18:
+        return "Popołudnie"
+    if 18 <= h < 22:
+        return "Wieczór"
+    return "Noc"
+
+
+def get_clock_state(campaign_id: int, conn: sqlite3.Connection | None = None) -> dict[str, Any]:
+    """Read the current clock state for a campaign.
+
+    Returns: {
+        ingame_hours: int   (total hours since start),
+        day: int            (1-indexed),
+        hour: int           (0–23),
+        hour_str: str       ("HH:00"),
+        period: str         ("Rano" / "Popołudnie" / "Wieczór" / "Noc"),
+        display: str        ("Dzień 3, 14:00 Popołudnie")
+    }
+    """
+    managed = conn is None
+    if managed:
+        conn = _conn()
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        flags = json.loads((row["session_flags"] if row else None) or "{}")
+        h = int(flags.get("ingame_hours", START_HOUR_DEFAULT))
+        day = (h // 24) + 1
+        hour = h % 24
+        return {
+            "ingame_hours": h,
+            "day": day,
+            "hour": hour,
+            "hour_str": _format_hour(hour),
+            "period": _time_of_day_label(hour),
+            "display": f"Dzień {day}, {_format_hour(hour)} {_time_of_day_label(hour)}",
+        }
+    finally:
+        if managed:
+            conn.close()
+
+
+def advance_clock(
+    campaign_id: int,
+    hours: float,
+    reason: str,
+    conn: sqlite3.Connection | None = None,
+) -> dict[str, Any]:
+    """Advance the in-game clock for a campaign.
+
+    Args:
+        campaign_id: target campaign
+        hours: hours to add (rounded to int; sub-hour resolution not supported)
+        reason: short string identifying the cause — one of
+                "travel" | "short_rest" | "long_rest" | "camp_setup" | "admin" | …
+                Free-form but please use the canonical values when possible
+                so reports stay clean.
+        conn: optional existing sqlite connection (for transactional callers).
+
+    Returns: same shape as get_clock_state(), reflecting the post-advance state,
+             plus `delta_hours` (the rounded amount actually applied).
+
+    Notes:
+        - hours ≤ 0 is a no-op (returns current state without writing).
+        - hours > MAX_ADVANCE_HOURS is clamped to the cap and logged.
+        - Audit log entry pushed onto session_flags.clock_history (rolling 50).
+    """
+    delta = int(round(max(0.0, float(hours or 0))))
+    if delta == 0:
+        # No-op: caller probably passed 0 or a tiny float; nothing to write.
+        return {**get_clock_state(campaign_id, conn=conn), "delta_hours": 0}
+    if delta > MAX_ADVANCE_HOURS:
+        delta = MAX_ADVANCE_HOURS
+
+    managed = conn is None
+    if managed:
+        conn = _conn()
+    try:
+        row = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            # No session row yet — nothing to advance against. Caller should
+            # ensure the session exists before driving the clock.
+            return {**get_clock_state(campaign_id, conn=conn), "delta_hours": 0}
+
+        flags = json.loads(row["session_flags"] or "{}")
+        old_hours = int(flags.get("ingame_hours", START_HOUR_DEFAULT))
+        new_hours = old_hours + delta
+
+        # Audit entry (rolling buffer)
+        history = list(flags.get("clock_history") or [])
+        history.append({
+            "from": old_hours,
+            "to": new_hours,
+            "delta": delta,
+            "reason": str(reason or "unspecified"),
+        })
+        if len(history) > CLOCK_HISTORY_MAX_ENTRIES:
+            history = history[-CLOCK_HISTORY_MAX_ENTRIES:]
+
+        flags["ingame_hours"] = new_hours
+        flags["clock_history"] = history
+
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), row["id"]),
+        )
+        if managed:
+            conn.commit()
+    finally:
+        if managed:
+            conn.close()
+
+    state = get_clock_state(campaign_id)
+    state["delta_hours"] = delta
+    return state

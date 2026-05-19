@@ -66,6 +66,7 @@ const elements = {
     // Game
     characterNameDisplay: document.getElementById('character-name-display'),
     characterStatsDisplay: document.getElementById('character-stats-display'),
+    headerClock: document.getElementById('header-clock'),
     chatMessages: document.getElementById('chat-messages'),
     chatInput: document.getElementById('chat-input'),
     btnOpenSheet: document.getElementById('open-sheet-btn'),
@@ -1364,6 +1365,33 @@ async function _wizardFinalizeAndEnter() {
 // ============================================================================
 // Game Screen
 // ============================================================================
+// ── In-game clock (T5) ───────────────────────────────────────────────────
+// Renders "Dzień 3, 14:00 Popołudnie" in the header. Mirrors backend state
+// from clock_service.get_clock_state() — single source of truth is server.
+function renderClock(state) {
+    const el = elements.headerClock;
+    if (!el) return;
+    if (!state || typeof state.display !== 'string') {
+        el.textContent = '';
+        el.hidden = true;
+        return;
+    }
+    el.textContent = state.display;
+    el.hidden = false;
+    // Tone-aware accent: night gets cooler colour, evening warmer
+    el.dataset.period = state.period || '';
+}
+
+async function fetchAndRenderClock(campaignId) {
+    if (!campaignId) { renderClock(null); return; }
+    try {
+        const state = await apiRequest('GET', `/campaigns/${campaignId}/clock`);
+        renderClock(state);
+    } catch {
+        renderClock(null);
+    }
+}
+
 async function enterGame(campaign) {
     // Persist session so F5 restores to this exact state
     try {
@@ -1378,6 +1406,9 @@ async function enterGame(campaign) {
     const maxHp = sheet.max_hp ?? characterData?.max_hp ?? 29;
     elements.characterStatsDisplay.textContent = `Poziom ${level} • ${hp}/${maxHp} HP`;
     elements.chatMessages.innerHTML = '';
+
+    // T5 — fetch initial clock state and render in header
+    fetchAndRenderClock(campaign.id);
 
     try {
         const [response, combatHist] = await Promise.all([
@@ -5067,6 +5098,10 @@ async function _wmExecuteTravel() {
       destination_q: t.q,
       destination_r: t.r,
     });
+
+    // T2/T5 — backend advances clock during hex-travel and returns the new
+    // state on `response.clock`. Re-render the header chip.
+    if (response.clock) renderClock(response.clock);
 
     const enc = response.encounter;
     const hours = response.total_hours || 0;

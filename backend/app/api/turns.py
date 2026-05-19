@@ -3733,6 +3733,19 @@ class HexTravelPayload(BaseModel):
     destination_r: int
 
 
+@router.get("/campaigns/{campaign_id}/clock")
+def get_campaign_clock(campaign_id: int):
+    """Current in-game clock state for the campaign — Stage 2A T5.
+
+    Returns `{ingame_hours, day, hour, hour_str, period, display}`.
+    Frontend uses this to render the "Dzień 3, 14:00 Popołudnie" header.
+    Returns a default state (hour 9 = start-of-campaign morning) if no
+    session row exists yet.
+    """
+    from app.services.clock_service import get_clock_state
+    return get_clock_state(campaign_id)
+
+
 @router.post("/campaigns/{campaign_id}/hex-travel")
 def player_hex_travel(campaign_id: int, payload: HexTravelPayload):
     """Player-initiated hex chain travel."""
@@ -3771,6 +3784,20 @@ def player_hex_travel(campaign_id: int, payload: HexTravelPayload):
             from_hex=from_hex, to_hex=(dest_q, dest_r),
             character_sheet=sheet, conn=conn,
         )
+
+        # T2: Advance the in-game clock by the hours travelled. resolve_chain_travel
+        # already computed total_hours from the path + teleport edges; we just persist
+        # it onto session_flags via the canonical helper.
+        try:
+            from app.services.clock_service import advance_clock as _advance_clock
+            travel_hours = float(result.get("total_hours") or 0.0)
+            if travel_hours > 0:
+                clock_state = _advance_clock(campaign_id, travel_hours, "travel", conn=conn)
+                conn.commit()  # _advance_clock uses caller conn, so we commit here
+                result["clock"] = clock_state  # surface clock display + delta to client
+        except Exception as _clk_err:  # noqa: BLE001 — log + degrade gracefully
+            logger.warning("clock_advance_travel_failed", error=str(_clk_err), campaign_id=campaign_id)
+
         return result
     finally:
         conn.close()
