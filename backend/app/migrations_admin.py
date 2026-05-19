@@ -1888,6 +1888,9 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     _exec("CREATE INDEX IF NOT EXISTS idx_game_locations_biome_subtype ON game_locations(biome, location_subtype)", "v2-locations-idx-biome-subtype")
     _exec("CREATE INDEX IF NOT EXISTS idx_game_locations_canonical ON game_locations(canonical)", "v2-locations-idx-canonical")
 
+    # Stage 2B R4: temporary sub-locations (e.g. Rozbij obóz)
+    _exec("ALTER TABLE game_locations ADD COLUMN temporary INTEGER NOT NULL DEFAULT 0", "v2-locations-temporary")
+
     # Backfill: derive created_by + canonical from legacy ai_generated boolean.
     # Only runs if every row still has the default value (created_by='admin_manual' AND canonical=0),
     # so re-runs of the migration are safe.

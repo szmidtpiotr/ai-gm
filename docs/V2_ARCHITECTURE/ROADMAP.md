@@ -40,13 +40,13 @@
 - [x] **R1** LLM tag `[SET_SAFE_FOR_REST:location_key:on|off]` — GM dynamicznie oznacza miejsca (np. po misji "oczyszczono karczmę" → bezpieczna) — commit `7ee98a1`
 - [x] **R2** Dziedziczenie: hex jest safe ⇔ ma lokację z `safe_for_rest=1`. Implementacja: helper `_hex_is_safe_for_rest(q, r)` używany przez endpointy /rest — commit `7ee98a1`
 - [x] **R3** Admin UI: edytuj `safe_for_rest` z karty lokacji (już istnieje?) **i** z edytora hexa na mapie kampanii — commit `c40b21d` (+ wired Lokacje subtab `c277ea8`, grouped view `69fad5c`)
-- [ ] **R4** Akcja gracza "**Rozbij obóz**" [D15] — tworzy tymczasową sub-lokację `temp_camp` z `safe_for_rest=1`, +1h zegara, +20% encounter chance podczas odpoczynku
-  - [ ] **R4a** Migration: `game_locations` ADD COLUMN `temporary INTEGER NOT NULL DEFAULT 0` (marks short-lived sub-locations like camps; cleaned up on MOVEMENT away from hex)
-  - [ ] **R4b** `world_service.build_camp(campaign_id)` — resolves current hex, finds parent macro (or "wilderness" placeholder), inserts `temp_camp_{campaign_id}_{ts}` with `safe_for_rest=1`, `temporary=1`, `created_by='gm_runtime'`, `canonical=0`, `source_campaign_id={campaign_id}`; sets `world_hexes.location_key` to new key
-  - [ ] **R4c** Endpoint: `POST /api/campaigns/{id}/build-camp` — calls service, advances clock +1h via `advance_clock`, sets `session_flags.camp_encounter_boost = 0.20` (consumed by next /rest call), returns `{location, current_clock, encounter_boost}`. Gates: not in combat, current hex not already `safe_for_rest=1`
-  - [ ] **R4d** Player UI: "🔥 Rozbij obóz" button in action area, shown only when current hex `safe_for_rest=0` AND not in combat. After click → narrative line "Rozbiłeś obóz. Czujesz, że ten teren wciąż jest niespokojny..." + clock advances
-  - [ ] **R4e** Auto-cleanup: on MOVEMENT action away from a hex with a `temporary=1` location, world_service marks it `is_active=0` (soft-delete keeps history). On `/rest` end, encounter_boost flag cleared
-  - [ ] **R4f** Smoke tests: build-camp on wilderness hex → safe, +1h clock; build-camp twice → 409; move away → temp_camp deactivated
+- [x] **R4** Akcja gracza "**Rozbij obóz**" [D15] — tworzy tymczasową sub-lokację `temp_camp` z `safe_for_rest=1`, +1h zegara, +20% encounter chance podczas odpoczynku
+  - [x] **R4a** Migration: `game_locations` ADD COLUMN `temporary INTEGER NOT NULL DEFAULT 0` (marks short-lived sub-locations like camps; cleaned up on MOVEMENT away from hex)
+  - [x] **R4b** `world_service.build_camp(campaign_id)` — resolves current hex, finds parent macro (or "wilderness" placeholder), inserts `temp_camp_{campaign_id}_{ts}` with `safe_for_rest=1`, `temporary=1`, `created_by='gm_runtime'`, `canonical=0`, `source_campaign_id={campaign_id}`; sets `world_hexes.location_key` to new key
+  - [x] **R4c** Endpoint: `POST /api/campaigns/{id}/build-camp` — calls service, advances clock +1h via `advance_clock`, sets `session_flags.camp_encounter_boost = 0.20` (consumed by next /rest call), returns `{location, current_clock, encounter_boost}`. Gates: not in combat, current hex not already `safe_for_rest=1`
+  - [x] **R4d** Player UI: "🔥 Rozbij obóz" button in suggested actions, surfaced by `suggested_actions._build_narrative_actions` only when current hex `safe_for_rest=0` AND not in combat. Click → `handleBuildCamp()` calls dedicated endpoint, prints system line + patches local action list (REST enabled, BUILD_CAMP removed)
+  - [x] **R4e** Auto-cleanup: `hex_travel_service.resolve_chain_travel` calls `world_service.deactivate_temporary_location_on_hex` on the *from* hex before updating session flags; soft-deletes `temporary=1` rows + clears hex.location_key
+  - [x] **R4f** Smoke tests: build-camp on wilderness hex → 200 + safe + +1h clock; second build-camp on same hex → 409; deactivate helper soft-deletes the row and clears hex.location_key (manual call verified)
 
 #### Stage 2B-Schema — Locations source-of-truth (provenance + reuse)
 
