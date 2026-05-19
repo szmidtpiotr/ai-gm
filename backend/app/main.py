@@ -49,6 +49,7 @@ from app.services.llm_admin_service import hydrate_runtime_from_stored_preset
 from app.routers.admin import router as admin_router
 from app.routers.admin_cheat import router as admin_cheat_router
 from app.routers.sandbox import router as sandbox_router
+from app.routers.admin_visual import admin_router as admin_visual_router, public_router as visual_public_router
 from app.routers.settings import router as settings_router
 from app.routers.debug import router as debug_router
 from app.routers.test_runner import router as test_runner_router
@@ -196,6 +197,31 @@ RAW_MIGRATIONS = [
         "'{\"forced_action\":\"flee\",\"duration\":\"encounter\"}', "
         "'Pęknięcie psychiczne. Bohater musi próbować ucieczki każdej rundy aż do końca starcia.'"
     ")",
+    # 2026-05-19 Stage 2A follow-up: visual settings table + time-of-day overlay seeds.
+    """CREATE TABLE IF NOT EXISTS game_config_visual (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )""",
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('time_of_day.enabled', 'true')",
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('time_of_day.mode', '\"frame\"')",
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('time_of_day.intensity', '60')",
+    """INSERT OR IGNORE INTO game_config_visual (key, value) VALUES (
+        'time_of_day.rano',
+        '{"color":"#ffd97a","accent":"#f7e7a3","label":"Rano"}'
+    )""",
+    """INSERT OR IGNORE INTO game_config_visual (key, value) VALUES (
+        'time_of_day.popoludnie',
+        '{"color":"#c9a54a","accent":"#d4b65e","label":"Popołudnie"}'
+    )""",
+    """INSERT OR IGNORE INTO game_config_visual (key, value) VALUES (
+        'time_of_day.wieczor',
+        '{"color":"#c95c2e","accent":"#e07555","label":"Wieczór"}'
+    )""",
+    """INSERT OR IGNORE INTO game_config_visual (key, value) VALUES (
+        'time_of_day.noc',
+        '{"color":"#5a6d99","accent":"#7a8cb8","label":"Noc"}'
+    )""",
 ]
 
 
@@ -310,6 +336,8 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(admin_analytics_router, prefix="/api")
 app.include_router(admin_cheat_router, prefix="/api")
 app.include_router(sandbox_router, prefix="/api")
+app.include_router(admin_visual_router, prefix="/api")
+app.include_router(visual_public_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(locations_router, prefix="/api")
 app.include_router(session_location_router)
