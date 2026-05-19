@@ -461,9 +461,13 @@ def _nearby_known_places(
     limit: int = 5,
 ) -> list:
     """
-    Return up to `limit` locations matching the current biome and subtype,
-    capped to the hero's effective tier scope. Ordered canonical → popular.
-    Excludes the current location itself.
+    Return up to `limit` locations matching the current biome and subtype.
+    Ordered canonical → popular. Excludes the current location itself.
+
+    Note: no tier cap. The list is only a hint to the narrator (for reuse
+    during action: create), not a movement target. Tier is rendered next
+    to each entry so the GM can self-select. Hero level is not yet
+    reliably tracked in sheet_json across all characters.
     """
     try:
         cur_row = conn.execute(
@@ -477,24 +481,9 @@ def _nearby_known_places(
         if not biome and not subtype:
             return []
 
-        # Tier cap: max(1, hero_level // 2). Falls back to 5 if no character.
-        tier_cap = 5
-        if character_id is not None:
-            try:
-                ch = conn.execute(
-                    "SELECT sheet_json FROM characters WHERE id = ? LIMIT 1",
-                    (character_id,),
-                ).fetchone()
-                if ch and ch[0]:
-                    sheet = json.loads(ch[0]) if isinstance(ch[0], str) else (ch[0] or {})
-                    lvl = int(sheet.get("level") or 1)
-                    tier_cap = max(1, lvl // 2)
-            except Exception:
-                pass
-
         def _query(use_subtype: bool):
-            clauses = ["is_active=1", "key != ?", "(tier IS NULL OR tier <= ?)"]
-            p: list = [current_key, tier_cap]
+            clauses = ["is_active=1", "key != ?"]
+            p: list = [current_key]
             if biome:
                 clauses.append("biome = ?")
                 p.append(biome)

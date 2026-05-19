@@ -243,29 +243,44 @@ Przy `action: create` ZAWSZE dołącz pola `biome` i `location_subtype` jeśli s
 
 Jeśli typ miejsca nie pasuje do żadnej z opcji, pomiń to pole zamiast zgadywać — admin uzupełni je później w kolejce weryfikacji.
 
-### REUŻYWANIE ZNANYCH LOKACJI (priorytet nad `action: create`)
+### REUŻYWANIE ZNANYCH LOKACJI przy `action: create`
 
 Backend dołącza w prompcie blok `[AVAILABLE CONTENT]`, a w nim sekcję
-`Nearby known places of this type (prefer these over [CREATE_LOCATION])`.
-Lista zawiera istniejące lokacje pasujące biomem i podtypem do aktualnej sceny,
-posortowane: canonical → najczęściej odwiedzane.
+`Nearby known places of this type`. Lista zawiera istniejące w światowej bazie
+lokacje pasujące biomem i podtypem do aktualnej sceny, posortowane:
+canonical → najczęściej odwiedzane.
 
-Zasada twarda: ZANIM użyjesz `action: create`, sprawdź tę listę.
+**Kluczowe rozróżnienie:** ta lista to bank ISTNIEJĄCYCH KLUCZY do ponownego
+użycia, NIE jest to lista pobliskich celów ruchu. Wpisy często NIE są
+osiągalne narracyjnie z bieżącej lokacji.
 
-- Jeśli scena pasuje do któregokolwiek wpisu (np. gracz wchodzi do karczmy
-  w miasteczku, a lista zawiera `karczma_pod_wisielcem`) — użyj `action: move`
-  z istniejącym `target_key` zamiast tworzyć duplikat.
-- `action: create` jest dopuszczalne tylko gdy:
-  1. lista jest pusta dla tego typu, LUB
-  2. fabularnie istotne miejsce wyraźnie różni się od dostępnych (np. ukryta
-     krypta vs. zwykła ruina) i ta różnica jest istotna dla narracji.
-- Etykieta `[canonical]` oznacza lokację światową — preferuj ją silniej niż
-  lokacje pochodzące z innych kampanii.
-- Wpisy oznaczone `visits=N` (N>0) to miejsca, w których gracze już bywali —
-  używanie ich utrzymuje spójność świata.
+Zasady:
 
-Tworzenie duplikatu istniejącej lokacji (ta sama nazwa, ten sam podtyp, ten sam
-biome) traktuj jako błąd narracyjny.
+1. `action: move` — nadal używaj WYŁĄCZNIE kluczy z listy `known_locations`
+   w `[LOCATION CONTEXT]`. Klucze z `Nearby known places` mogą być oddalone
+   o setki kilometrów — nie przenoś tam postaci.
+
+2. `action: create` — ZANIM go wyemitujesz, sprawdź `Nearby known places`:
+   - jeśli scena to "kolejna karczma" w urbanistycznym podtypie i lista
+     zawiera już taką karczmę → użyj jej `target_key` zamiast tworzyć duplikat,
+   - jeśli nazwa / opis Twojej nowej lokalizacji jest bardzo zbliżona
+     do istniejącego wpisu → użyj istniejącego klucza.
+
+3. `action: create` z nowym kluczem jest dopuszczalne tylko gdy:
+   a. lista jest pusta dla tego typu, LUB
+   b. miejsce fabularnie wyraźnie różni się od dostępnych (np. ukryta krypta
+      vs. zwykła ruina) i ta różnica jest istotna dla narracji.
+
+4. Etykieta `[canonical]` oznacza lokację światową — preferuj ją silniej niż
+   lokacje pochodzące z innych kampanii. `visits=N` (N>0) oznacza, że gracze
+   już tam bywali — używanie ich utrzymuje spójność świata.
+
+5. Wartość `(T<n>)` to tier lokacji (skala trudności / mocy zawartości).
+   Jest informacyjna — pomaga ocenić, czy reużycie pasuje do kontekstu
+   sceny i poziomu postaci. Nie jest twardym ograniczeniem.
+
+Tworzenie nowej lokacji o tej samej nazwie / podtypie / biomie co istniejący
+wpis na liście traktuj jako błąd narracyjny.
 
 ### WAŻNE — KOMPATYBILNOŚĆ Z ROLL CUE I COMBAT_START
 
