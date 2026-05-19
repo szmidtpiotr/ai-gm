@@ -27,11 +27,11 @@
 
 #### Stage 2A — Zegar gry (fundament, niczego widocznego dla gracza bez tego)
 
-- [ ] **T1** `advance_clock(campaign_id, hours, reason)` — zwiększa `ingame_hours` w `game_sessions.session_flags`, loguje powód do audit
-- [ ] **T2** Travel między hex'ami / lokacjami → `advance_clock(travel_hours)` z `location_connections`
-- [ ] **T3** Krótki odpoczynek → `advance_clock(1)`
-- [ ] **T4** Długi odpoczynek → `advance_clock(8)`
-- [ ] **T5** Nagłówek UI: "**Dzień 3, 14:30 Popołudnie**" (czyta z `ingame_hours`, formatuje przez `_time_of_day()`)
+- [x] **T1** `advance_clock(campaign_id, hours, reason)` — `clock_service.py`, audit log rolling 50, commit `1ee136d`
+- [x] **T2** Travel między hex'ami / lokacjami → hook w `player_hex_travel`, commit `1ee136d`
+- [ ] **T3** Krótki odpoczynek → `advance_clock(1)` (defer do Stage 2C, brak call site)
+- [ ] **T4** Długi odpoczynek → `advance_clock(8)` (defer do Stage 2C, brak call site)
+- [x] **T5** Nagłówek UI: "**Dzień 3, 14:00 Popołudnie**" + `GET /clock`, commit `1ee136d`
 
 #### Stage 2B — Bezpieczne miejsca (safe_for_rest edytowalne dynamicznie)
 
