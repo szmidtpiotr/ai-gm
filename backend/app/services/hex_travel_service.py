@@ -396,6 +396,62 @@ def _infer_hex_type_from_name(name: str) -> str:
     return "plains"
 
 
+# Stage 2B-Schema S17: subtype keywords used to match canonical game_locations
+_SUBTYPE_KEYWORDS: dict[str, list[str]] = {
+    "tavern":  ["karczma", "tawerna", "tavern", "inn", "gospoda"],
+    "city":    ["miasto", "city", "town"],
+    "village": ["wioska", "wies", "village", "osada"],
+    "castle":  ["zamek", "castle", "twierdza", "fort"],
+    "cave":    ["jaskinia", "grota", "cave"],
+    "dungeon": ["loch", "lochy", "dungeon", "podziemia"],
+    "forest":  ["las", "forest", "puszcza"],
+    "camp":    ["oboz", "camp"],
+    "ruins":   ["ruiny", "ruins", "ruina"],
+    "port":    ["port", "przystan", "harbor"],
+}
+
+
+def _find_canonical_location_for_name(
+    name: str,
+    conn: sqlite3.Connection,
+) -> sqlite3.Row | None:
+    """
+    Find a canonical game_location matching `name` by:
+    1. Label similarity ≥ 0.4
+    2. Subtype keyword match (Polish / English terms)
+    Returns the best matching row or None.
+    """
+    if not name or not name.strip():
+        return None
+
+    rows = conn.execute(
+        "SELECT id, key, label, location_subtype, biome "
+        "FROM game_locations WHERE canonical = 1 AND is_active = 1"
+    ).fetchall()
+    if not rows:
+        return None
+
+    # Pass 1 — label similarity
+    best_score, best_row = 0.0, None
+    for row in rows:
+        score = _label_similarity(name, row["label"] or "")
+        if score > best_score:
+            best_score = score
+            best_row = row
+    if best_score >= 0.4:
+        return best_row
+
+    # Pass 2 — subtype keyword in name
+    norm = _normalize(name)
+    for subtype, keywords in _SUBTYPE_KEYWORDS.items():
+        if any(kw in norm for kw in keywords):
+            for row in rows:
+                if (row["location_subtype"] or "").lower() == subtype:
+                    return row
+
+    return None
+
+
 def _find_nearby_empty_hex(
     conn: sqlite3.Connection,
     max_distance: int = 4,
@@ -512,6 +568,52 @@ def resolve_starting_hex(
             "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
             (_json.dumps(flags, ensure_ascii=False), gs["id"]),
         )
+
+    # Stage 2B-Schema S17: pair the hex with a canonical game_location (or create minimal one)
+    loc_key: str | None = None
+    canonical_loc = _find_canonical_location_for_name(starting_location_name or "", conn)
+    if canonical_loc:
+        loc_key = canonical_loc["key"]
+        logger.info(
+            "s17_canonical_location_matched",
+            campaign_id=campaign_id,
+            loc_key=loc_key,
+            starting_name=starting_location_name,
+        )
+    else:
+        loc_key = f"start_{campaign_id}"
+        conn.execute(
+            """INSERT OR IGNORE INTO game_locations
+               (key, label, safe_for_rest, canonical, created_by, is_active,
+                approved, review_status, ai_generated, source_campaign_id)
+               VALUES (?,?,1,0,'gm_runtime',1,1,'approved',0,?)""",
+            (loc_key, starting_location_name or f"Start {campaign_id}", campaign_id),
+        )
+        logger.info(
+            "s17_start_location_created",
+            campaign_id=campaign_id,
+            loc_key=loc_key,
+            starting_name=starting_location_name,
+        )
+
+    conn.execute(
+        "UPDATE world_hexes SET location_key = ? WHERE q = ? AND r = ?",
+        (loc_key, sq, sr),
+    )
+
+    # Also anchor the session at the resolved location so context injection works from turn 1
+    if gs:
+        loc_row = conn.execute(
+            "SELECT id FROM game_locations WHERE key = ? AND is_active = 1", (loc_key,)
+        ).fetchone()
+        if loc_row and not conn.execute(
+            "SELECT current_location_id FROM game_sessions WHERE id = ? AND current_location_id IS NOT NULL",
+            (gs["id"],),
+        ).fetchone():
+            conn.execute(
+                "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
+                (loc_row["id"], gs["id"]),
+            )
 
     conn.commit()
 
