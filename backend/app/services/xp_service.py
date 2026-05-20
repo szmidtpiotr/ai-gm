@@ -125,10 +125,12 @@ def _cost_for_stat_target(costs: dict[int, int], new_value: int) -> int:
 
 
 def _stat_known_in_catalog(conn: sqlite3.Connection, stat_key: str) -> bool:
-    sk = (stat_key or "").strip().lower()
+    sk = (stat_key or "").strip()
     if not sk:
         return False
-    row = conn.execute("SELECT key FROM game_config_stats WHERE key = ? LIMIT 1", (sk,)).fetchone()
+    row = conn.execute(
+        "SELECT key FROM game_config_stats WHERE UPPER(key) = UPPER(?) LIMIT 1", (sk,)
+    ).fetchone()
     return row is not None
 
 
@@ -273,11 +275,11 @@ def spend_stat_point_up(
     stat_key: str,
 ) -> dict[str, Any]:
     """Raise one configured core stat by 1; cost from meta `xp_stat_point_costs` (**T21**)."""
-    sk = (stat_key or "").strip().lower()
-    if not sk:
+    raw_key = (stat_key or "").strip()
+    if not raw_key:
         raise ValueError("stat_key_required")
 
-    if not _stat_known_in_catalog(conn, sk):
+    if not _stat_known_in_catalog(conn, raw_key):
         raise ValueError("unknown_stat")
 
     row = conn.execute(
@@ -292,6 +294,12 @@ def spend_stat_point_up(
 
     sheet = parse_character_sheet(row["sheet_json"])
     stats = dict(sheet.get("stats") or {})
+    # Find canonical key (sheet may use STR/str/Str — match case-insensitively)
+    sk = raw_key
+    for k in stats:
+        if k.upper() == raw_key.upper():
+            sk = k
+            break
     current = int(stats.get(sk, 10) or 10)
     if current >= ceiling:
         raise ValueError("stat_at_ceiling")

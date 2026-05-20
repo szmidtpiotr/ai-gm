@@ -188,13 +188,13 @@ def perform_long_rest(
         (json.dumps(sheet, ensure_ascii=False), character_id),
     )
 
-    advance_clock(campaign_id, hours=8, conn=conn)
+    advance_clock(campaign_id, 8, "long_rest", conn=conn)
 
     if pending_xp:
         conn.execute(
             """INSERT INTO character_xp_grants
-               (character_id, campaign_id, amount, reason, source)
-               VALUES (?, ?, ?, 'Długi odpoczynek — odblokowanie PD', 'long_rest')""",
+               (character_id, campaign_id, amount, reason, source, granted_by_user_id)
+               VALUES (?, ?, ?, 'Długi odpoczynek — odblokowanie PD', 'long_rest', 0)""",
             (character_id, campaign_id, pending_xp),
         )
 
@@ -265,7 +265,7 @@ def perform_short_rest(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",
         (json.dumps(sheet, ensure_ascii=False), character_id),
     )
-    advance_clock(campaign_id, hours=1, conn=conn)
+    advance_clock(campaign_id, 1, "short_rest", conn=conn)
     conn.commit()
 
     logger.info(
