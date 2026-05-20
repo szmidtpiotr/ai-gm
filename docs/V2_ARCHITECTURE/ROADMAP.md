@@ -99,15 +99,15 @@
 
 #### Stage 2C — UI wydawania PD + endpointy /rest (wieńczy pętlę)
 
-- [ ] **X1** Pasek PD w karcie postaci — "47/100 do milestone 100" (czysto wizualny, bez bannera per [D12])
-- [ ] **X2** Etykieta "Poz. N" w nagłówku (computed `floor(xp_total/100)`, max 10) — bez fanfar
-- [ ] **X3** `POST /api/characters/{id}/rest?type=long` — waliduje `safe_for_rest`, +8h zegara, full HP/mana, **flip pending XP → spendable**, reset death save counter
-- [ ] **X4** `POST /api/characters/{id}/rest?type=short` — +1h, regen 1d6+CON HP, max 2 między długimi (T23 spec)
-- [ ] **X5** UI: dwa przyciski w karcie (krótki / długi odpoczynek) z confirmation, gated na safe_for_rest
-- [ ] **X6** Panel "Awansuj" — skill rank-up cards (cost `max(30, 30 × rank)`, calls `spend_skill_rank_up`)
-- [ ] **X7** Panel "Awansuj" — stat point-up cards (cost `max(30, 50 × modifier)`, calls `spend_stat_point_up`)
-- [ ] **X8** Panel "Awansuj" — spell learn (75 XP) / upgrade (R2=50, R3=100) cards dla Scholar
-- [ ] **X9** "Historia PD" view — paginated `character_xp_grants` log, grouped by category, w karcie postaci
+- [x] **X1** XP bar — `.xp-bar-card` fill toward next 100-XP milestone; `#sheet-xp-bar-fill` + pending badge `#sheet-xp-pending`.
+- [x] **X2** "Poz. N" label — `#sheet-level` computed as `floor(xp_lifetime_earned/100)+1`, max 10.
+- [x] **X3** `POST /api/characters/{id}/rest?type=long` — `safe_for_rest` gate, full HP/mana, flush `pending_xp→xp_available`, reset `short_rests_used=0` + `death_saves_failed=0`, +8h clock, audit row in `character_xp_grants`.
+- [x] **X4** `POST /api/characters/{id}/rest?type=short` — same gate, `short_rests_used < 2` (T23), 1d6+CON_mod HP regen capped at max, +1h clock.
+- [x] **X5** Rest buttons — ☽ Krótki (N/2 charges) / ★ Długi / ⬆ Awansuj; disabled + note when not safe. In `#sheet-rest-actions`.
+- [x] **X6** Awansuj panel — skill rank-up cards from `/characters/{id}/xp` costs, calls `POST spend-skill`.
+- [x] **X7** Awansuj panel — stat point-up cards, calls `POST spend-stat`.
+- [x] **X8** Awansuj panel — Scholar spell learn (75 XP) / R2 (50) / R3 (100); new endpoints `spend-spell-learn` + `spend-spell-upgrade`.
+- [x] **X9** XP log — last 20 grants from `/xp/grant-log` inside Awansuj modal.
 
 #### Stage 2C+ — Rest Sandbox (admin harness)
 
