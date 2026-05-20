@@ -230,6 +230,10 @@ def _process_location_intent(
                 "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
                 (result.resolved_location_id, session_id),
             )
+            conn.execute(
+                "UPDATE game_locations SET usage_count = usage_count + 1 WHERE id = ?",
+                (result.resolved_location_id,),
+            )
             conn.commit()
             logger.info(
                 "location_updated_from_gm_response",
