@@ -1,6 +1,6 @@
 import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
-import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=8";
+import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=9";
 import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
 import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=5";
 
@@ -1427,6 +1427,21 @@ async function _loadPendingLocations(container, panel) {
                   method: "POST", body: JSON.stringify({ action: "approve" }),
                 });
                 showToast("Zatwierdzone.", "success");
+                await reload();
+              } catch (e) { showToast(e.message, "error"); }
+            },
+          },
+          {
+            label: row.canonical ? "⭐ Kanon" : "☆ Kanon",
+            class: row.canonical ? "secondary-btn" : "secondary-btn",
+            style: row.canonical ? "opacity:0.5;cursor:default" : "",
+            onClick: async () => {
+              if (row.canonical) return;
+              try {
+                await adminFetch(`/api/admin/world/locations/${row.key}/promote-canonical`, {
+                  method: "PATCH",
+                });
+                showToast("Oznaczono jako kanoniczną.", "success");
                 await reload();
               } catch (e) { showToast(e.message, "error"); }
             },

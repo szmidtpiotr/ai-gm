@@ -305,6 +305,42 @@ async def delete_session_flag_endpoint(
 # Endpointy zatwierdzania lokalizacji AI
 # ============================================================================
 
+@router.get("/api/admin/locations/stats")
+async def location_stats(
+    _admin: None = Depends(require_admin_token),
+):
+    """Stage 2B-Schema S19 — telemetry: counts by created_by + canonical share."""
+    conn = _get_db_connection()
+    try:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM game_locations WHERE is_active = 1"
+        ).fetchone()[0]
+        seed = conn.execute(
+            "SELECT COUNT(*) FROM game_locations WHERE is_active = 1 AND created_by = 'seed'"
+        ).fetchone()[0]
+        admin_count = conn.execute(
+            "SELECT COUNT(*) FROM game_locations WHERE is_active = 1 AND created_by = 'admin'"
+        ).fetchone()[0]
+        gm_runtime = conn.execute(
+            "SELECT COUNT(*) FROM game_locations WHERE is_active = 1 AND created_by = 'gm_runtime'"
+        ).fetchone()[0]
+        canonical = conn.execute(
+            "SELECT COUNT(*) FROM game_locations WHERE is_active = 1 AND canonical = 1"
+        ).fetchone()[0]
+        return {
+            "total": total,
+            "seed_count": seed,
+            "admin_count": admin_count,
+            "gm_runtime_count": gm_runtime,
+            "canonical_count": canonical,
+            "gm_runtime_share": round(gm_runtime / total, 3) if total else 0.0,
+        }
+    except sqlite3.Error as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
 @router.get("/api/admin/locations/pending")
 async def get_pending_locations(
     _admin: None = Depends(require_admin_token),
