@@ -49,6 +49,7 @@ from app.services.llm_admin_service import hydrate_runtime_from_stored_preset
 from app.routers.admin import router as admin_router
 from app.routers.admin_cheat import router as admin_cheat_router
 from app.routers.sandbox import router as sandbox_router
+from app.routers.rest_sandbox import router as rest_sandbox_router
 from app.routers.admin_visual import admin_router as admin_visual_router, public_router as visual_public_router
 from app.routers.settings import router as settings_router
 from app.routers.debug import router as debug_router
@@ -336,6 +337,7 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(admin_analytics_router, prefix="/api")
 app.include_router(admin_cheat_router, prefix="/api")
 app.include_router(sandbox_router, prefix="/api")
+app.include_router(rest_sandbox_router, prefix="/api")
 app.include_router(admin_visual_router, prefix="/api")
 app.include_router(visual_public_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")

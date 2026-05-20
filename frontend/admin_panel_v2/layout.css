@@ -4081,3 +4081,42 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   font-size: 0.72rem; color: var(--text-muted);
   margin-top: 10px; font-style: italic;
 }
+
+/* ── Stage 2C+: Rest Sandbox ─────────────────────────────────────────────── */
+.rsb-root { padding: 0 4px; }
+.rsb-grid { display: grid; grid-template-columns: 280px 1fr 1fr; gap: 16px; margin-top: 16px; }
+@media (max-width: 900px) { .rsb-grid { grid-template-columns: 1fr; } }
+.rsb-col { display: flex; flex-direction: column; gap: 12px; }
+
+.rsb-sheet-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 14px; }
+.rsb-sheet-name { font-weight: 700; font-size: 0.9rem; margin-bottom: 10px; }
+.rsb-stat-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.rsb-stat { flex: 1; min-width: 70px; }
+.rsb-stat__label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); }
+.rsb-stat__val { font-size: 1rem; font-weight: 700; }
+.rsb-bar { height: 6px; margin-top: 4px; background: var(--bg-secondary); }
+
+.rsb-hero-meta { display: block; font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+
+.rsb-controls { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+.rsb-control-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.rsb-ctrl-btn {
+  flex: 1; min-width: 130px; padding: 9px 12px; border-radius: 8px;
+  border: 1px solid var(--border-color); background: var(--bg-secondary);
+  color: var(--text-primary); cursor: pointer; font-size: 0.8rem;
+  transition: background .15s;
+}
+.rsb-ctrl-btn:hover:not([disabled]) { background: var(--bg-hover, rgba(255,255,255,.08)); }
+.rsb-ctrl-btn[disabled] { opacity: .38; cursor: not-allowed; }
+.rsb-ctrl-safe  { border-color: rgba(92,184,92,.4); }
+.rsb-ctrl-unsafe { border-color: rgba(217,83,79,.4); }
+.rsb-ctrl-short { border-color: rgba(91,192,222,.4); }
+.rsb-ctrl-long  { border-color: rgba(201,165,74,.4); color: #c9a54a; }
+.rsb-ctrl-reset { border-color: rgba(150,150,150,.3); }
+
+.rsb-log { max-height: 480px; overflow-y: auto; background: var(--bg-secondary); border-radius: 8px; padding: 8px; font-size: 0.78rem; font-family: monospace; }
+.rsb-log-entry { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.04); white-space: pre-wrap; }
+.rsb-log-ok    { color: #5cb85c; }
+.rsb-log-error { color: #d9534f; }
+.rsb-log-warn  { color: #c9a54a; }
+.rsb-log-info  { color: var(--text-muted); }
