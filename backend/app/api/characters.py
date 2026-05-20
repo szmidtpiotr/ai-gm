@@ -931,9 +931,8 @@ def get_character(character_id: int):
         (character_id,),
     ).fetchone()
 
-    conn.close()
-
     if not row:
+        conn.close()
         raise HTTPException(status_code=404, detail="Character not found")
 
     item = dict(row)
@@ -943,6 +942,18 @@ def get_character(character_id: int):
         item["sheet_json"] = {}
     item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
 
+    # Stage 2C X5: include safe_for_rest based on current session location
+    item["safe_for_rest"] = False
+    if item.get("campaign_id"):
+        try:
+            from app.services.rest_service import _is_safe_for_character
+            item["safe_for_rest"] = _is_safe_for_character(
+                character_id, int(item["campaign_id"]), conn
+            )
+        except Exception:
+            pass
+
+    conn.close()
     return item
 
 
@@ -1230,6 +1241,138 @@ def list_character_xp_grants(
                 ) from None
             raise HTTPException(status_code=500, detail=str(e)) from None
         return {"character_id": character_id, "grants": rows}
+    finally:
+        conn.close()
+
+
+# ── Stage 2C X3/X4 — rest endpoints ──────────────────────────────────────────
+
+@router.post("/characters/{character_id}/rest")
+def character_rest(
+    character_id: int,
+    type: str = Query(..., pattern="^(long|short)$"),
+    user_id: int = Query(...),
+):
+    """X3 (long) / X4 (short) rest. Validates safe_for_rest, advances clock."""
+    from app.services.rest_service import perform_long_rest, perform_short_rest
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id, campaign_id FROM characters WHERE id = ? AND status = 'in_campaign'",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="Character not in campaign")
+        campaign_id = int(char["campaign_id"])
+
+        fn = perform_long_rest if type == "long" else perform_short_rest
+        result = fn(conn, character_id, campaign_id)
+
+        if not result.get("ok"):
+            err = result.get("error", "unknown")
+            code = 409 if err in ("not_safe_for_rest", "short_rest_exhausted") else 500
+            raise HTTPException(status_code=code, detail=err)
+        return result
+    finally:
+        conn.close()
+
+
+# ── Stage 2C X8 — Scholar spell XP spend ─────────────────────────────────────
+
+SPELL_LEARN_COST = 75
+SPELL_UPGRADE_COSTS = {2: 50, 3: 100}
+
+
+class SpellSpendRequest(BaseModel):
+    spell_key: str
+    user_id: int
+
+
+@router.post("/characters/{character_id}/xp/spend-spell-learn")
+def spend_spell_learn(character_id: int, req: SpellSpendRequest):
+    """X8 — Scholar learns a new spell for 75 XP."""
+    from app.services.dice import parse_character_sheet
+    from app.services.spell_service import learn_spell as _learn_spell
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT sheet_json, campaign_id FROM characters WHERE id = ?",
+                           (character_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Character not found")
+        sheet = parse_character_sheet(row["sheet_json"])
+        if (sheet.get("archetype") or "").lower() != "scholar":
+            raise HTTPException(status_code=400, detail="only_scholar")
+        xp = int(sheet.get("xp_available") or 0)
+        if xp < SPELL_LEARN_COST:
+            raise HTTPException(status_code=400, detail="insufficient_xp")
+        sheet["xp_available"] = xp - SPELL_LEARN_COST
+        conn.execute("UPDATE characters SET sheet_json = ? WHERE id = ?",
+                     (json.dumps(sheet, ensure_ascii=False), character_id))
+        try:
+            _learn_spell(character_id, req.spell_key)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        conn.execute(
+            "INSERT INTO character_xp_grants (character_id, campaign_id, amount, reason, source) "
+            "VALUES (?, ?, ?, ?, 'spell_learn')",
+            (character_id, row["campaign_id"], -SPELL_LEARN_COST, f"Nauka zaklęcia: {req.spell_key}"),
+        )
+        conn.commit()
+        return {"ok": True, "spell_key": req.spell_key, "xp_spent": SPELL_LEARN_COST,
+                "xp_available": sheet["xp_available"]}
+    finally:
+        conn.close()
+
+
+@router.post("/characters/{character_id}/xp/spend-spell-upgrade")
+def spend_spell_upgrade(character_id: int, req: SpellSpendRequest):
+    """X8 — Scholar upgrades a known spell rank: R2=50 XP, R3=100 XP."""
+    from app.services.dice import parse_character_sheet
+    from app.services.spell_service import upgrade_spell as _upgrade_spell
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT sheet_json, campaign_id FROM characters WHERE id = ?",
+                           (character_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Character not found")
+        sheet = parse_character_sheet(row["sheet_json"])
+        if (sheet.get("archetype") or "").lower() != "scholar":
+            raise HTTPException(status_code=400, detail="only_scholar")
+        spell_row = conn.execute(
+            "SELECT rank FROM character_spells WHERE character_id = ? AND spell_key = ?",
+            (character_id, req.spell_key),
+        ).fetchone()
+        if not spell_row:
+            raise HTTPException(status_code=404, detail="spell_not_known")
+        current_rank = int(spell_row["rank"])
+        new_rank = current_rank + 1
+        cost = SPELL_UPGRADE_COSTS.get(new_rank)
+        if not cost:
+            raise HTTPException(status_code=400, detail="spell_at_max_rank")
+        xp = int(sheet.get("xp_available") or 0)
+        if xp < cost:
+            raise HTTPException(status_code=400, detail="insufficient_xp")
+        sheet["xp_available"] = xp - cost
+        conn.execute("UPDATE characters SET sheet_json = ? WHERE id = ?",
+                     (json.dumps(sheet, ensure_ascii=False), character_id))
+        try:
+            _upgrade_spell(character_id, req.spell_key)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        conn.execute(
+            "INSERT INTO character_xp_grants (character_id, campaign_id, amount, reason, source) "
+            "VALUES (?, ?, ?, ?, 'spell_upgrade')",
+            (character_id, row["campaign_id"], -cost, f"Ulepszenie zaklęcia: {req.spell_key} → R{new_rank}"),
+        )
+        conn.commit()
+        return {"ok": True, "spell_key": req.spell_key, "new_rank": new_rank,
+                "xp_spent": cost, "xp_available": sheet["xp_available"]}
     finally:
         conn.close()
 

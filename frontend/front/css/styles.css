@@ -5700,3 +5700,64 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   text-align: right;
   padding: 0 16px 2px;
 }
+
+/* ── Stage 2C: X1 XP bar ─────────────────────────────────────────────────── */
+.xp-bar-card {
+  padding: 4px 0 8px;
+}
+.xp-bar { margin-top: 4px; background: var(--bg-secondary); }
+.xp-bar__fill { background: #c9a54a; }
+.xp-bar-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.xp-pending { color: #c9a54a; }
+
+/* ── Stage 2C: X5 rest buttons ───────────────────────────────────────────── */
+.rest-actions { padding: 8px 0 4px; }
+.rest-actions__label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin-bottom: 6px; }
+.rest-actions__row { display: flex; gap: 6px; flex-wrap: wrap; }
+.rest-actions__note { font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; }
+.rest-btn {
+  flex: 1; min-width: 80px; padding: 7px 8px; border-radius: 8px; border: 1px solid var(--border-color);
+  background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; font-size: 0.78rem;
+  transition: background .15s, opacity .15s;
+}
+.rest-btn:hover:not([disabled]) { background: var(--bg-hover, rgba(255,255,255,.08)); }
+.rest-btn--disabled, .rest-btn[disabled] { opacity: .38; cursor: not-allowed; }
+.rest-btn--upgrade { border-color: rgba(201,165,74,.5); color: #c9a54a; }
+.rest-charges { font-size: 0.7rem; color: var(--text-muted); margin-left: 4px; }
+
+/* ── Stage 2C: X6/X7/X8 Awansuj panel ───────────────────────────────────── */
+.awansuj-xp-badge {
+  background: rgba(201,165,74,.1); border: 1px solid rgba(201,165,74,.3);
+  border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;
+  font-size: 0.85rem; color: var(--text-primary);
+}
+.awansuj-section-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); margin: 12px 0 6px; }
+.awansuj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.awansuj-card {
+  background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px;
+  padding: 10px; display: flex; flex-direction: column; gap: 4px;
+}
+.awansuj-card--locked { opacity: .5; }
+.awansuj-card--spell { border-color: rgba(120,80,200,.4); }
+.awansuj-card__title { font-size: 0.8rem; font-weight: 600; }
+.awansuj-card__detail { font-size: 0.7rem; color: var(--text-muted); }
+.awansuj-card__btn {
+  margin-top: auto; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--border-color);
+  background: var(--bg-card); color: var(--text-primary); cursor: pointer; font-size: 0.75rem;
+  transition: background .15s;
+}
+.awansuj-card__btn:hover:not([disabled]) { background: rgba(201,165,74,.15); }
+.awansuj-card__btn[disabled] { cursor: not-allowed; opacity: .5; }
+
+/* ── Stage 2C: X9 XP log ─────────────────────────────────────────────────── */
+.xp-log-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.xp-log-table th { text-align: left; padding: 4px 8px; color: var(--text-muted); font-weight: 500; border-bottom: 1px solid var(--border-color); }
+.xp-log-table td { padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,.04); }
+.xp-pos { color: #5cb85c; font-weight: 600; }
+.xp-neg { color: #c9a54a; }
