@@ -76,8 +76,8 @@
 - [x] **S15** Prompt addendum in `system_prompt.txt` → new section `### REUŻYWANIE ZNANYCH LOKACJI (priorytet nad action: create)`: explains the `Nearby known places` section, defines hard rule (check list before emitting `action: create`), spells out when `create` is allowed (empty list OR fabularnie distinct), notes `[canonical]` and `visits=N` semantics, declares duplicates a narrative error.
 - [x] **S16** `usage_count`: increment on every `game_sessions.current_location_id` change. Three write paths patched: `turns.py` (GM location_intent), `turn_pipeline.py` (`_update_character_location` / WSM MOVEMENT), `session_location.py` (admin override, only on actual change).
 - [x] **S17** `resolve_starting_hex()` auto-pair: added `_find_canonical_location_for_name()` helper (label similarity ≥ 0.4, then subtype keyword fallback via `_SUBTYPE_KEYWORDS` dict). On match → `UPDATE world_hexes SET location_key`. On miss → `INSERT OR IGNORE game_locations key=start_{campaign_id}` (`safe_for_rest=1`, `canonical=0`, `created_by='gm_runtime'`) then stamp `location_key`. Also sets `game_sessions.current_location_id` when not already anchored so context injection works from turn 1.
-- [ ] **S18** "Promote to canonical" button in admin Review Queue → flips `canonical=1` (independent of `review_status`)
-- [ ] **S19** Telemetry endpoint `/api/admin/locations/stats` returning `{seed_count, admin_count, gm_runtime_count, canonical_count, gm_runtime_share}` for dashboard widget
+- [x] **S18** "Promote to canonical" button in admin Review Queue: `PATCH /api/admin/world/locations/{key}/promote-canonical` in `world_review.py`; "☆ Kanon" / "⭐ Kanon" button added to pending-locations `extraActions` in `world.js` (disabled/greyed when already canonical). `table.js` patched to support `ex.style` on action buttons (v8→v9 cache-bust).
+- [x] **S19** Telemetry endpoint `GET /api/admin/locations/stats` in `admin_location.py` — returns `{total, seed_count, admin_count, gm_runtime_count, canonical_count, gm_runtime_share}` keyed by `created_by` column value.
 
 #### Stage 2D — Wpięcie 22 źródeł XP [D14] (najważniejsze dla różnorodności gry)
 

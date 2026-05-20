@@ -1292,6 +1292,9 @@ export function renderTable(container, columns, rows, options = {}) {
           if (ex.class) {
             b.className = ex.class;
           }
+          if (ex.style) {
+            b.setAttribute("style", ex.style);
+          }
           b.addEventListener("click", () => {
             void ex.onClick();
           });

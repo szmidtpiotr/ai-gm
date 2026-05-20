@@ -111,6 +111,24 @@ def patch_pending_weapon(key: str, req: WeaponPatchReq):
         conn.close()
 
 
+@router.patch("/locations/{key}/promote-canonical")
+def promote_canonical(key: str):
+    """Stage 2B-Schema S18 — flip canonical=1 for a location, independent of review_status."""
+    conn = _get_db()
+    try:
+        cursor = conn.execute(
+            "UPDATE game_locations SET canonical = 1, updated_at = datetime('now') "
+            "WHERE key = ? AND is_active = 1",
+            (key,),
+        )
+        conn.commit()
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Lokalizacja '{key}' nie istnieje")
+        return {"ok": True, "key": key, "canonical": True}
+    finally:
+        conn.close()
+
+
 @router.post("/review/{entity_type}/{key}")
 def review_entity(entity_type: str, key: str, req: ReviewAction):
     """
