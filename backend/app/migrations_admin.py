@@ -900,6 +900,27 @@ ADMIN_SEEDS = [
         ('mg_grant_exceptional', 'mg_grant', 'MG: wybitny sukces (rzadko)',
          'Pas [S10b]: 35–60 XP', 45, 130, 1)
     """,
+    # Stage 2D XS1-XS15 reward keys
+    """
+    INSERT OR IGNORE INTO game_config_xp_rewards
+        (key, category, label, description, xp_amount, sort_order, is_active)
+    VALUES
+        ('campaign.beat_complete',    'campaign',    'Cel bitu ukończony',           'XS1: +30 XP za ukończenie bitu narracyjnego',       30, 200, 1),
+        ('campaign.side_quest',       'campaign',    'Quest poboczny ukończony',      'XS2: +40 XP za [QUEST_COMPLETE]',                   40, 210, 1),
+        ('campaign.dungeon_cleared',  'campaign',    'Loch oczyszczony',             'XS3: +75 XP za [DUNGEON_CLEAR]',                    75, 220, 1),
+        ('campaign.campaign_ending',  'campaign',    'Koniec kampanii',              'XS4: +200 XP za [CAMPAIGN_END]',                   200, 230, 1),
+        ('exploration.location_new',  'exploration', 'Pierwsza wizyta w lokacji',    'XS5: +15 XP — pierwsza makro-lokacja',              15, 300, 1),
+        ('exploration.npc_first_talk','exploration', 'Pierwsza rozmowa z NPC',       'XS6: +5 XP za DIALOGUE z nowym npc_key',             5, 310, 1),
+        ('exploration.secret',        'exploration', 'Odkrycie: lore/tajemnica',     'XS7: +10 XP za [DISCOVERY:lore_key]',               10, 320, 1),
+        ('exploration.hidden_room',   'exploration', 'Odkrycie: ukryta lokacja',     'XS8: +10 XP za [DISCOVERY:secret_location]',        10, 330, 1),
+        ('skills.skill_dc_12',        'skills',      'Test biegłości DC 12-15',      'XS9: +3 XP za sukces DC ∈ [12-15]',                  3, 400, 1),
+        ('skills.skill_dc_16',        'skills',      'Test trudny DC 16-19',         'XS10: +8 XP za sukces DC ∈ [16-19]',                 8, 410, 1),
+        ('skills.skill_dc_20',        'skills',      'Test legendarny DC ≥ 20',      'XS11: +15 XP za sukces DC ≥ 20',                   15, 420, 1),
+        ('narrative.free_grant',      'narrative',   'Nagroda narracyjna (LLM tag)', 'XS12: [XP_GRANT:powód:ilość] — kap 50 XP/sesja',   10, 500, 1),
+        ('combat.outnumbered_victory','combat',      'Zwycięstwo w przewadze wroga', 'XS13: +20 XP — walka z 3+ wrogami',                20, 600, 1),
+        ('combat.death_save_survived','combat',      'Przeżycie rzutu na śmierć',    'XS14: +15 XP za przeżycie death save',             15, 610, 1),
+        ('session.start_bonus',       'session',     'Bonus za powrót do sesji',     'XS15: +10 XP za nową sesję po ≥30 min przerwie',    10, 700, 1)
+    """,
 ]
 
 

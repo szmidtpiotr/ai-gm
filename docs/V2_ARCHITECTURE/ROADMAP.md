@@ -81,21 +81,21 @@
 
 #### Stage 2D — Wpięcie 22 źródeł XP [D14] (najważniejsze dla różnorodności gry)
 
-- [ ] **XS1** `[BEAT_COMPLETE:beat_key]` tag → grant XP z `campaign.beat_complete` (30 XP)
-- [ ] **XS2** `[QUEST_COMPLETE:quest_key]` → `campaign.side_quest` (40 XP)
-- [ ] **XS3** `[DUNGEON_CLEAR:dungeon_key]` → `campaign.dungeon_cleared` (75 XP)
-- [ ] **XS4** `[CAMPAIGN_END:ending_id]` → `campaign.campaign_ending` (200 XP)
-- [ ] **XS5** Pierwsza wizyta w macro-lokacji → `exploration.location_new` (15 XP). Tracking via `characters.visited_location_keys`
-- [ ] **XS6** Pierwsza rozmowa z NPC (DIALOGUE z nowym npc_key) → `exploration.npc_first_talk` (5 XP)
-- [ ] **XS7** `[DISCOVERY:lore_key]` → `exploration.secret` (10 XP)
-- [ ] **XS8** `[DISCOVERY:secret_location]` → `exploration.hidden_room` (10 XP)
-- [ ] **XS9** Sukces w teście DC ∈ [12-15] → `skills.skill_dc_12` (3 XP)
-- [ ] **XS10** Sukces w teście DC ∈ [16-19] → `skills.skill_dc_16` (8 XP)
-- [ ] **XS11** Sukces w teście DC ≥ 20 → `skills.skill_dc_20` (15 XP)
-- [ ] **XS12** LLM tag `[XP_GRANT:reason:amount]` → `narrative.*` (cap 50 XP per session)
-- [ ] **XS13** `outnumbered_victory` — wygrana walka z 3+ wrogami → 20 XP (combat extra, łatwy add-on)
-- [ ] **XS14** `death_save_survived` — przeżycie rzutu na śmierć → 15 XP (combat extra)
-- [ ] **XS15** Session start trigger (po hydration F5 → +0, ale rozpoczęcie nowej sesji w >30 min gap → bonus)
+- [x] **XS1** `[BEAT_COMPLETE:beat_key]` → `campaign.beat_complete` 30 XP — `_process_beat_signals` now calls `grant_beat_complete` (was dead code)
+- [x] **XS2** `[QUEST_COMPLETE:quest_key]` → `campaign.side_quest` 40 XP — narrative tag parser in `turn_pipeline`
+- [x] **XS3** `[DUNGEON_CLEAR:dungeon_key]` → `campaign.dungeon_cleared` 75 XP — narrative tag parser
+- [x] **XS4** `[CAMPAIGN_END:ending_id]` → `campaign.campaign_ending` 200 XP — narrative tag parser
+- [x] **XS5** First macro-location visit → `exploration.location_new` 15 XP — `grant_first_location_visit` reads/writes `characters.visited_location_keys`
+- [x] **XS6** First DIALOGUE with new npc_key → `exploration.npc_first_talk` 5 XP — `_process_npc_first_talk` in `turn_pipeline`
+- [x] **XS7** `[DISCOVERY:lore_key]` → `exploration.secret` 10 XP — narrative tag parser
+- [x] **XS8** `[DISCOVERY:secret_location]` → `exploration.hidden_room` 10 XP — narrative tag parser
+- [x] **XS9** Skill success DC 12-15 → `skills.skill_dc_12` 3 XP — turns.py roll resolution hook
+- [x] **XS10** Skill success DC 16-19 → `skills.skill_dc_16` 8 XP — same hook
+- [x] **XS11** Skill success DC ≥ 20 → `skills.skill_dc_20` 15 XP — same hook
+- [x] **XS12** `[XP_GRANT:reason:amount]` → `narrative.free_grant`, cap 50 XP/session — narrative tag parser
+- [x] **XS13** Outnumbered victory (≥3 enemies) → `combat.outnumbered_victory` 20 XP — `combat_service.resolve_attack` victory hook
+- [x] **XS14** Death save survived → `combat.death_save_survived` 15 XP — turns.py death-save outcome hook
+- [x] **XS15** New session (≥30 min gap) → `session.start_bonus` 10 XP — `_process_session_start` in `turn_pipeline`
 
 #### Stage 2C — UI wydawania PD + endpointy /rest (wieńczy pętlę)
 

@@ -173,8 +173,13 @@ def process_v2_turn(
     _apply_world_state(mechanic_result, context, character_id, campaign_id, turn_number, conn)
     _update_session_flags(wsm_result, session_flags, mechanic_result, conn, campaign_id)
 
-    # XP grant for beat signals
+    # XS1: Beat complete XP
     xp_delta = _process_beat_signals(mechanic_result, campaign_id, character_id, turn_number, conn)
+    # XS6: First NPC talk XP
+    xp_delta += _process_npc_first_talk(action_type, params.get("npc_key") or params.get("target", ""),
+                                         character_id, campaign_id, turn_number, conn)
+    # XS15: Session start bonus
+    xp_delta += _process_session_start(character_id, campaign_id, turn_number, conn)
 
     # ── Step 7: Context Injector ──────────────────────────────────────────
     refreshed_flags = _reload_session_flags(campaign_id, conn) or session_flags
@@ -230,6 +235,25 @@ def process_v2_turn(
             "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
             (json.dumps(session_flags, ensure_ascii=False), campaign_id),
         )
+        conn.commit()
+
+    # XS2-XS4/XS7-XS8/XS12: Parse narrative XP tags from LLM prose
+    xp_delta += _process_narrative_xp_tags(prose, character_id, campaign_id, turn_number, conn)
+
+    # XS5: First macro-location visit (check after location may have changed)
+    current_loc_row = conn.execute(
+        "SELECT gl.key FROM game_sessions gs "
+        "JOIN game_locations gl ON gl.id = gs.current_location_id "
+        "WHERE gs.campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if current_loc_row:
+        from app.services.xp_sources import grant_first_location_visit
+        xp_delta += grant_first_location_visit(
+            conn, character_id, campaign_id, current_loc_row["key"], turn_number
+        )
+
+    if xp_delta:
         conn.commit()
 
     # ── Step 9: Assemble response ─────────────────────────────────────────
@@ -574,14 +598,47 @@ def _process_beat_signals(
     mechanic_result: dict, campaign_id: int, character_id: int,
     turn_number: int, conn: sqlite3.Connection
 ) -> int:
-    """Process beat_signals from mechanic result. Returns XP delta."""
+    """XS1 — Process beat_signals, grant pending XP for each completed beat."""
+    from app.services.xp_sources import grant_beat_complete
     xp = 0
     for signal in mechanic_result.get("beat_signals", []):
         if signal.startswith("BEAT_COMPLETE:"):
             beat_key = signal.split(":", 1)[1]
             if mark_beat_visited(campaign_id, beat_key, turn_number, conn):
-                xp += 30  # beat completion XP
+                xp += grant_beat_complete(conn, character_id, campaign_id, beat_key, turn_number)
     return xp
+
+
+def _process_npc_first_talk(
+    action_type: str, npc_key: str | None,
+    character_id: int, campaign_id: int, turn_number: int,
+    conn: sqlite3.Connection,
+) -> int:
+    """XS6 — Grant 5 XP on first DIALOGUE with each unique NPC."""
+    if action_type != "DIALOGUE" or not npc_key:
+        return 0
+    from app.services.xp_sources import grant_first_npc_talk
+    return grant_first_npc_talk(conn, character_id, campaign_id, npc_key, turn_number)
+
+
+def _process_narrative_xp_tags(
+    narrative: str, character_id: int, campaign_id: int,
+    turn_number: int, conn: sqlite3.Connection,
+) -> int:
+    """XS2/XS3/XS4/XS7/XS8/XS12 — parse LLM narrative for XP tags."""
+    if not narrative:
+        return 0
+    from app.services.xp_sources import process_narrative_xp_tags
+    result = process_narrative_xp_tags(narrative, conn, character_id, campaign_id, turn_number)
+    return result.get("total_granted", 0)
+
+
+def _process_session_start(
+    character_id: int, campaign_id: int, turn_number: int, conn: sqlite3.Connection,
+) -> int:
+    """XS15 — grant session start bonus if ≥30 min since last turn."""
+    from app.services.xp_sources import grant_session_start
+    return grant_session_start(conn, character_id, campaign_id, turn_number)
 
 
 def _get_next_turn_number(campaign_id: int, conn: sqlite3.Connection) -> int:
