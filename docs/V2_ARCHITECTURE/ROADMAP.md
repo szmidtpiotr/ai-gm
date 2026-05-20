@@ -114,11 +114,11 @@
 > **Position:** ships AFTER Stage 2C delivers `/rest` endpoints (X3, X4) and BEFORE Stage 2D begins. Mirrors Combat Sandbox (issue #21) — gives admins an isolated rig to exercise the full rest loop without playing through a campaign.
 > **Why here, not earlier:** without working `/rest` endpoints the harness has nothing to exercise — would just toggle camp setup. After Stage 2C, the sandbox can validate the complete loop: build_camp → short rest → long rest → HP/mana regen → encounter rolls → XP spend.
 
-- [ ] **RSB1** Router `backend/app/routers/rest_sandbox.py` at `/api/admin/rest-sandbox/*` — mirrors `sandbox.py` structure (heroes list, setup clone, end). Clone tagged `__rest_sandbox_clone__=true` to keep it filtered from pickers.
-- [ ] **RSB2** Endpoints exercise R4 + X3 + X4: `POST /setup` (hero clone + place on test hex), `POST /set-hex-safe-for-rest` (toggle hex safety), `POST /build-camp` (proxy to R4 endpoint), `POST /short-rest` (proxy to X4), `POST /long-rest` (proxy to X3), `POST /roll-encounter` (force encounter roll given current boost), `POST /reset-hero` (HP/mana/XP back to baseline)
-- [ ] **RSB3** Frontend section `frontend/admin_panel_v2/sections/rest_sandbox.js` mounted as 💤 Rest Sandbox in admin sidebar (next to ⚔ Combat Sandbox). 3-column layout: hero state (HP/mana/XP/conditions) | rest controls (toggle safe / build camp / short / long / encounter) | event log.
-- [ ] **RSB4** 📋 Kopiuj raport button bundles hero state + log + final HP/mana into clipboard markdown for issue reports.
-- [ ] **RSB5** Implementation-record issue + companion future-Playwright tracker (mirrors #21/#22 pattern).
+- [x] **RSB1** `backend/app/routers/rest_sandbox.py` at `/api/admin/rest-sandbox/*`. Clone prefix `[RSB] `, sheet tag `__rest_sandbox_clone__=true`. Dedicated test hex at (99,99). Registered in `main.py`.
+- [x] **RSB2** Endpoints: `GET /heroes`, `POST /setup`, `GET /character/{id}`, `POST /set-hex-safe`, `POST /build-camp` (proxies `world_service.build_camp`), `POST /short-rest` (proxies `perform_short_rest`), `POST /long-rest` (proxies `perform_long_rest`), `POST /roll-encounter` (random check vs hex encounter_chance), `POST /reset-hero`, `POST /end`.
+- [x] **RSB3** `frontend/admin_panel_v2/sections/rest_sandbox.js` — 💤 Rest Sandbox nav entry. 3-column: hero picker + sheet card | rest controls (🏕/🔒/🔓/☽/★/🎲/↺) | event log. Module registered in `index.html`.
+- [x] **RSB4** 📋 Kopiuj raport — clipboard markdown with hero state (HP/mana/XP/conditions) + full log.
+- [x] **RSB5** Implementation-record issue #48 + future Playwright tracker issue #49.
 
 ### Stage 3 — New surprise condition [D11]
 
