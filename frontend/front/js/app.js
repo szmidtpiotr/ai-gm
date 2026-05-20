@@ -3491,10 +3491,28 @@ function populateCharacterSheet(character) {
         if (manaBar) manaBar.style.width = `${maxMana > 0 ? (mana / maxMana) * 100 : 0}%`;
     }
 
-    // Level, XP
-    elements.sheetLevel.textContent = sheet.level || character.level || 1;
+    // X2: Level label — "Poz. N" derived from lifetime XP (100 XP per level, max 10)
+    const xpLifetime = parseInt(sheet.xp_lifetime_earned ?? 0);
+    const level = Math.min(10, Math.max(1, Math.floor(xpLifetime / 100) + 1));
+    elements.sheetLevel.textContent = `Poz. ${level}`;
+
+    // X1: XP bar — shows spendable XP as fill toward next 100-XP milestone
+    const xpAvail = parseInt(sheet.xp_available ?? 0);
+    const xpPending = parseInt(sheet.pending_xp ?? 0);
     const xpEl = document.getElementById('sheet-xp');
-    if (xpEl) xpEl.textContent = sheet.xp_available ?? 0;
+    const xpBarFill = document.getElementById('sheet-xp-bar-fill');
+    const xpPendingEl = document.getElementById('sheet-xp-pending');
+    const xpNextEl = document.getElementById('sheet-xp-next');
+    const nextMilestone = level * 100;
+    const xpToNext = Math.max(0, nextMilestone - xpAvail);
+    const xpPct = level >= 10 ? 100 : Math.min(100, (xpAvail % 100));
+    if (xpEl) xpEl.textContent = xpAvail;
+    if (xpBarFill) xpBarFill.style.width = `${xpPct}%`;
+    if (xpPendingEl) xpPendingEl.textContent = xpPending > 0 ? `+${xpPending} oczekujące` : '';
+    if (xpNextEl) xpNextEl.textContent = level < 10 ? `${xpToNext} do mil. ${nextMilestone}` : 'MAX';
+
+    // X5: Rest buttons — show/hide based on safe_for_rest from current location
+    renderRestButtons(character, sheet);
 
     // Arcane Points (Scholar)
     const apCard = document.getElementById('sheet-ap-card');
@@ -3560,6 +3578,232 @@ function populateCharacterSheet(character) {
     setText('sheet-personality-text', identity.personality || sheet.personality);
     setText('sheet-flaw-text', identity.flaw || sheet.flaw);
     setText('sheet-bond-text', bondText);
+}
+
+// ============================================================================
+// X5: Rest buttons + X6/X7/X8 Awansuj panel + X9 XP log
+// ============================================================================
+
+async function refreshCharacterSheet() {
+    if (!characterData?.id) return;
+    try {
+        const updated = await apiRequest('GET', `/characters/${characterData.id}`);
+        characterData = updated;
+        populateCharacterSheet(characterData);
+    } catch (e) {
+        console.warn('[refreshCharacterSheet] failed:', e);
+    }
+}
+
+function renderRestButtons(character, sheet) {
+    const container = document.getElementById('sheet-rest-actions');
+    if (!container) return;
+    const shortUsed = parseInt(sheet.short_rests_used ?? 0);
+    const shortLeft = Math.max(0, 2 - shortUsed);
+    const safeForRest = !!character.safe_for_rest;
+
+    container.innerHTML = `
+        <div class="rest-actions">
+            <div class="rest-actions__label">Odpoczynek</div>
+            <div class="rest-actions__row">
+                <button class="rest-btn rest-btn--short ${!safeForRest || shortLeft === 0 ? 'rest-btn--disabled' : ''}"
+                    id="btn-short-rest"
+                    ${!safeForRest || shortLeft === 0 ? 'disabled' : ''}>
+                    ☽ Krótki <span class="rest-charges">${shortLeft}/2</span>
+                </button>
+                <button class="rest-btn rest-btn--long ${!safeForRest ? 'rest-btn--disabled' : ''}"
+                    id="btn-long-rest"
+                    ${!safeForRest ? 'disabled' : ''}>
+                    ★ Długi
+                </button>
+                <button class="rest-btn rest-btn--upgrade" id="btn-awansuj">
+                    ⬆ Awansuj${sheet.xp_available > 0 ? ` (${sheet.xp_available} PD)` : ''}
+                </button>
+            </div>
+            ${!safeForRest ? '<div class="rest-actions__note">Musisz być w bezpiecznym miejscu</div>' : ''}
+        </div>`;
+
+    container.querySelector('#btn-short-rest')?.addEventListener('click', () => doRest('short', character, sheet));
+    container.querySelector('#btn-long-rest')?.addEventListener('click', () => doRest('long', character, sheet));
+    container.querySelector('#btn-awansuj')?.addEventListener('click', () => openAwansujPanel(character, sheet));
+}
+
+async function doRest(type, character, sheet) {
+    const label = type === 'long' ? 'długi' : 'krótki';
+    if (!confirm(`Wykonać ${label} odpoczynek?`)) return;
+    try {
+        const r = await fetch(
+            `/api/characters/${character.id}/rest?type=${type}&user_id=${currentUser?.id}`,
+            { method: 'POST' }
+        );
+        const data = await r.json();
+        if (!r.ok) {
+            const msg = { not_safe_for_rest: 'Nie jesteś w bezpiecznym miejscu.', short_rest_exhausted: 'Brak ładunków krótkiego odpoczynku. Wykonaj długi odpoczynek.' }[data.detail] || data.detail;
+            showToast(msg, 'error');
+            return;
+        }
+        if (type === 'long') {
+            const xpMsg = data.xp_unlocked > 0 ? ` Odblokowano ${data.xp_unlocked} PD.` : '';
+            showToast(`Długi odpoczynek. HP: ${data.hp_after}/${sheet.max_hp}. +8h.${xpMsg}`, 'success');
+        } else {
+            showToast(`Krótki odpoczynek. HP: ${data.hp_before}→${data.hp_after} (+${data.hp_after - data.hp_before}). +1h. Pozostało: ${data.short_rests_remaining}/2`, 'success');
+        }
+        await refreshCharacterSheet();
+    } catch (e) {
+        showToast('Błąd odpoczynku: ' + e.message, 'error');
+    }
+}
+
+async function openAwansujPanel(character, sheet) {
+    const modal = document.getElementById('awansuj-modal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    document.getElementById('awansuj-close')?.addEventListener('click', () => { modal.style.display = 'none'; }, { once: true });
+
+    const body = document.getElementById('awansuj-body');
+    if (!body) return;
+    body.innerHTML = '<div class="camp-loading">Ładowanie…</div>';
+
+    try {
+        const [xpData, skillMeta] = await Promise.all([
+            fetch(`/api/characters/${character.id}/xp?user_id=${currentUser?.id}`).then(r => r.json()),
+            fetch('/api/mechanics/metadata').then(r => r.ok ? r.json() : {})
+        ]);
+        const xpAvail = xpData.xp_available ?? 0;
+        const skills = sheet.skills || {};
+        const stats = sheet.stats || {};
+        const mods = sheet.stat_modifiers || {};
+        const rankCosts = xpData.rank_up_costs || {};
+        const statCosts = xpData.stat_point_costs || {};
+        const isScholar = (sheet.archetype || '').toLowerCase() === 'scholar';
+
+        // X6: skill rank-up cards
+        const skillCards = Object.entries(skills).filter(([, rank]) => rank < 5).map(([key, rank]) => {
+            const newRank = rank + 1;
+            const cost = rankCosts[newRank] || rankCosts[String(newRank)] || '?';
+            const canAfford = typeof cost === 'number' && xpAvail >= cost;
+            const label = (skillMeta?.skills || []).find(s => s.key === key)?.label || key;
+            return `<div class="awansuj-card ${canAfford ? '' : 'awansuj-card--locked'}">
+                <div class="awansuj-card__title">${escapeHtml(label)}</div>
+                <div class="awansuj-card__detail">Ranga ${rank} → ${newRank}</div>
+                <button class="awansuj-card__btn" data-action="skill" data-key="${key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>
+                    ${cost} PD
+                </button>
+            </div>`;
+        }).join('');
+
+        // X7: stat point-up cards
+        const STAT_LABELS = { STR:'Siła', DEX:'Zręczność', CON:'Kondycja', INT:'Inteligencja', WIS:'Mądrość', CHA:'Charyzma', LCK:'Szczęście' };
+        const statCards = Object.entries(stats).map(([key, val]) => {
+            const newVal = val + 1;
+            const cost = statCosts[newVal] || statCosts[String(newVal)];
+            if (!cost || newVal > 20) return '';
+            const canAfford = xpAvail >= cost;
+            const mod = mods[key] ?? Math.floor((val - 10) / 2);
+            const newMod = Math.floor((newVal - 10) / 2);
+            return `<div class="awansuj-card ${canAfford ? '' : 'awansuj-card--locked'}">
+                <div class="awansuj-card__title">${STAT_LABELS[key] || key}</div>
+                <div class="awansuj-card__detail">${val} (${mod >= 0 ? '+' : ''}${mod}) → ${newVal} (${newMod >= 0 ? '+' : ''}${newMod})</div>
+                <button class="awansuj-card__btn" data-action="stat" data-key="${key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>
+                    ${cost} PD
+                </button>
+            </div>`;
+        }).filter(Boolean).join('');
+
+        // X8: Scholar spell cards
+        let spellCards = '';
+        if (isScholar) {
+            const [knownSpells, allSpells] = await Promise.all([
+                fetch(`/api/characters/${character.id}/spells`).then(r => r.json()),
+                fetch('/api/spells').then(r => r.ok ? r.json() : { spells: [] })
+            ]);
+            const knownMap = {};
+            (knownSpells.spells || []).forEach(s => { knownMap[s.spell_key] = s.rank; });
+            (allSpells.spells || []).forEach(spell => {
+                const currentRank = knownMap[spell.key] ?? 0;
+                if (currentRank === 0) {
+                    const canAfford = xpAvail >= 75;
+                    spellCards += `<div class="awansuj-card awansuj-card--spell ${canAfford ? '' : 'awansuj-card--locked'}">
+                        <div class="awansuj-card__title">✨ ${escapeHtml(spell.label)}</div>
+                        <div class="awansuj-card__detail">Naucz (R1)</div>
+                        <button class="awansuj-card__btn" data-action="spell-learn" data-key="${spell.key}" data-cost="75" ${canAfford ? '' : 'disabled'}>75 PD</button>
+                    </div>`;
+                } else if (currentRank < 3) {
+                    const cost = currentRank === 1 ? 50 : 100;
+                    const canAfford = xpAvail >= cost;
+                    spellCards += `<div class="awansuj-card awansuj-card--spell ${canAfford ? '' : 'awansuj-card--locked'}">
+                        <div class="awansuj-card__title">✨ ${escapeHtml(spell.label)}</div>
+                        <div class="awansuj-card__detail">R${currentRank} → R${currentRank + 1}</div>
+                        <button class="awansuj-card__btn" data-action="spell-upgrade" data-key="${spell.key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>${cost} PD</button>
+                    </div>`;
+                }
+            });
+        }
+
+        body.innerHTML = `
+            <div class="awansuj-xp-badge">Dostępne PD: <strong>${xpAvail}</strong></div>
+            ${skillCards || statCards ? `<div class="awansuj-section-label">Umiejętności</div><div class="awansuj-grid">${skillCards}</div>
+            <div class="awansuj-section-label">Cechy</div><div class="awansuj-grid">${statCards}</div>` : ''}
+            ${isScholar && spellCards ? `<div class="awansuj-section-label">Zaklęcia (Scholar)</div><div class="awansuj-grid">${spellCards}</div>` : ''}
+            <div class="awansuj-section-label">Historia PD</div>
+            <div id="awansuj-xp-log"><div class="camp-loading">Ładowanie…</div></div>`;
+
+        loadXpLog(character, document.getElementById('awansuj-xp-log'));
+
+        body.querySelectorAll('[data-action]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const { action, key, cost } = btn.dataset;
+                if (!confirm(`Wydać ${cost} PD?`)) return;
+                let url, payload;
+                if (action === 'skill') {
+                    url = `/api/characters/${character.id}/xp/spend-skill`;
+                    payload = { skill_key: key, user_id: currentUser?.id };
+                } else if (action === 'stat') {
+                    url = `/api/characters/${character.id}/xp/spend-stat`;
+                    payload = { stat_key: key, user_id: currentUser?.id };
+                } else if (action === 'spell-learn') {
+                    url = `/api/characters/${character.id}/xp/spend-spell-learn`;
+                    payload = { spell_key: key, user_id: currentUser?.id };
+                } else if (action === 'spell-upgrade') {
+                    url = `/api/characters/${character.id}/xp/spend-spell-upgrade`;
+                    payload = { spell_key: key, user_id: currentUser?.id };
+                }
+                try {
+                    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    const data = await r.json();
+                    if (!r.ok) throw new Error(data.detail || 'error');
+                    showToast(`Zakupiono! Pozostało: ${data.xp_available} PD`, 'success');
+                    modal.style.display = 'none';
+                    await refreshCharacterSheet();
+                } catch (e) {
+                    showToast('Błąd: ' + e.message, 'error');
+                }
+            });
+        });
+    } catch (e) {
+        body.innerHTML = `<p style="color:var(--accent-red)">${escapeHtml(e.message)}</p>`;
+    }
+}
+
+// X9: XP grant log (loaded into awansuj-xp-log div)
+async function loadXpLog(character, container) {
+    if (!container) return;
+    try {
+        const data = await fetch(`/api/characters/${character.id}/xp/grant-log?user_id=${currentUser?.id}&limit=20`).then(r => r.json());
+        const grants = data.grants || [];
+        if (!grants.length) { container.innerHTML = '<p class="section-note">Brak historii PD.</p>'; return; }
+        container.innerHTML = `<table class="xp-log-table">
+            <thead><tr><th>Powód</th><th>PD</th><th>Kiedy</th></tr></thead>
+            <tbody>${grants.map(g => {
+                const amt = g.amount > 0 ? `+${g.amount}` : String(g.amount);
+                const cls = g.amount > 0 ? 'xp-pos' : 'xp-neg';
+                const date = (g.created_at || '').slice(0, 16).replace('T', ' ');
+                return `<tr><td>${escapeHtml(g.reason || g.source || '—')}</td><td class="${cls}">${amt}</td><td>${date}</td></tr>`;
+            }).join('')}</tbody>
+        </table>`;
+    } catch (e) {
+        container.innerHTML = `<p style="color:var(--accent-red)">Błąd ładowania historii.</p>`;
+    }
 }
 
 // ============================================================================

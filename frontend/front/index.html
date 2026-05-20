@@ -434,7 +434,7 @@
           <div class="sheet-meta-row">
             <div class="stat-card stat-card--small">
               <span class="stat-card__label">POZIOM</span>
-              <span class="stat-card__value" id="sheet-level">1</span>
+              <span class="stat-card__value" id="sheet-level">Poz. 1</span>
             </div>
             <div class="stat-card stat-card--small">
               <span class="stat-card__label">XP</span>
@@ -445,6 +445,22 @@
               <span class="stat-card__value" id="sheet-arcane-points">0</span>
             </div>
           </div>
+
+          <!-- X1: XP bar -->
+          <div class="xp-bar-card">
+            <div class="xp-bar-row">
+              <div class="stat-card__bar xp-bar">
+                <div class="stat-card__bar-fill xp-bar__fill" id="sheet-xp-bar-fill" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="xp-bar-meta">
+              <span class="xp-pending" id="sheet-xp-pending"></span>
+              <span class="xp-next" id="sheet-xp-next"></span>
+            </div>
+          </div>
+
+          <!-- X5: Rest buttons -->
+          <div id="sheet-rest-actions"></div>
 
           <div class="stats-grid" id="sheet-stats">
             <!-- Stats inserted by JS -->
@@ -954,8 +970,19 @@
     </div>
   </div>
 
+  <!-- X6/X7/X8/X9: Awansuj modal -->
+  <div id="awansuj-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--bg-card,#1a1a2e);border:1px solid var(--border-color,#333);border-radius:12px;width:100%;max-width:560px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border-color,#333)">
+        <h3 style="margin:0;font-size:1.1rem;font-weight:700">⬆ Awansuj</h3>
+        <button id="awansuj-close" style="background:none;border:none;color:var(--text-muted,#888);font-size:1.4rem;cursor:pointer;padding:4px">✕</button>
+      </div>
+      <div id="awansuj-body" style="overflow-y:auto;padding:16px 20px;flex:1"></div>
+    </div>
+  </div>
+
   <script src="./js/clog.js?v=combat-v35"></script>
   <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
-  <script src="./js/app.js?v=stage2b-strip-location-blocked-2026-05-19"></script>
+  <script src="./js/app.js?v=stage2c-rest-awansuj-xp-2026-05-20"></script>
 </body>
 </html>
