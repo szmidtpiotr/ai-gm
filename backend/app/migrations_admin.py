@@ -1422,6 +1422,21 @@ def _make_character_first_migration(conn: sqlite3.Connection) -> None:
 
     conn.execute("PRAGMA foreign_keys = OFF")
     try:
+        # Back-fill columns that may be absent in older DB snapshots so the
+        # INSERT SELECT below works regardless of when the backup was taken.
+        for _col, _default in (
+            ("hero_status", "'active'"),
+            ("visited_location_keys", "'[]'"),
+        ):
+            if _col not in cols:
+                try:
+                    conn.execute(
+                        f"ALTER TABLE characters ADD COLUMN {_col} TEXT NOT NULL DEFAULT {_default}"
+                    )
+                except sqlite3.OperationalError:
+                    pass
+
+        conn.execute("DROP TABLE IF EXISTS characters_v42")
         conn.execute("""
             CREATE TABLE characters_v42 (
                 id                    INTEGER PRIMARY KEY AUTOINCREMENT,

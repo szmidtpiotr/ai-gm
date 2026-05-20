@@ -51,7 +51,9 @@ voice-service/models/stt/
 .mcp.json
 
 # Claude Code session data (settings may contain API keys)
-.claude/
+# Use wildcard so negation of skills/ can work (git won't descend into ignored dirs)
+.claude/*
+!.claude/skills/
 
 # Stray SQLite DB files at project root (data/ is the real mount)
 backend/ai_gm.db
