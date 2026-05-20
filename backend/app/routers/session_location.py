@@ -96,12 +96,17 @@ async def update_session_location(
         # Aktualizuj sesję
         conn.execute(
             """
-            UPDATE game_sessions 
+            UPDATE game_sessions
             SET current_location_id = ?, updated_at = datetime('now')
             WHERE id = ?
             """,
             (loc_row["id"], session_id)
         )
+        if loc_row["id"] != previous_location_id:
+            conn.execute(
+                "UPDATE game_locations SET usage_count = usage_count + 1 WHERE id = ?",
+                (loc_row["id"],),
+            )
         conn.commit()
         
         logger.info("session_location_updated",

@@ -531,6 +531,10 @@ def _update_character_location(campaign_id: int, location_key: str,
         "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
         (loc_row[0], campaign_id)
     )
+    conn.execute(
+        "UPDATE game_locations SET usage_count = usage_count + 1 WHERE id = ?",
+        (loc_row[0],),
+    )
     conn.commit()
 
 
