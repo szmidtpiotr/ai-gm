@@ -161,6 +161,53 @@ def _skill_known_in_catalog(skill_key: str) -> bool:
     return bool(alt and alt in keys)
 
 
+def grant_pending_xp(
+    conn: sqlite3.Connection,
+    character_id: int,
+    campaign_id: int,
+    amount: int,
+    *,
+    reason: str,
+    source: str,
+    source_key: str = "",
+    turn_number: int | None = None,
+) -> dict[str, Any]:
+    """Stage 2D — grant XP to pending_xp (not yet spendable; flushed on long rest).
+
+    Also increments xp_lifetime_earned for level calculations and writes an
+    audit row to character_xp_grants.
+    """
+    if amount <= 0:
+        return {"granted": 0}
+
+    row = conn.execute(
+        "SELECT sheet_json FROM characters WHERE id = ?", (character_id,)
+    ).fetchone()
+    if not row:
+        return {"granted": 0}
+
+    sheet = parse_character_sheet(row["sheet_json"])
+    pending = int(sheet.get("pending_xp") or 0) + amount
+    lifetime = int(sheet.get("xp_lifetime_earned") or 0) + amount
+    sheet["pending_xp"] = pending
+    sheet["xp_lifetime_earned"] = lifetime
+
+    conn.execute(
+        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+        (json.dumps(sheet, ensure_ascii=False), character_id),
+    )
+    try:
+        conn.execute(
+            "INSERT INTO character_xp_grants "
+            "(character_id, campaign_id, amount, reason, source, source_key, turn_number, granted_by_user_id) "
+            "VALUES (?,?,?,?,?,?,?,0)",
+            (character_id, campaign_id, amount, reason, source, source_key or "", turn_number),
+        )
+    except Exception:
+        pass  # audit row is best-effort
+    return {"granted": amount, "pending_xp": pending, "xp_lifetime_earned": lifetime}
+
+
 def grant_character_xp(
     conn: sqlite3.Connection,
     character_id: int,

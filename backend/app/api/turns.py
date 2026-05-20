@@ -2021,6 +2021,22 @@ def create_turn(
                 ensure_ascii=False,
             )
 
+        # XS9/XS10/XS11: pending XP for successful skill check by DC range
+        if (roll_result_data and roll_result_data.get("success")
+                and roll_result_data.get("test") != "death_save"):
+            _dc_val = roll_result_data.get("dc")
+            if _dc_val and int(_dc_val) >= 12:
+                try:
+                    from app.services.xp_sources import grant_skill_dc_success
+                    _tn9 = conn.execute(
+                        "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    grant_skill_dc_success(conn, int(payload.character_id), campaign_id, int(_dc_val), _tn9)
+                    conn.commit()
+                except Exception:
+                    pass
+
         if roll_result_data and roll_result_data.get("test") == "death_save":
             sheet_dict = parse_character_sheet(character["sheet_json"])
             new_sheet, died_here = apply_death_save_outcome(sheet_dict, roll_result_data)
@@ -2036,6 +2052,18 @@ def create_turn(
                 ),
             )
             conn.commit()
+            # XS14: grant pending XP when player survives a death save
+            if not died_here:
+                try:
+                    from app.services.xp_sources import grant_death_save_survived
+                    _tn14 = conn.execute(
+                        "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    grant_death_save_survived(conn, int(payload.character_id), campaign_id, _tn14)
+                    conn.commit()
+                except Exception:
+                    pass
             character = get_character_or_404(conn, campaign_id, payload.character_id)
             if died_here:
                 loc = (character["location"] or "unknown place").strip()
@@ -2923,6 +2951,22 @@ def create_turn_stream(
                 ensure_ascii=False,
             )
 
+        # XS9/XS10/XS11: pending XP for successful skill check by DC range
+        if (roll_result_data and roll_result_data.get("success")
+                and roll_result_data.get("test") != "death_save"):
+            _dc_val = roll_result_data.get("dc")
+            if _dc_val and int(_dc_val) >= 12:
+                try:
+                    from app.services.xp_sources import grant_skill_dc_success
+                    _tn9 = conn.execute(
+                        "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    grant_skill_dc_success(conn, int(payload.character_id), campaign_id, int(_dc_val), _tn9)
+                    conn.commit()
+                except Exception:
+                    pass
+
         if roll_result_data and roll_result_data.get("test") == "death_save":
             sheet_dict = parse_character_sheet(character["sheet_json"])
             new_sheet, died_here = apply_death_save_outcome(sheet_dict, roll_result_data)
@@ -2938,6 +2982,18 @@ def create_turn_stream(
                 ),
             )
             conn.commit()
+            # XS14: grant pending XP when player survives a death save
+            if not died_here:
+                try:
+                    from app.services.xp_sources import grant_death_save_survived
+                    _tn14 = conn.execute(
+                        "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    grant_death_save_survived(conn, int(payload.character_id), campaign_id, _tn14)
+                    conn.commit()
+                except Exception:
+                    pass
             character = get_character_or_404(conn, campaign_id, payload.character_id)
             if died_here:
                 loc = (character["location"] or "unknown place").strip()

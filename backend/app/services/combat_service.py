@@ -1897,6 +1897,21 @@ def resolve_attack(
                                     conn.commit()
                         except Exception:
                             pass
+                        # XS13: outnumbered victory (3+ enemies)
+                        try:
+                            _enemy_count = sum(
+                                1 for c in combatants if c.get("type") == "enemy"
+                            )
+                            if _enemy_count >= 3:
+                                from app.services.xp_sources import grant_outnumbered_victory
+                                _tn13 = _next_combat_log_sequence(conn, cid)
+                                grant_outnumbered_victory(
+                                    conn, int(ch_id), int(campaign_id),
+                                    _enemy_count, _tn13,
+                                )
+                                conn.commit()
+                        except Exception:
+                            pass
                         out["combat_state"] = load_combat_snapshot(campaign_id)
                         return out
             else:
