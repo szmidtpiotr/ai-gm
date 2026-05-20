@@ -607,12 +607,13 @@ def resolve_starting_hex(
             "SELECT id FROM game_locations WHERE key = ? AND is_active = 1", (loc_key,)
         ).fetchone()
         if loc_row and not conn.execute(
-            "SELECT current_location_id FROM game_sessions WHERE id = ? AND current_location_id IS NOT NULL",
-            (gs["id"],),
+            "SELECT current_location_id FROM game_sessions "
+            "WHERE campaign_id = ? AND current_location_id IS NOT NULL",
+            (campaign_id,),
         ).fetchone():
             conn.execute(
-                "UPDATE game_sessions SET current_location_id = ? WHERE id = ?",
-                (loc_row["id"], gs["id"]),
+                "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
+                (loc_row["id"], campaign_id),
             )
 
     conn.commit()
