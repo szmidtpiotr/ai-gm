@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=stage2a-visual-bars-2026-05-19">
+  <link rel="stylesheet" href="./css/styles.css?v=stage4-bar-has-fallback-2026-05-21">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -224,10 +224,10 @@
   <!-- GAME SCREEN -->
   <div id="game-screen" class="screen">
     <header class="header header--game">
-      <button type="button" class="header__avatar" id="open-sheet-btn">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
+      <button type="button" class="header__avatar" id="home-btn" title="Postacie (główny ekran)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 11.5 12 4l9 7.5"/>
+          <path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/>
         </svg>
       </button>
       <div class="header__center">
@@ -378,18 +378,18 @@
     <div id="sheet-panel" class="sheet-panel">
       <div class="sheet-panel__handle"></div>
       <div class="sheet-panel__header">
-        <h2 id="sheet-character-name">Bohater</h2>
+        <div class="sheet-header-title">
+          <h2 id="sheet-character-name">Bohater</h2>
+          <span class="sheet-location-badge" id="sheet-location-badge" style="display:none">
+            <span class="sheet-location-badge__pin">📍</span>
+            <span class="sheet-location-badge__label" id="sheet-location-label"></span>
+          </span>
+        </div>
         <div class="sheet-tabs">
           <button type="button" class="sheet-tab sheet-tab--active" data-tab="stats">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
               <circle cx="12" cy="7" r="4"/>
-            </svg>
-          </button>
-          <button type="button" class="sheet-tab" data-tab="skills">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
             </svg>
           </button>
           <button type="button" class="sheet-tab" data-tab="inventory">
@@ -462,21 +462,14 @@
           <!-- X5: Rest buttons -->
           <div id="sheet-rest-actions"></div>
 
-          <div class="stats-grid" id="sheet-stats">
-            <!-- Stats inserted by JS -->
+          <!-- Stage 4 S2+S3 + merged skills: one combined stat→skill list -->
+          <div class="stat-skill-list" id="sheet-stat-skill-list">
+            <!-- Grouped stat+skill blocks inserted by JS -->
           </div>
 
           <div id="sheet-conditions-section" style="display:none">
             <h3 class="sheet-section-title">Aktywne Stany</h3>
             <div id="sheet-conditions" class="conditions-list"></div>
-          </div>
-        </div>
-
-        <!-- Skills Tab -->
-        <div id="tab-skills" class="sheet-tab-content">
-          <h3 class="sheet-section-title">Umiejętności</h3>
-          <div class="skills-list" id="sheet-skills">
-            <!-- Skills will be inserted here -->
           </div>
         </div>
 
@@ -981,8 +974,24 @@
     </div>
   </div>
 
+  <!-- Stage 4 S12: mobile bottom tab bar (visible below 768px only) -->
+  <nav id="mobile-bottom-bar" class="mobile-bottom-bar" aria-label="Główna nawigacja">
+    <button type="button" class="mbb-btn mbb-btn--active" data-mbb="game">
+      <span class="mbb-btn__icon" aria-hidden="true">🎲</span>
+      <span class="mbb-btn__label">Gra</span>
+    </button>
+    <button type="button" class="mbb-btn" data-mbb="character">
+      <span class="mbb-btn__icon" aria-hidden="true">👤</span>
+      <span class="mbb-btn__label">Postać</span>
+    </button>
+    <button type="button" class="mbb-btn" data-mbb="inventory">
+      <span class="mbb-btn__icon" aria-hidden="true">🎒</span>
+      <span class="mbb-btn__label">Ekwipunek</span>
+    </button>
+  </nav>
+
   <script src="./js/clog.js?v=combat-v35"></script>
   <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
-  <script src="./js/app.js?v=stage2c-rest-awansuj-xp-2026-05-20"></script>
+  <script src="./js/app.js?v=stage4-headerhome-2026-05-21"></script>
 </body>
 </html>

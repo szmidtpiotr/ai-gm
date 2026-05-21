@@ -47,3 +47,19 @@ def get_slash_commands_public():
     """Chat `/` autocomplete: tylko komendy włączone w adminie (Config → slash commands)."""
     return {"commands": get_public_slash_commands()}
 
+
+@router.get("/mechanics/conditions")
+def get_public_conditions():
+    """Player-facing condition catalog: key/label/description only. Powers
+    tooltip on condition chips in the character sheet (Stage 4 S5).
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT key, label, description FROM game_config_conditions WHERE is_active = 1 ORDER BY key"
+        ).fetchall()
+        return {"conditions": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+

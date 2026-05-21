@@ -22,6 +22,8 @@
 - **Audits & Tasks**
   - [Audit 2026-05-18](AUDIT_2026_05_18.md)
   - [Decisions 2026-05-18](DECISIONS_2026_05_18.md)
+  - [Piper Voice Training Prep](PIPER_VOICE_TRAINING_PREP.md)
+  - [Rulebook](RULEBOOK.md)
   - [Narrative Items](TASK_NARRATIVE_ITEMS.md)
   - [T46 Test Plan](TASK_T46_TEST_PLAN.md)
 

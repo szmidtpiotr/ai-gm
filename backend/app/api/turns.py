@@ -76,6 +76,8 @@ logger = get_logger(__name__)
 
 COMBAT_START_RE  = re.compile(r"\[COMBAT_START:([^\]]+)\]", re.IGNORECASE)
 DUNGEON_CLEAR_RE = re.compile(r"\[DUNGEON_CLEAR:([^\]]+)\]", re.IGNORECASE)
+# Stage 3 Z4 — [APPLY_CONDITION:condition_key:enemy_key]
+APPLY_CONDITION_RE = re.compile(r"\[APPLY_CONDITION:\s*([^:\s\]]+)\s*:\s*([^\]\s][^\]]*?)\s*\]", re.IGNORECASE)
 GRANT_ITEM_RE    = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
 GRANT_GOLD_RE = re.compile(r"^Grant Gold\s+([+-]?\d+)$", re.IGNORECASE)
 OPEN_SHOP_RE = re.compile(r"^Open Shop\s+(\S+)$", re.IGNORECASE)
@@ -294,6 +296,29 @@ def _maybe_start_combat_from_gm_tag(
             enemy_keys=enemy_keys,
             combat_id=combat_state.get("id"),
         )
+        # Stage 3 Z4 — apply pending zaskoczony from pre-combat stealth success
+        try:
+            import json as _pjson
+            with sqlite3.connect(DB_PATH) as _pconn:
+                _pconn.row_factory = sqlite3.Row
+                _gs = _pconn.execute(
+                    "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                _sf = _pjson.loads(_gs["session_flags"] or "{}") if _gs else {}
+                if _sf.get("pending_zaskoczony"):
+                    for _ek in enemy_keys:
+                        cs.apply_condition_to_combatant(campaign_id, _ek, "zaskoczony")
+                    _sf.pop("pending_zaskoczony", None)
+                    _pconn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                        (_pjson.dumps(_sf, ensure_ascii=False), campaign_id),
+                    )
+                    _pconn.commit()
+                    logger.info("combat_gm_tag_pending_zaskoczony_applied",
+                                campaign_id=campaign_id, enemy_keys=enemy_keys)
+        except Exception as _pz_err:
+            logger.warning("combat_gm_tag_pending_zaskoczony_error", error=str(_pz_err))
         return combat_state
     except ValueError as e:
         logger.warning(
@@ -2551,6 +2576,18 @@ def create_turn(
         # [DUNGEON_CLEAR:key] — strip tag and record completion
         _dungeon_clear_result = _handle_dungeon_clear_tag(campaign_id, payload.character_id, clean_assistant)
         clean_assistant = DUNGEON_CLEAR_RE.sub("", clean_assistant).rstrip()
+        # Stage 3 Z4 — [APPLY_CONDITION:zaskoczony:enemy_key] from stealth-success narration
+        try:
+            from app.services.combat_service import apply_condition_to_combatant
+            for _ac in APPLY_CONDITION_RE.finditer(clean_assistant):
+                _cond_key = _ac.group(1).strip()
+                _enemy_ref = _ac.group(2).strip()
+                _ac_res = apply_condition_to_combatant(campaign_id, _enemy_ref, _cond_key)
+                logger.info("apply_condition_tag", campaign_id=campaign_id,
+                            condition=_cond_key, enemy_ref=_enemy_ref, result=_ac_res)
+        except Exception as _ac_err:
+            logger.warning("apply_condition_tag_error", error=str(_ac_err))
+        clean_assistant = APPLY_CONDITION_RE.sub("", clean_assistant).rstrip()
         clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
         _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
         _narrative_for_cues, grant_item_labels, grant_gold_amount, open_shop_npc_key = extract_grant_cues(
@@ -2576,8 +2613,25 @@ def create_turn(
         # ── roll_cue skill test intercept ─────────────────────────────────────
         # When narrator emits roll_cue:"Roll Arcana d20" (not an attack), convert
         # it to skill_test_pending so the Roll Popup appears.
+        # Issue #53 fix 3: when LLM emits plain text (no JSON envelope), scan the
+        # narrative tail for a trailing "Roll <skill> d20" line — same intercept
+        # path, just sourced from raw text instead of the parsed JSON field.
+        _raw_cue = ""
         if _parsed_json and not _skill_pending_narrator:
             _raw_cue = str(_parsed_json.get("roll_cue") or "").strip()
+        elif not _parsed_json and not _skill_pending_narrator:
+            import re as _rc_re_pre
+            _tail_text = (clean_assistant or "").rstrip()
+            # Take the last non-empty line and check if it matches Roll <skill> d20
+            for _line in reversed(_tail_text.splitlines()):
+                _line_s = _line.strip()
+                if not _line_s:
+                    continue
+                if _rc_re_pre.match(r"^Roll\s+.+?\s+d\d+$", _line_s, _rc_re_pre.IGNORECASE):
+                    _raw_cue = _line_s
+                    logger.info("roll_cue_plain_text_fallback", cue=_raw_cue)
+                break  # only inspect the last non-empty line
+        if (_parsed_json or _raw_cue) and not _skill_pending_narrator:
             if _raw_cue:
                 import re as _rc_re
                 _cm = _rc_re.match(r"^Roll (.+?) d\d+$", _raw_cue, _rc_re.IGNORECASE)
@@ -2663,6 +2717,54 @@ def create_turn(
             process_create_tags(assistant_text or "", conn, campaign_id)
         except Exception as _pct_err:
             logger.warning("process_create_tags_error", error=str(_pct_err))
+
+        # XS1/XS2-XS8/XS12/XS15/XS6: narrative tag XP sources
+        try:
+            import re as _xs_re
+            from app.services.xp_sources import (
+                process_narrative_xp_tags,
+                grant_first_location_visit,
+                grant_first_npc_talk,
+                grant_session_start,
+                grant_beat_complete,
+            )
+            _xp_char_id = int(payload.character_id)
+            _xp_turn = conn.execute(
+                "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+                (campaign_id,),
+            ).fetchone()[0]
+            _xp_total = 0
+            # XS15: session start bonus — checked before this turn is written
+            _xp_total += grant_session_start(conn, _xp_char_id, campaign_id, _xp_turn)
+            # XS6: first NPC dialogue
+            _dlg_m = _xs_re.match(r"^DIALOGUE:(.+)$", text.strip(), _xs_re.I)
+            if _dlg_m:
+                _xp_total += grant_first_npc_talk(
+                    conn, _xp_char_id, campaign_id, _dlg_m.group(1).strip(), _xp_turn
+                )
+            # XS1: [BEAT_COMPLETE:key] tag in narrative
+            for _bm in _xs_re.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", assistant_text or "", _xs_re.I):
+                _xp_total += grant_beat_complete(conn, _xp_char_id, campaign_id, _bm.group(1), _xp_turn)
+            # XS2-XS4/XS7-XS8/XS12: bulk narrative tag parser
+            _tag_r = process_narrative_xp_tags(
+                assistant_text or "", conn, _xp_char_id, campaign_id, _xp_turn
+            )
+            _xp_total += _tag_r["total_granted"]
+            # XS5: first macro-location visit
+            _loc_r5 = conn.execute(
+                "SELECT gl.key FROM game_sessions gs "
+                "JOIN game_locations gl ON gl.id = gs.current_location_id "
+                "WHERE gs.campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _loc_r5:
+                _xp_total += grant_first_location_visit(
+                    conn, _xp_char_id, campaign_id, _loc_r5["key"], _xp_turn
+                )
+            if _xp_total:
+                conn.commit()
+        except Exception as _xs_err:
+            logger.warning("narrative_xp_hooks_error", error=str(_xs_err))
 
         log = create_turn_log(
             conn=conn,
@@ -3319,6 +3421,18 @@ def create_turn_stream(
             combat_extra = None
             if full_raw.strip():
                 clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
+                # Stage 3 Z4 — apply + strip [APPLY_CONDITION:condition_key:enemy_key]
+                try:
+                    from app.services.combat_service import apply_condition_to_combatant
+                    for _ac in APPLY_CONDITION_RE.finditer(clean_text):
+                        _ac_res = apply_condition_to_combatant(
+                            campaign_id_val, _ac.group(2).strip(), _ac.group(1).strip()
+                        )
+                        logger.info("apply_condition_tag_stream", campaign_id=campaign_id_val,
+                                    condition=_ac.group(1), enemy_ref=_ac.group(2), result=_ac_res)
+                except Exception as _ace:
+                    logger.warning("apply_condition_tag_stream_error", error=str(_ace))
+                clean_text = APPLY_CONDITION_RE.sub("", clean_text).rstrip()
                 fb = get_db()
                 try:
                     clean_text = maybe_append_open_shop_fallback(
@@ -3412,6 +3526,48 @@ def create_turn_stream(
                             amount=grant_gold_amount,
                             new_total_gp=new_total,
                         )
+                    # XS1/XS2-XS8/XS12/XS15/XS6: narrative tag XP sources (stream handler)
+                    try:
+                        import re as _xs_re2
+                        from app.services.xp_sources import (
+                            process_narrative_xp_tags,
+                            grant_first_location_visit,
+                            grant_first_npc_talk,
+                            grant_session_start,
+                            grant_beat_complete,
+                        )
+                        _xp_char_id2 = int(character_id_val)
+                        _xp_turn2 = save_conn.execute(
+                            "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+                            (campaign_id_val,),
+                        ).fetchone()[0]
+                        _xp_total2 = 0
+                        _xp_total2 += grant_session_start(save_conn, _xp_char_id2, campaign_id_val, _xp_turn2)
+                        _dlg_m2 = _xs_re2.match(r"^DIALOGUE:(.+)$", (user_text_val or "").strip(), _xs_re2.I)
+                        if _dlg_m2:
+                            _xp_total2 += grant_first_npc_talk(
+                                save_conn, _xp_char_id2, campaign_id_val, _dlg_m2.group(1).strip(), _xp_turn2
+                            )
+                        for _bm2 in _xs_re2.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", full_raw or "", _xs_re2.I):
+                            _xp_total2 += grant_beat_complete(save_conn, _xp_char_id2, campaign_id_val, _bm2.group(1), _xp_turn2)
+                        _tag_r2 = process_narrative_xp_tags(
+                            full_raw or "", save_conn, _xp_char_id2, campaign_id_val, _xp_turn2
+                        )
+                        _xp_total2 += _tag_r2["total_granted"]
+                        _loc_r52 = save_conn.execute(
+                            "SELECT gl.key FROM game_sessions gs "
+                            "JOIN game_locations gl ON gl.id = gs.current_location_id "
+                            "WHERE gs.campaign_id = ? LIMIT 1",
+                            (campaign_id_val,),
+                        ).fetchone()
+                        if _loc_r52:
+                            _xp_total2 += grant_first_location_visit(
+                                save_conn, _xp_char_id2, campaign_id_val, _loc_r52["key"], _xp_turn2
+                            )
+                        if _xp_total2:
+                            save_conn.commit()
+                    except Exception as _xs_err2:
+                        logger.warning("narrative_xp_hooks_stream_error", error=str(_xs_err2))
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, full_raw
                     )
@@ -3590,6 +3746,33 @@ def resolve_skill_test_endpoint(
         # Clear pending state
         session_flags.pop("pending_skill_test", None)
         session_flags["state"] = "NARRATIVE"
+
+        # Stage 3 Z4 — stealth success → server-side zaskoczony
+        # If active combat exists, apply zaskoczony to all alive enemies.
+        # Otherwise, set session_flags.pending_zaskoczony=True so the
+        # next [COMBAT_START:enemy_key] can pre-apply the condition.
+        _stealth_applied: list[str] = []
+        if str(pending.get("skill_key", "")).lower() == "stealth" and result.get("success") and not result.get("nat1"):
+            try:
+                from app.services.combat_service import get_active_combat, apply_condition_to_combatant
+                _snap = get_active_combat(campaign_id)
+                if _snap:
+                    for _c in (_snap.get("combatants") or []):
+                        if _c.get("type") == "player": continue
+                        if int(_c.get("hp_current", 0) or 0) <= 0: continue
+                        _ek = str(_c.get("enemy_key") or "")
+                        if _ek:
+                            _r = apply_condition_to_combatant(campaign_id, _ek, "zaskoczony")
+                            if _r.get("ok"):
+                                _stealth_applied.append(_ek)
+                    logger.info("stealth_success_zaskoczony_applied",
+                                campaign_id=campaign_id, enemies=_stealth_applied)
+                else:
+                    session_flags["pending_zaskoczony"] = True
+                    logger.info("stealth_success_pending_zaskoczony", campaign_id=campaign_id)
+            except Exception as _sa_err:
+                logger.warning("stealth_zaskoczony_error", error=str(_sa_err))
+
         conn.execute(
             "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
             (_json.dumps(session_flags, ensure_ascii=False), campaign_id),
@@ -3603,11 +3786,24 @@ def resolve_skill_test_endpoint(
         elif result.get("nat1"):
             nat_instruction = "To był fumble — wprowadź komplikację, która stworzy przyszłe napięcie."
 
+        # Stage 3 Z4 — stealth flavour hint when zaskoczony just applied
+        stealth_hint = ""
+        if _stealth_applied:
+            stealth_hint = (
+                " Cel/cele zostali zaskoczeni — opisz w narracji ich chwilową nieświadomość "
+                "i przewagę gracza, ale NIE umieszczaj żadnych tagów w nawiasach kwadratowych."
+            )
+        elif str(pending.get("skill_key", "")).lower() == "stealth" and result.get("success"):
+            stealth_hint = (
+                " Skradanie się powiodło — opisz że bohater jest w cieniu, nieświadom wrogów; "
+                "przewaga zaskoczenia zadziała w momencie rozpoczęcia walki."
+            )
+
         narrator_prompt = (
             f"{skill_ctx}\n\n"
             f"Napisz narrację wyniku testu umiejętności po polsku. "
             f"60-90 słów. Klimat dark fantasy. Nie wymieniaj liczb ani kości. "
-            f"{nat_instruction}"
+            f"{nat_instruction}{stealth_hint}"
         )
         try:
             prose_raw = _gen_chat(
@@ -3660,6 +3856,20 @@ def resolve_skill_test_endpoint(
              _persisted_roll, prose, "skill_test"),
         )
         conn.commit()
+
+        # XS9/XS10/XS11: grant pending XP for successful skill check by DC
+        if result.get("success") and not result.get("nat1"):
+            try:
+                _dc_val_st = None
+                _counter = pending.get("counter") or {}
+                if _counter.get("counter_type") == "dc":
+                    _dc_val_st = _counter.get("dc")
+                if _dc_val_st and int(_dc_val_st) >= 12:
+                    from app.services.xp_sources import grant_skill_dc_success
+                    grant_skill_dc_success(conn, int(payload.character_id), campaign_id, int(_dc_val_st), turn_number)
+                    conn.commit()
+            except Exception:
+                pass
 
         char_state_row = conn.execute(
             "SELECT sheet_json FROM characters WHERE id = ?", (payload.character_id,)
