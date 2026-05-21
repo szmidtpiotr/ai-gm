@@ -255,6 +255,78 @@ def _strip_hidden_fields(sheet: dict) -> dict:
     return sanitized
 
 
+def _auto_equip_first_weapon_and_armor(
+    character_id: int,
+    conn: sqlite3.Connection,
+) -> None:
+    """Equip the first granted weapon and the first armor item, if none of that
+    type is equipped yet. A clean character sheet starts ready to fight. Safe
+    to call multiple times — no-op when something is already equipped.
+    """
+    weapon_equipped = conn.execute(
+        "SELECT id FROM character_inventory WHERE character_id = ? AND weapon_key IS NOT NULL AND equipped = 1 LIMIT 1",
+        (character_id,),
+    ).fetchone()
+    if not weapon_equipped:
+        weapon_row = conn.execute(
+            "SELECT id FROM character_inventory WHERE character_id = ? AND weapon_key IS NOT NULL ORDER BY id ASC LIMIT 1",
+            (character_id,),
+        ).fetchone()
+        if weapon_row:
+            conn.execute(
+                "UPDATE character_inventory SET equipped = 1, slot = 'main_hand' WHERE id = ?",
+                (int(weapon_row["id"]),),
+            )
+
+    armor_equipped = conn.execute(
+        """
+        SELECT inv.id FROM character_inventory inv
+        JOIN game_config_items it ON it.key = inv.item_key
+        WHERE inv.character_id = ? AND it.item_type = 'armor' AND inv.equipped = 1 LIMIT 1
+        """,
+        (character_id,),
+    ).fetchone()
+    if not armor_equipped:
+        armor_row = conn.execute(
+            """
+            SELECT inv.id FROM character_inventory inv
+            JOIN game_config_items it ON it.key = inv.item_key
+            WHERE inv.character_id = ? AND it.item_type = 'armor'
+            ORDER BY inv.id ASC LIMIT 1
+            """,
+            (character_id,),
+        ).fetchone()
+        if armor_row:
+            conn.execute(
+                "UPDATE character_inventory SET equipped = 1, slot = 'torso' WHERE id = ?",
+                (int(armor_row["id"]),),
+            )
+    conn.commit()
+
+
+def _grant_and_equip_starter_loadout(
+    character_id: int,
+    archetype: str,
+    conn: sqlite3.Connection,
+) -> None:
+    """Grant the archetype's starter_items_json and auto-equip. Used by the
+    standalone (idle hero) creation path, which doesn't otherwise grant a kit.
+    """
+    arch_row = conn.execute(
+        "SELECT starter_items_json FROM game_config_archetypes WHERE key = ?",
+        (str(archetype or "").strip().lower(),),
+    ).fetchone()
+    if not arch_row:
+        return
+    try:
+        starter_items = json.loads(arch_row["starter_items_json"] or "[]")
+    except Exception:
+        starter_items = []
+    if isinstance(starter_items, list) and starter_items:
+        grant_loot_to_character(character_id, starter_items, source="start")
+    _auto_equip_first_weapon_and_armor(character_id, conn)
+
+
 # --- finalize-sheet (Phase 7.6): stat/skill redistribution + identity (player review) ---
 
 SIX_CORE_STATS = ("STR", "DEX", "CON", "INT", "WIS", "CHA", "LCK")
@@ -712,6 +784,13 @@ def create_standalone_character(req: dict = Body(...)):
             except Exception as e:
                 logger.warning("[create_standalone_character] scholar starting spells failed (non-fatal): %s", str(e))
 
+        # Grant + auto-equip starter loadout from the archetype config.
+        # Standalone (idle) heroes need their kit just like campaign-bundled ones.
+        try:
+            _grant_and_equip_starter_loadout(char_id, archetype, conn)
+        except Exception as e:
+            logger.warning("[create_standalone_character] starter loadout failed (non-fatal): %s", str(e))
+
         row = conn.execute("SELECT * FROM characters WHERE id = ?", (char_id,)).fetchone()
         item = dict(row)
         try:
@@ -944,12 +1023,28 @@ def get_character(character_id: int):
 
     # Stage 2C X5: include safe_for_rest based on current session location
     item["safe_for_rest"] = False
+    item["current_location_label"] = None
     if item.get("campaign_id"):
         try:
             from app.services.rest_service import _is_safe_for_character
             item["safe_for_rest"] = _is_safe_for_character(
                 character_id, int(item["campaign_id"]), conn
             )
+        except Exception:
+            pass
+        # Stage 4 S1: location badge — resolve current location label
+        try:
+            loc_row = conn.execute(
+                """
+                SELECT gl.label
+                FROM game_sessions gs
+                JOIN game_locations gl ON gl.id = gs.current_location_id
+                WHERE gs.id = ?
+                """,
+                (str(item["campaign_id"]),),
+            ).fetchone()
+            if loc_row and loc_row[0]:
+                item["current_location_label"] = loc_row[0]
         except Exception:
             pass
 
@@ -1645,6 +1740,7 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                     starter_items = []
                 if isinstance(starter_items, list) and starter_items:
                     grant_loot_to_character(character_id, starter_items, source="start")
+                    _auto_equip_first_weapon_and_armor(character_id, conn)
                 ggp = int(arch_row["starter_gold_gp"] or 0)
                 if ggp > 0:
                     conn.execute(
@@ -2028,6 +2124,7 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
                 starter_items = []
             if isinstance(starter_items, list) and starter_items:
                 grant_loot_to_character(character_id, starter_items, source="start")
+                _auto_equip_first_weapon_and_armor(character_id, conn)
             ggp = int(arch_row["starter_gold_gp"] or 0)
             if ggp > 0:
                 conn.execute(

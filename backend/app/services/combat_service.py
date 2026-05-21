@@ -94,6 +94,46 @@ def _sheet_conditions(sheet: dict) -> list[dict[str, Any]]:
     return [x for x in raw if isinstance(x, dict)]
 
 
+# ── Stage 3 Z2: attacker bonuses from target conditions ────────────────────
+
+def _apply_attack_bonuses(attacker: dict, target: dict) -> dict[str, Any]:
+    """Stage 3 Z2: derive attacker-side bonuses from target's conditions.
+
+    Currently handles `zaskoczony` (surprise): +2 to attack roll, first hit
+    deals doubled damage, and condition is consumed after damage (Z3).
+    Returns `{atk_bonus: int, first_hit_doubled: bool, consumed_keys: list[str]}`.
+    """
+    out: dict[str, Any] = {"atk_bonus": 0, "first_hit_doubled": False, "consumed_keys": []}
+    if not isinstance(target, dict):
+        return out
+    conds = target.get("conditions") or []
+    if not isinstance(conds, list):
+        return out
+    for c in conds:
+        if not isinstance(c, dict):
+            continue
+        if str(c.get("key", "")).lower() == "zaskoczony":
+            out["atk_bonus"] += 2
+            out["first_hit_doubled"] = True
+            out["consumed_keys"].append("zaskoczony")
+            break
+    return out
+
+
+def _clear_consumed_conditions(target: dict, consumed_keys: list[str]) -> None:
+    """Stage 3 Z3: remove keys from target.conditions list in place."""
+    if not consumed_keys or not isinstance(target, dict):
+        return
+    conds = target.get("conditions") or []
+    if not isinstance(conds, list):
+        return
+    keyset = {str(k).lower() for k in consumed_keys}
+    target["conditions"] = [
+        c for c in conds
+        if not (isinstance(c, dict) and str(c.get("key", "")).lower() in keyset)
+    ]
+
+
 def _apply_weapon_effects(
     weapon_row: dict | None,
     sheet: dict,
@@ -576,6 +616,75 @@ def get_active_combat(campaign_id: int) -> dict[str, Any] | None:
             return _row_to_combat_dict(row)
     except sqlite3.OperationalError:
         return None
+
+
+# ── Stage 3 Z4: apply a condition to a combatant by enemy_key/name ─────────
+
+def apply_condition_to_combatant(
+    campaign_id: int, enemy_ref: str, condition_key: str,
+) -> dict[str, Any]:
+    """Find combatant by enemy_key/name (case-insensitive contains match),
+    add the condition to its conditions list, persist combat row.
+
+    Returns `{ok: bool, matched: enemy_key|None, reason: str}`.
+    """
+    if not enemy_ref or not condition_key:
+        return {"ok": False, "matched": None, "reason": "missing_args"}
+    snap = get_active_combat(campaign_id)
+    if not snap:
+        return {"ok": False, "matched": None, "reason": "no_active_combat"}
+    combatants = snap.get("combatants") or []
+    ref_lo = enemy_ref.strip().lower()
+    matched = None
+    for c in combatants:
+        if not isinstance(c, dict) or c.get("type") == "player":
+            continue
+        if int(c.get("hp_current", 0) or 0) <= 0:
+            continue
+        ek = str(c.get("enemy_key", "")).lower()
+        nm = str(c.get("name", "")).lower()
+        if ref_lo == ek or ref_lo == nm or ref_lo in ek or ref_lo in nm:
+            matched = c
+            break
+    if not matched:
+        return {"ok": False, "matched": None, "reason": "enemy_not_found"}
+    conds = matched.get("conditions") or []
+    if not isinstance(conds, list):
+        conds = []
+    if any(isinstance(c, dict) and str(c.get("key", "")).lower() == condition_key.lower() for c in conds):
+        return {"ok": True, "matched": matched.get("enemy_key"), "reason": "already_present"}
+    # Look up label from config (best-effort)
+    label = condition_key.title()
+    try:
+        with _conn() as _c2:
+            r = _c2.execute(
+                "SELECT label FROM game_config_conditions WHERE key = ? AND is_active = 1",
+                (condition_key,),
+            ).fetchone()
+            if r and r["label"]:
+                label = str(r["label"])
+    except Exception:
+        pass
+    conds.append({"key": condition_key.lower(), "label": label, "runtime": {}})
+    matched["conditions"] = conds
+    # Persist
+    try:
+        with _conn() as conn:
+            _save_combat_row(
+                conn, campaign_id,
+                character_id=int(snap.get("character_id") or 0),
+                round_n=int(snap.get("round") or 1),
+                turn_order=list(snap.get("turn_order") or []),
+                current_turn=str(snap.get("current_turn") or ""),
+                combatants=list(combatants),
+                status=str(snap.get("status") or "active"),
+                ended_reason=snap.get("ended_reason"),
+                location_tag=snap.get("location_tag"),
+            )
+            conn.commit()
+    except Exception as e:
+        return {"ok": False, "matched": matched.get("enemy_key"), "reason": f"persist_error:{e}"}
+    return {"ok": True, "matched": matched.get("enemy_key"), "reason": "applied"}
 
 
 def get_enemy_catalog_for_prompt(conn: sqlite3.Connection) -> str:
@@ -1554,6 +1663,11 @@ def resolve_attack(
                     roll_result = int(attack_roll["total"])
             elif roll_result is None:
                 raise ValueError("missing player attack roll")
+            # Stage 3 Z2: surprise (zaskoczony) → +2 to attack total
+            _surprise_fx = _apply_attack_bonuses(sheet, enemy)
+            if _surprise_fx.get("atk_bonus"):
+                roll_result = int(roll_result) + int(_surprise_fx["atk_bonus"])
+                out["surprise_atk_bonus"] = int(_surprise_fx["atk_bonus"])
             player_nat20 = player_raw == 20
             player_nat1 = player_raw == 1
             dodge_roll: dict[str, Any] | None = None
@@ -1690,11 +1804,24 @@ def resolve_attack(
                     ).upper()
                 mod = _stat_mod(sheet, stat)
                 dmg = roll_damage_dice(die, mod)
+                # Stage 3 Z2/Z6: ×2 on crit, ×2 on surprise → ×4 if both
+                _dmg_mult = 1
+                if player_nat20:
+                    _dmg_mult *= 2
+                if _surprise_fx.get("first_hit_doubled"):
+                    _dmg_mult *= 2
+                if _dmg_mult > 1:
+                    dmg = dmg * _dmg_mult
+                    out["damage_multiplier"] = _dmg_mult
                 out["damage"] = dmg
                 prev_hp = int(enemy.get("hp_current", 0) or 0)
                 next_hp = max(0, prev_hp - dmg)
                 enemy["hp_current"] = next_hp
                 out["target_hp_remaining"] = next_hp
+                # Stage 3 Z3: clear `zaskoczony` (or any consumed condition) after damage
+                if _surprise_fx.get("consumed_keys"):
+                    _clear_consumed_conditions(enemy, _surprise_fx["consumed_keys"])
+                    out["consumed_conditions"] = _surprise_fx["consumed_keys"]
 
                 # ── Weapon effect_json (extra damage, save-or-condition) ──────
                 _wfx = _apply_weapon_effects(

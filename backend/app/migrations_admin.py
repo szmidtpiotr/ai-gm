@@ -627,19 +627,115 @@ ADMIN_SEEDS = [
     """,
     """
     INSERT OR IGNORE INTO game_config_skills (key, label, linked_stat, rank_ceiling, sort_order, description) VALUES
-    ('stealth', 'Stealth', 'DEX', 5, 1, 'Ciche poruszanie się i unikanie wykrycia. Odpowiada za wymykanie się, skradanie i działanie w cieniu.'),
-    ('athletics', 'Athletics', 'STR', 5, 2, 'Wysiłek fizyczny: bieganie, skoki, wspinaczka i dźwiganie.'),
-    ('initiative', 'Initiative', 'DEX', 5, 3, 'Szybka reakcja i gotowość do działania. Odpowiada za tempo i pierwszeństwo w niebezpiecznych chwilach.'),
-    ('attack', 'Attack', 'STR', 5, 4, 'Zdolność do skutecznego uderzenia: celowanie, siła i timing ataku.'),
-    ('two_handed', 'Two-Handed', 'STR', 5, 5, 'Biegłość w prowadzeniu ciężkiej broni dwuręcznej bez utraty kontroli nad ciosem.'),
-    ('awareness', 'Awareness', 'WIS', 5, 6, 'Wnikliwa obserwacja i czujność. Pomaga dostrzec zagrożenia, śledzić tropy i wyłapać drobne sygnały.'),
-    ('persuasion', 'Persuasion', 'CHA', 5, 7, 'Urok, argumenty i przekonywanie innych. Odpowiada za perswazję i rozmowę prowadzącą do zgody.'),
-    ('intimidation', 'Intimidation', 'CHA', 5, 8, 'Straszenie, stanowczość i presja psychiczna. Odpowiada za zastraszanie i wymuszanie reakcji.'),
-    ('survival', 'Survival', 'WIS', 5, 9, 'Przetrwanie w trudnych warunkach. Odpowiada za orientację, instynkt i decyzje w terenie.'),
-    ('lore', 'Lore', 'INT', 5, 10, 'Wiedza z opowieści i dawnych ksiąg. Odpowiada za rozpoznanie kultury, historii, symboli i opowieści świata.'),
-    ('arcana', 'Arcana', 'INT', 5, 11, 'Rozumienie magii i zjawisk magicznych. Odpowiada za rozpoznawanie zaklęć, rytuałów i sekretów arkanów.'),
-    ('medicine', 'Medicine', 'WIS', 5, 12, 'Udzielanie pomocy i leczenie. Odpowiada za ocenę ran, dobór środków i stabilizację w walce.'),
-    ('investigation', 'Investigation', 'INT', 5, 13, 'Dociekliwość i analizowanie szczegółów. Odpowiada za szukanie tropów, wyciąganie wniosków i składanie faktów.')
+    ('stealth', 'Skradanie', 'DEX', 5, 1, 'Ciche poruszanie się i unikanie wykrycia. Odpowiada za wymykanie się, skradanie i działanie w cieniu.'),
+    ('athletics', 'Atletyka', 'STR', 5, 2, 'Wysiłek fizyczny: bieganie, skoki, wspinaczka i dźwiganie.'),
+    ('initiative', 'Inicjatywa', 'DEX', 5, 3, 'Szybka reakcja i gotowość do działania. Odpowiada za tempo i pierwszeństwo w niebezpiecznych chwilach.'),
+    ('attack', 'Atak', 'STR', 5, 4, 'Zdolność do skutecznego uderzenia: celowanie, siła i timing ataku.'),
+    ('two_handed', 'Broń dwuręczna', 'STR', 5, 5, 'Biegłość w prowadzeniu ciężkiej broni dwuręcznej bez utraty kontroli nad ciosem.'),
+    ('awareness', 'Spostrzegawczość', 'WIS', 5, 6, 'Wnikliwa obserwacja i czujność. Pomaga dostrzec zagrożenia, śledzić tropy i wyłapać drobne sygnały.'),
+    ('persuasion', 'Perswazja', 'CHA', 5, 7, 'Urok, argumenty i przekonywanie innych. Odpowiada za perswazję i rozmowę prowadzącą do zgody.'),
+    ('intimidation', 'Zastraszanie', 'CHA', 5, 8, 'Straszenie, stanowczość i presja psychiczna. Odpowiada za zastraszanie i wymuszanie reakcji.'),
+    ('survival', 'Przetrwanie', 'WIS', 5, 9, 'Przetrwanie w trudnych warunkach. Odpowiada za orientację, instynkt i decyzje w terenie.'),
+    ('lore', 'Wiedza', 'INT', 5, 10, 'Wiedza z opowieści i dawnych ksiąg. Odpowiada za rozpoznanie kultury, historii, symboli i opowieści świata.'),
+    ('arcana', 'Arkana', 'INT', 5, 11, 'Rozumienie magii i zjawisk magicznych. Odpowiada za rozpoznawanie zaklęć, rytuałów i sekretów arkanów.'),
+    ('medicine', 'Medycyna', 'WIS', 5, 12, 'Udzielanie pomocy i leczenie. Odpowiada za ocenę ran, dobór środków i stabilizację w walce.'),
+    ('investigation', 'Dochodzenie', 'INT', 5, 13, 'Dociekliwość i analizowanie szczegółów. Odpowiada za szukanie tropów, wyciąganie wniosków i składanie faktów.'),
+    ('lockpick', 'Otwieranie zamków', 'DEX', 5, 14, 'Otwieranie zamków bez klucza — wytrychem, improwizowanym narzędziem lub gołymi rękami.'),
+    ('acrobatics', 'Akrobatyka', 'DEX', 5, 15, 'Zwinność i równowaga w ruchu — przewroty, balansowanie na krawędzi, łapanie się w upadku.'),
+    ('insight', 'Wnikliwość', 'WIS', 5, 16, 'Czytanie intencji i emocji rozmówcy — wykrywanie kłamstwa, oceny czyichś motywów.'),
+    ('deception', 'Oszustwo', 'CHA', 5, 17, 'Wprowadzanie w błąd słowem lub gestem — kłamanie, blefowanie, granie roli.')
+    """,
+    # Translate any pre-existing English labels to Polish (idempotent — only
+    # rewrites rows still holding the English defaults so admin renames are kept).
+    """
+    UPDATE game_config_skills SET label = 'Skradanie'          WHERE key = 'stealth'       AND label = 'Stealth'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Atletyka'           WHERE key = 'athletics'     AND label = 'Athletics'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Inicjatywa'         WHERE key = 'initiative'    AND label = 'Initiative'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Atak'               WHERE key = 'attack'        AND label = 'Attack'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Broń dwuręczna'     WHERE key = 'two_handed'    AND label = 'Two-Handed'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Spostrzegawczość'   WHERE key = 'awareness'     AND label = 'Awareness'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Perswazja'          WHERE key = 'persuasion'    AND label = 'Persuasion'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Zastraszanie'       WHERE key = 'intimidation'  AND label = 'Intimidation'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Przetrwanie'        WHERE key = 'survival'      AND label = 'Survival'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Wiedza'             WHERE key = 'lore'          AND label = 'Lore'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Arkana'             WHERE key = 'arcana'        AND label = 'Arcana'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Medycyna'           WHERE key = 'medicine'      AND label = 'Medicine'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Dochodzenie'        WHERE key = 'investigation' AND label = 'Investigation'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Otwieranie zamków'  WHERE key = 'lockpick'      AND label = 'Lockpick'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Akrobatyka'         WHERE key = 'acrobatics'    AND label = 'Acrobatics'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Wnikliwość'         WHERE key = 'insight'       AND label = 'Insight'
+    """,
+    """
+    UPDATE game_config_skills SET label = 'Oszustwo'           WHERE key = 'deception'     AND label = 'Deception'
+    """,
+    # Issue #53 fix 2 — narrow trigger_keywords for skills the LLM most often
+    # picks WRONG. Only set when empty so admin overrides are preserved.
+    # Keywords are space-prefixed substring matches against PL→ASCII normalized
+    # player text, with a min length of 5 chars (per turns.py:2657).
+    # `lockpick`: LLM picks Investigation (INT) instead of lockpick (DEX) for
+    # every wytrych/sforsować phrasing — see audit issue #53.
+    """
+    UPDATE game_config_skills
+       SET trigger_keywords = 'wytrych sforsować wytrychem wytrychami'
+     WHERE key = 'lockpick' AND (trigger_keywords IS NULL OR trigger_keywords = '')
+    """,
+    # `medicine`: LLM occasionally picks Awareness/Investigation for triage —
+    # the verbs opatrzyć / opatrunek / bandażować are unambiguous.
+    """
+    UPDATE game_config_skills
+       SET trigger_keywords = 'opatrzyć opatrunek bandażuję bandażuje'
+     WHERE key = 'medicine' AND (trigger_keywords IS NULL OR trigger_keywords = '')
+    """,
+    # `acrobatics`: LLM picks Athletics (STR) instead of Acrobatics (DEX) for
+    # salto / przewrót / balansowanie phrasings — DEX-coded movement.
+    """
+    UPDATE game_config_skills
+       SET trigger_keywords = 'salto przewrót akrobacj balansuję balansować'
+     WHERE key = 'acrobatics' AND (trigger_keywords IS NULL OR trigger_keywords = '')
+    """,
+    # `insight`: LLM picks Awareness (perceptual) instead of Insight (social
+    # read). These stems target *reading* people, not spotting things.
+    """
+    UPDATE game_config_skills
+       SET trigger_keywords = 'wyczytać intencj przejrzeć podstęp zamiarów'
+     WHERE key = 'insight' AND (trigger_keywords IS NULL OR trigger_keywords = '')
+    """,
+    # `deception`: LLM picks Persuasion (honest convincing) instead of
+    # Deception (lying). First-person action verbs disambiguate.
+    """
+    UPDATE game_config_skills
+       SET trigger_keywords = 'blefuję udaję oszukać ściemniam kłamię'
+     WHERE key = 'deception' AND (trigger_keywords IS NULL OR trigger_keywords = '')
     """,
     """
     INSERT OR IGNORE INTO game_config_dc (key, label, value, sort_order, description) VALUES
@@ -686,6 +782,12 @@ ADMIN_SEEDS = [
     (key, label, effect_json, description, is_active, locked_at, created_at, updated_at)
     VALUES
     ('poisoned', 'Poisoned', '{"schema_version":1,"effect_category":"character_condition","effects":[{"type":"static_stat_modifier","stat":"STR","value":-2,"expires":"duration_rounds:3"}]}', 'Temporary STR penalty.', 1, NULL, datetime('now'), datetime('now'))
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_conditions
+    (key, label, effect_json, description, is_active, stackable, auto_remove, locked_at, created_at, updated_at)
+    VALUES
+    ('zaskoczony', 'Zaskoczony', '{"schema_version":1,"effect_category":"character_condition","grants_attacker_bonus":{"atk_bonus":2,"first_hit_doubled":true},"clear_on":"damage_taken"}', 'Cel zaskoczony — atakujący zyskuje +2 do rzutu i podwaja obrażenia pierwszego trafienia. Znika po otrzymaniu obrażeń.', 1, 0, 'on_damage', NULL, datetime('now'), datetime('now'))
     """,
     """
     UPDATE game_config_stats

@@ -69,7 +69,7 @@ const elements = {
     headerClock: document.getElementById('header-clock'),
     chatMessages: document.getElementById('chat-messages'),
     chatInput: document.getElementById('chat-input'),
-    btnOpenSheet: document.getElementById('open-sheet-btn'),
+    btnHome: document.getElementById('home-btn'),
     btnOpenSettings: document.getElementById('open-settings-btn'),
     btnSend: document.getElementById('send-btn'),
 
@@ -280,6 +280,10 @@ function showScreen(screenName) {
     if (screens[screenName]) {
         screens[screenName].classList.add('screen--active');
         currentScreen = screenName;
+        // S12 follow-up: bottom bar is a game-screen affordance only.
+        // Toggle a body class so CSS can both gate the bar's display AND
+        // make room at the bottom of #game-screen so the composer isn't covered.
+        document.body.classList.toggle('bottom-bar-visible', screenName === 'game');
         window.clog?.setContext({ screen: screenName });
         window.clog?.event('screen_change', { screen: screenName });
         if (screenName !== 'game' && typeof stopCombatPolling === 'function') {
@@ -1452,7 +1456,7 @@ async function enterGame(campaign) {
     const level = sheet.level || characterData?.level || 1;
     const hp = sheet.current_hp ?? characterData?.hp ?? 29;
     const maxHp = sheet.max_hp ?? characterData?.max_hp ?? 29;
-    elements.characterStatsDisplay.textContent = `Poziom ${level} • ${hp}/${maxHp} HP`;
+    elements.characterStatsDisplay.textContent = `${hp}/${maxHp} HP`;
     elements.chatMessages.innerHTML = '';
 
     // T5 — fetch initial clock state and render in header
@@ -1688,6 +1692,7 @@ function parseGmFull(text) {
     let raw = String(text).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const stripInternalTags = s => String(s || '')
         .replace(/\s*\[LOCATION_BLOCKED:[^\]]*\]/g, '')
+        .replace(/\s*\[APPLY_CONDITION:[^\]]*\]/g, '')
         .trim();
     try {
         const data = JSON.parse(raw);
@@ -1705,6 +1710,7 @@ function parseGmFull(text) {
 function parseGmResponse(text) {
     const stripExtra = s => String(s || '')
         .replace(/\s*\[LOCATION_BLOCKED:[^\]]*\]/g, '')
+        .replace(/\s*\[APPLY_CONDITION:[^\]]*\]/g, '')
         .trim();
 
     if (!text) return '';
@@ -2593,7 +2599,7 @@ function updateHeaderStats() {
     const level = sheet.level || characterData.level || 1;
     const hp = sheet.current_hp ?? characterData.hp ?? 29;
     const maxHp = sheet.max_hp ?? characterData.max_hp ?? 29;
-    elements.characterStatsDisplay.textContent = `Poziom ${level} • ${hp}/${maxHp} HP`;
+    elements.characterStatsDisplay.textContent = `${hp}/${maxHp} HP`;
 
     if (elements.headerHpBarFill && maxHp > 0) {
         const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
@@ -2951,9 +2957,17 @@ function _renderInitiativeTrack(cs) {
         ].filter(Boolean).join(' ');
         const name = String(c.name || (isPlayer ? 'Bohater' : c.enemy_key) || '—');
         const zoneLabel = zone === 'ranged' ? 'Dystans' : 'Zwarcie';
+        // Stage 3 Z5 — surprise (zaskoczony) badge
+        const _conds = Array.isArray(c.conditions) ? c.conditions : [];
+        const _surprised = _conds.some(cc => cc && String(cc.key || '').toLowerCase() === 'zaskoczony');
+        const _surpriseBadge = _surprised
+            ? `<div class="init-chip__surprise" title="Zaskoczony — atak +2, pierwsze trafienie podwaja obrażenia">⚡</div>`
+            : '';
+        const _surpriseTitleSuffix = _surprised ? ' · ⚡ Zaskoczony' : '';
         return `
-            <div class="${cls}" data-combatant-id="${escapeHtml(id)}" title="${escapeHtml(name)}${ini ? ' · ' + ini : ''} · ${zoneLabel}">
+            <div class="${cls}" data-combatant-id="${escapeHtml(id)}" title="${escapeHtml(name)}${ini ? ' · ' + ini : ''} · ${zoneLabel}${_surpriseTitleSuffix}">
                 <div class="init-chip__zone" aria-label="${zoneLabel}">${zoneGlyph}</div>
+                ${_surpriseBadge}
                 <div class="init-chip__portrait">${portrait}</div>
                 <div class="init-chip__name">${escapeHtml(name)}</div>
                 <div class="init-chip__ini">${ini}</div>
@@ -3020,12 +3034,19 @@ function renderCombatUI(cs) {
         }
         const tier = dead ? 'low' : (pct > 60 ? 'high' : (pct > 25 ? 'mid' : 'low'));
         const name = String(c.name || c.enemy_key || 'Wróg');
+        // Stage 3 Z5 — surprise badge on combatant row
+        const _rowConds = Array.isArray(c.conditions) ? c.conditions : [];
+        const _rowSurprised = _rowConds.some(cc => cc && String(cc.key || '').toLowerCase() === 'zaskoczony');
+        const _rowSurpriseBadge = _rowSurprised
+            ? `<span class="combat-combatant__surprise" title="Zaskoczony — atak +2, pierwsze trafienie podwaja obrażenia">⚡</span>`
+            : '';
         return `
             <div class="combat-combatant combat-combatant--enemy ${dead ? 'combat-enemy--dead' : ''}">
                 <div class="combat-combatant__icon">${dead ? '💀' : '⚔️'}</div>
                 <div class="combat-combatant__body">
                     <div class="combat-combatant__name">
                         <span class="combat-combatant__name-text ${dead ? 'combat-enemy--dead' : ''}">${escapeHtml(name)}</span>
+                        ${_rowSurpriseBadge}
                         <span class="combat-combatant__meta">${ini}</span>
                     </div>
                     <div class="combat-combatant__hp-row">
@@ -3439,6 +3460,38 @@ function closeCharacterSheet() {
     }
 }
 
+// Stage 4 S12: mobile bottom-tab bar — three top-level views (Gra/Postać/Ekwipunek).
+// Only visible below 768px (CSS-gated). Routes to existing sheet open + inner-tab switch.
+function _setMobileBarActive(view) {
+    document.querySelectorAll('#mobile-bottom-bar .mbb-btn').forEach(btn => {
+        btn.classList.toggle('mbb-btn--active', btn.dataset.mbb === view);
+    });
+}
+function _switchSheetTab(tabId) {
+    const tab = document.querySelector(`.sheet-tab[data-tab="${tabId}"]`);
+    if (!tab) return;
+    document.querySelectorAll('.sheet-tab').forEach(t => t.classList.remove('sheet-tab--active'));
+    tab.classList.add('sheet-tab--active');
+    document.querySelectorAll('.sheet-tab-content').forEach(c => {
+        c.classList.toggle('sheet-tab-content--active', c.id === `tab-${tabId}`);
+    });
+}
+function handleMobileBarClick(e) {
+    const btn = e.target.closest('.mbb-btn');
+    if (!btn) return;
+    const view = btn.dataset.mbb;
+    if (view === 'game') {
+        if (isSheetOpen) closeCharacterSheet();
+    } else if (view === 'character') {
+        if (!isSheetOpen) toggleCharacterSheet();
+        _switchSheetTab('stats');
+    } else if (view === 'inventory') {
+        if (!isSheetOpen) toggleCharacterSheet();
+        _switchSheetTab('inventory');
+    }
+    _setMobileBarActive(view);
+}
+
 function handleSheetTabClick(e) {
     const tab = e.target.closest('.sheet-tab');
     if (!tab) return;
@@ -3460,11 +3513,25 @@ function populateCharacterSheet(character) {
     if (typeof sheet === 'string') { try { sheet = JSON.parse(sheet); } catch { sheet = {}; } }
     elements.sheetCharacterName.textContent = character.name || 'Bohater';
 
+    // Stage 4 S1: location badge in sheet header
+    const locBadge = document.getElementById('sheet-location-badge');
+    const locLabel = document.getElementById('sheet-location-label');
+    if (locBadge && locLabel) {
+        const locName = character.current_location_label;
+        if (locName) {
+            locLabel.textContent = locName;
+            locBadge.style.display = '';
+        } else {
+            locBadge.style.display = 'none';
+        }
+    }
+
     // HP
     const hp = sheet.current_hp ?? character.hp ?? 29;
     const maxHp = Math.max(1, sheet.max_hp ?? character.max_hp ?? 29);
     elements.sheetHp.textContent = `${hp} / ${maxHp}`;
     elements.sheetHpBar.style.width = `${Math.max(0, Math.min(100, (hp / maxHp) * 100))}%`;
+    flashHpOnDamage(hp);  // S8
 
     // Wound label (T24 / W1) — appears below HP bar when HP ≤ 75%
     const hpCard = elements.sheetHp?.closest('.stat-card--hp');
@@ -3509,6 +3576,7 @@ function populateCharacterSheet(character) {
     if (xpEl) xpEl.textContent = xpAvail;
     if (xpBarFill) xpBarFill.style.width = `${xpPct}%`;
     if (xpPendingEl) xpPendingEl.textContent = xpPending > 0 ? `+${xpPending} oczekujące` : '';
+    pulseXpOnGain(xpAvail);  // S10
     if (xpNextEl) xpNextEl.textContent = level < 10 ? `${xpToNext} do mil. ${nextMilestone}` : 'MAX';
 
     // X5: Rest buttons — show/hide based on safe_for_rest from current location
@@ -3523,38 +3591,11 @@ function populateCharacterSheet(character) {
         apEl.textContent = ap;
     }
 
-    // Stats grid with modifiers
-    const stats = sheet.stats || character.stats || {};
-    const mods = sheet.stat_modifiers || {};
-    const STAT_LABELS = { STR:'Siła', DEX:'Zręczność', CON:'Kondycja', INT:'Inteligencja', WIS:'Mądrość', CHA:'Charyzma', LCK:'Szczęście' };
-    const statNames = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'LCK'];
-    elements.sheetStats.innerHTML = statNames.map(stat => {
-        const val = stats[stat] ?? stats[stat.toLowerCase()] ?? 10;
-        const mod = mods[stat] ?? Math.floor((val - 10) / 2);
-        const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
-        const modCls = mod > 0 ? 'mod--pos' : mod < 0 ? 'mod--neg' : 'mod--zero';
-        return `<div class="stat-item">
-            <span class="stat-item__label" title="${STAT_LABELS[stat] || stat}">${stat}</span>
-            <span class="stat-item__value">${val}</span>
-            <span class="stat-item__mod ${modCls}">${modStr}</span>
-        </div>`;
-    }).join('');
+    // Stage 4 S2+S3 + merged: stat→skill grouped list
+    renderStatSkillList(sheet);
 
-    // Conditions
-    const conditions = sheet.conditions || [];
-    const condSection = document.getElementById('sheet-conditions-section');
-    const condEl = document.getElementById('sheet-conditions');
-    if (condSection && condEl) {
-        if (conditions.length > 0) {
-            condSection.style.display = '';
-            condEl.innerHTML = conditions.map(c => {
-                const label = typeof c === 'string' ? c : (c.label || c.key || c);
-                return `<span class="condition-chip">${escapeHtml(label)}</span>`;
-            }).join('');
-        } else {
-            condSection.style.display = 'none';
-        }
-    }
+    // Stage 4 S5+S6+S11: conditions w/ tooltip, auto-expand, fade transitions
+    renderConditionsBlock(sheet.conditions || []);
 
     // Show/hide spells tab for Scholar
     const spellsTabBtn = document.getElementById('sheet-tab-spells');
@@ -3562,7 +3603,6 @@ function populateCharacterSheet(character) {
         spellsTabBtn.style.display = sheet.archetype === 'scholar' ? '' : 'none';
     }
 
-    renderSkillsTab(sheet);
     renderSpellsTab(character, sheet);
     renderInventoryTab(character);
 
@@ -3842,6 +3882,205 @@ async function _ensureSkillMeta() {
     SKILL_META_CACHE.fetchedAt = now;
 }
 
+// Stage 4 S5: condition tooltip — cache labels + descriptions from public endpoint
+const CONDITION_META_CACHE = { byKey: null, fetchedAt: 0 };
+const CONDITION_META_TTL_MS = 5 * 60_000;
+async function _ensureConditionMeta() {
+    const now = Date.now();
+    if (CONDITION_META_CACHE.byKey && now - CONDITION_META_CACHE.fetchedAt < CONDITION_META_TTL_MS) return;
+    try {
+        const r = await fetch('/api/mechanics/conditions').then(r => r.ok ? r.json() : null);
+        const items = r?.conditions || [];
+        CONDITION_META_CACHE.byKey = Object.fromEntries(items.map(c => [c.key, c]));
+    } catch (_e) {
+        CONDITION_META_CACHE.byKey = {};
+    }
+    CONDITION_META_CACHE.fetchedAt = now;
+}
+
+// Stage 4 S4: stat tooltip — Polish names + role hints for the 7 core stats
+const STAT_TOOLTIPS = {
+    STR: 'Siła — walka wręcz, dźwiganie, fizyczna moc. Modyfikator wchodzi do ataków bronią białą i Atletyki.',
+    DEX: 'Zręczność — akrobacja, skradanie, refleks. Modyfikator wchodzi do Inicjatywy i ataków dystansowych.',
+    CON: 'Kondycja — wytrzymałość. Modyfikator wpływa na maks. PŻ i opieranie się truciznom.',
+    INT: 'Inteligencja — wiedza, magia, dochodzenie. Modyfikator wpływa na pulę many Uczonego.',
+    WIS: 'Mądrość — spostrzegawczość, intuicja, medycyna. Modyfikator wchodzi do wykrywania zagrożeń.',
+    CHA: 'Charyzma — perswazja, zastraszanie, oszustwo. Modyfikator wchodzi do testów społecznych.',
+    LCK: 'Szczęście — wyłapanie szczęśliwego trafu. Modyfikator dodatkowo wpływa na rzuty łutowe.',
+};
+
+// Stage 4 S5/S6/S11: conditions section — tooltip per chip, auto-expand when any,
+// fade-in for new conditions and fade-out for removed ones (diffed against last render).
+let _lastConditionKeys = new Set();
+async function renderConditionsBlock(conditions) {
+    const condSection = document.getElementById('sheet-conditions-section');
+    const condEl = document.getElementById('sheet-conditions');
+    if (!condSection || !condEl) return;
+
+    await _ensureConditionMeta();
+    const meta = CONDITION_META_CACHE.byKey || {};
+
+    const normalized = (conditions || []).map(c => {
+        if (typeof c === 'string') return { key: c, label: c };
+        return { key: c.key || c.label || '', label: c.label || c.key || '' };
+    }).filter(c => c.key);
+
+    if (normalized.length === 0) {
+        // Fade out everything still rendered, then hide section.
+        condSection.classList.remove('sheet-conditions--expanded');
+        condEl.querySelectorAll('.condition-chip').forEach(el => el.classList.add('condition-chip--leaving'));
+        setTimeout(() => {
+            condEl.innerHTML = '';
+            condSection.style.display = 'none';
+        }, 220);
+        _lastConditionKeys = new Set();
+        return;
+    }
+
+    condSection.style.display = '';
+    condSection.classList.add('sheet-conditions--expanded');  // S6: auto-expand
+    const currentKeys = new Set(normalized.map(c => c.key));
+
+    condEl.innerHTML = normalized.map(c => {
+        const m = meta[c.key] || {};
+        const desc = m.description || 'Brak opisu w bazie.';
+        const label = m.label || c.label || c.key;
+        const isNew = !_lastConditionKeys.has(c.key);
+        const cls = `condition-chip${isNew ? ' condition-chip--entering' : ''}`;
+        return `<span class="${cls}" title="${escapeHtml(desc)}" tabindex="0">${escapeHtml(label)}</span>`;
+    }).join('');
+
+    _lastConditionKeys = currentKeys;
+}
+
+// Stage 4 S8/S9/S10: animation helpers — fire when values change between renders.
+const _lastVitals = { hp: null, gold: null, xp_available: null };
+
+function pulseElement(el, cls, durationMs = 600) {
+    if (!el) return;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), durationMs);
+}
+
+function flashHpOnDamage(currentHp) {
+    if (_lastVitals.hp == null) { _lastVitals.hp = currentHp; return; }
+    if (currentHp < _lastVitals.hp) {
+        // Took damage — red flash on the whole card + brief tick on the number.
+        pulseElement(document.querySelector('.stat-card--hp'), 'stat-card--damaged', 600);
+        pulseElement(document.getElementById('sheet-hp'), 'stat-card__value--ticked', 480);
+    }
+    _lastVitals.hp = currentHp;
+}
+
+function pulseGoldOnChange(currentGold) {
+    if (_lastVitals.gold == null) { _lastVitals.gold = currentGold; return; }
+    if (currentGold !== _lastVitals.gold) {
+        pulseElement(document.querySelector('.inv-gold'), 'inv-gold--pulsing', 700);
+    }
+    _lastVitals.gold = currentGold;
+}
+
+function pulseXpOnGain(currentXpAvail) {
+    if (_lastVitals.xp_available == null) { _lastVitals.xp_available = currentXpAvail; return; }
+    if (currentXpAvail > _lastVitals.xp_available) {
+        pulseElement(document.querySelector('.xp-bar-card'), 'xp-bar-card--gained', 1100);
+        pulseElement(document.getElementById('sheet-xp-bar-fill'), 'xp-bar__fill--filling', 1000);
+    }
+    _lastVitals.xp_available = currentXpAvail;
+}
+
+// Stage 4 S2+S3 + merged stats/skills tab: one block per stat, with its trained skills nested.
+// Bar visualizes base stat on a 0-20 scale; right strip reserved for future item bonuses.
+// Rank shown as 5 dots (●●●○○) with a +2 prof pill at rank ≥ 3.
+async function renderStatSkillList(sheet) {
+    const container = document.getElementById('sheet-stat-skill-list');
+    if (!container) return;
+
+    const stats = sheet?.stats || {};
+    const mods = sheet?.stat_modifiers || {};
+    const skills = sheet?.skills || {};
+
+    await _ensureSkillMeta();
+    const labelByKey = Object.fromEntries(ALL_SKILL_ROWS.map(r => [r.key, r.label]));
+
+    const STAT_LABELS = {
+        STR: 'Siła', DEX: 'Zręczność', CON: 'Kondycja',
+        INT: 'Inteligencja', WIS: 'Mądrość', CHA: 'Charyzma', LCK: 'Szczęście',
+    };
+    const STAT_ORDER = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'LCK'];
+
+    // Resolve every trained skill (rank>0) and bucket by its linked stat.
+    const trainedByStat = Object.fromEntries(STAT_ORDER.map(s => [s, []]));
+    Object.entries(skills).forEach(([k, v]) => {
+        const rank = Number(v) || 0;
+        if (rank <= 0) return;
+        const meta = SKILL_META_CACHE.byKey?.[k] || {};
+        const linked = String(meta.linked_stat || (ALL_SKILL_ROWS.find(r => r.key === k)?.stat) || '').toUpperCase();
+        if (!STAT_ORDER.includes(linked)) return;
+        trainedByStat[linked].push({
+            key: k,
+            label: meta.label || labelByKey[k] || _formatSkillLabel(k),
+            rank,
+            ceiling: Number(meta.rank_ceiling) || 5,
+            description: SKILL_META_CACHE.descByKey?.[k] || meta.description || '',
+        });
+    });
+    // Sort skills inside each stat alphabetically by Polish label.
+    STAT_ORDER.forEach(s => trainedByStat[s].sort((a, b) => a.label.localeCompare(b.label)));
+
+    const renderDots = (rank, ceiling) => {
+        const max = Math.max(5, ceiling || 5);
+        let out = '';
+        for (let i = 0; i < max; i++) {
+            out += `<span class="stat-skill-row__dot ${i < rank ? 'stat-skill-row__dot--filled' : ''}"></span>`;
+        }
+        return out;
+    };
+
+    container.innerHTML = STAT_ORDER.map(stat => {
+        const val = Number(stats[stat] ?? stats[stat.toLowerCase()] ?? 10);
+        const mod = Number(mods[stat] ?? Math.floor((val - 10) / 2));
+        const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
+        const modCls = mod > 0 ? 'mod--pos' : mod < 0 ? 'mod--neg' : 'mod--zero';
+        // Bar: 0-20 scale. Future hook: itemBonus splits the fill into base + bonus.
+        const itemBonus = 0;
+        const basePct = Math.max(0, Math.min(100, (Math.min(val, 20) / 20) * 100));
+        const bonusPct = Math.max(0, Math.min(100 - basePct, (Math.min(itemBonus, 20) / 20) * 100));
+        const skillRows = trainedByStat[stat].map(s => {
+            const profPill = s.rank >= 3 ? '<span class="stat-skill-row__prof" title="Premia biegłości">+2</span>' : '';
+            const rollBonus = mod + s.rank + (s.rank >= 3 ? 2 : 0);
+            const rollStr = rollBonus >= 0 ? `+${rollBonus}` : `${rollBonus}`;
+            const desc = s.description || 'Brak opisu w bazie.';
+            return `
+                <div class="stat-skill-row" data-skill-key="${escapeHtml(s.key)}" title="${escapeHtml(desc)}">
+                    <span class="stat-skill-row__name">${escapeHtml(s.label)}</span>
+                    <span class="stat-skill-row__dots-wrap">${renderDots(s.rank, s.ceiling)}</span>
+                    ${profPill}
+                    <span class="stat-skill-row__roll">${rollStr}</span>
+                </div>`;
+        }).join('');
+        const skillsBlock = skillRows
+            ? `<div class="stat-skill-group__skills">${skillRows}</div>`
+            : `<div class="stat-skill-group__empty">brak wytrenowanych</div>`;
+        return `
+            <div class="stat-skill-group" data-stat="${stat}">
+                <div class="stat-skill-group__header">
+                    <span class="stat-skill-group__code" title="${escapeHtml(STAT_TOOLTIPS[stat] || STAT_LABELS[stat] || stat)}" tabindex="0">${stat}</span>
+                    <span class="stat-skill-group__val">${val}</span>
+                    <span class="stat-skill-group__mod ${modCls}">${modStr}</span>
+                    <div class="stat-skill-group__bar">
+                        <div class="stat-skill-group__bar-base" style="width:${basePct}%"></div>
+                        <div class="stat-skill-group__bar-bonus" style="width:${bonusPct}%"></div>
+                    </div>
+                    <span class="stat-skill-group__cap">20</span>
+                </div>
+                ${skillsBlock}
+            </div>`;
+    }).join('');
+}
+
 async function renderSkillsTab(sheet) {
     const skills = sheet?.skills || {};
     if (typeof skills !== 'object' || Array.isArray(skills)) {
@@ -4044,6 +4283,7 @@ async function renderInventoryTab(character) {
         <div class="inv-gold__value">${goldGp}</div>
         <div class="inv-gold__unit">zł</div>
     `;
+    pulseGoldOnChange(goldGp);  // S9
 
     // Bucket items by equip status / type
     const equipped = {};   // slot → item
@@ -4138,7 +4378,9 @@ function _renderLoreRow(item) {
     const qty = item.quantity > 1 ? `<span class="inv-row__qty">×${item.quantity}</span>` : '';
     const desc = item.description ? ` data-tooltip="${escapeHtml(item.description)}"` : '';
     const isNarrative = item.is_narrative || item.item_type === 'narrative';
-    const dropBtn = isNarrative
+    // Stage 4 S7: quest items can never be dropped — story-critical, no escape hatch.
+    const isQuest = item.item_type === 'quest' || item.is_quest === true;
+    const dropBtn = (isNarrative && !isQuest)
         ? `<button class="inv-row__drop-btn" data-action="drop" data-inventory-id="${item.id}" title="Wyrzuć przedmiot">✕</button>`
         : '';
     return `
@@ -4809,7 +5051,12 @@ function initEventListeners() {
     });
 
     // Game
-    elements.btnOpenSheet?.addEventListener('click', toggleCharacterSheet);
+    // Stage 4 follow-up: header home icon → main heroes screen (was: open sheet).
+    // Sheet access now lives in the mobile bottom bar's "Postać" button.
+    elements.btnHome?.addEventListener('click', () => {
+        if (isSheetOpen) closeCharacterSheet();
+        showScreen('heroes');
+    });
     elements.btnOpenSettings?.addEventListener('click', toggleSettings);
     elements.btnOpenJournal?.addEventListener('click', toggleJournal);
 
@@ -4832,6 +5079,9 @@ function initEventListeners() {
     elements.sheetTabs.forEach(tab => {
         tab.addEventListener('click', handleSheetTabClick);
     });
+
+    // Stage 4 S12: mobile bottom bar
+    document.getElementById('mobile-bottom-bar')?.addEventListener('click', handleMobileBarClick);
 
     // Overlay
     elements.overlay?.addEventListener('click', handleOverlayClick);

@@ -31,8 +31,8 @@
 
 - [x] **T1** `advance_clock(campaign_id, hours, reason)` — `clock_service.py`, audit log rolling 50, commit `1ee136d`
 - [x] **T2** Travel między hex'ami / lokacjami → hook w `player_hex_travel`, commit `1ee136d`
-- [ ] **T3** Krótki odpoczynek → `advance_clock(1)` (defer do Stage 2C, brak call site)
-- [ ] **T4** Długi odpoczynek → `advance_clock(8)` (defer do Stage 2C, brak call site)
+- [x] **T3** Krótki odpoczynek → `advance_clock(1)` — zaimplementowane w Stage 2C: `rest_service.perform_short_rest()` (X4)
+- [x] **T4** Długi odpoczynek → `advance_clock(8)` — zaimplementowane w Stage 2C: `rest_service.perform_long_rest()` (X3)
 - [x] **T5** Nagłówek UI: "**Dzień 3, 14:00 Popołudnie**" + `GET /clock`, commit `1ee136d`
 
 #### Stage 2B — Bezpieczne miejsca (safe_for_rest edytowalne dynamicznie)
@@ -122,27 +122,28 @@
 
 ### Stage 3 — New surprise condition [D11]
 
-- [ ] **Z1** Seed row in `game_config_conditions`: `key='zaskoczony'`, label_pl `'Zaskoczony'`, applies_to `'enemy'`, default_duration 1
-- [ ] **Z2** Backend: `combat_service._apply_attack_bonuses(attacker, target)` reads `zaskoczony` → returns `{atk_bonus: 2, first_hit_doubled: true}`
-- [ ] **Z3** Backend: clear `zaskoczony` immediately after target takes any damage
-- [ ] **Z4** Backend: emit `[APPLY_CONDITION:zaskoczony:<enemy_key>]` tag from stealth-success path (DC 8 alone / DC 16 group)
-- [ ] **Z5** Frontend: ⚡ badge on initiative chip + combatant row with tooltip
-- [ ] **Z6** Tests: Nat 20 player attack vs `zaskoczony` enemy → ×4 damage (×2 crit × ×2 surprise); regular hit → ×2
+- [x] **Z1** Seed row in `game_config_conditions` — `key='zaskoczony'`, `label='Zaskoczony'`, `effect_json` carries `grants_attacker_bonus:{atk_bonus:2,first_hit_doubled:true}`, `auto_remove='on_damage'`. Schema columns: `key/label/effect_json/description/is_active/stackable/auto_remove` (no separate label_pl/applies_to/default_duration columns).
+- [x] **Z2** `combat_service._apply_attack_bonuses(attacker, target)` — reads target conditions, returns `{atk_bonus, first_hit_doubled, consumed_keys}`. Wired into `resolve_attack`: +2 to attack total before dodge check; damage `×2` on `first_hit_doubled`, `×2` on nat20 crit, `×4` combined.
+- [x] **Z3** `_clear_consumed_conditions(target, [...])` — invoked after damage is applied, strips `zaskoczony` from `enemy.conditions` in-place.
+- [x] **Z4** `[APPLY_CONDITION:condition_key:enemy_ref]` tag — parsed in both `create_turn` and `create_turn_stream` (`APPLY_CONDITION_RE`), routed to new `apply_condition_to_combatant(campaign_id, enemy_ref, condition_key)` helper (matches by enemy_key or name, idempotent). Tag stripped from narrative server-side AND in frontend `stripInternalTags`. System prompt addendum tells LLM when to emit (DC 8 alone / DC 16 group).
+- [x] **Z5** Frontend ⚡ badge — initiative chip (top-left absolute) + combatant row (inline after name). Pulse animation `zaskoczony-pulse` 1.4s. Tooltip: "Zaskoczony — atak +2, pierwsze trafienie podwaja obrażenia". Cache-bust `stage3-zaskoczony-2026-05-20`.
+- [x] **Z6** Verified via Python smoke test — helpers return correct bonuses, multiplier math (`×1/×2/×2/×4`) holds, `apply_condition_to_combatant` works by-key, by-name, is idempotent.
 
 ### Stage 4 — Character sheet polish [issue #24, remaining ~9 items]
 
-- [ ] **S1** Location badge 📍 in sheet header (updates on every MOVEMENT action)
-- [ ] **S2** Skill rank dots (●●●○○, 5 max) replacing numeric rank
-- [ ] **S3** Proficiency `+2` badge at rank ≥ 3
-- [ ] **S4** Stat tooltip on tap (full name + Polish description)
-- [ ] **S5** Condition tooltip with mechanical effect text
-- [ ] **S6** Auto-expand Conditions section when any active condition present
-- [ ] **S7** Quest item drop blocker — hide `[Porzuć]` button for `item_type='quest'`
-- [ ] **S8** Real-time HP red flash + number tick on damage
-- [ ] **S9** Real-time gold coin pulse animation on change
-- [ ] **S10** Real-time XP bar fill animation when XP gained
-- [ ] **S11** New condition fade-in (orange highlight) + condition removed fade-out
-- [ ] **S12** Mobile bottom tab bar below 768px: Gra | Postać | Ekwipunek
+- [x] **S1** Location badge 📍 in sheet header — `current_location_label` added to `GET /api/characters/{id}` payload (resolved via `game_sessions.current_location_id → game_locations.label`); rendered as `.sheet-location-badge` chip next to character name in `populateCharacterSheet`. Auto-refreshes whenever the sheet repopulates (after each turn). Cache-bust `stage4-s1-location-badge-2026-05-21`.
+- [x] **S2** Skill rank dots (●●●○○, 5 max) replacing numeric rank — implemented as part of the merged Stats+Skills tab. Each skill row renders `ceiling` pips via `.stat-skill-row__dot`/`--filled`; gold glow on filled pips. Cache-bust `stage4-s1s2s3-merged-2026-05-21`.
+- [x] **S3** Proficiency `+2` badge at rank ≥ 3 — green pill `.stat-skill-row__prof` rendered inline next to dots when rank reaches 3+; tooltip "Premia biegłości". Also factored into the per-skill roll bonus (`mod + rank + 2`) shown on the right of each row.
+- [x] **S2+S3 bonus — Stats/Skills tab merge** — collapsed the two tabs into one (Skills tab + button removed). New `renderStatSkillList()` groups every trained skill under its parent stat. Each stat block: 3-letter code, value, modifier pill, **0–20 progress bar with base fill (gold) + reserved right strip for future item bonuses (green)**, then nested skill rows showing dots, prof pill, and the precomputed roll bonus. Stats with no trained skills show "brak wytrenowanych". Wizard's pre-existing `.skill-row` namespace preserved by renaming new classes to `.stat-skill-row__*`.
+- [x] **S4** Stat tooltip on tap — `.stat-skill-group__code` carries `title=` with full Polish name + role hint (e.g. STR → "Siła — walka wręcz, dźwiganie, fizyczna moc. Modyfikator wchodzi do ataków bronią białą i Atletyki."). `tabindex="0"` makes it tap-focusable so iOS Safari renders the tooltip on tap.
+- [x] **S5** Condition tooltip — new `GET /api/mechanics/conditions` public endpoint serves label + description. Frontend `_ensureConditionMeta()` caches it (5-min TTL); chip rendering injects the description into `title=` and `tabindex="0"` for keyboard/tap access.
+- [x] **S6** Auto-expand Conditions — section flashes a 0.55s outline (`conditions-flash` keyframes) when any condition is active. `.sheet-conditions--expanded` class added/removed by `renderConditionsBlock`.
+- [x] **S7** Quest item drop blocker — `_renderLoreRow` now suppresses the ✕ drop button when `item.item_type === 'quest'` OR `item.is_quest === true`. Narrative items keep the button.
+- [x] **S8** Real-time HP red flash + number tick — `flashHpOnDamage(hp)` compares against `_lastVitals.hp`; on decrease pulses `.stat-card--damaged` (red box-shadow flash) on the HP card and `.stat-card__value--ticked` (scale 1→1.18→1, red→accent) on the number.
+- [x] **S9** Gold pulse on change — `pulseGoldOnChange()` adds `.inv-gold--pulsing` (scale 1.04 + yellow drop-shadow) for 700ms whenever `gold_gp` differs from prior render.
+- [x] **S10** XP bar fill animation on gain — `pulseXpOnGain(xpAvail)` triggers `.xp-bar-card--gained` (lime box-shadow halo) + `.xp-bar__fill--filling` (shimmer sweep across the fill) when `xp_available` increased.
+- [x] **S11** Condition fade-in/out — `_lastConditionKeys` diffed each render. New keys get `condition-chip--entering` (orange→red ease-in scale-up), removed keys get `condition-chip--leaving` (220ms shrink + fade) before the DOM removes them.
+- [x] **S12** Mobile bottom tab bar — `#mobile-bottom-bar` (Gra/Postać/Ekwipunek) fixed to viewport bottom, CSS-gated `@media (max-width: 768px)`. iOS safe-area inset honored. Clicks route via `handleMobileBarClick` → `toggleCharacterSheet` + `_switchSheetTab('stats'|'inventory')`. Adds `padding-bottom` to body + sheet panel so the bar doesn't cover content.
 
 ### Stage 5 — 8-slot anatomical equipment [D1]
 

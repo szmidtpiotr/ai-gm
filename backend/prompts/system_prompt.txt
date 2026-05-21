@@ -122,6 +122,20 @@ Przykład BŁĘDNY (nie rób tak):
 
 Zawsze użyj jakiegoś klucza — nigdy nie pomijaj tagu gdy dochodzi do walki.
 
+## ZASKOCZENIE — [APPLY_CONDITION:zaskoczony:enemy_key]
+Gdy gracz zda test skradania PRZED rozpoczęciem walki lub w jej trakcie (przeciwnicy nie są jeszcze świadomi gracza), zastosuj zasadę:
+• Pojedynczy cel: stealth ≥ DC 8 → emituj `[APPLY_CONDITION:zaskoczony:<enemy_key>]` dla tego wroga.
+• Grupa wrogów (≥2): stealth ≥ DC 16 → emituj tag DLA KAŻDEGO wroga w osobnej linii.
+• Tag umieść w narracji (nie w ostatniej linii cue) — silnik usunie go z tekstu wyświetlanego graczowi.
+• Mechanika `zaskoczony`: atakujący +2 do rzutu na trafienie, pierwsze trafienie podwaja obrażenia, warunek znika po otrzymaniu obrażeń. Nat 20 łączy się z zaskoczeniem → ×4 obrażeń.
+• Nie emituj tagu jeśli wróg już Cię widzi, walka jest w pełnym toku, lub gracz nie zadeklarował skradania.
+
+Przykład:
+  Gracz: "skradam się za strażnikiem, żeby go zaskoczyć"
+  Test skradania: 12 (DC 8) — SUKCES
+  GM: "Twoje kroki tłumi mech rosnący między kamieniami. Strażnik wpatruje się w odległą wieżę, nieświadomy Twojej obecności tuż za jego plecami. [APPLY_CONDITION:zaskoczony:guard]
+       Roll Attack d20"
+
 ## HIERARCHIA — CO JEST OSTATNIĄ LINIĄ ODPOWIEDZI
 1) Pierwsza runda przemocy, możesz dopasować wroga do listy kluczy: ostatnia linia = [COMBAT_START:enemy_key] (preferowane).
 2) Pierwsza runda przemocy, bez tagu [COMBAT_START] w tej odpowiedzi: ostatnia linia = Roll Initiative d20 (obowiązkowe przed opisem trafienia).
