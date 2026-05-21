@@ -4120,3 +4120,51 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .rsb-log-error { color: #d9534f; }
 .rsb-log-warn  { color: #c9a54a; }
 .rsb-log-info  { color: var(--text-muted); }
+
+/* Stage 8 D6 — Debug section */
+.debug-section-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+}
+.debug-card { padding: 16px; }
+.debug-card--danger { border-left: 3px solid var(--accent-red, #c94a4a); }
+.debug-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0 10px;
+}
+.debug-row label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.debug-row input {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-family: inherit;
+  font-size: 13px;
+  min-width: 100px;
+}
+.debug-output {
+  margin: 0;
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Courier New', monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  max-height: 320px;
+  overflow: auto;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

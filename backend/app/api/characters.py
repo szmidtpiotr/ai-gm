@@ -263,19 +263,76 @@ def _auto_equip_first_weapon_and_armor(
     type is equipped yet. A clean character sheet starts ready to fight. Safe
     to call multiple times — no-op when something is already equipped.
     """
-    weapon_equipped = conn.execute(
-        "SELECT id FROM character_inventory WHERE character_id = ? AND weapon_key IS NOT NULL AND equipped = 1 LIMIT 1",
+    # Stage 5 follow-up: equip the first main-hand-capable weapon AND, if a
+    # separate off-hand-only item (shield) exists in the kit, equip that too.
+    # Two-handed weapons skip the off-hand step automatically because they
+    # claim both slots via the equip_item flow (we set both here directly).
+    main_equipped = conn.execute(
+        "SELECT id FROM character_inventory WHERE character_id = ? AND weapon_key IS NOT NULL AND equipped = 1 AND slot = 'main_hand' LIMIT 1",
         (character_id,),
     ).fetchone()
-    if not weapon_equipped:
+    if not main_equipped:
         weapon_row = conn.execute(
-            "SELECT id FROM character_inventory WHERE character_id = ? AND weapon_key IS NOT NULL ORDER BY id ASC LIMIT 1",
+            """
+            SELECT inv.id, COALESCE(gw.weapon_slot, 'main_hand') AS ws
+            FROM character_inventory inv
+            LEFT JOIN game_config_weapons gw ON gw.key = inv.weapon_key
+            WHERE inv.character_id = ? AND inv.weapon_key IS NOT NULL
+            ORDER BY
+              CASE COALESCE(gw.weapon_slot, 'main_hand')
+                WHEN 'main_hand'     THEN 0
+                WHEN 'either'        THEN 1
+                WHEN 'two_handed'    THEN 2
+                WHEN 'off_hand_only' THEN 3
+                ELSE 4 END,
+              inv.id ASC
+            LIMIT 1
+            """,
             (character_id,),
         ).fetchone()
         if weapon_row:
             conn.execute(
                 "UPDATE character_inventory SET equipped = 1, slot = 'main_hand' WHERE id = ?",
                 (int(weapon_row["id"]),),
+            )
+            # Two-handed → also claim off_hand so nothing else can land there.
+            if (weapon_row["ws"] or "main_hand").lower() == "two_handed":
+                conn.execute(
+                    "UPDATE character_inventory SET equipped = 0, slot = NULL WHERE character_id = ? AND slot = 'off_hand'",
+                    (character_id,),
+                )
+
+    # Off-hand: only equip something into off_hand if (a) the main_hand weapon
+    # is not two-handed AND (b) we have an off_hand_only candidate (a shield).
+    off_equipped = conn.execute(
+        "SELECT id FROM character_inventory WHERE character_id = ? AND weapon_key IS NOT NULL AND equipped = 1 AND slot = 'off_hand' LIMIT 1",
+        (character_id,),
+    ).fetchone()
+    main_is_two_handed = conn.execute(
+        """
+        SELECT 1 FROM character_inventory inv
+        JOIN game_config_weapons gw ON gw.key = inv.weapon_key
+        WHERE inv.character_id = ? AND inv.equipped = 1 AND inv.slot = 'main_hand'
+          AND gw.weapon_slot = 'two_handed'
+        LIMIT 1
+        """,
+        (character_id,),
+    ).fetchone()
+    if not off_equipped and not main_is_two_handed:
+        offhand_row = conn.execute(
+            """
+            SELECT inv.id FROM character_inventory inv
+            JOIN game_config_weapons gw ON gw.key = inv.weapon_key
+            WHERE inv.character_id = ? AND gw.weapon_slot = 'off_hand_only'
+              AND inv.equipped = 0
+            ORDER BY inv.id ASC LIMIT 1
+            """,
+            (character_id,),
+        ).fetchone()
+        if offhand_row:
+            conn.execute(
+                "UPDATE character_inventory SET equipped = 1, slot = 'off_hand' WHERE id = ?",
+                (int(offhand_row["id"]),),
             )
 
     armor_equipped = conn.execute(
@@ -287,9 +344,11 @@ def _auto_equip_first_weapon_and_armor(
         (character_id,),
     ).fetchone()
     if not armor_equipped:
+        # Stage 5 E4: pick a slot that matches the armor's coverage.
         armor_row = conn.execute(
             """
-            SELECT inv.id FROM character_inventory inv
+            SELECT inv.id, it.armor_coverage
+            FROM character_inventory inv
             JOIN game_config_items it ON it.key = inv.item_key
             WHERE inv.character_id = ? AND it.item_type = 'armor'
             ORDER BY inv.id ASC LIMIT 1
@@ -297,9 +356,19 @@ def _auto_equip_first_weapon_and_armor(
             (character_id,),
         ).fetchone()
         if armor_row:
+            coverage = (armor_row["armor_coverage"] or "torso").lower()
+            # 'full' anchors at torso. limb_arm/limb_leg defaults to the right side.
+            slot_map = {
+                "head": "head",
+                "torso": "torso",
+                "limb_arm": "r_arm",
+                "limb_leg": "r_leg",
+                "full": "torso",
+            }
+            target_slot = slot_map.get(coverage, "torso")
             conn.execute(
-                "UPDATE character_inventory SET equipped = 1, slot = 'torso' WHERE id = ?",
-                (int(armor_row["id"]),),
+                "UPDATE character_inventory SET equipped = 1, slot = ? WHERE id = ?",
+                (target_slot, int(armor_row["id"])),
             )
     conn.commit()
 
@@ -696,7 +765,28 @@ OPENING_SYSTEM_PROMPT = SYSTEM_PROMPT_TEXT
 
 @router.get("/characters")
 def list_user_characters(user_id: int):
-    """List all characters (heroes) belonging to a user, across all campaigns."""
+    """Legacy endpoint kept for backward-compat with old clients. New code should
+    use GET /heroes which adds Stage 6 enrichment (history counts, lifetime XP)."""
+    return _list_heroes_for_user(user_id, enriched=False)
+
+
+@router.get("/heroes")
+def list_user_heroes(user_id: int):
+    """Stage 6 H1 — enriched hero roster for the heroes hub.
+
+    On top of the bare character rows, each hero carries:
+      - campaigns_completed  : count of finished campaigns (victory/death/abandoned)
+      - total_xp_lifetime    : sheet_json.xp_lifetime_earned
+      - hero_status          : idle | in_campaign | in_dungeon (from characters.status)
+      - last_activity_at     : ISO timestamp (best-effort: created_at fallback)
+
+    Sandbox + rest-sandbox clones are filtered out so admins don't see them in the
+    player-facing hero picker.
+    """
+    return _list_heroes_for_user(user_id, enriched=True)
+
+
+def _list_heroes_for_user(user_id: int, enriched: bool) -> dict:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -704,24 +794,94 @@ def list_user_characters(user_id: int):
             """
             SELECT c.id, c.campaign_id, c.user_id, c.name, c.system_id,
                    c.sheet_json, c.location, c.is_active, c.created_at, c.status,
-                   cam.title AS campaign_title, cam.status AS campaign_status
+                   cam.title  AS campaign_title,
+                   cam.status AS campaign_status,
+                   cam.mode   AS campaign_mode
             FROM characters c
             LEFT JOIN campaigns cam ON cam.id = c.campaign_id
-            WHERE c.user_id = ? AND c.is_active = 1
+            WHERE c.user_id = ?
+              AND c.is_active = 1
+              AND c.name NOT LIKE '[SBX] %'
+              AND c.name NOT LIKE '[RSB] %'
             ORDER BY c.created_at DESC
             """,
             (user_id,),
         ).fetchall()
-        heroes = []
+
+        # Stage 6: bulk-fetch history counts so we don't N+1 the DB.
+        completed_counts: dict[int, int] = {}
+        if enriched and rows:
+            char_ids = [int(r["id"]) for r in rows]
+            placeholders = ",".join("?" for _ in char_ids)
+            hist_rows = conn.execute(
+                f"""
+                SELECT character_id, COUNT(*) AS n
+                FROM character_campaign_history
+                WHERE character_id IN ({placeholders})
+                  AND outcome IN ('victory','death','abandoned')
+                GROUP BY character_id
+                """,
+                char_ids,
+            ).fetchall()
+            completed_counts = {int(r["character_id"]): int(r["n"]) for r in hist_rows}
+
+        heroes: list[dict] = []
         for row in rows:
             item = dict(row)
             try:
                 sheet = json.loads(item.get("sheet_json") or "{}")
             except Exception:
                 sheet = {}
+            # Hide sandbox clones flagged in sheet metadata (defense in depth).
+            if sheet.get("__sandbox_clone__") or sheet.get("__rest_sandbox_clone__"):
+                continue
             item["sheet_json"] = _strip_hidden_fields(sheet)
+            if enriched:
+                item["campaigns_completed"] = completed_counts.get(int(item["id"]), 0)
+                item["total_xp_lifetime"] = int(sheet.get("xp_lifetime_earned") or 0)
+                # `hero_status` mirrors characters.status but is more explicit for the UI.
+                # If status is unset, infer from campaign linkage.
+                raw_status = (item.get("status") or "").strip().lower()
+                if not raw_status:
+                    raw_status = "in_campaign" if item.get("campaign_id") else "idle"
+                item["hero_status"] = raw_status
+                item["last_activity_at"] = item.get("created_at")
             heroes.append(item)
         return {"heroes": heroes}
+    finally:
+        conn.close()
+
+
+@router.get("/characters/{character_id}/history")
+def get_character_history(character_id: int):
+    """Stage 6 H2 — past campaigns for a hero, most recent first.
+
+    Joins the campaigns table so the UI doesn't need a second fetch.
+    LEFT JOIN: history row survives even if the campaign was hard-deleted.
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char_row = conn.execute(
+            "SELECT id FROM characters WHERE id = ? AND is_active = 1",
+            (character_id,),
+        ).fetchone()
+        if not char_row:
+            raise HTTPException(status_code=404, detail="Character not found")
+        rows = conn.execute(
+            """
+            SELECT h.id, h.campaign_id, h.outcome, h.chapter_summary,
+                   h.xp_earned, h.gold_at_end, h.turns_count,
+                   h.completed_at, h.created_at,
+                   cam.title AS campaign_title
+            FROM character_campaign_history h
+            LEFT JOIN campaigns cam ON cam.id = h.campaign_id
+            WHERE h.character_id = ?
+            ORDER BY COALESCE(h.completed_at, h.created_at) DESC, h.id DESC
+            """,
+            (character_id,),
+        ).fetchall()
+        return {"history": [dict(r) for r in rows]}
     finally:
         conn.close()
 

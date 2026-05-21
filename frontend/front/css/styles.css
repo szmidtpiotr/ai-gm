@@ -563,6 +563,282 @@ body {
   border-radius: var(--radius-lg);
 }
 
+/* ────────────────────────────────────────────────────────────────────────
+   Stage 6 H3–H5 — Hero hub: enriched cards, status chips, history modal.
+   ──────────────────────────────────────────────────────────────────────── */
+.hero-card-wrapper {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 10px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  transition: border-color 0.2s, transform 0.15s;
+}
+.hero-card-wrapper:hover {
+  border-color: rgba(201,165,74,0.45);
+}
+.hero-card {
+  flex: 1;
+  padding: 14px 14px 12px;
+  cursor: pointer;
+  position: relative;
+}
+.hero-card__main {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.hero-card__icon {
+  flex: 0 0 36px;
+  font-size: 26px;
+  color: var(--accent);
+  filter: drop-shadow(0 0 6px rgba(201,165,74,0.35));
+  line-height: 1;
+  padding-top: 2px;
+}
+.hero-card__body {
+  flex: 1;
+  min-width: 0;
+}
+.hero-card__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.hero-card__name {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero-card__sub {
+  margin: 0 0 4px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.hero-card__lastseen {
+  color: rgba(201,165,74,0.65);
+  font-style: italic;
+}
+.hero-card__campaign {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  color: rgba(201,165,74,0.75);
+}
+.hero-card__trophy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed rgba(255,255,255,0.06);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.hero-card__trophy span { white-space: nowrap; }
+
+.hero-card__history-btn,
+.hero-card__awansuj-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(201,165,74,0.35);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.hero-card__history-btn:hover {
+  background: rgba(201,165,74,0.12);
+  border-color: var(--accent);
+}
+.hero-card__awansuj-btn {
+  border-color: rgba(74,222,128,0.55);
+  color: #4ade80;
+  margin-left: 0;
+}
+.hero-card__awansuj-btn:hover {
+  background: rgba(74,222,128,0.10);
+  border-color: #4ade80;
+}
+
+.hero-card__delete {
+  background: #3a1212;
+  border: none;
+  border-left: 1px solid var(--border);
+  color: #c94a4a;
+  padding: 0 14px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: background 0.15s, color 0.15s;
+}
+.hero-card__delete:hover {
+  background: #4a1a1a;
+  color: #f87171;
+}
+
+/* Status chips */
+.hero-status-chip {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+.hero-status--idle {
+  background: rgba(74,222,128,0.12);
+  border: 1px solid rgba(74,222,128,0.45);
+  color: #86efac;
+}
+.hero-status--campaign {
+  background: rgba(201,165,74,0.12);
+  border: 1px solid rgba(201,165,74,0.45);
+  color: var(--accent);
+}
+.hero-status--dungeon {
+  background: rgba(220,38,38,0.12);
+  border: 1px solid rgba(220,38,38,0.45);
+  color: #fca5a5;
+}
+
+/* ── H4 Hero history modal ───────────────────────────────────────────── */
+.hero-history-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 9100;
+}
+.hero-history-modal--open { display: block; }
+.hero-history-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+  backdrop-filter: blur(2px);
+}
+.hero-history-modal__card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 64px);
+  background: linear-gradient(180deg, rgba(28,24,32,0.98) 0%, rgba(20,18,26,0.98) 100%);
+  border: 1px solid rgba(201,165,74,0.35);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: hero-history-pop 0.22s cubic-bezier(.2,1.3,.4,1) both;
+}
+@keyframes hero-history-pop {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.96); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.hero-history-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(201,165,74,0.18);
+}
+.hero-history-modal__header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.hero-history-modal__close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+  width: 28px; height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.15s, color 0.15s;
+}
+.hero-history-modal__close:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+.hero-history-modal__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 18px 18px;
+}
+.hero-history-modal__loading,
+.hero-history-modal__empty {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 18px 0;
+}
+
+.hero-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.hero-history-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: rgba(28,24,32,0.6);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.hero-history-row--victory   { border-left-color: #4ade80; }
+.hero-history-row--death     { border-left-color: #f87171; }
+.hero-history-row--abandoned { border-left-color: rgba(201,165,74,0.55); }
+.hero-history-row__icon {
+  font-size: 20px;
+  line-height: 1;
+  padding-top: 2px;
+}
+.hero-history-row__main { flex: 1; min-width: 0; }
+.hero-history-row__title {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero-history-row__meta {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+}
+.hero-history-row__summary {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
 .campaign-swipe-wrapper .campaign-card {
   position: relative;
   z-index: 1;
@@ -1998,6 +2274,358 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   100% { box-shadow: 0 0 0 14px rgba(201,165,74,0),  inset 0 1px 0 rgba(201,165,74,0.08); }
 }
 .inv-slot--just-equipped { animation: inv-equip-pulse 0.7s ease-out; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Stage 5 E5/E6/E7 — Anatomical 8-slot equipment diagram.
+   Heraldic medieval aesthetic: 8 ornate cartouches arranged around a
+   golden warrior silhouette. Empty slots = parchment-dim. Filled = gold-lit.
+   Locked-by-full-armor = chain icon. Wounded = blood overlay + red gradient.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.anatomy {
+  margin: 4px 0 var(--space-md);
+}
+
+.anatomy__frame {
+  position: relative;
+  padding: 18px 8px 10px;
+  border: 1px solid rgba(201,165,74,0.18);
+  border-radius: 12px;
+  background:
+    radial-gradient(ellipse at center, rgba(201,165,74,0.04) 0%, transparent 60%),
+    linear-gradient(180deg, rgba(20,18,26,0.45) 0%, rgba(10,9,8,0.0) 100%);
+  /* Ornamental corner brackets (gold leaf, etched-in look) */
+  box-shadow:
+    inset 0 0 0 1px rgba(201,165,74,0.04),
+    inset 0 1px 0 rgba(201,165,74,0.12);
+}
+.anatomy__frame::before,
+.anatomy__frame::after {
+  content: '';
+  position: absolute;
+  width: 22px; height: 22px;
+  border: 1px solid rgba(201,165,74,0.45);
+  pointer-events: none;
+}
+.anatomy__frame::before {
+  top: -2px; left: -2px;
+  border-right: none; border-bottom: none;
+  border-top-left-radius: 12px;
+}
+.anatomy__frame::after {
+  bottom: -2px; right: -2px;
+  border-left: none; border-top: none;
+  border-bottom-right-radius: 12px;
+}
+
+/* Background warrior silhouette — golden line art behind the slot grid */
+.anatomy__silhouette {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(100px, 32%, 180px);
+  height: auto;
+  pointer-events: none;
+  opacity: 0.10;
+  z-index: 0;
+}
+.anatomy__silhouette > * {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.anatomy__silhouette circle {
+  fill: rgba(201,165,74,0.10);
+}
+.anatomy__silhouette path {
+  fill: rgba(201,165,74,0.03);
+}
+.anatomy__silhouette .anatomy__crest {
+  fill: rgba(201,165,74,0.18);
+  stroke-width: 0.8;
+}
+
+/* Slot grid — 3 columns, anatomically-placed areas */
+.anatomy__grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-areas:
+    ". head ."
+    "larm torso rarm"
+    "lleg . rleg"
+    "mainh . offh";
+  gap: 8px;
+}
+
+.anatomy-slot--head  { grid-area: head; }
+.anatomy-slot--larm  { grid-area: larm; }
+.anatomy-slot--torso { grid-area: torso; }
+.anatomy-slot--rarm  { grid-area: rarm; }
+.anatomy-slot--lleg  { grid-area: lleg; }
+.anatomy-slot--rleg  { grid-area: rleg; }
+.anatomy-slot--mainh { grid-area: mainh; }
+.anatomy-slot--offh  { grid-area: offh; }
+
+/* Base cartouche styling — small ornate shield-shape via clip-path on a corner cut */
+.anatomy-slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  text-align: center;
+  padding: 6px 6px 8px;
+  min-height: 76px;
+  border: 1px solid rgba(201,165,74,0.18);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(28,24,32,0.85) 0%, rgba(20,18,26,0.92) 100%);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.25s, background 0.25s, transform 0.15s, box-shadow 0.25s;
+  outline: none;
+  user-select: none;
+}
+.anatomy-slot::before {
+  /* Inner gold-leaf rim, hairline */
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  pointer-events: none;
+  transition: border-color 0.25s;
+}
+.anatomy-slot:hover {
+  border-color: rgba(201,165,74,0.45);
+  transform: translateY(-1px);
+}
+.anatomy-slot:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(201,165,74,0.35);
+}
+
+.anatomy-slot__head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 4px;
+}
+.anatomy-slot__icon {
+  display: inline-flex;
+  width: 16px; height: 16px;
+  color: rgba(201,165,74,0.55);
+  flex-shrink: 0;
+}
+.anatomy-slot__icon svg { width: 100%; height: 100%; }
+.anatomy-slot__type {
+  font-size: 8.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(201,165,74,0.75);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.anatomy-slot__name {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.25;
+  padding: 0 2px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+.anatomy-slot__name--empty {
+  color: rgba(201,165,74,0.32);
+  font-weight: 400;
+  font-style: italic;
+  font-size: 16px;
+}
+.anatomy-slot__name--locked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: rgba(201,165,74,0.55);
+  font-size: 9.5px;
+  font-style: italic;
+  letter-spacing: 0.04em;
+}
+.anatomy-slot__chain {
+  display: inline-flex;
+  width: 14px; height: 14px;
+  color: rgba(201,165,74,0.7);
+}
+.anatomy-slot__chain svg { width: 100%; height: 100%; }
+
+.anatomy-slot__unequip {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid rgba(201,74,74,0.25);
+  color: rgba(255,255,255,0.45);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.anatomy-slot__unequip:hover {
+  background: rgba(201,74,74,0.18);
+  border-color: rgba(201,74,74,0.6);
+  color: #fca5a5;
+}
+
+/* States: filled / locked / wounded / filtering */
+.anatomy-slot--filled {
+  border-color: var(--accent, #c9a54a);
+  background:
+    linear-gradient(180deg, rgba(201,165,74,0.10) 0%, rgba(28,24,32,0.92) 70%);
+  box-shadow:
+    inset 0 1px 0 rgba(201,165,74,0.18),
+    0 4px 12px rgba(0,0,0,0.32);
+}
+.anatomy-slot--filled::before {
+  border-color: rgba(201,165,74,0.32);
+}
+.anatomy-slot--filled .anatomy-slot__icon {
+  color: var(--accent);
+  filter: drop-shadow(0 0 4px rgba(201,165,74,0.45));
+}
+
+.anatomy-slot--empty {
+  border-style: dashed;
+}
+.anatomy-slot--empty .anatomy-slot__icon {
+  opacity: 0.5;
+}
+
+.anatomy-slot--locked {
+  border-style: solid;
+  border-color: rgba(201,165,74,0.25);
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(20,18,26,0.92) 0px,
+      rgba(20,18,26,0.92) 6px,
+      rgba(201,165,74,0.03) 6px,
+      rgba(201,165,74,0.03) 12px
+    );
+  cursor: default;
+}
+.anatomy-slot--locked:hover {
+  transform: none;
+  border-color: rgba(201,165,74,0.35);
+}
+.anatomy-slot--locked .anatomy-slot__icon {
+  opacity: 0.3;
+}
+
+/* E7 — wound state: blood-red overlay with a drop icon at top-right */
+.anatomy-slot--wounded {
+  border-color: rgba(220,38,38,0.55) !important;
+  background:
+    linear-gradient(180deg, rgba(127,29,29,0.35) 0%, rgba(28,24,32,0.92) 65%) !important;
+  box-shadow: inset 0 0 14px rgba(220,38,38,0.18);
+  animation: wound-pulse 2.8s ease-in-out infinite;
+}
+.anatomy-slot--wounded .anatomy-slot__type {
+  color: #fca5a5;
+}
+.anatomy-slot__blood {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 12px;
+  height: 12px;
+  color: #ef4444;
+  filter: drop-shadow(0 0 4px rgba(239,68,68,0.6));
+  z-index: 2;
+}
+@keyframes wound-pulse {
+  0%, 100% { box-shadow: inset 0 0 14px rgba(220,38,38,0.18); }
+  50%      { box-shadow: inset 0 0 22px rgba(220,38,38,0.35); }
+}
+
+/* E6 — actively-filtering slot (the empty slot the player tapped) */
+.anatomy-slot--filtering {
+  border-color: var(--accent);
+  background:
+    linear-gradient(180deg, rgba(201,165,74,0.18) 0%, rgba(28,24,32,0.92) 70%);
+  animation: anatomy-filter-pulse 1.6s ease-in-out infinite;
+}
+@keyframes anatomy-filter-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201,165,74,0.0); }
+  50%      { box-shadow: 0 0 0 3px rgba(201,165,74,0.35); }
+}
+
+/* Filter pill above backpack */
+.anatomy-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 4px 6px 4px 12px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+  background: rgba(201,165,74,0.08);
+  border: 1px solid rgba(201,165,74,0.35);
+  border-radius: 999px;
+}
+.anatomy-filter-pill strong {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.anatomy-filter-pill__clear {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.2s, color 0.2s;
+}
+.anatomy-filter-pill__clear:hover {
+  background: rgba(201,165,74,0.18);
+  color: var(--accent);
+}
+
+/* Mobile compact — keep grid but tighten gaps + shrink silhouette */
+@media (max-width: 480px) {
+  .anatomy__grid { gap: 5px; }
+  .anatomy-slot { min-height: 64px; padding: 5px 4px 6px; }
+  .anatomy-slot__type { font-size: 7.5px; letter-spacing: 0.10em; }
+  .anatomy-slot__name { font-size: 10.5px; }
+  .anatomy__silhouette { opacity: 0.07; }
+}
 
 /* Backpack rows */
 .inv-list {
@@ -4546,6 +5174,131 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   50% { opacity: 0.55; transform: scale(1.18); }
 }
 
+/* Stage 7 C1 — condition badge row on initiative chip.
+   Stacks badges horizontally along the top of the chip.
+   Each badge has a tone-matching pulse animation. */
+.init-chip__cond-row {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  display: inline-flex;
+  gap: 3px;
+  z-index: 2;
+  pointer-events: auto;
+}
+.init-chip__cond-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  font-size: 11px;
+  line-height: 1;
+  cursor: help;
+  user-select: none;
+  filter: drop-shadow(0 0 3px currentColor);
+  transition: transform 0.15s;
+}
+.init-chip__cond-badge:hover { transform: scale(1.2); }
+
+/* Per-condition tints + pulse keyframes (color = drop-shadow accent) */
+.init-chip__cond-badge--surprise { color: #ffd84a; animation: cond-pulse-warm 1.4s ease-in-out infinite; }
+.init-chip__cond-badge--poison   { color: #4ade80; animation: cond-pulse-poison 1.8s ease-in-out infinite; }
+.init-chip__cond-badge--bleed    { color: #ef4444; animation: cond-pulse-bleed 1.2s ease-in-out infinite; }
+.init-chip__cond-badge--burn     { color: #fb923c; animation: cond-pulse-warm 0.9s ease-in-out infinite; }
+.init-chip__cond-badge--fear     { color: #818cf8; animation: cond-pulse-cool 1.6s ease-in-out infinite; }
+.init-chip__cond-badge--panic    { color: #a78bfa; animation: cond-pulse-cool 0.7s ease-in-out infinite; }
+.init-chip__cond-badge--stun     { color: #c084fc; animation: cond-pulse-cool 1.4s ease-in-out infinite; }
+.init-chip__cond-badge--blind    { color: #9ca3af; opacity: 0.7; }
+.init-chip__cond-badge--curse    { color: #f472b6; animation: cond-pulse-cool 2.0s ease-in-out infinite; }
+.init-chip__cond-badge--break    { color: #f87171; animation: cond-pulse-bleed 1.6s ease-in-out infinite; }
+.init-chip__cond-badge--generic  { color: var(--text-muted); }
+
+@keyframes cond-pulse-warm   { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.15); } }
+@keyframes cond-pulse-poison { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+@keyframes cond-pulse-bleed  { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.7; transform: scale(1.1); } }
+@keyframes cond-pulse-cool   { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+/* Stage 7 C2 — "Tura wroga…" overlay during enemy auto-turns.
+   Lives inside the combat banner; absolutely positioned, fades in.
+   Doesn't block clicks (pointer-events:none) because we still want chips clickable.
+*/
+.combat-status-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 5;
+  background: linear-gradient(180deg, rgba(0,0,0,0.0) 0%, rgba(20,18,26,0.55) 60%, rgba(20,18,26,0.0) 100%);
+}
+.combat-status-overlay--visible { opacity: 1; }
+
+.combat-status-overlay__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 22px;
+  background: linear-gradient(180deg, rgba(127,29,29,0.22) 0%, rgba(20,18,26,0.85) 100%);
+  border: 1px solid rgba(220,38,38,0.45);
+  border-radius: 10px;
+  box-shadow:
+    0 4px 20px rgba(0,0,0,0.45),
+    inset 0 0 14px rgba(220,38,38,0.18);
+  animation: enemy-turn-card-pulse 1.8s ease-in-out infinite;
+}
+.combat-status-overlay__icon {
+  font-size: 18px;
+  color: #ef4444;
+  filter: drop-shadow(0 0 6px rgba(239,68,68,0.6));
+  line-height: 1;
+}
+.combat-status-overlay__title {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 1px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: #fca5a5;
+  text-transform: uppercase;
+}
+.combat-status-overlay__dots { display: inline-flex; gap: 2px; margin-left: 4px; }
+.combat-status-overlay__dots i {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: #fca5a5;
+  opacity: 0.3;
+  animation: enemy-turn-dot 1.4s ease-in-out infinite;
+}
+.combat-status-overlay__dots i:nth-child(2) { animation-delay: 0.18s; }
+.combat-status-overlay__dots i:nth-child(3) { animation-delay: 0.36s; }
+.combat-status-overlay__sub {
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: rgba(252,165,165,0.75);
+  min-height: 14px;
+}
+@keyframes enemy-turn-card-pulse {
+  0%,100% { box-shadow: 0 4px 20px rgba(0,0,0,0.45), inset 0 0 14px rgba(220,38,38,0.18); }
+  50%     { box-shadow: 0 4px 22px rgba(0,0,0,0.55), inset 0 0 22px rgba(220,38,38,0.32); }
+}
+@keyframes enemy-turn-dot {
+  0%,100% { opacity: 0.25; transform: translateY(0); }
+  50%     { opacity: 1;    transform: translateY(-2px); }
+}
+@media (min-width: 769px) {
+  .combat-status-overlay { backdrop-filter: blur(2px); }
+}
+
+/* The init-chip already needs position:relative for the surprise badge.
+   Re-assert here so the badge row pins correctly even if cascade order shifts. */
+.init-chip { position: relative; }
+
 /* ── Initiative Track (T34) ─────────────────────────────────────────────── */
 .initiative-track {
   display: flex;
@@ -6109,3 +6862,143 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .xp-log-table td { padding: 4px 8px; border-bottom: 1px solid rgba(255,255,255,.04); }
 .xp-pos { color: #5cb85c; font-weight: 600; }
 .xp-neg { color: #c9a54a; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Stage 8 D3/D4 — Admin debug drawer
+   ────────────────────────────────────────────────────────────────────────── */
+.debug-drawer-toggle {
+  position: fixed;
+  /* Anchored top-right under the game header — clear of the composer + send button. */
+  right: 14px;
+  top: 100px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(28,24,32,0.92);
+  border: 1px solid rgba(201,165,74,0.45);
+  color: var(--accent);
+  font-size: 16px;
+  cursor: pointer;
+  z-index: 200;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+  transition: transform 0.15s, background 0.15s, border-color 0.15s, opacity 0.15s;
+  font-family: inherit;
+  opacity: 0.7;
+}
+.debug-drawer-toggle:hover {
+  transform: translateY(-1px);
+  background: rgba(40,30,38,0.98);
+  border-color: var(--accent);
+  opacity: 1;
+}
+.debug-drawer-toggle:active { transform: scale(0.96); }
+.debug-drawer-toggle[hidden] { display: none; }
+
+.debug-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 420px;
+  max-width: 100vw;
+  background: linear-gradient(180deg, rgba(28,24,32,0.98) 0%, rgba(18,16,22,0.98) 100%);
+  border-left: 1px solid rgba(201,165,74,0.35);
+  box-shadow: -8px 0 28px rgba(0,0,0,0.55);
+  z-index: 9200;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s cubic-bezier(.2,1,.4,1);
+}
+.debug-drawer--open { transform: translateX(0); }
+@media (max-width: 768px) {
+  .debug-drawer { width: 100vw; border-left: none; }
+}
+
+.debug-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(201,165,74,0.18);
+}
+.debug-drawer__header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.debug-drawer__actions { display: inline-flex; gap: 4px; }
+.debug-drawer__refresh,
+.debug-drawer__copy,
+.debug-drawer__close {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.debug-drawer__refresh:hover,
+.debug-drawer__copy:hover,
+.debug-drawer__close:hover {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(201,165,74,0.45);
+  color: var(--accent);
+}
+
+.debug-drawer__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  background: rgba(0,0,0,0.25);
+}
+.debug-tab {
+  flex: 1;
+  min-width: 60px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 5px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.debug-tab:hover {
+  background: rgba(201,165,74,0.06);
+  border-color: rgba(201,165,74,0.35);
+}
+.debug-tab--active {
+  background: rgba(201,165,74,0.14);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.debug-drawer__body {
+  flex: 1;
+  margin: 0;
+  padding: 12px 14px 16px;
+  overflow: auto;
+  font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Courier New', monospace;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(0,0,0,0.18);
+}

@@ -613,6 +613,17 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_campaign_snippets_type
     ON campaign_snippets(snippet_type, is_active)
     """,
+    # Stage 5 E1 — 8-slot anatomical equipment: armor_coverage column on items.
+    # Enum enforced in code (loot_service._VALID_ARMOR_COVERAGE) because SQLite
+    # cannot ALTER TABLE ADD COLUMN with a CHECK constraint. Allowed values:
+    # 'head' | 'torso' | 'limb_arm' | 'limb_leg' | 'full'. Default 'torso' so
+    # legacy rows still equip somewhere sensible until E3 backfill runs.
+    "ALTER TABLE game_config_items ADD COLUMN armor_coverage TEXT DEFAULT 'torso'",
+    # Stage 5 follow-up — weapon_slot enum on game_config_weapons.
+    # Allowed values: 'main_hand' | 'two_handed' | 'off_hand_only' | 'either'.
+    # Default 'main_hand' is the safest for legacy rows; backfill in ADMIN_SEEDS
+    # then overrides based on label/range/weapon_type heuristics.
+    "ALTER TABLE game_config_weapons ADD COLUMN weapon_slot TEXT DEFAULT 'main_hand'",
 ]
 
 ADMIN_SEEDS = [
@@ -753,7 +764,14 @@ ADMIN_SEEDS = [
     ('sword', 'Sword', 'd8', 'STR', '["warrior","ranger"]', 1, NULL, datetime('now'), datetime('now')),
     ('shield', 'Shield', 'd4', 'STR', '["warrior","ranger"]', 1, NULL, datetime('now'), datetime('now')),
     ('shortbow', 'Shortbow', 'd6', 'DEX', '["warrior","ranger"]', 1, NULL, datetime('now'), datetime('now')),
-    ('staff', 'Staff', 'd6', 'INT', '["scholar"]', 1, NULL, datetime('now'), datetime('now'))
+    ('staff', 'Staff', 'd6', 'INT', '["scholar"]', 1, NULL, datetime('now'), datetime('now')),
+    -- Unarmed: every character can punch. Tiny die so it's clearly worse than any real weapon.
+    ('unarmed', 'Pięści', '1d3', 'STR', '["warrior","ranger","scholar"]', 1, NULL, datetime('now'), datetime('now'))
+    """,
+    # Stage 5: stamp the unarmed row with the right weapon_slot/weapon_type.
+    """
+    UPDATE game_config_weapons SET weapon_slot = 'either', weapon_type = 'melee'
+    WHERE key = 'unarmed' AND weapon_slot != 'either'
     """,
     """
     INSERT OR IGNORE INTO game_config_enemies
@@ -1022,6 +1040,112 @@ ADMIN_SEEDS = [
         ('combat.outnumbered_victory','combat',      'Zwycięstwo w przewadze wroga', 'XS13: +20 XP — walka z 3+ wrogami',                20, 600, 1),
         ('combat.death_save_survived','combat',      'Przeżycie rzutu na śmierć',    'XS14: +15 XP za przeżycie death save',             15, 610, 1),
         ('session.start_bonus',       'session',     'Bonus za powrót do sesji',     'XS15: +10 XP za nową sesję po ≥30 min przerwie',    10, 700, 1)
+    """,
+    # Stage 5 E3 — backfill armor_coverage on existing armor rows.
+    # Each UPDATE is gated by `IS NULL OR ''` so admin edits are never clobbered.
+    # Order is specific → generic: helmet/gauntlet/greave first, then full plate,
+    # finally a catch-all 'torso' for anything that didn't match.
+    """
+    UPDATE game_config_items SET armor_coverage = 'head'
+    WHERE item_type = 'armor'
+      AND (armor_coverage IS NULL OR armor_coverage = '')
+      AND (
+        LOWER(label) LIKE '%helm%'
+        OR LOWER(label) LIKE '%hełm%'
+        OR LOWER(label) LIKE '%kapelusz%'
+        OR LOWER(label) LIKE '%hood%'
+        OR LOWER(label) LIKE '%kaptur%'
+      )
+    """,
+    """
+    UPDATE game_config_items SET armor_coverage = 'limb_arm'
+    WHERE item_type = 'armor'
+      AND (armor_coverage IS NULL OR armor_coverage = '')
+      AND (
+        LOWER(label) LIKE '%gauntlet%'
+        OR LOWER(label) LIKE '%rękawic%'
+        OR LOWER(label) LIKE '%rekawic%'
+        OR LOWER(label) LIKE '%naramien%'
+        OR LOWER(label) LIKE '%bracer%'
+      )
+    """,
+    """
+    UPDATE game_config_items SET armor_coverage = 'limb_leg'
+    WHERE item_type = 'armor'
+      AND (armor_coverage IS NULL OR armor_coverage = '')
+      AND (
+        LOWER(label) LIKE '%greave%'
+        OR LOWER(label) LIKE '%nagolen%'
+        OR LOWER(label) LIKE '%spodni%'
+        OR LOWER(label) LIKE '%boots%'
+        OR LOWER(label) LIKE '%buty%'
+      )
+    """,
+    """
+    UPDATE game_config_items SET armor_coverage = 'full'
+    WHERE item_type = 'armor'
+      AND (armor_coverage IS NULL OR armor_coverage = '')
+      AND (
+        LOWER(label) LIKE '%pełna%'
+        OR LOWER(label) LIKE '%pelna%'
+        OR LOWER(label) LIKE '%plate armor%'
+        OR LOWER(label) LIKE '%full plate%'
+        OR LOWER(label) LIKE '%full armor%'
+      )
+    """,
+    """
+    UPDATE game_config_items SET armor_coverage = 'torso'
+    WHERE item_type = 'armor'
+      AND (armor_coverage IS NULL OR armor_coverage = '')
+    """,
+    # Migrate equipped character_inventory rows from legacy slot='armor' → 'torso'.
+    # Idempotent: rows already on 'torso' don't match.
+    """
+    UPDATE character_inventory SET slot = 'torso' WHERE slot = 'armor' AND equipped = 1
+    """,
+    # Stage 5 follow-up — weapon_slot backfill on game_config_weapons.
+    # The column has DEFAULT 'main_hand' so legacy rows arrive pre-stamped;
+    # we still need to upgrade obvious cases (shields → off_hand_only,
+    # daggers → either, bows/staves/two-handers → two_handed).
+    # Gate: only override when current value is still the default 'main_hand'.
+    # That way an admin who explicitly set 'main_hand' for, say, a "hand axe"
+    # stays main_hand, while ranged/heavy weapons get fixed.
+    """
+    UPDATE game_config_weapons SET weapon_slot = 'off_hand_only'
+    WHERE weapon_slot = 'main_hand'
+      AND (LOWER(label) LIKE '%shield%' OR LOWER(label) LIKE '%tarcz%'
+           OR LOWER(key)   LIKE '%shield%' OR LOWER(key)   LIKE '%tarcz%')
+    """,
+    """
+    UPDATE game_config_weapons SET weapon_slot = 'either'
+    WHERE weapon_slot = 'main_hand'
+      AND (LOWER(label) LIKE '%dagger%' OR LOWER(label) LIKE '%sztylet%'
+           OR LOWER(key)   LIKE '%dagger%' OR LOWER(key)   LIKE '%sztylet%')
+    """,
+    """
+    UPDATE game_config_weapons SET weapon_slot = 'two_handed'
+    WHERE weapon_slot = 'main_hand'
+      AND (
+        two_handed = 1
+        OR weapon_type = 'ranged'
+        OR weapon_type = 'spell'
+        OR range_m IS NOT NULL
+        OR LOWER(label) LIKE '%bow%'      OR LOWER(label) LIKE '%łuk%'
+        OR LOWER(label) LIKE '%crossbow%' OR LOWER(label) LIKE '%kusz%'
+        OR LOWER(label) LIKE '%staff%'    OR LOWER(label) LIKE '%laska%' OR LOWER(label) LIKE '%kij%'
+        OR LOWER(label) LIKE '%greatsword%' OR LOWER(label) LIKE '%two-hand%'
+        OR LOWER(label) LIKE '%greataxe%'   OR LOWER(label) LIKE '%halberd%'
+        OR LOWER(label) LIKE '%warhammer%'  OR LOWER(label) LIKE '%spear%' OR LOWER(label) LIKE '%włóczn%'
+        OR LOWER(key)   LIKE '%bow%'      OR LOWER(key)   LIKE '%staff%'
+        OR LOWER(key)   LIKE '%great%'    OR LOWER(key)   LIKE '%halberd%'
+      )
+    """,
+    # Keep the legacy `two_handed` boolean in sync — engine code may still read it.
+    """
+    UPDATE game_config_weapons SET two_handed = 1 WHERE weapon_slot = 'two_handed' AND two_handed = 0
+    """,
+    """
+    UPDATE game_config_weapons SET two_handed = 0 WHERE weapon_slot != 'two_handed' AND two_handed = 1
     """,
 ]
 

@@ -16,7 +16,31 @@ LOOT_DB_PATH = "/data/ai_gm.db"
 
 logger = get_logger(__name__)
 
-_SLOT_VALUES = {"main_hand", "off_hand", "armor"}
+_SLOT_VALUES = {
+    "head",
+    "torso",
+    "l_arm",
+    "r_arm",
+    "l_leg",
+    "r_leg",
+    "main_hand",
+    "off_hand",
+}
+
+# Stage 5 E1/E2/E4: armor_coverage enum → which slots a single equipped row
+# claims. 'full' anchors to torso but locks all four limbs simultaneously.
+_ARMOR_COVERAGE_TO_SLOTS = {
+    "head": ("head",),
+    "torso": ("torso",),
+    "limb_arm": ("l_arm", "r_arm"),  # caller picks one at equip time
+    "limb_leg": ("l_leg", "r_leg"),  # caller picks one at equip time
+    "full": ("torso", "l_arm", "r_arm", "l_leg", "r_leg"),
+}
+_VALID_ARMOR_COVERAGE = frozenset(_ARMOR_COVERAGE_TO_SLOTS.keys())
+
+# Stage 5 follow-up: weapon_slot enum → which slots a weapon can occupy.
+# 'two_handed' anchors at main_hand but locks off_hand too.
+_VALID_WEAPON_SLOT = frozenset({"main_hand", "two_handed", "off_hand_only", "either"})
 
 # When game_config_items.item_type is wrong (e.g. quest) but effect_* matches consumable mechanics (8H).
 _CONSUMABLE_EFFECT_SIGNAL = frozenset(
@@ -32,8 +56,10 @@ def _inventory_rows_sql(effect_json_col_sql: str, effect_type_col_sql: str, effe
                    ci.item_key, ci.weapon_key, ci.consumable_key,
                    ci.label AS narrative_label, ci.meta_json AS ci_meta_json,
                    gi.label AS item_label, gi.item_type AS item_kind,
+                   gi.armor_coverage AS gi_armor_coverage,
                    {effect_json_col_sql}, {effect_type_col_sql}, {effect_dice_col_sql},
                    gw.label AS weapon_label,
+                   gw.weapon_slot AS gw_weapon_slot,
                    gc.label AS consumable_label,
                    gc_item.key AS consumable_catalog_item_key,
                    gc_item.label AS consumable_by_item_key_label
@@ -548,6 +574,26 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 item_type = "consumable"
             else:
                 item_type = raw_kind or "item"
+        # Stage 5 E4: surface armor_coverage + the list of slots a full-coverage
+        # anchor row is locking, so the frontend can render limb cards as "covered".
+        armor_coverage_raw = None
+        weapon_slot_raw = None
+        try:
+            armor_coverage_raw = r["gi_armor_coverage"]
+        except (KeyError, IndexError):
+            pass
+        try:
+            weapon_slot_raw = r["gw_weapon_slot"]
+        except (KeyError, IndexError):
+            pass
+        coverage = (armor_coverage_raw or "").lower() if item_type == "armor" else None
+        wslot = (weapon_slot_raw or "").lower() if item_type == "weapon" else None
+        covered_slots: list[str] = []
+        if item_type == "armor" and int(r["equipped"] or 0) == 1 and coverage == "full":
+            covered_slots = list(_ARMOR_COVERAGE_TO_SLOTS["full"])
+        # Two-handed weapon: anchor at main_hand but also lock off_hand visually.
+        if item_type == "weapon" and int(r["equipped"] or 0) == 1 and wslot == "two_handed":
+            covered_slots = ["main_hand", "off_hand"]
         out.append(
             {
                 "id": int(r["id"]),
@@ -560,6 +606,9 @@ def get_character_inventory(character_id: int) -> list[dict]:
                 "item_type": item_type,
                 "key": key,
                 "can_use": item_type == "consumable",
+                "armor_coverage": coverage,
+                "weapon_slot": wslot,
+                "covered_slots": covered_slots,
             }
         )
     return out
@@ -790,7 +839,19 @@ def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
 
 def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
     """
-    Equip an inventory entry on a slot and un-equip previous entry in same slot.
+    Equip an inventory entry on a slot, freeing whatever previously occupied
+    that slot (and, for full-coverage armor, all 4 limb slots in one go).
+
+    Coverage rules (Stage 5 E4):
+    - Weapons → main_hand or off_hand (no coverage check).
+    - Armor with `armor_coverage='head'` → only `slot='head'`.
+    - Armor with `armor_coverage='torso'` → only `slot='torso'`.
+    - Armor with `armor_coverage='limb_arm'` → caller must pass `l_arm` or `r_arm`.
+    - Armor with `armor_coverage='limb_leg'` → caller must pass `l_leg` or `r_leg`.
+    - Armor with `armor_coverage='full'` → row is anchored at `slot='torso'`,
+      but the equip transaction also frees existing `l_arm`/`r_arm`/`l_leg`/`r_leg`
+      rows. Hydration in `get_character_inventory` later reports the full row as
+      occupying all 5 slots so the UI can render limb cards as "covered by full".
     """
     cid = int(character_id)
     iid = int(inventory_id)
@@ -804,19 +865,88 @@ def equip_item(character_id: int, inventory_id: int, slot: str) -> dict:
             raise ValueError("character not found")
 
         row = conn.execute(
-            "SELECT id FROM character_inventory WHERE id = ? AND character_id = ?",
+            """
+            SELECT ci.id, ci.weapon_key, ci.item_key,
+                   gi.item_type, gi.armor_coverage,
+                   gw.weapon_slot AS weapon_slot
+            FROM character_inventory ci
+            LEFT JOIN game_config_items gi ON gi.key = ci.item_key
+            LEFT JOIN game_config_weapons gw ON gw.key = ci.weapon_key
+            WHERE ci.id = ? AND ci.character_id = ?
+            """,
             (iid, cid),
         ).fetchone()
         if not row:
             raise ValueError("inventory entry not found")
 
+        item_type = (row["item_type"] or "").lower()
+        coverage = (row["armor_coverage"] or "").lower()
+        weapon_slot_kind = (row["weapon_slot"] or "main_hand").lower()
+        is_weapon = bool(row["weapon_key"]) or item_type == "weapon"
+        is_armor = item_type == "armor"
+
+        slots_to_free: list[str] = [s]
+        anchor_slot = s
+
+        if is_armor:
+            if coverage and coverage not in _VALID_ARMOR_COVERAGE:
+                raise ValueError(f"invalid armor_coverage '{coverage}'")
+            if coverage == "head" and s != "head":
+                raise ValueError("head armor can only equip to slot 'head'")
+            if coverage == "torso" and s != "torso":
+                raise ValueError("torso armor can only equip to slot 'torso'")
+            if coverage == "limb_arm" and s not in ("l_arm", "r_arm"):
+                raise ValueError("arm armor must equip to 'l_arm' or 'r_arm'")
+            if coverage == "limb_leg" and s not in ("l_leg", "r_leg"):
+                raise ValueError("leg armor must equip to 'l_leg' or 'r_leg'")
+            if coverage == "full":
+                anchor_slot = "torso"
+                slots_to_free = list(_ARMOR_COVERAGE_TO_SLOTS["full"])
+        elif is_weapon:
+            if s not in ("main_hand", "off_hand"):
+                raise ValueError("weapons can only equip to 'main_hand' or 'off_hand'")
+            # Stage 5 follow-up: weapon_slot enforcement.
+            if weapon_slot_kind and weapon_slot_kind not in _VALID_WEAPON_SLOT:
+                raise ValueError(f"invalid weapon_slot '{weapon_slot_kind}'")
+            if weapon_slot_kind == "main_hand" and s != "main_hand":
+                raise ValueError("this weapon can only be equipped in main_hand")
+            if weapon_slot_kind == "off_hand_only" and s != "off_hand":
+                raise ValueError("this off-hand item can only be equipped in off_hand")
+            if weapon_slot_kind == "two_handed":
+                if s != "main_hand":
+                    raise ValueError("two-handed weapons must be equipped to main_hand (they lock off_hand too)")
+                # Two-handed weapons anchor to main_hand and occupy both.
+                anchor_slot = "main_hand"
+                slots_to_free = ["main_hand", "off_hand"]
+
+        # Free whatever sits in any slot this equip is about to claim.
+        placeholders = ",".join(["?"] * len(slots_to_free))
+        params = [cid, *slots_to_free]
         conn.execute(
-            "UPDATE character_inventory SET equipped = 0, slot = NULL WHERE character_id = ? AND slot = ?",
-            (cid, s),
+            f"UPDATE character_inventory SET equipped = 0, slot = NULL "
+            f"WHERE character_id = ? AND slot IN ({placeholders})",
+            params,
         )
+        # ALSO free any existing full-coverage anchor whose locked limbs overlap
+        # the target — prevents leaving phantom limbs occupied by an unequipped
+        # full plate (rare, but cheap to guard).
+        if is_armor and any(slot_x in slots_to_free for slot_x in ("l_arm", "r_arm", "l_leg", "r_leg", "torso")):
+            conn.execute(
+                """
+                UPDATE character_inventory SET equipped = 0, slot = NULL
+                WHERE character_id = ? AND equipped = 1 AND slot = 'torso'
+                  AND id IN (
+                    SELECT ci2.id FROM character_inventory ci2
+                    JOIN game_config_items gi2 ON gi2.key = ci2.item_key
+                    WHERE ci2.character_id = ? AND gi2.armor_coverage = 'full'
+                  )
+                """,
+                (cid, cid),
+            )
+
         conn.execute(
             "UPDATE character_inventory SET equipped = 1, slot = ? WHERE id = ?",
-            (s, iid),
+            (anchor_slot, iid),
         )
         conn.commit()
 

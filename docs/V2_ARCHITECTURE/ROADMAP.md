@@ -147,45 +147,62 @@
 
 ### Stage 5 — 8-slot anatomical equipment [D1]
 
-- [ ] **E1** `game_config_items.armor_coverage` column with check constraint (`head`/`torso`/`limb_arm`/`limb_leg`/`full`)
-- [ ] **E2** Backend `loot_service._SLOT_VALUES` expanded to 8: `{head, torso, l_arm, r_arm, l_leg, r_leg, main_hand, off_hand}`
-- [ ] **E3** Data migration: existing armor rows infer coverage from label (heavy → `full`, default → `torso`); equipped slot becomes `torso`
-- [ ] **E4** `equip_item()` resolves armor by `armor_coverage` (e.g. `full` occupies torso + l_arm + r_arm + l_leg + r_leg simultaneously)
-- [ ] **E5** Frontend: anatomical 8-slot diagram in character sheet (replaces current 3-card triptych)
-- [ ] **E6** Frontend: click slot → filter inventory to equippable items for that slot
-- [ ] **E7** Frontend: slot wound tint (red highlight if wound condition affects that body part — e.g. `arm_wound` tints both arms)
+- [x] **E1** `game_config_items.armor_coverage` column (enum enforced in code: `head`/`torso`/`limb_arm`/`limb_leg`/`full`; default `torso`)
+- [x] **E2** `loot_service._SLOT_VALUES` expanded to 8 slots; legacy `armor` slot removed across the stack
+- [x] **E3** ADMIN_SEEDS backfill — labels matched against helm/gauntlet/greave/full-plate patterns; legacy `slot='armor'` migrated to `slot='torso'`
+- [x] **E4** `equip_item()` is coverage-aware: `full` armor anchors at torso and locks 4 limbs in one transaction; slot validation rejects mismatched targets (head→leg → ValueError)
+- [x] **E5** Frontend anatomical diagram — heraldic medieval cartouches around a golden warrior silhouette; 8 slots arranged via `grid-template-areas`
+- [x] **E6** Click-to-filter — tapping an empty slot filters the backpack to equippable items; `Filtr: <slot>` pill above the pack
+- [x] **E7** Slot wound tint — `arm_wound`/`leg_wound`/`head_wound`/etc. read from `sheet.conditions`; affected slot gets a red gradient + 🩸 drop + `wound-pulse` animation
+- [x] **E8** (follow-up) `weapon_slot` enum on `game_config_weapons` (`main_hand`/`two_handed`/`off_hand_only`/`either`); two-handed weapons lock both hands; shield-class items reject `main_hand`. Smart Entry + admin v2 weapons table + modal expose the field. Auto-equip helper picks the right slot.
+- [x] **E9** (follow-up) Bare-hand combat — seeded `unarmed` weapon (1d3 STR melee, weapon_slot=either) and rewired `default_weapon_row()` to use it instead of the alphabetical-first catalog row.
+- [x] **E10** (follow-up) Identity sheet display — read both V2 (`bonds[].description`, `weaknesses[].description`) and V1 (`bond`, `flaw`) keys so heroes created in either format show identity data under "Historia/Wygląd" tab.
 
 ### Stage 6 — T42 Persistent Hero endpoints [D4]
 
-- [ ] **H1** `GET /api/heroes` — list all active heroes (filter sandbox clones), include `campaigns_completed`, `total_xp`, `hero_status`
-- [ ] **H2** `GET /api/characters/{id}/history` — full `character_campaign_history` records ordered by `completed_at` DESC
-- [ ] **H3** Heroes screen UI: cards showing each hero's status (idle/in_campaign/in_dungeon) + last activity
-- [ ] **H4** Hero history view — past campaigns with outcome (victory/death/abandoned), XP earned, level at close
-- [ ] **H5** Between-campaigns REST state — idle hero can spend XP, see history, before picking next adventure (overlaps with T45, this is the lite version)
+- [x] **H1** `GET /api/heroes?user_id=X` — enriched hero roster with `campaigns_completed` (count from history), `total_xp_lifetime` (sheet.xp_lifetime_earned), `hero_status` (idle/in_campaign/in_dungeon), `last_activity_at`. Filters `[SBX] %` / `[RSB] %` names + `__sandbox_clone__` sheet flag. Legacy `GET /characters?user_id=X` preserved for compat.
+- [x] **H2** `GET /api/characters/{id}/history` — history rows joined with `campaigns.title`, ordered by `completed_at DESC`. Returns `{history: [{id, campaign_id, campaign_title, outcome, xp_earned, gold_at_end, turns_count, chapter_summary, completed_at}]}`.
+- [x] **H2 write hook** — `DELETE /api/campaigns/{id}` now INSERTs a `character_campaign_history` row with `outcome='abandoned'` for each hero before unlinking. Idempotent gate prevents double-write.
+- [x] **H3** Heroes screen UI — new `.hero-card` layout: name + status chip (idle=green / in_campaign=gold / in_dungeon=red), archetype·level·HP·last-seen line, current-campaign line, trophy row (⚔ completed count · 🏆 lifetime XP · 📜 Historia · ⬆ Awansuj when idle+XP). Cards sort in_campaign > in_dungeon > idle, newest within each group.
+- [x] **H4** Hero history modal — `openHeroHistoryModal()` fades a centered card in over a backdrop; each row carries outcome icon (🏆/💀/🚪), Polish outcome label, XP earned, turn count, relative date (`_relativeTimePL`); empty state distinguishes "first campaign in progress" vs "no campaigns".
+- [x] **H5** Between-campaigns XP spending — idle hero card with `sheet.xp_available > 0` exposes a `⬆ Awansuj (N PD)` button that opens the existing X6/X7/X8 Awansuj panel without entering a campaign.
 
 ### Stage 7 — Combat UI polish (T34 cleanup)
 
-- [ ] **C1** Condition badges on combatant rows (⚠ FRIGHTENED, ☠ poisoned, 🩸 bleeding, ⚡ zaskoczony, etc.)
-- [ ] **C2** "Tura wroga..." text overlay during enemy auto-turn (not just disabled buttons)
+- [x] **C1** Condition badges on combatant rows — `_renderConditionBadges()` produces one `.init-chip__cond-badge` per active condition, pulled from `combatant.conditions[]`. 10 keys mapped (zaskoczony/poisoned/bleeding/burning/frightened/panicked/stunned/blinded/cursed/break) with per-condition pulse animations + tooltips from `/api/mechanics/conditions`. Surprise ⚡ from Z5 unified into this system.
+- [x] **C2** "Tura wroga…" overlay — `_showEnemyTurnOverlay()` lazy-mounts inside the combat banner and fades in via `.combat-status-overlay--visible`. Card has pulsing red box-shadow, sequenced 3-dot ellipsis, optional "Działa: <enemy name>". Triggered eagerly on enemy-turn POST and re-validated by every `renderCombatUI()` poll. Auto-hidden on combat end. `backdrop-filter: blur(2px)` on desktop.
 
 ### Stage 8 — Debug System [D5]
 
-- [ ] **D1** Player `/debug` slash commands: `set-hp <n>`, `set-state <state>`, `reset-cooldowns`, `dump-state`
-- [ ] **D2** `POST /api/debug/command` endpoint (admin-only)
-- [ ] **D3** Player debug drawer (420px right panel, toggle via `[🐛]` button, admin-only)
-- [ ] **D4** Section tabs in drawer: game_state, last_intent, mechanic_result, llm_prompts, narrator_output, performance_timing
-- [ ] **D5** `debug_mode=True` in turn response payload (when admin user is in session)
-- [ ] **D6** Admin Panel v2 "🐛 Debug" section — surfaces existing `routers/debug.py` endpoints in UI
+- [x] **D1** `/debug` slash commands in `commands_service._execute_debug_command`: `dump-state` (default), `set-hp N` (clamped to [0, max_hp]), `set-state STATE` (writes `session_flags.state` per WSM convention, auto-seeds `pending_skill_test` for SKILL_TEST_PENDING, supports full WSM enum incl. FEAR/DEATH_SAVE), `reset-cooldowns` (zeroes short_rests_used + death_saves_failed + wipes character_dungeon_runs). Composer integration: `/debug` listed in SLASH_COMMANDS, bare `/debug` prints inline usage hint, autocomplete via `DEBUG_CMD_TREE` mirrors `/admin` pattern (suggests subcommands AND state-value options after `set-state `).
+- [x] **D2** `POST /api/debug/command` in `routers/debug.py` — admin-only via `_user_is_admin(user_id)` helper, routes through `execute_command_logic`, restricted to `/debug` prefix. 403 for non-admin, 400 for non-debug commands.
+- [x] **D3** `[🐛]` floating button anchored **top-right (top: 100px)** — clear of composer/send button. Visibility gated by BOTH `currentUser.is_admin` AND `debugMode` (Settings → "🐛 Pokaż debug pod wiadomościami GM" toggle). Drawer is 420 px right-edge slide-out, mobile full-width.
+- [x] **D4** Six tabs in drawer (🌍 State / 🎯 Intent / ⚙ Mechanic / 🤖 LLM / 📜 Narrator / ⏱ Timing) plus refresh + copy-to-clipboard + close actions. Body is a `<pre>` JSON dump.
+- [x] **D5** `GET /api/debug/last-turn?character_id=X&user_id=Y` — snapshot endpoint (chose this over inline-debug-in-turn-response). Returns game_state (sheet + session_flags), `last_intent` (route + user_text + parsed JSON envelope), `mechanic_result` (live combat_state or last combat_turns row), `llm_prompts` (raw narrator envelope until journaling lands), `narrator_output`, `performance_timing` (placeholder until timing journaling lands), `last_turn_meta`. Drawer fetches from here on open and after each `/debug ...` command.
+- [x] **D6** Admin v2 `sections/debug.js` — 5 cards (Player State / GM Decisions / Validation Flags / Feature Flags / Reset Test Env). Each card has input fields + Pobierz/Refresh button + `<pre>` output. Reset is gated by `confirm()`. Feature Flags auto-loads on first mount.
 
-### Stage 9 — Phase 10 finishing
+### Stage 9 — Phase 10 finishing [split into 3 sub-phases]
 
-- [ ] **P1** TASK_36: dual summaries (`player_summary` vs `gm_summary`) generation
-- [ ] **P2** TASK_36: GM continuity injection at session start (>30 min gap detection + summary prepend)
-- [ ] **P3** TASK_36: Historia cooldown — `historia` command available once per 20 turns
-- [ ] **P4** TASK_37: full command palette modal with search field + click-to-insert + per-command admin toggle
-- [ ] **P5** TASK_38: wire epitaph into death screen (currently generator exists, UI doesn't show it)
-- [ ] **P6** TASK_38: victory screen with ending title + summary from campaign plan
-- [ ] **P7** TASK_38: post-end options panel — Nowa Przygoda (same world) / Nowy Świat / Nowy Bohater
+Stage 9 covers 7 items across 3 task areas (TASK_36 summaries, TASK_37 palette, TASK_38 death/victory). Shipped in 3 cohesive sub-phases — each lands independently with its own implementation-record comment on issue #62 and keeps a working main between pushes.
+
+#### Sub-phase 9-A — Death/Victory UI (frontend-heavy, cohesive UX payoff)
+**Why grouped:** all three items render the post-campaign experience. Frontend-heavy with small backend (expose epitaph + ending in campaign payload). The death screen DOM already exists in `index.html` with embers/vignette/skull animation — just needs the epitaph wired and post-end options added. Victory screen is the warm-gold mirror of death.
+
+- [ ] **P5** TASK_38: wire epitaph into death screen — `solo_death_service.generate_epitaph_llm()` already exists; replace the hardcoded "Ciemność pochłonęła kolejną duszę…" string in `#death-screen .death-epitaph` with `campaigns.epitaph`. Fade-in animation (~2 s opacity + letter-spacing collapse).
+- [ ] **P6** TASK_38: victory screen — new `#victory-screen` mirror of death-screen layout but warm/golden palette. Shows on `campaigns.status == 'completed'`. Renders ending title + summary from `gm_plan_json.endings[ending_id]`, plus character name + level + XP earned this campaign.
+- [ ] **P7** TASK_38: post-end options panel — shared between death + victory screens. Three CTAs: **Nowa Przygoda** (same world, same hero, new GM plan) / **Nowy Świat** (same hero, campaigns chooser) / **Nowy Bohater** (heroes screen → wizard). Each routes to the appropriate existing flow.
+
+#### Sub-phase 9-B — Dual summaries + continuity injection (backend + LLM plumbing)
+**Why grouped:** P2 depends on P1 having usable summaries. Schema migration + service plumbing + turn-pipeline prompt prefix all touch overlapping files (`history_summary_service.py`, `context_injector.py`, `campaign_ai_summaries` schema).
+
+- [ ] **P1** TASK_36: dual summaries — persist BOTH `player_summary` + `gm_summary` columns; backfill existing single-column rows; new endpoint `GET /api/campaigns/{id}/summaries?audience=player|gm` with admin-only `gm` audience.
+- [ ] **P2** TASK_36: GM continuity injection — detect ≥30 min session gap between consecutive turns; on the next turn prefix the LLM messages with "Twoja przygoda dotychczas:" + most recent `player_summary` (never `gm_summary` — gracz nie widzi GM-only notes). One-shot per gap.
+
+#### Sub-phase 9-C — Cooldown + command palette (small isolated polish)
+**Why grouped:** both small, both can ship anytime, no dependency on A or B. Cooldown is a one-line gate, palette reuses existing autocomplete data structures.
+
+- [ ] **P3** TASK_36: Historia cooldown — `/mem` rate-limited to **once per 20 player turns** per campaign. Counter in `session_flags.historia_last_turn`. On cooldown: system bubble "Pamięć potrzebuje czasu. Spróbuj za N tur." Admin bypasses.
+- [ ] **P4** TASK_37: command palette modal — `<dialog id="command-palette-modal">` opens on `Ctrl+/` AND a `⌘` button in composer. Search field filters live; arrow-key navigation; Enter inserts the command stub. Reuses `SLASH_COMMANDS` + `DEBUG_CMD_TREE` + admin tree as single source of truth. Per-command admin visibility toggle in `settings` table.
 
 ### Stage 10 — Auth security baseline [D6]
 

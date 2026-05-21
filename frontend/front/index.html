@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=stage4-bar-has-fallback-2026-05-21">
+  <link rel="stylesheet" href="./css/styles.css?v=stage8-debug-fix-2026-05-21">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -484,11 +484,13 @@
             <div class="inv-gold__unit">zł</div>
           </div>
 
-          <!-- Equipment triptych -->
+          <!-- Stage 5 E5: anatomical 8-slot diagram -->
           <div class="inv-section-label">
             <span>Wyposażenie</span>
           </div>
-          <div class="inv-slots" id="sheet-equip-slots"></div>
+          <div class="anatomy" id="sheet-anatomy">
+            <!-- Filled by renderAnatomyDiagram() — 8 slot cartouches around a heraldic silhouette -->
+          </div>
 
           <!-- Backpack -->
           <div class="inv-section-label">
@@ -990,8 +992,11 @@
     </button>
   </nav>
 
+  <!-- Stage 8 D3/D4 — admin debug drawer (lazy-mounted by JS when admin) -->
+  <button id="debug-drawer-toggle" type="button" class="debug-drawer-toggle" title="Debug (admin only)" aria-label="Otwórz debug drawer" hidden>🐛</button>
+
   <script src="./js/clog.js?v=combat-v35"></script>
   <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
-  <script src="./js/app.js?v=stage4-headerhome-2026-05-21"></script>
+  <script src="./js/app.js?v=stage8-set-state-fix-2026-05-21"></script>
 </body>
 </html>
