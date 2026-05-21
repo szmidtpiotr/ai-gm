@@ -226,6 +226,17 @@ async function _renderWeapons(container, panel) {
       },
       { key: "damage_die",    label: "Kość",            editable: true },
       { key: "linked_stat",   label: "Stat",            type: "select-dropdown", editable: true, editOptions: statOpts },
+      // Stage 5 follow-up: weapon_slot — main_hand / two_handed / off_hand_only / either.
+      { key: "weapon_slot", label: "Slot",
+        type: "badge", editType: "select",
+        editOptions: ["main_hand", "two_handed", "off_hand_only", "either"],
+        badgeClass: (r) => ({
+          main_hand: "admin-badge-muted",
+          two_handed: "admin-badge-red",
+          off_hand_only: "admin-badge-blue",
+          either: "admin-badge-gold",
+        }[r.weapon_slot] ?? "admin-badge-muted"),
+        editable: true },
       { key: "two_handed",    label: "Oburącz",         type: "boolean", editable: true },
       { key: "finesse",       label: "Finezja",         type: "boolean", editable: true },
       { key: "range_m",       label: "Zasięg (m)",      type: "number",  editable: true },
@@ -292,7 +303,12 @@ function _openWeaponModal(row, onDone) {
       <span style="font-size:0.72rem;color:var(--text-muted)">Typy: extra_damage, on_hit_save. Zostaw puste jeśli brak efektów.</span>
     </label>
     <div class="modal-field"><span>Dostępne klasy</span><div class="checkbox-group">${classes.map(c=>`<label class="modal-checkbox-row"><input type="checkbox" name="classes_${c}" ${(row?.allowed_classes??[]).includes(c)?"checked":""}><span>${c}</span></label>`).join("")}</div></div>
-    <label class="modal-checkbox-row"><input name="two_handed" type="checkbox" ${row?.two_handed?"checked":""}><span>Oburęczna</span></label>
+    <label class="modal-field"><span>Slot — który rękę zajmuje</span><select name="weapon_slot">
+      <option value="main_hand"     ${(row?.weapon_slot??"main_hand")==="main_hand"?"selected":""}>main_hand — Główna ręka (miecz, topór, młot)</option>
+      <option value="two_handed"    ${row?.weapon_slot==="two_handed"?"selected":""}>two_handed — Oburęczna (łuk, kostur, miecz dwuręczny)</option>
+      <option value="off_hand_only" ${row?.weapon_slot==="off_hand_only"?"selected":""}>off_hand_only — Tylko pomocnicza (tarcza, parująca)</option>
+      <option value="either"        ${row?.weapon_slot==="either"?"selected":""}>either — W obu rękach jednocześnie (sztylety)</option>
+    </select></label>
     <label class="modal-checkbox-row"><input name="finesse" type="checkbox" ${row?.finesse?"checked":""}><span>Finezja</span></label>
     <label class="modal-checkbox-row"><input name="is_active" type="checkbox" ${(row?.is_active??true)?"checked":""}><span>${LABELS.isActive}</span></label>`;
 
@@ -315,6 +331,7 @@ function _openWeaponModal(row, onDone) {
           const allowed_classes = LABELS.classes.filter((cl) => g(`classes_${cl}`)?.checked);
           if (!allowed_classes.length) { showToast("Wybierz przynajmniej jedną klasę.", "error"); return; }
 
+          const weapon_slot = g("weapon_slot").value;
           const body = {
             key, label, damage_die,
             weapon_type: g("weapon_type").value,
@@ -324,7 +341,8 @@ function _openWeaponModal(row, onDone) {
             description: g("description").value.trim(),
             note: g("note").value.trim(),
             effect_json: g("effect_json").value.trim() || null,
-            two_handed: g("two_handed").checked,
+            weapon_slot,
+            two_handed: weapon_slot === "two_handed",  // legacy boolean kept in sync
             finesse: g("finesse").checked,
             is_active: g("is_active").checked,
             allowed_classes,
@@ -624,6 +642,18 @@ async function _renderArmor(container, panel) {
       { key: "value_gp",   label: "Cena (gp)",   type: "number", editable: true },
       { key: "weight_kg",  label: "Waga (kg)",   type: "number", editable: true },
       { key: "ac_bonus",   label: "Bonus AC",    type: "number", editable: true },
+      // Stage 5 E1: armor_coverage — which anatomical slot(s) this piece occupies.
+      { key: "armor_coverage", label: "Pokrycie",
+        type: "badge", editType: "select",
+        editOptions: ["head", "torso", "limb_arm", "limb_leg", "full"],
+        badgeClass: (r) => ({
+          head: "admin-badge-blue",
+          torso: "admin-badge-green",
+          limb_arm: "admin-badge-muted",
+          limb_leg: "admin-badge-muted",
+          full: "admin-badge-gold",
+        }[r.armor_coverage] ?? "admin-badge-muted"),
+        editable: true },
       { key: "description",label: "Opis",        editable: true, popup: true },
       { key: "is_active",  label: LABELS.isActive, type: "boolean", editable: true },
       { key: "locked_at",  label: LABELS.locked,   type: "locked",  editable: false },
@@ -718,6 +748,14 @@ function _openItemModal(row, onDone, forceNew = false) {
     <label class="modal-field"><span>Cena (gp)</span><input name="value_gp" type="number" value="${row?.value_gp??0}" min="0"/></label>
     <label class="modal-field"><span>Waga (kg)</span><input name="weight_kg" type="number" value="${row?.weight_kg??0}" step="0.1" min="0"/></label>
     <label class="modal-field"><span>Bonus AC</span><input name="ac_bonus" type="number" value="${row?.ac_bonus??0}"/></label>
+    <label class="modal-field"><span>Pokrycie zbroi <em>(tylko dla item_type=armor)</em></span><select name="armor_coverage">
+      <option value=""        ${!row?.armor_coverage?"selected":""}>— nie dotyczy —</option>
+      <option value="head"     ${row?.armor_coverage==="head"?"selected":""}>head — głowa (hełm, kaptur)</option>
+      <option value="torso"    ${row?.armor_coverage==="torso"?"selected":""}>torso — tors (kirys, kolczuga)</option>
+      <option value="limb_arm" ${row?.armor_coverage==="limb_arm"?"selected":""}>limb_arm — ramię (gracz wybiera stronę)</option>
+      <option value="limb_leg" ${row?.armor_coverage==="limb_leg"?"selected":""}>limb_leg — noga (gracz wybiera stronę)</option>
+      <option value="full"     ${row?.armor_coverage==="full"?"selected":""}>full — pełna płytowa (tors + 4 kończyny)</option>
+    </select></label>
     <label class="modal-field"><span>Opis</span><textarea name="description" rows="3">${_esc(row?.description??"")}</textarea></label>
     <label class="modal-field"><span>Efekt (effect_json)</span><textarea name="effect_json" rows="3" placeholder='{"effects":[{"type":"heal_hp","value":"2d6"}]}'>${_esc(row?.effect_json??"")}</textarea></label>
     <label class="modal-field"><span>Źródło dropu</span><select name="source_exclusive"><option value="">— wszędzie —</option><option value="dungeon" ${row?.source_exclusive==="dungeon"?"selected":""}>Dungeon only</option><option value="boss" ${row?.source_exclusive==="boss"?"selected":""}>Boss only</option></select></label>
@@ -737,12 +775,14 @@ function _openItemModal(row, onDone, forceNew = false) {
           const label = g("label").value.trim();
           if (!key) { showToast("Klucz jest wymagany.", "error"); return; }
           if (!label) { showToast("Nazwa jest wymagana.", "error"); return; }
+          const coverageVal = (g("armor_coverage").value || "").trim() || null;
           const body = {
             key, label,
             item_type: g("item_type").value,
             value_gp: Number(g("value_gp").value),
             weight_kg: Number(g("weight_kg").value),
             ac_bonus: Number(g("ac_bonus").value),
+            armor_coverage: coverageVal,  // Stage 5 E1 — backend ignores when item_type != 'armor'
             description: g("description").value.trim(),
             effect_json: g("effect_json").value.trim() || null,
             source_exclusive: g("source_exclusive").value || null,

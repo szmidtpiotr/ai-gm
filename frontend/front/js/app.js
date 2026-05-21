@@ -11,6 +11,7 @@ const SLASH_COMMANDS = [
     { cmd: '/mem',     desc: 'Pytanie o przeszłość z podsumowań (bez wpływu na narrację)' },
     { cmd: '/helpme',  desc: 'Doradca OOC — wskazówki poza fabułą' },
     { cmd: '/admin',   desc: 'Komendy admina: add | set | remove | clear | combat | quest | show', adminOnly: true },
+    { cmd: '/debug',   desc: 'Debug: dump-state | set-hp N | set-state STATE | reset-cooldowns', adminOnly: true },
     { cmd: '/history', desc: 'Ostatnie 10 tur sesji' },
     { cmd: '/search',  desc: 'Przeszukaj lokację lub postać' },
     { cmd: '/atak',    desc: 'Synchronizuj panel walki lub zacznij walkę' },
@@ -418,9 +419,31 @@ let currentHero = null;
 
 async function loadHeroes() {
     if (!currentUser?.id) return;
-    const response = await apiRequest('GET', `/characters?user_id=${currentUser.id}`);
+    // Stage 6 H1: use the enriched /heroes endpoint.
+    const response = await apiRequest('GET', `/heroes?user_id=${currentUser.id}`);
     const heroes = response.heroes || [];
     renderHeroes(heroes);
+}
+
+// Stage 6 H3: status chip mapping (label + CSS modifier class).
+const HERO_STATUS_META = {
+    idle:         { label: 'Wolny',      cls: 'hero-status--idle' },
+    in_campaign:  { label: 'W kampanii', cls: 'hero-status--campaign' },
+    in_dungeon:   { label: 'W lochu',    cls: 'hero-status--dungeon' },
+};
+
+// Human-friendly relative time: <1h → "Dzisiaj", <1d → "Wczoraj", <7d → "X dni temu", else date.
+function _relativeTimePL(iso) {
+    if (!iso) return '';
+    const t = new Date(iso.replace(' ', 'T') + (iso.includes('Z') ? '' : 'Z'));
+    if (isNaN(t)) return '';
+    const diffMs = Date.now() - t.getTime();
+    const dayMs = 86_400_000;
+    if (diffMs < 60_000) return 'przed chwilą';
+    if (diffMs < dayMs) return 'dzisiaj';
+    if (diffMs < 2 * dayMs) return 'wczoraj';
+    if (diffMs < 7 * dayMs) return `${Math.floor(diffMs / dayMs)} dni temu`;
+    return t.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
 }
 
 function renderHeroes(heroes) {
@@ -435,60 +458,160 @@ function renderHeroes(heroes) {
     }
     if (empty) empty.style.display = 'none';
 
-    heroes.forEach(hero => {
+    // Sort: in_campaign first, then in_dungeon, then idle. Newest within each group.
+    const sortRank = { in_campaign: 0, in_dungeon: 1, idle: 2 };
+    const sorted = [...heroes].sort((a, b) => {
+        const ra = sortRank[a.hero_status || a.status || 'idle'] ?? 9;
+        const rb = sortRank[b.hero_status || b.status || 'idle'] ?? 9;
+        if (ra !== rb) return ra - rb;
+        return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    });
+
+    sorted.forEach(hero => {
         const sheet = hero.sheet_json || {};
         const archetype = sheet.archetype || hero.system_id || '?';
-        const level = sheet.level || 1;
+        const level = (sheet.xp_lifetime_earned != null)
+            ? Math.min(10, Math.floor(Number(sheet.xp_lifetime_earned) / 100) + 1)
+            : (sheet.level || 1);
         const hp = sheet.current_hp ?? sheet.max_hp ?? '?';
         const maxHp = sheet.max_hp ?? '?';
-        const status = hero.status || 'idle';
-        const statusLabel = { idle: 'Wolny', in_campaign: 'W kampanii', in_dungeon: 'W lochu' }[status] || status;
+        const status = hero.hero_status || hero.status || 'idle';
+        const statusMeta = HERO_STATUS_META[status] || HERO_STATUS_META.idle;
         const campaignTitle = hero.campaign_title || '';
-        const canDelete = true;  // always show — backend enforces safety
+        const completed = Number(hero.campaigns_completed ?? 0);
+        const xpLifetime = Number(hero.total_xp_lifetime ?? 0);
+        const xpAvail = Number(sheet.xp_available || 0);
+        const lastSeen = _relativeTimePL(hero.last_activity_at);
 
         const wrapper = document.createElement('div');
-        wrapper.style.cssText = 'position:relative;display:flex;align-items:stretch;margin-bottom:8px';
+        wrapper.className = 'hero-card-wrapper';
 
         const card = document.createElement('div');
-        card.className = 'campaign-card';
-        card.style.flex = '1';
+        card.className = 'hero-card';
+        card.dataset.heroId = String(hero.id);
         card.innerHTML = `
-            <div class="campaign-card__icon"><span>⚔</span></div>
-            <div class="campaign-card__content">
-                <h3>${_esc(hero.name)}</h3>
-                <p>${_esc(archetype)} · Poziom ${level} · HP ${hp}/${maxHp}</p>
-                ${campaignTitle ? `<p style="font-size:0.8em;opacity:0.6">${_esc(campaignTitle)}</p>` : ''}
+            <div class="hero-card__main">
+              <div class="hero-card__icon">⚔</div>
+              <div class="hero-card__body">
+                <div class="hero-card__title-row">
+                  <h3 class="hero-card__name">${_esc(hero.name)}</h3>
+                  <span class="hero-status-chip ${statusMeta.cls}">${_esc(statusMeta.label)}</span>
+                </div>
+                <p class="hero-card__sub">${_esc(archetype)} · Poz. ${level} · ${hp}/${maxHp} HP${lastSeen ? ` · <span class="hero-card__lastseen">${_esc(lastSeen)}</span>` : ''}</p>
+                ${campaignTitle ? `<p class="hero-card__campaign">📖 ${_esc(campaignTitle)}</p>` : ''}
+                <div class="hero-card__trophy">
+                  <span title="Zakończone przygody">⚔ ${completed}</span>
+                  <span title="Łączna ilość zdobytych PD">🏆 ${xpLifetime} PD</span>
+                  <button type="button" class="hero-card__history-btn" data-hero-id="${hero.id}" title="Historia bohatera">📜 Historia</button>
+                  ${status === 'idle' && xpAvail > 0 ? `<button type="button" class="hero-card__awansuj-btn" data-hero-id="${hero.id}" title="Wydaj PD na rozwój">⬆ Awansuj (${xpAvail} PD)</button>` : ''}
+                </div>
+              </div>
             </div>
-            <span class="campaign-card__arrow" style="font-size:0.75em;opacity:0.7">${_esc(statusLabel)}</span>
         `;
-        card.addEventListener('click', () => selectHero(hero));
+        card.addEventListener('click', (e) => {
+            // Don't trigger card-select when clicking the inline buttons.
+            if (e.target.closest('.hero-card__history-btn, .hero-card__awansuj-btn')) return;
+            selectHero(hero);
+        });
 
-        // Delete button
-        if (canDelete) {
-            const delBtn = document.createElement('button');
-            delBtn.style.cssText = 'background:#3a1212;border:none;color:#c94a4a;padding:0 14px;cursor:pointer;border-radius:0 var(--radius-md) var(--radius-md) 0;font-size:1.1rem;';
-            delBtn.title = 'Usuń bohatera';
-            delBtn.textContent = '🗑';
-            delBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const confirmed = await showDeleteHeroModal(hero.name);
-                if (!confirmed) return;
-                try {
-                    await apiRequest('DELETE', `/characters/${hero.id}?user_id=${currentUser.id}`);
-                    showToast('Bohater i powiązane kampanie usunięte', 'success');
-                    await loadHeroes();
-                } catch (err) {
-                    showToast(err.message || 'Błąd usuwania', 'error');
-                }
-            });
-            wrapper.appendChild(card);
-            wrapper.appendChild(delBtn);
-        } else {
-            wrapper.appendChild(card);
-        }
+        // Inline button wiring
+        card.querySelector('.hero-card__history-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openHeroHistoryModal(hero);
+        });
+        card.querySelector('.hero-card__awansuj-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Open the existing Awansuj panel — works on idle heroes (no campaign required).
+            currentHero = hero;
+            characterData = hero;
+            openAwansujPanel(hero, sheet);
+        });
 
+        const delBtn = document.createElement('button');
+        delBtn.className = 'hero-card__delete';
+        delBtn.title = 'Usuń bohatera';
+        delBtn.textContent = '🗑';
+        delBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const confirmed = await showDeleteHeroModal(hero.name);
+            if (!confirmed) return;
+            try {
+                await apiRequest('DELETE', `/characters/${hero.id}?user_id=${currentUser.id}`);
+                showToast('Bohater i powiązane kampanie usunięte', 'success');
+                await loadHeroes();
+            } catch (err) {
+                showToast(err.message || 'Błąd usuwania', 'error');
+            }
+        });
+
+        wrapper.appendChild(card);
+        wrapper.appendChild(delBtn);
         list.appendChild(wrapper);
     });
+}
+
+// Stage 6 H4: Hero history modal — past campaigns with outcome / XP / turns / date.
+async function openHeroHistoryModal(hero) {
+    let modal = document.getElementById('hero-history-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'hero-history-modal';
+        modal.className = 'hero-history-modal';
+        modal.innerHTML = `
+          <div class="hero-history-modal__backdrop" data-action="close"></div>
+          <div class="hero-history-modal__card">
+            <header class="hero-history-modal__header">
+              <h3 id="hero-history-modal-title">Historia</h3>
+              <button type="button" class="hero-history-modal__close" data-action="close" aria-label="Zamknij">✕</button>
+            </header>
+            <div class="hero-history-modal__body" id="hero-history-modal-body">
+              <p class="hero-history-modal__loading">Wczytywanie…</p>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => {
+            if (e.target.dataset.action === 'close') {
+                modal.classList.remove('hero-history-modal--open');
+            }
+        });
+    }
+    const title = document.getElementById('hero-history-modal-title');
+    const body  = document.getElementById('hero-history-modal-body');
+    if (title) title.textContent = `📜 ${hero.name} — historia`;
+    if (body) body.innerHTML = `<p class="hero-history-modal__loading">Wczytywanie…</p>`;
+    modal.classList.add('hero-history-modal--open');
+
+    try {
+        const r = await apiRequest('GET', `/characters/${hero.id}/history`);
+        const rows = r.history || [];
+        if (!body) return;
+        if (!rows.length) {
+            const isFirstActive = (hero.hero_status || hero.status) === 'in_campaign';
+            body.innerHTML = `<p class="hero-history-modal__empty">${isFirstActive
+                ? 'Aktualna przygoda jest pierwszą — historia zapełni się po jej zakończeniu.'
+                : 'Ten bohater jeszcze nie skończył żadnej przygody.'}</p>`;
+            return;
+        }
+        const outcomeIcon = { victory: '🏆', death: '💀', abandoned: '🚪' };
+        const outcomeLabel = { victory: 'Zwycięstwo', death: 'Śmierć', abandoned: 'Porzucono' };
+        body.innerHTML = `<ul class="hero-history-list">` + rows.map(h => {
+            const icon  = outcomeIcon[h.outcome] || '•';
+            const lbl   = outcomeLabel[h.outcome] || h.outcome || '—';
+            const title = h.campaign_title || `Kampania #${h.campaign_id}`;
+            const when  = _relativeTimePL(h.completed_at || h.created_at) || '—';
+            return `
+              <li class="hero-history-row hero-history-row--${_esc(h.outcome)}">
+                <span class="hero-history-row__icon">${icon}</span>
+                <div class="hero-history-row__main">
+                  <div class="hero-history-row__title">${_esc(title)}</div>
+                  <div class="hero-history-row__meta">${_esc(lbl)} · ${h.xp_earned ?? 0} PD · ${h.turns_count ?? 0} tur · ${_esc(when)}</div>
+                  ${h.chapter_summary ? `<div class="hero-history-row__summary">${_esc(h.chapter_summary)}</div>` : ''}
+                </div>
+              </li>`;
+        }).join('') + `</ul>`;
+    } catch (err) {
+        if (body) body.innerHTML = `<p class="hero-history-modal__empty">Nie udało się wczytać historii: ${_esc(err.message || err)}</p>`;
+    }
 }
 
 async function selectHero(hero) {
@@ -1816,6 +1939,64 @@ async function handleSlashCommand(text) {
         return true;
     }
 
+    // Stage 8 D1 — /debug subcommands (admin only).
+    if (/^\/debug(\s|$)/i.test(t)) {
+        if (!playerIsAdmin()) {
+            showToast('Brak uprawnień — /debug wymaga konta admina.', 'error');
+            return true;
+        }
+        // Bare `/debug` with no subcommand → show usage in chat, don't silently dump.
+        const tail = t.replace(/^\/debug\s*/i, '').trim();
+        if (!tail || tail === 'help') {
+            const helpLines = [
+                '**🐛 /debug — komendy debugowe (admin only)**',
+                '`/debug dump-state` — zrzut stanu postaci + ostatniej tury (drawer otwiera się sam)',
+                '`/debug set-hp N` — ustaw HP (przycinane do [0, max_hp])',
+                '`/debug set-state STATE` — wymuś state_machine (`NARRATIVE`, `COMBAT`, `SKILL_TEST_PENDING`)',
+                '`/debug reset-cooldowns` — wyzeruj krótkie odpoczynki, death saves i cooldowny lochów',
+                '',
+                'Otwórz **🐛 drawer** (prawa-góra) aby zobaczyć szczegóły. Ustawienia → "🐛 Pokaż debug pod wiadomościami GM" musi być ON.'
+            ].join('\n');
+            appendMessage({ role: 'system', content: helpLines, created_at: new Date() });
+            scrollToBottom();
+            return true;
+        }
+        if (!characterData?.id) {
+            showToast('Brak aktywnego bohatera.', 'error');
+            return true;
+        }
+        try {
+            const r = await fetch('/api/debug/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ character_id: characterData.id, text: t, user_id: currentUser?.id }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                showToast(`/debug: ${data?.detail || 'błąd'}`, 'error');
+                return true;
+            }
+            const result = data?.result || data;
+            const sub = result?.sub || 'debug';
+            const summary = (() => {
+                if (sub === 'set-hp')          return `HP → ${result.current_hp}/${result.max_hp}${result.clamped ? ' (wartość przycięta)' : ''}`;
+                if (sub === 'set-state')       return `state: ${result.previous} → ${result.state}${result.warning ? '\n⚠ ' + result.warning : ''}`;
+                if (sub === 'reset-cooldowns')return 'Cooldowns wyzerowane (rest + dungeon).';
+                if (sub === 'dump-state')      return `Stan zrzucony — bohater ${result.name} (id ${result.character_id}). Patrz drawer 🐛.`;
+                return JSON.stringify(result).slice(0, 200);
+            })();
+            appendMessage({ role: 'system', content: `🐛 ${summary}`, created_at: new Date() });
+            await refreshCharacterData();
+            // If the drawer is open, refresh its data immediately.
+            if (document.getElementById('debug-drawer')?.classList.contains('debug-drawer--open')) {
+                _refreshDebugDrawer();
+            }
+        } catch (e) {
+            showToast(`/debug: ${e.message || e}`, 'error');
+        }
+        return true;
+    }
+
     if (/^\/sheet(\s|$)/i.test(t)) {
         openSheetPanel();
         return true;
@@ -1877,6 +2058,54 @@ const ADMIN_CMD_HINTS = {
     'quest complete':  { hint: 'Ukończ questa',        placeholder: '[quest_key]' },
     'show state':      { hint: 'Pokaż stan postaci',   placeholder: '' },
 };
+
+// Stage 8 follow-up — /debug subcommand tree for autocomplete.
+// Mirrors ADMIN_CMD_TREE shape so we can reuse the same suggestion-popup plumbing.
+const DEBUG_CMD_TREE = {
+    'dump-state':      {},
+    'set-hp':          {},
+    'set-state':       { 'NARRATIVE': {}, 'COMBAT': {}, 'SKILL_TEST_PENDING': {} },
+    'reset-cooldowns': {},
+};
+const DEBUG_CMD_HINTS = {
+    'dump-state':      { hint: 'Zrzut stanu postaci + ostatniej tury (drawer)' },
+    'set-hp':          { hint: 'Ustaw HP postaci', placeholder: '<N>' },
+    'set-state':       { hint: 'Wymuś state_machine', placeholder: '<NARRATIVE|COMBAT|SKILL_TEST_PENDING>' },
+    'set-state NARRATIVE':         { hint: 'Tryb narracyjny — domyślny stan' },
+    'set-state COMBAT':            { hint: 'Tryb walki' },
+    'set-state SKILL_TEST_PENDING':{ hint: 'Oczekiwanie na rzut umiejętności' },
+    'reset-cooldowns': { hint: 'Wyzeruj short_rests + death_saves + cooldowny lochów' },
+};
+
+function getDebugSuggestions(afterDebug) {
+    const parts = afterDebug.trimStart().split(/\s+/);
+    const t0 = (parts[0] || '').toLowerCase();
+    const t1 = (parts[1] || '').toUpperCase();
+    const hasSpace1 = afterDebug.trimStart().includes(' ');
+
+    // After "/debug set-state " (with trailing space or partial) → suggest STATE values
+    if (hasSpace1 && DEBUG_CMD_TREE[t0] && Object.keys(DEBUG_CMD_TREE[t0]).length > 0) {
+        const sub = DEBUG_CMD_TREE[t0];
+        return Object.keys(sub)
+            .filter(k => k.toUpperCase().startsWith(t1))
+            .map(k => {
+                const full = `${t0} ${k}`;
+                const meta = DEBUG_CMD_HINTS[full] || {};
+                return { cmd: `/debug ${full}`, desc: meta.hint || '' };
+            });
+    }
+
+    // First word — list top-level subcommands matching what's typed so far.
+    return Object.keys(DEBUG_CMD_TREE)
+        .filter(k => k.startsWith(t0))
+        .map(k => {
+            const meta = DEBUG_CMD_HINTS[k] || {};
+            const desc = meta.hint
+                ? `${meta.hint}${meta.placeholder ? '  ' + meta.placeholder : ''}`
+                : '';
+            return { cmd: `/debug ${k}`, desc };
+        });
+}
 
 function getAdminSuggestions(afterAdmin) {
     const parts = afterAdmin.trimStart().split(/\s+/);
@@ -2695,10 +2924,42 @@ async function pollCombatState() {
     }
 }
 
+// Stage 7 C2 — toggle the "Tura wroga…" overlay (lazy-creates the DOM node).
+function _showEnemyTurnOverlay(show, enemyName) {
+    let overlay = document.getElementById('combat-status-overlay');
+    if (!show) {
+        overlay?.classList.remove('combat-status-overlay--visible');
+        return;
+    }
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'combat-status-overlay';
+        overlay.className = 'combat-status-overlay';
+        overlay.setAttribute('aria-live', 'polite');
+        overlay.innerHTML = `
+            <div class="combat-status-overlay__card">
+              <span class="combat-status-overlay__icon" aria-hidden="true">⚔</span>
+              <div class="combat-status-overlay__title">
+                Tura wroga<span class="combat-status-overlay__dots"><i></i><i></i><i></i></span>
+              </div>
+              <div class="combat-status-overlay__sub" id="combat-status-overlay-sub"></div>
+            </div>`;
+        // Mount inside the combat banner so it's scoped to the fight, not the whole screen.
+        (elements.combatBanner || document.body).appendChild(overlay);
+    }
+    const sub = document.getElementById('combat-status-overlay-sub');
+    if (sub) sub.textContent = enemyName ? `Działa: ${enemyName}` : '';
+    overlay.classList.add('combat-status-overlay--visible');
+}
+
 async function handleEnemyTurn() {
     if (enemyTurnInFlight || !currentCampaignId) return;
     enemyTurnInFlight = true;
     setCombatMsg('Tura wroga...');
+    // Show the overlay eagerly — `renderCombatUI` will keep it on until the next
+    // state poll proves the player has control back. Avoids a flicker window
+    // between POST request and the next render.
+    _showEnemyTurnOverlay(true);
     try {
         const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/enemy-turn`, {
             method: 'POST',
@@ -2845,6 +3106,7 @@ function hideCombatUI() {
     elements.combatComposer.hidden = true;
     elements.composer?.classList.remove('composer--hidden');
     if (elements.initiativeTrack) elements.initiativeTrack.innerHTML = '';
+    _showEnemyTurnOverlay(false);  // C2: clear overlay on combat end
     _initActedThisRound = new Set();
     _initLastRound = 0;
     _initLastCurrentTurn = null;
@@ -2897,6 +3159,36 @@ function triggerCritFlash(kind) {
 let _initActedThisRound = new Set();
 let _initLastRound = 0;
 let _initLastCurrentTurn = null;
+
+// Stage 7 C1 — condition → badge glyph + variant class for animation tint.
+// `label` is the human display name (Polish), used in chip tooltip.
+// `variant` maps to a CSS modifier (`.init-chip__cond-badge--<variant>`).
+const COND_BADGE_MAP = {
+    zaskoczony:   { glyph: '⚡', label: 'Zaskoczony',   variant: 'surprise' },
+    poisoned:     { glyph: '☠',  label: 'Zatruty',      variant: 'poison'   },
+    bleeding:     { glyph: '🩸', label: 'Krwawienie',   variant: 'bleed'    },
+    burning:      { glyph: '🔥', label: 'Płonący',      variant: 'burn'     },
+    frightened:   { glyph: '😨', label: 'Przerażony',   variant: 'fear'     },
+    panicked:     { glyph: '😱', label: 'Spanikowany',  variant: 'panic'    },
+    stunned:      { glyph: '💫', label: 'Oszołomiony',  variant: 'stun'     },
+    blinded:      { glyph: '🫥', label: 'Oślepiony',    variant: 'blind'    },
+    cursed:       { glyph: '🕷', label: 'Przeklęty',    variant: 'curse'    },
+    break:        { glyph: '💢', label: 'Złamany',      variant: 'break'    },
+};
+
+function _renderConditionBadges(conds) {
+    if (!Array.isArray(conds) || !conds.length) return '';
+    const meta = CONDITION_META_CACHE.byKey || {};
+    return conds.map(c => {
+        const key = String(c?.key || c?.label || '').trim().toLowerCase();
+        if (!key) return '';
+        const info = COND_BADGE_MAP[key] || { glyph: '•', label: c?.label || key, variant: 'generic' };
+        const labelPL = info.label || meta[key]?.label || key;
+        const desc = (meta[key]?.description) || '';
+        const tip = desc ? `${labelPL} — ${desc}` : labelPL;
+        return `<span class="init-chip__cond-badge init-chip__cond-badge--${info.variant}" title="${escapeHtml(tip)}" aria-label="${escapeHtml(labelPL)}">${info.glyph}</span>`;
+    }).filter(Boolean).join('');
+}
 
 function _renderInitiativeTrack(cs) {
     const track = elements.initiativeTrack;
@@ -2957,17 +3249,21 @@ function _renderInitiativeTrack(cs) {
         ].filter(Boolean).join(' ');
         const name = String(c.name || (isPlayer ? 'Bohater' : c.enemy_key) || '—');
         const zoneLabel = zone === 'ranged' ? 'Dystans' : 'Zwarcie';
-        // Stage 3 Z5 — surprise (zaskoczony) badge
+        // Stage 7 C1 — render badges for every active condition on this combatant.
         const _conds = Array.isArray(c.conditions) ? c.conditions : [];
-        const _surprised = _conds.some(cc => cc && String(cc.key || '').toLowerCase() === 'zaskoczony');
-        const _surpriseBadge = _surprised
-            ? `<div class="init-chip__surprise" title="Zaskoczony — atak +2, pierwsze trafienie podwaja obrażenia">⚡</div>`
-            : '';
-        const _surpriseTitleSuffix = _surprised ? ' · ⚡ Zaskoczony' : '';
+        const _badges = _renderConditionBadges(_conds);
+        const _badgeNames = _conds.map(cc => {
+            const k = String(cc?.key || cc?.label || '').trim();
+            if (!k) return '';
+            const meta = COND_BADGE_MAP[k.toLowerCase()];
+            const label = (meta?.label) || cc?.label || k;
+            return `${meta?.glyph || '•'} ${label}`;
+        }).filter(Boolean).join(' · ');
+        const _condTitleSuffix = _badgeNames ? ' · ' + _badgeNames : '';
         return `
-            <div class="${cls}" data-combatant-id="${escapeHtml(id)}" title="${escapeHtml(name)}${ini ? ' · ' + ini : ''} · ${zoneLabel}${_surpriseTitleSuffix}">
+            <div class="${cls}" data-combatant-id="${escapeHtml(id)}" title="${escapeHtml(name)}${ini ? ' · ' + ini : ''} · ${zoneLabel}${_condTitleSuffix}">
                 <div class="init-chip__zone" aria-label="${zoneLabel}">${zoneGlyph}</div>
-                ${_surpriseBadge}
+                ${_badges ? `<div class="init-chip__cond-row">${_badges}</div>` : ''}
                 <div class="init-chip__portrait">${portrait}</div>
                 <div class="init-chip__name">${escapeHtml(name)}</div>
                 <div class="init-chip__ini">${ini}</div>
@@ -2985,6 +3281,10 @@ function _renderInitiativeTrack(cs) {
 }
 
 function renderCombatUI(cs) {
+    // Stage 7 C1 — warm the condition meta cache so chip tooltips have descriptions.
+    // First call hits the network; subsequent calls are cached (5-min TTL).
+    _ensureConditionMeta().catch(() => {});
+
     const round = Number(cs.round || 1);
     elements.combatRound.textContent = `Runda ${round}`;
 
@@ -3002,6 +3302,14 @@ function renderCombatUI(cs) {
     elements.combatTurnLabel.textContent = isPlayerTurn ? 'Twoja tura' : 'Tura wroga';
     elements.combatTurnLabel.classList.toggle('combat-banner__turn--enemy', !isPlayerTurn);
     elements.combatTurnLabel.classList.toggle('combat-banner__turn--player', isPlayerTurn);
+
+    // Stage 7 C2 — "Tura wroga…" overlay during enemy turns.
+    // Names the currently-acting enemy if combat_state pins one.
+    const _currentTurnId = String(cs.current_turn ?? '');
+    const _actingEnemy = !isPlayerTurn
+        ? enemies.find(e => String(e?.id ?? e?.combatant_id ?? '') === _currentTurnId) || enemies[0]
+        : null;
+    _showEnemyTurnOverlay(!isPlayerTurn && cs.status !== 'ended', _actingEnemy?.name);
 
     const combatantRow = (c, isPlayer) => {
         const hpCur = Math.max(0, Number(c.hp_current ?? 0));
@@ -3606,17 +3914,28 @@ function populateCharacterSheet(character) {
     renderSpellsTab(character, sheet);
     renderInventoryTab(character);
 
-    // Combined lore tab — data from GM-generated identity block
+    // Combined lore tab — data from GM-generated identity block.
+    // Display reads BOTH V2 (bonds[].description, weaknesses[].description) AND V1
+    // (identity.bond, identity.flaw) fields, so heroes created in either format
+    // render correctly. Multiple entries are joined with " · ".
     const identity = sheet.identity || {};
     const setText = (id, val) => {
         const el = document.getElementById(id);
         if (el) el.textContent = val || '—';
     };
-    const bondText = (identity.bonds && identity.bonds[0]?.text) || identity.bond || sheet.bond || '';
+    const joinEntries = (arr, fallbackKey) => {
+        if (!Array.isArray(arr)) return '';
+        return arr
+            .map(e => (typeof e === 'string' ? e : (e?.description || e?.text || e?.[fallbackKey] || '')).trim())
+            .filter(Boolean)
+            .join(' · ');
+    };
+    const bondText = joinEntries(identity.bonds, 'bond') || identity.bond || sheet.bond || '';
+    const flawText = joinEntries(identity.weaknesses, 'flaw') || identity.flaw || sheet.flaw || '';
     setText('sheet-backstory-text', sheet.backstory || identity.backstory);
     setText('sheet-appearance-text', identity.appearance || sheet.appearance);
     setText('sheet-personality-text', identity.personality || sheet.personality);
-    setText('sheet-flaw-text', identity.flaw || sheet.flaw);
+    setText('sheet-flaw-text', flawText);
     setText('sheet-bond-text', bondText);
 }
 
@@ -4157,19 +4476,33 @@ function _formatSkillLabel(key) {
 // Inventory rendering — Adventurer's Pack
 // ============================================================================
 
+// Stage 5 E5: anatomical 8-slot definitions.
+// Each entry carries a grid-area name + Polish label + body-part wound keys
+// (used by E7 to tint the slot red when a matching condition is active).
 const INV_SLOT_DEFS = [
-    { key: 'main_hand', label: 'Główna ręka',     icon: 'sword'  },
-    { key: 'off_hand',  label: 'Pomocnicza ręka', icon: 'shield' },
-    { key: 'armor',     label: 'Zbroja',          icon: 'armor'  }
+    { key: 'head',      label: 'Głowa',           icon: 'helm',   area: 'head',      wound: ['head_wound'] },
+    { key: 'l_arm',     label: 'Lewe ramię',      icon: 'gaunt',  area: 'larm',      wound: ['arm_wound', 'arm_wound_left',  'l_arm_wound'] },
+    { key: 'torso',     label: 'Tors',            icon: 'armor',  area: 'torso',     wound: ['torso_wound', 'chest_wound'] },
+    { key: 'r_arm',     label: 'Prawe ramię',     icon: 'gaunt',  area: 'rarm',      wound: ['arm_wound', 'arm_wound_right', 'r_arm_wound'] },
+    { key: 'l_leg',     label: 'Lewa noga',       icon: 'greave', area: 'lleg',      wound: ['leg_wound', 'leg_wound_left',   'l_leg_wound'] },
+    { key: 'r_leg',     label: 'Prawa noga',      icon: 'greave', area: 'rleg',      wound: ['leg_wound', 'leg_wound_right',  'r_leg_wound'] },
+    { key: 'main_hand', label: 'Główna ręka',     icon: 'sword',  area: 'mainh',     wound: [] },
+    { key: 'off_hand',  label: 'Pomocnicza',      icon: 'shield', area: 'offh',      wound: [] },
 ];
 
 const INV_ICONS = {
     sword: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 17.5L3 6V3h3l11.5 11.5"/><path d="M13 19l6-6"/><path d="M16 16l4 4"/><path d="M19 21l2-2"/></svg>`,
     shield: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`,
     armor: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20.4 7.4l-3.4-3a1 1 0 0 0-1.3.1l-1.7 2-1.5-1a1 1 0 0 0-1 0l-1.5 1-1.7-2a1 1 0 0 0-1.3-.1l-3.4 3a1 1 0 0 0-.3 1.1L5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6l1.7-4.5a1 1 0 0 0-.3-1.1z"/><path d="M12 6v15"/></svg>`,
+    // Stage 5 E5: simple line-art glyphs for the anatomical slots.
+    helm: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13c0-4 3-7 7-7s7 3 7 7v4H5z"/><path d="M9 13v-1"/><path d="M15 13v-1"/><path d="M10 17v3h4v-3"/></svg>`,
+    gaunt: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4v9l-2 1 2 5h7l3-4V8l-2-1V4"/><path d="M11 8v3"/><path d="M14 8v3"/></svg>`,
+    greave: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6v6l-2 8-1 4h-2l-1-4-2-8z"/><path d="M9 9h6"/><path d="M10 13h4"/></svg>`,
     potion: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2h4"/><path d="M11 2v4.5L6 14a4 4 0 0 0 4 7h4a4 4 0 0 0 4-7L13 6.5V2"/></svg>`,
     scroll: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8a3 3 0 0 0 3-3V8H8"/><path d="M19 8V5a3 3 0 0 0-3-3H5v13a3 3 0 0 0 3 3"/><path d="M5 5h11"/></svg>`,
-    pack: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z"/><path d="M8 8V5a4 4 0 0 1 8 0v3"/><path d="M9 13h6"/></svg>`
+    pack: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h16v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8z"/><path d="M8 8V5a4 4 0 0 1 8 0v3"/><path d="M9 13h6"/></svg>`,
+    chain: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>`,
+    blood: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9 7 6 11 6 15a6 6 0 0 0 12 0c0-4-3-8-6-13z"/></svg>`,
 };
 
 // Map item_type → inventory section + icon glyph
@@ -4183,14 +4516,42 @@ function _invIconKind(item) {
     return 'scroll';
 }
 
-// Same algorithm as legacy frontend's pickEquipSlot
+// Stage 5 E4/E6: pick the right equip slot for a backpack item.
+// Armor → driven by item.armor_coverage; weapons → driven by item.weapon_slot.
 function _invPickEquipSlot(item, occupied) {
     const t = String(item.item_type || '').toLowerCase();
     if (t === 'armor') {
         const k = String(item.key || item.label || '').toLowerCase();
         if (/shield|tarcz/.test(k)) return 'off_hand';
-        return 'armor';
+        const cov = String(item.armor_coverage || '').toLowerCase();
+        if (cov === 'head') return 'head';
+        if (cov === 'limb_arm') return occupied.l_arm ? 'r_arm' : 'l_arm';
+        if (cov === 'limb_leg') return occupied.l_leg ? 'r_leg' : 'l_leg';
+        if (cov === 'full') return 'torso';
+        return 'torso';
     }
+    if (t === 'weapon') {
+        // Stage 5 follow-up: respect weapon_slot enum.
+        const ws = String(item.weapon_slot || 'main_hand').toLowerCase();
+        if (ws === 'two_handed')    return 'main_hand';
+        if (ws === 'off_hand_only') return 'off_hand';
+        if (ws === 'either')        return occupied.main_hand ? 'off_hand' : 'main_hand';
+        return 'main_hand';
+    }
+    return null;
+}
+
+// Stage 5 E6: only show weapons in the right slot when filtering.
+function _itemFitsSlot__weapon(item, slot) {
+    const ws = String(item.weapon_slot || 'main_hand').toLowerCase();
+    if (slot === 'main_hand') return ws === 'main_hand' || ws === 'two_handed' || ws === 'either';
+    if (slot === 'off_hand')  return ws === 'off_hand_only' || ws === 'either';
+    return false;
+}
+
+// Pre-existing helper continues below — left intact.
+function _invPickEquipSlot__legacy(item, occupied) {
+    const t = String(item.item_type || '').toLowerCase();
     if (t === 'weapon') {
         if (!occupied.main_hand) return 'main_hand';
         if (!occupied.off_hand)  return 'off_hand';
@@ -4285,16 +4646,25 @@ async function renderInventoryTab(character) {
     `;
     pulseGoldOnChange(goldGp);  // S9
 
-    // Bucket items by equip status / type
-    const equipped = {};   // slot → item
+    // Stage 5 E4-E7: bucket items + compute synthetic slot coverage for full-armor anchors.
+    const equipped = {};   // slot → item (real slot OR synthetic locked-by-full)
+    const lockedByFull = {}; // slot → anchor item (so the UI shows a chain)
     const backpack = [];
     const lore = [];
-    const occupied = { main_hand: false, off_hand: false, armor: false };
+    const occupied = { head: false, torso: false, l_arm: false, r_arm: false,
+                       l_leg: false, r_leg: false, main_hand: false, off_hand: false };
 
     for (const item of items) {
         if (Number(item.equipped) === 1 && item.slot) {
             equipped[item.slot] = item;
             occupied[item.slot] = true;
+            // Full-coverage armor: stamp the limb slots as locked.
+            for (const cs of (item.covered_slots || [])) {
+                if (cs !== item.slot) {
+                    lockedByFull[cs] = item;
+                    occupied[cs] = true;
+                }
+            }
         } else if (_invIsLore(item)) {
             lore.push(item);
         } else {
@@ -4302,20 +4672,33 @@ async function renderInventoryTab(character) {
         }
     }
 
-    // Triptych
-    const slotsEl = document.getElementById('sheet-equip-slots');
-    if (slotsEl) {
-        slotsEl.innerHTML = INV_SLOT_DEFS.map(def => _renderSlotCard(def, equipped[def.key])).join('');
-    }
+    // Stage 5 E7: gather body-part wound conditions from sheet.
+    const woundSet = _collectWoundSet();
+
+    // E5: anatomical diagram
+    renderAnatomyDiagram(equipped, lockedByFull, woundSet);
+
+    // Stage 5 E6: backpack filter — when user clicks an empty slot, only items
+    // equippable in that slot are shown. _inventoryFilter is module-scope so it
+    // survives equip actions (which re-render the tab).
+    const filter = _inventoryFilter;
+    const filteredBackpack = filter ? backpack.filter(it => _itemFitsSlot(it, filter)) : backpack;
 
     // Backpack
     const bpCount = document.getElementById('inv-backpack-count');
     const bpList = document.getElementById('sheet-backpack');
     if (bpCount) bpCount.textContent = backpack.length;
     if (bpList) {
-        bpList.innerHTML = backpack.length
-            ? backpack.map(item => _renderBackpackRow(item, occupied)).join('')
-            : `<div class="inv-empty">Plecak jest pusty</div>`;
+        const filterPill = filter
+            ? `<div class="anatomy-filter-pill">
+                 Filtr: <strong>${escapeHtml(_slotLabel(filter))}</strong>
+                 <button type="button" class="anatomy-filter-pill__clear" data-action="clear-filter" aria-label="Wyczyść filtr">✕</button>
+               </div>`
+            : '';
+        const body = filteredBackpack.length
+            ? filteredBackpack.map(item => _renderBackpackRow(item, occupied)).join('')
+            : `<div class="inv-empty">${filter ? 'Brak przedmiotów pasujących do tego slotu' : 'Plecak jest pusty'}</div>`;
+        bpList.innerHTML = filterPill + body;
     }
 
     // Lore
@@ -4331,21 +4714,125 @@ async function renderInventoryTab(character) {
     _wireInventoryActions();
 }
 
-function _renderSlotCard(def, item) {
-    if (!item) {
-        return `
-            <div class="inv-slot inv-slot--empty" data-slot="${def.key}">
-                <div class="inv-slot__icon">${INV_ICONS[def.icon]}</div>
-                <div class="inv-slot__type">${def.label}</div>
-                <div class="inv-slot__name inv-slot__name--empty">—</div>
-            </div>`;
+// Stage 5 E6: per-render backpack filter — slot key set by clicking an empty slot.
+let _inventoryFilter = null;
+
+function _slotLabel(key) {
+    const d = INV_SLOT_DEFS.find(x => x.key === key);
+    return d ? d.label : key;
+}
+
+// Wound conditions affecting body parts — read from sheet.conditions.
+function _collectWoundSet() {
+    const out = new Set();
+    try {
+        const sheet = currentCharacter?.sheet_json || characterData?.sheet_json || {};
+        const conditions = sheet?.conditions || [];
+        for (const c of conditions) {
+            const key = (typeof c === 'string' ? c : (c?.key || c?.label || '')).toString().toLowerCase();
+            if (key) out.add(key);
+        }
+    } catch (_e) {}
+    return out;
+}
+
+// Stage 5 E6 (+ follow-up): check whether a backpack item is equippable in a given slot.
+function _itemFitsSlot(item, slot) {
+    const t = String(item.item_type || '').toLowerCase();
+    if (t === 'weapon') return _itemFitsSlot__weapon(item, slot);
+    if (t !== 'armor') return false;
+    const cov = String(item.armor_coverage || '').toLowerCase();
+    if (slot === 'head')               return cov === 'head';
+    if (slot === 'torso')              return cov === 'torso' || cov === 'full';
+    if (slot === 'l_arm' || slot === 'r_arm') return cov === 'limb_arm' || cov === 'full';
+    if (slot === 'l_leg' || slot === 'r_leg') return cov === 'limb_leg' || cov === 'full';
+    return false;
+}
+
+// Stage 5 E5/E7: anatomical diagram renderer.
+function renderAnatomyDiagram(equipped, lockedByFull, woundSet) {
+    const host = document.getElementById('sheet-anatomy');
+    if (!host) return;
+
+    const cards = INV_SLOT_DEFS.map(def => _renderAnatomySlot(def, equipped[def.key], lockedByFull[def.key], woundSet)).join('');
+
+    // Central decorative element — heraldic warrior silhouette in golden line-art.
+    const silhouette = `
+        <svg class="anatomy__silhouette" viewBox="0 0 60 120" aria-hidden="true">
+          <!-- Head -->
+          <circle cx="30" cy="14" r="8" />
+          <!-- Torso -->
+          <path d="M16 26 L44 26 L42 64 L18 64 Z" />
+          <!-- Belt -->
+          <line x1="18" y1="60" x2="42" y2="60" />
+          <!-- Spine accent -->
+          <line x1="30" y1="26" x2="30" y2="64" stroke-dasharray="2 3" />
+          <!-- Arms -->
+          <path d="M16 28 L8  56 L11 70" />
+          <path d="M44 28 L52 56 L49 70" />
+          <!-- Legs -->
+          <path d="M22 64 L20 110" />
+          <path d="M38 64 L40 110" />
+          <!-- Heraldic crest -->
+          <path d="M27 36 L30 32 L33 36 L33 46 L30 50 L27 46 Z" class="anatomy__crest" />
+        </svg>`;
+
+    host.innerHTML = `
+        <div class="anatomy__frame">
+          ${silhouette}
+          <div class="anatomy__grid">${cards}</div>
+        </div>`;
+}
+
+function _renderAnatomySlot(def, item, lockingAnchor, woundSet) {
+    const wounded = (def.wound || []).some(k => woundSet.has(k));
+    // A slot is "locked by full" when a full-coverage anchor is equipped on
+    // a different slot and this slot is in its covered list.
+    const isLockedByFull = !item && !!lockingAnchor;
+    const isFiltering = _inventoryFilter === def.key;
+
+    const classes = ['anatomy-slot', `anatomy-slot--${def.area}`];
+    if (item)            classes.push('anatomy-slot--filled');
+    else if (isLockedByFull) classes.push('anatomy-slot--locked');
+    else                 classes.push('anatomy-slot--empty');
+    if (wounded)         classes.push('anatomy-slot--wounded');
+    if (isFiltering)     classes.push('anatomy-slot--filtering');
+
+    let body, action;
+    if (item) {
+        body = `<div class="anatomy-slot__name">${escapeHtml(item.label || item.key || '?')}</div>`;
+        action = `<button type="button" class="anatomy-slot__unequip" data-action="unequip" data-inventory-id="${item.id}" title="Zdejmij">✕</button>`;
+    } else if (isLockedByFull) {
+        const lockKind = (lockingAnchor?.item_type || '').toLowerCase() === 'weapon'
+            ? 'Zajęte przez broń oburęczną'
+            : 'Cz. pełnej zbroi';
+        body = `<div class="anatomy-slot__name anatomy-slot__name--locked">
+                  <span class="anatomy-slot__chain">${INV_ICONS.chain}</span>
+                  <span>${lockKind}</span>
+                </div>`;
+        action = '';
+    } else {
+        body = `<div class="anatomy-slot__name anatomy-slot__name--empty">—</div>`;
+        action = '';
     }
+
+    const woundDecoration = wounded
+        ? `<span class="anatomy-slot__blood" aria-label="rana">${INV_ICONS.blood}</span>`
+        : '';
+
     return `
-        <div class="inv-slot inv-slot--filled" data-slot="${def.key}" data-inventory-id="${item.id}">
-            <div class="inv-slot__icon">${INV_ICONS[def.icon]}</div>
-            <div class="inv-slot__type">${def.label}</div>
-            <div class="inv-slot__name">${escapeHtml(item.label || item.key || '?')}</div>
-            <button type="button" class="inv-slot__unequip" data-action="unequip" data-inventory-id="${item.id}">Zdejmij</button>
+        <div class="${classes.join(' ')}"
+             data-slot="${def.key}"
+             ${item ? `data-inventory-id="${item.id}"` : ''}
+             ${!item && !isLockedByFull ? 'data-action="filter-slot"' : ''}
+             role="button" tabindex="0">
+          <div class="anatomy-slot__head">
+            <span class="anatomy-slot__icon">${INV_ICONS[def.icon] || ''}</span>
+            <span class="anatomy-slot__type">${def.label}</span>
+            ${woundDecoration}
+          </div>
+          ${body}
+          ${action}
         </div>`;
 }
 
@@ -4398,8 +4885,21 @@ function _wireInventoryActions() {
     document.querySelectorAll('#tab-inventory [data-action]').forEach(btn => {
         if (btn.__wired) return;
         btn.__wired = true;
-        btn.addEventListener('click', async () => {
+        btn.addEventListener('click', async (ev) => {
             const action = btn.dataset.action;
+            // Stage 5 E6: filter-slot + clear-filter don't need a character / inventory id.
+            if (action === 'filter-slot') {
+                const slot = btn.dataset.slot;
+                _inventoryFilter = (_inventoryFilter === slot) ? null : slot;
+                renderInventoryTab(characterData);
+                return;
+            }
+            if (action === 'clear-filter') {
+                ev.stopPropagation();
+                _inventoryFilter = null;
+                renderInventoryTab(characterData);
+                return;
+            }
             const id = parseInt(btn.dataset.inventoryId, 10);
             if (!id || !characterData?.id) return;
             btn.disabled = true;
@@ -4805,7 +5305,131 @@ function updateAdminSettingsVisibility() {
     if (adminSection) adminSection.style.display = isAdmin ? 'block' : 'none';
     if (adminDivider) adminDivider.style.display = isAdmin ? 'flex' : 'none';
 
+    // Stage 8 D3 — show the 🐛 toggle only when (admin) AND (debugMode on
+    // via Settings → "🐛 Pokaż debug pod wiadomościami GM"). Hidden otherwise
+    // to keep the production view clean.
+    _refreshDebugToggleVisibility();
+
     if (isAdmin) pollServiceHealth();
+}
+
+function _refreshDebugToggleVisibility() {
+    const isAdmin = currentUser?.is_admin === 1 || currentUser?.is_admin === true;
+    const dbgToggle = document.getElementById('debug-drawer-toggle');
+    if (!dbgToggle) return;
+    dbgToggle.hidden = !(isAdmin && debugMode);
+    // If the toggle is hidden but the drawer is open, close it too.
+    if (dbgToggle.hidden) {
+        document.getElementById('debug-drawer')?.classList.remove('debug-drawer--open');
+    }
+}
+
+// Stage 8 D3+D4 — admin debug drawer.
+// Lazy-mounted on first toggle; pulls from /api/debug/last-turn.
+let _debugDrawerTab = 'state';
+async function _toggleDebugDrawer() {
+    let drawer = document.getElementById('debug-drawer');
+    if (!drawer) {
+        drawer = document.createElement('aside');
+        drawer.id = 'debug-drawer';
+        drawer.className = 'debug-drawer';
+        drawer.innerHTML = `
+          <header class="debug-drawer__header">
+            <h3>🐛 Debug</h3>
+            <div class="debug-drawer__actions">
+              <button type="button" class="debug-drawer__refresh" data-action="refresh" title="Odśwież">↻</button>
+              <button type="button" class="debug-drawer__copy" data-action="copy" title="Kopiuj aktywną sekcję">⧉</button>
+              <button type="button" class="debug-drawer__close" data-action="close" title="Zamknij" aria-label="Zamknij">✕</button>
+            </div>
+          </header>
+          <div class="debug-drawer__tabs" role="tablist">
+            <button type="button" class="debug-tab debug-tab--active" data-tab="state">🌍 State</button>
+            <button type="button" class="debug-tab" data-tab="intent">🎯 Intent</button>
+            <button type="button" class="debug-tab" data-tab="mechanic">⚙ Mechanic</button>
+            <button type="button" class="debug-tab" data-tab="llm">🤖 LLM</button>
+            <button type="button" class="debug-tab" data-tab="narrator">📜 Narrator</button>
+            <button type="button" class="debug-tab" data-tab="timing">⏱ Timing</button>
+          </div>
+          <pre class="debug-drawer__body" id="debug-drawer-body">Brak danych — wykonaj turę, aby zobaczyć debug.</pre>
+        `;
+        document.body.appendChild(drawer);
+        drawer.addEventListener('click', _handleDebugDrawerClick);
+    }
+    drawer.classList.toggle('debug-drawer--open');
+    if (drawer.classList.contains('debug-drawer--open')) {
+        await _refreshDebugDrawer();
+    }
+}
+
+function _handleDebugDrawerClick(e) {
+    const action = e.target.dataset.action;
+    const tab    = e.target.dataset.tab;
+    if (action === 'close') {
+        document.getElementById('debug-drawer')?.classList.remove('debug-drawer--open');
+    } else if (action === 'refresh') {
+        _refreshDebugDrawer();
+    } else if (action === 'copy') {
+        const body = document.getElementById('debug-drawer-body');
+        if (body && navigator.clipboard) {
+            navigator.clipboard.writeText(body.textContent || '').then(
+                () => showToast('Skopiowane do schowka.', 'success'),
+                () => showToast('Kopia nieudana.', 'error')
+            );
+        }
+    } else if (tab) {
+        _debugDrawerTab = tab;
+        document.querySelectorAll('#debug-drawer .debug-tab').forEach(
+            b => b.classList.toggle('debug-tab--active', b.dataset.tab === tab)
+        );
+        _renderDebugDrawerBody();
+    }
+}
+
+let _debugDrawerSnapshot = null;
+async function _refreshDebugDrawer() {
+    const body = document.getElementById('debug-drawer-body');
+    if (!body) return;
+    if (!characterData?.id) {
+        body.textContent = 'Brak aktywnego bohatera.';
+        return;
+    }
+    body.textContent = 'Wczytywanie…';
+    try {
+        const r = await fetch(`/api/debug/last-turn?character_id=${characterData.id}&user_id=${currentUser?.id ?? ''}`);
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            body.textContent = `Błąd: ${err?.detail || r.status}`;
+            return;
+        }
+        _debugDrawerSnapshot = await r.json();
+        _renderDebugDrawerBody();
+    } catch (e) {
+        body.textContent = `Błąd: ${e.message || e}`;
+    }
+}
+
+function _renderDebugDrawerBody() {
+    const body = document.getElementById('debug-drawer-body');
+    if (!body) return;
+    const snap = _debugDrawerSnapshot;
+    if (!snap) {
+        body.textContent = 'Brak danych — wykonaj turę, aby zobaczyć debug.';
+        return;
+    }
+    const tabMap = {
+        state:     snap.game_state,
+        intent:    snap.last_intent,
+        mechanic:  snap.mechanic_result,
+        llm:       snap.llm_prompts,
+        narrator:  snap.narrator_output,
+        timing:    snap.performance_timing,
+    };
+    const val = tabMap[_debugDrawerTab];
+    if (val == null) {
+        body.textContent = `(brak danych dla zakładki '${_debugDrawerTab}')`;
+        return;
+    }
+    body.textContent = typeof val === 'string' ? val : JSON.stringify(val, null, 2);
 }
 
 let _healthPollTimer = null;
@@ -5025,6 +5649,9 @@ function initEventListeners() {
     // New Campaign
     elements.newCampaignForm?.addEventListener('submit', handleCreateCampaign);
     elements.btnNewCampaignBack?.addEventListener('click', () => showScreen('campaigns'));
+
+    // Stage 8 D3 — debug drawer toggle (admin only; visibility set by updateAdminSettingsVisibility)
+    document.getElementById('debug-drawer-toggle')?.addEventListener('click', _toggleDebugDrawer);
     elements.campaignNameInput?.addEventListener('input', (e) => {
         elements.campaignNameCount.textContent = e.target.value.length;
     });
@@ -5257,6 +5884,8 @@ function initBubblePrefs() {
             document.querySelectorAll('.debug-block').forEach(el => {
                 el.style.display = debugMode ? 'block' : 'none';
             });
+            // Stage 8 follow-up: 🐛 drawer toggle visibility follows this same setting.
+            _refreshDebugToggleVisibility();
             // Re-render debug id chips (requires reload — hint user)
             if (debugMode) showToast('Debug mode ON — odśwież stronę aby zobaczyć ID tur', 'info', 3000);
         });
@@ -5370,6 +5999,10 @@ function initSlashAutocomplete(inputEl) {
         if (/^admin(\s|$)/i.test(token)) {
             return { idx, query: token, isAdmin: true };
         }
+        // /debug also spans multiple words — same treatment.
+        if (/^debug(\s|$)/i.test(token)) {
+            return { idx, query: token, isDebug: true };
+        }
         if (/\s/.test(token)) return null;
         return { idx, query: token, isAdmin: false };
     }
@@ -5440,6 +6073,11 @@ function initSlashAutocomplete(inputEl) {
             }
 
             found = getAdminSuggestions(afterAdmin);
+        } else if (ctx.isDebug) {
+            // Stage 8 follow-up — /debug subcommand autocomplete (admin only).
+            if (!playerIsAdmin()) { hide(); return; }
+            const afterDebug = ctx.query.replace(/^debug\s*/i, '');
+            found = getDebugSuggestions(afterDebug);
         } else {
             found = SLASH_COMMANDS
                 .filter(c => !c.adminOnly || playerIsAdmin())

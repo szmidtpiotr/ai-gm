@@ -92,7 +92,7 @@ def _assert_writable(table: str) -> None:
 SCHEMA_DESCRIPTORS: dict[str, dict] = {
     "game_config_weapons": {
         "required": ["key", "label", "damage_die", "weapon_type", "linked_stat"],
-        "optional": ["two_handed", "value_gp", "allowed_classes", "description", "note", "targeting", "weight_kg", "effect_json"],
+        "optional": ["weapon_slot", "two_handed", "value_gp", "allowed_classes", "description", "note", "targeting", "weight_kg", "effect_json"],
         "fields": {
             "key": {
                 "type": "text",
@@ -133,7 +133,17 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
             },
             "two_handed": {
                 "type": "boolean",
-                "question": "Czy broń wymaga obu rąk?",
+                "question": "Czy broń wymaga obu rąk? (Deprecated — użyj weapon_slot=two_handed)",
+            },
+            "weapon_slot": {
+                "type": "single_choice",
+                "question": "Który slot zajmuje ta broń?",
+                "options": [
+                    {"label": "main_hand", "description": "Główna ręka (miecz, topór, młot — jednoręczne)"},
+                    {"label": "two_handed", "description": "Oburęczna — zajmuje główną i pomocniczą rękę (łuk, kostur, miecz dwuręczny)"},
+                    {"label": "off_hand_only", "description": "Tylko pomocnicza ręka (tarcza, parująca broń)"},
+                    {"label": "either", "description": "Może być w obu rękach jednocześnie (sztylety — dwa sztylety jednocześnie)"},
+                ],
             },
             "value_gp": {
                 "type": "number",
@@ -187,7 +197,7 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
     },
     "game_config_items": {
         "required": ["key", "label", "item_type", "value_gp"],
-        "optional": ["ac_bonus", "effect_json"],
+        "optional": ["ac_bonus", "armor_coverage", "effect_json"],
         "fields": {
             "key": {
                 "type": "text",
@@ -217,6 +227,17 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
                 "question": "O ile punktów zwiększa Klasę Pancerza (AC)? (0-8)",
                 "min": 0,
                 "max": 8,
+            },
+            "armor_coverage": {
+                "type": "single_choice",
+                "question": "Jaki obszar ciała chroni ta zbroja? (tylko dla item_type='armor')",
+                "options": [
+                    {"label": "head", "description": "Głowa (hełm, kaptur, czepiec)"},
+                    {"label": "torso", "description": "Tors (kirys, kolczuga, kaftan)"},
+                    {"label": "limb_arm", "description": "Ramię (rękawica, naramiennik) — gracz wybiera lewe lub prawe"},
+                    {"label": "limb_leg", "description": "Noga (nagolennik, but) — gracz wybiera lewą lub prawą"},
+                    {"label": "full", "description": "Pełne pokrycie (zbroja płytowa) — zajmuje tors + 4 kończyny jednocześnie"},
+                ],
             },
             "effect_json": {
                 "type": "text",

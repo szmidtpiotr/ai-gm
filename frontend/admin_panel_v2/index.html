@@ -89,6 +89,10 @@
             <span class="nav-icon">🛠</span>
             <span class="nav-label">System</span>
           </button>
+          <button type="button" data-section="debug" title="Debug">
+            <span class="nav-icon">🐛</span>
+            <span class="nav-label">Debug</span>
+          </button>
         </nav>
 
         <div class="sidebar-footer">
@@ -132,6 +136,7 @@
           <div class="section-panel" data-section="visual"></div>
           <div class="section-panel" data-section="voice"></div>
           <div class="section-panel" data-section="system"></div>
+          <div class="section-panel" data-section="debug"></div>
         </div>
 
         <div class="activity-log-wrap" id="activity-log-wrap">
@@ -398,6 +403,7 @@
           "visual":     "/admin_panel_v2/sections/visual.js?v=1",
           "voice":      "/admin_panel_v2/sections/voice.js?v=1",
           "system":     "/admin_panel_v2/sections/system.js?v=5",
+          "debug":      "/admin_panel_v2/sections/debug.js?v=1",
         };
 
         if (moduleMap[key]) {

@@ -592,6 +592,7 @@ def build_camp(campaign_id: int):
 @router.delete("/campaigns/{campaign_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_campaign(campaign_id: int):
     conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
 
     try:
         row = conn.execute(
@@ -603,6 +604,43 @@ def delete_campaign(campaign_id: int):
             raise HTTPException(status_code=404, detail="Campaign not found")
 
         conn.execute("BEGIN")
+
+        # Stage 6 write hook — record an `abandoned` history row for each hero
+        # in this campaign before unlinking. Idempotent: skip if a non-active
+        # history row already exists for (character, campaign).
+        heroes_in = conn.execute(
+            """
+            SELECT c.id, c.sheet_json,
+                   (SELECT COUNT(*) FROM campaign_turns t WHERE t.campaign_id = ?) AS turns_count,
+                   COALESCE(c.gold_gp, 0) AS gold_at_end
+            FROM characters c WHERE c.campaign_id = ?
+            """,
+            (campaign_id, campaign_id),
+        ).fetchall()
+        for h in heroes_in:
+            try:
+                sheet = json.loads(h["sheet_json"] or "{}")
+            except Exception:
+                sheet = {}
+            xp_lifetime = int(sheet.get("xp_lifetime_earned") or 0)
+            already = conn.execute(
+                """
+                SELECT 1 FROM character_campaign_history
+                WHERE character_id = ? AND campaign_id = ? AND outcome != 'active'
+                LIMIT 1
+                """,
+                (int(h["id"]), campaign_id),
+            ).fetchone()
+            if already:
+                continue
+            conn.execute(
+                """
+                INSERT INTO character_campaign_history
+                  (character_id, campaign_id, outcome, xp_earned, gold_at_end, turns_count, completed_at)
+                VALUES (?, ?, 'abandoned', ?, ?, ?, datetime('now'))
+                """,
+                (int(h["id"]), campaign_id, xp_lifetime, int(h["gold_at_end"]), int(h["turns_count"])),
+            )
 
         conn.execute(
             "DELETE FROM campaign_turns WHERE campaign_id = ?",

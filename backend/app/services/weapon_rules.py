@@ -125,20 +125,37 @@ def load_weapon_row(conn: sqlite3.Connection, key: str | None) -> dict[str, Any]
 
 
 def default_weapon_row(conn: sqlite3.Connection) -> dict[str, Any] | None:
+    """Fallback weapon used when nothing is equipped — barehand strike.
+
+    Prefers a catalog row keyed 'unarmed' (so admins can balance the die / linked_stat).
+    Falls back to a hardcoded d3 STR melee strike if no row exists.
+    """
     try:
         row = conn.execute(
             """
             SELECT key, label, damage_die, linked_stat, weapon_type, two_handed, finesse, range_m
             FROM game_config_weapons
-            ORDER BY key ASC
+            WHERE key = 'unarmed' AND is_active = 1
             LIMIT 1
             """
         ).fetchone()
     except sqlite3.OperationalError:
         row = conn.execute(
-            "SELECT key, label, damage_die, linked_stat FROM game_config_weapons ORDER BY key ASC LIMIT 1"
+            "SELECT key, label, damage_die, linked_stat FROM game_config_weapons WHERE key = 'unarmed' LIMIT 1"
         ).fetchone()
-    return _normalize_weapon_row(row)
+    if row:
+        return _normalize_weapon_row(row)
+    # Hardcoded last-ditch fallback (kept tiny so it's clearly worse than any real weapon).
+    return _normalize_weapon_row({
+        "key": "unarmed",
+        "label": "Pięści",
+        "damage_die": "1d3",
+        "linked_stat": "STR",
+        "weapon_type": "melee",
+        "two_handed": 0,
+        "finesse": 0,
+        "range_m": None,
+    })
 
 
 def resolve_sheet_weapon(

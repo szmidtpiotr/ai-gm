@@ -3,12 +3,224 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Body
+from pydantic import BaseModel
 from app.core.db_runtime import resolve_db_path
 
 DB_PATH = resolve_db_path()
 
 router = APIRouter(prefix="/debug", tags=["debug"])
+
+
+# Stage 8 D2 — admin check helper (returns True/False without raising).
+def _user_is_admin(user_id: int | None) -> bool:
+    if not user_id:
+        return False
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        row = conn.execute(
+            "SELECT is_admin FROM users WHERE id = ?", (int(user_id),)
+        ).fetchone()
+        return bool(row and int(row[0] or 0) == 1)
+    finally:
+        conn.close()
+
+
+class DebugCommandRequest(BaseModel):
+    character_id: int
+    text: str
+    user_id: int | None = None
+
+
+@router.get("/last-turn")
+def get_last_turn_debug(character_id: int = Query(...), user_id: int | None = Query(None)):
+    """Stage 8 D5 — last-turn debug snapshot for the drawer.
+
+    Pulls the most recent campaign_turns row + character sheet + session_flags
+    so the player-debug drawer can render 6 tabs of state without the turn
+    endpoint having to inline anything. Admin-only.
+    """
+    if not _user_is_admin(user_id):
+        raise HTTPException(status_code=403, detail="Admin only")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id, campaign_id, name, sheet_json FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="Character not found")
+        campaign_id = char["campaign_id"]
+        try:
+            sheet = json.loads(char["sheet_json"] or "{}")
+        except Exception:
+            sheet = {}
+        # Last turn for this campaign. Schema is minimal in DEV
+        # (no intent_text/mechanic_result/etc. columns yet) — start with the
+        # rich SELECT and fall back to bare columns on OperationalError.
+        last_turn = None
+        if campaign_id:
+            try:
+                row = conn.execute(
+                    """
+                    SELECT id, campaign_id, turn_number, route, user_text, assistant_text,
+                           intent_text, mechanic_result, debug_meta, llm_response_json,
+                           created_at
+                    FROM campaign_turns
+                    WHERE campaign_id = ?
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (campaign_id,),
+                ).fetchone()
+            except sqlite3.OperationalError:
+                row = conn.execute(
+                    """
+                    SELECT id, campaign_id, turn_number, route, user_text, assistant_text,
+                           created_at
+                    FROM campaign_turns
+                    WHERE campaign_id = ?
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (campaign_id,),
+                ).fetchone()
+            if row:
+                last_turn = dict(row)
+                # Decode JSON-bearing columns when present.
+                for k in ("intent_text", "mechanic_result", "debug_meta", "llm_response_json"):
+                    raw = last_turn.get(k)
+                    if isinstance(raw, str) and raw.strip().startswith(("{", "[")):
+                        try:
+                            last_turn[k] = json.loads(raw)
+                        except Exception:
+                            pass
+        # Session flags for state machine + zones + dungeon run
+        session_flags = {}
+        if campaign_id:
+            srow = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE id = ?", (str(campaign_id),)
+            ).fetchone()
+            if srow and srow["session_flags"]:
+                try:
+                    session_flags = json.loads(srow["session_flags"])
+                except Exception:
+                    pass
+
+        # Stage 8 follow-up: derive Intent/Mechanic from what's actually persisted.
+        # campaign_turns is a bare table (no journaled intent/mechanic/llm/timing
+        # columns yet) — we pull what's discoverable instead of returning null.
+        intent_block = None
+        mechanic_block = None
+        assistant_raw = (last_turn or {}).get("assistant_text") if last_turn else None
+        if last_turn:
+            # Intent: route + user_text + any structured JSON in assistant_text
+            parsed_assistant = None
+            if isinstance(assistant_raw, str) and assistant_raw.strip().startswith("{"):
+                try:
+                    parsed_assistant = json.loads(assistant_raw)
+                except Exception:
+                    parsed_assistant = None
+            intent_block = {
+                "route": last_turn.get("route"),
+                "user_text": last_turn.get("user_text"),
+                "location_intent": (parsed_assistant or {}).get("location_intent"),
+                "roll_cue": (parsed_assistant or {}).get("roll_cue"),
+            }
+        # Mechanic: prefer the live combat_state from session_flags, else show
+        # the latest combat_turns row for this campaign.
+        if isinstance(session_flags.get("combat_state"), dict):
+            mechanic_block = {"source": "session_flags.combat_state",
+                              "combat_state": session_flags["combat_state"]}
+        elif campaign_id:
+            try:
+                ctrow = conn.execute(
+                    """
+                    SELECT id, turn_index, actor_type, actor_key, target_key,
+                           action_type, event_type, payload_json, created_at
+                    FROM combat_turns
+                    WHERE campaign_id = ?
+                    ORDER BY id DESC LIMIT 1
+                    """,
+                    (campaign_id,),
+                ).fetchone()
+                if ctrow:
+                    ct = dict(ctrow)
+                    raw_payload = ct.get("payload_json")
+                    if isinstance(raw_payload, str) and raw_payload.strip().startswith(("{", "[")):
+                        try:
+                            ct["payload_json"] = json.loads(raw_payload)
+                        except Exception:
+                            pass
+                    mechanic_block = {"source": "combat_turns (last row)", "row": ct}
+            except sqlite3.OperationalError:
+                pass
+
+        return {
+            "character_id": int(char["id"]),
+            "campaign_id": campaign_id,
+            "name": char["name"],
+            "game_state": {
+                "sheet": sheet,
+                "session_flags": session_flags,
+            },
+            "last_intent": intent_block or {
+                "note": "Brak danych — wykonaj turę, aby wypełnić tę zakładkę.",
+            },
+            "mechanic_result": mechanic_block or {
+                "note": "Brak aktywnej walki ani wpisu w combat_turns dla tej kampanii.",
+            },
+            "llm_prompts": {
+                "note": "LLM prompts nie są jeszcze journalowane w campaign_turns. Planowane: dodać `llm_response_json` + `llm_prompts_json` kolumny i wpisywać podczas turn_pipeline.",
+                "narrator_envelope_raw": _slice_debug({"x": assistant_raw}, "x") if assistant_raw else None,
+            },
+            "narrator_output": assistant_raw,
+            "performance_timing": {
+                "note": "Performance timing nie jest jeszcze journalowane. Planowane: zbierać per-phase czasy w turn_pipeline i zapisywać do debug_meta.",
+            },
+            "last_turn_meta": {
+                "id": (last_turn or {}).get("id") if last_turn else None,
+                "turn_number": (last_turn or {}).get("turn_number") if last_turn else None,
+                "route": (last_turn or {}).get("route") if last_turn else None,
+                "created_at": (last_turn or {}).get("created_at") if last_turn else None,
+            } if last_turn else None,
+        }
+    finally:
+        conn.close()
+
+
+def _slice_debug(last_turn: dict | None, key: str, limit: int = 8192) -> any:
+    """Truncate large JSON blobs so the wire stays sane."""
+    if not last_turn:
+        return None
+    val = last_turn.get(key)
+    if val is None:
+        return None
+    if isinstance(val, str) and len(val) > limit:
+        return val[:limit] + "… [truncated]"
+    return val
+
+
+@router.post("/command")
+def debug_command(req: DebugCommandRequest):
+    """Stage 8 D2 — admin-only slash-command execution surface.
+
+    Accepts `/debug ...` text and routes through commands_service so the same
+    code powers both the in-game composer (which gates by is_admin client-side
+    plus this server-side check) and any direct API harness we add later.
+    """
+    if not _user_is_admin(req.user_id):
+        raise HTTPException(status_code=403, detail="Admin only")
+    text = (req.text or "").strip()
+    if not text.startswith("/debug"):
+        raise HTTPException(status_code=400, detail="Only /debug commands are accepted here")
+    try:
+        from app.services.commands_service import execute_command_logic
+        result = execute_command_logic(req.character_id, text)
+        return result.payload
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
 
 
 def _parse_json(value: str | None, fallback):

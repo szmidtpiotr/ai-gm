@@ -301,6 +301,7 @@ class WeaponCreateReq(BaseModel):
     weight_kg: float = 0.0
     note: str | None = None
     effect_json: str | None = None
+    weapon_slot: str | None = None  # Stage 5: main_hand/two_handed/off_hand_only/either
     is_active: bool = True
 
 
@@ -322,6 +323,7 @@ class WeaponPatchReq(BaseModel):
     weight_kg: float | None = None
     note: str | None = None
     effect_json: str | None = None
+    weapon_slot: str | None = None  # Stage 5
     is_active: bool | None = None
     force: bool = False
 
@@ -412,6 +414,7 @@ class ItemCreateReq(BaseModel):
     weight_kg: float = 0.0
     allowed_classes: list[str] = []
     ac_bonus: int = 0
+    armor_coverage: str | None = None  # Stage 5 E1: head/torso/limb_arm/limb_leg/full
     effect_type: str | None = None
     effect_dice: str | None = None
     effect_bonus: int = 0
@@ -433,6 +436,7 @@ class ItemPatchReq(BaseModel):
     weight_kg: float | None = None
     allowed_classes: list[str] | None = None
     ac_bonus: int | None = None
+    armor_coverage: str | None = None  # Stage 5 E1
     effect_type: str | None = None
     effect_dice: str | None = None
     effect_bonus: int | None = None
@@ -1162,12 +1166,18 @@ def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_to
             weight_kg=req.weight_kg,
             note=req.note,
             effect_json=req.effect_json,
+            weapon_slot=req.weapon_slot,
             is_active=req.is_active,
         )
         return {"item": item}
     except ValueError as e:
         if str(e) == "weapon_exists":
             raise HTTPException(status_code=409, detail="Weapon key already exists") from None
+        if str(e) == "invalid_weapon_slot":
+            raise HTTPException(
+                status_code=422,
+                detail="weapon_slot must be one of: main_hand, two_handed, off_hand_only, either",
+            ) from None
         if str(e) == "invalid_key":
             raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
         if str(e) == "invalid_damage_die":
@@ -1215,6 +1225,7 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             weight_kg=req.weight_kg,
             note=req.note,
             effect_json=req.effect_json,
+            weapon_slot=req.weapon_slot,
             is_active=req.is_active,
             force=req.force,
         )
@@ -1247,6 +1258,11 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             raise HTTPException(status_code=422, detail="value_gp must be >= 0") from None
         if str(e) == "invalid_weight_kg":
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
+        if str(e) == "invalid_weapon_slot":
+            raise HTTPException(
+                status_code=422,
+                detail="weapon_slot must be one of: main_hand, two_handed, off_hand_only, either",
+            ) from None
         raise HTTPException(status_code=422, detail="Invalid weapon payload") from None
 
 
@@ -1523,6 +1539,7 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
             weight_kg=req.weight_kg,
             allowed_classes=req.allowed_classes,
             ac_bonus=req.ac_bonus,
+            armor_coverage=req.armor_coverage,
             effect_type=req.effect_type,
             effect_dice=req.effect_dice,
             effect_bonus=req.effect_bonus,
@@ -1562,6 +1579,11 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
         if str(e) == "invalid_ac_bonus":
             raise HTTPException(status_code=422, detail="ac_bonus must be >= 0") from None
+        if str(e) == "invalid_armor_coverage":
+            raise HTTPException(
+                status_code=422,
+                detail="armor_coverage must be one of: head, torso, limb_arm, limb_leg, full",
+            ) from None
         if str(e) == "invalid_charges":
             raise HTTPException(status_code=422, detail="charges must be >= 1") from None
         if str(e) in ("invalid_allowed_classes", "invalid_proficiency_classes"):
@@ -1581,6 +1603,7 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             weight_kg=req.weight_kg,
             allowed_classes=req.allowed_classes,
             ac_bonus=req.ac_bonus,
+            armor_coverage=req.armor_coverage,
             effect_type=req.effect_type,
             effect_dice=req.effect_dice,
             effect_bonus=req.effect_bonus,
@@ -1623,6 +1646,11 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
         if str(e) == "invalid_ac_bonus":
             raise HTTPException(status_code=422, detail="ac_bonus must be >= 0") from None
+        if str(e) == "invalid_armor_coverage":
+            raise HTTPException(
+                status_code=422,
+                detail="armor_coverage must be one of: head, torso, limb_arm, limb_leg, full",
+            ) from None
         if str(e) == "invalid_charges":
             raise HTTPException(status_code=422, detail="charges must be >= 1") from None
         if str(e) in ("invalid_allowed_classes", "invalid_proficiency_classes"):
@@ -1695,6 +1723,11 @@ def admin_create_consumable(req: ConsumableCreateReq, _: None = Depends(require_
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
         if str(e) == "invalid_ac_bonus":
             raise HTTPException(status_code=422, detail="ac_bonus must be >= 0") from None
+        if str(e) == "invalid_armor_coverage":
+            raise HTTPException(
+                status_code=422,
+                detail="armor_coverage must be one of: head, torso, limb_arm, limb_leg, full",
+            ) from None
         raise HTTPException(status_code=422, detail="Invalid consumable payload") from None
 
 
@@ -1746,6 +1779,11 @@ def admin_patch_consumable(key: str, req: ConsumablePatchReq, _: None = Depends(
             raise HTTPException(status_code=422, detail="weight_kg must be >= 0") from None
         if str(e) == "invalid_ac_bonus":
             raise HTTPException(status_code=422, detail="ac_bonus must be >= 0") from None
+        if str(e) == "invalid_armor_coverage":
+            raise HTTPException(
+                status_code=422,
+                detail="armor_coverage must be one of: head, torso, limb_arm, limb_leg, full",
+            ) from None
         raise HTTPException(status_code=422, detail="Invalid consumable payload") from None
 
 

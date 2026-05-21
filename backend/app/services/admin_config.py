@@ -581,7 +581,7 @@ def list_weapons() -> list[dict]:
         """
         SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg,
-               description, note, effect_json, source_exclusive,
+               description, note, effect_json, source_exclusive, weapon_slot,
                is_active, locked_at, created_at, updated_at,
                COALESCE(campaign_id, NULL) AS campaign_id,
                COALESCE(review_status, 'permanent') AS review_status
@@ -918,6 +918,9 @@ def delete_skill(key: str, *, force: bool) -> None:
         conn.close()
 
 
+_VALID_WEAPON_SLOT = {"main_hand", "two_handed", "off_hand_only", "either"}
+
+
 def create_weapon(
     *,
     key: str,
@@ -938,6 +941,7 @@ def create_weapon(
     weight_kg: float = 0.0,
     note: str | None = None,
     effect_json: str | None = None,
+    weapon_slot: str | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     safe_damage_die = _validate_damage_die(damage_die)
@@ -949,6 +953,17 @@ def create_weapon(
         raise ValueError("invalid_value_gp")
     if weight_kg < 0:
         raise ValueError("invalid_weight_kg")
+
+    # Stage 5 follow-up: validate weapon_slot if supplied; auto-derive from
+    # two_handed boolean otherwise (back-compat). Then sync the boolean to match.
+    if weapon_slot is None:
+        final_weapon_slot = "two_handed" if two_handed else "main_hand"
+    else:
+        final_weapon_slot = str(weapon_slot).strip().lower()
+        if final_weapon_slot not in _VALID_WEAPON_SLOT:
+            raise ValueError("invalid_weapon_slot")
+        # Keep the legacy boolean in sync with the new enum.
+        two_handed = (final_weapon_slot == "two_handed")
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -964,9 +979,10 @@ def create_weapon(
             """
             INSERT INTO game_config_weapons (
                 key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note, effect_json,
-                effect_json, is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
+                value_gp, weight_kg, description, note, effect_json, weapon_slot,
+                is_active, locked_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -986,6 +1002,7 @@ def create_weapon(
                 description or "",
                 note,
                 effect_json,
+                final_weapon_slot,
                 1 if is_active else 0,
             ),
         )
@@ -993,8 +1010,9 @@ def create_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note, effect_json,
-                   effect_json, is_active, locked_at, created_at, updated_at
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
+                   value_gp, weight_kg, description, note, effect_json, weapon_slot,
+                   is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
             (safe_key,),
@@ -1031,6 +1049,7 @@ def update_weapon(
     weight_kg: float | None = None,
     note: str | None = None,
     effect_json: str | None = None,
+    weapon_slot: str | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1040,8 +1059,9 @@ def update_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note, effect_json,
-                   effect_json, is_active, locked_at, created_at, updated_at
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
+                   value_gp, weight_kg, description, note, effect_json, weapon_slot,
+                   is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
             (safe_key,),
@@ -1094,13 +1114,22 @@ def update_weapon(
             raise ValueError("invalid_weight_kg")
         final_note = note if note is not None else current.get("note")
         final_effect_json = effect_json if effect_json is not None else current.get("effect_json")
+        # Stage 5 follow-up: weapon_slot — validate + keep two_handed boolean in sync.
+        if weapon_slot is not None:
+            ws_clean = str(weapon_slot).strip().lower()
+            if ws_clean not in _VALID_WEAPON_SLOT:
+                raise ValueError("invalid_weapon_slot")
+            final_weapon_slot = ws_clean
+            final_two = 1 if ws_clean == "two_handed" else 0
+        else:
+            final_weapon_slot = current.get("weapon_slot") or ("two_handed" if final_two else "main_hand")
 
         conn.execute(
             """
             UPDATE game_config_weapons
             SET label = ?, damage_die = ?, weapon_type = ?, linked_stat = ?, allowed_classes = ?,
                 two_handed = ?, finesse = ?, range_m = ?, targeting = ?, aoe_radius_m = ?, magic_school = ?,
-                value_gp = ?, weight_kg = ?, description = ?, note = ?, effect_json = ?,
+                value_gp = ?, weight_kg = ?, description = ?, note = ?, effect_json = ?, weapon_slot = ?,
                 is_active = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
@@ -1121,6 +1150,7 @@ def update_weapon(
                 final_desc,
                 final_note,
                 final_effect_json,
+                final_weapon_slot,
                 final_is_active,
                 safe_key,
             ),
@@ -1129,8 +1159,9 @@ def update_weapon(
             conn,
             """
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
-                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg, description, note, effect_json,
-                   effect_json, is_active, locked_at, created_at, updated_at
+                   two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
+                   value_gp, weight_kg, description, note, effect_json, weapon_slot,
+                   is_active, locked_at, created_at, updated_at
             FROM game_config_weapons WHERE key = ?
             """,
             (safe_key,),
@@ -1666,11 +1697,14 @@ def delete_condition(key: str, *, force: bool) -> None:
         conn.close()
 
 
+_VALID_ARMOR_COVERAGE = {"head", "torso", "limb_arm", "limb_leg", "full"}
+
+
 def list_items() -> list[dict]:
     rows = _fetch_all(
         """
         SELECT key, label, item_type, description, value_gp, weight_kg,
-               allowed_classes, ac_bonus,
+               allowed_classes, ac_bonus, armor_coverage,
                charges, effect_json, ai_generated, approved,
                note, is_active, locked_at, created_at, updated_at
         FROM game_config_items
@@ -1697,6 +1731,7 @@ def create_item(
     weight_kg: float = 0.0,
     allowed_classes: list[str] | None = None,
     ac_bonus: int = 0,
+    armor_coverage: str | None = None,
     effect_type: str | None = None,
     effect_dice: str | None = None,
     effect_bonus: int = 0,
@@ -1719,6 +1754,13 @@ def create_item(
     final_charges = int(charges)
     if final_charges < 1:
         raise ValueError("invalid_charges")
+    # Stage 5 E1: armor_coverage — only meaningful for armor; default 'torso'.
+    if safe_type == "armor":
+        final_coverage = (armor_coverage or "torso").strip().lower()
+        if final_coverage not in _VALID_ARMOR_COVERAGE:
+            raise ValueError("invalid_armor_coverage")
+    else:
+        final_coverage = None
     ac_json = _serialize_allowed_classes(allowed_classes)
     if effect_json is None:
         eff = _normalize_legacy_item_effect_json(
@@ -1743,10 +1785,10 @@ def create_item(
             """
             INSERT INTO game_config_items (
                 key, label, item_type, description, value_gp, weight_kg,
-                allowed_classes, ac_bonus,
+                allowed_classes, ac_bonus, armor_coverage,
                 charges, effect_json, ai_generated, approved,
                 note, is_active, locked_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, datetime('now'), datetime('now'))
             """,
             (
                 safe_key,
@@ -1757,6 +1799,7 @@ def create_item(
                 float(weight_kg),
                 ac_json,
                 int(ac_bonus),
+                final_coverage,
                 final_charges,
                 eff,
                 int(ai_generated),
@@ -1769,7 +1812,7 @@ def create_item(
             conn,
             """
             SELECT key, label, item_type, description, value_gp, weight_kg,
-                   allowed_classes, ac_bonus,
+                   allowed_classes, ac_bonus, armor_coverage,
                    charges, effect_json, ai_generated, approved,
                    note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
@@ -1803,6 +1846,7 @@ def update_item(
     allowed_classes: list[str] | None = None,
     weight_kg: float | None = None,
     ac_bonus: int | None = None,
+    armor_coverage: str | None = None,
     effect_type: str | None = None,
     effect_dice: str | None = None,
     effect_bonus: int | None = None,
@@ -1820,7 +1864,7 @@ def update_item(
             conn,
             """
             SELECT key, label, item_type, description, value_gp, weight_kg,
-                   allowed_classes, ac_bonus,
+                   allowed_classes, ac_bonus, armor_coverage,
                    charges, effect_json, ai_generated, approved,
                    note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
@@ -1864,6 +1908,21 @@ def update_item(
         if final_ac_bonus < 0:
             raise ValueError("invalid_ac_bonus")
 
+        # Stage 5 E1: armor_coverage. Only meaningful for armor.
+        if armor_coverage is not None:
+            coverage_clean = str(armor_coverage).strip().lower()
+            if final_type == "armor":
+                if coverage_clean not in _VALID_ARMOR_COVERAGE:
+                    raise ValueError("invalid_armor_coverage")
+                final_coverage = coverage_clean
+            else:
+                final_coverage = None  # discard for non-armor types
+        elif final_type == "armor":
+            # No new value but type is armor — keep existing or default to torso.
+            final_coverage = current.get("armor_coverage") or "torso"
+        else:
+            final_coverage = None
+
         final_charges = int(charges) if charges is not None else int(current.get("charges") or 1)
         if final_charges < 1:
             raise ValueError("invalid_charges")
@@ -1875,7 +1934,7 @@ def update_item(
             """
             UPDATE game_config_items
             SET label = ?, item_type = ?, description = ?, value_gp = ?, weight_kg = ?,
-                allowed_classes = ?, ac_bonus = ?,
+                allowed_classes = ?, ac_bonus = ?, armor_coverage = ?,
                 charges = ?, effect_json = ?, ai_generated = ?, approved = ?,
                 note = ?, is_active = ?, updated_at = datetime('now')
             WHERE key = ?
@@ -1888,6 +1947,7 @@ def update_item(
                 final_wkg,
                 final_ac,
                 final_ac_bonus,
+                final_coverage,
                 final_charges,
                 final_effect,
                 final_ai,
@@ -1901,7 +1961,7 @@ def update_item(
             conn,
             """
             SELECT key, label, item_type, description, value_gp, weight_kg,
-                   allowed_classes, ac_bonus,
+                   allowed_classes, ac_bonus, armor_coverage,
                    charges, effect_json, ai_generated, approved,
                    note, is_active, locked_at, created_at, updated_at
             FROM game_config_items WHERE key = ?
