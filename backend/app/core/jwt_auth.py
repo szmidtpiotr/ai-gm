@@ -84,3 +84,118 @@ def verify_request_user_matches(payload: dict | None, query_user_id: int | None)
             status_code=400,
             detail=f"user_id query param ({query_user_id}) does not match JWT subject ({jwt_uid})",
         )
+
+
+# Stage 10-C — enforcement helpers.
+# Routers use these to derive `user_id` from the JWT subject. Query-param
+# fallback remains during the migration window so a missing token doesn't
+# brick the player UI on the old cache-bust.
+
+import logging as _stdlib_logging
+from app.core.logging import get_logger as _get_logger
+
+_logger = _get_logger(__name__)
+
+
+def resolve_authed_user_id(
+    authorization: str | None,
+    user_id_query: int | None,
+) -> int:
+    """Derive the authenticated user_id from the request.
+
+    Order of trust:
+      1. `Authorization: Bearer <access_jwt>` (verified signature → payload.sub)
+      2. `?user_id=N` query param (LEGACY — logged as deprecation warning)
+
+    Raises:
+      HTTPException 401 — neither JWT nor query param present
+      HTTPException 401 — JWT present but invalid
+      HTTPException 400 — JWT and query param both present but disagree
+
+    During Stage 10-C this is THE auth point for player-facing endpoints. After
+    the deprecation period the query-param branch can be removed (one-liner).
+    """
+    token = _extract_bearer(authorization)
+    jwt_uid: int | None = None
+    if token:
+        try:
+            payload = verify_token(token, expected_type="access")
+            jwt_uid = int(payload.get("sub") or 0) or None
+        except JWTError as e:
+            raise HTTPException(status_code=401, detail=str(e)) from None
+
+    if jwt_uid is not None:
+        if user_id_query is not None and int(user_id_query) != jwt_uid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"user_id query param ({user_id_query}) does not match JWT subject ({jwt_uid})",
+            )
+        return jwt_uid
+
+    if user_id_query is not None:
+        _logger.warning(
+            "legacy_query_param_auth",
+            user_id=int(user_id_query),
+            hint="Frontend should send Authorization: Bearer <access_token> — query param fallback is deprecated.",
+        )
+        return int(user_id_query)
+
+    raise HTTPException(
+        status_code=401,
+        detail="Missing authentication (send Authorization: Bearer <access_token>)",
+    )
+
+
+def require_admin_role(
+    authorization: str | None,
+    user_id_query: int | None = None,
+) -> int:
+    """Stage 10-C A6 — require the request to come from an admin (JWT role=admin
+    OR legacy query-param user_id whose users.is_admin=1).
+
+    Returns the user_id when ok. Raises 403 otherwise.
+    """
+    # Need to verify JWT to know the role, OR fall back to DB lookup for legacy callers.
+    token = _extract_bearer(authorization)
+    if token:
+        try:
+            payload = verify_token(token, expected_type="access")
+        except JWTError as e:
+            raise HTTPException(status_code=401, detail=str(e)) from None
+        if str(payload.get("role") or "").lower() == "admin" or int(payload.get("is_admin") or 0) == 1:
+            uid = int(payload.get("sub") or 0)
+            if user_id_query is not None and int(user_id_query) != uid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"user_id query param ({user_id_query}) does not match JWT subject ({uid})",
+                )
+            return uid
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    # Legacy query-param fallback — verify via DB lookup.
+    if user_id_query is not None:
+        import sqlite3
+        from app.core.db_runtime import resolve_db_path
+        conn = sqlite3.connect(resolve_db_path())
+        try:
+            row = conn.execute(
+                "SELECT COALESCE(is_admin, 0) AS is_admin, COALESCE(role,'player') AS role FROM users WHERE id = ?",
+                (int(user_id_query),),
+            ).fetchone()
+        finally:
+            conn.close()
+        if not row:
+            raise HTTPException(status_code=401, detail="User not found")
+        if int(row[0] or 0) == 1 or str(row[1] or "").lower() == "admin":
+            _logger.warning(
+                "legacy_query_param_admin_auth",
+                user_id=int(user_id_query),
+                hint="Admin endpoint reached via legacy query-param fallback.",
+            )
+            return int(user_id_query)
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    raise HTTPException(
+        status_code=401,
+        detail="Missing authentication (send Authorization: Bearer <access_token>)",
+    )

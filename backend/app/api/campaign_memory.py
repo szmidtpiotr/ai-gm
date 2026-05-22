@@ -2,7 +2,7 @@
 
 import json
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.turns import (
@@ -11,6 +11,7 @@ from app.api.turns import (
     get_db,
     log_memory_turn_structured,
 )
+from app.core.jwt_auth import resolve_authed_user_id
 from app.services.client_ui_config import is_slash_command_enabled
 from app.services.history_summary_service import count_narrative_turns
 from app.services.memory_qa_service import answer_from_summaries
@@ -65,8 +66,11 @@ class MemoryAskBody(BaseModel):
 def post_memory_ask(
     campaign_id: int,
     body: MemoryAskBody,
-    user_id: int = Query(..., description="Właściciel kampanii — spójnie z LLM."),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
 ):
+    # Stage 10-C — JWT-authoritative user resolution.
+    user_id = resolve_authed_user_id(authorization, user_id)
     if not is_slash_command_enabled("/mem [pytanie]"):
         raise HTTPException(
             status_code=403,

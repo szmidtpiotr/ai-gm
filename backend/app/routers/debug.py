@@ -3,7 +3,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi import APIRouter, Header, HTTPException, Query, Body
 from pydantic import BaseModel
 from app.core.db_runtime import resolve_db_path
 
@@ -33,15 +33,20 @@ class DebugCommandRequest(BaseModel):
 
 
 @router.get("/last-turn")
-def get_last_turn_debug(character_id: int = Query(...), user_id: int | None = Query(None)):
+def get_last_turn_debug(
+    character_id: int = Query(...),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
+):
     """Stage 8 D5 — last-turn debug snapshot for the drawer.
 
     Pulls the most recent campaign_turns row + character sheet + session_flags
     so the player-debug drawer can render 6 tabs of state without the turn
     endpoint having to inline anything. Admin-only.
     """
-    if not _user_is_admin(user_id):
-        raise HTTPException(status_code=403, detail="Admin only")
+    # Stage 10-C A6: prefer JWT role=admin; fall back to legacy DB lookup.
+    from app.core.jwt_auth import require_admin_role
+    require_admin_role(authorization, user_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -201,15 +206,18 @@ def _slice_debug(last_turn: dict | None, key: str, limit: int = 8192) -> any:
 
 
 @router.post("/command")
-def debug_command(req: DebugCommandRequest):
+def debug_command(
+    req: DebugCommandRequest,
+    authorization: str | None = Header(default=None),
+):
     """Stage 8 D2 — admin-only slash-command execution surface.
 
     Accepts `/debug ...` text and routes through commands_service so the same
     code powers both the in-game composer (which gates by is_admin client-side
     plus this server-side check) and any direct API harness we add later.
     """
-    if not _user_is_admin(req.user_id):
-        raise HTTPException(status_code=403, detail="Admin only")
+    from app.core.jwt_auth import require_admin_role
+    require_admin_role(authorization, req.user_id)
     text = (req.text or "").strip()
     if not text.startswith("/debug"):
         raise HTTPException(status_code=400, detail="Only /debug commands are accepted here")

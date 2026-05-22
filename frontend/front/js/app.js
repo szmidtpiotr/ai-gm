@@ -4138,8 +4138,10 @@ async function openAwansujPanel(character, sheet) {
     body.innerHTML = '<div class="camp-loading">Ładowanie…</div>';
 
     try {
+        // Stage 10-C — route through apiRequest so the JWT Bearer header is
+        // attached automatically. Mechanics metadata is public, raw fetch ok.
         const [xpData, skillMeta] = await Promise.all([
-            fetch(`/api/characters/${character.id}/xp?user_id=${currentUser?.id}`).then(r => r.json()),
+            apiRequest('GET', `/characters/${character.id}/xp?user_id=${currentUser?.id}`),
             fetch('/api/mechanics/metadata').then(r => r.ok ? r.json() : {})
         ]);
         const xpAvail = xpData.xp_available ?? 0;
@@ -4262,7 +4264,8 @@ async function openAwansujPanel(character, sheet) {
 async function loadXpLog(character, container) {
     if (!container) return;
     try {
-        const data = await fetch(`/api/characters/${character.id}/xp/grant-log?user_id=${currentUser?.id}&limit=20`).then(r => r.json());
+        // Stage 10-C — apiRequest attaches the Bearer header.
+        const data = await apiRequest('GET', `/characters/${character.id}/xp/grant-log?user_id=${currentUser?.id}&limit=20`);
         const grants = data.grants || [];
         if (!grants.length) { container.innerHTML = '<p class="section-note">Brak historii PD.</p>'; return; }
         container.innerHTML = `<table class="xp-log-table">

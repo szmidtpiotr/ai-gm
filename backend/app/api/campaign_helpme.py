@@ -1,6 +1,6 @@
 """POST /helpme — doradca OOC; zapis route=helpme (poza kontekstem narracyjnym)."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.turns import (
@@ -10,6 +10,7 @@ from app.api.turns import (
     get_db,
     resolve_model_name,
 )
+from app.core.jwt_auth import resolve_authed_user_id
 from app.services.helpme_advisor_service import run_helpme_advisor
 from app.services.user_llm_settings import get_user_llm_settings_full
 
@@ -30,8 +31,10 @@ class HelpmeBody(BaseModel):
 def post_helpme(
     campaign_id: int,
     body: HelpmeBody,
-    user_id: int = Query(..., description="Właściciel kampanii — spójnie z LLM."),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
 ):
+    user_id = resolve_authed_user_id(authorization, user_id)
     conn = get_db()
     try:
         camp = get_campaign_or_404(conn, campaign_id)
