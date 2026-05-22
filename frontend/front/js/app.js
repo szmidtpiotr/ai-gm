@@ -1771,6 +1771,15 @@ async function enterGame(campaign) {
     window.clog?.setContext({ campaign_id: campaign.id, character_id: characterData?.id, screen: 'game' });
     window.clog?.event('game_entered', { campaign_id: campaign.id, character_id: characterData?.id });
     startCombatPolling();
+
+    // Stage 10-C+ Bug 1 fix — on F5 / resume, the campaign GET payload carries
+    // any pending_skill_test. Re-mount the roll popup so the player can't
+    // walk away from a bad roll by refreshing.
+    if (campaign?.pending_skill_test) {
+        try { showSkillTestPopup(campaign.pending_skill_test); } catch (e) {
+            console.warn('[skill-roll] could not restore pending popup on resume:', e);
+        }
+    }
 }
 
 function appendMessage(msg, opts = {}) {
@@ -2703,10 +2712,21 @@ function showSkillTestPopup(pending) {
     const existing = document.getElementById('skill-roll-popup');
     if (existing) existing.remove();
 
+    // Stage 10-C+ Bug 2 fix — interrupt any in-flight TTS reading the previous
+    // GM bubble before the roll popup mounts. Otherwise TTS continues, the modal
+    // appears to freeze, and the popup-narration steps on the previous read.
+    try { window.voiceUI?.stopPlayback?.(); } catch (_e) {}
+
     const mod   = pending.modifier_breakdown || {};
     const total = mod.total || 0;
     const sign  = total >= 0 ? '+' : '';
     const name  = (pending.skill_label || pending.skill_key || 'Umiejętność').toUpperCase();
+    // Stage 10-C+ Bug 1 fix — backend now commits the d20 when the pending is
+    // created. Refreshing the page returns the SAME committed value via
+    // GET /api/campaigns/{id}.pending_skill_test, so re-rolling is impossible.
+    const committedD20 = (typeof pending.committed_d20 === 'number')
+        ? Math.max(1, Math.min(20, parseInt(pending.committed_d20, 10)))
+        : null;
 
     // Compact modifier summary — single line, only non-zero parts
     const modParts = [
@@ -2783,10 +2803,19 @@ function showSkillTestPopup(pending) {
         dieWrap.classList.add('srp-rolling');
         let ticks = 0;
         const iv = setInterval(() => {
+            // Animation only — the displayed numbers during spin are decorative.
             dieNum.textContent = Math.ceil(Math.random() * 20);
             if (++ticks >= 16) {
                 clearInterval(iv);
-                rolled = Math.ceil(Math.random() * 20);
+                // Stage 10-C+ Bug 1 fix — use the server-committed roll when
+                // present (any pending from a v2+ backend has it). Fall back
+                // to a client roll only for legacy pendings (logs a warning).
+                if (committedD20 !== null) {
+                    rolled = committedD20;
+                } else {
+                    console.warn('[skill-roll] no committed_d20 on pending — falling back to client roll (legacy)');
+                    rolled = Math.ceil(Math.random() * 20);
+                }
                 const sum   = rolled + total;
                 const nat20 = rolled === 20;
                 const nat1  = rolled === 1;

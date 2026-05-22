@@ -908,6 +908,23 @@ def get_db():
     return conn
 
 
+def _commit_pending_skill_test(pending: dict, session_flags: dict) -> dict:
+    """Stage 10-C+ cheat fix — server-side d20 commitment.
+
+    The d20 value is locked in at the moment the pending test is persisted.
+    If the player refreshes the page mid-roll, they receive the SAME committed
+    value next time the popup mounts — no reroll possible.
+
+    Earlier versions trusted the client's `Math.random()` result, which let
+    a refresh-spammer reroll until they got a high die.
+    """
+    if "committed_d20" not in pending:
+        pending["committed_d20"] = random.randint(1, 20)
+    session_flags["pending_skill_test"] = pending
+    session_flags["state"] = "SKILL_TEST_PENDING"
+    return session_flags
+
+
 def _atak_command_response_for_api(campaign_id: int) -> dict:
     """Wynik /atak i /walka w API — zależny od włączenia /atak w konfiguracji slash (admin)."""
     if not is_slash_command_enabled("/atak"):
@@ -2403,8 +2420,7 @@ def create_turn(
             ).fetchone()
             if gs_row:
                 _sf = json.loads(gs_row["session_flags"] or "{}")
-                _sf["pending_skill_test"] = _pending
-                _sf["state"] = "SKILL_TEST_PENDING"
+                _sf = _commit_pending_skill_test(_pending, _sf)
                 conn.execute(
                     "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                     (json.dumps(_sf, ensure_ascii=False), campaign_id),
@@ -2470,8 +2486,7 @@ def create_turn(
                         ).fetchone()
                         if gs_row_pre:
                             _sf_pre = json.loads(gs_row_pre["session_flags"] or "{}")
-                            _sf_pre["pending_skill_test"] = _pending_pre
-                            _sf_pre["state"] = "SKILL_TEST_PENDING"
+                            _sf_pre = _commit_pending_skill_test(_pending_pre, _sf_pre)
                             conn.execute(
                                 "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                                 (json.dumps(_sf_pre, ensure_ascii=False), campaign_id),
@@ -2555,8 +2570,7 @@ def create_turn(
                 ).fetchone()
                 if gs_row2:
                     _sf2 = json.loads(gs_row2["session_flags"] or "{}")
-                    _sf2["pending_skill_test"] = _skill_pending_narrator
-                    _sf2["state"] = "SKILL_TEST_PENDING"
+                    _sf2 = _commit_pending_skill_test(_skill_pending_narrator, _sf2)
                     conn.execute(
                         "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                         (json.dumps(_sf2, ensure_ascii=False), campaign_id),
@@ -2702,8 +2716,7 @@ def create_turn(
                             ).fetchone()
                             if _gs3:
                                 _sf3 = json.loads(_gs3["session_flags"] or "{}")
-                                _sf3["pending_skill_test"] = _skill_pending_narrator
-                                _sf3["state"] = "SKILL_TEST_PENDING"
+                                _sf3 = _commit_pending_skill_test(_skill_pending_narrator, _sf3)
                                 conn.execute(
                                     "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                                     (json.dumps(_sf3, ensure_ascii=False), campaign_id),
@@ -3693,7 +3706,9 @@ def search_body_or_location(
 class SkillTestResolvePayload(BaseModel):
     character_id: int
     skill_test_id: str
-    d20_roll: int  # 1–20, client-generated
+    d20_roll: int  # Stage 10-C+ — IGNORED: the authoritative roll is `pending.committed_d20`,
+                   # rolled server-side at the moment the pending was committed. Kept in the
+                   # schema for back-compat with old clients; not trusted for the outcome.
 
 
 @router.post("/campaigns/{campaign_id}/skill-test/resolve")
@@ -3702,16 +3717,14 @@ def resolve_skill_test_endpoint(
     payload: SkillTestResolvePayload,
 ):
     """
-    Player sends their d20 roll. Backend resolves the pending skill test,
-    makes a second narrator LLM call, and returns prose + mechanic result.
+    Player triggers resolution. Backend uses the server-committed d20 value
+    (locked in when the pending was created) so a refresh-spammer cannot
+    reroll. Returns prose + mechanic result.
     """
     import json as _json
     from app.services.skill_service import resolve_skill_test, build_skill_result_context
     from app.services.llm_service import generate_chat as _gen_chat
     from app.services.world_service import process_create_tags as _proc_tags, get_current_location_info
-
-    if not (1 <= payload.d20_roll <= 20):
-        raise HTTPException(status_code=400, detail="d20_roll must be 1–20")
 
     conn = get_db()
     try:
@@ -3734,9 +3747,32 @@ def resolve_skill_test_endpoint(
         if pending.get("skill_test_id") != payload.skill_test_id:
             raise HTTPException(status_code=409, detail="skill_test_id mismatch — wrong session?")
 
-        # Resolve
+        # Stage 10-C+ cheat fix — use the SERVER-COMMITTED d20, not the client's claim.
+        # Legacy pending dicts without `committed_d20` (pre-fix) fall back to the client value
+        # and log a warning so we can spot any stale state.
+        committed = pending.get("committed_d20")
+        if committed is None:
+            logger.warning(
+                "skill_test_legacy_pending_no_committed_d20",
+                campaign_id=campaign_id,
+                skill_test_id=payload.skill_test_id,
+                fallback_d20=payload.d20_roll,
+            )
+            committed = int(payload.d20_roll)
+        committed = int(committed)
+        if not (1 <= committed <= 20):
+            raise HTTPException(status_code=500, detail=f"Invalid committed d20: {committed}")
+        if committed != int(payload.d20_roll):
+            logger.info(
+                "skill_test_client_d20_overridden",
+                campaign_id=campaign_id,
+                committed=committed,
+                client_claimed=int(payload.d20_roll),
+            )
+
+        # Resolve using the committed roll
         result = resolve_skill_test(
-            d20_roll=payload.d20_roll,
+            d20_roll=committed,
             pending=pending,
             conn=conn,
             campaign_id=campaign_id,

@@ -185,7 +185,10 @@ def _execute_debug_command(cur, conn, character_id: int, char_row, sheet: dict, 
         # surface the Roll Popup; admin can edit the values from the drawer.
         warning = None
         if target == "SKILL_TEST_PENDING" and "pending_skill_test" not in flags:
+            import random as _rand
+            import uuid as _uuid
             flags["pending_skill_test"] = {
+                "skill_test_id": f"st-dbg-{_uuid.uuid4().hex[:8]}",
                 "skill_key": "athletics",
                 "skill_label": "Atletyka (debug)",
                 "dc": 12,
@@ -196,6 +199,9 @@ def _execute_debug_command(cur, conn, character_id: int, char_row, sheet: dict, 
                     "proficiency": 0,
                     "total": 0,
                 },
+                # Stage 10-C+ — server-committed d20 so /debug-seeded pendings
+                # behave the same as real ones (no client reroll possible).
+                "committed_d20": _rand.randint(1, 20),
                 "source": "debug_set_state",
             }
             warning = "Auto-seed: dodano stub pending_skill_test (Atletyka DC 12)."
