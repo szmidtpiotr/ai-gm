@@ -6448,6 +6448,25 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 #dice-result-verdict.nat20   { color: #ffd700; text-shadow: 0 0 30px rgba(255, 215, 0, 0.6); }
 #dice-result-verdict.nat1    { color: #9b2020; }
 
+#dice-result-skill {
+  font-family: 'Cinzel', serif;
+  font-size: 1.1rem;
+  letter-spacing: 0.14em;
+  color: #c9961a;
+  margin-bottom: 4px;
+}
+
+#dice-result-intent {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: rgba(200, 170, 110, 0.65);
+  margin-bottom: 10px;
+  max-width: 280px;
+  text-align: center;
+}
+
+#dice-result-intent[hidden] { display: none !important; }
+
 /* ── World Map Panel — Task 43 ───────────────────────────────────────────── */
 .wmap-panel {
   position: fixed;

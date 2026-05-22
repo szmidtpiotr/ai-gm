@@ -2285,15 +2285,10 @@ function getRollSuggestions(afterRoll, cachedSkills) {
     const typed = (parts[0] || '').toLowerCase();
     const hasSkill = afterRoll.trimStart().includes(' ');
 
-    // Already typed a skill + space → show intent placeholder hint only
-    if (hasSkill) {
-        return [{
-            cmd: `/roll ${parts[0]}`,
-            desc: 'Opis akcji np. "Podkradam się do strażnika od tyłu"',
-        }];
-    }
+    // Skill already picked — hide popup so Enter submits the full command normally
+    if (hasSkill) return [];
 
-    // Still typing the skill name — filter by key or label prefix
+    // Still typing the skill name — filter by key or Polish label prefix
     return (cachedSkills || [])
         .filter(s => s.key.startsWith(typed) || s.label.toLowerCase().startsWith(typed))
         .slice(0, 10)
@@ -2858,52 +2853,84 @@ function showSkillTestPopup(pending) {
     const total = mod.total || 0;
     const sign  = total >= 0 ? '+' : '';
     const name  = (pending.skill_label || pending.skill_key || 'Umiejętność').toUpperCase();
+    const intent = pending._admin_intent || '';
     const committedD20 = (typeof pending.committed_d20 === 'number')
         ? Math.max(1, Math.min(20, parseInt(pending.committed_d20, 10)))
         : null;
 
     window._currentDicePending = pending;
 
-    // Populate static overlay elements
-    const overlay     = document.getElementById('dice-overlay');
-    const container   = document.getElementById('dice-container');
-    const skillName   = document.getElementById('dice-skill-name');
-    const skillMeta   = document.getElementById('dice-skill-meta');
-    const rollBtn     = document.getElementById('dice-roll-btn');
-    const resultCard  = document.getElementById('dice-result-card');
-    const resultNum   = document.getElementById('dice-result-num');
-    const resultTot   = document.getElementById('dice-result-total');
-    const resultVerd  = document.getElementById('dice-result-verdict');
+    const overlay    = document.getElementById('dice-overlay');
+    const container  = document.getElementById('dice-container');
+    const skillCard  = document.getElementById('dice-skill-card');
+    const resultCard = document.getElementById('dice-result-card');
+    const resultSkill  = document.getElementById('dice-result-skill');
+    const resultIntent = document.getElementById('dice-result-intent');
+    const resultNum  = document.getElementById('dice-result-num');
+    const resultTot  = document.getElementById('dice-result-total');
+    const resultVerd = document.getElementById('dice-result-verdict');
 
-    skillName.textContent = name;
+    // Pre-populate result card header (shown after roll)
+    if (resultSkill)  resultSkill.textContent  = name;
+    if (resultIntent) { resultIntent.textContent = intent; resultIntent.hidden = !intent; }
 
     const modParts = [
         mod.skill_rank  ? `Ranga +${mod.skill_rank}`  : '',
         mod.stat_mod != null ? `Mod.${mod.governing_stat||'STAT'} ${mod.stat_mod>=0?'+':''}${mod.stat_mod}` : '',
         mod.proficiency ? `Biegłość +${mod.proficiency}` : '',
     ].filter(Boolean);
-    const bonusLine = (modParts.length ? modParts.join(' · ') + ' · ' : '') + `Bonus ${sign}${total}`;
-    // Optionally show admin intent as subtitle above the bonus line
-    const intent = pending._admin_intent;
-    skillMeta.innerHTML = intent
-        ? `<em style="opacity:.7;font-style:italic">${escapeHtml(intent)}</em><br>${escapeHtml(bonusLine)}`
-        : escapeHtml(bonusLine);
+    if (resultTot) resultTot.textContent = (modParts.length ? modParts.join(' · ') + ' · ' : '') + `Bonus ${sign}${total}`;
 
-    rollBtn.disabled = false;
-    rollBtn.textContent = '⚄ Rzuć k20';
-    rollBtn.onclick = null;
+    resultNum.textContent  = '';
+    resultNum.className    = '';
+    resultVerd.textContent = '';
+    resultVerd.className   = '';
     resultCard.hidden = true;
-    resultNum.className = '';
-    resultVerd.className = '';
 
-    // Show overlay first so the container gets real dimensions before init
+    // Hide the pre-roll skill card — no button, roll is automatic
+    if (skillCard) skillCard.hidden = true;
+
+    // Show overlay — container gets real dimensions after this
     overlay.hidden = false;
 
-    // One frame later — container.clientWidth/clientHeight are now non-zero
+    // Helper to show result and schedule auto-close
+    function _showResult(rolled) {
+        const sum   = rolled + total;
+        const nat20 = rolled === 20;
+        const nat1  = rolled === 1;
+
+        resultNum.textContent = rolled;
+        resultNum.className   = nat20 ? 'nat20' : nat1 ? 'nat1' : '';
+
+        // Overwrite the mod line with the final sum
+        if (resultTot) resultTot.textContent =
+            (modParts.length ? modParts.join(' · ') + ' · ' : '') + `Bonus ${sign}${total}  =  ${sum}`;
+
+        if (nat20) {
+            resultVerd.textContent = '✦ Naturalny 20!';
+            resultVerd.className   = 'nat20';
+        } else if (nat1) {
+            resultVerd.textContent = '✧ Naturalny 1';
+            resultVerd.className   = 'nat1';
+        } else {
+            const dc = pending.dc || 12;
+            resultVerd.textContent = sum >= dc ? 'Sukces' : 'Porażka';
+            resultVerd.className   = sum >= dc ? 'success' : 'failure';
+        }
+        resultCard.hidden = false;
+
+        setTimeout(async () => {
+            overlay.hidden = true;
+            if (skillCard) skillCard.hidden = false; // restore for next use
+            await resolveSkillTest(pending.skill_test_id, rolled, null);
+        }, 2000);
+    }
+
+    // One frame later — container dimensions are non-zero
     requestAnimationFrame(() => {
-        // Fallback: if DICE library didn't load, show a simple number reveal
+        // Fallback: if DICE library didn't load, animate the number in the roll btn
         if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
-            _showSimpleFallbackRoll(pending, rollBtn, resultCard, resultNum, resultTot, resultVerd, overlay, committedD20, total, sign);
+            _showSimpleFallbackRoll(pending, _showResult);
             return;
         }
 
@@ -2915,81 +2942,38 @@ function showSkillTestPopup(pending) {
                 _diceBox.reinit(container);
             }
             _diceBox.setDice('1d20');
-        } catch (err) {
-            _showSimpleFallbackRoll(pending, rollBtn, resultCard, resultNum, resultTot, resultVerd, overlay, committedD20, total, sign);
+        } catch (_err) {
+            _showSimpleFallbackRoll(pending, _showResult);
             return;
         }
 
-        rollBtn.onclick = function() {
-            rollBtn.disabled = true;
-
-            // before_roll: return forced face value so physics lands on committedD20
-            const beforeRoll = committedD20 !== null ? () => [committedD20] : null;
-
-            _diceBox.start_throw(beforeRoll, (notation) => {
-                const rolled = notation.result[0];
-                const sum    = rolled + total;
-                const nat20  = rolled === 20;
-                const nat1   = rolled === 1;
-
-                // Brief pause so player can see the die settle
-                setTimeout(() => {
-                    resultNum.textContent = rolled;
-                    resultNum.className = nat20 ? 'nat20' : nat1 ? 'nat1' : '';
-                    resultTot.textContent = `${sign}${total} = ${sum}`;
-
-                    if (nat20) {
-                        resultVerd.textContent = '✦ Naturalny 20!';
-                        resultVerd.className = 'nat20';
-                    } else if (nat1) {
-                        resultVerd.textContent = '✧ Naturalny 1';
-                        resultVerd.className = 'nat1';
-                    } else {
-                        const dc = pending.dc || 12;
-                        resultVerd.textContent = sum >= dc ? 'Sukces' : 'Porażka';
-                        resultVerd.className = sum >= dc ? 'success' : 'failure';
-                    }
-                    resultCard.hidden = false;
-
-                    // Auto-resolve after 1.8 s — no confirm needed
-                    setTimeout(async () => {
-                        overlay.hidden = true;
-                        await resolveSkillTest(pending.skill_test_id, rolled, null);
-                    }, 1800);
-                }, 600);
-            });
-        };
+        // Auto-start — no button click needed
+        const beforeRoll = committedD20 !== null ? () => [committedD20] : null;
+        _diceBox.start_throw(beforeRoll, (notation) => {
+            // Brief settle pause before revealing result card
+            setTimeout(() => _showResult(notation.result[0]), 600);
+        });
     });
 }
 
-// Lightweight fallback when dice.js/Three.js fail to load
-function _showSimpleFallbackRoll(pending, rollBtn, resultCard, resultNum, resultTot, resultVerd, overlay, committedD20, total, sign) {
-    rollBtn.onclick = function() {
-        rollBtn.disabled = true;
-        let ticks = 0;
-        const iv = setInterval(() => {
-            rollBtn.textContent = `⚄ ${Math.ceil(Math.random() * 20)}`;
-            if (++ticks >= 14) {
-                clearInterval(iv);
-                const rolled = committedD20 !== null ? committedD20 : Math.ceil(Math.random() * 20);
-                const sum    = rolled + total;
-                const nat20  = rolled === 20;
-                const nat1   = rolled === 1;
-                rollBtn.textContent = '⚄ Rzuć k20';
-                resultNum.textContent = rolled;
-                resultNum.className = nat20 ? 'nat20' : nat1 ? 'nat1' : '';
-                resultTot.textContent = `${sign}${total} = ${sum}`;
-                if (nat20) { resultVerd.textContent = '✦ Naturalny 20!'; resultVerd.className = 'nat20'; }
-                else if (nat1) { resultVerd.textContent = '✧ Naturalny 1'; resultVerd.className = 'nat1'; }
-                else { const dc = pending.dc || 12; resultVerd.textContent = sum >= dc ? 'Sukces' : 'Porażka'; resultVerd.className = sum >= dc ? 'success' : 'failure'; }
-                resultCard.hidden = false;
-                setTimeout(async () => {
-                    overlay.hidden = true;
-                    await resolveSkillTest(pending.skill_test_id, rolled, null);
-                }, 1800);
-            }
-        }, 60);
-    };
+// Lightweight number-spinning fallback when dice.js/Three.js fail to load
+function _showSimpleFallbackRoll(pending, onResult) {
+    const committedD20 = (typeof pending.committed_d20 === 'number')
+        ? Math.max(1, Math.min(20, parseInt(pending.committed_d20, 10)))
+        : null;
+    // Show result card immediately so spinning number is visible
+    const resultCard = document.getElementById('dice-result-card');
+    const spinEl     = document.getElementById('dice-result-num');
+    if (resultCard) resultCard.hidden = false;
+    let ticks = 0;
+    const iv = setInterval(() => {
+        if (spinEl) spinEl.textContent = Math.ceil(Math.random() * 20);
+        if (++ticks >= 18) {
+            clearInterval(iv);
+            const rolled = committedD20 !== null ? committedD20 : Math.ceil(Math.random() * 20);
+            onResult(rolled);
+        }
+    }, 60);
 }
 
 async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
@@ -6735,9 +6719,9 @@ function initSlashAutocomplete(inputEl) {
         const caret = ctx.idx + insert.length;
         inputEl.setSelectionRange(caret, caret);
         inputEl.focus();
-        // For /admin pick, re-sync to show subcommand suggestions
-        // For /roll pick (just chose skill), re-sync to show the intent hint
-        if (cmd.cmd.startsWith('/admin') || cmd.cmd.startsWith('/roll')) {
+        // /admin: re-sync to show subcommand suggestions after picking a top-level verb
+        // /roll: hide popup — skill is now in input, user types free-text intent then Enter
+        if (cmd.cmd.startsWith('/admin')) {
             setTimeout(sync, 0);
         } else {
             hide();
