@@ -280,25 +280,27 @@ async function _renderCampaignsTab(userId, body) {
   let campaigns = [];
   let usesRemaining = null;
   try {
-    const [actData, userRow] = await Promise.all([
+    const [actData, usesData] = await Promise.all([
       adminFetch(`/api/admin/users/${userId}/activity`),
-      adminFetch(`/api/admin/users/${userId}/resurrection-config`).catch(() => null),
+      adminFetch(`/api/admin/users/${userId}/resurrection-uses`).catch(() => null),
     ]);
     campaigns = actData.items || [];
-    usesRemaining = userRow?.config?.uses_remaining ?? null;
+    usesRemaining = usesData?.uses_remaining ?? null;
   } catch (e) {
     body.innerHTML = `<p class="drawer-error">Błąd: ${_esc(e.message)}</p>`;
     return;
   }
 
   // ── Per-user resurrection lives widget ────────────────────────────────
-  const usesLabel = usesRemaining === null ? "bez limitu" : `${usesRemaining} pozostało`;
   const usesWidget = `
-    <div style="display:flex; align-items:center; gap:10px; padding:10px 0 16px; border-bottom:1px solid rgba(255,255,255,0.06); margin-bottom:12px;">
-      <span style="font-size:0.85rem; opacity:0.7;">✦ Wskrzeszenia:</span>
-      <span style="font-size:0.9rem; font-weight:600;">${_esc(usesLabel)}</span>
-      <button data-set-uses style="margin-left:auto; padding:4px 10px; font-size:0.8rem; background:#2a1f3a; color:#c0b8d0; border:1px solid #4a3a6a; border-radius:6px; cursor:pointer;">Zmień</button>
-      <button data-clear-uses style="padding:4px 10px; font-size:0.8rem; background:#2a1f3a; color:#c0b8d0; border:1px solid #4a3a6a; border-radius:6px; cursor:pointer;">Bez limitu</button>
+    <div style="display:flex; align-items:center; gap:8px; padding:10px 0 16px; border-bottom:1px solid rgba(255,255,255,0.06); margin-bottom:12px; flex-wrap:wrap;">
+      <span style="font-size:0.85rem; opacity:0.7; white-space:nowrap;">✦ Wskrzeszenia tego gracza:</span>
+      <input id="res-uses-input" type="number" min="0" max="99"
+        value="${usesRemaining ?? ""}"
+        placeholder="∞ bez limitu"
+        style="width:90px; padding:4px 8px; font-size:0.9rem; background:#2a1f3a; color:#ece6f8; border:1px solid #4a3a6a; border-radius:6px;" />
+      <button data-save-uses style="padding:4px 10px; font-size:0.8rem; background:#4a3a8a; color:#ece6f8; border:none; border-radius:6px; cursor:pointer;">Zapisz</button>
+      <button data-clear-uses style="padding:4px 10px; font-size:0.8rem; background:#2a1f3a; color:#c0b8d0; border:1px solid #4a3a6a; border-radius:6px; cursor:pointer;">Bez limitu (∞)</button>
     </div>`;
 
   const statusLabel = { active: "Aktywna", ended: "Zakończona", aborted: "Przerwana" };
@@ -349,24 +351,34 @@ async function _renderCampaignsTab(userId, body) {
 
   body.innerHTML = usesWidget + campaignsHtml;
 
-  // Wire uses buttons
-  body.querySelector("[data-set-uses]")?.addEventListener("click", async () => {
-    const v = prompt("Ile wskrzeszeń przyznać temu graczowi? (puste = anuluj)");
-    if (v === null || v.trim() === "") return;
-    const n = parseInt(v, 10);
-    if (isNaN(n) || n < 0) { showToast("Podaj liczbę ≥ 0.", "error"); return; }
+  // Wire uses input + buttons
+  const saveUses = async (clear = false) => {
+    const input = body.querySelector("#res-uses-input");
+    let payload;
+    if (clear) {
+      payload = { clear: true };
+    } else {
+      const raw = input?.value.trim() ?? "";
+      if (raw === "") { payload = { clear: true }; }
+      else {
+        const n = parseInt(raw, 10);
+        if (isNaN(n) || n < 0) { showToast("Podaj liczbę ≥ 0.", "error"); return; }
+        payload = { uses_remaining: n };
+      }
+    }
     try {
-      await adminFetch(`/api/admin/users/${userId}/resurrection-uses`, { method: "PATCH", body: JSON.stringify({ uses_remaining: n }) });
-      showToast(`Wskrzeszenia ustawione na ${n}.`, "success");
+      const res = await adminFetch(`/api/admin/users/${userId}/resurrection-uses`, {
+        method: "PATCH", body: JSON.stringify(payload),
+      });
+      const label = res.uses_remaining === null ? "bez limitu" : res.uses_remaining;
+      showToast(`Wskrzeszenia: ${label}.`, "success");
       await _renderCampaignsTab(userId, body);
     } catch (e) { showToast(e.message || "Błąd", "error"); }
-  });
-  body.querySelector("[data-clear-uses]")?.addEventListener("click", async () => {
-    try {
-      await adminFetch(`/api/admin/users/${userId}/resurrection-uses`, { method: "PATCH", body: JSON.stringify({ clear: true }) });
-      showToast("Limit wskrzeszeń usunięty — gracz ma nielimitowany dostęp.", "success");
-      await _renderCampaignsTab(userId, body);
-    } catch (e) { showToast(e.message || "Błąd", "error"); }
+  };
+  body.querySelector("[data-save-uses]")?.addEventListener("click", () => saveUses(false));
+  body.querySelector("[data-clear-uses]")?.addEventListener("click", () => saveUses(true));
+  body.querySelector("#res-uses-input")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") saveUses(false);
   });
 
   // Wire resurrect buttons

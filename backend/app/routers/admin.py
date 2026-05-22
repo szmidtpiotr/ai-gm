@@ -2456,6 +2456,20 @@ class ResurrectionConfigReq(BaseModel):
     clear_default_uses: bool = False  # set true to make default_uses NULL (unlimited)
 
 
+@router.get("/admin/users/{user_id}/resurrection-uses")
+def admin_get_user_resurrection_uses(user_id: int, _: None = Depends(require_admin_token)):
+    """Return this user's per-user resurrection uses_remaining."""
+    from app.services.resurrection_service import get_user_uses_remaining
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return {"ok": True, "uses_remaining": get_user_uses_remaining(user_id, conn)}
+    except LookupError:
+        raise HTTPException(status_code=404, detail="user not found")
+    finally:
+        conn.close()
+
+
 @router.get("/admin/resurrection-config")
 def admin_get_resurrection_config(_: None = Depends(require_admin_token)):
     """Read the global resurrection config (applies to all players)."""
