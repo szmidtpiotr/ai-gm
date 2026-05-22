@@ -4261,3 +4261,21 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Invite Tree section tabs (C15) ── */
+.inv-tab {
+  padding: 8px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: color 0.15s, border-color 0.15s;
+}
+.inv-tab--active,
+.inv-tab:hover {
+  color: var(--accent-gold, #c9a54a);
+  border-bottom-color: var(--accent-gold, #c9a54a);
+}

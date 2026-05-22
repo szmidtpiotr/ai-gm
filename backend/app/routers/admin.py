@@ -3960,3 +3960,92 @@ def player_create_invite(
         }
     finally:
         conn.close()
+
+
+# ── C14 — Admin SMTP Email Configuration ─────────────────────────────────────
+
+_SMTP_KEYS = frozenset([
+    "smtp_host", "smtp_port", "smtp_username", "smtp_password",
+    "smtp_from_address", "smtp_from_name", "smtp_use_tls", "registration_open",
+])
+
+
+@router.get("/admin/email/config")
+def admin_email_config_get(authorization: str | None = Header(default=None)):
+    """Get SMTP configuration keys from game_config_meta."""
+    from app.core.jwt_auth import require_admin_role
+    require_admin_role(authorization)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        keys = list(_SMTP_KEYS)
+        rows = conn.execute(
+            f"SELECT key, value FROM game_config_meta WHERE key IN ({','.join('?'*len(keys))})",
+            keys,
+        ).fetchall()
+        return {r["key"]: (r["value"] or "") for r in rows}
+    finally:
+        conn.close()
+
+
+class EmailConfigPatchReq(BaseModel):
+    smtp_host: str | None = None
+    smtp_port: str | None = None
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from_address: str | None = None
+    smtp_from_name: str | None = None
+    smtp_use_tls: str | None = None
+    registration_open: str | None = None
+
+
+@router.patch("/admin/email/config")
+def admin_email_config_patch(
+    req: EmailConfigPatchReq,
+    authorization: str | None = Header(default=None),
+):
+    """Update SMTP config keys in game_config_meta (upsert)."""
+    from app.core.jwt_auth import require_admin_role
+    require_admin_role(authorization)
+
+    data = {k: v for k, v in req.model_dump().items() if v is not None and k in _SMTP_KEYS}
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        for k, v in data.items():
+            conn.execute(
+                "INSERT INTO game_config_meta (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (k, str(v)),
+            )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+class EmailTestReq(BaseModel):
+    to: str
+
+
+@router.post("/admin/email/test")
+def admin_email_test(
+    req: EmailTestReq,
+    authorization: str | None = Header(default=None),
+):
+    """Send a test email to the given address."""
+    from app.core.jwt_auth import require_admin_role
+    require_admin_role(authorization)
+
+    to = req.to.strip()
+    if not to:
+        raise HTTPException(status_code=400, detail="Email address required")
+
+    from app.services.email_service import send_test_email as _send_test_email
+    ok = _send_test_email(to)
+    if not ok:
+        raise HTTPException(
+            status_code=503,
+            detail="Email sending failed — check SMTP configuration",
+        )
+    return {"ok": True}
