@@ -269,10 +269,28 @@ class OpenAIDriver:
     @staticmethod
     def generate_stream(base_url: str, model: str, messages: list[dict], api_key: str) -> Generator[str, None, None]:
         started_at = time.perf_counter()
+        payload = {"model": model, "messages": messages, "stream": True, "temperature": 0.8}
+        url = f"{base_url}/chat/completions"
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         try:
-            # Phase 7.5 keeps stream interface compatibility by returning single chunk.
-            content = OpenAIDriver.generate_chat(base_url, model, messages, api_key)
-            yield f"data: {content.replace(chr(10), '\\n')}\n\n"
+            with httpx.Client(timeout=float(os.getenv("OLLAMA_TIMEOUT", "120"))) as client:
+                with client.stream("POST", url, json=payload, headers=headers) as resp:
+                    resp.raise_for_status()
+                    for line in resp.iter_lines():
+                        if not line or line == "data: [DONE]":
+                            continue
+                        if line.startswith("data: "):
+                            raw = line[6:]
+                            try:
+                                chunk = json.loads(raw)
+                            except Exception:
+                                continue
+                            token = ((chunk.get("choices") or [{}])[0]
+                                     .get("delta", {}).get("content") or "")
+                            if token:
+                                yield f"data: {token.replace(chr(10), '\\n')}\n\n"
             yield "data: [DONE]\n\n"
         except httpx.TimeoutException as exc:
             logger.error(
@@ -371,9 +389,29 @@ class AzureDriver:
     @staticmethod
     def generate_stream(base_url: str, model: str, messages: list[dict], api_key: str) -> Generator[str, None, None]:
         started_at = time.perf_counter()
+        url = (
+            f"{base_url}/openai/deployments/{model}/chat/completions"
+            f"?api-version={AzureDriver._API_VERSION}"
+        )
+        payload = {"messages": messages, "stream": True, "temperature": 0.8}
+        headers = AzureDriver._headers(api_key)
         try:
-            content = AzureDriver.generate_chat(base_url, model, messages, api_key)
-            yield f"data: {content.replace(chr(10), chr(10))}\n\n"
+            with httpx.Client(timeout=float(os.getenv("OLLAMA_TIMEOUT", "120"))) as client:
+                with client.stream("POST", url, json=payload, headers=headers) as resp:
+                    resp.raise_for_status()
+                    for line in resp.iter_lines():
+                        if not line or line == "data: [DONE]":
+                            continue
+                        if line.startswith("data: "):
+                            raw = line[6:]
+                            try:
+                                chunk = json.loads(raw)
+                            except Exception:
+                                continue
+                            token = ((chunk.get("choices") or [{}])[0]
+                                     .get("delta", {}).get("content") or "")
+                            if token:
+                                yield f"data: {token.replace(chr(10), '\\n')}\n\n"
             yield "data: [DONE]\n\n"
         except httpx.TimeoutException as exc:
             logger.error("llm_timeout", model=model, llm_provider="azure",

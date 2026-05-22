@@ -3620,14 +3620,29 @@ def create_turn_stream(
             except Exception:
                 loc_info = None
 
-            # Include current_location in DONE payload
+            # Include current_location + any pending skill_test in DONE payload
             done_payload = {}
             if loc_info:
                 done_payload["current_location"] = loc_info
-            if done_payload:
-                yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
-            else:
-                yield "data: [DONE]\n\n"
+            try:
+                _sf_done_conn = sqlite3.connect(DB_PATH)
+                _sf_done_conn.row_factory = sqlite3.Row
+                try:
+                    _sf_row = _sf_done_conn.execute(
+                        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                        (campaign_id_val,),
+                    ).fetchone()
+                    if _sf_row:
+                        _sf_done = json.loads(_sf_row["session_flags"] or "{}")
+                        if _sf_done.get("pending_skill_test"):
+                            done_payload["skill_test_pending"] = _sf_done["pending_skill_test"]
+                        if _sf_done.get("state"):
+                            done_payload["state"] = _sf_done["state"]
+                finally:
+                    _sf_done_conn.close()
+            except Exception:
+                pass
+            yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(
             token_generator(),
