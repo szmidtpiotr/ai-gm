@@ -48,7 +48,7 @@ const elements = {
     heroesEmpty: document.getElementById('heroes-empty'),
     heroesWelcome: document.getElementById('heroes-welcome'),
     btnNewHero: document.getElementById('new-hero-btn'),
-    btnHeroesLogout: document.getElementById('heroes-logout-btn'),
+    btnHeroesLogout: document.getElementById('heroes-profile-btn'),
 
     // Campaigns
     campaignsList: document.getElementById('campaigns-list'),
@@ -6874,7 +6874,8 @@ function initEventListeners() {
         characterData = null;
         startCharacterWizard();
     });
-    elements.btnHeroesLogout?.addEventListener('click', handleLogout);
+    elements.btnHeroesLogout?.addEventListener('click', () => loadProfilePage());
+    document.getElementById('profile-logout-btn')?.addEventListener('click', handleLogout);
 
     // Campaigns
     elements.btnNewCampaign?.addEventListener('click', showNewCampaignScreen);
