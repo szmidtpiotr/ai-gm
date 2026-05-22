@@ -223,7 +223,24 @@ Stage 9 covers 7 items across 3 task areas (TASK_36 summaries, TASK_37 palette, 
 - [x] **A7** Multi-device verification — JWT is stateless by design; two independent sessions sign their own tokens and the server validates each independently. Manual two-tab login confirmed both work concurrently with separate access tokens (acceptance check, no code change required).
 - [ ] **A8** Onboarding overlay — first-login modal: welcome text, theme picker, accept rules, [Zaczynam przygodę], `users.onboarded_at` flag
 
-### Stage 11 — Hero Journal [T45]
+### Stage 11 — Hero Resurrection system [see #64]
+
+The Stage 9-A death screen ships with a `Wskrześ bohatera` button that today is rendered `hidden` and has no backend — so dying is permanent. This stage wires the real resurrection flow with **per-user admin-configurable cost** (XP claw-back / gold % / recent-gain gold / random equipped-item loss / free for admins). Slotted ahead of Hero Journal because death-screen polish without a working button feels broken, and the migration pattern (extra `users` columns) is hot in head from Stage 10-A.
+
+Design decisions resolved with owner in #64: XP revert cascades to skill/spell purchases, gold-recent-days uses `min(recent_gains, current_gold × cap%)`, item loss is deterministic (no save), resurrect resets death_saves_failed + short_rests_used + dungeon cooldowns.
+
+- [ ] **R1** Migration — `users.resurrection_enabled BOOLEAN DEFAULT 0`, `resurrection_cost_mode TEXT DEFAULT 'admin_free'`, `resurrection_cost_value INTEGER DEFAULT 25`, `resurrection_cost_cap_percent INTEGER DEFAULT 50`, `resurrection_uses_remaining INTEGER DEFAULT NULL`. New table `character_gold_log (character_id, delta, source, created_at, game_clock_day)`. Verify `character_xp_log` schema is journal-complete (`reverted_at` column needed).
+- [ ] **R2** Backend service `app/services/resurrection_service.py` — 5 cost-mode handlers (`xp_revert`, `gold_percent`, `gold_recent_days`, `item_loss`, `admin_free`) + `cost_preview(character_id, user_id)` returning what *would* be lost without applying.
+- [ ] **R3** Player endpoint `POST /api/characters/{id}/resurrect` — requires JWT (player owns hero), reads user config, applies cost, restores HP to `max_hp // 2`, clears `status='dead'` → `'active'`, resets death-state flags, decrements `resurrection_uses_remaining` if not null. Returns `{cost_paid, hero_summary}`.
+- [ ] **R4** Admin endpoints — `POST /api/admin/characters/{id}/resurrect` with `force: bool` (bypass cost + uses-remaining when true), `GET /api/admin/users/{id}/resurrection-config`, `PATCH /api/admin/users/{id}/resurrection-config`. All gated by `require_admin_role`.
+- [ ] **R5** Helper additions — `xp_service.revert_last_xp_with_purchases(character_id, amount)` (also undoes skill ranks / spells bought after threshold), `inventory_service.random_functional_item(character_id)` (pool = equipped + has effect_json or non-zero DR, excludes quest-marked).
+- [ ] **R6** Gold journaling — every mutation to `sheet_json.gold` writes a row to `character_gold_log`. Audit: `inventory_service`, `shop` purchase/sell, `loot_service.grant_loot_to_character`, XP-grant-to-gold paths. Tag each with `source` (`loot`, `shop_sell`, `shop_buy`, `quest_reward`, …).
+- [ ] **R7** Admin Panel v2 — `sections/players.js` gets a "Wskrzeszenie" card per user: master toggle, mode dropdown, value input, cap-percent input (conditional on mode), uses-remaining input. Live preview line ("Tryb: gold_recent_days → ostatnie 7 dni, max 50% obecnego złota").
+- [ ] **R8** Frontend death screen wiring — `index.html:868` un-hides `#resurrect-btn` when `currentUser.resurrection_enabled` AND `(resurrection_uses_remaining > 0 OR null)`. `app.js:5952` `handleResurrect()` calls `GET /resurrect-preview` → renders confirmation modal with the actual cost line ("Stracisz: 245 PD, 12 GP, ranga Atletyka 3→2") → POST `/resurrect` on confirm → on success play a brief revival animation + reload campaign state.
+- [ ] **R9** Admin force-resurrect button in `sections/players.js` — visible when viewing a dead-character user; "Wskrzesz bez kosztu" button POSTs admin endpoint with `force=true`. Confirmation modal.
+- [ ] **R10** Backend tests `test_resurrection.py` — 5 mode handlers, force-bypass path, uses-remaining decrement, full state reset (death_saves_failed + short_rests_used + dungeon cooldowns), gold journal integrity after partial revert.
+
+### Stage 12 — Hero Journal [T45]
 
 - [ ] **J1** Journal UI in heroes screen — chapter list (one per completed campaign)
 - [ ] **J2** Chapter summary LLM generator — 2 paragraphs, first-person, on campaign close
@@ -232,7 +249,7 @@ Stage 9 covers 7 items across 3 task areas (TASK_36 summaries, TASK_37 palette, 
 - [ ] **J5** XP timeline visualization (horizontal bar with level markers)
 - [ ] **J6** Cross-campaign minimap — combined visited hex overlay
 
-### Stage 12 — Admin polish
+### Stage 13 — Admin polish
 
 - [ ] **AP1** TASK_32: inline "Edytuj i Zatwierdź" modal in World Review Queue
 - [ ] **AP2** TASK_32: batch select + bulk approve in Pending review
@@ -240,14 +257,14 @@ Stage 9 covers 7 items across 3 task areas (TASK_36 summaries, TASK_37 palette, 
 - [ ] **AP4** TASK_33SA: form fields highlight changed-in-last-response
 - [ ] **AP5** TASK_33SA: delta line in chat (`Zmieniłem: damage 1d6 → 1d10`)
 
-### Stage 13 — Phase 11 Observability
+### Stage 14 — Phase 11 Observability
 
 - [ ] **O1** TASK_47: `game_events` table + `event_logger` service
 - [ ] **O2** TASK_48: `llm_call_log` table + admin viewer
 - [ ] **O3** TASK_49: admin analytics panel (dashboard/events/LLM tabs)
 - [ ] **O4** TASK_50: MCP server with 9 tools for AI-queryable game data
 
-### Stage 14 — Phase 12 AI Test Agent
+### Stage 15 — Phase 12 AI Test Agent
 
 - [ ] **T1** Update `ai_test_agent/` selectors for hero-first flow
 - [ ] **T2** Baseline regression scenario (login → hero → campaign → first turn)
@@ -260,14 +277,14 @@ Stage 9 covers 7 items across 3 task areas (TASK_36 summaries, TASK_37 palette, 
 - [ ] **T9** CI integration on DEV deploy
 - [ ] **T10** Combat Sandbox autotest harness ([#22]) — YAML scenarios via `/api/admin/sandbox/run-scenario`
 
-### Stage 15 — Known issues / bugs backlog
+### Stage 16 — Known issues / bugs backlog
 
 Bugs discovered during gameplay that don't fit a numbered stage. Pick into the queue when prioritised.
 
 - [ ] **K1** GM hallucinates weapons / items the player doesn't own (observed during Stage 2B R4 verification, 2026-05-19). LLM narrates "wyciągasz miecz" or grants ad-hoc weapons in combat without inventory lookup. Fix direction: enforce inventory grounding — pre-turn inventory snapshot prepended to context, plus prompt guardrail "Nigdy nie zakładaj że gracz posiada przedmiot, który nie jest w [INVENTORY]". May need a `weapon_grounding_check` post-pass that scans narrative for weapon mentions vs. inventory and downgrades hallucinated weapons to "improvisedfists" damage.
 - [ ] **K2** GM requests unnecessary skill rolls (e.g. Kowalstwo when entering a village square just because a blacksmith is in the scene). Observed during Stage 2B R4 follow-up, 2026-05-19. Fix direction: tighten roll-cue prompt rules so rolls require a *player attempt* on the skill, not mere proximity to a themed NPC; add a roll-cue filter that drops cues whose `reason` doesn't reference a player verb.
 
-### Stage 16 — Future feature backlog (deferred, multi-step)
+### Stage 17 — Future feature backlog (deferred, multi-step)
 
 Larger feature requests that need their own design pass when they reach the queue.
 
