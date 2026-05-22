@@ -6305,7 +6305,7 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 /* ── dice.js 3D roll overlay — issue #65 ────────────────────────────────── */
 
 #dice-overlay {
-  position: fixed;
+  position: absolute;   /* scoped to #game-screen so die stays within the chat area */
   inset: 0;
   z-index: 9000;
   background: rgba(5, 3, 1, 0.88);
@@ -6313,6 +6313,7 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
+  overflow: hidden;     /* clip physics edges that reach the border */
 }
 #dice-overlay[hidden] { display: none !important; }
 #dice-result-card[hidden] { display: none !important; }
