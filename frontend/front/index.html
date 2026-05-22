@@ -819,7 +819,7 @@
     <!-- Dice roll overlay — issue #65 dice.js 3D physics -->
     <div id="dice-overlay" hidden>
       <div id="dice-container"></div>
-      <button id="dice-skip-btn" title="Wróć do gry" onclick="location.reload()">✕</button>
+      <button id="dice-skip-btn" title="Wróć do wyboru kampanii" onclick="window.dismissDiceRoll&&window.dismissDiceRoll()">✕</button>
       <div id="dice-skill-card">
         <div id="dice-skill-name">UMIEJĘTNOŚĆ</div>
         <div id="dice-skill-meta"></div>
@@ -1100,6 +1100,6 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=stage11-svgrevert-2026-05-22"></script>
+  <script src="./js/app.js?v=stage11-popupleakfix-2026-05-22"></script>
 </body>
 </html>
