@@ -660,3 +660,42 @@ def reset_password(req: ResetPasswordReq):
     finally:
         conn.close()
 
+
+
+class ChangePasswordReq(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/auth/change-password")
+def change_password(
+    req: ChangePasswordReq,
+    authorization: str | None = Header(default=None),
+):
+    """Change password for the currently logged-in user (no email needed)."""
+    from app.core.jwt_auth import require_current_user
+    payload = require_current_user(authorization)
+    user_id = int(payload.get("sub") or 0)
+
+    if len(req.new_password) < 8:
+        raise HTTPException(status_code=422, detail="Hasło musi mieć minimum 8 znaków")
+
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT password_hash FROM users WHERE id = ? LIMIT 1", (user_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        ok, _ = _verify_user_password(str(row["password_hash"] or ""), req.current_password)
+        if not ok:
+            raise HTTPException(status_code=403, detail="Nieprawidłowe obecne hasło")
+
+        pw_hash = _bcrypt_hash(req.new_password)
+        conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (pw_hash, user_id))
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()

@@ -3807,18 +3807,27 @@ def update_my_profile(
     user_id = int(payload.get("sub") or 0)
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
     try:
         if req.display_name is not None:
             name = req.display_name.strip()[:40] or None
             conn.execute("UPDATE users SET display_name = ? WHERE id = ?", (name, user_id))
         if req.avatar_url is not None:
             url = req.avatar_url.strip() or None
-            conn.execute("UPDATE users SET avatar_url = ? WHERE id = ?", (url, user_id))
+            try:
+                conn.execute("UPDATE users SET avatar_url = ? WHERE id = ?", (url, user_id))
+            except sqlite3.OperationalError:
+                pass  # column not yet migrated — ignore avatar update
         conn.commit()
         row = conn.execute(
-            "SELECT display_name, avatar_url FROM users WHERE id = ?", (user_id,)
+            "SELECT display_name, email, avatar_url FROM users WHERE id = ?", (user_id,)
         ).fetchone()
-        return {"ok": True, "display_name": row["display_name"], "avatar_url": row["avatar_url"]}
+        avatar = None
+        try:
+            avatar = row["avatar_url"]
+        except Exception:
+            pass
+        return {"ok": True, "display_name": row["display_name"], "email": row["email"], "avatar_url": avatar}
     finally:
         conn.close()
 
@@ -3906,14 +3915,20 @@ def get_me_stats(authorization: str | None = Header(default=None)):
             (user_id,),
         ).fetchone()["n"]
 
-        me = conn.execute(
-            "SELECT invite_weekly_limit, display_name, avatar_url FROM users WHERE id = ?", (user_id,)
-        ).fetchone()
+        try:
+            me = conn.execute(
+                "SELECT invite_weekly_limit, display_name, avatar_url, email FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+        except sqlite3.OperationalError:
+            me = conn.execute(
+                "SELECT invite_weekly_limit, display_name, email FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
 
         return {
             "heroes": heroes,
             "display_name": me["display_name"] if me else None,
-            "avatar_url": me["avatar_url"] if me else None,
+            "email": me["email"] if me else None,
+            "avatar_url": (me["avatar_url"] if "avatar_url" in me.keys() else None) if me else None,
             "campaigns_completed": camps["completed"] if camps else 0,
             "campaigns_abandoned": camps["abandoned"] if camps else 0,
             "lifetime_xp": xp_turns["lifetime_xp"] if xp_turns else 0,
