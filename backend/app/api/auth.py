@@ -78,7 +78,7 @@ def player_login(req: PlayerLoginReq):
                        COALESCE(is_admin, 0) AS is_admin,
                        COALESCE(role, 'player') AS role,
                        COALESCE(failed_login_count, 0) AS failed_login_count,
-                       lockout_until, email_verified_at, onboarded_at
+                       lockout_until, email_verified_at, onboarded_at, email
                 FROM users WHERE username = ? LIMIT 1
                 """,
                 (username,),
@@ -189,12 +189,15 @@ def player_login(req: PlayerLoginReq):
         try:
             email_verified = row["email_verified_at"]
             onboarded = row["onboarded_at"]
+            user_email = row["email"]
         except (KeyError, IndexError):
             email_verified = None
             onboarded = None
+            user_email = None
 
-        if not email_verified and onboarded:
-            # Has played before but hasn't verified — block and prompt
+        # Only gate users who registered with an email AND haven't verified it yet.
+        # Users without an email (legacy accounts, admin-created) are always allowed through.
+        if not email_verified and onboarded and user_email:
             raise HTTPException(
                 status_code=403,
                 detail={
