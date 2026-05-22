@@ -23,6 +23,10 @@ const SLASH_COMMANDS = [
 // ============================================================================
 const screens = {
     login: document.getElementById('login-screen'),
+    register: document.getElementById('register-screen'),
+    verifyEmail: document.getElementById('verify-email-screen'),
+    forgotPassword: document.getElementById('forgot-password-screen'),
+    resetPassword: document.getElementById('reset-password-screen'),
     heroes: document.getElementById('heroes-screen'),
     campaigns: document.getElementById('campaigns-screen'),
     newCampaign: document.getElementById('new-campaign-screen'),
@@ -163,6 +167,11 @@ function applyBubblePrefs() {
 }
 
 let currentScreen = 'login';
+let _inviteCode = null;
+let _resetToken = null;
+let _verifyEmailAddress = null;
+let _resendCountdownInterval = null;
+let _canResendVerify = false;
 let currentCampaignId = null;
 let currentCampaign = null;
 
@@ -452,7 +461,15 @@ async function handleLogin(e) {
         }
     } catch (error) {
         console.error('[Login] Error:', error);
-        showToast(error.message || 'Błąd logowania', 'error');
+        if (error.status === 403 && error.body?.detail?.error === 'email_unverified') {
+            _canResendVerify = false;
+            document.getElementById('verify-email-desc').textContent =
+                'Potwierdź swój adres email, aby kontynuować przygodę.';
+            document.getElementById('resend-verify-btn').hidden = true;
+            showScreen('verifyEmail');
+        } else {
+            showToast(error.message || 'Błąd logowania', 'error');
+        }
     } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<span class="btn__icon">✨</span> Zaloguj się';
@@ -472,6 +489,250 @@ function handleLogout() {
     localStorage.removeItem('aigm_campaign_id');
     try { sessionStorage.removeItem('aigm_hero_id'); sessionStorage.removeItem('aigm_active_session'); } catch {}
     showScreen('login');
+}
+
+// ── Registration ──────────────────────────────────────────────────────────
+async function loadInviteInfo(code) {
+    try {
+        const resp = await apiRequest('GET', `/auth/invite/${code}`);
+        if (resp.inviter_name) {
+            document.getElementById('register-inviter-avatar').textContent =
+                resp.inviter_name.charAt(0).toUpperCase();
+            document.getElementById('register-inviter-name').textContent = resp.inviter_name;
+            document.getElementById('register-inviter-card').hidden = false;
+            if (resp.message) {
+                const msgEl = document.getElementById('register-inviter-msg');
+                msgEl.textContent = `"${resp.message}"`;
+                msgEl.hidden = false;
+            }
+        }
+        if (resp.email) {
+            const emailInput = document.getElementById('register-email');
+            emailInput.value = resp.email;
+            emailInput.readOnly = true;
+            emailInput.style.opacity = '0.65';
+        }
+        if (resp.expires_at) {
+            const expiry = new Date(resp.expires_at);
+            const hours = Math.round((expiry - Date.now()) / 3_600_000);
+            if (hours > 0) {
+                document.getElementById('register-expiry').textContent =
+                    `Zaproszenie ważne jeszcze ${hours} ${hours === 1 ? 'godzinę' : 'godzin'}`;
+            }
+        }
+    } catch (e) {
+        showToast('Nieprawidłowe lub wygasłe zaproszenie', 'error');
+        showScreen('login');
+    }
+}
+
+async function handleRegister(e) {
+    e.preventDefault();
+    const email    = document.getElementById('register-email').value.trim();
+    const username = document.getElementById('register-username').value.trim();
+    const password = document.getElementById('register-password').value;
+    const errEl    = document.getElementById('register-error');
+    errEl.hidden   = true;
+
+    if (!email || !username || !password) {
+        errEl.textContent = 'Wypełnij wszystkie pola';
+        errEl.hidden = false;
+        return;
+    }
+    if (password.length < 8) {
+        errEl.textContent = 'Hasło musi mieć minimum 8 znaków';
+        errEl.hidden = false;
+        return;
+    }
+
+    const btn = document.querySelector('#register-form button[type="submit"]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn__icon">⏳</span> Tworzenie konta...';
+
+    try {
+        const resp = await apiRequest('POST', '/auth/register', {
+            username, email, password, invite_code: _inviteCode
+        });
+        if (resp.access_token) {
+            localStorage.setItem('aigm_access_token', resp.access_token);
+            if (resp.refresh_token) localStorage.setItem('aigm_refresh_token', resp.refresh_token);
+            authToken = resp.access_token;
+            localStorage.setItem('token', authToken);
+            currentUser = { id: resp.user_id, username, is_admin: false, role: 'player' };
+            localStorage.setItem('user', JSON.stringify(currentUser));
+        }
+        _verifyEmailAddress = email;
+        _canResendVerify = !!resp.access_token;
+        document.getElementById('verify-email-desc').textContent =
+            `Wysłaliśmy link aktywacyjny na ${email}`;
+        document.getElementById('resend-verify-btn').hidden = !_canResendVerify;
+        showScreen('verifyEmail');
+    } catch (e) {
+        errEl.textContent = e.message || 'Błąd rejestracji';
+        errEl.hidden = false;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn__icon">⚔</span> Dołącz do przygody';
+    }
+}
+
+// ── Email verification ────────────────────────────────────────────────────
+async function autoVerifyEmail(token) {
+    try {
+        const resp = await apiRequest('POST', '/auth/verify-email', { token });
+        if (resp.access_token) {
+            localStorage.setItem('aigm_access_token', resp.access_token);
+            if (resp.refresh_token) localStorage.setItem('aigm_refresh_token', resp.refresh_token);
+            authToken = resp.access_token;
+            localStorage.setItem('token', authToken);
+            currentUser = {
+                id: resp.user_id, username: resp.username,
+                display_name: resp.display_name,
+                is_admin: resp.is_admin || false,
+                role: resp.role || 'player'
+            };
+            localStorage.setItem('user', JSON.stringify(currentUser));
+            updateAdminSettingsVisibility();
+        }
+        showToast('Email potwierdzony! Witaj w AI-GM.', 'success');
+        await loadHeroes();
+        showScreen('heroes');
+    } catch (e) {
+        showToast('Link weryfikacyjny jest nieprawidłowy lub wygasł', 'error');
+        showScreen('login');
+    }
+    history.replaceState({}, '', window.location.pathname);
+}
+
+async function handleResendVerification() {
+    if (_resendCountdownInterval) return;
+    const btn         = document.getElementById('resend-verify-btn');
+    const countdownEl = document.getElementById('resend-countdown');
+    try {
+        await apiRequest('POST', '/auth/resend-verification');
+        showToast('Link weryfikacyjny wysłany ponownie', 'info');
+        let secs = 120;
+        btn.disabled = true;
+        countdownEl.hidden = false;
+        countdownEl.textContent = `Możesz wysłać ponownie za ${secs}s`;
+        _resendCountdownInterval = setInterval(() => {
+            secs--;
+            countdownEl.textContent = `Możesz wysłać ponownie za ${secs}s`;
+            if (secs <= 0) {
+                clearInterval(_resendCountdownInterval);
+                _resendCountdownInterval = null;
+                btn.disabled = false;
+                countdownEl.hidden = true;
+            }
+        }, 1000);
+    } catch (e) {
+        const wait = e.body?.detail?.retry_after_seconds;
+        if (wait) {
+            showToast(`Odczekaj jeszcze ${wait}s przed ponownym wysłaniem`, 'warning');
+        } else {
+            showToast(e.message || 'Błąd wysyłania', 'error');
+        }
+    }
+}
+
+// ── Forgot / reset password ───────────────────────────────────────────────
+async function handleForgotPassword(e) {
+    e.preventDefault();
+    const email     = document.getElementById('forgot-email').value.trim();
+    const successEl = document.getElementById('forgot-success');
+    const btn       = document.getElementById('forgot-submit-btn');
+    if (!email) { showToast('Podaj adres email', 'error'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn__icon">⏳</span> Wysyłanie...';
+    successEl.hidden = true;
+
+    try {
+        await apiRequest('POST', '/auth/forgot-password', { email });
+    } catch (_) { /* always show success */ }
+
+    successEl.hidden = false;
+    btn.hidden = true;
+    btn.disabled = false;
+    btn.innerHTML = '<span class="btn__icon">📨</span> Wyślij link';
+}
+
+async function handleResetPassword(e) {
+    e.preventDefault();
+    const password = document.getElementById('reset-password').value;
+    const confirm  = document.getElementById('reset-password-confirm').value;
+    const errEl    = document.getElementById('reset-error');
+    errEl.hidden   = true;
+
+    if (!password || password.length < 8) {
+        errEl.textContent = 'Hasło musi mieć minimum 8 znaków';
+        errEl.hidden = false;
+        return;
+    }
+    if (password !== confirm) {
+        errEl.textContent = 'Hasła nie są identyczne';
+        errEl.hidden = false;
+        return;
+    }
+
+    const btn = document.querySelector('#reset-form button[type="submit"]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn__icon">⏳</span> Zapisywanie...';
+
+    try {
+        const resp = await apiRequest('POST', '/auth/reset-password', {
+            token: _resetToken, new_password: password
+        });
+        if (resp.access_token) {
+            localStorage.setItem('aigm_access_token', resp.access_token);
+            if (resp.refresh_token) localStorage.setItem('aigm_refresh_token', resp.refresh_token);
+            authToken = resp.access_token;
+            localStorage.setItem('token', authToken);
+            currentUser = {
+                id: resp.user_id, username: resp.username,
+                display_name: resp.display_name,
+                is_admin: resp.is_admin || false,
+                role: resp.role || 'player'
+            };
+            localStorage.setItem('user', JSON.stringify(currentUser));
+            updateAdminSettingsVisibility();
+        }
+        showToast('Hasło zmienione! Witaj ponownie.', 'success');
+        await loadHeroes();
+        showScreen('heroes');
+        history.replaceState({}, '', window.location.pathname);
+    } catch (e) {
+        errEl.textContent = e.message || 'Link wygasł lub jest nieprawidłowy';
+        errEl.hidden = false;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn__icon">✓</span> Ustaw nowe hasło';
+    }
+}
+
+// ── URL-based routing (invite / verify / reset links from emails) ─────────
+function checkUrlRouting() {
+    const path   = window.location.pathname;
+    const params = new URLSearchParams(window.location.search);
+
+    if (path === '/verify-email') {
+        const token = params.get('token');
+        if (token) { autoVerifyEmail(token); return true; }
+    }
+    if (path === '/reset-password') {
+        const token = params.get('token');
+        if (token) { _resetToken = token; showScreen('resetPassword'); return true; }
+    }
+    if (path === '/register' || params.get('invite')) {
+        const code = params.get('invite');
+        if (code) {
+            _inviteCode = code;
+            showScreen('register');
+            loadInviteInfo(code);
+            return true;
+        }
+    }
+    return false;
 }
 
 function checkAuth() {
@@ -6426,6 +6687,25 @@ function initEventListeners() {
     // Login
     elements.loginForm?.addEventListener('submit', handleLogin);
 
+    // Auth screens
+    document.getElementById('register-form')?.addEventListener('submit', handleRegister);
+    document.getElementById('forgot-form')?.addEventListener('submit', handleForgotPassword);
+    document.getElementById('reset-form')?.addEventListener('submit', handleResetPassword);
+    document.getElementById('resend-verify-btn')?.addEventListener('click', handleResendVerification);
+
+    document.getElementById('forgot-password-link')?.addEventListener('click', () => {
+        const successEl = document.getElementById('forgot-success');
+        if (successEl) successEl.hidden = true;
+        const submitBtn = document.getElementById('forgot-submit-btn');
+        if (submitBtn) submitBtn.hidden = false;
+        showScreen('forgotPassword');
+    });
+    document.getElementById('register-link')?.addEventListener('click', () => showScreen('register'));
+    document.getElementById('register-back-link')?.addEventListener('click', () => showScreen('login'));
+    document.getElementById('verify-back-link')?.addEventListener('click', () => showScreen('login'));
+    document.getElementById('forgot-back-link')?.addEventListener('click', () => showScreen('login'));
+    document.getElementById('reset-back-link')?.addEventListener('click', () => showScreen('login'));
+
     // Heroes
     elements.btnNewHero?.addEventListener('click', () => {
         currentHero = null;
@@ -6995,6 +7275,8 @@ async function tryRestoreSession() {
 
 async function init() {
     initEventListeners();
+
+    if (checkUrlRouting()) return;
 
     if (checkAuth()) {
         updateAdminSettingsVisibility();
