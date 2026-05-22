@@ -6746,15 +6746,24 @@ async function loadProfilePage() {
     if (!user) return;
 
     const fallbackLetter = (user.display_name || user.username || '?').charAt(0).toUpperCase();
-    document.getElementById('profile-username').textContent = user.display_name || user.username;
+    const nameEl = document.getElementById('profile-username');
+    if (nameEl) nameEl.textContent = user.display_name || user.username;
     _renderProfileAvatar(null, fallbackLetter);
+
+    // Show login and email immediately from cached user
+    const loginEl = document.getElementById('profile-login-label');
+    if (loginEl) loginEl.textContent = `@${user.username}`;
 
     try {
         const stats = await apiRequest('GET', '/me/stats');
         const displayName = stats.display_name || user.display_name || user.username;
-        document.getElementById('profile-username').textContent = displayName;
+        if (nameEl) nameEl.textContent = displayName;
         _renderProfileAvatar(stats.avatar_url || null,
             (displayName || '?').charAt(0).toUpperCase());
+
+        // Email
+        const emailEl = document.getElementById('profile-email-label');
+        if (emailEl) emailEl.textContent = stats.email || '';
 
         document.getElementById('ps-heroes').textContent = stats.heroes ?? '—';
         document.getElementById('ps-campaigns').textContent = stats.campaigns_completed ?? '—';
@@ -6763,11 +6772,16 @@ async function loadProfilePage() {
 
         const sent = stats.invite_weekly_sent ?? 0;
         const limit = stats.invite_weekly_limit ?? 3;
-        document.getElementById('profile-invite-quota').textContent =
-            `${sent} / ${limit} zaproszeń wysłanych w tym tygodniu`;
+        const quotaEl = document.getElementById('profile-invite-quota');
+        if (quotaEl) quotaEl.textContent =
+            sent >= limit
+                ? `Limit tygodniowy wyczerpany (${limit} zaproszeń)`
+                : `${sent} z ${limit} zaproszeń wysłanych w tym tygodniu`;
         const inviteBtn = document.getElementById('profile-invite-btn');
         if (inviteBtn) inviteBtn.disabled = sent >= limit;
-    } catch (_) {}
+    } catch (e) {
+        console.error('[Profile] stats failed:', e);
+    }
 }
 
 async function _saveProfile(patch) {
@@ -6785,7 +6799,7 @@ async function _saveProfile(patch) {
 }
 
 function _initProfileEditing() {
-    // Display name edit
+    // Display name edit (IDs unchanged — same hooks in new HTML)
     const nameEl     = document.getElementById('profile-username');
     const editBtn    = document.getElementById('profile-name-edit-btn');
     const editRow    = document.getElementById('profile-name-edit');
@@ -6856,6 +6870,63 @@ function _initProfileEditing() {
         reader.readAsDataURL(file);
         avatarInput.value = '';
     });
+
+    // ── Inline change-password form ─────────────────────────────────────────
+    const changePwBtn     = document.getElementById('profile-change-password-btn');
+    const pwFields        = document.getElementById('pf-password-fields');
+    const pwSaveBtn       = document.getElementById('pf-password-save-btn');
+    const pwCancelBtn     = document.getElementById('pf-password-cancel-btn');
+    const pwErrorEl       = document.getElementById('pf-password-error');
+    const currentPwInput  = document.getElementById('pf-current-password');
+    const newPwInput      = document.getElementById('pf-new-password');
+    const confirmPwInput  = document.getElementById('pf-confirm-password');
+
+    changePwBtn?.addEventListener('click', () => {
+        const open = pwFields && !pwFields.hidden;
+        if (pwFields) pwFields.hidden = open;
+        changePwBtn.classList.toggle('pf-row-btn--open', !open);
+        if (!open && currentPwInput) currentPwInput.focus();
+    });
+
+    pwCancelBtn?.addEventListener('click', () => {
+        if (pwFields) pwFields.hidden = true;
+        changePwBtn?.classList.remove('pf-row-btn--open');
+        [currentPwInput, newPwInput, confirmPwInput].forEach(el => { if (el) el.value = ''; });
+        if (pwErrorEl) pwErrorEl.hidden = true;
+    });
+
+    pwSaveBtn?.addEventListener('click', async () => {
+        if (pwErrorEl) pwErrorEl.hidden = true;
+        const current = currentPwInput?.value || '';
+        const newPw   = newPwInput?.value || '';
+        const confirm = confirmPwInput?.value || '';
+
+        if (!current) { _showPwError('Wprowadź obecne hasło'); return; }
+        if (newPw.length < 8) { _showPwError('Nowe hasło musi mieć min. 8 znaków'); return; }
+        if (newPw !== confirm) { _showPwError('Hasła nie są identyczne'); return; }
+
+        pwSaveBtn.disabled = true;
+        pwSaveBtn.textContent = 'Zapisywanie…';
+        try {
+            await apiRequest('POST', '/auth/change-password', {
+                current_password: current,
+                new_password: newPw,
+            });
+            showToast('Hasło zmienione', 'success');
+            pwCancelBtn?.click();
+        } catch (e) {
+            _showPwError(e.message || 'Błąd zmiany hasła');
+        } finally {
+            pwSaveBtn.disabled = false;
+            pwSaveBtn.textContent = 'Zapisz hasło';
+        }
+    });
+
+    function _showPwError(msg) {
+        if (!pwErrorEl) return;
+        pwErrorEl.textContent = msg;
+        pwErrorEl.hidden = false;
+    }
 }
 
 // ── Invite modal ─────────────────────────────────────────────────────────
@@ -6934,14 +7005,6 @@ function initEventListeners() {
         loadProfilePage();
     });
     document.getElementById('profile-invite-btn')?.addEventListener('click', openInviteModal);
-    document.getElementById('profile-change-password-btn')?.addEventListener('click', () => {
-        const successEl = document.getElementById('forgot-success');
-        if (successEl) successEl.hidden = true;
-        const submitBtn = document.getElementById('forgot-submit-btn');
-        if (submitBtn) submitBtn.hidden = false;
-        showScreen('forgotPassword');
-    });
-
     // Invite modal
     document.getElementById('invite-modal-backdrop')?.addEventListener('click', closeInviteModal);
     document.getElementById('invite-modal-close')?.addEventListener('click', closeInviteModal);
