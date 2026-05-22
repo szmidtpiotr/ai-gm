@@ -48,6 +48,20 @@ def get_slash_commands_public():
     return {"commands": get_public_slash_commands()}
 
 
+@router.get("/mechanics/skills")
+def get_public_skills():
+    """Skill catalog for autocomplete (key, label, linked_stat). No auth required."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT key, label, linked_stat FROM game_config_skills ORDER BY label"
+        ).fetchall()
+        return {"skills": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
 @router.get("/mechanics/conditions")
 def get_public_conditions():
     """Player-facing condition catalog: key/label/description only. Powers

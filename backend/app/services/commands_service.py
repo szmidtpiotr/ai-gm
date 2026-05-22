@@ -242,7 +242,76 @@ def _execute_debug_command(cur, conn, character_id: int, char_row, sheet: dict, 
             payload={"result": {"sub": "reset-cooldowns", "short_rests_used": 0, "death_saves_failed": 0}},
         )
 
+    if sub == "roll":
+        return _execute_roll_command(cur, conn, character_id, char_row, sheet, sub_arg)
+
     raise ValueError(
         f"Unknown debug subcommand: /debug {sub}. "
-        f"Available: dump-state, set-hp N, set-state STATE, reset-cooldowns"
+        f"Available: dump-state, set-hp N, set-state STATE, reset-cooldowns, roll [SKILL]"
+    )
+
+
+def _execute_roll_command(cur, conn, character_id: int, char_row, sheet: dict, skill_arg: str) -> "CommandResult":
+    """Admin-only /debug roll [skill_key] — seeds a pending_skill_test and returns skill_test_pending payload."""
+    import random as _rand
+    import uuid as _uuid
+    from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+
+    campaign_id = char_row["campaign_id"]
+    if not campaign_id:
+        raise ValueError("Character has no active campaign — assign one first")
+
+    skill_key = (skill_arg.strip().lower() or "athletics").replace(" ", "_")
+
+    # Validate skill exists in DB or known set — fall back gracefully
+    mod_info = calc_skill_modifier_info(sheet, skill_key)
+    label = _skill_label(skill_key)
+    counter = _get_counter(conn, skill_key)
+    dc = counter.get("dc", 12)
+
+    pending = {
+        "skill_test_id": f"st-roll-{_uuid.uuid4().hex[:8]}",
+        "skill_key": skill_key,
+        "skill_label": label,
+        "dc": dc,
+        "counter": counter,
+        "modifier_breakdown": mod_info,
+        "committed_d20": _rand.randint(1, 20),
+        "source": "admin_roll_command",
+    }
+
+    gs_row = conn.execute(
+        "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if not gs_row:
+        raise ValueError("No game session found for this campaign — start one first")
+
+    try:
+        flags = json.loads(gs_row["session_flags"] or "{}")
+    except Exception:
+        flags = {}
+
+    flags["pending_skill_test"] = pending
+    flags["state"] = "SKILL_TEST_PENDING"
+
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+        (json.dumps(flags, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
+
+    return CommandResult(
+        ok=True, type="command", command="/debug roll",
+        payload={
+            "skill_test_pending": pending,
+            "result": {
+                "sub": "roll",
+                "skill_key": skill_key,
+                "skill_label": label,
+                "dc": dc,
+                "committed_d20": pending["committed_d20"],
+                "modifier": mod_info["total"],
+            },
+        },
     )

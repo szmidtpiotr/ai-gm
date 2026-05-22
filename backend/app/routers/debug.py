@@ -219,8 +219,12 @@ def debug_command(
     from app.core.jwt_auth import require_admin_role
     require_admin_role(authorization, req.user_id)
     text = (req.text or "").strip()
+    # /roll [skill] is sugar for /debug roll [skill]
+    if text.startswith("/roll"):
+        skill_arg = text[5:].strip()
+        text = f"/debug roll {skill_arg}".strip()
     if not text.startswith("/debug"):
-        raise HTTPException(status_code=400, detail="Only /debug commands are accepted here")
+        raise HTTPException(status_code=400, detail="Only /debug and /roll commands are accepted here")
     try:
         from app.services.commands_service import execute_command_logic
         result = execute_command_logic(req.character_id, text)
