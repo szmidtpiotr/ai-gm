@@ -8069,6 +8069,19 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   font-size: 1.2rem;
 }
 
+.profile-action-btn--danger {
+  color: var(--danger);
+  border-color: rgba(201, 74, 74, 0.3);
+}
+.profile-action-btn--danger:hover {
+  background: rgba(201, 74, 74, 0.08);
+  border-color: rgba(201, 74, 74, 0.5);
+}
+.profile-action-btn--danger .profile-action-btn__arrow {
+  color: var(--danger);
+  opacity: 0.6;
+}
+
 /* ── Heroes invite chip ──────────────────────────────────────────────────── */
 .heroes-invite-row {
   display: flex;
