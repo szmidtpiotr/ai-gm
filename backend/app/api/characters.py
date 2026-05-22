@@ -1028,15 +1028,20 @@ def resurrect_hero(
     conn.row_factory = sqlite3.Row
     try:
         char = conn.execute(
-            "SELECT id, user_id, status FROM characters WHERE id = ?",
+            "SELECT id, user_id, status, sheet_json FROM characters WHERE id = ?",
             (character_id,),
         ).fetchone()
         if not char:
             raise HTTPException(status_code=404, detail="character not found")
         if int(char["user_id"]) != int(authed_uid):
             raise HTTPException(status_code=403, detail="not your hero")
-        if char["status"] != "dead":
-            raise HTTPException(status_code=409, detail=f"hero is '{char['status']}', not dead")
+        # Accept status='dead' OR current_hp <= 0 — the death service doesn't
+        # always set status, it leaves heroes as 'in_campaign' with 0 HP.
+        import json as _j
+        sheet = _j.loads(char["sheet_json"] or "{}")
+        is_dead = char["status"] == "dead" or int(sheet.get("current_hp") or 0) <= 0
+        if not is_dead:
+            raise HTTPException(status_code=409, detail=f"hero is '{char['status']}' with {sheet.get('current_hp')} HP — not dead")
         try:
             return apply_resurrection(character_id, int(char["user_id"]), conn, force=False)
         except PermissionError as e:

@@ -939,14 +939,15 @@ async function selectCampaign(campaign) {
 }
 
 function showNewCampaignScreen() {
-    // If we already have a hero, skip the title screen entirely
     if (currentHero && currentHero.id) {
+        // Hero already selected — create campaign immediately
         handleNewCampaignWithHero();
         return;
     }
-    elements.campaignNameInput.value = '';
-    elements.campaignNameCount.textContent = '0';
-    showScreen('newCampaign');
+    // No hero selected — send to heroes screen so the player picks one first.
+    // The old new-campaign wizard (character creation) must not appear if heroes exist.
+    showToast('Najpierw wybierz bohatera, aby stworzyć nową kampanię.', 'info', 3000);
+    loadHeroes().then(() => showScreen('heroes'));
 }
 
 async function handleNewCampaignWithHero() {
@@ -2613,6 +2614,11 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         showToast('Brak postaci - odśwież stronę', 'error');
         return;
     }
+
+    // Stop any in-flight TTS immediately — every player action interrupts reading.
+    // This prevents the previous GM message from continuing to play while the
+    // combat round advances and a new one arrives.
+    try { window.voiceUI?.stopPlayback?.(); } catch (_e) {}
 
     // Unlock audio from this user gesture
     window.voiceUI?.unlockAudio?.();
