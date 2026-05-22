@@ -7604,3 +7604,152 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   .command-palette__card { width: calc(100vw - 16px); }
   .command-palette__item { grid-template-columns: 1fr; gap: 2px; }
 }
+
+/* ── Auth link buttons in login footer ─────────────────────────────────── */
+.login__links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-lg);
+  margin-bottom: var(--space-xs);
+}
+
+.login__link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+.login__link:hover { opacity: 1; text-decoration: underline; }
+
+.login__link-sep {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  user-select: none;
+}
+
+/* ── Screens that reuse login background ──────────────────────────────── */
+#register-screen,
+#verify-email-screen,
+#forgot-password-screen,
+#reset-password-screen {
+  background:
+    radial-gradient(ellipse at center, rgba(201, 165, 74, 0.08) 0%, transparent 40%),
+    radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.7) 100%),
+    var(--bg-screen-login) center/cover no-repeat,
+    linear-gradient(180deg, #12100e 0%, #0a0908 50%, #050404 100%);
+}
+
+/* ── Inviter card ─────────────────────────────────────────────────────── */
+.inviter-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background: var(--bg-card);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-xl);
+  box-shadow: 0 0 24px rgba(201, 165, 74, 0.08);
+}
+
+.inviter-card__avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent-dark);
+  color: var(--bg-primary);
+  font-size: 1.2rem;
+  font-weight: 700;
+  font-family: 'Cinzel', serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  text-transform: uppercase;
+}
+
+.inviter-card__body { flex: 1; min-width: 0; }
+
+.inviter-card__label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.inviter-card__name {
+  font-size: var(--font-size-base);
+  color: var(--accent-light);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.inviter-card__msg {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-top: var(--space-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Register expiry note ─────────────────────────────────────────────── */
+.register-expiry {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-align: center;
+  margin-bottom: var(--space-xs);
+}
+
+/* ── Verify email card ────────────────────────────────────────────────── */
+.verify-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-xl);
+  text-align: center;
+  margin-bottom: var(--space-xl);
+}
+
+.verify-card__icon { font-size: 2rem; margin-bottom: var(--space-sm); }
+
+.verify-card__hint {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ── Auth feedback messages ───────────────────────────────────────────── */
+.auth-msg {
+  border-radius: var(--radius-sm);
+  padding: var(--space-md);
+  font-size: var(--font-size-sm);
+  text-align: center;
+  line-height: 1.5;
+}
+
+.auth-msg--error {
+  background: rgba(201, 74, 74, 0.12);
+  border: 1px solid rgba(201, 74, 74, 0.3);
+  color: #e88080;
+}
+
+.auth-msg--success {
+  background: rgba(34, 167, 70, 0.12);
+  border: 1px solid rgba(34, 167, 70, 0.3);
+  color: #6ad08a;
+}
+
+.auth-countdown {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  text-align: center;
+}

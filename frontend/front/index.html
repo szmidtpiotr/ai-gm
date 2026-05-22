@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=stage9c-palette-cooldown-2026-05-21">
+  <link rel="stylesheet" href="./css/styles.css?v=stage11c-auth-2026-05-22">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -44,7 +44,151 @@
 
       <footer class="login__footer">
         <p class="login__quote">"W mroku świec, historie się rodzą..."</p>
+        <div class="login__links">
+          <button type="button" class="login__link" id="forgot-password-link">Nie pamiętasz hasła?</button>
+          <span class="login__link-sep">·</span>
+          <button type="button" class="login__link" id="register-link">Masz zaproszenie?</button>
+        </div>
         <p class="login__version">v1.0.0</p>
+      </footer>
+    </div>
+  </div>
+
+  <!-- REGISTER SCREEN -->
+  <div id="register-screen" class="screen">
+    <div class="login">
+      <div id="register-inviter-card" class="inviter-card" hidden>
+        <div class="inviter-card__avatar" id="register-inviter-avatar">?</div>
+        <div class="inviter-card__body">
+          <div class="inviter-card__label">Zaproszenie od</div>
+          <div class="inviter-card__name" id="register-inviter-name">—</div>
+          <div class="inviter-card__msg" id="register-inviter-msg" hidden></div>
+        </div>
+      </div>
+
+      <div class="login__logo">
+        <div class="login__icons">
+          <span class="login__icon">💀</span>
+          <span class="login__icon login__icon--main">📜</span>
+          <span class="login__icon">🔥</span>
+        </div>
+        <h1 class="login__title">Dołącz do przygody</h1>
+        <p class="login__subtitle">Stwórz konto i wejdź do mrocznej krainy</p>
+      </div>
+
+      <form id="register-form" class="login__form">
+        <div class="form-field">
+          <label for="register-email">Adres email</label>
+          <input type="email" id="register-email" placeholder="twoj@email.com" autocomplete="email">
+        </div>
+        <div class="form-field">
+          <label for="register-username">Nazwa użytkownika (login)</label>
+          <input type="text" id="register-username" placeholder="Twój login..." autocomplete="username" maxlength="30">
+        </div>
+        <div class="form-field">
+          <label for="register-password">Hasło</label>
+          <input type="password" id="register-password" placeholder="Minimum 8 znaków..." autocomplete="new-password">
+        </div>
+        <div id="register-error" class="auth-msg auth-msg--error" hidden></div>
+        <button type="submit" class="btn btn--primary btn--full">
+          <span class="btn__icon">⚔</span>
+          Dołącz do przygody
+        </button>
+      </form>
+
+      <footer class="login__footer">
+        <p class="register-expiry" id="register-expiry"></p>
+        <button type="button" class="login__link" id="register-back-link">← Wróć do logowania</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- VERIFY EMAIL SCREEN -->
+  <div id="verify-email-screen" class="screen">
+    <div class="login">
+      <div class="login__logo">
+        <div class="login__icons">
+          <span class="login__icon login__icon--main" style="font-size:3rem">✉️</span>
+        </div>
+        <h1 class="login__title">Sprawdź pocztę</h1>
+        <p class="login__subtitle" id="verify-email-desc">Wysłaliśmy link aktywacyjny na Twój adres email</p>
+      </div>
+
+      <div class="verify-card">
+        <div class="verify-card__icon">📬</div>
+        <p class="verify-card__hint">Kliknij link w wiadomości, aby aktywować konto.<br>Sprawdź też folder SPAM.</p>
+      </div>
+
+      <div class="login__form" style="gap: var(--space-md)">
+        <button type="button" class="btn btn--secondary btn--full" id="resend-verify-btn">
+          Wyślij ponownie
+        </button>
+        <p id="resend-countdown" class="auth-countdown" hidden></p>
+        <button type="button" class="login__link" id="verify-back-link">← Wróć do logowania</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FORGOT PASSWORD SCREEN -->
+  <div id="forgot-password-screen" class="screen">
+    <div class="login">
+      <div class="login__logo">
+        <div class="login__icons">
+          <span class="login__icon login__icon--main" style="font-size:3rem">🔑</span>
+        </div>
+        <h1 class="login__title">Reset hasła</h1>
+        <p class="login__subtitle">Podaj email — wyślemy link do resetowania</p>
+      </div>
+
+      <form id="forgot-form" class="login__form">
+        <div class="form-field">
+          <label for="forgot-email">Adres email</label>
+          <input type="email" id="forgot-email" placeholder="twoj@email.com" autocomplete="email">
+        </div>
+        <div id="forgot-success" class="auth-msg auth-msg--success" hidden>
+          Jeśli podany email jest zarejestrowany — link do resetowania hasła został wysłany.
+        </div>
+        <button type="submit" class="btn btn--primary btn--full" id="forgot-submit-btn">
+          <span class="btn__icon">📨</span>
+          Wyślij link
+        </button>
+      </form>
+
+      <footer class="login__footer">
+        <button type="button" class="login__link" id="forgot-back-link">← Wróć do logowania</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- RESET PASSWORD SCREEN -->
+  <div id="reset-password-screen" class="screen">
+    <div class="login">
+      <div class="login__logo">
+        <div class="login__icons">
+          <span class="login__icon login__icon--main" style="font-size:3rem">🔒</span>
+        </div>
+        <h1 class="login__title">Nowe hasło</h1>
+        <p class="login__subtitle">Ustaw nowe hasło dla swojego konta</p>
+      </div>
+
+      <form id="reset-form" class="login__form">
+        <div class="form-field">
+          <label for="reset-password">Nowe hasło</label>
+          <input type="password" id="reset-password" placeholder="Minimum 8 znaków..." autocomplete="new-password">
+        </div>
+        <div class="form-field">
+          <label for="reset-password-confirm">Potwierdź nowe hasło</label>
+          <input type="password" id="reset-password-confirm" placeholder="Powtórz hasło..." autocomplete="new-password">
+        </div>
+        <div id="reset-error" class="auth-msg auth-msg--error" hidden></div>
+        <button type="submit" class="btn btn--primary btn--full">
+          <span class="btn__icon">✓</span>
+          Ustaw nowe hasło
+        </button>
+      </form>
+
+      <footer class="login__footer">
+        <button type="button" class="login__link" id="reset-back-link">← Wróć do logowania</button>
       </footer>
     </div>
   </div>
@@ -769,6 +913,33 @@
           </div>
         </section>
 
+        <!-- Credits -->
+        <section class="settings-group" id="settings-group-credits">
+          <header class="settings-group__header settings-group__header--toggle" data-fold="settings-fold-credits">
+            <span class="settings-group__icon">✦</span>
+            <h3 class="settings-group__title">Podziękowania</h3>
+            <span class="settings-group__chevron">›</span>
+          </header>
+          <div class="settings-fold" id="settings-fold-credits" hidden>
+            <div class="settings-credits">
+              <div class="settings-credit-item">
+                <span class="settings-credit-label">🎲 3D Dice Roller</span>
+                <a class="settings-credit-link" href="https://github.com/sarahRosannaBusch/dice" target="_blank" rel="noopener">
+                  Sarah Rosanna Busch
+                </a>
+                <span class="settings-credit-note">Three.js + Cannon.js physics dice · MIT licence</span>
+              </div>
+              <div class="settings-credit-item">
+                <span class="settings-credit-label">🎲 Original dice engine</span>
+                <a class="settings-credit-link" href="https://github.com/byWulf/dice-roller" target="_blank" rel="noopener">
+                  Anton Natarov (Teal)
+                </a>
+                <span class="settings-credit-note">Base Three.js dice implementation</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
       </div>
     </div>
 
@@ -1102,6 +1273,6 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=stage11-bugfix3-2026-05-22"></script>
+  <script src="./js/app.js?v=stage11c-auth-2026-05-22"></script>
 </body>
 </html>
