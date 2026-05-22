@@ -6799,46 +6799,59 @@ async function _saveProfile(patch) {
 }
 
 function _initProfileEditing() {
-    // Display name edit (IDs unchanged — same hooks in new HTML)
-    const nameEl     = document.getElementById('profile-username');
-    const editBtn    = document.getElementById('profile-name-edit-btn');
-    const editRow    = document.getElementById('profile-name-edit');
-    const nameInput  = document.getElementById('profile-name-input');
-    const saveBtn    = document.getElementById('profile-name-save');
-    const cancelBtn  = document.getElementById('profile-name-cancel');
+    // Contenteditable inline name edit — no separate input element
+    const nameEl    = document.getElementById('profile-username');
+    const editBtn   = document.getElementById('profile-name-edit-btn');
+    const saveBtn   = document.getElementById('profile-name-save');
+    const cancelBtn = document.getElementById('profile-name-cancel');
+    let _originalName = '';
 
-    const displayRow = document.getElementById('pf-name-display');
-
-    editBtn?.addEventListener('click', () => {
-        nameInput.value = nameEl.textContent.trim();
-        if (displayRow) displayRow.hidden = true;
-        editRow.hidden = false;
-        nameInput.focus();
-        nameInput.select();
-    });
-
-    const cancelEdit = () => {
-        editRow.hidden = true;
-        if (displayRow) displayRow.hidden = false;
+    const enterEdit = () => {
+        _originalName = nameEl.textContent.trim();
+        nameEl.contentEditable = 'true';
+        editBtn.hidden = true;
+        saveBtn.hidden = false;
+        cancelBtn.hidden = false;
+        nameEl.focus();
+        // move cursor to end
+        const range = document.createRange();
+        range.selectNodeContents(nameEl);
+        range.collapse(false);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
     };
 
-    cancelBtn?.addEventListener('click', cancelEdit);
+    const cancelEdit = () => {
+        nameEl.contentEditable = 'false';
+        nameEl.textContent = _originalName;
+        editBtn.hidden = false;
+        saveBtn.hidden = true;
+        cancelBtn.hidden = true;
+    };
 
-    saveBtn?.addEventListener('click', async () => {
-        const newName = nameInput.value.trim();
-        if (!newName) return;
+    const commitEdit = async () => {
+        const newName = nameEl.textContent.trim();
+        if (!newName) { cancelEdit(); return; }
         saveBtn.disabled = true;
         const resp = await _saveProfile({ display_name: newName });
         saveBtn.disabled = false;
         if (resp) {
             nameEl.textContent = resp.display_name || newName;
+            nameEl.contentEditable = 'false';
+            editBtn.hidden = false;
+            saveBtn.hidden = true;
+            cancelBtn.hidden = true;
             showToast('Nazwa zaktualizowana', 'success');
-            cancelEdit(); // restores display row
         }
-    });
+    };
 
-    nameInput?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') saveBtn.click();
+    editBtn?.addEventListener('click', enterEdit);
+    cancelBtn?.addEventListener('click', cancelEdit);
+    saveBtn?.addEventListener('click', commitEdit);
+
+    nameEl?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
         if (e.key === 'Escape') cancelEdit();
     });
 

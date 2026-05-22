@@ -8135,28 +8135,25 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 }
 .pf-pencil:hover { color: var(--accent); }
 
-/* Inline edit row — same height/layout as display row */
-.pf-name-editing {
-  gap: var(--space-xs);
+/* The name becomes editable in-place — no separate input */
+.pf-name[contenteditable="true"] {
+  outline: none;
+  border-bottom: 1.5px solid var(--border-accent);
+  padding-bottom: 2px;
+  cursor: text;
+  min-width: 60px;
+  caret-color: var(--accent);
+}
+.pf-name[contenteditable="true"]:focus {
+  border-bottom-color: var(--accent);
 }
 
-.pf-name-input {
-  flex: 1;
-  min-width: 0;
-  /* looks like the heading — no box, just a bottom border */
-  background: transparent;
-  border: none;
-  border-bottom: 1.5px solid var(--border-accent);
-  border-radius: 0;
-  padding: 2px 0;
-  color: var(--accent-light);
-  font-family: 'Cinzel', serif;
-  font-size: 1.3rem;
-  font-weight: 600;
-  outline: none;
-  width: 100%;
+.pf-name-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
 }
-.pf-name-input:focus { border-bottom-color: var(--accent); }
 
 .pf-name-save,
 .pf-name-cancel {
@@ -8165,7 +8162,6 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   cursor: pointer;
   padding: 4px 6px;
   border-radius: var(--radius-sm);
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   transition: background 0.15s;
@@ -8174,6 +8170,9 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .pf-name-save:hover { background: rgba(34,167,70,0.12); }
 .pf-name-cancel { color: var(--text-muted); }
 .pf-name-cancel:hover { background: rgba(255,255,255,0.06); }
+
+/* Fix: prevent display:flex overriding [hidden] */
+.pf-password-fields[hidden] { display: none !important; }
 
 .pf-login {
   font-size: var(--font-size-xs);
