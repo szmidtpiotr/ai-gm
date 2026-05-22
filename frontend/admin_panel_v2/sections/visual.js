@@ -34,11 +34,13 @@ function layout() {
 
       <nav class="visual-subtabs">
         <button class="visual-subtab visual-subtab--active" data-subtab="pora">🌗 Pora dnia</button>
+        <button class="visual-subtab" data-subtab="bg">🖼 Tła ekranów</button>
         <button class="visual-subtab" data-subtab="fonts" disabled title="Wkrótce">🅰 Czcionki (wkrótce)</button>
         <button class="visual-subtab" data-subtab="theme" disabled title="Wkrótce">🎭 Motywy UI (wkrótce)</button>
       </nav>
 
       <div class="visual-subpane" id="visual-subpane-pora"></div>
+      <div class="visual-subpane" id="visual-subpane-bg" hidden></div>
     </div>
   `;
 }
@@ -180,7 +182,146 @@ function updatePreview(panel) {
   if (label) label.textContent = PERIODS.find(p => p.key === period)?.label || "";
 }
 
+// Stage 9 follow-up — Tła ekranów subtab.
+// Lists each backend-supported screen as a card. Each card: preview image
+// (from /api/ui/bg/<screen> with cachebust), file picker, Wgraj button,
+// Usuń button. Uploads go to POST /api/admin/ui/bg/<screen>.
+const BG_SCREENS = [
+  { key: 'login',         label: 'Logowanie',          hint: 'Ekran logowania' },
+  { key: 'heroes',        label: 'Postacie (heroes)',  hint: 'Wybór bohatera' },
+  { key: 'campaigns',     label: 'Kampanie',           hint: 'Lista kampanii' },
+  { key: 'new-campaign',  label: 'Nowa kampania',      hint: 'Formularz tworzenia kampanii' },
+  { key: 'wizard',        label: 'Kreator postaci',    hint: 'Cztery kroki wizard' },
+  { key: 'game',          label: 'Gra (chat)',         hint: 'Ekran rozgrywki' },
+  { key: 'sheet',         label: 'Karta postaci',      hint: 'Panel z atrybutami / ekwipunkiem' },
+  { key: 'settings',      label: 'Ustawienia',         hint: 'Panel ustawień gry' },
+  { key: 'death',         label: 'Śmierć',             hint: 'Ekran końcowy — porażka' },
+  { key: 'victory',       label: 'Zwycięstwo',         hint: 'Ekran końcowy — sukces' },
+];
+
+async function renderTabBg(pane) {
+  pane.innerHTML = `
+    <div class="bg-screens-grid">
+      ${BG_SCREENS.map(s => `
+        <div class="bg-screen-card" data-screen="${s.key}">
+          <div class="bg-screen-card__head">
+            <h3>${esc(s.label)}</h3>
+            <span class="bg-screen-card__key">${esc(s.key)}</span>
+          </div>
+          <p class="bg-screen-card__hint">${esc(s.hint)}</p>
+          <div class="bg-screen-card__preview" data-preview="${s.key}">
+            <span class="bg-screen-card__empty">— brak —</span>
+          </div>
+          <div class="bg-screen-card__actions">
+            <label class="bg-screen-card__file">
+              <span class="bg-screen-card__file-label">Wybierz plik</span>
+              <input type="file" accept="image/jpeg,image/png,image/webp" data-file="${s.key}" hidden>
+            </label>
+            <button type="button" class="primary-btn" data-upload="${s.key}" disabled>Wgraj</button>
+            <button type="button" class="secondary-btn" data-delete="${s.key}">Usuń</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // Load existing backgrounds
+  try {
+    const r = await fetch('/api/ui/backgrounds');
+    if (r.ok) {
+      const data = await r.json();
+      const bgs = data?.backgrounds || {};
+      for (const s of BG_SCREENS) {
+        if (bgs[s.key]) _setPreview(pane, s.key, bgs[s.key]);
+      }
+    }
+  } catch (e) { /* silent */ }
+
+  // File picker → enable Upload button + preview locally
+  pane.querySelectorAll('input[type="file"][data-file]').forEach(input => {
+    input.addEventListener('change', (e) => {
+      const screen = input.dataset.file;
+      const file = e.target.files?.[0];
+      const upBtn = pane.querySelector(`button[data-upload="${screen}"]`);
+      const fileLabel = pane.querySelector(`.bg-screen-card[data-screen="${screen}"] .bg-screen-card__file-label`);
+      if (upBtn) upBtn.disabled = !file;
+      if (file && fileLabel) fileLabel.textContent = file.name.length > 28 ? file.name.slice(0, 25) + '…' : file.name;
+    });
+  });
+
+  // Upload
+  pane.querySelectorAll('button[data-upload]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const screen = btn.dataset.upload;
+      const input = pane.querySelector(`input[data-file="${screen}"]`);
+      const file = input?.files?.[0];
+      if (!file) { showToast('Wybierz plik najpierw.', 'error'); return; }
+      btn.disabled = true;
+      try {
+        const fd = new FormData();
+        fd.append('file', file);
+        const resp = await adminFetch(`/api/admin/ui/bg/${screen}`, { method: 'POST', body: fd });
+        if (resp?.url) {
+          _setPreview(pane, screen, resp.url + `?ts=${Date.now()}`);
+        }
+        showToast(`Tło dla "${screen}" wgrane.`, 'success');
+        // Reset the picker label
+        const fileLabel = pane.querySelector(`.bg-screen-card[data-screen="${screen}"] .bg-screen-card__file-label`);
+        if (fileLabel) fileLabel.textContent = 'Wybierz plik';
+        if (input) input.value = '';
+      } catch (e) {
+        showToast(`Błąd wysyłki: ${e?.message || e}`, 'error');
+      } finally {
+        btn.disabled = true;
+      }
+    });
+  });
+
+  // Delete
+  pane.querySelectorAll('button[data-delete]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const screen = btn.dataset.delete;
+      if (!confirm(`Usunąć tło dla ekranu "${screen}"?`)) return;
+      try {
+        await adminFetch(`/api/admin/ui/bg/${screen}`, { method: 'DELETE' });
+        _clearPreview(pane, screen);
+        showToast(`Tło dla "${screen}" usunięte.`, 'success');
+      } catch (e) {
+        showToast(`Błąd usuwania: ${e?.message || e}`, 'error');
+      }
+    });
+  });
+}
+
+function _setPreview(pane, screen, url) {
+  const wrap = pane.querySelector(`.bg-screen-card__preview[data-preview="${screen}"]`);
+  if (!wrap) return;
+  wrap.innerHTML = `<img src="${esc(url)}" alt="${esc(screen)} background" />`;
+}
+function _clearPreview(pane, screen) {
+  const wrap = pane.querySelector(`.bg-screen-card__preview[data-preview="${screen}"]`);
+  if (wrap) wrap.innerHTML = `<span class="bg-screen-card__empty">— brak —</span>`;
+}
+
 function bindEvents(panel) {
+  // Subtab switcher (Stage 9 follow-up)
+  panel.querySelectorAll('.visual-subtab[data-subtab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      const target = btn.dataset.subtab;
+      panel.querySelectorAll('.visual-subtab').forEach(b => b.classList.toggle('visual-subtab--active', b === btn));
+      panel.querySelector('#visual-subpane-pora').hidden = target !== 'pora';
+      const bgPane = panel.querySelector('#visual-subpane-bg');
+      if (bgPane) {
+        bgPane.hidden = target !== 'bg';
+        if (target === 'bg' && !bgPane.dataset.loaded) {
+          renderTabBg(bgPane);
+          bgPane.dataset.loaded = '1';
+        }
+      }
+    });
+  });
+
   // Enabled toggle
   panel.querySelector('input[data-field="enabled"]')?.addEventListener("change", async (e) => {
     const enabled = e.target.checked;

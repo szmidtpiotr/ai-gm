@@ -241,10 +241,51 @@ function _canAdjSkill(origKey, delta) {
 // ============================================================================
 // API Helper
 // ============================================================================
+// Stage 10 A2 — auto-refresh state. _refreshInFlight prevents a stampede when
+// multiple parallel requests get 401 simultaneously; they all await the same promise.
+let _refreshInFlight = null;
+async function _tryRefreshAccessToken() {
+    const refresh = localStorage.getItem('aigm_refresh_token');
+    if (!refresh) return null;
+    if (_refreshInFlight) return _refreshInFlight;
+    _refreshInFlight = (async () => {
+        try {
+            const r = await fetch(`${API_BASE}/auth/refresh`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: refresh }),
+            });
+            if (!r.ok) {
+                console.warn('[JWT] refresh failed:', r.status);
+                return null;
+            }
+            const data = await r.json();
+            if (data?.access_token) {
+                localStorage.setItem('aigm_access_token', data.access_token);
+                return data.access_token;
+            }
+        } catch (e) {
+            console.warn('[JWT] refresh exception:', e);
+        }
+        return null;
+    })();
+    try {
+        return await _refreshInFlight;
+    } finally {
+        _refreshInFlight = null;
+    }
+}
+
 async function apiRequest(method, endpoint, body = null) {
     const headers = {
         'Content-Type': 'application/json'
     };
+    // Stage 10 A2 — attach JWT when we have one. Backend continues accepting
+    // ?user_id= query param during 10-B; this header is additive.
+    const accessToken = localStorage.getItem('aigm_access_token');
+    if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`;
+    }
 
     const options = { method, headers };
     if (body) {
@@ -253,12 +294,33 @@ async function apiRequest(method, endpoint, body = null) {
 
     console.log(`[API] ${method} ${API_BASE}${endpoint}`, body || '');
 
-    const response = await fetch(`${API_BASE}${endpoint}`, options);
+    let response = await fetch(`${API_BASE}${endpoint}`, options);
+
+    // Stage 10 A2 — on 401 with a stored refresh token AND we sent an access
+    // token, try refreshing once and retry the request.
+    if (response.status === 401 && accessToken && localStorage.getItem('aigm_refresh_token')) {
+        const refreshed = await _tryRefreshAccessToken();
+        if (refreshed) {
+            headers['Authorization'] = `Bearer ${refreshed}`;
+            response = await fetch(`${API_BASE}${endpoint}`, options);
+        }
+    }
 
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error(`[API] Error ${response.status}:`, errorData);
-        throw new Error(errorData.detail || errorData.message || `API Error: ${response.status}`);
+        // Surface structured `detail` objects (e.g. historia_cooldown) — string
+        // detail goes into the Error message, full body attached as `err.body`.
+        const detail = errorData?.detail;
+        const msg = typeof detail === 'string'
+            ? detail
+            : (typeof detail === 'object' && detail?.message)
+                ? detail.message
+                : (errorData.message || `API Error: ${response.status}`);
+        const err = new Error(msg);
+        err.status = response.status;
+        err.body = errorData;
+        throw err;
     }
 
     if (response.status === 204 || response.headers.get('content-length') === '0') {
@@ -354,9 +416,18 @@ async function handleLogin(e) {
                 id: response.user_id,
                 username: response.username || username,
                 display_name: response.display_name,
-                is_admin: response.is_admin
+                is_admin: response.is_admin,
+                role: response.role || (response.is_admin ? 'admin' : 'player'),
             };
-            authToken = `user:${currentUser.id}`;
+            // Stage 10 A2 — store JWT pair when present (backend now emits them).
+            // Backward compat: legacy `token` key keeps the sentinel for old code paths.
+            if (response.access_token) {
+                localStorage.setItem('aigm_access_token', response.access_token);
+            }
+            if (response.refresh_token) {
+                localStorage.setItem('aigm_refresh_token', response.refresh_token);
+            }
+            authToken = response.access_token || `user:${currentUser.id}`;
             localStorage.setItem('token', authToken);
             localStorage.setItem('user', JSON.stringify(currentUser));
             window.clog?.setContext({ user_id: currentUser.id, username: currentUser.username });
@@ -393,6 +464,9 @@ function handleLogout() {
     currentHero = null;
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    // Stage 10 A2 — clear JWT pair on logout.
+    localStorage.removeItem('aigm_access_token');
+    localStorage.removeItem('aigm_refresh_token');
     localStorage.removeItem('aigm_hero_id');
     localStorage.removeItem('aigm_campaign_id');
     try { sessionStorage.removeItem('aigm_hero_id'); sessionStorage.removeItem('aigm_active_session'); } catch {}
@@ -678,14 +752,27 @@ function renderCampaigns(campaigns) {
         const wrapper = document.createElement('div');
         wrapper.className = 'campaign-swipe-wrapper';
 
-        const title = campaign.title || campaign.name || 'Kampania';
-        const desc = campaign.description || campaign.system_id || 'Fantasy';
+        // Stage 9 follow-up: when the GM plan hasn't finished generating yet,
+        // show a poetic placeholder + ⏳ spinner instead of the generic
+        // "Przygoda <hero>" working title. Once the plan lands the card
+        // shows the LLM-picked title + the premise as description.
+        const planReady = campaign.plan_ready !== false;
+        const rawTitle = campaign.title || campaign.name || 'Kampania';
+        const isGenericTitle = /^(Przygoda\s+\S+|Kampania(\s+#?\d+)?|Nowa kampania)$/i.test(rawTitle);
+        const showSpinner = !planReady && isGenericTitle;
+
+        const title = showSpinner ? 'Mglista przygoda…' : rawTitle;
+        const desc = showSpinner
+            ? 'GM zaplata wątki — wróć za chwilę.'
+            : (campaign.description || campaign.system_id || 'Fantasy');
+        const icon = showSpinner ? '⏳' : '📜';
+        const cardClass = showSpinner ? 'campaign-card campaign-card--brewing' : 'campaign-card';
 
         wrapper.innerHTML = `
             <div class="campaign-delete-action" data-campaign-id="${campaign.id}">🗑️</div>
-            <button type="button" class="campaign-card" data-campaign-id="${campaign.id}">
+            <button type="button" class="${cardClass}" data-campaign-id="${campaign.id}">
                 <div class="campaign-card__icon">
-                    <span>📜</span>
+                    <span>${icon}</span>
                 </div>
                 <div class="campaign-card__content">
                     <h3>${escapeHtml(title)}</h3>
@@ -1954,11 +2041,24 @@ async function handleSlashCommand(text) {
                 '`/debug set-hp N` — ustaw HP (przycinane do [0, max_hp])',
                 '`/debug set-state STATE` — wymuś state_machine (`NARRATIVE`, `COMBAT`, `SKILL_TEST_PENDING`)',
                 '`/debug reset-cooldowns` — wyzeruj krótkie odpoczynki, death saves i cooldowny lochów',
+                '`/debug preview-death` — 👁 podgląd ekranu śmierci (bez zmian w DB)',
+                '`/debug preview-victory` — 👁 podgląd ekranu zwycięstwa (bez zmian w DB)',
                 '',
                 'Otwórz **🐛 drawer** (prawa-góra) aby zobaczyć szczegóły. Ustawienia → "🐛 Pokaż debug pod wiadomościami GM" musi być ON.'
             ].join('\n');
             appendMessage({ role: 'system', content: helpLines, created_at: new Date() });
             scrollToBottom();
+            return true;
+        }
+        // Stage 9 P5/P6 preview commands — purely client-side, no DB mutation.
+        // Mounts the screen with sample data so admin can verify layout/animation
+        // without having to engineer a real death or victory in-game.
+        if (tail === 'preview-death') {
+            _previewDeathScreen();
+            return true;
+        }
+        if (tail === 'preview-victory') {
+            _previewVictoryScreen();
             return true;
         }
         if (!characterData?.id) {
@@ -2062,10 +2162,12 @@ const ADMIN_CMD_HINTS = {
 // Stage 8 follow-up — /debug subcommand tree for autocomplete.
 // Mirrors ADMIN_CMD_TREE shape so we can reuse the same suggestion-popup plumbing.
 const DEBUG_CMD_TREE = {
-    'dump-state':      {},
-    'set-hp':          {},
-    'set-state':       { 'NARRATIVE': {}, 'COMBAT': {}, 'SKILL_TEST_PENDING': {} },
-    'reset-cooldowns': {},
+    'dump-state':       {},
+    'set-hp':           {},
+    'set-state':        { 'NARRATIVE': {}, 'COMBAT': {}, 'SKILL_TEST_PENDING': {} },
+    'reset-cooldowns':  {},
+    'preview-death':    {},
+    'preview-victory':  {},
 };
 const DEBUG_CMD_HINTS = {
     'dump-state':      { hint: 'Zrzut stanu postaci + ostatniej tury (drawer)' },
@@ -2075,6 +2177,8 @@ const DEBUG_CMD_HINTS = {
     'set-state COMBAT':            { hint: 'Tryb walki' },
     'set-state SKILL_TEST_PENDING':{ hint: 'Oczekiwanie na rzut umiejętności' },
     'reset-cooldowns': { hint: 'Wyzeruj short_rests + death_saves + cooldowny lochów' },
+    'preview-death':   { hint: '👁 Podgląd ekranu śmierci (bez zmian w DB)' },
+    'preview-victory': { hint: '👁 Podgląd ekranu zwycięstwa (bez zmian w DB)' },
 };
 
 function getDebugSuggestions(afterDebug) {
@@ -2347,7 +2451,17 @@ async function handleMemCommand(question, fullText) {
         }
     } catch (e) {
         typing.remove();
-        showToast(e.message || 'Błąd /mem', 'error');
+        // Stage 9 P3 — pretty-print the historia cooldown 429 response.
+        const detail = e?.body?.detail;
+        if (detail && typeof detail === 'object' && detail.error === 'historia_cooldown') {
+            appendMessage({
+                role: 'system',
+                content: `🕯 ${detail.message}`,
+                created_at: new Date(),
+            });
+        } else {
+            showToast(e.message || 'Błąd /mem', 'error');
+        }
     }
     scrollToBottom();
 }
@@ -5324,6 +5438,153 @@ function _refreshDebugToggleVisibility() {
     }
 }
 
+// Stage 9 P4 — Command palette modal.
+// Single source of truth: SLASH_COMMANDS for top-level commands + DEBUG_CMD_TREE
+// for /debug subcommands (admin only) + a curated /admin example subset.
+// Opens via ⌘ button in composer OR Ctrl+/ keybinding. Closes on Esc / backdrop.
+const _PALETTE_STATE = { items: [], filtered: [], highlighted: 0 };
+
+function _buildPaletteItems() {
+    const items = [];
+    // Top-level slash commands
+    for (const c of SLASH_COMMANDS) {
+        if (c.adminOnly && !playerIsAdmin()) continue;
+        items.push({
+            label: c.cmd,
+            desc: c.desc || '',
+            insert: c.cmd + ' ',
+            // Cursor offset from end (negative = backwards). 0 = end-of-line.
+            cursorOffset: 0,
+        });
+    }
+    // /debug subcommands when admin
+    if (playerIsAdmin()) {
+        for (const sub of Object.keys(DEBUG_CMD_TREE)) {
+            const hint = DEBUG_CMD_HINTS[sub]?.hint || '';
+            const ph = DEBUG_CMD_HINTS[sub]?.placeholder || '';
+            items.push({
+                label: `/debug ${sub}${ph ? ' ' + ph : ''}`,
+                desc: hint,
+                insert: `/debug ${sub}${ph ? ' ' : ''}`,
+                cursorOffset: 0,
+            });
+        }
+    }
+    return items;
+}
+
+function _renderPaletteList() {
+    const list = document.getElementById('cp-list');
+    if (!list) return;
+    if (_PALETTE_STATE.filtered.length === 0) {
+        list.innerHTML = '<li class="command-palette__empty">Brak pasujących komend.</li>';
+        return;
+    }
+    list.innerHTML = _PALETTE_STATE.filtered.map((item, i) => `
+        <li class="command-palette__item ${i === _PALETTE_STATE.highlighted ? 'command-palette__item--active' : ''}"
+            role="option"
+            aria-selected="${i === _PALETTE_STATE.highlighted}"
+            data-cp-index="${i}">
+          <span class="command-palette__cmd">${escapeHtml(item.label)}</span>
+          <span class="command-palette__desc">${escapeHtml(item.desc)}</span>
+        </li>
+    `).join('');
+    // Scroll active row into view if needed
+    const active = list.querySelector('.command-palette__item--active');
+    if (active) active.scrollIntoView({ block: 'nearest' });
+}
+
+function _filterPalette(query) {
+    const q = (query || '').toLowerCase().trim().replace(/^\//, '');
+    if (!q) {
+        _PALETTE_STATE.filtered = _PALETTE_STATE.items.slice();
+    } else {
+        _PALETTE_STATE.filtered = _PALETTE_STATE.items.filter(it => {
+            const cmd = it.label.toLowerCase().replace(/^\//, '');
+            return cmd.startsWith(q) || cmd.includes(q) || it.desc.toLowerCase().includes(q);
+        });
+    }
+    _PALETTE_STATE.highlighted = 0;
+    _renderPaletteList();
+}
+
+function openCommandPalette() {
+    const modal = document.getElementById('command-palette');
+    if (!modal) return;
+    _PALETTE_STATE.items = _buildPaletteItems();
+    _PALETTE_STATE.filtered = _PALETTE_STATE.items.slice();
+    _PALETTE_STATE.highlighted = 0;
+    const search = document.getElementById('cp-search');
+    if (search) {
+        search.value = '';
+        search.focus();
+    }
+    modal.hidden = false;
+    _renderPaletteList();
+}
+function closeCommandPalette() {
+    const modal = document.getElementById('command-palette');
+    if (modal) modal.hidden = true;
+}
+function _paletteAcceptCurrent() {
+    const it = _PALETTE_STATE.filtered[_PALETTE_STATE.highlighted];
+    if (!it) return;
+    closeCommandPalette();
+    const input = elements.chatInput;
+    if (!input) return;
+    input.value = it.insert;
+    input.focus();
+    // Place cursor after the inserted text minus any reserved offset.
+    const pos = it.insert.length + (it.cursorOffset || 0);
+    try { input.setSelectionRange(pos, pos); } catch {}
+}
+
+function _wirePaletteEvents() {
+    document.getElementById('palette-btn')?.addEventListener('click', openCommandPalette);
+
+    const modal = document.getElementById('command-palette');
+    if (!modal) return;
+    modal.addEventListener('click', (e) => {
+        if (e.target.dataset?.cpAction === 'close') closeCommandPalette();
+        const item = e.target.closest('[data-cp-index]');
+        if (item) {
+            _PALETTE_STATE.highlighted = parseInt(item.dataset.cpIndex, 10) || 0;
+            _paletteAcceptCurrent();
+        }
+    });
+    document.getElementById('cp-search')?.addEventListener('input', (e) => {
+        _filterPalette(e.target.value);
+    });
+    document.getElementById('cp-search')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); closeCommandPalette(); return; }
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            _PALETTE_STATE.highlighted = Math.min(_PALETTE_STATE.filtered.length - 1, _PALETTE_STATE.highlighted + 1);
+            _renderPaletteList();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            _PALETTE_STATE.highlighted = Math.max(0, _PALETTE_STATE.highlighted - 1);
+            _renderPaletteList();
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            _paletteAcceptCurrent();
+        }
+    });
+
+    // Global keybinding: Ctrl+/ (or Cmd+/ on macOS)
+    document.addEventListener('keydown', (e) => {
+        if (e.key === '/' && (e.ctrlKey || e.metaKey)) {
+            const isModalOpen = !document.getElementById('command-palette')?.hidden;
+            if (isModalOpen) { e.preventDefault(); closeCommandPalette(); return; }
+            // Only open when game screen is active (palette is gameplay-oriented).
+            if (currentScreen === 'game') {
+                e.preventDefault();
+                openCommandPalette();
+            }
+        }
+    });
+}
+
 // Stage 8 D3+D4 — admin debug drawer.
 // Lazy-mounted on first toggle; pulls from /api/debug/last-turn.
 let _debugDrawerTab = 'state';
@@ -5480,9 +5741,11 @@ async function handleGoToCampaigns() {
 // ============================================================================
 // Death Screen
 // ============================================================================
-function showDeathScreen(characterName) {
+// Stage 9 P5 — Death screen with live LLM-generated epitaph from /api/campaigns/{id}/end-summary.
+async function showDeathScreen(characterName) {
     const deathScreen = document.getElementById('death-screen');
     const nameElement = document.getElementById('death-character-name');
+    const epitaphElement = document.getElementById('death-epitaph-text');
 
     if (nameElement && characterName) {
         nameElement.textContent = characterName;
@@ -5491,6 +5754,26 @@ function showDeathScreen(characterName) {
     if (deathScreen) {
         deathScreen.hidden = false;
         document.body.style.overflow = 'hidden';
+        // Fade-in animation: opacity + letter-spacing collapse over 2s.
+        if (epitaphElement) {
+            epitaphElement.classList.remove('death-epitaph--lit');
+            // Default placeholder while we fetch.
+            epitaphElement.textContent = 'Ciemność pochłonęła kolejną duszę...';
+        }
+        // Pull the live epitaph from the backend (LLM-generated when death lands).
+        if (currentCampaignId && epitaphElement) {
+            try {
+                const r = await fetch(`/api/campaigns/${currentCampaignId}/end-summary`);
+                if (r.ok) {
+                    const data = await r.json();
+                    if (data?.outcome === 'death' && data?.epitaph) {
+                        epitaphElement.textContent = data.epitaph;
+                    }
+                }
+            } catch (_e) { /* keep default */ }
+            // Trigger the fade-in animation after the text is in place.
+            requestAnimationFrame(() => epitaphElement.classList.add('death-epitaph--lit'));
+        }
     }
 }
 
@@ -5499,7 +5782,139 @@ function hideDeathScreen() {
     if (deathScreen) {
         deathScreen.hidden = true;
         document.body.style.overflow = '';
+        document.getElementById('death-epitaph-text')?.classList.remove('death-epitaph--lit');
     }
+}
+
+// Stage 9 P6 — Victory screen (warm-gold mirror of death-screen).
+async function showVictoryScreen() {
+    const screen = document.getElementById('victory-screen');
+    if (!screen) return;
+    screen.hidden = false;
+    document.body.style.overflow = 'hidden';
+    if (!currentCampaignId) return;
+    try {
+        const r = await fetch(`/api/campaigns/${currentCampaignId}/end-summary`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data?.outcome !== 'victory') return;
+        const nameEl  = document.getElementById('victory-character-name');
+        const metaEl  = document.getElementById('victory-character-meta');
+        const titleEl = document.getElementById('victory-ending-title');
+        const sumEl   = document.getElementById('victory-ending-summary');
+        if (nameEl)  nameEl.textContent  = data.character_name || 'Bohater';
+        if (metaEl)  metaEl.textContent  = `${data.character_class || ''} · Poz. ${data.level || 1} · ${data.xp_lifetime_earned ?? 0} PD`;
+        if (titleEl) titleEl.textContent = data.ending_title || '';
+        if (sumEl)   sumEl.textContent   = data.ending_summary || '';
+    } catch (_e) {}
+}
+
+function hideVictoryScreen() {
+    const screen = document.getElementById('victory-screen');
+    if (screen) {
+        screen.hidden = true;
+        document.body.style.overflow = '';
+    }
+}
+// Exposed on window for manual testing — proper auto-trigger via [CAMPAIGN_END]
+// tag is a separate task (see #62 Sub-phase 9-B / Stage 9 notes).
+window.showVictoryScreen = showVictoryScreen;
+
+// Stage 9 P5/P6 — preview commands.
+// Mount the screens with sample data without hitting the backend or mutating DB.
+// Useful for visual review and motion tuning. Triggered by /debug preview-death|preview-victory.
+function _previewDeathScreen() {
+    const heroName = characterData?.name || currentHero?.name || 'Bohater testowy';
+    const epitaphElement = document.getElementById('death-epitaph-text');
+    const nameElement = document.getElementById('death-character-name');
+    const deathScreen = document.getElementById('death-screen');
+    if (nameElement) nameElement.textContent = heroName;
+    if (epitaphElement) {
+        epitaphElement.classList.remove('death-epitaph--lit');
+        epitaphElement.textContent =
+            'Tu spoczywa imię, które wiatr już zapomniał. ' +
+            'Ostrze zawiodło, kości się rozsypały, świece zgasły — ' +
+            'a mrok wziął co swoje. Niech ziemia będzie mu lekka.';
+    }
+    if (deathScreen) {
+        deathScreen.hidden = false;
+        document.body.style.overflow = 'hidden';
+        requestAnimationFrame(() => epitaphElement?.classList.add('death-epitaph--lit'));
+    }
+    showToast('👁 Podgląd: ekran śmierci (sample epitaph)', 'info', 2500);
+}
+
+function _previewVictoryScreen() {
+    const heroName = characterData?.name || currentHero?.name || 'Bohater testowy';
+    const sheet = characterData?.sheet_json || currentHero?.sheet_json || {};
+    const arch = sheet.archetype || 'warrior';
+    const level = (sheet.xp_lifetime_earned != null)
+        ? Math.max(1, Math.min(10, Math.floor(Number(sheet.xp_lifetime_earned) / 100) + 1))
+        : (sheet.level || 1);
+    const xp = sheet.xp_lifetime_earned ?? 0;
+
+    const screen = document.getElementById('victory-screen');
+    if (!screen) return;
+    const nameEl  = document.getElementById('victory-character-name');
+    const metaEl  = document.getElementById('victory-character-meta');
+    const titleEl = document.getElementById('victory-ending-title');
+    const sumEl   = document.getElementById('victory-ending-summary');
+    if (nameEl)  nameEl.textContent  = heroName;
+    if (metaEl)  metaEl.textContent  = `${arch} · Poz. ${level} · ${xp} PD`;
+    if (titleEl) titleEl.textContent = 'Świt nad Korytarzem Cieni';
+    if (sumEl)   sumEl.textContent   =
+        'Po długiej walce z mrokiem cieni, twój bohater odnalazł utracony ' +
+        'Klucz Pradawnych. Ścieżka wiedzie dalej w nieznane, lecz dziś — ' +
+        'tylko dziś — jest zwycięstwo. Tarcza spoczywa na ołtarzu, miecz na ziemi, ' +
+        'a serce bije wreszcie spokojnie.';
+    screen.hidden = false;
+    document.body.style.overflow = 'hidden';
+    showToast('👁 Podgląd: ekran zwycięstwa (sample ending)', 'info', 2500);
+}
+window._previewDeathScreen = _previewDeathScreen;
+window._previewVictoryScreen = _previewVictoryScreen;
+
+// Stage 9 P7 — Shared post-end options handler. Wired via data-end-action.
+async function handleEndAction(action) {
+    hideDeathScreen();
+    hideVictoryScreen();
+    const hero = currentHero || characterData;
+    const sameWorldCampaign = currentCampaign;  // capture before clearing
+    // Always free up campaign state — the player is moving on.
+    currentCampaignId = null;
+    currentCampaign = null;
+    characterData = null;
+    if (action === 'new-hero') {
+        currentHero = null;
+        await loadHeroes();
+        showScreen('heroes');
+        return;
+    }
+    if (action === 'new-world') {
+        // Same hero, pick a different campaign.
+        if (hero) {
+            currentHero = hero;
+            if (elements.welcomeUser) elements.welcomeUser.textContent = `Bohater: ${hero.name}`;
+        }
+        await loadCampaigns();
+        showScreen('campaigns');
+        return;
+    }
+    if (action === 'new-adventure') {
+        // Same hero, same world theme — route to new-campaign screen so the
+        // player can mint a fresh campaign keeping the world flavor. MVP: this
+        // is the same as new-world for now; future work can pre-fill world tags.
+        if (hero) {
+            currentHero = hero;
+            if (elements.welcomeUser) elements.welcomeUser.textContent = `Bohater: ${hero.name}`;
+        }
+        showScreen('newCampaign');
+        showToast('Stwórz nową przygodę dla tego samego bohatera.', 'info', 3000);
+        return;
+    }
+    // Fallback — return to campaigns chooser.
+    await loadCampaigns();
+    showScreen('campaigns');
 }
 
 async function handleResurrect() {
@@ -5652,6 +6067,9 @@ function initEventListeners() {
 
     // Stage 8 D3 — debug drawer toggle (admin only; visibility set by updateAdminSettingsVisibility)
     document.getElementById('debug-drawer-toggle')?.addEventListener('click', _toggleDebugDrawer);
+
+    // Stage 9 P4 — command palette modal
+    _wirePaletteEvents();
     elements.campaignNameInput?.addEventListener('input', (e) => {
         elements.campaignNameCount.textContent = e.target.value.length;
     });
@@ -5756,6 +6174,13 @@ function initEventListeners() {
     // Death screen buttons
     document.getElementById('resurrect-btn')?.addEventListener('click', handleResurrect);
     document.getElementById('death-return-btn')?.addEventListener('click', handleDeathReturn);
+
+    // Stage 9 P7 — post-end option buttons, shared between death + victory screens.
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-end-action]');
+        if (!btn) return;
+        handleEndAction(btn.dataset.endAction);
+    });
 
     // Settings font controls
     initFontSettings();

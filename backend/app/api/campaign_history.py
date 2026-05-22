@@ -1,16 +1,30 @@
 """AI-generated campaign history summaries (prompt z pliku + SQLite jako kanon treści)."""
 
+import sqlite3
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.api.turns import get_campaign_or_404, get_db
 from app.services.history_summary_service import (
+    SUMMARY_AUDIENCE_GM,
     SUMMARY_AUDIENCE_PLAYER,
     evaluate_summary_rollup_cooldown,
+    fetch_latest_saved_summary,
     generate_campaign_summary,
     persist_summary,
     touch_rollup_cooldown_anchor,
     turns_until_summary_rollup_allowed,
 )
+
+
+def _user_is_admin(conn: sqlite3.Connection, user_id: int) -> bool:
+    try:
+        row = conn.execute(
+            "SELECT is_admin FROM users WHERE id = ?", (int(user_id),)
+        ).fetchone()
+        return bool(row and int(row[0] or 0) == 1)
+    except Exception:
+        return False
 from app.services.summary_ensure_service import (
     SummaryEnsureHttpError,
     run_ensure_campaign_history_summary,
@@ -159,11 +173,18 @@ def get_latest_campaign_history_summary(
         pattern="^(player|gm)$",
         description="[T02] Który stos rollupu zwrócić.",
     ),
+    user_id: int | None = Query(None, description="Required for audience=gm (admin gate)."),
 ):
-    """Ostatnio zapisane podsumowanie (jeśli było POST z persist=true)."""
+    """Ostatnio zapisane podsumowanie (jeśli było POST z persist=true).
+
+    Stage 9 P1: `audience=gm` is admin-only — caller must pass `user_id` and the
+    user must have `is_admin=1`. `audience=player` is open.
+    """
     conn = get_db()
     try:
         get_campaign_or_404(conn, campaign_id)
+        if audience == SUMMARY_AUDIENCE_GM and not _user_is_admin(conn, user_id or 0):
+            raise HTTPException(status_code=403, detail="audience=gm is admin-only")
         row = fetch_latest_saved_summary(conn, campaign_id, audience=audience)
         if not row:
             return {"campaign_id": campaign_id, "summary": None, "audience": audience}
@@ -175,6 +196,43 @@ def get_latest_campaign_history_summary(
             "included_turn_count": row["included_turn_count"],
             "created_at": row["created_at"],
             "audience": row.get("audience", audience),
+        }
+    finally:
+        conn.close()
+
+
+@router.get("/campaigns/{campaign_id}/summaries")
+def get_campaign_summaries_both(
+    campaign_id: int,
+    user_id: int | None = Query(None, description="If admin, gm summary is included; otherwise gm is null."),
+):
+    """Stage 9 P1 — return BOTH audience summaries in one round-trip.
+
+    `gm` is only populated when the caller is an admin. Non-admins get
+    `gm: null` even if a GM summary exists in the table.
+    """
+    conn = get_db()
+    try:
+        get_campaign_or_404(conn, campaign_id)
+        is_admin = _user_is_admin(conn, user_id or 0)
+        player_row = fetch_latest_saved_summary(conn, campaign_id, audience=SUMMARY_AUDIENCE_PLAYER)
+        gm_row = fetch_latest_saved_summary(conn, campaign_id, audience=SUMMARY_AUDIENCE_GM) if is_admin else None
+
+        def _shape(r):
+            if not r:
+                return None
+            return {
+                "summary_id": r["id"],
+                "summary": r["summary_text"],
+                "model_used": r["model_used"],
+                "included_turn_count": r["included_turn_count"],
+                "created_at": r["created_at"],
+            }
+        return {
+            "campaign_id": campaign_id,
+            "player": _shape(player_row),
+            "gm": _shape(gm_row),
+            "gm_visible": is_admin,
         }
     finally:
         conn.close()

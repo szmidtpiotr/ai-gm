@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 from app.core.config import DEFAULT_CAMPAIGN_LANGUAGE
 from app.core.logging import get_logger
 from app.services.history_summary_service import generate_dual_summary_preview
-from app.services.solo_death_service import death_summary_payload
+from app.services.solo_death_service import death_summary_payload, end_summary_payload
 from app.services.gm_plan_generation_service import retry_initial_gm_plan_for_campaign
 from app.services.gm_plan_schema import merge_gm_plan_patch, normalize_gm_plan
 from app.services.summary_settings_service import get_dual_summary_preview_mode
@@ -129,6 +129,7 @@ def list_campaigns():
             c.mode,
             c.status,
             c.created_at,
+            c.gm_plan_json,
             (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count,
             (SELECT ch.id FROM characters ch WHERE ch.campaign_id = c.id AND ch.is_active = 1 LIMIT 1) AS character_id
         FROM campaigns c
@@ -144,9 +145,45 @@ def list_campaigns():
 
     conn.close()
 
-    return {
-        "campaigns": [dict(row) for row in rows]
-    }
+    # Stage 9 follow-up: surface the GM-plan's premise/roadmap as the campaign
+    # description, and a `plan_ready` boolean so the UI can show a spinner /
+    # placeholder until the plan finishes generating.
+    out = []
+    for row in rows:
+        item = dict(row)
+        raw_plan = item.pop("gm_plan_json", None) or ""
+        plan_ready = False
+        description = ""
+        if raw_plan and raw_plan.strip() and raw_plan.strip() != "{}":
+            try:
+                plan = json.loads(raw_plan)
+            except Exception:
+                plan = {}
+            if isinstance(plan, dict):
+                # Try W1 schema first: top-level title/premise/roadmap.
+                title = str(plan.get("title") or "").strip()
+                premise = str(plan.get("premise") or "").strip()
+                roadmap = str(plan.get("roadmap") or "").strip()
+                # V2 schema: arcs.default.title / arcs.default.roadmap (or the active arc).
+                if not (title or premise or roadmap):
+                    arcs = plan.get("arcs") or {}
+                    if isinstance(arcs, dict):
+                        # Prefer the active arc, else first one.
+                        active_arc = next((a for a in arcs.values()
+                                           if isinstance(a, dict) and str(a.get("status") or "").lower() == "active"),
+                                          None)
+                        if active_arc is None and arcs:
+                            active_arc = next(iter(arcs.values()))
+                        if isinstance(active_arc, dict):
+                            title = str(active_arc.get("title") or "").strip()
+                            roadmap = str(active_arc.get("roadmap") or "").strip()
+                description = (premise or roadmap)[:240]
+                plan_ready = bool(title or premise or roadmap)
+        item["description"] = description
+        item["plan_ready"] = plan_ready
+        out.append(item)
+
+    return {"campaigns": out}
 
 
 @router.get("/campaigns/{campaign_id}")
@@ -362,6 +399,26 @@ def get_campaign_death_summary(campaign_id: int):
         conn.close()
     if payload is None:
         raise HTTPException(status_code=404, detail="Campaign not ended or not found")
+    return payload
+
+
+@router.get("/campaigns/{campaign_id}/end-summary")
+def get_campaign_end_summary(campaign_id: int):
+    """Stage 9 P5+P6 — unified summary for both death AND victory screens.
+
+    Returns:
+      outcome='death'   when campaigns.status == 'ended'
+      outcome='victory' when campaigns.status == 'completed'
+      404 otherwise
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        payload = end_summary_payload(conn, campaign_id)
+    finally:
+        conn.close()
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Campaign not ended yet")
     return payload
 
 

@@ -374,6 +374,12 @@ def _store_plan(conn: sqlite3.Connection, campaign_id: int,
             "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
             (json.dumps(full, ensure_ascii=False), campaign_id)
         )
+    # Stage 9 follow-up: rename generic placeholder title to the LLM-picked one.
+    try:
+        from app.services.gm_plan_generation_service import _maybe_rename_campaign_from_plan
+        _maybe_rename_campaign_from_plan(conn, campaign_id, plan_public)
+    except Exception as e:
+        logger.warning("campaign_title_rename_v2_failed", campaign_id=campaign_id, error=str(e))
     conn.commit()
 
 
