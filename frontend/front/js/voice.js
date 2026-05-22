@@ -837,6 +837,47 @@
     } catch (_err) {
       setAvailability(false, "Glos chwilowo niedostepny");
     }
+
+    // Enforce admin global on/off — fetched fresh every init so the toggle
+    // takes effect without requiring a player to clear localStorage.
+    try {
+      const cfgResp = await fetch(_voiceEndpoint("/voice/config"));
+      if (cfgResp.ok) {
+        const cfg = await cfgResp.json();
+        const globalTts = cfg.tts_enabled !== false; // default true if key absent
+        const globalStt = cfg.stt_enabled !== false;
+
+        if (!globalTts && ttsEnabled) {
+          ttsEnabled = false;
+          _setFlag(LS_TTS, false);
+          _syncUiState();
+          _emitTtsState();
+        }
+        if (!globalStt && sttEnabled) {
+          sttEnabled = false;
+          _setFlag(LS_STT, false);
+          _syncUiState();
+        }
+
+        // Grey out toggles so player can't re-enable what admin turned off
+        if (!globalTts && ttsBtn) {
+          ttsBtn.disabled = true;
+          ttsBtn.title = "TTS wyłączone przez administratora";
+        }
+        const sttBtnEl = _el("stt-toggle");
+        if (!globalStt && sttBtnEl) {
+          sttBtnEl.disabled = true;
+          sttBtnEl.title = "STT wyłączone przez administratora";
+        }
+        const micBtnEl = _el("stt-input-mic");
+        if (!globalStt && micBtnEl) {
+          micBtnEl.disabled = true;
+          micBtnEl.title = "STT wyłączone przez administratora";
+        }
+      }
+    } catch (_e) {
+      // Voice config unreachable — keep local preference, don't block init
+    }
   }
 
   window.voiceUI = {
