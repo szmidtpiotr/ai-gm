@@ -2754,6 +2754,17 @@ function showSkillTestPopup(pending) {
     const newBtn = rollBtn.cloneNode(true);
     rollBtn.parentNode.replaceChild(newBtn, rollBtn);
 
+    // ESC closes overlay and falls back to immediate resolve (safety escape)
+    const _escHandler = (e) => {
+        if (e.key === 'Escape') {
+            document.removeEventListener('keydown', _escHandler);
+            overlay.hidden = true;
+            resultCard.hidden = true;
+            resolveSkillTest(pending.skill_test_id, committedD20 ?? 10, null);
+        }
+    };
+    document.addEventListener('keydown', _escHandler);
+
     newBtn.addEventListener('click', () => {
         newBtn.disabled = true;
         newBtn.textContent = 'Rzucam…';
@@ -2762,10 +2773,19 @@ function showSkillTestPopup(pending) {
         if (!box) {
             // Fallback: no WebGL — silently resolve with committed value
             console.warn('[dice3d] no dice box, resolving directly');
+            document.removeEventListener('keydown', _escHandler);
             overlay.hidden = true;
             resolveSkillTest(pending.skill_test_id, committedD20 ?? 10, null);
             return;
         }
+
+        // Safety: if after_roll never fires (physics hang), resolve after 15s
+        const _safetyTimer = setTimeout(() => {
+            console.warn('[dice3d] safety timeout — resolving without animation');
+            document.removeEventListener('keydown', _escHandler);
+            overlay.hidden = true;
+            resolveSkillTest(pending.skill_test_id, committedD20 ?? 10, null);
+        }, 15000);
 
         box.setDice('1d20');
         box.start_throw(
@@ -2774,6 +2794,8 @@ function showSkillTestPopup(pending) {
 
             // after_roll — show result, auto-resolve after 1.5 s
             (_notation) => {
+                clearTimeout(_safetyTimer);
+                document.removeEventListener('keydown', _escHandler);
                 const d20    = committedD20 ?? (_notation.result?.[0] ?? 10);
                 const sum    = d20 + total;
                 const nat20  = d20 === 20;
