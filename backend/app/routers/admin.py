@@ -3791,6 +3791,38 @@ def admin_set_invite_limit(
 
 # ── /api/me — player self-service endpoints ───────────────────────────────────
 
+class UpdateProfileReq(BaseModel):
+    display_name: str | None = None
+    avatar_url: str | None = None  # data URL (base64) or empty string to clear
+
+
+@router.patch("/me/profile")
+def update_my_profile(
+    req: UpdateProfileReq,
+    authorization: str | None = Header(default=None),
+):
+    """Stage 11-C — update display name and/or avatar for current user."""
+    from app.core.jwt_auth import require_current_user
+    payload = require_current_user(authorization)
+    user_id = int(payload.get("sub") or 0)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        if req.display_name is not None:
+            name = req.display_name.strip()[:40] or None
+            conn.execute("UPDATE users SET display_name = ? WHERE id = ?", (name, user_id))
+        if req.avatar_url is not None:
+            url = req.avatar_url.strip() or None
+            conn.execute("UPDATE users SET avatar_url = ? WHERE id = ?", (url, user_id))
+        conn.commit()
+        row = conn.execute(
+            "SELECT display_name, avatar_url FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        return {"ok": True, "display_name": row["display_name"], "avatar_url": row["avatar_url"]}
+    finally:
+        conn.close()
+
+
 @router.patch("/me/onboarding")
 def complete_onboarding(authorization: str | None = Header(default=None)):
     """Stage 11-C C11 — mark onboarding complete for current user."""
@@ -3874,12 +3906,14 @@ def get_me_stats(authorization: str | None = Header(default=None)):
             (user_id,),
         ).fetchone()["n"]
 
-        invite_limit = conn.execute(
-            "SELECT invite_weekly_limit FROM users WHERE id = ?", (user_id,)
+        me = conn.execute(
+            "SELECT invite_weekly_limit, display_name, avatar_url FROM users WHERE id = ?", (user_id,)
         ).fetchone()
 
         return {
             "heroes": heroes,
+            "display_name": me["display_name"] if me else None,
+            "avatar_url": me["avatar_url"] if me else None,
             "campaigns_completed": camps["completed"] if camps else 0,
             "campaigns_abandoned": camps["abandoned"] if camps else 0,
             "lifetime_xp": xp_turns["lifetime_xp"] if xp_turns else 0,
@@ -3887,7 +3921,7 @@ def get_me_stats(authorization: str | None = Header(default=None)):
             "top_skill": top_skill["source_key"] if top_skill else None,
             "inviter_name": (inviter["display_name"] or inviter["username"]) if inviter else None,
             "invite_weekly_sent": weekly_sent,
-            "invite_weekly_limit": invite_limit["invite_weekly_limit"] if invite_limit else 3,
+            "invite_weekly_limit": me["invite_weekly_limit"] if me else 3,
         }
     finally:
         conn.close()

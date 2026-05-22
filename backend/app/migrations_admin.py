@@ -2706,6 +2706,7 @@ def _ensure_auth_ux_schema(conn: sqlite3.Connection) -> None:
         "ALTER TABLE users ADD COLUMN email_verified_at TEXT",
         "ALTER TABLE users ADD COLUMN onboarded_at TEXT",
         "ALTER TABLE users ADD COLUMN invite_weekly_limit INTEGER NOT NULL DEFAULT 3",
+        "ALTER TABLE users ADD COLUMN avatar_url TEXT",
         # Invite records
         """
         CREATE TABLE IF NOT EXISTS user_invites (

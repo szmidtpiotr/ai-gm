@@ -7967,6 +7967,17 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   flex-direction: column;
 }
 
+.profile-avatar-btn {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.profile-avatar-btn:hover .profile-avatar-overlay { opacity: 1; }
+
 .profile-avatar {
   width: 64px;
   height: 64px;
@@ -7979,10 +7990,78 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
   text-transform: uppercase;
   box-shadow: 0 0 20px rgba(201,165,74,0.2);
+  overflow: hidden;
 }
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.profile-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  color: #fff;
+}
+
+.profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.profile-edit-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+.profile-edit-btn:hover { color: var(--accent); }
+
+.profile-name-edit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.profile-name-input {
+  background: var(--bg-input, #0f0d0b);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  color: var(--text-primary);
+  font-family: 'Cinzel', serif;
+  font-size: var(--font-size-base);
+  width: 160px;
+}
+
+.profile-name-save,
+.profile-name-cancel {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.profile-name-save { color: var(--success); border-color: rgba(34,167,70,0.4); }
+.profile-name-cancel { color: var(--text-muted); }
 
 .profile-username {
   font-family: 'Cinzel', serif;
