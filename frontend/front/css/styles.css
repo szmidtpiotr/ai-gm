@@ -6314,6 +6314,8 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   align-items: center;
   justify-content: flex-end;
 }
+#dice-overlay[hidden] { display: none !important; }
+#dice-result-card[hidden] { display: none !important; }
 
 #dice-skip-btn {
   position: absolute;
