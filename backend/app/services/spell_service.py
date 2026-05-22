@@ -275,9 +275,22 @@ def learn_spell(character_id: int, spell_key: str) -> dict:
         ).fetchone()
         if existing:
             raise ValueError(f"Already knows '{spell_key}' at rank {existing['rank']}")
+        # Stamp the level so Stage 11 resurrection xp_revert can roll back
+        # spells purchased above the new level. Level lives in sheet_json.
+        sj_row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        import json as _j
+        char_level = 1
+        if sj_row:
+            try:
+                char_level = int(_j.loads(sj_row["sheet_json"] or "{}").get("level") or 1)
+            except Exception:
+                char_level = 1
         conn.execute(
-            "INSERT INTO character_spells (character_id, spell_key, rank) VALUES (?, ?, 1)",
-            (character_id, spell_key),
+            "INSERT INTO character_spells (character_id, spell_key, rank, learned_at_level) VALUES (?, ?, 1, ?)",
+            (character_id, spell_key, char_level),
         )
         conn.commit()
         return {"spell_key": spell_key, "label": spell["label"], "rank": 1}

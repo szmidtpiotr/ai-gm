@@ -971,6 +971,82 @@ def create_standalone_character(req: dict = Body(...)):
         conn.close()
 
 
+# ── Stage 11 R3 — Hero resurrection (issue #64) ─────────────────────────
+
+
+@router.get("/characters/{character_id}/resurrect-preview")
+def resurrect_preview(
+    character_id: int,
+    user_id: int | None = Query(None),
+    authorization: str | None = Header(None),
+):
+    """Compute the cost of resurrecting this hero without applying anything.
+
+    Returns the same shape as the response from `apply_resurrection` would,
+    minus the actual mutation. The frontend renders this into a confirmation
+    modal so the player sees what they'd lose before clicking through.
+    """
+    from app.services.resurrection_service import cost_preview
+    authed_uid = resolve_authed_user_id(authorization, user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id, user_id, status FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+        if int(char["user_id"]) != int(authed_uid):
+            raise HTTPException(status_code=403, detail="not your hero")
+        return cost_preview(character_id, int(char["user_id"]), conn)
+    finally:
+        conn.close()
+
+
+@router.post("/characters/{character_id}/resurrect")
+def resurrect_hero(
+    character_id: int,
+    user_id: int | None = Query(None),
+    authorization: str | None = Header(None),
+):
+    """Apply the configured cost and revive the hero.
+
+    Restores `max_hp // 2`, clears death-state flags and dungeon cooldowns,
+    decrements `resurrection_uses_remaining` if not unlimited. Per-mode cost
+    handled inside `resurrection_service.apply_resurrection`.
+
+    Gates:
+      - JWT must match the hero's owner (or query user_id matches if no JWT).
+      - Hero must currently be `status='dead'` — already-alive heroes 409.
+      - User must have `resurrection_enabled = 1` and uses_remaining > 0
+        (or NULL).
+    """
+    from app.services.resurrection_service import apply_resurrection
+    authed_uid = resolve_authed_user_id(authorization, user_id)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id, user_id, status FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+        if int(char["user_id"]) != int(authed_uid):
+            raise HTTPException(status_code=403, detail="not your hero")
+        if char["status"] != "dead":
+            raise HTTPException(status_code=409, detail=f"hero is '{char['status']}', not dead")
+        try:
+            return apply_resurrection(character_id, int(char["user_id"]), conn, force=False)
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+    finally:
+        conn.close()
+
+
 @router.patch("/characters/{character_id}/status")
 def update_character_status(character_id: int, req: dict = Body(...)):
     """Update hero status: idle | in_campaign | in_dungeon."""
@@ -1930,6 +2006,11 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                         "UPDATE characters SET gold_gp = COALESCE(gold_gp, 0) + ? WHERE id = ?",
                         (ggp, character_id),
                     )
+                    try:
+                        from app.services.economy_service import journal_gold_delta
+                        journal_gold_delta(conn, character_id, ggp, "starter_gold")
+                    except Exception:
+                        pass
                     conn.commit()
     except Exception as e:
         logger.warning("[finalize_sheet] starter items grant failed (non-fatal): %s", str(e))
@@ -2314,6 +2395,11 @@ def create_character(campaign_id: int, req: CharacterCreateRequest):
                     "UPDATE characters SET gold_gp = COALESCE(gold_gp, 0) + ? WHERE id = ?",
                     (ggp, character_id),
                 )
+                try:
+                    from app.services.economy_service import journal_gold_delta
+                    journal_gold_delta(conn, character_id, ggp, "starter_gold")
+                except Exception:
+                    pass
                 conn.commit()
     except Exception as e:
         logger.warning("[create_character] starter items / gold failed (non-fatal): %s", str(e))

@@ -1276,7 +1276,8 @@ def _resolve_grant_catalog_item(conn: sqlite3.Connection, label: str) -> dict[st
 
 
 def apply_grant_gold_to_character(
-    conn: sqlite3.Connection, *, character_id: int, amount: int
+    conn: sqlite3.Connection, *, character_id: int, amount: int,
+    source: str = "narrative_gold_grant", campaign_id: int | None = None,
 ) -> int | None:
     if int(amount) <= 0:
         return None
@@ -1285,12 +1286,20 @@ def apply_grant_gold_to_character(
         UPDATE characters
         SET gold_gp = COALESCE(gold_gp, 0) + ?
         WHERE id = ?
-        RETURNING gold_gp
+        RETURNING gold_gp, campaign_id
         """,
         (int(amount), int(character_id)),
     ).fetchone()
     if not row:
         return None
+    try:
+        from app.services.economy_service import journal_gold_delta
+        journal_gold_delta(
+            conn, int(character_id), int(amount), source,
+            campaign_id=campaign_id if campaign_id is not None else row["campaign_id"],
+        )
+    except Exception:
+        pass
     return int(row["gold_gp"] or 0)
 
 
