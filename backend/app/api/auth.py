@@ -65,7 +65,7 @@ def player_login(req: PlayerLoginReq):
     if not username or not password:
         raise HTTPException(status_code=400, detail="username and password are required")
 
-    conn = sqlite3.connect(resolve_db_path())
+    conn = sqlite3.connect(_AUTH_DB)
     conn.row_factory = sqlite3.Row
     try:
         # Read user with all Stage 10 columns; gracefully fall back if any are
@@ -78,7 +78,7 @@ def player_login(req: PlayerLoginReq):
                        COALESCE(is_admin, 0) AS is_admin,
                        COALESCE(role, 'player') AS role,
                        COALESCE(failed_login_count, 0) AS failed_login_count,
-                       lockout_until
+                       lockout_until, email_verified_at, onboarded_at
                 FROM users WHERE username = ? LIMIT 1
                 """,
                 (username,),
@@ -183,6 +183,26 @@ def player_login(req: PlayerLoginReq):
             is_admin=is_admin_val,
         )
 
+        # Stage 11-C C6 — email verification gate on 2nd+ login
+        # First session (onboarded_at IS NULL) is allowed through so new users
+        # can complete onboarding before we enforce verification.
+        try:
+            email_verified = row["email_verified_at"]
+            onboarded = row["onboarded_at"]
+        except (KeyError, IndexError):
+            email_verified = None
+            onboarded = None
+
+        if not email_verified and onboarded:
+            # Has played before but hasn't verified — block and prompt
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "email_unverified",
+                    "message": "Potwierdź swój adres email, aby kontynuować.",
+                }
+            )
+
         return {
             "ok": True,
             "user_id": int(row["id"]),
@@ -190,6 +210,7 @@ def player_login(req: PlayerLoginReq):
             "display_name": row["display_name"],
             "is_admin": is_admin_val,
             "role": role,
+            "onboarded_at": onboarded,
             **token_pair,
         }
     except sqlite3.OperationalError:
@@ -224,7 +245,7 @@ def refresh_access_token(req: RefreshTokenReq):
     if uid <= 0:
         raise HTTPException(status_code=401, detail="invalid_refresh_subject")
     # Re-fetch current role/is_admin in case the user was promoted/demoted since the refresh was issued.
-    conn = sqlite3.connect(resolve_db_path())
+    conn = sqlite3.connect(_AUTH_DB)
     conn.row_factory = sqlite3.Row
     try:
         row = conn.execute(
@@ -263,4 +284,376 @@ def get_me(authorization: str | None = Header(default=None)):
         "role": payload.get("role") or "player",
         "is_admin": int(payload.get("is_admin") or 0),
     }
+
+
+# ── Stage 11-C — Registration, invites, verification, password reset ──────────
+
+import os
+import re
+import secrets
+from datetime import datetime, timedelta, timezone
+
+INVITE_EXPIRY_HOURS = 72
+VERIFY_EXPIRY_HOURS = 72
+RESET_EXPIRY_HOURS  = 2
+BASE_URL_ENV        = "APP_BASE_URL"  # e.g. https://aigm-dev.studio-colorbox.com
+
+
+def _base_url() -> str:
+    return (os.getenv(BASE_URL_ENV) or "").rstrip("/")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _expires_iso(hours: int) -> str:
+    return (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
+
+
+def _is_expired(expires_at: str) -> bool:
+    try:
+        dt = datetime.fromisoformat(str(expires_at).replace(" ", "T"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) > dt
+    except Exception:
+        return True
+
+
+def _valid_username(username: str) -> bool:
+    return bool(re.match(r'^[a-zA-Z0-9_]{3,30}$', username))
+
+
+_AUTH_DB = "/data/ai_gm.db"
+
+
+@router.get("/auth/registration-status")
+def registration_status():
+    """Public — returns whether self-registration is open (controlled by admin)."""
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT value FROM game_config_meta WHERE key = 'registration_open' LIMIT 1"
+        ).fetchone()
+        open_val = str(row["value"] or "false").strip().lower() if row else "false"
+        return {"open": open_val in ("true", "1", "yes")}
+    finally:
+        conn.close()
+
+
+@router.get("/auth/invite/{code}")
+def get_invite(code: str):
+    """Validate an invite code and return inviter info (no auth required)."""
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        inv = conn.execute(
+            "SELECT * FROM user_invites WHERE code = ? LIMIT 1", (code,)
+        ).fetchone()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Zaproszenie nie istnieje")
+        if inv["used_at"]:
+            raise HTTPException(status_code=409, detail="Zaproszenie zostało już wykorzystane")
+        if _is_expired(inv["expires_at"]):
+            raise HTTPException(status_code=410, detail="Zaproszenie wygasło")
+
+        inviter = conn.execute(
+            "SELECT username, display_name FROM users WHERE id = ? LIMIT 1",
+            (inv["created_by"],),
+        ).fetchone()
+        inviter_name = (inviter["display_name"] or inviter["username"]) if inviter else "Admin"
+
+        return {
+            "valid": True,
+            "code": code,
+            "email": inv["email"],
+            "message": inv["message"],
+            "inviter_name": inviter_name,
+            "expires_at": inv["expires_at"],
+        }
+    finally:
+        conn.close()
+
+
+class RegisterReq(BaseModel):
+    invite_code: str
+    username: str
+    password: str
+    email: str | None = None  # required for open invites (where invite.email is NULL)
+
+
+@router.post("/auth/register")
+def register(req: RegisterReq):
+    """Stage 11-C C4 — create a new player account via invite."""
+    username  = (req.username or "").strip()
+    password  = req.password or ""
+    invite_code = (req.invite_code or "").strip()
+
+    if not username or not password or not invite_code:
+        raise HTTPException(status_code=400, detail="username, password, invite_code are required")
+    if not _valid_username(username):
+        raise HTTPException(status_code=400, detail="Nazwa użytkownika: 3-30 znaków, litery/cyfry/podkreślnik")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Hasło musi mieć minimum 8 znaków")
+
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        # Validate invite
+        inv = conn.execute(
+            "SELECT * FROM user_invites WHERE code = ? LIMIT 1", (invite_code,)
+        ).fetchone()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Nieprawidłowy kod zaproszenia")
+        if inv["used_at"]:
+            raise HTTPException(status_code=409, detail="Zaproszenie zostało już wykorzystane")
+        if _is_expired(inv["expires_at"]):
+            raise HTTPException(status_code=410, detail="Zaproszenie wygasło")
+
+        # Email: use locked email from invite (personalised) or provided email (open)
+        invite_email = inv["email"]
+        provided_email = (req.email or "").strip().lower()
+        if invite_email:
+            # Personalised — email must match
+            if provided_email and provided_email != invite_email.lower():
+                raise HTTPException(status_code=403, detail="Ten link zaproszenia jest przypisany do innego adresu email")
+            final_email = invite_email
+        else:
+            # Open invite — email required from request
+            if not provided_email or "@" not in provided_email:
+                raise HTTPException(status_code=400, detail="Podaj prawidłowy adres email")
+            final_email = provided_email
+
+        # Check username uniqueness
+        existing = conn.execute(
+            "SELECT id FROM users WHERE username = ? LIMIT 1", (username,)
+        ).fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail="Nazwa użytkownika jest już zajęta")
+
+        # Create user
+        pw_hash = _bcrypt_hash(password)
+        cursor = conn.execute(
+            """
+            INSERT INTO users (username, display_name, password_hash, email,
+                               is_active, is_admin, role, invited_by_user_id, created_at)
+            VALUES (?, ?, ?, ?, 1, 0, 'player', ?, ?)
+            """,
+            (username, username, pw_hash, final_email, inv["created_by"], _now_iso()),
+        )
+        new_user_id = cursor.lastrowid
+        conn.commit()
+
+        # Mark invite used
+        conn.execute(
+            "UPDATE user_invites SET accepted_by = ?, used_at = ? WHERE code = ?",
+            (new_user_id, _now_iso(), invite_code),
+        )
+        conn.commit()
+
+        # Send verification email
+        verify_token = secrets.token_hex(32)
+        conn.execute(
+            "INSERT INTO email_verification_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+            (new_user_id, verify_token, _expires_iso(VERIFY_EXPIRY_HOURS)),
+        )
+        conn.commit()
+
+        verify_link = f"{_base_url()}/verify-email?token={verify_token}"
+        inviter = conn.execute(
+            "SELECT username, display_name FROM users WHERE id = ? LIMIT 1",
+            (inv["created_by"],),
+        ).fetchone()
+        inviter_name = (inviter["display_name"] or inviter["username"]) if inviter else "Admin"
+
+        from app.services.email_service import send_verification_email
+        send_verification_email(final_email, verify_link)
+
+        # Issue JWT
+        from app.services.jwt_service import issue_pair
+        token_pair = issue_pair(user_id=new_user_id, username=username, role="player", is_admin=0)
+
+        logger.info("user_registered", user_id=new_user_id, username=username, invited_by=inv["created_by"])
+        return {
+            "ok": True,
+            "user_id": new_user_id,
+            "username": username,
+            "is_admin": 0,
+            "role": "player",
+            "onboarded_at": None,
+            "inviter_name": inviter_name,
+            "inviter_message": inv["message"],
+            **token_pair,
+        }
+    finally:
+        conn.close()
+
+
+@router.post("/auth/verify-email")
+def verify_email(body: dict):
+    """Stage 11-C C6 — confirm email address via token from verification email."""
+    token = (body.get("token") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="token is required")
+
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT * FROM email_verification_tokens WHERE token = ? LIMIT 1", (token,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Nieprawidłowy link weryfikacyjny")
+        if row["used_at"]:
+            raise HTTPException(status_code=409, detail="Link weryfikacyjny został już użyty")
+        if _is_expired(row["expires_at"]):
+            raise HTTPException(status_code=410, detail="Link weryfikacyjny wygasł")
+
+        user_id = row["user_id"]
+        now = _now_iso()
+        conn.execute(
+            "UPDATE users SET email_verified_at = ? WHERE id = ?", (now, user_id)
+        )
+        conn.execute(
+            "UPDATE email_verification_tokens SET used_at = ? WHERE token = ?", (now, token)
+        )
+        conn.commit()
+
+        user = conn.execute(
+            "SELECT username, COALESCE(role,'player') as role, COALESCE(is_admin,0) as is_admin FROM users WHERE id = ? LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        from app.services.jwt_service import issue_pair
+        token_pair = issue_pair(user_id=user_id, username=user["username"], role=user["role"], is_admin=int(user["is_admin"]))
+        return {"ok": True, **token_pair}
+    finally:
+        conn.close()
+
+
+@router.post("/auth/resend-verification")
+def resend_verification(authorization: str | None = Header(default=None)):
+    """Stage 11-C C6 — resend verification email (rate-limited: 1 per 2 minutes)."""
+    from app.core.jwt_auth import require_current_user
+    payload = require_current_user(authorization)
+    user_id = int(payload.get("sub") or 0)
+
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        user = conn.execute(
+            "SELECT email, email_verified_at FROM users WHERE id = ? LIMIT 1", (user_id,)
+        ).fetchone()
+        if not user or user["email_verified_at"]:
+            return {"ok": True, "message": "Już zweryfikowany"}
+
+        # Rate limit: 1 per 2 minutes
+        recent = conn.execute(
+            """
+            SELECT created_at FROM email_verification_tokens
+            WHERE user_id = ? AND used_at IS NULL
+            ORDER BY id DESC LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+        if recent:
+            created = datetime.fromisoformat(str(recent["created_at"]).replace(" ", "T"))
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            elapsed = (datetime.now(timezone.utc) - created).total_seconds()
+            if elapsed < 120:
+                wait = int(120 - elapsed)
+                raise HTTPException(
+                    status_code=429,
+                    detail={"error": "rate_limited", "retry_after_seconds": wait}
+                )
+
+        token = secrets.token_hex(32)
+        conn.execute(
+            "INSERT INTO email_verification_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+            (user_id, token, _expires_iso(VERIFY_EXPIRY_HOURS)),
+        )
+        conn.commit()
+
+        verify_link = f"{_base_url()}/verify-email?token={token}"
+        from app.services.email_service import send_verification_email
+        send_verification_email(user["email"], verify_link)
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+class ForgotPasswordReq(BaseModel):
+    email: str
+
+
+@router.post("/auth/forgot-password")
+def forgot_password(req: ForgotPasswordReq):
+    """Stage 11-C C7 — send password reset email (always 200, never reveals existence)."""
+    email = (req.email or "").strip().lower()
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        user = conn.execute(
+            "SELECT id FROM users WHERE LOWER(email) = ? AND is_active = 1 LIMIT 1", (email,)
+        ).fetchone()
+        if user:
+            token = secrets.token_hex(32)
+            conn.execute(
+                "INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)",
+                (user["id"], token, _expires_iso(RESET_EXPIRY_HOURS)),
+            )
+            conn.commit()
+            reset_link = f"{_base_url()}/reset-password?token={token}"
+            from app.services.email_service import send_password_reset_email
+            send_password_reset_email(email, reset_link)
+        # Always 200 — never reveal whether email exists
+        return {"ok": True, "message": "Jeśli ten adres istnieje w systemie, wyślemy link resetujący."}
+    finally:
+        conn.close()
+
+
+class ResetPasswordReq(BaseModel):
+    token: str
+    password: str
+
+
+@router.post("/auth/reset-password")
+def reset_password(req: ResetPasswordReq):
+    """Stage 11-C C7 — set new password via reset token, auto-login on success."""
+    token = (req.token or "").strip()
+    password = req.password or ""
+    if not token or len(password) < 8:
+        raise HTTPException(status_code=400, detail="token i hasło (min 8 znaków) są wymagane")
+
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT * FROM password_reset_tokens WHERE token = ? LIMIT 1", (token,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Nieprawidłowy link resetujący")
+        if row["used_at"]:
+            raise HTTPException(status_code=409, detail="Link resetujący został już użyty")
+        if _is_expired(row["expires_at"]):
+            raise HTTPException(status_code=410, detail="Link resetujący wygasł")
+
+        user_id = row["user_id"]
+        now = _now_iso()
+        pw_hash = _bcrypt_hash(password)
+        conn.execute("UPDATE users SET password_hash = ?, failed_login_count = 0, lockout_until = NULL WHERE id = ?", (pw_hash, user_id))
+        conn.execute("UPDATE password_reset_tokens SET used_at = ? WHERE token = ?", (now, token))
+        conn.commit()
+
+        user = conn.execute(
+            "SELECT username, COALESCE(role,'player') as role, COALESCE(is_admin,0) as is_admin FROM users WHERE id = ? LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        from app.services.jwt_service import issue_pair
+        token_pair = issue_pair(user_id=user_id, username=user["username"], role=user["role"], is_admin=int(user["is_admin"]))
+        return {"ok": True, **token_pair}
+    finally:
+        conn.close()
 

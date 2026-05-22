@@ -18,11 +18,13 @@
   - [Equipment Effects](14_EQUIPMENT_EFFECTS.md)
   - [Quest System](15_QUEST_SYSTEM.md)
   - [Remaining Decisions](16_REMAINING_DECISIONS.md)
+  - [Piper Voice Training Prep](17_PIPER_VOICE_TRAINING_PREP.md)
+  - [Android-testing-rig](18_android-testing-rig.md)
+  - [Auth UX Registration Profile](19_AUTH_UX_REGISTRATION_PROFILE.md)
 
 - **Audits & Tasks**
   - [Audit 2026-05-18](AUDIT_2026_05_18.md)
   - [Decisions 2026-05-18](DECISIONS_2026_05_18.md)
-  - [Piper Voice Training Prep](PIPER_VOICE_TRAINING_PREP.md)
   - [Rulebook](RULEBOOK.md)
   - [Narrative Items](TASK_NARRATIVE_ITEMS.md)
   - [T46 Test Plan](TASK_T46_TEST_PLAN.md)
