@@ -2443,6 +2443,8 @@ def admin_put_user_llm_settings(
 
 
 # ── Stage 11 R4 — Hero resurrection admin endpoints (#64) ──────────────
+# Config is GLOBAL (game_config_meta key='resurrection_config').
+# Per-user only: uses_remaining (lives remaining for that player).
 
 
 class ResurrectionConfigReq(BaseModel):
@@ -2450,48 +2452,75 @@ class ResurrectionConfigReq(BaseModel):
     mode: str | None = None
     value: int | None = None
     cap_percent: int | None = None
-    uses_remaining: int | None = None
-    clear_uses_remaining: bool = False  # set true to explicitly NULL the column
+    default_uses: int | None = None
+    clear_default_uses: bool = False  # set true to make default_uses NULL (unlimited)
 
 
-@router.get("/admin/users/{user_id}/resurrection-config")
-def admin_get_resurrection_config(
-    user_id: int, _: None = Depends(require_admin_token)
-):
-    from app.services.resurrection_service import get_user_resurrection_config
+@router.get("/admin/resurrection-config")
+def admin_get_resurrection_config(_: None = Depends(require_admin_token)):
+    """Read the global resurrection config (applies to all players)."""
+    from app.services.resurrection_service import get_global_resurrection_config
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        return {"ok": True, "config": get_user_resurrection_config(user_id, conn)}
+        return {"ok": True, "config": get_global_resurrection_config(conn)}
     finally:
         conn.close()
 
 
-@router.patch("/admin/users/{user_id}/resurrection-config")
+@router.patch("/admin/resurrection-config")
 def admin_patch_resurrection_config(
-    user_id: int, req: ResurrectionConfigReq,
+    req: ResurrectionConfigReq,
     _: None = Depends(require_admin_token),
 ):
-    from app.services.resurrection_service import set_user_resurrection_config
+    """Update the global resurrection config."""
+    from app.services.resurrection_service import set_global_resurrection_config
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        uses_arg = "__noop__"
-        if req.clear_uses_remaining:
-            uses_arg = None
-        elif req.uses_remaining is not None:
-            uses_arg = int(req.uses_remaining)
-        cfg = set_user_resurrection_config(
-            user_id, conn,
+        default_uses_arg = "__noop__"
+        if req.clear_default_uses:
+            default_uses_arg = None
+        elif req.default_uses is not None:
+            default_uses_arg = int(req.default_uses)
+        cfg = set_global_resurrection_config(
+            conn,
             enabled=req.enabled,
             mode=req.mode,
             value=req.value,
             cap_percent=req.cap_percent,
-            uses_remaining=uses_arg,
+            default_uses=default_uses_arg,
         )
         return {"ok": True, "config": cfg}
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    finally:
+        conn.close()
+
+
+class UserResurrectionUsesReq(BaseModel):
+    uses_remaining: int | None = None
+    clear: bool = False  # set to explicitly make NULL (unlimited)
+
+
+@router.patch("/admin/users/{user_id}/resurrection-uses")
+def admin_patch_user_resurrection_uses(
+    user_id: int,
+    req: UserResurrectionUsesReq,
+    _: None = Depends(require_admin_token),
+):
+    """Set per-user resurrection uses_remaining (their individual life count).
+
+    set clear=true for unlimited. The global config default_uses is used at
+    character creation / first-death if the user row is still NULL.
+    """
+    from app.services.resurrection_service import set_user_uses_remaining, get_user_uses_remaining
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        uses = None if req.clear else req.uses_remaining
+        set_user_uses_remaining(user_id, conn, uses)
+        return {"ok": True, "uses_remaining": get_user_uses_remaining(user_id, conn)}
     finally:
         conn.close()
 
@@ -2506,11 +2535,7 @@ def admin_force_resurrect(
     req: AdminResurrectReq,
     _: None = Depends(require_admin_token),
 ):
-    """Admin-triggered resurrection — defaults to force=true (free).
-
-    Use force=false to apply the user's configured cost mode anyway
-    (e.g. for GM-as-player testing of paid resurrects).
-    """
+    """Admin-triggered resurrection — defaults to force=true (free)."""
     from app.services.resurrection_service import apply_resurrection
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row

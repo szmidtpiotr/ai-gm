@@ -168,12 +168,21 @@ ADMIN_MIGRATIONS = [
     UPDATE users SET role = 'player'
     WHERE is_admin = 0 AND role NOT IN ('player','gm','admin')
     """,
-    # Stage 11 R1 — Hero resurrection per-user config (issue #64). All idempotent.
+    # Stage 11 R1 — Hero resurrection. Global config lives in game_config_meta
+    # (key='resurrection_config'). Per-user only: uses_remaining (lives remaining).
+    # The four config columns below are legacy scaffolding kept for back-compat
+    # but the service now reads/writes game_config_meta instead.
     "ALTER TABLE users ADD COLUMN resurrection_enabled INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE users ADD COLUMN resurrection_cost_mode TEXT NOT NULL DEFAULT 'admin_free'",
     "ALTER TABLE users ADD COLUMN resurrection_cost_value INTEGER NOT NULL DEFAULT 25",
     "ALTER TABLE users ADD COLUMN resurrection_cost_cap_percent INTEGER NOT NULL DEFAULT 50",
     "ALTER TABLE users ADD COLUMN resurrection_uses_remaining INTEGER",
+    # Seed the global default (idempotent via ON CONFLICT)
+    """
+    INSERT INTO game_config_meta (key, value, updated_at)
+    VALUES ('resurrection_config', '{"enabled":false,"mode":"admin_free","value":25,"cap_percent":50,"default_uses":null}', datetime('now'))
+    ON CONFLICT(key) DO NOTHING
+    """,
     # Stage 11 R1 — mark XP grants that have been clawed back so we never
     # double-revert. NULL = still active.
     "ALTER TABLE character_xp_grants ADD COLUMN reverted_at TEXT",
