@@ -2717,88 +2717,200 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
     }
 
     // Stop any in-flight TTS immediately — every player action interrupts reading.
-    // This prevents the previous GM message from continuing to play while the
-    // combat round advances and a new one arrives.
     try { window.voiceUI?.stopPlayback?.(); } catch (_e) {}
-
-    // Unlock audio from this user gesture
     window.voiceUI?.unlockAudio?.();
 
     elements.btnSend.disabled = true;
-    renderSuggestedActions([]);  // Clear buttons while waiting
+    renderSuggestedActions([]);
 
     const displayText = displayLabel || text;
-    const userMsgPlaceholder = { role: 'user', content: displayText, created_at: new Date() };
-    appendMessage(userMsgPlaceholder);
+    appendMessage({ role: 'user', content: displayText, created_at: new Date() });
     scrollToBottom();
 
     const typingIndicator = showTypingIndicator();
     let _skillTestPending = false;
 
     try {
-        const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/turns`, {
-            text: text,
-            character_id: characterData.id,
-            input_type: inputType,
-        });
+        const result = await _sendTurnStream(text, inputType, typingIndicator);
 
-        typingIndicator.remove();
+        if (result.skill_test_pending) {
+            _skillTestPending = true;
+            showSkillTestPopup(result.skill_test_pending);
+            scrollToBottom();
+            return;
+        }
 
-        // Store and render suggested actions
-        _suggestedActions = response.suggested_actions || [];
+        _suggestedActions = result.suggested_actions || _suggestedActions || [];
         renderSuggestedActions(_suggestedActions);
 
-        // ── Skill test pending? Show Roll Popup instead of (or before) prose ──
-        if (response.skill_test_pending) {
-            if (response.prose) {
-                const { narrative: preText } = parseGmFull(response.prose);
-                appendMessage({ role: 'assistant', content: preText, created_at: new Date() });
-            }
-            _skillTestPending = true;  // prevent finally from re-enabling send
-            showSkillTestPopup(response.skill_test_pending);
-            scrollToBottom();
-            return;  // resolveSkillTest will re-enable send when done
-        }
-
-        // Backend returns: { result: { message: "..." } } or { result: "..." }
-        let gmText = null;
-        if (response.result) {
-            gmText = typeof response.result === 'string'
-                ? response.result
-                : (response.result.message || response.result.narrative);
-        }
-        // Fallback to other possible fields
-        gmText = gmText || response.prose || response.assistant_text || response.gm_response || response.content;
-
-        if (gmText) {
-            const { narrative: gmContent, ...gmMeta } = parseGmFull(gmText);
-            appendMessage({
-                role: 'assistant',
-                content: gmContent,
-                created_at: response.created_at || new Date(),
-                turn_number: response.turn_number,
-                route: response.route,
-                debugMeta: gmMeta,
-            });
-        }
-
-        // Refresh character data after turn
         await refreshCharacterData();
-        // GM may have initiated combat — refresh combat state
         await pollCombatState();
-        // Update stale debug blocks with fresh combat state
         _refreshDebugBlocks();
-        // Update input placeholder based on current combat state
         updateInputPlaceholder();
     } catch (error) {
         typingIndicator.remove();
-        renderSuggestedActions(_suggestedActions);  // Restore previous buttons on error
+        renderSuggestedActions(_suggestedActions);
         console.error('Send message error:', error);
         showToast(error.message || 'Nie udało się wysłać wiadomości', 'error');
     } finally {
         if (!_skillTestPending) elements.btnSend.disabled = false;
         scrollToBottom();
     }
+}
+
+// Extract just the narrative text from a partially-received JSON response.
+// The LLM wraps its output in {"narrative":"...","location_intent":...}
+// During streaming we receive this incrementally — strip the JSON prefix/suffix
+// so the player only sees clean prose while tokens arrive.
+function _extractStreamingNarrative(raw) {
+    // Try: once we have at least {"narrative": " we can strip the prefix
+    const m = raw.match(/^\{"narrative"\s*:\s*"([\s\S]*)/);
+    if (m) {
+        // Unescape JSON string content (basic: \" → ", \n → newline)
+        return m[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+    }
+    // Not yet past the JSON prefix — hide it (show nothing until narrative starts)
+    if (raw.startsWith('{') && !raw.includes('"narrative"')) return '';
+    return raw;
+}
+
+// Streaming implementation — returns {skill_test_pending, suggested_actions} on completion
+async function _sendTurnStream(text, inputType, typingIndicator) {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = localStorage.getItem('aigm_access_token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const resp = await fetch(`/api/campaigns/${currentCampaignId}/turns/stream`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ text, character_id: characterData.id, input_type: inputType }),
+    });
+
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+
+    const reader  = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let streamBubble = null;        // the live GM bubble element
+    let contentEl = null;           // its .chat-bubble__content div
+    let rawTokens = '';             // accumulated raw LLM text
+    let firstToken = true;
+    const result = {};
+
+    // Parse SSE line-by-line
+    const processLine = (line) => {
+        if (!line.startsWith('data: ')) return;
+        const payload = line.slice(6);
+
+        if (payload.startsWith('[ERROR]')) {
+            throw new Error(payload.slice(7).trim() || 'Streaming error');
+        }
+
+        if (payload.startsWith('[DONE]')) {
+            const meta = payload.length > 6 ? JSON.parse(payload.slice(6)) : {};
+            if (meta.skill_test_pending) result.skill_test_pending = meta.skill_test_pending;
+            if (meta.current_location)   result.current_location   = meta.current_location;
+            return;
+        }
+
+        if (payload.startsWith('[COMBAT_STARTED]')) {
+            result.combat_started = JSON.parse(payload.slice(16));
+            return;
+        }
+        if (payload.startsWith('[COMBAT]')) {
+            result.combat = JSON.parse(payload.slice(8));
+            return;
+        }
+        if (payload.startsWith('[COMBAT_ENDED]')) {
+            result.combat_ended = JSON.parse(payload.slice(14));
+            return;
+        }
+        if (payload.startsWith('[GM_ROLL]')) {
+            result.gm_roll = JSON.parse(payload.slice(9));
+            return;
+        }
+        if (payload.startsWith('[OPEN_SHOP]')) {
+            result.open_shop = JSON.parse(payload.slice(11));
+            return;
+        }
+
+        // Raw narrative token
+        const token = payload.replace(/\\n/g, '\n');
+        rawTokens += token;
+
+        if (firstToken) {
+            firstToken = false;
+            typingIndicator.remove();
+
+            // Create the streaming GM bubble
+            streamBubble = document.createElement('div');
+            streamBubble.className = 'chat-bubble chat-bubble--gm chat-bubble--streaming';
+            contentEl = document.createElement('div');
+            contentEl.className = 'chat-bubble__content';
+            streamBubble.appendChild(contentEl);
+            elements.chatMessages.appendChild(streamBubble);
+        }
+
+        // Display cleaned text with cursor. The response is JSON-wrapped
+        // ({narrative: "..."}), so extract just the narrative value while streaming
+        // to avoid showing raw JSON syntax to the player.
+        if (contentEl) {
+            const display = _extractStreamingNarrative(rawTokens);
+            contentEl.textContent = display + '▌';
+            scrollToBottom();
+        }
+    };
+
+    // Read the SSE stream — yield to the browser every 6 lines so intermediate
+    // token batches can paint before the next chunk arrives.
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop() ?? '';
+        for (let i = 0; i < lines.length; i++) {
+            processLine(lines[i].trim());
+            if (i > 0 && i % 6 === 0) {
+                // Yield back to the event loop so the browser can paint the current tokens
+                await new Promise(r => setTimeout(r, 0));
+            }
+        }
+    }
+    if (buf.trim()) processLine(buf.trim());
+
+    // Finalize streaming bubble — apply full GM formatting
+    if (streamBubble && contentEl && rawTokens) {
+        const { narrative: gmContent } = parseGmFull(rawTokens);
+        streamBubble.classList.remove('chat-bubble--streaming');
+        // Replace textContent with formatted HTML + meta footer
+        const name    = 'MG — Mistrz Gry';
+        const dt      = formatDateTime(new Date());
+        const rereadBtn = `<button type="button" class="bubble-reread-btn" title="Przeczytaj ponownie">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+        </button>`;
+        streamBubble.innerHTML = `
+            <div class="chat-bubble__content">${formatGmNarrative(gmContent)}</div>
+            <div class="chat-bubble__meta">
+                <span class="bubble-meta__left"><span class="bubble-meta__name">${escapeHtml(name)}</span></span>
+                <span class="bubble-meta__right"><span class="bubble-meta__datetime">${escapeHtml(dt)}</span>${rereadBtn}</span>
+            </div>`;
+        streamBubble.querySelector('.bubble-reread-btn')?.addEventListener('click', () => {
+            window.voiceUI?.speakNowFromUserGesture?.(gmContent);
+        });
+        // TTS — speak the full text once streaming is done
+        if (gmContent) window.voiceUI?.speakGMText?.(gmContent);
+    } else if (firstToken) {
+        // No tokens at all — remove typing indicator if still present
+        typingIndicator.remove();
+    }
+
+    return result;
 }
 
 async function handleSendMessage() {
