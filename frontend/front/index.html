@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=stage11c-ledger2-2026-05-23">
+  <link rel="stylesheet" href="./css/styles.css?v=stage11c-ledger3-2026-05-23">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -275,25 +275,23 @@
           </button>
           <input type="file" id="profile-avatar-input" accept="image/*" style="display:none">
 
-          <!-- Name block — inline edit -->
+          <!-- Name block — contenteditable inline -->
           <div class="pf-name-block">
-            <div class="pf-name-row" id="pf-name-display">
-              <h2 class="pf-name" id="profile-username">—</h2>
-              <button type="button" class="pf-pencil" id="profile-name-edit-btn" title="Edytuj nazwę">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-              </button>
-            </div>
-            <!-- Inline edit row — replaces display row -->
-            <div class="pf-name-row pf-name-editing" id="profile-name-edit" hidden>
-              <input type="text" class="pf-name-input" id="profile-name-input" maxlength="40">
-              <button type="button" class="pf-name-save" id="profile-name-save" title="Zapisz (Enter)">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-              <button type="button" class="pf-name-cancel" id="profile-name-cancel" title="Anuluj (Esc)">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
+            <div class="pf-name-row">
+              <h2 class="pf-name" id="profile-username" contenteditable="false" spellcheck="false">—</h2>
+              <div class="pf-name-actions">
+                <button type="button" class="pf-pencil" id="profile-name-edit-btn" title="Edytuj nazwę">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                <button type="button" class="pf-name-save" id="profile-name-save" title="Zapisz (Enter)" hidden>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+                <button type="button" class="pf-name-cancel" id="profile-name-cancel" title="Anuluj (Esc)" hidden>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
             </div>
             <div class="pf-login" id="profile-login-label"></div>
             <div class="pf-email" id="profile-email-label"></div>
@@ -1531,6 +1529,6 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=stage11c-ledger2-2026-05-23"></script>
+  <script src="./js/app.js?v=stage11c-ledger3-2026-05-23"></script>
 </body>
 </html>
