@@ -27,6 +27,8 @@ const screens = {
     verifyEmail: document.getElementById('verify-email-screen'),
     forgotPassword: document.getElementById('forgot-password-screen'),
     resetPassword: document.getElementById('reset-password-screen'),
+    onboarding: document.getElementById('onboarding-screen'),
+    profile: document.getElementById('profile-screen'),
     heroes: document.getElementById('heroes-screen'),
     campaigns: document.getElementById('campaigns-screen'),
     newCampaign: document.getElementById('new-campaign-screen'),
@@ -167,6 +169,7 @@ function applyBubblePrefs() {
 }
 
 let currentScreen = 'login';
+let _onboardingTimer = null;
 let _inviteCode = null;
 let _resetToken = null;
 let _verifyEmailAddress = null;
@@ -454,7 +457,11 @@ async function handleLogin(e) {
             } catch (e) {
                 console.error('[Login] loadHeroes failed:', e);
             }
-            showScreen('heroes');
+            if (!response.onboarded_at) {
+                showOnboardingCinematic();
+            } else {
+                showScreen('heroes');
+            }
         } else {
             console.error('[Login] Invalid response:', response);
             showToast('Nieprawidłowa odpowiedź serwera', 'error');
@@ -596,7 +603,11 @@ async function autoVerifyEmail(token) {
         }
         showToast('Email potwierdzony! Witaj w AI-GM.', 'success');
         await loadHeroes();
-        showScreen('heroes');
+        if (!resp.onboarded_at) {
+            showOnboardingCinematic();
+        } else {
+            showScreen('heroes');
+        }
     } catch (e) {
         showToast('Link weryfikacyjny jest nieprawidłowy lub wygasł', 'error');
         showScreen('login');
@@ -6683,6 +6694,107 @@ function handleKeyPress(e) {
     document.addEventListener('touchstart', () => { tip.style.display = 'none'; }, { passive: true });
 })();
 
+// ── Onboarding cinematic ──────────────────────────────────────────────────
+async function showOnboardingCinematic() {
+    showScreen('onboarding');
+
+    // Fetch inviter info
+    try {
+        const stats = await apiRequest('GET', '/me/stats');
+        if (stats.inviter_name) {
+            document.getElementById('onboarding-inviter-name').textContent = stats.inviter_name;
+            document.getElementById('onboarding-inviter').hidden = false;
+        }
+    } catch (_) {}
+
+    // Progress bar animation over 6s
+    const bar = document.getElementById('onboarding-progress-bar');
+    if (bar) {
+        bar.style.transition = 'width 6s linear';
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => { bar.style.width = '100%'; });
+        });
+    }
+
+    // CTA is shown by CSS animation at 5s — nothing else needed
+}
+
+async function completeOnboarding() {
+    clearTimeout(_onboardingTimer);
+    try {
+        await apiRequest('PATCH', '/me/onboarding');
+    } catch (_) {}
+    showScreen('heroes');
+}
+
+// ── Profile page ────────────────────────────────────────────────────────
+async function loadProfilePage() {
+    showScreen('profile');
+    const user = currentUser;
+    if (!user) return;
+
+    const avatarLetter = (user.display_name || user.username || '?').charAt(0).toUpperCase();
+    document.getElementById('profile-avatar').textContent = avatarLetter;
+    document.getElementById('profile-username').textContent = user.display_name || user.username;
+
+    try {
+        const stats = await apiRequest('GET', '/me/stats');
+        document.getElementById('ps-heroes').textContent = stats.heroes ?? '—';
+        document.getElementById('ps-campaigns').textContent = stats.campaigns_completed ?? '—';
+        document.getElementById('ps-xp').textContent = stats.lifetime_xp?.toLocaleString('pl') ?? '—';
+        document.getElementById('ps-turns').textContent = stats.turns_total ?? '—';
+
+        const sent = stats.invite_weekly_sent ?? 0;
+        const limit = stats.invite_weekly_limit ?? 3;
+        document.getElementById('profile-invite-quota').textContent =
+            `${sent} / ${limit} zaproszeń wysłanych w tym tygodniu`;
+        const inviteBtn = document.getElementById('profile-invite-btn');
+        if (inviteBtn) inviteBtn.disabled = sent >= limit;
+    } catch (_) {}
+}
+
+// ── Invite modal ─────────────────────────────────────────────────────────
+function openInviteModal() {
+    const form = document.getElementById('invite-form');
+    const result = document.getElementById('invite-result');
+    const btn = document.getElementById('invite-submit-btn');
+    if (form) { form.reset(); form.hidden = false; }
+    if (result) result.hidden = true;
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn__icon">📨</span> Wyślij zaproszenie';
+    }
+    document.getElementById('invite-modal').hidden = false;
+}
+
+function closeInviteModal() {
+    document.getElementById('invite-modal').hidden = true;
+}
+
+async function handleSendInvite(e) {
+    e.preventDefault();
+    const email   = document.getElementById('invite-email').value.trim();
+    const message = document.getElementById('invite-message').value.trim();
+    if (!email) { showToast('Podaj adres email', 'error'); return; }
+
+    const btn = document.getElementById('invite-submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn__icon">⏳</span> Wysyłanie...';
+
+    try {
+        const resp = await apiRequest('POST', '/me/invites', { email, message: message || null });
+        const linkEl = document.getElementById('invite-link-display');
+        if (linkEl) linkEl.value = resp.invite_link || '';
+        document.getElementById('invite-form').hidden = true;
+        document.getElementById('invite-result').hidden = false;
+        showToast('Zaproszenie wysłane!', 'success');
+    } catch (err) {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn__icon">📨</span> Wyślij zaproszenie';
+        showToast(err.message || 'Błąd wysyłania zaproszenia', 'error');
+    }
+}
+
 function initEventListeners() {
     // Login
     elements.loginForm?.addEventListener('submit', handleLogin);
@@ -6705,6 +6817,52 @@ function initEventListeners() {
     document.getElementById('verify-back-link')?.addEventListener('click', () => showScreen('login'));
     document.getElementById('forgot-back-link')?.addEventListener('click', () => showScreen('login'));
     document.getElementById('reset-back-link')?.addEventListener('click', () => showScreen('login'));
+
+    // Onboarding cinematic
+    document.getElementById('onboarding-cta')?.addEventListener('click', completeOnboarding);
+
+    // Profile page
+    document.getElementById('profile-back-btn')?.addEventListener('click', () => showScreen('heroes'));
+    document.getElementById('go-to-profile-btn')?.addEventListener('click', () => {
+        closeSettings();
+        loadProfilePage();
+    });
+    document.getElementById('profile-invite-btn')?.addEventListener('click', openInviteModal);
+    document.getElementById('profile-change-password-btn')?.addEventListener('click', () => {
+        const successEl = document.getElementById('forgot-success');
+        if (successEl) successEl.hidden = true;
+        const submitBtn = document.getElementById('forgot-submit-btn');
+        if (submitBtn) submitBtn.hidden = false;
+        showScreen('forgotPassword');
+    });
+
+    // Invite modal
+    document.getElementById('invite-modal-backdrop')?.addEventListener('click', closeInviteModal);
+    document.getElementById('invite-modal-close')?.addEventListener('click', closeInviteModal);
+    document.getElementById('invite-form')?.addEventListener('submit', handleSendInvite);
+    document.getElementById('invite-copy-btn')?.addEventListener('click', () => {
+        const linkEl = document.getElementById('invite-link-display');
+        if (!linkEl) return;
+        navigator.clipboard?.writeText(linkEl.value).then(() => {
+            showToast('Link skopiowany!', 'success');
+        }).catch(() => {
+            linkEl.select();
+            document.execCommand('copy');
+            showToast('Link skopiowany!', 'success');
+        });
+    });
+    document.getElementById('invite-another-btn')?.addEventListener('click', () => {
+        const form = document.getElementById('invite-form');
+        const result = document.getElementById('invite-result');
+        const btn = document.getElementById('invite-submit-btn');
+        if (form) { form.reset(); form.hidden = false; }
+        if (result) result.hidden = true;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<span class="btn__icon">📨</span> Wyślij zaproszenie';
+        }
+    });
+    document.getElementById('heroes-invite-btn')?.addEventListener('click', openInviteModal);
 
     // Heroes
     elements.btnNewHero?.addEventListener('click', () => {

@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=stage11c-auth-2026-05-22">
+  <link rel="stylesheet" href="./css/styles.css?v=stage11c-c11c13-2026-05-22">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -193,6 +193,120 @@
     </div>
   </div>
 
+  <!-- ONBOARDING CINEMATIC SCREEN -->
+  <div id="onboarding-screen" class="screen">
+    <div class="onboarding">
+      <!-- Ember particles -->
+      <div class="onboarding__embers" aria-hidden="true">
+        <div class="onboarding-ember"></div>
+        <div class="onboarding-ember"></div>
+        <div class="onboarding-ember"></div>
+        <div class="onboarding-ember"></div>
+        <div class="onboarding-ember"></div>
+        <div class="onboarding-ember"></div>
+        <div class="onboarding-ember"></div>
+        <div class="onboarding-ember"></div>
+        <div class="onboarding-ember"></div>
+        <div class="onboarding-ember"></div>
+      </div>
+
+      <div class="onboarding__vignette" aria-hidden="true"></div>
+
+      <div class="onboarding__content">
+        <div class="onboarding__logo">
+          <span class="onboarding__crest">⚔</span>
+        </div>
+
+        <div class="onboarding__text" id="onboarding-text">
+          <p class="onboarding__subtitle">Mroczna kraina wita cię,</p>
+          <h1 class="onboarding__title">wędrowcze</h1>
+          <p class="onboarding__lore">Przygoda czeka. Każdy wybór kształtuje Twoją legendę.</p>
+        </div>
+
+        <div class="onboarding__inviter" id="onboarding-inviter" hidden>
+          <p class="onboarding__inviter-label">Zaproszony przez</p>
+          <p class="onboarding__inviter-name" id="onboarding-inviter-name">—</p>
+        </div>
+
+        <div class="onboarding__progress">
+          <div class="onboarding__progress-bar" id="onboarding-progress-bar"></div>
+        </div>
+
+        <button type="button" class="onboarding__cta" id="onboarding-cta">
+          Zaczynam przygodę
+          <span class="onboarding__cta-icon">⚔</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROFILE SCREEN -->
+  <div id="profile-screen" class="screen">
+    <header class="header">
+      <button type="button" class="header__back" id="profile-back-btn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="header__center">
+        <h1 class="header__title">Mój Profil</h1>
+      </div>
+      <div class="header__right"></div>
+    </header>
+
+    <main class="profile-content">
+      <!-- Avatar + username -->
+      <div class="profile-hero">
+        <div class="profile-avatar" id="profile-avatar">?</div>
+        <div class="profile-identity">
+          <div class="profile-username" id="profile-username">—</div>
+          <div class="profile-joined" id="profile-joined"></div>
+        </div>
+      </div>
+
+      <!-- Chronicle stats -->
+      <section class="profile-section">
+        <h3 class="profile-section-title">📜 Kronika</h3>
+        <div class="profile-stats-grid">
+          <div class="profile-stat">
+            <span class="profile-stat__value" id="ps-heroes">—</span>
+            <span class="profile-stat__label">Bohaterowie</span>
+          </div>
+          <div class="profile-stat">
+            <span class="profile-stat__value" id="ps-campaigns">—</span>
+            <span class="profile-stat__label">Kampanie</span>
+          </div>
+          <div class="profile-stat">
+            <span class="profile-stat__value" id="ps-xp">—</span>
+            <span class="profile-stat__label">Życiowe PD</span>
+          </div>
+          <div class="profile-stat">
+            <span class="profile-stat__value" id="ps-turns">—</span>
+            <span class="profile-stat__label">Tury</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Invites -->
+      <section class="profile-section">
+        <h3 class="profile-section-title">⚔ Zaproszenia</h3>
+        <p class="profile-invite-quota" id="profile-invite-quota">— / — w tym tygodniu</p>
+        <button type="button" class="btn btn--primary btn--full" id="profile-invite-btn">
+          Zaproś znajomego
+        </button>
+      </section>
+
+      <!-- Security -->
+      <section class="profile-section">
+        <h3 class="profile-section-title">🔒 Bezpieczeństwo</h3>
+        <button type="button" class="profile-action-btn" id="profile-change-password-btn">
+          Zmień hasło
+          <span class="profile-action-btn__arrow">›</span>
+        </button>
+      </section>
+    </main>
+  </div>
+
   <!-- CAMPAIGNS SCREEN -->
   <!-- HEROES SCREEN -->
   <div id="heroes-screen" class="screen">
@@ -222,6 +336,11 @@
         <span class="campaign-card__arrow">›</span>
       </button>
       <div id="heroes-list"></div>
+      <div class="heroes-invite-row">
+        <button type="button" class="heroes-invite-chip" id="heroes-invite-btn">
+          ⚔ Zaproś znajomego do przygody
+        </button>
+      </div>
       <div id="heroes-empty" class="empty-state" style="display:none">
         <span class="empty-state__icon">⚔</span>
         <h3>Nie masz jeszcze żadnych bohaterów</h3>
@@ -707,6 +826,10 @@
         <button type="button" class="settings-nav-mini-btn" id="go-to-heroes-btn">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
           Postacie
+        </button>
+        <button type="button" class="settings-nav-mini-btn" id="go-to-profile-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
+          Profil
         </button>
       </div>
 
@@ -1266,6 +1389,48 @@
     </div>
   </div>
 
+  <!-- Send Invite Modal -->
+  <div id="invite-modal" class="invite-modal" hidden role="dialog" aria-modal="true">
+    <div class="invite-modal__backdrop" id="invite-modal-backdrop"></div>
+    <div class="invite-modal__card">
+      <header class="invite-modal__header">
+        <h3 class="invite-modal__title">⚔ Zaproś do przygody</h3>
+        <button type="button" class="invite-modal__close" id="invite-modal-close">✕</button>
+      </header>
+
+      <form id="invite-form" class="invite-modal__body">
+        <div class="form-field">
+          <label for="invite-email">Adres email znajomego</label>
+          <input type="email" id="invite-email" placeholder="znajomy@email.com" autocomplete="off">
+        </div>
+        <div class="form-field">
+          <label for="invite-message">Wiadomość osobista <span style="color:var(--text-muted)">(opcjonalna)</span></label>
+          <input type="text" id="invite-message" placeholder='np. "Dołącz do mojej drużyny!"' maxlength="120">
+        </div>
+        <button type="submit" class="btn btn--primary btn--full" id="invite-submit-btn">
+          <span class="btn__icon">📨</span>
+          Wyślij zaproszenie
+        </button>
+      </form>
+
+      <!-- Link result (shown after successful invite) -->
+      <div id="invite-result" class="invite-result" hidden>
+        <p class="invite-result__label">Zaproszenie wysłane! Link do skopiowania:</p>
+        <div class="invite-result__link-row">
+          <input type="text" id="invite-link-display" class="invite-result__link" readonly>
+          <button type="button" class="invite-result__copy-btn" id="invite-copy-btn" title="Skopiuj link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+          </button>
+        </div>
+        <button type="button" class="btn btn--secondary btn--full" id="invite-another-btn">
+          Zaproś kolejną osobę
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="./js/clog.js?v=combat-v35"></script>
   <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
   <!-- dice.js 3D dice physics (issue #65) — must use bundled Three.js r73, NOT a newer CDN build -->
@@ -1273,6 +1438,6 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=stage11c-auth-2026-05-22"></script>
+  <script src="./js/app.js?v=stage11c-c11c13-2026-05-22"></script>
 </body>
 </html>
