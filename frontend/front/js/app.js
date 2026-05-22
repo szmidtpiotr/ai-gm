@@ -6729,18 +6729,33 @@ async function completeOnboarding() {
 }
 
 // ── Profile page ────────────────────────────────────────────────────────
+function _renderProfileAvatar(avatarUrl, fallbackLetter) {
+    const el = document.getElementById('profile-avatar');
+    if (!el) return;
+    if (avatarUrl) {
+        el.innerHTML = `<img src="${avatarUrl}" alt="Avatar">`;
+    } else {
+        el.textContent = fallbackLetter;
+    }
+}
+
 async function loadProfilePage() {
     _profileReturnScreen = currentScreen;
     showScreen('profile');
     const user = currentUser;
     if (!user) return;
 
-    const avatarLetter = (user.display_name || user.username || '?').charAt(0).toUpperCase();
-    document.getElementById('profile-avatar').textContent = avatarLetter;
+    const fallbackLetter = (user.display_name || user.username || '?').charAt(0).toUpperCase();
     document.getElementById('profile-username').textContent = user.display_name || user.username;
+    _renderProfileAvatar(null, fallbackLetter);
 
     try {
         const stats = await apiRequest('GET', '/me/stats');
+        const displayName = stats.display_name || user.display_name || user.username;
+        document.getElementById('profile-username').textContent = displayName;
+        _renderProfileAvatar(stats.avatar_url || null,
+            (displayName || '?').charAt(0).toUpperCase());
+
         document.getElementById('ps-heroes').textContent = stats.heroes ?? '—';
         document.getElementById('ps-campaigns').textContent = stats.campaigns_completed ?? '—';
         document.getElementById('ps-xp').textContent = stats.lifetime_xp?.toLocaleString('pl') ?? '—';
@@ -6753,6 +6768,94 @@ async function loadProfilePage() {
         const inviteBtn = document.getElementById('profile-invite-btn');
         if (inviteBtn) inviteBtn.disabled = sent >= limit;
     } catch (_) {}
+}
+
+async function _saveProfile(patch) {
+    try {
+        const resp = await apiRequest('PATCH', '/me/profile', patch);
+        if (resp.display_name !== undefined && currentUser) {
+            currentUser.display_name = resp.display_name;
+            localStorage.setItem('user', JSON.stringify(currentUser));
+        }
+        return resp;
+    } catch (e) {
+        showToast(e.message || 'Błąd zapisu', 'error');
+        return null;
+    }
+}
+
+function _initProfileEditing() {
+    // Display name edit
+    const nameEl     = document.getElementById('profile-username');
+    const editBtn    = document.getElementById('profile-name-edit-btn');
+    const editRow    = document.getElementById('profile-name-edit');
+    const nameInput  = document.getElementById('profile-name-input');
+    const saveBtn    = document.getElementById('profile-name-save');
+    const cancelBtn  = document.getElementById('profile-name-cancel');
+
+    editBtn?.addEventListener('click', () => {
+        nameInput.value = nameEl.textContent.trim();
+        editRow.hidden = false;
+        editBtn.hidden = true;
+        nameInput.focus();
+        nameInput.select();
+    });
+
+    const cancelEdit = () => {
+        editRow.hidden = true;
+        editBtn.hidden = false;
+    };
+
+    cancelBtn?.addEventListener('click', cancelEdit);
+
+    saveBtn?.addEventListener('click', async () => {
+        const newName = nameInput.value.trim();
+        if (!newName) return;
+        saveBtn.disabled = true;
+        const resp = await _saveProfile({ display_name: newName });
+        saveBtn.disabled = false;
+        if (resp) {
+            nameEl.textContent = resp.display_name || newName;
+            showToast('Nazwa zaktualizowana', 'success');
+            cancelEdit();
+        }
+    });
+
+    nameInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveBtn.click();
+        if (e.key === 'Escape') cancelEdit();
+    });
+
+    // Avatar upload
+    const avatarBtn   = document.getElementById('profile-avatar-btn');
+    const avatarInput = document.getElementById('profile-avatar-input');
+
+    avatarBtn?.addEventListener('click', () => avatarInput?.click());
+
+    avatarInput?.addEventListener('change', async () => {
+        const file = avatarInput.files?.[0];
+        if (!file) return;
+        if (file.size > 2 * 1024 * 1024) {
+            showToast('Plik za duży (max 2 MB)', 'error');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = async (ev) => {
+            const dataUrl = ev.target.result;
+            _renderProfileAvatar(dataUrl,
+                (currentUser?.display_name || currentUser?.username || '?').charAt(0).toUpperCase());
+            const resp = await _saveProfile({ avatar_url: dataUrl });
+            if (!resp) {
+                // revert on failure
+                _renderProfileAvatar(null,
+                    (currentUser?.display_name || currentUser?.username || '?').charAt(0).toUpperCase());
+            } else {
+                showToast('Zdjęcie zaktualizowane', 'success');
+            }
+        };
+        reader.readAsDataURL(file);
+        avatarInput.value = '';
+    });
 }
 
 // ── Invite modal ─────────────────────────────────────────────────────────
@@ -6825,6 +6928,7 @@ function initEventListeners() {
 
     // Profile page
     document.getElementById('profile-back-btn')?.addEventListener('click', () => showScreen(_profileReturnScreen || 'heroes'));
+    _initProfileEditing();
     document.getElementById('go-to-profile-btn')?.addEventListener('click', () => {
         closeSettings();
         loadProfilePage();
