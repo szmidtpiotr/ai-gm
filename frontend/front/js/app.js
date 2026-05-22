@@ -2706,157 +2706,112 @@ async function handleSendMessage() {
     await sendTurn(content, 'free_text');
 }
 
-// ── Skill Test Roll Popup v3 — compact staged ────────────────────────────────
+// ── Skill Test Roll Popup — dice.js 3D physics (issue #65) ──────────────────
+
+let _diceBox = null; // singleton; expensive to init, reused across rolls
+
+function _initDiceBox() {
+    if (_diceBox) return _diceBox;
+    const container = document.getElementById('dice-container');
+    if (!container || typeof DICE === 'undefined') return null;
+    try {
+        _diceBox = new DICE.dice_box(container);
+    } catch (e) {
+        console.warn('[dice3d] init failed:', e);
+        return null;
+    }
+    return _diceBox;
+}
 
 function showSkillTestPopup(pending) {
-    const existing = document.getElementById('skill-roll-popup');
-    if (existing) existing.remove();
-
-    // Stage 10-C+ Bug 2 fix — interrupt any in-flight TTS reading the previous
-    // GM bubble before the roll popup mounts. Otherwise TTS continues, the modal
-    // appears to freeze, and the popup-narration steps on the previous read.
+    // Stop TTS (Bug 2 fix — existing)
     try { window.voiceUI?.stopPlayback?.(); } catch (_e) {}
 
     const mod   = pending.modifier_breakdown || {};
     const total = mod.total || 0;
     const sign  = total >= 0 ? '+' : '';
     const name  = (pending.skill_label || pending.skill_key || 'Umiejętność').toUpperCase();
-    // Stage 10-C+ Bug 1 fix — backend now commits the d20 when the pending is
-    // created. Refreshing the page returns the SAME committed value via
-    // GET /api/campaigns/{id}.pending_skill_test, so re-rolling is impossible.
+    const dc    = pending.counter || pending.dc || '?';
     const committedD20 = (typeof pending.committed_d20 === 'number')
         ? Math.max(1, Math.min(20, parseInt(pending.committed_d20, 10)))
         : null;
 
-    // Compact modifier summary — single line, only non-zero parts
-    const modParts = [
-        mod.skill_rank  ? `Ranga <span>+${mod.skill_rank}</span>`  : '',
-        mod.stat_mod    ? `Mod.${mod.governing_stat||'STAT'} <span>${mod.stat_mod>=0?'+':''}${mod.stat_mod}</span>` : '',
-        mod.proficiency ? `Biegłość <span>+${mod.proficiency}</span>` : '',
-    ].filter(Boolean).join(' · ');
-    const modsHTML = modParts || `Bonus <span>${sign}${total}</span>`;
+    // Populate the persistent overlay (defined in index.html)
+    const overlay    = document.getElementById('dice-overlay');
+    const skillName  = document.getElementById('dice-skill-name');
+    const skillMeta  = document.getElementById('dice-skill-meta');
+    const rollBtn    = document.getElementById('dice-roll-btn');
+    const resultCard = document.getElementById('dice-result-card');
 
-    // Compact SVG d20 (decagon + inner triangle)
-    const D20 = `<svg viewBox="0 0 200 200" class="srp-die-svg" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="srpGrad" cx="50%" cy="42%" r="58%">
-          <stop offset="0%" stop-color="#1c1408"/>
-          <stop offset="100%" stop-color="#060403"/>
-        </radialGradient>
-      </defs>
-      <polygon class="srp-d20-outer"
-        points="100,5 155.8,23.1 190.4,70.6 190.4,129.4 155.8,176.9 100,195 44.2,176.9 9.6,129.4 9.6,70.6 44.2,23.1"
-        fill="url(#srpGrad)" stroke="#7a5618" stroke-width="2"/>
-      <polygon points="100,44 162,150 38,150"
-        fill="none" stroke="#4a360e" stroke-width="1" opacity="0.55"/>
-      <line x1="100" y1="44" x2="100" y2="6"   stroke="#3a2a0a" stroke-width="0.7" opacity="0.45"/>
-      <line x1="162" y1="150" x2="189" y2="130" stroke="#3a2a0a" stroke-width="0.7" opacity="0.45"/>
-      <line x1="38"  y1="150" x2="11"  y2="130" stroke="#3a2a0a" stroke-width="0.7" opacity="0.45"/>
-      <text class="srp-d20-num" id="srp-num" x="100" y="113"
-        text-anchor="middle" dominant-baseline="middle"
-        font-family="Cinzel,serif" font-size="56" font-weight="700" fill="#c9961a">?</text>
-    </svg>`;
+    skillName.textContent = name;
+    skillMeta.textContent = `DC ${dc}  ·  ${sign}${total} bonus`;
+    rollBtn.disabled = false;
+    rollBtn.textContent = '⚄ Rzuć k20';
+    resultCard.hidden = true;
+    overlay.hidden = false;
 
-    const popup = document.createElement('div');
-    popup.id = 'skill-roll-popup';
-    popup.className = 'skill-roll-overlay';
-    popup.innerHTML = `
-      <div class="srp-card">
-        <div class="srp-head">
-          <div class="srp-eyebrow">Próba Umiejętności</div>
-          <div class="srp-name">${escapeHtml(name)}</div>
-          <div class="srp-mods-line">${modsHTML} · Bonus <span>${sign}${total}</span></div>
-        </div>
-        <div class="srp-die-stage">
-          <div class="srp-die-wrap" id="srp-die">${D20}</div>
-          <div class="srp-result" id="srp-result">
-            <span class="srp-res-val" id="srp-rd20">—</span>
-            <span class="srp-res-sep">${sign}${total}</span>
-            <span class="srp-res-sep">=</span>
-            <span class="srp-res-total" id="srp-rtot">—</span>
-            <span class="srp-res-label" id="srp-rlbl"></span>
-          </div>
-          <div class="srp-nat" id="srp-nat"></div>
-        </div>
-        <div class="srp-foot">
-          <button class="srp-btn srp-btn-roll" id="srp-roll">⚄  Rzuć k20</button>
-          <button class="srp-btn srp-btn-confirm" id="srp-confirm" style="display:none">Zatwierdź wynik</button>
-        </div>
-      </div>`;
+    // Fresh click handler (remove previous listener by replacing the node)
+    const newBtn = rollBtn.cloneNode(true);
+    rollBtn.parentNode.replaceChild(newBtn, rollBtn);
 
-    const _chatRoot = document.getElementById('chat-container') || document.body;
-    _chatRoot.appendChild(popup);
+    newBtn.addEventListener('click', () => {
+        newBtn.disabled = true;
+        newBtn.textContent = 'Rzucam…';
 
-    let rolled = null;
-    const dieWrap = popup.querySelector('#srp-die');
-    const dieNum  = popup.querySelector('#srp-num');
-    const result  = popup.querySelector('#srp-result');
-    const rd20    = popup.querySelector('#srp-rd20');
-    const rtot    = popup.querySelector('#srp-rtot');
-    const rlbl    = popup.querySelector('#srp-rlbl');
-    const nat     = popup.querySelector('#srp-nat');
-    const rollBtn = popup.querySelector('#srp-roll');
-    const confBtn = popup.querySelector('#srp-confirm');
+        const box = _initDiceBox();
+        if (!box) {
+            // Fallback: no WebGL — silently resolve with committed value
+            console.warn('[dice3d] no dice box, resolving directly');
+            overlay.hidden = true;
+            resolveSkillTest(pending.skill_test_id, committedD20 ?? 10, null);
+            return;
+        }
 
-    rollBtn.addEventListener('click', () => {
-        rollBtn.disabled = true;
-        dieWrap.classList.add('srp-rolling');
-        let ticks = 0;
-        const iv = setInterval(() => {
-            // Animation only — the displayed numbers during spin are decorative.
-            dieNum.textContent = Math.ceil(Math.random() * 20);
-            if (++ticks >= 16) {
-                clearInterval(iv);
-                // Stage 10-C+ Bug 1 fix — use the server-committed roll when
-                // present (any pending from a v2+ backend has it). Fall back
-                // to a client roll only for legacy pendings (logs a warning).
-                if (committedD20 !== null) {
-                    rolled = committedD20;
-                } else {
-                    console.warn('[skill-roll] no committed_d20 on pending — falling back to client roll (legacy)');
-                    rolled = Math.ceil(Math.random() * 20);
-                }
-                const sum   = rolled + total;
-                const nat20 = rolled === 20;
-                const nat1  = rolled === 1;
+        box.setDice('1d20');
+        box.start_throw(
+            // before_roll — return the server-committed face so the die lands on it
+            (_notation) => committedD20 !== null ? [committedD20] : null,
 
-                dieWrap.classList.remove('srp-rolling');
-                dieWrap.classList.add('srp-landed');
-                dieNum.textContent = rolled;
+            // after_roll — show result, auto-resolve after 1.5 s
+            (_notation) => {
+                const d20    = committedD20 ?? (_notation.result?.[0] ?? 10);
+                const sum    = d20 + total;
+                const nat20  = d20 === 20;
+                const nat1   = d20 === 1;
+                const dc_val = parseInt(dc, 10) || 0;
+                const success = nat20 || (!nat1 && sum >= dc_val);
 
-                const outer = popup.querySelector('.srp-d20-outer');
+                const numEl     = document.getElementById('dice-result-num');
+                const totalEl   = document.getElementById('dice-result-total');
+                const verdictEl = document.getElementById('dice-result-verdict');
+
+                numEl.textContent = d20;
+                numEl.className = nat20 ? 'nat20' : nat1 ? 'nat1' : '';
+
                 if (nat20) {
-                    outer.style.stroke = '#f0c040';
-                    dieNum.style.fill  = '#f0c040';
-                    dieWrap.classList.add('srp-nat20');
-                    nat.textContent = 'Naturalny 20';
-                    nat.className = 'srp-nat nat20';
+                    totalEl.textContent  = 'Naturalny 20!';
+                    verdictEl.textContent = 'Legendarne!';
+                    verdictEl.className  = 'nat20';
                 } else if (nat1) {
-                    outer.style.stroke = '#8b1a1a';
-                    dieNum.style.fill  = '#c04040';
-                    dieWrap.classList.add('srp-nat1');
-                    nat.textContent = 'Naturalny 1';
-                    nat.className = 'srp-nat nat1';
+                    totalEl.textContent  = 'Naturalny 1';
+                    verdictEl.textContent = 'Tragedia!';
+                    verdictEl.className  = 'nat1';
+                } else {
+                    totalEl.textContent  = `${d20} ${sign}${total} = ${sum}`;
+                    verdictEl.textContent = success ? 'Sukces!' : 'Porażka';
+                    verdictEl.className  = success ? 'success' : 'failure';
                 }
 
-                setTimeout(() => {
-                    rd20.textContent = rolled;
-                    rtot.textContent = sum;
-                    rtot.className   = 'srp-res-total' + (nat20 ? ' nat20' : nat1 ? ' nat1' : '');
-                    rlbl.textContent = nat20 ? '✦' : nat1 ? '✧' : '';
-                    result.classList.add('visible');
-                    confBtn.style.display = '';
-                }, 220);
-            }
-        }, 65);
-    });
+                resultCard.hidden = false;
 
-    confBtn.addEventListener('click', async () => {
-        if (rolled === null) return;
-        confBtn.disabled = true;
-        confBtn.textContent = 'Rozwiązuję…';
-        await resolveSkillTest(pending.skill_test_id, rolled, popup);
-    });
+                setTimeout(async () => {
+                    overlay.hidden = true;
+                    resultCard.hidden = true;
+                    await resolveSkillTest(pending.skill_test_id, d20, null);
+                }, 1500);
+            }
+        );
+    }, { once: true });
 }
 
 async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
