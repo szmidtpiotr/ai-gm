@@ -3867,42 +3867,54 @@ def get_me_stats(authorization: str | None = Header(default=None)):
             (user_id,),
         ).fetchone()["n"]
 
-        # Campaigns
-        camps = conn.execute(
-            """
-            SELECT COUNT(*) FILTER (WHERE outcome = 'completed') as completed,
-                   COUNT(*) FILTER (WHERE outcome = 'abandoned') as abandoned
-            FROM character_campaign_history h
-            JOIN characters c ON c.id = h.character_id
-            WHERE c.user_id = ?
-            """,
-            (user_id,),
-        ).fetchone()
+        # Campaigns completed — resilient if table/column doesn't exist
+        camps = None
+        try:
+            camps = conn.execute(
+                """
+                SELECT COUNT(*) FILTER (WHERE outcome = 'completed') as completed,
+                       COUNT(*) FILTER (WHERE outcome = 'abandoned') as abandoned
+                FROM character_campaign_history h
+                JOIN characters c ON c.id = h.character_id
+                WHERE c.user_id = ?
+                """,
+                (user_id,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            pass
 
         # Lifetime XP and turns
-        xp_turns = conn.execute(
-            """
-            SELECT COALESCE(SUM(g.amount), 0) as lifetime_xp,
-                   COUNT(DISTINCT t.id) as turns_total
-            FROM characters c
-            LEFT JOIN character_xp_grants g ON g.character_id = c.id
-            LEFT JOIN campaign_turns t ON t.character_id = c.id
-            WHERE c.user_id = ?
-            """,
-            (user_id,),
-        ).fetchone()
+        xp_turns = None
+        try:
+            xp_turns = conn.execute(
+                """
+                SELECT COALESCE(SUM(g.amount), 0) as lifetime_xp,
+                       COUNT(DISTINCT t.id) as turns_total
+                FROM characters c
+                LEFT JOIN character_xp_grants g ON g.character_id = c.id
+                LEFT JOIN campaign_turns t ON t.character_id = c.id
+                WHERE c.user_id = ?
+                """,
+                (user_id,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            pass
 
-        # Top skill (most XP from skills category)
-        top_skill = conn.execute(
-            """
-            SELECT source_key, SUM(amount) as total
-            FROM character_xp_grants g
-            JOIN characters c ON c.id = g.character_id
-            WHERE c.user_id = ? AND g.category = 'skills' AND g.source_key IS NOT NULL
-            GROUP BY g.source_key ORDER BY total DESC LIMIT 1
-            """,
-            (user_id,),
-        ).fetchone()
+        # Top skill — optional, skip if column missing
+        top_skill = None
+        try:
+            top_skill = conn.execute(
+                """
+                SELECT source_key, SUM(amount) as total
+                FROM character_xp_grants g
+                JOIN characters c ON c.id = g.character_id
+                WHERE c.user_id = ? AND g.source_key IS NOT NULL
+                GROUP BY g.source_key ORDER BY total DESC LIMIT 1
+                """,
+                (user_id,),
+            ).fetchone()
+        except sqlite3.OperationalError:
+            pass
 
         # Invite info
         inviter = conn.execute(

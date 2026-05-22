@@ -8135,37 +8135,45 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 }
 .pf-pencil:hover { color: var(--accent); }
 
-.pf-name-edit {
-  display: flex;
-  align-items: center;
+/* Inline edit row — same height/layout as display row */
+.pf-name-editing {
   gap: var(--space-xs);
-  margin-top: var(--space-sm);
 }
 
 .pf-name-input {
   flex: 1;
   min-width: 0;
-  background: rgba(0,0,0,0.4);
-  border: 1px solid var(--border-accent);
-  border-radius: var(--radius-sm);
-  padding: 6px var(--space-sm);
-  color: var(--text-primary);
+  /* looks like the heading — no box, just a bottom border */
+  background: transparent;
+  border: none;
+  border-bottom: 1.5px solid var(--border-accent);
+  border-radius: 0;
+  padding: 2px 0;
+  color: var(--accent-light);
   font-family: 'Cinzel', serif;
-  font-size: var(--font-size-sm);
+  font-size: 1.3rem;
+  font-weight: 600;
+  outline: none;
+  width: 100%;
 }
+.pf-name-input:focus { border-bottom-color: var(--accent); }
 
 .pf-name-save,
 .pf-name-cancel {
   background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 5px 10px;
+  border: none;
   cursor: pointer;
-  font-size: 0.85rem;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  transition: background 0.15s;
 }
-.pf-name-save { color: var(--success); border-color: rgba(34,167,70,0.4); }
+.pf-name-save { color: var(--success); }
+.pf-name-save:hover { background: rgba(34,167,70,0.12); }
 .pf-name-cancel { color: var(--text-muted); }
+.pf-name-cancel:hover { background: rgba(255,255,255,0.06); }
 
 .pf-login {
   font-size: var(--font-size-xs);
