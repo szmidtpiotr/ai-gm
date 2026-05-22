@@ -2,9 +2,10 @@
 
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query  # noqa: F401 — Header used below
 
 from app.api.turns import get_campaign_or_404, get_db
+from app.core.jwt_auth import resolve_authed_user_id
 from app.services.history_summary_service import (
     SUMMARY_AUDIENCE_GM,
     SUMMARY_AUDIENCE_PLAYER,
@@ -45,7 +46,7 @@ def _finalize_rollup_cooldown(campaign_id: int) -> None:
 @router.post("/campaigns/{campaign_id}/history/summary")
 def create_campaign_history_summary(
     campaign_id: int,
-    user_id: int = Query(..., description="Must match campaign owner; used for per-user LLM settings."),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
     max_turns: int = Query(200, ge=5, le=2000),
     persist: bool = Query(True, description="Zapisz wynik w tabeli campaign_ai_summaries (kanon poza Loki)."),
     audience: str = Query(
@@ -53,11 +54,13 @@ def create_campaign_history_summary(
         pattern="^(player|gm)$",
         description="[T02] Który stos rollupu zapisać (player vs gm).",
     ),
+    authorization: str | None = Header(default=None),
 ):
     """
     Generuje podsumowanie z tur narracyjnych w SQLite (nie z logów Loki).
     Prompt reguł: backend/prompts/history_summary_prompt.txt
     """
+    user_id = resolve_authed_user_id(authorization, user_id)
     conn = get_db()
     try:
         campaign = get_campaign_or_404(conn, campaign_id)
@@ -131,7 +134,7 @@ def create_campaign_history_summary(
 @router.post("/campaigns/{campaign_id}/history/summary/ensure")
 def ensure_campaign_history_summary(
     campaign_id: int,
-    user_id: int = Query(..., description="Must match campaign owner; LLM settings."),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
     max_turns: int = Query(200, ge=5, le=2000),
     persist: bool = Query(True, description="Zapisz nowe podsumowanie w campaign_ai_summaries."),
     audience: str = Query(
@@ -145,6 +148,7 @@ def ensure_campaign_history_summary(
         le=500,
         description="Regeneruj, gdy przybyło co najmniej tyle nowych tur narracyjnych od zapisu.",
     ),
+    authorization: str | None = Header(default=None),
 ):
     """
     Dla UI „Historia”: zwraca zapisane podsumowanie, jeśli jest świeże;
@@ -152,6 +156,7 @@ def ensure_campaign_history_summary(
     Świeżość: regeneracja, gdy od zapisu doszło co najmniej ``stale_after_turns`` nowych tur narracyjnych
     (porównanie: aktualny COUNT tur narracyjnych minus ``included_turn_count`` z ostatniego wiersza).
     """
+    user_id = resolve_authed_user_id(authorization, user_id)
     try:
         return run_ensure_campaign_history_summary(
             campaign_id=campaign_id,
@@ -173,17 +178,25 @@ def get_latest_campaign_history_summary(
         pattern="^(player|gm)$",
         description="[T02] Który stos rollupu zwrócić.",
     ),
-    user_id: int | None = Query(None, description="Required for audience=gm (admin gate)."),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
 ):
     """Ostatnio zapisane podsumowanie (jeśli było POST z persist=true).
 
-    Stage 9 P1: `audience=gm` is admin-only — caller must pass `user_id` and the
-    user must have `is_admin=1`. `audience=player` is open.
+    Stage 9 P1: `audience=gm` is admin-only — JWT role='admin' OR legacy
+    user_id whose users.is_admin=1.
     """
+    # JWT-aware admin gate. Token (if present) takes precedence.
+    effective_uid = user_id
+    if authorization:
+        try:
+            effective_uid = resolve_authed_user_id(authorization, user_id)
+        except HTTPException:
+            effective_uid = user_id  # fall through to legacy path
     conn = get_db()
     try:
         get_campaign_or_404(conn, campaign_id)
-        if audience == SUMMARY_AUDIENCE_GM and not _user_is_admin(conn, user_id or 0):
+        if audience == SUMMARY_AUDIENCE_GM and not _user_is_admin(conn, effective_uid or 0):
             raise HTTPException(status_code=403, detail="audience=gm is admin-only")
         row = fetch_latest_saved_summary(conn, campaign_id, audience=audience)
         if not row:
@@ -204,17 +217,24 @@ def get_latest_campaign_history_summary(
 @router.get("/campaigns/{campaign_id}/summaries")
 def get_campaign_summaries_both(
     campaign_id: int,
-    user_id: int | None = Query(None, description="If admin, gm summary is included; otherwise gm is null."),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
 ):
     """Stage 9 P1 — return BOTH audience summaries in one round-trip.
 
     `gm` is only populated when the caller is an admin. Non-admins get
     `gm: null` even if a GM summary exists in the table.
     """
+    effective_uid = user_id
+    if authorization:
+        try:
+            effective_uid = resolve_authed_user_id(authorization, user_id)
+        except HTTPException:
+            effective_uid = user_id
     conn = get_db()
     try:
         get_campaign_or_404(conn, campaign_id)
-        is_admin = _user_is_admin(conn, user_id or 0)
+        is_admin = _user_is_admin(conn, effective_uid or 0)
         player_row = fetch_latest_saved_summary(conn, campaign_id, audience=SUMMARY_AUDIENCE_PLAYER)
         gm_row = fetch_latest_saved_summary(conn, campaign_id, audience=SUMMARY_AUDIENCE_GM) if is_admin else None
 

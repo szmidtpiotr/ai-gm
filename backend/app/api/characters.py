@@ -5,7 +5,8 @@ import random
 import re
 import sqlite3
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Header, HTTPException, Query
+from app.core.jwt_auth import resolve_authed_user_id
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.character_creation_config import (
     CREATION_SKILL_POOL,
@@ -764,14 +765,21 @@ OPENING_SYSTEM_PROMPT = SYSTEM_PROMPT_TEXT
 # ── Task 42: Character-first flow endpoints ───────────────────────────────────
 
 @router.get("/characters")
-def list_user_characters(user_id: int):
+def list_user_characters(
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
+):
     """Legacy endpoint kept for backward-compat with old clients. New code should
     use GET /heroes which adds Stage 6 enrichment (history counts, lifetime XP)."""
+    user_id = resolve_authed_user_id(authorization, user_id)
     return _list_heroes_for_user(user_id, enriched=False)
 
 
 @router.get("/heroes")
-def list_user_heroes(user_id: int):
+def list_user_heroes(
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
+):
     """Stage 6 H1 — enriched hero roster for the heroes hub.
 
     On top of the bare character rows, each hero carries:
@@ -783,6 +791,7 @@ def list_user_heroes(user_id: int):
     Sandbox + rest-sandbox clones are filtered out so admins don't see them in the
     player-facing hero picker.
     """
+    user_id = resolve_authed_user_id(authorization, user_id)
     return _list_heroes_for_user(user_id, enriched=True)
 
 
@@ -1362,10 +1371,16 @@ def spend_character_stat_xp(character_id: int, req: SpendStatXpRequest):
 
 
 @router.post("/characters/{character_id}/xp/grant-mg")
-def grant_character_xp_mg(character_id: int, req: GrantMgXpRequest, user_id: int = Query(...)):
+def grant_character_xp_mg(
+    character_id: int,
+    req: GrantMgXpRequest,
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
+):
     """
     Owner kampanii postaci przyznaje XP z puli MG (**[S10b]**); wpis w `character_xp_grants` (**[S10d]**).
     """
+    user_id = resolve_authed_user_id(authorization, user_id)
     from app.services import xp_service
 
     conn = sqlite3.connect(DB_PATH)
@@ -1432,15 +1447,17 @@ def grant_character_xp_mg(character_id: int, req: GrantMgXpRequest, user_id: int
 @router.get("/characters/{character_id}/xp/reward-catalog")
 def get_character_xp_reward_catalog(
     character_id: int,
-    user_id: int = Query(...),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
     categories: str = Query(
         "mg_grant,quest",
         description="Po przecinku: mg_grant, quest, enemy_tier (T12 / S10e).",
     ),
+    authorization: str | None = Header(default=None),
 ):
     """
     Katalog `game_config_xp_rewards` dla właściciela kampanii (np. wybór `reward_key` przy grancie MG).
     """
+    user_id = resolve_authed_user_id(authorization, user_id)
     from app.services import xp_service
 
     conn = sqlite3.connect(DB_PATH)
@@ -1473,9 +1490,13 @@ def get_character_xp_reward_catalog(
 
 @router.get("/characters/{character_id}/xp/grant-log")
 def list_character_xp_grants(
-    character_id: int, user_id: int = Query(...), limit: int = Query(50, ge=1, le=200)
+    character_id: int,
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    limit: int = Query(50, ge=1, le=200),
+    authorization: str | None = Header(default=None),
 ):
     """Ostatnie granty XP (audit); tylko owner kampanii."""
+    user_id = resolve_authed_user_id(authorization, user_id)
     from app.services import xp_service
 
     conn = sqlite3.connect(DB_PATH)
@@ -1506,9 +1527,11 @@ def list_character_xp_grants(
 def character_rest(
     character_id: int,
     type: str = Query(..., pattern="^(long|short)$"),
-    user_id: int = Query(...),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
 ):
     """X3 (long) / X4 (short) rest. Validates safe_for_rest, advances clock."""
+    user_id = resolve_authed_user_id(authorization, user_id)
     from app.services.rest_service import perform_long_rest, perform_short_rest
 
     conn = sqlite3.connect(DB_PATH)

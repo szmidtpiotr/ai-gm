@@ -2,10 +2,11 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query, Response, status
+from fastapi import APIRouter, Header, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict
 
 from app.core.config import DEFAULT_CAMPAIGN_LANGUAGE
+from app.core.jwt_auth import resolve_authed_user_id
 from app.core.logging import get_logger
 from app.services.history_summary_service import generate_dual_summary_preview
 from app.services.solo_death_service import death_summary_payload, end_summary_payload
@@ -191,9 +192,19 @@ def get_campaign(
     campaign_id: int,
     user_id: int | None = Query(
         None,
-        description="Viewer user id; when omitted or unauthorized, `gm_plan_json` is omitted (T07).",
+        description="Viewer user id (legacy fallback); prefer Authorization: Bearer.",
     ),
+    authorization: str | None = Header(default=None),
 ):
+    # JWT-aware viewer resolution. Best-effort — visibility falls back to
+    # "no plan visible" when neither auth source is present, which is the
+    # safest default for this endpoint.
+    effective_uid = user_id
+    if authorization:
+        try:
+            effective_uid = resolve_authed_user_id(authorization, user_id)
+        except HTTPException:
+            effective_uid = user_id
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -210,13 +221,19 @@ def get_campaign(
         if not row:
             raise HTTPException(status_code=404, detail="Campaign not found")
 
-        return _apply_gm_plan_visibility(conn, dict(row), campaign_id, user_id)
+        return _apply_gm_plan_visibility(conn, dict(row), campaign_id, effective_uid)
     finally:
         conn.close()
 
 
 @router.patch("/campaigns/{campaign_id}/gm-plan")
-def patch_campaign_gm_plan(campaign_id: int, req: GmPlanPatchRequest, user_id: int = Query(...)):
+def patch_campaign_gm_plan(
+    campaign_id: int,
+    req: GmPlanPatchRequest,
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
+):
+    user_id = resolve_authed_user_id(authorization, user_id)
     """
     Owner-only merge into `gm_plan_json` (**[S11a]** / T06 W1).
     Prefer body: `arcs`, `active_arc_id`, `engine_private`. Stare, płaskie klucze
@@ -257,10 +274,15 @@ def patch_campaign_gm_plan(campaign_id: int, req: GmPlanPatchRequest, user_id: i
 
 
 @router.post("/campaigns/{campaign_id}/gm-plan/generate-initial")
-def post_generate_initial_gm_plan(campaign_id: int, user_id: int = Query(...)):
+def post_generate_initial_gm_plan(
+    campaign_id: int,
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
+    authorization: str | None = Header(default=None),
+):
     """
     T05: ponów generację początkowego planu MG (owner), np. gdy LLM padł przy tworzeniu postaci.
     """
+    user_id = resolve_authed_user_id(authorization, user_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -302,12 +324,14 @@ def post_generate_initial_gm_plan(campaign_id: int, user_id: int = Query(...)):
 @router.post("/campaigns/{campaign_id}/gm-plan/advance-scene")
 def advance_campaign_scene(
     campaign_id: int,
-    user_id: int = Query(...),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
     note: str = Query("", max_length=2000, description="Optional note for the scene log."),
+    authorization: str | None = Header(default=None),
 ):
     """
     Increment `current_scene_ordinal` and append `scene_log` entry (**[S11a]** / **[S10c]** boundary).
     """
+    user_id = resolve_authed_user_id(authorization, user_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -525,13 +549,15 @@ def reset_campaign_progress(campaign_id: int):
 @router.post("/campaigns/{campaign_id}/dual-summary-preview")
 def dual_summary_preview(
     campaign_id: int,
-    user_id: int = Query(..., description="Must match campaign owner."),
+    user_id: int | None = Query(None, description="Legacy fallback — prefer Authorization: Bearer."),
     max_turns: int = Query(200, ge=5, le=2000),
+    authorization: str | None = Header(default=None),
 ):
     """
     [T01] One LLM call → JSON player_summary + gm_notes. Does NOT persist to campaign_ai_summaries.
     Mounted on campaigns router (same prefix /api) so the path is always registered with core campaign API.
     """
+    user_id = resolve_authed_user_id(authorization, user_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
