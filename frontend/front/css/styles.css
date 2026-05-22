@@ -8097,12 +8097,15 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 
 /* ── Invite modal ──────────────────────────────────────────────────────── */
 .invite-modal {
+  display: none;
   position: fixed;
   inset: 0;
   z-index: 9000;
-  display: flex;
   align-items: flex-end;
   justify-content: center;
+}
+.invite-modal:not([hidden]) {
+  display: flex;
 }
 
 .invite-modal__backdrop {
