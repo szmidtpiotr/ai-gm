@@ -154,6 +154,20 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_dc ADD COLUMN description TEXT",
     "ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
+    # Stage 10 A1+A4+A5 — auth security baseline columns. All idempotent.
+    "ALTER TABLE users ADD COLUMN failed_login_count INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN lockout_until TEXT",
+    "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'player'",
+    # Backfill role from is_admin. Runs every startup but is idempotent (only
+    # rewrites rows that don't already match the derived value).
+    """
+    UPDATE users SET role = 'admin'
+    WHERE is_admin = 1 AND role != 'admin'
+    """,
+    """
+    UPDATE users SET role = 'player'
+    WHERE is_admin = 0 AND role NOT IN ('player','gm','admin')
+    """,
     """
     CREATE TABLE IF NOT EXISTS game_config_items (
         key          TEXT PRIMARY KEY,

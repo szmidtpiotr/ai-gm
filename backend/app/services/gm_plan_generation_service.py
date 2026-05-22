@@ -14,6 +14,66 @@ from app.services.llm_service import generate_chat
 
 logger = get_logger(__name__)
 
+
+# Stage 9 follow-up: title placeholders we'll happily overwrite when the LLM
+# plan produces a real title. Anything outside this pattern (admin-edited or
+# user-renamed) is left alone.
+_GENERIC_TITLE_RE = re.compile(
+    r"^(?:Przygoda\s+\S+|Kampania(?:\s+#?\d+)?|Nowa\s+kampania|Bez\s+tytułu)$",
+    re.IGNORECASE,
+)
+
+
+def _maybe_rename_campaign_from_plan(conn, campaign_id: int, plan: dict) -> None:
+    """When the LLM plan carries a `title` and the current campaign title is
+    still the generic placeholder, swap it for the atmospheric one.
+
+    The plan shape is the W1 schema (`title` at top level). Some legacy plans
+    nest it under `arcs[0].title` — handle both.
+    """
+    plan_title = ""
+    if isinstance(plan, dict):
+        # W1 schema: top-level title. V2 schema: arcs.default.title (dict)
+        # or arcs[0].title (list — legacy).
+        plan_title = str(plan.get("title") or "").strip()
+        if not plan_title:
+            arcs = plan.get("arcs")
+            if isinstance(arcs, dict) and arcs:
+                # Prefer the active arc, else the first one.
+                active_arc = next(
+                    (a for a in arcs.values()
+                     if isinstance(a, dict) and str(a.get("status") or "").lower() == "active"),
+                    None,
+                ) or next(iter(arcs.values()))
+                if isinstance(active_arc, dict):
+                    plan_title = str(active_arc.get("title") or "").strip()
+            elif isinstance(arcs, list) and arcs:
+                first = arcs[0]
+                if isinstance(first, dict):
+                    plan_title = str(first.get("title") or "").strip()
+    if not plan_title or len(plan_title) > 120:
+        return  # nothing to write or suspicious length
+
+    row = conn.execute(
+        "SELECT title FROM campaigns WHERE id = ?", (campaign_id,)
+    ).fetchone()
+    if not row:
+        return
+    current = str((row[0] if isinstance(row, tuple) else row["title"]) or "").strip()
+    if not _GENERIC_TITLE_RE.match(current):
+        return  # admin/user has set a custom title — preserve it
+
+    conn.execute(
+        "UPDATE campaigns SET title = ? WHERE id = ?",
+        (plan_title, campaign_id),
+    )
+    logger.info(
+        "campaign_title_renamed_from_plan",
+        campaign_id=campaign_id,
+        old_title=current,
+        new_title=plan_title,
+    )
+
 GM_PLAN_GENERATION_SYSTEM = """Jesteś asystentem projektowania kampanii RPG (notatki dla MG).
 Zwróć WYŁĄCZNIE jeden obiekt JSON (bez markdown, bez komentarzy, bez tekstu przed/po), kształt:
 {
@@ -143,6 +203,13 @@ def generate_initial_gm_plan_with_retries(
                 "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
                 (dumped, campaign_id),
             )
+            # Stage 9 follow-up: when the GM plan has a fresh LLM-generated
+            # title, swap out the generic "Przygoda <hero>" placeholder so the
+            # campaign chooser shows the atmospheric name instead.
+            try:
+                _maybe_rename_campaign_from_plan(conn, campaign_id, merged)
+            except Exception as e:
+                logger.warning("campaign_title_rename_failed", campaign_id=campaign_id, error=str(e))
             conn.commit()
             logger.info("gm_plan_generation_ok", campaign_id=campaign_id, attempt=attempt)
             return True, None

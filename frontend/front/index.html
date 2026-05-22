@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=stage8-debug-fix-2026-05-21">
+  <link rel="stylesheet" href="./css/styles.css?v=stage9c-palette-cooldown-2026-05-21">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -315,6 +315,7 @@
           </svg>
         </button>
         <input type="text" id="chat-input" class="composer__input" placeholder="Co robisz? Możesz pisać swobodnie...">
+        <button type="button" class="composer__palette" id="palette-btn" title="Komendy (Ctrl+/)" aria-label="Otwórz paletę komend">⌘</button>
         <div class="composer__tts-reading" id="tts-reading-overlay" hidden title="Dotknij, aby zatrzymać">
           <span></span><span></span><span></span><span></span><span></span>
           <span></span><span></span><span></span><span></span><span></span>
@@ -847,14 +848,77 @@
           <h1 class="death-title">poległ...</h1>
           <p class="death-name" id="death-character-name">Bohater</p>
         </div>
-        <p class="death-epitaph">Ciemność pochłonęła kolejną duszę...</p>
-        <div class="death-actions">
-          <button type="button" class="death-btn death-btn--resurrect" id="resurrect-btn">
+        <p class="death-epitaph" id="death-epitaph-text">Ciemność pochłonęła kolejną duszę...</p>
+        <div class="death-actions" id="death-actions">
+          <button type="button" class="death-btn death-btn--new-adventure" data-end-action="new-adventure">
+            <span class="death-btn__icon">⚔</span>
+            Nowa Przygoda
+            <span class="death-btn__sub">ten sam świat</span>
+          </button>
+          <button type="button" class="death-btn death-btn--new-world" data-end-action="new-world">
+            <span class="death-btn__icon">🗺</span>
+            Nowy Świat
+            <span class="death-btn__sub">inna kampania</span>
+          </button>
+          <button type="button" class="death-btn death-btn--new-hero" data-end-action="new-hero">
+            <span class="death-btn__icon">👤</span>
+            Nowy Bohater
+            <span class="death-btn__sub">postacie</span>
+          </button>
+          <button type="button" class="death-btn death-btn--resurrect" id="resurrect-btn" hidden>
             <span class="death-btn__icon">✦</span>
             Wskrześ bohatera
           </button>
-          <button type="button" class="death-btn death-btn--return" id="death-return-btn">
-            Powrót do kampanii
+        </div>
+      </div>
+    </div>
+
+    <!-- Stage 9 P6 — Victory Screen Overlay (mirror of death-screen, warm/gold palette) -->
+    <div id="victory-screen" class="victory-screen" hidden>
+      <div class="victory-rays" aria-hidden="true">
+        <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+        <div class="ray"></div><div class="ray"></div><div class="ray"></div>
+        <div class="ray"></div><div class="ray"></div>
+      </div>
+      <div class="victory-embers">
+        <div class="vember"></div><div class="vember"></div><div class="vember"></div>
+        <div class="vember"></div><div class="vember"></div><div class="vember"></div>
+        <div class="vember"></div><div class="vember"></div><div class="vember"></div>
+        <div class="vember"></div><div class="vember"></div><div class="vember"></div>
+      </div>
+      <div class="victory-vignette"></div>
+      <div class="victory-content">
+        <div class="victory-laurel" aria-hidden="true">
+          <svg viewBox="0 0 64 64" fill="currentColor">
+            <path d="M32 12c-6 0-11 4-13 10 2 0 4 1 6 3 1-3 4-5 7-5 4 0 7 2 8 6 3-2 6-3 9-2-1-7-8-12-17-12z"/>
+            <path d="M32 50c-8 0-15-5-17-12 3-1 6 0 9 2 1-4 4-6 8-6 3 0 6 2 7 5 2-2 4-3 6-3-2-6-7-10-13-10v-2c4 0 8 1 11 3v-4l-2-2 2-2v-2h-2l-2-2-2 2h-2v2l2 2-2 2v4c-3-2-7-3-11-3v6c-3 0-6 2-8 5-3-2-6-3-9-1-1-1-1-2 0-3 4-4 9-7 15-7l2-1 2 1c6 0 11 3 15 7 1 1 1 2 0 3-3-2-6-1-9 1-2-3-5-5-8-5"/>
+            <circle cx="32" cy="22" r="3"/>
+          </svg>
+          <div class="victory-laurel__glow"></div>
+        </div>
+        <div class="victory-text">
+          <p class="victory-subtitle">Twoja przygoda dobiegła</p>
+          <h1 class="victory-title">triumfalnego końca</h1>
+          <p class="victory-name" id="victory-character-name">Bohater</p>
+          <p class="victory-meta" id="victory-character-meta"></p>
+        </div>
+        <h2 class="victory-ending-title" id="victory-ending-title"></h2>
+        <p class="victory-ending-summary" id="victory-ending-summary"></p>
+        <div class="death-actions" id="victory-actions">
+          <button type="button" class="death-btn death-btn--new-adventure" data-end-action="new-adventure">
+            <span class="death-btn__icon">⚔</span>
+            Nowa Przygoda
+            <span class="death-btn__sub">ten sam świat</span>
+          </button>
+          <button type="button" class="death-btn death-btn--new-world" data-end-action="new-world">
+            <span class="death-btn__icon">🗺</span>
+            Nowy Świat
+            <span class="death-btn__sub">inna kampania</span>
+          </button>
+          <button type="button" class="death-btn death-btn--new-hero" data-end-action="new-hero">
+            <span class="death-btn__icon">👤</span>
+            Nowy Bohater
+            <span class="death-btn__sub">postacie</span>
           </button>
         </div>
       </div>
@@ -995,8 +1059,26 @@
   <!-- Stage 8 D3/D4 — admin debug drawer (lazy-mounted by JS when admin) -->
   <button id="debug-drawer-toggle" type="button" class="debug-drawer-toggle" title="Debug (admin only)" aria-label="Otwórz debug drawer" hidden>🐛</button>
 
+  <!-- Stage 9 P4 — command palette modal -->
+  <div id="command-palette" class="command-palette" hidden role="dialog" aria-modal="true" aria-labelledby="cp-title">
+    <div class="command-palette__backdrop" data-cp-action="close"></div>
+    <div class="command-palette__card">
+      <header class="command-palette__header">
+        <span class="command-palette__icon" aria-hidden="true">⌘</span>
+        <input type="text" class="command-palette__search" id="cp-search" placeholder="Szukaj komendy…" autocomplete="off" spellcheck="false" aria-label="Szukaj komendy">
+        <kbd class="command-palette__kbd">Esc</kbd>
+      </header>
+      <ul class="command-palette__list" id="cp-list" role="listbox" aria-label="Komendy"></ul>
+      <footer class="command-palette__footer">
+        <span><kbd>↑</kbd><kbd>↓</kbd> nawigacja</span>
+        <span><kbd>Enter</kbd> wstaw</span>
+        <span><kbd>Esc</kbd> zamknij</span>
+      </footer>
+    </div>
+  </div>
+
   <script src="./js/clog.js?v=combat-v35"></script>
   <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
-  <script src="./js/app.js?v=stage8-set-state-fix-2026-05-21"></script>
+  <script src="./js/app.js?v=stage10b-jwt-2026-05-21"></script>
 </body>
 </html>

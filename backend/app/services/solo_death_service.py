@@ -181,19 +181,50 @@ def death_summary_payload(
     campaign_id: int,
 ) -> dict[str, Any] | None:
     """Build death-summary JSON or None if not ended."""
+    return _end_summary_payload(conn, campaign_id, expected_outcome="death")
+
+
+def end_summary_payload(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+) -> dict[str, Any] | None:
+    """Stage 9 P5+P6 — unified payload for both death AND victory screens.
+
+    Reads `campaigns.status`:
+      'ended'     → outcome='death',   epitaph + death_reason
+      'completed' → outcome='victory', ending title + summary from gm_plan_json
+    Returns None if campaign is still active.
+    """
+    return _end_summary_payload(conn, campaign_id, expected_outcome=None)
+
+
+def _end_summary_payload(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    expected_outcome: str | None,
+) -> dict[str, Any] | None:
     camp = conn.execute(
         """
-        SELECT id, status, death_reason, ended_at, epitaph
+        SELECT id, status, death_reason, ended_at, epitaph, gm_plan_json
         FROM campaigns WHERE id = ?
         """,
         (campaign_id,),
     ).fetchone()
-    if not camp or str(camp["status"] or "").lower() != "ended":
+    if not camp:
+        return None
+    status = str(camp["status"] or "").strip().lower()
+    if status == "ended":
+        outcome = "death"
+    elif status == "completed":
+        outcome = "victory"
+    else:
+        return None
+    if expected_outcome and outcome != expected_outcome:
         return None
 
     ch = conn.execute(
         """
-        SELECT name, sheet_json FROM characters
+        SELECT id, name, sheet_json FROM characters
         WHERE campaign_id = ?
         ORDER BY id ASC
         LIMIT 1
@@ -214,22 +245,55 @@ def death_summary_payload(
     if isinstance(bonds_raw, list):
         for b in bonds_raw:
             if isinstance(b, dict):
+                # Support BOTH V2 (description) and V1 (text) key shapes.
                 bonds_out.append(
                     {
-                        "text": str(b.get("text") or ""),
+                        "text": str(b.get("description") or b.get("text") or ""),
                         "strength": str(b.get("strength") or "strong"),
                         "origin": str(b.get("origin") or "creation"),
                     }
                 )
 
     arch = str(sheet.get("archetype") or sheet.get("class") or "adventurer").strip()
+    level = sheet.get("level")
+    if level is None and sheet.get("xp_lifetime_earned") is not None:
+        level = max(1, min(10, int(sheet["xp_lifetime_earned"]) // 100 + 1))
+    xp_lifetime = int(sheet.get("xp_lifetime_earned") or 0)
+
+    # Pull ending title + summary from gm_plan_json for victory.
+    ending_title = ""
+    ending_summary = ""
+    if outcome == "victory":
+        try:
+            plan = json.loads(camp["gm_plan_json"] or "{}")
+        except Exception:
+            plan = {}
+        endings = plan.get("endings")
+        # endings may be a dict keyed by ending_id, or a list. Pick the first
+        # non-empty one for MVP — when CAMPAIGN_END tag lands the id will be
+        # propagated explicitly.
+        ending_obj = None
+        if isinstance(endings, dict) and endings:
+            ending_obj = next(iter(endings.values()))
+        elif isinstance(endings, list) and endings:
+            ending_obj = endings[0]
+        if isinstance(ending_obj, dict):
+            ending_title = str(ending_obj.get("title") or "")
+            ending_summary = str(ending_obj.get("summary") or ending_obj.get("description") or "")
 
     return {
+        "outcome": outcome,  # 'death' | 'victory'
+        "campaign_id": int(camp["id"]),
+        "character_id": int(ch["id"]),
         "character_name": str(ch["name"] or ""),
         "character_class": arch,
+        "level": level or 1,
+        "xp_lifetime_earned": xp_lifetime,
         "death_reason": str(camp["death_reason"] or ""),
         "ended_at": str(camp["ended_at"] or ""),
         "epitaph": str(camp["epitaph"] or ""),
+        "ending_title": ending_title,
+        "ending_summary": ending_summary,
         "secret": str(ident.get("secret") or ""),
         "bonds": bonds_out,
     }

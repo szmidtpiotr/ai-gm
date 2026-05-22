@@ -10,7 +10,11 @@ from app.services.admin_auth import verify_admin_token
 router = APIRouter()
 
 BACKGROUNDS_DIR = Path("/data/backgrounds")
-ALLOWED_SCREENS = {"login", "campaigns", "new-campaign", "wizard", "game"}
+# Stage 9 follow-up: extend to all major screens so admin can theme everything.
+ALLOWED_SCREENS = {
+    "login", "campaigns", "new-campaign", "wizard", "game",
+    "heroes", "settings", "sheet", "death", "victory",
+}
 ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_SIZE = 10 * 1024 * 1024  # 10 MB

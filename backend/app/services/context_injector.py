@@ -134,8 +134,14 @@ class ContextInjector:
         ingame_hours = session_flags.get("ingame_hours", 9)
         tone = self._get_campaign_tone(campaign_id)
 
+        # Stage 9 P2 — Continuity injection: if there's been a ≥30 min gap since
+        # the last narrative turn AND we haven't already injected for this gap,
+        # prepend the latest player_summary as a "previously, on…" prefix.
+        continuity_block = self._build_continuity_block(campaign_id, session_flags)
+
         # Build blocks
         blocks = [
+            continuity_block,
             self._build_world_block(location, ingame_hours),
             self._build_entities_block(npcs, combat_roster),
             self._build_mechanic_block(action_type, mechanic_result),
@@ -208,6 +214,77 @@ class ContextInjector:
         return prefix + original_prompt
 
     # ── Block builders ─────────────────────────────────────────────────────
+
+    # Stage 9 P2 — Continuity injection.
+    # Gap threshold: 30 min (matches XS15 session.start_bonus, SESSION_GAP_MINUTES).
+    # Idempotency: session_flags["continuity_injected_at_turn"] tracks the last
+    # turn_number we injected for, so we don't re-inject within the same session window.
+    _CONTINUITY_GAP_MINUTES = 30
+
+    def _build_continuity_block(self, campaign_id: int, session_flags: dict) -> str:
+        try:
+            from datetime import datetime, timezone
+            # Find the timestamp of the most recent narrative turn.
+            row = self.conn.execute(
+                """
+                SELECT id, turn_number, created_at FROM campaign_turns
+                WHERE campaign_id = ?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (campaign_id,),
+            ).fetchone()
+            if not row:
+                return ""  # no prior turns to bridge from
+            last_turn_number = int(row["turn_number"] or 0)
+            try:
+                last_ts = datetime.fromisoformat(str(row["created_at"]).replace(" ", "T"))
+                if last_ts.tzinfo is None:
+                    last_ts = last_ts.replace(tzinfo=timezone.utc)
+                gap_min = (datetime.now(timezone.utc) - last_ts).total_seconds() / 60
+            except Exception:
+                return ""
+            if gap_min < self._CONTINUITY_GAP_MINUTES:
+                return ""
+            # One-shot per gap: don't re-inject within the same session window.
+            last_injected = int(session_flags.get("continuity_injected_at_turn") or 0)
+            if last_injected == last_turn_number:
+                return ""
+
+            # Fetch the player_summary (never gm_summary — gracz nie widzi GM notes).
+            from app.services.history_summary_service import (
+                SUMMARY_AUDIENCE_PLAYER,
+                fetch_latest_saved_summary,
+            )
+            row_s = fetch_latest_saved_summary(
+                self.conn, campaign_id, audience=SUMMARY_AUDIENCE_PLAYER
+            )
+            text = ((row_s or {}).get("summary_text") or "").strip()
+            if not text:
+                return ""  # silent skip if no summary exists yet
+
+            # Mark as injected so the next turn in this session doesn't re-prepend.
+            try:
+                flags = dict(session_flags)
+                flags["continuity_injected_at_turn"] = last_turn_number
+                import json
+                self.conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                    (json.dumps(flags, ensure_ascii=False), str(campaign_id)),
+                )
+                self.conn.commit()
+            except Exception as e:
+                logger.warning("continuity_flag_write_failed", error=str(e))
+
+            return (
+                f"=== TWOJA PRZYGODA DOTYCHCZAS ===\n"
+                f"(Po {int(gap_min)} min przerwy — wznowienie sesji. "
+                f"Wpleć krótko poniższe wydarzenia w narrację pierwszego akapitu, "
+                f"nie cytuj dosłownie.)\n"
+                f"{text}"
+            )
+        except Exception as e:
+            logger.warning("continuity_block_failed", error=str(e))
+            return ""
 
     def _build_world_block(self, location: dict | None, ingame_hours: int) -> str:
         lines = ["=== ŚWIAT ==="]

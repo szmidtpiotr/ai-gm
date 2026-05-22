@@ -188,31 +188,39 @@ Stage 9 covers 7 items across 3 task areas (TASK_36 summaries, TASK_37 palette, 
 #### Sub-phase 9-A — Death/Victory UI (frontend-heavy, cohesive UX payoff)
 **Why grouped:** all three items render the post-campaign experience. Frontend-heavy with small backend (expose epitaph + ending in campaign payload). The death screen DOM already exists in `index.html` with embers/vignette/skull animation — just needs the epitaph wired and post-end options added. Victory screen is the warm-gold mirror of death.
 
-- [ ] **P5** TASK_38: wire epitaph into death screen — `solo_death_service.generate_epitaph_llm()` already exists; replace the hardcoded "Ciemność pochłonęła kolejną duszę…" string in `#death-screen .death-epitaph` with `campaigns.epitaph`. Fade-in animation (~2 s opacity + letter-spacing collapse).
-- [ ] **P6** TASK_38: victory screen — new `#victory-screen` mirror of death-screen layout but warm/golden palette. Shows on `campaigns.status == 'completed'`. Renders ending title + summary from `gm_plan_json.endings[ending_id]`, plus character name + level + XP earned this campaign.
-- [ ] **P7** TASK_38: post-end options panel — shared between death + victory screens. Three CTAs: **Nowa Przygoda** (same world, same hero, new GM plan) / **Nowy Świat** (same hero, campaigns chooser) / **Nowy Bohater** (heroes screen → wizard). Each routes to the appropriate existing flow.
+- [x] **P5** TASK_38 — epitaph wired into death screen. New backend `GET /api/campaigns/{id}/end-summary` returns `outcome: 'death' | 'victory'` + epitaph (from `campaigns.epitaph` populated by `solo_death_service.generate_epitaph_llm()`). Frontend `showDeathScreen` fetches it on mount and renders into `#death-epitaph-text` with the 1.6 s opacity + letter-spacing collapse animation (`.death-epitaph--lit` class triggered via `requestAnimationFrame`).
+- [x] **P6** TASK_38 — victory screen shipped. New `#victory-screen` overlay: rotating sun-rays (60 s loop), warm-gold rising embers (`vember-rise` 6 s), laurel-wreath SVG with bloom + glow pulse, character name + class + level + lifetime XP, ending title + summary from `gm_plan_json.endings[ending_id]`. Shows on `campaigns.status === 'completed'`. Auto-trigger via `[CAMPAIGN_END:ending_id]` tag is out-of-scope for 9-A — for now exposed as `window.showVictoryScreen()` for manual testing; will auto-fire when sub-phase 9-B wires status-change detection.
+- [x] **P7** TASK_38 — post-end options panel. Three `data-end-action` buttons (`new-adventure` / `new-world` / `new-hero`) shared between death + victory screens. `handleEndAction()` routes: new-hero → `loadHeroes()` + `showScreen('heroes')`; new-world → keep hero, `loadCampaigns()` + `showScreen('campaigns')`; new-adventure → same hero, `showScreen('newCampaign')` with toast hint. Wskrześ button hidden by default (still in DOM as `#resurrect-btn[hidden]` — admin-only toggle in a future task).
 
 #### Sub-phase 9-B — Dual summaries + continuity injection (backend + LLM plumbing)
 **Why grouped:** P2 depends on P1 having usable summaries. Schema migration + service plumbing + turn-pipeline prompt prefix all touch overlapping files (`history_summary_service.py`, `context_injector.py`, `campaign_ai_summaries` schema).
 
-- [ ] **P1** TASK_36: dual summaries — persist BOTH `player_summary` + `gm_summary` columns; backfill existing single-column rows; new endpoint `GET /api/campaigns/{id}/summaries?audience=player|gm` with admin-only `gm` audience.
-- [ ] **P2** TASK_36: GM continuity injection — detect ≥30 min session gap between consecutive turns; on the next turn prefix the LLM messages with "Twoja przygoda dotychczas:" + most recent `player_summary` (never `gm_summary` — gracz nie widzi GM-only notes). One-shot per gap.
+- [x] **P1** TASK_36: dual summaries — **infrastructure already in place** (`campaign_ai_summaries.audience` column + `persist_summary(audience=...)` + per-audience `fetch_latest_saved_summary`). Added new `GET /api/campaigns/{id}/summaries?user_id=Y` returning `{player, gm, gm_visible}` in one round-trip with admin-only gm portion. Existing `/history/summary?audience=gm` endpoint now requires `user_id` matching an admin (403 otherwise). Player audience stays open.
+- [x] **P2** TASK_36: continuity injection — `ContextInjector._build_continuity_block(campaign_id, session_flags)` checks last turn timestamp; when gap ≥ 30 min (matches XS15 SESSION_GAP_MINUTES) AND `session_flags.continuity_injected_at_turn != last_turn_number`, fetches the latest `player_summary` and prepends a "=== TWOJA PRZYGODA DOTYCHCZAS ===" block to the narrator prompt with a directive to weave it into the first paragraph without quoting. Marks session_flags so it fires once per gap. Never reads `gm_summary` (player-only narrative bridge).
 
 #### Sub-phase 9-C — Cooldown + command palette (small isolated polish)
 **Why grouped:** both small, both can ship anytime, no dependency on A or B. Cooldown is a one-line gate, palette reuses existing autocomplete data structures.
 
-- [ ] **P3** TASK_36: Historia cooldown — `/mem` rate-limited to **once per 20 player turns** per campaign. Counter in `session_flags.historia_last_turn`. On cooldown: system bubble "Pamięć potrzebuje czasu. Spróbuj za N tur." Admin bypasses.
-- [ ] **P4** TASK_37: command palette modal — `<dialog id="command-palette-modal">` opens on `Ctrl+/` AND a `⌘` button in composer. Search field filters live; arrow-key navigation; Enter inserts the command stub. Reuses `SLASH_COMMANDS` + `DEBUG_CMD_TREE` + admin tree as single source of truth. Per-command admin visibility toggle in `settings` table.
+- [x] **P3** TASK_36: Historia cooldown — `/mem` rate-limited to **20 narrative turns** per campaign. Counter in `session_flags.historia_last_turn` (number of narrative turns at last successful /mem). Gate in `post_memory_ask`: if `narrative_n - last < 20`, returns `HTTP 429` with `detail={error: 'historia_cooldown', message, turns_remaining, ...}`. Frontend `handleMemCommand` catches the structured detail and renders it as a system bubble (`🕯 Pamięć potrzebuje czasu. Spróbuj za N tur.`) instead of a toast. Admin users bypass both the gate AND the post-success stamp. `apiRequest` upgraded to attach the full error body as `err.body` so structured 429 detail survives the throw.
+- [x] **P4** TASK_37: command palette modal — `#command-palette` opens on `⌘` button in composer OR `Ctrl+/` (`Cmd+/` on Mac) keybinding while on the game screen. Search input filters by command name or description (case-insensitive substring + prefix match). Arrow keys navigate; Enter inserts the command stub into the chat input with cursor positioned for args; Esc / backdrop click / re-press Ctrl+/ closes. Sources: `SLASH_COMMANDS` (filtered by `adminOnly`) + `DEBUG_CMD_TREE` (admin-only, includes `preview-death` / `preview-victory`). Empty-state "Brak pasujących komend." Mobile: full-width card, single-column item rows.
 
-### Stage 10 — Auth security baseline [D6]
+### Stage 10 — Auth security baseline [D6 · split into 3 sub-phases — see #63]
 
-- [ ] **A1** Audit current password hashing — verify bcrypt; if not, migrate users on next login
-- [ ] **A2** JWT bearer tokens (HS256, 7-day expiry); refresh endpoint
-- [ ] **A3** Migrate auth middleware from current cookie/bearer to JWT
-- [ ] **A4** Brute-force lockout — 10 fails → 15 min lock, counter resets on success
-- [ ] **A5** Roles column on `users` table (`player`/`gm`/`admin`); existing admins keep their flag
-- [ ] **A6** Role-based endpoint guards (admin-only routes verify `role='admin'`)
-- [ ] **A7** Multi-device sessions — verify JWT works on phone + desktop simultaneously
+**2026-05-21 audit:** current state is "trust the client" — `user_id` is a query param, "token" is the literal string `user:<id>`. Plain-text passwords exist alongside bcrypt. Migrating to JWT means rewriting auth on ~40 endpoints, so the work is split to keep main shippable between steps.
+
+#### Sub-phase 10-A — Hardening of what exists (additive, ships independently)
+- [x] **A1** Plain-text + sha256 password rows transparently re-hashed to bcrypt ($2b$12$) on next successful login. Existing bcrypt rows untouched. `_verify_user_password` now returns `(ok, kind)` so the login handler knows when to re-hash. `demo` user already migrated as a smoke test.
+- [x] **A4** Brute-force lockout — `users.failed_login_count` + `users.lockout_until` columns added (idempotent ALTER). 10 consecutive fails → 15 min lock, `HTTP 423 Locked` with structured detail `{error, message, minutes_remaining, lockout_until}`. Successful login clears both columns. Lockout window self-expires on time check (no background job needed).
+- [x] **A5** `users.role` enum column (`player`/`gm`/`admin`) added with `DEFAULT 'player'`. Backfill UPDATEs sync from `is_admin` (1→'admin', 0→'player') on every startup, idempotent. Login response now carries `role` alongside the legacy `is_admin`. Both columns coexist; downstream code can switch to `role` on its own timeline.
+
+#### Sub-phase 10-B — JWT issuance (parallel to existing query-param auth)
+- [x] **A2** JWT bearer tokens. `backend/app/services/jwt_service.py` issues HS256 tokens (7-day access, 30-day refresh) using `JWT_SECRET` env (dev fallback derived from hostname + DB path). Refresh tokens carry a `jti` for future revocation. `backend/app/core/jwt_auth.py` exposes `current_user_optional` + `require_current_user` FastAPI dependencies. Login now emits `{access_token, refresh_token, token_type, expires_in}` alongside the legacy `user_id`/`is_admin`/`role`. New endpoints: `POST /auth/refresh` (exchanges refresh for new access, re-fetches current role from DB), `GET /auth/me` (validates current token + returns identity).
+- [x] **A2 frontend** — Frontend stores `aigm_access_token` + `aigm_refresh_token` in localStorage on login. `apiRequest` attaches `Authorization: Bearer <token>` on every request when present. Auto-refresh on 401: single-flight `_tryRefreshAccessToken` exchanges refresh for new access and retries the failed request transparently. Logout clears both keys. Existing `?user_id=` query-param fallback untouched — 10-B is purely additive.
+
+#### Sub-phase 10-C — Migrate enforcement (THE breaking change)
+- [ ] **A3** Endpoints derive `user_id` from JWT signature; query-param fallback removed (deprecation warning during overlap)
+- [ ] **A6** Admin-only routes require `role='admin'` (with `is_admin=1` back-compat fallback)
+- [ ] **A7** Multi-device verification — phone + desktop concurrent sessions tested
 - [ ] **A8** Onboarding overlay — first-login modal: welcome text, theme picker, accept rules, [Zaczynam przygodę], `users.onboarded_at` flag
 
 ### Stage 11 — Hero Journal [T45]
@@ -258,6 +266,13 @@ Bugs discovered during gameplay that don't fit a numbered stage. Pick into the q
 
 - [ ] **K1** GM hallucinates weapons / items the player doesn't own (observed during Stage 2B R4 verification, 2026-05-19). LLM narrates "wyciągasz miecz" or grants ad-hoc weapons in combat without inventory lookup. Fix direction: enforce inventory grounding — pre-turn inventory snapshot prepended to context, plus prompt guardrail "Nigdy nie zakładaj że gracz posiada przedmiot, który nie jest w [INVENTORY]". May need a `weapon_grounding_check` post-pass that scans narrative for weapon mentions vs. inventory and downgrades hallucinated weapons to "improvisedfists" damage.
 - [ ] **K2** GM requests unnecessary skill rolls (e.g. Kowalstwo when entering a village square just because a blacksmith is in the scene). Observed during Stage 2B R4 follow-up, 2026-05-19. Fix direction: tighten roll-cue prompt rules so rolls require a *player attempt* on the skill, not mere proximity to a themed NPC; add a roll-cue filter that drops cues whose `reason` doesn't reference a player verb.
+
+### Stage 16 — Future feature backlog (deferred, multi-step)
+
+Larger feature requests that need their own design pass when they reach the queue.
+
+- [ ] **F1 — Player account management screen.** Standalone "Twoje konto" view accessible from the main menu / settings. Scope: change password (verify old + new + confirm), change display name, account deletion (soft-delete with grace period), session/device list, **add friend** flow (search by username/email, friend-request pattern, accept/decline). Backend: extend `users` table with `display_name_color`?, add `user_friendships` table with `(user_a, user_b, status)`, new endpoints `/api/me/*`. Frontend: dedicated screen below `heroes`, gold-accent profile card, friend list with status chips. Out of scope: email verification, 2FA (push to Stage 10 Auth security).
+- [ ] **F2 — Multiplayer in-character / out-of-character chat between players.** Once campaigns become multi-character, players need a sidechannel to coordinate without GM involvement. Scope: `/say` (in-character, visible to all players in the same campaign, NOT to the GM context — does NOT feed the narrator), `/whisper @player` (private), `/ooc` (out-of-character, all players see, NOT GM context). Backend: `campaign_player_messages` table with `(campaign_id, sender_user_id, recipient_user_id_or_null, channel, body, created_at)`, polling or websocket. Frontend: small "playerzy" channel pane parallel to the chat scroll, color-coded per channel. Open question: how / whether to surface to GM at all (probably NEVER — that's the whole point of "without GM involved").
 
 ---
 
