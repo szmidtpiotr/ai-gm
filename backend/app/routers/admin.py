@@ -3602,3 +3602,361 @@ def admin_delete_riddle(key: str, _: None = Depends(require_admin_token)):
         return {"ok": True}
     finally:
         conn.close()
+
+
+# ── Stage 11-C — Invite management (admin) ────────────────────────────────────
+
+import secrets as _secrets
+from datetime import timedelta, timezone
+
+
+class InviteCreateReq(BaseModel):
+    email: str | None = None           # None = open invite (admin only)
+    message: str | None = None
+    expires_hours: int = 72
+
+
+@router.post("/admin/invites")
+def admin_create_invite(
+    req: InviteCreateReq,
+    authorization: str | None = Header(default=None),
+):
+    """Admin: create a personalised or open invite link."""
+    from app.core.jwt_auth import require_admin_role
+    admin_user_id = require_admin_role(authorization)
+
+    code = _secrets.token_urlsafe(20)
+    expires_at = (datetime.now(timezone.utc) + timedelta(hours=req.expires_hours)).isoformat()
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute(
+            """
+            INSERT INTO user_invites (code, created_by, email, message, created_at, expires_at)
+            VALUES (?, ?, ?, ?, datetime('now'), ?)
+            """,
+            (code, admin_user_id, req.email or None, req.message or None, expires_at),
+        )
+        conn.commit()
+
+        base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+        invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+
+        return {
+            "ok": True,
+            "code": code,
+            "invite_link": invite_link,
+            "email": req.email,
+            "expires_at": expires_at,
+        }
+    finally:
+        conn.close()
+
+
+@router.get("/admin/invites")
+def admin_list_invites(authorization: str | None = Header(default=None)):
+    """Admin: list all invites."""
+    from app.core.jwt_auth import require_admin_role
+    require_admin_role(authorization)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT i.*, u.username as creator_name, a.username as accepted_name
+            FROM user_invites i
+            LEFT JOIN users u ON u.id = i.created_by
+            LEFT JOIN users a ON a.id = i.accepted_by
+            ORDER BY i.created_at DESC LIMIT 200
+            """
+        ).fetchall()
+        return {"invites": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/invites/{invite_id}")
+def admin_revoke_invite(invite_id: int, authorization: str | None = Header(default=None)):
+    """Admin: revoke (delete) an unused invite."""
+    from app.core.jwt_auth import require_admin_role
+    require_admin_role(authorization)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        cur = conn.execute(
+            "DELETE FROM user_invites WHERE id = ? AND used_at IS NULL", (invite_id,)
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Invite not found or already used")
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.get("/admin/invite-tree")
+def admin_invite_tree(authorization: str | None = Header(default=None)):
+    """Admin: return nested invite tree for D3.js visualization."""
+    from app.core.jwt_auth import require_admin_role
+    require_admin_role(authorization)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        # All users with invite relationships
+        users = conn.execute(
+            """
+            SELECT u.id, u.username, u.display_name, u.invited_by_user_id,
+                   u.created_at, u.onboarded_at,
+                   COUNT(t.id) as turns_total,
+                   MAX(t.created_at) as last_active
+            FROM users u
+            LEFT JOIN campaign_turns t ON t.character_id IN (
+                SELECT id FROM characters WHERE user_id = u.id
+            )
+            GROUP BY u.id
+            ORDER BY u.id
+            """,
+        ).fetchall()
+
+        now = datetime.now(timezone.utc)
+
+        def activity_status(turns: int, last_active_str: str | None) -> str:
+            if not last_active_str or turns == 0:
+                return "cold"
+            try:
+                last = datetime.fromisoformat(str(last_active_str).replace(" ", "T"))
+                if last.tzinfo is None:
+                    last = last.replace(tzinfo=timezone.utc)
+                days = (now - last).days
+                if days > 30:
+                    return "cold"
+                if turns >= 10:
+                    return "active"
+                return "low"
+            except Exception:
+                return "cold"
+
+        def build_node(u):
+            return {
+                "id": u["id"],
+                "name": u["display_name"] or u["username"],
+                "username": u["username"],
+                "turns": u["turns_total"] or 0,
+                "last_active": u["last_active"],
+                "joined": u["created_at"],
+                "onboarded": bool(u["onboarded_at"]),
+                "status": activity_status(u["turns_total"] or 0, u["last_active"]),
+                "children": [],
+            }
+
+        nodes = {u["id"]: build_node(u) for u in users}
+
+        # Build tree: root = users with no inviter (admins/seed)
+        roots = []
+        for u in users:
+            node = nodes[u["id"]]
+            parent_id = u["invited_by_user_id"]
+            if parent_id and parent_id in nodes:
+                nodes[parent_id]["children"].append(node)
+            else:
+                roots.append(node)
+
+        return {"tree": roots if len(roots) != 1 else roots[0]}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/users/{user_id}/invite-limit")
+def admin_set_invite_limit(
+    user_id: int,
+    body: dict,
+    authorization: str | None = Header(default=None),
+):
+    """Admin: override a user's weekly invite limit."""
+    from app.core.jwt_auth import require_admin_role
+    require_admin_role(authorization)
+    limit = int(body.get("invite_weekly_limit", 3))
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute("UPDATE users SET invite_weekly_limit = ? WHERE id = ?", (limit, user_id))
+        conn.commit()
+        return {"ok": True, "invite_weekly_limit": limit}
+    finally:
+        conn.close()
+
+
+# ── /api/me — player self-service endpoints ───────────────────────────────────
+
+@router.patch("/me/onboarding")
+def complete_onboarding(authorization: str | None = Header(default=None)):
+    """Stage 11-C C11 — mark onboarding complete for current user."""
+    from app.core.jwt_auth import require_current_user
+    payload = require_current_user(authorization)
+    user_id = int(payload.get("sub") or 0)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            "UPDATE users SET onboarded_at = datetime('now') WHERE id = ? AND onboarded_at IS NULL",
+            (user_id,),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.get("/me/stats")
+def get_me_stats(authorization: str | None = Header(default=None)):
+    """Stage 11-C C12 — player chronicle stats for profile page."""
+    from app.core.jwt_auth import require_current_user
+    payload = require_current_user(authorization)
+    user_id = int(payload.get("sub") or 0)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        # Hero count
+        heroes = conn.execute(
+            "SELECT COUNT(*) as n FROM characters WHERE user_id = ? AND name NOT LIKE '[SBX] %' AND name NOT LIKE '[RSB] %'",
+            (user_id,),
+        ).fetchone()["n"]
+
+        # Campaigns
+        camps = conn.execute(
+            """
+            SELECT COUNT(*) FILTER (WHERE outcome = 'completed') as completed,
+                   COUNT(*) FILTER (WHERE outcome = 'abandoned') as abandoned
+            FROM character_campaign_history h
+            JOIN characters c ON c.id = h.character_id
+            WHERE c.user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+
+        # Lifetime XP and turns
+        xp_turns = conn.execute(
+            """
+            SELECT COALESCE(SUM(g.amount), 0) as lifetime_xp,
+                   COUNT(DISTINCT t.id) as turns_total
+            FROM characters c
+            LEFT JOIN character_xp_grants g ON g.character_id = c.id
+            LEFT JOIN campaign_turns t ON t.character_id = c.id
+            WHERE c.user_id = ?
+            """,
+            (user_id,),
+        ).fetchone()
+
+        # Top skill (most XP from skills category)
+        top_skill = conn.execute(
+            """
+            SELECT source_key, SUM(amount) as total
+            FROM character_xp_grants g
+            JOIN characters c ON c.id = g.character_id
+            WHERE c.user_id = ? AND g.category = 'skills' AND g.source_key IS NOT NULL
+            GROUP BY g.source_key ORDER BY total DESC LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+
+        # Invite info
+        inviter = conn.execute(
+            "SELECT u2.username, u2.display_name FROM users u1 JOIN users u2 ON u2.id = u1.invited_by_user_id WHERE u1.id = ?",
+            (user_id,),
+        ).fetchone()
+
+        weekly_sent = conn.execute(
+            "SELECT COUNT(*) as n FROM user_invites WHERE created_by = ? AND created_at >= datetime('now', '-7 days')",
+            (user_id,),
+        ).fetchone()["n"]
+
+        invite_limit = conn.execute(
+            "SELECT invite_weekly_limit FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+
+        return {
+            "heroes": heroes,
+            "campaigns_completed": camps["completed"] if camps else 0,
+            "campaigns_abandoned": camps["abandoned"] if camps else 0,
+            "lifetime_xp": xp_turns["lifetime_xp"] if xp_turns else 0,
+            "turns_total": xp_turns["turns_total"] if xp_turns else 0,
+            "top_skill": top_skill["source_key"] if top_skill else None,
+            "inviter_name": (inviter["display_name"] or inviter["username"]) if inviter else None,
+            "invite_weekly_sent": weekly_sent,
+            "invite_weekly_limit": invite_limit["invite_weekly_limit"] if invite_limit else 3,
+        }
+    finally:
+        conn.close()
+
+
+class CreateInviteReq(BaseModel):
+    email: str
+    message: str | None = None
+
+
+@router.post("/me/invites")
+def player_create_invite(
+    req: CreateInviteReq,
+    authorization: str | None = Header(default=None),
+):
+    """Stage 11-C C13 — player creates a personalised invite (always email-locked)."""
+    from app.core.jwt_auth import require_current_user
+    payload = require_current_user(authorization)
+    user_id = int(payload.get("sub") or 0)
+
+    email = (req.email or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Podaj prawidłowy adres email")
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        # Check weekly quota
+        user = conn.execute(
+            "SELECT invite_weekly_limit FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        limit = int(user["invite_weekly_limit"] or 3) if user else 3
+
+        sent_this_week = conn.execute(
+            "SELECT COUNT(*) as n FROM user_invites WHERE created_by = ? AND created_at >= datetime('now', '-7 days')",
+            (user_id,),
+        ).fetchone()["n"]
+
+        if sent_this_week >= limit:
+            raise HTTPException(
+                status_code=429,
+                detail={"error": "invite_quota_exceeded", "limit": limit, "sent": sent_this_week}
+            )
+
+        code = _secrets.token_urlsafe(20)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=72)).isoformat()
+        conn.execute(
+            "INSERT INTO user_invites (code, created_by, email, message, created_at, expires_at) VALUES (?, ?, ?, ?, datetime('now'), ?)",
+            (code, user_id, email, req.message or None, expires_at),
+        )
+        conn.commit()
+
+        inviter = conn.execute(
+            "SELECT username, display_name FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        inviter_name = (inviter["display_name"] or inviter["username"]) if inviter else "Gracz"
+
+        base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+        invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+
+        # Send invite email
+        from app.services.email_service import send_invite_email
+        send_invite_email(email, inviter_name, req.message, invite_link)
+
+        return {
+            "ok": True,
+            "code": code,
+            "invite_link": invite_link,
+            "remaining": limit - sent_this_week - 1,
+        }
+    finally:
+        conn.close()

@@ -2697,6 +2697,84 @@ def _ensure_narrative_items_schema(conn: sqlite3.Connection) -> None:
         logger.warning("admin_migration_t46_narrative_items_migrate_failed", error=str(e))
 
 
+def _ensure_auth_ux_schema(conn: sqlite3.Connection) -> None:
+    """Stage 11-C — invite system, email verification, password reset, friends, onboarding."""
+    stmts = [
+        # New columns on users
+        "ALTER TABLE users ADD COLUMN email TEXT",
+        "ALTER TABLE users ADD COLUMN invited_by_user_id INTEGER REFERENCES users(id)",
+        "ALTER TABLE users ADD COLUMN email_verified_at TEXT",
+        "ALTER TABLE users ADD COLUMN onboarded_at TEXT",
+        "ALTER TABLE users ADD COLUMN invite_weekly_limit INTEGER NOT NULL DEFAULT 3",
+        # Invite records
+        """
+        CREATE TABLE IF NOT EXISTS user_invites (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            code        TEXT    NOT NULL UNIQUE,
+            created_by  INTEGER NOT NULL REFERENCES users(id),
+            email       TEXT,
+            message     TEXT,
+            accepted_by INTEGER REFERENCES users(id),
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+            expires_at  TEXT    NOT NULL,
+            used_at     TEXT
+        )
+        """,
+        "CREATE INDEX IF NOT EXISTS idx_user_invites_code ON user_invites(code)",
+        "CREATE INDEX IF NOT EXISTS idx_user_invites_creator ON user_invites(created_by)",
+        # Email verification tokens
+        """
+        CREATE TABLE IF NOT EXISTS email_verification_tokens (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL REFERENCES users(id),
+            token      TEXT    NOT NULL UNIQUE,
+            expires_at TEXT    NOT NULL,
+            used_at    TEXT
+        )
+        """,
+        # Password reset tokens
+        """
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL REFERENCES users(id),
+            token      TEXT    NOT NULL UNIQUE,
+            expires_at TEXT    NOT NULL,
+            used_at    TEXT
+        )
+        """,
+        # Friends (foundation for multiplayer — stored now, UI ships with F2)
+        """
+        CREATE TABLE IF NOT EXISTS user_friendships (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_a_id  INTEGER NOT NULL REFERENCES users(id),
+            user_b_id  INTEGER NOT NULL REFERENCES users(id),
+            status     TEXT    NOT NULL DEFAULT 'pending',
+            created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(user_a_id, user_b_id)
+        )
+        """,
+        # SMTP + registration config keys (seeded with empty defaults into game_config_meta)
+        "INSERT OR IGNORE INTO game_config_meta(key, value) VALUES ('smtp_host', '')",
+        "INSERT OR IGNORE INTO game_config_meta(key, value) VALUES ('smtp_port', '587')",
+        "INSERT OR IGNORE INTO game_config_meta(key, value) VALUES ('smtp_username', '')",
+        "INSERT OR IGNORE INTO game_config_meta(key, value) VALUES ('smtp_password', '')",
+        "INSERT OR IGNORE INTO game_config_meta(key, value) VALUES ('smtp_from_name', 'AI-GM')",
+        "INSERT OR IGNORE INTO game_config_meta(key, value) VALUES ('smtp_from_address', '')",
+        "INSERT OR IGNORE INTO game_config_meta(key, value) VALUES ('smtp_use_tls', 'true')",
+        "INSERT OR IGNORE INTO game_config_meta(key, value) VALUES ('registration_open', 'false')",
+    ]
+    for sql in stmts:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception as e:
+            msg = str(e).lower()
+            if "already exists" in msg or "duplicate column" in msg or "unique constraint" in msg:
+                pass
+            else:
+                logger.warning("auth_ux_migration_warning", sql_preview=sql.strip()[:80], error=str(e))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -2767,6 +2845,7 @@ def run_admin_migrations() -> None:
         _run_v2_schema_migrations(conn)
         _ensure_dungeon_v2_schema(conn)
         _ensure_narrative_items_schema(conn)
+        _ensure_auth_ux_schema(conn)
     finally:
         conn.close()
 
