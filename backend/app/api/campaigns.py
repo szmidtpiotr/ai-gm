@@ -86,10 +86,26 @@ def _apply_gm_plan_visibility(
         owner_user_id=owner_user_id,
         viewer_user_id=viewer_user_id,
     ):
-        return row_dict
-    out = dict(row_dict)
-    out.pop("gm_plan_json", None)
-    return out
+        row_dict = dict(row_dict)
+    else:
+        row_dict = dict(row_dict)
+        row_dict.pop("gm_plan_json", None)
+    # Stage 10-C+ — surface any pending skill test so a refreshed client
+    # can re-mount the popup. The d20 is server-committed (see
+    # _commit_pending_skill_test in turns.py) so F5 cannot reroll.
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if gs and gs["session_flags"]:
+            sf = json.loads(gs["session_flags"])
+            if isinstance(sf, dict) and sf.get("pending_skill_test"):
+                row_dict["pending_skill_test"] = sf["pending_skill_test"]
+                row_dict["state_machine"] = sf.get("state") or "SKILL_TEST_PENDING"
+    except Exception:
+        pass
+    return row_dict
 
 
 def _parse_gm_plan(raw: str | None) -> dict:
