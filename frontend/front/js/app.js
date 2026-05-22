@@ -175,6 +175,7 @@ let _resetToken = null;
 let _verifyEmailAddress = null;
 let _resendCountdownInterval = null;
 let _canResendVerify = false;
+let _profileReturnScreen = 'heroes';
 let currentCampaignId = null;
 let currentCampaign = null;
 
@@ -6729,6 +6730,7 @@ async function completeOnboarding() {
 
 // ── Profile page ────────────────────────────────────────────────────────
 async function loadProfilePage() {
+    _profileReturnScreen = currentScreen;
     showScreen('profile');
     const user = currentUser;
     if (!user) return;
@@ -6822,7 +6824,7 @@ function initEventListeners() {
     document.getElementById('onboarding-cta')?.addEventListener('click', completeOnboarding);
 
     // Profile page
-    document.getElementById('profile-back-btn')?.addEventListener('click', () => showScreen('heroes'));
+    document.getElementById('profile-back-btn')?.addEventListener('click', () => showScreen(_profileReturnScreen || 'heroes'));
     document.getElementById('go-to-profile-btn')?.addEventListener('click', () => {
         closeSettings();
         loadProfilePage();
