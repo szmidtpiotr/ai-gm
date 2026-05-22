@@ -11,7 +11,8 @@ const SLASH_COMMANDS = [
     { cmd: '/mem',     desc: 'Pytanie o przeszłość z podsumowań (bez wpływu na narrację)' },
     { cmd: '/helpme',  desc: 'Doradca OOC — wskazówki poza fabułą' },
     { cmd: '/admin',   desc: 'Komendy admina: add | set | remove | clear | combat | quest | show', adminOnly: true },
-    { cmd: '/debug',   desc: 'Debug: dump-state | set-hp N | set-state STATE | reset-cooldowns', adminOnly: true },
+    { cmd: '/debug',   desc: 'Debug: dump-state | set-hp N | set-state STATE | reset-cooldowns | roll SKILL', adminOnly: true },
+    { cmd: '/roll',    desc: 'Admin: wymuś test umiejętności z animacją kostek (np. /roll skradanie)', adminOnly: true },
     { cmd: '/history', desc: 'Ostatnie 10 tur sesji' },
     { cmd: '/search',  desc: 'Przeszukaj lokację lub postać' },
     { cmd: '/atak',    desc: 'Synchronizuj panel walki lub zacznij walkę' },
@@ -2110,6 +2111,53 @@ async function handleSlashCommand(text) {
         return true;
     }
 
+    // /roll [skill_key] [intent] — admin-only: seeds a pending_skill_test and shows the dice popup
+    if (/^\/roll(\s|$)/i.test(t)) {
+        if (!playerIsAdmin()) {
+            showToast('Brak uprawnień — /roll wymaga konta admina.', 'error');
+            return true;
+        }
+        if (!characterData?.id) {
+            showToast('Brak aktywnego bohatera — wejdź do kampanii.', 'error');
+            return true;
+        }
+        // Parse: /roll <skill_key> [intent...]
+        const rollArgs = t.replace(/^\/roll\s*/i, '').trim();
+        const [skillKey, ...intentParts] = rollArgs.split(/\s+/);
+        const skillArg = skillKey || 'athletics';
+        const intent = intentParts.join(' ').trim(); // optional free-text context
+
+        try {
+            const r = await fetch('/api/debug/command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    character_id: characterData.id,
+                    text: `/roll ${skillArg}`,
+                    user_id: currentUser?.id,
+                    intent,          // passed through for context display
+                }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                showToast(`/roll: ${data?.detail || 'błąd'}`, 'error');
+                return true;
+            }
+            // Show dice popup with the seeded pending_skill_test
+            const stp = data?.skill_test_pending;
+            if (stp) {
+                if (intent) stp._admin_intent = intent; // attach intent for overlay subtitle
+                showSkillTestPopup(stp);
+            } else {
+                const res = data?.result || {};
+                appendMessage({ role: 'system', content: `🎲 /roll ${res.skill_label || skillArg} — DC ${res.dc}, mod ${res.modifier >= 0 ? '+' : ''}${res.modifier}`, created_at: new Date() });
+            }
+        } catch (e) {
+            showToast(`/roll: ${e.message || e}`, 'error');
+        }
+        return true;
+    }
+
     if (/^\/sheet(\s|$)/i.test(t)) {
         openSheetPanel();
         return true;
@@ -2193,6 +2241,64 @@ const DEBUG_CMD_HINTS = {
     'preview-death':   { hint: '👁 Podgląd ekranu śmierci (bez zmian w DB)' },
     'preview-victory': { hint: '👁 Podgląd ekranu zwycięstwa (bez zmian w DB)' },
 };
+
+// /roll [skill] [intent] autocomplete — skill list seeded from game_config_skills
+// Populated at page load / first use and cached for the session.
+let _rollSkillCache = null;
+
+async function _fetchRollSkills() {
+    if (_rollSkillCache) return _rollSkillCache;
+    try {
+        const r = await fetch('/api/mechanics/skills');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const rows = data?.skills || data || [];
+        _rollSkillCache = rows.map(s => ({ key: s.key || s.skill_key, label: s.label }))
+            .filter(s => s.key && s.label);
+    } catch (_e) {
+        // Fallback: hardcoded from game_config_skills (matches DB as of stage 11)
+        _rollSkillCache = [
+            { key: 'acrobatics',    label: 'Akrobatyka' },
+            { key: 'arcana',        label: 'Arkana' },
+            { key: 'attack',        label: 'Atak' },
+            { key: 'athletics',     label: 'Atletyka' },
+            { key: 'two_handed',    label: 'Broń dwuręczna' },
+            { key: 'investigation', label: 'Dochodzenie' },
+            { key: 'initiative',    label: 'Inicjatywa' },
+            { key: 'medicine',      label: 'Medycyna' },
+            { key: 'deception',     label: 'Oszustwo' },
+            { key: 'lockpick',      label: 'Otwieranie zamków' },
+            { key: 'persuasion',    label: 'Perswazja' },
+            { key: 'survival',      label: 'Przetrwanie' },
+            { key: 'stealth',       label: 'Skradanie' },
+            { key: 'awareness',     label: 'Spostrzegawczość' },
+            { key: 'lore',          label: 'Wiedza' },
+            { key: 'insight',       label: 'Wnikliwość' },
+            { key: 'intimidation',  label: 'Zastraszanie' },
+        ];
+    }
+    return _rollSkillCache;
+}
+
+function getRollSuggestions(afterRoll, cachedSkills) {
+    const parts = afterRoll.trimStart().split(/\s+/);
+    const typed = (parts[0] || '').toLowerCase();
+    const hasSkill = afterRoll.trimStart().includes(' ');
+
+    // Already typed a skill + space → show intent placeholder hint only
+    if (hasSkill) {
+        return [{
+            cmd: `/roll ${parts[0]}`,
+            desc: 'Opis akcji np. "Podkradam się do strażnika od tyłu"',
+        }];
+    }
+
+    // Still typing the skill name — filter by key or label prefix
+    return (cachedSkills || [])
+        .filter(s => s.key.startsWith(typed) || s.label.toLowerCase().startsWith(typed))
+        .slice(0, 10)
+        .map(s => ({ cmd: `/roll ${s.key}`, desc: s.label }));
+}
 
 function getDebugSuggestions(afterDebug) {
     const parts = afterDebug.trimStart().split(/\s+/);
@@ -2715,7 +2821,10 @@ async function handleSendMessage() {
     await sendTurn(content, 'free_text');
 }
 
-// ── Skill Test Roll Popup — SVG d20 (dice.js 3D deferred to issue #65) ───────
+// ── Skill Test Roll Popup — dice.js 3D physics (issue #65) ──────────────────
+
+// Singleton dice box — created once and reused so Three.js/Cannon don't re-init
+let _diceBox = null;
 
 // Stored so the ✕ dismiss button (static HTML onclick) can call it
 window._currentDicePending = null;
@@ -2742,10 +2851,7 @@ window.dismissDiceRoll = async function() {
 };
 
 function showSkillTestPopup(pending) {
-    const existing = document.getElementById('skill-roll-popup');
-    if (existing) existing.remove();
-
-    // Stop TTS (Bug 2 fix)
+    // Stop TTS immediately
     try { window.voiceUI?.stopPlayback?.(); } catch (_e) {}
 
     const mod   = pending.modifier_breakdown || {};
@@ -2756,126 +2862,134 @@ function showSkillTestPopup(pending) {
         ? Math.max(1, Math.min(20, parseInt(pending.committed_d20, 10)))
         : null;
 
-    window._currentDicePending = pending; // expose for dismissDiceRoll()
+    window._currentDicePending = pending;
+
+    // Populate static overlay elements
+    const overlay     = document.getElementById('dice-overlay');
+    const container   = document.getElementById('dice-container');
+    const skillName   = document.getElementById('dice-skill-name');
+    const skillMeta   = document.getElementById('dice-skill-meta');
+    const rollBtn     = document.getElementById('dice-roll-btn');
+    const resultCard  = document.getElementById('dice-result-card');
+    const resultNum   = document.getElementById('dice-result-num');
+    const resultTot   = document.getElementById('dice-result-total');
+    const resultVerd  = document.getElementById('dice-result-verdict');
+
+    skillName.textContent = name;
 
     const modParts = [
-        mod.skill_rank  ? `Ranga <span>+${mod.skill_rank}</span>`  : '',
-        mod.stat_mod    ? `Mod.${mod.governing_stat||'STAT'} <span>${mod.stat_mod>=0?'+':''}${mod.stat_mod}</span>` : '',
-        mod.proficiency ? `Biegłość <span>+${mod.proficiency}</span>` : '',
-    ].filter(Boolean).join(' · ');
-    const modsHTML = modParts || `Bonus <span>${sign}${total}</span>`;
+        mod.skill_rank  ? `Ranga +${mod.skill_rank}`  : '',
+        mod.stat_mod != null ? `Mod.${mod.governing_stat||'STAT'} ${mod.stat_mod>=0?'+':''}${mod.stat_mod}` : '',
+        mod.proficiency ? `Biegłość +${mod.proficiency}` : '',
+    ].filter(Boolean);
+    const bonusLine = (modParts.length ? modParts.join(' · ') + ' · ' : '') + `Bonus ${sign}${total}`;
+    // Optionally show admin intent as subtitle above the bonus line
+    const intent = pending._admin_intent;
+    skillMeta.innerHTML = intent
+        ? `<em style="opacity:.7;font-style:italic">${escapeHtml(intent)}</em><br>${escapeHtml(bonusLine)}`
+        : escapeHtml(bonusLine);
 
-    const D20 = `<svg viewBox="0 0 200 200" class="srp-die-svg" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="srpGrad" cx="50%" cy="42%" r="58%">
-          <stop offset="0%" stop-color="#1c1408"/>
-          <stop offset="100%" stop-color="#060403"/>
-        </radialGradient>
-      </defs>
-      <polygon class="srp-d20-outer"
-        points="100,5 155.8,23.1 190.4,70.6 190.4,129.4 155.8,176.9 100,195 44.2,176.9 9.6,129.4 9.6,70.6 44.2,23.1"
-        fill="url(#srpGrad)" stroke="#7a5618" stroke-width="2"/>
-      <polygon points="100,44 162,150 38,150"
-        fill="none" stroke="#4a360e" stroke-width="1" opacity="0.55"/>
-      <line x1="100" y1="44" x2="100" y2="6"   stroke="#3a2a0a" stroke-width="0.7" opacity="0.45"/>
-      <line x1="162" y1="150" x2="189" y2="130" stroke="#3a2a0a" stroke-width="0.7" opacity="0.45"/>
-      <line x1="38"  y1="150" x2="11"  y2="130" stroke="#3a2a0a" stroke-width="0.7" opacity="0.45"/>
-      <text class="srp-d20-num" id="srp-num" x="100" y="113"
-        text-anchor="middle" dominant-baseline="middle"
-        font-family="Cinzel,serif" font-size="56" font-weight="700" fill="#c9961a">?</text>
-    </svg>`;
+    rollBtn.disabled = false;
+    rollBtn.textContent = '⚄ Rzuć k20';
+    rollBtn.onclick = null;
+    resultCard.hidden = true;
+    resultNum.className = '';
+    resultVerd.className = '';
 
-    const popup = document.createElement('div');
-    popup.id = 'skill-roll-popup';
-    popup.className = 'skill-roll-overlay';
-    popup.innerHTML = `
-      <div class="srp-card">
-        <div class="srp-head">
-          <div class="srp-eyebrow">Próba Umiejętności</div>
-          <div class="srp-name">${escapeHtml(name)}</div>
-          <div class="srp-mods-line">${modsHTML} · Bonus <span>${sign}${total}</span></div>
-        </div>
-        <div class="srp-die-stage">
-          <div class="srp-die-wrap" id="srp-die">${D20}</div>
-          <div class="srp-result" id="srp-result">
-            <span class="srp-res-val" id="srp-rd20">—</span>
-            <span class="srp-res-sep">${sign}${total}</span>
-            <span class="srp-res-sep">=</span>
-            <span class="srp-res-total" id="srp-rtot">—</span>
-            <span class="srp-res-label" id="srp-rlbl"></span>
-          </div>
-          <div class="srp-nat" id="srp-nat"></div>
-        </div>
-        <div class="srp-foot">
-          <button class="srp-btn srp-btn-roll" id="srp-roll">⚄  Rzuć k20</button>
-          <button class="srp-btn srp-btn-confirm" id="srp-confirm" style="display:none">Zatwierdź wynik</button>
-        </div>
-      </div>`;
+    // Show overlay first so the container gets real dimensions before init
+    overlay.hidden = false;
 
-    const _chatRoot = document.getElementById('chat-container') || document.body;
-    _chatRoot.appendChild(popup);
+    // One frame later — container.clientWidth/clientHeight are now non-zero
+    requestAnimationFrame(() => {
+        // Fallback: if DICE library didn't load, show a simple number reveal
+        if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
+            _showSimpleFallbackRoll(pending, rollBtn, resultCard, resultNum, resultTot, resultVerd, overlay, committedD20, total, sign);
+            return;
+        }
 
-    let rolled = null;
-    const dieWrap = popup.querySelector('#srp-die');
-    const dieNum  = popup.querySelector('#srp-num');
-    const result  = popup.querySelector('#srp-result');
-    const rd20    = popup.querySelector('#srp-rd20');
-    const rtot    = popup.querySelector('#srp-rtot');
-    const rlbl    = popup.querySelector('#srp-rlbl');
-    const nat     = popup.querySelector('#srp-nat');
-    const rollBtn = popup.querySelector('#srp-roll');
-    const confBtn = popup.querySelector('#srp-confirm');
+        try {
+            if (!_diceBox) {
+                _diceBox = new DICE.dice_box(container);
+            } else {
+                _diceBox.clear();
+                _diceBox.reinit(container);
+            }
+            _diceBox.setDice('1d20');
+        } catch (err) {
+            _showSimpleFallbackRoll(pending, rollBtn, resultCard, resultNum, resultTot, resultVerd, overlay, committedD20, total, sign);
+            return;
+        }
 
-    rollBtn.addEventListener('click', () => {
+        rollBtn.onclick = function() {
+            rollBtn.disabled = true;
+
+            // before_roll: return forced face value so physics lands on committedD20
+            const beforeRoll = committedD20 !== null ? () => [committedD20] : null;
+
+            _diceBox.start_throw(beforeRoll, (notation) => {
+                const rolled = notation.result[0];
+                const sum    = rolled + total;
+                const nat20  = rolled === 20;
+                const nat1   = rolled === 1;
+
+                // Brief pause so player can see the die settle
+                setTimeout(() => {
+                    resultNum.textContent = rolled;
+                    resultNum.className = nat20 ? 'nat20' : nat1 ? 'nat1' : '';
+                    resultTot.textContent = `${sign}${total} = ${sum}`;
+
+                    if (nat20) {
+                        resultVerd.textContent = '✦ Naturalny 20!';
+                        resultVerd.className = 'nat20';
+                    } else if (nat1) {
+                        resultVerd.textContent = '✧ Naturalny 1';
+                        resultVerd.className = 'nat1';
+                    } else {
+                        const dc = pending.dc || 12;
+                        resultVerd.textContent = sum >= dc ? 'Sukces' : 'Porażka';
+                        resultVerd.className = sum >= dc ? 'success' : 'failure';
+                    }
+                    resultCard.hidden = false;
+
+                    // Auto-resolve after 1.8 s — no confirm needed
+                    setTimeout(async () => {
+                        overlay.hidden = true;
+                        await resolveSkillTest(pending.skill_test_id, rolled, null);
+                    }, 1800);
+                }, 600);
+            });
+        };
+    });
+}
+
+// Lightweight fallback when dice.js/Three.js fail to load
+function _showSimpleFallbackRoll(pending, rollBtn, resultCard, resultNum, resultTot, resultVerd, overlay, committedD20, total, sign) {
+    rollBtn.onclick = function() {
         rollBtn.disabled = true;
-        dieWrap.classList.add('srp-rolling');
         let ticks = 0;
         const iv = setInterval(() => {
-            dieNum.textContent = Math.ceil(Math.random() * 20);
-            if (++ticks >= 16) {
+            rollBtn.textContent = `⚄ ${Math.ceil(Math.random() * 20)}`;
+            if (++ticks >= 14) {
                 clearInterval(iv);
-                rolled = committedD20 !== null ? committedD20 : Math.ceil(Math.random() * 20);
-                const sum   = rolled + total;
-                const nat20 = rolled === 20;
-                const nat1  = rolled === 1;
-
-                dieWrap.classList.remove('srp-rolling');
-                dieWrap.classList.add('srp-landed');
-                dieNum.textContent = rolled;
-
-                const outer = popup.querySelector('.srp-d20-outer');
-                if (nat20) {
-                    outer.style.stroke = '#f0c040';
-                    dieNum.style.fill  = '#f0c040';
-                    dieWrap.classList.add('srp-nat20');
-                    nat.textContent = 'Naturalny 20';
-                    nat.className = 'srp-nat nat20';
-                } else if (nat1) {
-                    outer.style.stroke = '#8b1a1a';
-                    dieNum.style.fill  = '#c04040';
-                    dieWrap.classList.add('srp-nat1');
-                    nat.textContent = 'Naturalny 1';
-                    nat.className = 'srp-nat nat1';
-                }
-
-                setTimeout(() => {
-                    rd20.textContent = rolled;
-                    rtot.textContent = sum;
-                    rtot.className   = 'srp-res-total' + (nat20 ? ' nat20' : nat1 ? ' nat1' : '');
-                    rlbl.textContent = nat20 ? '✦' : nat1 ? '✧' : '';
-                    result.classList.add('visible');
-                    confBtn.style.display = '';
-                }, 220);
+                const rolled = committedD20 !== null ? committedD20 : Math.ceil(Math.random() * 20);
+                const sum    = rolled + total;
+                const nat20  = rolled === 20;
+                const nat1   = rolled === 1;
+                rollBtn.textContent = '⚄ Rzuć k20';
+                resultNum.textContent = rolled;
+                resultNum.className = nat20 ? 'nat20' : nat1 ? 'nat1' : '';
+                resultTot.textContent = `${sign}${total} = ${sum}`;
+                if (nat20) { resultVerd.textContent = '✦ Naturalny 20!'; resultVerd.className = 'nat20'; }
+                else if (nat1) { resultVerd.textContent = '✧ Naturalny 1'; resultVerd.className = 'nat1'; }
+                else { const dc = pending.dc || 12; resultVerd.textContent = sum >= dc ? 'Sukces' : 'Porażka'; resultVerd.className = sum >= dc ? 'success' : 'failure'; }
+                resultCard.hidden = false;
+                setTimeout(async () => {
+                    overlay.hidden = true;
+                    await resolveSkillTest(pending.skill_test_id, rolled, null);
+                }, 1800);
             }
-        }, 65);
-    });
-
-    confBtn.addEventListener('click', async () => {
-        if (rolled === null) return;
-        confBtn.disabled = true;
-        confBtn.textContent = 'Rozwiązuję…';
-        await resolveSkillTest(pending.skill_test_id, rolled, popup);
-    });
+        }, 60);
+    };
 }
 
 async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
@@ -6590,6 +6704,10 @@ function initSlashAutocomplete(inputEl) {
         if (/^debug(\s|$)/i.test(token)) {
             return { idx, query: token, isDebug: true };
         }
+        // /roll [skill] [intent] — spans up to two words (skill + free-text intent)
+        if (/^roll(\s|$)/i.test(token)) {
+            return { idx, query: token, isRoll: true };
+        }
         if (/\s/.test(token)) return null;
         return { idx, query: token, isAdmin: false };
     }
@@ -6618,7 +6736,8 @@ function initSlashAutocomplete(inputEl) {
         inputEl.setSelectionRange(caret, caret);
         inputEl.focus();
         // For /admin pick, re-sync to show subcommand suggestions
-        if (cmd.cmd.startsWith('/admin')) {
+        // For /roll pick (just chose skill), re-sync to show the intent hint
+        if (cmd.cmd.startsWith('/admin') || cmd.cmd.startsWith('/roll')) {
             setTimeout(sync, 0);
         } else {
             hide();
@@ -6665,6 +6784,19 @@ function initSlashAutocomplete(inputEl) {
             if (!playerIsAdmin()) { hide(); return; }
             const afterDebug = ctx.query.replace(/^debug\s*/i, '');
             found = getDebugSuggestions(afterDebug);
+        } else if (ctx.isRoll) {
+            // /roll [skill] [intent] — admin-only skill picker with free-text intent
+            if (!playerIsAdmin()) { hide(); return; }
+            const afterRoll = ctx.query.replace(/^roll\s*/i, '');
+            // Fetch skill list async (cached after first call)
+            _fetchRollSkills().then(skills => {
+                const sugg = getRollSuggestions(afterRoll, skills);
+                if (!sugg.length) { hide(); return; }
+                matches = sugg;
+                hi = 0;
+                showPopup();
+            });
+            return; // async path — skip synchronous found assignment
         } else {
             found = SLASH_COMMANDS
                 .filter(c => !c.adminOnly || playerIsAdmin())
