@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=stage11c-ledger-2026-05-23">
+  <link rel="stylesheet" href="./css/styles.css?v=stage11c-ledger2-2026-05-23">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -275,20 +275,25 @@
           </button>
           <input type="file" id="profile-avatar-input" accept="image/*" style="display:none">
 
-          <!-- Name block -->
+          <!-- Name block — inline edit -->
           <div class="pf-name-block">
-            <div class="pf-name-row">
+            <div class="pf-name-row" id="pf-name-display">
               <h2 class="pf-name" id="profile-username">—</h2>
-              <button type="button" class="pf-pencil" id="profile-name-edit-btn" title="Edytuj nazwę wyświetlaną">
+              <button type="button" class="pf-pencil" id="profile-name-edit-btn" title="Edytuj nazwę">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                 </svg>
               </button>
             </div>
-            <div class="pf-name-edit" id="profile-name-edit" hidden>
-              <input type="text" class="pf-name-input" id="profile-name-input" maxlength="40" placeholder="Nazwa wyświetlana…">
-              <button type="button" class="pf-name-save" id="profile-name-save">✓</button>
-              <button type="button" class="pf-name-cancel" id="profile-name-cancel">✕</button>
+            <!-- Inline edit row — replaces display row -->
+            <div class="pf-name-row pf-name-editing" id="profile-name-edit" hidden>
+              <input type="text" class="pf-name-input" id="profile-name-input" maxlength="40">
+              <button type="button" class="pf-name-save" id="profile-name-save" title="Zapisz (Enter)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <button type="button" class="pf-name-cancel" id="profile-name-cancel" title="Anuluj (Esc)">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
             </div>
             <div class="pf-login" id="profile-login-label"></div>
             <div class="pf-email" id="profile-email-label"></div>
@@ -351,37 +356,36 @@
           <span class="pf-section-label__line"></span>
         </div>
 
-        <!-- Inline change password form -->
-        <div class="pf-password-form" id="pf-password-form">
-          <div class="pf-password-fields" id="pf-password-fields" hidden>
-            <div class="pf-form-field">
-              <label class="pf-form-label">Obecne hasło</label>
-              <input type="password" class="pf-form-input" id="pf-current-password" placeholder="••••••••" autocomplete="current-password">
-            </div>
-            <div class="pf-form-field">
-              <label class="pf-form-label">Nowe hasło</label>
-              <input type="password" class="pf-form-input" id="pf-new-password" placeholder="Minimum 8 znaków" autocomplete="new-password">
-            </div>
-            <div class="pf-form-field">
-              <label class="pf-form-label">Powtórz nowe hasło</label>
-              <input type="password" class="pf-form-input" id="pf-confirm-password" placeholder="••••••••" autocomplete="new-password">
-            </div>
-            <div id="pf-password-error" class="auth-msg auth-msg--error" hidden></div>
-            <div class="pf-password-actions">
-              <button type="button" class="pf-action-btn pf-action-btn--primary" id="pf-password-save-btn">Zapisz hasło</button>
-              <button type="button" class="pf-action-btn" id="pf-password-cancel-btn">Anuluj</button>
-            </div>
+        <!-- Toggle row first, fields below -->
+        <button type="button" class="pf-row-btn" id="profile-change-password-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          Zmień hasło
+          <svg class="pf-row-btn__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+
+        <div class="pf-password-fields" id="pf-password-fields" hidden>
+          <div class="pf-form-field">
+            <label class="pf-form-label">Obecne hasło</label>
+            <input type="password" class="pf-form-input" id="pf-current-password" placeholder="••••••••" autocomplete="current-password">
           </div>
-          <button type="button" class="pf-row-btn" id="profile-change-password-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-            Zmień hasło
-            <svg class="pf-row-btn__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
+          <div class="pf-form-field">
+            <label class="pf-form-label">Nowe hasło</label>
+            <input type="password" class="pf-form-input" id="pf-new-password" placeholder="Minimum 8 znaków" autocomplete="new-password">
+          </div>
+          <div class="pf-form-field">
+            <label class="pf-form-label">Powtórz nowe hasło</label>
+            <input type="password" class="pf-form-input" id="pf-confirm-password" placeholder="••••••••" autocomplete="new-password">
+          </div>
+          <div id="pf-password-error" class="auth-msg auth-msg--error" hidden></div>
+          <div class="pf-password-actions">
+            <button type="button" class="pf-action-btn pf-action-btn--primary" id="pf-password-save-btn">Zapisz hasło</button>
+            <button type="button" class="pf-action-btn" id="pf-password-cancel-btn">Anuluj</button>
+          </div>
         </div>
 
         <button type="button" class="pf-row-btn pf-row-btn--danger" id="profile-logout-btn">
@@ -1527,6 +1531,6 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=stage11c-ledger-2026-05-23"></script>
+  <script src="./js/app.js?v=stage11c-ledger2-2026-05-23"></script>
 </body>
 </html>

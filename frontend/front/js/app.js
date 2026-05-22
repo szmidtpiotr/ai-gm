@@ -6807,17 +6807,19 @@ function _initProfileEditing() {
     const saveBtn    = document.getElementById('profile-name-save');
     const cancelBtn  = document.getElementById('profile-name-cancel');
 
+    const displayRow = document.getElementById('pf-name-display');
+
     editBtn?.addEventListener('click', () => {
         nameInput.value = nameEl.textContent.trim();
+        if (displayRow) displayRow.hidden = true;
         editRow.hidden = false;
-        editBtn.hidden = true;
         nameInput.focus();
         nameInput.select();
     });
 
     const cancelEdit = () => {
         editRow.hidden = true;
-        editBtn.hidden = false;
+        if (displayRow) displayRow.hidden = false;
     };
 
     cancelBtn?.addEventListener('click', cancelEdit);
@@ -6831,7 +6833,7 @@ function _initProfileEditing() {
         if (resp) {
             nameEl.textContent = resp.display_name || newName;
             showToast('Nazwa zaktualizowana', 'success');
-            cancelEdit();
+            cancelEdit(); // restores display row
         }
     });
 
