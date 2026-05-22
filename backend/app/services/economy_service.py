@@ -106,6 +106,53 @@ def get_level_display(character_id: int, conn: sqlite3.Connection) -> int:
     return min(10, total // 100)
 
 
+# ── Gold journaling (Stage 11 R6 — issue #64) ─────────────────────────────
+
+
+def journal_gold_delta(
+    conn: sqlite3.Connection,
+    character_id: int,
+    delta: int,
+    source: str,
+    *,
+    campaign_id: int | None = None,
+    meta: dict | None = None,
+    set_absolute: int | None = None,
+) -> None:
+    """Write a row to character_gold_log. Mutating gold_gp itself is the
+    caller's responsibility — this only journals.
+
+    `delta` is the SIGNED change (positive = gain, negative = spend).
+    `set_absolute` lets callers that overwrite (e.g. admin "set gold to N")
+    record the resulting value in meta_json — pass it for traceability.
+    Resurrection's gold_recent_days mode only sums positive deltas, so
+    spends do not affect that calculation.
+    """
+    if delta == 0:
+        return
+    game_day = 1
+    if campaign_id is not None:
+        try:
+            from app.services.clock_service import get_clock_state
+            game_day = int(get_clock_state(int(campaign_id), conn=conn)["day"])
+        except Exception:
+            pass
+    payload = dict(meta or {})
+    if set_absolute is not None:
+        payload["set_absolute"] = int(set_absolute)
+    try:
+        conn.execute(
+            """
+            INSERT INTO character_gold_log
+                (character_id, delta, source, game_clock_day, meta_json)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (character_id, int(delta), source, game_day, json.dumps(payload, ensure_ascii=False) if payload else None),
+        )
+    except sqlite3.OperationalError as e:
+        logger.warning("gold_log_insert_failed", error=str(e))
+
+
 def get_xp_log(
     character_id: int,
     conn: sqlite3.Connection,

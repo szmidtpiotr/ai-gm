@@ -5774,6 +5774,10 @@ async function handleGoToCampaigns() {
 // Death Screen
 // ============================================================================
 // Stage 9 P5 — Death screen with live LLM-generated epitaph from /api/campaigns/{id}/end-summary.
+// Stage 11 R8 — cached resurrect-preview shape so the confirm modal can render
+// the actual cost line ("Stracisz 250 PD") without a second fetch on click.
+let _resurrectPreviewCache = null;
+
 async function showDeathScreen(characterName) {
     const deathScreen = document.getElementById('death-screen');
     const nameElement = document.getElementById('death-character-name');
@@ -5806,6 +5810,47 @@ async function showDeathScreen(characterName) {
             // Trigger the fade-in animation after the text is in place.
             requestAnimationFrame(() => epitaphElement.classList.add('death-epitaph--lit'));
         }
+
+        // Stage 11 R8 — un-hide #resurrect-btn only if admin enabled it for this user.
+        const resBtn = document.getElementById('resurrect-btn');
+        _resurrectPreviewCache = null;
+        if (resBtn && characterData?.id) {
+            resBtn.hidden = true;
+            try {
+                _resurrectPreviewCache = await apiRequest('GET', `/characters/${characterData.id}/resurrect-preview`);
+                if (_resurrectPreviewCache?.enabled) {
+                    resBtn.hidden = false;
+                    resBtn.disabled = false;
+                    resBtn.textContent = '✦ Wskrześ bohatera';
+                }
+            } catch (_e) { /* leave hidden */ }
+        }
+    }
+}
+
+function _formatResurrectCostLine(preview) {
+    const cost = preview?.cost || {};
+    switch (cost.mode) {
+        case 'admin_free':
+            return 'Wskrzeszenie nie będzie kosztować nic.';
+        case 'gold_percent':
+            return `Stracisz <strong>${cost.gold_lost} GP</strong> (${cost.percent}% z ${cost.current_gold} GP).`;
+        case 'gold_recent_days':
+            return `Stracisz <strong>${cost.gold_lost} GP</strong> — sumę zarobków z ostatnich ${cost.window_days} dni gry, ograniczoną do ${cost.cap_percent}% obecnego złota.`;
+        case 'xp_revert': {
+            const lines = [`Cofnięte zostanie <strong>${cost.xp_lost} PD</strong> (${cost.grants_count} ostatnich nadań).`];
+            if ((cost.current_xp ?? 0) - (cost.xp_lost ?? 0) < 0) {
+                lines.push('Twoja postać może spaść o poziom — straconych zostaną też zakupione w tym czasie awanse umiejętności i zaklęć.');
+            }
+            return lines.join(' ');
+        }
+        case 'item_loss':
+            if (cost.fallback_to_free) {
+                return 'Brak funkcjonalnych przedmiotów do utraty — wskrzeszenie będzie bezpłatne.';
+            }
+            return `Stracisz losowo wybrany przedmiot spośród ${cost.eligible_count} założonych funkcjonalnych przedmiotów.`;
+        default:
+            return 'Koszt zostanie obliczony.';
     }
 }
 
@@ -5950,9 +5995,75 @@ async function handleEndAction(action) {
 }
 
 async function handleResurrect() {
-    hideDeathScreen();
-    showToast('Bohater został wskrzeszony!', 'success');
-    // TODO: Call resurrection API when available
+    // Stage 11 R8 — real resurrection flow. Confirmation modal shows the
+    // server-computed cost, then POSTs /resurrect, then reloads the campaign
+    // state so the player resumes mid-game.
+    if (!characterData?.id || !currentCampaignId) {
+        showToast('Brak aktywnej kampanii / bohatera.', 'error');
+        return;
+    }
+    const preview = _resurrectPreviewCache || await (async () => {
+        try { return await apiRequest('GET', `/characters/${characterData.id}/resurrect-preview`); }
+        catch { return null; }
+    })();
+    if (!preview?.enabled) {
+        showToast('Wskrzeszenie nie jest dostępne dla tego konta.', 'error');
+        return;
+    }
+    const costLine = _formatResurrectCostLine(preview);
+    const usesLine = (preview.config?.uses_remaining !== null && preview.config?.uses_remaining !== undefined)
+        ? `<p style="opacity:0.7; font-size:0.9rem; margin-top:8px;">Pozostałych wskrzeszeń: ${preview.config.uses_remaining}</p>`
+        : '';
+
+    // Build a lightweight confirmation overlay (reuses death-screen z-stack)
+    const modal = document.createElement('div');
+    modal.id = 'resurrect-confirm';
+    modal.style.cssText = `
+        position: fixed; inset: 0; z-index: 10001;
+        background: rgba(8, 4, 14, 0.86); backdrop-filter: blur(6px);
+        display: flex; align-items: center; justify-content: center;
+        padding: 24px;
+    `;
+    modal.innerHTML = `
+      <div style="max-width: 520px; background: #1a1525; border: 1px solid #4a3a6a; border-radius: 14px; padding: 28px; color: #ece6f8; box-shadow: 0 12px 48px rgba(0,0,0,0.6);">
+        <h2 style="margin: 0 0 12px; font-family: 'Cinzel', serif; color: #c8a8ff;">Wskrzeszenie</h2>
+        <p style="line-height: 1.5; margin: 0 0 16px;">${costLine}</p>
+        ${usesLine}
+        <div style="display: flex; gap: 12px; margin-top: 20px;">
+          <button id="res-cancel" style="flex:1; padding: 10px; background: #2a1f3a; color: #c0b8d0; border: 1px solid #4a3a6a; border-radius: 6px; cursor: pointer;">Anuluj</button>
+          <button id="res-confirm" style="flex:2; padding: 10px; background: linear-gradient(135deg, #c8a8ff, #8868c0); color: #1a0e2a; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">✦ Wskrześ</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#res-cancel').addEventListener('click', () => modal.remove());
+    modal.querySelector('#res-confirm').addEventListener('click', async () => {
+        const btn = modal.querySelector('#res-confirm');
+        btn.disabled = true;
+        btn.textContent = 'Wskrzeszanie…';
+        try {
+            const result = await apiRequest('POST', `/characters/${characterData.id}/resurrect`);
+            modal.remove();
+            hideDeathScreen();
+            // Brief toast with the actual cost paid
+            const paid = result.cost_applied || {};
+            let msg = `✦ ${characterData.name || 'Bohater'} wstał — HP ${result.revived_hp}/${result.max_hp}.`;
+            if (paid.gold_lost) msg += ` Strata: ${paid.gold_lost} GP.`;
+            if (paid.xp_subtracted) msg += ` Cofnięto: ${paid.xp_subtracted} PD.`;
+            if (paid.item_lost) msg += ` Utracono: ${paid.item_lost.label}.`;
+            showToast(msg, 'success');
+            // Reload campaign state so chat / sheet / map all reflect the revival.
+            if (currentCampaign) {
+                await enterGame(currentCampaign);
+            } else {
+                await loadCampaigns();
+                showScreen('campaigns');
+            }
+        } catch (e) {
+            modal.remove();
+            showToast(e?.message || 'Wskrzeszenie nieudane.', 'error');
+        }
+    });
 }
 
 async function handleDeathReturn() {

@@ -1068,18 +1068,26 @@ def get_character_gold(character_id: int) -> int:
         return int(row["gold_gp"] or 0)
 
 
-def apply_character_gold_delta(character_id: int, delta: int, reason: str | None = None) -> int:
+def apply_character_gold_delta(
+    character_id: int,
+    delta: int,
+    reason: str | None = None,
+    *,
+    campaign_id: int | None = None,
+) -> int:
     """
     Atomically adjust gold_gp by delta (must not go below 0).
-    ``reason`` is accepted for API compatibility; not persisted in this phase.
+    Stage 11 R6 — `reason` is now persisted to `character_gold_log` so the
+    `gold_recent_days` resurrection mode can sum recent gains. `campaign_id`
+    is used to derive the in-game day; without it, day defaults to 1 and the
+    row won't be matched by a windowed lookup.
     """
-    _ = reason
     if int(delta) == 0:
         raise ValueError("delta must be non-zero")
     cid = int(character_id)
     d = int(delta)
     with _conn() as conn:
-        row = conn.execute("SELECT gold_gp FROM characters WHERE id = ?", (cid,)).fetchone()
+        row = conn.execute("SELECT gold_gp, campaign_id FROM characters WHERE id = ?", (cid,)).fetchone()
         if not row:
             raise ValueError("character not found")
         cur = int(row["gold_gp"] or 0)
@@ -1087,6 +1095,16 @@ def apply_character_gold_delta(character_id: int, delta: int, reason: str | None
         if new_g < 0:
             raise ValueError("gold_gp would be negative")
         conn.execute("UPDATE characters SET gold_gp = ? WHERE id = ?", (new_g, cid))
+        # Resolve campaign for clock lookup (fall back to character's own campaign_id)
+        cid_for_clock = campaign_id if campaign_id is not None else row["campaign_id"]
+        try:
+            from app.services.economy_service import journal_gold_delta
+            journal_gold_delta(
+                conn, cid, d, reason or "unknown",
+                campaign_id=cid_for_clock,
+            )
+        except Exception as _e:
+            pass  # journaling must never block the gold mutation
     return new_g
 
 

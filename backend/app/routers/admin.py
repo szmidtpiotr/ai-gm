@@ -2134,7 +2134,8 @@ def admin_user_activity(user_id: int, _: None = Depends(require_admin_token)):
             """
             SELECT
                 c.id, c.title, c.status, c.created_at,
-                ch.name AS char_name, ch.sheet_json,
+                ch.id AS char_id, ch.name AS char_name,
+                ch.status AS char_status, ch.sheet_json,
                 (SELECT COUNT(*) FROM campaign_turns ct WHERE ct.campaign_id = c.id) AS turn_count,
                 (SELECT MAX(ct2.created_at) FROM campaign_turns ct2 WHERE ct2.campaign_id = c.id) AS last_turn_at
             FROM campaigns c
@@ -2151,7 +2152,9 @@ def admin_user_activity(user_id: int, _: None = Depends(require_admin_token)):
                 "title": r["title"],
                 "status": r["status"],
                 "created_at": r["created_at"],
+                "char_id": r["char_id"],
                 "char_name": r["char_name"],
+                "char_status": r["char_status"],
                 "turn_count": r["turn_count"] or 0,
                 "last_turn_at": r["last_turn_at"],
             }
@@ -2437,6 +2440,95 @@ def admin_put_user_llm_settings(
         api_key=api_key,
     )
     return {"ok": True, "settings": get_user_llm_settings_masked(user_id=user_id)}
+
+
+# ── Stage 11 R4 — Hero resurrection admin endpoints (#64) ──────────────
+
+
+class ResurrectionConfigReq(BaseModel):
+    enabled: bool | None = None
+    mode: str | None = None
+    value: int | None = None
+    cap_percent: int | None = None
+    uses_remaining: int | None = None
+    clear_uses_remaining: bool = False  # set true to explicitly NULL the column
+
+
+@router.get("/admin/users/{user_id}/resurrection-config")
+def admin_get_resurrection_config(
+    user_id: int, _: None = Depends(require_admin_token)
+):
+    from app.services.resurrection_service import get_user_resurrection_config
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return {"ok": True, "config": get_user_resurrection_config(user_id, conn)}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/users/{user_id}/resurrection-config")
+def admin_patch_resurrection_config(
+    user_id: int, req: ResurrectionConfigReq,
+    _: None = Depends(require_admin_token),
+):
+    from app.services.resurrection_service import set_user_resurrection_config
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        uses_arg = "__noop__"
+        if req.clear_uses_remaining:
+            uses_arg = None
+        elif req.uses_remaining is not None:
+            uses_arg = int(req.uses_remaining)
+        cfg = set_user_resurrection_config(
+            user_id, conn,
+            enabled=req.enabled,
+            mode=req.mode,
+            value=req.value,
+            cap_percent=req.cap_percent,
+            uses_remaining=uses_arg,
+        )
+        return {"ok": True, "config": cfg}
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    finally:
+        conn.close()
+
+
+class AdminResurrectReq(BaseModel):
+    force: bool = True  # admin default: free resurrect
+
+
+@router.post("/admin/characters/{character_id}/resurrect")
+def admin_force_resurrect(
+    character_id: int,
+    req: AdminResurrectReq,
+    _: None = Depends(require_admin_token),
+):
+    """Admin-triggered resurrection — defaults to force=true (free).
+
+    Use force=false to apply the user's configured cost mode anyway
+    (e.g. for GM-as-player testing of paid resurrects).
+    """
+    from app.services.resurrection_service import apply_resurrection
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id, user_id, status FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+        try:
+            return apply_resurrection(character_id, int(char["user_id"]), conn, force=req.force)
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e))
+        except RuntimeError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+    finally:
+        conn.close()
 
 
 @router.get("/admin/settings/loki")

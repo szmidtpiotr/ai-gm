@@ -339,14 +339,31 @@ def admin_cheat(
                 "SELECT COALESCE(gold_gp,0) FROM characters WHERE id = ?",
                 (character_id,),
             ).fetchone()[0]
+            try:
+                from app.services.economy_service import journal_gold_delta
+                journal_gold_delta(conn, character_id, amount, "admin_cheat_add", campaign_id=campaign_id or None)
+            except Exception:
+                pass
             result = {"gold_gp": new_gold}
 
         elif cmd == "set gold":
             amount = max(0, int(req.value or 0))
+            prev = conn.execute(
+                "SELECT COALESCE(gold_gp,0) FROM characters WHERE id = ?", (character_id,)
+            ).fetchone()[0]
             conn.execute(
                 "UPDATE characters SET gold_gp = ? WHERE id = ?",
                 (amount, character_id),
             )
+            try:
+                from app.services.economy_service import journal_gold_delta
+                journal_gold_delta(
+                    conn, character_id, amount - int(prev or 0),
+                    "admin_cheat_set", campaign_id=campaign_id or None,
+                    set_absolute=amount,
+                )
+            except Exception:
+                pass
             result = {"gold_gp": amount}
 
         elif cmd in ("add health", "set health"):

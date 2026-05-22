@@ -168,6 +168,40 @@ ADMIN_MIGRATIONS = [
     UPDATE users SET role = 'player'
     WHERE is_admin = 0 AND role NOT IN ('player','gm','admin')
     """,
+    # Stage 11 R1 — Hero resurrection per-user config (issue #64). All idempotent.
+    "ALTER TABLE users ADD COLUMN resurrection_enabled INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN resurrection_cost_mode TEXT NOT NULL DEFAULT 'admin_free'",
+    "ALTER TABLE users ADD COLUMN resurrection_cost_value INTEGER NOT NULL DEFAULT 25",
+    "ALTER TABLE users ADD COLUMN resurrection_cost_cap_percent INTEGER NOT NULL DEFAULT 50",
+    "ALTER TABLE users ADD COLUMN resurrection_uses_remaining INTEGER",
+    # Stage 11 R1 — mark XP grants that have been clawed back so we never
+    # double-revert. NULL = still active.
+    "ALTER TABLE character_xp_grants ADD COLUMN reverted_at TEXT",
+    # Stage 11 R5 — stamp the level at which each spell was learned so the
+    # xp_revert resurrection mode can revoke spells purchased above the new
+    # level. Existing rows stay NULL ("unknown when learned") and are kept
+    # by the rollback (rollback only revokes rows with learned_at_level > N).
+    "ALTER TABLE character_spells ADD COLUMN learned_at_level INTEGER",
+    # Stage 11 R1 — character_gold_log journal. Every gold mutation writes a
+    # row; resurrection's gold_recent_days mode sums positive deltas in a
+    # window. `game_clock_day` is the in-game day (clock-driven), used by the
+    # recent-days lookup. `wall_clock_at` is for ops debugging.
+    """
+    CREATE TABLE IF NOT EXISTS character_gold_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        character_id INTEGER NOT NULL,
+        delta INTEGER NOT NULL,
+        source TEXT NOT NULL DEFAULT 'unknown',
+        meta_json TEXT,
+        game_clock_day INTEGER,
+        wall_clock_at TEXT NOT NULL DEFAULT (datetime('now')),
+        reverted_at TEXT
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_character_gold_log_char_day
+    ON character_gold_log(character_id, game_clock_day DESC)
+    """,
     """
     CREATE TABLE IF NOT EXISTS game_config_items (
         key          TEXT PRIMARY KEY,
