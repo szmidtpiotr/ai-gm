@@ -1,12 +1,10 @@
 """
-Resurrection Service — Stage 11 (issue #64)
+Resurrection Service — Stage 11 (issue #64, redesigned global config)
 
-Server-side enforcement of hero resurrection from a dead state.
-
-Each user has a per-account config (resurrection_enabled + cost mode + params)
-set by an admin in the Players panel. When a player dies and tries to revive,
-the configured cost is computed and applied here. Admins can force a free
-resurrect via the dedicated admin endpoint.
+Config is GLOBAL (one setting for all players), stored as JSON in
+game_config_meta key='resurrection_config'. Admins set it once in the
+System panel → Resurrection tab. Each user's individual "lives remaining"
+is still tracked per-user in users.resurrection_uses_remaining.
 
 Cost modes
 ----------
@@ -20,7 +18,7 @@ gold_recent_days  — sum gold *gains* in the last cost_value game days, then
 item_loss         — remove one randomly chosen equipped functional item
                     (weapon / armor with DR>0 / consumable with effect_json).
                     Quest-marked items excluded. If pool empty → free.
-admin_free        — no cost (default for new accounts).
+admin_free        — no cost (default).
 
 All modes share these post-revive effects:
 - HP restored to max_hp // 2
@@ -50,67 +48,103 @@ VALID_MODES = (
 )
 
 
-# ── Config helpers ────────────────────────────────────────────────────────
+# ── Global config (game_config_meta key='resurrection_config') ───────────
+
+_GLOBAL_CONFIG_KEY = "resurrection_config"
+_GLOBAL_CONFIG_DEFAULT: dict[str, Any] = {
+    "enabled": False,
+    "mode": "admin_free",
+    "value": 25,
+    "cap_percent": 50,
+    "default_uses": None,  # None = unlimited by default for every player
+}
 
 
-def get_user_resurrection_config(user_id: int, conn: sqlite3.Connection) -> dict[str, Any]:
+def get_global_resurrection_config(conn: sqlite3.Connection) -> dict[str, Any]:
+    """Read the global resurrection config from game_config_meta."""
     row = conn.execute(
-        """
-        SELECT
-            COALESCE(resurrection_enabled, 0) AS enabled,
-            COALESCE(resurrection_cost_mode, 'admin_free') AS mode,
-            COALESCE(resurrection_cost_value, 25) AS value,
-            COALESCE(resurrection_cost_cap_percent, 50) AS cap_percent,
-            resurrection_uses_remaining AS uses_remaining
-        FROM users WHERE id = ?
-        """,
-        (user_id,),
+        "SELECT value FROM game_config_meta WHERE key = ?",
+        (_GLOBAL_CONFIG_KEY,),
     ).fetchone()
-    if not row:
-        raise LookupError(f"User {user_id} not found")
-    return {
-        "enabled": bool(row["enabled"]),
-        "mode": row["mode"],
-        "value": int(row["value"]),
-        "cap_percent": int(row["cap_percent"]),
-        "uses_remaining": row["uses_remaining"],  # may be None = unlimited
-    }
+    if not row or not row["value"]:
+        return dict(_GLOBAL_CONFIG_DEFAULT)
+    try:
+        stored = json.loads(row["value"])
+        cfg = dict(_GLOBAL_CONFIG_DEFAULT)
+        cfg.update(stored)
+        return cfg
+    except (json.JSONDecodeError, TypeError):
+        return dict(_GLOBAL_CONFIG_DEFAULT)
 
 
-def set_user_resurrection_config(
-    user_id: int,
+def set_global_resurrection_config(
     conn: sqlite3.Connection,
     *,
     enabled: bool | None = None,
     mode: str | None = None,
     value: int | None = None,
     cap_percent: int | None = None,
-    uses_remaining: int | None | str = "__noop__",  # sentinel so None means "set to NULL"
+    default_uses: int | None | str = "__noop__",
 ) -> dict[str, Any]:
+    """Upsert the global resurrection config in game_config_meta."""
     if mode is not None and mode not in VALID_MODES:
         raise ValueError(f"Invalid mode '{mode}'. Allowed: {VALID_MODES}")
-    sets: list[str] = []
-    args: list[Any] = []
+    cfg = get_global_resurrection_config(conn)
     if enabled is not None:
-        sets.append("resurrection_enabled = ?")
-        args.append(1 if enabled else 0)
+        cfg["enabled"] = bool(enabled)
     if mode is not None:
-        sets.append("resurrection_cost_mode = ?")
-        args.append(mode)
+        cfg["mode"] = mode
     if value is not None:
-        sets.append("resurrection_cost_value = ?")
-        args.append(int(value))
+        cfg["value"] = int(value)
     if cap_percent is not None:
-        sets.append("resurrection_cost_cap_percent = ?")
-        args.append(max(0, min(100, int(cap_percent))))
-    if uses_remaining != "__noop__":
-        sets.append("resurrection_uses_remaining = ?")
-        args.append(uses_remaining)
-    if sets:
-        args.append(user_id)
-        conn.execute(f"UPDATE users SET {', '.join(sets)} WHERE id = ?", args)
-        conn.commit()
-    return get_user_resurrection_config(user_id, conn)
+        cfg["cap_percent"] = max(0, min(100, int(cap_percent)))
+    if default_uses != "__noop__":
+        cfg["default_uses"] = None if default_uses is None else int(default_uses)
+    conn.execute(
+        """
+        INSERT INTO game_config_meta (key, value, updated_at)
+        VALUES (?, ?, datetime('now'))
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        """,
+        (_GLOBAL_CONFIG_KEY, json.dumps(cfg, ensure_ascii=False)),
+    )
+    conn.commit()
+    return cfg
+
+
+# ── Per-user uses_remaining helper ────────────────────────────────────────
+
+
+def get_user_uses_remaining(user_id: int, conn: sqlite3.Connection) -> int | None:
+    """Return this user's resurrection_uses_remaining (None = unlimited)."""
+    row = conn.execute(
+        "SELECT resurrection_uses_remaining FROM users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+    if not row:
+        raise LookupError(f"User {user_id} not found")
+    return row["resurrection_uses_remaining"]
+
+
+def set_user_uses_remaining(
+    user_id: int, conn: sqlite3.Connection, uses: int | None
+) -> int | None:
+    """Set per-user resurrection uses_remaining. None = unlimited."""
+    conn.execute(
+        "UPDATE users SET resurrection_uses_remaining = ? WHERE id = ?",
+        (uses, user_id),
+    )
+    conn.commit()
+    return uses
+
+
+# Legacy compat shim — kept so existing tests and admin endpoints that
+# call get_user_resurrection_config don't break before refactor is complete.
+def get_user_resurrection_config(user_id: int, conn: sqlite3.Connection) -> dict[str, Any]:
+    """Return global config merged with per-user uses_remaining."""
+    cfg = get_global_resurrection_config(conn)
+    cfg["uses_remaining"] = get_user_uses_remaining(user_id, conn)
+    return cfg
 
 
 # ── Per-mode cost calculators ─────────────────────────────────────────────
@@ -278,7 +312,8 @@ def cost_preview(
 
     Returns a structured dict the frontend renders into the confirmation modal.
     """
-    cfg = get_user_resurrection_config(user_id, conn)
+    cfg = get_global_resurrection_config(conn)
+    uses_remaining = get_user_uses_remaining(user_id, conn)
     char = conn.execute(
         "SELECT id, campaign_id, sheet_json, status FROM characters WHERE id = ?",
         (character_id,),
@@ -288,9 +323,9 @@ def cost_preview(
     sheet = json.loads(char["sheet_json"] or "{}")
 
     if not cfg["enabled"]:
-        return {"enabled": False, "reason": "resurrection_disabled_for_user", "config": cfg}
-    if cfg["uses_remaining"] is not None and int(cfg["uses_remaining"]) <= 0:
-        return {"enabled": False, "reason": "no_uses_remaining", "config": cfg}
+        return {"enabled": False, "reason": "resurrection_disabled", "config": cfg}
+    if uses_remaining is not None and int(uses_remaining) <= 0:
+        return {"enabled": False, "reason": "no_uses_remaining", "config": cfg, "uses_remaining": 0}
 
     mode = cfg["mode"]
     if mode == "admin_free":
@@ -308,7 +343,7 @@ def cost_preview(
     else:
         raise ValueError(f"Unknown cost mode: {mode}")
 
-    return {"enabled": True, "config": cfg, "cost": cost}
+    return {"enabled": True, "config": cfg, "uses_remaining": uses_remaining, "cost": cost}
 
 
 # ── Apply ─────────────────────────────────────────────────────────────────
@@ -463,7 +498,8 @@ def apply_resurrection(
         PermissionError if disabled and not force
         RuntimeError    if no uses remaining and not force
     """
-    cfg = get_user_resurrection_config(user_id, conn)
+    cfg = get_global_resurrection_config(conn)
+    uses_remaining = get_user_uses_remaining(user_id, conn)
     char = conn.execute(
         "SELECT id, campaign_id, sheet_json, status FROM characters WHERE id = ?",
         (character_id,),
@@ -473,8 +509,8 @@ def apply_resurrection(
 
     if not force:
         if not cfg["enabled"]:
-            raise PermissionError("Resurrection is disabled for this user")
-        if cfg["uses_remaining"] is not None and int(cfg["uses_remaining"]) <= 0:
+            raise PermissionError("Resurrection is disabled")
+        if uses_remaining is not None and int(uses_remaining) <= 0:
             raise RuntimeError("No resurrection uses remaining")
 
     sheet = json.loads(char["sheet_json"] or "{}")
@@ -532,8 +568,8 @@ def apply_resurrection(
     except sqlite3.OperationalError:
         pass
 
-    # Decrement uses_remaining (only when not force-bypass)
-    if not force and cfg["uses_remaining"] is not None:
+    # Decrement per-user uses_remaining (only when not force-bypass)
+    if not force and uses_remaining is not None:
         conn.execute(
             "UPDATE users SET resurrection_uses_remaining = MAX(0, resurrection_uses_remaining - 1) WHERE id = ?",
             (user_id,),
@@ -549,13 +585,12 @@ def apply_resurrection(
         revived_hp=revive_hp,
     )
 
+    uses_after = (uses_remaining - 1) if (not force and uses_remaining is not None) else uses_remaining
     return {
         "character_id": character_id,
         "force": force,
         "cost_applied": cost_applied,
         "revived_hp": revive_hp,
         "max_hp": max_hp,
-        "uses_remaining_after": (
-            cfg["uses_remaining"] - 1 if (not force and cfg["uses_remaining"] is not None) else cfg["uses_remaining"]
-        ),
+        "uses_remaining_after": uses_after,
     }

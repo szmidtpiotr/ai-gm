@@ -28,13 +28,14 @@ const LABELS = {
   charState:       "Stan postaci",
 };
 
-const TABS = ["llm", "database", "config", "slash-cmds", "admin-cmd"];
+const TABS = ["llm", "database", "config", "slash-cmds", "admin-cmd", "resurrection"];
 const TAB_LABELS = {
   llm:           "LLM",
   database:      "Database",
   config:        "Config",
   "slash-cmds":  "Slash Commands",
   "admin-cmd":   "Admin Cmd",
+  resurrection:  "Wskrzeszenie",
 };
 
 const PROVIDERS = [
@@ -78,11 +79,12 @@ export async function init(panel) {
 async function _renderTab(tab) {
   const body = _panel.querySelector("#system-body");
   body.innerHTML = `<div class="drawer-loading">Ładowanie…</div>`;
-  if      (tab === "llm")        await _renderLlmTab(body);
-  else if (tab === "database")   await _renderDatabaseTab(body);
-  else if (tab === "config")     await _renderConfigTab(body);
-  else if (tab === "slash-cmds") await _renderSlashTab(body);
-  else if (tab === "admin-cmd")  await _renderAdminCmdTab(body);
+  if      (tab === "llm")          await _renderLlmTab(body);
+  else if (tab === "database")     await _renderDatabaseTab(body);
+  else if (tab === "config")       await _renderConfigTab(body);
+  else if (tab === "slash-cmds")   await _renderSlashTab(body);
+  else if (tab === "admin-cmd")    await _renderAdminCmdTab(body);
+  else if (tab === "resurrection") await _renderResurrectionTab(body);
 }
 
 // ── LLM tab ───────────────────────────────────────────────────────────────────
@@ -924,6 +926,117 @@ function _openPresetModal(preset, body) {
         },
       },
     ],
+  });
+}
+
+// ── Resurrection global config tab ───────────────────────────────────────────
+
+const _RESURRECT_MODE_LABELS = {
+  admin_free:       "🆓 Bezpłatnie (GM mercy / testy)",
+  gold_percent:     "💰 Procent obecnego złota",
+  gold_recent_days: "📜 Suma niedawnych zarobków (okno dni)",
+  xp_revert:        "✦ Cofnij ostatnie zdobycie PD",
+  item_loss:        "🎒 Losowa utrata założonego przedmiotu",
+};
+
+function _resurrectHelpText(cfg) {
+  switch (cfg.mode) {
+    case "admin_free":       return "Wskrzeszenie jest bezpłatne dla wszystkich graczy.";
+    case "gold_percent":     return `Gracz straci <strong>${cfg.value}%</strong> obecnego złota.`;
+    case "gold_recent_days": return `Gracz straci sumę zarobków z ostatnich <strong>${cfg.value} dni gry</strong>, maksymalnie <strong>${cfg.cap_percent}%</strong> bieżącego złota.`;
+    case "xp_revert":        return `Cofnięte zostanie <strong>${cfg.value} PD</strong>. Awanse umiejętności i zaklęcia zakupione za te PD zostaną cofnięte.`;
+    case "item_loss":        return "Losowo wybrany funkcjonalny przedmiot z ekwipunku zostanie utracony.";
+    default:                 return "";
+  }
+}
+
+async function _renderResurrectionTab(body) {
+  const { adminFetch, showToast } = await import("../shared/api.js").catch(() => ({
+    adminFetch: window.adminFetch, showToast: window.showToast
+  }));
+  let cfg = {};
+  try {
+    const data = await adminFetch("/api/admin/resurrection-config");
+    cfg = data.config || {};
+  } catch (e) {
+    body.innerHTML = `<p class="drawer-error">Błąd: ${_esc(e.message)}</p>`;
+    return;
+  }
+
+  const modeOpts = Object.entries(_RESURRECT_MODE_LABELS).map(([k, lbl]) =>
+    `<option value="${k}"${cfg.mode === k ? " selected" : ""}>${lbl}</option>`
+  ).join("");
+
+  body.innerHTML = `
+    <div class="drawer-section" style="max-width:640px">
+      <div class="drawer-section-title">Wskrzeszenie bohaterów — globalna konfiguracja</div>
+      <p style="font-size:0.85rem;opacity:0.7;margin:0 0 16px;line-height:1.5;">
+        Ta konfiguracja dotyczy <strong>wszystkich graczy</strong>. Włącz wskrzeszenie i wybierz
+        koszt, który zapłaci każdy bohater po śmierci. Indywidualne „życia" możesz ustawiać
+        w sekcji <em>Gracze → Kampanie → karta bohatera</em>.
+      </p>
+
+      <label class="drawer-toggle-row" style="margin-bottom:16px;">
+        <span style="font-weight:600;">Wskrzeszenie włączone</span>
+        <input type="checkbox" id="res-enabled" ${cfg.enabled ? "checked" : ""} />
+      </label>
+
+      <label class="drawer-field">
+        <span>Tryb kosztu</span>
+        <select id="res-mode">${modeOpts}</select>
+      </label>
+
+      <label class="drawer-field">
+        <span>Wartość główna (PD / % / liczba dni gry)</span>
+        <input id="res-value" type="number" min="0" max="9999" value="${cfg.value ?? 25}" />
+      </label>
+
+      <label class="drawer-field" id="res-cap-row" style="display:${cfg.mode === "gold_recent_days" ? "" : "none"}">
+        <span>Górny limit % bieżącego złota (tylko dla trybu „niedawne zarobki")</span>
+        <input id="res-cap" type="number" min="0" max="100" value="${cfg.cap_percent ?? 50}" />
+      </label>
+
+      <label class="drawer-field">
+        <span>Domyślna liczba użyć (puste = bez limitu dla każdego gracza)</span>
+        <input id="res-default-uses" type="number" min="0" max="999" value="${cfg.default_uses ?? ""}" placeholder="bez limitu" />
+      </label>
+
+      <div id="res-help" style="margin:12px 0;padding:10px;background:rgba(255,255,255,0.04);border-radius:6px;font-size:0.9rem;line-height:1.4;">
+        ${_resurrectHelpText(cfg)}
+      </div>
+
+      <button class="primary-btn" id="res-save" style="margin-top:4px">Zapisz konfigurację</button>
+    </div>`;
+
+  const elMode = body.querySelector("#res-mode");
+  const elVal  = body.querySelector("#res-value");
+  const elCap  = body.querySelector("#res-cap");
+  const elHelp = body.querySelector("#res-help");
+  const elCapRow = body.querySelector("#res-cap-row");
+
+  const refresh = () => {
+    elHelp.innerHTML = _resurrectHelpText({ mode: elMode.value, value: +elVal.value || 0, cap_percent: +elCap.value || 0 });
+    elCapRow.style.display = elMode.value === "gold_recent_days" ? "" : "none";
+  };
+  elMode.addEventListener("change", refresh);
+  elVal.addEventListener("input", refresh);
+  elCap.addEventListener("input", refresh);
+
+  body.querySelector("#res-save").addEventListener("click", async () => {
+    const usesRaw = body.querySelector("#res-default-uses").value.trim();
+    const payload = {
+      enabled:    body.querySelector("#res-enabled").checked,
+      mode:       elMode.value,
+      value:      parseInt(elVal.value, 10) || 0,
+      cap_percent: parseInt(elCap.value, 10) || 0,
+    };
+    if (usesRaw === "") payload.clear_default_uses = true;
+    else payload.default_uses = parseInt(usesRaw, 10) || 0;
+    try {
+      await adminFetch("/api/admin/resurrection-config", { method: "PATCH", body: JSON.stringify(payload) });
+      showToast("Konfiguracja wskrzeszenia zapisana.", "success");
+      await _renderResurrectionTab(body);
+    } catch (e) { showToast(e.message || "Błąd", "error"); }
   });
 }
 

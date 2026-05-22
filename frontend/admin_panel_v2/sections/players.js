@@ -17,7 +17,6 @@ const LABELS = {
   tabInfo:      "Info",
   tabCampaigns: "Kampanie",
   tabLlm:       "LLM",
-  tabResurrect: "Wskrzeszenie",
   resetPassword:"Zmień hasło",
   newPassword:  "Nowe hasło (min. 8 znaków)",
   llmMode:      "Tryb LLM",
@@ -154,7 +153,6 @@ function _renderDrawerTabs(userId) {
     { id: "info",       label: LABELS.tabInfo },
     { id: "campaigns",  label: LABELS.tabCampaigns },
     { id: "llm",        label: LABELS.tabLlm },
-    { id: "resurrect",  label: LABELS.tabResurrect },
   ];
   nav.innerHTML = tabs.map((t) =>
     `<button class="drawer-tab-btn${t.id === _drawerTab ? " active" : ""}" data-tab="${t.id}">${t.label}</button>`
@@ -174,7 +172,6 @@ async function _renderDrawerBody(userId, tab) {
   if (tab === "info")      await _renderInfoTab(userId, body);
   if (tab === "campaigns") await _renderCampaignsTab(userId, body);
   if (tab === "llm")       await _renderLlmTab(userId, body);
-  if (tab === "resurrect") await _renderResurrectTab(userId, body);
 }
 
 // ── Info tab ──────────────────────────────────────────────────────────────────
@@ -281,23 +278,35 @@ async function _renderInfoTab(userId, body) {
 
 async function _renderCampaignsTab(userId, body) {
   let campaigns = [];
+  let usesRemaining = null;
   try {
-    const data = await adminFetch(`/api/admin/users/${userId}/activity`);
-    campaigns = data.items || [];
+    const [actData, userRow] = await Promise.all([
+      adminFetch(`/api/admin/users/${userId}/activity`),
+      adminFetch(`/api/admin/users/${userId}/resurrection-config`).catch(() => null),
+    ]);
+    campaigns = actData.items || [];
+    usesRemaining = userRow?.config?.uses_remaining ?? null;
   } catch (e) {
     body.innerHTML = `<p class="drawer-error">Błąd: ${_esc(e.message)}</p>`;
     return;
   }
 
-  if (!campaigns.length) {
-    body.innerHTML = `<p class="drawer-empty">${LABELS.noCampaigns}</p>`;
-    return;
-  }
+  // ── Per-user resurrection lives widget ────────────────────────────────
+  const usesLabel = usesRemaining === null ? "bez limitu" : `${usesRemaining} pozostało`;
+  const usesWidget = `
+    <div style="display:flex; align-items:center; gap:10px; padding:10px 0 16px; border-bottom:1px solid rgba(255,255,255,0.06); margin-bottom:12px;">
+      <span style="font-size:0.85rem; opacity:0.7;">✦ Wskrzeszenia:</span>
+      <span style="font-size:0.9rem; font-weight:600;">${_esc(usesLabel)}</span>
+      <button data-set-uses style="margin-left:auto; padding:4px 10px; font-size:0.8rem; background:#2a1f3a; color:#c0b8d0; border:1px solid #4a3a6a; border-radius:6px; cursor:pointer;">Zmień</button>
+      <button data-clear-uses style="padding:4px 10px; font-size:0.8rem; background:#2a1f3a; color:#c0b8d0; border:1px solid #4a3a6a; border-radius:6px; cursor:pointer;">Bez limitu</button>
+    </div>`;
 
   const statusLabel = { active: "Aktywna", ended: "Zakończona", aborted: "Przerwana" };
   const statusBadge = { active: "admin-badge-green", ended: "admin-badge-muted", aborted: "admin-badge-red" };
 
-  body.innerHTML = campaigns.map((c) => {
+  const campaignsHtml = !campaigns.length
+    ? `<p class="drawer-empty">${LABELS.noCampaigns}</p>`
+    : campaigns.map((c) => {
     const hp     = c.char_current_hp ?? null;
     const maxHp  = c.char_max_hp ?? null;
     const hpPct  = (hp !== null && maxHp) ? Math.round((hp / maxHp) * 100) : null;
@@ -338,7 +347,29 @@ async function _renderCampaignsTab(userId, body) {
       </div>`;
   }).join("");
 
-  // Wire any resurrect buttons
+  body.innerHTML = usesWidget + campaignsHtml;
+
+  // Wire uses buttons
+  body.querySelector("[data-set-uses]")?.addEventListener("click", async () => {
+    const v = prompt("Ile wskrzeszeń przyznać temu graczowi? (puste = anuluj)");
+    if (v === null || v.trim() === "") return;
+    const n = parseInt(v, 10);
+    if (isNaN(n) || n < 0) { showToast("Podaj liczbę ≥ 0.", "error"); return; }
+    try {
+      await adminFetch(`/api/admin/users/${userId}/resurrection-uses`, { method: "PATCH", body: JSON.stringify({ uses_remaining: n }) });
+      showToast(`Wskrzeszenia ustawione na ${n}.`, "success");
+      await _renderCampaignsTab(userId, body);
+    } catch (e) { showToast(e.message || "Błąd", "error"); }
+  });
+  body.querySelector("[data-clear-uses]")?.addEventListener("click", async () => {
+    try {
+      await adminFetch(`/api/admin/users/${userId}/resurrection-uses`, { method: "PATCH", body: JSON.stringify({ clear: true }) });
+      showToast("Limit wskrzeszeń usunięty — gracz ma nielimitowany dostęp.", "success");
+      await _renderCampaignsTab(userId, body);
+    } catch (e) { showToast(e.message || "Błąd", "error"); }
+  });
+
+  // Wire resurrect buttons
   body.querySelectorAll("[data-resurrect-id]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const charId = btn.dataset.resurrectId;
@@ -435,133 +466,8 @@ async function _renderLlmTab(userId, body) {
   });
 }
 
-// ── Resurrect tab (Stage 11 R7 — issue #64) ──────────────────────────────────
-
-const RESURRECT_MODE_LABELS = {
-  admin_free:       "🆓 Bezpłatnie (tryb admina/GM)",
-  gold_percent:     "💰 Procent obecnego złota",
-  gold_recent_days: "📜 Niedawne zarobki (okno dni)",
-  xp_revert:        "✦ Cofnij ostatnie zdobycie PD",
-  item_loss:        "🎒 Utrata losowego założonego przedmiotu",
-};
-
-function _resurrectModeHelpText(cfg) {
-  switch (cfg.mode) {
-    case "admin_free":
-      return "Bohater zostanie wskrzeszony bez żadnego kosztu.";
-    case "gold_percent":
-      return `Bohater straci <strong>${cfg.value}%</strong> obecnego złota.`;
-    case "gold_recent_days":
-      return `Bohater straci sumę zarobków z ostatnich <strong>${cfg.value} dni gry</strong>, maksymalnie <strong>${cfg.cap_percent}%</strong> obecnego złota.`;
-    case "xp_revert":
-      return `Cofnięte zostanie <strong>${cfg.value} PD</strong> (lub więcej, do najbliższego pełnego nadania). Zakupione w tym czasie awanse umiejętności i zaklęć zostaną cofnięte.`;
-    case "item_loss":
-      return "Losowo wybrany funkcjonalny przedmiot z ekwipunku zostanie utracony.";
-    default:
-      return "";
-  }
-}
-
-async function _renderResurrectTab(userId, body) {
-  let cfg = {};
-  try {
-    const data = await adminFetch(`/api/admin/users/${userId}/resurrection-config`);
-    cfg = data.config || {};
-  } catch (e) {
-    body.innerHTML = `<p class="drawer-error">Błąd: ${_esc(e.message)}</p>`;
-    return;
-  }
-
-  const modeOpts = Object.entries(RESURRECT_MODE_LABELS).map(([k, lbl]) =>
-    `<option value="${k}"${cfg.mode === k ? " selected" : ""}>${lbl}</option>`
-  ).join("");
-
-  body.innerHTML = `
-    <div class="drawer-section">
-      <div class="drawer-section-title">Wskrzeszenie bohatera</div>
-      <p style="font-size: 0.85rem; opacity: 0.7; margin: 0 0 12px;">
-        Po zgonie bohatera ekran śmierci pokaże przycisk „Wskrześ" tylko wtedy, gdy ta opcja
-        jest włączona. Koszt zależy od wybranego trybu i jest egzekwowany serwerowo.
-      </p>
-
-      <label class="drawer-toggle-row">
-        <span>Włączone</span>
-        <input type="checkbox" id="res-enabled" ${cfg.enabled ? "checked" : ""} />
-      </label>
-
-      <label class="drawer-field">
-        <span>Tryb kosztu</span>
-        <select id="res-mode">${modeOpts}</select>
-      </label>
-
-      <label class="drawer-field">
-        <span>Wartość główna (PD / % / dni)</span>
-        <input id="res-value" type="number" min="0" max="9999" value="${cfg.value ?? 25}" />
-      </label>
-
-      <label class="drawer-field" id="res-cap-row">
-        <span>Górny limit % bieżącego złota (tylko dla „niedawne zarobki")</span>
-        <input id="res-cap" type="number" min="0" max="100" value="${cfg.cap_percent ?? 50}" />
-      </label>
-
-      <label class="drawer-field">
-        <span>Pozostałych użyć (puste = bez limitu)</span>
-        <input id="res-uses" type="number" min="0" max="999" value="${cfg.uses_remaining ?? ""}" placeholder="bez limitu" />
-      </label>
-
-      <div id="res-help" style="margin: 12px 0; padding: 10px; background: rgba(255,255,255,0.04); border-radius: 6px; font-size: 0.9rem; line-height: 1.4;">
-        ${_resurrectModeHelpText(cfg)}
-      </div>
-
-      <button class="primary-btn" id="res-save-btn" style="margin-top: 4px">Zapisz konfigurację</button>
-    </div>`;
-
-  const elMode = body.querySelector("#res-mode");
-  const elVal = body.querySelector("#res-value");
-  const elCap = body.querySelector("#res-cap");
-  const elUses = body.querySelector("#res-uses");
-  const elEnabled = body.querySelector("#res-enabled");
-  const elHelp = body.querySelector("#res-help");
-  const elCapRow = body.querySelector("#res-cap-row");
-
-  const refreshHelp = () => {
-    elHelp.innerHTML = _resurrectModeHelpText({
-      mode: elMode.value,
-      value: parseInt(elVal.value, 10) || 0,
-      cap_percent: parseInt(elCap.value, 10) || 0,
-    });
-    elCapRow.style.display = elMode.value === "gold_recent_days" ? "" : "none";
-  };
-  elMode.addEventListener("change", refreshHelp);
-  elVal.addEventListener("input", refreshHelp);
-  elCap.addEventListener("input", refreshHelp);
-  refreshHelp();
-
-  body.querySelector("#res-save-btn").addEventListener("click", async () => {
-    const usesRaw = elUses.value.trim();
-    const payload = {
-      enabled: elEnabled.checked,
-      mode: elMode.value,
-      value: parseInt(elVal.value, 10) || 0,
-      cap_percent: parseInt(elCap.value, 10) || 0,
-    };
-    if (usesRaw === "") {
-      payload.clear_uses_remaining = true;
-    } else {
-      payload.uses_remaining = parseInt(usesRaw, 10) || 0;
-    }
-    try {
-      await adminFetch(`/api/admin/users/${userId}/resurrection-config`, {
-        method: "PATCH",
-        body: JSON.stringify(payload),
-      });
-      showToast("Konfiguracja wskrzeszenia zapisana.", "success");
-      await _renderResurrectTab(userId, body);
-    } catch (e) {
-      showToast(e.message || "Błąd zapisu", "error");
-    }
-  });
-}
+// (Resurrection tab removed — config is now global, in System → Wskrzeszenie.
+//  Per-user uses_remaining is managed inline in the Campaigns tab.)
 
 // ── Create user modal ─────────────────────────────────────────────────────────
 
