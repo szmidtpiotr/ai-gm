@@ -2919,11 +2919,18 @@ function showSkillTestPopup(pending) {
         }
         resultCard.hidden = false;
 
-        setTimeout(async () => {
+        // Close after 5.5 s, or immediately on tap/click anywhere on the overlay
+        let _closed = false;
+        async function _closeResult() {
+            if (_closed) return;
+            _closed = true;
+            overlay.removeEventListener('click', _closeResult);
             overlay.hidden = true;
-            if (skillCard) skillCard.hidden = false; // restore for next use
+            if (skillCard) skillCard.hidden = false;
             await resolveSkillTest(pending.skill_test_id, rolled, null);
-        }, 2000);
+        }
+        setTimeout(_closeResult, 5500);
+        overlay.addEventListener('click', _closeResult, { once: true });
     }
 
     // One frame later — container dimensions are non-zero
@@ -6706,6 +6713,9 @@ function initSlashAutocomplete(inputEl) {
             el.addEventListener('mousedown', e => e.preventDefault());
             el.addEventListener('click', () => pick(matches[+el.dataset.i]));
         });
+        // Scroll the highlighted item into view (popup has overflow-y:auto + max-height)
+        const activeEl = popup.querySelector('.slash-popup-item--active');
+        if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
     }
 
     function pick(cmd) {
