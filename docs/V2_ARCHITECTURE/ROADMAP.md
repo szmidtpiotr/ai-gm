@@ -240,20 +240,37 @@ Design decisions resolved with owner in #64: XP revert cascades to skill/spell p
 - [x] **R9** Admin force-resurrect button in `sections/players.js` — visible when viewing a dead-character user; "Wskrzesz bez kosztu" button POSTs admin endpoint with `force=true`. Confirmation modal.
 - [x] **R10** Backend tests `test_resurrection.py` — 5 mode handlers, force-bypass path, uses-remaining decrement, full state reset (death_saves_failed + short_rests_used + dungeon cooldowns), gold journal integrity after partial revert.
 
-### Stage 11-C — Auth UX: Registration + Onboarding + Profile [→ doc 19]
+### Stage 11-C — Auth UX: Registration + Onboarding + Profile + Invite System [→ doc 19, #67–#72]
 
 > Design doc: `docs/V2_ARCHITECTURE/19_AUTH_UX_REGISTRATION_PROFILE.md`
-> Promoted from F1 (Stage 17) because profile page reuses the same DB migration as A8.
-> **Discuss before implementing** — 4 open questions in the doc.
+> Full design session complete 2026-05-22. All screens decided. See doc for DB schema + screen specs.
 
-- [ ] **A8** Onboarding overlay — first-login modal: 3 screens (world intro / display name / theme picker), writes `users.onboarded_at` + `display_name`; gated server-side on `onboarded_at IS NULL`
-- [ ] **REG1** Migration: `app_config.registration_open` key (default 0); `users.display_name TEXT`
-- [ ] **REG2** Backend: `GET /api/auth/registration-status` (public) + `POST /api/auth/register` (creates player account when `registration_open=1`)
-- [ ] **REG3** Frontend: "Nie masz konta?" link on login screen; registration modal (3 fields: username / display name / password+confirm); hidden when registration closed
-- [ ] **REG4** Admin toggle: System panel → "Rejestracja otwarta" switch → PATCH `app_config.registration_open`
-- [ ] **PRO1** Backend: `PATCH /api/me` (display_name) + `POST /api/me/change-password` + `GET /api/me/stats` (chronicle aggregates from existing tables)
-- [ ] **PRO2** Frontend: Profile page — identity card (display name / username / theme chips) + chronicle (heroes / campaigns / lifetime XP / turns / top skill) + settings collapse (change password / soft-delete)
-- [ ] **PRO3** Entry point: "Konto" entry in settings drawer → profile page
+#### Backend foundation [#67]
+- [ ] **C1** DB migration — `user_invites`, `email_verification_tokens`, `password_reset_tokens`, `user_friendships` tables; `users.invited_by_user_id`, `email_verified_at`, `onboarded_at`, `invite_weekly_limit` columns; `app_config` keys: `smtp_*`, `registration_open`
+- [ ] **C2** Email service — `app/services/email_service.py`: `send_email(to, subject, html)` via SMTP using `app_config` settings; `send_invite_email()`, `send_verification_email()`, `send_password_reset_email()` helpers
+
+#### Invite + registration [#68]
+- [ ] **C3** Invite CRUD — `POST /api/invites` (create, admin or player, respects weekly quota), `GET /api/invites/{code}` (validate + return inviter info), admin endpoints: list all invites, revoke, boost user quota
+- [ ] **C4** Registration — `POST /api/auth/register` (validates invite code/token, creates user, marks invite used, sends verification email, returns JWT)
+- [ ] **C5** `GET /api/auth/registration-status` (public) — returns `{open: bool}` for login screen conditional link
+
+#### Email verification + password reset [#69]
+- [ ] **C6** Email verification — `POST /api/auth/verify-email` (validates token, sets `email_verified_at`); `POST /api/auth/resend-verification` (rate-limited 1/2min); login endpoint returns `{error: "email_unverified"}` when unverified on 2nd+ login
+- [ ] **C7** Password reset — `POST /api/auth/forgot-password` (always 200, sends email if account exists); `POST /api/auth/reset-password` (validates token, updates password, auto-returns JWT, marks token used)
+
+#### Frontend auth screens [#70]
+- [ ] **C8** Login screen additions — "Nie pamiętasz hasła? → Reset" and "Masz zaproszenie? → Zarejestruj się" footer links; email-unverified gate screen on login
+- [ ] **C9** Registration screen — invite card (inviter avatar + name + personal message), email pre-filled+locked, username + password fields, countdown timer, bare `/register` screen for code entry
+- [ ] **C10** Forgot password screens — enter email screen + set new password screen (2h token, auto-login on save)
+
+#### Frontend onboarding + profile [#71]
+- [ ] **C11** Onboarding flow — 2-step: (1) CSS cinematic with inviter message card + atmospheric art + title, auto-advance 6s; (2) theme picker → "Zaczynam przygodę"; gated on `onboarded_at IS NULL` from login response
+- [ ] **C12** Profile page — Chronicle stats, Friends section (add/search players, foundation for multiplayer), Invites (sent quota + "Wyślij zaproszenie" button), Security (change password / delete account); entry via Settings drawer "Konto" link
+- [ ] **C13** Send invite modal — email form + copyable link (both in one modal); accessible from profile page + "📨 Zaproś znajomego" chip on heroes screen
+
+#### Admin features [#72]
+- [ ] **C14** Admin SMTP config — System panel → Email section: `smtp_host/port/username/password/from_name/from_address/use_tls` form + "Wyślij testowy email" button
+- [ ] **C15** Admin invite tree — Players → "Drzewo zaproszeń" tab: interactive D3.js collapsible tree, activity colour coding (green/yellow/grey), click-node flyout, "Eksportuj CSV" button
 
 ### Stage 12 — Hero Journal [T45]
 
