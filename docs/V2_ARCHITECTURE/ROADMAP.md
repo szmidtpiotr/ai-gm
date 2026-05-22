@@ -240,6 +240,21 @@ Design decisions resolved with owner in #64: XP revert cascades to skill/spell p
 - [x] **R9** Admin force-resurrect button in `sections/players.js` — visible when viewing a dead-character user; "Wskrzesz bez kosztu" button POSTs admin endpoint with `force=true`. Confirmation modal.
 - [x] **R10** Backend tests `test_resurrection.py` — 5 mode handlers, force-bypass path, uses-remaining decrement, full state reset (death_saves_failed + short_rests_used + dungeon cooldowns), gold journal integrity after partial revert.
 
+### Stage 11-C — Auth UX: Registration + Onboarding + Profile [→ doc 19]
+
+> Design doc: `docs/V2_ARCHITECTURE/19_AUTH_UX_REGISTRATION_PROFILE.md`
+> Promoted from F1 (Stage 17) because profile page reuses the same DB migration as A8.
+> **Discuss before implementing** — 4 open questions in the doc.
+
+- [ ] **A8** Onboarding overlay — first-login modal: 3 screens (world intro / display name / theme picker), writes `users.onboarded_at` + `display_name`; gated server-side on `onboarded_at IS NULL`
+- [ ] **REG1** Migration: `app_config.registration_open` key (default 0); `users.display_name TEXT`
+- [ ] **REG2** Backend: `GET /api/auth/registration-status` (public) + `POST /api/auth/register` (creates player account when `registration_open=1`)
+- [ ] **REG3** Frontend: "Nie masz konta?" link on login screen; registration modal (3 fields: username / display name / password+confirm); hidden when registration closed
+- [ ] **REG4** Admin toggle: System panel → "Rejestracja otwarta" switch → PATCH `app_config.registration_open`
+- [ ] **PRO1** Backend: `PATCH /api/me` (display_name) + `POST /api/me/change-password` + `GET /api/me/stats` (chronicle aggregates from existing tables)
+- [ ] **PRO2** Frontend: Profile page — identity card (display name / username / theme chips) + chronicle (heroes / campaigns / lifetime XP / turns / top skill) + settings collapse (change password / soft-delete)
+- [ ] **PRO3** Entry point: "Konto" entry in settings drawer → profile page
+
 ### Stage 12 — Hero Journal [T45]
 
 - [ ] **J1** Journal UI in heroes screen — chapter list (one per completed campaign)
