@@ -6302,6 +6302,129 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .srp-btn-confirm:hover:not(:disabled) { background: rgba(201,150,26,0.25); color: #1a1008; }
 .srp-btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ── dice.js 3D roll overlay — issue #65 ────────────────────────────────── */
+
+#dice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(5, 3, 1, 0.88);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+#dice-container {
+  position: absolute;
+  inset: 0;
+}
+
+#dice-container canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+#dice-skill-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 32px;
+  padding: 20px 28px;
+  background: rgba(14, 9, 4, 0.92);
+  border: 1px solid rgba(160, 100, 30, 0.35);
+  border-radius: 10px;
+  text-align: center;
+  backdrop-filter: blur(6px);
+}
+
+#dice-skill-name {
+  font-family: 'Cinzel', serif;
+  font-size: 1.25rem;
+  letter-spacing: 0.12em;
+  color: #c9961a;
+  margin-bottom: 4px;
+}
+
+#dice-skill-meta {
+  font-size: 0.85rem;
+  color: rgba(200, 170, 110, 0.65);
+  margin-bottom: 16px;
+}
+
+#dice-roll-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 0.95rem;
+  padding: 9px 28px;
+  background: rgba(100, 60, 10, 0.5);
+  color: #d4a040;
+  border: 1px solid rgba(160, 100, 30, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+
+#dice-roll-btn:hover:not(:disabled) {
+  background: rgba(160, 100, 20, 0.6);
+  color: #f0c050;
+}
+
+#dice-roll-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#dice-result-card {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  animation: dice-result-fade 0.3s ease;
+}
+
+@keyframes dice-result-fade {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+#dice-result-num {
+  font-family: 'Cinzel', serif;
+  font-size: 5.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #c9961a;
+  text-shadow: 0 0 40px rgba(201, 150, 26, 0.5);
+}
+
+#dice-result-num.nat20 { color: #ffd700; text-shadow: 0 0 60px rgba(255, 215, 0, 0.8); }
+#dice-result-num.nat1  { color: #9b2020; text-shadow: 0 0 40px rgba(155, 32, 32, 0.6); }
+
+#dice-result-total {
+  margin-top: 8px;
+  font-size: 1.1rem;
+  color: rgba(200, 170, 110, 0.8);
+  letter-spacing: 0.05em;
+}
+
+#dice-result-verdict {
+  margin-top: 12px;
+  font-family: 'Cinzel', serif;
+  font-size: 1.6rem;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+}
+
+#dice-result-verdict.success { color: #4caf78; text-shadow: 0 0 20px rgba(76, 175, 120, 0.4); }
+#dice-result-verdict.failure { color: #9b2020; text-shadow: 0 0 20px rgba(155, 32, 32, 0.3); }
+#dice-result-verdict.nat20   { color: #ffd700; text-shadow: 0 0 30px rgba(255, 215, 0, 0.6); }
+#dice-result-verdict.nat1    { color: #9b2020; }
+
 /* ── World Map Panel — Task 43 ───────────────────────────────────────────── */
 .wmap-panel {
   position: fixed;
