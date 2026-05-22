@@ -1668,6 +1668,9 @@ async function enterGame(campaign) {
     const maxHp = sheet.max_hp ?? characterData?.max_hp ?? 29;
     elements.characterStatsDisplay.textContent = `${hp}/${maxHp} HP`;
     elements.chatMessages.innerHTML = '';
+    document.getElementById('skill-roll-popup')?.remove();
+    const _diceOverlayEl = document.getElementById('dice-overlay');
+    if (_diceOverlayEl) _diceOverlayEl.hidden = true;
 
     // T5 — fetch initial clock state and render in header
     // Visual overlay settings loaded in parallel; clock render also applies overlay
@@ -2708,6 +2711,30 @@ async function handleSendMessage() {
 
 // ── Skill Test Roll Popup — SVG d20 (dice.js 3D deferred to issue #65) ───────
 
+// Stored so the ✕ dismiss button (static HTML onclick) can call it
+window._currentDicePending = null;
+
+window.dismissDiceRoll = async function() {
+    const overlay = document.getElementById('dice-overlay');
+    if (overlay) overlay.hidden = true;
+    const pending = window._currentDicePending;
+    window._currentDicePending = null;
+    if (pending?.skill_test_id) {
+        try {
+            // Resolve with committed value — clears server state so reload is clean
+            await resolveSkillTest(pending.skill_test_id, pending.committed_d20 ?? 10, null);
+        } catch (_e) {
+            // Resolve failed — navigate to campaigns directly so player isn't stuck
+        }
+    }
+    // Go back to campaign chooser
+    currentCampaignId = null;
+    currentCampaign = null;
+    characterData = null;
+    await loadCampaigns();
+    showScreen('campaigns');
+};
+
 function showSkillTestPopup(pending) {
     const existing = document.getElementById('skill-roll-popup');
     if (existing) existing.remove();
@@ -2722,6 +2749,8 @@ function showSkillTestPopup(pending) {
     const committedD20 = (typeof pending.committed_d20 === 'number')
         ? Math.max(1, Math.min(20, parseInt(pending.committed_d20, 10)))
         : null;
+
+    window._currentDicePending = pending; // expose for dismissDiceRoll()
 
     const modParts = [
         mod.skill_rank  ? `Ranga <span>+${mod.skill_rank}</span>`  : '',
