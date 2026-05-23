@@ -394,6 +394,7 @@ html, body {
 
 .admin-main {
   grid-area: main;
+  min-width: 0;               /* required so grid 1fr column doesn't expand to content */
   overflow: hidden;           /* scroll lives in .section-panels now */
   background: var(--bg-base);
   display: flex;
@@ -402,6 +403,7 @@ html, body {
 
 .section-panels {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -4288,6 +4290,11 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   margin-bottom: 24px;
   overflow-x: auto;
   flex-wrap: wrap;
+  position: sticky;
+  top: -24px; /* aligns with .section-panel's 24px padding */
+  background: var(--bg-base);
+  z-index: 5;
+  padding-top: 8px;
 }
 .system-tab {
   padding: 10px 18px;
@@ -4306,5 +4313,5 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   color: var(--accent-gold, #c9a54a);
   border-bottom-color: var(--accent-gold, #c9a54a);
 }
-.system-tab-panel { display: none; }
+.system-tab-panel { display: none; min-width: 0; }
 .system-tab-panel--active { display: block; }
