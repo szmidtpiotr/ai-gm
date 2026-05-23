@@ -589,13 +589,17 @@ async function _renderLocations(container) {
           throw e;
         }
       },
-      async onDelete(row, { force } = {}) {
+      async onDelete(row, { force, bulk } = {}) {
         try {
           await adminFetch(`/api/locations/${row.key}${force ? "?force=true" : ""}`, { method: "DELETE" });
-          showToast("Usunięto.", "success");
-          await load();
+          if (!bulk) {
+            // Single-row delete — refresh the table immediately.
+            showToast("Usunięto.", "success");
+            await load();
+          }
+          // Bulk delete: defer reload to the end (handled by renderTable inside table.js)
         } catch (e) {
-          showToast("Błąd usuwania: " + (e.message || "?"), "error");
+          if (!bulk) showToast("Błąd usuwania: " + (e.message || "?"), "error");
           throw e;
         }
       },
