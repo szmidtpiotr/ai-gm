@@ -173,18 +173,26 @@ def get_canonical_to_alias_map() -> dict[str, str]:
 
 def get_public_slash_commands() -> list[dict[str, str]]:
     """Player-visible commands. If alias is set, returns alias as 'command' so the
-    player never sees the canonical name in autocomplete / /help."""
+    player never sees the canonical name in autocomplete / /help.
+    Always includes 'canonical' (canonical first-token, e.g. '/mem') so the client
+    can substitute alias → canonical before its own command-routing regexes run.
+    """
     out: list[dict[str, str]] = []
     for r in get_merged_slash_commands():
         if r.get("player_enabled", r.get("enabled", True)) is False:
             continue
         alias = _normalize_alias(r.get("alias"))
         canonical = str(r["command"])
-        display = alias or _canonical_first_token(canonical)
+        canon_first = _canonical_first_token(canonical)
+        display = alias or canon_first
         # Preserve placeholder suffix like ' [pytanie]' or ' <new name>'
         suffix = canonical.split(None, 1)[1] if " " in canonical else ""
         cmd_str = f"{display} {suffix}".rstrip() if suffix else display
-        out.append({"command": cmd_str, "description": str(r["description"])})
+        out.append({
+            "command": cmd_str,
+            "canonical": canon_first,
+            "description": str(r["description"]),
+        })
     return out
 
 

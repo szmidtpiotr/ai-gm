@@ -2301,7 +2301,8 @@ function formatGmNarrative(content) {
 
 // Returns true if the command was handled (do not send to turns API)
 async function handleSlashCommand(text) {
-    const t = text.trim();
+    // Expand alias → canonical first, so the regex handlers below match.
+    const t = _expandSlashAlias(text.trim());
 
     if (/^\/help(\s|$)/i.test(t)) {
         const lines = SLASH_COMMANDS
@@ -2520,9 +2521,10 @@ const DEBUG_CMD_HINTS = {
 let _rollSkillCache = null;
 let _publicSlashCache = null;
 let _publicSlashFetchInflight = null;
+let _aliasToCanonical = {};  // {'/pytanie': '/mem', ...}
 
 // Fetch player-visible slash commands from server (alias-aware).
-// Server returns [{command: '/szukaj', description: '...'}] with aliases applied.
+// Server returns [{command: '/szukaj', canonical: '/search', description: '...'}].
 async function _fetchPublicSlashCommands(force = false) {
     if (_publicSlashCache && !force) return _publicSlashCache;
     if (_publicSlashFetchInflight) return _publicSlashFetchInflight;
@@ -2537,6 +2539,15 @@ async function _fetchPublicSlashCommands(force = false) {
                 cmd: String(c.command || '').split(/\s+/)[0],   // strip placeholder suffix
                 desc: String(c.description || ''),
             }));
+            // Build alias→canonical map for client-side substitution
+            _aliasToCanonical = {};
+            for (const c of rows) {
+                const visible = String(c.command || '').split(/\s+/)[0].toLowerCase();
+                const canon   = String(c.canonical || '').toLowerCase();
+                if (visible && canon && visible !== canon) {
+                    _aliasToCanonical[visible] = canon;
+                }
+            }
             return _publicSlashCache;
         } catch (e) {
             console.warn('[slash] failed to fetch server commands, using hardcoded fallback', e);
@@ -2547,6 +2558,16 @@ async function _fetchPublicSlashCommands(force = false) {
         }
     })();
     return _publicSlashFetchInflight;
+}
+
+// Replace alias prefix with canonical so client-side regex handlers (handleMemCommand,
+// handleHelpmeCommand, /admin, etc.) still match. Keep rest of text intact.
+function _expandSlashAlias(text) {
+    if (!text || !text.startsWith('/')) return text;
+    const first = text.split(/\s+/, 1)[0].toLowerCase();
+    const canon = _aliasToCanonical[first];
+    if (!canon || canon === first) return text;
+    return canon + text.slice(first.length);
 }
 
 // Effective list: server (alias-aware) + admin-only commands from hardcoded for admins.
