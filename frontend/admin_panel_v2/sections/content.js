@@ -4,6 +4,28 @@ import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=8";
 import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
 import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=5";
 
+// Compact at-a-glance render of an effect_json blob: shows the effect type(s)
+// + key values, mono-styled. Empty → muted dash.
+function _fmtEffectJson(raw) {
+  if (!raw) return '<span style="color:var(--text-muted)">—</span>';
+  let parsed;
+  try { parsed = typeof raw === "string" ? JSON.parse(raw) : raw; }
+  catch { return `<code class="effect-json-pill" title="${String(raw).replace(/"/g,'&quot;')}">⚠ invalid</code>`; }
+  const effects = Array.isArray(parsed.effects) ? parsed.effects : [];
+  if (!effects.length) return '<span style="color:var(--text-muted)">—</span>';
+  const labels = effects.map(e => {
+    const t = e.type || "?";
+    if (t === "heal_hp" || t === "restore_mana") return `${t}:${e.value ?? "?"}`;
+    if (t === "apply_condition" || t === "add_condition") return `+${e.condition_key || "?"}`;
+    if (t === "remove_condition") return `−${e.condition_key || "?"}`;
+    if (t === "extra_damage") return `+dmg ${e.dice || ""}${e.damage_type ? " " + e.damage_type : ""}`.trim();
+    if (t === "narrative_only") return "narracja";
+    return t;
+  });
+  const full = JSON.stringify(parsed);
+  return `<code class="effect-json-pill" title="${full.replace(/"/g,'&quot;')}">${labels.join(", ")}</code>`;
+}
+
 const LABELS = {
   weapons:      "Broń",
   armor:        "Zbroja",
@@ -707,8 +729,8 @@ async function _renderItems(container, panel) {
       { key: "value_gp",    label: "Cena (gp)",  type: "number", editable: true },
       { key: "weight_kg",   label: "Waga (kg)",  type: "number", editable: true },
       { key: "description", label: "Opis",        editable: true, popup: true },
-      { key: "effect_json", label: "Efekt",       editable: true, popup: true,
-        formatDisplay: (r) => r.effect_json ? "✓" : "—" },
+      { key: "effect_json", label: "Efekt (JSON)", editable: true, popup: true,
+        formatDisplay: (r) => _fmtEffectJson(r.effect_json) },
       { key: "source_exclusive", label: "Źródło", editable: true, type: "select-dropdown",
         editOptions: [{value:"",label:"— wszędzie —"},{value:"dungeon",label:"Dungeon"},{value:"boss",label:"Boss"}],
         formatDisplay: (r) => r.source_exclusive ? `🔒 ${r.source_exclusive}` : "—" },
@@ -828,6 +850,9 @@ async function _renderConsumables(container, panel) {
       { key: "effect_dice",   label: "Kość",    editable: true },
       { key: "effect_bonus",  label: "Bonus",   type: "number", editable: true },
       { key: "effect_target", label: "Cel",     editable: true },
+      { key: "effect_json",   label: "Efekt (JSON)", editable: false,
+        formatDisplay: (r) => _fmtEffectJson(r.effect_json) },
+      { key: "description",   label: "Opis",    editable: true, popup: true },
       { key: "charges",       label: "Ładunki", type: "number", editable: true },
       { key: "base_price",    label: "Cena",    type: "number", editable: true },
       { key: "is_active",     label: LABELS.isActive, type: "boolean", editable: true },

@@ -4511,3 +4511,20 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 }
 .debug-output strong { color: var(--text-primary, #e8e4dc); }
 .debug-output em { color: var(--text-muted, #888); font-style: italic; }
+
+/* Inline JSON effect preview pill */
+.effect-json-pill {
+  display: inline-block;
+  font-family: monospace;
+  font-size: 0.78rem;
+  color: var(--accent-gold, #c9a54a);
+  background: rgba(201, 165, 74, 0.08);
+  border: 1px solid rgba(201, 165, 74, 0.2);
+  border-radius: 4px;
+  padding: 2px 8px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
