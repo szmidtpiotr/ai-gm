@@ -2301,8 +2301,11 @@ function formatGmNarrative(content) {
 
 // Returns true if the command was handled (do not send to turns API)
 async function handleSlashCommand(text) {
-    // Expand alias → canonical first, so the regex handlers below match.
-    const t = _expandSlashAlias(text.trim());
+    // Keep the user's original text for display in the bubble; use expanded
+    // form only for matching/extracting args. So '/pytanie gdzie jestem' stays
+    // '/pytanie ...' on screen but matches the /mem handler.
+    const original = text.trim();
+    const t = _expandSlashAlias(original);
 
     if (/^\/help(\s|$)/i.test(t)) {
         const lines = SLASH_COMMANDS
@@ -2444,13 +2447,13 @@ async function handleSlashCommand(text) {
             scrollToBottom();
             return true;
         }
-        await handleMemCommand(question, t);
+        await handleMemCommand(question, original);
         return true;
     }
 
     if (/^\/helpme(\s|$)/i.test(t)) {
         const topic = t.replace(/^\/helpme\s*/i, '').trim();
-        await handleHelpmeCommand(topic, t);
+        await handleHelpmeCommand(topic, original);
         return true;
     }
 
