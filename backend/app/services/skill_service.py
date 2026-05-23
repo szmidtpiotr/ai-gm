@@ -135,6 +135,12 @@ TRAP_RE = re.compile(
 )
 
 
+# Skills/checks that are gated behind the Scholar archetype.
+# Non-Scholars cannot attempt these — the tag is dropped and an in-fiction
+# refusal is injected into the prose so the GM doesn't proceed to a dice prompt.
+ARCANE_SKILL_KEYS = {"arcana", "spell_attack", "arcane_save"}
+
+
 def intercept_skill_test_tag(
     prose: str,
     conn: sqlite3.Connection,
@@ -144,6 +150,11 @@ def intercept_skill_test_tag(
     """
     Strip first [SKILL_TEST:...] tag from prose and return pending context.
     Returns (cleaned_prose, pending_dict | None).
+
+    Mechanic gate: arcane skill tests (arcana / spell_attack / arcane_save)
+    are only valid for Scholar archetype characters. If a non-Scholar tries,
+    the tag is dropped and a narrative refusal is appended to the prose
+    instead of opening a dice prompt.
     """
     m = SKILL_TEST_RE.search(prose)
     if not m:
@@ -153,13 +164,7 @@ def intercept_skill_test_tag(
     res_type = m.group(2).upper()
     value = m.group(3).strip()
 
-    # Build counter
-    if res_type == "DC":
-        counter = {"counter_type": "dc", "counter_key": None, "dc": int(value) if value.isdigit() else 12}
-    else:
-        counter = {"counter_type": "opposed", "counter_key": value.lower(), "dc": 12}
-
-    # Load character sheet for modifier
+    # Load character sheet (also used for the archetype gate below)
     sheet = {}
     try:
         row = conn.execute(
@@ -169,6 +174,25 @@ def intercept_skill_test_tag(
             sheet = json.loads(row[0] or "{}")
     except Exception:
         pass
+
+    # ── Archetype gate: arcane checks require Scholar ────────────────────
+    if skill_key in ARCANE_SKILL_KEYS:
+        archetype = str(sheet.get("archetype") or "").strip().lower()
+        if archetype != "scholar":
+            refusal = (
+                "\n\nKreślisz w powietrzu znak, który widziałeś gdzieś w bibliotece, "
+                "i czekasz na iskrę mocy. Nic się nie dzieje — twoja krew nie nosi "
+                "w sobie arkanów, a słowa zaklęcia rozpadają się w gardle. "
+                "Twój bohater nie ma archetypu pozwalającego rzucać czary."
+            )
+            cleaned = (prose[:m.start()].rstrip() + prose[m.end():]).rstrip()
+            return cleaned + refusal, None
+
+    # Build counter
+    if res_type == "DC":
+        counter = {"counter_type": "dc", "counter_key": None, "dc": int(value) if value.isdigit() else 12}
+    else:
+        counter = {"counter_type": "opposed", "counter_key": value.lower(), "dc": 12}
 
     mod_info = calc_skill_modifier_info(sheet, skill_key)
     skill_test_id = f"st-{uuid.uuid4().hex[:8]}"

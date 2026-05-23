@@ -111,15 +111,31 @@ _SKILL_VERB_HINT = _re_skill.compile(
 )
 
 
-def _skill_test_tag_instruction(conn, campaign_id: int, user_text: str | None) -> str | None:
+_ARCANE_SKILL_KEYS = {"arcana", "spell_attack", "arcane_save"}
+
+
+def _skill_test_tag_instruction(conn, campaign_id: int, user_text: str | None, character=None) -> str | None:
     """
     Inject skill test instructions when player text hints at a skill use.
     Loads skills from DB with descriptions so LLM picks the right custom key.
+
+    Archetype gate: if character is not a Scholar, hides arcana/spell_attack/arcane_save
+    from the skill list and appends an explicit rule forbidding magic tests.
     """
     if not user_text:
         return None
     if not _SKILL_VERB_HINT.search(user_text):
         return None
+
+    # Detect archetype for arcane gate
+    archetype = ""
+    if character is not None:
+        try:
+            sheet = parse_character_sheet(character["sheet_json"])
+            archetype = str(sheet.get("archetype") or "").strip().lower()
+        except Exception:
+            archetype = ""
+    is_scholar = (archetype == "scholar")
 
     # Load skills from DB with descriptions — crucial so LLM knows WHEN to use custom skills
     skill_lines = []
@@ -130,13 +146,31 @@ def _skill_test_tag_instruction(conn, campaign_id: int, user_text: str | None) -
                 "ORDER BY sort_order"
             ).fetchall()
             for r in rows:
+                key = str(r["key"]).lower()
+                # Filter out arcane skills for non-Scholars
+                if not is_scholar and key in _ARCANE_SKILL_KEYS:
+                    continue
                 desc = str(r["description"] or "").strip()
                 desc_part = f" — {desc[:60]}" if desc else ""
                 skill_lines.append(f"  {r['key']} ({r['label']}, {r['linked_stat']}){desc_part}")
     except Exception:
-        skill_lines = ["  stealth, lockpick, perception, persuasion, athletics, arcana, medicine, lore"]
+        fallback = ["stealth", "lockpick", "perception", "persuasion", "athletics", "medicine", "lore"]
+        if is_scholar:
+            fallback.append("arcana")
+        skill_lines = [f"  {', '.join(fallback)}"]
 
     skills_block = "\n".join(skill_lines)
+
+    archetype_rule = ""
+    if not is_scholar:
+        archetype_rule = (
+            "\n[ARCHETYP — BLOKADA MAGII]\n"
+            f"Bohater jest {archetype.upper() or 'NON-SCHOLAR'} — NIE ma archetypu Uczonego (Scholar). "
+            "NIGDY nie oferuj testów arcana / spell_attack / arcane_save. "
+            "Jeśli gracz próbuje rzucić zaklęcie, odpowiedz NARRACYJNIE bez rzutu — "
+            "jego krew nie nosi w sobie arkanów, słowa zaklęcia rozpadają się w gardle. "
+            "Brak roll_cue, brak [SKILL_TEST:arcana:...] — tylko opis nieudanej próby.\n"
+        )
 
     return (
         "[MECHANIKA — TESTY UMIEJĘTNOŚCI — WAŻNE]\n"
@@ -146,7 +180,8 @@ def _skill_test_tag_instruction(conn, campaign_id: int, user_text: str | None) -
         "NIE używaj angielskich odpowiedników z D&D (np. 'Investigation', 'Athletics' itp.) "
         "— użyj polskiego klucza z listy.\n\n"
         "DOSTĘPNE UMIEJĘTNOŚCI:\n"
-        f"{skills_block}\n\n"
+        f"{skills_block}\n"
+        f"{archetype_rule}\n"
         "Przykłady:\n"
         "  \"roll_cue\": \"Roll stealth d20\"       ← skradanie\n"
         "  \"roll_cue\": \"Roll kowalstwo d20\"     ← ocena/naprawa broni, wykuwanie\n"
@@ -498,7 +533,7 @@ def build_narrative_messages(
 
     # Skill test tag instruction — injected when player text hints at skill use
     if not combat_block and not roll_result_message and has_db_conn and messages:
-        _st_block = _skill_test_tag_instruction(conn, int(campaign["id"]), user_text)
+        _st_block = _skill_test_tag_instruction(conn, int(campaign["id"]), user_text, character=character)
         if _st_block:
             messages.append({"role": "system", "content": _st_block})
 
