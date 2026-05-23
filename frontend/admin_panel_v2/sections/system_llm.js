@@ -28,7 +28,7 @@ const LABELS = {
   charState:       "Stan postaci",
 };
 
-const TABS = ["llm", "database", "config", "slash-cmds", "admin-cmd", "resurrection"];
+const TABS = ["llm", "database", "config", "slash-cmds", "admin-cmd", "resurrection", "visual", "voice", "email"];
 const TAB_LABELS = {
   llm:           "LLM",
   database:      "Database",
@@ -36,6 +36,14 @@ const TAB_LABELS = {
   "slash-cmds":  "Slash Commands",
   "admin-cmd":   "Admin Cmd",
   resurrection:  "Wskrzeszenie",
+  visual:        "🎨 Wygląd",
+  voice:         "🔊 Głos",
+  email:         "📨 Email",
+};
+const TAB_MODULES = {
+  visual: "/admin_panel_v2/sections/visual.js?v=2",
+  voice:  "/admin_panel_v2/sections/voice.js?v=1",
+  email:  "/admin_panel_v2/sections/email.js?v=1",
 };
 
 const PROVIDERS = [
@@ -85,6 +93,18 @@ async function _renderTab(tab) {
   else if (tab === "slash-cmds")   await _renderSlashTab(body);
   else if (tab === "admin-cmd")    await _renderAdminCmdTab(body);
   else if (tab === "resurrection") await _renderResurrectionTab(body);
+  else if (TAB_MODULES[tab])       await _renderModuleTab(body, TAB_MODULES[tab]);
+}
+
+async function _renderModuleTab(body, modulePath) {
+  body.innerHTML = "";
+  try {
+    const { init: subInit } = await import(modulePath);
+    await subInit(body);
+  } catch (err) {
+    body.innerHTML = `<p class="drawer-error">Błąd ładowania modułu: ${_esc(err.message)}</p>`;
+    console.error("[system] module load failed:", modulePath, err);
+  }
 }
 
 // ── LLM tab ───────────────────────────────────────────────────────────────────
