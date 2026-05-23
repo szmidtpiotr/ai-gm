@@ -168,7 +168,7 @@ async function _activateTab(panel, tab) {
   }
   else if (tab === "pending")   await _renderPendingReview(container, panel);
   else if (tab === "builder") {
-    const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=4");
+    const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=6");
     await initBuilder(container);
   }
 }

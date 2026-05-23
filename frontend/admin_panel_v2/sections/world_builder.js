@@ -295,13 +295,34 @@ function _onWheel(e) {
 }
 
 function _center() {
-  const list=Object.values(_hexes);
-  if(!list.length){_pan={x:400,y:280};_zoom=1;return;}
-  const px=list.map(h=>hexToPixel(h.q,h.r).x);
-  const py=list.map(h=>hexToPixel(h.q,h.r).y);
-  const cx=(Math.min(...px)+Math.max(...px))/2;
-  const cy=(Math.min(...py)+Math.max(...py))/2;
-  _pan={x:450-cx,y:300-cy}; _zoom=1;
+  // Use the actual SVG bounding box (not hardcoded 450×300) so hexes land
+  // in the visible centre regardless of viewport / sidebar widths. Also
+  // auto-fit zoom so the whole painted area fits with a comfortable margin.
+  const svgRect = _svg ? _svg.getBoundingClientRect() : { width: 900, height: 600 };
+  const W = Math.max(200, svgRect.width  || 900);
+  const H = Math.max(200, svgRect.height || 600);
+
+  const list = Object.values(_hexes);
+  if (!list.length) {
+    _pan = { x: W / 2, y: H / 2 };
+    _zoom = 1;
+    return;
+  }
+  const px = list.map(h => hexToPixel(h.q, h.r).x);
+  const py = list.map(h => hexToPixel(h.q, h.r).y);
+  const minX = Math.min(...px), maxX = Math.max(...px);
+  const minY = Math.min(...py), maxY = Math.max(...py);
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+
+  // Auto-fit: scale so painted area (+margin) fits, but cap zoom at [0.4, 1.5]
+  const spanX = Math.max(HEX_SIZE * 3, (maxX - minX) + HEX_SIZE * 3);
+  const spanY = Math.max(HEX_SIZE * 3, (maxY - minY) + HEX_SIZE * 3);
+  const fitX = W / spanX;
+  const fitY = H / spanY;
+  _zoom = Math.max(0.4, Math.min(1.5, Math.min(fitX, fitY)));
+
+  _pan = { x: W / 2 - cx * _zoom, y: H / 2 - cy * _zoom };
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -341,7 +362,17 @@ export async function init(container) {
     return;
   }
 
-  _renderPalette(); _center(); _render();
+  // Defer initial center to next frame so the SVG has its layout dimensions
+  // (getBoundingClientRect would return 0×0 during synchronous init).
+  requestAnimationFrame(() => {
+    _renderPalette(); _center(); _render();
+  });
+  // Re-fit whenever the canvas resizes (sidebar collapse, window resize, etc.)
+  if (typeof ResizeObserver !== "undefined" && !_svg.__hasResizeObs) {
+    const ro = new ResizeObserver(() => { _render(); });
+    ro.observe(_svg);
+    _svg.__hasResizeObs = true;
+  }
 
   _svg.addEventListener("wheel",_onWheel,{passive:false});
   let _ds=null;
