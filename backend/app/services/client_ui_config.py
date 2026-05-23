@@ -6,7 +6,7 @@ import json
 import sqlite3
 from typing import Any
 
-from app.api.slash_command_registry import COMMAND_REGISTRY
+from app.api.slash_command_registry import ADMIN_ONLY_COMMANDS, COMMAND_REGISTRY
 
 DB_PATH = "/data/ai_gm.db"
 
@@ -18,17 +18,33 @@ SEARCH_SLASH_COMMAND: dict[str, str] = {
 }
 
 
+def _default_admin_enabled(cmd: str) -> bool:
+    """All commands available to admin by default."""
+    return True
+
+
+def _default_player_enabled(cmd: str) -> bool:
+    """Admin-only commands hidden from players by default; everything else visible."""
+    return cmd not in ADMIN_ONLY_COMMANDS
+
+
 def _default_slash_rows() -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = [
-        {"command": k, "description": str(v), "enabled": True} for k, v in COMMAND_REGISTRY.items()
-    ]
-    rows.append(
-        {
-            "command": SEARCH_SLASH_COMMAND["command"],
-            "description": SEARCH_SLASH_COMMAND["description"],
-            "enabled": True,
-        }
-    )
+    rows: list[dict[str, Any]] = []
+    for k, v in COMMAND_REGISTRY.items():
+        rows.append({
+            "command": k,
+            "description": str(v),
+            "enabled": _default_player_enabled(k),
+            "admin_enabled": _default_admin_enabled(k),
+            "player_enabled": _default_player_enabled(k),
+        })
+    rows.append({
+        "command": SEARCH_SLASH_COMMAND["command"],
+        "description": SEARCH_SLASH_COMMAND["description"],
+        "enabled": True,
+        "admin_enabled": True,
+        "player_enabled": True,
+    })
     return rows
 
 
@@ -65,7 +81,7 @@ def _coerce_enabled(v: Any, default: bool = True) -> bool:
 
 
 def get_merged_slash_commands() -> list[dict[str, Any]]:
-    """Pełna lista (admin + logika serwera): command, description, enabled."""
+    """Pełna lista (admin + logika serwera): command, description, admin_enabled, player_enabled, enabled (legacy = player_enabled)."""
     out: list[dict[str, Any]] = [dict(x) for x in DEFAULT_SLASH_COMMANDS]
     with _conn() as conn:
         raw = _get_meta(conn, META_KEY_SLASH_COMMANDS)
@@ -88,25 +104,42 @@ def get_merged_slash_commands() -> list[dict[str, Any]]:
         desc = str(item.get("description", "")).strip()
         if desc:
             entry["description"] = desc[:_MAX_DESC]
-        if "enabled" in item:
-            entry["enabled"] = _coerce_enabled(item.get("enabled"), default=True)
+        # Legacy fallback: if only "enabled" stored, treat it as player_enabled
+        if "admin_enabled" in item:
+            entry["admin_enabled"] = _coerce_enabled(item.get("admin_enabled"), default=True)
+        if "player_enabled" in item:
+            entry["player_enabled"] = _coerce_enabled(item.get("player_enabled"), default=_default_player_enabled(cmd))
+        elif "enabled" in item:
+            entry["player_enabled"] = _coerce_enabled(item.get("enabled"), default=_default_player_enabled(cmd))
     for row in out:
         u = by_cmd.get(row["command"])
         if not u:
             continue
         if "description" in u:
             row["description"] = u["description"]
-        if "enabled" in u:
-            row["enabled"] = bool(u["enabled"])
+        if "admin_enabled" in u:
+            row["admin_enabled"] = bool(u["admin_enabled"])
+        if "player_enabled" in u:
+            row["player_enabled"] = bool(u["player_enabled"])
+            row["enabled"] = bool(u["player_enabled"])  # keep legacy in sync
     return out
 
 
 def get_public_slash_commands() -> list[dict[str, str]]:
-    """Tylko włączone komendy — dla gracza (autocomplete) bez pola enabled."""
+    """Tylko włączone dla gracza — dla autocomplete'a gracza, bez pól enabled/admin."""
     return [
         {"command": str(r["command"]), "description": str(r["description"])}
         for r in get_merged_slash_commands()
-        if r.get("enabled", True) is not False
+        if r.get("player_enabled", r.get("enabled", True)) is not False
+    ]
+
+
+def get_admin_slash_commands() -> list[dict[str, str]]:
+    """Komendy widoczne dla admina (player_enabled OR admin_enabled)."""
+    return [
+        {"command": str(r["command"]), "description": str(r["description"])}
+        for r in get_merged_slash_commands()
+        if r.get("admin_enabled", True) is not False or r.get("player_enabled", True) is not False
     ]
 
 
@@ -149,8 +182,9 @@ def slash_registry_key_for_dispatch(text: str) -> str | None:
 
 def set_slash_commands_ui(commands: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    Zapis opisów i flag enabled dla wszystkich znanych komend czatu.
-    Każdy element: command, description (niepusty), enabled (bool).
+    Zapis opisów i flag dla wszystkich znanych komend czatu.
+    Każdy element: command, description, admin_enabled, player_enabled
+    (legacy: 'enabled' jest akceptowane jako player_enabled).
     """
     if not isinstance(commands, list):
         raise ValueError("Request body must include a commands array.")
@@ -160,7 +194,7 @@ def set_slash_commands_ui(commands: list[dict[str, Any]]) -> list[dict[str, Any]
 
     for item in commands:
         if not isinstance(item, dict):
-            raise ValueError("Each command entry must be an object with command, description, enabled.")
+            raise ValueError("Each command entry must be an object with command, description, flags.")
         cmd = str(item.get("command", "")).strip()
         desc = str(item.get("description", "")).strip()
         if cmd not in ALLOWED_SLASH_COMMANDS:
@@ -172,16 +206,27 @@ def set_slash_commands_ui(commands: list[dict[str, Any]]) -> list[dict[str, Any]
         seen.add(cmd)
         if not desc:
             raise ValueError("Description cannot be empty.")
-        if "enabled" not in item:
-            raise ValueError(f"Missing enabled for {cmd!r}.")
-        en = item.get("enabled")
-        if not isinstance(en, bool):
-            raise ValueError(f"enabled for {cmd!r} must be a boolean.")
-        payload.append({"command": cmd, "description": desc[:_MAX_DESC], "enabled": en})
+        admin_en = item.get("admin_enabled")
+        player_en = item.get("player_enabled")
+        if player_en is None and "enabled" in item:
+            player_en = item.get("enabled")
+        if admin_en is None:
+            admin_en = _default_admin_enabled(cmd)
+        if player_en is None:
+            player_en = _default_player_enabled(cmd)
+        if not isinstance(admin_en, bool) or not isinstance(player_en, bool):
+            raise ValueError(f"admin_enabled/player_enabled for {cmd!r} must be booleans.")
+        payload.append({
+            "command": cmd,
+            "description": desc[:_MAX_DESC],
+            "admin_enabled": admin_en,
+            "player_enabled": player_en,
+            "enabled": player_en,  # legacy mirror
+        })
 
     if seen != ALLOWED_SLASH_COMMANDS:
         n = len(ALLOWED_SLASH_COMMANDS)
-        raise ValueError(f"Send all {n} slash commands with descriptions and enabled flags.")
+        raise ValueError(f"Send all {n} slash commands with descriptions and flags.")
 
     raw = json.dumps(payload, ensure_ascii=False)
     with _conn() as conn:

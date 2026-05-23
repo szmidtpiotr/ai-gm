@@ -505,8 +505,17 @@ async function _renderSlashTab(body) {
   body.innerHTML = `
     <div class="system-section">
       <div class="system-section-title">${LABELS.slashCmds}</div>
-      <p class="system-help-text">Lista komend jest zawsze zgodna z serwerem (COMMAND_REGISTRY + /search). Checkbox = czy gracz może użyć tej komendy; pole tekstowe = opis w podpowiedzi. Zapis w bazie.</p>
-      <div id="slash-rows" style="margin-top:14px"></div>
+      <p class="system-help-text">
+        Lista komend systemowych. Dwa przełączniki na komendę: <strong>Admin</strong> (widoczność dla administratora) oraz <strong>Gracz</strong> (widoczność dla zwykłego gracza).
+        Pole tekstowe = opis w podpowiedzi /help i autocomplete'a.
+      </p>
+      <div class="slash-table-head">
+        <span class="slash-th-cmd">Komenda</span>
+        <span class="slash-th-toggle">Admin</span>
+        <span class="slash-th-toggle">Gracz</span>
+        <span class="slash-th-desc">Opis</span>
+      </div>
+      <div id="slash-rows" style="margin-top:6px"></div>
       <button class="primary-btn" id="slash-save-btn" disabled style="margin-top:12px">${LABELS.slashSave}</button>
     </div>`;
 
@@ -516,16 +525,21 @@ async function _renderSlashTab(body) {
   try {
     const data = await adminFetch("/api/admin/slash-commands");
     const cmds = data.commands || [];
-    slashRows.innerHTML = cmds.map(c => `
+    slashRows.innerHTML = cmds.map(c => {
+      const adminOn  = c.admin_enabled !== false;
+      const playerOn = c.player_enabled !== undefined ? c.player_enabled !== false : c.enabled !== false;
+      return `
       <div class="slash-cmd-row" data-cmd="${_esc(c.command || "")}">
-        <div class="slash-cmd-head">
-          <input type="checkbox" class="slash-cmd-enabled" title="Włącz/wyłącz dla gracza"
-            ${c.enabled !== false ? "checked" : ""} />
-          <span class="slash-cmd-name">${_esc(c.command || "")}</span>
-        </div>
+        <span class="slash-cmd-name">${_esc(c.command || "")}</span>
+        <label class="slash-toggle">
+          <input type="checkbox" class="slash-cmd-admin" ${adminOn ? "checked" : ""} />
+        </label>
+        <label class="slash-toggle">
+          <input type="checkbox" class="slash-cmd-player" ${playerOn ? "checked" : ""} />
+        </label>
         <textarea class="slash-cmd-desc" rows="2">${_esc(c.description || "")}</textarea>
-      </div>`
-    ).join("");
+      </div>`;
+    }).join("");
     saveBtn.disabled = false;
   } catch (e) {
     showToast(e.message || "Nie można załadować komend.", "error");
@@ -535,9 +549,10 @@ async function _renderSlashTab(body) {
   saveBtn.addEventListener("click", async () => {
     const rows = slashRows.querySelectorAll(".slash-cmd-row");
     const commands = Array.from(rows).map(row => ({
-      command:     row.dataset.cmd,
-      description: row.querySelector(".slash-cmd-desc").value.trim(),
-      enabled:     row.querySelector(".slash-cmd-enabled").checked,
+      command:        row.dataset.cmd,
+      description:    row.querySelector(".slash-cmd-desc").value.trim(),
+      admin_enabled:  row.querySelector(".slash-cmd-admin").checked,
+      player_enabled: row.querySelector(".slash-cmd-player").checked,
     }));
     saveBtn.disabled = true; saveBtn.textContent = "⏳";
     try {

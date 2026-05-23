@@ -2590,19 +2590,41 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .sys-row-zero td { color: var(--text-muted); }
 
 /* Slash command rows */
+/* Table-style grid for slash commands admin */
+.slash-table-head {
+  display: grid;
+  grid-template-columns: 180px 70px 70px 1fr;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #888);
+  border-bottom: 1px solid var(--border, #2a2622);
+}
+.slash-th-toggle { text-align: center; }
+
 .slash-cmd-row {
+  display: grid;
+  grid-template-columns: 180px 70px 70px 1fr;
+  gap: 12px;
+  align-items: center;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 10px 12px;
-  margin-bottom: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  margin-bottom: 6px;
 }
-.slash-cmd-head { display: flex; align-items: center; gap: 8px; }
 .slash-cmd-name { font-family: monospace; font-size: 0.88rem; color: var(--accent-gold); font-weight: 600; }
-.slash-cmd-enabled { width: 16px; height: 16px; accent-color: var(--accent-gold); cursor: pointer; }
+.slash-cmd-head { display: flex; align-items: center; gap: 8px; }
+.slash-cmd-enabled,
+.slash-cmd-admin,
+.slash-cmd-player {
+  width: 16px; height: 16px;
+  accent-color: var(--accent-gold);
+  cursor: pointer;
+}
+.slash-toggle { display: flex; justify-content: center; align-items: center; cursor: pointer; }
 .slash-cmd-desc {
   width: 100%;
   background: var(--bg-surface);
@@ -2615,6 +2637,10 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   font-family: inherit;
 }
 .slash-cmd-desc:focus { outline: none; border-color: var(--accent-gold); }
+@media (max-width: 720px) {
+  .slash-table-head { display: none; }
+  .slash-cmd-row { grid-template-columns: 1fr; }
+}
 
 /* Admin cmd terminal */
 .cmd-history-wrap {

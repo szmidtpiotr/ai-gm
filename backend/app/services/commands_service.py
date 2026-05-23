@@ -251,6 +251,31 @@ def _execute_debug_command(cur, conn, character_id: int, char_row, sheet: dict, 
     )
 
 
+def _resolve_skill_input(conn, raw: str) -> str | None:
+    """Translate a user-typed skill arg to canonical skill key.
+    Accepts: 'stealth', 'skradanie', 'Skradanie', 'percepcja' etc.
+    Returns key if found, None otherwise.
+    """
+    if not raw or not conn:
+        return None
+    norm = raw.strip().lower()
+    try:
+        rows = conn.execute("SELECT key, label FROM game_config_skills").fetchall()
+        for r in rows:
+            k = str(r["key"]).lower()
+            lbl = str(r["label"] or "").lower()
+            if k == norm or lbl == norm or k == norm.replace(" ", "_"):
+                return str(r["key"])
+        # Substring fallback — start-with match on label
+        for r in rows:
+            lbl = str(r["label"] or "").lower()
+            if lbl and lbl.startswith(norm):
+                return str(r["key"])
+    except Exception:
+        pass
+    return None
+
+
 def _execute_roll_command(cur, conn, character_id: int, char_row, sheet: dict, skill_arg: str) -> "CommandResult":
     """Admin-only /debug roll [skill_key] — seeds a pending_skill_test and returns skill_test_pending payload."""
     import random as _rand
@@ -261,7 +286,12 @@ def _execute_roll_command(cur, conn, character_id: int, char_row, sheet: dict, s
     if not campaign_id:
         raise ValueError("Character has no active campaign — assign one first")
 
-    skill_key = (skill_arg.strip().lower() or "athletics").replace(" ", "_")
+    raw_arg = (skill_arg or "").strip()
+    if not raw_arg:
+        skill_key = "athletics"
+    else:
+        # Try matching as label (Polish name) first, fall back to key form
+        skill_key = _resolve_skill_input(conn, raw_arg) or raw_arg.lower().replace(" ", "_")
 
     # Validate skill exists in DB or known set — fall back gracefully
     mod_info = calc_skill_modifier_info(sheet, skill_key)

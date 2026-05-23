@@ -258,9 +258,12 @@ class AdminAdvanceSceneReq(BaseModel):
 
 
 class SlashCommandItemReq(BaseModel):
+    model_config = ConfigDict(extra="allow")  # tolerate legacy "enabled" field
     command: str
     description: str = Field(..., max_length=4000)
-    enabled: bool
+    enabled: bool | None = None
+    admin_enabled: bool | None = None
+    player_enabled: bool | None = None
 
 
 class SlashCommandsPutReq(BaseModel):

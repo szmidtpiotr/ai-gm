@@ -2561,11 +2561,16 @@ function getRollSuggestions(afterRoll, cachedSkills) {
     // Skill already picked — hide popup so Enter submits the full command normally
     if (hasSkill) return [];
 
-    // Still typing the skill name — filter by key or Polish label prefix
+    // Still typing the skill name — match by key OR Polish label prefix;
+    // insert the Polish label (backend resolves label → key).
     return (cachedSkills || [])
-        .filter(s => s.key.startsWith(typed) || s.label.toLowerCase().startsWith(typed))
+        .filter(s => {
+            const key = (s.key || '').toLowerCase();
+            const lbl = (s.label || '').toLowerCase();
+            return key.startsWith(typed) || lbl.startsWith(typed);
+        })
         .slice(0, 10)
-        .map(s => ({ cmd: `/roll ${s.key}`, desc: s.label }));
+        .map(s => ({ cmd: `/roll ${s.label}`, desc: s.key }));
 }
 
 function getDebugSuggestions(afterDebug) {
