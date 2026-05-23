@@ -3793,7 +3793,8 @@ def admin_set_invite_limit(
 
 class UpdateProfileReq(BaseModel):
     display_name: str | None = None
-    avatar_url: str | None = None  # data URL (base64) or empty string to clear
+    avatar_url: str | None = None
+    username: str | None = None
 
 
 @router.patch("/me/profile")
@@ -3806,9 +3807,24 @@ def update_my_profile(
     payload = require_current_user(authorization)
     user_id = int(payload.get("sub") or 0)
 
+    import re as _re
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
+        if req.username is not None:
+            uname = req.username.strip().lower()[:30]
+            if not uname:
+                raise HTTPException(status_code=422, detail="Login nie może być pusty")
+            if not _re.match(r'^[a-z0-9_]+$', uname):
+                raise HTTPException(status_code=422, detail="Login może zawierać tylko litery, cyfry i _")
+            if len(uname) < 3:
+                raise HTTPException(status_code=422, detail="Login musi mieć min. 3 znaki")
+            taken = conn.execute(
+                "SELECT id FROM users WHERE username = ? AND id != ? LIMIT 1", (uname, user_id)
+            ).fetchone()
+            if taken:
+                raise HTTPException(status_code=409, detail="Ta nazwa jest już zajęta")
+            conn.execute("UPDATE users SET username = ? WHERE id = ?", (uname, user_id))
         if req.display_name is not None:
             name = req.display_name.strip()[:40] or None
             conn.execute("UPDATE users SET display_name = ? WHERE id = ?", (name, user_id))
@@ -3817,17 +3833,18 @@ def update_my_profile(
             try:
                 conn.execute("UPDATE users SET avatar_url = ? WHERE id = ?", (url, user_id))
             except sqlite3.OperationalError:
-                pass  # column not yet migrated — ignore avatar update
+                pass
         conn.commit()
         row = conn.execute(
-            "SELECT display_name, email, avatar_url FROM users WHERE id = ?", (user_id,)
+            "SELECT username, display_name, email, avatar_url FROM users WHERE id = ?", (user_id,)
         ).fetchone()
         avatar = None
         try:
             avatar = row["avatar_url"]
         except Exception:
             pass
-        return {"ok": True, "display_name": row["display_name"], "email": row["email"], "avatar_url": avatar}
+        return {"ok": True, "username": row["username"], "display_name": row["display_name"],
+                "email": row["email"], "avatar_url": avatar}
     finally:
         conn.close()
 

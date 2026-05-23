@@ -6750,9 +6750,9 @@ async function loadProfilePage() {
     if (nameEl) nameEl.textContent = user.display_name || user.username;
     _renderProfileAvatar(null, fallbackLetter);
 
-    // Show login and email immediately from cached user
+    // Show login immediately from cached user (without @, the row adds it)
     const loginEl = document.getElementById('profile-login-label');
-    if (loginEl) loginEl.textContent = `@${user.username}`;
+    if (loginEl) loginEl.textContent = user.username || '';
 
     try {
         const stats = await apiRequest('GET', '/me/stats');
@@ -6806,53 +6806,104 @@ function _initProfileEditing() {
     const cancelBtn = document.getElementById('profile-name-cancel');
     let _originalName = '';
 
-    const enterEdit = () => {
-        _originalName = nameEl.textContent.trim();
-        nameEl.contentEditable = 'true';
-        editBtn.hidden = true;
-        saveBtn.hidden = false;
-        cancelBtn.hidden = false;
-        nameEl.focus();
-        // move cursor to end
+    const _focusEnd = (el) => {
+        el.focus();
         const range = document.createRange();
-        range.selectNodeContents(nameEl);
+        range.selectNodeContents(el);
         range.collapse(false);
         const sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
     };
 
-    const cancelEdit = () => {
-        nameEl.contentEditable = 'false';
-        nameEl.textContent = _originalName;
-        editBtn.hidden = false;
-        saveBtn.hidden = true;
-        cancelBtn.hidden = true;
-    };
-
-    const commitEdit = async () => {
-        const newName = nameEl.textContent.trim();
-        if (!newName) { cancelEdit(); return; }
-        saveBtn.disabled = true;
-        const resp = await _saveProfile({ display_name: newName });
-        saveBtn.disabled = false;
-        if (resp) {
-            nameEl.textContent = resp.display_name || newName;
-            nameEl.contentEditable = 'false';
-            editBtn.hidden = false;
-            saveBtn.hidden = true;
-            cancelBtn.hidden = true;
-            showToast('Nazwa zaktualizowana', 'success');
-        }
-    };
-
-    editBtn?.addEventListener('click', enterEdit);
-    cancelBtn?.addEventListener('click', cancelEdit);
-    saveBtn?.addEventListener('click', commitEdit);
+    // ── Display name ──────────────────────────────────────────────
+    editBtn?.addEventListener('click', () => {
+        _originalName = nameEl.textContent.trim();
+        nameEl.contentEditable = 'true';
+        _focusEnd(nameEl);
+    });
 
     nameEl?.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); commitEdit(); }
-        if (e.key === 'Escape') cancelEdit();
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const newName = nameEl.textContent.trim();
+            if (!newName) { nameEl.textContent = _originalName; nameEl.contentEditable = 'false'; return; }
+            _saveProfile({ display_name: newName }).then(resp => {
+                if (resp) {
+                    nameEl.textContent = resp.display_name || newName;
+                    showToast('Nazwa zaktualizowana', 'success');
+                    // update localStorage
+                    if (currentUser) currentUser.display_name = resp.display_name || newName;
+                }
+            });
+            nameEl.contentEditable = 'false';
+        }
+        if (e.key === 'Escape') {
+            nameEl.textContent = _originalName;
+            nameEl.contentEditable = 'false';
+        }
+    });
+
+    nameEl?.addEventListener('blur', () => {
+        // Revert on blur-without-Enter
+        if (nameEl.contentEditable === 'true') {
+            nameEl.textContent = _originalName;
+            nameEl.contentEditable = 'false';
+        }
+    });
+
+    // ── @username ─────────────────────────────────────────────────
+    const loginEl       = document.getElementById('profile-login-label');
+    const loginEditBtn  = document.getElementById('profile-login-edit-btn');
+    const loginHint     = document.getElementById('profile-login-hint');
+    let _originalLogin  = '';
+
+    const _setLoginHint = (msg, ok) => {
+        if (!loginHint) return;
+        loginHint.textContent = msg;
+        loginHint.className = 'pf-login-hint' + (ok === true ? ' pf-login-hint--ok' : ok === false ? ' pf-login-hint--err' : '');
+    };
+
+    loginEditBtn?.addEventListener('click', () => {
+        _originalLogin = loginEl.textContent.trim();
+        loginEl.contentEditable = 'true';
+        _setLoginHint('Enter aby zapisać · Esc aby anulować', null);
+        _focusEnd(loginEl);
+    });
+
+    loginEl?.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const newLogin = loginEl.textContent.trim().toLowerCase();
+            if (!newLogin) { loginEl.textContent = _originalLogin; loginEl.contentEditable = 'false'; _setLoginHint('', null); return; }
+            _setLoginHint('Sprawdzanie…', null);
+            try {
+                const resp = await _saveProfile({ username: newLogin });
+                if (resp) {
+                    loginEl.textContent = resp.username || newLogin;
+                    if (currentUser) { currentUser.username = resp.username || newLogin; localStorage.setItem('user', JSON.stringify(currentUser)); }
+                    loginEl.contentEditable = 'false';
+                    _setLoginHint('Zapisano', true);
+                    setTimeout(() => _setLoginHint('', null), 2000);
+                    showToast('Login zaktualizowany', 'success');
+                }
+            } catch (err) {
+                _setLoginHint(err.message || 'Błąd', false);
+            }
+        }
+        if (e.key === 'Escape') {
+            loginEl.textContent = _originalLogin;
+            loginEl.contentEditable = 'false';
+            _setLoginHint('', null);
+        }
+    });
+
+    loginEl?.addEventListener('blur', () => {
+        if (loginEl.contentEditable === 'true') {
+            loginEl.textContent = _originalLogin;
+            loginEl.contentEditable = 'false';
+            _setLoginHint('', null);
+        }
     });
 
     // Avatar upload
