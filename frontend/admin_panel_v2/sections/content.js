@@ -58,14 +58,13 @@ const LABELS = {
   resource:     "Katalog",
 };
 
-const TABS = ["weapons", "armor", "spells", "items", "consumables", "loot-tables"];
+const TABS = ["weapons", "armor", "spells", "items", "consumables"];
 
 const ASSISTANT_RESOURCES = [
   { value: "weapons",     label: LABELS.weapons },
   { value: "armor",       label: LABELS.armor },
   { value: "items",       label: LABELS.items },
   { value: "consumables", label: LABELS.consumables },
-  { value: "loot-tables", label: LABELS.lootTables },
 ];
 
 const TAB_TO_RESOURCE = {
@@ -73,7 +72,6 @@ const TAB_TO_RESOURCE = {
   armor:         "armor",
   items:         "items",
   consumables:   "consumables",
-  "loot-tables": "loot-tables",
 };
 
 const _rendered = new Set();
@@ -92,11 +90,10 @@ export async function init(panel) {
           <button class="subtab-btn" data-tab="spells">${LABELS.spells}</button>
           <button class="subtab-btn" data-tab="items">${LABELS.items}</button>
           <button class="subtab-btn" data-tab="consumables">${LABELS.consumables}</button>
-          <button class="subtab-btn" data-tab="loot-tables">${LABELS.lootTables}</button>
           <button class="subtab-btn" id="smart-entry-btn" title="AI asystent tworzenia treści" style="margin-left:auto">🤖 Kreator AI</button>
         </div>
         <div class="subtab-panels">
-          ${["weapons","armor","spells","items","consumables","loot-tables"].map(
+          ${["weapons","armor","spells","items","consumables"].map(
             (t) => `<div class="subtab-panel${t === "weapons" ? " active" : ""}" data-tab="${t}"></div>`
           ).join("")}
         </div>
@@ -944,7 +941,7 @@ function _openConsumableModal(row, onDone) {
 
 // ── Loot Tables ───────────────────────────────────────────────────────────────
 
-async function _renderLootTables(container, panel) {
+export async function _renderLootTables(container, panel) {
   container.innerHTML = `
     <div class="loot-tables-layout">
       <div class="loot-sidebar">

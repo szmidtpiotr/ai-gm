@@ -116,7 +116,7 @@ const LOCATION_RULES = [
   { key: "reason",           label: "Reason",           type: "text",    default: "Sacred ground", description: "Reason shown to player" },
 ];
 
-const TABS = ["builder", "locations", "npcs", "enemies", "dungeons", "riddles", "pending"];
+const TABS = ["builder", "locations", "npcs", "enemies", "loot-tables", "pending"];
 const _rendered = new Set();
 let _aiTrigger = null;
 
@@ -128,8 +128,7 @@ export async function init(panel) {
         <button class="subtab-btn" data-tab="locations">📍 Lokacje</button>
         <button class="subtab-btn" data-tab="npcs">${LABELS.npcs}</button>
         <button class="subtab-btn" data-tab="enemies">${LABELS.enemies}</button>
-        <button class="subtab-btn" data-tab="dungeons">⚔️ Lochy</button>
-        <button class="subtab-btn" data-tab="riddles">🔮 Zagadki</button>
+        <button class="subtab-btn" data-tab="loot-tables">💰 Tabele łupów</button>
         <button class="subtab-btn" data-tab="pending">⏳ Oczekujące <span id="pending-nav-badge" class="admin-badge admin-badge-gold" style="display:none"></span></button>
       </div>
       <div class="subtab-panels">
@@ -163,8 +162,10 @@ async function _activateTab(panel, tab) {
   if      (tab === "locations") await _renderLocations(container);
   else if (tab === "npcs")      await _renderNpcs(container);
   else if (tab === "enemies")   await _renderEnemies(container);
-  else if (tab === "dungeons")  await _renderDungeons(container);
-  else if (tab === "riddles")   await _renderRiddles(container);
+  else if (tab === "loot-tables") {
+    const { _renderLootTables } = await import("/admin_panel_v2/sections/content.js?v=23");
+    await _renderLootTables(container, panel);
+  }
   else if (tab === "pending")   await _renderPendingReview(container, panel);
   else if (tab === "builder") {
     const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=4");
@@ -1663,7 +1664,7 @@ async function _loadPendingWeapons(container, panel) {
 
 // ── Dungeons ──────────────────────────────────────────────────────────────────
 
-async function _renderDungeons(container) {
+export async function _renderDungeons(container) {
   container.innerHTML = `
     <div class="dungeon-list-panel" style="display:flex;flex-direction:column;height:100%;overflow:hidden">
       <div class="dungeon-list-toolbar">
@@ -1901,7 +1902,7 @@ function _openDungeonModal(row, onDone) {
 
 // ── Riddle Bank ───────────────────────────────────────────────────────────────
 
-async function _renderRiddles(container) {
+export async function _renderRiddles(container) {
   const addBtn = document.createElement("button");
   addBtn.className = "primary-btn";
   addBtn.textContent = "+ Dodaj zagadkę";

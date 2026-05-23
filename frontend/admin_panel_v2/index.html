@@ -37,6 +37,10 @@
             <span class="nav-icon">🌍</span>
             <span class="nav-label">Świat</span>
           </button>
+          <button type="button" data-section="dungeons" title="Lochy">
+            <span class="nav-icon">⛓</span>
+            <span class="nav-label">Lochy</span>
+          </button>
           <button type="button" data-section="prompts" title="Narracja">
             <span class="nav-icon">📜</span>
             <span class="nav-label">Narracja</span>
@@ -113,6 +117,7 @@
           <div class="section-panel" data-section="mechanics"></div>
           <div class="section-panel" data-section="content"></div>
           <div class="section-panel" data-section="world"></div>
+          <div class="section-panel" data-section="dungeons"></div>
           <div class="section-panel" data-section="prompts"></div>
           <div class="section-panel" data-section="players"></div>
           <div class="section-panel" data-section="campaigns"></div>
@@ -181,6 +186,7 @@
         "mechanics":  { label: "Mechaniki",  icon: "⚙",  module: null },
         "content":    { label: "Zawartość",  icon: "⚔",  module: null },
         "world":      { label: "Świat",      icon: "🌍", module: null },
+        "dungeons":   { label: "Lochy",      icon: "⛓", module: null },
         "prompts":    { label: "Narracja",   icon: "📜", module: null },
         "players":    { label: "Gracze",     icon: "👤", module: null },
         "campaigns":  { label: "Kampanie",   icon: "🗺", module: null },
@@ -377,7 +383,8 @@
           "overview":  "/admin_panel_v2/sections/dashboard.js?v=2",
           "mechanics": "/admin_panel_v2/sections/mechanics.js?v=10",
           "content":   "/admin_panel_v2/sections/content.js?v=23",
-          "world":     "/admin_panel_v2/sections/world.js?v=33",
+          "world":     "/admin_panel_v2/sections/world.js?v=34",
+          "dungeons":  "/admin_panel_v2/sections/dungeons.js?v=1",
           "prompts":   "/admin_panel_v2/sections/prompts.js?v=2",
           "players":   "/admin_panel_v2/sections/players.js?v=stage11-resurrect-global-2",
           "campaigns":  "/admin_panel_v2/sections/campaigns_hub.js?v=4",
