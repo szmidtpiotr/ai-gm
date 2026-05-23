@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin 2.0</title>
-    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=58" />
+    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=59" />
   </head>
   <body>
     <div class="admin-shell" id="admin-shell">
@@ -36,6 +36,7 @@
           <button type="button" data-section="world" title="Świat">
             <span class="nav-icon">🌍</span>
             <span class="nav-label">Świat</span>
+            <span class="nav-pending-badge" id="nav-world-pending" hidden></span>
           </button>
           <button type="button" data-section="dungeons" title="Lochy">
             <span class="nav-icon">⛓</span>
@@ -248,6 +249,7 @@
           showToast("Connected.", "success");
           log("Connected to " + apiRoot());
           await fetchLlmPreset();
+          refreshWorldPendingBadge();
         } catch (e) {
           setConnected(false);
           showToast(e.message || "Connection failed.", "error");
@@ -276,10 +278,33 @@
           showToast("Dev login succeeded.", "success");
           log("Dev login OK");
           await fetchLlmPreset();
+          refreshWorldPendingBadge();
         } catch (e) {
           showToast(e.message || "Dev login failed.", "error");
           log("Dev login failed");
         }
+      }
+
+      /* ── Pending world content badge ── */
+      async function refreshWorldPendingBadge() {
+        const el = document.getElementById("nav-world-pending");
+        if (!el) return;
+        try {
+          const [loc, npc, en, wep] = await Promise.all([
+            adminFetch("/api/admin/world/pending/locations").catch(() => ({ items: [] })),
+            adminFetch("/api/admin/world/pending/npcs").catch(() => ({ items: [] })),
+            adminFetch("/api/admin/world/pending/enemies").catch(() => ({ items: [] })),
+            adminFetch("/api/admin/world/pending/weapons").catch(() => ({ items: [] })),
+          ]);
+          const total = (loc.items?.length || 0) + (npc.items?.length || 0)
+                      + (en.items?.length  || 0) + (wep.items?.length || 0);
+          if (total > 0) {
+            el.textContent = String(total);
+            el.hidden = false;
+          } else {
+            el.hidden = true;
+          }
+        } catch { /* non-critical */ }
       }
 
       /* ── LLM preset pill ── */
@@ -383,7 +408,7 @@
           "overview":  "/admin_panel_v2/sections/dashboard.js?v=2",
           "mechanics": "/admin_panel_v2/sections/mechanics.js?v=10",
           "content":   "/admin_panel_v2/sections/content.js?v=23",
-          "world":     "/admin_panel_v2/sections/world.js?v=34",
+          "world":     "/admin_panel_v2/sections/world.js?v=35",
           "dungeons":  "/admin_panel_v2/sections/dungeons.js?v=1",
           "prompts":   "/admin_panel_v2/sections/prompts.js?v=2",
           "players":   "/admin_panel_v2/sections/players.js?v=stage11-resurrect-global-2",
@@ -453,6 +478,7 @@
 
         if (connected) {
           await fetchLlmPreset();
+          refreshWorldPendingBadge();
           const lastSection = loadSection();
           const navBtns = Array.from(document.querySelectorAll("#sidebar-nav button[data-section]"));
           const panels  = Array.from(document.querySelectorAll(".section-panel"));

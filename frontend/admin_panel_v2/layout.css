@@ -4528,3 +4528,32 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   white-space: nowrap;
   cursor: help;
 }
+
+/* Sidebar pending-content badge (Świat) */
+.nav-pending-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: auto;
+  background: var(--accent-gold, #c9a54a);
+  color: #0a0908;
+  border-radius: 9px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-family: monospace;
+  line-height: 1;
+}
+.nav-pending-badge[hidden] { display: none; }
+/* Hide badge label spacing when sidebar collapsed */
+.admin-shell.sidebar-collapsed .nav-pending-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  margin-left: 0;
+  min-width: 14px;
+  height: 14px;
+  font-size: 0.6rem;
+}

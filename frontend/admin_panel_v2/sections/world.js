@@ -534,6 +534,29 @@ async function _renderLocations(container) {
         formatDisplay: (r) => (LOC_REVIEW_STATUS[r.review_status] || LOC_REVIEW_STATUS.permanent).label,
         filterOptions: Object.entries(LOC_REVIEW_STATUS).map(([v, m]) => ({ value: v, label: m.label })),
       },
+      {
+        key: "created_by", label: "Autor",
+        type: "badge", editable: false,
+        formatDisplay: (r) => {
+          const cb = String(r.created_by || "admin_manual").toLowerCase();
+          if (cb === "admin_manual") return "🛠 Admin";
+          if (cb === "llm_seed")     return "🤖 LLM";
+          if (cb === "gm_session")   return "🎲 GM (sesja)";
+          return cb;
+        },
+        badgeClass: (r) => {
+          const cb = String(r.created_by || "admin_manual").toLowerCase();
+          if (cb === "admin_manual") return "admin-badge-blue";
+          if (cb === "llm_seed")     return "admin-badge-gold";
+          if (cb === "gm_session")   return "admin-badge-muted";
+          return "admin-badge-muted";
+        },
+        filterOptions: [
+          { value: "admin_manual", label: "🛠 Admin (ręcznie)" },
+          { value: "llm_seed",     label: "🤖 LLM (AI)" },
+          { value: "gm_session",   label: "🎲 GM (sesja)" },
+        ],
+      },
       { key: "canonical",      label: "⭐ Kanon", type: "boolean", editable: true },
       { key: "usage_count",    label: "Wizyt", type: "number", editable: false },
       { key: "_enemy_count",   label: "Wrogowie", type: "number", editable: false },
@@ -1311,19 +1334,24 @@ async function _renderPendingReview(container, panel) {
         <button class="subtab-btn" data-ptab="weapons">⚔ Broń <span id="pr-weapon-badge" class="admin-badge admin-badge-gold" style="display:none"></span></button>
       </div>
       <div id="pr-loc-panel" class="pr-panel active"></div>
-      <div id="pr-npc-panel" class="pr-panel" style="display:none"></div>
-      <div id="pr-enemy-panel" class="pr-panel" style="display:none"></div>
-      <div id="pr-weapon-panel" class="pr-panel" style="display:none"></div>
+      <div id="pr-npc-panel" class="pr-panel"></div>
+      <div id="pr-enemy-panel" class="pr-panel"></div>
+      <div id="pr-weapon-panel" class="pr-panel"></div>
     </div>`;
 
   container.querySelectorAll("[data-ptab]").forEach(btn => {
     btn.addEventListener("click", () => {
       container.querySelectorAll("[data-ptab]").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
-      container.querySelectorAll(".pr-panel").forEach(p => p.style.display = "none");
+      // Toggle .active class on panels — CSS rules .pr-panel { display:none }
+      // and .pr-panel.active { display:block } make this the only working hook.
+      container.querySelectorAll(".pr-panel").forEach(p => {
+        p.classList.remove("active");
+        p.style.removeProperty("display");
+      });
       const map = { locations: "pr-loc-panel", npcs: "pr-npc-panel", enemies: "pr-enemy-panel", weapons: "pr-weapon-panel" };
       const target = container.querySelector(`#${map[btn.dataset.ptab]}`);
-      if (target) target.style.display = "";
+      if (target) target.classList.add("active");
     });
   });
 
