@@ -593,12 +593,19 @@ async function _renderLocations(container) {
         try {
           await adminFetch(`/api/locations/${row.key}${force ? "?force=true" : ""}`, { method: "DELETE" });
           if (!bulk) {
-            // Single-row delete — refresh the table immediately.
             showToast("Usunięto.", "success");
             await load();
           }
-          // Bulk delete: defer reload to the end (handled by renderTable inside table.js)
         } catch (e) {
+          // 404 = already gone server-side. Treat as success (bulk especially —
+          // local cache may be stale after another admin or earlier bulk op).
+          if (e?.status === 404) {
+            if (!bulk) {
+              showToast("Już usunięte.", "info");
+              await load();
+            }
+            return;
+          }
           if (!bulk) showToast("Błąd usuwania: " + (e.message || "?"), "error");
           throw e;
         }
