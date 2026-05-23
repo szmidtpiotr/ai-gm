@@ -28,12 +28,18 @@ def _default_player_enabled(cmd: str) -> bool:
     return cmd not in ADMIN_ONLY_COMMANDS
 
 
+_DEFAULT_ALIASES: dict[str, str] = {
+    "/quest": "/zadania",
+}
+
+
 def _default_slash_rows() -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for k, v in COMMAND_REGISTRY.items():
+        first_token = k.split(None, 1)[0].lower()
         rows.append({
             "command": k,
-            "alias": "",
+            "alias": _DEFAULT_ALIASES.get(first_token, ""),
             "description": str(v),
             "enabled": _default_player_enabled(k),
             "admin_enabled": _default_admin_enabled(k),

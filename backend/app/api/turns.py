@@ -2226,6 +2226,51 @@ def create_turn(
                 return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
             # /sheet
+            # /quest — list player's active quests + short narrative
+            if cmd == "/quest":
+                quest_rows = []
+                try:
+                    quest_rows = conn.execute(
+                        """
+                        SELECT id, quest_type, title, narrative, status, created_turn
+                        FROM character_quests
+                        WHERE character_id = ? AND campaign_id = ? AND status = 'active'
+                        ORDER BY created_turn DESC, id DESC
+                        """,
+                        (payload.character_id, campaign_id),
+                    ).fetchall()
+                except Exception:
+                    quest_rows = []
+                quests = []
+                for r in quest_rows:
+                    narrative_str = str(r["narrative"] or "").strip()
+                    if len(narrative_str) > 220:
+                        narrative_str = narrative_str[:217].rstrip() + "…"
+                    quests.append({
+                        "id": int(r["id"]),
+                        "type": str(r["quest_type"] or "main"),
+                        "title": str(r["title"] or ""),
+                        "narrative": narrative_str,
+                        "created_turn": r["created_turn"],
+                    })
+                if quests:
+                    lines = [f"📜 **Aktywne zadania** ({len(quests)}):", ""]
+                    for q in quests:
+                        type_badge = "⚔" if q["type"] == "main" else "•"
+                        lines.append(f"{type_badge} **{q['title']}**")
+                        if q["narrative"]:
+                            lines.append(f"  {q['narrative']}")
+                        lines.append("")
+                    message = "\n".join(lines).rstrip()
+                else:
+                    message = "📜 Brak aktywnych zadań."
+                result = {"command": "quest", "quests": quests, "message": message}
+                log = create_turn_log(
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+                )
+                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
             if cmd == "/sheet":
                 result = {
                     "command": "sheet",
@@ -3248,6 +3293,64 @@ def create_turn_stream(
 
                 return StreamingResponse(
                     atak_cmd_stream(),
+                    media_type="text/event-stream",
+                    headers=stream_headers,
+                )
+
+            # /quest — list player's active quests
+            if cmd == "/quest":
+                route_cmd = "command"
+                quest_rows = []
+                try:
+                    quest_rows = conn.execute(
+                        """
+                        SELECT id, quest_type, title, narrative, status, created_turn
+                        FROM character_quests
+                        WHERE character_id = ? AND campaign_id = ? AND status = 'active'
+                        ORDER BY created_turn DESC, id DESC
+                        """,
+                        (payload.character_id, campaign_id),
+                    ).fetchall()
+                except Exception:
+                    quest_rows = []
+                quests = []
+                for r in quest_rows:
+                    narr = str(r["narrative"] or "").strip()
+                    if len(narr) > 220:
+                        narr = narr[:217].rstrip() + "…"
+                    quests.append({
+                        "id": int(r["id"]),
+                        "type": str(r["quest_type"] or "main"),
+                        "title": str(r["title"] or ""),
+                        "narrative": narr,
+                        "created_turn": r["created_turn"],
+                    })
+                if quests:
+                    lines = [f"📜 **Aktywne zadania** ({len(quests)}):", ""]
+                    for q in quests:
+                        type_badge = "⚔" if q["type"] == "main" else "•"
+                        lines.append(f"{type_badge} **{q['title']}**")
+                        if q["narrative"]:
+                            lines.append(f"  {q['narrative']}")
+                        lines.append("")
+                    message = "\n".join(lines).rstrip()
+                else:
+                    message = "📜 Brak aktywnych zadań."
+                result = {"command": "quest", "quests": quests, "message": message}
+                log = create_turn_log(
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False),
+                    route=route_cmd,
+                )
+                outer = _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+                outer_json = json.dumps(outer, ensure_ascii=False)
+
+                def quest_cmd_stream():
+                    yield f"data: [CMD_JSON]{outer_json}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    quest_cmd_stream(),
                     media_type="text/event-stream",
                     headers=stream_headers,
                 )

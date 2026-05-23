@@ -11,6 +11,7 @@ COMMAND_REGISTRY: dict[str, str] = {
     "/mem [pytanie]": "Pytanie o przeszłość z podsumowań — bez wpływu na narrację (żółte dymki)",
     "/helpme [pytanie]": "Doradca OOC — wskazówki bez zmiany fabuły (czerwone dymki); nie wpływa na kontekst narracji",
     "/export": "Export the full session to a text file on the server (/data/exports/)",
+    "/quest": "Lista aktywnych zadań (questów) z krótkim opisem",
     "/admin": "Komendy admina: add | set | remove | clear | combat | quest | show",
     "/debug": "Debug: dump-state | set-hp N | set-state STATE | reset-cooldowns | roll SKILL",
 }

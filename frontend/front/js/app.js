@@ -3181,6 +3181,26 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             result.open_shop = JSON.parse(payload.slice(11));
             return;
         }
+        if (payload.startsWith('[CMD_JSON]')) {
+            try {
+                const cmdResult = JSON.parse(payload.slice(10));
+                result.command_result = cmdResult;
+                typingIndicator.remove();
+                const msg = cmdResult?.result?.message;
+                if (msg) {
+                    appendMessage({
+                        role: 'system',
+                        content: msg,
+                        created_at: cmdResult.created_at || new Date(),
+                        route: 'command',
+                    });
+                    scrollToBottom();
+                }
+            } catch (e) {
+                console.warn('[stream] CMD_JSON parse failed', e);
+            }
+            return;
+        }
 
         // Raw narrative token
         const token = payload.replace(/\\n/g, '\n');
