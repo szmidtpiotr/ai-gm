@@ -4430,3 +4430,46 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   padding: 2px 6px;
   border-radius: 3px;
 }
+
+/* ── Debug: per-card JSON / Human view toggle ── */
+.debug-view-toggle {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  margin: 8px 0 4px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border, #2a2622);
+  border-radius: 6px;
+}
+.dvt-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted, #888);
+  font-size: 0.78rem;
+  font-family: inherit;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.dvt-btn:hover { color: var(--text-primary, #e8e4dc); }
+.dvt-btn--active {
+  background: rgba(201, 165, 74, 0.15);
+  color: var(--accent, #c9a54a);
+}
+
+/* Allow human-readable HTML inside the <pre> output */
+.debug-output {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.debug-output code {
+  background: rgba(201, 165, 74, 0.08);
+  color: var(--accent, #c9a54a);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+.debug-output strong { color: var(--text-primary, #e8e4dc); }
+.debug-output em { color: var(--text-muted, #888); font-style: italic; }

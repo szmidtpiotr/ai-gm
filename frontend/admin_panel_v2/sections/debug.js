@@ -30,7 +30,108 @@ const LABELS = {
   fire:            "⚠ Wykonaj reset",
   loading:         "Wczytywanie…",
   emptyResult:     "Brak danych. Wprowadź parametr i kliknij «Pobierz».",
+  viewHuman:       "📖 Czytelne",
+  viewJson:        "⚙ JSON",
 };
+
+// ── Human-readable formatters per endpoint ─────────────────────────────────
+
+function fmtPlayerState(d) {
+  if (!d || typeof d !== "object") return _esc(String(d ?? "—"));
+  const lines = [];
+  lines.push(`<strong>👤 Postać #${d.character_id}</strong>`);
+  if (d.location) lines.push(`📍 Lokacja: <code>${_esc(d.location)}</code>`);
+  lines.push(`❤ HP: ${d.hp}/${d.max_hp}`);
+  lines.push(`💰 Złoto: ${d.gold_gp} gp`);
+  const inv = d.inventory || [];
+  lines.push("");
+  lines.push(`<strong>📦 Ekwipunek (${inv.length})</strong>`);
+  if (!inv.length) lines.push("  <em>— pusto —</em>");
+  else inv.forEach(it => lines.push(`  • ${_esc(it.item_key)}${it.slot ? ` <em>(${_esc(it.slot)})</em>` : ""}`));
+  const qa = d.quests_active || [];
+  if (qa.length) {
+    lines.push("");
+    lines.push(`<strong>⚡ Aktywne questy (${qa.length})</strong>`);
+    qa.forEach(q => lines.push(`  • ${_esc(q)}`));
+  }
+  const qc = d.quests_completed || [];
+  if (qc.length) {
+    lines.push("");
+    lines.push(`<strong>✓ Ukończone questy (${qc.length})</strong>`);
+    qc.forEach(q => lines.push(`  • ${_esc(q)}`));
+  }
+  return lines.join("\n");
+}
+
+function fmtGmDecisions(d) {
+  if (!d || !Array.isArray(d.decisions)) return _esc(String(d ?? "—"));
+  const lines = [];
+  lines.push(`<strong>Sesja #${_esc(d.session_id)} · ${d.decisions.length} decyzji</strong>`);
+  lines.push("");
+  if (!d.decisions.length) {
+    lines.push("<em>— brak tur —</em>");
+    return lines.join("\n");
+  }
+  d.decisions.forEach(dec => {
+    const date = dec.created_at ? new Date(dec.created_at).toLocaleString("pl") : "?";
+    lines.push(`<strong>Tura ${dec.turn_number ?? "?"}</strong> · <code>${_esc(dec.type || dec.route || "?")}</code> · <span style="color:var(--text-muted)">${_esc(date)}</span>`);
+    if (dec.reason) lines.push(`  <em>powód: ${_esc(dec.reason)}</em>`);
+    if (dec.user_text) lines.push(`  <span style="color:#7aa6e6">🗣 Gracz:</span> ${_esc(_truncate(dec.user_text, 180))}`);
+    if (dec.assistant_text) lines.push(`  <span style="color:#c9a54a">📜 GM:</span> ${_esc(_truncate(dec.assistant_text, 220))}`);
+    lines.push("");
+  });
+  return lines.join("\n");
+}
+
+function fmtValidation(d) {
+  if (!d || typeof d !== "object") return _esc(String(d ?? "—"));
+  const lines = [];
+  if (d.test_run_id) lines.push(`<strong>test_run_id:</strong> <code>${_esc(d.test_run_id)}</code>`);
+  const flags = Array.isArray(d.flags) ? d.flags : (d.validation_flags || []);
+  lines.push(`<strong>Flagi (${flags.length})</strong>`);
+  if (!flags.length) lines.push("  <em>— brak flag —</em>");
+  else flags.forEach(f => {
+    if (typeof f === "string") lines.push(`  • ${_esc(f)}`);
+    else {
+      const ok = f.passed === true || f.ok === true;
+      const icon = ok ? "✓" : (f.passed === false || f.ok === false ? "✗" : "•");
+      const color = ok ? "#4caf78" : (f.passed === false ? "#c94a4a" : "");
+      lines.push(`  <span style="color:${color}">${icon}</span> ${_esc(f.name || f.flag || JSON.stringify(f))}${f.message ? ` — <em>${_esc(f.message)}</em>` : ""}`);
+    }
+  });
+  return lines.join("\n");
+}
+
+function fmtFeatureFlags(d) {
+  if (!d || typeof d !== "object") return _esc(String(d ?? "—"));
+  const entries = Object.entries(d).filter(([k]) => k !== "ok" && !k.startsWith("_"));
+  if (!entries.length) return "<em>— brak flag —</em>";
+  const lines = [`<strong>Feature flags (${entries.length})</strong>`, ""];
+  entries.forEach(([k, v]) => {
+    let icon, color;
+    if (v === true)       { icon = "✓"; color = "#4caf78"; }
+    else if (v === false) { icon = "✗"; color = "#c94a4a"; }
+    else                  { icon = "•"; color = "var(--text-muted)"; }
+    const val = typeof v === "object" ? JSON.stringify(v) : String(v);
+    lines.push(`  <span style="color:${color}">${icon}</span> <strong>${_esc(k)}</strong>: <code>${_esc(val)}</code>`);
+  });
+  return lines.join("\n");
+}
+
+function fmtGeneric(d) {
+  if (!d || typeof d !== "object") return _esc(String(d ?? "—"));
+  const lines = [];
+  Object.entries(d).forEach(([k, v]) => {
+    const valStr = typeof v === "object" ? JSON.stringify(v, null, 2) : String(v);
+    lines.push(`<strong>${_esc(k)}:</strong> <code>${_esc(valStr)}</code>`);
+  });
+  return lines.join("\n");
+}
+
+function _truncate(s, n) {
+  const str = String(s ?? "");
+  return str.length > n ? str.slice(0, n) + "…" : str;
+}
 
 function _h(strings, ...vals) {
   // Tiny template helper for HTML strings.
@@ -82,6 +183,10 @@ export async function init(panel) {
           <input type="number" id="dbg-player-state-id" min="1" placeholder="np. 1064" />
           <button type="button" class="primary-btn" id="dbg-player-state-go">${LABELS.fetch}</button>
         </div>
+        <div class="debug-view-toggle" data-target="dbg-player-state-out">
+          <button type="button" class="dvt-btn dvt-btn--active" data-mode="human">${LABELS.viewHuman}</button>
+          <button type="button" class="dvt-btn" data-mode="json">${LABELS.viewJson}</button>
+        </div>
         <pre class="debug-output" id="dbg-player-state-out">${LABELS.emptyResult}</pre>
       </div>
 
@@ -96,6 +201,10 @@ export async function init(panel) {
           <input type="number" id="dbg-gm-limit" min="1" max="200" value="20" />
           <button type="button" class="primary-btn" id="dbg-gm-go">${LABELS.fetch}</button>
         </div>
+        <div class="debug-view-toggle" data-target="dbg-gm-out">
+          <button type="button" class="dvt-btn dvt-btn--active" data-mode="human">${LABELS.viewHuman}</button>
+          <button type="button" class="dvt-btn" data-mode="json">${LABELS.viewJson}</button>
+        </div>
         <pre class="debug-output" id="dbg-gm-out">${LABELS.emptyResult}</pre>
       </div>
 
@@ -108,6 +217,10 @@ export async function init(panel) {
           <input type="text" id="dbg-val-run-id" placeholder="np. abc-123" />
           <button type="button" class="primary-btn" id="dbg-val-go">${LABELS.fetch}</button>
         </div>
+        <div class="debug-view-toggle" data-target="dbg-val-out">
+          <button type="button" class="dvt-btn dvt-btn--active" data-mode="human">${LABELS.viewHuman}</button>
+          <button type="button" class="dvt-btn" data-mode="json">${LABELS.viewJson}</button>
+        </div>
         <pre class="debug-output" id="dbg-val-out">${LABELS.emptyResult}</pre>
       </div>
 
@@ -117,6 +230,10 @@ export async function init(panel) {
         <p class="card-hint">${LABELS.featureFlagsHint}</p>
         <div class="debug-row">
           <button type="button" class="primary-btn" id="dbg-ff-go">${LABELS.refresh}</button>
+        </div>
+        <div class="debug-view-toggle" data-target="dbg-ff-out">
+          <button type="button" class="dvt-btn dvt-btn--active" data-mode="human">${LABELS.viewHuman}</button>
+          <button type="button" class="dvt-btn" data-mode="json">${LABELS.viewJson}</button>
         </div>
         <pre class="debug-output" id="dbg-ff-out">${LABELS.emptyResult}</pre>
       </div>
@@ -128,6 +245,10 @@ export async function init(panel) {
         <div class="debug-row">
           <button type="button" class="danger-btn" id="dbg-reset-go">${LABELS.fire}</button>
         </div>
+        <div class="debug-view-toggle" data-target="dbg-reset-out">
+          <button type="button" class="dvt-btn dvt-btn--active" data-mode="human">${LABELS.viewHuman}</button>
+          <button type="button" class="dvt-btn" data-mode="json">${LABELS.viewJson}</button>
+        </div>
         <pre class="debug-output" id="dbg-reset-out">${LABELS.emptyResult}</pre>
       </div>
 
@@ -136,48 +257,84 @@ export async function init(panel) {
 
   const get = (id) => panel.querySelector(`#${id}`);
 
-  async function call(out, fn) {
+  // Per-output state: { data, formatter, mode }
+  const outputs = new Map();
+
+  function renderOutput(outId) {
+    const state = outputs.get(outId);
+    const out = get(outId);
+    if (!out || !state) return;
+    if (state.error) { out.textContent = state.error; return; }
+    if (state.data == null) { out.textContent = LABELS.emptyResult; return; }
+    if (state.mode === "human" && state.formatter) {
+      out.innerHTML = state.formatter(state.data);
+    } else {
+      out.textContent = _renderJson(state.data);
+    }
+  }
+
+  async function call(out, fn, formatter = fmtGeneric) {
+    const outId = out.id;
     out.textContent = LABELS.loading;
+    const prev = outputs.get(outId) || {};
+    outputs.set(outId, { ...prev, data: null, error: null, formatter });
     try {
       const data = await fn();
-      out.textContent = _renderJson(data);
+      outputs.set(outId, { ...outputs.get(outId), data });
+      renderOutput(outId);
     } catch (e) {
-      out.textContent = `Błąd: ${e?.message || e}`;
+      outputs.set(outId, { ...outputs.get(outId), error: `Błąd: ${e?.message || e}` });
+      renderOutput(outId);
       showToast(`Debug: ${e?.message || e}`, "error");
     }
   }
 
+  // Wire up view-mode toggles for every output
+  panel.querySelectorAll(".debug-view-toggle").forEach(group => {
+    const targetId = group.dataset.target;
+    // Initialize state with default mode = human
+    outputs.set(targetId, { data: null, error: null, formatter: fmtGeneric, mode: "human" });
+    group.querySelectorAll(".dvt-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        group.querySelectorAll(".dvt-btn").forEach(b => b.classList.toggle("dvt-btn--active", b === btn));
+        const state = outputs.get(targetId) || {};
+        outputs.set(targetId, { ...state, mode: btn.dataset.mode });
+        renderOutput(targetId);
+      });
+    });
+  });
+
   get("dbg-player-state-go").addEventListener("click", () => {
     const id = parseInt(get("dbg-player-state-id").value, 10);
     if (!id) { showToast(`Podaj ${LABELS.charIdLabel}`, "error"); return; }
-    call(get("dbg-player-state-out"), () => adminFetch(`/api/debug/player_state?character_id=${id}`));
+    call(get("dbg-player-state-out"), () => adminFetch(`/api/debug/player_state?character_id=${id}`), fmtPlayerState);
   });
 
   get("dbg-gm-go").addEventListener("click", () => {
     const cid = parseInt(get("dbg-gm-campaign-id").value, 10);
     const limit = parseInt(get("dbg-gm-limit").value, 10) || 20;
     if (!cid) { showToast(`Podaj ${LABELS.campaignIdLabel}`, "error"); return; }
-    call(get("dbg-gm-out"), () => adminFetch(`/api/debug/gm_decisions?session_id=${cid}&limit=${limit}`));
+    call(get("dbg-gm-out"), () => adminFetch(`/api/debug/gm_decisions?session_id=${cid}&limit=${limit}`), fmtGmDecisions);
   });
 
   get("dbg-val-go").addEventListener("click", () => {
     const runId = get("dbg-val-run-id").value.trim();
     if (!runId) { showToast(`Podaj ${LABELS.runIdLabel}`, "error"); return; }
-    call(get("dbg-val-out"), () => adminFetch(`/api/debug/validation_flags?test_run_id=${encodeURIComponent(runId)}`));
+    call(get("dbg-val-out"), () => adminFetch(`/api/debug/validation_flags?test_run_id=${encodeURIComponent(runId)}`), fmtValidation);
   });
 
   get("dbg-ff-go").addEventListener("click", () => {
-    call(get("dbg-ff-out"), () => adminFetch(`/api/debug/settings/feature_flags`));
+    call(get("dbg-ff-out"), () => adminFetch(`/api/debug/settings/feature_flags`), fmtFeatureFlags);
   });
 
   get("dbg-reset-go").addEventListener("click", async () => {
     if (!confirm("Reset środowiska testowego? Operacja nieodwracalna.")) return;
-    await call(get("dbg-reset-out"), () => adminFetch(`/api/debug/reset_test_env`, { method: "POST" }));
+    await call(get("dbg-reset-out"), () => adminFetch(`/api/debug/reset_test_env`, { method: "POST" }), fmtGeneric);
     showToast("Test env reset wysłany.", "success");
   });
 
   // Auto-fetch feature flags on first load — gives a non-empty screen immediately.
-  call(get("dbg-ff-out"), () => adminFetch(`/api/debug/settings/feature_flags`));
+  call(get("dbg-ff-out"), () => adminFetch(`/api/debug/settings/feature_flags`), fmtFeatureFlags);
 
   // ── User → Character picker ────────────────────────────────────────────
   const userSel = get("dbg-user-select");
