@@ -362,11 +362,24 @@ export async function init(container) {
     return;
   }
 
-  // Defer initial center to next frame so the SVG has its layout dimensions
-  // (getBoundingClientRect would return 0×0 during synchronous init).
-  requestAnimationFrame(() => {
-    _renderPalette(); _center(); _render();
-  });
+  _renderPalette();
+
+  // Wait for the SVG to actually have layout dimensions before centering —
+  // requestAnimationFrame alone is not enough if the parent is mid-transition
+  // or the panel just became visible. Retry up to ~500ms.
+  let attempts = 0;
+  const tryCenter = () => {
+    const r = _svg.getBoundingClientRect();
+    if ((r.width < 50 || r.height < 50) && attempts < 10) {
+      attempts++;
+      setTimeout(tryCenter, 50);
+      return;
+    }
+    _center();
+    _render();
+  };
+  requestAnimationFrame(tryCenter);
+
   // Re-fit whenever the canvas resizes (sidebar collapse, window resize, etc.)
   if (typeof ResizeObserver !== "undefined" && !_svg.__hasResizeObs) {
     const ro = new ResizeObserver(() => { _render(); });
