@@ -511,6 +511,7 @@ async function _renderSlashTab(body) {
       </p>
       <div class="slash-table-head">
         <span class="slash-th-cmd">Komenda</span>
+        <span class="slash-th-alias">Alias (zmień nazwę)</span>
         <span class="slash-th-toggle">Admin</span>
         <span class="slash-th-toggle">Gracz</span>
         <span class="slash-th-desc">Opis</span>
@@ -528,9 +529,12 @@ async function _renderSlashTab(body) {
     slashRows.innerHTML = cmds.map(c => {
       const adminOn  = c.admin_enabled !== false;
       const playerOn = c.player_enabled !== undefined ? c.player_enabled !== false : c.enabled !== false;
+      const alias    = String(c.alias || "");
       return `
       <div class="slash-cmd-row" data-cmd="${_esc(c.command || "")}">
         <span class="slash-cmd-name">${_esc(c.command || "")}</span>
+        <input type="text" class="slash-cmd-alias" placeholder="np. /szukaj"
+               value="${_esc(alias)}" maxlength="40" spellcheck="false" />
         <label class="slash-toggle">
           <input type="checkbox" class="slash-cmd-admin" ${adminOn ? "checked" : ""} />
         </label>
@@ -550,6 +554,7 @@ async function _renderSlashTab(body) {
     const rows = slashRows.querySelectorAll(".slash-cmd-row");
     const commands = Array.from(rows).map(row => ({
       command:        row.dataset.cmd,
+      alias:          row.querySelector(".slash-cmd-alias").value.trim(),
       description:    row.querySelector(".slash-cmd-desc").value.trim(),
       admin_enabled:  row.querySelector(".slash-cmd-admin").checked,
       player_enabled: row.querySelector(".slash-cmd-player").checked,

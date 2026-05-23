@@ -264,6 +264,7 @@ class SlashCommandItemReq(BaseModel):
     enabled: bool | None = None
     admin_enabled: bool | None = None
     player_enabled: bool | None = None
+    alias: str | None = None
 
 
 class SlashCommandsPutReq(BaseModel):

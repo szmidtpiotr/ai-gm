@@ -2156,7 +2156,16 @@ def create_turn(
         if text.startswith("/") and not roll_request:
             route = "command"
             cmd = text.split(" ", 1)[0].lower()
-            sk_dispatch = slash_registry_key_for_dispatch(text)
+            _is_admin_user = False
+            try:
+                _u_row = conn.execute(
+                    "SELECT COALESCE(is_admin, 0) AS is_admin FROM users WHERE id = ? LIMIT 1",
+                    (character["user_id"],),
+                ).fetchone()
+                _is_admin_user = bool(_u_row and int(_u_row["is_admin"] or 0))
+            except Exception:
+                pass
+            sk_dispatch = slash_registry_key_for_dispatch(text, is_admin=_is_admin_user)
             if (
                 sk_dispatch
                 and not is_slash_command_enabled(sk_dispatch)
@@ -3160,7 +3169,16 @@ def create_turn_stream(
         # Commands are not streamed (except /roll, which is turned into a narrative input)
         if text.startswith("/") and not roll_request:
             cmd = text.split(" ", 1)[0].lower()
-            sk_stream = slash_registry_key_for_dispatch(text)
+            _is_admin_stream = False
+            try:
+                _ur = conn.execute(
+                    "SELECT COALESCE(is_admin, 0) AS is_admin FROM users WHERE id = ? LIMIT 1",
+                    (character["user_id"],),
+                ).fetchone()
+                _is_admin_stream = bool(_ur and int(_ur["is_admin"] or 0))
+            except Exception:
+                pass
+            sk_stream = slash_registry_key_for_dispatch(text, is_admin=_is_admin_stream)
             if (
                 sk_stream
                 and not is_slash_command_enabled(sk_stream)

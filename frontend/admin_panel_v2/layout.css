@@ -2593,7 +2593,7 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 /* Table-style grid for slash commands admin */
 .slash-table-head {
   display: grid;
-  grid-template-columns: 180px 70px 70px 1fr;
+  grid-template-columns: 180px 160px 70px 70px 1fr;
   gap: 12px;
   padding: 8px 12px;
   font-size: 0.72rem;
@@ -2606,7 +2606,7 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 
 .slash-cmd-row {
   display: grid;
-  grid-template-columns: 180px 70px 70px 1fr;
+  grid-template-columns: 180px 160px 70px 70px 1fr;
   gap: 12px;
   align-items: center;
   background: var(--bg-elevated);
@@ -2615,6 +2615,18 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   padding: 10px 12px;
   margin-bottom: 6px;
 }
+.slash-cmd-alias {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--accent-gold);
+  font-family: monospace;
+  font-size: 0.82rem;
+  padding: 5px 8px;
+  width: 100%;
+}
+.slash-cmd-alias:focus { outline: none; border-color: var(--accent-gold); }
+.slash-cmd-alias::placeholder { color: rgba(255,255,255,0.18); font-family: monospace; }
 .slash-cmd-name { font-family: monospace; font-size: 0.88rem; color: var(--accent-gold); font-weight: 600; }
 .slash-cmd-head { display: flex; align-items: center; gap: 8px; }
 .slash-cmd-enabled,
@@ -2637,7 +2649,7 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   font-family: inherit;
 }
 .slash-cmd-desc:focus { outline: none; border-color: var(--accent-gold); }
-@media (max-width: 720px) {
+@media (max-width: 900px) {
   .slash-table-head { display: none; }
   .slash-cmd-row { grid-template-columns: 1fr; }
 }
