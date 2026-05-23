@@ -3,7 +3,7 @@
 const TABS = [
     { key: 'sandbox', label: '⚔ Combat',  module: '/admin_panel_v2/sections/sandbox.js?v=10' },
     { key: 'rest',    label: '💤 Rest',    module: '/admin_panel_v2/sections/rest_sandbox.js?v=1' },
-    { key: 'debug',   label: '🐛 Debug',   module: '/admin_panel_v2/sections/debug.js?v=picker-1' },
+    { key: 'debug',   label: '🐛 Debug',   module: '/admin_panel_v2/sections/debug.js?v=picker-2' },
 ];
 
 export async function init(panel) {

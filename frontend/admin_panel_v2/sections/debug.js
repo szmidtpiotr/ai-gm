@@ -157,7 +157,7 @@ export async function init(panel) {
     const cid = parseInt(get("dbg-gm-campaign-id").value, 10);
     const limit = parseInt(get("dbg-gm-limit").value, 10) || 20;
     if (!cid) { showToast(`Podaj ${LABELS.campaignIdLabel}`, "error"); return; }
-    call(get("dbg-gm-out"), () => adminFetch(`/api/debug/gm_decisions?campaign_id=${cid}&limit=${limit}`));
+    call(get("dbg-gm-out"), () => adminFetch(`/api/debug/gm_decisions?session_id=${cid}&limit=${limit}`));
   });
 
   get("dbg-val-go").addEventListener("click", () => {
