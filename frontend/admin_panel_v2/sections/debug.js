@@ -49,6 +49,28 @@ export async function init(panel) {
     <header class="section-header">
       <h2 class="section-title">${LABELS.title}</h2>
     </header>
+
+    <!-- User → Character picker (auto-fills all ID fields) -->
+    <div class="card debug-picker">
+      <h3 class="card-title">🎯 Wybierz gracza i postać</h3>
+      <p class="card-hint">Wybór wypełnia automatycznie wszystkie pola <code>character_id</code> i <code>campaign_id</code> poniżej.</p>
+      <div class="debug-picker-row">
+        <label>
+          <span class="debug-picker-label">Gracz</span>
+          <select id="dbg-user-select" class="debug-picker-select">
+            <option value="">— ładowanie graczy… —</option>
+          </select>
+        </label>
+        <label>
+          <span class="debug-picker-label">Postać</span>
+          <select id="dbg-char-select" class="debug-picker-select" disabled>
+            <option value="">— wybierz najpierw gracza —</option>
+          </select>
+        </label>
+        <span class="debug-picker-ids" id="dbg-picker-ids"></span>
+      </div>
+    </div>
+
     <div class="section-body debug-section-grid">
 
       <!-- Player State -->
@@ -156,4 +178,83 @@ export async function init(panel) {
 
   // Auto-fetch feature flags on first load — gives a non-empty screen immediately.
   call(get("dbg-ff-out"), () => adminFetch(`/api/debug/settings/feature_flags`));
+
+  // ── User → Character picker ────────────────────────────────────────────
+  const userSel = get("dbg-user-select");
+  const charSel = get("dbg-char-select");
+  const idsEl   = get("dbg-picker-ids");
+  let _users = [];
+  let _allChars = [];
+
+  async function loadPicker() {
+    try {
+      const [accountsResp, charsResp] = await Promise.all([
+        adminFetch("/api/admin/accounts"),
+        adminFetch("/api/admin/characters"),
+      ]);
+      _users = (accountsResp.items || []).filter(u => u && u.id);
+      _allChars = (charsResp.items || []).filter(c => c && c.id);
+
+      // Group characters by owner; sort users with characters first
+      const userHasChars = new Set(_allChars.map(c => c.user_id));
+      const sorted = [..._users].sort((a, b) => {
+        const ha = userHasChars.has(a.id) ? 0 : 1;
+        const hb = userHasChars.has(b.id) ? 0 : 1;
+        if (ha !== hb) return ha - hb;
+        return String(a.username || "").localeCompare(String(b.username || ""));
+      });
+
+      userSel.innerHTML = `<option value="">— wybierz gracza —</option>` + sorted.map(u => {
+        const label = u.display_name && u.display_name !== u.username
+          ? `${u.display_name} (@${u.username})`
+          : `@${u.username}`;
+        const count = _allChars.filter(c => c.user_id === u.id).length;
+        return `<option value="${u.id}">${_esc(label)}${count ? ` — ${count} postaci` : ""}</option>`;
+      }).join("");
+    } catch (err) {
+      userSel.innerHTML = `<option value="">— błąd: ${_esc(err.message || err)} —</option>`;
+      console.error("[debug picker] load failed:", err);
+    }
+  }
+
+  userSel.addEventListener("change", () => {
+    const uid = parseInt(userSel.value, 10);
+    if (!uid) {
+      charSel.innerHTML = `<option value="">— wybierz najpierw gracza —</option>`;
+      charSel.disabled = true;
+      idsEl.textContent = "";
+      return;
+    }
+    const myChars = _allChars.filter(c => c.user_id === uid);
+    if (!myChars.length) {
+      charSel.innerHTML = `<option value="">— ten gracz nie ma postaci —</option>`;
+      charSel.disabled = true;
+      idsEl.textContent = "";
+      return;
+    }
+    charSel.innerHTML = `<option value="">— wybierz postać —</option>` + myChars.map(c => {
+      const camp = c.campaign_title ? ` · ${_esc(c.campaign_title)}` : "";
+      return `<option value="${c.id}" data-campaign-id="${c.campaign_id ?? ""}">${_esc(c.name)} (#${c.id})${camp}</option>`;
+    }).join("");
+    charSel.disabled = false;
+    idsEl.textContent = "";
+  });
+
+  charSel.addEventListener("change", () => {
+    const cid = parseInt(charSel.value, 10);
+    if (!cid) { idsEl.textContent = ""; return; }
+    const opt = charSel.options[charSel.selectedIndex];
+    const campId = parseInt(opt?.dataset.campaignId, 10) || "";
+
+    // Auto-fill all matching inputs
+    const psId = get("dbg-player-state-id");
+    const gmCampId = get("dbg-gm-campaign-id");
+    if (psId) psId.value = cid;
+    if (gmCampId) gmCampId.value = campId;
+
+    idsEl.innerHTML = `character_id: <code>${cid}</code>` +
+                      (campId ? ` · campaign_id: <code>${campId}</code>` : ` · <em>brak aktywnej kampanii</em>`);
+  });
+
+  loadPicker();
 }
