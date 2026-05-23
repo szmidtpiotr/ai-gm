@@ -537,24 +537,27 @@ async function _renderLocations(container) {
       {
         key: "created_by", label: "Autor",
         type: "badge", editable: false,
+        // created_by values in DB: 'admin_manual' (admin panel / seed scripts),
+        // 'gm_runtime' (LLM/GM during a player session). 'llm_seed' reserved
+        // for future bulk-by-LLM tools.
         formatDisplay: (r) => {
           const cb = String(r.created_by || "admin_manual").toLowerCase();
           if (cb === "admin_manual") return "🛠 Admin";
-          if (cb === "llm_seed")     return "🤖 LLM";
-          if (cb === "gm_session")   return "🎲 GM (sesja)";
+          if (cb === "gm_runtime")   return "🎲 GM (sesja LLM)";
+          if (cb === "llm_seed")     return "🤖 LLM (seed)";
           return cb;
         },
         badgeClass: (r) => {
           const cb = String(r.created_by || "admin_manual").toLowerCase();
           if (cb === "admin_manual") return "admin-badge-blue";
-          if (cb === "llm_seed")     return "admin-badge-gold";
-          if (cb === "gm_session")   return "admin-badge-muted";
+          if (cb === "gm_runtime")   return "admin-badge-gold";
+          if (cb === "llm_seed")     return "admin-badge-muted";
           return "admin-badge-muted";
         },
         filterOptions: [
           { value: "admin_manual", label: "🛠 Admin (ręcznie)" },
-          { value: "llm_seed",     label: "🤖 LLM (AI)" },
-          { value: "gm_session",   label: "🎲 GM (sesja)" },
+          { value: "gm_runtime",   label: "🎲 GM (sesja LLM)" },
+          { value: "llm_seed",     label: "🤖 LLM (seed)" },
         ],
       },
       { key: "canonical",      label: "⭐ Kanon", type: "boolean", editable: true },
@@ -1577,117 +1580,101 @@ async function _loadPendingWeapons(container, panel) {
   const navBadge = panel.querySelector("#pending-nav-badge");
   panelEl.innerHTML = `<div class="camp-loading">Ładowanie…</div>`;
 
-  try {
-    const data = await adminFetch("/api/admin/world/pending/weapons");
-    const items = data.items || [];
-
-    badge.textContent = String(items.length);
-    badge.style.display = items.length ? "" : "none";
+  const updateBadges = (count) => {
+    badge.textContent = String(count);
+    badge.style.display = count ? "" : "none";
     if (navBadge) {
       const total = ["pr-loc-badge","pr-npc-badge","pr-enemy-badge","pr-weapon-badge"]
         .reduce((s, id) => s + (parseInt(container.querySelector(`#${id}`)?.textContent)||0), 0);
       navBadge.textContent = String(total); navBadge.style.display = total ? "" : "none";
     }
+  };
 
-    if (!items.length) { panelEl.innerHTML = `<p class="section-note">Brak oczekującej broni.</p>`; return; }
+  const reload = async () => {
+    try {
+      const data = await adminFetch("/api/admin/world/pending/weapons");
+      const items = data.items || [];
+      updateBadges(items.length);
+      if (!items.length) {
+        panelEl.innerHTML = `<p class="section-note">Brak oczekującej broni.</p>`;
+        return;
+      }
 
-    panelEl.innerHTML = "";
-    items.forEach(item => {
-      const scopeLabel = item.campaign_id ? `<span class="admin-badge admin-badge-blue" style="font-size:0.7rem">kampania #${item.campaign_id}</span>` : "";
-      const row = document.createElement("div");
-      row.className = "pending-row";
-      row.dataset.weaponKey = item.key;
-      row.innerHTML = `
-        <div class="pending-row-info">
-          <strong>${_esc(item.label || item.key)}</strong>
-          <code>${_esc(item.key)}</code>
-          ${scopeLabel}
-          <span style="color:var(--text-muted);font-size:0.76rem">${_esc(item.weapon_type||"melee")} · ${_esc(item.damage_die||"1d6")} · ${_esc(item.linked_stat||"STR")}</span>
-          ${item.description ? `<span style="color:var(--text-muted);font-size:0.74rem">${_esc(item.description.slice(0,80))}…</span>` : ""}
-        </div>
-        <div class="pending-row-actions" style="gap:6px;flex-wrap:wrap">
-          <button class="secondary-btn small-btn wep-edit-btn">✎ Edytuj</button>
-          <button class="primary-btn pending-approve-btn" style="font-size:0.78rem;padding:4px 10px">✓ Globalna</button>
-          <button class="secondary-btn small-btn pending-keep-btn" style="color:var(--accent-gold)">📌 Tylko kampania</button>
-          <button class="secondary-btn danger-outline pending-reject-btn" style="font-size:0.78rem;padding:4px 8px">✕ Odrzuć</button>
-        </div>
-        <div class="wep-edit-form" style="display:none;margin-top:8px;padding:10px;background:var(--bg-elevated);border-radius:6px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <label style="font-size:0.78rem">Nazwa<input class="field-input" name="label" value="${_esc(item.label||"")}" style="margin-top:3px"/></label>
-          <label style="font-size:0.78rem">Kość obrażeń<input class="field-input" name="damage_die" value="${_esc(item.damage_die||"1d6")}" style="margin-top:3px"/></label>
-          <label style="font-size:0.78rem">Typ<select class="field-input" name="weapon_type" style="margin-top:3px">
-            ${["melee","ranged","spell"].map(t=>`<option value="${t}"${item.weapon_type===t?" selected":""}>${t}</option>`).join("")}
-          </select></label>
-          <label style="font-size:0.78rem">Stat<select class="field-input" name="linked_stat" style="margin-top:3px">
-            ${["STR","DEX","INT","WIS","CHA"].map(s=>`<option value="${s}"${item.linked_stat===s?" selected":""}>${s}</option>`).join("")}
-          </select></label>
-          <label style="font-size:0.78rem;grid-column:1/-1">Opis<input class="field-input" name="description" value="${_esc(item.description||"")}" style="margin-top:3px"/></label>
-          <button class="primary-btn small-btn wep-save-btn" style="grid-column:1/-1">Zapisz zmiany</button>
-        </div>`;
+      const columns = [
+        { key: "label",       label: "Nazwa",     editable: true },
+        { key: "key",         label: "Klucz",     editable: false },
+        { key: "weapon_type", label: "Typ",       type: "badge", editType: "select",
+          editOptions: ["melee","ranged","spell"], editable: true,
+          badgeClass: (r) => r.weapon_type === "ranged" ? "admin-badge-blue"
+                            : r.weapon_type === "spell" ? "admin-badge-gold"
+                            : "admin-badge-muted" },
+        { key: "damage_die",  label: "Kość",      editable: true },
+        { key: "linked_stat", label: "Stat",      type: "badge", editType: "select",
+          editOptions: ["STR","DEX","INT","WIS","CHA"], editable: true,
+          badgeClass: () => "admin-badge-muted" },
+        { key: "campaign_id", label: "Kampania",  editable: false,
+          formatDisplay: (r) => r.campaign_id ? `#${r.campaign_id}` : "—" },
+        { key: "description", label: "Opis",      editable: true, popup: true,
+          formatDisplay: (r) => r.description ? `${String(r.description).slice(0,60)}${r.description.length>60?"…":""}` : "—" },
+        { key: "ai_generated", label: "Autor",    type: "badge", editable: false,
+          formatDisplay: (r) => r.ai_generated ? "🎲 GM (sesja LLM)" : "🛠 Admin",
+          badgeClass:   (r) => r.ai_generated ? "admin-badge-gold" : "admin-badge-blue" },
+      ];
 
-      // Edit toggle
-      const editForm = row.querySelector(".wep-edit-form");
-      row.querySelector(".wep-edit-btn").addEventListener("click", () => {
-        editForm.style.display = editForm.style.display === "none" ? "grid" : "none";
+      panelEl.innerHTML = "";
+      const tableHost = document.createElement("div");
+      panelEl.appendChild(tableHost);
+
+      renderTable(tableHost, columns, items, {
+        tableId: "pending-weapons",
+        showTextSearch: true,
+        searchPlaceholder: "Szukaj oczekującej broni…",
+        async onEdit(row, colKey, newVal) {
+          try {
+            await adminFetch(`/api/admin/world/pending/weapons/${row.key}`, {
+              method: "PATCH", body: JSON.stringify({ [colKey]: newVal }),
+            });
+            showToast("Zapisano.", "success");
+            await reload();
+          } catch (e) { showToast(e.message, "error"); throw e; }
+        },
+        extraActions: (row) => [
+          { label: "✓ Globalna", class: "primary-btn", onClick: async () => {
+              try {
+                await adminFetch(`/api/admin/world/review/weapon/${row.key}`, {
+                  method: "POST", body: JSON.stringify({ action: "approve" }),
+                });
+                showToast("Broń dodana do globalnego katalogu.", "success");
+                await reload();
+              } catch (e) { showToast(e.message, "error"); }
+            }},
+          { label: "📌 Tylko kampania", class: "secondary-btn", onClick: async () => {
+              try {
+                await adminFetch(`/api/admin/weapons/${row.key}`, {
+                  method: "PATCH", body: JSON.stringify({ review_status: "permanent" }),
+                });
+                showToast("Broń zachowana — widoczna tylko w kampanii.", "success");
+                await reload();
+              } catch (e) { showToast(e.message, "error"); }
+            }},
+          { label: "✕ Odrzuć", class: "danger-outline", onClick: async () => {
+              if (!confirm(`Odrzucić broń "${row.label||row.key}"?`)) return;
+              try {
+                await adminFetch(`/api/admin/world/review/weapon/${row.key}`, {
+                  method: "POST", body: JSON.stringify({ action: "discard" }),
+                });
+                showToast("Odrzucone.", "success");
+                await reload();
+              } catch (e) { showToast(e.message, "error"); }
+            }},
+        ],
       });
-      row.querySelector(".wep-save-btn").addEventListener("click", async () => {
-        const g = n => row.querySelector(`[name="${n}"]`).value.trim();
-        try {
-          await adminFetch(`/api/admin/world/pending/weapons/${item.key}`, {
-            method: "PATCH", body: JSON.stringify({
-              label: g("label"), damage_die: g("damage_die"),
-              weapon_type: g("weapon_type"), linked_stat: g("linked_stat"),
-              description: g("description") || null,
-            }),
-          });
-          showToast("Zapisano zmiany.", "success"); editForm.style.display = "none";
-        } catch (e) { showToast(e.message, "error"); }
-      });
+    } catch (e) {
+      panelEl.innerHTML = `<p style="color:var(--accent-red);font-size:0.82rem">${_esc(e.message)}</p>`;
+    }
+  };
 
-      // Approve globally
-      row.querySelector(".pending-approve-btn").addEventListener("click", async () => {
-        try {
-          await adminFetch(`/api/admin/world/review/weapon/${item.key}`, {
-            method: "POST", body: JSON.stringify({ action: "approve" }),
-          });
-          showToast("Broń dodana do globalnego katalogu.", "success");
-          row.remove();
-          badge.textContent = String(Math.max(0, (parseInt(badge.textContent)||1)-1));
-          if (badge.textContent==="0") badge.style.display="none";
-        } catch (e) { showToast(e.message, "error"); }
-      });
-
-      // Keep campaign-scoped (approve but keep campaign_id)
-      row.querySelector(".pending-keep-btn").addEventListener("click", async () => {
-        try {
-          await adminFetch(`/api/admin/weapons/${item.key}`, {
-            method: "PATCH", body: JSON.stringify({ review_status: "permanent" }),
-          });
-          showToast("Broń zachowana — widoczna tylko w kampanii.", "success");
-          row.remove();
-          badge.textContent = String(Math.max(0, (parseInt(badge.textContent)||1)-1));
-          if (badge.textContent==="0") badge.style.display="none";
-        } catch (e) { showToast(e.message, "error"); }
-      });
-
-      // Discard
-      row.querySelector(".pending-reject-btn").addEventListener("click", async () => {
-        if (!confirm(`Odrzucić broń "${item.label||item.key}"?`)) return;
-        try {
-          await adminFetch(`/api/admin/world/review/weapon/${item.key}`, {
-            method: "POST", body: JSON.stringify({ action: "discard" }),
-          });
-          showToast("Odrzucone.", "success");
-          row.remove();
-          badge.textContent = String(Math.max(0, (parseInt(badge.textContent)||1)-1));
-          if (badge.textContent==="0") badge.style.display="none";
-        } catch (e) { showToast(e.message, "error"); }
-      });
-
-      panelEl.appendChild(row);
-    });
-  } catch (e) {
-    panelEl.innerHTML = `<p style="color:var(--accent-red);font-size:0.82rem">${_esc(e.message)}</p>`;
-  }
+  await reload();
 }
 
 // ── Dungeons ──────────────────────────────────────────────────────────────────
