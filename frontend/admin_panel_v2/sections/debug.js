@@ -411,6 +411,12 @@ export async function init(panel) {
 
     idsEl.innerHTML = `character_id: <code>${cid}</code>` +
                       (campId ? ` · campaign_id: <code>${campId}</code>` : ` · <em>brak aktywnej kampanii</em>`);
+
+    // Auto-fetch everything that has enough info
+    get("dbg-player-state-go")?.click();
+    if (campId) get("dbg-gm-go")?.click();
+    // Feature flags don't depend on selection, but refresh too for a complete snapshot
+    get("dbg-ff-go")?.click();
   });
 
   loadPicker();
