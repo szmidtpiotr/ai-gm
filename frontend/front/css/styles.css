@@ -8148,28 +8148,32 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   border-bottom-color: var(--accent);
 }
 
-.pf-name-actions {
+.pf-pencil--sm {
+  padding: 2px 4px;
+}
+
+/* @username row */
+.pf-login-row {
   display: flex;
   align-items: center;
   gap: 2px;
-  flex-shrink: 0;
+  margin-top: 4px;
 }
 
-.pf-name-save,
-.pf-name-cancel {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  transition: background 0.15s;
+.pf-at {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-family: 'Lora', serif;
+  font-style: italic;
 }
-.pf-name-save { color: var(--success); }
-.pf-name-save:hover { background: rgba(34,167,70,0.12); }
-.pf-name-cancel { color: var(--text-muted); }
-.pf-name-cancel:hover { background: rgba(255,255,255,0.06); }
+
+.pf-login-hint {
+  font-size: 11px;
+  margin-left: var(--space-xs);
+  transition: color 0.2s;
+}
+.pf-login-hint--ok  { color: var(--success); }
+.pf-login-hint--err { color: var(--danger); }
 
 /* Fix: prevent display:flex overriding [hidden] */
 .pf-password-fields[hidden] { display: none !important; }
