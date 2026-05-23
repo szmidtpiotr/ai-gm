@@ -315,12 +315,20 @@ function _center() {
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
 
-  // Auto-fit: scale so painted area (+margin) fits, but cap zoom at [0.4, 1.5]
-  const spanX = Math.max(HEX_SIZE * 3, (maxX - minX) + HEX_SIZE * 3);
-  const spanY = Math.max(HEX_SIZE * 3, (maxY - minY) + HEX_SIZE * 3);
-  const fitX = W / spanX;
-  const fitY = H / spanY;
-  _zoom = Math.max(0.4, Math.min(1.5, Math.min(fitX, fitY)));
+  // Auto-fit: scale so painted area (+margin) fits the canvas.
+  // Lower clamp is generous (0.08) — small enough to fit groups spread across
+  // q/r = 0..100 (which spans ~6000×10000 px), but not so small you lose
+  // hexes entirely. Upper clamp 1.5× for visual clarity on small clusters.
+  // Single hex: keep at zoom 1, just center on it.
+  const spanX = (maxX - minX) + HEX_SIZE * 3;
+  const spanY = (maxY - minY) + HEX_SIZE * 3;
+  if (list.length === 1) {
+    _zoom = 1;
+  } else {
+    const fitX = W / spanX;
+    const fitY = H / spanY;
+    _zoom = Math.max(0.08, Math.min(1.5, Math.min(fitX, fitY)));
+  }
 
   _pan = { x: W / 2 - cx * _zoom, y: H / 2 - cy * _zoom };
 }
