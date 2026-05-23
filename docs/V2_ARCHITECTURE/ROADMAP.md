@@ -272,6 +272,23 @@ Design decisions resolved with owner in #64: XP revert cascades to skill/spell p
 - [ ] **C14** Admin SMTP config — System panel → Email section: `smtp_host/port/username/password/from_name/from_address/use_tls` form + "Wyślij testowy email" button
 - [ ] **C15** Admin invite tree — Players → "Drzewo zaproszeń" tab: interactive D3.js collapsible tree, activity colour coding (green/yellow/grey), click-node flyout, "Eksportuj CSV" button
 
+### Stage 11-D — Slash Commands hardening (done)
+- [x] **SD1** Per-command `admin_enabled` + `player_enabled` toggles in admin panel
+- [x] **SD2** Per-command `alias` field — admin can rename `/search` → `/szukaj`; players forced to use alias, admin keeps canonical fallback
+- [x] **SD3** Backend `/api/mechanics/slash-commands` returns alias as `command` + new `canonical` field
+- [x] **SD4** Client-side alias expansion in `handleSlashCommand` (preserves original text in user bubble)
+- [x] **SD5** New `/quest` command (default alias `/zadania`) reading from `character_quests` table
+- [x] **SD6** Streaming endpoint `[CMD_JSON]` properly rendered as system bubble (was falling through to "raw narrative token")
+- [x] **SD7** Archetype gate — non-Scholar `arcana`/`spell_attack`/`arcane_save` checks blocked server-side + filtered from GM's skill list prompt
+- [x] **SD8** Polish-label support for `/roll` autocomplete and backend command parser (label↔key resolver)
+
+### Stage 11-E — Content library expansion (done — seeded on DEV)
+- [x] **CL1** Seed 30 weapons (swords, axes, blunt, polearm, ranged, spell focus) with Polish labels + descriptions
+- [x] **CL2** Seed 30 armors (light/medium/heavy + shields + helmets + boots + gloves + cloaks) with `ac_bonus` + `armor_coverage`
+- [x] **CL3** Seed 60+ misc items (tools, containers, quest/lore items, magical passive items, instruments, mundane gear)
+- [x] **CL4** Seed 30 consumables (healing/mana potions, buff potions, single-use scrolls, food, throwables/poisons)
+- [x] Script: `scripts/seed_extra_content.py` (idempotent — re-runnable on PROD when ready)
+
 ### Stage 12 — Hero Journal [T45]
 
 - [ ] **J1** Journal UI in heroes screen — chapter list (one per completed campaign)
@@ -280,6 +297,23 @@ Design decisions resolved with owner in #64: XP revert cascades to skill/spell p
 - [ ] **J4** Cross-campaign `/mem` (search across all hero's campaigns)
 - [ ] **J5** XP timeline visualization (horizontal bar with level markers)
 - [ ] **J6** Cross-campaign minimap — combined visited hex overlay
+
+### Stage 12-B — Księga Wiedzy: Quick Tips (planned)
+
+Short, glossary-style entries that explain a single mechanic in 1–3 sentences. Surfaced inside the Księga Wiedzy panel as a dedicated "Wskazówki" tab and triggered contextually when the player encounters a new mechanic for the first time (e.g. first time hit by a critical → auto-open "Krytyczna porażka (Nat 1)" tip).
+
+- [ ] **KW1** New DB table `knowledge_quick_tips` (key, title_pl, body_pl, category, icon, related_command, sort_order)
+- [ ] **KW2** Admin CRUD for tips in Księga Wiedzy admin section (smart-entry style: chat→JSON→form, with LLM able to author drafts)
+- [ ] **KW3** Player UI — new "Wskazówki" tab in Księga Wiedzy panel, grouped by category (Walka / Magia / Eksploracja / Mechaniki / Postać)
+- [ ] **KW4** Contextual auto-open hook — `triggered_tips` session_flags list, GM mentions tip slug → first occurrence opens panel pre-scrolled to that tip
+- [ ] **KW5** Seed ~30 initial Quick Tips. Draft topics:
+  - **Walka**: Tury i kolejność · Atak (d20 + STR/DEX) · Zwarcie vs Dystans (zone-change) · Tarcza i AC · Krytyk (Nat 20) · Krytyczna porażka (Nat 1) · Zaskoczenie · Ucieczka (Flee) · Uzdrowienie w walce
+  - **Magia**: Mana i Arkana · Rzucanie zaklęć (spell_attack) · Miscast (Nat 1) · Punkty Arkana (uczenie/rozwój czarów) · Tarcza arkana
+  - **Eksploracja**: Test umiejętności (DC) · Skradanie · Otwieranie zamków (klucz vs wytrych) · Pułapki · Czytanie ksiąg/inskrypcji bez rzutu · Mapa świata (heksy)
+  - **Mechaniki**: 7 statystyk (STR/DEX/CON/INT/WIS/CHA/LCK) · Modyfikator statystyki · Ranga umiejętności + biegłość (+2 przy R3) · DC scale (Easy 8 / Med 12 / Hard 16 / Extreme 20) · Punkty Doświadczenia (PD) · Awans poziomu · Skala HP
+  - **Postać**: Archetypy (Wojownik/Łotrzyk/Uczony) · Wybór archetypu i konsekwencje · Wskrzeszenie i cena · Ekwipunek (sloty anatomiczne) · Bukłak na wodę i zmęczenie · Odpoczynek (krótki/długi) i regeneracja
+- [ ] **KW6** "Pokaż wszystkie wskazówki" przycisk w panelu pomocy (`/help`) — chip-shortcut to open the Wskazówki tab
+- [ ] **KW7** Dodać tip-id reference w system_prompt, by GM mógł oznaczyć tip do auto-opensa, np. `[TIP:zaskoczenie]` — engine zdejmuje tag i triggeruje opening
 
 ### Stage 13 — Admin polish
 
