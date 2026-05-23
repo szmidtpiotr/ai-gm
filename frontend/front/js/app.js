@@ -2518,6 +2518,49 @@ const DEBUG_CMD_HINTS = {
 // /roll [skill] [intent] autocomplete — skill list seeded from game_config_skills
 // Populated at page load / first use and cached for the session.
 let _rollSkillCache = null;
+let _publicSlashCache = null;
+let _publicSlashFetchInflight = null;
+
+// Fetch player-visible slash commands from server (alias-aware).
+// Server returns [{command: '/szukaj', description: '...'}] with aliases applied.
+async function _fetchPublicSlashCommands(force = false) {
+    if (_publicSlashCache && !force) return _publicSlashCache;
+    if (_publicSlashFetchInflight) return _publicSlashFetchInflight;
+    _publicSlashFetchInflight = (async () => {
+        try {
+            const r = await fetch(`${API_BASE}/mechanics/slash-commands`);
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const d = await r.json();
+            const rows = Array.isArray(d.commands) ? d.commands : [];
+            // Convert to the same shape as SLASH_COMMANDS for the autocomplete code path
+            _publicSlashCache = rows.map(c => ({
+                cmd: String(c.command || '').split(/\s+/)[0],   // strip placeholder suffix
+                desc: String(c.description || ''),
+            }));
+            return _publicSlashCache;
+        } catch (e) {
+            console.warn('[slash] failed to fetch server commands, using hardcoded fallback', e);
+            _publicSlashCache = null;
+            return null;
+        } finally {
+            _publicSlashFetchInflight = null;
+        }
+    })();
+    return _publicSlashFetchInflight;
+}
+
+// Effective list: server (alias-aware) + admin-only commands from hardcoded for admins.
+function _effectiveSlashCommands() {
+    const base = (_publicSlashCache || SLASH_COMMANDS).slice();
+    if (playerIsAdmin()) {
+        // Server omits admin-only commands (player_enabled=false). Merge them in.
+        const seen = new Set(base.map(c => c.cmd));
+        for (const c of SLASH_COMMANDS) {
+            if (c.adminOnly && !seen.has(c.cmd)) base.push(c);
+        }
+    }
+    return base;
+}
 
 async function _fetchRollSkills() {
     if (_rollSkillCache) return _rollSkillCache;
@@ -5992,8 +6035,9 @@ const _PALETTE_STATE = { items: [], filtered: [], highlighted: 0 };
 
 function _buildPaletteItems() {
     const items = [];
-    // Top-level slash commands
-    for (const c of SLASH_COMMANDS) {
+    // Top-level slash commands — alias-aware from server when available
+    const source = _effectiveSlashCommands();
+    for (const c of source) {
         if (c.adminOnly && !playerIsAdmin()) continue;
         items.push({
             label: c.cmd,
@@ -7583,7 +7627,14 @@ function initSlashAutocomplete(inputEl) {
             });
             return; // async path — skip synchronous found assignment
         } else {
-            found = SLASH_COMMANDS
+            // Use alias-aware list from server; kick off async fetch if not cached
+            if (!_publicSlashCache) {
+                _fetchPublicSlashCommands().then(rows => {
+                    if (rows) sync();  // re-render once data lands
+                });
+            }
+            const list = _effectiveSlashCommands();
+            found = list
                 .filter(c => !c.adminOnly || playerIsAdmin())
                 .filter(c => c.cmd.slice(1).startsWith(q) || (q.length > 1 && c.desc.toLowerCase().includes(q)));
         }
@@ -7674,6 +7725,9 @@ async function tryRestoreSession() {
 
 async function init() {
     initEventListeners();
+
+    // Warm the alias-aware slash-command cache (non-blocking)
+    _fetchPublicSlashCommands();
 
     if (checkUrlRouting()) return;
 
