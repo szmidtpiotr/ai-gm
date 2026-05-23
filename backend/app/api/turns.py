@@ -2166,6 +2166,15 @@ def create_turn(
             except Exception:
                 pass
             sk_dispatch = slash_registry_key_for_dispatch(text, is_admin=_is_admin_user)
+            # Alias support: rewrite cmd + text to canonical first-token so the
+            # per-command branches below (cmd == '/mem', etc.) match. The user's
+            # original text remains in user_text for logging.
+            if sk_dispatch:
+                _canon = sk_dispatch.split(" ", 1)[0].lower()
+                if _canon != cmd:
+                    rest = text[len(cmd):]
+                    text = _canon + rest
+                    cmd = _canon
             if (
                 sk_dispatch
                 and not is_slash_command_enabled(sk_dispatch)
@@ -3179,6 +3188,13 @@ def create_turn_stream(
             except Exception:
                 pass
             sk_stream = slash_registry_key_for_dispatch(text, is_admin=_is_admin_stream)
+            # Alias support: rewrite cmd + text to canonical first-token
+            if sk_stream:
+                _canon_s = sk_stream.split(" ", 1)[0].lower()
+                if _canon_s != cmd:
+                    rest_s = text[len(cmd):]
+                    text = _canon_s + rest_s
+                    cmd = _canon_s
             if (
                 sk_stream
                 and not is_slash_command_enabled(sk_stream)
