@@ -3509,14 +3509,21 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 
 /* Hero picker */
 .sandbox-hero-picker { display: flex; flex-direction: column; gap: 4px; max-height: 200px; overflow-y: auto; }
-.sandbox-hero-btn {
+.sandbox-hero-btn,
+.sandbox-hero-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   text-align: left; padding: 7px 9px; background: transparent;
   border: 1px solid rgba(120,90,60,0.25); border-radius: 6px;
   color: var(--text-primary); cursor: pointer; line-height: 1.3;
   transition: border-color 0.15s, background 0.15s;
+  user-select: none;
 }
-.sandbox-hero-btn:hover { border-color: var(--accent-gold); }
-.sandbox-hero-btn.selected {
+.sandbox-hero-btn:hover,
+.sandbox-hero-chip:hover { border-color: var(--accent-gold); background: rgba(201, 165, 74, 0.04); }
+.sandbox-hero-btn.selected,
+.sandbox-hero-chip.selected {
   background: rgba(201, 165, 74, 0.12);
   border-color: var(--accent-gold);
   box-shadow: inset 0 0 0 1px rgba(201, 165, 74, 0.3);
