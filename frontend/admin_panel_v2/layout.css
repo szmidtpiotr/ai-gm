@@ -4282,7 +4282,7 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   border-bottom-color: var(--accent-gold, #c9a54a);
 }
 
-/* ── System / Tools tab wrapper ── */
+/* ── System / Tools — tabs (used by Tools section) ── */
 .system-tabs {
   display: flex;
   gap: 0;
@@ -4318,3 +4318,56 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 }
 .system-tab-panel { display: none; min-width: 0; }
 .system-tab-panel--active { display: block; }
+
+/* ── System — Konfiguracja accordion ── */
+.sys-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.sys-acc-item {
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  background: var(--bg-surface, #14110d);
+  overflow: hidden;
+}
+.sys-acc-item--open {
+  border-color: rgba(201, 165, 74, 0.35);
+}
+.sys-acc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 20px;
+  background: none;
+  border: none;
+  color: var(--text-primary, #e8e4dc);
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.sys-acc-header:hover { background: rgba(201, 165, 74, 0.04); }
+.sys-acc-item--open .sys-acc-header {
+  color: var(--accent, #c9a54a);
+  border-bottom: 1px solid rgba(201, 165, 74, 0.18);
+}
+.sys-acc-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted, #888);
+  transition: transform 0.2s ease;
+}
+.sys-acc-item--open .sys-acc-chevron {
+  transform: rotate(180deg);
+  color: var(--accent, #c9a54a);
+}
+.sys-acc-body {
+  display: none;
+  min-width: 0;
+}
+.sys-acc-item--open .sys-acc-body { display: block; }
+.sys-acc-content { padding: 8px 0; min-width: 0; }

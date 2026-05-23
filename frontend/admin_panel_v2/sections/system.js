@@ -1,50 +1,62 @@
-/* System section — tabs wrapper hosting LLM config, Wygląd, Głos, Email */
+/* System section — single "Konfiguracja" view with accordion sections:
+   LLM/Server admin (top, default open) + Wygląd + Głos + Email/SMTP. */
 
-const TABS = [
-    { key: 'llm',    label: '⚙ Konfiguracja',  module: '/admin_panel_v2/sections/system_llm.js?v=stage11-resurrect-global' },
-    { key: 'visual', label: '🎨 Wygląd',        module: '/admin_panel_v2/sections/visual.js?v=2' },
-    { key: 'voice',  label: '🔊 Głos',          module: '/admin_panel_v2/sections/voice.js?v=1' },
-    { key: 'email',  label: '📨 Email / SMTP',  module: '/admin_panel_v2/sections/email.js?v=1' },
+const SECTIONS = [
+    { key: 'llm',    label: '⚙ Konfiguracja serwera',  module: '/admin_panel_v2/sections/system_llm.js?v=stage11-resurrect-global', open: true },
+    { key: 'visual', label: '🎨 Wygląd gry',           module: '/admin_panel_v2/sections/visual.js?v=2',  open: false },
+    { key: 'voice',  label: '🔊 Głos (TTS / STT)',     module: '/admin_panel_v2/sections/voice.js?v=1',   open: false },
+    { key: 'email',  label: '📨 Email / SMTP',         module: '/admin_panel_v2/sections/email.js?v=1',   open: false },
 ];
 
 export async function init(panel) {
     panel.innerHTML = `
-        <div class="system-tabs">
-            ${TABS.map((t, i) => `
-                <button type="button" class="system-tab ${i === 0 ? 'system-tab--active' : ''}" data-sys-tab="${t.key}">${t.label}</button>
+        <div class="sys-accordion">
+            ${SECTIONS.map(s => `
+                <section class="sys-acc-item ${s.open ? 'sys-acc-item--open' : ''}" data-sys-key="${s.key}">
+                    <button type="button" class="sys-acc-header">
+                        <span class="sys-acc-label">${s.label}</span>
+                        <svg class="sys-acc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                    </button>
+                    <div class="sys-acc-body">
+                        <div class="sys-acc-content" data-sys-content="${s.key}"></div>
+                    </div>
+                </section>
             `).join('')}
         </div>
-        ${TABS.map((t, i) => `
-            <div class="system-tab-panel ${i === 0 ? 'system-tab-panel--active' : ''}" data-sys-panel="${t.key}"></div>
-        `).join('')}
     `;
 
     const loaded = new Set();
 
-    async function loadTab(key) {
+    async function loadSection(key) {
         if (loaded.has(key)) return;
-        const cfg = TABS.find(t => t.key === key);
+        const cfg = SECTIONS.find(s => s.key === key);
         if (!cfg) return;
-        const sub = panel.querySelector(`[data-sys-panel="${key}"]`);
-        if (!sub) return;
+        const container = panel.querySelector(`[data-sys-content="${key}"]`);
+        if (!container) return;
         try {
             const { init: subInit } = await import(cfg.module);
-            await subInit(sub);
+            await subInit(container);
             loaded.add(key);
         } catch (err) {
-            sub.innerHTML = `<div style="padding:24px;color:var(--danger,#c94a4a)">Błąd ładowania: ${err.message}</div>`;
+            container.innerHTML = `<div style="padding:24px;color:var(--danger,#c94a4a)">Błąd ładowania: ${err.message}</div>`;
             console.error('[system] failed to load', key, err);
         }
     }
 
-    panel.querySelectorAll('.system-tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const key = btn.dataset.sysTab;
-            panel.querySelectorAll('.system-tab').forEach(b => b.classList.toggle('system-tab--active', b === btn));
-            panel.querySelectorAll('.system-tab-panel').forEach(p => p.classList.toggle('system-tab-panel--active', p.dataset.sysPanel === key));
-            loadTab(key);
+    // Accordion expand/collapse — load section on first open
+    panel.querySelectorAll('.sys-acc-item').forEach(item => {
+        const header = item.querySelector('.sys-acc-header');
+        const key = item.dataset.sysKey;
+        header.addEventListener('click', async () => {
+            const willOpen = !item.classList.contains('sys-acc-item--open');
+            item.classList.toggle('sys-acc-item--open', willOpen);
+            if (willOpen) await loadSection(key);
         });
     });
 
-    await loadTab(TABS[0].key);
+    // Eagerly load the first (default-open) section
+    const firstOpen = SECTIONS.find(s => s.open);
+    if (firstOpen) await loadSection(firstOpen.key);
 }
