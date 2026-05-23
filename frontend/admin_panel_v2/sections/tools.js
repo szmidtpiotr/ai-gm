@@ -1,10 +1,9 @@
-/* System section — tabs wrapper hosting LLM config, Wygląd, Głos, Email */
+/* Tools section — combines Combat Sandbox + Rest Sandbox + Debug under one tab */
 
 const TABS = [
-    { key: 'llm',    label: '⚙ Konfiguracja',  module: '/admin_panel_v2/sections/system_llm.js?v=stage11-resurrect-global' },
-    { key: 'visual', label: '🎨 Wygląd',        module: '/admin_panel_v2/sections/visual.js?v=2' },
-    { key: 'voice',  label: '🔊 Głos',          module: '/admin_panel_v2/sections/voice.js?v=1' },
-    { key: 'email',  label: '📨 Email / SMTP',  module: '/admin_panel_v2/sections/email.js?v=1' },
+    { key: 'sandbox', label: '⚔ Combat',  module: '/admin_panel_v2/sections/sandbox.js?v=10' },
+    { key: 'rest',    label: '💤 Rest',    module: '/admin_panel_v2/sections/rest_sandbox.js?v=1' },
+    { key: 'debug',   label: '🐛 Debug',   module: '/admin_panel_v2/sections/debug.js?v=1' },
 ];
 
 export async function init(panel) {
@@ -33,7 +32,7 @@ export async function init(panel) {
             loaded.add(key);
         } catch (err) {
             sub.innerHTML = `<div style="padding:24px;color:var(--danger,#c94a4a)">Błąd ładowania: ${err.message}</div>`;
-            console.error('[system] failed to load', key, err);
+            console.error('[tools] failed to load', key, err);
         }
     }
 

@@ -69,37 +69,17 @@
 
           <!-- SYSTEM group -->
           <div class="nav-group-label">System</div>
-          <button type="button" data-section="sandbox" title="Combat Sandbox">
-            <span class="nav-icon">⚔</span>
-            <span class="nav-label">Sandbox</span>
-          </button>
-          <button type="button" data-section="rest-sandbox" title="Rest Sandbox">
-            <span class="nav-icon">💤</span>
-            <span class="nav-label">Rest SBX</span>
-          </button>
-          <button type="button" data-section="visual" title="Wygląd gry">
-            <span class="nav-icon">🎨</span>
-            <span class="nav-label">Wygląd</span>
-          </button>
-          <button type="button" data-section="voice" title="Głos">
-            <span class="nav-icon">🔊</span>
-            <span class="nav-label">Głos</span>
+          <button type="button" data-section="tools" title="Narzędzia (Sandbox / Rest / Debug)">
+            <span class="nav-icon">⚒</span>
+            <span class="nav-label">Narzędzia</span>
           </button>
           <button type="button" data-section="invites" title="Drzewo Zaproszeń">
             <span class="nav-icon">🌳</span>
             <span class="nav-label">Zaproszenia</span>
           </button>
-          <button type="button" data-section="email" title="Email / SMTP">
-            <span class="nav-icon">📨</span>
-            <span class="nav-label">Email</span>
-          </button>
-          <button type="button" data-section="system" title="System">
+          <button type="button" data-section="system" title="System (Konfiguracja / Wygląd / Głos / Email)">
             <span class="nav-icon">🛠</span>
             <span class="nav-label">System</span>
-          </button>
-          <button type="button" data-section="debug" title="Debug">
-            <span class="nav-icon">🐛</span>
-            <span class="nav-label">Debug</span>
           </button>
         </nav>
 
@@ -139,14 +119,9 @@
           <div class="section-panel" data-section="analytics"></div>
           <div class="section-panel" data-section="workshops"></div>
           <div class="section-panel" data-section="knowledge"></div>
-          <div class="section-panel" data-section="sandbox"></div>
-          <div class="section-panel" data-section="rest-sandbox"></div>
-          <div class="section-panel" data-section="visual"></div>
+          <div class="section-panel" data-section="tools"></div>
           <div class="section-panel" data-section="invites"></div>
-          <div class="section-panel" data-section="email"></div>
-          <div class="section-panel" data-section="voice"></div>
           <div class="section-panel" data-section="system"></div>
-          <div class="section-panel" data-section="debug"></div>
         </div>
 
         <div class="activity-log-wrap" id="activity-log-wrap">
@@ -212,10 +187,9 @@
         "analytics":  { label: "Statystyki", icon: "📊", module: null },
         "workshops":  { label: "Bank pomysłów", icon: "💡", module: null },
         "knowledge":  { label: "Księga Wiedzy", icon: "📖", module: null },
+        "tools":      { label: "Narzędzia",   icon: "⚒", module: null },
         "invites":    { label: "Zaproszenia", icon: "🌳", module: null },
-        "email":      { label: "Email",       icon: "📨", module: null },
-        "voice":      { label: "Głos",       icon: "🔊", module: null },
-        "system":     { label: "System",     icon: "🛠", module: null },
+        "system":     { label: "System",      icon: "🛠", module: null },
       };
 
       /* ── DOM refs ── */
@@ -410,14 +384,9 @@
           "analytics":  "/admin_panel_v2/sections/analytics.js?v=1",
           "workshops":  "/admin_panel_v2/sections/workshops.js?v=3",
           "knowledge":  "/admin_panel_v2/sections/knowledge.js?v=1",
-          "sandbox":       "/admin_panel_v2/sections/sandbox.js?v=10",
-          "rest-sandbox":  "/admin_panel_v2/sections/rest_sandbox.js?v=1",
-          "visual":     "/admin_panel_v2/sections/visual.js?v=2",
+          "tools":      "/admin_panel_v2/sections/tools.js?v=1",
           "invites":    "/admin_panel_v2/sections/invites.js?v=1",
-          "email":      "/admin_panel_v2/sections/email.js?v=1",
-          "voice":      "/admin_panel_v2/sections/voice.js?v=1",
-          "system":     "/admin_panel_v2/sections/system.js?v=stage11-resurrect-global",
-          "debug":      "/admin_panel_v2/sections/debug.js?v=1",
+          "system":     "/admin_panel_v2/sections/system.js?v=tabs-1",
         };
 
         if (moduleMap[key]) {
