@@ -8,14 +8,12 @@
 
 ---
 
-## Current state snapshot (2026-05-18)
-
-After today's audit pass:
+## Current state snapshot (2026-05-24)
 
 **Fully done ✅ (per spec, no gaps):**
-T01 T02 T03 T04 · T05 T06 T07 · T10 · T11 T13 · T14 T15 T17 T18 T19 · T21 T22 T23 T26 (spells) T41 · T26N T27 T29 · T30 T31 T40 · T33 (UI) T34 T43 · T46
+T01 T02 T03 T04 · T05 T06 T07 · T10 · T11 T13 · T14 T15 T17 T18 T19 · T21 T22 T23 T26 (spells) T41 · T26N T27 T29 · T30 T31 T40 · T33 (UI) T34 T43 · T46 · T47a · T48
 
-**Partially done ⚠️ (functional but with spec gaps — see DECISIONS_2026_05_18.md):**
+**Partially done ⚠️ (functional but with spec gaps):**
 T08 T09 (review queue details) · T04B T12 (frontend popup) · T16 (condition rename pending) · T20 (3-slot → 8-slot pending) · T24 (no frontend label) · T25V2 T26X (no player UI for spending/log) · T28 (deceased context) · T32 T33SA · T35 (see #24) · T44 (player UI missing) · T36 T37 T38 T39 · T42
 
 **Not started ❌:**
@@ -718,3 +716,24 @@ Distinguish narrative types inside GM chat bubbles:
 - **Estimate:** ~4–6 hours including testing on all three LLM drivers
 
 **Files to change:** `backend/app/api/turns.py` (all three streaming paths), `backend/app/services/llm_service.py` (yield-loop break), new `POST /cancel` route, `frontend/front/js/app.js` (fire cancel request before aborting fetch)
+
+---
+
+### T48 — Location UX polish: F5 persistence + hex map name display ✅
+
+**Status:** Done — issues #94 #95 — 2026-05-24  
+**Priority:** Medium UX polish
+
+**What was delivered:**
+
+1. **Location badge survives F5** — `GET /campaigns/{id}/characters` now includes `current_location_label` (JOIN `game_sessions → game_locations`). Previously `refreshCharacterData()` would wipe the badge on every reload because the bulk-characters endpoint didn't return the field.
+
+2. **Awansuj panel: Polish skill labels** — `openAwansujPanel()` was fetching `/api/mechanics/metadata` (no `skills` field) causing all skill cards to fall back to raw English keys (`stealth`, `sleight_of_hand`, etc.). Changed to `/api/mechanics/skills` + `skillLabelMap` dict. Also added 5 missing skills to `game_config_skills` DB and fixed `ranged_attack` label.
+
+3. **Admin hex map editor title** — shows `Name (q, r)` with dimmed coords span, instead of raw `(q, r) type`.
+
+4. **Travel confirmation for current hex** — `_wmOnHexClick` now reads `characterData.current_location_label` when the clicked hex matches the player's position, showing `Jesteś tutaj: Krypta Krwawego Hrabiego` instead of `Podróżujesz do (3,1)`.
+
+5. **Encounter warning guard** — tightened `if (response.encounter)` → `if (response.encounter?.enemy_key)` to prevent false-positive red alert when encounter object exists but has no enemy.
+
+**Files changed:** `backend/app/api/characters.py`, `frontend/front/js/app.js`, `frontend/admin_panel_v2/sections/campaigns.js`, `frontend/admin_panel_v2/layout.css`

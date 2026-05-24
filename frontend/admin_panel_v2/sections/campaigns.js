@@ -617,7 +617,7 @@ async function renderMapTab(c) {
     if (sel) { sel.setAttribute("stroke", "#fff"); sel.setAttribute("stroke-width", "2"); }
 
     editor.innerHTML = `
-      <div class="camp-map-editor-title">(${h.q}, ${h.r}) ${escHtml(h.label || h.hex_type || "")}</div>
+      <div class="camp-map-editor-title">${escHtml(h.campaign_label || h.label || h.hex_type || `(${h.q}, ${h.r})`)}<span class="camp-map-editor-coords"> (${h.q}, ${h.r})</span></div>
       <div class="camp-map-field-group">
         <div class="camp-map-field-label">Odkryty przez gracza</div>
         <label class="camp-map-toggle"><input type="checkbox" id="cme-discovered" ${h.discovered ? "checked" : ""}><span>Odkryty</span></label>

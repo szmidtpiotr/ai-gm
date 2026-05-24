@@ -1263,6 +1263,18 @@ def list_characters(campaign_id: int):
         (campaign_id,),
     ).fetchall()
 
+    # Resolve current location label once for this campaign
+    loc_label_row = conn.execute(
+        """
+        SELECT gl.label
+        FROM game_sessions gs
+        JOIN game_locations gl ON gl.id = gs.current_location_id
+        WHERE gs.id = ?
+        """,
+        (str(campaign_id),),
+    ).fetchone()
+    location_label = loc_label_row[0] if loc_label_row and loc_label_row[0] else None
+
     conn.close()
 
     characters = []
@@ -1273,6 +1285,7 @@ def list_characters(campaign_id: int):
         except Exception:
             item["sheet_json"] = {}
         item["sheet_json"] = _strip_hidden_fields(item["sheet_json"])
+        item["current_location_label"] = location_label
         characters.append(item)
 
     return {"characters": characters}

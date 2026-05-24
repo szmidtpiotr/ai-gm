@@ -5174,7 +5174,7 @@ async function openAwansujPanel(character, sheet) {
         // attached automatically. Mechanics metadata is public, raw fetch ok.
         const [xpData, skillMeta] = await Promise.all([
             apiRequest('GET', `/characters/${character.id}/xp?user_id=${currentUser?.id}`),
-            fetch('/api/mechanics/metadata').then(r => r.ok ? r.json() : {})
+            fetch('/api/mechanics/skills').then(r => r.ok ? r.json() : { skills: [] })
         ]);
         const xpAvail = xpData.xp_available ?? 0;
         const skills = sheet.skills || {};
@@ -5183,13 +5183,14 @@ async function openAwansujPanel(character, sheet) {
         const rankCosts = xpData.rank_up_costs || {};
         const statCosts = xpData.stat_point_costs || {};
         const isScholar = (sheet.archetype || '').toLowerCase() === 'scholar';
+        const skillLabelMap = Object.fromEntries((skillMeta?.skills || []).map(s => [s.key, s.label]));
 
         // X6: skill rank-up cards
         const skillCards = Object.entries(skills).filter(([, rank]) => rank < 5).map(([key, rank]) => {
             const newRank = rank + 1;
             const cost = rankCosts[newRank] || rankCosts[String(newRank)] || '?';
             const canAfford = typeof cost === 'number' && xpAvail >= cost;
-            const label = (skillMeta?.skills || []).find(s => s.key === key)?.label || key;
+            const label = skillLabelMap[key] || key;
             return `<div class="awansuj-card ${canAfford ? '' : 'awansuj-card--locked'}">
                 <div class="awansuj-card__title">${escapeHtml(label)}</div>
                 <div class="awansuj-card__detail">Ranga ${rank} → ${newRank}</div>
@@ -8376,7 +8377,10 @@ function _wmOnHexClick(e) {
   const hex = _wmap.hexes.find(h => h.q === q && h.r === r);
   if (!hex) return;
 
-  const label = hex.label || `(${q},${r})`;
+  // For the current hex, prefer the live location badge label if the hex has no own label
+  const isCurrent = _wmap.currentHex && _wmap.currentHex.q === q && _wmap.currentHex.r === r;
+  const locationLabel = isCurrent ? (characterData?.current_location_label || null) : null;
+  const label = hex.label || locationLabel || `(${q},${r})`;
   const cfg = _wmap.hexTypes[hex.hex_type] || {};
   const typeName = cfg.label || hex.hex_type || '';
   const info = hex.status === 'discovered'
@@ -8385,7 +8389,10 @@ function _wmOnHexClick(e) {
 
   _wmap.pendingTravel = { q, r, label };
   const confirm = _wmap.confirm;
-  confirm.querySelector('#wmap-confirm-title').textContent = `Podróżujesz do ${label}`;
+  const isSameHex = isCurrent;
+  confirm.querySelector('#wmap-confirm-title').textContent = isSameHex
+    ? `Jesteś tutaj: ${label}`
+    : `Podróżujesz do ${label}`;
   confirm.querySelector('#wmap-confirm-info').textContent = info;
   confirm.removeAttribute('hidden');
 }
@@ -8476,7 +8483,7 @@ function _wmJournalArrived(response, destLabel) {
     atmoEl.textContent = atmo;
     requestAnimationFrame(() => atmoEl.classList.add('wmap-tj-atmo--visible'));
   }
-  if (response.encounter) {
+  if (response.encounter?.enemy_key) {
     el.querySelector('#wmap-tj-encounter').removeAttribute('hidden');
   }
 }
