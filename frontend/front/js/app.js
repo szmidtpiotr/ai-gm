@@ -197,6 +197,7 @@ let wizardStepNum = 0;
 let isSheetOpen = false;
 let isSettingsOpen = false;
 let isJournalOpen = false;
+let _journalBadgeTurns = 0;  // narrative turns since last journal open; badge fires at 10
 let characterData = null;
 let authToken = null;
 let currentUser = null;
@@ -2004,6 +2005,9 @@ async function enterGame(campaign) {
         const turns = response.turns || (Array.isArray(response) ? response : []);
         const combatRows = Array.isArray(combatHist.turns) ? combatHist.turns : [];
 
+        // J3 — init badge counter from existing narrative turn count mod 10
+        _journalBadgeTurns = turns.filter(t => t.route === 'narrative').length % 10;
+
         // Build interleaved timeline by created_at. campaign_turns are wrapped, combat_turns flow
         // in between. Combat-roll player turns ("__AI_GM_COMBAT_ROLL_V1__") render GM narrative only —
         // the visual roll card comes from the corresponding combat_turns row.
@@ -3141,6 +3145,17 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         await pollCombatState();
         _refreshDebugBlocks();
         updateInputPlaceholder();
+
+        // J3 — count narrative turns; show journal badge every 10
+        if (inputType !== 'combat') {
+            _journalBadgeTurns++;
+            if (_journalBadgeTurns >= 10) {
+                _journalBadgeTurns = 0;
+                if (!isJournalOpen) {
+                    document.getElementById('open-journal-btn')?.classList.add('journal-btn--badge');
+                }
+            }
+        }
     } catch (error) {
         typingIndicator.remove();
         renderSuggestedActions(_suggestedActions);
@@ -5782,6 +5797,7 @@ function toggleJournal() {
         journalOpenedAt = Date.now();
         if (isSettingsOpen) closeSettings();
         if (isSheetOpen) closeCharacterSheet();
+        document.getElementById('open-journal-btn')?.classList.remove('journal-btn--badge');
         loadJournalContent(false);
         setTimeout(() => {
             elements.overlay.classList.add('panel-overlay--active');

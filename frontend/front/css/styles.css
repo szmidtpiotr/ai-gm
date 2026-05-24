@@ -226,6 +226,27 @@ body {
   border-color: var(--accent);
 }
 
+/* J3 — journal badge dot when new summary is ready */
+#open-journal-btn {
+  position: relative;
+}
+#open-journal-btn.journal-btn--badge::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg-primary);
+  animation: journal-badge-pulse 2s ease-in-out infinite;
+}
+@keyframes journal-badge-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.6; transform: scale(0.8); }
+}
+
 .header__avatar {
   border-color: var(--accent);
   color: var(--accent);

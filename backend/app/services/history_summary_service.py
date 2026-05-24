@@ -81,7 +81,7 @@ def count_narrative_turns(conn: sqlite3.Connection, campaign_id: int) -> int:
 
 # --- T10: optional background POST …/history/summary/ensure every N narrative turns ---
 META_KEY_SUMMARY_AUTO_ENSURE_EVERY_N = "summary_auto_ensure_every_n_narrative_turns"
-DEFAULT_SUMMARY_AUTO_ENSURE_EVERY_N_NARRATIVE_TURNS = 20
+DEFAULT_SUMMARY_AUTO_ENSURE_EVERY_N_NARRATIVE_TURNS = 10
 
 
 def get_summary_auto_ensure_every_n_narrative_turns(conn: sqlite3.Connection) -> int:

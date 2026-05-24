@@ -2776,6 +2776,19 @@ def _ensure_auth_ux_schema(conn: sqlite3.Connection) -> None:
                 logger.warning("auth_ux_migration_warning", sql_preview=sql.strip()[:80], error=str(e))
 
 
+def _ensure_j3_summary_interval(conn: sqlite3.Connection) -> None:
+    """J3 — lower auto-ensure summary interval from 20 → 10 narrative turns.
+    Only updates when the old default (20) is still in place; admin overrides untouched."""
+    try:
+        conn.execute(
+            "UPDATE game_config_meta SET value = '10' "
+            "WHERE key = 'summary_auto_ensure_every_n_narrative_turns' AND value = '20'"
+        )
+        conn.commit()
+    except Exception as e:
+        logger.warning("j3_summary_interval_migration_failed", error=str(e))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -2847,6 +2860,7 @@ def run_admin_migrations() -> None:
         _ensure_dungeon_v2_schema(conn)
         _ensure_narrative_items_schema(conn)
         _ensure_auth_ux_schema(conn)
+        _ensure_j3_summary_interval(conn)
     finally:
         conn.close()
 
