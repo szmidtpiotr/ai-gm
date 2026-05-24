@@ -8392,7 +8392,6 @@ async function _wmExecuteTravel() {
 
   // Preload tips cache in parallel so cinematic has no tip-fetch delay
   const tipsPreload = _loadKnowledgeTips();
-  const isFirstTravel = !localStorage.getItem('aigm_first_hex_travel');
 
   try {
     const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/hex-travel`, {
@@ -8437,14 +8436,16 @@ async function _wmExecuteTravel() {
     // Wait for map slide-out before overlay covers the screen
     await new Promise(r => setTimeout(r, 360));
 
-    // On first travel: show the exploration_hex_map tip inside the cinematic
+    // Pick a tip from the cycling pool (round-robin through all knowledge tips)
     let cinTip = null;
-    if (isFirstTravel) {
-      try {
-        const tips = await tipsPreload;
-        cinTip = tips.find(tp => tp.tip_key === 'exploration_hex_map') || null;
-      } catch (_) {}
-    }
+    try {
+      const tips = await tipsPreload;
+      if (tips.length) {
+        const idx = parseInt(localStorage.getItem('aigm_travel_tip_idx') || '0', 10);
+        cinTip = tips[idx % tips.length];
+        localStorage.setItem('aigm_travel_tip_idx', String((idx + 1) % tips.length));
+      }
+    } catch (_) {}
 
     // Full-screen cinematic — waits for player tap or 15 s countdown
     await _showTravelCinematic({
@@ -8474,10 +8475,11 @@ async function _wmExecuteTravel() {
     elements.chatMessages.appendChild(travelBubble);
     scrollToBottom();
 
-    // KW7 — mark first travel and surface exploration_hex_map tip in the knowledge tab
-    if (isFirstTravel) {
+    // Mark shown tip as seen in the knowledge tab (highlights it there)
+    if (cinTip) _markTipSeen(cinTip.tip_key);
+    // KW7 — first hex travel flag (used by GM tip system)
+    if (!localStorage.getItem('aigm_first_hex_travel')) {
       localStorage.setItem('aigm_first_hex_travel', '1');
-      _handleTriggeredTips(['exploration_hex_map']);
     }
 
     // Encounter → trigger combat after a short delay
