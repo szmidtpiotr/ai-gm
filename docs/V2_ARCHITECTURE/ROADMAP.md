@@ -354,7 +354,7 @@ Extends the hex travel system from a static map into a living, auto-expanding wo
 
 Bugs discovered during gameplay that don't fit a numbered stage. Pick into the queue when prioritised.
 
-- [ ] **K1** GM hallucinates weapons / items the player doesn't own (observed during Stage 2B R4 verification, 2026-05-19). LLM narrates "wyciągasz miecz" or grants ad-hoc weapons in combat without inventory lookup. Fix direction: enforce inventory grounding — pre-turn inventory snapshot prepended to context, plus prompt guardrail "Nigdy nie zakładaj że gracz posiada przedmiot, który nie jest w [INVENTORY]". May need a `weapon_grounding_check` post-pass that scans narrative for weapon mentions vs. inventory and downgrades hallucinated weapons to "improvisedfists" damage.
+- [x] **K1** GM hallucinates weapons / items the player doesn't own — **FIXED** (issue #87, commit e4dc9b0): `_inject_character_inventory_context()` prepends `[PLAYER INVENTORY]` to system prompt every turn; ZASADA guardrail added to system_prompt.txt; verified mobile 2026-05-24.
 - [ ] **K2** GM requests unnecessary skill rolls (e.g. Kowalstwo when entering a village square just because a blacksmith is in the scene). Observed during Stage 2B R4 follow-up, 2026-05-19. Fix direction: tighten roll-cue prompt rules so rolls require a *player attempt* on the skill, not mere proximity to a themed NPC; add a roll-cue filter that drops cues whose `reason` doesn't reference a player verb.
 
 ### Stage 17 — Future feature backlog (deferred, multi-step)
