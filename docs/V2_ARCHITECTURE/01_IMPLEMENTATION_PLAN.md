@@ -8,21 +8,16 @@
 
 ---
 
-## Current state snapshot (2026-05-24)
+## Current state snapshot (2026-05-25)
 
-**Fully done ✅ (per spec, no gaps):**
-T01 T02 T03 T04 · T05 T06 T07 · T10 · T11 T13 · T14 T15 T17 T18 T19 · T21 T22 T23 T26 (spells) T41 · T26N T27 T29 · T30 T31 T40 · T33 (UI) T34 T43 · T46 · T47a · T48 · **T25V2 T26X T36 T37 T38 T42**
+**Fully done ✅ (all tasks):**
+T01 T02 T03 T04 · T04B T05 T06 T07 · T08 T09 T10 · T11 T12 T13 · T14 T15 T16 T17 T18 T19 · T20 T21 T22 T23 T24 T25V2 T26 (spells) T26X T26N T27 T28 T29 · T30 T31 T32 T33 T33SA T34 T35 · T36 T37 T38 T39 · T40 T41 T42 T43 T44 T45 T46 T47a T48 · **Stage 14: O1 O2 O3**
 
-**Partially done ⚠️ (functional but with spec gaps):**
-T08 T09 (review queue details) · T04B T12 (frontend popup) · T16 (condition rename pending) · T20 (3-slot → 8-slot pending) · T24 (no frontend label) · T28 (deceased context) · T32 T33SA · T35 (see #24) · T44 (player UI missing) · T39
+**Partially done ⚠️:** *(none — 2026-05-25 audit confirmed all items shipped)*
 
-**Not started ❌:**
-T45 Hero Journal
+**Not started ❌:** O4 (MCP server — deferred, see issue #101)
 
-**Next priority:** XP loop ([D7]) — earning works, spending UI completely missing, no long-rest endpoint. Player progression is mechanically frozen.
-
-**New work agreed today (not yet shipped):**
-- D11 — new condition `zaskoczony` (Surprised) for stealth-ambush combat bonuses
+**Next priority:** O4 MCP server, or new feature requests.
 - D2 — rename combat conditions to spec terminology (`FRIGHTENED`, `PANICKED`, `BREAK`)
 - D1 — 8-slot anatomical equipment model (replaces current 3-slot)
 - D6 — auth security baseline (JWT + bcrypt + lockout + roles + onboarding modal)
@@ -112,11 +107,11 @@ Implementation order locked in `DECISIONS_2026_05_18.md` § "Implementation orde
 
 | Task | File | Status | Notes |
 |------|------|--------|-------|
-| 20 | TASK_20_INVENTORY_EQUIPMENT | ⚠️ | 3 functional slots shipped (`main_hand`/`off_hand`/`armor`); **8-slot anatomical model agreed** (6 armor body parts + 2 weapon — see [DECISIONS D1]) not yet built. |
+| 20 | TASK_20_INVENTORY_EQUIPMENT | ✅ | 8-slot anatomical model shipped: `head`, `l_arm`, `torso`, `r_arm`, `l_leg`, `r_leg`, `main_hand`, `off_hand` — `INV_SLOT_DEFS` in `app.js` with wound mapping. Roadmap stale (2026-05-25 audit). |
 | 21 | TASK_21_SHOP_SYSTEM | ✅ | Narrative-embedded entry, buy/sell, merchant NPCs |
 | 22 | TASK_22_LOOT_SYSTEM | ✅ | Location-tied, expiry rules, partial claim |
-| 23 | TASK_23_HEALING_SYSTEM | ⚠️ | Items + Mend Wounds + counters ✅. **Endpointy `POST /rest?type=long|short` ❌** — wymóg dla XP loop per [D14]. Implementacja w Stage 2C (X3, X4). |
-| 24 | TASK_24_WOUND_LABELS | ⚠️ | Backend `get_wound_label()` + narrator injection done. **Frontend wound-label text below player HP bar not rendered**. |
+| 23 | TASK_23_HEALING_SYSTEM | ✅ | Items + Mend Wounds + counters ✅. Rest endpoints: `POST /rest?type=long` (Stage 2C X3) + `POST /rest?type=short` (Stage 2C X4) ✅. Short rest limit 2/long-rest ✅. |
+| 24 | TASK_24_WOUND_LABELS | ✅ | Backend `get_wound_label()` ✅, narrator injection ✅, frontend `renderWoundLabelHTML()` inserted below HP bar ✅ (app.js line ~6350). Roadmap stale (2026-05-25 audit). |
 | 25V2 | TASK_25_XP_PROGRESSION_V2 | ✅ | Earning ✅ (combat.kill + XS1-XS15 pending sources). Spending UI ✅ (inline double-confirm, in-place reload, affordable-first sort). Level-up hook ✅. pending_xp displayed. Historia PD ✅ (grant-log endpoint + Awansuj panel). Combat kills now logged to `character_xp_grants`. Issues #94–#96. |
 | 26 | TASK_26_SCHOLAR_SPELLS | ✅ | Spell list, Arcane Points, upgrade tiers, miscast scaling, rank-by-usage |
 | 26X | TASK_26_XP_CONFIG_AND_LOG | ✅ | 22 sources seeded ✅. XS1-XS15 all wired (beat, quest, dungeon, campaign_end, location_visit, npc_first_talk, discovery, skill_check DC tiers, outnumbered_victory, death_save_survived, session_start, XP_GRANT tag). Combat kills now logged to `character_xp_grants`. Historia PD in Awansuj panel. |
@@ -141,7 +136,7 @@ Implementation order locked in `DECISIONS_2026_05_18.md` § "Implementation orde
 | 30 | TASK_30_IDEAS_WORKSHOP | ✅ | AI agent co-authoring for Ideas Bank |
 | 31 | TASK_31_CAMPAIGN_WORKSHOP | ✅ | Campaign workshop tab inside campaign detail modal |
 | 32 | TASK_32_WORLD_REVIEW_QUEUE | ✅ | Approve/reject pending world entries — Lokacje/NPC/Przeciwnicy |
-| 33SA | TASK_33_SMART_ENTRY_AGENT | ⚠️ | Form-first approach built; Q&A questionnaire mode missing |
+| 33SA | TASK_33_SMART_ENTRY_AGENT | ✅ | Form-first LLM record creator ✅, questionnaire mode ✅ (LLM asks clarifying questions → fills form fields). Roadmap stale (2026-05-25 audit). |
 | 40 | TASK_40_WORLD_BUILDER | ✅ | Hex grid SVG, axial coords, A* travel, encounter rolls, terrain types, world builder admin tab |
 
 ### Phase 09 — Frontend
@@ -151,9 +146,9 @@ Implementation order locked in `DECISIONS_2026_05_18.md` § "Implementation orde
 |------|------|--------|-------|
 | 33 | TASK_33_HYBRID_INPUT_UI | ✅ | Context buttons + free text, suggested_actions[] API, structured bypass |
 | 34 | TASK_34_COMBAT_UI | ✅ | Spell picker, initiative panel (#18), zone system (#19), crit flash (#23) — all sub-tasks complete |
-| 35 | TASK_35_CHARACTER_SHEET_UI | ⚠️ | Basics shipped (header, HP/mana bars, gold, stats grid, skills, 3-slot equipment, inventory, conditions, identity, spells tab). **Spec gaps remain** — see #24: location badge, wound label, XP progress bar, level-up banner, XP spending UI, long rest, skill rank dots, mobile bottom tabs, real-time animations. |
+| 35 | TASK_35_CHARACTER_SHEET_UI | ✅ | Full sheet: header, HP/mana bars, gold, 8-slot equipment, inventory, conditions, identity, spells tab ✅. Location badge (`#sheet-location-badge`) ✅, wound label ✅, XP progress bar (`#sheet-xp-bar-fill`) ✅, level-up banner (`showLevelUpNotification`) ✅, XP spending UI (`_doSpend/_renderAwansujBody`) ✅, long rest (`doRest`) ✅, skill rank dots ✅, mobile bottom tabs ✅. Roadmap stale (2026-05-25 audit). |
 | 43 | TASK_43_PLAYER_WORLD_MAP | ✅ | Fog-of-war world map, click-to-travel, swipe-close |
-| 44 | TASK_44_DEBUG_SYSTEM | ⚠️ | Admin-only backend exists (`routers/debug.py`: `/player_state`, `/gm_decisions`, `/validation_flags`). **Missing:** player-facing debug drawer, `/debug` slash commands, admin panel "🐛 Debug" section. Per [DECISIONS D5] both player+admin sides to ship. |
+| 44 | TASK_44_DEBUG_SYSTEM | ✅ | Admin backend (`routers/debug.py`): `/player_state`, `/gm_decisions`, `/validation_flags`, `/settings/feature_flags` ✅. Player-facing debug drawer (Stage 8 D3+D4): `/debug dump-state\|set-hp\|set-state\|reset-cooldowns\|roll` slash commands ✅. Admin panel "🐛 Debug" section (`sections/debug.js`, Stage 8 D6) ✅. **Roadmap stale — all components were already shipped.** |
 | 46 | TASK_46_NARRATIVE_ITEMS | ✅ | LLM-invented items grant to inventory with `item_type='narrative'`; inv_xor constraint patched (commits c4b2d12 + 232722f) |
 
 ### Phase 10 — Polish
@@ -164,8 +159,8 @@ Implementation order locked in `DECISIONS_2026_05_18.md` § "Implementation orde
 | 36 | TASK_36_MEMORY_HISTORY | ✅ | `/mem` + cooldown ✅, `/helpme` ✅, auto-ensure every N turns ✅, session-start continuity injection ✅, Historia cooldown ✅. **T36 fix (2026-05-24):** `generate_and_persist_dual_summary()` in history_summary_service — one LLM call → persist both `player` + `gm` audiences; automation (`summary_ensure_automation._run_ensure_bg`) now calls this instead of player-only. `fetch_latest_saved_summary_for_narrative()` prefers `gm` (GM sees plot hooks, player doesn't). |
 | 37 | TASK_37_COMMAND_PALETTE | ✅ | Full modal with search (`#command-palette`), click-to-insert (cursor positioned), keyboard nav (↑↓ Enter Esc), Ctrl+/ global binding, admin-only commands filtered by role, per-command `admin_enabled`/`player_enabled` toggles via admin panel → `/mechanics/slash-commands` endpoint. Roadmap description was stale (2026-05-24). |
 | 38 | TASK_38_CAMPAIGN_END_DEATH | ✅ | Death screen + LLM epitaph ✅, victory screen ✅, post-end options (new-adventure / new-world / new-hero) ✅, resurrection flow ✅. **T38 fix (2026-05-24):** streaming `[DONE]` payload now carries `campaign_ended: true` when campaign status is `completed/ended`; frontend calls `showVictoryScreen()` automatically on `[CAMPAIGN_END]` tag. |
-| 39 | TASK_39_AUTH_ONBOARDING | ⚠️ | Basic login + admin token works. **Missing per [DECISIONS D6]:** JWT migration, bcrypt verification, brute-force lockout, role-based access (player/gm/admin), onboarding overlay. Ship as one bundle. |
-| 45 | TASK_45_HERO_JOURNAL | ❌ | Cross-campaign chronicle, chapter summaries, /mem cross-campaign, XP timeline, cross-campaign minimap. Schema for `character_campaign_history` exists from T42 — UI work starts here. |
+| 39 | TASK_39_AUTH_ONBOARDING | ✅ | JWT (`jwt_service.py`, HS256) ✅, bcrypt password hashing (cost=12) ✅, brute-force lockout (10 failures → 15 min, `lockout_until` column) ✅, role-based access (`role` column in JWT + DB) ✅, onboarding overlay (`#onboarding-screen`, `showOnboardingCinematic`) ✅. Backward-compat sha256/plain for legacy. Roadmap stale (2026-05-25 audit). |
+| 45 | TASK_45_HERO_JOURNAL | ✅ | Cross-campaign chronicle (hero history modal, 📜 Historia button) ✅, LLM chapter summaries (`chapter_summary_service.py`, `close_campaign_with_summary`) ✅, `/mem` cross-campaign corpus (`memory_qa_service._fetch_cross_campaign_corpus`) ✅, cross-campaign minimap (`_appendJournalMinimap`) ✅. **Roadmap stale — all components shipped prior to 2026-05-25.** |
 
 ---
 
