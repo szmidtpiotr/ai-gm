@@ -2098,13 +2098,15 @@ async function enterGame(campaign) {
                 const turn = item.data;
                 const utext = turn.user_text || '';
                 if (utext && !utext.startsWith('__AI_GM')) {
-                    // Skill test rich format: "[Rzut: Skill — d20 +mod = total — Outcome]"
+                    // Skill test rich format: "[Rzut: Skill — d20 +mod = total[ vs key: d20 +mod = total] — Outcome]"
                     let displayText = utext;
-                    const richM = utext.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\s*([+\-−])\s*(\d+)\s*=\s*(\d+)\s*[—-]\s*(.+?)\]$/);
+                    // Group 6 optionally captures " vs perception: 5 +2 = 7" for opposed checks
+                    const richM = utext.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\s*([+\-−])\s*(\d+)\s*=\s*(\d+)((?:\s+vs\s+[^—-]+)?)\s*[—-]\s*(.+?)\]$/);
                     const simpleM = !richM && utext.match(/^\[Rzut:\s*(.+?)\s*[—-]\s*(\d+)\]$/);
                     if (richM) {
                         const sign = richM[3] === '−' ? '−' : richM[3];
-                        displayText = `🎲 ${richM[1]}: ${richM[2]} ${sign}${richM[4]} = ${richM[5]} — ${richM[6]}`;
+                        const oppSuffix = richM[6] ? richM[6].trim() : '';
+                        displayText = `🎲 ${richM[1]}: ${richM[2]} ${sign}${richM[4]} = ${richM[5]}${oppSuffix ? ' ' + oppSuffix : ''} — ${richM[7]}`;
                     } else if (simpleM) {
                         displayText = `🎲 ${simpleM[1]}: rzut ${simpleM[2]}`;
                     }
@@ -2572,7 +2574,11 @@ async function handleSlashCommand(text) {
             const stp = data?.skill_test_pending;
             if (!stp) {
                 const res = data?.result || {};
-                appendMessage({ role: 'system', content: `🎲 /roll ${res.skill_label || skillArg} — DC ${res.dc}, mod ${res.modifier >= 0 ? '+' : ''}${res.modifier}`, created_at: new Date() });
+                const _ctr = (data?.skill_test_pending || {}).counter || {};
+                const _dcLabel = _ctr.counter_type === 'opposed'
+                    ? `vs ${(_ctr.counter_key || 'przeciwnik').toUpperCase()}`
+                    : `DC ${res.dc}`;
+                appendMessage({ role: 'system', content: `🎲 /roll ${res.skill_label || skillArg} — ${_dcLabel}, mod ${res.modifier >= 0 ? '+' : ''}${res.modifier}`, created_at: new Date() });
                 return true;
             }
 
@@ -2793,7 +2799,6 @@ function getRollSuggestions(afterRoll, cachedSkills) {
             const lbl = (s.label || '').toLowerCase();
             return key.startsWith(typed) || lbl.startsWith(typed);
         })
-        .slice(0, 10)
         .map(s => ({ cmd: `/roll ${s.label}`, desc: s.key }));
 }
 
@@ -3558,9 +3563,17 @@ function showSkillTestPopup(pending) {
             resultVerd.textContent = '✧ Naturalny 1';
             resultVerd.className   = 'nat1';
         } else {
-            const dc = pending.dc || 12;
-            resultVerd.textContent = sum >= dc ? 'Sukces' : 'Porażka';
-            resultVerd.className   = sum >= dc ? 'success' : 'failure';
+            const counter = pending.counter || {};
+            if (counter.counter_type === 'opposed') {
+                // Opponent rolls server-side — we don't know the outcome yet
+                const oppKey = (counter.counter_key || 'przeciwnik').toUpperCase();
+                resultVerd.textContent = `vs ${oppKey} — wynik po chwili`;
+                resultVerd.className   = '';
+            } else {
+                const dc = pending.dc || 12;
+                resultVerd.textContent = sum >= dc ? 'Sukces' : 'Porażka';
+                resultVerd.className   = sum >= dc ? 'success' : 'failure';
+            }
         }
         resultCard.hidden = false;
 

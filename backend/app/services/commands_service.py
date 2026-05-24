@@ -97,14 +97,14 @@ def execute_command_logic(character_id: int, text: str, forced_d20: int | None =
         # called from the admin-gated POST /api/debug/command endpoint; we don't
         # re-check the admin flag here. The HTTP layer is the gate.
         if cmd == "/debug":
-            return _execute_debug_command(cur, conn, character_id, row, sheet, arg)
+            return _execute_debug_command(cur, conn, character_id, row, sheet, arg, forced_d20=forced_d20)
 
         raise ValueError(f"Unknown command: {cmd}")
     finally:
         conn.close()
 
 
-def _execute_debug_command(cur, conn, character_id: int, char_row, sheet: dict, arg: str) -> CommandResult:
+def _execute_debug_command(cur, conn, character_id: int, char_row, sheet: dict, arg: str, forced_d20: int | None = None) -> CommandResult:
     """Implements `/debug ...` subcommands. Mutates DB where requested."""
     sub_parts = arg.split(" ", 1) if arg else [""]
     sub = sub_parts[0].strip().lower()

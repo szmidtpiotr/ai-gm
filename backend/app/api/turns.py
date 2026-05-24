@@ -4213,8 +4213,19 @@ def resolve_skill_test_endpoint(
         else:
             _outcome = "Porażka"
         _sign = "+" if _mod >= 0 else "−"
+        # For opposed checks, append the opponent's result so the player knows why they succeeded/failed
+        _opp_roll = result.get("opponent_roll")
+        _opp_total = result.get("opponent_total")
+        _counter = pending.get("counter", {})
+        if _counter.get("counter_type") == "opposed" and _opp_roll is not None:
+            _opp_key = _counter.get("counter_key", "przeciwnik")
+            _opp_mod = (_opp_total or 0) - _opp_roll
+            _opp_sign = "+" if _opp_mod >= 0 else "−"
+            _opp_suffix = f" vs {_opp_key}: {_opp_roll} {_opp_sign}{abs(_opp_mod)} = {_opp_total}"
+        else:
+            _opp_suffix = ""
         _persisted_roll = (
-            f"[Rzut: {skill_label} — {payload.d20_roll} {_sign}{abs(_mod)} = {_total} — {_outcome}]"
+            f"[Rzut: {skill_label} — {committed} {_sign}{abs(_mod)} = {_total}{_opp_suffix} — {_outcome}]"
         )
         conn.execute(
             """INSERT INTO campaign_turns
