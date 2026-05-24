@@ -1046,9 +1046,17 @@ def _extract_narrative_for_cues(text: str) -> tuple[str, dict | None]:
     """
     If text is JSON containing `narrative`, return (narrative, parsed_dict).
     Otherwise return (text, None) as plain-text fallback.
+
+    The SSE streaming path encodes newlines as \\n then decodes them back to
+    literal newline characters before this function is called. Literal newlines
+    inside JSON string values are technically invalid per spec, so json.loads
+    rejects them. We use strict=False to allow literal control characters inside
+    strings so that grant_item and other top-level fields are extracted correctly.
     """
+    _decoder = json.JSONDecoder(strict=False)
+    stripped = _strip_json_code_fence(text)
     try:
-        parsed = json.loads(_strip_json_code_fence(text))
+        parsed = _decoder.decode(stripped)
         if isinstance(parsed, dict) and "narrative" in parsed:
             return str(parsed.get("narrative") or ""), parsed
     except (ValueError, TypeError):
@@ -1406,13 +1414,13 @@ def _grant_narrative_weapon(
                 (key, label, f"Narracyjna broń: {label}"),
             )
 
-        # Grant via normal weapon_key path
+        # Grant via normal weapon_key path (store original label for display)
         conn.execute(
             """INSERT INTO character_inventory
                (character_id, weapon_key, item_key, consumable_key, label,
                 quantity, equipped, source, meta_json)
-               VALUES (?, ?, NULL, NULL, NULL, 1, 0, ?, ?)""",
-            (int(character_id), key, str(source or "gm"),
+               VALUES (?, ?, NULL, NULL, ?, 1, 0, ?, ?)""",
+            (int(character_id), key, str(label), str(source or "gm"),
              json.dumps({"narrative_weapon": True, "original_label": label}, ensure_ascii=False)),
         )
         logger.info("narrative_weapon_created", key=key, label=label, campaign_id=campaign_id)
@@ -2694,6 +2702,17 @@ def create_turn(
                     grant_item_labels.append(_s)
         grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
         clean_assistant = _repack_narrative(clean_assistant, _narrative_for_cues, _parsed_json)
+        # Inject _debug into assistant JSON for frontend debug block
+        _mr = result.get("mechanic_result") if isinstance(result, dict) else None
+        if _mr and isinstance(_mr, dict):
+            try:
+                _dbg_payload = {k: _mr[k] for k in ("roll", "total", "dc", "outcome", "action_type") if k in _mr}
+                _ca_parsed = json.loads(_strip_json_code_fence(clean_assistant))
+                if isinstance(_ca_parsed, dict):
+                    _ca_parsed["_debug"] = _dbg_payload
+                    clean_assistant = json.dumps(_ca_parsed, ensure_ascii=False)
+            except Exception:
+                pass
         validate_roll_cue_name(clean_assistant.strip())
 
         # ── roll_cue skill test intercept ─────────────────────────────────────
@@ -3363,6 +3382,74 @@ def create_turn_stream(
                 media_type="text/event-stream",
                 headers=stream_headers,
             )
+
+        # ── Pre-LLM keyword scan (streaming endpoint) ────────────────────────
+        # Mirror of the same scanner in create_turn(); fires before the LLM
+        # call so exploration actions that match trigger_keywords get a dice
+        # prompt immediately instead of going straight to narrative.
+        if not roll_request and not text.startswith("__AI_GM"):
+            try:
+                _PL_MAP_S = str.maketrans(
+                    "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
+                    "acelnoszzACELNOSZZ"
+                )
+                _txt_s = text.lower().translate(_PL_MAP_S)
+                _kw_rows_s = conn.execute(
+                    "SELECT key, trigger_keywords FROM game_config_skills "
+                    "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
+                    "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
+                ).fetchall()
+                _txt_padded_s = " " + _txt_s + " "
+                _pre_match_s = None
+                for _kr_s in _kw_rows_s:
+                    raw_kws_s = (_kr_s["trigger_keywords"] or "").replace(",", " ")
+                    _kws_s = [k.strip().lower().translate(_PL_MAP_S)
+                              for k in raw_kws_s.split()
+                              if k.strip() and len(k.strip()) >= 5]
+                    if any(kw and f" {kw}" in _txt_padded_s for kw in _kws_s):
+                        _pre_match_s = _kr_s["key"]
+                        break
+                if _pre_match_s and not is_attack_test(_pre_match_s):
+                    _active_combat_s = conn.execute(
+                        "SELECT id FROM active_combat WHERE campaign_id = ? LIMIT 1",
+                        (campaign_id,),
+                    ).fetchone()
+                    if not _active_combat_s:
+                        from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+                        import uuid as _uuid_s
+                        _char_sh_s = json.loads(character["sheet_json"] or "{}")
+                        _pending_s = {
+                            "skill_test_id": f"st-{_uuid_s.uuid4().hex[:8]}",
+                            "skill_key": _pre_match_s,
+                            "skill_label": _skill_label(_pre_match_s),
+                            "counter": _get_counter(conn, _pre_match_s),
+                            "modifier_breakdown": calc_skill_modifier_info(_char_sh_s, _pre_match_s),
+                        }
+                        gs_row_s = conn.execute(
+                            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                            (campaign_id,),
+                        ).fetchone()
+                        if gs_row_s:
+                            _sf_s = json.loads(gs_row_s["session_flags"] or "{}")
+                            _sf_s = _commit_pending_skill_test(_pending_s, _sf_s)
+                            conn.execute(
+                                "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                                (json.dumps(_sf_s, ensure_ascii=False), campaign_id),
+                            )
+                            conn.commit()
+                        logger.info("skill_test_triggered_by_keywords_stream", skill=_pre_match_s, text_snippet=text[:40])
+                        _done_kw = json.dumps({"skill_test_pending": _pending_s}, ensure_ascii=False)
+
+                        def _skill_kw_stream():
+                            yield f"data: [DONE]{_done_kw}\n\n"
+
+                        return StreamingResponse(
+                            _skill_kw_stream(),
+                            media_type="text/event-stream",
+                            headers=stream_headers,
+                        )
+            except Exception as _pre_err_s:
+                logger.warning("pre_llm_keyword_scan_stream_error: %s", str(_pre_err_s))
 
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 
