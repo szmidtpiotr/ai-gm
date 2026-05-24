@@ -1001,9 +1001,70 @@ async function openHeroHistoryModal(hero) {
                 ${summaryHtml}
               </li>`;
         }).join('') + `</ol>`;
+        // J6 — append cross-campaign minimap after chapter list
+        _appendJournalMinimap(body, hero.id);
     } catch (err) {
         if (body) body.innerHTML = `<p class="hero-history-modal__empty">Nie udało się wczytać kroniki: ${_esc(err.message || err)}</p>`;
     }
+}
+
+async function _appendJournalMinimap(body, characterId) {
+    const wrap = document.createElement('div');
+    wrap.className = 'journal-minimap';
+    wrap.innerHTML = `<div class="journal-minimap__title">Odwiedzone miejsca</div><div class="journal-minimap__svg-wrap" id="journal-minimap-svg-wrap"><span class="journal-minimap__empty">Wczytywanie…</span></div>`;
+    body.appendChild(wrap);
+
+    try {
+        const data = await apiRequest('GET', `/characters/${characterId}/hex-map`);
+        const hexes = data.hexes || [];
+        const svgWrap = document.getElementById('journal-minimap-svg-wrap');
+        if (!svgWrap) return;
+        if (!hexes.length) {
+            svgWrap.innerHTML = `<span class="journal-minimap__empty">Żadne miejsce nie zostało jeszcze odkryte.</span>`;
+            return;
+        }
+        svgWrap.innerHTML = _renderHexMinimap(hexes);
+    } catch (_e) {
+        const svgWrap = document.getElementById('journal-minimap-svg-wrap');
+        if (svgWrap) svgWrap.innerHTML = '';
+    }
+}
+
+function _renderHexMinimap(hexes) {
+    const S = 12;
+    const H = Math.sqrt(3) * S;
+    const toPixel = (q, r) => ({ x: S * 1.5 * q, y: H * (r + q * 0.5) });
+    const TYPE_COLORS = {
+        plains: '#3d5a2a', forest: '#1a3a1a', mountain: '#4a3c2e',
+        water: '#102a42', desert: '#5a4a1a', swamp: '#1e3228',
+        dungeon: '#2a1a3a', ruins: '#3a2a2a', town: '#4a4a2e', road: '#3a3a1a',
+    };
+    const pixels = hexes.map(h => toPixel(h.q, h.r));
+    const minX = Math.min(...pixels.map(p => p.x)) - S;
+    const minY = Math.min(...pixels.map(p => p.y)) - H / 2;
+    const maxX = Math.max(...pixels.map(p => p.x)) + S;
+    const maxY = Math.max(...pixels.map(p => p.y)) + H / 2;
+    const svgW = Math.ceil(maxX - minX + 16);
+    const svgH = Math.ceil(maxY - minY + 16);
+    const hexPath = (cx, cy) => {
+        const pts = [];
+        for (let i = 0; i < 6; i++) {
+            const a = Math.PI / 180 * (60 * i);
+            pts.push(`${(cx + S * Math.cos(a)).toFixed(1)},${(cy + S * Math.sin(a)).toFixed(1)}`);
+        }
+        return `M${pts.join('L')}Z`;
+    };
+    const paths = hexes.map((h, i) => {
+        const { x, y } = pixels[i];
+        const cx = x - minX + 8, cy = y - minY + 8;
+        const col = TYPE_COLORS[h.hex_type] || '#2a2420';
+        const lbl = (h.label || '').slice(0, 8);
+        return `<g>
+          <path d="${hexPath(cx, cy)}" fill="${col}" stroke="#c9a54a44" stroke-width="0.8"/>
+          ${lbl ? `<text x="${cx.toFixed(1)}" y="${(cy + 3).toFixed(1)}" text-anchor="middle" font-size="4.5" fill="#c8b87a88" style="pointer-events:none">${_esc(lbl)}</text>` : ''}
+        </g>`;
+    }).join('');
+    return `<svg width="${svgW}" height="${svgH}" style="display:block">${paths}</svg>`;
 }
 
 async function selectHero(hero) {

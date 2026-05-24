@@ -895,6 +895,38 @@ def get_character_history(character_id: int):
         conn.close()
 
 
+@router.get("/characters/{character_id}/hex-map")
+def get_character_hex_map(character_id: int):
+    """J6 — union of discovered hexes across all campaigns this character participated in."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char_row = conn.execute(
+            "SELECT id FROM characters WHERE id = ? AND is_active = 1",
+            (character_id,),
+        ).fetchone()
+        if not char_row:
+            raise HTTPException(status_code=404, detail="Character not found")
+        rows = conn.execute(
+            """
+            SELECT DISTINCT w.q, w.r, w.hex_type, w.label
+            FROM campaign_hex_data d
+            JOIN world_hexes w ON w.q = d.hex_q AND w.r = d.hex_r
+            WHERE d.discovered = 1
+              AND d.campaign_id IN (
+                  SELECT campaign_id FROM character_campaign_history WHERE character_id = ?
+                  UNION
+                  SELECT campaign_id FROM characters WHERE id = ? AND campaign_id IS NOT NULL
+              )
+            ORDER BY w.q, w.r
+            """,
+            (character_id, character_id),
+        ).fetchall()
+        return {"character_id": character_id, "hexes": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
 @router.post("/characters")
 def create_standalone_character(req: dict = Body(...)):
     """Create a character without a campaign (hero-first flow). campaign_id stays NULL.

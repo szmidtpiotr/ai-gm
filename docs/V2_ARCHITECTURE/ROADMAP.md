@@ -296,7 +296,7 @@ Design decisions resolved with owner in #64: XP revert cascades to skill/spell p
 - [x] **J3** Running summary for active campaign (auto-update every 10 turns). Backend: `summary_auto_ensure_every_n_narrative_turns` lowered 20→10 via `_ensure_j3_summary_interval()` migration; `DEFAULT_SUMMARY_AUTO_ENSURE_EVERY_N_NARRATIVE_TURNS=10`. Frontend: `_journalBadgeTurns` counter init from existing turn count mod 10; increments per `sendTurn`; at 10 shows pulsing gold badge dot on journal button; clears on open.
 - [x] **J4** Cross-campaign `/mem` (search across all hero's campaigns). `_fetch_cross_campaign_corpus()` in `memory_qa_service.py` joins `character_campaign_history` → `campaign_ai_summaries` for ALL campaigns, each labeled `=== Title (Outcome) ===`. `answer_from_summaries()` accepts `character_id`; endpoint passes it. Prompt updated to cite campaign names in answers. Source field: `cross_campaign` vs `single_campaign`.
 - [x] **J5** XP timeline visualization (horizontal bar with level markers). Pure frontend: `renderXpTimeline(sheet)` in `populateCharacterSheet`. 8px track, gradient fill to `xp_lifetime_earned/1000`, 9 dividers, pulsing accent cursor at fill edge, 10 centered level labels (current highlighted), meta row with PD-to-next. No new API calls.
-- [ ] **J6** Cross-campaign minimap — combined visited hex overlay
+- [x] **J6** Cross-campaign minimap — combined visited hex overlay. New endpoint `GET /characters/{id}/hex-map` (UNION of `campaign_hex_data.discovered=1` across all character campaigns + active). `_renderHexMinimap()` renders flat-top SVG (S=12) with `TYPE_COLORS`, gold stroke. `_appendJournalMinimap()` appends "Odwiedzone miejsca" section at bottom of hero journal modal.
 
 ### Stage 12-B — Księga Wiedzy: Quick Tips (planned)
 
