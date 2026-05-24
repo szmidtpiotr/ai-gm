@@ -116,7 +116,7 @@ const LOCATION_RULES = [
   { key: "reason",           label: "Reason",           type: "text",    default: "Sacred ground", description: "Reason shown to player" },
 ];
 
-const TABS = ["builder", "locations", "npcs", "enemies", "loot-tables", "pending"];
+const TABS = ["builder", "terrain", "locations", "npcs", "enemies", "loot-tables", "pending"];
 const _rendered = new Set();
 let _aiTrigger = null;
 
@@ -125,6 +125,7 @@ export async function init(panel) {
     <div class="section-content">
       <div class="subtab-bar">
         <button class="subtab-btn active" data-tab="builder">🗺 Mapa Świata</button>
+        <button class="subtab-btn" data-tab="terrain">🌿 Typy Terenu</button>
         <button class="subtab-btn" data-tab="locations">📍 Lokacje</button>
         <button class="subtab-btn" data-tab="npcs">${LABELS.npcs}</button>
         <button class="subtab-btn" data-tab="enemies">${LABELS.enemies}</button>
@@ -166,6 +167,7 @@ async function _activateTab(panel, tab) {
     const { _renderLootTables } = await import("/admin_panel_v2/sections/content.js?v=23");
     await _renderLootTables(container, panel);
   }
+  else if (tab === "terrain")   await _renderTerrainConfig(container);
   else if (tab === "pending")   await _renderPendingReview(container, panel);
   else if (tab === "builder") {
     const { init: initBuilder } = await import("/admin_panel_v2/sections/world_builder.js?v=8");
@@ -2186,6 +2188,274 @@ function _openRiddleModal(row, onDone) {
           showToast(isEdit?"Zapisano.":"Dodano zagadkę.", "success");
           c(); await onDone();
         } catch (e) { showToast(e.message||"Błąd", "error"); }
+      }},
+    ],
+  });
+}
+
+// ── Terrain Config ─────────────────────────────────────────────────────────────
+
+async function _renderTerrainConfig(container) {
+  container.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <h3 style="margin:0">🌿 Typy Terenu</h3>
+    <button class="primary-btn" id="terrain-add-btn">+ Nowy typ</button>
+  </div>
+  <p style="color:var(--text-muted);font-size:13px;margin-bottom:20px">
+    Parametry generowania terenu świata. <strong>Waga spawnu</strong> określa częstotliwość — wyższe = częstsze.
+    Typy z wagą 0 nie są generowane automatycznie.
+  </p>
+  <div id="terrain-table-wrap"><div class="loading">Ładowanie…</div></div>`;
+
+  container.querySelector("#terrain-add-btn").addEventListener("click", () => _openTerrainModal(null, () => _renderTerrainConfig(container)));
+
+  await _loadTerrainTable(container.querySelector("#terrain-table-wrap"));
+}
+
+async function _loadTerrainTable(wrap) {
+  wrap.innerHTML = `<div class="loading">Ładowanie…</div>`;
+  let rows;
+  try {
+    rows = await adminFetch("/api/admin/hex-terrain-config");
+  } catch (e) {
+    wrap.innerHTML = `<div class="error-msg">Błąd: ${_esc(e.message)}</div>`;
+    return;
+  }
+
+  const totalWeight = rows.reduce((s, r) => s + (r.spawn_weight || 0), 0);
+
+  wrap.innerHTML = `
+  <table class="admin-table" style="width:100%">
+    <colgroup>
+      <col style="width:44px">
+      <col style="width:80px">
+      <col>
+      <col style="width:90px">
+      <col style="width:120px">
+      <col style="width:100px">
+      <col style="width:80px">
+      <col style="width:56px">
+    </colgroup>
+    <thead><tr>
+      <th>Ikona</th>
+      <th>Klucz</th>
+      <th>Etykieta</th>
+      <th>Waga</th>
+      <th>Szansa spawnu</th>
+      <th>Czas podróży</th>
+      <th>Enc. %</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+    ${rows.map(r => {
+      const pct = totalWeight > 0 && r.spawn_weight > 0
+        ? ((r.spawn_weight / totalWeight) * 100).toFixed(1)
+        : "0";
+      const barW = totalWeight > 0 ? Math.round((r.spawn_weight / totalWeight) * 100) : 0;
+      return `<tr data-key="${_esc(r.hex_type)}" style="${r.is_active ? '' : 'opacity:0.45'}">
+        <td style="text-align:center;font-size:22px">${_esc(r.map_icon || "")}</td>
+        <td><code style="font-size:12px">${_esc(r.hex_type)}</code></td>
+        <td>${_esc(r.label || "")}</td>
+        <td>
+          <input type="number" class="terrain-weight-input" data-key="${_esc(r.hex_type)}"
+            value="${r.spawn_weight}" min="0" max="999"
+            style="width:60px;padding:3px 6px;background:var(--input-bg,#1e2030);border:1px solid var(--border,#333);
+                   border-radius:4px;color:var(--text-primary,#e2e8f0);text-align:center">
+        </td>
+        <td>
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="flex:1;height:8px;background:var(--border,#333);border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:${barW}%;background:${r.map_color||'#4ade80'};border-radius:4px;transition:width .3s"></div>
+            </div>
+            <span style="font-size:12px;color:var(--text-muted);min-width:36px;text-align:right">${pct}%</span>
+          </div>
+        </td>
+        <td style="text-align:center">
+          <input type="number" class="terrain-hours-input" data-key="${_esc(r.hex_type)}"
+            value="${r.travel_hours}" min="1" max="48" step="0.5"
+            style="width:64px;padding:3px 6px;background:var(--input-bg,#1e2030);border:1px solid var(--border,#333);
+                   border-radius:4px;color:var(--text-primary,#e2e8f0);text-align:center"> h
+        </td>
+        <td style="text-align:center">
+          <input type="number" class="terrain-enc-input" data-key="${_esc(r.hex_type)}"
+            value="${Math.round((r.encounter_base_chance||0)*100)}" min="0" max="100"
+            style="width:52px;padding:3px 6px;background:var(--input-bg,#1e2030);border:1px solid var(--border,#333);
+                   border-radius:4px;color:var(--text-primary,#e2e8f0);text-align:center"> %
+        </td>
+        <td>
+          <button class="icon-btn terrain-edit-btn" data-key="${_esc(r.hex_type)}" title="Edytuj">✏️</button>
+        </td>
+      </tr>`;
+    }).join("")}
+    </tbody>
+  </table>
+  <p style="font-size:12px;color:var(--text-muted);margin-top:10px">
+    Suma wag: <strong>${totalWeight}</strong>. Zmiany wagi/godzin/% — naciśnij Enter lub kliknij poza polem.
+  </p>`;
+
+  // Inline save on blur/Enter for weight, hours, encounter
+  const _saveField = async (key, field, rawValue) => {
+    let value;
+    if (field === "spawn_weight" || field === "travel_hours") {
+      value = parseFloat(rawValue);
+      if (isNaN(value) || value < 0) return;
+    } else if (field === "encounter_base_chance") {
+      value = Math.min(100, Math.max(0, parseInt(rawValue, 10))) / 100;
+      if (isNaN(value)) return;
+    }
+    try {
+      await adminFetch(`/api/admin/hex-terrain-config/${key}`, {
+        method: "PATCH",
+        body: JSON.stringify({ [field]: value }),
+      });
+      showToast(`Zapisano ${field} dla ${key}.`, "success");
+      await _loadTerrainTable(wrap);
+    } catch (e) { showToast(e.message || "Błąd zapisu", "error"); }
+  };
+
+  wrap.querySelectorAll(".terrain-weight-input").forEach(inp => {
+    inp.addEventListener("change", () => _saveField(inp.dataset.key, "spawn_weight", inp.value));
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
+  });
+  wrap.querySelectorAll(".terrain-hours-input").forEach(inp => {
+    inp.addEventListener("change", () => _saveField(inp.dataset.key, "travel_hours", inp.value));
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
+  });
+  wrap.querySelectorAll(".terrain-enc-input").forEach(inp => {
+    inp.addEventListener("change", () => _saveField(inp.dataset.key, "encounter_base_chance", inp.value));
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
+  });
+
+  wrap.querySelectorAll(".terrain-edit-btn").forEach(btn => {
+    const key = btn.dataset.key;
+    const row = rows.find(r => r.hex_type === key);
+    btn.addEventListener("click", () => _openTerrainModal(row, () => _loadTerrainTable(wrap)));
+  });
+}
+
+// Grouped emoji suggestions for terrain/map icons
+const _TERRAIN_EMOJI_GROUPS = [
+  { label: "Roślinność", emojis: ["🌾","🌱","🌿","🍀","🍁","🍂","🍃","🌺","🌸","🌼","🌻","🪷","🪴","🌵","🎋","🎍","🪨","🪵","🌰","🍄","🪸","🌾"] },
+  { label: "Krajobraz", emojis: ["⛰️","🏔️","🗻","🌋","🏝️","🏜️","🌊","🏞️","🌅","🌄","🌁","🌃","🌌","🌬️","💧","🌀","❄️","🌨️","⛅","🌧️","⛈️","🌈"] },
+  { label: "Drzewa i lasy", emojis: ["🌲","🌳","🌴","🎄","🌿","🍂","🌾","🎑","🌳","🌲","🌴","🪵","🍄","🌱","🌿","🍀","🎋"] },
+  { label: "Woda", emojis: ["🌊","💧","💦","🌧️","❄️","🏔️","🏞️","⛵","🚣","⚓","🐟","🐠","🦈","🐬","🐳","🦦","🌀","🌁"] },
+  { label: "Miejsca", emojis: ["🏘️","🏰","🏯","⛪","🕌","🛕","🏛️","🏚️","🗼","⛺","🕳️","🚪","🌉","🛤️","🛣️","⚓","🏗️","🏠","🏡","🏟️","🗽"] },
+  { label: "Symbole", emojis: ["⚔️","🗡️","🛡️","🏹","🪄","💀","👁️","🔮","🌙","☀️","⭐","💎","🪙","🗺️","📜","🔑","⚗️","🧿","🕯️","🪬","🔥","⚡"] },
+  { label: "Stworzenia", emojis: ["🐉","🦁","🐺","🐻","🦅","🦇","🐍","🦎","🐊","🕷️","🦂","🐗","🦊","🦋","🦌","🐘","🦏","🐆","🐅","🦬","🦉","🦅","🐦‍⬛"] },
+];
+
+function _openTerrainModal(row, onDone) {
+  const isEdit = !!row;
+  const form = document.createElement("div");
+  form.style.cssText = "display:flex;flex-direction:column;gap:12px";
+  form.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label class="modal-field"><span>Klucz hex_type *</span>
+        <input name="hex_type" type="text" value="${_esc(row?.hex_type??'')}" ${isEdit?"readonly":""}
+          placeholder="np. volcano" autocomplete="off" style="font-family:monospace"/>
+      </label>
+      <label class="modal-field"><span>Etykieta (PL) *</span>
+        <input name="label" type="text" value="${_esc(row?.label??'')}" placeholder="np. Wulkan"/>
+      </label>
+    </div>
+    <div style="display:grid;grid-template-columns:80px 1fr;gap:12px">
+      <label class="modal-field"><span>Ikona</span>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <input name="map_icon" type="text" value="${_esc(row?.map_icon??'')}" placeholder="🌋"
+            style="font-size:22px;text-align:center;width:56px;padding:4px"/>
+          <button type="button" id="icon-picker-toggle"
+            style="font-size:11px;padding:3px 6px;background:var(--border,#333);border:none;border-radius:4px;color:var(--text-muted);cursor:pointer">
+            🎨 wybierz
+          </button>
+        </div>
+      </label>
+      <label class="modal-field"><span>Kolor mapy</span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input name="map_color" type="color" value="${row?.map_color??'#888888'}" style="width:48px;height:36px;padding:2px;border:1px solid var(--border,#333);border-radius:4px;background:none;cursor:pointer"/>
+          <input name="map_color_hex" type="text" value="${_esc(row?.map_color??'#888888')}" placeholder="#888888"
+            style="width:100px;font-family:monospace"/>
+          <span style="font-size:12px;color:var(--text-muted)">Kolor hexagonu na mapie świata</span>
+        </div>
+      </label>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      <label class="modal-field"><span>Waga spawnu</span>
+        <input name="spawn_weight" type="number" value="${row?.spawn_weight??5}" min="0" max="999"/>
+        <small style="color:var(--text-muted)">0 = nie generowany</small>
+      </label>
+      <label class="modal-field"><span>Czas podróży (h)</span>
+        <input name="travel_hours" type="number" value="${row?.travel_hours??4}" min="0.5" max="48" step="0.5"/>
+      </label>
+      <label class="modal-field"><span>Bazowa szansa enc. (%)</span>
+        <input name="encounter_base_chance" type="number" value="${Math.round((row?.encounter_base_chance??0.2)*100)}" min="0" max="100"/>
+      </label>
+    </div>
+    <label class="modal-checkbox-row"><input name="is_active" type="checkbox" ${(row?.is_active??true)?"checked":""}><span>Aktywny (widoczny na mapie i generowany)</span></label>
+    <div id="icon-picker-panel" style="display:none;border:1px solid var(--border,#333);border-radius:6px;padding:10px;background:var(--surface-2,#1a1d2e)">
+      ${_TERRAIN_EMOJI_GROUPS.map(g => `
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">${g.label}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${g.emojis.map(e => `<button type="button" class="emoji-pick-btn"
+              style="font-size:20px;width:36px;height:36px;border:1px solid var(--border,#333);border-radius:4px;
+                     background:var(--surface,#13152a);cursor:pointer;transition:background .15s"
+              data-emoji="${e}">${e}</button>`).join("")}
+          </div>
+        </div>`).join("")}
+    </div>`;
+
+  // Sync color picker ↔ text input
+  const syncColor = (src, dst) => {
+    form.querySelector(`[name="${src}"]`).addEventListener("input", e => {
+      form.querySelector(`[name="${dst}"]`).value = e.target.value;
+    });
+  };
+  // Defer until form is in DOM (openModal attaches it)
+  setTimeout(() => {
+    syncColor("map_color", "map_color_hex");
+    syncColor("map_color_hex", "map_color");
+
+    // Icon picker toggle
+    const pickerPanel = form.querySelector("#icon-picker-panel");
+    const iconInput = form.querySelector("[name='map_icon']");
+    form.querySelector("#icon-picker-toggle").addEventListener("click", () => {
+      pickerPanel.style.display = pickerPanel.style.display === "none" ? "block" : "none";
+    });
+    form.querySelectorAll(".emoji-pick-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        iconInput.value = btn.dataset.emoji;
+        pickerPanel.style.display = "none";
+      });
+      btn.addEventListener("mouseenter", () => { btn.style.background = "var(--primary-dim,#2a3060)"; });
+      btn.addEventListener("mouseleave", () => { btn.style.background = "var(--surface,#13152a)"; });
+    });
+  }, 0);
+
+  openModal({
+    title: isEdit ? `Edytuj teren: ${row.hex_type}` : "Nowy typ terenu",
+    content: form,
+    footer: [
+      { label: "Anuluj", class: "secondary-btn", onClick: c => c() },
+      { label: isEdit ? "Zapisz" : "Dodaj", class: "primary-btn", onClick: async c => {
+        const g = n => form.querySelector(`[name="${n}"]`);
+        const hex_type = isEdit ? row.hex_type : g("hex_type").value.trim().toLowerCase().replace(/\s+/g,"_");
+        const label = g("label").value.trim();
+        if (!hex_type || !label) { showToast("Klucz i etykieta są wymagane.", "error"); return; }
+        const body = {
+          label,
+          map_icon: g("map_icon").value.trim() || null,
+          map_color: g("map_color_hex").value.trim() || g("map_color").value,
+          spawn_weight: parseInt(g("spawn_weight").value) || 0,
+          travel_hours: parseFloat(g("travel_hours").value) || 4,
+          encounter_base_chance: Math.min(100, Math.max(0, parseInt(g("encounter_base_chance").value))) / 100,
+          is_active: g("is_active").checked,
+        };
+        if (!isEdit) body.hex_type = hex_type;
+        try {
+          if (isEdit) await adminFetch(`/api/admin/hex-terrain-config/${hex_type}`, { method:"PATCH", body:JSON.stringify(body) });
+          else        await adminFetch("/api/admin/hex-terrain-config",              { method:"POST",  body:JSON.stringify(body) });
+          showToast(isEdit?"Zapisano.":"Dodano typ terenu.", "success");
+          c(); await onDone();
+        } catch (e) { showToast(e.message || "Błąd", "error"); }
       }},
     ],
   });

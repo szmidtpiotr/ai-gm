@@ -3374,6 +3374,75 @@ def admin_delete_knowledge_tip(tip_key: str, _: None = Depends(require_admin_tok
         conn.close()
 
 
+# ── Hex terrain type config ───────────────────────────────────────────────────
+
+@router.get("/admin/hex-terrain-config")
+def admin_list_hex_terrain_config(_: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT hex_type, label, map_icon, map_color, travel_hours, "
+            "encounter_base_chance, spawn_weight, is_active "
+            "FROM hex_type_config ORDER BY spawn_weight DESC, hex_type"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/hex-terrain-config/{hex_type}")
+def admin_update_hex_terrain_config(
+    hex_type: str, req: dict = Body(...), _: None = Depends(require_admin_token)
+):
+    allowed = {"label", "map_icon", "map_color", "travel_hours",
+               "encounter_base_chance", "spawn_weight", "is_active"}
+    updates = {k: v for k, v in req.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        vals = list(updates.values()) + [hex_type]
+        cur = conn.execute(f"UPDATE hex_type_config SET {sets} WHERE hex_type = ?", vals)
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail=f"Terrain type not found: {hex_type}")
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.post("/admin/hex-terrain-config")
+def admin_create_hex_terrain_config(
+    req: dict = Body(...), _: None = Depends(require_admin_token)
+):
+    required = {"hex_type", "label"}
+    if not required.issubset(req.keys()):
+        raise HTTPException(status_code=400, detail="hex_type and label are required")
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO hex_type_config "
+            "(hex_type, label, map_icon, map_color, travel_hours, encounter_base_chance, spawn_weight, is_active) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
+            (
+                req["hex_type"], req["label"],
+                req.get("map_icon", ""),
+                req.get("map_color", "#4a6a4a"),
+                req.get("travel_hours", 1.0),
+                req.get("encounter_base_chance", 0.15),
+                req.get("spawn_weight", 0),
+            ),
+        )
+        conn.commit()
+        return {"ok": True}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail=f"Terrain type already exists: {req['hex_type']}")
+    finally:
+        conn.close()
+
+
 # ── Dungeon admin CRUD ────────────────────────────────────────────────────────
 
 @router.get("/admin/dungeons")

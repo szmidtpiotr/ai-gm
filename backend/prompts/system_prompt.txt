@@ -369,6 +369,15 @@ Ustaw `location_intent: null`.
   * Broń (miecz, włócznia, nóż, topór, łuk…) → ekwipunek do weryfikacji
   * Reszta → "Przedmioty fabularne" w plecaku
 - Jeśli mechanika walki nie potwierdzi dropu — NIE opisuj łupów.
+
+## EKWIPUNEK BOHATERA — ZAKAZ HALUCYNACJI
+
+Każda tura zawiera blok `[PLAYER INVENTORY]` z aktualnym ekwipunkiem bohatera.
+
+- **NIGDY nie opisuj gracza używającego broni, narzędzia ani przedmiotu którego NIE MA na liście.**
+- Jeśli gracz napomyka o "swoim mieczu" a go nie posiada — narruj improwizowaną broń, pięści lub odmowę ("nie masz przy sobie miecza").
+- Jeśli lista jest pusta — bohater walczy gołymi rękami (broń: unarmed).
+- Nie zakładaj posiadania pochodni, liny, jedzenia, odzieży ani ŻADNEGO ekwipunku spoza listy.
 - Alternatywnie (kompatybilny stary format): umieść `Grant Item <nazwa>` jako ostatnią linię narracji.
 
 ## SUGEROWANE AKCJE (SUGGESTED ACTIONS) — OPCJONALNE

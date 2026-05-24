@@ -681,6 +681,10 @@ ADMIN_MIGRATIONS = [
     # Default 'main_hand' is the safest for legacy rows; backfill in ADMIN_SEEDS
     # then overrides based on label/range/weapon_type heuristics.
     "ALTER TABLE game_config_weapons ADD COLUMN weapon_slot TEXT DEFAULT 'main_hand'",
+    # Issue #53 — trigger_keywords on skills. Must be here (before ADMIN_SEEDS)
+    # so that the UPDATE seeds below don't crash on old/restored DBs that
+    # pre-date _run_v2_schema_migrations adding it there.
+    "ALTER TABLE game_config_skills ADD COLUMN trigger_keywords TEXT DEFAULT NULL",
 ]
 
 ADMIN_SEEDS = [
@@ -2839,8 +2843,8 @@ def _ensure_hex_spawn_weights(conn: sqlite3.Connection) -> None:
         pass  # already exists
     weights = {
         "plains": 30, "forest": 25, "hills": 15, "mountains": 10,
-        "swamp": 7, "ruins": 6, "river": 4, "cave": 3, "dungeon": 1,
-        "road": 0, "town": 0, "castle": 0,
+        "swamp": 7, "ruins": 6, "river": 4, "road": 5, "cave": 3,
+        "dungeon": 1, "town": 2, "castle": 1,
     }
     for hex_type, w in weights.items():
         conn.execute(
@@ -2906,6 +2910,15 @@ def run_admin_migrations() -> None:
                 if "already exists" in msg or "duplicate column" in msg:
                     logger.info(
                         "admin_migration_seeded_skipped",
+                        sql_preview=sql.strip().splitlines()[0],
+                        reason=str(e),
+                    )
+                elif "no such table" in msg or "no such column" in msg:
+                    # Schema not yet created (e.g. restored from older backup).
+                    # _run_v2_schema_migrations below will create it; next
+                    # startup the seed will run successfully.
+                    logger.warning(
+                        "admin_seed_deferred",
                         sql_preview=sql.strip().splitlines()[0],
                         reason=str(e),
                     )

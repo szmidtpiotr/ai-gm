@@ -216,6 +216,120 @@ def _death_mechanica_system_append(
     )
 
 
+def _inject_hex_terrain_context(
+    conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
+) -> None:
+    """Append [HEX CONTEXT] to system prompt so GM knows current terrain type and atmosphere."""
+    if not messages:
+        return
+    first = messages[0]
+    if not isinstance(first, dict) or first.get("role") != "system":
+        return
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            return
+        flags = json.loads(gs["session_flags"] or "{}")
+        ch = flags.get("current_hex")
+        if not ch:
+            return
+        q, r = int(ch["q"]), int(ch["r"])
+        hex_row = conn.execute(
+            "SELECT hex_type, label, atmosphere FROM world_hexes WHERE q = ? AND r = ? AND is_active = 1",
+            (q, r),
+        ).fetchone()
+        if not hex_row:
+            return
+        hex_type = hex_row["hex_type"] or "plains"
+        cfg_row = conn.execute(
+            "SELECT label, map_icon FROM hex_type_config WHERE hex_type = ?",
+            (hex_type,),
+        ).fetchone()
+        terrain_label = cfg_row["label"] if cfg_row else hex_type
+        terrain_icon = (cfg_row["map_icon"] or "") if cfg_row else ""
+        hex_label = hex_row["label"] or ""
+        atmosphere = hex_row["atmosphere"] or ""
+
+        parts = [
+            f"[HEX CONTEXT]",
+            f"terrain_type: {hex_type}  # {terrain_icon} {terrain_label}",
+        ]
+        if hex_label:
+            parts.append(f"hex_label: {hex_label}")
+        if atmosphere:
+            parts.append(f"atmosphere: {atmosphere}")
+        parts.append(
+            "Narruj opisy otoczenia, pogodę, napotkane stworzenia i nastrój "
+            "zgodnie z powyższym typem terenu."
+        )
+        block = "\n".join(parts)
+        first["content"] = f"{first['content'].rstrip()}\n\n{block}"
+    except Exception as exc:
+        logger.warning("hex_terrain_context_injection_failed", error=str(exc))
+
+
+def _inject_character_inventory_context(
+    conn: sqlite3.Connection, character: sqlite3.Row | None, messages: list[dict]
+) -> None:
+    """Append [PLAYER INVENTORY] to system prompt — anti-hallucination for item/weapon ownership."""
+    if not character or not messages:
+        return
+    first = messages[0]
+    if not isinstance(first, dict) or first.get("role") != "system":
+        return
+    try:
+        cid = int(character["id"])
+        rows = conn.execute(
+            """
+            SELECT ci.item_key, ci.weapon_key, ci.consumable_key,
+                   ci.label, ci.quantity, ci.equipped, ci.slot,
+                   COALESCE(w.label, it.label, cons.label) AS catalog_label
+            FROM character_inventory ci
+            LEFT JOIN game_config_weapons   w    ON w.key    = ci.weapon_key
+            LEFT JOIN game_config_items     it   ON it.key   = ci.item_key
+            LEFT JOIN game_config_consumables cons ON cons.key = ci.consumable_key
+            WHERE ci.character_id = ?
+            ORDER BY ci.equipped DESC, ci.slot, catalog_label
+            """,
+            (cid,),
+        ).fetchall()
+
+        if not rows:
+            return
+
+        equipped_lines = []
+        carried_lines = []
+        for r in rows:
+            name = r["label"] or r["catalog_label"] or r["weapon_key"] or r["item_key"] or r["consumable_key"] or "?"
+            qty = int(r["quantity"] or 1)
+            qty_str = f" ×{qty}" if qty > 1 else ""
+            if r["equipped"]:
+                slot = r["slot"] or "equipped"
+                equipped_lines.append(f"  {slot}: {name}")
+            else:
+                carried_lines.append(f"  - {name}{qty_str}")
+
+        parts = ["[PLAYER INVENTORY]"]
+        if equipped_lines:
+            parts.append("Equipped:")
+            parts.extend(equipped_lines)
+        if carried_lines:
+            parts.append("Carried:")
+            parts.extend(carried_lines)
+        parts.append(
+            "ZASADA: Nigdy nie opisuj gracza używającego broni ani przedmiotu "
+            "który NIE jest na powyższej liście. Nie zakładaj posiadania miecza, "
+            "tarczy, pochodni ani żadnego innego ekwipunku spoza tej listy."
+        )
+        block = "\n".join(parts)
+        first["content"] = f"{first['content'].rstrip()}\n\n{block}"
+    except Exception as exc:
+        logger.warning("inventory_context_injection_failed", error=str(exc))
+
+
 def _inject_location_llm_context(
     conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
 ) -> None:
@@ -480,6 +594,8 @@ def build_narrative_messages(
         _inject_campaign_s11_context(conn, campaign, messages, current_user_text=user_text)
         _inject_location_llm_context(conn, int(campaign["id"]), messages)
         _inject_npc_llm_context(conn, int(campaign["id"]), messages)
+        _inject_hex_terrain_context(conn, int(campaign["id"]), messages)
+        _inject_character_inventory_context(conn, character, messages)
 
     combat_log_block = combat_svc.get_combat_turns_context_for_prompt(int(campaign["id"]))
     if combat_log_block and messages:

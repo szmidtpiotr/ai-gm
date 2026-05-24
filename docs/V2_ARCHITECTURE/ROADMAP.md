@@ -310,6 +310,18 @@ Short, glossary-style entries that explain a single mechanic in 1–3 sentences.
 - [x] **KW6** "📖 Pokaż wskazówki" chip appended to `/help` system bubble after `appendMessage`; click opens character sheet (if closed) and switches to knowledge tab via `_switchSheetTab('knowledge')` + `renderKnowledgeTab()`. CSS: `.help-wskazowki-chip` gold pill with hover state.
 - [x] **KW7** `[TIP:key]` guidance added to `system_prompt.txt` under new section `## TAG [TIP:klucz]`. Documents all 23 valid keys by category, rules (1 tag/turn, end of response, first encounter only), and example output. Frontend `parseGmFull` already strips tags + `_handleTriggeredTips` surfaces unseen tips (wired in KW4).
 
+### Stage 12-C — Hex World Expansion [2026-05-24]
+
+Extends the hex travel system from a static map into a living, auto-expanding world.
+
+- [x] **HW1** Neighbor outline fix — `get_campaign_world_map()` always adds all 6 neighbors of `current_hex` to the outline set, split into `outline` (real DB hex) vs `unexplored` (no DB row, very faint dotted); both are click-to-travel — commit `77b9a7c`
+- [x] **HW2** Full-screen travel cinematic — terrain-specific gradient, floating emoji, destination name, atmosphere flavor, cycling tips (all 31 tips, round-robin via `aigm_travel_tip_idx`), 15 s progress bar, tap-to-dismiss with 400 ms grace, auto-dismiss — commits `77b9a7c` + `eaf98be` + `14bea34`
+- [x] **HW3** GM arrival narration — after cinematic closes, auto-sends "Przybyłem do: [miejsce]." trigger; system_prompt.txt `## PRZYBYCIE DO NOWEGO MIEJSCA` section instructs GM to give 2-3 sentence location intro — commit `7aa52c7`
+- [x] **HW4** Dynamic world expansion — travel to an `unexplored` (phantom) hex auto-generates a new `world_hexes` row using `_auto_generate_hex(q, r, conn)` with spawn-weight sampling; `ok: false` guard in `_wmExecuteTravel` prevents stuck-at-origin — commit `06d75e4`
+- [x] **HW5** `spawn_weight` column on `hex_type_config` — migration + initial weights (plains 30 → dungeon/castle 1); `_auto_generate_hex` uses `random.choices(types, weights)` for terrain frequency — commit `06d75e4`
+- [x] **HW6** Admin "🌿 Typy Terenu" subtab in Mapa Świata — inline editable table (spawn_weight, travel_hours, ENC%), probability bars, ✏️ full modal with color picker, emoji icon picker (7 groups: Roślinność / Krajobraz / Drzewa / Woda / Miejsca / Symbole / Stworzenia), "Nowy typ" create flow — today, issue #86
+- [x] **HW7** `[HEX CONTEXT]` LLM injection — `_inject_hex_terrain_context()` in `game_engine.py` appends terrain_type, Polish label, atmosphere, and narration directive to every system prompt turn; GM now knows the biome and can narrate accordingly — today, issue #86
+
 ### Stage 13 — Admin polish
 
 - [ ] **AP1** TASK_32: inline "Edytuj i Zatwierdź" modal in World Review Queue
@@ -654,7 +666,7 @@ The original phase-grouped view follows below for context. Cross-reference task 
 
 ## Progress Summary
 
-After 2026-05-18 audit corrections:
+Updated 2026-05-24 (after Stage 12-B + 12-C):
 
 ```
 Phase 01  Foundation        ████████████  5/5    100%
@@ -665,12 +677,18 @@ Phase 05  Combat            ███████████░  5.5/7   79%   
 Phase 06  Economy           ████████░░░░  6.5/10  65%   (T20/T24/T25V2/T26X partial)
 Phase 07  Narrator          ███████████░  3.5/4   88%   (T28 deceased context)
 Phase 08  Admin             ██████████░░  4.5/5   90%   (+sandbox bonus, T32/T33SA partial)
-Phase 09  Frontend          █████████░░░  3.5/5   70%   (T35 partial, T44 partial)
-Phase 10  Polish            ███░░░░░░░░░  1.5/5   30%   (T36-T39 partial, T45 not started)
+Phase 09  Frontend          ██████████░░  4/5     80%   (T44 partial; hex world + T35 done)
+Phase 10  Polish            ████████████  5/5    100%   (T36-T39 + T45 all complete)
 Phase 11  Observability     ░░░░░░░░░░░░  0/4      0%
 Phase 12  AI Test Agent     ░░░░░░░░░░░░  0/10     0%
 
-Overall:  ~~~~~~~~~~~~~~~~  40.5/64  63%
-```
+Bonus stages (not in original plan):
+  Stage 11-C  Auth UX (registration / onboarding / invites)  7/7   100%
+  Stage 11-D  Slash commands hardening                        8/8   100%
+  Stage 11-E  Content library (weapons/armor/items/cons)      5/5   100%
+  Stage 12-B  Księga Wiedzy quick tips                        7/7   100%
+  Stage 12-C  Hex world expansion + GM biome context          7/7   100%
 
-_The numbers dropped slightly vs the pre-audit estimate (67% → 63%) because partial completions are now scored at 0.5 instead of 1.0. The work itself didn't regress — we just have honest accounting._
+Overall (original plan):  ~~~~~~~~~~~~~~~~  42/64  66%
+Overall (incl. bonus):    ~~~~~~~~~~~~~~~~  ~80 tasks complete
+```
