@@ -2141,6 +2141,11 @@ function appendMessage(msg, opts = {}) {
         dbg.dataset.stale = '1';
         dbg.style.display = debugMode ? 'block' : 'none';
         _renderDebugCombatLine(dbg, cs);
+        if (m.debugRoll) {
+            const dr = m.debugRoll;
+            const rollLine = `▼ ROLL: action=${dr.action_type || '?'} d20=${dr.roll ?? '?'} total=${dr.total ?? '?'} dc=${dr.dc ?? '?'} → ${dr.outcome || '?'}`;
+            dbg.innerHTML += `<span class="debug-block__roll">${escapeHtml(rollLine)}</span>`;
+        }
         dbg.innerHTML += `<span class="debug-block__loc">${escapeHtml(locLine)}${locJson ? '\n' + escapeHtml(locJson) : ''}</span>`;
         elements.chatMessages.appendChild(dbg);
     }
@@ -2185,7 +2190,7 @@ function formatDateTime(dateStr) {
 }
 
 function parseGmFull(text) {
-    if (!text) return { narrative: '', locationIntent: null };
+    if (!text) return { narrative: '', locationIntent: null, debugRoll: null };
     let raw = String(text).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const stripInternalTags = s => String(s || '')
         .replace(/\s*\[LOCATION_BLOCKED:[^\]]*\]/g, '')
@@ -2197,11 +2202,12 @@ function parseGmFull(text) {
             return {
                 narrative: stripInternalTags(typeof data.narrative === 'string' ? data.narrative : ''),
                 locationIntent: data.location_intent || null,
+                debugRoll: data._debug || null,
                 raw: data,
             };
         }
     } catch (_e) {}
-    return { narrative: parseGmResponse(text), locationIntent: null };
+    return { narrative: parseGmResponse(text), locationIntent: null, debugRoll: null };
 }
 
 function parseGmResponse(text) {

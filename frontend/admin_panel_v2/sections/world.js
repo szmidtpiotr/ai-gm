@@ -399,14 +399,39 @@ function _checkbox(name, labelText, checked = false) {
 
 // ── Locations ─────────────────────────────────────────────────────────────────
 
+// Icon map for location subtypes used in the accordion tree view
+const _LOC_ICONS = {
+  tavern: "🍺", inn: "🏠", shop: "🏪", temple: "⛪", guild: "🏛", village: "🏡",
+  town: "🏘", city: "🏙", castle: "🏰", ruin: "🏚", cave: "🗻", dungeon: "🕳",
+  tower: "🗼", watchtower: "🛡", forest_clearing: "🌿", camp: "⛺", road: "🛣",
+  bridge: "🌉", crossroads: "🔀", graveyard: "☠", swamp_hut: "🌫", mine: "⛏",
+  harbor: "⚓", other: "•",
+  // extended subtypes from seed
+  "port-city": "⚓", "trade-city": "🏪", "port": "⚓", "pirate-haven": "🏴‍☠️",
+  "religious-city": "⛪", "mining-village": "⛏", "burned-village": "🔥",
+  "bridge-town": "🌉", "lumber-village": "🪓", hermitage: "🏡", "wayside-inn": "🏠",
+  "haunted-forest": "👻", "undead-forest": "💀", "swamp-forest": "🌿",
+  "elven-woods": "🌟", "mountain-range": "🏔", volcano: "🌋", "frozen-peaks": "❄️",
+  "ruined-monastery": "🏚", "vampire-crypt": "🧛", "cursed-mine": "⛏",
+  "haunted-fortress": "👹", "ancient-temple": "🌀", "misty-marsh": "🌫",
+  "wolf-steppe": "🐺", "salt-desert": "🏜", "sorrow-coast": "🌊",
+  "frozen-tundra": "❄️", garrison: "🛡", shrine: "🕯", library: "📚",
+  smithy: "⚒️", arena: "⚔️", monastery: "⛩", slum: "🌆", "port-city": "⚓",
+  wilderness: "🌄", river: "🌊", mountain: "⛰️", forest: "🌲", garden: "🌿",
+  tomb: "⚰️", market: "🛒", fortress: "🏰",
+};
+const _locIcon = (loc) =>
+  _LOC_ICONS[loc.location_subtype] || _LOC_ICONS[loc.biome] ||
+  (loc.location_type === "macro" ? "📍" : "·");
+
 async function _renderLocations(container) {
+  // ── Toolbar ──────────────────────────────────────────────────────────
   const toolbar = document.createElement("div");
   toolbar.className = "tab-toolbar";
   const addBtn = document.createElement("button");
   addBtn.className = "primary-btn";
   addBtn.textContent = "+ " + LABELS.addLocation;
   toolbar.appendChild(addBtn);
-
   const kreatorBtn = document.createElement("button");
   kreatorBtn.className = "subtab-btn";
   kreatorBtn.id = "loc-smart-entry-btn";
@@ -415,19 +440,41 @@ async function _renderLocations(container) {
   kreatorBtn.textContent = "🤖 Kreator AI";
   kreatorBtn.addEventListener("click", () => openSmartEntry("game_locations"));
   toolbar.appendChild(kreatorBtn);
-
   container.appendChild(toolbar);
 
-  // Pending review moved to dedicated "Oczekujące" tab
-  const tableHost = document.createElement("div");
-  container.appendChild(tableHost);
+  // ── Filters bar ──────────────────────────────────────────────────────
+  const filtersBar = document.createElement("div");
+  filtersBar.className = "loc-filters-bar";
+  filtersBar.innerHTML = `
+    <input class="loc-search" type="text" placeholder="Szukaj lokacji…" />
+    <select class="loc-filter" data-filter="biome">
+      <option value="">Wszystkie biomy</option>
+      ${LOC_BIOMES.filter(b => b.value).map(b => `<option value="${b.value}">${b.label}</option>`).join("")}
+    </select>
+    <select class="loc-filter" data-filter="created_by">
+      <option value="">Wszystkie źródła</option>
+      ${Object.entries(LOC_CREATED_BY).map(([v, m]) => `<option value="${v}">${m.label}</option>`).join("")}
+    </select>
+    <select class="loc-filter" data-filter="review_status">
+      <option value="">Wszystkie statusy</option>
+      ${Object.entries(LOC_REVIEW_STATUS).map(([v, m]) => `<option value="${v}">${m.label}</option>`).join("")}
+    </select>
+    <button class="secondary-btn loc-expand-all" title="Rozwiń wszystkie makro-lokacje">+ Rozwiń</button>
+    <button class="secondary-btn loc-collapse-all" title="Zwiń wszystkie makro-lokacje">− Zwiń</button>
+  `;
+  container.appendChild(filtersBar);
+
+  // ── Tree host ─────────────────────────────────────────────────────────
+  const treeHost = document.createElement("div");
+  treeHost.className = "loc-tree";
+  container.appendChild(treeHost);
 
   let locations = [];
+  const expandedSet = new Set();
+  const filterState = { search: "", biome: "", created_by: "", review_status: "" };
 
-  // Auto-refresh table after Smart Entry save
-  const _onSmartSave = (e) => {
-    if (e?.detail?.table === "game_locations") load();
-  };
+  // Cleanup listeners when container leaves DOM
+  const _onSmartSave = (e) => { if (e?.detail?.table === "game_locations") load(); };
   window.addEventListener("smart-entry-saved", _onSmartSave);
   const _obs = new MutationObserver(() => {
     if (!document.contains(container)) {
@@ -437,212 +484,319 @@ async function _renderLocations(container) {
   });
   _obs.observe(document.body, { childList: true, subtree: true });
 
-  const load = async () => {
-    renderTable(tableHost, null, null, {});
-    try {
-      locations = await adminFetch("/api/locations/admin/locations?active_only=1");
-    } catch (e) {
-      showToast("Błąd ładowania lokacji: " + (e.message || "?"), "error");
-      return;
+  // ── Helpers ───────────────────────────────────────────────────────────
+  const _byLabel = (a, b) => String(a.label || "").localeCompare(String(b.label || ""), "pl");
+  const _esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+  const _matchesFilter = (loc) => {
+    const s = filterState.search.toLowerCase();
+    if (s && !loc.label?.toLowerCase().includes(s) && !loc.key?.toLowerCase().includes(s)) return false;
+    if (filterState.biome && loc.biome !== filterState.biome) return false;
+    if (filterState.created_by && loc.created_by !== filterState.created_by) return false;
+    if (filterState.review_status && loc.review_status !== filterState.review_status) return false;
+    return true;
+  };
+
+  const _tierBadge = (loc) => {
+    if (!loc.tier) return "";
+    const cls = ["","admin-badge-green","admin-badge-gold","admin-badge-orange","admin-badge-red","admin-badge-red"][Math.min(loc.tier,5)] || "admin-badge-muted";
+    return `<span class="admin-badge ${cls} loc-badge">T${loc.tier}</span>`;
+  };
+  const _biomeBadge = (loc) => {
+    if (!loc.biome) return "";
+    const m = LOC_BIOMES.find(b => b.value === loc.biome);
+    return `<span class="admin-badge admin-badge-muted loc-badge">${m ? m.label : loc.biome}</span>`;
+  };
+  const _sourceBadge = (loc) => {
+    const info = LOC_CREATED_BY[loc.created_by] || LOC_CREATED_BY.admin_manual;
+    return `<span class="admin-badge ${info.class} loc-badge">${info.label}</span>`;
+  };
+  const _safeBadge = (loc) =>
+    loc.safe_for_rest ? `<span class="admin-badge admin-badge-green loc-badge" title="Bezpieczny odpoczynek">🛏</span>` : "";
+
+  const _attachRowActions = (actionsEl, loc) => {
+    const editBtn = document.createElement("button");
+    editBtn.className = "secondary-btn loc-action-btn";
+    editBtn.textContent = "Edytuj";
+    editBtn.addEventListener("click", () => {
+      const orig = locations.find(l => l.key === loc.key) || loc;
+      _openLocationModal(orig, locations, load);
+    });
+    actionsEl.appendChild(editBtn);
+
+    if ((loc.review_status || "permanent") === "permanent") {
+      const revertBtn = document.createElement("button");
+      revertBtn.className = "secondary-btn loc-action-btn";
+      revertBtn.textContent = "↩ Review";
+      revertBtn.title = "Cofnij do oczekujących";
+      revertBtn.addEventListener("click", async () => {
+        try {
+          await adminFetch(`/api/locations/admin/locations/${loc.key}`, {
+            method: "PATCH",
+            body: JSON.stringify({ review_status: "pending_review", approved: 0 }),
+          });
+          showToast("Cofnięto do review.", "success");
+          await load();
+        } catch (e) {
+          showToast("Błąd: " + (e.message || "?"), "error");
+        }
+      });
+      actionsEl.appendChild(revertBtn);
     }
 
-    // Build lookup map for parent labels (by id)
-    const locById = new Map((locations).map(l => [l.id, l]));
-    const decorated = locations.map(loc => ({
-      ...loc,
-      _parent_label: loc.parent_id
-        ? (locById.get(loc.parent_id)?.label ?? `#${loc.parent_id}`)
-        : "—",
-      _enemy_count: Array.isArray(loc.enemy_keys) ? loc.enemy_keys.length : 0,
-      _rules_preview: (loc.rules && typeof loc.rules === "object" && Object.keys(loc.rules).length)
-        ? Object.keys(loc.rules).join(", ")
-        : "",
-    }));
+    const delBtn = document.createElement("button");
+    delBtn.className = "secondary-btn loc-action-btn loc-action-btn--danger";
+    delBtn.textContent = "Usuń";
+    delBtn.addEventListener("click", async () => {
+      if (!confirm(`Usunąć lokację "${loc.label}"?`)) return;
+      try {
+        await adminFetch(`/api/locations/${loc.key}`, { method: "DELETE" });
+        showToast("Usunięto.", "success");
+        await load();
+      } catch (e) {
+        if (e?.status === 404) { showToast("Już usunięte.", "info"); await load(); return; }
+        if (e?.status === 422) {
+          const msg = e?.body?.detail || "Ma aktywne podlokalizacje.";
+          if (confirm(`${msg}\n\nCzy usunąć lokację razem z wszystkimi podlokalizacjami?`)) {
+            try {
+              await adminFetch(`/api/locations/${loc.key}?force=true`, { method: "DELETE" });
+              showToast("Usunięto (z podlokalizacjami).", "success");
+              await load();
+            } catch (e2) {
+              showToast("Błąd: " + (e2.message || "?"), "error");
+            }
+          }
+          return;
+        }
+        showToast("Błąd: " + (e.message || "?"), "error");
+      }
+    });
+    actionsEl.appendChild(delBtn);
+  };
 
-    // Grouped sort: every macro immediately followed by its sub-locations.
-    // Orphan subs (parent_id missing / unresolved) bucketed at the bottom.
-    const _byLabel = (a, b) => String(a.label || "").localeCompare(String(b.label || ""), "pl");
-    const macros  = decorated.filter(l => l.location_type === "macro").sort(_byLabel);
+  // ── Hover tooltip (singleton per _renderLocations call) ──────────────
+  const tip = document.createElement("div");
+  tip.className = "loc-tooltip";
+  tip.hidden = true;
+  document.body.appendChild(tip);
+  let _tipTimer = null;
+
+  const _showTip = (loc, anchorEl) => {
+    const biomeLabel  = LOC_BIOMES.find(b => b.value === loc.biome)?.label || loc.biome || "—";
+    const subtypeLabel = LOC_SUBTYPES.find(s => s.value === loc.location_subtype)?.label || loc.location_subtype || "—";
+    const sourceInfo  = LOC_CREATED_BY[loc.created_by] || LOC_CREATED_BY.admin_manual;
+    const enemyCount  = Array.isArray(loc.enemy_keys) ? loc.enemy_keys.length : 0;
+    const desc = loc.description ? _esc(loc.description) : "<em style='color:var(--text-muted)'>Brak opisu.</em>";
+
+    tip.innerHTML = `
+      <div class="loc-tip-header">
+        <span class="loc-tip-icon">${_locIcon(loc)}</span>
+        <span class="loc-tip-name">${_esc(loc.label || loc.key)}</span>
+        ${loc.canonical ? `<span class="loc-tip-canon" title="Kanoniczne">⭐</span>` : ""}
+      </div>
+      <div class="loc-tip-key">${_esc(loc.key)}</div>
+      <div class="loc-tip-divider"></div>
+      <div class="loc-tip-desc">${desc}</div>
+      <div class="loc-tip-divider"></div>
+      <div class="loc-tip-meta">
+        <span class="loc-tip-meta-item"><b>Biom</b> ${biomeLabel}</span>
+        <span class="loc-tip-meta-item"><b>Tier</b> ${loc.tier ?? "—"}</span>
+        <span class="loc-tip-meta-item"><b>Podtyp</b> ${subtypeLabel}</span>
+        <span class="loc-tip-meta-item"><b>Odpoczynek</b> ${loc.safe_for_rest ? "✓" : "✗"}</span>
+        <span class="loc-tip-meta-item"><b>Wrogowie</b> ${enemyCount}</span>
+        <span class="loc-tip-meta-item"><b>Wizyt</b> ${loc.usage_count ?? 0}</span>
+        <span class="loc-tip-meta-item"><b>Źródło</b> ${sourceInfo.label}</span>
+      </div>
+    `;
+
+    tip.hidden = false;
+
+    // Position: below the row, flip up if near bottom of viewport
+    const rect = anchorEl.getBoundingClientRect();
+    const tipH = 200; // estimated, corrected below after paint
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow > tipH + 8
+      ? rect.bottom + 6
+      : rect.top - tipH - 6;
+    const left = Math.min(rect.left, window.innerWidth - 340);
+    tip.style.top  = `${top + window.scrollY}px`;
+    tip.style.left = `${Math.max(8, left)}px`;
+
+    // Re-adjust vertically after real paint
+    requestAnimationFrame(() => {
+      const realH = tip.offsetHeight;
+      const adjustedTop = spaceBelow > realH + 8
+        ? rect.bottom + 6
+        : rect.top - realH - 6;
+      tip.style.top = `${adjustedTop + window.scrollY}px`;
+    });
+  };
+
+  const _hideTip = () => {
+    clearTimeout(_tipTimer);
+    tip.hidden = true;
+  };
+
+  const _attachHover = (row, loc) => {
+    row.addEventListener("mouseenter", () => {
+      clearTimeout(_tipTimer);
+      _tipTimer = setTimeout(() => _showTip(loc, row), 1500);
+    });
+    row.addEventListener("mouseleave", _hideTip);
+    // Also hide immediately if user starts clicking
+    row.addEventListener("mousedown", _hideTip);
+  };
+
+  // Cleanup tooltip when container leaves DOM
+  const _tipObs = new MutationObserver(() => {
+    if (!document.contains(container)) {
+      _hideTip();
+      tip.remove();
+      _tipObs.disconnect();
+    }
+  });
+  _tipObs.observe(document.body, { childList: true, subtree: true });
+
+  // ── Row builders ──────────────────────────────────────────────────────
+  const _makeMacroRow = (loc, subCount, isExpanded, onToggle) => {
+    const row = document.createElement("div");
+    row.className = `loc-row loc-row--macro${isExpanded ? " loc-row--expanded" : ""}`;
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.className = "loc-toggle";
+    toggleBtn.title = isExpanded ? "Zwiń pod-lokacje" : "Rozwiń pod-lokacje";
+    toggleBtn.textContent = isExpanded ? "−" : "+";
+    toggleBtn.addEventListener("click", (e) => { e.stopPropagation(); onToggle(); });
+    row.appendChild(toggleBtn);
+
+    row.insertAdjacentHTML("beforeend", `
+      <span class="loc-icon">${_locIcon(loc)}</span>
+      <span class="loc-label">${_esc(loc.label || loc.key)}</span>
+      <span class="loc-key">${_esc(loc.key)}</span>
+      <span class="loc-sub-count">${subCount} pod-lok.</span>
+      ${_biomeBadge(loc)}${_tierBadge(loc)}${_safeBadge(loc)}${_sourceBadge(loc)}
+    `);
+
+    const actionsEl = document.createElement("span");
+    actionsEl.className = "loc-actions";
+    _attachRowActions(actionsEl, loc);
+    row.appendChild(actionsEl);
+    _attachHover(row, loc);
+    return row;
+  };
+
+  const _makeSubRow = (loc, orphan = false) => {
+    const row = document.createElement("div");
+    row.className = `loc-row loc-row--sub${orphan ? " loc-row--orphan" : ""}`;
+    row.insertAdjacentHTML("beforeend", `
+      <span class="loc-sub-indent"><span class="loc-sub-glyph">└</span></span>
+      <span class="loc-icon">${_locIcon(loc)}</span>
+      <span class="loc-label">${_esc(loc.label || loc.key)}</span>
+      <span class="loc-key">${_esc(loc.key)}</span>
+      ${_biomeBadge(loc)}${_tierBadge(loc)}${_safeBadge(loc)}${_sourceBadge(loc)}
+    `);
+    const actionsEl = document.createElement("span");
+    actionsEl.className = "loc-actions";
+    _attachRowActions(actionsEl, loc);
+    row.appendChild(actionsEl);
+    _attachHover(row, loc);
+    return row;
+  };
+
+  // ── Render tree ───────────────────────────────────────────────────────
+  const render = () => {
+    treeHost.innerHTML = "";
+
+    const locById = new Map(locations.map(l => [l.id, l]));
+    const macros = locations.filter(l => l.location_type === "macro").sort(_byLabel);
     const subsByParent = new Map();
     const orphanSubs = [];
-    for (const l of decorated) {
+
+    for (const l of locations) {
       if (l.location_type === "macro") continue;
-      const parent = (l.parent_id != null) ? locById.get(l.parent_id) : null;
-      if (parent && parent.location_type === "macro") {
+      const parent = l.parent_id != null ? locById.get(l.parent_id) : null;
+      if (parent?.location_type === "macro") {
         if (!subsByParent.has(parent.id)) subsByParent.set(parent.id, []);
         subsByParent.get(parent.id).push(l);
       } else {
         orphanSubs.push(l);
       }
     }
-    const rows = [];
-    for (const m of macros) {
-      rows.push(m);
-      const subs = (subsByParent.get(m.id) || []).sort(_byLabel);
-      rows.push(...subs);
+
+    const hasFilter = Object.values(filterState).some(Boolean);
+    let count = 0;
+
+    for (const macro of macros) {
+      const subs = (subsByParent.get(macro.id) || []).sort(_byLabel);
+      const macroMatch = _matchesFilter(macro);
+      const matchingSubs = subs.filter(_matchesFilter);
+
+      if (hasFilter && !macroMatch && matchingSubs.length === 0) continue;
+
+      // Auto-expand when filter has matching subs
+      const isExpanded = expandedSet.has(macro.id) || (hasFilter && matchingSubs.length > 0);
+
+      treeHost.appendChild(
+        _makeMacroRow(macro, subs.length, isExpanded, () => {
+          if (expandedSet.has(macro.id)) expandedSet.delete(macro.id);
+          else expandedSet.add(macro.id);
+          render();
+        })
+      );
+      count++;
+
+      if (isExpanded) {
+        const visibleSubs = hasFilter ? matchingSubs : subs;
+        for (const sub of visibleSubs) {
+          treeHost.appendChild(_makeSubRow(sub));
+          count++;
+        }
+      }
     }
-    rows.push(...orphanSubs.sort(_byLabel));
 
-    const columns = [
-      { key: "key",            label: LABELS.key,         editable: false },
-      { key: "label",          label: LABELS.label,       editable: true,
-        formatDisplay: (r) => r.location_type === "sub" ? `↳ ${r.label ?? ""}` : (r.label ?? "") },
-      {
-        key: "location_type",  label: LABELS.type,
-        type: "badge", editType: "select",
-        editOptions: LOC_TYPES.map((t) => t.value),
-        badgeClass: (row) => row.location_type === "macro" ? "admin-badge-gold" : "admin-badge-muted",
-        filterOptions: LOC_TYPES,
-      },
-      { key: "_parent_label",  label: "Nadrzędna",        editable: false },
-      // Stage 2B-Schema: provenance + reuse columns
-      {
-        key: "created_by",     label: "Źródło",
-        type: "badge",
-        editable: false,
-        badgeClass: (row) => (LOC_CREATED_BY[row.created_by] || LOC_CREATED_BY.admin_manual).class,
-        formatDisplay: (r) => (LOC_CREATED_BY[r.created_by] || LOC_CREATED_BY.admin_manual).label,
-        filterOptions: Object.entries(LOC_CREATED_BY).map(([v, m]) => ({ value: v, label: m.label })),
-      },
-      {
-        key: "location_subtype", label: "Podtyp",
-        editType: "select",
-        editOptions: LOC_SUBTYPES.map((s) => s.value),
-        editable: true,
-        formatDisplay: (r) => {
-          const m = LOC_SUBTYPES.find((s) => s.value === (r.location_subtype || ""));
-          return m ? m.label : (r.location_subtype || "—");
-        },
-        filterOptions: LOC_SUBTYPES,
-      },
-      {
-        key: "biome",          label: "Biom",
-        editType: "select",
-        editOptions: LOC_BIOMES.map((b) => b.value),
-        editable: true,
-        formatDisplay: (r) => {
-          const m = LOC_BIOMES.find((b) => b.value === (r.biome || ""));
-          return m ? m.label : (r.biome || "—");
-        },
-        filterOptions: LOC_BIOMES,
-      },
-      { key: "tier",           label: "Tier",  type: "number", editable: true },
-      {
-        key: "review_status",  label: "Status",
-        type: "badge", editable: false,
-        badgeClass: (row) => (LOC_REVIEW_STATUS[row.review_status] || LOC_REVIEW_STATUS.permanent).class,
-        formatDisplay: (r) => (LOC_REVIEW_STATUS[r.review_status] || LOC_REVIEW_STATUS.permanent).label,
-        filterOptions: Object.entries(LOC_REVIEW_STATUS).map(([v, m]) => ({ value: v, label: m.label })),
-      },
-      {
-        key: "created_by", label: "Autor",
-        type: "badge", editable: false,
-        // created_by values in DB: 'admin_manual' (admin panel / seed scripts),
-        // 'gm_runtime' (LLM/GM during a player session). 'llm_seed' reserved
-        // for future bulk-by-LLM tools.
-        formatDisplay: (r) => {
-          const cb = String(r.created_by || "admin_manual").toLowerCase();
-          if (cb === "admin_manual") return "🛠 Admin";
-          if (cb === "gm_runtime")   return "🎲 GM (sesja LLM)";
-          if (cb === "llm_seed")     return "🤖 LLM (seed)";
-          return cb;
-        },
-        badgeClass: (r) => {
-          const cb = String(r.created_by || "admin_manual").toLowerCase();
-          if (cb === "admin_manual") return "admin-badge-blue";
-          if (cb === "gm_runtime")   return "admin-badge-gold";
-          if (cb === "llm_seed")     return "admin-badge-muted";
-          return "admin-badge-muted";
-        },
-        filterOptions: [
-          { value: "admin_manual", label: "🛠 Admin (ręcznie)" },
-          { value: "gm_runtime",   label: "🎲 GM (sesja LLM)" },
-          { value: "llm_seed",     label: "🤖 LLM (seed)" },
-        ],
-      },
-      { key: "canonical",      label: "⭐ Kanon", type: "boolean", editable: true },
-      { key: "usage_count",    label: "Wizyt", type: "number", editable: false },
-      { key: "_enemy_count",   label: "Wrogowie", type: "number", editable: false },
-      { key: "_rules_preview", label: "Reguły", editable: false, popup: true,
-        formatDisplay: (r) => r._rules_preview },
-      { key: "safe_for_rest",  label: "🛏 Odpoczynek", type: "boolean", editable: true },
-      { key: "description",    label: LABELS.description, editable: true, popup: true },
-      { key: "is_active",      label: LABELS.isActive,    type: "boolean", editable: true },
-      { key: "locked_at",      label: LABELS.locked,      type: "locked",  editable: false },
-    ];
+    for (const sub of orphanSubs.sort(_byLabel)) {
+      if (hasFilter && !_matchesFilter(sub)) continue;
+      treeHost.appendChild(_makeSubRow(sub, true));
+      count++;
+    }
 
-    renderTable(tableHost, columns, rows, {
-      tableId:           "locations",
-      selectable:        true,
-      showTextSearch:    true,
-      searchPlaceholder: "Szukaj lokacji…",
-      async onEdit(row, colKey, newVal, { force } = {}) {
-        try {
-          await adminFetch(`/api/locations/admin/locations/${row.key}`, {
-            method: "PATCH",
-            body:   JSON.stringify({ [colKey]: newVal, ...(force ? { force: true } : {}) }),
-          });
-          showToast("Zapisano.", "success");
-          await load();
-        } catch (e) {
-          showToast("Błąd zapisu: " + (e.message || "?"), "error");
-          throw e;
-        }
-      },
-      async onDelete(row, { force, bulk } = {}) {
-        try {
-          await adminFetch(`/api/locations/${row.key}${force ? "?force=true" : ""}`, { method: "DELETE" });
-          if (!bulk) {
-            showToast("Usunięto.", "success");
-            await load();
-          }
-        } catch (e) {
-          // 404 = already gone server-side. Treat as success (bulk especially —
-          // local cache may be stale after another admin or earlier bulk op).
-          if (e?.status === 404) {
-            if (!bulk) {
-              showToast("Już usunięte.", "info");
-              await load();
-            }
-            return;
-          }
-          if (!bulk) showToast("Błąd usuwania: " + (e.message || "?"), "error");
-          throw e;
-        }
-      },
-      extraActions: (row) => {
-        const actions = [{
-          label: "Edytuj",
-          class: "secondary-btn",
-          onClick: () => {
-            // Pass the original location object (with rules, enemy_keys etc.)
-            const orig = locations.find(l => l.key === row.key) || row;
-            _openLocationModal(orig, locations, load);
-          },
-        }];
-        const status = row.review_status || "permanent";
-        if (status === "permanent") {
-          actions.push({
-            label: "↩ Cofnij do review",
-            class: "secondary-btn",
-            onClick: async () => {
-              try {
-                await adminFetch(`/api/locations/admin/locations/${row.key}`, {
-                  method: "PATCH",
-                  body:   JSON.stringify({ review_status: "pending_review", approved: 0 }),
-                });
-                showToast("Cofnięto do review.", "success");
-                await load();
-              } catch (e) {
-                showToast("Błąd: " + (e.message || "?"), "error");
-              }
-            },
-          });
-        }
-        return actions;
-      },
-    });
+    if (count === 0) {
+      treeHost.innerHTML = `<div class="loc-empty">Brak lokacji spełniających kryteria.</div>`;
+    }
   };
+
+  // ── Load data ─────────────────────────────────────────────────────────
+  const load = async () => {
+    treeHost.innerHTML = `<div class="loc-loading">Ładowanie lokacji…</div>`;
+    try {
+      locations = await adminFetch("/api/locations/admin/locations?active_only=1");
+    } catch (e) {
+      showToast("Błąd ładowania lokacji: " + (e.message || "?"), "error");
+      treeHost.innerHTML = `<div class="loc-empty">Błąd ładowania danych.</div>`;
+      return;
+    }
+    render();
+  };
+
+  // ── Filter events ─────────────────────────────────────────────────────
+  filtersBar.querySelector(".loc-search").addEventListener("input", function() {
+    filterState.search = this.value;
+    render();
+  });
+  filtersBar.querySelectorAll(".loc-filter").forEach(sel => {
+    sel.addEventListener("change", function() {
+      filterState[this.dataset.filter] = this.value;
+      render();
+    });
+  });
+  filtersBar.querySelector(".loc-expand-all").addEventListener("click", () => {
+    locations.filter(l => l.location_type === "macro").forEach(m => expandedSet.add(m.id));
+    render();
+  });
+  filtersBar.querySelector(".loc-collapse-all").addEventListener("click", () => {
+    expandedSet.clear();
+    render();
+  });
 
   addBtn.addEventListener("click", () => _openLocationModal(null, locations, load));
   _aiTrigger = () => _openAiGenerateModal({

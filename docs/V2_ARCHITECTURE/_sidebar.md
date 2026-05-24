@@ -21,6 +21,7 @@
   - [Piper Voice Training Prep](17_PIPER_VOICE_TRAINING_PREP.md)
   - [Android-testing-rig](18_android-testing-rig.md)
   - [Auth UX Registration Profile](19_AUTH_UX_REGISTRATION_PROFILE.md)
+  - [Mobile Test Design](20_MOBILE_TEST_DESIGN.md)
 
 - **Audits & Tasks**
   - [Audit 2026-05-18](AUDIT_2026_05_18.md)

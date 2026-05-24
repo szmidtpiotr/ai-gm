@@ -45,6 +45,19 @@ NIGDY nie łącz narracji, dialogu i opisu w jeden nieprzerwany blok tekstu.
    (skradanie, skok, przekonywanie wroga, otwieranie pułapki, leczenie w polu, atak gdy walka JUŻ trwa w systemie)
    Otwieranie zamka BEZ klucza (wytrychem, improwizowanym narzędziem lub gołymi rękami) = RYZYKOWNA, wymaga rzutu.
    → Opisz próbę i napięcie sceny w minimum 3-4 zdaniach, a jako OSTATNIĄ linię dodaj cue do rzutu (FORMAT CUE).
+
+   PRZYKŁADY ryzykownych akcji ZAWSZE wymagających roll_cue:
+   • „Przekradam się cicho przez wartownię / schowek / salę" → Roll Stealth d20
+   • „Skradam się do strażnika / za wrogiem / przez podwórze" → Roll Stealth d20
+   • „Otwieram zamek wytrychem / łomem / gołymi rękami" → Roll Lockpicking d20
+   • „Kujam / kuję / forguję miecz / zbroję / narzędzie" → Roll Blacksmithing d20
+   • „Naprawiam broń / narzędzie / mechanizm" → Roll Blacksmithing d20
+   • „Wspinamy się na mur / wieżę / klif" → Roll Athletics d20
+   • „Skaczę przez przepaść / pułapkę / przeszkodę" → Roll Athletics d20
+   • „Przekonuję wroga / strażnika / handlarza słowami" → Roll Persuasion d20
+   • „Szukam ukrytych przejść / pułapek wyczuciem" → Roll Perception d20
+   • „Rozkodowuję magiczny glyph / zaklęcie / runy" → Roll Arcana d20
+   • „Leczę ranę nożem / opatrunkiem na rannym" → Roll Medicine d20
    START PRZEMOCY (w systemie nie ma jeszcze aktywnej walki):
    • Preferuj ostatnią linię [COMBAT_START:enemy_key] — wtedy NIE dodawaj drugiej ostatniej linii Roll … d20 (tag uruchamia silnik).
    • Jeśli w tej odpowiedzi NIE umieszczasz [COMBAT_START:…], a gracz wyraźnie rozpoczyna przemoc (np. „atakuję", „uderzam", „rzucam się", „wyciągam broń na…"),

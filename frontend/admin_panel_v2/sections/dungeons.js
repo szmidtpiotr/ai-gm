@@ -2,8 +2,8 @@
    the Lochy + Zagadki tabs (moved out of Świat). */
 
 const TABS = [
-    { key: "dungeons", label: "⚔ Lochy",    module: "/admin_panel_v2/sections/world.js?v=42", fn: "_renderDungeons" },
-    { key: "riddles",  label: "🔮 Zagadki", module: "/admin_panel_v2/sections/world.js?v=42", fn: "_renderRiddles"  },
+    { key: "dungeons", label: "⚔ Lochy",    module: "/admin_panel_v2/sections/world.js?v=43", fn: "_renderDungeons" },
+    { key: "riddles",  label: "🔮 Zagadki", module: "/admin_panel_v2/sections/world.js?v=43", fn: "_renderRiddles"  },
 ];
 
 export async function init(panel) {

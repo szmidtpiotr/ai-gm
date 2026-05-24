@@ -419,17 +419,20 @@ def _find_canonical_location_for_name(
     Find a canonical game_location matching `name` by:
     1. Label similarity ≥ 0.4
     2. Subtype keyword match (Polish / English terms)
-    Returns the best matching row or None.
+    3. Hex-type inference from name
+    4. Random canonical fallback (always returns something when canonicals exist)
+    Returns the best matching row or None only when no canonicals exist.
     """
-    if not name or not name.strip():
-        return None
-
     rows = conn.execute(
         "SELECT id, key, label, location_subtype, biome "
         "FROM game_locations WHERE canonical = 1 AND is_active = 1"
     ).fetchall()
     if not rows:
         return None
+
+    # When no name is given, skip name-based passes and go straight to random fallback.
+    if not name or not name.strip():
+        return random.choice(rows)
 
     # Pass 1 — label similarity
     best_score, best_row = 0.0, None
@@ -449,7 +452,27 @@ def _find_canonical_location_for_name(
                 if (row["location_subtype"] or "").lower() == subtype:
                     return row
 
-    return None
+    # Pass 3 — hex-type inference: guess terrain from name, find matching canonical location
+    _HEXTYPE_TO_SUBTYPES: dict[str, list[str]] = {
+        "town":      ["city", "village", "tavern", "camp"],
+        "castle":    ["castle"],
+        "forest":    ["forest"],
+        "cave":      ["cave"],
+        "dungeon":   ["dungeon"],
+        "ruins":     ["ruins"],
+        "swamp":     ["camp"],
+        "mountains": ["cave", "camp"],
+        "plains":    ["village", "camp", "city"],
+        "road":      ["village", "tavern", "camp"],
+    }
+    hex_type = _infer_hex_type_from_name(name)
+    for subtype in _HEXTYPE_TO_SUBTYPES.get(hex_type, []):
+        for row in rows:
+            if (row["location_subtype"] or "").lower() == subtype:
+                return row
+
+    # Pass 4 — absolute fallback: any canonical location
+    return random.choice(rows) if rows else None
 
 
 def _find_nearby_empty_hex(
