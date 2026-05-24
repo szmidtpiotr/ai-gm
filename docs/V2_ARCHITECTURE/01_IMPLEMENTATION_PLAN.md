@@ -670,9 +670,9 @@ Distinguish narrative types inside GM chat bubbles:
 
 ---
 
-### T47a — Turn Cancel: Client-Side Abort ❌
+### T47a — Turn Cancel: Client-Side Abort ✅
 
-**Status:** Planned  
+**Status:** Done — issues #92, #93 — commit fcb8fab + ba261b6 (2026-05-24)  
 **Priority:** Medium — pure UX polish, no backend dependency
 
 **Problem:** Once the player hits Send, they are locked out until the LLM finishes — even if they immediately realize they want to rephrase or add context. On mobile there is no ESC key to fall back on.
