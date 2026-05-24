@@ -272,6 +272,7 @@ def grant_character_xp(
     amount: int,
     *,
     reason: str,
+    source: str = "combat.kill",
     meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if amount <= 0:
@@ -289,13 +290,14 @@ def grant_character_xp(
         }
 
     row = conn.execute(
-        "SELECT sheet_json FROM characters WHERE id = ?",
+        "SELECT sheet_json, campaign_id FROM characters WHERE id = ?",
         (character_id,),
     ).fetchone()
     if not row:
         raise ValueError("character not found")
 
     sheet = parse_character_sheet(row["sheet_json"])
+    campaign_id = row["campaign_id"]
     cur = int(sheet.get("xp_available") or 0)
     life = int(sheet.get("xp_lifetime_earned") or 0)
     amt = int(amount)
@@ -312,6 +314,17 @@ def grant_character_xp(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",
         (json.dumps(sheet, ensure_ascii=False), character_id),
     )
+    # Audit log — same table as grant_pending_xp so Historia PD shows all XP
+    try:
+        conn.execute(
+            "INSERT INTO character_xp_grants "
+            "(character_id, campaign_id, amount, reason, source, granted_by_user_id) "
+            "VALUES (?,?,?,?,?,0)",
+            (character_id, campaign_id, amt, reason, source),
+        )
+    except Exception:
+        pass  # audit row is best-effort
+
     out = {
         "granted": amt,
         "xp_available": cur,

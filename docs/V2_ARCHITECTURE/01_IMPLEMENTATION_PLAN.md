@@ -11,10 +11,10 @@
 ## Current state snapshot (2026-05-24)
 
 **Fully done ✅ (per spec, no gaps):**
-T01 T02 T03 T04 · T05 T06 T07 · T10 · T11 T13 · T14 T15 T17 T18 T19 · T21 T22 T23 T26 (spells) T41 · T26N T27 T29 · T30 T31 T40 · T33 (UI) T34 T43 · T46 · T47a · T48
+T01 T02 T03 T04 · T05 T06 T07 · T10 · T11 T13 · T14 T15 T17 T18 T19 · T21 T22 T23 T26 (spells) T41 · T26N T27 T29 · T30 T31 T40 · T33 (UI) T34 T43 · T46 · T47a · T48 · **T25V2 T26X**
 
 **Partially done ⚠️ (functional but with spec gaps):**
-T08 T09 (review queue details) · T04B T12 (frontend popup) · T16 (condition rename pending) · T20 (3-slot → 8-slot pending) · T24 (no frontend label) · T25V2 T26X (no player UI for spending/log) · T28 (deceased context) · T32 T33SA · T35 (see #24) · T44 (player UI missing) · T36 T37 T38 T39 · T42
+T08 T09 (review queue details) · T04B T12 (frontend popup) · T16 (condition rename pending) · T20 (3-slot → 8-slot pending) · T24 (no frontend label) · T28 (deceased context) · T32 T33SA · T35 (see #24) · T44 (player UI missing) · T36 T37 T38 T39 · T42
 
 **Not started ❌:**
 T45 Hero Journal
@@ -117,9 +117,9 @@ Implementation order locked in `DECISIONS_2026_05_18.md` § "Implementation orde
 | 22 | TASK_22_LOOT_SYSTEM | ✅ | Location-tied, expiry rules, partial claim |
 | 23 | TASK_23_HEALING_SYSTEM | ⚠️ | Items + Mend Wounds + counters ✅. **Endpointy `POST /rest?type=long|short` ❌** — wymóg dla XP loop per [D14]. Implementacja w Stage 2C (X3, X4). |
 | 24 | TASK_24_WOUND_LABELS | ⚠️ | Backend `get_wound_label()` + narrator injection done. **Frontend wound-label text below player HP bar not rendered**. |
-| 25V2 | TASK_25_XP_PROGRESSION_V2 | ⚠️ | Earning side ✅ (`grant_character_xp` fires on **combat.kill_*** only — 5/6 categories dead seed). Spending side ❌ (no UI). No `/rest` endpoint, no clock advance, no XP→spendable flip. **Stage 2 (4 sub-stages: 2A clock → 2B safe-rest → 2D 22 XP sources → 2C UI) per [D7+D13]. NEXT PRIORITY.** |
+| 25V2 | TASK_25_XP_PROGRESSION_V2 | ✅ | Earning ✅ (combat.kill + XS1-XS15 pending sources). Spending UI ✅ (inline double-confirm, in-place reload, affordable-first sort). Level-up hook ✅. pending_xp displayed. Historia PD ✅ (grant-log endpoint + Awansuj panel). Combat kills now logged to `character_xp_grants`. Issues #94–#96. |
 | 26 | TASK_26_SCHOLAR_SPELLS | ✅ | Spell list, Arcane Points, upgrade tiers, miscast scaling, rank-by-usage |
-| 26X | TASK_26_XP_CONFIG_AND_LOG | ⚠️ | 22 sources seeded ✅, admin endpoints ✅. **Only 1/22 fires in code** (`combat.kill_*`). Player "Historia PD" view ❌. Wiring planned in Stage 2D (XS1–XS15). |
+| 26X | TASK_26_XP_CONFIG_AND_LOG | ✅ | 22 sources seeded ✅. XS1-XS15 all wired (beat, quest, dungeon, campaign_end, location_visit, npc_first_talk, discovery, skill_check DC tiers, outnumbered_victory, death_save_survived, session_start, XP_GRANT tag). Combat kills now logged to `character_xp_grants`. Historia PD in Awansuj panel. |
 | 42 | TASK_42_CHARACTER_FIRST_FLOW | ✅ | Hero-first model complete — hero→campaign selection, cascade unlink on delete, session restore |
 | 41 | TASK_41_DUNGEON_RUNS | ✅ | Backend + full player UI: picker modal, room types, riddle bank, square tile map, death handling, F5 restore |
 
