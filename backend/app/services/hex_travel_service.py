@@ -17,6 +17,69 @@ logger = structlog.get_logger()
 
 DB_PATH = "/data/ai_gm.db"
 
+_TERRAIN_ATMO: dict[str, list[str]] = {
+    "plains":    ["Wiatr kołysze trawami. Horyzont wydaje się nieskończony.",
+                  "Rozległa równina ciągnie się po horyzont. Sucha trawa szeleści pod stopami.",
+                  "Otwarte pole, żadnej osłony. W oddali widać kępy drzew."],
+    "forest":    ["Gęste korony drzew przysłaniają niebo. W koronach słyszysz ptaki.",
+                  "Las jest wilgotny i cichy. Zapach próchnicy miesza się z żywicą.",
+                  "Drzewa rosną ciasno. Między pniami panuje zielony półmrok."],
+    "hills":     ["Pagórkowaty teren utrudnia widoczność. Wiatr jest silniejszy na wzniesieniach.",
+                  "Wzniesienia falują jedno po drugim. Z grzbietu roztacza się dobry widok.",
+                  "Kamieniste wzgórza pokryte wrzosem. Ścieżka pnie się stromo."],
+    "mountains": ["Szczyty skał giną w chmurach. Powietrze jest rzadkie i chłodne.",
+                  "Strome zbocza, ostre krawędzie. Echo kroków odbija się od skał.",
+                  "Granit i śnieg. Wiatr tu jest zimny nawet w południe."],
+    "swamp":     ["Bagnisty grunt ugina się pod stopami. Powietrze jest gęste i duszne.",
+                  "Woda stoi między korzeniami. Żaby i owady tworzą nieustanny chór.",
+                  "Mgła snuje się nad trzęsawiskiem. Każdy krok to ryzyko."],
+    "river":     ["Rzeka płynie wartko przez kamieniste koryto. Woda jest zimna i czysta.",
+                  "Szeroki nurt przecina okolicę. Moczysz nogi — woda sięga kolan.",
+                  "Brzeg porastają wierzby. Słychać plusk i szum prądu."],
+    "ruins":     ["Między zaroślami sterczą resztki murów. Kamienie są spękane i omszałe.",
+                  "Ruiny jakiejś budowli. Dach dawno się zawalił, fundamenty jeszcze stoją.",
+                  "Ślady dawnej cywilizacji. Co tu stało — trudno zgadnąć."],
+    "cave":      ["Wejście do jaskini zieje zimnym powietrzem. W środku ciemność.",
+                  "Skały tworzą naturalną grotę. Kapanie wody odbija się echem.",
+                  "Jaskinia. Zapach wilgoci i kamienia. W głębi coś się porusza."],
+    "dungeon":   ["Stare, kute drzwi stoją otworem. Z podziemi ciągnie chłód.",
+                  "Mroczny kompleks pod ziemią. Pochodnie na ścianach dawno wygasły.",
+                  "Korytarze wyłożone ciosanymi blokami. Wybudowały je ludzkie ręce."],
+}
+
+
+def _auto_generate_hex(q: int, r: int, conn: sqlite3.Connection) -> dict:
+    """
+    Generate a new world_hex at (q, r) using spawn_weight-based terrain sampling.
+    Inserts into world_hexes with a random atmosphere string. Returns the new hex dict.
+    """
+    rows = conn.execute(
+        "SELECT hex_type, spawn_weight FROM hex_type_config "
+        "WHERE is_active = 1 AND spawn_weight > 0"
+    ).fetchall()
+    if rows:
+        types   = [r["hex_type"]    for r in rows]
+        weights = [int(r["spawn_weight"]) for r in rows]
+        terrain = random.choices(types, weights=weights, k=1)[0]
+    else:
+        terrain = "plains"
+
+    atmos = _TERRAIN_ATMO.get(terrain, ["Niezbadany teren."])
+    atmosphere = random.choice(atmos)
+
+    conn.execute(
+        "INSERT OR IGNORE INTO world_hexes "
+        "(q, r, hex_type, atmosphere, encounter_chance, is_active, created_by_gm) "
+        "VALUES (?, ?, ?, ?, ?, 1, 0)",
+        (q, r, terrain, atmosphere, 0.15),
+    )
+    conn.commit()
+    return {
+        "q": q, "r": r, "hex_type": terrain, "label": None,
+        "atmosphere": atmosphere, "encounter_chance": 0.15,
+        "encounter_pool": [], "teleport_edges": [],
+    }
+
 
 # ── Hex adjacency (flat-top) ──────────────────────────────────────────────────
 
@@ -192,13 +255,18 @@ def resolve_chain_travel(
         pass
 
     if to_hex not in hexes:
-        return {
-            "ok": False,
-            "error": "Nie ma tam nic — to nieznane terytorium.",
-            "path": [], "total_hours": 0,
-            "arrived_hex": {"q": from_hex[0], "r": from_hex[1]}, "encounter": None, "encounter_hex": None,
-            "hex_data": {}, "teleport_used": None, "item_blocked": None,
-        }
+        # Auto-generate the destination — world expands as players explore
+        _auto_generate_hex(to_hex[0], to_hex[1], conn)
+        hexes = _load_hex_graph(conn)
+        if to_hex not in hexes:
+            return {
+                "ok": False,
+                "error": "Nie można wygenerować tego terenu.",
+                "path": [], "total_hours": 0,
+                "arrived_hex": {"q": from_hex[0], "r": from_hex[1]},
+                "encounter": None, "encounter_hex": None,
+                "hex_data": {}, "teleport_used": None, "item_blocked": None,
+            }
 
     if from_hex == to_hex:
         dest_data = hexes.get(to_hex, {})

@@ -8191,8 +8191,14 @@ function _wmRender() {
       if (isCurrent && !isHead)
         html += `<text x="${sx}" y="${sy-rz*0.52}" text-anchor="middle"
           font-size="${Math.max(11, 14*_wmap.zoom)}" style="pointer-events:none">📍</text>`;
+    } else if (hex.status === 'unexplored') {
+      // Phantom hex — not in world_hexes yet, will be generated on travel
+      html += `<polygon class="wm-hex wm-hex--unexplored" data-q="${hex.q}" data-r="${hex.r}"
+        points="${_wmCorners(sx, sy, rz-1)}"
+        fill="transparent" stroke="rgba(180,160,100,0.18)" stroke-width="0.5" stroke-dasharray="2,4"
+        style="cursor:pointer"/>`;
     } else {
-      // Outline: unvisited adjacent hex
+      // Outline: unvisited but mapped adjacent hex
       const outlineStroke = isPassed ? 'rgba(240,192,64,0.4)' : '#2a2218';
       const outlineSw = isPassed ? 1.5 : 0.6;
       html += `<polygon class="wm-hex wm-hex--outline" data-q="${hex.q}" data-r="${hex.r}"
@@ -8543,19 +8549,20 @@ async function _wmExecuteTravel() {
 
 // ── Full-screen travel cinematic ──────────────────────────────────────────────
 
+// Keys match hex_type_config.hex_type in the DB exactly
 const _TERRAIN_THEMES = {
-  plains:   { g: 'linear-gradient(160deg,#3A2200 0%,#6B4400 35%,#9A6A18 65%,#5A3800 100%)', icon: '🌾' },
-  forest:   { g: 'linear-gradient(160deg,#050E05 0%,#0F250F 35%,#1E421E 65%,#102010 100%)', icon: '🌲' },
-  mountain: { g: 'linear-gradient(160deg,#0A0E16 0%,#14202E 35%,#1E3044 65%,#0E1A28 100%)', icon: '⛰️' },
-  swamp:    { g: 'linear-gradient(160deg,#060E06 0%,#0E2010 35%,#183A18 65%,#0A1A0C 100%)', icon: '🌿' },
-  ruins:    { g: 'linear-gradient(160deg,#160806 0%,#2E1008 35%,#4A2214 65%,#2A1008 100%)', icon: '🏚️' },
-  dungeon:  { g: 'linear-gradient(160deg,#050508 0%,#0C0C14 35%,#14141E 65%,#080812 100%)', icon: '🕯️' },
-  road:     { g: 'linear-gradient(160deg,#180E04 0%,#2E1E08 35%,#4A3214 65%,#2A1C08 100%)', icon: '🛤️' },
-  village:  { g: 'linear-gradient(160deg,#200A04 0%,#401808 35%,#6A3018 65%,#401808 100%)', icon: '🏘️' },
-  castle:   { g: 'linear-gradient(160deg,#060610 0%,#10101C 35%,#1A1A2C 65%,#0C0C18 100%)', icon: '🏰' },
-  cave:     { g: 'linear-gradient(160deg,#040404 0%,#0A0A0A 35%,#121210 65%,#060604 100%)', icon: '🪨' },
-  river:    { g: 'linear-gradient(160deg,#060E18 0%,#0E1E2C 35%,#1C3040 65%,#0A1C2E 100%)', icon: '🌊' },
-  lake:     { g: 'linear-gradient(160deg,#060E18 0%,#0E1E2C 35%,#1C3040 65%,#0A1C2E 100%)', icon: '🏞️' },
+  plains:    { g: 'linear-gradient(160deg,#3A2200 0%,#6B4400 35%,#9A6A18 65%,#5A3800 100%)', icon: '🌾' },
+  forest:    { g: 'linear-gradient(160deg,#050E05 0%,#0F250F 35%,#1E421E 65%,#102010 100%)', icon: '🌲' },
+  hills:     { g: 'linear-gradient(160deg,#2A1E08 0%,#4A3A18 35%,#6A5A2A 65%,#4A3A18 100%)', icon: '⛰️' },
+  mountains: { g: 'linear-gradient(160deg,#0A0E16 0%,#14202E 35%,#1E3044 65%,#0E1A28 100%)', icon: '🏔️' },
+  swamp:     { g: 'linear-gradient(160deg,#060E06 0%,#0E2010 35%,#183A18 65%,#0A1A0C 100%)', icon: '🌿' },
+  ruins:     { g: 'linear-gradient(160deg,#160806 0%,#2E1008 35%,#4A2214 65%,#2A1008 100%)', icon: '🏚️' },
+  dungeon:   { g: 'linear-gradient(160deg,#050508 0%,#0C0C14 35%,#14141E 65%,#080812 100%)', icon: '⚔️' },
+  road:      { g: 'linear-gradient(160deg,#180E04 0%,#2E1E08 35%,#4A3214 65%,#2A1C08 100%)', icon: '🛤️' },
+  town:      { g: 'linear-gradient(160deg,#200A04 0%,#401808 35%,#6A3018 65%,#401808 100%)', icon: '🏘️' },
+  castle:    { g: 'linear-gradient(160deg,#060610 0%,#10101C 35%,#1A1A2C 65%,#0C0C18 100%)', icon: '🏰' },
+  cave:      { g: 'linear-gradient(160deg,#040404 0%,#0A0A0A 35%,#121210 65%,#060604 100%)', icon: '🕳️' },
+  river:     { g: 'linear-gradient(160deg,#060E18 0%,#0E1E2C 35%,#1C3040 65%,#0A1C2E 100%)', icon: '🌊' },
 };
 const _TERRAIN_DEFAULT = { g: 'linear-gradient(160deg,#0A0810 0%,#16141E 50%,#201C2A 100%)', icon: '🗺️' };
 

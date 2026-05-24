@@ -2830,6 +2830,26 @@ def _ensure_j3_summary_interval(conn: sqlite3.Connection) -> None:
         logger.warning("j3_summary_interval_migration_failed", error=str(e))
 
 
+def _ensure_hex_spawn_weights(conn: sqlite3.Connection) -> None:
+    """Add spawn_weight to hex_type_config and set realistic defaults."""
+    try:
+        conn.execute("ALTER TABLE hex_type_config ADD COLUMN spawn_weight INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # already exists
+    weights = {
+        "plains": 30, "forest": 25, "hills": 15, "mountains": 10,
+        "swamp": 7, "ruins": 6, "river": 4, "cave": 3, "dungeon": 1,
+        "road": 0, "town": 0, "castle": 0,
+    }
+    for hex_type, w in weights.items():
+        conn.execute(
+            "UPDATE hex_type_config SET spawn_weight = ? WHERE hex_type = ? AND spawn_weight = 0",
+            (w, hex_type),
+        )
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -2903,6 +2923,7 @@ def run_admin_migrations() -> None:
         _ensure_auth_ux_schema(conn)
         _ensure_knowledge_book_v2(conn)
         _ensure_j3_summary_interval(conn)
+        _ensure_hex_spawn_weights(conn)
     finally:
         conn.close()
 

@@ -4296,19 +4296,26 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0):
                 if nb not in discovered_coords and nb in all_hexes:
                     outline_coords.add(nb)
 
-        # Also expose current hex neighbors as outlines so the player always sees
+        # Also expose all 6 neighbors of current hex so the player always sees
         # which directions they can travel from where they stand.
-        # Restricted to hexes that exist in world_hexes — phantom tiles beyond the
-        # edge of the mapped world are excluded so they can't be mistakenly clicked.
+        # Real world_hexes neighbors → regular outline; phantom coords → 'unexplored'
+        # (these will auto-generate a hex on travel via _auto_generate_hex).
+        _unexplored_coords: set[tuple[int, int]] = set()
         if current_hex:
             ch = (int(current_hex["q"]), int(current_hex["r"]))
             for dq, dr in _DIRS:
                 nb = (ch[0]+dq, ch[1]+dr)
-                if nb not in discovered_coords and nb in all_hexes:
-                    outline_coords.add(nb)
+                if nb not in discovered_coords:
+                    if nb in all_hexes:
+                        outline_coords.add(nb)
+                    else:
+                        _unexplored_coords.add(nb)
 
         for coord in outline_coords:
             result_hexes.append({"q": coord[0], "r": coord[1], "status": "outline",
+                                  "hex_type": None, "label": None})
+        for coord in _unexplored_coords:
+            result_hexes.append({"q": coord[0], "r": coord[1], "status": "unexplored",
                                   "hex_type": None, "label": None})
 
         # Teleport connections (only where at least one endpoint is discovered)
