@@ -8385,11 +8385,14 @@ async function _wmExecuteTravel() {
   const t = _wmap.pendingTravel;
   if (!t) return;
   _wmap.confirm.setAttribute('hidden', '');
-  // Keep map open — travel animation plays on the map itself
 
   if (!currentCampaignId || !characterData?.id) return;
 
   _wmJournalShow('loading');
+
+  // Preload tips cache in parallel so cinematic has no tip-fetch delay
+  const tipsPreload = _loadKnowledgeTips();
+  const isFirstTravel = !localStorage.getItem('aigm_first_hex_travel');
 
   try {
     const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/hex-travel`, {
@@ -8406,33 +8409,46 @@ async function _wmExecuteTravel() {
     const arrivedData = response.hex_data || {};
     const path = response.path || [];
 
-    // Build journal route stops from path
     const sampledIndices = _wmJournalBuildStops(path);
-
-    // Animate path on map SVG step by step
     const encounterHex = enc ? response.encounter_hex : null;
     await _wmAnimateTravelPath(path, encounterHex, sampledIndices);
 
-    // Update current hex (arrived position)
     if (arrivedHex.q !== undefined) {
       _wmap.currentHex = arrivedHex;
-      _wmap.travelHead = -1; // clear cursor
+      _wmap.travelHead = -1;
       _wmRender();
     }
 
-    // Build readable destination
     const hexTypeName = (_wmap.hexTypes?.[arrivedData.hex_type]?.label) || arrivedData.hex_type || '';
     const rawLabel = t.label && !t.label.match(/^\([-\d]+,[-\d]+\)$/) ? t.label : null;
     const destLabel = rawLabel || arrivedData.label || null;
 
-    // Show arrived state in journal
     _wmJournalArrived(response, destLabel);
 
-    // Wait, then close map and show chat bubble
-    await new Promise(r => setTimeout(r, 2000));
+    // Short pause so journal DOTARŁEŚ is readable, then close map
+    await new Promise(r => setTimeout(r, 1000));
     _wmClose();
+    // Wait for map slide-out before overlay covers the screen
+    await new Promise(r => setTimeout(r, 360));
 
-    // Build arrival prose
+    // On first travel: show the exploration_hex_map tip inside the cinematic
+    let cinTip = null;
+    if (isFirstTravel) {
+      try {
+        const tips = await tipsPreload;
+        cinTip = tips.find(tp => tp.tip_key === 'exploration_hex_map') || null;
+      } catch (_) {}
+    }
+
+    // Full-screen cinematic — waits for player tap or 15 s countdown
+    await _showTravelCinematic({
+      hexType: arrivedData.hex_type,
+      destLabel,
+      atmo: arrivedData.atmosphere,
+      tip: cinTip,
+    });
+
+    // Build arrival chat bubble
     let prose;
     if (hours > 0) {
       const hStr = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
@@ -8452,13 +8468,13 @@ async function _wmExecuteTravel() {
     elements.chatMessages.appendChild(travelBubble);
     scrollToBottom();
 
-    // KW7 — first hex travel surfaces the mapa_heksy tip
-    if (!localStorage.getItem('aigm_first_hex_travel')) {
+    // KW7 — mark first travel and surface exploration_hex_map tip in the knowledge tab
+    if (isFirstTravel) {
       localStorage.setItem('aigm_first_hex_travel', '1');
-      _handleTriggeredTips(['mapa_heksy']);
+      _handleTriggeredTips(['exploration_hex_map']);
     }
 
-    // If encounter → trigger combat
+    // Encounter → trigger combat after a short delay
     if (enc?.enemy_key) {
       setTimeout(async () => {
         try {
@@ -8491,6 +8507,76 @@ async function _wmExecuteTravel() {
     _wmJournalHide();
     showToast(err.message || 'Błąd podróży', 'error');
   }
+}
+
+// ── Full-screen travel cinematic ──────────────────────────────────────────────
+
+const _TERRAIN_THEMES = {
+  plains:   { g: 'linear-gradient(160deg,#3A2200 0%,#6B4400 35%,#9A6A18 65%,#5A3800 100%)', icon: '🌾' },
+  forest:   { g: 'linear-gradient(160deg,#050E05 0%,#0F250F 35%,#1E421E 65%,#102010 100%)', icon: '🌲' },
+  mountain: { g: 'linear-gradient(160deg,#0A0E16 0%,#14202E 35%,#1E3044 65%,#0E1A28 100%)', icon: '⛰️' },
+  swamp:    { g: 'linear-gradient(160deg,#060E06 0%,#0E2010 35%,#183A18 65%,#0A1A0C 100%)', icon: '🌿' },
+  ruins:    { g: 'linear-gradient(160deg,#160806 0%,#2E1008 35%,#4A2214 65%,#2A1008 100%)', icon: '🏚️' },
+  dungeon:  { g: 'linear-gradient(160deg,#050508 0%,#0C0C14 35%,#14141E 65%,#080812 100%)', icon: '🕯️' },
+  road:     { g: 'linear-gradient(160deg,#180E04 0%,#2E1E08 35%,#4A3214 65%,#2A1C08 100%)', icon: '🛤️' },
+  village:  { g: 'linear-gradient(160deg,#200A04 0%,#401808 35%,#6A3018 65%,#401808 100%)', icon: '🏘️' },
+  castle:   { g: 'linear-gradient(160deg,#060610 0%,#10101C 35%,#1A1A2C 65%,#0C0C18 100%)', icon: '🏰' },
+  cave:     { g: 'linear-gradient(160deg,#040404 0%,#0A0A0A 35%,#121210 65%,#060604 100%)', icon: '🪨' },
+  river:    { g: 'linear-gradient(160deg,#060E18 0%,#0E1E2C 35%,#1C3040 65%,#0A1C2E 100%)', icon: '🌊' },
+  lake:     { g: 'linear-gradient(160deg,#060E18 0%,#0E1E2C 35%,#1C3040 65%,#0A1C2E 100%)', icon: '🏞️' },
+};
+const _TERRAIN_DEFAULT = { g: 'linear-gradient(160deg,#0A0810 0%,#16141E 50%,#201C2A 100%)', icon: '🗺️' };
+
+let _travelCinematicTimer = null;
+
+function _showTravelCinematic({ hexType, destLabel, atmo, tip }) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById('travel-cinematic');
+    if (!overlay) { resolve(); return; }
+
+    const theme = _TERRAIN_THEMES[hexType] || _TERRAIN_DEFAULT;
+    document.getElementById('travel-cin-bg').style.background = theme.g;
+    document.getElementById('travel-cin-icon').textContent = theme.icon;
+    document.getElementById('travel-cin-title').textContent = destLabel || 'Nieznane miejsce';
+
+    const atmoEl = document.getElementById('travel-cin-atmo');
+    atmoEl.textContent = atmo || '';
+    atmoEl.style.display = atmo ? '' : 'none';
+
+    const tipEl = document.getElementById('travel-cin-tip');
+    if (tip) {
+      document.getElementById('travel-cin-tip-title').textContent = tip.title || '';
+      document.getElementById('travel-cin-tip-body').textContent = tip.body || '';
+      tipEl.removeAttribute('hidden');
+    } else {
+      tipEl.setAttribute('hidden', '');
+    }
+
+    overlay.removeAttribute('hidden');
+    // Double rAF ensures transition fires after display is restored
+    requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('travel-cin--visible')));
+
+    // Progress bar
+    const bar = document.getElementById('travel-cin-bar');
+    bar.style.transition = 'none';
+    bar.style.width = '0%';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      bar.style.transition = 'width 15s linear';
+      bar.style.width = '100%';
+    }));
+
+    const done = () => {
+      clearTimeout(_travelCinematicTimer);
+      overlay.removeEventListener('click', done);
+      overlay.classList.remove('travel-cin--visible');
+      setTimeout(() => { overlay.setAttribute('hidden', ''); resolve(); }, 500);
+    };
+
+    _travelCinematicTimer = setTimeout(done, 15000);
+    // 400ms grace period prevents lingering touch events from the map interaction from
+    // immediately dismissing the overlay before the player has a chance to read it.
+    setTimeout(() => overlay.addEventListener('click', done, { once: true }), 400);
+  });
 }
 
 async function _wmOpen() {

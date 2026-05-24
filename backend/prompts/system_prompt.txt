@@ -485,7 +485,7 @@ Możesz umieścić tag `[TIP:klucz]` na końcu odpowiedzi (po narracji, w osobne
 
 Walka: `nat20_krytyk` · `nat1_porazka` · `zwarcie_dystans` · `tury_kolejnosc` · `atak_d20` · `tarcza_ac` · `zaskoczenie` · `ucieczka_walka` · `uzdrowienie_walka`
 Magia: `mana_arkana` · `rzucanie_zaklec` · `miscast_nat1` · `punkty_arkana`
-Eksploracja: `test_umiejetnosci` · `skradanie` · `otwieranie_zamkow` · `pulapki` · `mapa_heksy`
+Eksploracja: `exploration_skill_dc` · `exploration_stealth` · `exploration_lockpick` · `exploration_traps` · `exploration_hex_map`
 Mechaniki: `statystyki_7` · `modyfikator_statystyki` · `dc_scale`
 Postać: `archetypy` · `odpoczynek` · `wskrzeszenie` · `ekwipunek_sloty`
 

@@ -7020,6 +7020,130 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   display: flex; align-items: center; gap: 7px;
 }
 
+/* ── Full-screen Travel Cinematic Overlay ───────────────────────────────────── */
+.travel-cinematic {
+  position: fixed; inset: 0; z-index: 9800;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.65s ease;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.travel-cinematic[hidden] {
+  display: flex !important; /* keep in layout for transitions */
+  pointer-events: none;
+}
+.travel-cin--visible { opacity: 1; }
+
+.travel-cin__bg {
+  position: absolute; inset: 0; z-index: 0;
+  background: linear-gradient(160deg, #0A0810 0%, #16141E 100%);
+  transition: background 0s;
+}
+/* dark vignette + grain */
+.travel-cin__bg::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(ellipse 90% 80% at 50% 45%, transparent 20%, rgba(0,0,0,0.6) 100%);
+}
+.travel-cin__bg::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  mix-blend-mode: overlay;
+  z-index: 1;
+}
+
+.travel-cin__content {
+  position: relative; z-index: 10;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 16px;
+  padding: 40px 28px 100px;
+  text-align: center; width: 100%; max-width: 380px;
+}
+
+.travel-cin__icon {
+  font-size: 5.5rem; line-height: 1;
+  filter: drop-shadow(0 6px 28px rgba(0,0,0,0.7));
+  animation: cin-float 3.5s ease-in-out infinite;
+}
+@keyframes cin-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.travel-cin__title {
+  font-family: 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  font-size: 2rem; font-weight: 700; margin: 0;
+  color: #D4A94A;
+  letter-spacing: 0.06em; line-height: 1.2;
+  text-shadow: 0 2px 24px rgba(212,169,74,0.45), 0 0 80px rgba(212,169,74,0.12);
+}
+
+.travel-cin__atmo {
+  font-family: Georgia, serif;
+  font-style: italic; font-size: 0.9rem;
+  color: #C8B090; max-width: 270px; line-height: 1.65;
+  margin: 0; opacity: 0.9;
+}
+
+/* Tip card */
+.travel-cin__tip {
+  background: rgba(8,5,2,0.72);
+  border: 1px solid rgba(212,169,74,0.22);
+  border-radius: 8px; padding: 14px 16px;
+  display: flex; gap: 12px; align-items: flex-start;
+  text-align: left; width: 100%; max-width: 320px;
+  backdrop-filter: blur(6px);
+  margin-top: 6px;
+  animation: cin-tip-in 0.5s 0.4s both;
+}
+@keyframes cin-tip-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.travel-cin__tip[hidden] { display: none !important; }
+
+.travel-cin-tip__icon { font-size: 1.5rem; flex-shrink: 0; margin-top: 1px; }
+.travel-cin-tip__body { display: flex; flex-direction: column; gap: 3px; }
+.travel-cin-tip__label {
+  font-size: 0.6rem; letter-spacing: 0.14em;
+  color: #D4A94A; font-weight: 700; text-transform: uppercase;
+}
+.travel-cin-tip__title-text {
+  font-size: 0.84rem; color: #E8D4A8; font-weight: 600; margin-bottom: 2px;
+}
+.travel-cin-tip__text { font-size: 0.8rem; color: #B8A880; line-height: 1.5; }
+
+/* Footer — pinned to bottom */
+.travel-cin__footer {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  z-index: 10;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding-bottom: 22px;
+}
+.travel-cin__progress {
+  width: 100%; height: 3px;
+  background: rgba(255,255,255,0.06);
+}
+.travel-cin__bar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, rgba(212,169,74,0.5), #D4A94A);
+  border-radius: 0 2px 2px 0;
+}
+.travel-cin__hint {
+  font-size: 0.65rem; letter-spacing: 0.16em; text-transform: uppercase;
+  color: rgba(255,255,255,0.3); margin: 0;
+  animation: cin-hint-pulse 2s ease-in-out infinite;
+}
+@keyframes cin-hint-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
 /* ── Custom DELETE confirmation modal ───────────────────────────────────────── */
 .delete-modal-overlay {
   position: fixed; inset: 0; background: rgba(4,2,1,0.88);
