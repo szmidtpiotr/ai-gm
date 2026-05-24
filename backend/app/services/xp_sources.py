@@ -86,8 +86,46 @@ def grant_dungeon_clear(conn: sqlite3.Connection, character_id: int, campaign_id
 
 def grant_campaign_end(conn: sqlite3.Connection, character_id: int, campaign_id: int,
                        ending_id: str, turn_number: int) -> int:
-    return _grant(conn, character_id, campaign_id, "campaign.campaign_ending",
-                  f"Koniec kampanii: {ending_id}", turn_number)
+    xp = _grant(conn, character_id, campaign_id, "campaign.campaign_ending",
+                f"Koniec kampanii: {ending_id}", turn_number)
+    # J2: mark campaign completed + queue chapter summary
+    try:
+        import json as _json
+        conn.execute(
+            "UPDATE campaigns SET status = 'completed' WHERE id = ? AND status NOT IN ('ended','completed')",
+            (campaign_id,),
+        )
+        conn.commit()
+        char_row = conn.execute(
+            "SELECT id, user_id, sheet_json FROM characters WHERE id = ? LIMIT 1",
+            (character_id,),
+        ).fetchone()
+        if char_row:
+            sheet = {}
+            try:
+                sheet = _json.loads(char_row["sheet_json"] or "{}")
+            except Exception:
+                pass
+            _xp_earned = int(sheet.get("xp_lifetime_earned") or 0)
+            _gold = int(sheet.get("gold_gp") or sheet.get("gold") or 0)
+            _turns = conn.execute(
+                "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
+                (campaign_id,),
+            ).fetchone()[0]
+            from app.services.chapter_summary_service import close_campaign_with_summary
+            close_campaign_with_summary(
+                conn,
+                campaign_id=campaign_id,
+                character_id=int(char_row["id"]),
+                outcome="victory",
+                user_id=int(char_row["user_id"]),
+                xp_earned=_xp_earned,
+                gold_at_end=_gold,
+                turns_count=int(_turns or 0),
+            )
+    except Exception as _j2_err:
+        logger.warning("j2_victory_history_failed", error=str(_j2_err), campaign_id=campaign_id)
+    return xp
 
 
 # ── XS5: First location visit ─────────────────────────────────────────────────

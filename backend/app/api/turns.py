@@ -2133,6 +2133,28 @@ def create_turn(
                     character_row=character,
                     death_reason=dr,
                 )
+                # J2: write history row + queue chapter summary generation
+                try:
+                    from app.services.chapter_summary_service import close_campaign_with_summary
+                    _ch_sheet = json.loads(character["sheet_json"] or "{}")
+                    _ch_xp = int(_ch_sheet.get("xp_lifetime_earned") or 0)
+                    _ch_gold = int(_ch_sheet.get("gold_gp") or _ch_sheet.get("gold") or 0)
+                    _ch_turns = conn.execute(
+                        "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    close_campaign_with_summary(
+                        conn,
+                        campaign_id=campaign_id,
+                        character_id=int(payload.character_id),
+                        outcome="death",
+                        user_id=int(character["user_id"]),
+                        xp_earned=_ch_xp,
+                        gold_at_end=_ch_gold,
+                        turns_count=int(_ch_turns or 0),
+                    )
+                except Exception as _j2_err:
+                    logger.warning("j2_death_history_failed", error=str(_j2_err))
                 user_line = user_text_stored if roll_request else (roll_result_message or text)
                 log = create_turn_log(
                     conn=conn,
@@ -3210,6 +3232,28 @@ def create_turn_stream(
                     character_row=character,
                     death_reason=dr,
                 )
+                # J2: write history row + queue chapter summary generation
+                try:
+                    from app.services.chapter_summary_service import close_campaign_with_summary
+                    _ch_sheet = json.loads(character["sheet_json"] or "{}")
+                    _ch_xp = int(_ch_sheet.get("xp_lifetime_earned") or 0)
+                    _ch_gold = int(_ch_sheet.get("gold_gp") or _ch_sheet.get("gold") or 0)
+                    _ch_turns = conn.execute(
+                        "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    close_campaign_with_summary(
+                        conn,
+                        campaign_id=campaign_id,
+                        character_id=int(payload.character_id),
+                        outcome="death",
+                        user_id=int(character["user_id"]),
+                        xp_earned=_ch_xp,
+                        gold_at_end=_ch_gold,
+                        turns_count=int(_ch_turns or 0),
+                    )
+                except Exception as _j2_err:
+                    logger.warning("j2_death_history_failed_stream", error=str(_j2_err))
                 user_line = user_text_stored if roll_request else (roll_result_message or text)
                 log = create_turn_log(
                     conn=conn,

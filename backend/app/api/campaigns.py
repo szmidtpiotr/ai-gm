@@ -709,13 +709,14 @@ def delete_campaign(campaign_id: int):
         # history row already exists for (character, campaign).
         heroes_in = conn.execute(
             """
-            SELECT c.id, c.sheet_json,
+            SELECT c.id, c.user_id, c.sheet_json,
                    (SELECT COUNT(*) FROM campaign_turns t WHERE t.campaign_id = ?) AS turns_count,
                    COALESCE(c.gold_gp, 0) AS gold_at_end
             FROM characters c WHERE c.campaign_id = ?
             """,
             (campaign_id, campaign_id),
         ).fetchall()
+        _abandoned_summary_jobs: list[dict] = []
         for h in heroes_in:
             try:
                 sheet = json.loads(h["sheet_json"] or "{}")
@@ -732,7 +733,7 @@ def delete_campaign(campaign_id: int):
             ).fetchone()
             if already:
                 continue
-            conn.execute(
+            cur = conn.execute(
                 """
                 INSERT INTO character_campaign_history
                   (character_id, campaign_id, outcome, xp_earned, gold_at_end, turns_count, completed_at)
@@ -740,6 +741,11 @@ def delete_campaign(campaign_id: int):
                 """,
                 (int(h["id"]), campaign_id, xp_lifetime, int(h["gold_at_end"]), int(h["turns_count"])),
             )
+            _abandoned_summary_jobs.append({
+                "history_id": int(cur.lastrowid),
+                "character_id": int(h["id"]),
+                "user_id": int(h["user_id"]),
+            })
 
         conn.execute(
             "DELETE FROM campaign_turns WHERE campaign_id = ?",
@@ -758,6 +764,21 @@ def delete_campaign(campaign_id: int):
         )
 
         conn.commit()
+
+        # Queue async chapter summaries for abandoned heroes (after commit so DB row is visible)
+        try:
+            from app.services.chapter_summary_service import schedule_chapter_summary
+            for job in _abandoned_summary_jobs:
+                schedule_chapter_summary(
+                    history_id=job["history_id"],
+                    campaign_id=campaign_id,
+                    character_id=job["character_id"],
+                    outcome="abandoned",
+                    user_id=job["user_id"],
+                )
+        except Exception as _j2_err:
+            logger.warning("j2_abandoned_summary_failed", error=str(_j2_err), campaign_id=campaign_id)
+
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     except HTTPException:

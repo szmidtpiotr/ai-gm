@@ -292,7 +292,7 @@ Design decisions resolved with owner in #64: XP revert cascades to skill/spell p
 ### Stage 12 — Hero Journal [T45]
 
 - [x] **J1** Journal UI in heroes screen — chapter list (one per completed campaign). Modal "Kronika przygód" with Cinzel chapter headings (Rozdział I/II/III…), outcome badge (Zwycięstwo/Śmierć/Porzucono), stats row, and chapter_summary body (placeholder "Podsumowanie wkrótce…" when not yet generated). `_toRoman()` helper. Cache-bust `j1-journal-2026-05-24`.
-- [ ] **J2** Chapter summary LLM generator — 2 paragraphs, first-person, on campaign close
+- [x] **J2** Chapter summary LLM generator — 2 paragraphs, first-person, on campaign close. Async daemon thread via `chapter_summary_service.py`. Hooks: death path (turns.py ×2), victory path (xp_sources.py `grant_campaign_end`), abandonment path (campaigns.py DELETE handler). Idempotent `ensure_history_row()` + `schedule_chapter_summary()`. `campaigns.status` set to `'completed'` on victory for the first time.
 - [ ] **J3** Running summary for active campaign (auto-update every 10 turns)
 - [ ] **J4** Cross-campaign `/mem` (search across all hero's campaigns)
 - [ ] **J5** XP timeline visualization (horizontal bar with level markers)
