@@ -2436,6 +2436,19 @@ async function handleSlashCommand(text) {
             .map(c => `\`${c.cmd}\` — ${c.desc}`)
             .join('\n');
         appendMessage({ role: 'system', content: `**Komendy:**\n${lines}`, created_at: new Date() });
+        // KW6 — inject Wskazówki shortcut chip into the help bubble
+        const helpBubble = elements.chatMessages.lastElementChild;
+        if (helpBubble) {
+            const chip = document.createElement('button');
+            chip.className = 'help-wskazowki-chip';
+            chip.textContent = '📖 Pokaż wskazówki';
+            chip.addEventListener('click', () => {
+                if (!isSheetOpen) toggleCharacterSheet();
+                _switchSheetTab('knowledge');
+                renderKnowledgeTab();
+            });
+            helpBubble.querySelector('.chat-bubble__content').appendChild(chip);
+        }
         scrollToBottom();
         return true;
     }

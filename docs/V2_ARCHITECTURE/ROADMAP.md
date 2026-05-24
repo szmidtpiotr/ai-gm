@@ -307,8 +307,8 @@ Short, glossary-style entries that explain a single mechanic in 1–3 sentences.
 - [x] **KW3** Player UI — new "Wskazówki" tab (tab button + `#tab-knowledge` div in `index.html`); `renderKnowledgeTab()` groups tips by category (Walka / Magia / Eksploracja / Mechaniki / Postać); `GET /api/knowledge-tips` endpoint in `backend/app/api/knowledge.py`. Cache-bust `kw-tips-2026-05-24`.
 - [x] **KW4** Contextual trigger hook — `parseGmFull` extracts `[TIP:key]` tags (stripped from display); `_handleTriggeredTips(keys)` surfaces unseen tips using `aigm_seen_tips` localStorage set; seen keys persisted so each tip fires only once per player.
 - [x] **KW5** Seeded 30 Quick Tips across 5 categories: 7 Walka · 4 Magia · 5 Eksploracja · 3 Mechaniki (DC/statystyki/biegłość) · 4 Postać + original 7 legacy tips = 31 total.
-- [ ] **KW6** "Pokaż wszystkie wskazówki" przycisk w panelu pomocy (`/help`) — chip-shortcut to open the Wskazówki tab
-- [ ] **KW7** `[TIP:key]` reference in system_prompt so GM can trigger auto-open — engine strips tag + triggers opening (KW4 wires the frontend; this item adds the system_prompt guidance)
+- [x] **KW6** "📖 Pokaż wskazówki" chip appended to `/help` system bubble after `appendMessage`; click opens character sheet (if closed) and switches to knowledge tab via `_switchSheetTab('knowledge')` + `renderKnowledgeTab()`. CSS: `.help-wskazowki-chip` gold pill with hover state.
+- [x] **KW7** `[TIP:key]` guidance added to `system_prompt.txt` under new section `## TAG [TIP:klucz]`. Documents all 23 valid keys by category, rules (1 tag/turn, end of response, first encounter only), and example output. Frontend `parseGmFull` already strips tags + `_handleTriggeredTips` surfaces unseen tips (wired in KW4).
 
 ### Stage 13 — Admin polish
 

@@ -4810,6 +4810,26 @@ body:has(#game-screen.screen--active) .sheet-panel {
   opacity: 0.8;
 }
 
+/* KW6 — /help Wskazówki shortcut chip */
+.help-wskazowki-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 4px 10px;
+  background: rgba(212, 175, 55, 0.12);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 20px;
+  color: var(--accent);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.help-wskazowki-chip:hover {
+  background: rgba(212, 175, 55, 0.22);
+  border-color: rgba(212, 175, 55, 0.6);
+}
+
 /* ================================================
    COMBAT — Banner + composer override
    ================================================ */
