@@ -8158,7 +8158,6 @@ function _wmRender() {
   const rz = _WH * _wmap.zoom;
 
   // Build path lookup for animation highlighting
-  const _pathSet = new Set(_wmap.travelPath.map(p => `${p.q},${p.r}`));
   const _pathIdx = (q, r) => _wmap.travelPath.findIndex(p => p.q === q && p.r === r);
 
   for (const hex of _wmap.hexes) {
@@ -8266,8 +8265,8 @@ function _wmOnHexClick(e) {
 function _wmJournalShow(state) {
   const el = _wmap.journal;
   if (!el) return;
+  // Removing [hidden] triggers :not([hidden]) → transform:translateY(0) transition
   el.removeAttribute('hidden');
-  requestAnimationFrame(() => el.classList.add('wmap-travel-journal--visible'));
   if (state === 'loading') {
     el.querySelector('#wmap-tj-title').textContent = 'WYRUSZASZ';
     const sp = el.querySelector('#wmap-tj-spinner');
@@ -8355,8 +8354,8 @@ function _wmJournalArrived(response, destLabel) {
 function _wmJournalHide() {
   const el = _wmap.journal;
   if (!el) return;
-  el.classList.remove('wmap-travel-journal--visible');
-  setTimeout(() => el.setAttribute('hidden', ''), 450);
+  // Adding [hidden] triggers transform:translateY(100%) transition (slide-down)
+  el.setAttribute('hidden', '');
   _wmap.travelPath = [];
   _wmap.travelHead = -1;
 }
@@ -8524,8 +8523,9 @@ async function _wmOpen() {
 }
 
 function _wmClose() {
+  _wmJournalHide();   // slide journal down first, then panel slides right
   _wmap.panel.style.transform = 'translateX(100%)';
-  setTimeout(() => { _wmap.panel.setAttribute('hidden', ''); _wmJournalHide(); }, 280);
+  setTimeout(() => _wmap.panel.setAttribute('hidden', ''), 280);
   _wmap.confirm.setAttribute('hidden', '');
   _wmap.pendingTravel = null;
 }
