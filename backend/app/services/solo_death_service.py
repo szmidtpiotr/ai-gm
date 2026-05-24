@@ -173,6 +173,21 @@ def end_solo_campaign_on_death(
         campaign_id=campaign_id,
         character_name=name,
     )
+    # O1 — log player_death event (best-effort)
+    try:
+        from app.services.event_logger import write_game_event
+        write_game_event(
+            "player_death",
+            campaign_id,
+            int(character_row["id"]),
+            user_id,
+            {"cause": death_reason},
+            severity="warning",
+            conn=conn,
+        )
+        conn.commit()
+    except Exception:
+        pass
     # T42: flush pending_xp on death — between campaigns counts as long rest
     try:
         character_id = int(character_row["id"])

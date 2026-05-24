@@ -308,6 +308,7 @@ def _call_llm(messages: list[dict], llm_config: dict | None) -> str:
         result = llm_service.generate_chat(
             messages=messages,
             llm_config=llm_config,
+            call_type="intent_parser",
         )
         return (result or "").strip()
     except Exception as exc:

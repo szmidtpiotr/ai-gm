@@ -213,6 +213,8 @@ def process_v2_turn(
             messages=[{"role": "user", "content": narrator_prompt}],
             model=model,
             llm_config=llm_config,
+            call_type="narrator",
+            campaign_id=campaign_id,
         ) or ""
     except Exception as e:
         logger.warning("turn_pipeline_narrator_error", error=str(e))
@@ -796,10 +798,17 @@ ZASADY:
 """
 
     try:
+        _cid_for_log = None
+        try:
+            _cid_for_log = int(campaign_id) if campaign_id else None
+        except Exception:
+            pass
         prose = generate_chat(
             messages=[{"role": "user", "content": prompt}],
             model=model,
             llm_config=llm_config,
+            call_type="intro_scene",
+            campaign_id=_cid_for_log,
         ) or ""
 
         if not prose.strip():

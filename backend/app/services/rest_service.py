@@ -204,6 +204,25 @@ def perform_long_rest(
 
     conn.commit()
 
+    # O1 — log long_rest event (best-effort)
+    try:
+        from app.services.event_logger import write_game_event
+        write_game_event(
+            "long_rest",
+            campaign_id,
+            character_id,
+            None,
+            {
+                "xp_unlocked": pending_xp,
+                "hp_restored": max_hp - hp_before,
+                "mana_restored": max_mana - mana_before,
+            },
+            conn=conn,
+        )
+        conn.commit()
+    except Exception:
+        pass
+
     logger.info(
         "long_rest_performed",
         character_id=character_id,

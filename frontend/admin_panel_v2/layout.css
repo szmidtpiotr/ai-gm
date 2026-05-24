@@ -2366,6 +2366,30 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .an-small-table tr:last-child td { border-bottom: none; }
 .an-small-table tr:hover td { background: var(--bg-elevated); }
 
+/* Analytics tab strip */
+.an-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 24px; flex-wrap: wrap; }
+.an-tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); font-size: 0.82rem; font-weight: 500; padding: 8px 14px; cursor: pointer; transition: color var(--transition), border-color var(--transition); }
+.an-tab:hover { color: var(--text-primary); }
+.an-tab.active { color: var(--accent-gold); border-bottom-color: var(--accent-gold); }
+
+/* Event feed */
+.an-event-filters { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.an-filter-select { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 0.78rem; padding: 4px 8px; }
+.an-event-list { max-height: 520px; overflow-y: auto; }
+.an-event-row { display: flex; align-items: baseline; gap: 8px; padding: 5px 4px; border-bottom: 1px solid var(--border-subtle); cursor: pointer; font-size: 0.78rem; flex-wrap: wrap; transition: background var(--transition); }
+.an-event-row:hover { background: var(--bg-elevated); }
+.an-ev-icon { font-size: 1rem; flex-shrink: 0; }
+.an-ev-ts { color: var(--text-muted); font-size: 0.72rem; flex-shrink: 0; white-space: nowrap; }
+.an-ev-type { color: var(--accent-gold); font-weight: 600; font-size: 0.75rem; flex-shrink: 0; }
+.an-ev-sev { font-size: 0.68rem; border-radius: 3px; padding: 1px 5px; font-weight: 600; flex-shrink: 0; }
+.an-ev-sev-info    { background: rgba(59,130,246,0.2); color: var(--accent-blue); }
+.an-ev-sev-warning { background: rgba(245,158,11,0.2); color: #f59e0b; }
+.an-ev-sev-error   { background: rgba(192,57,43,0.2);  color: var(--accent-red); }
+.an-ev-sev-debug   { background: var(--bg-elevated);   color: var(--text-muted); }
+.an-ev-camp { color: var(--text-muted); font-size: 0.72rem; flex-shrink: 0; }
+.an-ev-data { color: var(--text-secondary); font-size: 0.75rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.an-ev-detail { width: 100%; margin-top: 4px; padding: 6px 8px; background: var(--bg-base); border-radius: var(--radius-sm); font-size: 0.73rem; color: var(--text-secondary); white-space: pre-wrap; word-break: break-all; border: 1px solid var(--border); }
+
 /* ── Campaign Designer ───────────────────────────────────────────────────── */
 .designer-layout {
   display: grid;

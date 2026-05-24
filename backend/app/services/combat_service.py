@@ -2039,6 +2039,39 @@ def resolve_attack(
                                 conn.commit()
                         except Exception:
                             pass
+                        # O1 — log combat victory event (best-effort)
+                        try:
+                            _enemies_killed = sum(
+                                1 for _ec in combatants
+                                if _ec.get("type") == "enemy"
+                            )
+                            _xp_so_far = int(out.get("xp", 0) or 0)
+                            _round_count = int(row.get("round", 0) or 0) if row else 0
+                            _char_user_id = None
+                            try:
+                                _cu_row = conn.execute(
+                                    "SELECT user_id FROM characters WHERE id = ?", (ch_id,)
+                                ).fetchone()
+                                if _cu_row:
+                                    _char_user_id = int(_cu_row[0] or 0) or None
+                            except Exception:
+                                pass
+                            from app.services.event_logger import write_game_event
+                            write_game_event(
+                                "combat_victory",
+                                int(campaign_id),
+                                int(ch_id),
+                                _char_user_id,
+                                {
+                                    "enemies_killed": _enemies_killed,
+                                    "xp_awarded": _xp_so_far,
+                                    "rounds": _round_count,
+                                },
+                                conn=conn,
+                            )
+                            conn.commit()
+                        except Exception:
+                            pass
                         out["combat_state"] = load_combat_snapshot(campaign_id)
                         return out
             else:

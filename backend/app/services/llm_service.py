@@ -475,7 +475,14 @@ def _raise_llm_http_error(exc: httpx.HTTPStatusError) -> None:
     ) from exc
 
 
-def generate_chat(messages: list[dict], model: str | None = None, llm_config: dict[str, str] | None = None) -> str:
+def generate_chat(
+    messages: list[dict],
+    model: str | None = None,
+    llm_config: dict[str, str] | None = None,
+    *,
+    call_type: str = "narrator",
+    campaign_id: int | None = None,
+) -> str:
     effective = get_effective_config(llm_config)
     resolved_model = _resolve_model(model, effective)
     provider = effective["provider"]
@@ -485,14 +492,30 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
         raise RuntimeError(
             f"{provider.title()} API key missing: paste it in LLM settings and Save, or set LLM_API_KEY on the server."
         )
+    _err: str | None = None
     try:
         if provider == "ollama":
-            return OllamaDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
-        if provider == "openai":
-            return OpenAIDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
-        if provider == "azure":
-            return AzureDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+            result = OllamaDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+        elif provider == "openai":
+            result = OpenAIDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+        elif provider == "azure":
+            result = AzureDriver.generate_chat(effective["base_url"], resolved_model, messages, effective["api_key"])
+        else:
+            raise RuntimeError(f"Unknown LLM provider: {provider}")
+        # O2 — log successful call
+        try:
+            from app.services.event_logger import write_llm_log
+            write_llm_log(
+                call_type,
+                resolved_model,
+                _duration_ms(started_at),
+                campaign_id=campaign_id,
+            )
+        except Exception:
+            pass
+        return result
     except httpx.TimeoutException as exc:
+        _err = f"timeout: {exc}"
         logger.error(
             "llm_timeout",
             model=resolved_model,
@@ -500,34 +523,57 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
             duration_ms=_duration_ms(started_at),
             error_message=str(exc),
         )
+        try:
+            from app.services.event_logger import write_llm_log
+            write_llm_log(call_type, resolved_model, _duration_ms(started_at), campaign_id=campaign_id, error=_err[:200])
+        except Exception:
+            pass
         raise RuntimeError(f"LLM timeout: {exc}") from exc
     except httpx.HTTPStatusError as exc:
         detail = exc.response.text if exc.response is not None else str(exc)
+        _err = _trim_error_message(detail)
         logger.error(
             "llm_error",
             model=resolved_model,
             llm_provider=provider,
             duration_ms=_duration_ms(started_at),
-            error_message=_trim_error_message(detail),
+            error_message=_err,
         )
+        try:
+            from app.services.event_logger import write_llm_log
+            write_llm_log(call_type, resolved_model, _duration_ms(started_at), campaign_id=campaign_id, error=(_err or "")[:200])
+        except Exception:
+            pass
         _raise_llm_http_error(exc)
     except httpx.RequestError as exc:
+        _err = str(exc)
         logger.error(
             "llm_error",
             model=resolved_model,
             llm_provider=provider,
             duration_ms=_duration_ms(started_at),
-            error_message=str(exc),
+            error_message=_err,
         )
+        try:
+            from app.services.event_logger import write_llm_log
+            write_llm_log(call_type, resolved_model, _duration_ms(started_at), campaign_id=campaign_id, error=(_err or "")[:200])
+        except Exception:
+            pass
         raise RuntimeError(f"LLM connection error: {exc}") from exc
     except RuntimeError as exc:
+        _err = str(exc)
         logger.error(
             "llm_error",
             model=resolved_model,
             llm_provider=provider,
             duration_ms=_duration_ms(started_at),
-            error_message=str(exc),
+            error_message=_err,
         )
+        try:
+            from app.services.event_logger import write_llm_log
+            write_llm_log(call_type, resolved_model, _duration_ms(started_at), campaign_id=campaign_id, error=(_err or "")[:200])
+        except Exception:
+            pass
         raise
     raise RuntimeError(f"Unknown LLM provider: {provider}")
 

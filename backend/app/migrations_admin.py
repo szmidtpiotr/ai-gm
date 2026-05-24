@@ -685,6 +685,38 @@ ADMIN_MIGRATIONS = [
     # so that the UPDATE seeds below don't crash on old/restored DBs that
     # pre-date _run_v2_schema_migrations adding it there.
     "ALTER TABLE game_config_skills ADD COLUMN trigger_keywords TEXT DEFAULT NULL",
+    # Stage 14 O1 — structured game event log
+    """
+    CREATE TABLE IF NOT EXISTS game_events (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_type   TEXT NOT NULL,
+        severity     TEXT NOT NULL DEFAULT 'info' CHECK(severity IN ('debug','info','warning','error')),
+        campaign_id  INTEGER REFERENCES campaigns(id),
+        character_id INTEGER REFERENCES characters(id),
+        user_id      INTEGER REFERENCES users(id),
+        event_data   TEXT NOT NULL DEFAULT '{}',
+        created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_game_events_type_date ON game_events (event_type, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_game_events_campaign ON game_events (campaign_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_game_events_severity ON game_events (severity, created_at)",
+    # Stage 14 O2 — LLM call performance log
+    """
+    CREATE TABLE IF NOT EXISTS llm_call_log (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id       INTEGER REFERENCES campaigns(id),
+        call_type         TEXT NOT NULL,
+        model             TEXT NOT NULL DEFAULT '',
+        prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+        completion_tokens INTEGER NOT NULL DEFAULT 0,
+        latency_ms        INTEGER NOT NULL DEFAULT 0,
+        cache_hit         INTEGER NOT NULL DEFAULT 0,
+        error             TEXT DEFAULT NULL,
+        created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_llm_log_type_date ON llm_call_log (call_type, created_at)",
 ]
 
 ADMIN_SEEDS = [
@@ -2940,4 +2972,4 @@ def run_admin_migrations() -> None:
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="12.2")
+    logger.info("admin_migration_complete", phase="14.0")

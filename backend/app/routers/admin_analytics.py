@@ -1,7 +1,15 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from typing import Optional
 
 from app.services.admin_auth import verify_admin_token
-from app.services.admin_analytics import get_combat, get_dice, get_economy, get_overview
+from app.services.admin_analytics import (
+    get_combat,
+    get_dice,
+    get_economy,
+    get_game_events,
+    get_llm_stats,
+    get_overview,
+)
 
 router = APIRouter()
 
@@ -44,3 +52,22 @@ def analytics_economy(
     _: None = Depends(_require_admin),
 ):
     return get_economy(days)
+
+
+@router.get("/admin/analytics/events")
+def analytics_events(
+    days: int = Query(default=30, ge=1, le=365),
+    event_type: Optional[str] = Query(default=None),
+    severity: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    _: None = Depends(_require_admin),
+):
+    return get_game_events(days, event_type=event_type, severity=severity, limit=limit)
+
+
+@router.get("/admin/analytics/llm")
+def analytics_llm(
+    days: int = Query(default=30, ge=1, le=365),
+    _: None = Depends(_require_admin),
+):
+    return get_llm_stats(days)

@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import datetime, timedelta, UTC
+from typing import Optional
 
 ADMIN_DB = "/data/ai_gm.db"
 
@@ -222,6 +223,86 @@ def get_combat(days: int) -> dict:
 
 
 # ── Economy ───────────────────────────────────────────────────────────────────
+
+# ── Game Events ──────────────────────────────────────────────────────────────────
+
+def get_game_events(
+    days: int,
+    event_type: Optional[str] = None,
+    severity: Optional[str] = None,
+    limit: int = 100,
+) -> dict:
+    """Paginated game events feed."""
+    since = _date_from(days)
+    conn = _conn()
+    try:
+        clauses = ["created_at >= ?"]
+        params: list = [since]
+        if event_type:
+            clauses.append("event_type = ?")
+            params.append(event_type)
+        if severity:
+            clauses.append("severity = ?")
+            params.append(severity)
+        where = " AND ".join(clauses)
+        rows = conn.execute(
+            f"SELECT id, event_type, severity, campaign_id, character_id, event_data, created_at"
+            f" FROM game_events WHERE {where} ORDER BY id DESC LIMIT ?",
+            params + [limit],
+        ).fetchall()
+        types = conn.execute(
+            "SELECT DISTINCT event_type FROM game_events ORDER BY event_type"
+        ).fetchall()
+        return {
+            "events": [dict(r) for r in rows],
+            "event_types": [r[0] for r in types],
+        }
+    finally:
+        conn.close()
+
+
+# ── LLM Stats ────────────────────────────────────────────────────────────────────
+
+def get_llm_stats(days: int) -> dict:
+    """LLM performance by call_type."""
+    since = _date_from(days)
+    conn = _conn()
+    try:
+        totals = conn.execute(
+            "SELECT COUNT(*) AS total, AVG(latency_ms) AS avg_ms,"
+            " SUM(cache_hit) AS cache_hits,"
+            " SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS errors"
+            " FROM llm_call_log WHERE created_at >= ?",
+            (since,),
+        ).fetchone()
+        by_type = conn.execute(
+            "SELECT call_type, COUNT(*) AS n, AVG(latency_ms) AS avg_ms,"
+            " SUM(cache_hit) AS cache_hits"
+            " FROM llm_call_log WHERE created_at >= ?"
+            " GROUP BY call_type ORDER BY n DESC",
+            (since,),
+        ).fetchall()
+        slowest = conn.execute(
+            "SELECT call_type, model, latency_ms, created_at, error"
+            " FROM llm_call_log WHERE created_at >= ?"
+            " ORDER BY latency_ms DESC LIMIT 10",
+            (since,),
+        ).fetchall()
+        total_val = totals["total"] if totals else 0
+        cache_hits = totals["cache_hits"] if totals else 0
+        errors = totals["errors"] if totals else 0
+        return {
+            "total": total_val,
+            "avg_latency_ms": round(totals["avg_ms"] or 0) if totals else 0,
+            "cache_hits": cache_hits or 0,
+            "cache_hit_pct": round((cache_hits or 0) / total_val * 100, 1) if total_val else 0,
+            "errors": errors or 0,
+            "by_type": [dict(r) for r in by_type],
+            "slowest": [dict(r) for r in slowest],
+        }
+    finally:
+        conn.close()
+
 
 def get_economy(days: int) -> dict:
     since = _date_from(days)
