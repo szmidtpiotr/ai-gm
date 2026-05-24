@@ -193,6 +193,10 @@ let currentCampaign = null;
 
 // T33: Suggested actions state
 let _suggestedActions = [];
+
+// T47a: Turn cancel — AbortController for the active LLM streaming fetch
+let _activeTurnAbort = null;   // AbortController | null — set while a turn is in-flight
+let _activeTurnText  = '';     // the raw text submitted, restored on cancel
 let wizardStepNum = 0;
 let isSheetOpen = false;
 let isSettingsOpen = false;
@@ -2233,6 +2237,7 @@ function appendMessage(msg, opts = {}) {
     }
 
     elements.chatMessages.appendChild(bubble);
+    bubble._isChatBubble = true;  // sentinel for cancel removal
 
     // Auto-speak GM narrative via TTS (skip for history replay)
     if (isGm && opts.autoSpeak !== false) {
@@ -2266,6 +2271,7 @@ function appendMessage(msg, opts = {}) {
         dbg.innerHTML += `<span class="debug-block__loc">${escapeHtml(locLine)}${locJson ? '\n' + escapeHtml(locJson) : ''}</span>`;
         elements.chatMessages.appendChild(dbg);
     }
+    return bubble;
 }
 
 function _renderDebugCombatLine(dbg, cs) {
@@ -3229,9 +3235,10 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
 
     elements.btnSend.disabled = true;
     renderSuggestedActions([]);
+    _activeTurnText = text;
 
     const displayText = displayLabel || text;
-    appendMessage({ role: 'user', content: displayText, created_at: new Date() });
+    const userBubble = appendMessage({ role: 'user', content: displayText, created_at: new Date() });
     scrollToBottom();
 
     const typingIndicator = showTypingIndicator();
@@ -3267,6 +3274,17 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         }
     } catch (error) {
         typingIndicator.remove();
+        _activeTurnAbort = null;
+        _hideCancelButton();
+        if (error.name === 'AbortError') {
+            // User-initiated cancel — restore their text to the input
+            userBubble?.remove();
+            elements.chatInput.value = _activeTurnText;
+            elements.chatInput.dispatchEvent(new Event('input'));
+            elements.chatInput.focus();
+            showToast('Wiadomość cofnięta — możesz poprawić', 'info');
+            return;
+        }
         renderSuggestedActions(_suggestedActions);
         console.error('Send message error:', error);
         showToast(error.message || 'Nie udało się wysłać wiadomości', 'error');
@@ -3298,10 +3316,14 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
     const token = localStorage.getItem('aigm_access_token');
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
+    _activeTurnAbort = new AbortController();
+    _showCancelButton();
+
     const resp = await fetch(`/api/campaigns/${currentCampaignId}/turns/stream`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ text, character_id: characterData.id, input_type: inputType }),
+        signal: _activeTurnAbort.signal,
     });
 
     if (!resp.ok) {
@@ -3419,6 +3441,9 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
         }
     }
     if (buf.trim()) processLine(buf.trim());
+
+    _activeTurnAbort = null;
+    _hideCancelButton();
 
     // Finalize streaming bubble — apply full GM formatting
     if (streamBubble && contentEl && rawTokens) {
@@ -3711,10 +3736,37 @@ function _resetInputState() {
 }
 
 // Escape key: dismiss skill test popup or reset stuck input state
+// T47a — Turn cancel helpers
+function _cancelActiveTurn() {
+    if (!_activeTurnAbort) return;
+    _activeTurnAbort.abort();
+    // State cleanup happens in sendTurn's catch(AbortError) block
+}
+
+function _showCancelButton() {
+    if (document.getElementById('cancel-turn-btn')) return;
+    const btn = document.createElement('button');
+    btn.id = 'cancel-turn-btn';
+    btn.type = 'button';
+    btn.className = 'cancel-turn-btn';
+    btn.title = 'Cofnij wiadomość (ESC)';
+    btn.innerHTML = '✕ Cofnij';
+    btn.addEventListener('click', _cancelActiveTurn);
+    // Insert before the send button inside the composer
+    const composer = document.querySelector('.composer') || elements.btnSend?.parentElement;
+    if (composer) composer.appendChild(btn);
+}
+
+function _hideCancelButton() {
+    document.getElementById('cancel-turn-btn')?.remove();
+}
+
 document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const popup = document.getElementById('skill-roll-popup');
     if (popup) { popup.remove(); _resetInputState(); return; }
+    // T47a — cancel in-flight turn
+    if (_activeTurnAbort) { _cancelActiveTurn(); return; }
     // If send is stuck disabled and we're in game screen, reset
     if (elements.btnSend?.disabled) _resetInputState();
 });

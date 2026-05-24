@@ -1546,6 +1546,32 @@ body {
   font-size: 0.9rem;
 }
 
+/* T47a — Turn cancel button */
+.cancel-turn-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--space-xs);
+  padding: 4px 14px;
+  border: 1px solid rgba(180, 80, 60, 0.55);
+  border-radius: var(--radius-full);
+  background: rgba(180, 60, 40, 0.08);
+  color: #c0604a;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  animation: _cancelBtnIn 0.18s ease-out;
+}
+.cancel-turn-btn:hover {
+  background: rgba(180, 60, 40, 0.18);
+  border-color: rgba(180, 80, 60, 0.8);
+}
+@keyframes _cancelBtnIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .message__meta {
   display: flex;
   align-items: center;

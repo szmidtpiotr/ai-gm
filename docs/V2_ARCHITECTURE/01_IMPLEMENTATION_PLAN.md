@@ -667,3 +667,54 @@ Distinguish narrative types inside GM chat bubbles:
 - T33 line flipped to ✅ for structured action bypass.
 
 **Workflow rule codified in CLAUDE.md** — every implementation now requires a GitHub issue with structured sections (Task / What was implemented / Files changed / Backend / Numbers Policy / Acceptance / Out of scope) and `needs-testing` label until visually verified.
+
+---
+
+### T47a — Turn Cancel: Client-Side Abort ❌
+
+**Status:** Planned  
+**Priority:** Medium — pure UX polish, no backend dependency
+
+**Problem:** Once the player hits Send, they are locked out until the LLM finishes — even if they immediately realize they want to rephrase or add context. On mobile there is no ESC key to fall back on.
+
+**What it delivers:**
+- A **✕ Cofnij** pill button appears in the composer area the moment a turn is submitted, stays visible until the GM response arrives
+- Pressing ESC (desktop) or tapping ✕ Cofnij (mobile) aborts the pending `fetch()` via `AbortController`
+- The player's original message text is restored to the input field
+- The "typing…" / loading state is cleared and the player bubble removed from chat
+- A brief toast "Wiadomość cofnięta — możesz poprawić" confirms the cancel
+- If the LLM already finished streaming before the user cancels, the cancel is ignored (response is shown normally)
+
+**Scope:**
+- Only the client-side fetch is aborted — the backend LLM call continues running until it finishes, then the response is discarded (server never knows a cancel happened)
+- This is acceptable because: turns are not persisted until the full response is written to `campaign_turns`, so a cancelled turn leaves no DB trace
+- Token/time waste on the server for the abandoned call is the accepted tradeoff
+
+**Files to change:** `frontend/front/js/app.js`, `frontend/front/css/styles.css`, `frontend/front/index.html`
+
+---
+
+### T47b — Turn Cancel: Server-Side Kill ❌
+
+**Status:** Planned — implement after T47a, only if token waste becomes a real problem  
+**Priority:** Low
+
+**Problem:** After T47a, cancelled turns still burn LLM tokens on the server because `AbortController` only severs the HTTP connection — the FastAPI streaming generator keeps running.
+
+**What it would deliver:**
+- `POST /api/campaigns/{id}/turns/cancel` endpoint that:
+  1. Checks a per-campaign "cancel requested" flag in `session_flags`
+  2. The streaming generator in `turns.py` polls `request.is_disconnected()` (already available in Starlette) or checks the flag every N tokens and raises `asyncio.CancelledError` to break out early
+  3. Returns 200 immediately; the generator notices on its next yield and exits
+- No partial turn is persisted (the INSERT happens only on normal completion)
+
+**Complexity assessment:**
+- **Medium-hard.** Not technically difficult, but requires careful async coordination:
+  1. The turn endpoint is a synchronous FastAPI route run in a thread pool — `request.is_disconnected()` requires `await` so the streaming generator would need to be converted to `async def` or the cancel flag approach used instead
+  2. The cancel-flag approach (write `session_flags.cancel_requested=true` → generator reads it) is simpler but adds a DB read per streaming chunk
+  3. Ollama, OpenAI, and Azure each have different httpx streaming contexts — the cancellation must be tested on all three drivers independently
+  4. A race condition exists: if the cancel arrives after the LLM finishes but before the INSERT, the turn should still be discarded — requires a post-stream cancel check
+  5. The `/cancel` endpoint itself needs auth (player can only cancel their own active turn)
+- **Estimate:** ~4–6 hours including testing on all three LLM drivers
+
+**Files to change:** `backend/app/api/turns.py` (all three streaming paths), `backend/app/services/llm_service.py` (yield-loop break), new `POST /cancel` route, `frontend/front/js/app.js` (fire cancel request before aborting fetch)
