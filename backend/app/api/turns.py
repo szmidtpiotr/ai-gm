@@ -81,6 +81,30 @@ APPLY_CONDITION_RE = re.compile(r"\[APPLY_CONDITION:\s*([^:\s\]]+)\s*:\s*([^\]\s
 GRANT_ITEM_RE    = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
 GRANT_GOLD_RE = re.compile(r"^Grant Gold\s+([+-]?\d+)$", re.IGNORECASE)
 OPEN_SHOP_RE = re.compile(r"^Open Shop\s+(\S+)$", re.IGNORECASE)
+
+# K2 fix helpers ──────────────────────────────────────────────────────────────
+_PL_NORMALIZE = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+
+
+def _normalize_pl(text: str) -> str:
+    return text.lower().translate(_PL_NORMALIZE)
+
+
+def _kw_matches(kw: str, normalized_text: str) -> bool:
+    """True when kw appears as a whole word in normalized_text (exact boundary, not prefix)."""
+    return bool(re.search(r"(?<![a-zA-Z0-9_])" + re.escape(kw) + r"(?![a-zA-Z0-9_])", normalized_text))
+
+
+def _text_is_action_attempt(text: str) -> bool:
+    """
+    False for messages that are clearly questions or passive descriptions.
+    Prevents noun trigger-keywords from firing on ambient narrative text.
+    """
+    stripped = text.strip()
+    # Questions are never action attempts in the pre-LLM scanner
+    if stripped.endswith("?"):
+        return False
+    return True
 # 9A-4c+ — gdy model nie generuje cue, dołącz „Open Shop” na podstawie intencji gracza i NPC w scenie.
 _TRADE_USER_INTENT_RE = re.compile(
     r"(kup|sprzed|towar|towary|towarem|handl|handel|sklep|poka|pokaz"
@@ -2556,13 +2580,9 @@ def create_turn(
 
         # ── Pre-LLM: scan player text against trigger_keywords ───────────────
         # If a keyword matches and we're not in combat, trigger skill test immediately.
-        if not text.startswith("__AI_GM"):
+        if not text.startswith("__AI_GM") and _text_is_action_attempt(text):
             try:
-                _PL_MAP_PRE = str.maketrans(
-                    "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
-                    "acelnoszzACELNOSZZ"
-                )
-                _txt_pre = text.lower().translate(_PL_MAP_PRE)
+                _txt_pre = _normalize_pl(text)
                 # Combat-class skills (attack / ranged_attack / two_handed) represent
                 # weapon-modifier stats used during real combat resolution, not
                 # standalone skill checks. Their trigger_keywords are combat verbs
@@ -2576,17 +2596,16 @@ def create_turn(
                     "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
                     "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
                 ).fetchall()
-                # Wrap text with spaces for word-boundary matching
-                _txt_padded = " " + _txt_pre + " "
                 _pre_match = None
                 for _kr_pre in _kw_rows_pre:
                     raw_kws = (_kr_pre["trigger_keywords"] or "").replace(",", " ")
                     # Only use keywords ≥5 chars to avoid common particles like "sie", "cel"
-                    _kws_pre = [k.strip().lower().translate(_PL_MAP_PRE)
+                    # K2 fix: use exact word-boundary match (not prefix) so "legend" does
+                    # not match "legendzie", "kronik" doesn't match "kroniki", etc.
+                    _kws_pre = [k.strip().lower().translate(_PL_NORMALIZE)
                                 for k in raw_kws.split()
                                 if k.strip() and len(k.strip()) >= 5]
-                    # Word-boundary match: keyword must appear as a whole word
-                    if any(kw and f" {kw}" in _txt_padded for kw in _kws_pre):
+                    if any(_kw_matches(kw, _txt_pre) for kw in _kws_pre):
                         _pre_match = _kr_pre["key"]
                         break
                 if _pre_match and not is_attack_test(_pre_match):
@@ -2768,8 +2787,10 @@ def create_turn(
         # Issue #53 fix 3: when LLM emits plain text (no JSON envelope), scan the
         # narrative tail for a trailing "Roll <skill> d20" line — same intercept
         # path, just sourced from raw text instead of the parsed JSON field.
+        # K2 guard: suppress LLM-emitted roll_cue when player asked a question —
+        # questions cannot be action attempts even if the LLM hallucinates a roll.
         _raw_cue = ""
-        if _parsed_json and not _skill_pending_narrator:
+        if _text_is_action_attempt(text) and _parsed_json and not _skill_pending_narrator:
             _raw_cue = str(_parsed_json.get("roll_cue") or "").strip()
         elif not _parsed_json and not _skill_pending_narrator:
             import re as _rc_re_pre
@@ -2807,24 +2828,20 @@ def create_turn(
                     # Both player text and keywords are normalized to ASCII so that
                     # Polish chars (ń→n, ć→c, ę→e, ó→o, ą→a, ł→l, ś→s, ź/ż→z) match.
                     try:
-                        _PL_MAP = str.maketrans(
-                            "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
-                            "acelnoszzACELNOSZZ"
-                        )
-                        _txt_norm = (text or "").lower().translate(_PL_MAP)
+                        _txt_norm = _normalize_pl(text or "")
                         # Same combat-class exclusion as the pre-LLM scan above.
                         _kw_rows = conn.execute(
                             "SELECT key, trigger_keywords FROM game_config_skills "
                             "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
                             "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
                         ).fetchall()
-                        _txt_norm_padded = " " + _txt_norm + " "
                         for _kr in _kw_rows:
                             _raw_kws = (_kr["trigger_keywords"] or "").replace(",", " ")
-                            _kws = [k.strip().lower().translate(_PL_MAP)
+                            # K2 fix: exact word boundary, same as pre-LLM scanner
+                            _kws = [k.strip().lower().translate(_PL_NORMALIZE)
                                     for k in _raw_kws.split()
                                     if k.strip() and len(k.strip()) >= 5]
-                            if any(kw and f" {kw}" in _txt_norm_padded for kw in _kws):
+                            if any(_kw_matches(kw, _txt_norm) for kw in _kws):
                                 _canonical = _kr["key"]
                                 break
                     except Exception as _kw_err:
@@ -3458,26 +3475,22 @@ def create_turn_stream(
         # Mirror of the same scanner in create_turn(); fires before the LLM
         # call so exploration actions that match trigger_keywords get a dice
         # prompt immediately instead of going straight to narrative.
-        if not roll_request and not text.startswith("__AI_GM"):
+        if not roll_request and not text.startswith("__AI_GM") and _text_is_action_attempt(text):
             try:
-                _PL_MAP_S = str.maketrans(
-                    "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
-                    "acelnoszzACELNOSZZ"
-                )
-                _txt_s = text.lower().translate(_PL_MAP_S)
+                _txt_s = _normalize_pl(text)
                 _kw_rows_s = conn.execute(
                     "SELECT key, trigger_keywords FROM game_config_skills "
                     "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
                     "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
                 ).fetchall()
-                _txt_padded_s = " " + _txt_s + " "
                 _pre_match_s = None
                 for _kr_s in _kw_rows_s:
                     raw_kws_s = (_kr_s["trigger_keywords"] or "").replace(",", " ")
-                    _kws_s = [k.strip().lower().translate(_PL_MAP_S)
+                    # K2 fix: exact word-boundary match (not prefix) — "legend" ≠ "legendzie"
+                    _kws_s = [k.strip().lower().translate(_PL_NORMALIZE)
                               for k in raw_kws_s.split()
                               if k.strip() and len(k.strip()) >= 5]
-                    if any(kw and f" {kw}" in _txt_padded_s for kw in _kws_s):
+                    if any(_kw_matches(kw, _txt_s) for kw in _kws_s):
                         _pre_match_s = _kr_s["key"]
                         break
                 if _pre_match_s and not is_attack_test(_pre_match_s):
