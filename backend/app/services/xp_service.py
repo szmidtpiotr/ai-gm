@@ -460,6 +460,7 @@ def get_xp_snapshot(conn: sqlite3.Connection, character_id: int) -> dict[str, An
     return {
         "xp_available": int(sheet.get("xp_available") or 0),
         "xp_lifetime_earned": int(sheet.get("xp_lifetime_earned") or 0),
+        "pending_xp": int(sheet.get("pending_xp") or 0),
         "rank_up_costs": {str(k): costs[k] for k in sorted(costs.keys())},
         "stat_point_costs": {str(k): st_costs[k] for k in sorted(st_costs.keys())},
         "stat_value_ceiling": st_ceil,

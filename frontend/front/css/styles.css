@@ -7661,6 +7661,15 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 }
 .awansuj-card__btn:hover:not([disabled]) { background: rgba(201,165,74,.15); }
 .awansuj-card__btn[disabled] { cursor: not-allowed; opacity: .5; }
+.awansuj-card__btn--armed {
+  background: rgba(201,165,74,.25); border-color: var(--accent-gold);
+  color: var(--accent-gold); font-weight: 600;
+}
+.awansuj-pending-note {
+  font-size: 0.75rem; color: var(--text-muted); background: rgba(255,200,80,.06);
+  border: 1px solid rgba(255,200,80,.2); border-radius: 6px;
+  padding: 6px 10px; margin-bottom: 10px;
+}
 
 /* ── Stage 2C: X9 XP log ─────────────────────────────────────────────────── */
 .xp-log-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }

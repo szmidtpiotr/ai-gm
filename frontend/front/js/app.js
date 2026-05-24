@@ -5165,18 +5165,23 @@ async function openAwansujPanel(character, sheet) {
     modal.style.display = 'flex';
     document.getElementById('awansuj-close')?.addEventListener('click', () => { modal.style.display = 'none'; }, { once: true });
 
+    await _renderAwansujBody(character, sheet);
+}
+
+async function _renderAwansujBody(character, sheet) {
     const body = document.getElementById('awansuj-body');
     if (!body) return;
     body.innerHTML = '<div class="camp-loading">Ładowanie…</div>';
 
+    const STAT_LABELS = { STR:'Siła', DEX:'Zręczność', CON:'Kondycja', INT:'Inteligencja', WIS:'Mądrość', CHA:'Charyzma', LCK:'Szczęście' };
+
     try {
-        // Stage 10-C — route through apiRequest so the JWT Bearer header is
-        // attached automatically. Mechanics metadata is public, raw fetch ok.
         const [xpData, skillMeta] = await Promise.all([
             apiRequest('GET', `/characters/${character.id}/xp?user_id=${currentUser?.id}`),
             fetch('/api/mechanics/skills').then(r => r.ok ? r.json() : { skills: [] })
         ]);
         const xpAvail = xpData.xp_available ?? 0;
+        const pendingXp = xpData.pending_xp ?? 0;
         const skills = sheet.skills || {};
         const stats = sheet.stats || {};
         const mods = sheet.stat_modifiers || {};
@@ -5185,38 +5190,50 @@ async function openAwansujPanel(character, sheet) {
         const isScholar = (sheet.archetype || '').toLowerCase() === 'scholar';
         const skillLabelMap = Object.fromEntries((skillMeta?.skills || []).map(s => [s.key, s.label]));
 
-        // X6: skill rank-up cards
-        const skillCards = Object.entries(skills).filter(([, rank]) => rank < 5).map(([key, rank]) => {
+        // X6: skill rank-up cards — sorted: affordable first, then by rank desc
+        const skillEntries = Object.entries(skills).filter(([, rank]) => rank < 5);
+        skillEntries.sort(([, ra], [, rb]) => {
+            const ca = rankCosts[ra + 1] ?? rankCosts[String(ra + 1)] ?? Infinity;
+            const cb = rankCosts[rb + 1] ?? rankCosts[String(rb + 1)] ?? Infinity;
+            const aAfford = typeof ca === 'number' && xpAvail >= ca ? 0 : 1;
+            const bAfford = typeof cb === 'number' && xpAvail >= cb ? 0 : 1;
+            if (aAfford !== bAfford) return aAfford - bAfford;
+            return rb - ra; // higher rank first within same affordability
+        });
+        const skillCards = skillEntries.map(([key, rank]) => {
             const newRank = rank + 1;
-            const cost = rankCosts[newRank] || rankCosts[String(newRank)] || '?';
+            const cost = rankCosts[newRank] ?? rankCosts[String(newRank)] ?? '?';
             const canAfford = typeof cost === 'number' && xpAvail >= cost;
             const label = skillLabelMap[key] || key;
             return `<div class="awansuj-card ${canAfford ? '' : 'awansuj-card--locked'}">
                 <div class="awansuj-card__title">${escapeHtml(label)}</div>
                 <div class="awansuj-card__detail">Ranga ${rank} → ${newRank}</div>
-                <button class="awansuj-card__btn" data-action="skill" data-key="${key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>
+                <button class="awansuj-card__btn awansuj-card__btn--confirm" data-action="skill" data-key="${key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>
                     ${cost} PD
                 </button>
             </div>`;
         }).join('');
 
-        // X7: stat point-up cards
-        const STAT_LABELS = { STR:'Siła', DEX:'Zręczność', CON:'Kondycja', INT:'Inteligencja', WIS:'Mądrość', CHA:'Charyzma', LCK:'Szczęście' };
-        const statCards = Object.entries(stats).map(([key, val]) => {
+        // X7: stat point-up cards — sorted affordable first
+        const statEntries = Object.entries(stats).map(([key, val]) => {
             const newVal = val + 1;
-            const cost = statCosts[newVal] || statCosts[String(newVal)];
-            if (!cost || newVal > 20) return '';
-            const canAfford = xpAvail >= cost;
+            const cost = statCosts[newVal] ?? statCosts[String(newVal)];
+            if (!cost || newVal > 20) return null;
+            return { key, val, cost, canAfford: xpAvail >= cost };
+        }).filter(Boolean);
+        statEntries.sort((a, b) => (a.canAfford ? 0 : 1) - (b.canAfford ? 0 : 1));
+        const statCards = statEntries.map(({ key, val, cost, canAfford }) => {
+            const newVal = val + 1;
             const mod = mods[key] ?? Math.floor((val - 10) / 2);
             const newMod = Math.floor((newVal - 10) / 2);
             return `<div class="awansuj-card ${canAfford ? '' : 'awansuj-card--locked'}">
                 <div class="awansuj-card__title">${STAT_LABELS[key] || key}</div>
                 <div class="awansuj-card__detail">${val} (${mod >= 0 ? '+' : ''}${mod}) → ${newVal} (${newMod >= 0 ? '+' : ''}${newMod})</div>
-                <button class="awansuj-card__btn" data-action="stat" data-key="${key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>
+                <button class="awansuj-card__btn awansuj-card__btn--confirm" data-action="stat" data-key="${key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>
                     ${cost} PD
                 </button>
             </div>`;
-        }).filter(Boolean).join('');
+        }).join('');
 
         // X8: Scholar spell cards
         let spellCards = '';
@@ -5234,7 +5251,7 @@ async function openAwansujPanel(character, sheet) {
                     spellCards += `<div class="awansuj-card awansuj-card--spell ${canAfford ? '' : 'awansuj-card--locked'}">
                         <div class="awansuj-card__title">✨ ${escapeHtml(spell.label)}</div>
                         <div class="awansuj-card__detail">Naucz (R1)</div>
-                        <button class="awansuj-card__btn" data-action="spell-learn" data-key="${spell.key}" data-cost="75" ${canAfford ? '' : 'disabled'}>75 PD</button>
+                        <button class="awansuj-card__btn awansuj-card__btn--confirm" data-action="spell-learn" data-key="${spell.key}" data-cost="75" ${canAfford ? '' : 'disabled'}>75 PD</button>
                     </div>`;
                 } else if (currentRank < 3) {
                     const cost = currentRank === 1 ? 50 : 100;
@@ -5242,54 +5259,94 @@ async function openAwansujPanel(character, sheet) {
                     spellCards += `<div class="awansuj-card awansuj-card--spell ${canAfford ? '' : 'awansuj-card--locked'}">
                         <div class="awansuj-card__title">✨ ${escapeHtml(spell.label)}</div>
                         <div class="awansuj-card__detail">R${currentRank} → R${currentRank + 1}</div>
-                        <button class="awansuj-card__btn" data-action="spell-upgrade" data-key="${spell.key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>${cost} PD</button>
+                        <button class="awansuj-card__btn awansuj-card__btn--confirm" data-action="spell-upgrade" data-key="${spell.key}" data-cost="${cost}" ${canAfford ? '' : 'disabled'}>${cost} PD</button>
                     </div>`;
                 }
             });
         }
 
+        const pendingNote = pendingXp > 0
+            ? `<div class="awansuj-pending-note">⏳ ${pendingXp} PD oczekuje — dostępne po długim odpoczynku</div>`
+            : '';
+
         body.innerHTML = `
             <div class="awansuj-xp-badge">Dostępne PD: <strong>${xpAvail}</strong></div>
-            ${skillCards || statCards ? `<div class="awansuj-section-label">Umiejętności</div><div class="awansuj-grid">${skillCards}</div>
-            <div class="awansuj-section-label">Cechy</div><div class="awansuj-grid">${statCards}</div>` : ''}
-            ${isScholar && spellCards ? `<div class="awansuj-section-label">Zaklęcia (Scholar)</div><div class="awansuj-grid">${spellCards}</div>` : ''}
+            ${pendingNote}
+            ${skillCards ? `<div class="awansuj-section-label">Umiejętności</div><div class="awansuj-grid">${skillCards}</div>` : ''}
+            ${statCards ? `<div class="awansuj-section-label">Cechy</div><div class="awansuj-grid">${statCards}</div>` : ''}
+            ${isScholar && spellCards ? `<div class="awansuj-section-label">Zaklęcia</div><div class="awansuj-grid">${spellCards}</div>` : ''}
             <div class="awansuj-section-label">Historia PD</div>
             <div id="awansuj-xp-log"><div class="camp-loading">Ładowanie…</div></div>`;
 
         loadXpLog(character, document.getElementById('awansuj-xp-log'));
 
-        body.querySelectorAll('[data-action]').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const { action, key, cost } = btn.dataset;
-                if (!confirm(`Wydać ${cost} PD?`)) return;
-                let url, payload;
-                if (action === 'skill') {
-                    url = `/api/characters/${character.id}/xp/spend-skill`;
-                    payload = { skill_key: key, user_id: currentUser?.id };
-                } else if (action === 'stat') {
-                    url = `/api/characters/${character.id}/xp/spend-stat`;
-                    payload = { stat_key: key, user_id: currentUser?.id };
-                } else if (action === 'spell-learn') {
-                    url = `/api/characters/${character.id}/xp/spend-spell-learn`;
-                    payload = { spell_key: key, user_id: currentUser?.id };
-                } else if (action === 'spell-upgrade') {
-                    url = `/api/characters/${character.id}/xp/spend-spell-upgrade`;
-                    payload = { spell_key: key, user_id: currentUser?.id };
-                }
-                try {
-                    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    const data = await r.json();
-                    if (!r.ok) throw new Error(data.detail || 'error');
-                    showToast(`Zakupiono! Pozostało: ${data.xp_available} PD`, 'success');
-                    modal.style.display = 'none';
-                    await refreshCharacterSheet();
-                } catch (e) {
-                    showToast('Błąd: ' + e.message, 'error');
-                }
-            });
-        });
+        // Inline double-confirm: first click arms the button, second click spends.
+        // Clicking anywhere else disarms. No browser confirm() modal.
+        let _armed = null;
+        const disarm = () => {
+            if (_armed) {
+                _armed.textContent = _armed.dataset.origLabel;
+                _armed.classList.remove('awansuj-card__btn--armed');
+                _armed = null;
+            }
+        };
+        body.addEventListener('click', e => {
+            const btn = e.target.closest('.awansuj-card__btn--confirm');
+            if (!btn) { disarm(); return; }
+            if (btn.disabled) return;
+
+            if (_armed === btn) {
+                // Second click — execute
+                disarm();
+                _doSpend(character, sheet, btn);
+            } else {
+                // First click — arm
+                disarm();
+                _armed = btn;
+                btn.dataset.origLabel = btn.textContent.trim();
+                btn.textContent = '✓ Potwierdź';
+                btn.classList.add('awansuj-card__btn--armed');
+            }
+        }, true);
     } catch (e) {
         body.innerHTML = `<p style="color:var(--accent-red)">${escapeHtml(e.message)}</p>`;
+    }
+}
+
+async function _doSpend(character, sheet, btn) {
+    const { action, key, cost } = btn.dataset;
+    let url, payload;
+    if (action === 'skill') {
+        url = `/api/characters/${character.id}/xp/spend-skill`;
+        payload = { skill_key: key };
+    } else if (action === 'stat') {
+        url = `/api/characters/${character.id}/xp/spend-stat`;
+        payload = { stat_key: key };
+    } else if (action === 'spell-learn') {
+        url = `/api/characters/${character.id}/xp/spend-spell-learn`;
+        payload = { spell_key: key };
+    } else if (action === 'spell-upgrade') {
+        url = `/api/characters/${character.id}/xp/spend-spell-upgrade`;
+        payload = { spell_key: key };
+    } else return;
+
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Błąd');
+        showToast(`Zakupiono! Pozostało: ${data.xp_available} PD`, 'success');
+        // Reload the panel in-place with fresh character data
+        const updated = await apiRequest('GET', `/characters/${character.id}`);
+        characterData = updated;
+        const updatedSheet = updated.sheet_json || {};
+        await _renderAwansujBody(updated, updatedSheet);
+        updateHeaderStats();
+    } catch (e) {
+        showToast('Błąd: ' + e.message, 'error');
+        btn.disabled = false;
+        btn.textContent = cost + ' PD';
     }
 }
 
