@@ -8401,6 +8401,12 @@ async function _wmExecuteTravel() {
       destination_r: t.r,
     });
 
+    if (response.ok === false) {
+      _wmJournalHide();
+      showToast(response.error || 'Nie można podróżować do tego miejsca.', 'error');
+      return;
+    }
+
     if (response.clock) renderClock(response.clock);
 
     const enc = response.encounter;

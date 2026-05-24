@@ -4296,13 +4296,15 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0):
                 if nb not in discovered_coords and nb in all_hexes:
                     outline_coords.add(nb)
 
-        # Always expose all 6 neighbors of current hex as outlines so the player
-        # can see where unexplored paths lead even if those tiles aren't in world_hexes.
+        # Also expose current hex neighbors as outlines so the player always sees
+        # which directions they can travel from where they stand.
+        # Restricted to hexes that exist in world_hexes — phantom tiles beyond the
+        # edge of the mapped world are excluded so they can't be mistakenly clicked.
         if current_hex:
             ch = (int(current_hex["q"]), int(current_hex["r"]))
             for dq, dr in _DIRS:
                 nb = (ch[0]+dq, ch[1]+dr)
-                if nb not in discovered_coords:
+                if nb not in discovered_coords and nb in all_hexes:
                     outline_coords.add(nb)
 
         for coord in outline_coords:
