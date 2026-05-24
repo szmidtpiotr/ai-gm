@@ -184,7 +184,9 @@ class OllamaDriver:
                     json=payload,
                     headers=_build_headers(api_key),
                 ) as resp:
-                    resp.raise_for_status()
+                    if resp.status_code >= 400:
+                        resp.read()
+                        resp.raise_for_status()
                     for line in resp.iter_lines():
                         if not line:
                             continue
@@ -277,7 +279,9 @@ class OpenAIDriver:
         try:
             with httpx.Client(timeout=float(os.getenv("OLLAMA_TIMEOUT", "120"))) as client:
                 with client.stream("POST", url, json=payload, headers=headers) as resp:
-                    resp.raise_for_status()
+                    if resp.status_code >= 400:
+                        resp.read()
+                        resp.raise_for_status()
                     for line in resp.iter_lines():
                         if not line or line == "data: [DONE]":
                             continue
@@ -398,7 +402,9 @@ class AzureDriver:
         try:
             with httpx.Client(timeout=float(os.getenv("OLLAMA_TIMEOUT", "120"))) as client:
                 with client.stream("POST", url, json=payload, headers=headers) as resp:
-                    resp.raise_for_status()
+                    if resp.status_code >= 400:
+                        resp.read()
+                        resp.raise_for_status()
                     for line in resp.iter_lines():
                         if not line or line == "data: [DONE]":
                             continue
