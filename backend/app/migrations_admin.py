@@ -1204,6 +1204,31 @@ ADMIN_SEEDS = [
     """
     UPDATE game_config_weapons SET two_handed = 0 WHERE weapon_slot != 'two_handed' AND two_handed = 1
     """,
+    # KW1 — knowledge book seeds (combat / magic / exploration / mechanics / general)
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('combat_turn_order','combat','Kolejność w walce','Na początku walki każda postać i przeciwnik rzuca na Inicjatywę (d20 + DEX). Wyższy wynik działa pierwszy. Twoja tura = 1 akcja (atak, zaklęcie, użycie przedmiotu, zmiana strefy) + ruch.',10)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('combat_attack_roll','combat','Rzut na atak','Rzucasz d20 + modyfikator STR (broń wręcz) lub DEX (broń dystansowa) + ranga umiejętności. Wynik ≥ Obronie (AC) wroga to trafienie. Obrażenia zależą od broni i twoich statystyk.',20)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('combat_zone','combat','Zwarcie i dystans','Każda walka ma dwie strefy: Zwarcie i Dystans. Broń wręcz działa tylko w Zwarciu — jeśli jesteś za daleko, musisz najpierw zbliżyć się (kosztuje całą turę). Łucznicy i magowie wolą Dystans.',30)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('combat_armor','combat','Tarcza i zbroja','Zbroja i tarcza zwiększają Obronę (AC), utrudniając wrogom trafienie. Im wyższe AC, tym rzadziej obrywa twoja postać. Sprawdź AC w karcie postaci.',40)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('combat_surprise','combat','Zaskoczenie','Jeśli zaatakujesz z ukrycia lub wróg cię nie wykrył, atakujesz z zaskoczenia. Ofiara traci swoją pierwszą turę i nie może reagować. Skradanie się przed walką się opłaca.',50)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('combat_flee','combat','Ucieczka z walki','Wpisz "uciekam" lub użyj przycisku Ucieczka, aby spróbować wydostać się z walki. Wymaga testu DEX vs. Inicjatywy wroga. Udana ucieczka kończy walkę bez zwycięstwa — tracisz też potencjalne łupy.',60)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('combat_healing','combat','Leczenie w walce','Mikstury zdrowia możesz użyć w swojej turze (kosztuje akcję). Zaklęcia leczące Scholar też działają podczas walki. Uważaj — przy 0 HP musisz rzucić na przeżycie.',70)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('magic_casting','magic','Rzucanie zaklęć','Każde zaklęcie kosztuje Manę. Rzut na atak zaklęciem: d20 + INT + ranga zaklęcia. Nat 20 = podwójne obrażenia lub efekt specjalny. Nat 1 = Miscast — coś pójdzie nie tak.',10)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('magic_miscast','magic','Miscast — czarodziejska porażka','Nat 1 na rzucie zaklęcia wywołuje niekontrolowany efekt. Poziomy 1–2: ogłuszenie. Poziomy 3–4: obrażenia własne (1k4). Poziomy 5–7: obrażenia + ogłuszenie. Poziomy 8+: obrażenia (1k8) + ogłuszenie + efekt wtórny.',20)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('magic_arcane_points','magic','Punkty Arkana','Zdobywasz 1 Punkt Arkana za każdy poziom. Wydajesz je na: nowe zaklęcie (1 PA), rangę 2 (1 PA), rangę 3 (2 PA). Zaplanuj mądrze — Punktów Arkana jest mało.',30)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('magic_mana_recovery','magic','Odzyskiwanie Many','Mana wraca w całości po Długim Odpoczynku. Krótki Odpoczynek przywraca tylko część HP — mana pozostaje. Zarządzaj zasobami mądrze, bo nie zawsze będzie czas na odpoczynek.',40)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('exploration_skill_dc','exploration','Skala trudności testów','DC 8 = Łatwy (większość zdoła). DC 12 = Średni (wymaga skupienia). DC 16 = Trudny (wymaga wprawy). DC 20 = Ekstremalny (mistrz w dziedzinie). DC 24+ = Legendarny (granica ludzkich możliwości).',10)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('exploration_stealth','exploration','Skradanie','Test DEX vs. Postrzeganie strażnika. Powodzenie = niezauważony. Możesz próbować ominąć walkę zupełnie albo przygotować atak z zaskoczenia. Jasne oświetlenie i głośna zbroja utrudniają skradanie.',20)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('exploration_lockpick','exploration','Otwieranie zamków','Test DEX. Jeśli masz wytrych — możesz próbować każdy zamknięty zamek. Bez wytrycha potrzebujesz klucza. Nat 1 przy otwieraniu = złamany wytrych lub zablokowany zamek.',30)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('exploration_traps','exploration','Pułapki','Pułapki wykrywasz testem Postrzegania (biernym lub aktywnym). Kiedy wykryjesz pułapkę, możesz ją rozbroić (test DEX), ominąć lub wyłączyć inaczej. Zignorowanie pułapki = obrażenia lub gorszy efekt.',40)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('exploration_hex_map','exploration','Mapa heksów','Świat jest podzielony na heksy. Odkrywasz je przez eksplorację i narrację. Każdy heks może mieć typ terenu, napotkane wyzwania i notatki z kampanii. Twoja mapa rośnie wraz z przygodami.',50)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('mechanics_rest_short','mechanics','Krótki odpoczynek','Możesz odpocząć krótko w bezpiecznym miejscu. Odzyskujesz część HP (Kość Wytrzymałości + CON). Nie przywraca many ani nie realizuje oczekujących PD. Wróg może nie dać ci czasu na odpoczynek.',10)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('mechanics_rest_long','mechanics','Długi odpoczynek','Pełny odpoczynek (obóz, karczma): pełna regeneracja HP i Many, realizacja Oczekujących PD (stają się Dostępnymi PD). Wymaga bezpiecznego miejsca — nie wszędzie możesz rozłożyć obóz.',20)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('mechanics_xp_spending','mechanics','Wydawanie PD','Dostępne PD wydajesz na: rangę umiejętności (50/100/200/400/1200 PD) lub wzrost statystyki (40–1000 PD zależnie od wartości docelowej). Otwórz kartę postaci → zakładka Statystyki → przycisk Awansuj.',30)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('character_stats','general','Statystyki postaci','STR: siła fizyczna i walka wręcz. DEX: zwinność, ucieczka, skradanie, dystans. CON: HP i wytrzymałość. INT: magia i wiedza. WIS: spostrzegawczość i intuicja. CHA: rozmowy i perswazja. LCK: szczęście w rzutach.',10)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('character_death_save','general','Rzut na przeżycie','Przy 0 HP: rzucasz d20. ≥ 10 = przeżywasz z 1 HP (i dostajesz bonus XP). < 10 = śmierć bohatera. Modyfikator CON pomaga w tym rzucie. Mikstura użyta przez kogoś innego może go zastąpić.',20)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('character_conditions_list','general','Stany i efekty','Zatruty: -2 do rzutów. Ogłuszony: traci turę. Krwawiący: traci HP co turę. Spowolniony: redukuje akcje. Przerażony: penalty do ataków. Stany można leczyć odpoczynkiem, zaklęciami lub miksturami.',30)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('inventory_slots','general','Plecak i ekwipunek','Broń trzymana w dłoni to Główna Ręka. Tarcza lub broń zapasowa to Druga Ręka. Zbroja zajmuje slot Tułów. Przedmioty, mikstury i materiały trafiają do Plecaka. Sprawdź aktualny ekwipunek w karcie postaci.',40)""",
+    """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('economy_gold','general','Złoto i handel','Złoto (sz) zdobywasz z lootów, questów i sprzedaży. Możesz kupować od kupców podczas eksploracji. Cena zależy od reputacji i CHA. Nie trać złota na rzeczy zbędne — dobre wyposażenie ratuje życie.',50)""",
 ]
 
 
@@ -2697,6 +2722,22 @@ def _ensure_narrative_items_schema(conn: sqlite3.Connection) -> None:
         logger.warning("admin_migration_t46_narrative_items_migrate_failed", error=str(e))
 
 
+def _ensure_knowledge_book_v2(conn: sqlite3.Connection) -> None:
+    """KW1 — add icon and related_command columns to knowledge_book."""
+    for sql in [
+        "ALTER TABLE knowledge_book ADD COLUMN icon TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE knowledge_book ADD COLUMN related_command TEXT NOT NULL DEFAULT ''",
+    ]:
+        try:
+            conn.execute(sql)
+            conn.commit()
+        except Exception as e:
+            if "duplicate column" in str(e).lower():
+                pass
+            else:
+                logger.warning("knowledge_book_v2_migration_warning", error=str(e))
+
+
 def _ensure_auth_ux_schema(conn: sqlite3.Connection) -> None:
     """Stage 11-C — invite system, email verification, password reset, friends, onboarding."""
     stmts = [
@@ -2860,6 +2901,7 @@ def run_admin_migrations() -> None:
         _ensure_dungeon_v2_schema(conn)
         _ensure_narrative_items_schema(conn)
         _ensure_auth_ux_schema(conn)
+        _ensure_knowledge_book_v2(conn)
         _ensure_j3_summary_interval(conn)
     finally:
         conn.close()

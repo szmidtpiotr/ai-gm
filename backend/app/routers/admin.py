@@ -3327,9 +3327,10 @@ def admin_create_knowledge_tip(req: dict = Body(...), _: None = Depends(require_
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     try:
         conn.execute(
-            "INSERT INTO knowledge_book (tip_key, category, title, body, is_active, sort_order) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO knowledge_book (tip_key, category, title, body, is_active, sort_order, icon, related_command) VALUES (?,?,?,?,?,?,?,?)",
             (tip_key, req.get("category") or "general", title, body,
-             1 if req.get("is_active", 1) else 0, int(req.get("sort_order") or 0)),
+             1 if req.get("is_active", 1) else 0, int(req.get("sort_order") or 0),
+             (req.get("icon") or "").strip(), (req.get("related_command") or "").strip()),
         )
         conn.commit()
         return {"ok": True, "tip_key": tip_key}
@@ -3343,7 +3344,7 @@ def admin_create_knowledge_tip(req: dict = Body(...), _: None = Depends(require_
 def admin_update_knowledge_tip(
     tip_key: str, req: dict = Body(...), _: None = Depends(require_admin_token)
 ):
-    allowed = {"category", "title", "body", "is_active", "sort_order"}
+    allowed = {"category", "title", "body", "is_active", "sort_order", "icon", "related_command"}
     updates = {k: v for k, v in req.items() if k in allowed}
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields to update")

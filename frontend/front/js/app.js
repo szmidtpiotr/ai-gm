@@ -2171,6 +2171,11 @@ async function enterGame(campaign) {
 function appendMessage(msg, opts = {}) {
     const bubble = document.createElement('div');
     const isGm = msg.role === 'assistant' || msg.actor === 'gm';
+
+    // KW4 — process triggered tips from GM narrative
+    if (isGm && msg.debugMeta?.triggeredTips?.length) {
+        _handleTriggeredTips(msg.debugMeta.triggeredTips);
+    }
     const isSystem = msg.role === 'system';
     const variant = isSystem ? 'system' : (isGm ? 'gm' : 'user');
     bubble.className = `chat-bubble chat-bubble--${variant}`;
@@ -2300,18 +2305,22 @@ function formatDateTime(dateStr) {
 function parseGmFull(text) {
     if (!text) return { narrative: '', locationIntent: null, debugRoll: null };
     let raw = String(text).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const _tipKeys = [];
     const stripInternalTags = s => String(s || '')
         .replace(/\s*\[LOCATION_BLOCKED:[^\]]*\]/g, '')
         .replace(/\s*\[APPLY_CONDITION:[^\]]*\]/g, '')
+        .replace(/\s*\[TIP:([^\]]+)\]/gi, (_, k) => { _tipKeys.push(k.trim()); return ''; })
         .trim();
     try {
         const data = JSON.parse(raw);
         if (data && typeof data === 'object') {
+            const narrative = stripInternalTags(typeof data.narrative === 'string' ? data.narrative : '');
             return {
-                narrative: stripInternalTags(typeof data.narrative === 'string' ? data.narrative : ''),
+                narrative,
                 locationIntent: data.location_intent || null,
                 debugRoll: data._debug || null,
                 raw: data,
+                triggeredTips: _tipKeys.length ? [..._tipKeys] : undefined,
             };
         }
     } catch (_e) {}
@@ -4681,6 +4690,9 @@ function handleSheetTabClick(e) {
     document.querySelectorAll('.sheet-tab-content').forEach(content => {
         content.classList.toggle('sheet-tab-content--active', content.id === `tab-${tabId}`);
     });
+
+    // KW3 — lazy-render knowledge tab on first open
+    if (tabId === 'knowledge') renderKnowledgeTab();
 }
 
 function populateCharacterSheet(character) {
@@ -4862,6 +4874,97 @@ function renderXpTimeline(sheet) {
       <div class="xp-timeline__meta">${metaText}</div>
     `;
 }
+
+// ── Knowledge Tips Tab (KW3–KW5) ─────────────────────────────────────────────
+
+let _knowledgeTipsCache = null;
+
+async function _loadKnowledgeTips() {
+    if (_knowledgeTipsCache) return _knowledgeTipsCache;
+    try {
+        const data = await fetch('/api/knowledge-tips').then(r => r.json());
+        _knowledgeTipsCache = data.tips || [];
+    } catch (_e) {
+        _knowledgeTipsCache = [];
+    }
+    return _knowledgeTipsCache;
+}
+
+const KNOWLEDGE_CAT_LABELS = {
+    combat: 'Walka', magic: 'Magia', exploration: 'Eksploracja',
+    mechanics: 'Mechaniki', general: 'Postać i świat'
+};
+const KNOWLEDGE_CAT_ORDER = ['combat', 'magic', 'exploration', 'mechanics', 'general'];
+
+async function renderKnowledgeTab() {
+    const container = document.getElementById('knowledge-tips-content');
+    if (!container) return;
+    const tips = await _loadKnowledgeTips();
+    if (!tips.length) {
+        container.innerHTML = '<p class="sheet-empty-hint">Brak dostępnych wskazówek.</p>';
+        return;
+    }
+    const grouped = {};
+    for (const t of tips) {
+        const cat = t.category || 'general';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(t);
+    }
+    const seenTips = _getSeenTips();
+    let html = '';
+    for (const cat of KNOWLEDGE_CAT_ORDER) {
+        if (!grouped[cat]?.length) continue;
+        html += `<div class="knowledge-category">
+          <div class="knowledge-category__label">${KNOWLEDGE_CAT_LABELS[cat] || cat}</div>
+          ${grouped[cat].map(t => `
+            <div class="knowledge-tip${seenTips.has(t.tip_key) ? ' knowledge-tip--highlight' : ''}" id="tip-${t.tip_key}">
+              <div class="knowledge-tip__title">${_esc(t.title)}</div>
+              <div class="knowledge-tip__body">${_esc(t.body)}</div>
+              ${t.related_command ? `<span class="knowledge-tip__cmd">${_esc(t.related_command)}</span>` : ''}
+            </div>`).join('')}
+        </div>`;
+    }
+    // other categories not in ORDER
+    for (const cat of Object.keys(grouped)) {
+        if (KNOWLEDGE_CAT_ORDER.includes(cat)) continue;
+        html += `<div class="knowledge-category">
+          <div class="knowledge-category__label">${cat}</div>
+          ${grouped[cat].map(t => `
+            <div class="knowledge-tip" id="tip-${t.tip_key}">
+              <div class="knowledge-tip__title">${_esc(t.title)}</div>
+              <div class="knowledge-tip__body">${_esc(t.body)}</div>
+            </div>`).join('')}
+        </div>`;
+    }
+    container.innerHTML = html;
+}
+
+function _getSeenTips() {
+    try { return new Set(JSON.parse(localStorage.getItem('aigm_seen_tips') || '[]')); } catch { return new Set(); }
+}
+function _markTipSeen(key) {
+    try {
+        const s = _getSeenTips();
+        s.add(key);
+        localStorage.setItem('aigm_seen_tips', JSON.stringify([...s]));
+    } catch {}
+}
+
+async function _handleTriggeredTips(keys) {
+    const tips = await _loadKnowledgeTips();
+    const tipMap = Object.fromEntries(tips.map(t => [t.tip_key, t]));
+    const seen = _getSeenTips();
+    for (const key of keys) {
+        if (seen.has(key)) continue;
+        _markTipSeen(key);
+        const tip = tipMap[key];
+        if (tip) {
+            showToast(`Nowa wskazówka: ${tip.title}`, 'info', 4000);
+        }
+    }
+}
+
+// ── Rest Buttons ──────────────────────────────────────────────────────────────
 
 function renderRestButtons(character, sheet) {
     const container = document.getElementById('sheet-rest-actions');
@@ -6179,7 +6282,7 @@ function initSheetTabSwipe(panel) {
     const content = panel.querySelector('.sheet-panel__content');
     if (!content) return;
 
-    const TAB_ORDER = ['stats', 'skills', 'inventory', 'appearance'];
+    const TAB_ORDER = ['stats', 'skills', 'inventory', 'appearance', 'knowledge'];
     let startX = 0, startY = 0, moved = false;
 
     content.addEventListener('touchstart', (e) => {

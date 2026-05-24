@@ -44,6 +44,7 @@ from app.api.dungeons import router as dungeons_router
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.api.client_logs import router as client_logs_router
+from app.api.knowledge import router as knowledge_router
 from app.migrations_admin import run_admin_migrations
 from app.services.llm_admin_service import hydrate_runtime_from_stored_preset
 from app.routers.admin import router as admin_router
@@ -328,6 +329,7 @@ app.include_router(shop.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")
 app.include_router(client_logs_router, prefix="/api")
+app.include_router(knowledge_router, prefix="/api")
 # Keep non-prefixed character endpoints available for direct local calls
 # (e.g. /characters/{id}/sheet), while preserving /api/* routes.
 app.include_router(characters.router)

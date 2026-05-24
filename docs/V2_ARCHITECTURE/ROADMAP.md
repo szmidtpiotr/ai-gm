@@ -298,22 +298,17 @@ Design decisions resolved with owner in #64: XP revert cascades to skill/spell p
 - [x] **J5** XP timeline visualization (horizontal bar with level markers). Pure frontend: `renderXpTimeline(sheet)` in `populateCharacterSheet`. 8px track, gradient fill to `xp_lifetime_earned/1000`, 9 dividers, pulsing accent cursor at fill edge, 10 centered level labels (current highlighted), meta row with PD-to-next. No new API calls.
 - [x] **J6** Cross-campaign minimap — combined visited hex overlay. New endpoint `GET /characters/{id}/hex-map` (UNION of `campaign_hex_data.discovered=1` across all character campaigns + active). `_renderHexMinimap()` renders flat-top SVG (S=12) with `TYPE_COLORS`, gold stroke. `_appendJournalMinimap()` appends "Odwiedzone miejsca" section at bottom of hero journal modal.
 
-### Stage 12-B — Księga Wiedzy: Quick Tips (planned)
+### Stage 12-B — Księga Wiedzy: Quick Tips
 
 Short, glossary-style entries that explain a single mechanic in 1–3 sentences. Surfaced inside the Księga Wiedzy panel as a dedicated "Wskazówki" tab and triggered contextually when the player encounters a new mechanic for the first time (e.g. first time hit by a critical → auto-open "Krytyczna porażka (Nat 1)" tip).
 
-- [ ] **KW1** New DB table `knowledge_quick_tips` (key, title_pl, body_pl, category, icon, related_command, sort_order)
-- [ ] **KW2** Admin CRUD for tips in Księga Wiedzy admin section (smart-entry style: chat→JSON→form, with LLM able to author drafts)
-- [ ] **KW3** Player UI — new "Wskazówki" tab in Księga Wiedzy panel, grouped by category (Walka / Magia / Eksploracja / Mechaniki / Postać)
-- [ ] **KW4** Contextual auto-open hook — `triggered_tips` session_flags list, GM mentions tip slug → first occurrence opens panel pre-scrolled to that tip
-- [ ] **KW5** Seed ~30 initial Quick Tips. Draft topics:
-  - **Walka**: Tury i kolejność · Atak (d20 + STR/DEX) · Zwarcie vs Dystans (zone-change) · Tarcza i AC · Krytyk (Nat 20) · Krytyczna porażka (Nat 1) · Zaskoczenie · Ucieczka (Flee) · Uzdrowienie w walce
-  - **Magia**: Mana i Arkana · Rzucanie zaklęć (spell_attack) · Miscast (Nat 1) · Punkty Arkana (uczenie/rozwój czarów) · Tarcza arkana
-  - **Eksploracja**: Test umiejętności (DC) · Skradanie · Otwieranie zamków (klucz vs wytrych) · Pułapki · Czytanie ksiąg/inskrypcji bez rzutu · Mapa świata (heksy)
-  - **Mechaniki**: 7 statystyk (STR/DEX/CON/INT/WIS/CHA/LCK) · Modyfikator statystyki · Ranga umiejętności + biegłość (+2 przy R3) · DC scale (Easy 8 / Med 12 / Hard 16 / Extreme 20) · Punkty Doświadczenia (PD) · Awans poziomu · Skala HP
-  - **Postać**: Archetypy (Wojownik/Łotrzyk/Uczony) · Wybór archetypu i konsekwencje · Wskrzeszenie i cena · Ekwipunek (sloty anatomiczne) · Bukłak na wodę i zmęczenie · Odpoczynek (krótki/długi) i regeneracja
+- [x] **KW1** Reused existing `knowledge_book` table (already existed); added `icon TEXT DEFAULT ''` and `related_command TEXT DEFAULT ''` columns via `_ensure_knowledge_book_v2()` migration. 23 Polish seed entries added across 5 categories (total 31 tips).
+- [x] **KW2** Admin CRUD extended — `admin.py` PATCH `allowed` set + POST INSERT include `icon` + `related_command` fields; existing admin panel Księga Wiedzy section already provided the UI.
+- [x] **KW3** Player UI — new "Wskazówki" tab (tab button + `#tab-knowledge` div in `index.html`); `renderKnowledgeTab()` groups tips by category (Walka / Magia / Eksploracja / Mechaniki / Postać); `GET /api/knowledge-tips` endpoint in `backend/app/api/knowledge.py`. Cache-bust `kw-tips-2026-05-24`.
+- [x] **KW4** Contextual trigger hook — `parseGmFull` extracts `[TIP:key]` tags (stripped from display); `_handleTriggeredTips(keys)` surfaces unseen tips using `aigm_seen_tips` localStorage set; seen keys persisted so each tip fires only once per player.
+- [x] **KW5** Seeded 30 Quick Tips across 5 categories: 7 Walka · 4 Magia · 5 Eksploracja · 3 Mechaniki (DC/statystyki/biegłość) · 4 Postać + original 7 legacy tips = 31 total.
 - [ ] **KW6** "Pokaż wszystkie wskazówki" przycisk w panelu pomocy (`/help`) — chip-shortcut to open the Wskazówki tab
-- [ ] **KW7** Dodać tip-id reference w system_prompt, by GM mógł oznaczyć tip do auto-opensa, np. `[TIP:zaskoczenie]` — engine zdejmuje tag i triggeruje opening
+- [ ] **KW7** `[TIP:key]` reference in system_prompt so GM can trigger auto-open — engine strips tag + triggers opening (KW4 wires the frontend; this item adds the system_prompt guidance)
 
 ### Stage 13 — Admin polish
 

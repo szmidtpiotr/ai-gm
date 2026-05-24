@@ -4764,6 +4764,52 @@ body:has(#game-screen.screen--active) .sheet-panel {
   }
 }
 
+/* KW3 — knowledge tips tab */
+.knowledge-category {
+  margin-bottom: 16px;
+}
+.knowledge-category__label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.knowledge-tip {
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background: var(--bg-card);
+  border-radius: var(--radius-md);
+  border-left: 2px solid var(--border);
+  transition: border-color 0.2s;
+}
+.knowledge-tip--highlight {
+  border-left-color: var(--accent);
+  background: rgba(201,165,74,0.06);
+}
+.knowledge-tip__title {
+  font-family: 'Cinzel', serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.knowledge-tip__body {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.knowledge-tip__cmd {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 0.65rem;
+  font-family: monospace;
+  color: var(--accent);
+  opacity: 0.8;
+}
+
 /* ================================================
    COMBAT — Banner + composer override
    ================================================ */
