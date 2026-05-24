@@ -245,9 +245,12 @@ def _execute_debug_command(cur, conn, character_id: int, char_row, sheet: dict, 
     if sub == "roll":
         return _execute_roll_command(cur, conn, character_id, char_row, sheet, sub_arg, forced_d20=forced_d20)
 
+    if sub == "xp":
+        return _execute_xp_command(cur, conn, character_id, sheet, sub_arg)
+
     raise ValueError(
         f"Unknown debug subcommand: /debug {sub}. "
-        f"Available: dump-state, set-hp N, set-state STATE, reset-cooldowns, roll [SKILL]"
+        f"Available: dump-state, set-hp N, set-state STATE, reset-cooldowns, roll [SKILL], xp add|set N"
     )
 
 
@@ -347,4 +350,60 @@ def _execute_roll_command(cur, conn, character_id: int, char_row, sheet: dict, s
                 "modifier": mod_info["total"],
             },
         },
+    )
+
+
+def _execute_xp_command(cur, conn, character_id: int, sheet: dict, arg: str) -> "CommandResult":
+    """Admin `/debug xp add N` / `/debug xp set N` — direct XP injection for testing."""
+    from app.services.xp_service import grant_character_xp, apply_levelup_if_needed
+
+    parts = (arg or "").strip().split()
+    if len(parts) < 2:
+        raise ValueError("Usage: /debug xp add N  |  /debug xp set N")
+
+    op = parts[0].lower()
+    try:
+        n = int(parts[1])
+    except (ValueError, TypeError):
+        raise ValueError("N must be an integer")
+
+    if op not in ("add", "set"):
+        raise ValueError("Usage: /debug xp add N  |  /debug xp set N")
+
+    if op == "set":
+        if n < 0:
+            raise ValueError("N must be >= 0 for set")
+        sheet["xp_available"] = n
+        # Also adjust lifetime so level stays consistent
+        lifetime_old = int(sheet.get("xp_lifetime_earned") or 0)
+        xp_avail_old = int(sheet.get("xp_available") or 0)
+        # Bump lifetime by the delta (set only increases lifetime, never decreases)
+        delta = max(0, n - xp_avail_old)
+        sheet["xp_lifetime_earned"] = lifetime_old + delta
+        sheet["xp_available"] = n
+    else:  # add
+        if n <= 0:
+            raise ValueError("N must be > 0 for add")
+        sheet["xp_available"] = int(sheet.get("xp_available") or 0) + n
+        sheet["xp_lifetime_earned"] = int(sheet.get("xp_lifetime_earned") or 0) + n
+
+    levelup = apply_levelup_if_needed(sheet, conn)
+
+    cur.execute(
+        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+        (json.dumps(sheet, ensure_ascii=False), character_id),
+    )
+    conn.commit()
+
+    return CommandResult(
+        ok=True, type="command", command=f"/debug xp {op}",
+        payload={"result": {
+            "sub": f"xp {op}",
+            "op": op,
+            "amount": n,
+            "xp_available": int(sheet["xp_available"]),
+            "xp_lifetime_earned": int(sheet.get("xp_lifetime_earned") or 0),
+            "level": int(sheet.get("level") or 1),
+            "level_up": levelup,
+        }},
     )

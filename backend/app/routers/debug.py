@@ -237,8 +237,11 @@ def debug_command(
         v = int(req.forced_d20)
         if 1 <= v <= 20:
             forced_d20 = v
+    # /xp add N / /xp set N are sugar for /debug xp add N / /debug xp set N
+    if text.startswith("/xp"):
+        text = f"/debug xp{text[3:]}".strip()
     if not text.startswith("/debug"):
-        raise HTTPException(status_code=400, detail="Only /debug and /roll commands are accepted here")
+        raise HTTPException(status_code=400, detail="Only /debug, /roll and /xp commands are accepted here")
     try:
         from app.services.commands_service import execute_command_logic
         result = execute_command_logic(req.character_id, text, forced_d20=forced_d20)

@@ -183,6 +183,10 @@ def perform_long_rest(
     sheet["short_rests_used"] = 0
     sheet["death_saves_failed"] = 0
 
+    # Level-up check — after flushing pending XP into lifetime, recalculate
+    from app.services.xp_service import apply_levelup_if_needed
+    levelup = apply_levelup_if_needed(sheet, conn)
+
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",
         (json.dumps(sheet, ensure_ascii=False), character_id),
@@ -207,19 +211,23 @@ def perform_long_rest(
         hp_restored=max_hp - hp_before,
         mana_restored=max_mana - mana_before,
         xp_unlocked=pending_xp,
+        level_up=levelup,
     )
 
-    return {
+    result = {
         "ok": True,
         "type": "long",
         "hp_before": hp_before,
-        "hp_after": max_hp,
+        "hp_after": int(sheet["current_hp"]),
         "mana_before": mana_before,
-        "mana_after": max_mana,
+        "mana_after": int(sheet["current_mana"]),
         "xp_unlocked": pending_xp,
-        "xp_available": sheet["xp_available"],
+        "xp_available": int(sheet["xp_available"]),
         "hours_advanced": 8,
     }
+    if levelup:
+        result["level_up"] = levelup
+    return result
 
 
 def perform_short_rest(

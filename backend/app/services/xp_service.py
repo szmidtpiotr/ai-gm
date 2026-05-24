@@ -161,6 +161,64 @@ def _skill_known_in_catalog(skill_key: str) -> bool:
     return bool(alt and alt in keys)
 
 
+XP_PER_LEVEL = 100
+MAX_LEVEL = 10
+
+
+def calc_level(xp_lifetime: int) -> int:
+    """Level derived purely from lifetime XP. 1 at 0 XP, +1 per 100, cap 10."""
+    return min(MAX_LEVEL, int(xp_lifetime) // XP_PER_LEVEL + 1)
+
+
+def apply_levelup_if_needed(
+    sheet: dict,
+    conn: sqlite3.Connection,
+) -> dict | None:
+    """Check whether xp_lifetime_earned crossed a new level threshold.
+
+    Mutates *sheet* in-place: updates level, max_hp, max_mana, current_hp/mana
+    (increased by the gained headroom). Returns a level-up summary dict when a
+    level-up happened, None otherwise.
+    """
+    from app.services.vitality_service import calculate_hp, calculate_mana
+
+    lifetime = int(sheet.get("xp_lifetime_earned") or 0)
+    old_level = int(sheet.get("level") or 1)
+    new_level = calc_level(lifetime)
+
+    if new_level <= old_level:
+        return None
+
+    archetype = str(sheet.get("archetype") or "warrior").lower()
+    stats = sheet.get("stats") or {}
+    con = int(stats.get("CON", 10) or 10)
+    int_stat = int(stats.get("INT", 10) or 10)
+
+    old_max_hp = int(sheet.get("max_hp") or 0)
+    old_max_mana = int(sheet.get("max_mana") or 0)
+    new_max_hp = calculate_hp(archetype, con, new_level)
+    new_max_mana = calculate_mana(archetype, int_stat, new_level)
+
+    hp_gain = max(0, new_max_hp - old_max_hp)
+    mana_gain = max(0, new_max_mana - old_max_mana)
+
+    sheet["level"] = new_level
+    sheet["max_hp"] = new_max_hp
+    sheet["current_hp"] = min(int(sheet.get("current_hp") or 0) + hp_gain, new_max_hp)
+    sheet["max_mana"] = new_max_mana
+    sheet["current_mana"] = min(int(sheet.get("current_mana") or 0) + mana_gain, new_max_mana)
+
+    return {
+        "level_up": True,
+        "old_level": old_level,
+        "new_level": new_level,
+        "hp_gain": hp_gain,
+        "mana_gain": mana_gain,
+        "new_max_hp": new_max_hp,
+        "new_max_mana": new_max_mana,
+    }
+
+
 def grant_pending_xp(
     conn: sqlite3.Connection,
     character_id: int,
@@ -246,6 +304,10 @@ def grant_character_xp(
     sheet["xp_available"] = cur
     sheet["xp_lifetime_earned"] = life
 
+    levelup = apply_levelup_if_needed(sheet, conn)
+    if levelup:
+        cur = int(sheet["xp_available"])  # recalc after levelup mutated sheet
+
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",
         (json.dumps(sheet, ensure_ascii=False), character_id),
@@ -256,6 +318,8 @@ def grant_character_xp(
         "xp_lifetime_earned": life,
         "reason": reason,
     }
+    if levelup:
+        out["level_up"] = levelup
     if meta:
         out["meta"] = meta
     return out

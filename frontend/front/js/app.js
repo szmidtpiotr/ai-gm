@@ -2520,6 +2520,10 @@ async function handleSlashCommand(text) {
                 if (sub === 'set-state')       return `state: ${result.previous} → ${result.state}${result.warning ? '\n⚠ ' + result.warning : ''}`;
                 if (sub === 'reset-cooldowns')return 'Cooldowns wyzerowane (rest + dungeon).';
                 if (sub === 'dump-state')      return `Stan zrzucony — bohater ${result.name} (id ${result.character_id}). Patrz drawer 🐛.`;
+                if (sub?.startsWith('xp ')) {
+                    const lvlMsg = result.level_up ? ` ⬆ LEVEL UP! Poz. ${result.level_up.old_level} → ${result.level_up.new_level}` : '';
+                    return `PD ${result.op === 'add' ? '+' : '='}${result.amount} → dostępne: ${result.xp_available} | lifetime: ${result.xp_lifetime_earned} | Poz. ${result.level}${lvlMsg}`;
+                }
                 return JSON.stringify(result).slice(0, 200);
             })();
             appendMessage({ role: 'system', content: `🐛 ${summary}`, created_at: new Date() });
@@ -2673,6 +2677,7 @@ const DEBUG_CMD_TREE = {
     'set-hp':           {},
     'set-state':        { 'NARRATIVE': {}, 'COMBAT': {}, 'SKILL_TEST_PENDING': {} },
     'reset-cooldowns':  {},
+    'xp':               { 'add': {}, 'set': {} },
     'preview-death':    {},
     'preview-victory':  {},
 };
@@ -2684,6 +2689,9 @@ const DEBUG_CMD_HINTS = {
     'set-state COMBAT':            { hint: 'Tryb walki' },
     'set-state SKILL_TEST_PENDING':{ hint: 'Oczekiwanie na rzut umiejętności' },
     'reset-cooldowns': { hint: 'Wyzeruj short_rests + death_saves + cooldowny lochów' },
+    'xp':              { hint: 'Zarządzaj PD', placeholder: '<add|set> <N>' },
+    'xp add':          { hint: 'Dodaj N PD do xp_available (+ lifetime)', placeholder: '<N>' },
+    'xp set':          { hint: 'Ustaw xp_available na N', placeholder: '<N>' },
     'preview-death':   { hint: '👁 Podgląd ekranu śmierci (bez zmian w DB)' },
     'preview-victory': { hint: '👁 Podgląd ekranu zwycięstwa (bez zmian w DB)' },
 };
@@ -4097,6 +4105,36 @@ function setCombatMsg(text, isError) {
 }
 
 // ── Crit flash (T34) — Nat 20 / Nat 1 theatrical overlay ─────────────────
+// T25V2 — Level-up notification overlay
+function showLevelUpNotification(lu) {
+    if (!lu || !lu.new_level) return;
+    const existing = document.getElementById('levelup-overlay');
+    if (existing) existing.remove();
+
+    const el = document.createElement('div');
+    el.id = 'levelup-overlay';
+    el.className = 'levelup-overlay';
+    el.innerHTML = `
+        <div class="levelup-overlay__inner">
+            <div class="levelup-overlay__badge">AWANS</div>
+            <div class="levelup-overlay__level">Poziom ${lu.new_level}</div>
+            <div class="levelup-overlay__gains">
+                ${lu.hp_gain > 0 ? `<span>+${lu.hp_gain} HP</span>` : ''}
+                ${lu.mana_gain > 0 ? `<span>+${lu.mana_gain} Mana</span>` : ''}
+            </div>
+            <div class="levelup-overlay__tap">Dotknij aby zamknąć</div>
+        </div>`;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('levelup-overlay--active'));
+
+    const close = () => {
+        el.classList.remove('levelup-overlay--active');
+        setTimeout(() => el.remove(), 400);
+    };
+    el.addEventListener('click', close);
+    setTimeout(close, 5000);
+}
+
 let _critFlashTimer = null;
 const CRIT_FLASH_COPY = {
     crit:   { title: 'Cios Krytyczny', sub: 'Naturalny 20 — podwójne obrażenia' },
@@ -5110,7 +5148,8 @@ async function doRest(type, character, sheet) {
         }
         if (type === 'long') {
             const xpMsg = data.xp_unlocked > 0 ? ` Odblokowano ${data.xp_unlocked} PD.` : '';
-            showToast(`Długi odpoczynek. HP: ${data.hp_after}/${sheet.max_hp}. +8h.${xpMsg}`, 'success');
+            showToast(`Długi odpoczynek. HP: ${data.hp_after}/${data.new_max_hp || sheet.max_hp}. +8h.${xpMsg}`, 'success');
+            if (data.level_up) showLevelUpNotification(data.level_up);
         } else {
             showToast(`Krótki odpoczynek. HP: ${data.hp_before}→${data.hp_after} (+${data.hp_after - data.hp_before}). +1h. Pozostało: ${data.short_rests_remaining}/2`, 'success');
         }
