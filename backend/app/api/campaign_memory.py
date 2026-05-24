@@ -109,6 +109,7 @@ def post_memory_ask(
             user_id=user_id,
             question=body.question.strip(),
             model=str(camp["model_id"] or "").strip() or None,
+            character_id=body.character_id,  # J4: cross-campaign search
         )
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e)) from None

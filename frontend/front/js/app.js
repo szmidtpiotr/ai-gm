@@ -2496,7 +2496,7 @@ async function handleSlashCommand(text) {
     if (/^\/mem(\s|$)/i.test(t)) {
         const question = t.replace(/^\/mem\s*/i, '').trim();
         if (!question) {
-            appendMessage({ role: 'system', content: 'Użyj: <code>/mem [pytanie]</code> — pytanie o przeszłość z podsumowań.', created_at: new Date() });
+            appendMessage({ role: 'system', content: 'Użyj: <code>/mem [pytanie]</code> — pytanie o przeszłość ze wszystkich kampanii bohatera.', created_at: new Date() });
             scrollToBottom();
             return true;
         }
