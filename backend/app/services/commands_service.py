@@ -24,7 +24,7 @@ def is_command(text: str) -> bool:
     return (text or "").strip().startswith("/")
 
 
-def execute_command_logic(character_id: int, text: str) -> CommandResult:
+def execute_command_logic(character_id: int, text: str, forced_d20: int | None = None) -> CommandResult:
     text = (text or "").strip()
 
     if not text.startswith("/"):
@@ -243,7 +243,7 @@ def _execute_debug_command(cur, conn, character_id: int, char_row, sheet: dict, 
         )
 
     if sub == "roll":
-        return _execute_roll_command(cur, conn, character_id, char_row, sheet, sub_arg)
+        return _execute_roll_command(cur, conn, character_id, char_row, sheet, sub_arg, forced_d20=forced_d20)
 
     raise ValueError(
         f"Unknown debug subcommand: /debug {sub}. "
@@ -276,8 +276,10 @@ def _resolve_skill_input(conn, raw: str) -> str | None:
     return None
 
 
-def _execute_roll_command(cur, conn, character_id: int, char_row, sheet: dict, skill_arg: str) -> "CommandResult":
-    """Admin-only /debug roll [skill_key] — seeds a pending_skill_test and returns skill_test_pending payload."""
+def _execute_roll_command(cur, conn, character_id: int, char_row, sheet: dict, skill_arg: str, forced_d20: int | None = None) -> "CommandResult":
+    """Admin-only /debug roll [skill_key] [value?] — seeds a pending_skill_test and returns skill_test_pending payload.
+    If forced_d20 is provided (1-20), it is committed as the authoritative roll value instead of a random one.
+    """
     import random as _rand
     import uuid as _uuid
     from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
@@ -299,6 +301,7 @@ def _execute_roll_command(cur, conn, character_id: int, char_row, sheet: dict, s
     counter = _get_counter(conn, skill_key)
     dc = counter.get("dc", 12)
 
+    committed = int(forced_d20) if (forced_d20 is not None and 1 <= int(forced_d20) <= 20) else _rand.randint(1, 20)
     pending = {
         "skill_test_id": f"st-roll-{_uuid.uuid4().hex[:8]}",
         "skill_key": skill_key,
@@ -306,8 +309,8 @@ def _execute_roll_command(cur, conn, character_id: int, char_row, sheet: dict, s
         "dc": dc,
         "counter": counter,
         "modifier_breakdown": mod_info,
-        "committed_d20": _rand.randint(1, 20),
-        "source": "admin_roll_command",
+        "committed_d20": committed,
+        "source": "admin_roll_forced" if forced_d20 is not None else "admin_roll_command",
     }
 
     gs_row = conn.execute(

@@ -24,7 +24,7 @@ const SLASH_COMMANDS = [
     { cmd: '/helpme',  desc: 'Doradca OOC — wskazówki poza fabułą' },
     { cmd: '/admin',   desc: 'Komendy admina: add | set | remove | clear | combat | quest | show', adminOnly: true },
     { cmd: '/debug',   desc: 'Debug: dump-state | set-hp N | set-state STATE | reset-cooldowns | roll SKILL', adminOnly: true },
-    { cmd: '/roll',    desc: 'Admin: wymuś test umiejętności z animacją kostek (np. /roll skradanie)', adminOnly: true },
+    { cmd: '/roll',    desc: 'Admin: wymuś test umiejętności. /roll skradanie → kostek; /roll skradanie 18 → wstrzyknij wartość 18', adminOnly: true },
     { cmd: '/history', desc: 'Ostatnie 10 tur sesji' },
     { cmd: '/search',  desc: 'Przeszukaj lokację lub postać' },
     { cmd: '/atak',    desc: 'Synchronizuj panel walki lub zacznij walkę' },
@@ -2526,7 +2526,9 @@ async function handleSlashCommand(text) {
         return true;
     }
 
-    // /roll [skill_key] [intent] — admin-only: seeds a pending_skill_test and shows the dice popup
+    // /roll [skill_key] [value|intent] — admin-only
+    // /roll stealth        → dice popup (random committed roll)
+    // /roll stealth 18     → forced value 18, skip popup, resolve immediately
     if (/^\/roll(\s|$)/i.test(t)) {
         if (!playerIsAdmin()) {
             showToast('Brak uprawnień — /roll wymaga konta admina.', 'error');
@@ -2536,39 +2538,56 @@ async function handleSlashCommand(text) {
             showToast('Brak aktywnego bohatera — wejdź do kampanii.', 'error');
             return true;
         }
-        // Parse: /roll <skill_key> [intent...]
         const rollArgs = t.replace(/^\/roll\s*/i, '').trim();
-        const [skillKey, ...intentParts] = rollArgs.split(/\s+/);
-        const skillArg = skillKey || 'athletics';
-        const intent = intentParts.join(' ').trim(); // optional free-text context
+        const parts = rollArgs.split(/\s+/);
+        const skillArg = parts[0] || 'athletics';
+
+        // Detect forced value: second token is a number 1-20
+        const maybeVal = parts[1];
+        const forcedVal = (maybeVal && /^\d+$/.test(maybeVal) && +maybeVal >= 1 && +maybeVal <= 20)
+            ? +maybeVal : null;
+        const intent = forcedVal !== null ? parts.slice(2).join(' ').trim()
+                                         : parts.slice(1).join(' ').trim();
 
         try {
+            const body = {
+                character_id: characterData.id,
+                text: `/roll ${skillArg}`,
+                user_id: currentUser?.id,
+            };
+            if (forcedVal !== null) body.forced_d20 = forcedVal;
+            if (intent) body.intent = intent;
+
             const r = await fetch('/api/debug/command', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    character_id: characterData.id,
-                    text: `/roll ${skillArg}`,
-                    user_id: currentUser?.id,
-                    intent,          // passed through for context display
-                }),
+                body: JSON.stringify(body),
             });
             const data = await r.json().catch(() => ({}));
             if (!r.ok) {
                 showToast(`/roll: ${data?.detail || 'błąd'}`, 'error');
                 return true;
             }
-            // Show dice popup with the seeded pending_skill_test
+
             const stp = data?.skill_test_pending;
-            if (stp) {
-                if (intent) stp._admin_intent = intent; // attach intent for overlay subtitle
-                showSkillTestPopup(stp);
-            } else {
+            if (!stp) {
                 const res = data?.result || {};
                 appendMessage({ role: 'system', content: `🎲 /roll ${res.skill_label || skillArg} — DC ${res.dc}, mod ${res.modifier >= 0 ? '+' : ''}${res.modifier}`, created_at: new Date() });
+                return true;
+            }
+
+            if (forcedVal !== null) {
+                // Forced value path: skip popup, resolve immediately with the committed value
+                if (elements.btnSend) elements.btnSend.disabled = true;
+                await resolveSkillTest(stp.skill_test_id, forcedVal, null);
+            } else {
+                // Normal path: show 3D dice popup
+                if (intent) stp._admin_intent = intent;
+                showSkillTestPopup(stp);
             }
         } catch (e) {
             showToast(`/roll: ${e.message || e}`, 'error');
+            if (elements.btnSend) elements.btnSend.disabled = false;
         }
         return true;
     }

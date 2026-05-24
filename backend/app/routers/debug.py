@@ -30,6 +30,7 @@ class DebugCommandRequest(BaseModel):
     character_id: int
     text: str
     user_id: int | None = None
+    forced_d20: int | None = None  # admin override: inject specific roll value (1-20)
 
 
 @router.get("/last-turn")
@@ -219,15 +220,28 @@ def debug_command(
     from app.core.jwt_auth import require_admin_role
     require_admin_role(authorization, req.user_id)
     text = (req.text or "").strip()
-    # /roll [skill] is sugar for /debug roll [skill]
+    forced_d20: int | None = None
+    # /roll [skill] [value?] is sugar for /debug roll [skill]
+    # Strip a trailing numeric value (1-20) before transforming so it's passed separately.
     if text.startswith("/roll"):
         skill_arg = text[5:].strip()
+        parts = skill_arg.split()
+        if parts and parts[-1].isdigit():
+            v = int(parts[-1])
+            if 1 <= v <= 20:
+                forced_d20 = v
+                skill_arg = " ".join(parts[:-1])
         text = f"/debug roll {skill_arg}".strip()
+    # Also accept forced_d20 from request body directly
+    if req.forced_d20 is not None and forced_d20 is None:
+        v = int(req.forced_d20)
+        if 1 <= v <= 20:
+            forced_d20 = v
     if not text.startswith("/debug"):
         raise HTTPException(status_code=400, detail="Only /debug and /roll commands are accepted here")
     try:
         from app.services.commands_service import execute_command_logic
-        result = execute_command_logic(req.character_id, text)
+        result = execute_command_logic(req.character_id, text, forced_d20=forced_d20)
         return result.payload
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e)) from None
