@@ -332,10 +332,10 @@ Extends the hex travel system from a static map into a living, auto-expanding wo
 
 ### Stage 14 — Phase 11 Observability
 
-- [ ] **O1** TASK_47: `game_events` table + `event_logger` service
-- [ ] **O2** TASK_48: `llm_call_log` table + admin viewer
-- [ ] **O3** TASK_49: admin analytics panel (dashboard/events/LLM tabs)
-- [ ] **O4** TASK_50: MCP server with 9 tools for AI-queryable game data
+- [x] **O1** TASK_47: `game_events` table + `event_logger` service — commit `cc51537`
+- [x] **O2** TASK_48: `llm_call_log` table + admin viewer — commit `cc51537`
+- [x] **O3** TASK_49: admin analytics panel (dashboard/events/LLM tabs) — commit `cc51537`
+- [ ] **O4** TASK_50: MCP server with 9 tools for AI-queryable game data — **deferred** (issue #101)
 
 ### Stage 15 — Phase 12 AI Test Agent
 
