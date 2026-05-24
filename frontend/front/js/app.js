@@ -4695,6 +4695,9 @@ function populateCharacterSheet(character) {
     pulseXpOnGain(xpAvail);  // S10
     if (xpNextEl) xpNextEl.textContent = level < 10 ? `${xpToNext} do mil. ${nextMilestone}` : 'MAX';
 
+    // J5: XP timeline — full 10-level progression
+    renderXpTimeline(sheet);
+
     // X5: Rest buttons — show/hide based on safe_for_rest from current location
     renderRestButtons(character, sheet);
 
@@ -4760,6 +4763,43 @@ async function refreshCharacterSheet() {
     } catch (e) {
         console.warn('[refreshCharacterSheet] failed:', e);
     }
+}
+
+function renderXpTimeline(sheet) {
+    const container = document.getElementById('xp-timeline-card');
+    if (!container) return;
+    const MAX_XP = 1000;
+    const xpLifetime = Math.max(0, parseInt(sheet.xp_lifetime_earned ?? 0));
+    const level = Math.min(10, Math.max(1, Math.floor(xpLifetime / 100) + 1));
+    const fillPct = Math.min(100, (xpLifetime / MAX_XP) * 100);
+
+    // 9 dividers at 10%, 20% ... 90%
+    let divsHtml = '';
+    for (let i = 1; i < 10; i++) {
+        divsHtml += `<span class="xp-timeline__div" style="left:${i * 10}%"></span>`;
+    }
+
+    // 10 level labels, each spanning 10% of the bar
+    let labelsHtml = '';
+    for (let lvl = 1; lvl <= 10; lvl++) {
+        const cls = lvl === level ? 'xp-timeline__label xp-timeline__label--current' : 'xp-timeline__label';
+        labelsHtml += `<span class="${cls}">L${lvl}</span>`;
+    }
+
+    const toNext = level < 10 ? (level * 100 - xpLifetime) : 0;
+    const metaText = level < 10
+        ? `${xpLifetime} PD · Poz. ${level} · ${toNext} PD do Poz. ${level + 1}`
+        : `${xpLifetime} PD · Poz. 10 · MAX`;
+
+    container.innerHTML = `
+      <div class="xp-timeline__track-wrap">
+        <div class="xp-timeline__fill" style="width:${fillPct}%"></div>
+        <div class="xp-timeline__dividers">${divsHtml}</div>
+        <div class="xp-timeline__cursor" style="left:${fillPct}%"></div>
+      </div>
+      <div class="xp-timeline__labels">${labelsHtml}</div>
+      <div class="xp-timeline__meta">${metaText}</div>
+    `;
 }
 
 function renderRestButtons(character, sheet) {
