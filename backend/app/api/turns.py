@@ -3946,6 +3946,13 @@ def create_turn_stream(
                             done_payload["skill_test_pending"] = _sf_done["pending_skill_test"]
                         if _sf_done.get("state"):
                             done_payload["state"] = _sf_done["state"]
+                    # T38: signal victory when [CAMPAIGN_END] tag fired this turn
+                    _camp_row = _sf_done_conn.execute(
+                        "SELECT status FROM campaigns WHERE id = ? LIMIT 1",
+                        (campaign_id_val,),
+                    ).fetchone()
+                    if _camp_row and str(_camp_row["status"] or "").lower() in ("completed", "ended"):
+                        done_payload["campaign_ended"] = True
                 finally:
                     _sf_done_conn.close()
             except Exception:

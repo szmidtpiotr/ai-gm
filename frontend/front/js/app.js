@@ -3272,6 +3272,12 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         _refreshDebugBlocks();
         updateInputPlaceholder();
 
+        // T38: victory auto-trigger when [CAMPAIGN_END] tag fired this turn
+        if (result.campaign_ended) {
+            showVictoryScreen();
+            return;
+        }
+
         // J3 — count narrative turns; show journal badge every 10
         if (inputType !== 'combat') {
             _journalBadgeTurns++;
@@ -3363,6 +3369,7 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             const meta = payload.length > 6 ? JSON.parse(payload.slice(6)) : {};
             if (meta.skill_test_pending) result.skill_test_pending = meta.skill_test_pending;
             if (meta.current_location)   result.current_location   = meta.current_location;
+            if (meta.campaign_ended)     result.campaign_ended     = true;
             return;
         }
 
@@ -6956,8 +6963,6 @@ function hideVictoryScreen() {
         document.body.style.overflow = '';
     }
 }
-// Exposed on window for manual testing — proper auto-trigger via [CAMPAIGN_END]
-// tag is a separate task (see #62 Sub-phase 9-B / Stage 9 notes).
 window.showVictoryScreen = showVictoryScreen;
 
 // Stage 9 P5/P6 — preview commands.

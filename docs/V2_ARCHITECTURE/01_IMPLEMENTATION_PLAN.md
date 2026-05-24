@@ -11,10 +11,10 @@
 ## Current state snapshot (2026-05-24)
 
 **Fully done ✅ (per spec, no gaps):**
-T01 T02 T03 T04 · T05 T06 T07 · T10 · T11 T13 · T14 T15 T17 T18 T19 · T21 T22 T23 T26 (spells) T41 · T26N T27 T29 · T30 T31 T40 · T33 (UI) T34 T43 · T46 · T47a · T48 · **T25V2 T26X**
+T01 T02 T03 T04 · T05 T06 T07 · T10 · T11 T13 · T14 T15 T17 T18 T19 · T21 T22 T23 T26 (spells) T41 · T26N T27 T29 · T30 T31 T40 · T33 (UI) T34 T43 · T46 · T47a · T48 · **T25V2 T26X T37 T38**
 
 **Partially done ⚠️ (functional but with spec gaps):**
-T08 T09 (review queue details) · T04B T12 (frontend popup) · T16 (condition rename pending) · T20 (3-slot → 8-slot pending) · T24 (no frontend label) · T28 (deceased context) · T32 T33SA · T35 (see #24) · T44 (player UI missing) · T36 T37 T38 T39 · T42
+T08 T09 (review queue details) · T04B T12 (frontend popup) · T16 (condition rename pending) · T20 (3-slot → 8-slot pending) · T24 (no frontend label) · T28 (deceased context) · T32 T33SA · T35 (see #24) · T44 (player UI missing) · T36 T39 · T42
 
 **Not started ❌:**
 T45 Hero Journal
@@ -162,8 +162,8 @@ Implementation order locked in `DECISIONS_2026_05_18.md` § "Implementation orde
 | Task | File | Status | Notes |
 |------|------|--------|-------|
 | 36 | TASK_36_MEMORY_HISTORY | ⚠️ | `/mem` semantic search ✅, `/helpme` ✅, `campaign_history` summary generator ✅. **Missing:** dual summaries (player vs gm), session-start GM continuity injection wiring, Historia cooldown enforcement. |
-| 37 | TASK_37_COMMAND_PALETTE | ⚠️ | `/help` lists commands in system bubble ✅. **Missing:** full modal with search, click-to-insert, per-command admin toggle. |
-| 38 | TASK_38_CAMPAIGN_END_DEATH | ⚠️ | Death screen overlay ✅, epitaph LLM (`solo_death_service.generate_epitaph_llm`) ✅. **Missing:** epitaph wiring into UI, victory screen ending content, post-end "Nowa Przygoda/Nowy Świat" options. |
+| 37 | TASK_37_COMMAND_PALETTE | ✅ | Full modal with search (`#command-palette`), click-to-insert (cursor positioned), keyboard nav (↑↓ Enter Esc), Ctrl+/ global binding, admin-only commands filtered by role, per-command `admin_enabled`/`player_enabled` toggles via admin panel → `/mechanics/slash-commands` endpoint. Roadmap description was stale (2026-05-24). |
+| 38 | TASK_38_CAMPAIGN_END_DEATH | ✅ | Death screen + LLM epitaph ✅, victory screen ✅, post-end options (new-adventure / new-world / new-hero) ✅, resurrection flow ✅. **T38 fix (2026-05-24):** streaming `[DONE]` payload now carries `campaign_ended: true` when campaign status is `completed/ended`; frontend calls `showVictoryScreen()` automatically on `[CAMPAIGN_END]` tag. |
 | 39 | TASK_39_AUTH_ONBOARDING | ⚠️ | Basic login + admin token works. **Missing per [DECISIONS D6]:** JWT migration, bcrypt verification, brute-force lockout, role-based access (player/gm/admin), onboarding overlay. Ship as one bundle. |
 | 45 | TASK_45_HERO_JOURNAL | ❌ | Cross-campaign chronicle, chapter summaries, /mem cross-campaign, XP timeline, cross-campaign minimap. Schema for `character_campaign_history` exists from T42 — UI work starts here. |
 
