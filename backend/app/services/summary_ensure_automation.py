@@ -10,7 +10,9 @@ import threading
 from app.core.logging import get_logger
 from app.services.history_summary_service import (
     count_narrative_turns,
+    generate_and_persist_dual_summary,
     get_summary_auto_ensure_every_n_narrative_turns,
+    touch_rollup_cooldown_anchor,
 )
 from app.services.summary_ensure_service import (
     SummaryEnsureHttpError,
@@ -27,21 +29,19 @@ def _get_db():
 
 
 def _run_ensure_bg(campaign_id: int, owner_user_id: int) -> None:
+    """T36: use dual summary (one LLM call → player + gm persisted in campaign_ai_summaries)."""
     try:
-        out = run_ensure_campaign_history_summary(
+        out = generate_and_persist_dual_summary(
             campaign_id=campaign_id,
             user_id=owner_user_id,
         )
-    except SummaryEnsureHttpError as e:
-        logger.warning(
-            "summary_auto_ensure_result",
-            campaign_id=campaign_id,
-            ok=False,
-            status_code=e.status_code,
-            detail=e.detail,
-        )
-        return
-    except Exception as e:  # pragma: no cover - defensive
+        # Stamp the shared rollup cooldown anchor so the next auto-ensure doesn't fire too soon.
+        conn = _get_db()
+        try:
+            touch_rollup_cooldown_anchor(conn, campaign_id)
+        finally:
+            conn.close()
+    except Exception as e:
         logger.exception(
             "summary_auto_ensure_result",
             campaign_id=campaign_id,
@@ -54,9 +54,10 @@ def _run_ensure_bg(campaign_id: int, owner_user_id: int) -> None:
         "summary_auto_ensure_result",
         campaign_id=campaign_id,
         ok=True,
-        refreshed=bool(out.get("refreshed")),
-        cooldown_active=bool(out.get("cooldown_active")),
-        summary_id=out.get("summary_id"),
+        player_saved=bool(out.get("player_saved")),
+        gm_saved=bool(out.get("gm_saved")),
+        included_turn_count=out.get("included_turn_count"),
+        warning=out.get("warning"),
     )
 
 

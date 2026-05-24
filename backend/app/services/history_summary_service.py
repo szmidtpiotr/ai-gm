@@ -368,6 +368,51 @@ def fetch_latest_saved_summary(
     return dict(row) if row else None
 
 
+def generate_and_persist_dual_summary(
+    *,
+    campaign_id: int,
+    user_id: int,
+    max_turns: int = 200,
+) -> dict[str, Any]:
+    """T36 — one LLM call → persist both player + gm summaries to campaign_ai_summaries.
+
+    Returns {"player_saved": bool, "gm_saved": bool, "included_turn_count": int}.
+    Best-effort: persists whatever is non-empty.
+    """
+    result = generate_dual_summary_preview(
+        campaign_id=campaign_id,
+        user_id=user_id,
+        max_turns=max_turns,
+    )
+    if result.get("parse_error"):
+        return {"player_saved": False, "gm_saved": False, "included_turn_count": 0,
+                "warning": result.get("parse_error")}
+
+    ps = (result.get("player_summary") or "").strip()
+    gn = (result.get("gm_notes") or "").strip()
+    turn_count = int(result.get("included_turn_count") or 0)
+    model = str(result.get("model_used") or "")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    player_saved = gm_saved = False
+    try:
+        if ps:
+            persist_summary(conn, campaign_id=campaign_id, summary_text=ps,
+                            model_used=model, included_turn_count=turn_count,
+                            audience=SUMMARY_AUDIENCE_PLAYER)
+            player_saved = True
+        if gn:
+            persist_summary(conn, campaign_id=campaign_id, summary_text=gn,
+                            model_used=model, included_turn_count=turn_count,
+                            audience=SUMMARY_AUDIENCE_GM)
+            gm_saved = True
+    finally:
+        conn.close()
+    return {"player_saved": player_saved, "gm_saved": gm_saved,
+            "included_turn_count": turn_count, "warning": result.get("warning")}
+
+
 def fetch_latest_saved_summary_for_narrative(
     conn: sqlite3.Connection,
     campaign_id: int,
