@@ -11,10 +11,10 @@
 ## Current state snapshot (2026-05-24)
 
 **Fully done ✅ (per spec, no gaps):**
-T01 T02 T03 T04 · T05 T06 T07 · T10 · T11 T13 · T14 T15 T17 T18 T19 · T21 T22 T23 T26 (spells) T41 · T26N T27 T29 · T30 T31 T40 · T33 (UI) T34 T43 · T46 · T47a · T48 · **T25V2 T26X T37 T38**
+T01 T02 T03 T04 · T05 T06 T07 · T10 · T11 T13 · T14 T15 T17 T18 T19 · T21 T22 T23 T26 (spells) T41 · T26N T27 T29 · T30 T31 T40 · T33 (UI) T34 T43 · T46 · T47a · T48 · **T25V2 T26X T37 T38 T42**
 
 **Partially done ⚠️ (functional but with spec gaps):**
-T08 T09 (review queue details) · T04B T12 (frontend popup) · T16 (condition rename pending) · T20 (3-slot → 8-slot pending) · T24 (no frontend label) · T28 (deceased context) · T32 T33SA · T35 (see #24) · T44 (player UI missing) · T36 T39 · T42
+T08 T09 (review queue details) · T04B T12 (frontend popup) · T16 (condition rename pending) · T20 (3-slot → 8-slot pending) · T24 (no frontend label) · T28 (deceased context) · T32 T33SA · T35 (see #24) · T44 (player UI missing) · T36 T39
 
 **Not started ❌:**
 T45 Hero Journal
@@ -74,7 +74,7 @@ Implementation order locked in `DECISIONS_2026_05_18.md` § "Implementation orde
 | 05 | TASK_05_HP_MANA_FORMULAS | ✅ | HP = base + CON_mod × level. Mana = 8 + INT_mod × level (Scholar) |
 | 06 | TASK_06_CHARACTER_WIZARD | ✅ | 4-step wizard, GM identity generation, secret predisposition |
 | 07 | TASK_07_CAMPAIGN_PLAN_GENERATION | ✅ | LLM generates from character + Ideas Bank |
-| 42 | TASK_42_PERSISTENT_HERO | ⚠️ | Schema done (`hero_status`, `visited_location_keys`, `character_campaign_history`). Endpoints + UI **missing**: `GET /api/heroes`, `GET /characters/{id}/history`, `POST /characters/{id}/rest`, between-campaigns REST UI. See [AUDIT_2026_05_18 → D4]. |
+| 42 | TASK_42_PERSISTENT_HERO | ✅ | `GET /api/heroes` (enriched) ✅, `GET /characters/{id}/history` ✅, `POST /characters/{id}/rest` ✅, hero history modal (📜 Historia, chapter list + cross-campaign minimap) ✅, hero status badges ✅. **T42 fix (2026-05-24):** `flush_pending_xp_on_campaign_end()` in `rest_service.py` — called from victory (`xp_sources.grant_campaign_end`) and death (`solo_death_service.end_solo_campaign_on_death`) paths; idle heroes now always have their PD available for spending. Victory screen + death screen show `xp_unlocked` count. |
 
 ### Phase 03 — World
 > Depends on Phase 01.

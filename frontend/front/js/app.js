@@ -6874,6 +6874,9 @@ async function showDeathScreen(characterName) {
                     const data = await r.json();
                     if (data?.outcome === 'death' && data?.epitaph) {
                         epitaphElement.textContent = data.epitaph;
+                        if (data.xp_unlocked > 0) {
+                            showToast(`✦ ${data.xp_unlocked} PD odblokowano — dostępne w następnej przygodzie`, 'info', 4000);
+                        }
                     }
                 }
             } catch (_e) { /* keep default */ }
@@ -6950,7 +6953,8 @@ async function showVictoryScreen() {
         const titleEl = document.getElementById('victory-ending-title');
         const sumEl   = document.getElementById('victory-ending-summary');
         if (nameEl)  nameEl.textContent  = data.character_name || 'Bohater';
-        if (metaEl)  metaEl.textContent  = `${data.character_class || ''} · Poz. ${data.level || 1} · ${data.xp_lifetime_earned ?? 0} PD`;
+        const xpUnlocked = data.xp_unlocked > 0 ? ` · ✦ ${data.xp_unlocked} PD odblokowano` : '';
+        if (metaEl)  metaEl.textContent  = `${data.character_class || ''} · Poz. ${data.level || 1} · ${data.xp_lifetime_earned ?? 0} PD${xpUnlocked}`;
         if (titleEl) titleEl.textContent = data.ending_title || '';
         if (sumEl)   sumEl.textContent   = data.ending_summary || '';
     } catch (_e) {}

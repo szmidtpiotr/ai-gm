@@ -230,6 +230,57 @@ def perform_long_rest(
     return result
 
 
+def flush_pending_xp_on_campaign_end(
+    conn: sqlite3.Connection,
+    character_id: int,
+    campaign_id: int,
+) -> int:
+    """T42 — convert pending_xp → xp_available when a campaign ends (victory/death/abandoned).
+
+    Between campaigns IS the long rest. This ensures idle heroes can spend XP
+    without needing an in-campaign rest endpoint.
+    Returns the amount flushed (0 if none pending).
+    """
+    from app.services.dice import parse_character_sheet
+    from app.services.xp_service import apply_levelup_if_needed
+
+    row = conn.execute(
+        "SELECT sheet_json FROM characters WHERE id = ?", (character_id,)
+    ).fetchone()
+    if not row:
+        return 0
+    sheet = parse_character_sheet(row["sheet_json"])
+    pending = int(sheet.get("pending_xp") or 0)
+    if pending <= 0:
+        return 0
+
+    xp_available = int(sheet.get("xp_available") or 0)
+    xp_lifetime  = int(sheet.get("xp_lifetime_earned") or 0)
+    sheet["pending_xp"] = 0
+    sheet["xp_available"] = xp_available + pending
+    sheet["xp_lifetime_earned"] = xp_lifetime + pending
+
+    apply_levelup_if_needed(sheet, conn)
+
+    conn.execute(
+        "UPDATE characters SET sheet_json = ? WHERE id = ?",
+        (json.dumps(sheet, ensure_ascii=False), character_id),
+    )
+    try:
+        conn.execute(
+            "INSERT INTO character_xp_grants "
+            "(character_id, campaign_id, amount, reason, source, granted_by_user_id) "
+            "VALUES (?, ?, ?, 'Koniec przygody — odblokowanie PD', 'campaign_end_flush', 0)",
+            (character_id, campaign_id, pending),
+        )
+    except Exception:
+        pass
+    conn.commit()
+    logger.info("pending_xp_flushed_on_campaign_end",
+                character_id=character_id, campaign_id=campaign_id, amount=pending)
+    return pending
+
+
 def perform_short_rest(
     conn: sqlite3.Connection,
     character_id: int,

@@ -125,6 +125,12 @@ def grant_campaign_end(conn: sqlite3.Connection, character_id: int, campaign_id:
             )
     except Exception as _j2_err:
         logger.warning("j2_victory_history_failed", error=str(_j2_err), campaign_id=campaign_id)
+    # T42: flush pending_xp on victory — between campaigns counts as long rest
+    try:
+        from app.services.rest_service import flush_pending_xp_on_campaign_end
+        flush_pending_xp_on_campaign_end(conn, character_id, campaign_id)
+    except Exception as _flush_err:
+        logger.warning("pending_xp_flush_failed_victory", error=str(_flush_err))
     return xp
 
 

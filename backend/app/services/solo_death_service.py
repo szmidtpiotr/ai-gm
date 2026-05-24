@@ -173,6 +173,13 @@ def end_solo_campaign_on_death(
         campaign_id=campaign_id,
         character_name=name,
     )
+    # T42: flush pending_xp on death — between campaigns counts as long rest
+    try:
+        character_id = int(character_row["id"])
+        from app.services.rest_service import flush_pending_xp_on_campaign_end
+        flush_pending_xp_on_campaign_end(conn, character_id, campaign_id)
+    except Exception as _flush_err:
+        logger.warning("pending_xp_flush_failed_death", error=str(_flush_err))
     return epitaph
 
 
@@ -296,4 +303,18 @@ def _end_summary_payload(
         "ending_summary": ending_summary,
         "secret": str(ident.get("secret") or ""),
         "bonds": bonds_out,
+        "xp_unlocked": _get_end_flush_xp(conn, int(ch["id"]), int(camp["id"])),
     }
+
+
+def _get_end_flush_xp(conn: sqlite3.Connection, character_id: int, campaign_id: int) -> int:
+    """Return pending_xp flushed at campaign end (source='campaign_end_flush')."""
+    try:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM character_xp_grants "
+            "WHERE character_id = ? AND campaign_id = ? AND source = 'campaign_end_flush'",
+            (character_id, campaign_id),
+        ).fetchone()
+        return int(row[0] or 0)
+    except Exception:
+        return 0
