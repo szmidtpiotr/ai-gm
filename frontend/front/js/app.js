@@ -3,6 +3,18 @@
  * Task T28.5 - Alternative frontend based on Figma designs v18-20
  */
 
+// ── Theme system ──────────────────────────────────────────────────────────
+const VALID_THEMES = ['dark', 'amber', 'sepia', 'light'];
+
+function applyTheme(theme) {
+    const t = VALID_THEMES.includes(theme) ? theme : 'dark';
+    document.documentElement.dataset.theme = t;
+    localStorage.setItem('aigm_theme', t);
+}
+
+// Apply saved theme immediately on load (before any rendering)
+applyTheme(localStorage.getItem('aigm_theme') || 'dark');
+
 const API_BASE = '/api';
 
 const SLASH_COMMANDS = [
@@ -898,7 +910,18 @@ function renderHeroes(heroes) {
     });
 }
 
-// Stage 6 H4: Hero history modal — past campaigns with outcome / XP / turns / date.
+function _toRoman(n) {
+    if (!n || n < 1) return '?';
+    const v = [1000,900,500,400,100,90,50,40,10,9,5,4,1];
+    const r = ['M','CM','D','CD','C','XC','L','XL','X','IX','V','IV','I'];
+    let out = '';
+    for (let i = 0; i < v.length; i++) {
+        while (n >= v[i]) { out += r[i]; n -= v[i]; }
+    }
+    return out;
+}
+
+// Stage 12 J1: Hero Journal — chapter list, one per completed campaign.
 async function openHeroHistoryModal(hero) {
     let modal = document.getElementById('hero-history-modal');
     if (!modal) {
@@ -909,7 +932,13 @@ async function openHeroHistoryModal(hero) {
           <div class="hero-history-modal__backdrop" data-action="close"></div>
           <div class="hero-history-modal__card">
             <header class="hero-history-modal__header">
-              <h3 id="hero-history-modal-title">Historia</h3>
+              <div class="hero-history-modal__header-inner">
+                <span class="hero-history-modal__crest">📜</span>
+                <div>
+                  <div class="hero-history-modal__hero-name" id="hero-history-modal-hero"></div>
+                  <h3 id="hero-history-modal-title">Kronika przygód</h3>
+                </div>
+              </div>
               <button type="button" class="hero-history-modal__close" data-action="close" aria-label="Zamknij">✕</button>
             </header>
             <div class="hero-history-modal__body" id="hero-history-modal-body">
@@ -923,9 +952,9 @@ async function openHeroHistoryModal(hero) {
             }
         });
     }
-    const title = document.getElementById('hero-history-modal-title');
-    const body  = document.getElementById('hero-history-modal-body');
-    if (title) title.textContent = `📜 ${hero.name} — historia`;
+    const heroNameEl = document.getElementById('hero-history-modal-hero');
+    const body = document.getElementById('hero-history-modal-body');
+    if (heroNameEl) heroNameEl.textContent = hero.name;
     if (body) body.innerHTML = `<p class="hero-history-modal__loading">Wczytywanie…</p>`;
     modal.classList.add('hero-history-modal--open');
 
@@ -935,30 +964,44 @@ async function openHeroHistoryModal(hero) {
         if (!body) return;
         if (!rows.length) {
             const isFirstActive = (hero.hero_status || hero.status) === 'in_campaign';
-            body.innerHTML = `<p class="hero-history-modal__empty">${isFirstActive
-                ? 'Aktualna przygoda jest pierwszą — historia zapełni się po jej zakończeniu.'
-                : 'Ten bohater jeszcze nie skończył żadnej przygody.'}</p>`;
+            body.innerHTML = `
+              <div class="journal-empty">
+                <div class="journal-empty__glyph">📜</div>
+                <p class="journal-empty__text">${isFirstActive
+                    ? 'Pierwsza przygoda trwa — jej rozdział pojawi się tu po zakończeniu.'
+                    : 'Kronika jest pusta. Żadna przygoda nie dobiegła jeszcze końca.'}</p>
+              </div>`;
             return;
         }
-        const outcomeIcon = { victory: '🏆', death: '💀', abandoned: '🚪' };
+        const outcomeIcon  = { victory: '🏆', death: '💀', abandoned: '🚪' };
         const outcomeLabel = { victory: 'Zwycięstwo', death: 'Śmierć', abandoned: 'Porzucono' };
-        body.innerHTML = `<ul class="hero-history-list">` + rows.map(h => {
-            const icon  = outcomeIcon[h.outcome] || '•';
-            const lbl   = outcomeLabel[h.outcome] || h.outcome || '—';
-            const title = h.campaign_title || `Kampania #${h.campaign_id}`;
-            const when  = _relativeTimePL(h.completed_at || h.created_at) || '—';
+        body.innerHTML = `<ol class="journal-list">` + rows.map((h, idx) => {
+            const chapterN  = rows.length - idx;
+            const icon      = outcomeIcon[h.outcome]  || '•';
+            const lbl       = outcomeLabel[h.outcome] || h.outcome || '—';
+            const chTitle   = _esc(h.campaign_title   || `Kampania #${h.campaign_id}`);
+            const when      = _relativeTimePL(h.completed_at || h.created_at) || '—';
+            const outcomeClass = _esc(h.outcome || 'abandoned');
+            const summaryHtml = h.chapter_summary
+                ? `<p class="journal-chapter__summary">${_esc(h.chapter_summary)}</p>`
+                : `<p class="journal-chapter__summary journal-chapter__summary--pending">Podsumowanie rozdziału zostanie wygenerowane wkrótce…</p>`;
             return `
-              <li class="hero-history-row hero-history-row--${_esc(h.outcome)}">
-                <span class="hero-history-row__icon">${icon}</span>
-                <div class="hero-history-row__main">
-                  <div class="hero-history-row__title">${_esc(title)}</div>
-                  <div class="hero-history-row__meta">${_esc(lbl)} · ${h.xp_earned ?? 0} PD · ${h.turns_count ?? 0} tur · ${_esc(when)}</div>
-                  ${h.chapter_summary ? `<div class="hero-history-row__summary">${_esc(h.chapter_summary)}</div>` : ''}
+              <li class="journal-chapter journal-chapter--${outcomeClass}">
+                <div class="journal-chapter__eyebrow">Rozdział ${_toRoman(chapterN)}</div>
+                <div class="journal-chapter__title">${chTitle}</div>
+                <div class="journal-chapter__outcome-row">
+                  <span class="journal-chapter__outcome-badge journal-chapter__outcome-badge--${outcomeClass}">
+                    ${icon} ${_esc(lbl)}
+                  </span>
+                  <span class="journal-chapter__stats">
+                    ${h.xp_earned ?? 0} PD &middot; ${h.turns_count ?? 0} tur &middot; ${_esc(when)}
+                  </span>
                 </div>
+                ${summaryHtml}
               </li>`;
-        }).join('') + `</ul>`;
+        }).join('') + `</ol>`;
     } catch (err) {
-        if (body) body.innerHTML = `<p class="hero-history-modal__empty">Nie udało się wczytać historii: ${_esc(err.message || err)}</p>`;
+        if (body) body.innerHTML = `<p class="hero-history-modal__empty">Nie udało się wczytać kroniki: ${_esc(err.message || err)}</p>`;
     }
 }
 
@@ -6819,6 +6862,19 @@ async function showOnboardingCinematic() {
     // CTA is shown by CSS animation at 5s — nothing else needed
 }
 
+function _advanceOnboardingToThemePicker() {
+    document.getElementById('onboarding-step-1')?.classList.add('onboarding__content--hidden');
+    const step2 = document.getElementById('onboarding-step-2');
+    if (!step2) return;
+    step2.classList.remove('onboarding__content--hidden');
+
+    // Mark active swatch based on current saved theme
+    const current = localStorage.getItem('aigm_theme') || 'dark';
+    step2.querySelectorAll('.onboarding__theme-swatch').forEach(btn => {
+        btn.classList.toggle('onboarding__theme-swatch--active', btn.dataset.theme === current);
+    });
+}
+
 async function completeOnboarding() {
     clearTimeout(_onboardingTimer);
     try {
@@ -7159,8 +7215,18 @@ function initEventListeners() {
     document.getElementById('forgot-back-link')?.addEventListener('click', () => showScreen('login'));
     document.getElementById('reset-back-link')?.addEventListener('click', () => showScreen('login'));
 
-    // Onboarding cinematic
-    document.getElementById('onboarding-cta')?.addEventListener('click', completeOnboarding);
+    // Onboarding — step 1 CTA advances to theme picker
+    document.getElementById('onboarding-cta')?.addEventListener('click', _advanceOnboardingToThemePicker);
+    // Onboarding — theme swatches
+    document.getElementById('onboarding-themes')?.addEventListener('click', e => {
+        const btn = e.target.closest('.onboarding__theme-swatch');
+        if (!btn) return;
+        document.querySelectorAll('.onboarding__theme-swatch').forEach(b => b.classList.remove('onboarding__theme-swatch--active'));
+        btn.classList.add('onboarding__theme-swatch--active');
+        applyTheme(btn.dataset.theme);
+    });
+    // Onboarding — final "Zaczynam przygodę" button
+    document.getElementById('onboarding-start')?.addEventListener('click', completeOnboarding);
 
     // Profile page
     document.getElementById('profile-back-btn')?.addEventListener('click', () => showScreen(_profileReturnScreen || 'heroes'));

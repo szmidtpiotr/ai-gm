@@ -221,7 +221,7 @@ Stage 9 covers 7 items across 3 task areas (TASK_36 summaries, TASK_37 palette, 
 - [x] **A3** All 18 authenticated endpoints now resolve `user_id` via `resolve_authed_user_id(authorization, user_id_query)`. Trust order: (1) JWT signature → payload.sub; (2) legacy `?user_id=` query (logs deprecation warning); (3) 401 if neither. When both present, must agree or 400. Endpoints sweep covers `auth.py`, `campaign_history.py`, `campaign_helpme.py`, `campaign_memory.py`, `campaigns.py`, `characters.py`, `debug.py`. Frontend `apiRequest` already attaches the Bearer header (10-B); two stray raw `fetch()` calls (xp + xp/grant-log) migrated to `apiRequest` so they get the header automatically.
 - [x] **A6** Admin-only endpoints use `require_admin_role(authorization, user_id_query)` — verifies JWT `role='admin'` OR `is_admin=1` claim; falls back to DB lookup when only query param present. Applied to `/debug/last-turn`, `/debug/command`, and the `/summaries` gm-audience gate. 403 for non-admins, 400 for mismatched JWT+query.
 - [x] **A7** Multi-device verification — JWT is stateless by design; two independent sessions sign their own tokens and the server validates each independently. Manual two-tab login confirmed both work concurrently with separate access tokens (acceptance check, no code change required).
-- [ ] **A8** Onboarding overlay — first-login modal: welcome text, theme picker, accept rules, [Zaczynam przygodę], `users.onboarded_at` flag
+- [x] **A8** Onboarding 2-step: cinematic welcome (step 1) + theme picker (step 2, 4 themes: Mrok/Bursztyn/Sepia/Jasność, live CSS var overrides, saved to localStorage). `users.onboarded_at` flag set on completion. CSS `[data-theme=*]` overrides applied on page load. — commit `d79fa05` (cinematic) + `A8-theme-picker-2026-05-24`
 
 ### Stage 11 — Hero Resurrection system [see #64]
 
@@ -246,31 +246,31 @@ Design decisions resolved with owner in #64: XP revert cascades to skill/spell p
 > Full design session complete 2026-05-22. All screens decided. See doc for DB schema + screen specs.
 
 #### Backend foundation [#67]
-- [ ] **C1** DB migration — `user_invites`, `email_verification_tokens`, `password_reset_tokens`, `user_friendships` tables; `users.invited_by_user_id`, `email_verified_at`, `onboarded_at`, `invite_weekly_limit` columns; `app_config` keys: `smtp_*`, `registration_open`
-- [ ] **C2** Email service — `app/services/email_service.py`: `send_email(to, subject, html)` via SMTP using `app_config` settings; `send_invite_email()`, `send_verification_email()`, `send_password_reset_email()` helpers
+- [x] **C1** DB migration — `user_invites`, `email_verification_tokens`, `password_reset_tokens`, `user_friendships` tables; `users.invited_by_user_id`, `email_verified_at`, `onboarded_at`, `invite_weekly_limit` columns; `app_config` keys: `smtp_*`, `registration_open`
+- [x] **C2** Email service — `app/services/email_service.py`: `send_email(to, subject, html)` via SMTP using `app_config` settings; `send_invite_email()`, `send_verification_email()`, `send_password_reset_email()` helpers
 
 #### Invite + registration [#68]
-- [ ] **C3** Invite CRUD — `POST /api/invites` (create, admin or player, respects weekly quota), `GET /api/invites/{code}` (validate + return inviter info), admin endpoints: list all invites, revoke, boost user quota
-- [ ] **C4** Registration — `POST /api/auth/register` (validates invite code/token, creates user, marks invite used, sends verification email, returns JWT)
-- [ ] **C5** `GET /api/auth/registration-status` (public) — returns `{open: bool}` for login screen conditional link
+- [x] **C3** Invite CRUD — `POST /api/invites` (create, admin or player, respects weekly quota), `GET /api/invites/{code}` (validate + return inviter info), admin endpoints: list all invites, revoke, boost user quota
+- [x] **C4** Registration — `POST /api/auth/register` (validates invite code/token, creates user, marks invite used, sends verification email, returns JWT)
+- [x] **C5** `GET /api/auth/registration-status` (public) — returns `{open: bool}` for login screen conditional link
 
 #### Email verification + password reset [#69]
-- [ ] **C6** Email verification — `POST /api/auth/verify-email` (validates token, sets `email_verified_at`); `POST /api/auth/resend-verification` (rate-limited 1/2min); login endpoint returns `{error: "email_unverified"}` when unverified on 2nd+ login
-- [ ] **C7** Password reset — `POST /api/auth/forgot-password` (always 200, sends email if account exists); `POST /api/auth/reset-password` (validates token, updates password, auto-returns JWT, marks token used)
+- [x] **C6** Email verification — `POST /api/auth/verify-email` (validates token, sets `email_verified_at`); `POST /api/auth/resend-verification` (rate-limited 1/2min); login endpoint returns `{error: "email_unverified"}` when unverified on 2nd+ login
+- [x] **C7** Password reset — `POST /api/auth/forgot-password` (always 200, sends email if account exists); `POST /api/auth/reset-password` (validates token, updates password, auto-returns JWT, marks token used)
 
 #### Frontend auth screens [#70]
-- [ ] **C8** Login screen additions — "Nie pamiętasz hasła? → Reset" and "Masz zaproszenie? → Zarejestruj się" footer links; email-unverified gate screen on login
-- [ ] **C9** Registration screen — invite card (inviter avatar + name + personal message), email pre-filled+locked, username + password fields, countdown timer, bare `/register` screen for code entry
-- [ ] **C10** Forgot password screens — enter email screen + set new password screen (2h token, auto-login on save)
+- [x] **C8** Login screen additions — "Nie pamiętasz hasła? → Reset" and "Masz zaproszenie? → Zarejestruj się" footer links; email-unverified gate screen on login
+- [x] **C9** Registration screen — invite card (inviter avatar + name + personal message), email pre-filled+locked, username + password fields, countdown timer, bare `/register` screen for code entry
+- [x] **C10** Forgot password screens — enter email screen + set new password screen (2h token, auto-login on save)
 
 #### Frontend onboarding + profile [#71]
-- [ ] **C11** Onboarding flow — 2-step: (1) CSS cinematic with inviter message card + atmospheric art + title, auto-advance 6s; (2) theme picker → "Zaczynam przygodę"; gated on `onboarded_at IS NULL` from login response
-- [ ] **C12** Profile page — Chronicle stats, Friends section (add/search players, foundation for multiplayer), Invites (sent quota + "Wyślij zaproszenie" button), Security (change password / delete account); entry via Settings drawer "Konto" link
-- [ ] **C13** Send invite modal — email form + copyable link (both in one modal); accessible from profile page + "📨 Zaproś znajomego" chip on heroes screen
+- [x] **C11** Onboarding flow — 2-step: (1) CSS cinematic with inviter message card + atmospheric art + title, auto-advance 6s; (2) theme picker → "Zaczynam przygodę"; gated on `onboarded_at IS NULL` from login response
+- [x] **C12** Profile page — Chronicle stats, Friends section (add/search players, foundation for multiplayer), Invites (sent quota + "Wyślij zaproszenie" button), Security (change password / delete account); entry via Settings drawer "Konto" link
+- [x] **C13** Send invite modal — email form + copyable link (both in one modal); accessible from profile page + "📨 Zaproś znajomego" chip on heroes screen
 
 #### Admin features [#72]
-- [ ] **C14** Admin SMTP config — System panel → Email section: `smtp_host/port/username/password/from_name/from_address/use_tls` form + "Wyślij testowy email" button
-- [ ] **C15** Admin invite tree — Players → "Drzewo zaproszeń" tab: interactive D3.js collapsible tree, activity colour coding (green/yellow/grey), click-node flyout, "Eksportuj CSV" button
+- [x] **C14** Admin SMTP config — System panel → Email section: `smtp_host/port/username/password/from_name/from_address/use_tls` form + "Wyślij testowy email" button
+- [x] **C15** Admin invite tree — Players → "Drzewo zaproszeń" tab: interactive D3.js collapsible tree, activity colour coding (green/yellow/grey), click-node flyout, "Eksportuj CSV" button
 
 ### Stage 11-D — Slash Commands hardening (done)
 - [x] **SD1** Per-command `admin_enabled` + `player_enabled` toggles in admin panel
@@ -291,7 +291,7 @@ Design decisions resolved with owner in #64: XP revert cascades to skill/spell p
 
 ### Stage 12 — Hero Journal [T45]
 
-- [ ] **J1** Journal UI in heroes screen — chapter list (one per completed campaign)
+- [x] **J1** Journal UI in heroes screen — chapter list (one per completed campaign). Modal "Kronika przygód" with Cinzel chapter headings (Rozdział I/II/III…), outcome badge (Zwycięstwo/Śmierć/Porzucono), stats row, and chapter_summary body (placeholder "Podsumowanie wkrótce…" when not yet generated). `_toRoman()` helper. Cache-bust `j1-journal-2026-05-24`.
 - [ ] **J2** Chapter summary LLM generator — 2 paragraphs, first-person, on campaign close
 - [ ] **J3** Running summary for active campaign (auto-update every 10 turns)
 - [ ] **J4** Cross-campaign `/mem` (search across all hero's campaigns)
