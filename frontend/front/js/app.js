@@ -3233,7 +3233,9 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
     try { window.voiceUI?.stopPlayback?.(); } catch (_e) {}
     window.voiceUI?.unlockAudio?.();
 
-    elements.btnSend.disabled = true;
+    // Keep button enabled so mobile tap can reach the cancel handler.
+    // Double-send is blocked by the _activeTurnAbort guard in the click listener.
+    elements.btnSend.disabled = false;
     renderSuggestedActions([]);
     _activeTurnText = text;
 
@@ -3744,21 +3746,15 @@ function _cancelActiveTurn() {
 }
 
 function _showCancelButton() {
-    if (document.getElementById('cancel-turn-btn')) return;
-    const btn = document.createElement('button');
-    btn.id = 'cancel-turn-btn';
-    btn.type = 'button';
-    btn.className = 'cancel-turn-btn';
-    btn.title = 'Cofnij wiadomość (ESC)';
-    btn.innerHTML = '✕ Cofnij';
-    btn.addEventListener('click', _cancelActiveTurn);
-    // Insert before the send button inside the composer
-    const composer = document.querySelector('.composer') || elements.btnSend?.parentElement;
-    if (composer) composer.appendChild(btn);
+    if (!elements.btnSend) return;
+    elements.btnSend.classList.add('composer__send--stopping');
+    elements.btnSend.title = 'Zatrzymaj odpowiedź (ESC)';
 }
 
 function _hideCancelButton() {
-    document.getElementById('cancel-turn-btn')?.remove();
+    if (!elements.btnSend) return;
+    elements.btnSend.classList.remove('composer__send--stopping');
+    elements.btnSend.title = '';
 }
 
 document.addEventListener('keydown', (e) => {
@@ -7652,7 +7648,10 @@ function initEventListeners() {
         if (e.target === document.getElementById('spell-picker-overlay')) closeSpellPicker();
     });
     elements.combatEndBtn?.addEventListener('click', hideCombatEndOverlay);
-    elements.btnSend?.addEventListener('click', handleSendMessage);
+    elements.btnSend?.addEventListener('click', (e) => {
+        if (_activeTurnAbort) { _cancelActiveTurn(); return; }
+        handleSendMessage();
+    });
     elements.chatInput?.addEventListener('keypress', handleKeyPress);
     elements.chatInput?.addEventListener('input', updateCharCounter);
     initSlashAutocomplete(elements.chatInput);
