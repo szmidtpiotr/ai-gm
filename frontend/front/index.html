@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=kw67-2026-05-24">
+  <link rel="stylesheet" href="./css/styles.css?v=travel-anim-2026-05-24">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -1401,6 +1401,17 @@
         <button class="wmap-btn-cancel" id="wmap-btn-cancel">Anuluj</button>
       </div>
     </div>
+    <!-- Travel journal card — slides up during journey -->
+    <div id="wmap-travel-journal" class="wmap-travel-journal" hidden>
+      <div class="wmap-tj-header">
+        <span class="wmap-tj-title-text" id="wmap-tj-title">WYRUSZASZ</span>
+        <span class="wmap-tj-spinner" id="wmap-tj-spinner"></span>
+      </div>
+      <div class="wmap-tj-route" id="wmap-tj-route"></div>
+      <div class="wmap-tj-meta" id="wmap-tj-meta"></div>
+      <div class="wmap-tj-atmo" id="wmap-tj-atmo"></div>
+      <div class="wmap-tj-encounter-alert" id="wmap-tj-encounter" hidden>⚔ Na drodze czeka wróg!</div>
+    </div>
   </div>
 
   <!-- Combat End Overlay -->
@@ -1584,6 +1595,6 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=kw67-2026-05-24"></script>
+  <script src="./js/app.js?v=travel-anim-2026-05-24"></script>
 </body>
 </html>

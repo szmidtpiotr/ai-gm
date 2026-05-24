@@ -8129,6 +8129,9 @@ const _wmap = {
   currentHex: null,
   pendingTravel: null,   // { q, r, label }
   _ds: null,             // drag state
+  travelPath: [],        // [{q,r}] active travel path from backend
+  travelHead: -1,        // index of currently animated hex (-1 = none)
+  journal: null,         // #wmap-travel-journal element
 };
 
 const _WH = 32; // hex size px
@@ -8154,6 +8157,10 @@ function _wmRender() {
   let html = '';
   const rz = _WH * _wmap.zoom;
 
+  // Build path lookup for animation highlighting
+  const _pathSet = new Set(_wmap.travelPath.map(p => `${p.q},${p.r}`));
+  const _pathIdx = (q, r) => _wmap.travelPath.findIndex(p => p.q === q && p.r === r);
+
   for (const hex of _wmap.hexes) {
     const {x, y} = _wmHexToPixel(hex.q, hex.r);
     const {x:sx, y:sy} = _wmWorld(x, y);
@@ -8161,10 +8168,18 @@ function _wmRender() {
     const isCurrent = _wmap.currentHex && _wmap.currentHex.q === hex.q && _wmap.currentHex.r === hex.r;
     const cfg = _wmap.hexTypes[hex.hex_type] || {};
 
+    // Travel path highlighting
+    const pi = _pathIdx(hex.q, hex.r);
+    const isOnPath = pi >= 0;
+    const isPassed = isOnPath && pi <= _wmap.travelHead;
+    const isHead = pi === _wmap.travelHead && pi >= 0;
+
     if (discovered) {
-      const fill = cfg.map_color || '#4a6a4a';
-      const stroke = isCurrent ? '#f0c040' : '#1a1612';
-      const sw = isCurrent ? 2.5 : 0.8;
+      let fill = cfg.map_color || '#4a6a4a';
+      let stroke = isCurrent ? '#f0c040' : '#1a1612';
+      let sw = isCurrent ? 2.5 : 0.8;
+      if (isHead) { stroke = '#f0c040'; sw = 3; fill = `color-mix(in srgb, ${fill} 70%, #c9961a 30%)`; }
+      else if (isPassed) { stroke = 'rgba(240,192,64,0.55)'; sw = 1.8; }
       html += `<polygon class="wm-hex" data-q="${hex.q}" data-r="${hex.r}"
         points="${_wmCorners(sx, sy, rz-1)}"
         fill="${fill}" stroke="${stroke}" stroke-width="${sw}" style="cursor:pointer"/>`;
@@ -8174,16 +8189,40 @@ function _wmRender() {
       if (_wmap.zoom >= 1.0 && hex.label)
         html += `<text x="${sx}" y="${sy+rz*0.38}" text-anchor="middle"
           font-size="${Math.max(7, 9*_wmap.zoom)}" fill="#c8b87a" style="pointer-events:none">${escapeHtml(hex.label.slice(0,14))}</text>`;
-      if (isCurrent)
+      if (isCurrent && !isHead)
         html += `<text x="${sx}" y="${sy-rz*0.52}" text-anchor="middle"
           font-size="${Math.max(11, 14*_wmap.zoom)}" style="pointer-events:none">📍</text>`;
     } else {
       // Outline: unvisited adjacent hex
+      const outlineStroke = isPassed ? 'rgba(240,192,64,0.4)' : '#2a2218';
+      const outlineSw = isPassed ? 1.5 : 0.6;
       html += `<polygon class="wm-hex wm-hex--outline" data-q="${hex.q}" data-r="${hex.r}"
         points="${_wmCorners(sx, sy, rz-1)}"
-        fill="transparent" stroke="#2a2218" stroke-width="0.6" stroke-dasharray="3,2"
+        fill="${isPassed ? 'rgba(240,192,64,0.04)' : 'transparent'}" stroke="${outlineStroke}" stroke-width="${outlineSw}" stroke-dasharray="3,2"
         style="cursor:pointer"/>`;
     }
+  }
+
+  // Travel path connector polyline (drawn after hexes so it's on top)
+  if (_wmap.travelHead >= 0 && _wmap.travelPath.length > 1) {
+    const visPath = _wmap.travelPath.slice(0, _wmap.travelHead + 1);
+    const pts = visPath.map(({q,r}) => {
+      const {x,y} = _wmHexToPixel(q,r);
+      const {x:sx,y:sy} = _wmWorld(x,y);
+      return `${sx},${sy}`;
+    }).join(' ');
+    html += `<polyline class="wmap-path-line" points="${pts}"
+      fill="none" stroke="rgba(240,192,64,0.38)" stroke-width="${1.4*_wmap.zoom}"
+      stroke-dasharray="${4*_wmap.zoom},${3*_wmap.zoom}" style="pointer-events:none"/>`;
+    // Animated cursor dot at head
+    const head = _wmap.travelPath[_wmap.travelHead];
+    const {x:hx,y:hy} = _wmHexToPixel(head.q, head.r);
+    const {x:hsx,y:hsy} = _wmWorld(hx,hy);
+    const cr = Math.max(4, 5 * _wmap.zoom);
+    html += `<circle class="wmap-travel-cursor" cx="${hsx}" cy="${hsy}" r="${cr}"
+      fill="rgba(240,192,64,0.85)" style="pointer-events:none"/>`;
+    html += `<circle class="wmap-travel-cursor-ring" cx="${hsx}" cy="${hsy}" r="${cr*1.9}"
+      fill="none" stroke="rgba(240,192,64,0.35)" stroke-width="1" style="pointer-events:none"/>`;
   }
 
   // Teleport connections
@@ -8222,14 +8261,137 @@ function _wmOnHexClick(e) {
   confirm.removeAttribute('hidden');
 }
 
+// ── Travel journal helpers ────────────────────────────────────────────────────
+
+function _wmJournalShow(state) {
+  const el = _wmap.journal;
+  if (!el) return;
+  el.removeAttribute('hidden');
+  requestAnimationFrame(() => el.classList.add('wmap-travel-journal--visible'));
+  if (state === 'loading') {
+    el.querySelector('#wmap-tj-title').textContent = 'WYRUSZASZ';
+    const sp = el.querySelector('#wmap-tj-spinner');
+    sp.className = 'wmap-tj-spinner';
+    el.querySelector('#wmap-tj-route').innerHTML = '';
+    el.querySelector('#wmap-tj-meta').textContent = '';
+    el.querySelector('#wmap-tj-atmo').textContent = '';
+    el.querySelector('#wmap-tj-atmo').classList.remove('wmap-tj-atmo--visible');
+    el.querySelector('#wmap-tj-encounter').setAttribute('hidden', '');
+  }
+}
+
+function _wmJournalBuildStops(path) {
+  const route = _wmap.journal?.querySelector('#wmap-tj-route');
+  if (!route || !path.length) return;
+  // Sample: show all if ≤ 8 stops, else pick evenly
+  const n = path.length;
+  let indices = [];
+  if (n <= 8) { indices = path.map((_, i) => i); }
+  else {
+    indices = [0];
+    const step = (n - 2) / 5;
+    for (let k = 1; k <= 5; k++) indices.push(Math.round(step * k));
+    indices.push(n - 1);
+    indices = [...new Set(indices)].sort((a, b) => a - b);
+  }
+  let html = '';
+  indices.forEach((pi, i) => {
+    const { q, r } = path[pi];
+    const hex = _wmap.hexes.find(h => h.q === q && h.r === r);
+    const cfg = hex ? (_wmap.hexTypes[hex.hex_type] || {}) : {};
+    const icon = cfg.map_icon || '·';
+    if (i > 0) html += `<span class="wmap-tj-arrow">›</span>`;
+    html += `<div class="wmap-tj-stop" id="wmap-tj-stop-pi${pi}" data-path-idx="${pi}">
+      <div class="wmap-tj-stop-icon">${icon}</div>
+    </div>`;
+  });
+  route.innerHTML = html;
+  // Reveal first stop immediately
+  requestAnimationFrame(() => route.querySelector('.wmap-tj-stop')?.classList.add('wmap-tj-stop--visible'));
+  return indices;
+}
+
+function _wmJournalUpdateStop(pathIdx, mode, sampledIndices) {
+  const route = _wmap.journal?.querySelector('#wmap-tj-route');
+  if (!route) return;
+  // Find the closest sampled stop for this path index
+  if (!sampledIndices) return;
+  const closest = sampledIndices.reduce((best, si) =>
+    Math.abs(si - pathIdx) < Math.abs(best - pathIdx) ? si : best, sampledIndices[0]);
+  const stopEl = route.querySelector(`#wmap-tj-stop-pi${closest}`);
+  if (!stopEl) return;
+  stopEl.classList.add('wmap-tj-stop--visible');
+  const icon = stopEl.querySelector('.wmap-tj-stop-icon');
+  if (!icon) return;
+  icon.className = 'wmap-tj-stop-icon';
+  if (mode === 'encounter') icon.classList.add('wmap-tj-stop-icon--encounter');
+  else if (mode === 'arrived') icon.classList.add('wmap-tj-stop-icon--arrived');
+  else icon.classList.add('wmap-tj-stop-icon--active');
+}
+
+function _wmJournalArrived(response, destLabel) {
+  const el = _wmap.journal;
+  if (!el) return;
+  el.querySelector('#wmap-tj-title').textContent = 'DOTARŁEŚ';
+  const sp = el.querySelector('#wmap-tj-spinner');
+  sp.className = 'wmap-tj-spinner wmap-tj-spinner--done';
+  const hours = response.total_hours || 0;
+  if (hours > 0) {
+    const hStr = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
+    const hWord = hours === 1 ? 'godzina' : (hours < 5 ? 'godziny' : 'godzin');
+    el.querySelector('#wmap-tj-meta').textContent = `${hStr} ${hWord} w drodze`;
+  }
+  const atmo = response.hex_data?.atmosphere;
+  if (atmo) {
+    const atmoEl = el.querySelector('#wmap-tj-atmo');
+    atmoEl.textContent = atmo;
+    requestAnimationFrame(() => atmoEl.classList.add('wmap-tj-atmo--visible'));
+  }
+  if (response.encounter) {
+    el.querySelector('#wmap-tj-encounter').removeAttribute('hidden');
+  }
+}
+
+function _wmJournalHide() {
+  const el = _wmap.journal;
+  if (!el) return;
+  el.classList.remove('wmap-travel-journal--visible');
+  setTimeout(() => el.setAttribute('hidden', ''), 450);
+  _wmap.travelPath = [];
+  _wmap.travelHead = -1;
+}
+
+async function _wmAnimateTravelPath(path, encounterHex, sampledIndices) {
+  if (!path.length) { _wmap.travelHead = -1; return; }
+  _wmap.travelPath = path;
+  const steps = path.length;
+  const stepDelay = Math.max(120, Math.min(320, 1600 / steps));
+
+  for (let i = 0; i < steps; i++) {
+    _wmap.travelHead = i;
+    _wmRender();
+    _wmJournalUpdateStop(i, i === steps - 1 ? 'arrived' : 'active', sampledIndices);
+
+    const isEncHex = encounterHex && encounterHex.q === path[i].q && encounterHex.r === path[i].r;
+    if (isEncHex) {
+      _wmJournalUpdateStop(i, 'encounter', sampledIndices);
+      await new Promise(r => setTimeout(r, 500));
+      break;
+    }
+    await new Promise(r => setTimeout(r, stepDelay));
+  }
+}
+
 async function _wmExecuteTravel() {
   const t = _wmap.pendingTravel;
   if (!t) return;
   _wmap.confirm.setAttribute('hidden', '');
-  _wmClose();
+  // Keep map open — travel animation plays on the map itself
 
-  // Dispatch hex travel to turn pipeline
   if (!currentCampaignId || !characterData?.id) return;
+
+  _wmJournalShow('loading');
+
   try {
     const response = await apiRequest('POST', `/campaigns/${currentCampaignId}/hex-travel`, {
       character_id: characterData.id,
@@ -8237,42 +8399,48 @@ async function _wmExecuteTravel() {
       destination_r: t.r,
     });
 
-    // T2/T5 — backend advances clock during hex-travel and returns the new
-    // state on `response.clock`. Re-render the header chip.
     if (response.clock) renderClock(response.clock);
 
     const enc = response.encounter;
     const hours = response.total_hours || 0;
     const arrivedHex = response.arrived_hex || {};
     const arrivedData = response.hex_data || {};
+    const path = response.path || [];
 
-    // Build readable destination — never show coordinates
+    // Build journal route stops from path
+    const sampledIndices = _wmJournalBuildStops(path);
+
+    // Animate path on map SVG step by step
+    const encounterHex = enc ? response.encounter_hex : null;
+    await _wmAnimateTravelPath(path, encounterHex, sampledIndices);
+
+    // Update current hex (arrived position)
+    if (arrivedHex.q !== undefined) {
+      _wmap.currentHex = arrivedHex;
+      _wmap.travelHead = -1; // clear cursor
+      _wmRender();
+    }
+
+    // Build readable destination
     const hexTypeName = (_wmap.hexTypes?.[arrivedData.hex_type]?.label) || arrivedData.hex_type || '';
-    // Only use a name if it's a real label, not a fallback coord string
     const rawLabel = t.label && !t.label.match(/^\([-\d]+,[-\d]+\)$/) ? t.label : null;
     const destLabel = rawLabel || arrivedData.label || null;
 
-    // Travel animation: brief walking indicator then message
-    const travelAnim = document.createElement('div');
-    travelAnim.className = 'chat-bubble chat-bubble--system';
-    travelAnim.innerHTML = `<div class="chat-bubble__content" style="display:flex;align-items:center;gap:8px"><span style="animation:pulse 0.8s infinite">🚶</span> <em>Podróżujesz…</em></div>`;
-    elements.chatMessages.appendChild(travelAnim);
-    scrollToBottom();
-    await new Promise(r => setTimeout(r, 900));
-    travelAnim.remove();
+    // Show arrived state in journal
+    _wmJournalArrived(response, destLabel);
 
-    // Arrival message
+    // Wait, then close map and show chat bubble
+    await new Promise(r => setTimeout(r, 2000));
+    _wmClose();
+
+    // Build arrival prose
     let prose;
     if (hours > 0) {
       const hStr = Number.isInteger(hours) ? `${hours}` : hours.toFixed(1);
       const hWord = hours === 1 ? 'godzinę' : (hours < 5 ? 'godziny' : 'godzin');
-      if (destLabel) {
-        prose = `Dotarłeś do <strong>${escapeHtml(destLabel)}</strong>. Droga zajęła ${hStr} ${hWord}.`;
-      } else if (hexTypeName) {
-        prose = `Wkraczasz na teren — ${escapeHtml(hexTypeName)}. Droga zajęła ${hStr} ${hWord}.`;
-      } else {
-        prose = `Dotarłeś do celu. Droga zajęła ${hStr} ${hWord}.`;
-      }
+      if (destLabel) prose = `Dotarłeś do <strong>${escapeHtml(destLabel)}</strong>. Droga zajęła ${hStr} ${hWord}.`;
+      else if (hexTypeName) prose = `Wkraczasz na teren — ${escapeHtml(hexTypeName)}. Droga zajęła ${hStr} ${hWord}.`;
+      else prose = `Dotarłeś do celu. Droga zajęła ${hStr} ${hWord}.`;
     } else {
       prose = destLabel ? `Jesteś w ${escapeHtml(destLabel)}.` : 'Przybyłeś na miejsce.';
     }
@@ -8283,14 +8451,15 @@ async function _wmExecuteTravel() {
     travelBubble.className = 'chat-bubble chat-bubble--travel';
     travelBubble.innerHTML = prose;
     elements.chatMessages.appendChild(travelBubble);
+    scrollToBottom();
 
-    // Update current hex on map
-    if (arrivedHex.q !== undefined) {
-      _wmap.currentHex = arrivedHex;
-      if (!_wmap.panel.hasAttribute('hidden')) _wmRender();
+    // KW7 — first hex travel surfaces the mapa_heksy tip
+    if (!localStorage.getItem('aigm_first_hex_travel')) {
+      localStorage.setItem('aigm_first_hex_travel', '1');
+      _handleTriggeredTips(['mapa_heksy']);
     }
 
-    // If encounter → trigger combat via turn API (narrator will add [COMBAT_START:key])
+    // If encounter → trigger combat
     if (enc?.enemy_key) {
       setTimeout(async () => {
         try {
@@ -8320,6 +8489,7 @@ async function _wmExecuteTravel() {
     await pollCombatState();
     scrollToBottom();
   } catch (err) {
+    _wmJournalHide();
     showToast(err.message || 'Błąd podróży', 'error');
   }
 }
@@ -8355,7 +8525,7 @@ async function _wmOpen() {
 
 function _wmClose() {
   _wmap.panel.style.transform = 'translateX(100%)';
-  setTimeout(() => _wmap.panel.setAttribute('hidden', ''), 280);
+  setTimeout(() => { _wmap.panel.setAttribute('hidden', ''); _wmJournalHide(); }, 280);
   _wmap.confirm.setAttribute('hidden', '');
   _wmap.pendingTravel = null;
 }
@@ -8364,6 +8534,7 @@ function initWorldMap() {
   _wmap.panel   = document.getElementById('world-map-panel');
   _wmap.svg     = document.getElementById('wmap-svg');
   _wmap.confirm = document.getElementById('wmap-confirm');
+  _wmap.journal = document.getElementById('wmap-travel-journal');
   if (!_wmap.panel) return;
 
   document.getElementById('open-map-btn')?.addEventListener('click', _wmOpen);
