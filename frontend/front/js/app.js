@@ -8482,6 +8482,30 @@ async function _wmExecuteTravel() {
       localStorage.setItem('aigm_first_hex_travel', '1');
     }
 
+    // GM arrival narration — brief location intro. Skipped if encounter combat fires instead.
+    if (!enc?.enemy_key) {
+      try {
+        const triggerText = destLabel
+          ? `Przybyłem do: ${destLabel}.`
+          : `Przybyłem w nowe miejsce.`;
+        const typingEl = showTypingIndicator();
+        const narration = await apiRequest('POST', `/campaigns/${currentCampaignId}/turns`, {
+          text: triggerText,
+          character_id: characterData.id,
+        });
+        typingEl.remove();
+        const gmText = narration.prose || narration.result?.message || narration.assistant_text || '';
+        if (gmText) {
+          const { narrative: gmContent } = parseGmFull(gmText);
+          if (gmContent) appendMessage({ role: 'assistant', content: gmContent, created_at: new Date() });
+        }
+        if (narration.skill_test_pending) showSkillTestPopup(narration.skill_test_pending);
+        scrollToBottom();
+      } catch (err) {
+        console.warn('Arrival narration failed:', err);
+      }
+    }
+
     // Encounter → trigger combat after a short delay
     if (enc?.enemy_key) {
       setTimeout(async () => {

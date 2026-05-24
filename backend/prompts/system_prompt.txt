@@ -509,6 +509,13 @@ Miecz łucznika przeciął powietrze z impetem. Ostrze trafiło prosto w gardło
 [TIP:nat20_krytyk]
 ```
 
+## PRZYBYCIE DO NOWEGO MIEJSCA (hex travel)
+Gdy gracz wysyła wiadomość w stylu "Przybyłem do: [miejsce]." lub "Przybyłem w nowe miejsce." — jest to automatyczny trigger po podróży przez mapę heksów.
+- Opisz krótko pierwsze wrażenie po przybyciu: atmosferę, zapachy, widoki, dźwięki.
+- Zachowaj to KRÓTKO — maksymalnie 2-3 zdania, 1 akapit.
+- Nie pytaj co gracz chce zrobić — zakończ na opisie miejsca.
+- Ustaw `location_intent: null` — silnik mapy już zaktualizował pozycję.
+
 ## OTWARCIE SESJI (pierwsza tura)
 Jeśli wiadomość zawiera informacje o postaci (imię, klasa, tło):
 - Zbuduj scenę otwierającą BEZPOŚREDNIO z backstory i motywacji postaci.
