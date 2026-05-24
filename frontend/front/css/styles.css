@@ -1535,6 +1535,17 @@ body {
   color: var(--text-secondary);
 }
 
+.chat-bubble--roll {
+  align-self: center;
+  background: rgba(201, 150, 26, 0.1);
+  border: 1px solid rgba(201, 150, 26, 0.45);
+  color: #d4a040;
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.06em;
+  font-size: 0.9rem;
+}
+
 .message__meta {
   display: flex;
   align-items: center;

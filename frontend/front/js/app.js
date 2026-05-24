@@ -2108,7 +2108,8 @@ async function enterGame(campaign) {
                     } else if (simpleM) {
                         displayText = `🎲 ${simpleM[1]}: rzut ${simpleM[2]}`;
                     }
-                    appendMessage({ role: 'user', content: displayText, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, turn_id: turn.id }, { autoSpeak: false });
+                    const rollRole = (richM || simpleM) ? 'roll' : 'user';
+                    appendMessage({ role: rollRole, content: displayText, created_at: turn.created_at, turn_number: turn.turn_number, route: turn.route, turn_id: turn.id }, { autoSpeak: false });
                 }
                 if (turn.assistant_text) {
                     const { narrative: gmContent, ...gmMeta } = parseGmFull(turn.assistant_text);
@@ -2177,10 +2178,11 @@ function appendMessage(msg, opts = {}) {
         _handleTriggeredTips(msg.debugMeta.triggeredTips);
     }
     const isSystem = msg.role === 'system';
-    const variant = isSystem ? 'system' : (isGm ? 'gm' : 'user');
+    const isRoll = msg.role === 'roll';
+    const variant = isSystem ? 'system' : isRoll ? 'roll' : (isGm ? 'gm' : 'user');
     bubble.className = `chat-bubble chat-bubble--${variant}`;
 
-    if (!isSystem) {
+    if (!isSystem && !isRoll) {
         const name = isGm
             ? 'MG — Mistrz Gry'
             : (characterData?.name || currentUser?.username || 'Gracz').toUpperCase();
@@ -3617,14 +3619,14 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
 
         popupEl?.remove();
 
-        // Show the roll result as a user message in chat history
+        // Show the roll result as a centered yellow roll bubble in chat history
         const sr = response.skill_test_result || {};
         let rollBubbleEl = null;
         if (sr.skill_label || sr.skill_key) {
             const skillName = sr.skill_label || sr.skill_key || 'Test';
             const outcome = sr.nat20 ? ' — Naturalny 20!' : sr.nat1 ? ' — Naturalny 1' : sr.success ? ' — Sukces' : ' — Porażka';
             const rollLine = `🎲 ${skillName}: ${sr.d20_roll} +${sr.modifier} = ${sr.player_total}${outcome}`;
-            appendMessage({ role: 'user', content: rollLine, created_at: new Date() });
+            appendMessage({ role: 'roll', content: rollLine, created_at: new Date() });
             // Keep reference to roll bubble so we can scroll to it (not the very bottom)
             rollBubbleEl = elements.chatMessages.lastElementChild;
         }
