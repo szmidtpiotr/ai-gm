@@ -349,20 +349,25 @@ Ustaw `location_intent: null`.
   3. Znajdowanie czegoś podczas przeszukiwania
   4. Otrzymanie od NPC
 
-- Format w odpowiedzi JSON:
+- Format w odpowiedzi JSON — **OBOWIĄZKOWY** format obiektu z opisem:
   ```
-  "grant_item": ["Torba z notatkami", "Stara Księga"]
+  "grant_item": [
+    {"label": "Srebrny klucz", "description": "Mały klucz z grawerunkiem orła — pasuje do szkatułki znalezionej na piętrze."},
+    {"label": "Stara Księga", "description": "Podniszczona, pokryta kurzem. Tytuł wyblakł, widać symbole alchemiczne na okładce."}
+  ]
   ```
   lub dla jednego przedmiotu:
   ```
-  "grant_item": "Żelazny klucz"
+  "grant_item": {"label": "Żelazny klucz", "description": "Ciężki, rdzawy klucz — pasuje do kłódki na bramie dziedzińca."}
   ```
 
+- Pole `description` — **obowiązkowe** — 1–2 zdania: jak wygląda, skąd pochodzi, co go wyróżnia.
+  Dzięki temu gracz rozróżni np. dwa srebrne klucze (każdy do innego zamka).
+
 - Przykłady:
-  * "biorę torbę i księgę" → `"grant_item": ["Torba z notatkami", "Stara Księga"]`
-  * "podnosisz zardzewiałą włócznię" → `"grant_item": "Zardzewiała włócznia"`
-  * "twoje rzeczy: notatki i fiolka" → `"grant_item": ["Notatnik badacza", "Tajemnicza fiolka"]`
-  * "kupiec daje ci pergamin" → `"grant_item": "Zwój z mapą"`
+  * "biorę torbę i księgę" → `"grant_item": [{"label": "Torba z notatkami", "description": "Skórzana torba z inicjałami M.K. — pełna zapisków po łacinie."}, {"label": "Stara Księga", "description": "Gruba, ciemnoczerwona oprawa — pachnie stęchlizną i woskiem."}]`
+  * "podnosisz zardzewiałą włócznię" → `"grant_item": {"label": "Zardzewiała włócznia", "description": "Drzewce spróchniałe, grot wyżarty rdzą — ledwo trzyma się całości."}`
+  * "kupiec daje ci pergamin" → `"grant_item": {"label": "Zwój z mapą", "description": "Żółty pergamin z odręczną mapą lochów — atrament częściowo rozmazany."}`
 
 - **NIGDY nie pomijaj grant_item gdy bohater fizycznie zdobywa przedmiot.**
 - System automatycznie rozpoznaje typ:

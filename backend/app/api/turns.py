@@ -1187,16 +1187,36 @@ def maybe_append_open_shop_fallback(
     return _repack_narrative(raw, new_narr.strip(), parsed)
 
 
-def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None, str | None]:
+def _parse_grant_item_entry(x: object) -> tuple[str, str | None] | None:
+    """Parse a single grant_item element into (label, description|None). Returns None if invalid."""
+    if isinstance(x, dict):
+        label = str(x.get("label") or "").strip()
+        desc = str(x.get("description") or "").strip() or None
+        return (label, desc) if label else None
+    if isinstance(x, str) and x.strip():
+        return (x.strip(), None)
+    return None
+
+
+def extract_grant_cues(
+    assistant_text: str,
+) -> tuple[str, list[str], int | None, str | None, dict[str, str | None]]:
     """
     Collect GM grant cues from the end of assistant text.
-    Returns cleaned_text, grant_item_labels (list), grant_gold_amount, open_shop_npc_key.
-    Handles: roll_cue "Grant Item X", grant_item "X", grant_item ["X","Y"], last-line cues.
+    Returns: cleaned_text, grant_item_labels, grant_gold_amount, open_shop_npc_key, grant_item_descriptions.
+    grant_item_descriptions maps label → description (or None) for narrative items.
+    Handles: roll_cue "Grant Item X", grant_item "X"/"obj", grant_item [...]s, last-line cues.
     """
     clean_text = (assistant_text or "").rstrip()
     grant_item_labels: list[str] = []
+    grant_item_descriptions: dict[str, str | None] = {}
     grant_gold_amount: int | None = None
     open_shop_npc_key: str | None = None
+
+    def _add_entry(entry: tuple[str, str | None] | None) -> None:
+        if entry and entry[0] not in grant_item_labels:
+            grant_item_labels.append(entry[0])
+            grant_item_descriptions[entry[0]] = entry[1]
 
     # JSON-mode GM response
     try:
@@ -1204,13 +1224,14 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None,
     except Exception:
         payload = None
     if isinstance(payload, dict):
-        # Check dedicated grant_item field (string or array) — LLM alternate format
+        # Check dedicated grant_item field (string, object, or array) — LLM alternate format
         raw_gi = payload.get("grant_item")
         if raw_gi:
             if isinstance(raw_gi, list):
-                grant_item_labels.extend(str(x).strip() for x in raw_gi if str(x).strip())
-            elif isinstance(raw_gi, str) and raw_gi.strip():
-                grant_item_labels.append(raw_gi.strip())
+                for x in raw_gi:
+                    _add_entry(_parse_grant_item_entry(x))
+            else:
+                _add_entry(_parse_grant_item_entry(raw_gi))
             if grant_item_labels:
                 payload["grant_item"] = None
                 clean_text = json.dumps(payload, ensure_ascii=False)
@@ -1220,6 +1241,7 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None,
             rc_item = parse_grant_item_cue(roll_cue)
             if rc_item and rc_item not in grant_item_labels:
                 grant_item_labels.append(rc_item)
+                grant_item_descriptions.setdefault(rc_item, None)
             if grant_gold_amount is None:
                 grant_gold_amount = parse_grant_gold_cue(roll_cue)
             if open_shop_npc_key is None:
@@ -1232,6 +1254,8 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None,
         maybe_item = parse_grant_item_cue(clean_text)
         if maybe_item and maybe_item not in grant_item_labels:
             grant_item_labels.append(maybe_item)
+            # Plain-text cues carry no description
+            grant_item_descriptions.setdefault(maybe_item, None)
             clean_text = strip_last_grant_item_cue(clean_text)
             continue
         if grant_gold_amount is None:
@@ -1247,7 +1271,7 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None,
                 clean_text = strip_last_open_shop_cue(clean_text)
                 continue
         break
-    return clean_text, grant_item_labels, grant_gold_amount, open_shop_npc_key
+    return clean_text, grant_item_labels, grant_gold_amount, open_shop_npc_key, grant_item_descriptions
 
 
 def _resolve_grant_catalog_item(conn: sqlite3.Connection, label: str) -> dict[str, str] | None:
@@ -2706,22 +2730,23 @@ def create_turn(
         clean_assistant = APPLY_CONDITION_RE.sub("", clean_assistant).rstrip()
         clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
         _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
-        _narrative_for_cues, grant_item_labels, grant_gold_amount, open_shop_npc_key = extract_grant_cues(
-            _narrative_for_cues
-        )
+        (
+            _narrative_for_cues,
+            grant_item_labels,
+            grant_gold_amount,
+            open_shop_npc_key,
+            grant_item_descriptions,
+        ) = extract_grant_cues(_narrative_for_cues)
         # Also check top-level grant_item in parsed JSON — extract_grant_cues only sees
         # the plain narrative text and can't find fields in the outer JSON object.
         if isinstance(_parsed_json, dict):
             _raw_gi_json = _parsed_json.get("grant_item")
-            if isinstance(_raw_gi_json, list):
-                for _x in _raw_gi_json:
-                    _s = str(_x).strip()
-                    if _s and _s not in grant_item_labels:
-                        grant_item_labels.append(_s)
-            elif isinstance(_raw_gi_json, str) and _raw_gi_json.strip():
-                _s = _raw_gi_json.strip()
-                if _s not in grant_item_labels:
-                    grant_item_labels.append(_s)
+            _entries_json: list = (_raw_gi_json if isinstance(_raw_gi_json, list) else [_raw_gi_json]) if _raw_gi_json else []
+            for _x in _entries_json:
+                _entry = _parse_grant_item_entry(_x)
+                if _entry and _entry[0] not in grant_item_labels:
+                    grant_item_labels.append(_entry[0])
+                    grant_item_descriptions[_entry[0]] = _entry[1]
         grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
         clean_assistant = _repack_narrative(clean_assistant, _narrative_for_cues, _parsed_json)
         # Inject _debug into assistant JSON for frontend debug block
@@ -2909,6 +2934,7 @@ def create_turn(
             assistant_text=clean_assistant,
         )
         for _gil in grant_item_labels:
+            _gil_desc = grant_item_descriptions.get(_gil)
             _resolved = _resolve_grant_catalog_item(conn, _gil)
             if _resolved:
                 from app.services.loot_service import grant_loot_to_character
@@ -2923,6 +2949,7 @@ def create_turn(
             else:
                 _grant_narrative_item_to_inventory(conn, character_id=payload.character_id,
                                                    label=_gil, source="gm",
+                                                   description=_gil_desc,
                                                    given_at=f"turn:{log['turn_number']}")
         if grant_item_labels:
             conn.commit()
@@ -3736,19 +3763,17 @@ def create_turn_stream(
                     grant_item_labels,
                     grant_gold_amount,
                     open_shop_npc_key,
+                    grant_item_descriptions,
                 ) = extract_grant_cues(_narrative_for_cues_s)
                 # Also check top-level grant_item in parsed JSON (same fix as non-streaming path)
                 if isinstance(_parsed_json_s, dict):
                     _raw_gi_s = _parsed_json_s.get("grant_item")
-                    if isinstance(_raw_gi_s, list):
-                        for _xs in _raw_gi_s:
-                            _ss = str(_xs).strip()
-                            if _ss and _ss not in grant_item_labels:
-                                grant_item_labels.append(_ss)
-                    elif isinstance(_raw_gi_s, str) and _raw_gi_s.strip():
-                        _ss = _raw_gi_s.strip()
-                        if _ss not in grant_item_labels:
-                            grant_item_labels.append(_ss)
+                    _entries_s: list = (_raw_gi_s if isinstance(_raw_gi_s, list) else [_raw_gi_s]) if _raw_gi_s else []
+                    for _xs in _entries_s:
+                        _entry_s = _parse_grant_item_entry(_xs)
+                        if _entry_s and _entry_s[0] not in grant_item_labels:
+                            grant_item_labels.append(_entry_s[0])
+                            grant_item_descriptions[_entry_s[0]] = _entry_s[1]
                 grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
                 clean_text = _repack_narrative(clean_text, _narrative_for_cues_s, _parsed_json_s)
                 validate_roll_cue_name(clean_text.strip())
@@ -3785,6 +3810,7 @@ def create_turn_stream(
                         assistant_text=clean_text,
                     )
                     for _gil in grant_item_labels:
+                        _gil_desc_s = grant_item_descriptions.get(_gil)
                         _resolved = _resolve_grant_catalog_item(save_conn, _gil)
                         if _resolved:
                             from app.services.loot_service import grant_loot_to_character
@@ -3799,6 +3825,7 @@ def create_turn_stream(
                         else:
                             _grant_narrative_item_to_inventory(
                                 save_conn, character_id=character_id_val, label=_gil, source="gm",
+                                description=_gil_desc_s,
                                 given_at=f"turn:{stream_log['turn_number']}")
                     if grant_item_labels:
                         save_conn.commit()
