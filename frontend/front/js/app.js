@@ -309,7 +309,10 @@ async function _tryRefreshAccessToken() {
 
 async function apiRequest(method, endpoint, body = null) {
     const headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        // Prevent browser caching of API responses — turn lists across campaigns
+        // can otherwise resolve from cache and skip the intro-turn trigger.
+        'Cache-Control': 'no-cache',
     };
     // Stage 10 A2 — attach JWT when we have one. Backend continues accepting
     // ?user_id= query param during 10-B; this header is additive.
@@ -318,7 +321,7 @@ async function apiRequest(method, endpoint, body = null) {
         headers['Authorization'] = `Bearer ${accessToken}`;
     }
 
-    const options = { method, headers };
+    const options = { method, headers, cache: 'no-store' };
     if (body) {
         options.body = JSON.stringify(body);
     }
@@ -2062,14 +2065,21 @@ async function enterGame(campaign) {
         fetchAndRenderClock(campaign.id);
     });
 
+    let turns = [];
+    let combatRows = [];
     try {
         const [response, combatHist] = await Promise.all([
             apiRequest('GET', `/campaigns/${campaign.id}/turns`),
-            fetch(`/api/campaigns/${campaign.id}/combat/turns/history`).then(r => r.ok ? r.json() : { turns: [] }).catch(() => ({ turns: [] })),
+            fetch(`/api/campaigns/${campaign.id}/combat/turns/history`, { cache: 'no-store' }).then(r => r.ok ? r.json() : { turns: [] }).catch(() => ({ turns: [] })),
         ]);
-        const turns = response.turns || (Array.isArray(response) ? response : []);
-        const combatRows = Array.isArray(combatHist.turns) ? combatHist.turns : [];
+        turns = response.turns || (Array.isArray(response) ? response : []);
+        combatRows = Array.isArray(combatHist.turns) ? combatHist.turns : [];
+    } catch (error) {
+        console.error('Failed to load chat history:', error);
+        // Leave turns/combatRows empty — empty-timeline branch will trigger __AI_GM_OPEN
+    }
 
+    try {
         // J3 — init badge counter from existing narrative turn count mod 10
         _journalBadgeTurns = turns.filter(t => t.route === 'narrative').length % 10;
 
