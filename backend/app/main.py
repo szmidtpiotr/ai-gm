@@ -224,6 +224,16 @@ RAW_MIGRATIONS = [
         'time_of_day.noc',
         '{"color":"#5a6d99","accent":"#7a8cb8","label":"Noc"}'
     )""",
+    # 2026-05-25 — multi-role NPCs. `is_shop` already exists; add `is_quest_giver`
+    # and `is_ally` to mirror the same boolean-capability pattern, then backfill
+    # from the legacy single-value `npc_type` so existing rows keep their role.
+    # `npc_type` stays as the "primary" role (auto-derived on PATCH) for the
+    # ~30 callers in services/* that still SELECT it.
+    "ALTER TABLE npcs ADD COLUMN is_quest_giver INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE npcs ADD COLUMN is_ally INTEGER NOT NULL DEFAULT 0",
+    "UPDATE npcs SET is_shop = 1        WHERE npc_type = 'merchant'    AND is_shop = 0",
+    "UPDATE npcs SET is_quest_giver = 1 WHERE npc_type = 'quest_giver' AND is_quest_giver = 0",
+    "UPDATE npcs SET is_ally = 1        WHERE npc_type = 'ally'        AND is_ally = 0",
 ]
 
 

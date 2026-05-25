@@ -1033,6 +1033,54 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 
 .ea-field textarea { resize: vertical; min-height: 64px; }
 
+.ea-field-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.ea-role-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.ea-role-check {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 2px;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition);
+}
+
+.ea-role-check:hover { background: var(--bg-elevated); }
+
+.ea-role-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent-gold);
+}
+
+.ea-role-label {
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ea-role-hint {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
 .modal-checkbox-row {
   display: flex;
   align-items: center;

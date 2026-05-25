@@ -1498,12 +1498,11 @@ async function _openEnemyModal(row, onDone) {
 const _EA_FIELDS = {
   npc: [
     { key: "label",              label: "Nazwa",          type: "text",     required: true },
-    { key: "npc_type",           label: "Typ",            type: "select",   options: [
-        { v: "neutral", l: "Neutralny" },
-        { v: "merchant", l: "Kupiec" },
-        { v: "quest_giver", l: "Dawca zadań" },
-        { v: "ally", l: "Sojusznik" },
-    ]},
+    { type: "role_group",        label: "Role (możesz zaznaczyć więcej niż jedną)", roles: [
+        { key: "is_shop",        l: "🪙 Kupiec",     hint: "handluje przedmiotami" },
+        { key: "is_quest_giver", l: "📜 Dawca zadań", hint: "oferuje questy / haki fabularne" },
+        { key: "is_ally",        l: "🤝 Sojusznik",   hint: "może dołączyć do drużyny" },
+    ], hint: "Wszystkie odznaczone = neutralny (tylko rozmowa)." },
     { key: "description",        label: "Opis",           type: "textarea" },
     { key: "personality_prompt", label: "Osobowość (prompt do GM)", type: "textarea" },
     { key: "is_active",          label: "Aktywny",        type: "checkbox" },
@@ -1549,9 +1548,26 @@ async function _openEditApproveModal({ item, entityType, onDone }) {
   form.className = "edit-approve-form";
 
   fields.forEach((f) => {
-    const cur = detail[f.key];
     const field = document.createElement("div");
     field.className = "ea-field";
+
+    if (f.type === "role_group") {
+      // Multi-role checkbox group — each role is its own DB column (is_shop /
+      // is_quest_giver / is_ally). npc_type is derived server-side from these.
+      const checks = f.roles.map(r => `
+        <label class="ea-role-check">
+          <input type="checkbox" name="${r.key}"${Number(detail[r.key]) ? " checked" : ""}>
+          <span class="ea-role-label">${_esc(r.l)}</span>
+          <span class="ea-role-hint">${_esc(r.hint || "")}</span>
+        </label>`).join("");
+      field.innerHTML = `<label>${_esc(f.label)}</label><div class="ea-role-group">${checks}</div>${
+        f.hint ? `<div class="ea-field-hint">${_esc(f.hint)}</div>` : ""
+      }`;
+      form.appendChild(field);
+      return;
+    }
+
+    const cur = detail[f.key];
     const reqMark = f.required ? " <span class='ea-req'>*</span>" : "";
     let inputHtml;
     if (f.type === "select") {
@@ -1584,6 +1600,17 @@ async function _openEditApproveModal({ item, entityType, onDone }) {
       { label: "Zapisz i Zatwierdź", class: "primary-btn", onClick: async (cls) => {
           const patch = {};
           for (const f of fields) {
+            if (f.type === "role_group") {
+              // Collect each role checkbox individually; backend re-derives npc_type.
+              for (const r of f.roles) {
+                const el = form.querySelector(`[name="${r.key}"]`);
+                if (!el) continue;
+                const v = el.checked ? 1 : 0;
+                const orig = Number(detail[r.key] || 0);
+                if (v !== orig) patch[r.key] = v;
+              }
+              continue;
+            }
             const el = form.querySelector(`[name="${f.key}"]`);
             if (!el) continue;
             let v;

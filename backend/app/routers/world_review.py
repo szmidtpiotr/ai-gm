@@ -119,22 +119,53 @@ class NpcPendingPatchReq(_BaseModel):
     description: str | None = None
     personality_prompt: str | None = None
     is_active: int | None = None
+    # Multi-role capability flags (mirror existing is_shop). `npc_type` is
+    # auto-derived from these on save for backward compat with consumers that
+    # still read the single-value column.
+    is_shop: int | None = None
+    is_quest_giver: int | None = None
+    is_ally: int | None = None
+
+
+def _derive_primary_npc_type(is_shop: int, is_quest_giver: int, is_ally: int) -> str:
+    """Pick a single primary role for the legacy npc_type column.
+    Priority: merchant > quest_giver > ally > neutral."""
+    if int(is_shop or 0):
+        return "merchant"
+    if int(is_quest_giver or 0):
+        return "quest_giver"
+    if int(is_ally or 0):
+        return "ally"
+    return "neutral"
 
 
 @router.get("/pending/npc/{key}")
 def get_pending_npc(key: str):
-    """Full row for one pending NPC — used by 'Edytuj i Zatwierdź' modal."""
+    """Full row for one pending NPC — used by 'Edytuj i Zatwierdź' modal.
+
+    Legacy compatibility: if all role booleans are 0 but `npc_type` is a
+    non-neutral value (LLM/raw inserts that didn't set the booleans), derive
+    the matching flag so the modal pre-fills correctly. The DB row isn't
+    rewritten — that only happens on save.
+    """
     conn = _get_db()
     try:
         row = conn.execute(
             """SELECT key, label, npc_type, description, personality_prompt,
-                      is_active, review_status
+                      is_active, is_shop, is_quest_giver, is_ally, review_status
                FROM npcs WHERE key = ?""",
             (key,),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="NPC not found")
-        return {"item": dict(row)}
+        item = dict(row)
+        flags_sum = int(item.get("is_shop") or 0) + int(item.get("is_quest_giver") or 0) + int(item.get("is_ally") or 0)
+        if flags_sum == 0:
+            nt = item.get("npc_type") or "neutral"
+            if nt == "merchant":    item["is_shop"] = 1
+            elif nt == "quest_giver": item["is_quest_giver"] = 1
+            elif nt == "ally":      item["is_ally"] = 1
+        return {"item": item}
     finally:
         conn.close()
 
@@ -145,6 +176,21 @@ def patch_pending_npc(key: str, req: NpcPendingPatchReq):
     conn = _get_db()
     try:
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        # If any role flag was sent, also (re)derive npc_type so legacy callers
+        # see a consistent primary role. Read the current row first so unset
+        # flags fall back to the stored value, not to 0.
+        role_keys = {"is_shop", "is_quest_giver", "is_ally"}
+        if updates.keys() & role_keys:
+            cur = conn.execute(
+                "SELECT is_shop, is_quest_giver, is_ally FROM npcs WHERE key = ?", (key,)
+            ).fetchone()
+            cur_flags = dict(cur) if cur else {"is_shop": 0, "is_quest_giver": 0, "is_ally": 0}
+            merged = {**cur_flags, **{k: updates[k] for k in role_keys if k in updates}}
+            updates["npc_type"] = _derive_primary_npc_type(
+                merged.get("is_shop", 0),
+                merged.get("is_quest_giver", 0),
+                merged.get("is_ally", 0),
+            )
         if not updates:
             return {"ok": True}
         sets = ", ".join(f"{k} = ?" for k in updates)
@@ -154,7 +200,8 @@ def patch_pending_npc(key: str, req: NpcPendingPatchReq):
         )
         conn.commit()
         row = conn.execute(
-            "SELECT key, label, npc_type, description FROM npcs WHERE key = ?", (key,)
+            "SELECT key, label, npc_type, is_shop, is_quest_giver, is_ally, description FROM npcs WHERE key = ?",
+            (key,),
         ).fetchone()
         return {"ok": True, "npc": dict(row) if row else {}}
     finally:
