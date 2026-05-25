@@ -19,6 +19,28 @@
 
 ## DONE
 
+### BUG-09 — Walka toczy się trybem narracyjnym zamiast silnika walki ✅ (2026-05-25)
+
+**Co zrobiono:**  
+`context_injector.py` dostał nową metodę `_build_available_enemies_block()`, która przy każdej turze narracyjnej odpytuje bazę o aktywne klucze wrogów (`game_config_enemies WHERE is_active=1`) i wstrzykuje je do kontekstu LLM jako blok `=== DOSTĘPNE KLUCZE WROGÓW ===`. Wcześniej system_prompt.txt miał zahardkodowanych 10 kluczy (brak `giant_rat`, `rat`, `cave_spider`, `bat` itd.) — LLM nie wiedział jak zainicjować walkę z olbrzymim szczurem i narrował ją zamiast emitować `[COMBAT_START:giant_rat]`. Teraz LLM zawsze widzi pełną listę ~70 kluczy z bazy. Przy okazji: zegar (`clock`) jest teraz dołączany do payloadu `[DONE]` na końcu streamu — frontend aktualizuje header natychmiast bez osobnego `GET /clock`.
+
+**Czego się spodziewać:**  
+Gdy gracz spotka szczura / pająka / wilka / innego wroga z bazy, MG emituje `[COMBAT_START:odpowiedni_klucz]` i silnik walki się uruchamia. Zegar w headerze aktualizuje się w tej samej chwili co odbiór końca tury (nie z lekkim opóźnieniem).
+
+**Pliki:** `backend/app/services/context_injector.py`, `backend/prompts/system_prompt.txt`, `backend/app/api/turns.py`, `frontend/front/js/app.js`
+
+**Jak przetestować:**
+1. Zagraj turę narracyjną gdzie MG wpycha walkę z wrogiem z bazy (np. "wchodzę do piwnicy pełnej szczurów") — powinno pojawić się okienko walki, nie sama narracja.
+2. Sprawdź że po turze zegar w headerze aktualizuje się natychmiast (nie po chwili).
+3. Sprawdź logi backendu: `docker logs ai-gm-dev-backend-1 --tail=50` — brak błędów `available_enemies_block_failed`.
+4. W logach LLM call sprawdź że kontekst zawiera blok `DOSTĘPNE KLUCZE WROGÓW` z kluczem `giant_rat`, `cave_spider`, `bat` itp.
+
+**GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/129
+
+---
+
+## DONE
+
 ### BUG-03 — NPC nie są zapamiętywani ✅ (2026-05-25)
 
 **Co zrobiono:**  
