@@ -12,6 +12,7 @@ Handles:
 from __future__ import annotations
 
 import json
+import random
 import re
 import sqlite3
 import structlog
@@ -863,10 +864,18 @@ def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
 
 
 def _ensure_enemy_loot_table(conn: sqlite3.Connection, enemy_key: str) -> None:
-    """Create and assign a loot table for an enemy if it doesn't already have one."""
+    """Create and assign a loot table for an enemy, populating it with
+    tier-appropriate random loot if both the table is new (or empty) and the
+    catalog has eligible items.
+
+    Idempotent: re-running on an already-curated table (with entries) leaves
+    it untouched. Re-running on an enemy that already has loot_table_key set
+    is also a no-op so admin-curated loot is never overwritten.
+    """
     try:
         row = conn.execute(
-            "SELECT label, loot_table_key FROM game_config_enemies WHERE key = ?", (enemy_key,)
+            "SELECT label, loot_table_key, tier, drop_chance FROM game_config_enemies WHERE key = ?",
+            (enemy_key,),
         ).fetchone()
         if not row:
             return
@@ -874,20 +883,132 @@ def _ensure_enemy_loot_table(conn: sqlite3.Connection, enemy_key: str) -> None:
             return
         lt_key = f"loot_{enemy_key}"
         label = row["label"] or enemy_key
+        tier = (row["tier"] or "standard").lower()
+
+        recipe = _TIER_LOOT_RECIPES.get(tier, _TIER_LOOT_RECIPES["standard"])
+
         exists = conn.execute(
             "SELECT key FROM game_config_loot_tables WHERE key = ?", (lt_key,)
         ).fetchone()
         if not exists:
+            gold_min, gold_max = recipe["gold"]
             conn.execute(
-                "INSERT INTO game_config_loot_tables (key, label, description, is_active) VALUES (?, ?, '', 1)",
-                (lt_key, f"Łupy: {label}"),
+                "INSERT INTO game_config_loot_tables (key, label, description, is_active, gold_min, gold_max) "
+                "VALUES (?, ?, ?, 1, ?, ?)",
+                (lt_key, f"Łupy: {label}",
+                 f"Auto-generated tier={tier} loot. Edit freely — re-approval won't overwrite.",
+                 int(gold_min), int(gold_max)),
             )
         conn.execute(
             "UPDATE game_config_enemies SET loot_table_key = ? WHERE key = ?",
             (lt_key, enemy_key),
         )
-    except Exception:
-        pass
+
+        # Only populate entries if the table is empty — admins may have already
+        # curated a same-named table; respect that.
+        existing_entries = conn.execute(
+            "SELECT COUNT(*) AS n FROM game_config_loot_entries WHERE loot_table_key = ?",
+            (lt_key,),
+        ).fetchone()
+        if existing_entries and existing_entries["n"] > 0:
+            return
+
+        _populate_loot_table_for_tier(conn, lt_key, tier)
+
+        # Set drop_chance from tier if still at the SQL default of 1.0 (the
+        # column has NOT NULL DEFAULT 1.0, so 1.0 reliably means "untouched").
+        if row["drop_chance"] is not None and abs(float(row["drop_chance"]) - 1.0) < 1e-6:
+            conn.execute(
+                "UPDATE game_config_enemies SET drop_chance = ? WHERE key = ?",
+                (float(recipe["drop_chance"]), enemy_key),
+            )
+    except Exception as exc:  # noqa: BLE001
+        # Never block approval if loot seeding fails — admin can fill the
+        # table manually. Log so the failure isn't silent.
+        logger.warning("loot_autogen_failed", enemy_key=enemy_key, error=str(exc))
+
+
+# ── Tier-based loot recipes ──────────────────────────────────────────────────
+# Each recipe declares: enemy drop_chance, gold range, and a list of picks.
+# A pick is (category, count, weight_range, qty_max):
+#   - category: "consumable" / "item" / "weapon"
+#   - count: how many DISTINCT entries from that category to roll into the table
+#   - weight_range: (min, max) — picked entry's per-roll drop weight (1-100)
+#   - qty_max: max quantity per drop (qty_min always 1)
+# Picks are skipped silently if the catalog has no eligible rows.
+
+_TIER_LOOT_RECIPES: dict[str, dict[str, Any]] = {
+    "weak": {
+        "drop_chance": 0.3,
+        "gold": (0, 8),
+        "picks": [("consumable", 1, (20, 40), 1)],
+    },
+    "standard": {
+        "drop_chance": 0.5,
+        "gold": (5, 25),
+        "picks": [
+            ("consumable", 1, (30, 50), 2),
+            ("item",       1, (20, 40), 1),
+        ],
+    },
+    "elite": {
+        "drop_chance": 0.7,
+        "gold": (20, 80),
+        "picks": [
+            ("consumable", 2, (40, 60), 2),
+            ("item",       1, (30, 50), 1),
+            ("weapon",     1, (15, 30), 1),
+        ],
+    },
+    "boss": {
+        "drop_chance": 1.0,
+        "gold": (80, 300),
+        "picks": [
+            ("consumable", 2, (50, 70), 3),
+            ("item",       2, (40, 60), 2),
+            ("weapon",     1, (40, 60), 1),
+        ],
+    },
+}
+
+_CATEGORY_SQL: dict[str, str] = {
+    "consumable": "SELECT key FROM game_config_consumables WHERE COALESCE(is_active, 1) = 1",
+    "item":       "SELECT key FROM game_config_items       WHERE COALESCE(is_active, 1) = 1",
+    "weapon":     "SELECT key FROM game_config_weapons     "
+                  "WHERE COALESCE(is_active, 1) = 1 AND COALESCE(approved, 1) = 1 AND campaign_id IS NULL",
+}
+
+_CATEGORY_COL: dict[str, str] = {
+    "consumable": "consumable_key",
+    "item":       "item_key",
+    "weapon":     "weapon_key",
+}
+
+
+def _populate_loot_table_for_tier(conn: sqlite3.Connection, lt_key: str, tier: str) -> None:
+    """Insert tier-appropriate random loot entries into a freshly-created table."""
+    recipe = _TIER_LOOT_RECIPES.get(tier, _TIER_LOOT_RECIPES["standard"])
+    for category, count, (w_min, w_max), qty_max in recipe["picks"]:
+        sql = _CATEGORY_SQL.get(category)
+        col = _CATEGORY_COL.get(category)
+        if not sql or not col:
+            continue
+        try:
+            keys = [r["key"] for r in conn.execute(sql).fetchall()]
+        except Exception:
+            keys = []
+        if not keys:
+            continue
+        n = min(count, len(keys))
+        picks = random.sample(keys, n)
+        for pk in picks:
+            weight = random.randint(int(w_min), int(w_max))
+            q_max = max(1, int(qty_max))
+            conn.execute(
+                "INSERT INTO game_config_loot_entries "
+                f"(loot_table_key, {col}, weight, qty_min, qty_max) VALUES (?, ?, ?, 1, ?)",
+                (lt_key, pk, weight, q_max),
+            )
 
 
 def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool:
