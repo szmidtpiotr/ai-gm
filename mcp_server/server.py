@@ -423,7 +423,7 @@ def get_campaign_summary(campaign_id: int) -> dict:
         active_combat_out = None
         try:
             ac_row = conn.execute(
-                "SELECT id, combatants, current_turn, round_number FROM active_combat "
+                "SELECT id, combatants, current_turn, round FROM active_combat "
                 "WHERE campaign_id = ? AND status = 'active' LIMIT 1",
                 [campaign_id],
             ).fetchone()
@@ -440,7 +440,7 @@ def get_campaign_summary(campaign_id: int) -> dict:
                 ]
                 active_combat_out = {
                     "combat_id": ac_row["id"],
-                    "round": ac_row["round_number"],
+                    "round": ac_row["round"],
                     "current_turn": ac_row["current_turn"],
                     "alive_enemies": enemies,
                 }
@@ -1503,8 +1503,8 @@ def take_short_rest() -> str:
 
     try:
         result = _api_post(
-            f"/campaigns/{_session_campaign_id}/rest/short",
-            {"character_id": _session_character_id},
+            f"/characters/{_session_character_id}/rest?type=short",
+            {},
             timeout=30,
         )
     except Exception as e:
