@@ -959,19 +959,34 @@ async function _renderNpcs(container) {
       return;
     }
 
+    // Compute a per-row "roles" summary for display ("🪙 📜 🤝" or "neutralny")
+    rows = rows.map(r => {
+      const tokens = [];
+      if (Number(r.is_shop))        tokens.push("🪙");
+      if (Number(r.is_quest_giver)) tokens.push("📜");
+      if (Number(r.is_ally))        tokens.push("🤝");
+      return { ...r, _roles_display: tokens.length ? tokens.join(" ") : "neutralny" };
+    });
+
     const columns = [
       { key: "id",       label: "ID",          editable: false },
       { key: "key",      label: LABELS.key,    editable: false },
       { key: "label",    label: LABELS.label,  editable: true },
       {
-        key: "npc_type", label: LABELS.npcType,
-        type: "badge", editType: "select",
-        editOptions: NPC_TYPES.map((t) => t.value),
-        badgeClass: (row) => row.npc_type === "merchant" ? "admin-badge-gold" : "admin-badge-muted",
-        filterOptions: NPC_TYPES,
+        key: "_roles_display", label: "Role", editable: false,
+        // Tooltip listing each role spelled out
+        formatDisplay: (r) => {
+          const ts = [];
+          if (Number(r.is_shop))        ts.push("🪙 Kupiec");
+          if (Number(r.is_quest_giver)) ts.push("📜 Dawca zadań");
+          if (Number(r.is_ally))        ts.push("🤝 Sojusznik");
+          return ts.length ? ts.join(" · ") : "neutralny";
+        },
       },
       { key: "_location_keys_text", label: "Lokacje",            editable: false, popup: true },
-      { key: "is_shop",             label: LABELS.isShop,        type: "boolean", editable: true },
+      { key: "is_shop",             label: "🪙 Kupiec",          type: "boolean", editable: true },
+      { key: "is_quest_giver",      label: "📜 Quest",           type: "boolean", editable: true },
+      { key: "is_ally",             label: "🤝 Sojusznik",       type: "boolean", editable: true },
       { key: "is_active",           label: LABELS.isActive,      type: "boolean", editable: true },
       { key: "description",         label: LABELS.description,   editable: true, popup: true },
       { key: "personality_json",    label: "Osobowość JSON",     editable: true, popup: true },
@@ -1050,10 +1065,34 @@ async function _openNpcModal(row, onDone) {
     `<input type="text" name="key" value="${_esc(row?.key ?? "")}" ${isEdit ? "readonly" : ""} placeholder="np. innkeeper" autocomplete="off" />`));
   form.appendChild(_field(`${LABELS.label} *`,
     `<input type="text" name="label" value="${_esc(row?.label ?? "")}" placeholder="np. Karczmarz" autocomplete="off" />`));
-  form.appendChild(_field(LABELS.npcType,
-    `<select name="npc_type">
-      ${NPC_TYPES.map((t) => `<option value="${t.value}" ${(row?.npc_type ?? "neutral") === t.value ? "selected" : ""}>${t.label}</option>`).join("")}
-    </select>`));
+
+  // Multi-role checkboxes (mirror AP1 pending modal). Backend re-derives the
+  // single-value `npc_type` column from these flags. For legacy rows where
+  // booleans weren't set (raw INSERTs), pre-fill the matching flag from
+  // npc_type so the modal shows a sensible starting state.
+  const flagsSum = Number(row?.is_shop || 0) + Number(row?.is_quest_giver || 0) + Number(row?.is_ally || 0);
+  const legacyType = flagsSum === 0 ? (row?.npc_type || "neutral") : null;
+  const roleField = document.createElement("div");
+  roleField.className = "ea-field";
+  roleField.innerHTML = `
+    <label>Role (możesz zaznaczyć więcej niż jedną)</label>
+    <div class="ea-role-group">
+      <label class="ea-role-check">
+        <input type="checkbox" name="is_shop"        ${Number(row?.is_shop) || legacyType === "merchant"    ? "checked" : ""}>
+        <span class="ea-role-label">🪙 Kupiec</span><span class="ea-role-hint">handluje przedmiotami</span>
+      </label>
+      <label class="ea-role-check">
+        <input type="checkbox" name="is_quest_giver" ${Number(row?.is_quest_giver) || legacyType === "quest_giver" ? "checked" : ""}>
+        <span class="ea-role-label">📜 Dawca zadań</span><span class="ea-role-hint">oferuje questy / haki fabularne</span>
+      </label>
+      <label class="ea-role-check">
+        <input type="checkbox" name="is_ally"        ${Number(row?.is_ally) || legacyType === "ally"        ? "checked" : ""}>
+        <span class="ea-role-label">🤝 Sojusznik</span><span class="ea-role-hint">może dołączyć do drużyny</span>
+      </label>
+    </div>
+    <div class="ea-field-hint">Wszystkie odznaczone = neutralny (tylko rozmowa).</div>`;
+  form.appendChild(roleField);
+
   form.appendChild(_field(LABELS.description,
     `<textarea name="description" rows="3">${_esc(row?.description ?? "")}</textarea>`));
   form.appendChild(_field(LABELS.personality,
@@ -1098,19 +1137,21 @@ async function _openNpcModal(row, onDone) {
     locListWrap.innerHTML = `<p style="font-size:0.78rem;color:var(--accent-red);padding:8px">Błąd ładowania lokacji.</p>`;
   });
 
-  const shopChkRow = _checkbox("is_shop", LABELS.isShop, row?.is_shop ?? false);
-  form.appendChild(shopChkRow);
-
+  // Shop inventory JSON shown only when the 🪙 Kupiec role is ticked (in the
+  // role-group above). is_shop standalone checkbox removed — the role group
+  // is the single source of truth for that flag.
+  const isShopInitial = Number(row?.is_shop) || legacyType === "merchant";
   const shopInvWrap = document.createElement("div");
   shopInvWrap.id = "shop-inv-wrap";
-  shopInvWrap.style.display = row?.is_shop ? "" : "none";
+  shopInvWrap.style.display = isShopInitial ? "" : "none";
   shopInvWrap.appendChild(_field(LABELS.shopInv,
     `<textarea name="shop_inventory_json" rows="4">${_esc(shopJson)}</textarea>`));
   form.appendChild(shopInvWrap);
 
   form.appendChild(_checkbox("is_active", LABELS.isActive, row?.is_active ?? true));
 
-  shopChkRow.querySelector("input").addEventListener("change", (e) => {
+  // Reactively show/hide shop inventory when the merchant role checkbox flips.
+  roleField.querySelector('[name="is_shop"]').addEventListener("change", (e) => {
     shopInvWrap.style.display = e.target.checked ? "" : "none";
   });
 
@@ -1123,13 +1164,14 @@ async function _openNpcModal(row, onDone) {
         label: isEdit ? LABELS.save : "Dodaj",
         class: "primary-btn",
         onClick: async (c) => {
-          const key          = form.querySelector('[name="key"]').value.trim();
-          const label        = form.querySelector('[name="label"]').value.trim();
-          const npc_type     = form.querySelector('[name="npc_type"]').value;
-          const description  = form.querySelector('[name="description"]').value.trim();
-          const is_shop      = form.querySelector('[name="is_shop"]').checked;
-          const is_active    = form.querySelector('[name="is_active"]').checked;
-          const location_keys = Array.from(
+          const key            = form.querySelector('[name="key"]').value.trim();
+          const label          = form.querySelector('[name="label"]').value.trim();
+          const description    = form.querySelector('[name="description"]').value.trim();
+          const is_shop        = form.querySelector('[name="is_shop"]').checked;
+          const is_quest_giver = form.querySelector('[name="is_quest_giver"]').checked;
+          const is_ally        = form.querySelector('[name="is_ally"]').checked;
+          const is_active      = form.querySelector('[name="is_active"]').checked;
+          const location_keys  = Array.from(
             form.querySelectorAll('[name="location_key_cb"]:checked')
           ).map(cb => cb.value);
 
@@ -1140,10 +1182,13 @@ async function _openNpcModal(row, onDone) {
           const pJSON = _tryJson(persRaw, {});
           if (!pJSON.ok) { showToast("Osobowość musi być poprawnym JSON.", "error"); return; }
 
-          // API expects personality_json as a JSON string, not an object
+          // Backend derives npc_type from the role flags. No need to send it.
           const body = {
-            key, label, npc_type, description, is_shop: is_shop ? 1 : 0,
-            is_active: is_active ? 1 : 0,
+            key, label, description,
+            is_shop:        is_shop        ? 1 : 0,
+            is_quest_giver: is_quest_giver ? 1 : 0,
+            is_ally:        is_ally        ? 1 : 0,
+            is_active:      is_active      ? 1 : 0,
             personality_json: JSON.stringify(pJSON.value),
             location_keys,
           };
@@ -1592,6 +1637,14 @@ async function _openEditApproveModal({ item, entityType, onDone }) {
     : `/api/admin/world/pending/enemies/${item.key}`;
   const approveUrl = `/api/admin/world/review/${entityType}/${item.key}`;
 
+  // Enemy-only: append a loot preview section (rolled tier-based, editable).
+  // State lives in a closure object so reroll/add/remove can mutate it and
+  // the same object is read on save.
+  let lootState = null;
+  if (entityType === "enemy") {
+    lootState = await _attachLootPreviewSection(form, item);
+  }
+
   openModal({
     title: `✎ Edytuj i Zatwierdź — ${item.label || item.key}`,
     content: form,
@@ -1630,6 +1683,20 @@ async function _openEditApproveModal({ item, entityType, onDone }) {
             if (Object.keys(patch).length > 0) {
               await adminFetch(patchUrl, { method: "PATCH", body: JSON.stringify(patch) });
             }
+            // Enemy: collect the (possibly edited) loot entries and PUT before
+            // approve. Backend's auto-gen skips because loot_table_key is set.
+            if (entityType === "enemy" && lootState) {
+              const entries = lootState.collect();
+              await adminFetch(`/api/admin/world/pending/enemies/${item.key}/loot`, {
+                method: "PUT",
+                body: JSON.stringify({
+                  tier: lootState.tier,
+                  gold_min: lootState.gold_min,
+                  gold_max: lootState.gold_max,
+                  entries,
+                }),
+              });
+            }
             await adminFetch(approveUrl, { method: "POST", body: JSON.stringify({ action: "approve" }) });
             showToast("Zapisane i zatwierdzone.", "success");
             cls();
@@ -1640,6 +1707,114 @@ async function _openEditApproveModal({ item, entityType, onDone }) {
         }},
     ],
   });
+}
+
+// AP1 v2 — render the loot preview/edit section inside the pending-enemy modal.
+// Returns a state object with .collect() to read current entries on save +
+// .tier / .gold_min / .gold_max for the PUT body.
+async function _attachLootPreviewSection(form, item) {
+  const wrap = document.createElement("div");
+  wrap.className = "ea-loot-section";
+  wrap.innerHTML = `
+    <div class="ea-loot-header">
+      <label>🎲 Tabela łupów (auto-roll na podstawie tieru)</label>
+      <div class="ea-loot-actions">
+        <button type="button" class="secondary-btn ea-loot-reroll" style="font-size:0.75rem;padding:3px 10px">🔄 Przeloseuj</button>
+        <button type="button" class="secondary-btn ea-loot-add"    style="font-size:0.75rem;padding:3px 10px">＋ Dodaj wpis</button>
+      </div>
+    </div>
+    <div class="ea-loot-gold">
+      <label>Złoto:</label>
+      <input type="number" class="ea-loot-gmin" min="0" style="width:80px">
+      <span>–</span>
+      <input type="number" class="ea-loot-gmax" min="0" style="width:80px">
+    </div>
+    <div class="ea-loot-rows"><div class="ea-loot-loading">Ładowanie podglądu łupu…</div></div>
+    <div class="ea-field-hint">Edytuj wpisy przed zapisem. Pusta lista = brak losowych przedmiotów (tylko złoto, jeśli &gt; 0).</div>
+  `;
+  form.appendChild(wrap);
+
+  const rowsEl = wrap.querySelector(".ea-loot-rows");
+  const gMinEl = wrap.querySelector(".ea-loot-gmin");
+  const gMaxEl = wrap.querySelector(".ea-loot-gmax");
+
+  // State shared with the save handler
+  const state = {
+    tier: null,
+    gold_min: 0,
+    gold_max: 0,
+    entries: [],
+    collect() {
+      // Read current values from the DOM so admin edits flow through.
+      const out = [];
+      rowsEl.querySelectorAll(".ea-loot-row").forEach(r => {
+        const kind = r.querySelector(".ea-loot-kind").value;
+        const key  = r.querySelector(".ea-loot-key").value.trim();
+        const w    = Number(r.querySelector(".ea-loot-weight").value);
+        const qm   = Number(r.querySelector(".ea-loot-qmax").value);
+        if (!key) return;
+        out.push({ kind, key, weight: Math.max(1, w || 30), qty_min: 1, qty_max: Math.max(1, qm || 1) });
+      });
+      state.gold_min = Math.max(0, Number(gMinEl.value) || 0);
+      state.gold_max = Math.max(0, Number(gMaxEl.value) || 0);
+      return out;
+    },
+  };
+
+  const renderRows = (entries) => {
+    if (!entries.length) {
+      rowsEl.innerHTML = `<div class="ea-loot-empty">Brak wpisów — kliknij „＋ Dodaj wpis" lub „🔄 Przeloseuj".</div>`;
+      return;
+    }
+    rowsEl.innerHTML = entries.map(e => _lootRowHtml(e)).join("");
+    rowsEl.querySelectorAll(".ea-loot-remove").forEach(b => {
+      b.addEventListener("click", () => { b.closest(".ea-loot-row").remove(); });
+    });
+  };
+
+  const loadPreview = async () => {
+    rowsEl.innerHTML = `<div class="ea-loot-loading">Ładowanie podglądu łupu…</div>`;
+    try {
+      const data = await adminFetch(`/api/admin/world/pending/enemy/${item.key}/loot-preview`);
+      state.tier = data.tier;
+      state.gold_min = data.gold_min;
+      state.gold_max = data.gold_max;
+      state.entries = data.entries || [];
+      gMinEl.value = state.gold_min;
+      gMaxEl.value = state.gold_max;
+      renderRows(state.entries);
+    } catch (e) {
+      rowsEl.innerHTML = `<div class="ea-loot-empty" style="color:var(--accent-red)">${_esc(e.message || "Błąd")}</div>`;
+    }
+  };
+
+  wrap.querySelector(".ea-loot-reroll").addEventListener("click", loadPreview);
+  wrap.querySelector(".ea-loot-add").addEventListener("click", () => {
+    // Add an empty row admin can fill in
+    const blank = { kind: "consumable", key: "", weight: 30, qty_min: 1, qty_max: 1 };
+    const cur = (rowsEl.querySelector(".ea-loot-empty")) ? [] : state.collect();
+    cur.push(blank);
+    state.entries = cur;
+    renderRows(cur);
+  });
+
+  await loadPreview();
+  return state;
+}
+
+function _lootRowHtml(e) {
+  return `
+    <div class="ea-loot-row">
+      <select class="ea-loot-kind">
+        <option value="consumable"${e.kind === "consumable" ? " selected" : ""}>🧪 consumable</option>
+        <option value="item"${e.kind === "item" ? " selected" : ""}>📦 item</option>
+        <option value="weapon"${e.kind === "weapon" ? " selected" : ""}>⚔ weapon</option>
+      </select>
+      <input type="text"   class="ea-loot-key"    value="${_esc(e.key || "")}" placeholder="key (np. potion_healing_minor)">
+      <input type="number" class="ea-loot-weight" value="${Number(e.weight) || 30}" min="1" max="100" title="Weight 1-100">
+      <input type="number" class="ea-loot-qmax"   value="${Number(e.qty_max) || 1}" min="1" title="Qty max">
+      <button type="button" class="ea-loot-remove" title="Usuń">✕</button>
+    </div>`;
 }
 
 async function _renderPendingReview(container, panel) {

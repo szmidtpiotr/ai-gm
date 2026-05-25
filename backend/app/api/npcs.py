@@ -21,6 +21,8 @@ class NpcCreateReq(BaseModel):
     description: str | None = None
     personality_json: str = "{}"
     is_shop: int = 0
+    is_quest_giver: int = 0
+    is_ally: int = 0
     shop_inventory_json: str = "[]"
     is_active: int = 1
     location_keys: list[str] = Field(default_factory=list)
@@ -32,9 +34,20 @@ class NpcPatchReq(BaseModel):
     description: str | None = None
     personality_json: str | None = None
     is_shop: int | None = None
+    is_quest_giver: int | None = None
+    is_ally: int | None = None
     shop_inventory_json: str | None = None
     is_active: int | None = None
     location_keys: list[str] | None = None
+
+
+def _derive_primary_npc_type(is_shop: int, is_quest_giver: int, is_ally: int) -> str:
+    """Priority: merchant > quest_giver > ally > neutral. Matches
+    backend/app/routers/world_review.py — keep in sync."""
+    if int(is_shop or 0):        return "merchant"
+    if int(is_quest_giver or 0): return "quest_giver"
+    if int(is_ally or 0):        return "ally"
+    return "neutral"
 
 
 def _conn() -> sqlite3.Connection:
@@ -113,7 +126,16 @@ def get_npc(npc_id: int):
 
 @router.post("/npcs")
 def create_npc(body: NpcCreateReq):
-    _validate_npc_type(body.npc_type)
+    # When ANY role flag is set, derive npc_type from the flags (admin checked
+    # the new role checkboxes); otherwise honour an explicit npc_type field.
+    is_shop = int(body.is_shop or 0)
+    is_quest_giver = int(body.is_quest_giver or 0)
+    is_ally = int(body.is_ally or 0)
+    if is_shop or is_quest_giver or is_ally:
+        npc_type = _derive_primary_npc_type(is_shop, is_quest_giver, is_ally)
+    else:
+        npc_type = body.npc_type
+    _validate_npc_type(npc_type)
     _validate_json_fields(
         {
             "personality_json": body.personality_json,
@@ -125,16 +147,19 @@ def create_npc(body: NpcCreateReq):
             cur = conn.execute(
                 """
                 INSERT INTO npcs
-                (key, label, npc_type, description, personality_json, is_shop, shop_inventory_json, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (key, label, npc_type, description, personality_json, is_shop,
+                 is_quest_giver, is_ally, shop_inventory_json, is_active)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     body.key.strip(),
                     body.label.strip(),
-                    body.npc_type.strip(),
+                    npc_type.strip(),
                     body.description,
                     body.personality_json,
-                    int(body.is_shop),
+                    is_shop,
+                    is_quest_giver,
+                    is_ally,
                     body.shop_inventory_json,
                     int(body.is_active),
                 ),
@@ -151,6 +176,21 @@ def create_npc(body: NpcCreateReq):
 def patch_npc(npc_id: int, body: NpcPatchReq):
     data = body.model_dump(exclude_unset=True)
     location_keys = data.pop("location_keys", None)
+
+    # If any role flag was sent, also re-derive npc_type from the merged state
+    # (sent flags + current DB values for unsent flags). Same pattern as
+    # world_review.patch_pending_npc.
+    role_keys = {"is_shop", "is_quest_giver", "is_ally"}
+    sent_roles = role_keys & data.keys()
+    if sent_roles:
+        with _conn() as conn:
+            row = _load_npc(conn, npc_id)
+            cur_flags = {k: int(row[k] or 0) for k in role_keys}
+        merged = {**cur_flags, **{k: int(data[k] or 0) for k in sent_roles}}
+        data["npc_type"] = _derive_primary_npc_type(
+            merged["is_shop"], merged["is_quest_giver"], merged["is_ally"]
+        )
+
     _validate_npc_type(data.get("npc_type"))
     _validate_json_fields(data)
 

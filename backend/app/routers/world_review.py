@@ -18,6 +18,7 @@ from app.services.world_service import (
     get_pending_weapons,
     approve_entity,
     discard_entity,
+    roll_loot_preview_for_tier,
 )
 
 DB_PATH = "/data/ai_gm.db"
@@ -260,6 +261,118 @@ def patch_pending_enemy(key: str, req: EnemyPendingPatchReq):
             "SELECT key, label, tier, hp_base FROM game_config_enemies WHERE key = ?", (key,)
         ).fetchone()
         return {"ok": True, "enemy": dict(row) if row else {}}
+    finally:
+        conn.close()
+
+
+# ── AP1 v2: Loot preview / custom-write for pending enemies ──────────────────
+
+class LootEntryReq(_BaseModel):
+    kind: str  # "consumable" | "item" | "weapon"
+    key: str
+    weight: int = 30
+    qty_min: int = 1
+    qty_max: int = 1
+
+
+class LootWriteReq(_BaseModel):
+    tier: str | None = None  # optional override; defaults to enemy's tier
+    gold_min: int | None = None
+    gold_max: int | None = None
+    entries: list[LootEntryReq]
+
+
+@router.get("/pending/enemy/{key}/loot-preview")
+def preview_pending_enemy_loot(key: str, tier: str | None = None):
+    """Dry-run: roll tier-based loot for this enemy and return the suggestion
+    WITHOUT touching the DB. Admin can re-roll by re-calling, edit fields,
+    then commit via PUT /pending/enemies/{key}/loot before approve."""
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT tier, drop_chance FROM game_config_enemies WHERE key = ?", (key,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Enemy not found")
+        effective_tier = (tier or row["tier"] or "standard").lower()
+        result = roll_loot_preview_for_tier(conn, effective_tier)
+        return {
+            "tier": effective_tier,
+            "drop_chance": result["drop_chance"],
+            "gold_min": result["gold_min"],
+            "gold_max": result["gold_max"],
+            "entries": result["entries"],
+        }
+    finally:
+        conn.close()
+
+
+@router.put("/pending/enemies/{key}/loot")
+def write_pending_enemy_loot(key: str, req: LootWriteReq):
+    """Replace the loot table for a pending enemy. Creates the table if it
+    doesn't exist, assigns it to the enemy, deletes any existing entries,
+    and inserts the new ones. Triggered by the 'Edytuj i Zatwierdź' modal
+    before its final approve POST.
+
+    Idempotent: re-PUT replaces everything cleanly."""
+    conn = _get_db()
+    try:
+        erow = conn.execute(
+            "SELECT label, tier, loot_table_key FROM game_config_enemies WHERE key = ?", (key,)
+        ).fetchone()
+        if not erow:
+            raise HTTPException(status_code=404, detail="Enemy not found")
+
+        lt_key = erow["loot_table_key"] or f"loot_{key}"
+        label = erow["label"] or key
+        tier = (req.tier or erow["tier"] or "standard").lower()
+        gold_min = int(req.gold_min if req.gold_min is not None else 0)
+        gold_max = int(req.gold_max if req.gold_max is not None else 0)
+
+        # Upsert the loot table (create if missing, update gold if exists)
+        existing = conn.execute(
+            "SELECT key FROM game_config_loot_tables WHERE key = ?", (lt_key,)
+        ).fetchone()
+        if existing:
+            conn.execute(
+                "UPDATE game_config_loot_tables SET gold_min = ?, gold_max = ?, "
+                "updated_at = datetime('now') WHERE key = ?",
+                (gold_min, gold_max, lt_key),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO game_config_loot_tables (key, label, description, is_active, gold_min, gold_max) "
+                "VALUES (?, ?, ?, 1, ?, ?)",
+                (lt_key, f"Łupy: {label}",
+                 f"Curated via 'Edytuj i Zatwierdź' modal (tier={tier})", gold_min, gold_max),
+            )
+
+        # Pin to enemy
+        conn.execute(
+            "UPDATE game_config_enemies SET loot_table_key = ? WHERE key = ?",
+            (lt_key, key),
+        )
+
+        # Replace entries
+        conn.execute(
+            "DELETE FROM game_config_loot_entries WHERE loot_table_key = ?", (lt_key,)
+        )
+        col_map = {"consumable": "consumable_key", "item": "item_key", "weapon": "weapon_key"}
+        written = 0
+        for e in req.entries:
+            col = col_map.get(e.kind)
+            if not col or not e.key:
+                continue
+            conn.execute(
+                f"INSERT INTO game_config_loot_entries (loot_table_key, {col}, weight, qty_min, qty_max) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (lt_key, e.key.strip(), max(1, int(e.weight)),
+                 max(1, int(e.qty_min)), max(1, int(e.qty_max))),
+            )
+            written += 1
+
+        conn.commit()
+        return {"ok": True, "loot_table_key": lt_key, "entries_written": written}
     finally:
         conn.close()
 

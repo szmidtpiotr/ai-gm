@@ -987,11 +987,30 @@ _CATEGORY_COL: dict[str, str] = {
 
 def _populate_loot_table_for_tier(conn: sqlite3.Connection, lt_key: str, tier: str) -> None:
     """Insert tier-appropriate random loot entries into a freshly-created table."""
+    rolled = roll_loot_preview_for_tier(conn, tier)
+    for e in rolled["entries"]:
+        col = _CATEGORY_COL.get(e["kind"])
+        if not col:
+            continue
+        conn.execute(
+            "INSERT INTO game_config_loot_entries "
+            f"(loot_table_key, {col}, weight, qty_min, qty_max) VALUES (?, ?, ?, 1, ?)",
+            (lt_key, e["key"], int(e["weight"]), int(e["qty_max"])),
+        )
+
+
+def roll_loot_preview_for_tier(conn: sqlite3.Connection, tier: str) -> dict[str, Any]:
+    """Dry-run: roll tier-based loot and return as structured JSON without
+    writing anything. Used by both the modal preview endpoint and the actual
+    on-approve population (via _populate_loot_table_for_tier).
+
+    Returns: {"drop_chance", "gold_min", "gold_max", "entries": [{kind,key,weight,qty_min,qty_max}]}
+    """
     recipe = _TIER_LOOT_RECIPES.get(tier, _TIER_LOOT_RECIPES["standard"])
+    entries: list[dict[str, Any]] = []
     for category, count, (w_min, w_max), qty_max in recipe["picks"]:
         sql = _CATEGORY_SQL.get(category)
-        col = _CATEGORY_COL.get(category)
-        if not sql or not col:
+        if not sql:
             continue
         try:
             keys = [r["key"] for r in conn.execute(sql).fetchall()]
@@ -1002,13 +1021,20 @@ def _populate_loot_table_for_tier(conn: sqlite3.Connection, lt_key: str, tier: s
         n = min(count, len(keys))
         picks = random.sample(keys, n)
         for pk in picks:
-            weight = random.randint(int(w_min), int(w_max))
-            q_max = max(1, int(qty_max))
-            conn.execute(
-                "INSERT INTO game_config_loot_entries "
-                f"(loot_table_key, {col}, weight, qty_min, qty_max) VALUES (?, ?, ?, 1, ?)",
-                (lt_key, pk, weight, q_max),
-            )
+            entries.append({
+                "kind": category,
+                "key": pk,
+                "weight": random.randint(int(w_min), int(w_max)),
+                "qty_min": 1,
+                "qty_max": max(1, int(qty_max)),
+            })
+    gold_min, gold_max = recipe["gold"]
+    return {
+        "drop_chance": float(recipe["drop_chance"]),
+        "gold_min": int(gold_min),
+        "gold_max": int(gold_max),
+        "entries": entries,
+    }
 
 
 def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool:
