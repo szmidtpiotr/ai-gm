@@ -1818,10 +1818,96 @@ async function _loadPendingType(container, type, panelId, badgeId, panel) {
 
     panelEl.innerHTML = "";
     const entityType = type === "locations" ? "location" : type === "npcs" ? "npc" : "enemy";
+
+    // AP2 — bulk-select state shared between toolbar + rows
+    const selected = new Set();
+    const rowByKey = new Map();
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "bulk-toolbar";
+    toolbar.innerHTML = `
+      <label class="bulk-select-all-label">
+        <input type="checkbox" class="bulk-select-all">
+        <span>Zaznacz wszystko</span>
+      </label>
+      <span class="bulk-count" data-count="0">0 zaznaczonych</span>
+      <div class="bulk-actions">
+        <button class="primary-btn bulk-approve-btn" disabled style="font-size:0.78rem;padding:4px 12px">✓ Zatwierdź zaznaczone</button>
+        <button class="secondary-btn danger-outline bulk-reject-btn" disabled style="font-size:0.78rem;padding:4px 12px">✕ Odrzuć zaznaczone</button>
+      </div>
+    `;
+    panelEl.appendChild(toolbar);
+
+    const bulkApproveBtn = toolbar.querySelector(".bulk-approve-btn");
+    const bulkRejectBtn  = toolbar.querySelector(".bulk-reject-btn");
+    const bulkCount      = toolbar.querySelector(".bulk-count");
+    const selectAllBox   = toolbar.querySelector(".bulk-select-all");
+
+    const decBadgeOnce = () => {
+      badge.textContent = String(Math.max(0, (parseInt(badge.textContent) || 1) - 1));
+      if (badge.textContent === "0") badge.style.display = "none";
+    };
+
+    const refreshToolbar = () => {
+      const n = selected.size;
+      bulkCount.textContent = `${n} zaznaczonych`;
+      bulkCount.dataset.count = String(n);
+      bulkApproveBtn.disabled = n === 0;
+      bulkRejectBtn.disabled  = n === 0;
+      // Select-all reflects current state (no event loop — we set .checked manually)
+      const total = rowByKey.size;
+      selectAllBox.checked = total > 0 && n === total;
+      selectAllBox.indeterminate = n > 0 && n < total;
+    };
+
+    const removeRow = (key) => {
+      const r = rowByKey.get(key);
+      if (r) { r.remove(); rowByKey.delete(key); }
+      selected.delete(key);
+      decBadgeOnce();
+      refreshToolbar();
+    };
+
+    const runBulk = async (action) => {
+      const keys = Array.from(selected);
+      if (!keys.length) return;
+      if (action === "discard" && !confirm(`Odrzucić ${keys.length} oczekujących pozycji? Tej operacji nie można cofnąć.`)) return;
+      bulkApproveBtn.disabled = true;
+      bulkRejectBtn.disabled  = true;
+      let ok = 0, fail = 0;
+      const results = await Promise.allSettled(keys.map(k =>
+        adminFetch(`/api/admin/world/review/${entityType}/${k}`, {
+          method: "POST", body: JSON.stringify({ action }),
+        }).then(() => ({ k, ok: true }))
+      ));
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") { ok++; removeRow(keys[i]); }
+        else { fail++; }
+      });
+      if (ok)   showToast(`${ok} ${action === "approve" ? "zatwierdzonych" : "odrzuconych"}.`, "success");
+      if (fail) showToast(`${fail} nie udało się.`, "error");
+      refreshToolbar();
+    };
+
+    bulkApproveBtn.addEventListener("click", () => runBulk("approve"));
+    bulkRejectBtn .addEventListener("click", () => runBulk("discard"));
+
+    selectAllBox.addEventListener("change", () => {
+      const check = selectAllBox.checked;
+      rowByKey.forEach((row, key) => {
+        const cb = row.querySelector(".pending-row-check");
+        if (!cb) return;
+        cb.checked = check;
+        if (check) selected.add(key); else selected.delete(key);
+      });
+      refreshToolbar();
+    });
+
     items.forEach(item => {
       const row = document.createElement("div");
       row.className = "pending-row";
       row.innerHTML = `
+        <input type="checkbox" class="pending-row-check" title="Zaznacz do operacji zbiorczej">
         <div class="pending-row-info">
           <strong>${_esc(item.label || item.name || item.key)}</strong>
           <code>${_esc(item.key)}</code>
@@ -1833,14 +1919,15 @@ async function _loadPendingType(container, type, panelId, badgeId, panel) {
           <button class="secondary-btn danger-outline pending-reject-btn" style="font-size:0.78rem;padding:4px 8px">✕ Odrzuć</button>
         </div>`;
 
-      const decBadge = () => {
-        row.remove();
-        badge.textContent = String(Math.max(0, (parseInt(badge.textContent) || 1) - 1));
-        if (badge.textContent === "0") badge.style.display = "none";
-      };
+      rowByKey.set(item.key, row);
+
+      row.querySelector(".pending-row-check").addEventListener("change", (e) => {
+        if (e.target.checked) selected.add(item.key); else selected.delete(item.key);
+        refreshToolbar();
+      });
 
       row.querySelector(".pending-edit-approve-btn").addEventListener("click", () => {
-        _openEditApproveModal({ item, entityType, onDone: decBadge });
+        _openEditApproveModal({ item, entityType, onDone: () => removeRow(item.key) });
       });
 
       row.querySelector(".pending-approve-btn").addEventListener("click", async () => {
@@ -1849,9 +1936,7 @@ async function _loadPendingType(container, type, panelId, badgeId, panel) {
             method: "POST", body: JSON.stringify({ action: "approve" }),
           });
           showToast("Zatwierdzone.", "success");
-          row.remove();
-          badge.textContent = String(Math.max(0, (parseInt(badge.textContent) || 1) - 1));
-          if (badge.textContent === "0") badge.style.display = "none";
+          removeRow(item.key);
         } catch (e) { showToast(e.message, "error"); }
       });
 
@@ -1862,14 +1947,14 @@ async function _loadPendingType(container, type, panelId, badgeId, panel) {
             method: "POST", body: JSON.stringify({ action: "discard" }),
           });
           showToast("Odrzucone.", "success");
-          row.remove();
-          badge.textContent = String(Math.max(0, (parseInt(badge.textContent) || 1) - 1));
-          if (badge.textContent === "0") badge.style.display = "none";
+          removeRow(item.key);
         } catch (e) { showToast(e.message, "error"); }
       });
 
       panelEl.appendChild(row);
     });
+
+    refreshToolbar();
   } catch (e) {
     panelEl.innerHTML = `<p style="color:var(--accent-red);font-size:0.82rem">${_esc(e.message)}</p>`;
   }
