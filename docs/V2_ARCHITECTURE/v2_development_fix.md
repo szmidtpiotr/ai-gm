@@ -13,19 +13,6 @@
 
 ## TO DO
 
-### BUG-04 — Plan MG (Akt / Scena / Cel) zawsze pusty 🟡
-
-**Co zrobić:**  
-Pola "Akt", "Scena", "Cel sceny" w panelu kampanii są puste przez całą grę. MG ma plan, ale nie zapisuje go do bazy. Trzeba dodać aktualizację.
-
-**Co ustalono:**  
-*Do omówienia* — jak często MG ma aktualizować plan? Co turę? Tylko przy zmianie sceny? Czy sam decyduje?
-
-**Czego się spodziewać:**  
-W panelu kampanii widać aktualny akt fabuły, w jakiej scenie jesteśmy i jaki jest jej cel. Gracz może też widzieć cel sceny w swoim UI (jako podpowiedź "co teraz?").
-
----
-
 ### BUG-05 — Nudne opisy porażek rzutów 🟢
 
 **Co zrobić:**  
@@ -85,6 +72,27 @@ Po pierwszej rozmowie z Martą MG zapisuje ją do listy. W kolejnych turach MG w
 5. `docker exec ai-gm-dev-backend-1 pytest backend/tests/test_bug03_npc_memory.py -v` — wszystkie testy zielone.
 
 **GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/123
+
+---
+
+### BUG-04 — Plan MG (Akt / Scena / Cel) zawsze pusty ✅ (2026-05-25)
+
+**Co zrobiono:**  
+Trójwarstwowy system aktualizacji planu MG. **`gm_note`** (opcjonalne, co turę) — krótka notatka narracyjna trafia do rolling buffera 30 wpisów w `engine_private.gm_note_buffer`. **`scene_advance: true`** — inkrementuje `current_scene_ordinal` aktywnego łuku. **`gm_plan_update`** — merguje zmiany roadmapy, dodaje/usuwa cele sceny, aktualizuje `last_plan_updated_turn`. Trigger: `scene_advance` lub konfigurowalny próg (default 25 tur) — gdy przekroczony, `context_injector` wstrzykuje do system promptu blok "AKTUALIZACJA PLANU MG — WYMAGANA" i MG zwraca `gm_plan_update` w tym samym response (zero dodatkowych LLM callów). Nowa zakładka "⚙ Ustawienia" w panelu Kampanie z edytowalnymi wartościami dla progu planu i zegara (oba z opisem). Przy okazji: `npc_met` w system_prompt.txt zmieniony z OPCJONALNE na OBOWIĄZKOWE — LLM czytał "optional" dosłownie.
+
+**Czego się spodziewać:**  
+Po co 25 turach MG dostaje prośbę o update i aktualizuje roadmapę, cele i stan sceny. Admin widzi w panelu aktualną notatkę MG i licznik sceny. W ⚙ Ustawieniach można zmienić próg.
+
+**Pliki:** `backend/app/services/plan_config_service.py` (nowy), `backend/app/services/context_injector.py`, `backend/app/services/turn_pipeline.py`, `backend/app/api/turns.py`, `backend/app/routers/admin.py`, `backend/prompts/system_prompt.txt`, `backend/tests/test_bug04_gm_plan_update.py` (nowy), `frontend/admin_panel_v2/sections/campaigns_hub.js`, `frontend/admin_panel_v2/sections/campaigns_settings.js` (nowy)
+
+**Jak przetestować:**
+1. W panelu admina → Kampanie → ⚙ Ustawienia — sprawdź że widać pola "Plan MG" i "Zegar gry" z wartościami.
+2. Zmień próg na 5 tur, zapisz. Zagraj 5 tur narracyjnych — MG powinien zwrócić `gm_plan_update` w JSON.
+3. Otwórz kampanię → Plan GM — sprawdź że roadmap ma nową notatkę `[T5] ...`.
+4. Zagraj turę gdzie MG powie że scena się skończyła (`scene_advance: true`) — sprawdź w DB że `current_scene_ordinal` wzrósł.
+5. `docker exec ai-gm-dev-backend-1 pytest tests/test_bug04_gm_plan_update.py -v` — 9 passed.
+
+**GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/125
 
 ---
 
