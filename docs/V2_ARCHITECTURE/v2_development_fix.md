@@ -13,42 +13,7 @@
 
 ## TO DO
 
-### BUG-05 — Nudne opisy porażek rzutów 🟢
-
-**Co zrobić:**  
-Kiedy gracz nie zda rzutu, MG dziś daje generyczny opis typu "tajemnica pozostaje ukryta" — fabuła stoi. Trzeba zmusić MG żeby przy porażce wprowadzał konkretną konsekwencję (hałas, strata czasu, zmęczenie, niechciana uwaga).
-
-**Co ustalono:**  
-Robota mechaniczna — dopiszemy regułę do system promptu, lista 5 typów konsekwencji już jest gotowa.
-
-**Czego się spodziewać:**  
-Porażka rzutu pcha fabułę do przodu w niewygodny sposób — np. nieudane skradanie ściąga strażnika, nieudana perswazja kosztuje pół godziny czasu.
-
----
-
-### BUG-06 — XP rośnie za wolno 🟢
-
-**Co zrobić:**  
-Gracz po 29 turach gry (las, ruiny, misja, rozmowy z NPC) dostał tylko 9 XP. Dziś XP daje się głównie za odpoczynek. Brakuje XP za walkę i za akcje fabularne.
-
-**Co ustalono:**  
-*Do omówienia* — konkretne wartości XP (5? 10? 25?) za różne eventy. Czy walka też ma dawać XP (dziś **nie daje wcale**)?
-
-**Czego się spodziewać:**  
-Gracz widzi że gra nagradza go za eksplorację, rozmowy z nowymi ludźmi, zdobywanie ważnych przedmiotów, kończenie misji. Awanse poziomu pojawiają się w sensownych odstępach.
-
----
-
-### BUG-08 — Nowy łotr startuje z pustym plecakiem 🟢
-
-**Co zrobić:**  
-Łotr poziomu 1 zaczyna grę bez **niczego** — bez broni, bez prowiantu, bez światła. Powód: w bazie nie ma archetypu "łotr", tylko "wojownik" i "uczony".
-
-**Co ustalono:**  
-*Do omówienia* — co dokładnie ma dostać łotr na start? (sztylet, wytrychy, 5 złota, pochodnia?)
-
-**Czego się spodziewać:**  
-Nowy łotr startuje z sensownym zestawem startowym, tak jak wojownik i uczony. Nie wchodzi do groźnych ruin gołymi rękami.
+*(wszystkie bugi ze ścieżki testowej 2026-05-25 ukończone)*
 
 ---
 
@@ -155,3 +120,63 @@ Gracz nigdy nie zobaczy `[LOCATION_BLOCKED:...]` w narracji. Jeśli MG opisze ru
 4. `docker exec ai-gm-dev-backend-1 pytest backend/tests/test_phase8d_location_hook.py -v`
 
 **GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/121
+
+---
+
+### BUG-05 — Konsekwencje porażek rzutów ✅ (2026-05-25)
+
+**Co zrobiono:**  
+Nowa OBOWIĄZKOWA sekcja "KONSEKWENCJE PORAŻEK RZUTÓW" w `system_prompt.txt`. MG nie może już pisać "nie udało się" bez konkretu — musi wybrać konsekwencję z 6 kategorii: **Hałas** (uwaga), **Strata czasu** (`time_advance_minutes`), **Zmęczenie/rana** (HP/kondycja), **Niechciana uwaga** (NPC), **Strata zasobu** (`remove_item`), **Zranienie 3rd party** (towarzysz/NPC obrywa zamiast gracza). Sekcja zawiera 3 przykłady (skradanie, lockpicking, perswazja). Im wyższe DC, tym poważniejsza konsekwencja.
+
+**Czego się spodziewać:**  
+Porażka rzutu pcha fabułę do przodu w niewygodny sposób — nieudane skradanie ściąga strażnika, nieudany lockpicking kosztuje wytrych i pół godziny, nieudana perswazja zamyka możliwość handlu na ten dzień.
+
+**Pliki:** `backend/prompts/system_prompt.txt`
+
+**Jak przetestować:**
+1. Zagraj 5 tur z świadomymi porażkami (akcje na słabym staty).
+2. Sprawdź że każda porażka ma konkretną konsekwencję (nie tylko "nie udało się").
+3. W przynajmniej 3 z 5 porażek powinny pojawić się różne kategorie konsekwencji.
+4. Konsekwencje typu "strata czasu" powinny mieć w JSON `time_advance_minutes`; "strata zasobu" — `remove_item`.
+
+**GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/126
+
+---
+
+### BUG-06 — XP rośnie za wolno ✅ (2026-05-25)
+
+**Co zrobiono:**  
+Cały system XP (XS1-XS15) był **już zaimplementowany** w Stage 2D — problem był taki że MG nie znał tagów. Nowa sekcja "NAGRODY XP — TAGI W NARRACJI" w `system_prompt.txt` z listą tagów: `[BEAT_COMPLETE]` (+30), `[QUEST_COMPLETE]` (+40), `[DUNGEON_CLEAR]` (+75), `[DISCOVERY:lore:...]` (+10), `[DISCOVERY:secret_location:...]` (+10), `[XP_GRANT:powod:N]` (+5–25, cap 50/sesja). MG dostał też instrukcję "bądź szczodry — po 5-10 turach powinno wpaść 30-50 XP". Dodatkowo: hook BUG-03 (`npc_met`) wywołuje teraz `grant_first_npc_talk` automatycznie — pierwszy raz z imiennym NPC = +5 XP (XS6) bez potrzeby DIALOGUE action.
+
+**Czego się spodziewać:**  
+Gracz po 10-15 turach narracyjnych ma 40+ XP (zamiast 9 jak wcześniej). Awanse poziomu pojawiają się w sensownych odstępach (poziom 2 po ~100 XP = jedna pełna sesja).
+
+**Pliki:** `backend/prompts/system_prompt.txt`, `backend/app/api/turns.py`
+
+**Jak przetestować:**
+1. Zagraj turę spotkania nowego NPC (`gospodarz Tomek`) — sprawdź `character_xp_grants` — powinien być wpis `exploration.npc_first_talk` +5 XP.
+2. Zagraj turę gdzie MG emituje `[BEAT_COMPLETE:found_map]` — sprawdź +30 XP.
+3. Po 10-15 turach narracyjnych — łączny XP powinien być 40+.
+4. Sprawdź że ten sam NPC drugi raz NIE daje +5 XP (idempotencja).
+
+**GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/127
+
+---
+
+### BUG-08 — Nowy łotr startuje z pustym plecakiem ✅ (2026-05-25)
+
+**Co zrobiono:**  
+Nowa migracja `_ensure_rogue_archetype` w `migrations_admin.py` dodaje wiersz `rogue` do `game_config_archetypes`. Universal kit (zgodnie z decyzją): sztylet, krótki łuk, wytrychy, lina 10m, 2× pochodnia, 3× suchy prowiant, skórzana zbroja. 8 sg, HP 8 (między wojownikiem 10 a uczonym 6). Frontend już wcześniej znał `rogue` (ARCHETYPE_BONUS DEX+2/LCK+1) — brakowała tylko strony DB.
+
+**Czego się spodziewać:**  
+Nowy łotr startuje z sensownym zestawem startowym, tak jak wojownik i uczony. Nie wchodzi do groźnych ruin gołymi rękami.
+
+**Pliki:** `backend/app/migrations_admin.py`
+
+**Jak przetestować:**
+1. Sprawdź DB: `docker exec ai-gm-dev-backend-1 sqlite3 /data/ai_gm.db "SELECT * FROM game_config_archetypes WHERE key='rogue';"` — powinno zwrócić wiersz.
+2. Stwórz nową postać łotra przez kreator. Sprawdź ekwipunek: sztylet, krótki łuk, wytrychy, lina, 2 pochodnie, 3 prowianty, skórzana zbroja.
+3. Sprawdź złoto: 8 sg. HP base: 8 + mod CON.
+4. Otwórz Admin → Mechanika → archetypy — rogue widoczny i edytowalny.
+
+**GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/128
