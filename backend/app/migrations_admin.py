@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 
@@ -2928,6 +2929,31 @@ def _ensure_hex_spawn_weights(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _ensure_rogue_archetype(conn: sqlite3.Connection) -> None:
+    """BUG-08: add Rogue archetype if missing (so new rogues get a proper starter kit)."""
+    starter_items = json.dumps([
+        {"weapon_key": "dagger"},
+        {"weapon_key": "shortbow"},
+        {"item_key": "lockpicks"},
+        {"item_key": "rope_10m"},
+        {"item_key": "torch", "quantity": 2},
+        {"item_key": "ration_trail", "quantity": 3},
+        {"item_key": "leather_armor"},
+    ], ensure_ascii=False)
+    try:
+        conn.execute(
+            """INSERT OR IGNORE INTO game_config_archetypes
+               (key, label, description, starter_items_json, starter_gold_gp, hp_base)
+               VALUES ('rogue', 'Łotr',
+                       'Mistrz skradania, podstępu i otwierania zamków. Zwinny, ostrożny, polega na łucznictwie z dystansu i sztylecie z bliska.',
+                       ?, 8, 8)""",
+            (starter_items,),
+        )
+        conn.commit()
+    except sqlite3.OperationalError as e:
+        logger.warning("rogue_archetype_seed_failed", error=str(e))
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -3012,6 +3038,7 @@ def run_admin_migrations() -> None:
         _ensure_j3_summary_interval(conn)
         _ensure_hex_spawn_weights(conn)
         _ensure_campaign_known_npcs(conn)
+        _ensure_rogue_archetype(conn)
     finally:
         conn.close()
 

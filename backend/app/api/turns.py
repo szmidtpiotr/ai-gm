@@ -1793,7 +1793,7 @@ def create_turn_log(
                     _name = str(_e.get("name") or "").strip()
                     if not _name:
                         continue
-                    record_npc_met(
+                    _met_res = record_npc_met(
                         campaign_id=campaign_id,
                         name=_name,
                         role=(str(_e.get("role")).strip() if _e.get("role") else None),
@@ -1802,6 +1802,14 @@ def create_turn_log(
                         notes=(str(_e.get("notes")).strip() if _e.get("notes") else None),
                         conn=conn,
                     )
+                    # BUG-06 / XS6: +5 XP for first encounter with a named NPC
+                    if _met_res.get("ok") and _met_res.get("new") and character_id is not None:
+                        try:
+                            from app.services.xp_sources import grant_first_npc_talk
+                            _npc_key = _name.lower().replace(" ", "_")
+                            grant_first_npc_talk(conn, int(character_id), campaign_id, _npc_key, _turn_num)
+                        except Exception as _xp_err:
+                            logger.warning("xs6_npc_xp_failed", error=str(_xp_err))
 
                 _upd_raw = _ndata.get("npc_update")
                 _upd_entries = _upd_raw if isinstance(_upd_raw, list) else (

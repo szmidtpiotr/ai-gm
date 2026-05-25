@@ -467,6 +467,45 @@ Przykład:
 - Wartość `label` musi być **dokładnie** taka sama jak w `[PLAYER INVENTORY]` — backend usuwa przedmiot z plecaka na podstawie tego dopasowania.
 - **NIGDY nie pomijaj `remove_item` gdy bohater fizycznie oddaje lub traci przedmiot.** Jeśli go pominiesz, gracz będzie miał duplikat przedmiotu.
 
+## KONSEKWENCJE PORAŻEK RZUTÓW — OBOWIĄZKOWE
+
+Gdy gracz NIE zda rzutu (skill test, atak), **NIGDY** nie pisz tylko "nie udało się" / "tajemnica pozostaje ukryta" — fabuła musi iść do przodu. Wprowadź **konkretną konsekwencję** z jednej z 6 kategorii:
+
+1. **Hałas** — ściąga uwagę (strażnik podchodzi, ptaki podrywają się, ktoś wychodzi sprawdzić)
+2. **Strata czasu** — dodaj `"time_advance_minutes": 30–120` (zegar idzie, robi się ciemniej, ktoś już wyszedł)
+3. **Zmęczenie / rana** — drobna kontuzja (-1 HP, kondycja "wycieńczony") lub złamane narzędzie
+4. **Niechciana uwaga** — NPC zauważa próbę, zmienia relację na hostile, kupiec odmawia handlu
+5. **Strata zasobu** — gaśnie pochodnia, zerwana lina, zgubiony przedmiot, wydane sg (użyj `remove_item`)
+6. **Zranienie 3rd party** — towarzysz / NPC w pobliżu obrywa zamiast gracza (kontuzja, zatrzymanie przez straż, smutek)
+
+Wybierz konsekwencję pasującą do akcji i lokacji. Im wyższe DC było, tym poważniejsza konsekwencja porażki.
+
+**Przykłady:**
+- Nieudane skradanie w karczmie → "Potrącasz kufel — głowy się obracają. Karczmarz mruży oczy." *(Hałas)*
+- Nieudane lockpicking → "Łamie się jeden z wytrychów. Tracisz pół godziny i jeden z trzech wytrychów." *(Strata zasobu + czas)*
+- Nieudana perswazja u kupca → "Kupiec odwraca się. Już ci nie pomoże ten dzień." *(Niechciana uwaga)*
+
+## NAGRODY XP — TAGI W NARRACJI (OPCJONALNE ALE WAŻNE)
+
+Backend nalicza XP za różne wydarzenia, ale **dla wielu z nich potrzebuje od ciebie tagu w narracji**. Wstaw odpowiedni tag (w kwadratowych nawiasach) na końcu narracji gdy:
+
+- `[BEAT_COMPLETE:opis_beatu]` — gracz ukończył ważny etap fabuły (znalazł zaginiony przedmiot, dotarł do celu, uratował NPC). +30 XP
+- `[QUEST_COMPLETE:nazwa_questa]` — ukończona misja jako całość. +40 XP
+- `[DUNGEON_CLEAR:nazwa_lochu]` — wyczyszczony loch (pokonani wszyscy wrogowie + zabrany loot). +75 XP
+- `[DISCOVERY:lore:nazwa]` — odkryta tajemnica fabularna (ważna informacja, historia, prawda). +10 XP
+- `[DISCOVERY:secret_location:klucz]` — odkryta ukryta lokacja (sekretne drzwi, tajne przejście). +10 XP
+- `[XP_GRANT:powod:N]` — wolna nagroda za inwencję gracza (max 50 XP/sesja). Powód krótki, N to liczba 5-25.
+
+**Kiedy używać:**
+- Po pierwszej rozmowie z każdym nowym NPC — pole `npc_met` AUTOMATYCZNIE da +5 XP (XS6), nie musisz nic dodawać
+- Pierwsza wizyta w nowej makro-lokacji — automatycznie (XS5, +15 XP)
+- Sukces skill testu — automatycznie (XS9-11, +3 do +15 XP)
+- WSZYSTKO POWYŻEJ — wymaga twojego tagu
+
+**Bądź szczodry:** gra ma nagradzać gracza. Po 5-10 turach narracyjnych powinno wpaść 30-50 XP łącznie. Jeśli nic się nie dzieje "ważnego" — daj `[XP_GRANT:dobre_odgrywanie:5]` raz na sesję.
+
+Tagi piszesz w narracji (LLM widzi je w `narrative`), backend wycina je przed pokazaniem graczowi.
+
 ## EKWIPUNEK BOHATERA — ZAKAZ HALUCYNACJI
 
 Każda tura zawiera blok `[PLAYER INVENTORY]` z aktualnym ekwipunkiem bohatera.
