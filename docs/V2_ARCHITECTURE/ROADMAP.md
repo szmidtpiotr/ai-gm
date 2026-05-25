@@ -335,7 +335,8 @@ Extends the hex travel system from a static map into a living, auto-expanding wo
 - [x] **O1** TASK_47: `game_events` table + `event_logger` service — commit `cc51537`
 - [x] **O2** TASK_48: `llm_call_log` table + admin viewer — commit `cc51537`
 - [x] **O3** TASK_49: admin analytics panel (dashboard/events/LLM tabs) — commit `cc51537`
-- [x] **O4** TASK_50: MCP server with 9 tools for AI-queryable game data — commit `098e11f`. SSE on port 8400. Docs: `docs/MCP_SERVER.md`
+- [x] **O4** TASK_50: MCP server with 9 tools for AI-queryable game data — commit `098e11f`. Streamable HTTP at `https://aigm-dev.studio-colorbox.com/mcp` (NPM proxy). Docs: `docs/MCP_SERVER.md`
+- [x] **O4b** MCP admin integration — analytics MCP tab (live status ping, copy URL, Perplexity guide, tool list), topbar status pill polling every 60 s — commit `a0aef22`, issue [#103](https://github.com/szmidtpiotr/ai-gm/issues/103)
 
 ### Stage 15 — Phase 12 AI Test Agent
 
@@ -640,10 +641,10 @@ The original phase-grouped view follows below for context. Cross-reference task 
 
 ## Phase 11 — Observability
 
-- [ ] **T47 Game Event Logging** — `game_events` table, event_logger service
-- [ ] **T48 LLM Call Log** — `llm_call_log` table, admin viewer
-- [ ] **T49 Admin Analytics Panel** — dashboard/events/LLM tabs
-- [ ] **T50 MCP Server** — 9 tools for AI-queryable game data
+- [x] **T47 Game Event Logging** — `game_events` table, event_logger service — commit `cc51537`
+- [x] **T48 LLM Call Log** — `llm_call_log` table, admin viewer — commit `cc51537`
+- [x] **T49 Admin Analytics Panel** — dashboard/dice/combat/economy/events/LLM/MCP tabs — commit `cc51537`, MCP tab `a0aef22`
+- [x] **T50 MCP Server** — 9 tools, Streamable HTTP, public via `https://aigm-dev.studio-colorbox.com/mcp` — commit `098e11f`
 
 ---
 
