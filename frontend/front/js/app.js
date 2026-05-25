@@ -1130,12 +1130,61 @@ function _renderHexMinimap(hexes) {
 
 async function selectHero(hero) {
     currentHero = hero;
-    // Always show campaigns chooser — let player decide (dungeon, new campaign, etc.)
     if (elements.welcomeUser) {
         elements.welcomeUser.textContent = `Bohater: ${hero.name}`;
     }
-    // Save hero to session so F5 restores context
     try { localStorage.setItem('aigm_hero_id', hero.id); localStorage.removeItem('aigm_campaign_id'); } catch {}
+
+    const status = hero.hero_status || hero.status || 'idle';
+    if (status === 'idle') {
+        _showIdleHeroPanel(hero);
+        return;
+    }
+    await loadCampaigns();
+    showScreen('campaigns');
+}
+
+function _showIdleHeroPanel(hero) {
+    const panel = document.getElementById('idle-hero-panel');
+    if (!panel) { _proceedFromIdlePanel(); return; }
+    const sheet = (typeof hero.sheet_json === 'string' ? JSON.parse(hero.sheet_json || '{}') : hero.sheet_json) || {};
+
+    // Identity
+    const initial = (hero.name || '?')[0].toUpperCase();
+    document.getElementById('idle-hero-panel-avatar').textContent = initial;
+    document.getElementById('idle-hero-panel-name').textContent = hero.name || '—';
+    const archetype = sheet.archetype || hero.archetype || '—';
+    const level = sheet.level || 1;
+    const hp = sheet.current_hp ?? sheet.max_hp ?? '?';
+    const maxHp = sheet.max_hp ?? hp;
+    document.getElementById('idle-hero-panel-meta').textContent = `${archetype} · Poziom ${level}`;
+
+    // Stats row
+    const xpAvail = sheet.xp_available || 0;
+    const campaigns = hero.campaigns_completed ?? 0;
+    document.getElementById('idle-hero-panel-stats').innerHTML = `
+        <div class="idle-hero-stat"><span class="idle-hero-stat__val">${hp}/${maxHp}</span><span class="idle-hero-stat__label">HP</span></div>
+        <div class="idle-hero-stat"><span class="idle-hero-stat__val">${xpAvail > 0 ? `+${xpAvail}` : (sheet.xp_lifetime || 0)}</span><span class="idle-hero-stat__label">${xpAvail > 0 ? 'PD dostępne' : 'PD ogółem'}</span></div>
+        <div class="idle-hero-stat"><span class="idle-hero-stat__val">${campaigns}</span><span class="idle-hero-stat__label">Przygód</span></div>
+    `;
+
+    // Awansuj button
+    const awansujBtn = document.getElementById('idle-hero-panel-awansuj');
+    if (awansujBtn) {
+        awansujBtn.hidden = xpAvail <= 0;
+        awansujBtn.textContent = `⬆ Awansuj (${xpAvail} PD)`;
+    }
+
+    panel.hidden = false;
+}
+
+function _hideIdleHeroPanel() {
+    const panel = document.getElementById('idle-hero-panel');
+    if (panel) panel.hidden = true;
+}
+
+async function _proceedFromIdlePanel() {
+    _hideIdleHeroPanel();
     await loadCampaigns();
     showScreen('campaigns');
 }
@@ -3333,6 +3382,8 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
 
         await refreshCharacterData();
         await pollCombatState();
+        // BUG-02: clock now ticks every turn — refresh header display.
+        fetchAndRenderClock(currentCampaignId);
         _refreshDebugBlocks();
         updateInputPlaceholder();
 
@@ -8157,6 +8208,23 @@ function initEventListeners() {
     // New Campaign
     elements.newCampaignForm?.addEventListener('submit', handleCreateCampaign);
     elements.btnNewCampaignBack?.addEventListener('click', () => showScreen('campaigns'));
+
+    // Idle hero panel
+    document.getElementById('idle-hero-panel-backdrop')?.addEventListener('click', _hideIdleHeroPanel);
+    document.getElementById('idle-hero-panel-close')?.addEventListener('click', _hideIdleHeroPanel);
+    document.getElementById('idle-hero-panel-proceed')?.addEventListener('click', _proceedFromIdlePanel);
+    document.getElementById('idle-hero-panel-history')?.addEventListener('click', () => {
+        _hideIdleHeroPanel();
+        if (currentHero) openHeroHistoryModal(currentHero);
+    });
+    document.getElementById('idle-hero-panel-awansuj')?.addEventListener('click', () => {
+        _hideIdleHeroPanel();
+        if (currentHero) {
+            const sheet = (typeof currentHero.sheet_json === 'string' ? JSON.parse(currentHero.sheet_json || '{}') : currentHero.sheet_json) || {};
+            characterData = currentHero;
+            openAwansujPanel(currentHero, sheet);
+        }
+    });
 
     // Stage 8 D3 — debug drawer toggle (admin only; visibility set by updateAdminSettingsVisibility)
     document.getElementById('debug-drawer-toggle')?.addEventListener('click', _toggleDebugDrawer);

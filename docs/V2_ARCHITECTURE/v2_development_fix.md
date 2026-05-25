@@ -11,21 +11,6 @@
 
 ## TO DO
 
-### BUG-02 — Zegar gry stoi w miejscu 🔴
-
-**Co zrobić:**  
-Sprawić, żeby zegar gry tykał po każdej turze. Dzisiaj rusza tylko przy odpoczynku, podróży i walce — zwykła rozmowa czy eksploracja niczego nie zmienia.
-
-**Co ustalono:**  
-- Tura narracyjna: domyślnie **15 minut**. MG może podbić przez `time_advance_minutes` w odpowiedzi (np. dla długich rozmów).
-- Walka i podróż: wartości konfigurowalne w admin panelu. Defaulty: walka 5 min, podróż 60 min.
-- Nowy event MG: `time_advance_minutes: N` (opcjonalny).
-
-**Czego się spodziewać:**  
-Gracz zobaczy że w karczmie spędza wieczór, a po dniu marszu robi się wieczór. Świat zacznie żyć — dzień i noc, zmęczenie, pora dnia.
-
----
-
 ### BUG-03 — NPC nie są zapamiętywani 🔴
 
 **Co zrobić:**  
@@ -108,6 +93,18 @@ Nowy łotr startuje z sensownym zestawem startowym, tak jak wojownik i uczony. N
 ---
 
 ## DONE
+
+### BUG-02 — Zegar gry stoi w miejscu ✅ (2026-05-25)
+
+**Co zrobiono:**  
+`clock_service` dostał wsparcie dla minut (`session_flags.ingame_minutes`, 0–59) bez utraty kompatybilności z istniejącymi wywołaniami opartymi o godziny. Nowy serwis `clock_config_service` trzyma konfigurację w `game_config_meta` (defaults: narrative=15min, combat=5min, travel=60min). Funkcja `create_turn_log` w `turns.py` po każdym zapisie tury wywołuje `advance_clock` z wartością zależną od `route`. MG może nadpisać w górę dla narracji przez nowe pole `time_advance_minutes` w odpowiedzi JSON (0–480 min). Nowe admin endpoints `GET/PATCH /api/admin/clock-config`. Frontend odświeża zegar w nagłówku po każdej turze. Display: `"Dzień 3, 14:23 Popołudnie"` (przedtem: `"14:00"`).
+
+**Czego się spodziewać:**  
+Zegar gry idzie do przodu po każdej turze narracyjnej (domyślnie +15 min) i walki (+5 min). Gracz widzi popołudnie po kilkunastu turach, wieczór po wielu rozmowach. MG przy długich akcjach (rozmowa, czytanie księgi) może podbić wartość. Admin tunuje defaulty bez deploya przez `/api/admin/clock-config`. UI admin panelu jako follow-up.
+
+**Pliki:** `backend/app/services/clock_service.py`, `backend/app/services/clock_config_service.py` (nowy), `backend/app/api/turns.py`, `backend/app/routers/admin.py`, `backend/prompts/system_prompt.txt`, `backend/tests/test_bug02_clock_minutes.py` (nowy), `frontend/front/js/app.js`, `frontend/front/index.html`
+
+---
 
 ### BUG-07 — Techniczny błąd widoczny w narracji ✅ (2026-05-25)
 

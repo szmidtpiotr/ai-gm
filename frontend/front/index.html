@@ -1619,6 +1619,31 @@
     </button>
   </nav>
 
+  <!-- Between-campaigns idle hero panel -->
+  <div id="idle-hero-panel" class="idle-hero-panel" hidden>
+    <div class="idle-hero-panel__backdrop" id="idle-hero-panel-backdrop"></div>
+    <div class="idle-hero-panel__card">
+      <button type="button" class="idle-hero-panel__close" id="idle-hero-panel-close" aria-label="Zamknij">✕</button>
+      <div class="idle-hero-panel__portrait">
+        <div class="idle-hero-panel__avatar" id="idle-hero-panel-avatar">?</div>
+      </div>
+      <div class="idle-hero-panel__identity">
+        <h2 class="idle-hero-panel__name" id="idle-hero-panel-name">—</h2>
+        <p class="idle-hero-panel__meta" id="idle-hero-panel-meta">—</p>
+      </div>
+      <div class="idle-hero-panel__stats" id="idle-hero-panel-stats"></div>
+      <div class="idle-hero-panel__actions">
+        <button type="button" class="btn btn--primary btn--full" id="idle-hero-panel-proceed">
+          ⚔ Wyrusz do przygód
+        </button>
+        <div class="idle-hero-panel__secondary">
+          <button type="button" class="idle-hero-action-btn" id="idle-hero-panel-awansuj" hidden>⬆ Awansuj</button>
+          <button type="button" class="idle-hero-action-btn" id="idle-hero-panel-history">📜 Historia</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Stage 8 D3/D4 — admin debug drawer (lazy-mounted by JS when admin) -->
   <button id="debug-drawer-toggle" type="button" class="debug-drawer-toggle" title="Debug (admin only)" aria-label="Otwórz debug drawer" hidden>🐛</button>
 
@@ -1711,6 +1736,6 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=f13-friends"></script>
+  <script src="./js/app.js?v=bug02-clock-tick"></script>
 </body>
 </html>

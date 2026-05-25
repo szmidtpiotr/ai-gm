@@ -2516,6 +2516,37 @@ def admin_patch_resurrection_config(
         conn.close()
 
 
+class ClockConfigReq(BaseModel):
+    narrative_min: int | None = None
+    combat_min: int | None = None
+    travel_min: int | None = None
+
+
+@router.get("/admin/clock-config")
+def admin_get_clock_config(_: None = Depends(require_admin_token)):
+    """BUG-02: read per-turn-type clock-tick config (game_config_meta)."""
+    from app.services.clock_config_service import get_clock_config
+    return {"ok": True, "config": get_clock_config()}
+
+
+@router.patch("/admin/clock-config")
+def admin_patch_clock_config(
+    req: ClockConfigReq,
+    _: None = Depends(require_admin_token),
+):
+    """BUG-02: update per-turn-type clock-tick config (game_config_meta)."""
+    from app.services.clock_config_service import set_clock_config
+    try:
+        cfg = set_clock_config(
+            narrative_min=req.narrative_min,
+            combat_min=req.combat_min,
+            travel_min=req.travel_min,
+        )
+        return {"ok": True, "config": cfg}
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
 class UserResurrectionUsesReq(BaseModel):
     uses_remaining: int | None = None
     clear: bool = False  # set to explicitly make NULL (unlimited)
@@ -2570,6 +2601,107 @@ def admin_force_resurrect(
             raise HTTPException(status_code=403, detail=str(e))
         except RuntimeError as e:
             raise HTTPException(status_code=409, detail=str(e))
+    finally:
+        conn.close()
+
+
+@router.post("/admin/characters/{character_id}/promote-to-npc")
+def admin_promote_character_to_npc(
+    character_id: int,
+    _: None = Depends(require_admin_token),
+):
+    """Promote a fallen hero to a permanent NPC entry."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id, name, appearance, personality, motivation, backstory, sheet_json FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+
+        name = char["name"] or f"character_{character_id}"
+        slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+        base_key = f"hero_{slug}_{character_id}"
+
+        existing = conn.execute("SELECT id FROM npcs WHERE key = ?", (base_key,)).fetchone()
+        if existing:
+            raise HTTPException(status_code=409, detail=f"NPC with key '{base_key}' already exists")
+
+        appearance = char["appearance"] or ""
+        backstory = char["backstory"] or ""
+        parts = [p for p in [appearance, backstory] if p]
+        description = "\n\n".join(parts) if parts else f"Były bohater — {name}."
+
+        import json as _json
+        try:
+            sheet = _json.loads(char["sheet_json"] or "{}")
+        except Exception:
+            sheet = {}
+        personality_obj = {
+            "personality": char["personality"] or "",
+            "motivation": char["motivation"] or "",
+            "archetype": sheet.get("archetype", "unknown"),
+        }
+        personality_json_str = _json.dumps(personality_obj, ensure_ascii=False)
+
+        conn.execute(
+            """
+            INSERT INTO npcs (key, label, npc_type, description, personality_json,
+                              is_shop, shop_inventory_json, is_active,
+                              keyword_triggers, review_status)
+            VALUES (?, ?, 'neutral', ?, ?, 0, '[]', 1, '[]', 'permanent')
+            """,
+            (base_key, name, description, personality_json_str),
+        )
+        conn.commit()
+        return {"ok": True, "npc_key": base_key, "label": name, "character_id": character_id}
+    finally:
+        conn.close()
+
+
+@router.get("/admin/characters/fallen")
+def admin_list_fallen_heroes(_: None = Depends(require_admin_token)):
+    """List heroes whose most recent campaign ended with a death_reason.
+    Used by the admin panel Fallen Heroes flow to surface promotion candidates."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT c.id, c.name, c.status, c.appearance,
+                   cam.id AS campaign_id, cam.title AS campaign_title,
+                   cam.death_reason, cam.epitaph, cam.ended_at
+            FROM characters c
+            INNER JOIN campaigns cam ON cam.id = (
+                SELECT id FROM campaigns
+                WHERE character_id = c.id AND death_reason IS NOT NULL
+                ORDER BY COALESCE(ended_at, '') DESC
+                LIMIT 1
+            )
+            ORDER BY cam.ended_at DESC
+            """
+        ).fetchall()
+        heroes = []
+        for r in rows:
+            # Check if already promoted to NPC
+            import json as _json
+            slug = re.sub(r"[^a-z0-9]+", "_", (r["name"] or "").lower()).strip("_")
+            npc_key = f"hero_{slug}_{r['id']}"
+            already = conn.execute("SELECT key FROM npcs WHERE key = ?", (npc_key,)).fetchone()
+            heroes.append({
+                "character_id": r["id"],
+                "name": r["name"],
+                "status": r["status"],
+                "campaign_title": r["campaign_title"],
+                "death_reason": r["death_reason"],
+                "epitaph": r["epitaph"],
+                "ended_at": r["ended_at"],
+                "already_promoted": already is not None,
+                "npc_key": npc_key if already else None,
+            })
+        return {"items": heroes}
     finally:
         conn.close()
 
@@ -4172,6 +4304,96 @@ def admin_email_config_patch(
             )
         conn.commit()
         return {"ok": True}
+    finally:
+        conn.close()
+
+
+class McpConfigPutReq(BaseModel):
+    campaign_id: int | None = None
+    hero_id: int | None = None
+
+
+@router.get("/admin/mcp/config")
+def admin_mcp_config_get(_: None = Depends(require_admin_token)):
+    """Read pinned MCP session config (campaign + hero) from game_config_meta."""
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT key, value FROM game_config_meta WHERE key IN (?, ?)",
+            ("mcp_default_campaign_id", "mcp_default_hero_id"),
+        ).fetchall()
+        meta = {r["key"]: r["value"] for r in rows}
+
+        campaign_id_raw = meta.get("mcp_default_campaign_id")
+        hero_id_raw = meta.get("mcp_default_hero_id")
+        campaign_id = int(campaign_id_raw) if campaign_id_raw else None
+        hero_id = int(hero_id_raw) if hero_id_raw else None
+
+        campaign_title: str | None = None
+        hero_name: str | None = None
+
+        if campaign_id:
+            row = conn.execute(
+                "SELECT title FROM campaigns WHERE id = ?", (campaign_id,)
+            ).fetchone()
+            campaign_title = row["title"] if row else None
+
+        if hero_id:
+            row = conn.execute(
+                "SELECT name FROM characters WHERE id = ?", (hero_id,)
+            ).fetchone()
+            hero_name = row["name"] if row else None
+
+        return {
+            "campaign_id": campaign_id,
+            "hero_id": hero_id,
+            "campaign_title": campaign_title,
+            "hero_name": hero_name,
+        }
+    finally:
+        conn.close()
+
+
+@router.put("/admin/mcp/config")
+def admin_mcp_config_put(
+    req: McpConfigPutReq,
+    _: None = Depends(require_admin_token),
+):
+    """Upsert pinned MCP session config (campaign_id + hero_id) in game_config_meta."""
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        for key, val in [
+            ("mcp_default_campaign_id", req.campaign_id),
+            ("mcp_default_hero_id", req.hero_id),
+        ]:
+            if val is None:
+                conn.execute("DELETE FROM game_config_meta WHERE key = ?", (key,))
+            else:
+                conn.execute(
+                    "INSERT INTO game_config_meta (key, value) VALUES (?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    (key, str(val)),
+                )
+
+        # Ensure the pinned hero is properly assigned to the pinned campaign so
+        # the turns endpoint (which checks characters.campaign_id) accepts it.
+        if req.campaign_id and req.hero_id:
+            conn.execute(
+                "UPDATE characters SET campaign_id = ?, status = 'in_campaign' WHERE id = ?",
+                (req.campaign_id, req.hero_id),
+            )
+            # Reactivate campaign if it was ended (e.g. manually created test campaigns)
+            conn.execute(
+                "UPDATE campaigns SET status = 'active' WHERE id = ? AND status = 'ended'",
+                (req.campaign_id,),
+            )
+
+        conn.commit()
+        return {"ok": True, "campaign_id": req.campaign_id, "hero_id": req.hero_id}
     finally:
         conn.close()
 

@@ -333,6 +333,28 @@ Gdy akcja wymaga rzutu lub inicjuje walkę:
 
 Jeśli nie ma rzutu ani walki — pomiń pole `roll_cue` lub ustaw `null`.
 
+### CZAS GRY — `time_advance_minutes` (OPCJONALNE)
+
+Backend domyślnie dodaje **15 minut** czasu gry po każdej turze narracyjnej.
+Możesz nadpisać tę wartość polem `time_advance_minutes` (liczba całkowita 0–480)
+gdy akcja w tej turze zajmuje wyraźnie więcej:
+
+- długa rozmowa / pertraktacje z NPC → 30–60 min
+- dokładne przeszukanie pomieszczenia / czytanie księgi → 30 min
+- marsz między lokacjami (bez hex-travel) → 60–120 min
+- czekanie do zmierzchu / odpoczynek w karczmie kilka godzin → 180–360 min
+
+Mniejsze wartości są ignorowane (backend stosuje swoje minimum). Jeśli akcja jest
+szybka (rzucenie noża, otworzenie drzwi) — po prostu nie podawaj pola.
+
+Przykład:
+```json
+{
+  "narrative": "Spędzasz godzinę szlifując każdy fragment ostrza...",
+  "time_advance_minutes": 60
+}
+```
+
 ## PRZEDMIOTY FABULARNE (GRANT ITEM) — OBOWIĄZKOWE
 - Gdy bohater **zdobywa, podnosi, bierze lub trzyma** dowolny fizyczny przedmiot —
   ZAWSZE umieszczaj w polu `grant_item` (JSON array). Dotyczy to KAŻDEJ z poniższych sytuacji:

@@ -1723,6 +1723,53 @@ def create_turn_log(
 
         schedule_after_narrative_turn_committed(campaign_id)
 
+    # BUG-02: auto-advance the in-game clock per turn type.
+    # Routes that should NOT tick: meta/slash commands, opening turn, rolls
+    # (the player just rolled dice — no in-world time passed).
+    try:
+        from app.services.clock_config_service import get_clock_config
+        from app.services.clock_service import advance_clock
+
+        cfg = get_clock_config()
+        default_min = 0
+        if route == "narrative":
+            default_min = cfg["narrative_min"]
+        elif route == "combat":
+            default_min = cfg["combat_min"]
+        elif route == "travel":
+            default_min = cfg["travel_min"]
+
+        # LLM override: only honored for narrative turns. The MG can request a
+        # larger advance ("rozmowa trwała godzinę" → 60). Smaller values are
+        # ignored — backend default is the floor so quick turns still tick.
+        llm_min = 0
+        if route == "narrative" and assistant_text:
+            try:
+                _adata = json.loads(_strip_json_code_fence(assistant_text))
+                if isinstance(_adata, dict):
+                    _raw = _adata.get("time_advance_minutes")
+                    if _raw is not None:
+                        llm_min = max(0, min(int(_raw), 480))  # clamp 0-480 (8h)
+            except Exception:
+                pass
+
+        effective_min = max(default_min, llm_min)
+        if effective_min > 0:
+            advance_clock(
+                campaign_id,
+                minutes=effective_min,
+                reason=f"turn_{route}",
+                conn=conn,
+            )
+            conn.commit()
+    except Exception as _clk_err:
+        logger.warning(
+            "clock_auto_advance_failed",
+            campaign_id=campaign_id,
+            route=route,
+            error=str(_clk_err),
+        )
+
     return {
         "id": row["id"],
         "campaign_id": row["campaign_id"],
