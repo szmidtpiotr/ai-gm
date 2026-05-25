@@ -6,7 +6,38 @@ An MCP (Model Context Protocol) server that exposes AI-GM game data as tools. An
 
 ---
 
+## Public Endpoint
+
+The MCP server is exposed via the dev domain — no local network access needed:
+
+```
+https://aigm-dev.studio-colorbox.com/mcp
+```
+
+Transport: **Streamable HTTP** · Access: **Read-only**
+
+---
+
 ## Quick Start
+
+### Connect in Perplexity
+
+1. Open Perplexity → Settings → MCP Servers → **Add MCP Server**
+2. Fill in:
+   - **Name:** `AI-GM`
+   - **URL:** `https://aigm-dev.studio-colorbox.com/mcp`
+   - **Type:** `Streamable HTTP` (or just `HTTP`)
+3. Save and start a conversation. Perplexity will list available tools automatically.
+
+Example prompts after connecting:
+- _"Co się dzieje w kampanii 3? Oceń sytuację bohatera i plan MG."_
+- _"Ile graczy zginęło w ostatnim tygodniu i z czego?"_
+- _"Podaj pełny kontekst kampanii 1 do analizy."_
+- _"Jakie są statystyki LLM za ostatnie 24h?"_
+
+The `get_full_campaign_context` tool returns a Polish markdown report — paste it directly into any LLM for analysis.
+
+---
 
 ### Connect in Claude Desktop
 
@@ -16,7 +47,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 {
   "mcpServers": {
     "ai-gm": {
-      "url": "http://192.168.1.61:8400/sse"
+      "url": "https://aigm-dev.studio-colorbox.com/mcp"
     }
   }
 }
@@ -26,15 +57,24 @@ Restart Claude Desktop. You'll see **AI-GM Analytics** listed in the Tools panel
 
 ### Connect in Claude Code
 
-Add to your Claude Code MCP settings or run:
-
 ```bash
-claude mcp add ai-gm --transport sse http://192.168.1.61:8400/sse
+claude mcp add ai-gm --transport http https://aigm-dev.studio-colorbox.com/mcp
 ```
 
 ### Verify the server is running
 
 ```bash
+curl -X POST -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}' \
+  https://aigm-dev.studio-colorbox.com/mcp
+# → event: message / data: {"result":{"serverInfo":{"name":"AI-GM Analytics",...}}}
+```
+
+### Direct container access (LAN only)
+
+```bash
+# Port 8400 on the DEV host (not exposed to internet)
 curl -s -o /dev/null -w "%{http_code}\n" http://192.168.1.61:8400/
 # → 200
 ```
@@ -44,14 +84,16 @@ curl -s -o /dev/null -w "%{http_code}\n" http://192.168.1.61:8400/
 ## Architecture
 
 ```
-Claude Desktop / Claude Code / any MCP client
-         ↕  SSE (port 8400)
-ai-gm-dev-mcp-server  (Docker container)
+Perplexity / Claude Desktop / Claude Code / any MCP client
+         ↕  Streamable HTTP (HTTPS)
+aigm-dev.studio-colorbox.com/mcp   (Nginx Proxy Manager → 192.168.1.61:8400)
+         ↕
+ai-gm-dev-mcp-server  (Docker container, port 8400)
          ↕  SQLite read-only
 /data/ai_gm.db  (bind-mounted from ./data-dev)
 ```
 
-- **Transport:** SSE (`/sse` endpoint)
+- **Transport:** Streamable HTTP (`/mcp` endpoint, proxied via NPM)
 - **Access:** Read-only — cannot modify the DB
 - **Language:** Returns data with Polish text as-is (same as the game); tool names and descriptions are in English
 - **Container:** `ai-gm-dev-mcp-server` on DEV, port `8400`

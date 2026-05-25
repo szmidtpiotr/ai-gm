@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI-GM Admin 2.0</title>
-    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=61" />
+    <link rel="stylesheet" href="/admin_panel_v2/layout.css?v=62" />
   </head>
   <body>
     <div class="admin-shell" id="admin-shell">
@@ -100,6 +100,10 @@
           <span class="topbar-pill llm-pill" id="llm-pill" style="display:none">
             <span>⚡</span>
             <span id="llm-pill-label">—</span>
+          </span>
+          <span class="topbar-pill mcp-pill" id="mcp-pill" title="MCP Server status">
+            <span class="pill-dot" id="mcp-pill-dot"></span>
+            <span id="mcp-pill-label">MCP</span>
           </span>
           <span class="topbar-pill disconnected" id="connection-badge">
             <span class="pill-dot"></span>
@@ -319,6 +323,36 @@
         } catch { /* non-critical */ }
       }
 
+      /* ── MCP status pill ── */
+      const mcpPill    = document.getElementById("mcp-pill");
+      const mcpPillDot = document.getElementById("mcp-pill-dot");
+      const mcpPillLbl = document.getElementById("mcp-pill-label");
+
+      async function checkMcpPill() {
+        try {
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 5000);
+          const resp = await fetch("/mcp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
+            body: JSON.stringify({ jsonrpc: "2.0", id: 0, method: "initialize", params: {
+              protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "topbar-check", version: "1" }
+            }}),
+            signal: ctrl.signal,
+          });
+          clearTimeout(t);
+          if (resp.ok) {
+            mcpPill.classList.add("mcp-up"); mcpPill.classList.remove("mcp-down");
+            mcpPillDot.classList.add("up"); mcpPillDot.classList.remove("down");
+            mcpPillLbl.textContent = "MCP ●";
+          } else { throw new Error("not ok"); }
+        } catch {
+          mcpPill.classList.add("mcp-down"); mcpPill.classList.remove("mcp-up");
+          mcpPillDot.classList.add("down"); mcpPillDot.classList.remove("up");
+          mcpPillLbl.textContent = "MCP ○";
+        }
+      }
+
       /* ── active section persistence ── */
       const SECTION_KEY = "aigm_admin2_section";
       function saveSection(key) { try { localStorage.setItem(SECTION_KEY, key); } catch {} }
@@ -413,7 +447,7 @@
           "prompts":   "/admin_panel_v2/sections/prompts.js?v=2",
           "players":   "/admin_panel_v2/sections/players.js?v=stage11-resurrect-global-2",
           "campaigns":  "/admin_panel_v2/sections/campaigns_hub.js?v=4",
-          "analytics":  "/admin_panel_v2/sections/analytics.js?v=2",
+          "analytics":  "/admin_panel_v2/sections/analytics.js?v=3",
           "workshops":  "/admin_panel_v2/sections/workshops.js?v=3",
           "knowledge":  "/admin_panel_v2/sections/knowledge.js?v=1",
           "tools":      "/admin_panel_v2/sections/tools.js?v=3",
@@ -475,6 +509,9 @@
         const connected = await autoConnect();
         setConnected(connected && isConnected());
         log("Admin 2.0 initialized");
+
+        void checkMcpPill();
+        setInterval(checkMcpPill, 60_000);
 
         if (connected) {
           await fetchLlmPreset();

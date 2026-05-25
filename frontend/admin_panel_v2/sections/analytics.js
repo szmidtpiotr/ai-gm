@@ -55,6 +55,7 @@ const TABS = [
   { id: "economy", label: "Gospodarka" },
   { id: "events", label: "Zdarzenia" },
   { id: "llm", label: "LLM" },
+  { id: "mcp", label: "MCP" },
 ];
 
 const EVENT_ICONS = {
@@ -135,6 +136,7 @@ export async function init(panel) {
   }
 
   function renderCurrentTab(body) {
+    if (currentTab === "mcp") { renderMcpTab(body); return; }
     if (!_cache.overview) return;
     const { overview, dice, combat, economy, events, llm } = _cache;
     switch (currentTab) {
@@ -349,6 +351,124 @@ function renderLlmTab(body, llm) {
       </div>
     </div>
   `;
+}
+
+// ── MCP tab ───────────────────────────────────────────────────────────────────
+
+const MCP_URL = "https://aigm-dev.studio-colorbox.com/mcp";
+
+const MCP_TOOLS = [
+  { name: "get_campaign_summary",      star: true,  desc: "Pełny snapshot kampanii: postać, plan MG, tury, ekwipunek, NPCs, podsumowania AI" },
+  { name: "get_full_campaign_context", star: false, desc: "Dump w markdown — idealny do wklejenia w Perplexity / ChatGPT" },
+  { name: "get_system_health",         star: false, desc: "Aktywne kampanie, rozmiar DB, ostatni LLM call, błędy ostatniej godziny" },
+  { name: "get_llm_performance",       star: false, desc: "Statystyki wywołań LLM wg okresu (24h / 7d / 30d) i typu" },
+  { name: "get_player_stats",          star: false, desc: "Aktywność graczy: tury, śmierci, XP, aktywna kampania" },
+  { name: "get_world_analytics",       star: false, desc: "Lokacje, wrogowie, pending review, hexes, bank pomysłów" },
+  { name: "query_game_events",         star: false, desc: "Filtrowany log zdarzeń (combat_victory, player_death, long_rest…)" },
+  { name: "query_action_log",          star: false, desc: "Paginowany log tur kampanii wg trasy / zakresu tur" },
+  { name: "get_error_log",             star: false, desc: "Błędy i ostrzeżenia z game_events + llm_call_log" },
+];
+
+async function renderMcpTab(body) {
+  body.innerHTML = `
+    <div class="mcp-tab">
+      <div class="mcp-server-card">
+        <div class="mcp-server-header">
+          <div>
+            <div class="mcp-server-name">🤖 AI-GM MCP Server</div>
+            <div class="mcp-server-sub">Model Context Protocol — AI-queryable game analytics</div>
+          </div>
+          <span class="mcp-status-badge mcp-checking" id="mcp-tab-badge">⏳ Checking…</span>
+        </div>
+        <div class="mcp-url-row">
+          <code class="mcp-url-code">${MCP_URL}</code>
+          <button class="mcp-copy-btn" id="mcp-copy-btn" title="Kopiuj URL">📋 Kopiuj</button>
+        </div>
+        <div class="mcp-meta-row">
+          <span>Transport: <strong>Streamable HTTP</strong></span>
+          <span>·</span>
+          <span>Narzędzia: <strong>9</strong></span>
+          <span>·</span>
+          <span>Dostęp: <strong>Read-only</strong></span>
+        </div>
+      </div>
+
+      <div class="mcp-two-col">
+        <div class="mcp-connect-card">
+          <div class="mcp-section-title">🔍 Perplexity</div>
+          <div class="mcp-connect-steps">
+            <div class="mcp-step"><span class="mcp-step-label">URL:</span><code>${MCP_URL}</code></div>
+            <div class="mcp-step"><span class="mcp-step-label">Type:</span><code>Streamable HTTP</code></div>
+          </div>
+          <div class="mcp-examples-title">Przykładowe pytania do Perplexity:</div>
+          <ul class="mcp-examples">
+            <li>„Co się dzieje w kampanii 3? Oceń sytuację bohatera."</li>
+            <li>„Ile graczy zginęło w ostatnim tygodniu i z czego?"</li>
+            <li>„Jakie są statystyki LLM za ostatnie 24h?"</li>
+            <li>„Podaj pełny kontekst kampanii 1 do analizy."</li>
+          </ul>
+        </div>
+
+        <div class="mcp-connect-card">
+          <div class="mcp-section-title">⌨️ Claude Code / Desktop</div>
+          <div class="mcp-connect-steps" style="margin-bottom:14px">
+            <div class="mcp-step-label" style="margin-bottom:6px">Claude Code CLI:</div>
+            <pre class="mcp-code-block">claude mcp add ai-gm \\
+  --transport http \\
+  ${MCP_URL}</pre>
+          </div>
+          <div class="mcp-connect-steps">
+            <div class="mcp-step-label" style="margin-bottom:6px">claude_desktop_config.json:</div>
+            <pre class="mcp-code-block">{ "mcpServers": {
+  "ai-gm": {
+    "url": "${MCP_URL}"
+  }
+}}</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="mcp-tools-card">
+        <div class="mcp-section-title">🔧 9 dostępnych narzędzi</div>
+        <div class="mcp-tools-list">
+          ${MCP_TOOLS.map(t => `
+            <div class="mcp-tool-row">
+              <code class="mcp-tool-name${t.star ? " mcp-tool-star" : ""}">${t.star ? "★ " : ""}${t.name}</code>
+              <span class="mcp-tool-desc">${t.desc}</span>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+
+  body.querySelector("#mcp-copy-btn")?.addEventListener("click", () => {
+    navigator.clipboard.writeText(MCP_URL).then(() => {
+      const btn = body.querySelector("#mcp-copy-btn");
+      btn.textContent = "✓ Skopiowano";
+      setTimeout(() => { btn.textContent = "📋 Kopiuj"; }, 2000);
+    }).catch(() => {});
+  });
+
+  const badge = body.querySelector("#mcp-tab-badge");
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000);
+    const resp = await fetch("/mcp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {
+        protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "admin-panel", version: "1" }
+      }}),
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
+    badge.className = resp.ok ? "mcp-status-badge mcp-online" : "mcp-status-badge mcp-offline";
+    badge.textContent = resp.ok ? "● Online" : "● Offline";
+  } catch {
+    badge.className = "mcp-status-badge mcp-offline";
+    badge.textContent = "● Offline";
+  }
 }
 
 // ── Shared renderers ─────────────────────────────────────────────────────────
