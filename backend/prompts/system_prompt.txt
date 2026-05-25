@@ -333,6 +333,38 @@ Gdy akcja wymaga rzutu lub inicjuje walkę:
 
 Jeśli nie ma rzutu ani walki — pomiń pole `roll_cue` lub ustaw `null`.
 
+### PAMIĘĆ NPC — `npc_met` / `npc_update` (OPCJONALNE)
+
+Kiedy gracz **pierwszy raz** spotyka NPC z imienia (karczmarz, mag, strażnik
+z imieniem, kapłan), dodaj do odpowiedzi pole `npc_met` — backend zapisze
+wpis do rejestru kampanii i będzie ci podsuwał poznanych NPC w kolejnych
+turach (lista "ZNANI NPC" widoczna w prompcie).
+
+```json
+"npc_met": [
+  {
+    "name": "Marta",
+    "role": "karczmarka",
+    "location": "Pod Trzema Krukami",
+    "notes": "Wysoka, siwiejąca; pamięta każdego klienta; nie znosi krzykaczy"
+  }
+]
+```
+
+Kiedy stosunek już-poznanego NPC do gracza **zmienia się** (gracz pomógł, obraził,
+zdradził, uratował), użyj `npc_update`:
+
+```json
+"npc_update": [
+  {"name": "Marta", "relation_status": "hostile", "notes": "Wyrzuciła gracza za awanturę"}
+]
+```
+
+`relation_status` może mieć wartości: `friendly` / `neutral` / `hostile`.
+Oba pola są opcjonalne — pomijaj je gdy w turze nic się nie dzieje z NPC-ami.
+NIE wysyłaj `npc_met` ponownie dla NPC widocznych już w sekcji "ZNANI NPC"
+— używaj `npc_update` jeśli coś się zmieniło.
+
 ### CZAS GRY — `time_advance_minutes` (OPCJONALNE)
 
 Backend domyślnie dodaje **15 minut** czasu gry po każdej turze narracyjnej.

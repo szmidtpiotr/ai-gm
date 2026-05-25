@@ -139,11 +139,16 @@ class ContextInjector:
         # prepend the latest player_summary as a "previously, on…" prefix.
         continuity_block = self._build_continuity_block(campaign_id, session_flags)
 
+        # BUG-03 — recently-met NPCs (per-campaign roster) so MG stays consistent
+        # across turns. Pulled fresh each call; cap of 10 enforced by service.
+        known_npcs_block = self._build_known_npcs_block(campaign_id)
+
         # Build blocks
         blocks = [
             continuity_block,
             self._build_world_block(location, ingame_hours),
             self._build_entities_block(npcs, combat_roster),
+            known_npcs_block,
             self._build_mechanic_block(action_type, mechanic_result),
             self._build_character_state_block(character, active_conditions),
             self._build_tone_block(tone),
@@ -347,6 +352,19 @@ class ContextInjector:
     def _build_content_index_block(self, mechanic_result: dict) -> str:
         """Stage 2B-Schema S14: surface AVAILABLE CONTENT + nearby places to the narrator."""
         return (mechanic_result.get("available_content_index") or "").strip()
+
+    def _build_known_npcs_block(self, campaign_id: int) -> str:
+        """BUG-03 — render the per-campaign roster of NPCs the party has met."""
+        try:
+            from app.services.npc_memory_service import (
+                format_known_npcs_block,
+                get_recent_known_npcs,
+            )
+            rows = get_recent_known_npcs(campaign_id, conn=self.conn)
+            return format_known_npcs_block(rows)
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully
+            logger.warning("known_npcs_block_failed", error=str(exc), campaign_id=campaign_id)
+            return ""
 
     def _build_mechanic_block(self, action_type: str, result: dict) -> str:
         builders = {

@@ -2874,6 +2874,40 @@ def _ensure_j3_summary_interval(conn: sqlite3.Connection) -> None:
         logger.warning("j3_summary_interval_migration_failed", error=str(e))
 
 
+def _ensure_campaign_known_npcs(conn: sqlite3.Connection) -> None:
+    """BUG-03 — per-campaign roster of NPCs the party has met.
+
+    Lightweight "have-met" layer linked to the global `npcs` catalog where
+    possible. Stores ephemeral relationship state (notes, disposition) and
+    first-meet metadata. The MG context-injector reads the most recently
+    updated 10 rows per campaign to keep NPC consistency between turns.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS campaign_known_npcs (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id         INTEGER NOT NULL,
+            npc_id              INTEGER,
+            npc_name            TEXT NOT NULL,
+            role                TEXT,
+            first_met_location  TEXT,
+            first_met_turn      INTEGER,
+            notes               TEXT,
+            relation_status     TEXT NOT NULL DEFAULT 'neutral'
+                                  CHECK (relation_status IN ('friendly', 'neutral', 'hostile')),
+            created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(campaign_id, npc_name)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_campaign_known_npcs_recent "
+        "ON campaign_known_npcs(campaign_id, updated_at DESC)"
+    )
+    conn.commit()
+
+
 def _ensure_hex_spawn_weights(conn: sqlite3.Connection) -> None:
     """Add spawn_weight to hex_type_config and set realistic defaults."""
     try:
@@ -2977,6 +3011,7 @@ def run_admin_migrations() -> None:
         _ensure_knowledge_book_v2(conn)
         _ensure_j3_summary_interval(conn)
         _ensure_hex_spawn_weights(conn)
+        _ensure_campaign_known_npcs(conn)
     finally:
         conn.close()
 

@@ -66,6 +66,7 @@ export async function init(panel) {
           <button class="camp-tab-btn" data-tab="plan" type="button">Plan GM</button>
           <button class="camp-tab-btn" data-tab="turns" type="button">Tury</button>
           <button class="camp-tab-btn" data-tab="map" type="button">🗺 Mapa</button>
+          <button class="camp-tab-btn" data-tab="npcs" type="button">👥 Znani NPC</button>
           <button class="camp-tab-btn" data-tab="workshop" type="button">🔧 Warsztat</button>
         </div>
         <div class="camp-modal-body" id="camp-modal-body">
@@ -228,6 +229,8 @@ export async function init(panel) {
       await renderTurnsTab(c);
     } else if (currentTab === "map") {
       await renderMapTab(c);
+    } else if (currentTab === "npcs") {
+      await renderKnownNpcsTab(c);
     } else if (currentTab === "workshop") {
       await renderWorkshopTab(c);
     }
@@ -527,6 +530,72 @@ export async function init(panel) {
 
 function escHtml(str) {
   return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+// ── BUG-03: Known NPCs Tab ────────────────────────────────────────────────────
+
+async function renderKnownNpcsTab(c) {
+  const body = document.getElementById("camp-modal-body");
+  if (!body) return;
+  body.innerHTML = `<div style="padding:16px;color:var(--text-muted)">Ładowanie listy poznanych NPC…</div>`;
+
+  let data;
+  try {
+    data = await adminFetch(`/api/admin/campaigns/${c.id}/known-npcs?limit=200`);
+  } catch (e) {
+    body.innerHTML = `<div style="padding:16px;color:var(--accent-red)">${e.message}</div>`;
+    return;
+  }
+
+  const npcs = Array.isArray(data?.npcs) ? data.npcs : [];
+  if (!npcs.length) {
+    body.innerHTML = `
+      <div style="padding:24px;color:var(--text-muted);font-style:italic">
+        Brak poznanych NPC w tej kampanii.<br><br>
+        <span style="font-size:0.85em">MG zapisuje NPC do tej listy gdy emituje pole <code>npc_met</code> w odpowiedzi
+        na turę. Backend dorzuca ostatnich 10 do prompta każdej kolejnej tury, żeby MG pamiętał kogo gracz już zna.</span>
+      </div>`;
+    return;
+  }
+
+  const relColor = (rel) => rel === "friendly" ? "var(--accent-green)"
+                          : rel === "hostile" ? "var(--accent-red)"
+                          : "var(--text-muted)";
+  const relLabel = (rel) => rel === "friendly" ? "Przyjazny"
+                          : rel === "hostile" ? "Wrogi"
+                          : "Neutralny";
+
+  body.innerHTML = `
+    <div style="padding:12px 8px">
+      <div style="color:var(--text-muted);margin-bottom:12px;font-size:0.9em">
+        Łącznie: <b>${npcs.length}</b>. Lista najświeższych aktualizacji u góry — MG dostaje ostatnich 10 jako kontekst.
+      </div>
+      <table class="data-table" style="width:100%">
+        <thead>
+          <tr>
+            <th>Imię</th>
+            <th>Rola</th>
+            <th>Spotkany w</th>
+            <th>Tura</th>
+            <th>Relacja</th>
+            <th>Notatka</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${npcs.map(n => `
+            <tr>
+              <td><b>${escHtml(n.npc_name)}</b></td>
+              <td>${escHtml(n.role || "—")}</td>
+              <td>${escHtml(n.first_met_location || "—")}</td>
+              <td>${n.first_met_turn ?? "—"}</td>
+              <td style="color:${relColor(n.relation_status)}">${relLabel(n.relation_status)}</td>
+              <td style="font-size:0.85em;color:var(--text-muted)">${escHtml(n.notes || "")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
 }
 
 // ── Campaign Hex Map Tab ──────────────────────────────────────────────────────

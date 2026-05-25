@@ -1770,6 +1770,82 @@ def create_turn_log(
             error=str(_clk_err),
         )
 
+    # BUG-03: persist NPCs from MG response. The narrator may emit `npc_met`
+    # (first encounter) and/or `npc_update` (relation/notes change). Both are
+    # optional and only on narrative turns; everything else is a no-op.
+    if route == "narrative" and assistant_text:
+        try:
+            from app.services.npc_memory_service import (
+                record_npc_met,
+                update_npc_relation,
+            )
+
+            _ndata = json.loads(_strip_json_code_fence(assistant_text))
+            if isinstance(_ndata, dict):
+                _turn_num = int(row["turn_number"])
+                _met_raw = _ndata.get("npc_met")
+                _met_entries = _met_raw if isinstance(_met_raw, list) else (
+                    [_met_raw] if isinstance(_met_raw, dict) else []
+                )
+                for _e in _met_entries:
+                    if not isinstance(_e, dict):
+                        continue
+                    _name = str(_e.get("name") or "").strip()
+                    if not _name:
+                        continue
+                    record_npc_met(
+                        campaign_id=campaign_id,
+                        name=_name,
+                        role=(str(_e.get("role")).strip() if _e.get("role") else None),
+                        first_met_location=(str(_e.get("location")).strip() if _e.get("location") else None),
+                        first_met_turn=_turn_num,
+                        notes=(str(_e.get("notes")).strip() if _e.get("notes") else None),
+                        conn=conn,
+                    )
+
+                _upd_raw = _ndata.get("npc_update")
+                _upd_entries = _upd_raw if isinstance(_upd_raw, list) else (
+                    [_upd_raw] if isinstance(_upd_raw, dict) else []
+                )
+                for _e in _upd_entries:
+                    if not isinstance(_e, dict):
+                        continue
+                    _name = str(_e.get("name") or "").strip()
+                    if not _name:
+                        continue
+                    _rel = _e.get("relation_status")
+                    res = update_npc_relation(
+                        campaign_id=campaign_id,
+                        name=_name,
+                        relation_status=(str(_rel).strip().lower() if _rel else None),
+                        notes=(str(_e.get("notes")).strip() if _e.get("notes") else None),
+                        conn=conn,
+                    )
+                    # If the MG sent an update for someone not yet recorded, fall
+                    # through to record_npc_met so we don't drop the relation hint.
+                    if not res.get("ok") and res.get("reason") == "not_found":
+                        record_npc_met(
+                            campaign_id=campaign_id,
+                            name=_name,
+                            first_met_turn=_turn_num,
+                            notes=(str(_e.get("notes")).strip() if _e.get("notes") else None),
+                            conn=conn,
+                        )
+                        if _rel:
+                            update_npc_relation(
+                                campaign_id=campaign_id,
+                                name=_name,
+                                relation_status=str(_rel).strip().lower(),
+                                conn=conn,
+                            )
+                conn.commit()
+        except Exception as _npc_err:
+            logger.warning(
+                "npc_memory_persist_failed",
+                campaign_id=campaign_id,
+                error=str(_npc_err),
+            )
+
     return {
         "id": row["id"],
         "campaign_id": row["campaign_id"],

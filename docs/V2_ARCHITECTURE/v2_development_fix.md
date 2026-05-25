@@ -11,22 +11,6 @@
 
 ## TO DO
 
-### BUG-03 — NPC nie są zapamiętywani 🔴
-
-**Co zrobić:**  
-Zrobić listę "spotkanych NPC" per kampania. Dziś po dziesiątkach rozmów z karczmarką Martą system wciąż pokazuje "brak znanych NPC". MG może o niej "zapomnieć" w następnej turze.
-
-**Co ustalono:**  
-- Nowa tabela `campaign_known_npcs` z FK do istniejącej tabeli `npcs` (żeby korzystać z `description`, `personality`, `inventory` które już są).
-- Dodatkowe pola: `first_met_location`, `first_met_turn`, `notes` (krótka notatka MG), `relation_status` ('friendly' / 'neutral' / 'hostile').
-- MG emituje `NPC_MET: {name, role, location, notes}` przy pierwszym spotkaniu, opcjonalnie `NPC_UPDATE: {name, relation_status, notes}` dla zmian.
-- Do system promptu wstrzykiwanych **ostatnich 10 spotkanych NPC** z notatkami i statusem relacji.
-
-**Czego się spodziewać:**  
-MG będzie konsekwentnie odgrywał poznane postacie — pamięta ich imiona, role, ostatnie spotkanie. Gracz w panelu zobaczy listę poznanych ludzi.
-
----
-
 ### BUG-01 — Przedmioty się duplikują przy oddaniu NPC 🟡
 
 **Co zrobić:**  
@@ -93,6 +77,18 @@ Nowy łotr startuje z sensownym zestawem startowym, tak jak wojownik i uczony. N
 ---
 
 ## DONE
+
+### BUG-03 — NPC nie są zapamiętywani ✅ (2026-05-25)
+
+**Co zrobiono:**  
+Nowa tabela `campaign_known_npcs` (FK do `npcs`, z polami `notes`, `relation_status`, `first_met_location`, `first_met_turn`) i serwis `npc_memory_service.py` z funkcjami `record_npc_met` / `update_npc_relation` / `get_recent_known_npcs`. Hook w `create_turn_log` parsuje pola `npc_met` i `npc_update` z odpowiedzi MG i zapisuje do bazy. `context_injector` dołącza ostatnich 10 spotkanych NPC do system promptu każdej kolejnej tury (sekcja "ZNANI NPC" z notatkami i statusem relacji). Nowa zakładka "👥 Znani NPC" w monitorze kampanii (admin panel v2) z tabelą wszystkich poznanych postaci. Nowy admin endpoint `GET /api/admin/campaigns/{id}/known-npcs`.
+
+**Czego się spodziewać:**  
+Po pierwszej rozmowie z Martą MG zapisuje ją do listy. W kolejnych turach MG widzi "ZNANI NPC: - Marta (karczmarka)..." w prompcie i konsekwentnie odgrywa postać. Gdy gracz pomaga lub obraża NPC, MG emituje `npc_update` i status relacji zmienia się na friendly/hostile. Admin może podejrzeć całą listę w panelu kampanii.
+
+**Pliki:** `backend/app/migrations_admin.py`, `backend/app/services/npc_memory_service.py` (nowy), `backend/app/services/context_injector.py`, `backend/app/api/turns.py`, `backend/app/routers/admin.py`, `backend/prompts/system_prompt.txt`, `backend/tests/test_bug03_npc_memory.py` (nowy), `frontend/admin_panel_v2/sections/campaigns.js`, `frontend/admin_panel_v2/sections/campaigns_hub.js`
+
+---
 
 ### BUG-02 — Zegar gry stoi w miejscu ✅ (2026-05-25)
 

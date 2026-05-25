@@ -2516,6 +2516,18 @@ def admin_patch_resurrection_config(
         conn.close()
 
 
+@router.get("/admin/campaigns/{campaign_id}/known-npcs")
+def admin_get_campaign_known_npcs(
+    campaign_id: int,
+    limit: int = 50,
+    _: None = Depends(require_admin_token),
+):
+    """BUG-03: list NPCs the party has met in this campaign (newest first)."""
+    from app.services.npc_memory_service import get_recent_known_npcs
+    rows = get_recent_known_npcs(campaign_id, limit=int(limit))
+    return {"ok": True, "campaign_id": campaign_id, "count": len(rows), "npcs": rows}
+
+
 class ClockConfigReq(BaseModel):
     narrative_min: int | None = None
     combat_min: int | None = None
