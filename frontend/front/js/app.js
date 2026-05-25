@@ -3646,25 +3646,6 @@ function _initTiltAim(onTilt) {
     };
 }
 
-function _showReticle() {
-    const r = document.getElementById('dice-tilt-reticle');
-    if (r) { r.hidden = false; r.style.transform = 'translate(0, 0)'; }
-}
-function _updateReticle(vec) {
-    const r = document.getElementById('dice-tilt-reticle');
-    const c = document.getElementById('dice-container');
-    if (!r || !c) return;
-    const rect = c.getBoundingClientRect();
-    const range = 0.35; // 35 % of container half-size = comfortable reticle travel
-    const dx = vec.x * (rect.width  / 2) * range;
-    const dy = -vec.y * (rect.height / 2) * range; // screen-y inverted vs. dice physics
-    r.style.transform = `translate(${dx}px, ${dy}px)`;
-}
-function _hideReticle() {
-    const r = document.getElementById('dice-tilt-reticle');
-    if (r) r.hidden = true;
-}
-
 function _showManualBtn(onClick) {
     const b = document.getElementById('dice-manual-roll-btn');
     if (!b) return;
@@ -3832,7 +3813,6 @@ function showSkillTestPopup(pending) {
             if (_shake?.cleanup) _shake.cleanup();
             if (_tilt?.cleanup)  _tilt.cleanup();
             _hideShakeHint();
-            _hideReticle();
             _hideManualBtn();
             if (dirVec && typeof _diceBox.start_throw_with_vector === 'function') {
                 _diceBox.start_throw_with_vector(dirVec, intensity ?? 1, beforeRoll, afterRoll);
@@ -3846,7 +3826,6 @@ function showSkillTestPopup(pending) {
             if (_shake?.cleanup) _shake.cleanup();
             if (_tilt?.cleanup)  _tilt.cleanup();
             _hideShakeHint();
-            _hideReticle();
             _hideManualBtn();
             window.dismissDiceRoll = _origDismiss;
             if (_origDismiss) await _origDismiss();
@@ -3861,8 +3840,8 @@ function showSkillTestPopup(pending) {
         };
 
         const startTilt = () => {
-            _tilt = _initTiltAim(_updateReticle);
-            if (_tilt.active) _showReticle();
+            // Silent tilt — no visual reticle; tilt still influences throw direction at shake time
+            _tilt = _initTiltAim(null);
         };
 
         const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
