@@ -19,6 +19,38 @@
 
 ## DONE
 
+### STR-01 — gm_note_buffer brak w create_turn_stream() ✅ (2026-05-25)
+
+**Co zrobiono:**
+Logika parsowania `gm_note` / `scene_advance` / `gm_plan_update` (BUG-04) była tylko w `create_turn()` (endpoint niestrumieniowany). Frontend zawsze używa `create_turn_stream()`, przez co `engine_private.gm_note_buffer` nigdy nie był wypełniany w praktyce. Przeniesiono odpowiedni blok kodu do `token_generator` w `create_turn_stream()` (po obsłudze XP, przed startem walki).
+
+**Pliki:** `backend/app/api/turns.py` → `create_turn_stream()` (linie ~4192–4240)
+
+**Jak przetestować:**
+1. Graj turę narracyjną o dużym znaczeniu fabularnym (np. odkrycie mapy, spotkanie kluczowego NPC).
+2. Sprawdź odpowiedź LLM w `campaign_turns.assistant_text` — szukaj pola `gm_note`.
+3. Jeśli LLM zwrócił `gm_note`, sprawdź `campaigns.gm_plan_json` → `engine_private.gm_note_buffer`.
+4. Powinien zawierać nowy wpis `{"turn": N, "note": "..."}`.
+
+**GitHub:** https://github.com/szmidtpiotr/ai-gm/issues/133 | Commit: 7790d13
+
+---
+
+### STR-02 — Zakończona walka blokuje skill test keyword scanner ✅ (2026-05-25)
+
+**Co zrobiono:**
+Oba skanery słów kluczowych (`create_turn()` i `create_turn_stream()`) sprawdzały obecność JAKIEGOKOLWIEK wiersza w `active_combat` bez filtrowania po statusie. Wiersze z `status='ended'` (po ucieczce/zwycięstwie) blokowały pokazywanie popup skill test na zawsze po pierwszej walce w kampanii. Dodano `AND status = 'active'` do obu zapytań.
+
+**Pliki:** `backend/app/api/turns.py` → linie 2905 i 3789
+
+**Jak przetestować:**
+1. Ucieknij z walki (lub wygraj).
+2. Wyślij turę z tekstem zawierającym słowo kluczowe skilla (np. "skradam się", "wspinaam się").
+3. `[DONE]` powinien zawierać `skill_test_pending` z kluczem skilla.
+4. Podczas aktywnej walki (`status='active'`) — popup nadal zablokowany (poprawne zachowanie).
+
+**GitHub:** https://github.com/szmidtpiotr/ai-gm/issues/132 | Commit: de24362
+
 ### MCP-01 — `skill_test_keyword` dead-end w kliencie MCP ✅ (2026-05-25)
 
 **Co zrobiono:**
