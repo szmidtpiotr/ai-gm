@@ -16,10 +16,12 @@ After the F1 sweep and a verification pass, the project is mostly shipped. What 
 
 ### Big features (own sprint each)
 
-- **F2 — Multiplayer chat** (`/say` in-character / `/whisper` private / `/ooc` out-of-character) — F1.3 friend system unblocks this. Half a week. Backend: `campaign_player_messages` table + polling or websocket. Frontend: small "playerzy" channel pane parallel to the chat scroll. Open question: never feed the GM context. [Line 376]
-- **T45 — Hero Journal** — cross-campaign chronicle, chapter summaries, `/mem` cross-campaign. ~1 week, design-heavy. [Line 647]
 - **Player-facing Debug Drawer** — right-side 420 px panel with section tabs (game_state, last_intent, mechanic_result, llm_prompts, narrator_output), `/debug set-hp`, `/debug set-state`, `/debug reset-cooldowns` slash commands, `debug_mode=True` in turn response. Admin endpoints already exist, only the UI is missing. ~1 day. [Lines 604-608]
 - **Combat Sandbox autotest harness ([#22])** — YAML scenarios via `/api/admin/sandbox/run-scenario`. Companion to the existing #21 sandbox. ~1-2 days. Was the Stage 15 fallback now that the AI Test Agent path is cancelled. [Line 561]
+
+### Blocked / waiting on prerequisites
+
+- **F2 — Multiplayer chat** (`/say` / `/whisper` / `/ooc`) — **blocked** until multiplayer campaigns themselves exist. The friend system from F1.3 is in place, but the underlying "multiple players in one campaign" model isn't built (campaigns are still single-user). Half-week feature once unblocked.
 
 ### Small open items (quick wins)
 
@@ -670,7 +672,13 @@ The original phase-grouped view follows below for context. Cross-reference task 
   - [x] **Role-based access** (`player` / `gm` / `admin`) — `users.role` column + JWT claim
   - [x] **Multi-device sessions** — natural via stateless JWT
   - [x] **Onboarding overlay** — `#onboarding-screen` at index.html:197 + `showOnboardingCinematic` flow
-- [ ] **T45 Hero Journal** — cross-campaign chronicle, chapter summaries, /mem cross-campaign
+- [x] **T45 Hero Journal** — cross-campaign chronicle, chapter summaries, /mem cross-campaign — fully shipped
+  - [x] `character_campaign_history` table with `chapter_summary`, `outcome`, `xp_earned`, `gold_at_end`, `turns_count`, `completed_at`
+  - [x] `chapter_summary_service.py` — LLM-generated summaries, fire-and-forget daemon thread, called from `turns.py:2186/3281` and `xp_sources.py:115` on campaign end/death/abandon
+  - [x] `GET /characters/{id}/history` — chronicle endpoint with campaign titles joined (`characters.py:864`)
+  - [x] `GET /characters/{id}/hex-map` — cross-campaign hex union J6 (`characters.py:900`)
+  - [x] `/mem` cross-campaign search when `character_id` is provided — `memory_qa_service.py:135` J4
+  - [x] Player UI: "📜 Historia" button on hero cards → `openHeroHistoryModal` (`app.js:987`) — full "Kronika przygód" modal with per-chapter cards (Roman numerals, outcome badges 🏆/💀/🚪, XP/turns/timestamp), pending-summary state, cross-campaign minimap "Odwiedzone miejsca" below
 
 ---
 
