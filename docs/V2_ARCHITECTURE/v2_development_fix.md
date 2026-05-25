@@ -13,19 +13,6 @@
 
 ## TO DO
 
-### BUG-01 — Przedmioty się duplikują przy oddaniu NPC 🟡
-
-**Co zrobić:**  
-Naprawić sytuację gdy gracz oddaje rzecz NPC-owi — dziś rzecz zostaje u gracza i jeszcze pojawia się druga kopia. Backend musi rzeczywiście usuwać przedmiot z plecaka kiedy MG opisuje oddanie.
-
-**Co ustalono:**  
-Robota mechaniczna — MG dostanie nowy sygnał "usuń rzecz", backend go obsłuży. Plus fallback na słowa "oddaję / kładę / przekazuję" w tekście.
-
-**Czego się spodziewać:**  
-Kiedy oddasz księgę NPC-owi, ta księga znika z twojego plecaka. Bez duplikatów.
-
----
-
 ### BUG-04 — Plan MG (Akt / Scena / Cel) zawsze pusty 🟡
 
 **Co zrobić:**  
@@ -98,6 +85,27 @@ Po pierwszej rozmowie z Martą MG zapisuje ją do listy. W kolejnych turach MG w
 5. `docker exec ai-gm-dev-backend-1 pytest backend/tests/test_bug03_npc_memory.py -v` — wszystkie testy zielone.
 
 **GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/123
+
+---
+
+### BUG-01 — Przedmioty się duplikują przy oddaniu NPC ✅ (2026-05-25)
+
+**Co zrobiono:**  
+Nowe pole `remove_item` w odpowiedzi JSON MG. Kiedy narracja opisuje oddanie, zostawienie lub utratę przedmiotu — MG wstawia `{"label": "Stara Księga"}` (lub array dla kilku). Hook w `create_turn_log` parsuje to pole i usuwa pasujący wiersz z `character_inventory` (DELETE przy qty=1, dekrementacja przy qty>1). Dopasowanie po labelu jest case-insensitive (LOWER). Nowa sekcja "ODDAWANIE I TRACENIE PRZEDMIOTÓW" w system_prompt.txt z zasadami i przykładami.
+
+**Czego się spodziewać:**  
+Kiedy oddasz księgę NPC-owi, ta księga znika z twojego plecaka. Bez duplikatów.
+
+**Pliki:** `backend/app/api/turns.py`, `backend/prompts/system_prompt.txt`, `backend/tests/test_bug01_remove_item.py` (nowy)
+
+**Jak przetestować:**
+1. Zagraj turę gdzie zdobywasz przedmiot (np. "biorę księgę") — sprawdź że jest w plecaku.
+2. Zagraj turę "daję księgę Marcie" — MG powinien wyemitować `remove_item` w JSON.
+3. Sprawdź że księga **zniknęła** z plecaka w UI gracza. Brak duplikatów.
+4. Przetestuj stos: wejdź w posiadanie 3 fiolek, oddaj jedną — powinny zostać 2.
+5. `docker exec ai-gm-dev-backend-1 pytest tests/test_bug01_remove_item.py -v` — 8 passed.
+
+**GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/124
 
 ---
 
