@@ -1492,6 +1492,129 @@ async function _openEnemyModal(row, onDone) {
 
 // ── Pending Review Queue (Task 32) ────────────────────────────────────────
 
+// AP1 — inline "Edytuj i Zatwierdź" modal for pending NPCs/enemies.
+// Pre-fills full row, lets admin tweak fields, PATCHes changes, then approves
+// in one flow. Used by _loadPendingType.
+const _EA_FIELDS = {
+  npc: [
+    { key: "label",              label: "Nazwa",          type: "text",     required: true },
+    { key: "npc_type",           label: "Typ",            type: "select",   options: [
+        { v: "neutral", l: "Neutralny" },
+        { v: "merchant", l: "Kupiec" },
+        { v: "quest_giver", l: "Dawca zadań" },
+        { v: "ally", l: "Sojusznik" },
+    ]},
+    { key: "description",        label: "Opis",           type: "textarea" },
+    { key: "personality_prompt", label: "Osobowość (prompt do GM)", type: "textarea" },
+    { key: "is_active",          label: "Aktywny",        type: "checkbox" },
+  ],
+  enemy: [
+    { key: "label",        label: "Nazwa",         type: "text",     required: true },
+    { key: "tier",         label: "Tier",          type: "select",   options: [
+        { v: "weak", l: "Słaby" }, { v: "standard", l: "Standardowy" },
+        { v: "elite", l: "Elita" }, { v: "boss", l: "Boss" },
+    ]},
+    { key: "hp_base",      label: "HP",            type: "number", min: 1 },
+    { key: "ac_base",      label: "AC",            type: "number", min: 1 },
+    { key: "attack_bonus", label: "Atak +",        type: "number", min: 0 },
+    { key: "damage_die",   label: "Kość obrażeń (np. d6, 2d8)", type: "text" },
+    { key: "damage_type",  label: "Typ obrażeń",   type: "select",   options: [
+        { v: "physical", l: "Fizyczne" }, { v: "fire", l: "Ogień" },
+        { v: "poison", l: "Trucizna" },   { v: "magic", l: "Magia" },
+        { v: "misc", l: "Inny" },
+    ]},
+    { key: "xp_award",     label: "XP za zabójstwo", type: "number", min: 0 },
+    { key: "description",  label: "Opis",          type: "textarea" },
+    { key: "note",         label: "Notatka (zdolności specjalne — informacyjne)", type: "textarea" },
+  ],
+};
+
+async function _openEditApproveModal({ item, entityType, onDone }) {
+  // Fetch the full row so we have every field — the list response only returns
+  // summary columns (label / tier / hp_base for enemies, etc.).
+  const detailUrl = entityType === "npc"
+    ? `/api/admin/world/pending/npc/${item.key}`
+    : `/api/admin/world/pending/enemy/${item.key}`;
+  let detail;
+  try {
+    const resp = await adminFetch(detailUrl);
+    detail = resp.item || {};
+  } catch (e) {
+    showToast("Nie udało się pobrać szczegółów: " + (e.message || "?"), "error");
+    return;
+  }
+
+  const fields = _EA_FIELDS[entityType] || [];
+  const form = document.createElement("div");
+  form.className = "edit-approve-form";
+
+  fields.forEach((f) => {
+    const cur = detail[f.key];
+    const field = document.createElement("div");
+    field.className = "ea-field";
+    const reqMark = f.required ? " <span class='ea-req'>*</span>" : "";
+    let inputHtml;
+    if (f.type === "select") {
+      inputHtml = `<select name="${f.key}">
+        ${f.options.map(o => `<option value="${_esc(o.v)}"${String(cur ?? "") === o.v ? " selected" : ""}>${_esc(o.l)}</option>`).join("")}
+      </select>`;
+    } else if (f.type === "textarea") {
+      inputHtml = `<textarea name="${f.key}" rows="3">${_esc(cur ?? "")}</textarea>`;
+    } else if (f.type === "checkbox") {
+      inputHtml = `<input type="checkbox" name="${f.key}"${Number(cur) ? " checked" : ""}>`;
+    } else if (f.type === "number") {
+      inputHtml = `<input type="number" name="${f.key}" value="${_esc(cur ?? "")}"${f.min !== undefined ? ` min="${f.min}"` : ""}>`;
+    } else {
+      inputHtml = `<input type="text" name="${f.key}" value="${_esc(cur ?? "")}">`;
+    }
+    field.innerHTML = `<label>${_esc(f.label)}${reqMark}</label>${inputHtml}`;
+    form.appendChild(field);
+  });
+
+  const patchUrl = entityType === "npc"
+    ? `/api/admin/world/pending/npcs/${item.key}`
+    : `/api/admin/world/pending/enemies/${item.key}`;
+  const approveUrl = `/api/admin/world/review/${entityType}/${item.key}`;
+
+  openModal({
+    title: `✎ Edytuj i Zatwierdź — ${item.label || item.key}`,
+    content: form,
+    footer: [
+      { label: "Anuluj", class: "secondary-btn", onClick: (cls) => cls() },
+      { label: "Zapisz i Zatwierdź", class: "primary-btn", onClick: async (cls) => {
+          const patch = {};
+          for (const f of fields) {
+            const el = form.querySelector(`[name="${f.key}"]`);
+            if (!el) continue;
+            let v;
+            if (f.type === "checkbox") v = el.checked ? 1 : 0;
+            else if (f.type === "number") v = el.value === "" ? null : Number(el.value);
+            else v = String(el.value);
+            if (f.required && (v === null || v === "")) {
+              showToast(`Pole „${f.label}" jest wymagane.`, "error");
+              return;
+            }
+            // Only send fields that actually changed (skip nulls when DB had null/empty).
+            const orig = detail[f.key];
+            const origNorm = orig == null ? (f.type === "checkbox" ? 0 : "") : (f.type === "checkbox" ? Number(orig) : orig);
+            if (v !== origNorm) patch[f.key] = v;
+          }
+          try {
+            if (Object.keys(patch).length > 0) {
+              await adminFetch(patchUrl, { method: "PATCH", body: JSON.stringify(patch) });
+            }
+            await adminFetch(approveUrl, { method: "POST", body: JSON.stringify({ action: "approve" }) });
+            showToast("Zapisane i zatwierdzone.", "success");
+            cls();
+            onDone?.();
+          } catch (e) {
+            showToast("Błąd: " + (e.message || "?"), "error");
+          }
+        }},
+    ],
+  });
+}
+
 async function _renderPendingReview(container, panel) {
   container.innerHTML = `
     <div class="pending-review-layout">
@@ -1705,9 +1828,20 @@ async function _loadPendingType(container, type, panelId, badgeId, panel) {
           ${item.description ? `<span style="color:var(--text-muted);font-size:0.76rem">${_esc(item.description.slice(0, 80))}${item.description.length > 80 ? "…" : ""}</span>` : ""}
         </div>
         <div class="pending-row-actions">
-          <button class="primary-btn pending-approve-btn" style="font-size:0.78rem;padding:4px 10px">✓ Zatwierdź</button>
+          <button class="secondary-btn pending-edit-approve-btn" style="font-size:0.78rem;padding:4px 10px" title="Otwórz formularz edycji">✎ Edytuj i Zatwierdź</button>
+          <button class="primary-btn pending-approve-btn" style="font-size:0.78rem;padding:4px 10px" title="Zatwierdź bez zmian">✓ Zatwierdź</button>
           <button class="secondary-btn danger-outline pending-reject-btn" style="font-size:0.78rem;padding:4px 8px">✕ Odrzuć</button>
         </div>`;
+
+      const decBadge = () => {
+        row.remove();
+        badge.textContent = String(Math.max(0, (parseInt(badge.textContent) || 1) - 1));
+        if (badge.textContent === "0") badge.style.display = "none";
+      };
+
+      row.querySelector(".pending-edit-approve-btn").addEventListener("click", () => {
+        _openEditApproveModal({ item, entityType, onDone: decBadge });
+      });
 
       row.querySelector(".pending-approve-btn").addEventListener("click", async () => {
         try {

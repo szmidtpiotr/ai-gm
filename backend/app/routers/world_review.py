@@ -111,6 +111,112 @@ def patch_pending_weapon(key: str, req: WeaponPatchReq):
         conn.close()
 
 
+# ── AP1: GET + PATCH for pending NPCs ────────────────────────────────────────
+
+class NpcPendingPatchReq(_BaseModel):
+    label: str | None = None
+    npc_type: str | None = None
+    description: str | None = None
+    personality_prompt: str | None = None
+    is_active: int | None = None
+
+
+@router.get("/pending/npc/{key}")
+def get_pending_npc(key: str):
+    """Full row for one pending NPC — used by 'Edytuj i Zatwierdź' modal."""
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            """SELECT key, label, npc_type, description, personality_prompt,
+                      is_active, review_status
+               FROM npcs WHERE key = ?""",
+            (key,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="NPC not found")
+        return {"item": dict(row)}
+    finally:
+        conn.close()
+
+
+@router.patch("/pending/npcs/{key}")
+def patch_pending_npc(key: str, req: NpcPendingPatchReq):
+    """Edit a pending NPC before approving/discarding."""
+    conn = _get_db()
+    try:
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not updates:
+            return {"ok": True}
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        conn.execute(
+            f"UPDATE npcs SET {sets} WHERE key = ? AND review_status = 'pending_review'",
+            list(updates.values()) + [key],
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT key, label, npc_type, description FROM npcs WHERE key = ?", (key,)
+        ).fetchone()
+        return {"ok": True, "npc": dict(row) if row else {}}
+    finally:
+        conn.close()
+
+
+# ── AP1: GET + PATCH for pending enemies ─────────────────────────────────────
+
+class EnemyPendingPatchReq(_BaseModel):
+    label: str | None = None
+    tier: str | None = None
+    hp_base: int | None = None
+    ac_base: int | None = None
+    attack_bonus: int | None = None
+    damage_die: str | None = None
+    damage_type: str | None = None
+    xp_award: int | None = None
+    description: str | None = None
+    note: str | None = None
+
+
+@router.get("/pending/enemy/{key}")
+def get_pending_enemy(key: str):
+    """Full row for one pending enemy — used by 'Edytuj i Zatwierdź' modal."""
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            """SELECT key, label, tier, hp_base, ac_base, attack_bonus,
+                      damage_die, damage_type, xp_award, description, note,
+                      review_status
+               FROM game_config_enemies WHERE key = ?""",
+            (key,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Enemy not found")
+        return {"item": dict(row)}
+    finally:
+        conn.close()
+
+
+@router.patch("/pending/enemies/{key}")
+def patch_pending_enemy(key: str, req: EnemyPendingPatchReq):
+    """Edit a pending enemy before approving/discarding."""
+    conn = _get_db()
+    try:
+        updates = {k: v for k, v in req.model_dump().items() if v is not None}
+        if not updates:
+            return {"ok": True}
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        conn.execute(
+            f"UPDATE game_config_enemies SET {sets} WHERE key = ? AND review_status = 'pending_review'",
+            list(updates.values()) + [key],
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT key, label, tier, hp_base FROM game_config_enemies WHERE key = ?", (key,)
+        ).fetchone()
+        return {"ok": True, "enemy": dict(row) if row else {}}
+    finally:
+        conn.close()
+
+
 @router.patch("/locations/{key}/promote-canonical")
 def promote_canonical(key: str):
     """Stage 2B-Schema S18 — flip canonical=1 for a location, independent of review_status."""

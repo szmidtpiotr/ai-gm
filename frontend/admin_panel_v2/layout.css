@@ -984,6 +984,55 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   line-height: 1.6;
 }
 
+/* ── AP1: Edit-and-Approve modal form ─────────────────────────────────── */
+
+.edit-approve-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ea-field { display: flex; flex-direction: column; gap: 4px; }
+
+.ea-field label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.ea-field .ea-req { color: var(--accent-red); }
+
+.ea-field input[type="text"],
+.ea-field input[type="number"],
+.ea-field select,
+.ea-field textarea {
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.ea-field input:focus,
+.ea-field select:focus,
+.ea-field textarea:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+
+.ea-field input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  align-self: flex-start;
+  cursor: pointer;
+}
+
+.ea-field textarea { resize: vertical; min-height: 64px; }
+
 .modal-checkbox-row {
   display: flex;
   align-items: center;
