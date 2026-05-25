@@ -150,6 +150,26 @@ services:
       - ai-gm-dev
 
 
+  ai-gm-dev-mcp-server:
+    build:
+      context: .
+      dockerfile: mcp_server/Dockerfile
+    volumes:
+      - ./data-dev:/data:ro
+    environment:
+      - DB_PATH=/data/ai_gm.db
+      - MCP_TRANSPORT=sse
+      - FASTMCP_HOST=0.0.0.0
+      - FASTMCP_PORT=8400
+    ports:
+      - "8400:8400"
+    restart: unless-stopped
+    networks:
+      - ai-gm-dev
+    labels:
+      - service=mcp-server-dev
+
+
 networks:
   ai-gm-dev:
     driver: bridge
