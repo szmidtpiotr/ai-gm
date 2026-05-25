@@ -140,9 +140,10 @@ def _get_session_id_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> 
 
 
 def _inject_location_blocked(assistant_response: str, reason: str) -> str:
+    # BUG-07: do not leak the technical reason tag into player-visible narrative.
+    # Just null the location_intent so the bogus move isn't persisted; the block
+    # is already logged server-side in `_process_location_intent` (location_move_blocked).
     data = json.loads(_strip_json_code_fence(assistant_response))
-    narrative = str(data.get("narrative") or "").rstrip()
-    data["narrative"] = f"{narrative}\n\n[LOCATION_BLOCKED: {reason}]".strip()
     data["location_intent"] = None
     return json.dumps(data, ensure_ascii=False)
 

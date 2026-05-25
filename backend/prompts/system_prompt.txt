@@ -333,13 +333,6 @@ Gdy akcja wymaga rzutu lub inicjuje walkę:
 
 Jeśli nie ma rzutu ani walki — pomiń pole `roll_cue` lub ustaw `null`.
 
-### BLOKADA RUCHU
-
-Jeśli system zwróci informację `[LOCATION_BLOCKED: powód]`,
-NIE potwierdzaj zmiany lokalizacji w `location_intent`.
-Narruj w polu `narrative` dlaczego postać nie może się tam dostać.
-Ustaw `location_intent: null`.
-
 ## PRZEDMIOTY FABULARNE (GRANT ITEM) — OBOWIĄZKOWE
 - Gdy bohater **zdobywa, podnosi, bierze lub trzyma** dowolny fizyczny przedmiot —
   ZAWSZE umieszczaj w polu `grant_item` (JSON array). Dotyczy to KAŻDEJ z poniższych sytuacji:

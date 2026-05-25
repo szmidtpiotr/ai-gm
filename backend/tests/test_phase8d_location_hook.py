@@ -190,8 +190,10 @@ def test_hook_blocks_unknown_location_when_auto_create_disabled():
         out = turns_api._process_location_intent(conn, campaign_id, _gm_json("Nieznany Zamek Blokada"))
 
         parsed = json.loads(out)
+        # BUG-07: location_intent must be nulled so the bogus move isn't persisted,
+        # but the technical [LOCATION_BLOCKED:...] tag must NOT leak to player narrative.
         assert parsed["location_intent"] is None
-        assert "[LOCATION_BLOCKED:" in parsed["narrative"]
+        assert "LOCATION_BLOCKED" not in parsed["narrative"]
     finally:
         _set_flag(conn, "location_auto_create_enabled", "1")
         conn.close()
