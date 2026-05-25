@@ -158,6 +158,7 @@ class ContextInjector:
             self._build_tone_block(tone),
             self._build_content_index_block(mechanic_result),
             plan_update_block,
+            self._build_available_enemies_block(),
             NARRATOR_CONSTRAINTS,
         ]
 
@@ -369,6 +370,25 @@ class ContextInjector:
             return format_known_npcs_block(rows)
         except Exception as exc:  # noqa: BLE001 — degrade gracefully
             logger.warning("known_npcs_block_failed", error=str(exc), campaign_id=campaign_id)
+            return ""
+
+    def _build_available_enemies_block(self) -> str:
+        """Inject active enemy keys so LLM can use correct keys in [COMBAT_START:...]."""
+        try:
+            rows = self.conn.execute(
+                "SELECT key FROM game_config_enemies"
+                " WHERE is_active=1 AND key NOT LIKE 'seed_pending_%'"
+                " ORDER BY key"
+            ).fetchall()
+            if not rows:
+                return ""
+            keys = ", ".join(row["key"] for row in rows)
+            return (
+                "=== DOSTĘPNE KLUCZE WROGÓW ===\n"
+                f"Użyj wyłącznie tych kluczy w [COMBAT_START:...] i [APPLY_CONDITION:...enemy_key]:\n{keys}"
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("available_enemies_block_failed", error=str(exc))
             return ""
 
     def _build_plan_update_request_block(self, campaign_id: int, turn_number: int) -> str:

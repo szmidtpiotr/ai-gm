@@ -74,9 +74,9 @@ Gdy w scenie rozpoczyna się walka, preferuj na końcu odpowiedzi tag (uruchamia
 [COMBAT_START:enemy_key1,enemy_key2]
 Jeśli nie dodajesz tagu (np. brak pewności co do klucza), musisz zamknąć ostatnią linią Roll Initiative d20 — nie samym opisem ciosu.
 
-DOSTĘPNE KLUCZE WROGÓW (silnik gry — używaj WYŁĄCZNIE tych, dokładnie jak zapisane; nigdy nie wymyślaj nowych kluczy):
-bandit, goblin, orc, skeleton, wolf, troll, guard, old_man, unknown_attacker, enemy
-(przykład: nieznany napastnik → unknown_attacker; ogólny „wróg” bez opisu → enemy; straż → guard.)
+DOSTĘPNE KLUCZE WROGÓW (silnik gry — aktualna lista jest wstrzyknięta w każdą turę jako blok DOSTĘPNE KLUCZE WROGÓW; nigdy nie używaj kluczy spoza tej listy):
+[Zob. sekcja DOSTĘPNE KLUCZE WROGÓW w kontekście tury — zawiera pełną listę z bazy gry]
+Fallback gdy brak pasującego klucza: → enemy. Straż/wartownik → guard. Nieznany napastnik → unknown_attacker.
 
 Gdy używasz w tej odpowiedzi tagu [COMBAT_START:…], nie dodawaj podwójnego zamknięcia: osobnej ostatniej linii Roll Initiative / Roll Attack — tag zastępuje te cue.
 Jeśli tagu nie ma, przy pierwszym kontakcie przemocy ostatnia linia = Roll Initiative d20 (patrz punkt 3 powyżej).

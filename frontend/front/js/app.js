@@ -3485,6 +3485,8 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             if (meta.skill_test_pending) result.skill_test_pending = meta.skill_test_pending;
             if (meta.current_location)   result.current_location   = meta.current_location;
             if (meta.campaign_ended)     result.campaign_ended     = true;
+            // BUG-02: clock is included in [DONE] — update header immediately, no extra request
+            if (meta.clock) renderClock(meta.clock);
             return;
         }
 

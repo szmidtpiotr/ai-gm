@@ -4218,6 +4218,12 @@ def create_turn_stream(
                     ).fetchone()
                     if _camp_row and str(_camp_row["status"] or "").lower() in ("completed", "ended"):
                         done_payload["campaign_ended"] = True
+                    # BUG-02: include current clock so frontend updates immediately
+                    try:
+                        from app.services.clock_service import get_clock_state as _gcs
+                        done_payload["clock"] = _gcs(campaign_id_val, conn=_sf_done_conn)
+                    except Exception:
+                        pass
                 finally:
                     _sf_done_conn.close()
             except Exception:
