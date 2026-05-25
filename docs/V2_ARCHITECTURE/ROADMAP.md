@@ -340,25 +340,27 @@ Extends the hex travel system from a static map into a living, auto-expanding wo
 - [x] **O4b** MCP admin integration — analytics MCP tab (live status ping, copy URL, Perplexity guide, tool list), topbar status pill polling every 60 s — commit `a0aef22`, issue [#103](https://github.com/szmidtpiotr/ai-gm/issues/103)
 - [x] **O4c** MCP write tools (11-14) — `initialize_player_session`, `submit_player_turn`, `change_player_zone`, `flee_from_combat`; HTTP API via demo account; `httpx` dep; `DB_PATH` fix + `depends_on` in dev compose — commit `3d51c44`
 
-### Stage 15 — Phase 12 AI Test Agent
+### Stage 15 — Phase 12 AI Test Agent — **TEMPORARILY CANCELLED** (2026-05-25)
 
-- [ ] **T1** Update `ai_test_agent/` selectors for hero-first flow
-- [ ] **T2** Baseline regression scenario (login → hero → campaign → first turn)
-- [ ] **T3** Dungeon regression (enter → 3 rooms → boss → exit → loot verify)
-- [ ] **T4** Adversarial: inventory exploit (item duplication via GM)
-- [ ] **T5** Adversarial: economy cheat
-- [ ] **T6** Adversarial: prompt injection
-- [ ] **T7** LLM consistency (10× same scenario)
-- [ ] **T8** Admin Test Runner UI updates
-- [ ] **T9** CI integration on DEV deploy
-- [ ] **T10** Combat Sandbox autotest harness ([#22]) — YAML scenarios via `/api/admin/sandbox/run-scenario`
+Browser-driven test agent (T1-T10) deprioritised in favour of the **MCP server** (Stage 14 O4 / O4b / O4c), which gives an external LLM direct read+write access to the live game and lets Perplexity / Claude / any MCP client drive end-to-end scenarios without Playwright selectors. Revisit if MCP-based regression coverage proves insufficient.
+
+- [~] **T1** Update `ai_test_agent/` selectors for hero-first flow — *cancelled*
+- [~] **T2** Baseline regression scenario (login → hero → campaign → first turn) — *cancelled*
+- [~] **T3** Dungeon regression (enter → 3 rooms → boss → exit → loot verify) — *cancelled*
+- [~] **T4** Adversarial: inventory exploit (item duplication via GM) — *cancelled*
+- [~] **T5** Adversarial: economy cheat — *cancelled*
+- [~] **T6** Adversarial: prompt injection — *cancelled*
+- [~] **T7** LLM consistency (10× same scenario) — *cancelled*
+- [~] **T8** Admin Test Runner UI updates — *cancelled*
+- [~] **T9** CI integration on DEV deploy — *cancelled*
+- [~] **T10** Combat Sandbox autotest harness ([#22]) — YAML scenarios via `/api/admin/sandbox/run-scenario` — *cancelled*
 
 ### Stage 16 — Known issues / bugs backlog
 
 Bugs discovered during gameplay that don't fit a numbered stage. Pick into the queue when prioritised.
 
 - [x] **K1** GM hallucinates weapons / items the player doesn't own — **FIXED** (issue #87, commit e4dc9b0): `_inject_character_inventory_context()` prepends `[PLAYER INVENTORY]` to system prompt every turn; ZASADA guardrail added to system_prompt.txt; verified mobile 2026-05-24.
-- [ ] **K2** GM requests unnecessary skill rolls (e.g. Kowalstwo when entering a village square just because a blacksmith is in the scene). Observed during Stage 2B R4 follow-up, 2026-05-19. Fix direction: tighten roll-cue prompt rules so rolls require a *player attempt* on the skill, not mere proximity to a themed NPC; add a roll-cue filter that drops cues whose `reason` doesn't reference a player verb.
+- [x] **K2** GM requests unnecessary skill rolls (e.g. Kowalstwo when entering a village square just because a blacksmith is in the scene). Observed during Stage 2B R4 follow-up, 2026-05-19. **FIXED via prompt-only path** — commit `5835952` strengthened the roll_cue rules in `system_prompt.txt`: line 38 explicitly bans roll_cue after reading/examining; line 42 adds `KRYTYCZNA ZASADA: roll_cue WYŁĄCZNIE gdy gracz TERAZ bezpośrednio podejmuje ryzykowną akcję`; lines 49-60 list always-roll examples as player-verb statements ("Przekradam", "Otwieram", "Kujam"…). The optional backend filter was not built — prompt-half held in subsequent gameplay (no new sightings as of 2026-05-25). Reopen if observed again.
 
 ### Stage 17 — Future feature backlog (deferred, multi-step)
 
