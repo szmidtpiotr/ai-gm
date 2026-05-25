@@ -3572,6 +3572,14 @@ function _initShakeToRoll(onShake) {
                 try {
                     const result = await window.DeviceMotionEvent.requestPermission();
                     localStorage.setItem('aigm_motion_permission', result);
+                    // Bundle DeviceOrientation permission in the same user gesture so
+                    // tilt-aim works without a second prompt.
+                    try {
+                        if (typeof window.DeviceOrientationEvent?.requestPermission === 'function') {
+                            const oresult = await window.DeviceOrientationEvent.requestPermission();
+                            localStorage.setItem('aigm_orientation_permission', oresult);
+                        }
+                    } catch (_oe) { /* orientation refusal is non-fatal */ }
                     if (result === 'granted') {
                         window.addEventListener('devicemotion', motionHandler);
                         return true;
@@ -3600,6 +3608,74 @@ function _hideShakeHint() {
     if (!hint) return;
     hint.hidden = true;
     hint.onclick = null;
+}
+
+// ── Tilt-to-aim (F3 #3) ─────────────────────────────────────────────────────
+// Reads DeviceOrientationEvent; captures a baseline on the first sample so any
+// hold-angle (vertical, lap, etc.) feels neutral. Caller passes onTilt(vec)
+// receiving {x, y} ∈ [-1, 1] suitable for start_throw_with_vector.
+function _initTiltAim(onTilt) {
+    if (typeof window === 'undefined' || typeof window.DeviceOrientationEvent === 'undefined') {
+        return { active: false, cleanup: null, getCurrent: () => null };
+    }
+    const needsPermission = typeof window.DeviceOrientationEvent.requestPermission === 'function';
+    const stored = localStorage.getItem('aigm_orientation_permission');
+    if (needsPermission && stored !== 'granted') {
+        return { active: false, cleanup: null, getCurrent: () => null, error: stored === 'denied' ? 'denied' : 'needs_permission' };
+    }
+    const RANGE_DEG = 30; // ±30° tilt from baseline = full vector range
+    let baselineBeta = null, baselineGamma = null;
+    let current = { x: 0, y: 0 };
+    const handler = (e) => {
+        if (e.beta == null || e.gamma == null) return;
+        if (baselineBeta == null) { baselineBeta = e.beta; baselineGamma = e.gamma; }
+        const dGamma = e.gamma - baselineGamma;      // +ve = right side down
+        const dBeta  = e.beta  - baselineBeta;        // +ve = top of phone away
+        const vx = Math.max(-1, Math.min(1, dGamma / RANGE_DEG));
+        // Dice "up" axis is positive Y; tilting the top of the phone away from you (beta +)
+        // should throw the dice up the screen → negate dBeta.
+        const vy = Math.max(-1, Math.min(1, -dBeta / RANGE_DEG));
+        current = { x: vx, y: vy };
+        if (onTilt) onTilt(current);
+    };
+    window.addEventListener('deviceorientation', handler);
+    return {
+        active: true,
+        cleanup: () => window.removeEventListener('deviceorientation', handler),
+        getCurrent: () => current,
+    };
+}
+
+function _showReticle() {
+    const r = document.getElementById('dice-tilt-reticle');
+    if (r) { r.hidden = false; r.style.transform = 'translate(0, 0)'; }
+}
+function _updateReticle(vec) {
+    const r = document.getElementById('dice-tilt-reticle');
+    const c = document.getElementById('dice-container');
+    if (!r || !c) return;
+    const rect = c.getBoundingClientRect();
+    const range = 0.35; // 35 % of container half-size = comfortable reticle travel
+    const dx = vec.x * (rect.width  / 2) * range;
+    const dy = -vec.y * (rect.height / 2) * range; // screen-y inverted vs. dice physics
+    r.style.transform = `translate(${dx}px, ${dy}px)`;
+}
+function _hideReticle() {
+    const r = document.getElementById('dice-tilt-reticle');
+    if (r) r.hidden = true;
+}
+
+function _showManualBtn(onClick) {
+    const b = document.getElementById('dice-manual-roll-btn');
+    if (!b) return;
+    b.hidden = false;
+    b.onclick = onClick;
+}
+function _hideManualBtn() {
+    const b = document.getElementById('dice-manual-roll-btn');
+    if (!b) return;
+    b.hidden = true;
+    b.onclick = null;
 }
 
 // Stored so the ✕ dismiss button (static HTML onclick) can call it
@@ -3749,42 +3825,69 @@ function showSkillTestPopup(pending) {
             setTimeout(() => _showResult(notation.result[0]), 600);
         };
 
-        // Shake-to-roll on touch devices (F3 / issue #66); desktop falls through to auto-throw
+        // Shake-to-roll + tilt-aim + manual fallback (F3 / issue #66, upgrades #113)
         let _shake = null;
+        let _tilt = null;
         const triggerThrow = (dirVec, intensity) => {
-            if (_shake && _shake.cleanup) _shake.cleanup();
+            if (_shake?.cleanup) _shake.cleanup();
+            if (_tilt?.cleanup)  _tilt.cleanup();
             _hideShakeHint();
+            _hideReticle();
+            _hideManualBtn();
             if (dirVec && typeof _diceBox.start_throw_with_vector === 'function') {
                 _diceBox.start_throw_with_vector(dirVec, intensity ?? 1, beforeRoll, afterRoll);
             } else {
                 _diceBox.start_throw(beforeRoll, afterRoll);
             }
         };
-        // Patch dismissDiceRoll so the ✕ button also tears down the shake listener
+        // Patch dismissDiceRoll so the ✕ button also tears down all listeners
         const _origDismiss = window.dismissDiceRoll;
         window.dismissDiceRoll = async function() {
-            if (_shake && _shake.cleanup) _shake.cleanup();
+            if (_shake?.cleanup) _shake.cleanup();
+            if (_tilt?.cleanup)  _tilt.cleanup();
             _hideShakeHint();
+            _hideReticle();
+            _hideManualBtn();
             window.dismissDiceRoll = _origDismiss;
             if (_origDismiss) await _origDismiss();
         };
 
+        // Shake handler — prefers the live tilt vector when the player has aimed,
+        // otherwise uses the shake's own direction.
+        const onShake = (shakeVec, intensity) => {
+            const tiltVec = _tilt?.getCurrent?.();
+            const aimed = tiltVec && (Math.abs(tiltVec.x) > 0.1 || Math.abs(tiltVec.y) > 0.1);
+            triggerThrow(aimed ? tiltVec : shakeVec, intensity);
+        };
+
+        const startTilt = () => {
+            _tilt = _initTiltAim(_updateReticle);
+            if (_tilt.active) _showReticle();
+        };
+
         const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
         if (isTouch) {
-            _shake = _initShakeToRoll(triggerThrow);
+            _shake = _initShakeToRoll(onShake);
+            // Manual fallback is always available on touch — fires a random-vector throw
+            _showManualBtn(() => triggerThrow());
             if (_shake.error === 'needs_permission') {
-                _showShakeHint('Potrząśnij telefonem — dotknij aby zezwolić', async () => {
+                _showShakeHint('Przechyl by celować, potrząśnij by rzucić — dotknij aby zezwolić', async () => {
                     const ok = await _shake.requestPermission();
                     if (ok) {
-                        _showShakeHint('Potrząśnij telefonem aby rzucić kością', null);
-                    } else {
-                        triggerThrow(); // permission denied → just auto-roll
+                        startTilt();
+                        _showShakeHint('Przechyl by celować, potrząśnij by rzucić', null);
                     }
+                    // If denied, leave manual button visible as the way out
                 });
             } else if (_shake.active) {
-                _showShakeHint('Potrząśnij telefonem aby rzucić kością', null);
+                startTilt();
+                const hint = _tilt?.active
+                    ? 'Przechyl by celować, potrząśnij by rzucić'
+                    : 'Potrząśnij telefonem aby rzucić kością';
+                _showShakeHint(hint, null);
             } else {
-                triggerThrow(); // unsupported or previously denied
+                // Motion unsupported / denied — manual button is the only way; no auto-throw
+                _showShakeHint('Dotknij "Rzuć ręcznie" aby rzucić', null);
             }
         } else {
             triggerThrow(); // desktop: auto-roll, no shake

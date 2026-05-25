@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=shake-to-roll">
+  <link rel="stylesheet" href="./css/styles.css?v=tilt-aim">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -1282,6 +1282,12 @@
         <div class="shake-hint-icon">📱</div>
         <div class="shake-hint-text">Potrząśnij telefonem aby rzucić kością</div>
       </div>
+      <!-- Tilt-aim reticle — follows DeviceOrientation while waiting for shake -->
+      <div id="dice-tilt-reticle" hidden>
+        <div class="reticle-inner"></div>
+      </div>
+      <!-- Manual fallback if shake doesn't fire (broken accelerometer, denied permission) -->
+      <button id="dice-manual-roll-btn" type="button" hidden>🎲 Rzuć ręcznie</button>
     </div>
 
     <!-- Death Screen Overlay -->
@@ -1627,6 +1633,6 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=shake-directional"></script>
+  <script src="./js/app.js?v=tilt-aim"></script>
 </body>
 </html>
