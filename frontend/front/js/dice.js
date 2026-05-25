@@ -195,6 +195,25 @@ const DICE = (function() {
         throw_dices(box, vector, boost, dist, before_roll, after_roll);
     }
 
+    // F3 upgrade — direct throw with a caller-supplied direction & intensity (issue #113)
+    // vec: { x, y } normalized in [-1, 1] (e.g. derived from accelerometer or swipe)
+    // magnitude: ratio above-threshold of the gesture; clamped to [0.5, 3].
+    // If vec is near-zero, falls back to the random start_throw to avoid stuck dice.
+    that.dice_box.prototype.start_throw_with_vector = function(vec, magnitude, before_roll, after_roll) {
+        var box = this;
+        if (box.rolling) return;
+        var nx = Math.max(-1, Math.min(1, (vec && typeof vec.x === 'number') ? vec.x : 0));
+        var ny = Math.max(-1, Math.min(1, (vec && typeof vec.y === 'number') ? vec.y : 0));
+        if (Math.abs(nx) < 0.05 && Math.abs(ny) < 0.05) {
+            return box.start_throw(before_roll, after_roll);
+        }
+        var vector = { x: nx * box.w, y: -ny * box.h };
+        var dist = Math.sqrt(vector.x * vector.x + vector.y * vector.y);
+        var intensity = Math.max(0.5, Math.min(3, magnitude || 1));
+        var boost = (intensity + 2) * dist;
+        throw_dices(box, vector, boost, dist, before_roll, after_roll);
+    }
+
     //call this to roll dice from swipe (will throw dice in direction swiped)
     that.dice_box.prototype.bind_swipe = function(container, before_roll, after_roll) {
         let box = this;

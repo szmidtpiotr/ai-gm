@@ -3523,7 +3523,8 @@ async function handleSendMessage() {
 // Singleton dice box — created once and reused so Three.js/Cannon don't re-init
 let _diceBox = null;
 
-// ── Shake-to-roll on mobile (F3 / issue #66) ────────────────────────────────
+// ── Shake-to-roll on mobile (F3 / issue #66, upgrade #113) ──────────────────
+// onShake is invoked with ({x, y} normalized direction, intensity ratio).
 // Returns { active, cleanup, error, requestPermission? }.
 // active: true means listener is attached now.
 // error: 'unsupported' | 'needs_permission' | 'denied' | null.
@@ -3537,14 +3538,25 @@ function _initShakeToRoll(onShake) {
     let triggered = false;
     const motionHandler = (e) => {
         if (triggered) return;
-        const a = e.acceleration && (e.acceleration.x !== null) ? e.acceleration : e.accelerationIncludingGravity;
+        const usePure = !!(e.acceleration && e.acceleration.x !== null);
+        const a = usePure ? e.acceleration : e.accelerationIncludingGravity;
         if (!a) return;
-        const mag = Math.sqrt((a.x || 0) ** 2 + (a.y || 0) ** 2 + (a.z || 0) ** 2);
-        const effective = (e.acceleration && e.acceleration.x !== null) ? mag : Math.abs(mag - 9.8);
+        const ax = a.x || 0, ay = a.y || 0, az = a.z || 0;
+        const mag = Math.sqrt(ax * ax + ay * ay + az * az);
+        const effective = usePure ? mag : Math.abs(mag - 9.8);
         if (effective > THRESHOLD) {
             triggered = true;
             window.removeEventListener('devicemotion', motionHandler);
-            onShake();
+            // Haptic confirmation — Android supports navigator.vibrate; iOS Safari is a silent no-op.
+            try { navigator.vibrate?.(60); } catch (_e) {}
+            // Direction vector from horizontal acceleration; ignore Z (toward/away from face).
+            // accel.y is positive toward the top of the phone — matches dice "up" axis, no flip needed.
+            const horizMag = Math.sqrt(ax * ax + ay * ay);
+            const dirVec = horizMag > 0.5
+                ? { x: ax / horizMag, y: ay / horizMag }
+                : null; // axial / pure-Z shake → let caller use random vector
+            const intensity = Math.min(3, effective / THRESHOLD);
+            onShake(dirVec, intensity);
         }
     };
     const cleanup = () => window.removeEventListener('devicemotion', motionHandler);
@@ -3739,10 +3751,14 @@ function showSkillTestPopup(pending) {
 
         // Shake-to-roll on touch devices (F3 / issue #66); desktop falls through to auto-throw
         let _shake = null;
-        const triggerThrow = () => {
+        const triggerThrow = (dirVec, intensity) => {
             if (_shake && _shake.cleanup) _shake.cleanup();
             _hideShakeHint();
-            _diceBox.start_throw(beforeRoll, afterRoll);
+            if (dirVec && typeof _diceBox.start_throw_with_vector === 'function') {
+                _diceBox.start_throw_with_vector(dirVec, intensity ?? 1, beforeRoll, afterRoll);
+            } else {
+                _diceBox.start_throw(beforeRoll, afterRoll);
+            }
         };
         // Patch dismissDiceRoll so the ✕ button also tears down the shake listener
         const _origDismiss = window.dismissDiceRoll;
