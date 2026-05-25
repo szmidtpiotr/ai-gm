@@ -157,13 +157,19 @@ services:
     volumes:
       - ./data-dev:/data:ro
     environment:
-      - DB_PATH=/data/ai_gm.db
+      - DB_PATH=/data/ai_gm_dev.db
       - MCP_TRANSPORT=streamable-http
       - FASTMCP_HOST=0.0.0.0
       - FASTMCP_PORT=8400
+      # Write tools — player session via HTTP API (test account, DEV only)
+      - GAME_API_URL=http://backend:8000/api
+      - TEST_USERNAME=demo
+      - TEST_PASSWORD=demo
     ports:
       - "8400:8400"
     restart: unless-stopped
+    depends_on:
+      - backend
     networks:
       - ai-gm-dev
     labels:

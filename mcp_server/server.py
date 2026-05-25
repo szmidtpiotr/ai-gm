@@ -1,9 +1,10 @@
 """
 AI-GM MCP Server — T50
 Exposes game DB data as tools for AI assistants and external LLMs.
-Read-only access to /data/ai_gm.db (SQLite, mounted as volume).
+Read-only analytics: direct SQLite access.
+Read/write player tools: HTTP API calls to the game backend.
 
-Transport: SSE on port 8400.
+Transport: streamable-http on port 8400 (legacy SSE also supported via MCP_TRANSPORT=sse).
 """
 import json
 import math
@@ -12,11 +13,46 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import httpx
 from mcp.server.fastmcp import FastMCP
 
 DB_PATH = os.environ.get("DB_PATH", "/data/ai_gm.db")
 _HOST = os.environ.get("FASTMCP_HOST", "0.0.0.0")
 _PORT = int(os.environ.get("FASTMCP_PORT", "8400"))
+
+# ---------------------------------------------------------------------------
+# Player session — HTTP API (write tools)
+# ---------------------------------------------------------------------------
+
+_GAME_API_URL = os.environ.get("GAME_API_URL", "http://backend:8000/api")
+_TEST_USERNAME = os.environ.get("TEST_USERNAME", "")
+_TEST_PASSWORD = os.environ.get("TEST_PASSWORD", "")
+
+_session_token: Optional[str] = None
+_session_user_id: Optional[int] = None
+_session_campaign_id: Optional[int] = None
+_session_character_id: Optional[int] = None
+
+
+def _api_headers() -> dict:
+    h = {"Content-Type": "application/json"}
+    if _session_token:
+        h["Authorization"] = f"Bearer {_session_token}"
+    return h
+
+
+def _api_get(path: str, params: dict | None = None) -> dict:
+    with httpx.Client(timeout=30) as c:
+        r = c.get(f"{_GAME_API_URL}{path}", headers=_api_headers(), params=params)
+        r.raise_for_status()
+        return r.json()
+
+
+def _api_post(path: str, body: dict | None = None, timeout: float = 120) -> dict:
+    with httpx.Client(timeout=timeout) as c:
+        r = c.post(f"{_GAME_API_URL}{path}", json=body or {}, headers=_api_headers())
+        r.raise_for_status()
+        return r.json()
 
 mcp = FastMCP("AI-GM Analytics", host=_HOST, port=_PORT)
 
@@ -1019,6 +1055,208 @@ def get_full_campaign_context(campaign_id: int, format: str = "text") -> str | d
 {history_str}
 """
     return report.strip()
+
+
+# ---------------------------------------------------------------------------
+# Tool 10: initialize_player_session
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def initialize_player_session() -> str:
+    """
+    Log in as the configured test player and auto-select an active campaign + character.
+    MUST be called before submit_player_turn, change_player_zone, or flee_from_combat.
+    Returns a summary of the current game state and the campaign_id to use with read tools.
+    """
+    global _session_token, _session_user_id, _session_campaign_id, _session_character_id
+
+    if not _TEST_USERNAME or not _TEST_PASSWORD:
+        return "ERROR: TEST_USERNAME or TEST_PASSWORD env vars not set on the MCP server."
+
+    try:
+        with httpx.Client(timeout=15) as c:
+            r = c.post(
+                f"{_GAME_API_URL}/auth/login",
+                json={"username": _TEST_USERNAME, "password": _TEST_PASSWORD},
+            )
+            r.raise_for_status()
+            auth = r.json()
+    except Exception as e:
+        return f"ERROR: Login failed — {e}"
+
+    _session_token = auth["access_token"]
+    _session_user_id = auth["user_id"]
+
+    try:
+        campaigns = _api_get("/campaigns").get("campaigns", [])
+    except Exception as e:
+        return f"ERROR: Could not list campaigns — {e}"
+
+    if not campaigns:
+        return "ERROR: No campaigns found. Create one in the admin panel and assign a character."
+
+    active = [c for c in campaigns if c.get("status") == "active"]
+    campaign = active[0] if active else campaigns[0]
+    _session_campaign_id = campaign["id"]
+
+    try:
+        heroes = _api_get("/heroes", params={"user_id": _session_user_id}).get("heroes", [])
+    except Exception as e:
+        return f"ERROR: Could not list heroes — {e}"
+
+    if not heroes:
+        return "ERROR: No characters found. Create one in the admin panel."
+
+    assigned = [h for h in heroes if h.get("campaign_id") == _session_campaign_id]
+    hero = assigned[0] if assigned else heroes[0]
+    _session_character_id = hero["id"]
+
+    try:
+        char = _api_get(f"/characters/{_session_character_id}")
+    except Exception as e:
+        return f"Partial init — character load failed: {e}"
+
+    sheet = char.get("sheet_json", {})
+    hp = sheet.get("current_hp", "?")
+    max_hp = sheet.get("max_hp", "?")
+    level = sheet.get("level", 1)
+    archetype = sheet.get("archetype", "?")
+    location = char.get("current_location_label", "nieznana lokacja")
+    name = char.get("name", "?")
+    gold = sheet.get("gold", 0)
+
+    return (
+        f"=== SESSION READY ===\n"
+        f"User: {_TEST_USERNAME} (id={_session_user_id})\n"
+        f"Campaign: \"{campaign['title']}\" (id={_session_campaign_id}, status={campaign['status']})\n"
+        f"Character: {name} | Level {level} {archetype} | HP {hp}/{max_hp} | Gold: {gold}\n"
+        f"Location: {location}\n\n"
+        f"Tip: call get_full_campaign_context({_session_campaign_id}) to read full game state,\n"
+        f"then submit_player_turn(action) to take an action."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tool 11: submit_player_turn
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def submit_player_turn(action: str) -> str:
+    """
+    Submit a player action to the game master. Describe what your character does in Polish.
+    Examples: 'Atakuję goblina mieczem', 'Szukam ukrytych drzwi', 'Rozmawiam z karczmarką'.
+    Call get_full_campaign_context(campaign_id) afterwards to see the updated state.
+
+    Args:
+        action: What your character does (Polish preferred, natural language)
+    """
+    if not _session_campaign_id or not _session_character_id:
+        return "ERROR: Session not initialized. Call initialize_player_session() first."
+
+    try:
+        result = _api_post(
+            f"/campaigns/{_session_campaign_id}/turns",
+            {"character_id": _session_character_id, "text": action, "input_type": "player"},
+            timeout=120,
+        )
+    except Exception as e:
+        return f"ERROR submitting turn: {e}"
+
+    parts = []
+
+    res = result.get("result", {})
+    if isinstance(res, str):
+        parts.append(f"GM:\n{res}")
+    elif isinstance(res, dict):
+        narration = res.get("narration") or res.get("text") or res.get("assistant_text", "")
+        if narration:
+            parts.append(f"GM:\n{narration}")
+        roll_info = res.get("roll")
+        if roll_info:
+            parts.append(f"Roll: {roll_info}")
+        verdict = res.get("outcome") or res.get("verdict")
+        if verdict:
+            parts.append(f"Outcome: {verdict}")
+
+    cs = result.get("combat_state", {})
+    if cs:
+        status = cs.get("status")
+        if status == "ended":
+            parts.append("\n[Walka zakończona]")
+        elif status == "active":
+            combatants = cs.get("combatants", [])
+            player_cb = next((cb for cb in combatants if cb.get("type") == "player"), None)
+            if player_cb:
+                parts.append(
+                    f"\nTwoje HP: {player_cb.get('current_hp','?')}/{player_cb.get('max_hp','?')}"
+                )
+            alive_enemies = [
+                cb for cb in combatants
+                if cb.get("type") != "player" and (cb.get("current_hp") or 0) > 0
+            ]
+            if alive_enemies:
+                enemy_summary = ", ".join(
+                    f"{e.get('name','?')}({e.get('current_hp','?')}HP)" for e in alive_enemies
+                )
+                parts.append(f"Żywi wrogowie: {enemy_summary}")
+
+    route = result.get("route")
+    if route:
+        parts.append(f"[Route: {route}]")
+
+    if not parts:
+        return f"Turn submitted. Raw: {json.dumps(result, ensure_ascii=False)[:600]}"
+
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Tool 12: change_player_zone
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def change_player_zone() -> str:
+    """
+    Toggle combat zone between 'engaged' (melee / zwarcie) and 'ranged' (dystans).
+    Use to close into melee range or retreat to distance. Costs your action for the turn.
+    Only valid during active combat.
+    """
+    if not _session_campaign_id:
+        return "ERROR: Session not initialized. Call initialize_player_session() first."
+
+    try:
+        result = _api_post(f"/campaigns/{_session_campaign_id}/combat/zone-change")
+        return f"Strefa zmieniona.\n{json.dumps(result, indent=2, ensure_ascii=False)}"
+    except Exception as e:
+        return f"ERROR changing zone: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Tool 13: flee_from_combat
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def flee_from_combat() -> str:
+    """
+    Attempt to flee from the current combat. You escape but forfeit XP and loot.
+    Only valid during active combat.
+    """
+    if not _session_campaign_id:
+        return "ERROR: Session not initialized. Call initialize_player_session() first."
+
+    try:
+        result = _api_post(f"/campaigns/{_session_campaign_id}/combat/flee")
+        if result.get("fled"):
+            return "Uciekłeś z walki pomyślnie."
+        if result.get("already_ended"):
+            return "Walka już się skończyła."
+        return f"Flee result: {json.dumps(result, ensure_ascii=False)}"
+    except Exception as e:
+        return f"ERROR: {e}"
 
 
 # ---------------------------------------------------------------------------
