@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=no-reticle">
+  <link rel="stylesheet" href="./css/styles.css?v=f12-delete">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -436,6 +436,34 @@
           </svg>
           Wyloguj się
         </button>
+
+        <!-- F1.2 — soft-delete with 7-day grace -->
+        <button type="button" class="pf-row-btn pf-row-btn--danger" id="profile-delete-account-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/>
+            <path d="M10 11v6M14 11v6"/>
+            <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>
+          </svg>
+          Usuń konto
+          <svg class="pf-row-btn__chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <div class="pf-password-fields" id="pf-delete-fields" hidden>
+          <p class="pf-delete-warning">
+            Konto zostanie oznaczone do usunięcia. <strong>Masz 7 dni</strong> na cofnięcie decyzji — wystarczy się zalogować ponownie. Po tym czasie wszystkie postacie, kampanie i zapisy zostaną usunięte na stałe.
+          </p>
+          <div class="pf-form-field">
+            <label class="pf-form-label">Potwierdź hasłem</label>
+            <input type="password" class="pf-form-input" id="pf-delete-password" placeholder="••••••••" autocomplete="current-password">
+          </div>
+          <div id="pf-delete-error" class="auth-msg auth-msg--error" hidden></div>
+          <div class="pf-password-actions">
+            <button type="button" class="pf-action-btn pf-action-btn--danger" id="pf-delete-confirm-btn">Tak, usuń moje konto</button>
+            <button type="button" class="pf-action-btn" id="pf-delete-cancel-btn">Anuluj</button>
+          </div>
+        </div>
       </div>
 
     </main>
@@ -1622,6 +1650,28 @@
     </div>
   </div>
 
+  <!-- F1.2 — Undo soft-deletion modal (shown on login attempt for accounts within 7-day grace) -->
+  <div id="undelete-modal" class="invite-modal" hidden role="dialog" aria-modal="true">
+    <div class="invite-modal__backdrop" id="undelete-modal-backdrop"></div>
+    <div class="invite-modal__card">
+      <header class="invite-modal__header">
+        <h3 class="invite-modal__title">⚠ Konto zaplanowane do usunięcia</h3>
+      </header>
+      <div class="invite-modal__body">
+        <p style="line-height:1.55;color:var(--text-secondary);margin:0 0 10px">
+          Twoje konto zostało oznaczone do usunięcia. Możesz cofnąć tę decyzję do:
+        </p>
+        <p id="undelete-deadline" style="margin:0 0 18px;font-weight:600;color:var(--accent)">—</p>
+        <button type="button" class="btn btn--primary btn--full" id="undelete-confirm-btn">
+          🔄 Cofnij usunięcie i zaloguj się
+        </button>
+        <button type="button" class="btn btn--secondary btn--full" id="undelete-cancel-btn" style="margin-top:8px">
+          Anuluj
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="./js/clog.js?v=combat-v35"></script>
   <script src="./js/voice.js?v=safari-sync-unlock-2026-05-10"></script>
   <!-- dice.js 3D dice physics (issue #65) — must use bundled Three.js r73, NOT a newer CDN build -->
@@ -1629,6 +1679,6 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=no-reticle"></script>
+  <script src="./js/app.js?v=f12-delete"></script>
 </body>
 </html>

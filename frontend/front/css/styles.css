@@ -9075,6 +9075,30 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   box-shadow: 0 0 16px rgba(201,165,74,0.15);
 }
 
+/* F1.2 — destructive action variant */
+.pf-action-btn--danger {
+  background: rgba(180, 50, 40, 0.12);
+  border-color: rgba(200, 60, 50, 0.45);
+  color: #e07058;
+}
+.pf-action-btn--danger:hover {
+  background: rgba(200, 60, 50, 0.22);
+  border-color: rgba(220, 80, 70, 0.7);
+  color: #f08070;
+  box-shadow: 0 0 16px rgba(200, 60, 50, 0.2);
+}
+.pf-delete-warning {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: rgba(180, 50, 40, 0.08);
+  border-left: 3px solid rgba(200, 60, 50, 0.55);
+  border-radius: 4px;
+}
+.pf-delete-warning strong { color: #e07058; }
+
 /* ── Row button (expandable) ── */
 .pf-row-btn {
   display: flex;

@@ -78,7 +78,8 @@ def player_login(req: PlayerLoginReq):
                        COALESCE(is_admin, 0) AS is_admin,
                        COALESCE(role, 'player') AS role,
                        COALESCE(failed_login_count, 0) AS failed_login_count,
-                       lockout_until, email_verified_at, onboarded_at, email
+                       lockout_until, email_verified_at, onboarded_at, email,
+                       deleted_at
                 FROM users WHERE username = ? LIMIT 1
                 """,
                 (username,),
@@ -164,6 +165,26 @@ def player_login(req: PlayerLoginReq):
             conn.commit()
         except sqlite3.OperationalError:
             pass  # columns missing on old DB — skip silently
+
+        # F1.2 — Account pending deletion. Password was correct; do NOT issue a JWT.
+        # Frontend shows an undo modal; user can call /auth/undelete to restore.
+        try:
+            deleted_at_raw = row["deleted_at"]
+        except (KeyError, IndexError):
+            deleted_at_raw = None
+        if deleted_at_raw:
+            if _is_within_grace(str(deleted_at_raw)):
+                raise HTTPException(
+                    status_code=423,
+                    detail={
+                        "error": "pending_deletion",
+                        "message": "Twoje konto zostało zaplanowane do usunięcia. Możesz cofnąć decyzję.",
+                        "deleted_at": str(deleted_at_raw),
+                        "undo_deadline": _undo_deadline_iso(str(deleted_at_raw)),
+                    },
+                )
+            # Past grace — should have been hard-deleted by cron; play it safe and reject.
+            raise HTTPException(status_code=401, detail="Invalid credentials")
 
         # Role: prefer the explicit role column when present, else derive from is_admin.
         is_admin_val = int(row["is_admin"] or 0)
@@ -660,6 +681,140 @@ def reset_password(req: ResetPasswordReq):
     finally:
         conn.close()
 
+
+
+_DELETE_GRACE_DAYS = 7
+
+
+def _undo_deadline_iso(deleted_at_iso: str) -> str:
+    """Returns ISO string of (deleted_at + 7 days)."""
+    dt = datetime.fromisoformat(deleted_at_iso.replace(" ", "T"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return (dt + timedelta(days=_DELETE_GRACE_DAYS)).isoformat()
+
+
+def _is_within_grace(deleted_at_iso: str) -> bool:
+    try:
+        dt = datetime.fromisoformat(deleted_at_iso.replace(" ", "T"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).days < _DELETE_GRACE_DAYS
+    except (ValueError, TypeError):
+        return False
+
+
+class DeleteAccountReq(BaseModel):
+    current_password: str
+
+
+@router.post("/auth/delete-account")
+def delete_account(
+    req: DeleteAccountReq,
+    authorization: str | None = Header(default=None),
+):
+    """F1.2 — Soft-delete the current user's account with a 7-day grace period.
+    Sets users.deleted_at = now(). The account stays in the DB and can be
+    restored via /auth/undelete within the grace window."""
+    from app.core.jwt_auth import require_current_user
+    payload = require_current_user(authorization)
+    user_id = int(payload.get("sub") or 0)
+
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT password_hash, deleted_at FROM users WHERE id = ? LIMIT 1", (user_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="User not found")
+        if row["deleted_at"]:
+            # Already pending deletion — return the existing deadline (idempotent)
+            return {
+                "ok": True,
+                "deleted_at": row["deleted_at"],
+                "undo_deadline": _undo_deadline_iso(str(row["deleted_at"])),
+            }
+        ok, _ = _verify_user_password(str(row["password_hash"] or ""), req.current_password)
+        if not ok:
+            raise HTTPException(status_code=403, detail="Nieprawidłowe hasło")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        conn.execute("UPDATE users SET deleted_at = ? WHERE id = ?", (now_iso, user_id))
+        conn.commit()
+        logger.info("account_soft_deleted", user_id=user_id)
+        return {
+            "ok": True,
+            "deleted_at": now_iso,
+            "undo_deadline": _undo_deadline_iso(now_iso),
+        }
+    finally:
+        conn.close()
+
+
+class UndeleteReq(BaseModel):
+    username: str
+    password: str
+
+
+@router.post("/auth/undelete")
+def undelete_account(req: UndeleteReq):
+    """F1.2 — Restore a soft-deleted account within the 7-day grace window.
+    Takes raw credentials (no JWT — the user can't log in normally while flagged).
+    On success: clears deleted_at and issues a fresh JWT pair."""
+    username = (req.username or "").strip()
+    password = req.password or ""
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="username and password are required")
+
+    conn = sqlite3.connect(_AUTH_DB)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            """
+            SELECT id, username, password_hash, display_name,
+                   COALESCE(is_admin, 0) AS is_admin,
+                   COALESCE(role, 'player') AS role,
+                   deleted_at, onboarded_at
+            FROM users WHERE username = ? LIMIT 1
+            """,
+            (username,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        ok, _ = _verify_user_password(str(row["password_hash"] or ""), password)
+        if not ok:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        if not row["deleted_at"]:
+            raise HTTPException(status_code=400, detail="Konto nie jest oznaczone do usunięcia")
+        if not _is_within_grace(str(row["deleted_at"])):
+            raise HTTPException(status_code=410, detail="Okno cofnięcia minęło")
+
+        conn.execute("UPDATE users SET deleted_at = NULL WHERE id = ?", (int(row["id"]),))
+        conn.commit()
+        logger.info("account_undeleted", user_id=int(row["id"]))
+
+        from app.services.jwt_service import issue_pair
+        role = str(row["role"] or "player")
+        is_admin_val = int(row["is_admin"] or 0)
+        token_pair = issue_pair(
+            user_id=int(row["id"]),
+            username=str(row["username"] or ""),
+            role=role,
+            is_admin=is_admin_val,
+        )
+        return {
+            "ok": True,
+            "user_id": int(row["id"]),
+            "username": row["username"],
+            "display_name": row["display_name"],
+            "is_admin": is_admin_val,
+            "role": role,
+            "onboarded_at": row["onboarded_at"],
+            **token_pair,
+        }
+    finally:
+        conn.close()
 
 
 class ChangePasswordReq(BaseModel):

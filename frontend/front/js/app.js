@@ -495,6 +495,9 @@ async function handleLogin(e) {
                 'Potwierdź swój adres email, aby kontynuować przygodę.';
             document.getElementById('resend-verify-btn').hidden = true;
             showScreen('verifyEmail');
+        } else if (error.status === 423 && error.body?.detail?.error === 'pending_deletion') {
+            // F1.2 — account is soft-deleted; offer the undo path
+            _showUndeleteModal(error.body.detail.undo_deadline, username, password);
         } else {
             showToast(error.message || 'Błąd logowania', 'error');
         }
@@ -502,6 +505,57 @@ async function handleLogin(e) {
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<span class="btn__icon">✨</span> Zaloguj się';
     }
+}
+
+// F1.2 — undo modal shown when login hits 423 / pending_deletion
+function _showUndeleteModal(undoDeadlineIso, username, password) {
+    const modal = document.getElementById('undelete-modal');
+    if (!modal) return;
+    const deadlineEl = document.getElementById('undelete-deadline');
+    if (deadlineEl) deadlineEl.textContent = _formatDeadline(undoDeadlineIso);
+    modal.hidden = false;
+    const confirmBtn = document.getElementById('undelete-confirm-btn');
+    const cancelBtn  = document.getElementById('undelete-cancel-btn');
+    const backdrop   = document.getElementById('undelete-modal-backdrop');
+
+    const close = () => { modal.hidden = true; };
+    const onCancel = () => close();
+    const onBackdrop = () => close();
+    const onConfirm = async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Przywracanie…';
+        try {
+            const resp = await apiRequest('POST', '/auth/undelete', { username, password });
+            close();
+            // Mirror the login-success flow
+            currentUser = {
+                id: resp.user_id,
+                username: resp.username || username,
+                display_name: resp.display_name,
+                is_admin: resp.is_admin,
+                role: resp.role || (resp.is_admin ? 'admin' : 'player'),
+            };
+            if (resp.access_token)  localStorage.setItem('aigm_access_token', resp.access_token);
+            if (resp.refresh_token) localStorage.setItem('aigm_refresh_token', resp.refresh_token);
+            authToken = resp.access_token || `user:${currentUser.id}`;
+            localStorage.setItem('token', authToken);
+            localStorage.setItem('user', JSON.stringify(currentUser));
+            showToast('Konto przywrócone. Witaj z powrotem!', 'success');
+            await loadHeroes();
+            if (await tryRestoreSession()) return;
+            if (!resp.onboarded_at) showOnboardingCinematic();
+            else showScreen('heroes');
+        } catch (e) {
+            showToast(e.message || 'Błąd przywracania konta', 'error');
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '🔄 Cofnij usunięcie i zaloguj się';
+        }
+    };
+
+    // Re-bind cleanly (these handlers may be re-attached on each modal open)
+    confirmBtn.onclick = onConfirm;
+    cancelBtn.onclick  = onCancel;
+    backdrop.onclick   = onBackdrop;
 }
 
 function handleLogout() {
@@ -7780,6 +7834,65 @@ function _initProfileEditing() {
         pwErrorEl.textContent = msg;
         pwErrorEl.hidden = false;
     }
+
+    // ── F1.2 — Delete account (soft-delete with 7-day grace) ─────────────────
+    const delBtn       = document.getElementById('profile-delete-account-btn');
+    const delFields    = document.getElementById('pf-delete-fields');
+    const delConfirm   = document.getElementById('pf-delete-confirm-btn');
+    const delCancel    = document.getElementById('pf-delete-cancel-btn');
+    const delPwInput   = document.getElementById('pf-delete-password');
+    const delErrorEl   = document.getElementById('pf-delete-error');
+
+    delBtn?.addEventListener('click', () => {
+        const open = delFields && !delFields.hidden;
+        if (delFields) delFields.hidden = open;
+        delBtn.classList.toggle('pf-row-btn--open', !open);
+        if (!open && delPwInput) delPwInput.focus();
+    });
+
+    delCancel?.addEventListener('click', () => {
+        if (delFields) delFields.hidden = true;
+        delBtn?.classList.remove('pf-row-btn--open');
+        if (delPwInput) delPwInput.value = '';
+        if (delErrorEl) delErrorEl.hidden = true;
+    });
+
+    delConfirm?.addEventListener('click', async () => {
+        if (delErrorEl) delErrorEl.hidden = true;
+        const pw = delPwInput?.value || '';
+        if (!pw) { _showDelError('Wprowadź hasło, aby potwierdzić'); return; }
+
+        delConfirm.disabled = true;
+        delConfirm.textContent = 'Usuwanie…';
+        try {
+            const resp = await apiRequest('POST', '/auth/delete-account', { current_password: pw });
+            const deadline = resp?.undo_deadline ? _formatDeadline(resp.undo_deadline) : '';
+            showToast(
+                `Konto zaplanowane do usunięcia. Możesz cofnąć logując się do ${deadline}.`,
+                'success',
+            );
+            // Force logout
+            handleLogout();
+        } catch (e) {
+            _showDelError(e.message || 'Błąd usuwania konta');
+            delConfirm.disabled = false;
+            delConfirm.textContent = 'Tak, usuń moje konto';
+        }
+    });
+
+    function _showDelError(msg) {
+        if (!delErrorEl) return;
+        delErrorEl.textContent = msg;
+        delErrorEl.hidden = false;
+    }
+}
+
+// Helper: format an ISO timestamp as DD.MM.YYYY HH:MM
+function _formatDeadline(iso) {
+    try {
+        const d = new Date(iso);
+        return d.toLocaleString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (_e) { return iso; }
 }
 
 // ── Invite modal ─────────────────────────────────────────────────────────

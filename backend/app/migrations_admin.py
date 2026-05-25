@@ -2784,6 +2784,8 @@ def _ensure_auth_ux_schema(conn: sqlite3.Connection) -> None:
         "ALTER TABLE users ADD COLUMN onboarded_at TEXT",
         "ALTER TABLE users ADD COLUMN invite_weekly_limit INTEGER NOT NULL DEFAULT 3",
         "ALTER TABLE users ADD COLUMN avatar_url TEXT",
+        # F1.2 — soft-delete with 7-day grace period. NULL = active account.
+        "ALTER TABLE users ADD COLUMN deleted_at TEXT",
         # Invite records
         """
         CREATE TABLE IF NOT EXISTS user_invites (
