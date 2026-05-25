@@ -1445,10 +1445,10 @@ def flee_from_combat() -> str:
 
     try:
         result = _api_post(f"/campaigns/{_session_campaign_id}/combat/flee")
+        if result.get("already_ended"):
+            return "Walka już się skończyła (brak aktywnej walki)."
         if result.get("fled"):
             return "Uciekłeś z walki pomyślnie."
-        if result.get("already_ended"):
-            return "Walka już się skończyła."
         return f"Flee result: {json.dumps(result, ensure_ascii=False)}"
     except Exception as e:
         return f"ERROR: {e}"
