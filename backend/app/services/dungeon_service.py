@@ -405,7 +405,7 @@ def enter_dungeon(campaign_id: int, character_id: int, dungeon_key: str,
                   hero_level: int, previous_campaign_id: int | None = None) -> dict:
     cd = check_cooldown(character_id, dungeon_key)
     if cd.get("on_cooldown"):
-        raise PermissionError(f"dungeon_on_cooldown:{cd.get('cooldown_until')}:{cd.get('hours_remaining')}")
+        raise PermissionError(f"dungeon_on_cooldown|{cd.get('cooldown_until')}|{cd.get('hours_remaining')}")
 
     instance = generate_dungeon_instance(dungeon_key, hero_level)
 

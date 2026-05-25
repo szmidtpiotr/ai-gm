@@ -70,7 +70,7 @@ def enter_dungeon(dungeon_key: str, req: DungeonEnterReq):
             previous_campaign_id=req.previous_campaign_id
         )
     except PermissionError as e:
-        parts = str(e).split(":")
+        parts = str(e).split("|")
         detail: dict = {"error": "dungeon_on_cooldown"}
         if len(parts) >= 3:
             detail["cooldown_until"] = parts[1]

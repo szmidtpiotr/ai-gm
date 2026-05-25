@@ -348,7 +348,7 @@ ADMIN_MIGRATIONS = [
         (key, label, difficulty, min_level, max_level, location_tags, enemies_json, threat_total)
     VALUES
         ('enc_tavern_brawl', 'Bijatyka w tawernie', 'trivial', 1, 5, 'tavern', '[{"enemy_key":"tavernbrawler","count":2},{"enemy_key":"drunksoldier","count":1}]', 34),
-        ('enc_dungeon_rats', 'Szczury w piwnicy', 'trivial', 1, 3, 'dungeon', '[{"enemy_key":"giantrat","count":4}]', 20),
+        ('enc_dungeon_rats', 'Szczury w piwnicy', 'trivial', 1, 3, 'dungeon', '[{"enemy_key":"giant_rat","count":4}]', 20),
         ('enc_city_mugger', 'Napad w zaułku', 'easy', 1, 5, 'city', '[{"enemy_key":"mugger","count":2}]', 18),
         ('enc_city_thieves', 'Gang kieszonkowców', 'easy', 1, 4, 'city', '[{"enemy_key":"cutpurse","count":1},{"enemy_key":"pickpocket","count":1}]', 16),
         ('enc_city_guard_corrupt', 'Przekupny strażnik', 'medium', 1, 5, 'city', '[{"enemy_key":"corruptguard","count":1},{"enemy_key":"thug","count":1}]', 37),
@@ -2061,9 +2061,9 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     """, "v2-game-dungeons")
     _exec("""
         INSERT OR IGNORE INTO game_dungeons (key, label, location_key, rooms, enemy_pool, boss_enemy, loot_tier, atmosphere, cooldown_hours, min_level) VALUES
-        ('goblin_warren',  'Nora Goblinów',     'goblin_warren',  5, '["goblin","goblin_archer"]', 'goblin_shaman',  'standard', 'Ciasne tunele, smród gnijącego mięsa, pobrzękiwanie oręża w ciemności.',              48, 1),
-        ('crypt_of_bones', 'Krypta Kości',      'crypt_of_bones', 6, '["skeleton","zombie"]',      'skeleton_lord',  'rich',     'Wilgotne katakumby, fosforyzujące kości, echo kroków odbija się od kamiennych ścian.', 72, 2),
-        ('rat_tunnels',    'Kanały pod Miastem','rat_tunnels',    4, '["giantrat"]',               NULL,             'poor',     'Ciemne, zawilgocone kanały. Coś tu mieszka i nie lubi gości.',                        24, 1)
+        ('goblin_warren',  'Nora Goblinów',     'goblin_warren',  5, '["goblin","kobold"]', 'hobgoblin',      'standard', 'Ciasne tunele, smród gnijącego mięsa, pobrzękiwanie oręża w ciemności.',              48, 1),
+        ('crypt_of_bones', 'Krypta Kości',      'crypt_of_bones', 6, '["skeleton","zombie"]',      'skeleton_warrior','rich',   'Wilgotne katakumby, fosforyzujące kości, echo kroków odbija się od kamiennych ścian.', 72, 2),
+        ('rat_tunnels',    'Kanały pod Miastem','rat_tunnels',    4, '["giant_rat"]',              NULL,             'poor',     'Ciemne, zawilgocone kanały. Coś tu mieszka i nie lubi gości.',                        24, 1)
     """, "v2-game-dungeons-seed")
     # ─────────────────────────────────────────────────────────────────────────
 
