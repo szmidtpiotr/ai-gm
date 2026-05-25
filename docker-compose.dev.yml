@@ -158,7 +158,7 @@ services:
       - ./data-dev:/data:ro
     environment:
       - DB_PATH=/data/ai_gm.db
-      - MCP_TRANSPORT=sse
+      - MCP_TRANSPORT=streamable-http
       - FASTMCP_HOST=0.0.0.0
       - FASTMCP_PORT=8400
     ports:

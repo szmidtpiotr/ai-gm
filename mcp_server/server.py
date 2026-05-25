@@ -1026,6 +1026,7 @@ def get_full_campaign_context(campaign_id: int, format: str = "text") -> str | d
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # host/port are passed to FastMCP() constructor above, driven by
-    # FASTMCP_HOST (default 0.0.0.0) and FASTMCP_PORT (default 8400) env vars.
-    mcp.run(transport="sse")
+    # "streamable-http" = MCP spec 2025-03-26 (supported by Perplexity, Claude Desktop)
+    # "sse"             = legacy SSE transport (Claude Code < 1.3, older clients)
+    transport = os.environ.get("MCP_TRANSPORT", "streamable-http")
+    mcp.run(transport=transport)
