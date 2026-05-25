@@ -3633,6 +3633,28 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
   overflow-y: auto;
 }
 .smart-entry-input-row { display: flex; gap: 8px; }
+.se-mode-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg-tertiary) 60%, transparent);
+  align-self: flex-start;
+  margin-bottom: 4px;
+  transition: background 0.3s, color 0.3s;
+}
+.se-mode-badge.refine {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.se-field-row.se-field-changed {
+  animation: se-field-flash 2s ease-out forwards;
+}
+@keyframes se-field-flash {
+  0%   { background: color-mix(in srgb, var(--accent) 20%, transparent); border-radius: 4px; }
+  100% { background: transparent; }
+}
 .smart-entry-preview-col {
   flex: 0.9;
   display: flex;

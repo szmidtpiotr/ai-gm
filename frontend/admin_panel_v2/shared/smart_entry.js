@@ -19,6 +19,7 @@ let _currentTable = null;
 let _schemaFields = [];
 let _draft = {};
 let _existingKey = null;
+let _lastChangedFields = [];
 const _schemaCache = {};
 
 function _genId() { return "se-" + Math.random().toString(36).slice(2, 10); }
@@ -65,8 +66,9 @@ function _ensureOverlay() {
       <div class="smart-entry-body">
         <div class="smart-entry-chat-col">
           <div class="smart-entry-messages" id="se-messages"></div>
+          <div class="se-mode-badge" id="se-mode-badge">✨ Tworzenie</div>
           <div class="smart-entry-input-row" style="align-items:flex-end">
-            <textarea id="se-input" class="field-input" placeholder="Opisz rekord który chcesz stworzyć lub zmienić…" rows="3" maxlength="1000" style="resize:vertical;min-height:60px;flex:1"></textarea>
+            <textarea id="se-input" class="field-input" placeholder="Opisz rekord który chcesz stworzyć…" rows="3" maxlength="1000" style="resize:vertical;min-height:60px;flex:1"></textarea>
             <button class="primary-btn" id="se-send-btn" type="button">Wyślij</button>
           </div>
         </div>
@@ -115,7 +117,7 @@ function _ensureOverlay() {
 
 async function _switchTable(table) {
   _currentTable = table;
-  _draft = {}; _existingKey = null;
+  _draft = {}; _existingKey = null; _lastChangedFields = [];
   _sessionId = _genId();
   if (_overlay) {
     _overlay.querySelector("#se-messages").innerHTML = "";
@@ -127,6 +129,7 @@ async function _switchTable(table) {
     _schemaFields = schema.fields || [];
     _renderFormFields();
     _updateSaveBtn();
+    _updateModeBadge();
   } catch (e) {
     showToast("Błąd schematu: " + e.message, "error");
   }
@@ -484,6 +487,7 @@ async function _loadExisting(key) {
     _sessionId = _genId();
     _renderFormValues();
     _updateSaveBtn();
+    _updateModeBadge();
     if (_overlay) {
       _overlay.querySelector("#se-messages").innerHTML = "";
       _appendMsg(`Załadowano: "${record.label || key}". Opisz co chcesz zmienić.`, "agent");
@@ -491,6 +495,34 @@ async function _loadExisting(key) {
   } catch (e) {
     showToast("Błąd ładowania: " + e.message, "error");
   }
+}
+
+// ── Mode helpers ──────────────────────────────────────────────────────────────
+
+function _updateModeBadge() {
+  const badge = _overlay?.querySelector("#se-mode-badge");
+  const input = _overlay?.querySelector("#se-input");
+  if (!badge) return;
+  const hasContent = Object.values(_draft).some(v => v !== undefined && v !== "" && v !== null);
+  if (hasContent) {
+    badge.textContent = "🔄 Tryb uzupełniania";
+    badge.classList.add("refine");
+    if (input) input.placeholder = "Opisz co chcesz zmienić…";
+  } else {
+    badge.textContent = "✨ Tryb tworzenia";
+    badge.classList.remove("refine");
+    if (input) input.placeholder = "Opisz rekord który chcesz stworzyć…";
+  }
+}
+
+function _flashChangedFields(fields) {
+  if (!fields?.length || !_overlay) return;
+  fields.forEach(key => {
+    const row = _overlay.querySelector(`.se-field-row[data-field-key="${key}"]`);
+    if (!row) return;
+    row.classList.add("se-field-changed");
+    setTimeout(() => row.classList.remove("se-field-changed"), 2000);
+  });
 }
 
 // ── LLM call ──────────────────────────────────────────────────────────────────
@@ -525,8 +557,11 @@ async function _callAgent(message) {
       _draft = { ..._draft, ...Object.fromEntries(
         Object.entries(resp.draft).filter(([, v]) => v !== null && v !== undefined)
       )};
+      _lastChangedFields = Array.isArray(resp.changed_fields) ? resp.changed_fields : [];
       _renderFormValues();
+      _flashChangedFields(_lastChangedFields);
       _updateSaveBtn();
+      _updateModeBadge();
     }
   } catch (e) {
     typing.remove();
@@ -561,11 +596,12 @@ async function _save() {
       detail: { table: resp.table || _currentTable, key: resp.key, mode: resp.mode },
     }));
     // Reset for new record
-    _draft = {}; _existingKey = null; _sessionId = _genId();
+    _draft = {}; _existingKey = null; _lastChangedFields = []; _sessionId = _genId();
     if (_overlay) {
       _overlay.querySelector("#se-existing-select").value = "";
       _renderFormValues();
       _updateSaveBtn();
+      _updateModeBadge();
     }
   } catch (e) {
     const msg = typeof e?.message === "string" ? e.message : JSON.stringify(e);

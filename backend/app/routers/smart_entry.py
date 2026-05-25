@@ -576,6 +576,10 @@ Admin opisuje rekord. Ty WYPEŁNIASZ POLA — nie zapisujesz, nie tworzysz rekor
 ZAWSZE odpowiadaj WYŁĄCZNIE prawidłowym JSON-em w formacie:
 {"reply": "krótki komentarz co wypełniłem (po polsku, max 2 zdania)", "draft": {"pole": wartość, ...}}
 
+TRYBY PRACY:
+- TRYB TWORZENIA (brak current_draft lub pusty): Wypełnij WSZYSTKIE pola od zera na podstawie opisu admina. Generuj key, label, description, note i wszystkie wymagane pola.
+- TRYB UZUPEŁNIANIA (current_draft niepusty): Admin edytuje istniejący szkic. Zwróć w "draft" WYŁĄCZNIE pola które admin wprost prosi zmienić. NIE powtarzaj pól których admin nie wymienił — backend zachowa istniejące wartości. Wyjątek: jeśli zmiana jednego pola logicznie wymaga aktualizacji innego (np. zmiana label → nowy key), uwzględnij oba.
+
 ZASADY:
 - Pola i dozwolone wartości są podane w kontekście (SCHEMAT). NIE wymyślaj innych nazw pól.
 - single_choice: użyj DOKŁADNIE jednej z podanych wartości (np. "d6", "melee", "STR")
@@ -583,10 +587,9 @@ ZASADY:
 - boolean: 1 lub 0
 - number: liczba (nie string)
 - 'key' (slug): generuj z 'label': małe litery, polskie znaki → ascii, spacje → _, bez specjalnych
-- 'description': ZAWSZE generuj klimatyczny opis dla GM (wygląd, historia, atmosfera, 2-3 zdania)
-- 'note': ZAWSZE generuj krótki opis efektów dla GM (co czuje bohater, jak GM powinien to opisać)
+- 'description': W trybie tworzenia ZAWSZE generuj klimatyczny opis dla GM (wygląd, historia, atmosfera, 2-3 zdania)
+- 'note': W trybie tworzenia ZAWSZE generuj krótki opis efektów dla GM
 - Nie pisz "zapisałem" ani "utworzyłem rekord" — tylko wypełniasz formularz
-- Jeśli admin zmienia konkretne pole, zaktualizuj tylko to pole i wróć cały current_draft
 
 POLE effect_json (MECHANIKA BOJOWA — tylko dla broni):
 Generuj jako JSON string gdy broń ma specjalne efekty. Dozwolone typy:
@@ -811,18 +814,26 @@ def smart_entry_message(
     # Build system prompt with schema constraints
     schema_text = _build_schema_constraint_text(table) if table else "Tabela nieznana — zapytaj o typ rekordu."
 
-    # Build user message context
+    # Build user message context — explicit mode distinction
     context_parts = []
     if table:
         context_parts.append(schema_text)
-    if session["draft"]:
-        context_parts.append(f"Bieżący draft: {json.dumps(session['draft'], ensure_ascii=False)}")
-    if session.get("target_key"):
-        context_parts.append(f"TRYB EDYCJI rekordu: {session['target_key']}")
 
-    user_content = req.message
-    if context_parts:
-        user_content = "\n".join(context_parts) + f"\n\nAdmin: {req.message}"
+    is_refinement = bool(session["draft"])
+    if is_refinement:
+        draft_str = json.dumps(session["draft"], ensure_ascii=False)
+        context_parts.append(
+            f"TRYB UZUPEŁNIANIA — bieżący stan formularza (zachowaj wszystko czego admin nie zmienia):\n{draft_str}\n"
+            f"Zwróć w 'draft' TYLKO pola które admin teraz zmienia."
+        )
+        if session.get("target_key"):
+            context_parts.append(f"Edytowany rekord: {session['target_key']}")
+    else:
+        context_parts.append("TRYB TWORZENIA: Wypełnij wszystkie pola od zera.")
+        if session.get("target_key"):
+            context_parts.append(f"EDYCJA ISTNIEJĄCEGO REKORDU: {session['target_key']}")
+
+    user_content = "\n\n".join(context_parts) + f"\n\nAdmin: {req.message}"
 
     session["history"].append({"role": "user", "content": user_content})
     messages = [{"role": "system", "content": SMART_ENTRY_SYSTEM_PROMPT_V2}] + session["history"][-10:]
@@ -837,18 +848,22 @@ def smart_entry_message(
     # Parse JSON response
     reply_text, new_draft = _parse_llm_draft_response(raw_reply)
 
-    # Validate and merge new_draft into session draft
+    # Validate and merge new_draft into session draft; track what changed
+    changed_fields: list[str] = []
     if new_draft and table:
         schema = SCHEMA_DESCRIPTORS.get(table, {})
         valid_fields = set(schema.get("required", [])) | set(schema.get("optional", []))
         for k, v in new_draft.items():
             if k in valid_fields:
+                if session["draft"].get(k) != v:
+                    changed_fields.append(k)
                 session["draft"][k] = v
 
     return {
         "session_id": req.session_id,
         "reply": reply_text or "Wypełniłem co mogłem.",
         "draft": session["draft"],
+        "changed_fields": changed_fields,
     }
 
 
