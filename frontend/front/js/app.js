@@ -3523,6 +3523,73 @@ async function handleSendMessage() {
 // Singleton dice box — created once and reused so Three.js/Cannon don't re-init
 let _diceBox = null;
 
+// ── Shake-to-roll on mobile (F3 / issue #66) ────────────────────────────────
+// Returns { active, cleanup, error, requestPermission? }.
+// active: true means listener is attached now.
+// error: 'unsupported' | 'needs_permission' | 'denied' | null.
+function _initShakeToRoll(onShake) {
+    if (typeof window === 'undefined' || typeof window.DeviceMotionEvent === 'undefined') {
+        return { active: false, cleanup: null, error: 'unsupported' };
+    }
+    // Threshold tuned for an intentional shake; phones idle near ~0 m/s² on .acceleration
+    // and ~9.8 m/s² on .accelerationIncludingGravity. We compute magnitude minus gravity baseline.
+    const THRESHOLD = 18; // m/s²
+    let triggered = false;
+    const motionHandler = (e) => {
+        if (triggered) return;
+        const a = e.acceleration && (e.acceleration.x !== null) ? e.acceleration : e.accelerationIncludingGravity;
+        if (!a) return;
+        const mag = Math.sqrt((a.x || 0) ** 2 + (a.y || 0) ** 2 + (a.z || 0) ** 2);
+        const effective = (e.acceleration && e.acceleration.x !== null) ? mag : Math.abs(mag - 9.8);
+        if (effective > THRESHOLD) {
+            triggered = true;
+            window.removeEventListener('devicemotion', motionHandler);
+            onShake();
+        }
+    };
+    const cleanup = () => window.removeEventListener('devicemotion', motionHandler);
+
+    const needsPermission = typeof window.DeviceMotionEvent.requestPermission === 'function';
+    const stored = localStorage.getItem('aigm_motion_permission');
+    if (needsPermission && stored !== 'granted') {
+        return {
+            active: false,
+            cleanup,
+            error: stored === 'denied' ? 'denied' : 'needs_permission',
+            requestPermission: async () => {
+                try {
+                    const result = await window.DeviceMotionEvent.requestPermission();
+                    localStorage.setItem('aigm_motion_permission', result);
+                    if (result === 'granted') {
+                        window.addEventListener('devicemotion', motionHandler);
+                        return true;
+                    }
+                } catch (_e) {
+                    localStorage.setItem('aigm_motion_permission', 'denied');
+                }
+                return false;
+            },
+        };
+    }
+    window.addEventListener('devicemotion', motionHandler);
+    return { active: true, cleanup, error: null };
+}
+
+function _showShakeHint(text, onTap) {
+    const hint = document.getElementById('dice-shake-hint');
+    if (!hint) return;
+    const textEl = hint.querySelector('.shake-hint-text');
+    if (textEl && text) textEl.textContent = text;
+    hint.hidden = false;
+    hint.onclick = onTap || null;
+}
+function _hideShakeHint() {
+    const hint = document.getElementById('dice-shake-hint');
+    if (!hint) return;
+    hint.hidden = true;
+    hint.onclick = null;
+}
+
 // Stored so the ✕ dismiss button (static HTML onclick) can call it
 window._currentDicePending = null;
 
@@ -3664,12 +3731,48 @@ function showSkillTestPopup(pending) {
             return;
         }
 
-        // Auto-start — no button click needed
         const beforeRoll = committedD20 !== null ? () => [committedD20] : null;
-        _diceBox.start_throw(beforeRoll, (notation) => {
+        const afterRoll = (notation) => {
             // Brief settle pause before revealing result card
             setTimeout(() => _showResult(notation.result[0]), 600);
-        });
+        };
+
+        // Shake-to-roll on touch devices (F3 / issue #66); desktop falls through to auto-throw
+        let _shake = null;
+        const triggerThrow = () => {
+            if (_shake && _shake.cleanup) _shake.cleanup();
+            _hideShakeHint();
+            _diceBox.start_throw(beforeRoll, afterRoll);
+        };
+        // Patch dismissDiceRoll so the ✕ button also tears down the shake listener
+        const _origDismiss = window.dismissDiceRoll;
+        window.dismissDiceRoll = async function() {
+            if (_shake && _shake.cleanup) _shake.cleanup();
+            _hideShakeHint();
+            window.dismissDiceRoll = _origDismiss;
+            if (_origDismiss) await _origDismiss();
+        };
+
+        const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+        if (isTouch) {
+            _shake = _initShakeToRoll(triggerThrow);
+            if (_shake.error === 'needs_permission') {
+                _showShakeHint('Potrząśnij telefonem — dotknij aby zezwolić', async () => {
+                    const ok = await _shake.requestPermission();
+                    if (ok) {
+                        _showShakeHint('Potrząśnij telefonem aby rzucić kością', null);
+                    } else {
+                        triggerThrow(); // permission denied → just auto-roll
+                    }
+                });
+            } else if (_shake.active) {
+                _showShakeHint('Potrząśnij telefonem aby rzucić kością', null);
+            } else {
+                triggerThrow(); // unsupported or previously denied
+            }
+        } else {
+            triggerThrow(); // desktop: auto-roll, no shake
+        }
     });
 }
 
