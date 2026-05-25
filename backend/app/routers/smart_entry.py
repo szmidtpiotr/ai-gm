@@ -848,22 +848,36 @@ def smart_entry_message(
     # Parse JSON response
     reply_text, new_draft = _parse_llm_draft_response(raw_reply)
 
-    # Validate and merge new_draft into session draft; track what changed
+    # Validate and merge new_draft into session draft; track what changed + build delta
     changed_fields: list[str] = []
+    delta_parts: list[str] = []
     if new_draft and table:
         schema = SCHEMA_DESCRIPTORS.get(table, {})
         valid_fields = set(schema.get("required", [])) | set(schema.get("optional", []))
         for k, v in new_draft.items():
             if k in valid_fields:
-                if session["draft"].get(k) != v:
+                old_v = session["draft"].get(k)
+                if old_v != v:
                     changed_fields.append(k)
+                    # Build delta string only when there was a prior value (refinement)
+                    if old_v is not None and old_v != "" and old_v != {}:
+                        old_str = str(old_v) if not isinstance(old_v, (dict, list)) else "…"
+                        new_str = str(v) if not isinstance(v, (dict, list)) else "…"
+                        if len(old_str) > 30:
+                            old_str = old_str[:27] + "…"
+                        if len(new_str) > 30:
+                            new_str = new_str[:27] + "…"
+                        delta_parts.append(f"{k}: {old_str} → {new_str}")
                 session["draft"][k] = v
+
+    delta = f"Zmieniłem: {', '.join(delta_parts)}" if delta_parts else None
 
     return {
         "session_id": req.session_id,
         "reply": reply_text or "Wypełniłem co mogłem.",
         "draft": session["draft"],
         "changed_fields": changed_fields,
+        "delta": delta,
     }
 
 

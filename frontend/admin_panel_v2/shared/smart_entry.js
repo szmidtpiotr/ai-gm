@@ -1,5 +1,5 @@
 /**
- * Smart Entry v3 — form-first AI creator
+ * Smart Entry v7 — form-first AI creator (AP4: persistent field markers, AP5: delta line)
  * Usage: openSmartEntry(table?) — opens overlay for creating/editing records
  */
 import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
@@ -394,6 +394,9 @@ function _bindInputEvents(el, field) {
     _draft[field.key] = _readValue(field, el);
     _updateFieldRow(field.key);
     _updateSaveBtn();
+    // AP4: clear AI-changed marker when user manually edits the field
+    const fieldRow = _overlay?.querySelector(`.se-field-row[data-field-key="${field.key}"]`);
+    if (fieldRow) fieldRow.classList.remove("se-field-changed--marked");
     // Auto-slug: when label changes and key is empty
     if (field.key === "label") {
       const keyField = _schemaFields.find(f => f.key === "key");
@@ -516,11 +519,15 @@ function _updateModeBadge() {
 }
 
 function _flashChangedFields(fields) {
-  if (!fields?.length || !_overlay) return;
+  if (!_overlay) return;
+  // AP4: clear previous persistent markers before applying new ones
+  _overlay.querySelectorAll(".se-field-changed--marked").forEach(r => r.classList.remove("se-field-changed--marked"));
+  if (!fields?.length) return;
   fields.forEach(key => {
     const row = _overlay.querySelector(`.se-field-row[data-field-key="${key}"]`);
     if (!row) return;
     row.classList.add("se-field-changed");
+    row.classList.add("se-field-changed--marked");
     setTimeout(() => row.classList.remove("se-field-changed"), 2000);
   });
 }
@@ -552,7 +559,19 @@ async function _callAgent(message) {
       }),
     });
     typing.remove();
-    if (resp.reply) _appendMsg(resp.reply, "agent");
+    if (resp.reply) {
+      const msgDiv = _appendMsg(resp.reply, "agent");
+      // AP5: append delta line if backend computed field-level changes
+      if (resp.delta && msgDiv) {
+        const bubble = msgDiv.querySelector(".chat-bubble");
+        if (bubble) {
+          const deltaEl = document.createElement("div");
+          deltaEl.className = "chat-delta";
+          deltaEl.textContent = resp.delta;
+          bubble.appendChild(deltaEl);
+        }
+      }
+    }
     if (resp.draft && typeof resp.draft === "object") {
       _draft = { ..._draft, ...Object.fromEntries(
         Object.entries(resp.draft).filter(([, v]) => v !== null && v !== undefined)

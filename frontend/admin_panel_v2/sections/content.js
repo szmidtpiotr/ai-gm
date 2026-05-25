@@ -2,7 +2,7 @@ import { adminFetch } from "/admin_panel_v2/shared/api.js?v=3";
 import { showToast } from "/admin_panel_v2/shared/toast.js?v=1";
 import { renderTable, showConfirm } from "/admin_panel_v2/shared/table.js?v=8";
 import { openModal } from "/admin_panel_v2/shared/modal.js?v=1";
-import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=6";
+import { openSmartEntry } from "/admin_panel_v2/shared/smart_entry.js?v=7";
 
 // Compact at-a-glance render of an effect_json blob: shows the effect type(s)
 // + key values, mono-styled. Empty → muted dash.
