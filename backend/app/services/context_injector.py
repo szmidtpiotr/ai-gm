@@ -109,6 +109,7 @@ class ContextInjector:
         action_type: str,
         character_id: int,
         campaign_id: int,
+        turn_number: int = 0,
     ) -> str:
         """
         Build the complete narrator prompt string.
@@ -143,6 +144,9 @@ class ContextInjector:
         # across turns. Pulled fresh each call; cap of 10 enforced by service.
         known_npcs_block = self._build_known_npcs_block(campaign_id)
 
+        # BUG-04 — inject plan-update request when threshold reached
+        plan_update_block = self._build_plan_update_request_block(campaign_id, turn_number)
+
         # Build blocks
         blocks = [
             continuity_block,
@@ -153,6 +157,7 @@ class ContextInjector:
             self._build_character_state_block(character, active_conditions),
             self._build_tone_block(tone),
             self._build_content_index_block(mechanic_result),
+            plan_update_block,
             NARRATOR_CONSTRAINTS,
         ]
 
@@ -364,6 +369,45 @@ class ContextInjector:
             return format_known_npcs_block(rows)
         except Exception as exc:  # noqa: BLE001 — degrade gracefully
             logger.warning("known_npcs_block_failed", error=str(exc), campaign_id=campaign_id)
+            return ""
+
+    def _build_plan_update_request_block(self, campaign_id: int, turn_number: int) -> str:
+        """BUG-04 — inject plan update request when force_update_turns threshold exceeded."""
+        if turn_number <= 0:
+            return ""
+        try:
+            from app.services.plan_config_service import get_plan_config
+            from app.services.gm_plan_schema import normalize_gm_plan
+            cfg = get_plan_config()
+            threshold = int(cfg.get("force_update_turns", 25))
+            row = self.conn.execute(
+                "SELECT gm_plan_json FROM campaigns WHERE id = ?",
+                (campaign_id,),
+            ).fetchone()
+            plan = normalize_gm_plan(row["gm_plan_json"] if row else None)
+            ep = plan.get("engine_private") or {}
+            last_updated = int(ep.get("last_plan_updated_turn") or 0)
+            turns_since = turn_number - last_updated
+            if turns_since < threshold:
+                return ""
+            return (
+                f"## AKTUALIZACJA PLANU MG — WYMAGANA\n\n"
+                f"Od ostatniej aktualizacji planu minęło {turns_since} tur "
+                f"(próg: {threshold}). Zaktualizuj plan w tej odpowiedzi.\n\n"
+                "Dodaj do JSON pole `gm_plan_update`:\n"
+                '```json\n'
+                '"gm_plan_update": {\n'
+                '  "roadmap_note": "Co się zmieniło w fabule od ostatniego update (1–3 zdania)",\n'
+                '  "scene_goals_done": ["cel który właśnie się zakończył"],\n'
+                '  "scene_goals_add": ["nowy cel sceny jeśli potrzebny"],\n'
+                '  "scene_advance": true\n'
+                '}\n'
+                "```\n"
+                "Pola `scene_goals_done`, `scene_goals_add` i `scene_advance` są opcjonalne — "
+                "pomijaj je gdy nic się nie zmieniło."
+            )
+        except Exception as exc:  # noqa: BLE001 — degrade gracefully
+            logger.warning("plan_update_block_failed", error=str(exc), campaign_id=campaign_id)
             return ""
 
     def _build_mechanic_block(self, action_type: str, result: dict) -> str:
@@ -773,6 +817,7 @@ def build_narrator_prompt(
     action_type: str,
     character_id: int,
     campaign_id: int,
+    turn_number: int = 0,
 ) -> str:
     """Convenience wrapper for use in game_engine.py."""
     return ContextInjector(conn).build(
@@ -781,6 +826,7 @@ def build_narrator_prompt(
         action_type=action_type,
         character_id=character_id,
         campaign_id=campaign_id,
+        turn_number=turn_number,
     )
 
 

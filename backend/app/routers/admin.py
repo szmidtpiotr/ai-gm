@@ -2559,6 +2559,31 @@ def admin_patch_clock_config(
         raise HTTPException(status_code=422, detail=str(e))
 
 
+class PlanConfigReq(BaseModel):
+    force_update_turns: int
+
+
+@router.get("/admin/plan-config")
+def admin_get_plan_config(_: None = Depends(require_admin_token)):
+    """BUG-04: read GM plan auto-update config (game_config_meta)."""
+    from app.services.plan_config_service import get_plan_config
+    return {"ok": True, "config": get_plan_config()}
+
+
+@router.patch("/admin/plan-config")
+def admin_patch_plan_config(
+    req: PlanConfigReq,
+    _: None = Depends(require_admin_token),
+):
+    """BUG-04: update GM plan auto-update config (game_config_meta)."""
+    from app.services.plan_config_service import set_plan_config
+    try:
+        cfg = set_plan_config(force_update_turns=req.force_update_turns)
+        return {"ok": True, "config": cfg}
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
 class UserResurrectionUsesReq(BaseModel):
     uses_remaining: int | None = None
     clear: bool = False  # set to explicitly make NULL (unlimited)

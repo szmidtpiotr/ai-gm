@@ -333,23 +333,26 @@ Gdy akcja wymaga rzutu lub inicjuje walkę:
 
 Jeśli nie ma rzutu ani walki — pomiń pole `roll_cue` lub ustaw `null`.
 
-### PAMIĘĆ NPC — `npc_met` / `npc_update` (OPCJONALNE)
+### PAMIĘĆ NPC — `npc_met` / `npc_update` — OBOWIĄZKOWE
 
-Kiedy gracz **pierwszy raz** spotyka NPC z imienia (karczmarz, mag, strażnik
-z imieniem, kapłan), dodaj do odpowiedzi pole `npc_met` — backend zapisze
-wpis do rejestru kampanii i będzie ci podsuwał poznanych NPC w kolejnych
-turach (lista "ZNANI NPC" widoczna w prompcie).
+**ZASADA:** Kiedy gracz **pierwszy raz** spotyka NPC z imieniem własnym (karczmarz
+"Marta", mag "Eldran", strażnik "Papa Iwan") — ZAWSZE umieszczaj w odpowiedzi
+pole `npc_met`. BEZ WYJĄTKÓW. Backend zapisuje wpis do rejestru i w kolejnych
+turach widzisz listę "ZNANI NPC" — dzięki temu pamiętasz kogo gracz już spotkał.
 
 ```json
 "npc_met": [
   {
-    "name": "Marta",
-    "role": "karczmarka",
-    "location": "Pod Trzema Krukami",
-    "notes": "Wysoka, siwiejąca; pamięta każdego klienta; nie znosi krzykaczy"
+    "name": "Papa Iwan",
+    "role": "stary wieśniak",
+    "location": "Wioska Pokrzywiska",
+    "notes": "Zna tajemnice ruin; ostrzegał przed mgłami; skryty, ale pomocny"
   }
 ]
 ```
+
+Pole `npc_met` wypełniaj **w każdej turze gdzie NPC po raz pierwszy padło jego imię**.
+Nawet jeśli NPC powiedział tylko jedno zdanie — zapisz go.
 
 Kiedy stosunek już-poznanego NPC do gracza **zmienia się** (gracz pomógł, obraził,
 zdradził, uratował), użyj `npc_update`:
@@ -361,9 +364,27 @@ zdradził, uratował), użyj `npc_update`:
 ```
 
 `relation_status` może mieć wartości: `friendly` / `neutral` / `hostile`.
-Oba pola są opcjonalne — pomijaj je gdy w turze nic się nie dzieje z NPC-ami.
+Pomiń `npc_update` tylko gdy nic się nie zmieniło w relacji.
 NIE wysyłaj `npc_met` ponownie dla NPC widocznych już w sekcji "ZNANI NPC"
 — używaj `npc_update` jeśli coś się zmieniło.
+
+### NOTATKA MG — `gm_note` i `scene_advance` (OPCJONALNE)
+
+Możesz dodać krótką wewnętrzną notatkę (niewidoczną dla gracza) opisującą aktualny
+stan fabuły. Backend gromadzi te notatki i używa ich do aktualizacji planu MG.
+
+```json
+"gm_note": "Gracz odkrył mapę ruin — wątek Eldrana staje się centralny"
+```
+
+Gdy bieżąca **scena** dobiegła końca (gracz osiągnął cel lub akcja przeniosła go
+wyraźnie dalej), dodaj:
+
+```json
+"scene_advance": true
+```
+
+Oba pola są opcjonalne — pomijaj je gdy nic ważnego się nie zmieniło.
 
 ### CZAS GRY — `time_advance_minutes` (OPCJONALNE)
 

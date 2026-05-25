@@ -4940,6 +4940,22 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .debug-output strong { color: var(--text-primary, #e8e4dc); }
 .debug-output em { color: var(--text-muted, #888); font-style: italic; }
 
+/* Fallen Heroes list */
+.fallen-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+.fallen-hero-row {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(201,165,74,0.12);
+  border-radius: 6px;
+}
+.fallen-hero-info { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.fallen-hero-campaign, .fallen-hero-reason { font-size: 0.8rem; color: var(--text-muted, #888); }
+.fallen-hero-epitaph { font-size: 0.78rem; color: rgba(201,165,74,0.7); font-style: italic; margin-top: 2px; }
+.fallen-hero-actions { flex-shrink: 0; display: flex; align-items: center; }
+.fallen-promoted-badge { font-size: 0.78rem; color: var(--success, #4caf78); }
+.fallen-promoted-badge code { font-size: 0.75rem; }
+
 /* Inline JSON effect preview pill */
 .effect-json-pill {
   display: inline-block;
@@ -5488,3 +5504,11 @@ textarea.admin-table-cell-input { min-height: 80px; resize: vertical; }
 .mcp-route-badge.mcp-route-combat   { background: rgba(192,57,43,.15); color: #e74c3c; border-color: rgba(192,57,43,.3); }
 .mcp-route-badge.mcp-route-narrative{ background: rgba(59,130,246,.1); color: #3b82f6; border-color: rgba(59,130,246,.2); }
 .mcp-route-badge.mcp-route-skill    { background: rgba(39,174,96,.1);  color: #27ae60; border-color: rgba(39,174,96,.2); }
+
+.settings-card {
+  background: var(--bg-secondary, #1a2030);
+  border: 1px solid var(--border-color, #2a3040);
+  border-radius: 8px;
+  padding: 20px;
+}
+.settings-card-loading { color: var(--text-muted); font-size: 13px; }

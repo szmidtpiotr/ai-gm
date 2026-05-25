@@ -205,6 +205,7 @@ def process_v2_turn(
         action_type=action_type,
         character_id=character_id,
         campaign_id=campaign_id,
+        turn_number=turn_number,
     )
 
     # ── Step 8: LLM Narrator ──────────────────────────────────────────────

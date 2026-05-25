@@ -1902,6 +1902,83 @@ def create_turn_log(
                 error=str(_ri_err),
             )
 
+    # BUG-04: parse gm_note (per-turn), scene_advance, and gm_plan_update from LLM response.
+    # All fields are optional. Only runs on narrative turns.
+    if route == "narrative" and assistant_text:
+        try:
+            from app.services.gm_plan_schema import normalize_gm_plan
+            _pdata = json.loads(_strip_json_code_fence(assistant_text))
+            if isinstance(_pdata, dict):
+                _gm_note = str(_pdata.get("gm_note") or "").strip()
+                _scene_advance = bool(_pdata.get("scene_advance"))
+                _plan_update = _pdata.get("gm_plan_update")
+
+                if _gm_note or _scene_advance or isinstance(_plan_update, dict):
+                    _turn_num = int(row["turn_number"])
+                    _camp_row = conn.execute(
+                        "SELECT gm_plan_json FROM campaigns WHERE id = ?",
+                        (campaign_id,),
+                    ).fetchone()
+                    _plan = normalize_gm_plan(_camp_row["gm_plan_json"] if _camp_row else None)
+                    _ep = dict(_plan.get("engine_private") or {})
+
+                    if _gm_note:
+                        _buf = list(_ep.get("gm_note_buffer") or [])
+                        _buf.append({"turn": _turn_num, "note": _gm_note})
+                        if len(_buf) > 30:
+                            _buf = _buf[-30:]
+                        _ep["gm_note_buffer"] = _buf
+
+                    if _scene_advance:
+                        _aa = _plan.get("active_arc_id")
+                        if _aa and isinstance(_plan.get("arcs"), dict) and _aa in _plan["arcs"]:
+                            _plan["arcs"][_aa]["current_scene_ordinal"] = (
+                                int(_plan["arcs"][_aa].get("current_scene_ordinal") or 0) + 1
+                            )
+
+                    if isinstance(_plan_update, dict):
+                        _aa = _plan.get("active_arc_id")
+                        if _aa and isinstance(_plan.get("arcs"), dict) and _aa in _plan["arcs"]:
+                            _arc = _plan["arcs"][_aa]
+                            _rn = str(_plan_update.get("roadmap_note") or "").strip()
+                            if _rn:
+                                _old_rm = str(_arc.get("roadmap") or "").strip()
+                                _arc["roadmap"] = (
+                                    _old_rm + f"\n\n[T{_turn_num}] " + _rn
+                                ).strip()
+                            _goals_done = [
+                                str(g).strip().lower()
+                                for g in (_plan_update.get("scene_goals_done") or [])
+                                if g
+                            ]
+                            if _goals_done:
+                                _arc["scene_goals"] = [
+                                    g for g in (_arc.get("scene_goals") or [])
+                                    if not any(d in g.lower() for d in _goals_done)
+                                ]
+                            for _ng in (_plan_update.get("scene_goals_add") or []):
+                                _ns = str(_ng).strip()
+                                if _ns:
+                                    _arc.setdefault("scene_goals", []).append(_ns)
+                            if bool(_plan_update.get("scene_advance")):
+                                _arc["current_scene_ordinal"] = (
+                                    int(_arc.get("current_scene_ordinal") or 0) + 1
+                                )
+                        _ep["last_plan_updated_turn"] = _turn_num
+
+                    _plan["engine_private"] = _ep
+                    conn.execute(
+                        "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
+                        (json.dumps(_plan, ensure_ascii=False), campaign_id),
+                    )
+                    conn.commit()
+        except Exception as _plan_err:
+            logger.warning(
+                "gm_plan_update_hook_failed",
+                campaign_id=campaign_id,
+                error=str(_plan_err),
+            )
+
     return {
         "id": row["id"],
         "campaign_id": row["campaign_id"],
