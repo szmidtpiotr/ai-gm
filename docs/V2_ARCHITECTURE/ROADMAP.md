@@ -10,7 +10,33 @@
 
 ---
 
-## 🎯 EXECUTION QUEUE — strict order, check off top to bottom
+## 📋 OPEN WORK — what's left (audited 2026-05-25)
+
+After the F1 sweep and a verification pass, the project is mostly shipped. What remains:
+
+### Big features (own sprint each)
+
+- **F2 — Multiplayer chat** (`/say` in-character / `/whisper` private / `/ooc` out-of-character) — F1.3 friend system unblocks this. Half a week. Backend: `campaign_player_messages` table + polling or websocket. Frontend: small "playerzy" channel pane parallel to the chat scroll. Open question: never feed the GM context. [Line 376]
+- **T45 — Hero Journal** — cross-campaign chronicle, chapter summaries, `/mem` cross-campaign. ~1 week, design-heavy. [Line 647]
+- **Player-facing Debug Drawer** — right-side 420 px panel with section tabs (game_state, last_intent, mechanic_result, llm_prompts, narrator_output), `/debug set-hp`, `/debug set-state`, `/debug reset-cooldowns` slash commands, `debug_mode=True` in turn response. Admin endpoints already exist, only the UI is missing. ~1 day. [Lines 604-608]
+- **Combat Sandbox autotest harness ([#22])** — YAML scenarios via `/api/admin/sandbox/run-scenario`. Companion to the existing #21 sandbox. ~1-2 days. Was the Stage 15 fallback now that the AI Test Agent path is cancelled. [Line 561]
+
+### Small open items (quick wins)
+
+- **Wound label in combat banner** — sheet renders the label; combat panel still missing the same widget. ~30 min. [Line 585]
+- **Mobile bottom tab bar** (Gra | Postać | Ekwipunek) — replaces the current tap-to-open sheet pattern on small screens. ~half day. [Line 598]
+- **Between-campaigns REST state UI** — dedicated screen for an idle hero between campaigns (XP spending entry, hero journal access). ~half day. [Line 425]
+- **Fallen Hero → NPC promotion** admin flow — turn a dead hero into an NPC for narrative continuity. ~half day. [Line 426]
+
+### Deferred from F1.2
+
+- **Hard-delete cron** for soft-deleted users older than 7 days. ~30 min. [Issue #114]
+
+### Out of scope / cancelled
+
+- **Stage 15 — Phase 12 AI Test Agent (T51-T60)** — cancelled in favor of the MCP server. Revisit if MCP-based regression coverage proves insufficient.
+
+---
 
 > Phase-grouped reference is below this section. **Always work the topmost unchecked item.**
 > Stage breaks are momentum/scope markers, not blocking.
@@ -419,11 +445,11 @@ The original phase-grouped view follows below for context. Cross-reference task 
   - [x] `hero_status`, `visited_location_keys` columns
   - [x] `character_campaign_history` table
   - [x] Session flags cleared when new hero assigned
-  - [ ] `GET /api/heroes` endpoint (list heroes across users)
-  - [ ] `GET /api/characters/{id}/history` endpoint
-  - [ ] `POST /api/characters/{id}/rest` endpoint (long rest)
-  - [ ] Between-campaigns REST state UI (XP spending, hero journal access)
-  - [ ] Fallen Hero → NPC promotion admin flow
+  - [x] `GET /api/heroes` endpoint — `characters.py:778`
+  - [x] `GET /api/characters/{id}/history` endpoint — `characters.py:864`
+  - [x] `POST /api/characters/{id}/rest` endpoint — `characters.py:1659` (perform_long_rest / perform_short_rest in `rest_service.py`)
+  - [ ] Between-campaigns REST state UI (XP spending, hero journal access) — _still open: no dedicated rest-state screen between campaigns_
+  - [ ] Fallen Hero → NPC promotion admin flow — _still open: no code surface_
 
 ---
 
@@ -487,26 +513,26 @@ The original phase-grouped view follows below for context. Cross-reference task 
   - [x] Dungeon chest + boss loot tables
   - [x] Loot table sidebar search ([#16])
 - [x] **T23 Healing System** — items, rest, Scholar Mend Wounds
-- [-] **T24 Wound Labels** — backend done, frontend rendering missing
+- [-] **T24 Wound Labels** — sheet rendering shipped; combat banner still pending
   - [x] `get_wound_label()` helper with 5 thresholds + colors
   - [x] Narrator injection (`wound_label` in turn response)
-  - [ ] Render wound-label text below player HP bar in character sheet
-  - [ ] Render wound-label text below player HP bar in combat banner
-- [-] **T25V2 XP Progression V2** — _**earning works · spending UI missing — NEXT PRIORITY [D7]**_
+  - [x] Render wound-label text below player HP bar in character sheet — `app.js:5133/6618` `.wound-label`
+  - [ ] Render wound-label text below player HP bar in combat banner — _still open_
+- [x] **T25V2 XP Progression V2** — earning + spending UI all shipped
   - [x] `grant_character_xp` fires on enemy defeat
   - [x] XP awards table seeded (22 sources, 6 categories)
   - [x] Backend endpoints: `spend_skill_rank_up`, `spend_stat_point_up`
   - [x] Admin "mg" manual grant
-  - [ ] Player XP progress bar (current / next-level)
-  - [ ] Level display in header (`floor(xp_total / 100)`)
-  - [ ] `POST /api/characters/{id}/rest` long-rest endpoint
-  - [ ] Player "Awansuj" panel — skill cards, stat cards, spell cards
-  - [ ] Level-up notification banner
-- [-] **T26X XP Config + Log** — admin done, player Historia PD missing
+  - [x] Player XP progress bar — `sheet-xp-bar-fill`
+  - [x] Level display in header — sheet header
+  - [x] `POST /api/characters/{id}/rest` long-rest endpoint — `characters.py:1659`
+  - [x] Player "Awansuj" panel — `app.js:5395 #btn-awansuj` + `awansuj-modal` with skill/stat/spell cards
+  - [x] Level-up notification banner — `showLevelUpNotification` at `app.js:4381`
+- [x] **T26X XP Config + Log** — admin + player Historia PD shipped
   - [x] `game_config_xp_awards` editable by admin
   - [x] `character_xp_grants` audit log
   - [x] Admin `/xp-report` aggregated by category
-  - [ ] Player-facing "Historia PD" view in character sheet
+  - [x] Player-facing "Historia PD" view — inside Awansuj modal at `app.js:5550`
 - [x] **T26 Scholar Spells**
   - [x] 9 spells (tiers 1–5), mana system, miscast scaling
   - [x] Rank 2 + Rank 3 JSON for all spells
@@ -528,10 +554,10 @@ The original phase-grouped view follows below for context. Cross-reference task 
 
 - [x] **T26N Narrator Engine** — system prompt, constraints, post-processing
 - [x] **T27 Combat Narration** — per-action, parallelised, fallback templates
-- [-] **T28 NPC Dialogue** — in-character, keyword triggers, session memory
+- [x] **T28 NPC Dialogue** — in-character, keyword triggers, session memory
   - [x] Core dialogue request schema + LLM prompt
   - [x] `must_reveal_info` enforcement + reluctance markers
-  - [ ] Deceased NPC `relationship` field (ally/enemy/neutral) in dataclass — referenced in code but not defined
+  - [x] Deceased NPC `relationship` field — closed as W5 in Stage 1 (commit `10072e8`)
 - [x] **T29 Scene Narration** — exploration, movement, rest, skill outcomes
 
 ---
@@ -540,17 +566,17 @@ The original phase-grouped view follows below for context. Cross-reference task 
 
 - [x] **T30 Ideas Workshop** — AI agent co-authoring for Ideas Bank
 - [x] **T31 Campaign Workshop** — chat tab inside campaign modal
-- [-] **T32 World Review Queue** — approve/reject working, polish missing
+- [x] **T32 World Review Queue** — full polish shipped Stage 13
   - [x] Approve · Discard per row
   - [x] Pending counts badge
-  - [ ] Inline "Edytuj i Zatwierdź" modal
-  - [ ] Batch select / bulk approve
-- [-] **T33SA Smart Entry Agent** — form-first shipped per [D8]
+  - [x] Inline "Edytuj i Zatwierdź" modal — AP1 commit `c7d708d` / issue #104
+  - [x] Batch select / bulk approve — AP2 commit `13054b0` / issue #105
+- [x] **T33SA Smart Entry Agent** — conversational refinement shipped Stage 13
   - [x] Form-first one-shot fill via chat
   - [x] Tables supported: weapons, items, consumables, enemies, spells
   - [x] Effect Builder UI for `effect_json`
-  - [ ] Conversational refinement: AI keeps draft state, applies incremental edits, shows delta line ("Zmieniłem: damage 1d6 → 1d10")
-  - [ ] Form fields highlight which ones changed in last AI response
+  - [x] Conversational refinement + delta line ("Zmieniłem: damage 1d6 → 1d10") — AP3 `87542ce` + AP5 `1b636ac` / issues #109 #112
+  - [x] Form fields highlight which ones changed — AP4 `1b636ac` (persistent accent dot + 2s flash)
 - [x] **T40 World Builder (Hex Grid)**
   - [x] SVG hex grid, axial coords, A* travel, terrain types
   - [x] Admin campaign map tab + click-to-edit campaign overlay
@@ -575,29 +601,29 @@ The original phase-grouped view follows below for context. Cross-reference task 
   - [x] Frontend `renderSuggestedActions` + disabled-state styling
   - [x] Structured-action bypass (`input_type: "structured"`)
   - [x] Combat composer integration ([#17] series)
-- [x] **T34 Combat UI**
+- [-] **T34 Combat UI** — combat banner wound-label render still open
   - [x] Spell picker (Scholar — floating overlay, mana check)
   - [x] Initiative panel ([#18], commit `6d9ba8a`)
   - [x] Zone system (engaged/ranged) — display, gating, AI charging, zone-change ([#19], `b8bbf11` + `d57953f`)
   - [x] Crit flash overlay (Nat 20 / Nat 1) ([#23], `74c350a`)
-  - [ ] Enemy HP: show bar **AND** number per [D3] _(currently shows both — verify rendered correctly)_
-  - [ ] Fear/condition badge icons on combatant rows (⚠ Przerażony, ☠ Zatruty, ⚡ Zaskoczony)
-  - [ ] Wound label text below player HP bar in combat panel
-- [-] **T35 Character Sheet UI** — _basics shipped, ~9 spec items missing per [#24]_
+  - [x] Enemy HP shows bar AND number per [D3] — verified in code
+  - [x] Condition badges on combatant rows — `app.js:4451-4454` (⚠ Przerażony, ☠ Zatruty, ⚡ Zaskoczony glyph map)
+  - [ ] Wound label text below player HP bar in **combat banner** _(still open — only the sheet renders it)_
+- [-] **T35 Character Sheet UI** — most spec items shipped; mobile bottom-tab still pending
   - [x] HP bar · Mana bar (Scholar) · Level · gold · LCK
   - [x] Stat modifiers (color-coded), conditions chip row, Arcane Points
-  - [x] Skills tab, Inventory tab (3-slot), Spells tab (Scholar), Identity tab
-  - [ ] Location badge 📍 in header
-  - [ ] Wound label text under HP bar (color-coded per HP%)
-  - [ ] XP progress bar + level-up banner _(part of XP loop)_
-  - [ ] Skill rank dots (●●●○○) + proficiency badge at rank 3+
-  - [ ] Stat tooltip on tap (full name + description)
-  - [ ] Condition tooltip with mechanical effect
-  - [ ] Auto-expand Conditions section when active
-  - [ ] Quest item drop blocker (hide Porzuć button)
-  - [ ] Mobile bottom tab bar (Gra | Postać | Ekwipunek)
-  - [ ] Real-time animations (HP flash, gold pulse, XP fill, condition fade)
-  - [ ] **8-slot equipment diagram** per [D1] _(replaces current 3-card triptych)_
+  - [x] Skills tab, Inventory tab (8-slot anatomical), Spells tab (Scholar), Identity tab
+  - [x] Location badge 📍 in header — `sheet-location-badge` in index.html:845
+  - [x] Wound label text under HP bar (color-coded per HP%) — `wound-label--{tier}` at `app.js:6618`
+  - [x] XP progress bar + level-up banner — `sheet-xp-bar-fill` + `showLevelUpNotification`
+  - [x] Skill rank dots (●●●○○) + proficiency badge at rank 3+ — `app.js:5794`
+  - [x] Stat tooltip on tap — `wizard-stat-hint` data-tooltip at `app.js:1599/1707`
+  - [x] Condition tooltip — Stage 4 S5, `app.js:5683` cache labels + descriptions
+  - [x] Auto-expand Conditions when active — Stage 4 S11
+  - [x] Quest item drop blocker — Stage 4 S7 at `app.js:6347`
+  - [x] Real-time animations — `hp-damage-flash` + `gold-pulse` keyframes in `styles.css:4165-4185`
+  - [x] **8-slot equipment diagram** per [D1] — shipped (see T20 above)
+  - [ ] Mobile bottom tab bar (Gra | Postać | Ekwipunek) — _still open_
 - [x] **T43 Player World Map** — fog-of-war hex grid, click-to-travel, swipe-close
 - [-] **T44 Debug System** — _admin backend exists, full spec'd UI missing per [D5]_
   - [x] Admin endpoints (`routers/debug.py`): `/player_state`, `/gm_decisions`, `/validation_flags`, `/settings/feature_flags`, `/reset_test_env`
@@ -618,32 +644,32 @@ The original phase-grouped view follows below for context. Cross-reference task 
 
 ## Phase 10 — Polish
 
-- [-] **T36 Memory/History**
+- [x] **T36 Memory/History** — full coverage shipped
   - [x] `/mem` semantic search over campaign turns
   - [x] `/helpme` hint command
   - [x] Campaign history summary generator
-  - [ ] Dual summaries (player_summary vs gm_summary)
-  - [ ] GM continuity injection at session start (30+ min gap)
-  - [ ] Historia cooldown enforcement (20 turns)
-- [-] **T37 Command Palette**
+  - [x] Dual summaries (player_summary vs gm_notes) — `history_summary_dual_prompt.py`
+  - [x] GM continuity injection at session start — `context_injector.py:220` (`continuity_injected_at_turn` flag)
+  - [x] Historia cooldown enforcement (20 turns) — `summary_rollup_cooldown_turns=20` in `game_config_meta`
+- [x] **T37 Command Palette** — full modal + per-command toggle shipped
   - [x] `/help` lists commands in chat system bubble
   - [x] Admin-only commands hidden from non-admin players
-  - [ ] Full modal with search field + click-to-insert
-  - [ ] Per-command admin toggle (enabled_for_players setting)
-- [-] **T38 Campaign End/Death**
-  - [x] Death screen overlay
+  - [x] Full modal with search field + click-to-insert — `command-palette__item` at `app.js:6847+`
+  - [x] Per-command admin toggle — `client_ui_config.py:44` (`enabled` / `player_enabled` flags), backed by `slash_command_registry.py`
+- [x] **T38 Campaign End/Death** — death + victory + post-end options shipped
+  - [x] Death screen overlay — `#death-screen` at index.html:1350
   - [x] Epitaph LLM generator (`solo_death_service.generate_epitaph_llm`)
-  - [ ] Epitaph wiring into death screen UI
-  - [ ] Victory screen with ending title/summary content
-  - [ ] Post-end "Nowa Przygoda / Nowy Świat" options
-- [-] **T39 Auth/Onboarding** — _ship as full security baseline per [D6]_
+  - [x] Epitaph wiring into death screen UI — `death-epitaph-text` at index.html:1381
+  - [x] Victory screen — `#victory-screen` at index.html:1407 (Stage 9 P6)
+  - [x] Post-end "Nowa Przygoda / Nowy Świat" options — both screens wired at index.html:1385-1445
+- [x] **T39 Auth/Onboarding** — Stage 10 + 11-C security baseline shipped
   - [x] Basic login + admin token
-  - [ ] **JWT bearer tokens** (HS256, 7-day expiry, refresh endpoint)
-  - [ ] **bcrypt password hashing** (cost 12) — verify, migrate if not
-  - [ ] **Brute-force lockout** (10 fails → 15 min lock)
-  - [ ] **Role-based access** (`player` / `gm` / `admin`)
-  - [ ] **Multi-device sessions** (natural via JWT)
-  - [ ] **Onboarding overlay** (first-login modal: welcome + theme picker + accept rules)
+  - [x] **JWT bearer tokens** (HS256) — `auth.py` issues access+refresh pair; `/auth/refresh` endpoint at `auth.py:229`
+  - [x] **bcrypt password hashing** — `auth.py:6/21` (`_bcrypt_hash`, auto-rehash on login)
+  - [x] **Brute-force lockout** (10 fails → 15 min lock) — `LOCKOUT_THRESHOLD=10` at `auth.py:18`
+  - [x] **Role-based access** (`player` / `gm` / `admin`) — `users.role` column + JWT claim
+  - [x] **Multi-device sessions** — natural via stateless JWT
+  - [x] **Onboarding overlay** — `#onboarding-screen` at index.html:197 + `showOnboardingCinematic` flow
 - [ ] **T45 Hero Journal** — cross-campaign chronicle, chapter summaries, /mem cross-campaign
 
 ---
@@ -657,20 +683,20 @@ The original phase-grouped view follows below for context. Cross-reference task 
 
 ---
 
-## Phase 12 — AI Test Agent _(after all phases complete)_
+## Phase 12 — AI Test Agent — **CANCELLED 2026-05-25** (MCP server preferred)
 
-> Rework the existing `ai_test_agent/` (Playwright + Express + LLM orchestrator) to run automated adversarial and regression tests against the full game.
+> Browser-driven test agent (T51-T60) deprioritised in favor of the **MCP server** (Stage 14 O4 / O4b / O4c), which lets external LLM clients drive end-to-end scenarios. Revisit if MCP-based coverage proves insufficient. Sandbox autotest harness (T60 / [#22]) is also covered under "small open items" in the top section.
 
-- [ ] **T51 Update agent for current UI** — rewrite selectors for hero-first flow
-- [ ] **T52 Regression: baseline flow** — login → hero → campaign → first turn → verify
-- [ ] **T53 Regression: dungeon run** — enter → 3 rooms → boss → exit → loot
-- [ ] **T54 Adversarial: inventory exploit** — duplicate items via GM dialogue
-- [ ] **T55 Adversarial: economy cheat** — illegitimate gold/XP attempts
-- [ ] **T56 Adversarial: prompt injection** — malicious player text
-- [ ] **T57 LLM consistency test** — 10× same scenario, drift comparison
-- [ ] **T58 Admin panel: Test Runner UI** — trigger scenarios, show results
-- [ ] **T59 CI integration** — baseline regression after each deploy
-- [ ] **T60 Combat Sandbox autotest harness** ([#22]) — YAML scenarios via `/api/admin/sandbox/run-scenario`
+- [~] **T51 Update agent for current UI** — *cancelled*
+- [~] **T52 Regression: baseline flow** — *cancelled*
+- [~] **T53 Regression: dungeon run** — *cancelled*
+- [~] **T54 Adversarial: inventory exploit** — *cancelled*
+- [~] **T55 Adversarial: economy cheat** — *cancelled*
+- [~] **T56 Adversarial: prompt injection** — *cancelled*
+- [~] **T57 LLM consistency test** — *cancelled*
+- [~] **T58 Admin panel: Test Runner UI** — *cancelled*
+- [~] **T59 CI integration** — *cancelled*
+- [~] **T60 Combat Sandbox autotest harness** ([#22]) — *cancelled (Stage 15 sweep); still listed as a small open item in the OPEN WORK section at the top if you want to pick it up*
 
 ---
 
