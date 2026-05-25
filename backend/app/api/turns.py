@@ -2902,7 +2902,7 @@ def create_turn(
                 if _pre_match and not is_attack_test(_pre_match):
                     # Check not already in combat
                     _active_combat_pre = conn.execute(
-                        "SELECT id FROM active_combat WHERE campaign_id = ? LIMIT 1",
+                        "SELECT id FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
                         (campaign_id,),
                     ).fetchone()
                     if not _active_combat_pre:
@@ -3786,7 +3786,7 @@ def create_turn_stream(
                         break
                 if _pre_match_s and not is_attack_test(_pre_match_s):
                     _active_combat_s = conn.execute(
-                        "SELECT id FROM active_combat WHERE campaign_id = ? LIMIT 1",
+                        "SELECT id FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
                         (campaign_id,),
                     ).fetchone()
                     if not _active_combat_s:
