@@ -4189,6 +4189,55 @@ def create_turn_stream(
                             save_conn.commit()
                     except Exception as _xs_err2:
                         logger.warning("narrative_xp_hooks_stream_error", error=str(_xs_err2))
+                    # BUG-04 (stream): parse gm_note / scene_advance / gm_plan_update
+                    try:
+                        from app.services.gm_plan_schema import normalize_gm_plan
+                        _pdata4 = json.loads(_strip_json_code_fence(persisted_assistant_text or ""))
+                        if isinstance(_pdata4, dict):
+                            _gm_note4 = str(_pdata4.get("gm_note") or "").strip()
+                            _scene_advance4 = bool(_pdata4.get("scene_advance"))
+                            _plan_update4 = _pdata4.get("gm_plan_update")
+                            if _gm_note4 or _scene_advance4 or isinstance(_plan_update4, dict):
+                                _turn_num4 = save_conn.execute(
+                                    "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+                                    (campaign_id_val,),
+                                ).fetchone()[0]
+                                _camp_row4 = save_conn.execute(
+                                    "SELECT gm_plan_json FROM campaigns WHERE id = ?",
+                                    (campaign_id_val,),
+                                ).fetchone()
+                                _plan4 = normalize_gm_plan(_camp_row4["gm_plan_json"] if _camp_row4 else None)
+                                _ep4 = dict(_plan4.get("engine_private") or {})
+                                if _gm_note4:
+                                    _buf4 = list(_ep4.get("gm_note_buffer") or [])
+                                    _buf4.append({"turn": _turn_num4, "note": _gm_note4})
+                                    if len(_buf4) > 30:
+                                        _buf4 = _buf4[-30:]
+                                    _ep4["gm_note_buffer"] = _buf4
+                                if _scene_advance4:
+                                    _aa4 = _plan4.get("active_arc_id")
+                                    if _aa4 and isinstance(_plan4.get("arcs"), dict) and _aa4 in _plan4["arcs"]:
+                                        _plan4["arcs"][_aa4]["current_scene_ordinal"] = (
+                                            int(_plan4["arcs"][_aa4].get("current_scene_ordinal") or 0) + 1
+                                        )
+                                if isinstance(_plan_update4, dict):
+                                    _aa4 = _plan4.get("active_arc_id")
+                                    if _aa4 and isinstance(_plan4.get("arcs"), dict) and _aa4 in _plan4["arcs"]:
+                                        for _k4, _v4 in _plan_update4.items():
+                                            if _k4 in ("goal", "hooks", "notes") and _v4:
+                                                _plan4["arcs"][_aa4][_k4] = _v4
+                                _plan4["engine_private"] = _ep4
+                                save_conn.execute(
+                                    "UPDATE campaigns SET gm_plan_json=? WHERE id=?",
+                                    (json.dumps(_plan4, ensure_ascii=False), campaign_id_val),
+                                )
+                                save_conn.commit()
+                                logger.info("gm_note_buffer_updated_stream",
+                                            campaign_id=campaign_id_val,
+                                            note_len=len(_gm_note4),
+                                            scene_advance=_scene_advance4)
+                    except Exception as _gm4_err:
+                        logger.warning("gm_note_stream_error", error=str(_gm4_err))
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, full_raw
                     )
