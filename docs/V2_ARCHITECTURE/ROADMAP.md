@@ -324,7 +324,7 @@ Extends the hex travel system from a static map into a living, auto-expanding wo
 
 ### Stage 13 — Admin polish
 
-- [ ] **AP1** TASK_32: inline "Edytuj i Zatwierdź" modal in World Review Queue
+- [x] **AP1** TASK_32: inline "Edytuj i Zatwierdź" modal in World Review Queue — commit `c7d708d`, issue [#104](https://github.com/szmidtpiotr/ai-gm/issues/104). Adds GET/PATCH for pending NPCs/enemies + modal that pre-fills full row, diff-only PATCH, then approves in one flow
 - [ ] **AP2** TASK_32: batch select + bulk approve in Pending review
 - [ ] **AP3** TASK_33SA: conversational refinement — AI keeps draft state, applies incremental edits
 - [ ] **AP4** TASK_33SA: form fields highlight changed-in-last-response
