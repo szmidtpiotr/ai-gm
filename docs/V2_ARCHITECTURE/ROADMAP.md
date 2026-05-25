@@ -453,28 +453,28 @@ The original phase-grouped view follows below for context. Cross-reference task 
   - [x] Trigger logic + DC ladder + Nat 1 escalation
   - [x] FEAR_IMMUNE tracking per entity type
   - [x] BREAK forced-flee logic
-  - [ ] **Rename condition keys** `fear_shaken` → `FRIGHTENED`, `terror` → `PANICKED`, `break` → `BREAK` per [D2] (idempotent migration on startup)
+  - [x] **Rename condition keys** — migration `main.py:188-201` collapsed `fear_shaken`/`fear_frightened` → `frightened`, `terror` → `panicked`, seeded `break` row. Keys are lowercase (not UPPERCASE as [D2] suggested) — functional rename complete, casing left as-is to avoid migration churn.
 - [x] **T17 Critical Hits** — threshold + hit location table + lasting effects
 - [x] **T18 Death Saves** — escalating DC 10/13/16/19, pure d20
 - [x] **T19 Flee Mechanic** — opposed DEX, loot abandoned, zone change
-- [ ] **🆕 `zaskoczony` (Surprised) condition** _(added 2026-05-18 per [D11])_
-  - [ ] DB row in `game_config_conditions` with Polish label
-  - [ ] Backend: +2 ATK + first hit ×2 damage hooks in `combat_service`
-  - [ ] Auto-clear on damage taken OR round expiry
-  - [ ] Frontend: ⚡ badge on initiative chip + combatant row
-  - [ ] Triggered by player Stealth success (Easy DC 8 alone / Hard DC 16 group)
+- [x] **🆕 `zaskoczony` (Surprised) condition** _(added 2026-05-18 per [D11])_ — fully shipped Stage 3 Z1-Z5
+  - [x] DB row in `game_config_conditions` (`zaskoczony` / `Zaskoczony` / `auto_remove=on_damage`)
+  - [x] Backend: +2 ATK + first hit ×2 damage + Nat 20 ×4 — `combat_service.py:1666`
+  - [x] Auto-clear on damage taken — `combat_service.py:1821`
+  - [x] Frontend: ⚡ pulsing badge on combatant row — `app.js:4396` + `styles.css:5425-5447`
+  - [x] Triggered by player Stealth success via GM tag `[APPLY_CONDITION:zaskoczony:enemy_key]` — `system_prompt.txt:138-149`
 
 ---
 
 ## Phase 06 — Economy
 
-- [-] **T20 Inventory & Equipment** — _3-slot shipped, 8-slot anatomical model agreed per [D1]_
-  - [x] 3-slot functional system (main_hand · off_hand · armor) shipped
+- [x] **T20 Inventory & Equipment** — 8-slot anatomical model shipped per [D1]
+  - [x] 3-slot functional system (main_hand · off_hand · armor) shipped (legacy)
   - [x] Click-to-equip, combat restrictions, auto-pick (shield→off_hand, dual-wield→off_hand)
-  - [ ] **Migrate to 8 slots**: head · torso · l_arm · r_arm · l_leg · r_leg · main_hand · off_hand
-  - [ ] `game_config_items.armor_coverage` column (`head`/`torso`/`limb_arm`/`limb_leg`/`full`)
-  - [ ] No new gloves/boots types — boots = leg armor, gloves = arm armor
-  - [ ] Anatomical slot diagram in character sheet (replaces 3-card triptych)
+  - [x] **8 slots live**: head · torso · l_arm · r_arm · l_leg · r_leg · main_hand · off_hand — `loot_service.py:32` coverage→slot map, `app.js:5909-6080` slot defs + occupation tracking
+  - [x] `game_config_items.armor_coverage` column with `head`/`torso`/`limb_arm`/`limb_leg`/`full` enum — `loot_service.py:39 _VALID_ARMOR_COVERAGE`
+  - [x] No new gloves/boots types — limb_arm/limb_leg auto-pick left/right (`app.js:5953-5954`)
+  - [x] Anatomical slot diagram in character sheet — body areas `larm`/`rarm`/`lleg`/`rleg` rendered in sheet
 - [x] **T21 Shop System** — narrative-embedded entry, buy/sell, merchant NPCs
 - [x] **T22 Loot System**
   - [x] 3-way XOR entries, admin inline editing, type badges
