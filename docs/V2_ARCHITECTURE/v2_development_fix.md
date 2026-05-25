@@ -13,7 +13,101 @@
 
 ## TO DO
 
-*(wszystkie bugi ze ścieżki testowej 2026-05-25 ukończone)*
+### MCP-01 — `skill_test_keyword` dead-end w kliencie MCP 🔴 P0
+
+**Co zrobić:**
+Gdy gracz wpisuje "szukam", "sprawdzam" itp., backend zwraca `route: skill_test_keyword` z `skill_test_pending` (zawiera `skill_test_id`, `committed_d20`, `modifier_breakdown`) — bez narracji, tura niezapisana. Klient MCP nie wie że musi wywołać `POST /campaigns/{id}/skill-test/resolve`. Naprawić w `mcp_server/server.py`: `submit_player_turn` wykrywa `route == 'skill_test_keyword'` i automatycznie wywołuje `/skill-test/resolve` z `committed_d20` z odpowiedzi, zwracając narrację do MCP klienta jako jedną operację.
+
+**Czego się spodziewać:**
+Klient MCP wysyła akcję "szukam ukrytych drzwi" → dostaje narrację wyniku testu (np. "Twoje palce wyczuwają niewidoczne zawiasy..."). Bez widocznych przerw.
+
+**Plik:** `mcp_server/server.py` → `submit_player_turn`
+
+---
+
+### MCP-02 — Walka aktywuje się cicho, bez powiadomienia w MCP 🔴 P0
+
+**Co zrobić:**
+Gdy MG emituje `[COMBAT_START:enemy_key]`, walka zaczyna się podczas tury narracyjnej. Klient MCP dostaje narrację, ale nie wie że weszła walka dopóki nie wywoła `get_full_campaign_context`. Naprawić: w `submit_player_turn` po każdej turze sprawdzić czy `combat_state.status == 'active'` w odpowiedzi i oznaczyć to wyraźnie w output. Dodać baner `⚔️ WALKA ROZPOCZĘTA` z listą wrogów i HP.
+
+**Czego się spodziewać:**
+Klient MCP widzi w odpowiedzi wyraźny komunikat że walka się zaczęła, listę wrogów i ich HP, własne HP — bez potrzeby dodatkowego wywołania.
+
+**Plik:** `mcp_server/server.py` → `submit_player_turn`
+
+---
+
+### MCP-03 — Obcięte odpowiedzi MG w kliencie MCP 🟡 P1
+
+**Co zrobić:**
+Narracje MG kończą się w środku zdania. Limity tekstowe w `get_full_campaign_context` (turns_str 300 znaków na turę, assistant_text 600) są za małe. Zwiększyć do 800/1200 znaków. W `submit_player_turn` narration nie jest obcinana — dodać limit 2000 znaków.
+
+**Czego się spodziewać:**
+Narracja MG wyświetla się kompletnie, bez ucięcia.
+
+**Plik:** `mcp_server/server.py`
+
+---
+
+### MCP-04 — Dwa źródła prawdy: HP w podsumowaniu vs walka 🟡 P2
+
+**Co zrobić:**
+`get_campaign_summary` pobiera HP z `characters.sheet_json.current_hp`. Gdy trwa walka, HP jest zaktualizowane w `active_combat.combatants` — co może się różnić. Naprawić: w `get_campaign_summary` (i `get_full_campaign_context`) sprawdzić `active_combat` przez HTTP API lub przez SQLite `active_combat` tabelę i nadpisać HP + status walki w odpowiedzi.
+
+**Czego się spodziewać:**
+`get_full_campaign_context` zawsze pokazuje aktualne HP (z walki gdy trwa), aktywnych wrogów i status walki.
+
+**Plik:** `mcp_server/server.py` → `get_campaign_summary`
+
+---
+
+### MCP-05 — Krótki odpoczynek bez mechaniki HP 🟡 P2
+
+**Co zrobić:**
+Gdy gracz "je jedzenie" lub "odpoczywa chwilę", narracja nie wywołuje mechaniki HP recovery. W MCP brakuje narzędzia `take_short_rest`. Dodać nowe narzędzie MCP `take_short_rest()` wywołujące `POST /campaigns/{id}/rest/short`.
+
+**Czego się spodziewać:**
+Wywołanie `take_short_rest()` odzyskuje HP zgodnie z mechaniką (np. +CON_mod) i zwraca ile HP odzyskano i ile odpoczynków zostało.
+
+**Plik:** `mcp_server/server.py` (nowe narzędzie)
+
+---
+
+### MCP-06 — Cross-campaign bleed przy reinicjalizacji sesji 🟢 P3
+
+**Co zrobić:**
+Po `initialize_player_session` dla nowej kampanii, tura z odrzucenia `skill_test_keyword` poprzedniej sesji pojawia się jako tura 3 w nowej kampanii. Naprawić: `initialize_player_session` powinien wyczyścić `session_flags.pending_skill_test` + `session_flags.state = 'NARRATIVE'` dla wybranej kampanii.
+
+**Czego się spodziewać:**
+Po wybraniu nowej kampanii w `initialize_player_session` stary pending test nie przebija się do nowej sesji.
+
+**Plik:** `mcp_server/server.py` → `initialize_player_session`
+
+---
+
+### MCP-07 — Zone-change zwraca HTTP 400 przy drugim wywołaniu 🟢 P3
+
+**Co zrobić:**
+`change_player_zone()` rzuca `ValueError("zone change only on player's turn")` gdy nie jest tura gracza → backend zwraca HTTP 400 → `_api_post` rzuca wyjątek. Naprawić: w `backend/app/api/combat.py` `post_zone_change` złapać ten konkretny ValueError i zwrócić `{"ok": false, "reason": "already_used_this_round"}` z HTTP 200 zamiast 400.
+
+**Czego się spodziewać:**
+Drugie wywołanie `change_player_zone()` w tej samej rundzie zwraca `{ok: false, reason: "already_used_this_round"}` bez błędu.
+
+**Plik:** `backend/app/api/combat.py`
+
+---
+
+### FE-01 — Mapa świata nie aktualizuje hexa postaci po ruchu narracyjnym 🟡 P2
+
+**Co zrobić:**
+Gdy MG zmienia lokację przez `location_intent` (pole w JSON odpowiedzi), `current_location_id` w `game_sessions` jest aktualizowany, ale `session_flags.current_hex` NIE jest aktualizowany. Mapa świata czyta `current_hex` z `session_flags`, więc postać zawsze stoi na hexa startowym.
+
+Naprawić w `backend/app/api/turns.py` funkcja `_process_location_intent`: po zaktualizowaniu `current_location_id`, wyszukaj `key` lokacji z `game_locations`, znajdź pasujący heks w `world_hexes WHERE location_key = ?`, zaktualizuj `session_flags.current_hex`.
+
+**Czego się spodziewać:**
+Po turze narracyjnej gdzie MG przenosi postać do innej lokacji, otwarcie mapy świata pokazuje 📍 na właściwym hexa.
+
+**Plik:** `backend/app/api/turns.py` → `_process_location_intent`
 
 ---
 

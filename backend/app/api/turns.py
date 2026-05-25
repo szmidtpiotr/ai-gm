@@ -261,6 +261,32 @@ def _process_location_intent(
                 "UPDATE game_locations SET usage_count = usage_count + 1 WHERE id = ?",
                 (result.resolved_location_id,),
             )
+            # Also sync current_hex so the world map pin follows narrative movement
+            try:
+                import json as _jloc
+                _loc_row = conn.execute(
+                    "SELECT key FROM game_locations WHERE id = ?",
+                    (result.resolved_location_id,),
+                ).fetchone()
+                if _loc_row and _loc_row["key"]:
+                    _hex_row = conn.execute(
+                        "SELECT q, r FROM world_hexes WHERE location_key = ? AND is_active = 1 LIMIT 1",
+                        (_loc_row["key"],),
+                    ).fetchone()
+                    if _hex_row:
+                        _gs_sf = conn.execute(
+                            "SELECT id, session_flags FROM game_sessions WHERE id = ?",
+                            (session_id,),
+                        ).fetchone()
+                        if _gs_sf:
+                            _sf_loc = _jloc.loads(_gs_sf["session_flags"] or "{}")
+                            _sf_loc["current_hex"] = {"q": int(_hex_row["q"]), "r": int(_hex_row["r"])}
+                            conn.execute(
+                                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                                (_jloc.dumps(_sf_loc, ensure_ascii=False), _gs_sf["id"]),
+                            )
+            except Exception as _hex_sync_err:
+                logger.warning("hex_sync_on_location_move_failed", error=str(_hex_sync_err))
             conn.commit()
             logger.info(
                 "location_updated_from_gm_response",

@@ -113,7 +113,10 @@ def post_zone_change(campaign_id: int):
     try:
         return combat.change_player_zone(campaign_id)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        msg = str(e)
+        if "only on player" in msg or "not your turn" in msg:
+            return {"ok": False, "reason": "already_used_this_round", "detail": msg}
+        raise HTTPException(status_code=400, detail=msg) from e
 
 
 @router.post("/campaigns/{campaign_id}/combat/enemy-turn")

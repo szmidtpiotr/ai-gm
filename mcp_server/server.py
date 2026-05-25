@@ -54,6 +54,9 @@ def _api_post(path: str, body: dict | None = None, timeout: float = 120) -> dict
         r.raise_for_status()
         return r.json()
 
+import random as _random
+import re as _re
+
 mcp = FastMCP("AI-GM Analytics", host=_HOST, port=_PORT)
 
 
@@ -406,14 +409,43 @@ def get_campaign_summary(campaign_id: int) -> dict:
                 "skills": skills_raw,
             }
 
+            char_dict = dict(char_row)
             identity_out = {
-                "personality": char_row.get("personality"),
+                "personality": char_dict.get("personality"),
                 "flaw": sheet.get("flaw"),
                 "bond": sheet.get("bond"),
                 "secret": sheet.get("secret"),
                 "bonds": sheet.get("bonds", []),
-                "backstory": char_row.get("backstory"),
+                "backstory": char_dict.get("backstory"),
             }
+
+        # Active combat — override HP/conditions from live combat state if running
+        active_combat_out = None
+        try:
+            ac_row = conn.execute(
+                "SELECT id, combatants, current_turn, round_number FROM active_combat "
+                "WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+                [campaign_id],
+            ).fetchone()
+            if ac_row:
+                combatants = parse_json_safe(ac_row["combatants"], [])
+                player_cb = next((c for c in combatants if c.get("type") == "player"), None)
+                if player_cb and character_out:
+                    character_out["current_hp"] = player_cb.get("hp_current", character_out["current_hp"])
+                    character_out["conditions"] = player_cb.get("conditions", character_out["conditions"])
+                enemies = [
+                    {"name": c.get("name"), "key": c.get("enemy_key"), "hp": c.get("hp_current"),
+                     "max_hp": c.get("hp_max"), "zone": c.get("zone", "engaged")}
+                    for c in combatants if c.get("type") != "player" and (c.get("hp_current") or 0) > 0
+                ]
+                active_combat_out = {
+                    "combat_id": ac_row["id"],
+                    "round": ac_row["round_number"],
+                    "current_turn": ac_row["current_turn"],
+                    "alive_enemies": enemies,
+                }
+        except Exception:
+            pass
 
         # Current location (from game_sessions)
         session_row = conn.execute(
@@ -497,21 +529,24 @@ def get_campaign_summary(campaign_id: int) -> dict:
         ).fetchall()
         recent_turns = list(reversed(rows_to_dicts(turn_rows)))
 
-        # Recent events (last 15)
-        event_rows = conn.execute(
-            """
-            SELECT event_type, severity, event_data, created_at
-            FROM game_events WHERE campaign_id = ?
-            ORDER BY created_at DESC LIMIT 15
-            """,
-            [campaign_id],
-        ).fetchall()
+        # Recent events (last 15) — table may not exist on older DB snapshots
         recent_events = []
-        for r in event_rows:
-            d = dict(r)
-            d["data"] = parse_json_safe(d.pop("event_data"), {})
-            recent_events.append(d)
-        recent_events = list(reversed(recent_events))
+        try:
+            event_rows = conn.execute(
+                """
+                SELECT event_type, severity, event_data, created_at
+                FROM game_events WHERE campaign_id = ?
+                ORDER BY created_at DESC LIMIT 15
+                """,
+                [campaign_id],
+            ).fetchall()
+            for r in event_rows:
+                d = dict(r)
+                d["data"] = parse_json_safe(d.pop("event_data"), {})
+                recent_events.append(d)
+            recent_events = list(reversed(recent_events))
+        except Exception:
+            pass
 
         # Inventory
         inv_rows = conn.execute(
@@ -598,14 +633,19 @@ def get_campaign_summary(campaign_id: int) -> dict:
             "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'combat'",
             [campaign_id],
         ).fetchone()[0]
-        deaths = conn.execute(
-            "SELECT COUNT(*) FROM game_events WHERE campaign_id = ? AND event_type = 'player_death'",
-            [campaign_id],
-        ).fetchone()[0]
-        xp_events = conn.execute(
-            "SELECT COUNT(*) FROM game_events WHERE campaign_id = ? AND event_type LIKE '%xp%'",
-            [campaign_id],
-        ).fetchone()[0]
+        deaths = 0
+        xp_events = 0
+        try:
+            deaths = conn.execute(
+                "SELECT COUNT(*) FROM game_events WHERE campaign_id = ? AND event_type = 'player_death'",
+                [campaign_id],
+            ).fetchone()[0]
+            xp_events = conn.execute(
+                "SELECT COUNT(*) FROM game_events WHERE campaign_id = ? AND event_type LIKE '%xp%'",
+                [campaign_id],
+            ).fetchone()[0]
+        except Exception:
+            pass
 
         # Character history
         char_history = []
@@ -645,6 +685,7 @@ def get_campaign_summary(campaign_id: int) -> dict:
             "inventory": inventory,
             "known_npcs": known_npcs,
             "ai_summary": ai_summaries,
+            "active_combat": active_combat_out,
             "stats": {
                 "total_turns": total_turns,
                 "narrative_turns": narrative_turns,
@@ -853,32 +894,29 @@ def get_system_health() -> dict:
         except Exception:
             pass
 
-        # Last LLM call
-        last_llm = conn.execute(
-            "SELECT latency_ms, model, created_at FROM llm_call_log ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
-
-        # Recent errors (1h)
-        one_hour_ago = ts_cutoff(hours_back=1)
-        recent_errors = conn.execute(
-            """
-            SELECT COUNT(*) FROM game_events
-            WHERE severity IN ('warning','error') AND created_at >= ?
-            """,
-            [one_hour_ago],
-        ).fetchone()[0]
-
-        # Events today
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        events_today = conn.execute(
-            "SELECT COUNT(*) FROM game_events WHERE created_at >= ?",
-            [today],
-        ).fetchone()[0]
-
-        llm_calls_today = conn.execute(
-            "SELECT COUNT(*) FROM llm_call_log WHERE created_at >= ?",
-            [today],
-        ).fetchone()[0]
+        # Last LLM call — table may not exist on older DB snapshots
+        last_llm = None
+        recent_errors = 0
+        events_today = 0
+        llm_calls_today = 0
+        try:
+            last_llm = conn.execute(
+                "SELECT latency_ms, model, created_at FROM llm_call_log ORDER BY created_at DESC LIMIT 1"
+            ).fetchone()
+            one_hour_ago = ts_cutoff(hours_back=1)
+            recent_errors = conn.execute(
+                "SELECT COUNT(*) FROM game_events WHERE severity IN ('warning','error') AND created_at >= ?",
+                [one_hour_ago],
+            ).fetchone()[0]
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            events_today = conn.execute(
+                "SELECT COUNT(*) FROM game_events WHERE created_at >= ?", [today]
+            ).fetchone()[0]
+            llm_calls_today = conn.execute(
+                "SELECT COUNT(*) FROM llm_call_log WHERE created_at >= ?", [today]
+            ).fetchone()[0]
+        except Exception:
+            pass
 
         return {
             "status": "ok",
@@ -929,6 +967,7 @@ def get_full_campaign_context(campaign_id: int, format: str = "text") -> str | d
     stats = data.get("stats", {})
     char_history = data.get("character_history", [])
     known_npcs = data.get("known_npcs", [])
+    active_combat = data.get("active_combat")
 
     # --- Character section ---
     stat_mods = char.get("stat_modifiers", {})
@@ -960,8 +999,8 @@ def get_full_campaign_context(campaign_id: int, format: str = "text") -> str | d
     turns_str_parts = []
     for t in turns[-6:]:
         tn = t.get("turn_number", "?")
-        ut = (t.get("user_text") or "")[:300]
-        at = (t.get("assistant_text") or "")[:600]
+        ut = (t.get("user_text") or "")[:800]
+        at = (t.get("assistant_text") or "")[:1200]
         turns_str_parts.append(f"[Tura {tn}] Gracz: {ut}\n[Tura {tn}] MG: {at}")
     turns_str = "\n\n".join(turns_str_parts) or "(brak tur)"
 
@@ -983,6 +1022,20 @@ def get_full_campaign_context(campaign_id: int, format: str = "text") -> str | d
         )
         or "brak"
     )
+
+    # --- Active combat section ---
+    if active_combat:
+        enemies_str = ", ".join(
+            f"{en.get('name', '?')}({en.get('hp', '?')}HP)"
+            for en in active_combat.get("alive_enemies", [])
+        )
+        active_combat_str = (
+            f"WALKA AKTYWNA — Runda {active_combat.get('round', '?')}, "
+            f"tura: {active_combat.get('current_turn', '?')}\n"
+            f"Zywi wrogowie: {enemies_str}"
+        )
+    else:
+        active_combat_str = "(brak walki)"
 
     # --- GM plan section ---
     gm_sum = ai_sum.get("gm", {}).get("summary_text", "(brak podsumowania MG)")
@@ -1044,6 +1097,9 @@ def get_full_campaign_context(campaign_id: int, format: str = "text") -> str | d
 ## Ostatnie zdarzenia (ostatnie 10)
 {events_str}
 
+## Aktywna walka
+{active_combat_str}
+
 ## Statystyki kampanii
 - Łącznie tur: {stats.get('total_turns', 0)} (narracyjne: {stats.get('narrative_turns', 0)}, walki: {stats.get('combat_turns', 0)})
 - Zgony: {stats.get('deaths', 0)}
@@ -1088,6 +1144,25 @@ def initialize_player_session() -> str:
     _session_token = auth["access_token"]
     _session_user_id = auth["user_id"]
 
+    # ── Check for pinned MCP config in game_config_meta ──────────────────────
+    _pinned_campaign_id: Optional[int] = None
+    _pinned_hero_id: Optional[int] = None
+    _config_mode = "auto-selected"
+    try:
+        with sqlite3.connect(DB_PATH) as _db:
+            _db.row_factory = sqlite3.Row
+            _meta_rows = _db.execute(
+                "SELECT key, value FROM game_config_meta WHERE key IN (?, ?)",
+                ("mcp_default_campaign_id", "mcp_default_hero_id"),
+            ).fetchall()
+            _meta = {r["key"]: r["value"] for r in _meta_rows}
+            if _meta.get("mcp_default_campaign_id"):
+                _pinned_campaign_id = int(_meta["mcp_default_campaign_id"])
+            if _meta.get("mcp_default_hero_id"):
+                _pinned_hero_id = int(_meta["mcp_default_hero_id"])
+    except Exception:
+        pass  # DB read failure — fall back to auto-select
+
     try:
         campaigns = _api_get("/campaigns").get("campaigns", [])
     except Exception as e:
@@ -1096,8 +1171,20 @@ def initialize_player_session() -> str:
     if not campaigns:
         return "ERROR: No campaigns found. Create one in the admin panel and assign a character."
 
-    active = [c for c in campaigns if c.get("status") == "active"]
-    campaign = active[0] if active else campaigns[0]
+    # Use pinned campaign if configured and still exists/active, else auto-select
+    campaign = None
+    if _pinned_campaign_id is not None:
+        campaign = next(
+            (c for c in campaigns if c["id"] == _pinned_campaign_id and c.get("status") == "active"),
+            None,
+        )
+        if campaign:
+            _config_mode = f"pinned to campaign {_pinned_campaign_id}"
+    if campaign is None:
+        active = [c for c in campaigns if c.get("status") == "active"]
+        campaign = active[0] if active else campaigns[0]
+        _config_mode = "auto-selected"
+
     _session_campaign_id = campaign["id"]
 
     try:
@@ -1108,9 +1195,41 @@ def initialize_player_session() -> str:
     if not heroes:
         return "ERROR: No characters found. Create one in the admin panel."
 
-    assigned = [h for h in heroes if h.get("campaign_id") == _session_campaign_id]
-    hero = assigned[0] if assigned else heroes[0]
+    # Use pinned hero if configured and belongs to this campaign, else auto-select
+    hero = None
+    if _pinned_hero_id is not None:
+        hero = next(
+            (h for h in heroes if h["id"] == _pinned_hero_id and h.get("campaign_id") == _session_campaign_id),
+            None,
+        )
+        if hero:
+            _config_mode += f" / pinned hero {_pinned_hero_id}"
+    if hero is None:
+        assigned = [h for h in heroes if h.get("campaign_id") == _session_campaign_id]
+        hero = assigned[0] if assigned else heroes[0]
+
     _session_character_id = hero["id"]
+
+    # Clear any stale pending_skill_test that might bleed from a prior session
+    try:
+        with sqlite3.connect(DB_PATH) as _db:
+            _db.row_factory = sqlite3.Row
+            _gs_row = _db.execute(
+                "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (_session_campaign_id,),
+            ).fetchone()
+            if _gs_row:
+                _sf = json.loads(_gs_row["session_flags"] or "{}")
+                if _sf.get("pending_skill_test") or _sf.get("state") == "SKILL_TEST_PENDING":
+                    _sf.pop("pending_skill_test", None)
+                    _sf["state"] = "NARRATIVE"
+                    _db.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                        (json.dumps(_sf, ensure_ascii=False), _gs_row["id"]),
+                    )
+                    _db.commit()
+    except Exception:
+        pass
 
     try:
         char = _api_get(f"/characters/{_session_character_id}")
@@ -1131,7 +1250,8 @@ def initialize_player_session() -> str:
         f"User: {_TEST_USERNAME} (id={_session_user_id})\n"
         f"Campaign: \"{campaign['title']}\" (id={_session_campaign_id}, status={campaign['status']})\n"
         f"Character: {name} | Level {level} {archetype} | HP {hp}/{max_hp} | Gold: {gold}\n"
-        f"Location: {location}\n\n"
+        f"Location: {location}\n"
+        f"Config: {_config_mode}\n\n"
         f"Tip: call get_full_campaign_context({_session_campaign_id}) to read full game state,\n"
         f"then submit_player_turn(action) to take an action."
     )
@@ -1164,15 +1284,79 @@ def submit_player_turn(action: str) -> str:
     except Exception as e:
         return f"ERROR submitting turn: {e}"
 
+    route = result.get("route", "")
+
+    # Auto-resolve skill tests — backend already committed a d20, just need to confirm
+    if route in ("skill_test_keyword", "skill_test"):
+        pending = result.get("skill_test_pending", {})
+        skill_label = pending.get("skill_label") or pending.get("skill_key", "?")
+        committed_d20 = pending.get("committed_d20", "?")
+        mods = pending.get("modifier_breakdown", {})
+        total_mod = mods.get("total_modifier", 0) if isinstance(mods, dict) else 0
+        total = (committed_d20 + total_mod) if isinstance(committed_d20, int) else "?"
+        skill_test_id = pending.get("skill_test_id", "")
+
+        if skill_test_id and isinstance(committed_d20, int):
+            try:
+                resolve_result = _api_post(
+                    f"/campaigns/{_session_campaign_id}/skill-test/resolve",
+                    {
+                        "character_id": _session_character_id,
+                        "skill_test_id": skill_test_id,
+                        "d20_roll": committed_d20,
+                    },
+                    timeout=60,
+                )
+                prose = resolve_result.get("prose") or resolve_result.get("narrative") or ""
+                success = resolve_result.get("success")
+                nat20 = resolve_result.get("nat20")
+                nat1 = resolve_result.get("nat1")
+                dc = resolve_result.get("dc") or mods.get("dc", "?") if isinstance(mods, dict) else "?"
+                result_label = "SUKCES" if success else "PORAŻKA"
+                if nat20: result_label = "NAT 20 — KRYTYCZNY SUKCES!"
+                if nat1: result_label = "NAT 1 — KRYTYCZNA PORAŻKA!"
+                lines = [
+                    f"🎲 Test umiejętności: {skill_label} | d20={committed_d20} + {total_mod} = {total} vs DC {dc} → {result_label}",
+                ]
+                if prose:
+                    lines.append(f"MG:\n{prose[:2000]}")
+                return "\n".join(lines)
+            except Exception as resolve_err:
+                return (
+                    f"🎲 Test umiejętności wymagany: {skill_label}\n"
+                    f"d20 (committed)={committed_d20}, modyfikator={total_mod}, suma={total}\n"
+                    f"BŁĄD auto-rozwiązania: {resolve_err}\n"
+                    f"Wywołaj submit_player_turn z dowolną akcją aby kontynuować."
+                )
+        return (
+            f"🎲 Test umiejętności wymagany: {skill_label}\n"
+            f"d20 (committed)={committed_d20}, modyfikator={total_mod}, suma={total}\n"
+            f"Wywołaj submit_player_turn z dowolną akcją aby kontynuować."
+        )
+
     parts = []
 
     res = result.get("result", {})
     if isinstance(res, str):
-        parts.append(f"GM:\n{res}")
-    elif isinstance(res, dict):
-        narration = res.get("narration") or res.get("text") or res.get("assistant_text", "")
+        # res might itself be a JSON string
+        try:
+            res = json.loads(res)
+        except Exception:
+            parts.append(f"GM:\n{res[:2000]}")
+            res = {}
+    if isinstance(res, dict):
+        # Check for nested message field (streaming non-JSON turn response)
+        msg = res.get("message", "")
+        if isinstance(msg, str) and msg.strip():
+            try:
+                msg_parsed = json.loads(msg)
+                narration = msg_parsed.get("narrative") or msg_parsed.get("narration") or msg_parsed.get("text", "")
+            except Exception:
+                narration = msg
+        else:
+            narration = res.get("narrative") or res.get("narration") or res.get("text") or res.get("assistant_text", "")
         if narration:
-            parts.append(f"GM:\n{narration}")
+            parts.append(f"GM:\n{narration[:2000]}")
         roll_info = res.get("roll")
         if roll_info:
             parts.append(f"Roll: {roll_info}")
@@ -1180,7 +1364,7 @@ def submit_player_turn(action: str) -> str:
         if verdict:
             parts.append(f"Outcome: {verdict}")
 
-    cs = result.get("combat_state", {})
+    cs = result.get("combat_state") or {}
     if cs:
         status = cs.get("status")
         if status == "ended":
@@ -1188,26 +1372,31 @@ def submit_player_turn(action: str) -> str:
         elif status == "active":
             combatants = cs.get("combatants", [])
             player_cb = next((cb for cb in combatants if cb.get("type") == "player"), None)
-            if player_cb:
-                parts.append(
-                    f"\nTwoje HP: {player_cb.get('current_hp','?')}/{player_cb.get('max_hp','?')}"
-                )
             alive_enemies = [
                 cb for cb in combatants
-                if cb.get("type") != "player" and (cb.get("current_hp") or 0) > 0
+                if cb.get("type") != "player" and (cb.get("hp_current") or cb.get("current_hp") or 0) > 0
             ]
+            combat_banner = ["", "⚔️ WALKA AKTYWNA"]
+            if player_cb:
+                php = player_cb.get("hp_current") or player_cb.get("current_hp", "?")
+                mhp = player_cb.get("hp_max") or player_cb.get("max_hp", "?")
+                pzone = player_cb.get("zone", "engaged")
+                combat_banner.append(f"Twoje HP: {php}/{mhp} | Strefa: {pzone}")
             if alive_enemies:
-                enemy_summary = ", ".join(
-                    f"{e.get('name','?')}({e.get('current_hp','?')}HP)" for e in alive_enemies
-                )
-                parts.append(f"Żywi wrogowie: {enemy_summary}")
+                enemy_lines = [
+                    f"  - {e.get('name','?')}: {e.get('hp_current') or e.get('current_hp','?')}HP [{e.get('zone','?')}]"
+                    for e in alive_enemies
+                ]
+                combat_banner.append("Żywi wrogowie:")
+                combat_banner.extend(enemy_lines)
+            combat_banner.append(f"Runda: {cs.get('round_number','?')} | Tura: {cs.get('current_turn','?')}")
+            parts.append("\n".join(combat_banner))
 
-    route = result.get("route")
-    if route:
+    if route and route not in ("narrative", "combat"):
         parts.append(f"[Route: {route}]")
 
     if not parts:
-        return f"Turn submitted. Raw: {json.dumps(result, ensure_ascii=False)[:600]}"
+        return f"Turn submitted. Raw: {json.dumps(result, ensure_ascii=False)[:800]}"
 
     return "\n".join(parts)
 
@@ -1229,7 +1418,13 @@ def change_player_zone() -> str:
 
     try:
         result = _api_post(f"/campaigns/{_session_campaign_id}/combat/zone-change")
-        return f"Strefa zmieniona.\n{json.dumps(result, indent=2, ensure_ascii=False)}"
+        if not result.get("ok", True):
+            reason = result.get("reason", "unknown")
+            return f"Zmiana strefy nie powiodła się: {reason}. Użyj tej akcji tylko w swojej turze."
+        from_zone = result.get("from", "?")
+        to_zone = result.get("to", "?")
+        zone_name = {"engaged": "zwarcie", "ranged": "dystans"}.get(to_zone, to_zone)
+        return f"Strefa zmieniona: {from_zone} → {to_zone} ({zone_name}). Tura zużyta."
     except Exception as e:
         return f"ERROR changing zone: {e}"
 
@@ -1257,6 +1452,75 @@ def flee_from_combat() -> str:
         return f"Flee result: {json.dumps(result, ensure_ascii=False)}"
     except Exception as e:
         return f"ERROR: {e}"
+
+
+# ---------------------------------------------------------------------------
+# Tool 14: roll_dice
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def roll_dice(dice: str = "d20") -> str:
+    """
+    Roll dice for skill tests, combat, or anything else.
+    Format: 'd20', '2d6', 'd8+3', 'd20-1'.
+    Returns roll result with nat20/nat1 flags for d20.
+    """
+    m = _re.match(r'^(\d*)d(\d+)([+-]\d+)?$', dice.strip().lower())
+    if not m:
+        return f"Nieprawidłowy format '{dice}'. Użyj: 'd20', '2d6', 'd8+3'"
+    count = int(m.group(1) or 1)
+    sides = int(m.group(2))
+    mod = int(m.group(3) or 0)
+    if count < 1 or count > 20 or sides < 2 or sides > 100:
+        return f"Nieprawidłowe parametry: liczba kości 1-20, ściany kości 2-100"
+    rolls = [_random.randint(1, sides) for _ in range(count)]
+    total = sum(rolls) + mod
+    rolls_str = "+".join(str(r) for r in rolls)
+    mod_str = f"{mod:+d}" if mod != 0 else ""
+    result_line = f"🎲 {dice}: [{rolls_str}]{mod_str} = **{total}**"
+    if count == 1 and sides == 20:
+        if rolls[0] == 20:
+            result_line += " — NAT 20: KRYTYCZNY SUKCES!"
+        elif rolls[0] == 1:
+            result_line += " — NAT 1: KRYTYCZNA PORAŻKA!"
+    return result_line
+
+
+# ---------------------------------------------------------------------------
+# Tool 15: take_short_rest
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+def take_short_rest() -> str:
+    """
+    Take a short rest to recover HP. Uses one short rest charge (max 2 per session).
+    Only valid outside of active combat, in a safe location or after clearing an area.
+    """
+    if not _session_campaign_id or not _session_character_id:
+        return "ERROR: Session not initialized. Call initialize_player_session() first."
+
+    try:
+        result = _api_post(
+            f"/campaigns/{_session_campaign_id}/rest/short",
+            {"character_id": _session_character_id},
+            timeout=30,
+        )
+    except Exception as e:
+        return f"ERROR: {e}"
+
+    if result.get("error"):
+        return f"Odpoczynek niemożliwy: {result['error']}"
+
+    hp_gained = result.get("hp_gained", 0)
+    hp_now = result.get("current_hp", "?")
+    max_hp = result.get("max_hp", "?")
+    rests_left = result.get("short_rests_remaining", "?")
+
+    if hp_gained == 0:
+        return f"Odpocząłeś, ale nie odzyskałeś HP (może już jesteś na maksimum). HP: {hp_now}/{max_hp}. Odpoczynki: {rests_left} pozostało."
+    return f"Krótki odpoczynek: +{hp_gained} HP. HP: {hp_now}/{max_hp}. Odpoczynki: {rests_left} pozostało."
 
 
 # ---------------------------------------------------------------------------
