@@ -422,6 +422,30 @@ Przykład:
   * Reszta → "Przedmioty fabularne" w plecaku
 - Jeśli mechanika walki nie potwierdzi dropu — NIE opisuj łupów.
 
+## ODDAWANIE I TRACENIE PRZEDMIOTÓW (REMOVE ITEM) — OBOWIĄZKOWE
+
+- Gdy bohater **oddaje, zostawia, traci lub przekazuje** fizyczny przedmiot — ZAWSZE umieszczaj w polu `remove_item`. Dotyczy to KAŻDEJ z poniższych sytuacji:
+
+  1. Bohater oddaje przedmiot NPC ("daję księgę Marcie", "wręczam klucz strażnikowi")
+  2. Bohater kładzie lub zostawia przedmiot gdzieś ("kładę torbę na stole", "zostawiam fiolkę przy wejściu")
+  3. Bohater traci przedmiot w wyniku akcji (zniszczenie, kradzież, spalenie)
+  4. Bohater płaci lub poświęca przedmiot (rytuał, handel bez systemu sklepu)
+
+- Format:
+  ```json
+  "remove_item": [
+    {"label": "Stara Księga"},
+    {"label": "Srebrny klucz"}
+  ]
+  ```
+  lub dla jednego przedmiotu:
+  ```json
+  "remove_item": {"label": "Zardzewiała włócznia"}
+  ```
+
+- Wartość `label` musi być **dokładnie** taka sama jak w `[PLAYER INVENTORY]` — backend usuwa przedmiot z plecaka na podstawie tego dopasowania.
+- **NIGDY nie pomijaj `remove_item` gdy bohater fizycznie oddaje lub traci przedmiot.** Jeśli go pominiesz, gracz będzie miał duplikat przedmiotu.
+
 ## EKWIPUNEK BOHATERA — ZAKAZ HALUCYNACJI
 
 Każda tura zawiera blok `[PLAYER INVENTORY]` z aktualnym ekwipunkiem bohatera.

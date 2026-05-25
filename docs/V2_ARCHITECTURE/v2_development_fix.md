@@ -6,6 +6,8 @@
 - Nowe zadania dodajemy **na dole sekcji TO DO**
 - Ukończone zadania **przenosimy na dół pliku** do sekcji DONE
 - W każdym zadaniu: **Co zrobić / Co ustalono / Czego się spodziewać** — prostym językiem, bez żargonu
+- Po każdym ukończonym zadaniu dopisz **Jak przetestować** — konkretne kroki weryfikacji (co otworzyć, kliknąć, wywołać, co powinno się zmienić)
+- Dla każdego zadania zawsze zakładaj **issue na GitHub** z labelami `enhancement` + `needs-testing`; link wklej w sekcji DONE
 
 ---
 
@@ -88,6 +90,15 @@ Po pierwszej rozmowie z Martą MG zapisuje ją do listy. W kolejnych turach MG w
 
 **Pliki:** `backend/app/migrations_admin.py`, `backend/app/services/npc_memory_service.py` (nowy), `backend/app/services/context_injector.py`, `backend/app/api/turns.py`, `backend/app/routers/admin.py`, `backend/prompts/system_prompt.txt`, `backend/tests/test_bug03_npc_memory.py` (nowy), `frontend/admin_panel_v2/sections/campaigns.js`, `frontend/admin_panel_v2/sections/campaigns_hub.js`
 
+**Jak przetestować:**
+1. Wejdź na https://aigm-dev.studio-colorbox.com/ jako gracz, zagraj turę gdzie MG przedstawia nową postać (np. karczmarza).
+2. W panelu admina otwórz kampanię → zakładka "👥 Znani NPC" — sprawdź że postać się pojawiła z rolą i statusem `neutral`.
+3. Zagraj turę gdzie pomagasz NPC (np. "pomagam mu"). Sprawdź czy status zmienił się na `friendly`.
+4. Zagraj kolejną turę — upewnij się że MG nadal spójnie odgrywa tę postać (imię, rola) w narracji.
+5. `docker exec ai-gm-dev-backend-1 pytest backend/tests/test_bug03_npc_memory.py -v` — wszystkie testy zielone.
+
+**GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/123
+
 ---
 
 ### BUG-02 — Zegar gry stoi w miejscu ✅ (2026-05-25)
@@ -100,6 +111,15 @@ Zegar gry idzie do przodu po każdej turze narracyjnej (domyślnie +15 min) i wa
 
 **Pliki:** `backend/app/services/clock_service.py`, `backend/app/services/clock_config_service.py` (nowy), `backend/app/api/turns.py`, `backend/app/routers/admin.py`, `backend/prompts/system_prompt.txt`, `backend/tests/test_bug02_clock_minutes.py` (nowy), `frontend/front/js/app.js`, `frontend/front/index.html`
 
+**Jak przetestować:**
+1. Wejdź na https://aigm-dev.studio-colorbox.com/, sprawdź czy zegar w nagłówku pokazuje czas z minutami (np. `"Dzień 1, 08:00 Rano"`).
+2. Zagraj turę narracyjną — zegar powinien przeskoczyć o +15 min. Zagraj kilka tur i obserwuj czy czas rośnie.
+3. Zagraj turę walki — zegar powinien przeskoczyć o +5 min.
+4. Sprawdź `GET /api/admin/clock-config` — powinien zwrócić `{narrative_min: 15, combat_min: 5, travel_min: 60}`.
+5. `docker exec ai-gm-dev-backend-1 pytest backend/tests/test_bug02_clock_minutes.py -v` — wszystkie testy zielone.
+
+**GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/122
+
 ---
 
 ### BUG-07 — Techniczny błąd widoczny w narracji ✅ (2026-05-25)
@@ -111,3 +131,11 @@ Funkcja `_inject_location_blocked` w `backend/app/api/turns.py` przestała dokle
 Gracz nigdy nie zobaczy `[LOCATION_BLOCKED:...]` w narracji. Jeśli MG opisze ruch do nieistniejącej lokacji, panel po prostu nie zmieni current_location — bez technicznego komunikatu.
 
 **Pliki:** `backend/app/api/turns.py`, `backend/prompts/system_prompt.txt`, `backend/tests/test_phase8d_location_hook.py`
+
+**Jak przetestować:**
+1. Wejdź na https://aigm-dev.studio-colorbox.com/ i zagraj turę gdzie próbujesz wejść do nieistniejącej lokacji (np. "idę do smoczej jamy" gdy takiej nie ma w DB).
+2. Sprawdź że narracja MG **nie zawiera** tekstu `[LOCATION_BLOCKED` ani żadnych technicznych tagów.
+3. W panelu admina potwierdź że `current_location` kampanii się nie zmieniła (zostaje stara lokacja).
+4. `docker exec ai-gm-dev-backend-1 pytest backend/tests/test_phase8d_location_hook.py -v`
+
+**GitHub issue:** https://github.com/szmidtpiotr/ai-gm/issues/121

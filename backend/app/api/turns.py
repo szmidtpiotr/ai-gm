@@ -1846,6 +1846,62 @@ def create_turn_log(
                 error=str(_npc_err),
             )
 
+    # BUG-01: remove items when GM signals the player handed/lost one.
+    # Only on narrative turns and only when we have a character to update.
+    if route == "narrative" and assistant_text and character_id is not None:
+        try:
+            _rdata = json.loads(_strip_json_code_fence(assistant_text))
+            if isinstance(_rdata, dict):
+                _ri_raw = _rdata.get("remove_item")
+                _ri_entries = _ri_raw if isinstance(_ri_raw, list) else (
+                    [_ri_raw] if isinstance(_ri_raw, dict) else []
+                )
+                for _ri in _ri_entries:
+                    if not isinstance(_ri, dict):
+                        continue
+                    _label = str(_ri.get("label") or "").strip()
+                    if not _label:
+                        continue
+                    _inv_row = conn.execute(
+                        """
+                        SELECT id, quantity FROM character_inventory
+                        WHERE character_id = ? AND LOWER(label) = LOWER(?)
+                        LIMIT 1
+                        """,
+                        (int(character_id), _label),
+                    ).fetchone()
+                    if not _inv_row:
+                        logger.warning(
+                            "remove_item_not_found",
+                            campaign_id=campaign_id,
+                            character_id=character_id,
+                            label=_label,
+                        )
+                        continue
+                    if int(_inv_row["quantity"] or 1) > 1:
+                        conn.execute(
+                            "UPDATE character_inventory SET quantity = quantity - 1 WHERE id = ?",
+                            (_inv_row["id"],),
+                        )
+                    else:
+                        conn.execute(
+                            "DELETE FROM character_inventory WHERE id = ?",
+                            (_inv_row["id"],),
+                        )
+                    logger.info(
+                        "remove_item_applied",
+                        campaign_id=campaign_id,
+                        character_id=character_id,
+                        label=_label,
+                    )
+                conn.commit()
+        except Exception as _ri_err:
+            logger.warning(
+                "remove_item_persist_failed",
+                campaign_id=campaign_id,
+                error=str(_ri_err),
+            )
+
     return {
         "id": row["id"],
         "campaign_id": row["campaign_id"],
