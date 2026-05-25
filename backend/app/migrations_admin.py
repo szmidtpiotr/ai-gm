@@ -2822,7 +2822,10 @@ def _ensure_auth_ux_schema(conn: sqlite3.Connection) -> None:
             used_at    TEXT
         )
         """,
-        # Friends (foundation for multiplayer — stored now, UI ships with F2)
+        # Friends (foundation for multiplayer — F1.3)
+        # Convention: user_a_id < user_b_id (canonical pair). requester_id is whichever
+        # of the two initiated the relationship (used for pending → accept routing,
+        # and to identify the blocker on status='blocked').
         """
         CREATE TABLE IF NOT EXISTS user_friendships (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2833,6 +2836,9 @@ def _ensure_auth_ux_schema(conn: sqlite3.Connection) -> None:
             UNIQUE(user_a_id, user_b_id)
         )
         """,
+        # F1.3 — extra columns on user_friendships (idempotent ALTERs)
+        "ALTER TABLE user_friendships ADD COLUMN requester_id INTEGER REFERENCES users(id)",
+        "ALTER TABLE user_friendships ADD COLUMN responded_at TEXT",
         # SMTP + registration config keys (seeded with empty defaults into game_config_meta)
         "INSERT OR IGNORE INTO game_config_meta(key, value) VALUES ('smtp_host', '')",
         "INSERT OR IGNORE INTO game_config_meta(key, value) VALUES ('smtp_port', '587')",

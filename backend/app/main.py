@@ -34,6 +34,7 @@ from app.api import (
     characters,
     combat,
     commands,
+    friends,
     turns,
     mechanics,
     inventory,
@@ -337,6 +338,7 @@ app.include_router(inventory.router, prefix="/api")
 app.include_router(npcs.router, prefix="/api")
 app.include_router(shop.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(friends.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")
 app.include_router(client_logs_router, prefix="/api")
 app.include_router(knowledge_router, prefix="/api")

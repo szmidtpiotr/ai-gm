@@ -7623,6 +7623,8 @@ async function loadProfilePage() {
     } catch (e) {
         console.error('[Profile] stats failed:', e);
     }
+    // F1.3 — load friends list every time the profile opens
+    _loadFriends();
 }
 
 async function _saveProfile(patch) {
@@ -7895,6 +7897,133 @@ function _formatDeadline(iso) {
     } catch (_e) { return iso; }
 }
 
+// ── F1.3 — Friends panel ────────────────────────────────────────────────────
+let _friendsSearchTimer = null;
+
+function _friendInitial(u) {
+    const s = (u.display_name || u.username || '?').trim();
+    return s ? s.charAt(0).toUpperCase() : '?';
+}
+
+function _friendRowHtml(user, ctx /* 'search' | 'incoming' | 'outgoing' | 'accepted' */) {
+    const avatarBg = user.avatar_url
+        ? `style="background-image:url('${user.avatar_url.replace(/'/g, "&apos;")}'); color:transparent"`
+        : '';
+    let actions = '';
+    if (ctx === 'search') {
+        if (user.status === 'none')
+            actions = `<button class="pf-friend-btn pf-friend-btn--accent" data-act="request" data-uid="${user.id}">+ Dodaj</button>`;
+        else if (user.status === 'pending_outgoing')
+            actions = `<span class="pf-friend-status-chip">Wysłano</span>`;
+        else if (user.status === 'pending_incoming')
+            actions = `<button class="pf-friend-btn pf-friend-btn--accent" data-act="accept" data-fid="${user.friendship_id}">Akceptuj</button>`;
+        else if (user.status === 'accepted')
+            actions = `<span class="pf-friend-status-chip">Znajomy</span>`;
+    } else if (ctx === 'incoming') {
+        actions = `
+            <button class="pf-friend-btn pf-friend-btn--accent" data-act="accept" data-fid="${user.friendship_id}">Akceptuj</button>
+            <button class="pf-friend-btn pf-friend-btn--danger" data-act="delete" data-fid="${user.friendship_id}">Odrzuć</button>`;
+    } else if (ctx === 'outgoing') {
+        actions = `<button class="pf-friend-btn pf-friend-btn--danger" data-act="delete" data-fid="${user.friendship_id}">Anuluj</button>`;
+    } else if (ctx === 'accepted') {
+        actions = `<button class="pf-friend-btn pf-friend-btn--danger" data-act="delete" data-fid="${user.friendship_id}">Usuń</button>`;
+    }
+    return `
+        <div class="pf-friend-row" data-uid="${user.id}">
+            <div class="pf-friend-avatar" ${avatarBg}>${_friendInitial(user)}</div>
+            <div class="pf-friend-meta">
+                <div class="pf-friend-name">${(user.display_name || user.username || '').replace(/</g, '&lt;')}</div>
+                <div class="pf-friend-login">@${(user.username || '').replace(/</g, '&lt;')}</div>
+            </div>
+            <div class="pf-friend-actions">${actions}</div>
+        </div>`;
+}
+
+async function _loadFriends() {
+    try {
+        const data = await apiRequest('GET', '/me/friends');
+        const accepted = data.accepted || [];
+        const incoming = data.incoming || [];
+        const outgoing = data.outgoing || [];
+
+        const renderList = (id, items, ctx, emptyHtml) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.innerHTML = items.length
+                ? items.map(u => _friendRowHtml(u, ctx)).join('')
+                : (emptyHtml || '');
+        };
+        renderList('pf-friends-accepted', accepted, 'accepted',
+            '<p class="pf-friends-empty">Jeszcze nikogo nie dodałeś. Wyszukaj kogoś powyżej.</p>');
+        renderList('pf-friends-incoming', incoming, 'incoming');
+        renderList('pf-friends-outgoing', outgoing, 'outgoing');
+        document.getElementById('pf-friends-incoming-wrap').hidden = incoming.length === 0;
+        document.getElementById('pf-friends-outgoing-wrap').hidden = outgoing.length === 0;
+    } catch (e) {
+        console.error('[Friends] load failed:', e);
+    }
+}
+
+async function _searchFriends(q) {
+    const resultsEl = document.getElementById('pf-friends-search-results');
+    if (!resultsEl) return;
+    if (!q || q.length < 2) {
+        resultsEl.innerHTML = '';
+        return;
+    }
+    try {
+        const data = await apiRequest('GET', `/me/friends/search?q=${encodeURIComponent(q)}`);
+        const items = data.results || [];
+        resultsEl.innerHTML = items.length
+            ? items.map(u => _friendRowHtml(u, 'search')).join('')
+            : '<p class="pf-friends-empty">Brak wyników</p>';
+    } catch (e) {
+        console.error('[Friends] search failed:', e);
+        resultsEl.innerHTML = '<p class="pf-friends-empty">Błąd wyszukiwania</p>';
+    }
+}
+
+async function _handleFriendAction(act, target) {
+    try {
+        if (act === 'request') {
+            const uid = parseInt(target.dataset.uid, 10);
+            await apiRequest('POST', '/me/friends/request', { target_user_id: uid });
+            showToast('Zaproszenie wysłane', 'success');
+        } else if (act === 'accept') {
+            const fid = parseInt(target.dataset.fid, 10);
+            await apiRequest('POST', `/me/friends/${fid}/accept`);
+            showToast('Dodano do drużyny', 'success');
+        } else if (act === 'delete') {
+            const fid = parseInt(target.dataset.fid, 10);
+            await apiRequest('DELETE', `/me/friends/${fid}`);
+        }
+        // Refresh both list and any open search results
+        await _loadFriends();
+        const searchInput = document.getElementById('pf-friends-search-input');
+        if (searchInput && searchInput.value.trim().length >= 2) {
+            await _searchFriends(searchInput.value.trim());
+        }
+    } catch (e) {
+        showToast(e.message || 'Błąd operacji', 'error');
+    }
+}
+
+function _initFriendsPanel() {
+    const input = document.getElementById('pf-friends-search-input');
+    input?.addEventListener('input', () => {
+        clearTimeout(_friendsSearchTimer);
+        const q = input.value.trim();
+        _friendsSearchTimer = setTimeout(() => _searchFriends(q), 250);
+    });
+
+    // Event delegation for all friend-row buttons (search results + section lists)
+    document.getElementById('profile-screen')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.pf-friend-btn[data-act]');
+        if (!btn) return;
+        _handleFriendAction(btn.dataset.act, btn);
+    });
+}
+
 // ── Invite modal ─────────────────────────────────────────────────────────
 function openInviteModal() {
     const form = document.getElementById('invite-form');
@@ -7976,6 +8105,7 @@ function initEventListeners() {
     // Profile page
     document.getElementById('profile-back-btn')?.addEventListener('click', () => showScreen(_profileReturnScreen || 'heroes'));
     _initProfileEditing();
+    _initFriendsPanel();
     document.getElementById('go-to-profile-btn')?.addEventListener('click', () => {
         closeSettings();
         loadProfilePage();

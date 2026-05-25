@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=f12-delete">
+  <link rel="stylesheet" href="./css/styles.css?v=f13-friends">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -386,6 +386,38 @@
           </svg>
           Zaproś do przygody
         </button>
+      </div>
+
+      <!-- ── ZNAJOMI (F1.3) ────────────────────────────────── -->
+      <div class="pf-card">
+        <div class="pf-section-label">
+          <span class="pf-section-label__line"></span>
+          <span class="pf-section-label__text">Znajomi</span>
+          <span class="pf-section-label__line"></span>
+        </div>
+
+        <div class="pf-friends-search">
+          <input type="text" id="pf-friends-search-input" class="pf-form-input"
+                 placeholder="Szukaj po loginie lub nazwie…" autocomplete="off">
+        </div>
+        <div id="pf-friends-search-results" class="pf-friends-list"></div>
+
+        <div class="pf-friends-section" id="pf-friends-incoming-wrap" hidden>
+          <h4 class="pf-friends-heading">📬 Zaproszenia do Ciebie</h4>
+          <div id="pf-friends-incoming" class="pf-friends-list"></div>
+        </div>
+
+        <div class="pf-friends-section" id="pf-friends-outgoing-wrap" hidden>
+          <h4 class="pf-friends-heading">⏳ Twoje wysłane zaproszenia</h4>
+          <div id="pf-friends-outgoing" class="pf-friends-list"></div>
+        </div>
+
+        <div class="pf-friends-section">
+          <h4 class="pf-friends-heading">⚔ Twoja drużyna</h4>
+          <div id="pf-friends-accepted" class="pf-friends-list">
+            <p class="pf-friends-empty">Jeszcze nikogo nie dodałeś. Wyszukaj kogoś powyżej.</p>
+          </div>
+        </div>
       </div>
 
       <!-- ── BEZPIECZEŃSTWO ─────────────────────────────────── -->
@@ -1679,6 +1711,6 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=f12-delete"></script>
+  <script src="./js/app.js?v=f13-friends"></script>
 </body>
 </html>
