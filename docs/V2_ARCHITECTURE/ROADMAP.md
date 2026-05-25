@@ -338,6 +338,7 @@ Extends the hex travel system from a static map into a living, auto-expanding wo
 - [x] **O3** TASK_49: admin analytics panel (dashboard/events/LLM tabs) — commit `cc51537`
 - [x] **O4** TASK_50: MCP server with 9 tools for AI-queryable game data — commit `098e11f`. Streamable HTTP at `https://aigm-dev.studio-colorbox.com/mcp` (NPM proxy). Docs: `docs/MCP_SERVER.md`
 - [x] **O4b** MCP admin integration — analytics MCP tab (live status ping, copy URL, Perplexity guide, tool list), topbar status pill polling every 60 s — commit `a0aef22`, issue [#103](https://github.com/szmidtpiotr/ai-gm/issues/103)
+- [x] **O4c** MCP write tools (11-14) — `initialize_player_session`, `submit_player_turn`, `change_player_zone`, `flee_from_combat`; HTTP API via demo account; `httpx` dep; `DB_PATH` fix + `depends_on` in dev compose — commit `3d51c44`
 
 ### Stage 15 — Phase 12 AI Test Agent
 
