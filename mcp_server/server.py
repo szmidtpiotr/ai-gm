@@ -1305,7 +1305,13 @@ def submit_player_turn(action: str) -> str:
         skill_label = pending.get("skill_label") or pending.get("skill_key", "?")
         committed_d20 = pending.get("committed_d20", "?")
         mods = pending.get("modifier_breakdown", {})
-        total_mod = mods.get("total_modifier", 0) if isinstance(mods, dict) else 0
+        # Backend's calc_skill_modifier_info returns "total" (not "total_modifier"). Fall back
+        # to the legacy key for old pending payloads.
+        total_mod = (mods.get("total") if isinstance(mods, dict) else None)
+        if total_mod is None and isinstance(mods, dict):
+            total_mod = mods.get("total_modifier", 0)
+        if total_mod is None:
+            total_mod = 0
         total = (committed_d20 + total_mod) if isinstance(committed_d20, int) else "?"
         skill_test_id = pending.get("skill_test_id", "")
 
