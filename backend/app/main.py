@@ -235,6 +235,10 @@ RAW_MIGRATIONS = [
     "UPDATE npcs SET is_shop = 1        WHERE npc_type = 'merchant'    AND is_shop = 0",
     "UPDATE npcs SET is_quest_giver = 1 WHERE npc_type = 'quest_giver' AND is_quest_giver = 0",
     "UPDATE npcs SET is_ally = 1        WHERE npc_type = 'ally'        AND is_ally = 0",
+
+    "ALTER TABLE game_config_weapons     ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE game_config_items       ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE game_config_consumables ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
 ]
 
 

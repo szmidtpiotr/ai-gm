@@ -583,6 +583,7 @@ def list_weapons() -> list[dict]:
                two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school, value_gp, weight_kg,
                description, note, effect_json, source_exclusive, weapon_slot,
                is_active, locked_at, created_at, updated_at,
+               COALESCE(rarity, 1) AS rarity,
                COALESCE(campaign_id, NULL) AS campaign_id,
                COALESCE(review_status, 'permanent') AS review_status
         FROM game_config_weapons
@@ -1706,7 +1707,8 @@ def list_items() -> list[dict]:
         SELECT key, label, item_type, description, value_gp, weight_kg,
                allowed_classes, ac_bonus, armor_coverage,
                charges, effect_json, ai_generated, approved,
-               note, is_active, locked_at, created_at, updated_at
+               note, is_active, locked_at, created_at, updated_at,
+               COALESCE(rarity, 1) AS rarity
         FROM game_config_items
         ORDER BY item_type ASC, label COLLATE NOCASE ASC, key ASC
         """
@@ -2029,7 +2031,8 @@ def list_consumables() -> list[dict]:
     rows = _fetch_all(
         """
         SELECT key, label, description, effect_json, weight_kg, charges, value_gp,
-               note, is_active, locked_at, created_at, updated_at
+               note, is_active, locked_at, created_at, updated_at,
+               COALESCE(rarity, 1) AS rarity
         FROM game_config_items
         WHERE item_type = 'consumable'
         ORDER BY label COLLATE NOCASE ASC, key ASC
