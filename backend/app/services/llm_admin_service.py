@@ -175,6 +175,16 @@ def save_llm_preset(
                 ),
             )
             conn.commit()
+            # If this preset is currently active, push changes to the in-memory runtime
+            # so the backend picks up the new values without requiring a restart.
+            active_id = get_active_global_preset_id()
+            if active_id is not None and int(active_id) == int(preset_id):
+                set_runtime_config(
+                    provider=safe_provider,
+                    base_url=safe_base_url,
+                    model=safe_model,
+                    api_key=api_key_value,
+                )
             return get_llm_preset(int(preset_id), mask_api_key=True)
 
         api_key_value = str(api_key or "").strip()

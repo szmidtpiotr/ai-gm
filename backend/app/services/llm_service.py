@@ -370,7 +370,86 @@ class AzureDriver:
         )
 
     @staticmethod
-    def generate_chat(base_url: str, model: str, messages: list[dict], api_key: str) -> str:
+    def _is_content_filter_error(body: str) -> bool:
+        try:
+            return json.loads(body).get("error", {}).get("code") == "content_filter"
+        except Exception:
+            return False
+
+    # Weapon stem → display name (matches Polish inflected forms via startswith on lowercased word)
+    _WEAPON_STEMS: list[tuple[str, str]] = [
+        ("młot",    "młot"),
+        ("miecz",   "miecz"),
+        ("sztylet", "sztylet"),
+        ("topor",   "topór"),
+        ("topór",   "topór"),
+        ("łuk",     "łuk"),
+        ("kusza",   "kuszę"),
+        ("włoczni", "włócznię"),
+        ("berło",   "berło"),
+        ("buzdyg",  "buzdygan"),
+        ("rapier",  "rapier"),
+        ("nóż",     "nóż"),
+        ("noz",     "nóż"),
+        ("kij",     "kij"),
+        ("laska",   "laskę"),
+        ("maczug",  "maczugę"),
+    ]
+
+    # Polish stems that indicate a combat action in the player's text
+    _COMBAT_STEMS: tuple[str, ...] = (
+        "ataku", "uderzam", "biję", "bije", "walcz", "strzelam",
+        "kłuję", "kłuje", "tnę", "zbójc", "bandy", "rzucam się",
+        "naciera", "zaataku",
+    )
+
+    @classmethod
+    def _neutralize_combat_text(cls, text: str) -> str | None:
+        """
+        Locally replace a violent Polish player action with a neutral RPG mechanics sentence.
+        Returns None when the text doesn't look like a combat action.
+        This avoids an extra LLM call (which would itself get filtered).
+        """
+        lower = text.lower()
+        if not any(stem in lower for stem in cls._COMBAT_STEMS):
+            return None
+        # Extract weapon name from the text
+        weapon: str | None = None
+        for token in lower.split():
+            stripped = token.strip(".,!?;:'\"()")
+            for stem, label in cls._WEAPON_STEMS:
+                if stripped.startswith(stem):
+                    weapon = label
+                    break
+            if weapon:
+                break
+        if weapon:
+            return f"Gracz inicjuje akcję bojową z użyciem {weapon}."
+        return "Gracz inicjuje akcję bojową z pobliskim przeciwnikiem."
+
+    @staticmethod
+    def _rephrase_last_user_message(
+        messages: list[dict], base_url: str, model: str, api_key: str
+    ) -> list[dict] | None:
+        """Replace the last user message with a filter-safe neutral RPG mechanics sentence."""
+        last_user_idx = next(
+            (i for i in range(len(messages) - 1, -1, -1) if messages[i].get("role") == "user"),
+            None,
+        )
+        if last_user_idx is None:
+            return None
+        original = messages[last_user_idx].get("content") or ""
+        neutral = AzureDriver._neutralize_combat_text(original)
+        if neutral is None:
+            return None
+        new_messages = list(messages)
+        new_messages[last_user_idx] = {**messages[last_user_idx], "content": neutral}
+        return new_messages
+
+    @staticmethod
+    def generate_chat(
+        base_url: str, model: str, messages: list[dict], api_key: str, _no_rephrase: bool = False
+    ) -> str:
         payload = {"messages": messages, "stream": False, "temperature": 0.8}
         with httpx.Client(timeout=float(os.getenv("OLLAMA_TIMEOUT", "120"))) as client:
             resp = client.post(
@@ -378,6 +457,11 @@ class AzureDriver:
                 json=payload,
                 headers=AzureDriver._headers(api_key),
             )
+            if resp.status_code == 400 and not _no_rephrase and AzureDriver._is_content_filter_error(resp.text):
+                new_messages = AzureDriver._rephrase_last_user_message(messages, base_url, model, api_key)
+                if new_messages is not None:
+                    logger.info("azure_content_filter_rephrase", model=model)
+                    return AzureDriver.generate_chat(base_url, model, new_messages, api_key, _no_rephrase=True)
             resp.raise_for_status()
             try:
                 data = resp.json()
@@ -391,7 +475,9 @@ class AzureDriver:
         return content
 
     @staticmethod
-    def generate_stream(base_url: str, model: str, messages: list[dict], api_key: str) -> Generator[str, None, None]:
+    def generate_stream(
+        base_url: str, model: str, messages: list[dict], api_key: str, _no_rephrase: bool = False
+    ) -> Generator[str, None, None]:
         started_at = time.perf_counter()
         url = (
             f"{base_url}/openai/deployments/{model}/chat/completions"
@@ -404,6 +490,12 @@ class AzureDriver:
                 with client.stream("POST", url, json=payload, headers=headers) as resp:
                     if resp.status_code >= 400:
                         resp.read()
+                        if resp.status_code == 400 and not _no_rephrase and AzureDriver._is_content_filter_error(resp.text):
+                            new_messages = AzureDriver._rephrase_last_user_message(messages, base_url, model, api_key)
+                            if new_messages is not None:
+                                logger.info("azure_content_filter_rephrase", model=model)
+                                yield from AzureDriver.generate_stream(base_url, model, new_messages, api_key, _no_rephrase=True)
+                                return
                         resp.raise_for_status()
                     for line in resp.iter_lines():
                         if not line or line == "data: [DONE]":

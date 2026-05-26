@@ -1668,9 +1668,13 @@ def resolve_model_name(
     req = _clean_model_hint(requested_model)
     cam = _clean_model_hint(campaign_model)
     effective = get_effective_config(llm_config)
-    if effective["provider"] == "openai":
+    # For OpenAI and Azure the caller specifies the model/deployment by name directly —
+    # no need to validate against a remote list (Azure catalogs show model IDs, not deployment names).
+    if effective["provider"] in ("openai", "azure"):
         return (req or cam or effective["model"]).strip()
 
+    # For Ollama and other self-hosted providers, validate against the live model list
+    # so the UI can fall back to whatever is actually pulled locally.
     health = get_health(llm_config)
     available = health.get("models") or []
     if not available:
