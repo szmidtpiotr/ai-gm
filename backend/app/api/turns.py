@@ -134,6 +134,110 @@ def _is_reading_context(text: str) -> bool:
     has_verb = any(v in norm for v in _READING_VERBS)
     has_target = any(t in norm for t in _READING_TARGETS)
     return has_verb and has_target
+
+
+# ── Combat-keyword fallback (issue #135) ────────────────────────────────────
+# When the player declares an attack in Polish and the LLM forgot to emit
+# [COMBAT_START:enemy_key], inject the tag post-hoc so the combat engine
+# actually starts. Pre-existing system prompt rule covered most cases but
+# Polish narrative mode still slipped through ~5% of the time. Without this
+# fallback the entire fight plays out as cinematic prose with zero HP / dice.
+_COMBAT_INTENT_VERBS = (
+    "atakuj", "atakuje", "uderzam", "uderzac", "walcze", "walczy",
+    "rzucam sie na", "skacze na", "bije", "bije sie",
+    "kopie", "kopnij", "tne", "tnac",
+    "strzelam", "strzelac", "klue", "klu sztyletem", "pcham noz",
+    "wyciagam bron", "biore zamach", "obalam",
+)
+
+
+def _player_combat_intent(text: str) -> bool:
+    """Detect explicit attack declaration in player text."""
+    norm = _normalize_pl(text or "")
+    return any(v in norm for v in _COMBAT_INTENT_VERBS)
+
+
+def _resolve_enemy_key_from_context(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    assistant_text: str,
+) -> str:
+    """Best-effort enemy_key resolution from the current GM response + last
+    few turns. Falls back to `unknown_attacker` if nothing matches.
+
+    Matches against `game_config_enemies.label` (case-insensitive substring)
+    in the most-recent narrative context.
+    """
+    haystack_parts: list[str] = [str(assistant_text or "")]
+    try:
+        rows = conn.execute(
+            "SELECT assistant_text FROM campaign_turns WHERE campaign_id = ? ORDER BY id DESC LIMIT 3",
+            (campaign_id,),
+        ).fetchall()
+        for r in rows:
+            haystack_parts.append(str(r[0] or ""))
+    except sqlite3.OperationalError:
+        pass
+    haystack = _normalize_pl(" ".join(haystack_parts))
+    if not haystack.strip():
+        return "unknown_attacker"
+    try:
+        enemy_rows = conn.execute(
+            "SELECT key, label FROM game_config_enemies WHERE is_active = 1"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return "unknown_attacker"
+    best_key = None
+    for er in enemy_rows:
+        label = _normalize_pl(str(er["label"] or ""))
+        key_norm = _normalize_pl(str(er["key"] or ""))
+        # Substring on the label OR direct mention of the key in narrative.
+        if label and len(label) >= 4 and label in haystack:
+            best_key = er["key"]
+            break
+        if key_norm and len(key_norm) >= 4 and key_norm in haystack:
+            best_key = er["key"]
+            break
+    return best_key or "unknown_attacker"
+
+
+def _ensure_combat_start_tag(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    player_text: str,
+    assistant_text: str,
+) -> str:
+    """If player declared combat intent and the GM response is missing both
+    a [COMBAT_START:…] tag AND a `Roll Initiative d20` cue, append a tag so
+    the combat engine fires. No-op when a tag/cue is already present or when
+    a combat is already active.
+    """
+    if not _player_combat_intent(player_text):
+        return assistant_text
+    if COMBAT_START_RE.search(assistant_text or ""):
+        return assistant_text
+    if re.search(r"Roll\s+Initiative\s+d20", assistant_text or "", re.IGNORECASE):
+        return assistant_text
+    try:
+        active = conn.execute(
+            "SELECT id FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if active:
+            return assistant_text
+    except sqlite3.OperationalError:
+        pass
+    enemy_key = _resolve_enemy_key_from_context(conn, campaign_id, assistant_text)
+    logger.info(
+        "combat_start_tag_injected",
+        campaign_id=campaign_id,
+        enemy_key=enemy_key,
+        player_snippet=(player_text or "")[:80],
+    )
+    sep = "\n\n" if not (assistant_text or "").endswith("\n") else ""
+    return f"{assistant_text or ''}{sep}[COMBAT_START:{enemy_key}]"
+
+
 # 9A-4c+ — gdy model nie generuje cue, dołącz „Open Shop” na podstawie intencji gracza i NPC w scenie.
 _TRADE_USER_INTENT_RE = re.compile(
     r"(kup|sprzed|towar|towary|towarem|handl|handel|sklep|poka|pokaz"
@@ -3307,6 +3411,10 @@ def create_turn(
                 new_total_gp=new_total,
             )
 
+        # Issue #135 — inject [COMBAT_START] when player declared attack but
+        # LLM omitted the tag. Keeps combat engine engaged in Polish narrative mode.
+        assistant_text = _ensure_combat_start_tag(conn, campaign_id, text, assistant_text)
+
         new_combat = _maybe_start_combat_from_gm_tag(
             campaign_id, payload.character_id, assistant_text
         )
@@ -3975,6 +4083,8 @@ def create_turn_stream(
                         user_text=user_text_val,
                         assistant_text=clean_text,
                     )
+                    # Issue #135 — inject [COMBAT_START] when player attacked but LLM omitted it.
+                    clean_text = _ensure_combat_start_tag(save_conn, campaign_id_val, user_text_val, clean_text)
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, clean_text
                     )
@@ -4270,6 +4380,8 @@ def create_turn_stream(
                                             scene_advance=_scene_advance4)
                     except Exception as _gm4_err:
                         logger.warning("gm_note_stream_error", error=str(_gm4_err))
+                    # Issue #135 — fallback inject for streaming narrative path too.
+                    full_raw = _ensure_combat_start_tag(save_conn, campaign_id_val, user_text_val, full_raw)
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, full_raw
                     )

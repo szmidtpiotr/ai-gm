@@ -74,6 +74,15 @@ SKILL_LABELS = _SKILL_LABEL_FALLBACK
 
 # ── Modifier calculation ──────────────────────────────────────────────────────
 
+_SKILL_KEY_ALIASES: dict[str, tuple[str, ...]] = {
+    # Canonical key → list of legacy / alternate keys that may appear in older
+    # sheet_json blobs. See issue #135 — `awareness` is the DB-canonical key
+    # but some sheets and seed scripts wrote `perception`, leaving the player
+    # apparently un-trained when the pre-router fired on Polish keywords.
+    "awareness": ("perception",),
+}
+
+
 def calc_skill_modifier_info(sheet: dict, skill_key: str) -> dict:
     """Return full modifier breakdown for the Roll Popup."""
     from app.services.vitality_service import wound_penalty
@@ -83,6 +92,13 @@ def calc_skill_modifier_info(sheet: dict, skill_key: str) -> dict:
     stat_val = int(stats.get(governing_stat, 10))
     stat_mod = stat_modifier(stat_val)
     skill_rank = int(skills.get(skill_key, 0))
+    # Issue #135 — fall back to legacy aliases when canonical key has rank 0.
+    if skill_rank == 0:
+        for _alias in _SKILL_KEY_ALIASES.get(skill_key, ()):
+            _alt = int(skills.get(_alias, 0) or 0)
+            if _alt > skill_rank:
+                skill_rank = _alt
+                break
     proficiency = 2 if skill_rank >= 3 else 0
     # Issue #26 (Option A) — DEX-governed skills take the wound DEX penalty.
     wound = wound_penalty(sheet)
