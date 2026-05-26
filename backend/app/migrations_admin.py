@@ -3069,7 +3069,53 @@ def run_admin_migrations() -> None:
         _ensure_hex_spawn_weights(conn)
         _ensure_campaign_known_npcs(conn)
         _ensure_rogue_archetype(conn)
+        _allow_nullable_campaign_model_id(conn)
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="14.0")
+    logger.info("admin_migration_complete", phase="14.1")
+
+
+def _allow_nullable_campaign_model_id(conn: sqlite3.Connection) -> None:
+    """Remove NOT NULL constraint from campaigns.model_id.
+
+    NULL means "use whatever the active global preset specifies". A non-NULL
+    value pins that specific model name for the campaign (legacy / deliberate
+    per-campaign override). This is an idempotent table-recreation migration
+    because SQLite does not support ALTER COLUMN to drop constraints.
+    """
+    cols = conn.execute("PRAGMA table_info(campaigns)").fetchall()
+    model_col = next((c for c in cols if c["name"] == "model_id"), None)
+    if model_col is None or model_col["notnull"] == 0:
+        return  # already nullable or column missing
+    col_names = [c["name"] for c in cols]
+    cols_csv = ", ".join(col_names)
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS _campaigns_migration_tmp (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                system_id TEXT NOT NULL,
+                model_id TEXT,
+                owner_user_id INTEGER NOT NULL,
+                language TEXT NOT NULL DEFAULT 'pl',
+                mode TEXT NOT NULL DEFAULT 'solo',
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                death_reason TEXT,
+                ended_at TEXT,
+                epitaph TEXT,
+                gm_plan_json TEXT NOT NULL DEFAULT '{}',
+                last_rollup_narrative_turn_count INTEGER,
+                engine_private_json TEXT DEFAULT NULL,
+                FOREIGN KEY (owner_user_id) REFERENCES users(id)
+            )
+        """)
+        conn.execute(f"INSERT INTO _campaigns_migration_tmp ({cols_csv}) SELECT {cols_csv} FROM campaigns")
+        conn.execute("DROP TABLE campaigns")
+        conn.execute("ALTER TABLE _campaigns_migration_tmp RENAME TO campaigns")
+        conn.commit()
+        logger.info("admin_migration_campaign_model_id_nullable")
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")

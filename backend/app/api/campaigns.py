@@ -115,7 +115,7 @@ def _parse_gm_plan(raw: str | None) -> dict:
 class CampaignCreateRequest(BaseModel):
     title: str
     system_id: str
-    model_id: str
+    model_id: str | None = None
     owner_user_id: int
     language: str = DEFAULT_CAMPAIGN_LANGUAGE
     mode: str = "solo"
