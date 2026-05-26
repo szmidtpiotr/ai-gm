@@ -29,6 +29,8 @@
   - [Rulebook](RULEBOOK.md)
   - [Narrative Items](TASK_NARRATIVE_ITEMS.md)
   - [T46 Test Plan](TASK_T46_TEST_PLAN.md)
+  - [Roadmap Adminpanel3](roadmap_adminpanel3.md)
+  - [V2 Development Fix](v2_development_fix.md)
 
 - **Phase 01 · Foundation**
   - [01 · DB Schema](PHASE_01_FOUNDATION/TASK_01_DB_SCHEMA.md)
@@ -98,3 +100,7 @@
   - [38 · Campaign End Death](PHASE_10_POLISH/TASK_38_CAMPAIGN_END_DEATH.md)
   - [39 · Auth Onboarding](PHASE_10_POLISH/TASK_39_AUTH_ONBOARDING.md)
   - [45 · Hero Journal](PHASE_10_POLISH/TASK_45_HERO_JOURNAL.md)
+
+- **Phase 11 · Test Campaigns**
+  - [Combat Simulation](PHASE_11_TEST_CAMPAIGNS/01_COMBAT_SIMULATION.md)
+  - [Aigm Fix Report Bug02 Bug03](PHASE_11_TEST_CAMPAIGNS/02_AIGM_Fix_Report_BUG02_BUG03.md)

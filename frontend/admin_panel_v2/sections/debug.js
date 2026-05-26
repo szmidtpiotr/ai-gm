@@ -252,6 +252,18 @@ export async function init(panel) {
         <pre class="debug-output" id="dbg-reset-out">${LABELS.emptyResult}</pre>
       </div>
 
+      <!-- Fallen Heroes → NPC promotion -->
+      <div class="card debug-card" style="grid-column: 1 / -1">
+        <h3 class="card-title">🪦 Fallen Heroes — promocja do NPC</h3>
+        <p class="card-hint">Bohaterowie, których ostatnia kampania zakończyła się śmiercią. Można ich awansować na trwałe NPC dla ciągłości narracji.</p>
+        <div class="debug-row">
+          <button type="button" class="primary-btn" id="dbg-fallen-refresh">↻ Odśwież listę</button>
+        </div>
+        <div id="dbg-fallen-list" class="fallen-list">
+          <em style="color:var(--text-muted)">Kliknij «Odśwież listę» aby załadować.</em>
+        </div>
+      </div>
+
     </div>
   `;
 
@@ -420,4 +432,55 @@ export async function init(panel) {
   });
 
   loadPicker();
+
+  // ── Fallen Heroes → NPC promotion ─────────────────────────────────────────
+  async function loadFallenHeroes() {
+    const listEl = get("dbg-fallen-list");
+    if (!listEl) return;
+    listEl.innerHTML = `<em style="color:var(--text-muted)">Wczytywanie…</em>`;
+    try {
+      const { items } = await adminFetch("/api/admin/characters/fallen");
+      if (!items.length) {
+        listEl.innerHTML = `<em style="color:var(--text-muted)">— brak poległych bohaterów —</em>`;
+        return;
+      }
+      listEl.innerHTML = items.map(h => `
+        <div class="fallen-hero-row" data-char-id="${h.character_id}">
+          <div class="fallen-hero-info">
+            <strong>${_esc(h.name)}</strong>
+            <span class="fallen-hero-campaign">📖 ${_esc(h.campaign_title || "—")}</span>
+            <span class="fallen-hero-reason">⚔ ${_esc(h.death_reason || "—")}</span>
+            ${h.epitaph ? `<em class="fallen-hero-epitaph">"${_esc(h.epitaph)}"</em>` : ""}
+          </div>
+          <div class="fallen-hero-actions">
+            ${h.already_promoted
+              ? `<span class="fallen-promoted-badge" title="NPC: ${_esc(h.npc_key || '')}">✓ NPC: <code>${_esc(h.npc_key || '')}</code></span>`
+              : `<button type="button" class="primary-btn fallen-promote-btn" data-char-id="${h.character_id}" data-name="${_esc(h.name)}">🪦 Awansuj na NPC</button>`
+            }
+          </div>
+        </div>
+      `).join("");
+
+      listEl.querySelectorAll(".fallen-promote-btn").forEach(btn => {
+        btn.addEventListener("click", async () => {
+          const cid = parseInt(btn.dataset.charId, 10);
+          const name = btn.dataset.name;
+          if (!confirm(`Awansować "${name}" na trwałe NPC?`)) return;
+          btn.disabled = true; btn.textContent = "Przetwarzam…";
+          try {
+            const res = await adminFetch(`/api/admin/characters/${cid}/promote-to-npc`, { method: "POST" });
+            showToast(`NPC utworzony: ${res.npc_key}`, "success");
+            await loadFallenHeroes();
+          } catch (e) {
+            showToast(`Błąd: ${e?.message || e}`, "error");
+            btn.disabled = false; btn.textContent = "🪦 Awansuj na NPC";
+          }
+        });
+      });
+    } catch (e) {
+      listEl.innerHTML = `<em style="color:var(--danger,#c94a4a)">Błąd: ${_esc(e?.message || String(e))}</em>`;
+    }
+  }
+
+  get("dbg-fallen-refresh")?.addEventListener("click", loadFallenHeroes);
 }

@@ -358,25 +358,32 @@ function renderLlmTab(body, llm) {
 const MCP_URL = "https://aigm-dev.studio-colorbox.com/mcp";
 
 const MCP_TOOLS = [
-  { name: "get_campaign_summary",      star: true,  desc: "Pełny snapshot kampanii: postać, plan MG, tury, ekwipunek, NPCs, podsumowania AI" },
-  { name: "get_full_campaign_context", star: false, desc: "Dump w markdown — idealny do wklejenia w Perplexity / ChatGPT" },
-  { name: "get_system_health",         star: false, desc: "Aktywne kampanie, rozmiar DB, ostatni LLM call, błędy ostatniej godziny" },
-  { name: "get_llm_performance",       star: false, desc: "Statystyki wywołań LLM wg okresu (24h / 7d / 30d) i typu" },
-  { name: "get_player_stats",          star: false, desc: "Aktywność graczy: tury, śmierci, XP, aktywna kampania" },
-  { name: "get_world_analytics",       star: false, desc: "Lokacje, wrogowie, pending review, hexes, bank pomysłów" },
-  { name: "query_game_events",         star: false, desc: "Filtrowany log zdarzeń (combat_victory, player_death, long_rest…)" },
-  { name: "query_action_log",          star: false, desc: "Paginowany log tur kampanii wg trasy / zakresu tur" },
-  { name: "get_error_log",             star: false, desc: "Błędy i ostrzeżenia z game_events + llm_call_log" },
+  { name: "initialize_player_session", star: true,  write: true,  desc: "Loguje się jako gracz testowy i ładuje aktywną kampanię + postać. Wywołaj jako pierwsze." },
+  { name: "submit_player_turn",        star: true,  write: true,  desc: "Wysyła akcję gracza do MG i zwraca narrację. Główna pętla rozgrywki." },
+  { name: "change_player_zone",        star: false, write: true,  desc: "Przełącza strefę walki: zwarcie ↔ dystans. Zużywa akcję tury." },
+  { name: "flee_from_combat",          star: false, write: true,  desc: "Próba ucieczki z walki (traci XP i łupy)." },
+  { name: "get_campaign_summary",      star: true,  write: false, desc: "Pełny snapshot kampanii: postać, plan MG, tury, ekwipunek, NPCs, podsumowania AI" },
+  { name: "get_full_campaign_context", star: false, write: false, desc: "Dump w markdown — idealny do wklejenia w Perplexity / ChatGPT" },
+  { name: "get_system_health",         star: false, write: false, desc: "Aktywne kampanie, rozmiar DB, ostatni LLM call, błędy ostatniej godziny" },
+  { name: "get_llm_performance",       star: false, write: false, desc: "Statystyki wywołań LLM wg okresu (24h / 7d / 30d) i typu" },
+  { name: "get_player_stats",          star: false, write: false, desc: "Aktywność graczy: tury, śmierci, XP, aktywna kampania" },
+  { name: "get_world_analytics",       star: false, write: false, desc: "Lokacje, wrogowie, pending review, hexes, bank pomysłów" },
+  { name: "query_game_events",         star: false, write: false, desc: "Filtrowany log zdarzeń (combat_victory, player_death, long_rest…)" },
+  { name: "query_action_log",          star: false, write: false, desc: "Paginowany log tur kampanii wg trasy / zakresu tur" },
+  { name: "get_error_log",             star: false, write: false, desc: "Błędy i ostrzeżenia z game_events + llm_call_log" },
 ];
 
 async function renderMcpTab(body) {
+  const writeCount = MCP_TOOLS.filter(t => t.write).length;
+  const readCount  = MCP_TOOLS.filter(t => !t.write).length;
+
   body.innerHTML = `
     <div class="mcp-tab">
       <div class="mcp-server-card">
         <div class="mcp-server-header">
           <div>
             <div class="mcp-server-name">🤖 AI-GM MCP Server</div>
-            <div class="mcp-server-sub">Model Context Protocol — AI-queryable game analytics</div>
+            <div class="mcp-server-sub">Model Context Protocol — AI-queryable + playable game</div>
           </div>
           <span class="mcp-status-badge mcp-checking" id="mcp-tab-badge">⏳ Checking…</span>
         </div>
@@ -387,9 +394,9 @@ async function renderMcpTab(body) {
         <div class="mcp-meta-row">
           <span>Transport: <strong>Streamable HTTP</strong></span>
           <span>·</span>
-          <span>Narzędzia: <strong>9</strong></span>
+          <span>Narzędzia: <strong>${MCP_TOOLS.length}</strong> (${writeCount} write, ${readCount} read)</span>
           <span>·</span>
-          <span>Dostęp: <strong>Read-only</strong></span>
+          <span>Dostęp: <strong>Read + Write</strong></span>
         </div>
       </div>
 
@@ -400,12 +407,10 @@ async function renderMcpTab(body) {
             <div class="mcp-step"><span class="mcp-step-label">URL:</span><code>${MCP_URL}</code></div>
             <div class="mcp-step"><span class="mcp-step-label">Type:</span><code>Streamable HTTP</code></div>
           </div>
-          <div class="mcp-examples-title">Przykładowe pytania do Perplexity:</div>
+          <div class="mcp-examples-title">Prompt startowy dla Perplexity:</div>
           <ul class="mcp-examples">
-            <li>„Co się dzieje w kampanii 3? Oceń sytuację bohatera."</li>
-            <li>„Ile graczy zginęło w ostatnim tygodniu i z czego?"</li>
-            <li>„Jakie są statystyki LLM za ostatnie 24h?"</li>
-            <li>„Podaj pełny kontekst kampanii 1 do analizy."</li>
+            <li>„Wywołaj initialize_player_session, potem get_full_campaign_context i zagraj kilka tur."</li>
+            <li>„Jesteś wojownikiem w polskim RPG. Zacznij od initialize_player_session."</li>
           </ul>
         </div>
 
@@ -429,14 +434,47 @@ async function renderMcpTab(body) {
       </div>
 
       <div class="mcp-tools-card">
-        <div class="mcp-section-title">🔧 9 dostępnych narzędzi</div>
+        <div class="mcp-section-title">🔧 ${MCP_TOOLS.length} dostępnych narzędzi</div>
         <div class="mcp-tools-list">
           ${MCP_TOOLS.map(t => `
             <div class="mcp-tool-row">
               <code class="mcp-tool-name${t.star ? " mcp-tool-star" : ""}">${t.star ? "★ " : ""}${t.name}</code>
+              <span class="mcp-tool-badge${t.write ? " mcp-tool-write" : " mcp-tool-read"}">${t.write ? "write" : "read"}</span>
               <span class="mcp-tool-desc">${t.desc}</span>
             </div>
           `).join("")}
+        </div>
+      </div>
+
+      <div class="mcp-config-section">
+        <h4>Konfiguracja sesji MCP</h4>
+        <div class="mcp-config-row">
+          <label>Gracz:</label>
+          <select id="mcp-cfg-user" class="mcp-live-sel" disabled>
+            <option value="">Ładowanie…</option>
+          </select>
+          <label>Bohater:</label>
+          <select id="mcp-cfg-hero" class="mcp-live-sel" disabled>
+            <option value="">— wybierz gracza —</option>
+          </select>
+          <label>Kampania:</label>
+          <span id="mcp-cfg-camp-display" class="mcp-cfg-camp-display">—</span>
+          <button id="mcp-cfg-save" class="btn-primary" disabled>Zapisz</button>
+        </div>
+        <div id="mcp-cfg-status" class="mcp-cfg-status">Ładowanie aktywnej sesji…</div>
+      </div>
+
+      <div class="mcp-live-section">
+        <div class="mcp-live-header">
+          <span class="mcp-live-title">🎮 Podgląd na żywo</span>
+          <select id="mcp-camp-sel" class="mcp-live-sel" disabled>
+            <option value="">Ładowanie kampanii…</option>
+          </select>
+          <button id="mcp-iframe-reload" class="mcp-reload-btn" title="Odśwież">↺ Załaduj</button>
+        </div>
+        <div id="mcp-diag-bar" class="mcp-diag-bar" hidden></div>
+        <div class="mcp-iframe-wrap">
+          <iframe id="mcp-player-iframe" src="about:blank"></iframe>
         </div>
       </div>
     </div>
@@ -450,6 +488,20 @@ async function renderMcpTab(body) {
     }).catch(() => {});
   });
 
+  body.querySelector("#mcp-iframe-reload")?.addEventListener("click", () => {
+    _loadSelectedCampaign(body);
+  });
+
+  body.querySelector("#mcp-camp-sel")?.addEventListener("change", () => {
+    _loadSelectedCampaign(body);
+  });
+
+  // Load campaign list then auto-load the most recent active campaign
+  _initDemoCampaigns(body);
+
+  // MCP config section wiring
+  _initMcpConfig(body);
+
   const badge = body.querySelector("#mcp-tab-badge");
   try {
     const ctrl = new AbortController();
@@ -458,7 +510,7 @@ async function renderMcpTab(body) {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {
-        protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "admin-panel", version: "1" }
+        protocolVersion: "2025-03-26", capabilities: {}, clientInfo: { name: "admin-panel", version: "1" }
       }}),
       signal: ctrl.signal,
     });
@@ -469,6 +521,293 @@ async function renderMcpTab(body) {
     badge.className = "mcp-status-badge mcp-offline";
     badge.textContent = "● Offline";
   }
+}
+
+// Direct fetch to /api/* — bypasses adminFetch URL-builder so it always works
+// regardless of aigm_admin_baseurl value in localStorage.
+async function _mcpApiFetch(path, options = {}) {
+  const token = localStorage.getItem("aigm_admin_token") || "";
+  const headers = new Headers(options.headers || {});
+  if (!headers.has("Content-Type") && options.body) headers.set("Content-Type", "application/json");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const resp = await fetch(`/api${path}`, { ...options, headers });
+  let body = null;
+  try { body = await resp.json(); } catch { /* non-json */ }
+  if (!resp.ok) {
+    const msg = body?.detail || (Array.isArray(body?.detail) ? body.detail.map(e => e.msg).join("; ") : null) || `HTTP ${resp.status}`;
+    throw new Error(String(msg).slice(0, 200));
+  }
+  return body;
+}
+
+async function _initMcpConfig(body) {
+  const userSel   = body.querySelector("#mcp-cfg-user");
+  const heroSel   = body.querySelector("#mcp-cfg-hero");
+  const campDisp  = body.querySelector("#mcp-cfg-camp-display");
+  const saveBtn   = body.querySelector("#mcp-cfg-save");
+  const statusEl  = body.querySelector("#mcp-cfg-status");
+
+  let _heroMap = {};  // heroId → full hero object
+  let _pinnedHeroId = null;
+
+  // Load current pinned config
+  try {
+    const cfg = await _mcpApiFetch("/admin/mcp/config");
+    _pinnedHeroId = cfg.hero_id ?? null;
+    statusEl.textContent = cfg.hero_name
+      ? `Aktywna: bohater „${cfg.hero_name}" → kampania „${cfg.campaign_title ?? "—"}"`
+      : "Brak przypietej sesji — MCP używa auto-wykrywania.";
+  } catch (e) {
+    statusEl.textContent = `Błąd ładowania: ${e.message}`;
+  }
+
+  const updateCampDisplay = () => {
+    const hero = _heroMap[heroSel.value];
+    campDisp.textContent = hero?.campaign_id
+      ? `#${hero.campaign_id} ${hero.campaign_title || ""}`.trim()
+      : "—";
+    saveBtn.disabled = false;
+  };
+
+  const populateHeroes = async (userId) => {
+    heroSel.innerHTML = `<option value="">— brak (auto) —</option>`;
+    heroSel.disabled = true;
+    campDisp.textContent = "—";
+    saveBtn.disabled = true;
+    if (!_demoToken) return;
+    try {
+      const url = userId ? `/api/characters?user_id=${userId}` : `/api/characters`;
+      const resp = await fetch(url, { headers: { "Authorization": `Bearer ${_demoToken}` } });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const heroes = data.heroes || (Array.isArray(data) ? data : []);
+      _heroMap = {};
+      heroes.forEach(h => {
+        _heroMap[String(h.id)] = h;
+        const opt = document.createElement("option");
+        opt.value = String(h.id);
+        opt.textContent = `${h.name}  (${h.campaign_title || `kampania #${h.campaign_id}` || "brak kampanii"})`;
+        heroSel.appendChild(opt);
+      });
+      heroSel.disabled = false;
+      saveBtn.disabled = false;
+      if (_pinnedHeroId && _heroMap[String(_pinnedHeroId)]) {
+        heroSel.value = String(_pinnedHeroId);
+        updateCampDisplay();
+        // Pre-select user matching the pinned hero
+        const uid = _heroMap[String(_pinnedHeroId)]?.user_id;
+        if (uid) userSel.value = String(uid);
+      }
+    } catch (e) {
+      heroSel.innerHTML = `<option value="">⚠ ${e.message}</option>`;
+      heroSel.disabled = false;
+      saveBtn.disabled = false;
+    }
+  };
+
+  // Populate players derived from characters (uses _demoToken — no admin token needed)
+  const populateUsers = async () => {
+    let waited = 0;
+    const waitAndLoad = () => {
+      if (_demoToken || waited >= 3000) {
+        _doPopulate();
+      } else {
+        waited += 150;
+        setTimeout(waitAndLoad, 150);
+      }
+    };
+    const _doPopulate = async () => {
+      try {
+        const resp = await fetch("/api/characters", {
+          headers: { "Authorization": `Bearer ${_demoToken}` },
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        const heroes = data.heroes || (Array.isArray(data) ? data : []);
+        // Deduplicate users from character list
+        const seen = new Map();
+        heroes.forEach(h => {
+          if (h.user_id && !seen.has(h.user_id)) seen.set(h.user_id, h.user_id);
+        });
+        userSel.innerHTML = `<option value="">— wszyscy gracze —</option>`;
+        seen.forEach((uid) => {
+          const opt = document.createElement("option");
+          opt.value = String(uid);
+          opt.textContent = `Gracz #${uid}`;
+          userSel.appendChild(opt);
+        });
+        userSel.disabled = false;
+        // Load all heroes initially (no user filter)
+        populateHeroes(null);
+      } catch (e) {
+        userSel.innerHTML = `<option value="">⚠ ${e.message}</option>`;
+        userSel.disabled = false;
+        populateHeroes(null);
+      }
+    };
+    waitAndLoad();
+  };
+
+  userSel.addEventListener("change", () => {
+    const userId = userSel.value ? parseInt(userSel.value) : null;
+    _pinnedHeroId = null;
+    populateHeroes(userId);
+  });
+
+  heroSel.addEventListener("change", updateCampDisplay);
+
+  saveBtn.addEventListener("click", async () => {
+    saveBtn.disabled = true;
+    saveBtn.textContent = "Zapisywanie…";
+    const hero = _heroMap[heroSel.value] ?? null;
+    const heroId  = hero ? parseInt(heroSel.value) : null;
+    const campId  = hero?.campaign_id ?? null;
+    try {
+      await _mcpApiFetch("/admin/mcp/config", {
+        method: "PUT",
+        body: JSON.stringify({ campaign_id: campId, hero_id: heroId }),
+      });
+      statusEl.textContent = hero
+        ? `Aktywna: bohater „${hero.name}" → kampania „${hero.campaign_title || campId}"`
+        : "Brak przypietej sesji — MCP używa auto-wykrywania.";
+      showToast("Konfiguracja MCP zapisana", "success");
+      if (campId) {
+        const liveSel = body.querySelector("#mcp-camp-sel");
+        if (liveSel) { liveSel.value = String(campId); _loadSelectedCampaign(body); }
+      }
+    } catch (e) {
+      showToast(`Błąd zapisu: ${e.message}`, "error");
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Zapisz";
+    }
+  });
+
+  populateUsers();
+}
+
+let _demoToken = null;
+let _demoCamps = [];
+
+async function _initDemoCampaigns(body) {
+  const sel = body.querySelector("#mcp-camp-sel");
+  const btn = body.querySelector("#mcp-iframe-reload");
+  try {
+    // Login as demo
+    const loginResp = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "demo", password: "demo" }),
+    });
+    if (!loginResp.ok) throw new Error(`Login failed ${loginResp.status}`);
+    const auth = await loginResp.json();
+    _demoToken = auth.access_token;
+
+    // Store player token in shared localStorage (both keys the player UI reads)
+    localStorage.setItem("token", auth.access_token);
+    localStorage.setItem("aigm_access_token", auth.access_token);
+    if (auth.refresh_token) localStorage.setItem("aigm_refresh_token", auth.refresh_token);
+    localStorage.setItem("user", JSON.stringify({
+      id: auth.user_id, username: auth.username,
+      display_name: auth.display_name, is_admin: auth.is_admin,
+    }));
+
+    // Fetch campaigns
+    const campsResp = await fetch("/api/campaigns", {
+      headers: { "Authorization": `Bearer ${_demoToken}` },
+    });
+    if (!campsResp.ok) throw new Error("Brak dostępu do kampanii");
+    const campsData = await campsResp.json();
+    const all = campsData.campaigns || (Array.isArray(campsData) ? campsData : []);
+    _demoCamps = all.sort((a, b) => (b.id ?? 0) - (a.id ?? 0));
+
+    // Populate selector
+    sel.innerHTML = "";
+    const active = _demoCamps.filter(c => c.status === "active");
+    const ended = _demoCamps.filter(c => c.status !== "active");
+
+    if (active.length) {
+      const grp = document.createElement("optgroup");
+      grp.label = "Aktywne";
+      active.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = `#${c.id} ${c.title || "Kampania"}`;
+        grp.appendChild(opt);
+      });
+      sel.appendChild(grp);
+    }
+    if (ended.length) {
+      const grp = document.createElement("optgroup");
+      grp.label = "Zakończone";
+      ended.forEach(c => {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = `#${c.id} ${c.title || "Kampania"}`;
+        grp.appendChild(opt);
+      });
+      sel.appendChild(grp);
+    }
+    if (!_demoCamps.length) {
+      sel.innerHTML = `<option value="">Brak kampanii</option>`;
+    }
+
+    sel.disabled = false;
+
+    // Auto-load most recent active campaign
+    if (active.length) sel.value = String(active[0].id);
+    else if (_demoCamps.length) sel.value = String(_demoCamps[0].id);
+
+    _loadSelectedCampaign(body);
+  } catch (e) {
+    if (sel) { sel.disabled = false; sel.innerHTML = `<option value="">⚠ ${e.message}</option>`; }
+  }
+}
+
+function _loadSelectedCampaign(body) {
+  const sel = body.querySelector("#mcp-camp-sel");
+  const iframe = body.querySelector("#mcp-player-iframe");
+  const diagBar = body.querySelector("#mcp-diag-bar");
+  if (!iframe) return;
+  const campId = sel?.value;
+  if (!campId) return;
+
+  const camp = _demoCamps.find(c => String(c.id) === String(campId));
+  if (camp?.character_id) localStorage.setItem("aigm_hero_id", String(camp.character_id));
+  localStorage.setItem("aigm_campaign_id", String(campId));
+
+  if (diagBar) { diagBar.textContent = "⏳ Ładowanie…"; diagBar.hidden = false; }
+
+  iframe.addEventListener("load", function _onLoad() {
+    iframe.removeEventListener("load", _onLoad);
+    // Wait for async init() to complete, then check iframe DOM state
+    setTimeout(() => {
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc) { _setDiag(diagBar, "⚠ brak dostępu do iframe (cross-origin?)"); return; }
+        const active = doc.querySelector(".screen--active");
+        const screenId = active?.id || "none";
+        const chatEl = doc.getElementById("chat-messages");
+        const msgCount = chatEl?.childElementCount ?? 0;
+        const heroName = doc.getElementById("character-name-display")?.textContent?.trim() || "—";
+        _setDiag(diagBar, `Ekran: ${screenId} | Bohater: ${heroName} | Wiadomości w czacie: ${msgCount}`);
+        // If game screen active but no messages, try to read the console log hints
+        if (screenId === "game-screen" && msgCount === 0) {
+          _setDiag(diagBar, `⚠ Ekran gry bez wiadomości! Bohater: ${heroName} — sprawdź console po błędy JS`);
+        }
+      } catch (e) {
+        _setDiag(diagBar, `⚠ Błąd odczytu iframe: ${e.message}`);
+      }
+    }, 2500);
+  });
+
+  iframe.src = "/?_t=" + Date.now();
+}
+
+function _setDiag(el, msg) {
+  if (!el) return;
+  el.textContent = msg;
+  el.hidden = false;
 }
 
 // ── Shared renderers ─────────────────────────────────────────────────────────
