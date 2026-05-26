@@ -16,7 +16,7 @@ After the F1 sweep and a verification pass, the project is mostly shipped. What 
 
 ### Big features (own sprint each)
 
-- **Player-facing Debug Drawer** — right-side 420 px panel with section tabs (game_state, last_intent, mechanic_result, llm_prompts, narrator_output), `/debug set-hp`, `/debug set-state`, `/debug reset-cooldowns` slash commands, `debug_mode=True` in turn response. Admin endpoints already exist, only the UI is missing. ~1 day. [Lines 604-608]
+- ~~**Player-facing Debug Drawer**~~ — **[x] fully shipped** (verified 2026-05-25): 420px drawer (`app.js:6957`, `styles.css:7784`), 6 tabs, slash commands in palette, admin Debug tab in Narzędzia (`sections/debug.js` + `tools.js`). `debug_mode` turn payload flag dropped — drawer pulls `/api/debug/last-turn` directly, flag is redundant.
 - **Combat Sandbox autotest harness ([#22])** — YAML scenarios via `/api/admin/sandbox/run-scenario`. Companion to the existing #21 sandbox. ~1-2 days. Was the Stage 15 fallback now that the AI Test Agent path is cancelled. [Line 561]
 
 ### Blocked / waiting on prerequisites
@@ -25,10 +25,8 @@ After the F1 sweep and a verification pass, the project is mostly shipped. What 
 
 ### Small open items (quick wins)
 
-- **Wound label in combat banner** — sheet renders the label; combat panel still missing the same widget. ~30 min. [Line 585]
-- **Mobile bottom tab bar** (Gra | Postać | Ekwipunek) — replaces the current tap-to-open sheet pattern on small screens. ~half day. [Line 598]
-- **Between-campaigns REST state UI** — dedicated screen for an idle hero between campaigns (XP spending entry, hero journal access). ~half day. [Line 425]
-- **Fallen Hero → NPC promotion** admin flow — turn a dead hero into an NPC for narrative continuity. ~half day. [Line 426]
+- ~~**Between-campaigns REST state UI**~~ — **[x] shipped (2026-05-25)**: idle hero bottom-sheet panel (`_showIdleHeroPanel` in `app.js`, `#idle-hero-panel` in `index.html`, CSS in `styles.css`). Shows HP, XP, campaigns count; Awansuj + Historia buttons; "Wyrusz" → campaigns screen.
+- ~~**Fallen Hero → NPC promotion**~~ — **[x] shipped (2026-05-25)**: backend `POST /api/admin/characters/{id}/promote-to-npc` + `GET /api/admin/characters/fallen` in `admin.py`. Admin UI card in `sections/debug.js` under Narzędzia → Debug tab.
 
 ### Deferred from F1.2
 
@@ -515,11 +513,11 @@ The original phase-grouped view follows below for context. Cross-reference task 
   - [x] Dungeon chest + boss loot tables
   - [x] Loot table sidebar search ([#16])
 - [x] **T23 Healing System** — items, rest, Scholar Mend Wounds
-- [-] **T24 Wound Labels** — sheet rendering shipped; combat banner still pending
+- [x] **T24 Wound Labels** — fully shipped
   - [x] `get_wound_label()` helper with 5 thresholds + colors
   - [x] Narrator injection (`wound_label` in turn response)
   - [x] Render wound-label text below player HP bar in character sheet — `app.js:5133/6618` `.wound-label`
-  - [ ] Render wound-label text below player HP bar in combat banner — _still open_
+  - [x] Render wound-label text below player HP bar in combat banner — verified shipped: `app.js:4606` + `styles.css:5158`
 - [x] **T25V2 XP Progression V2** — earning + spending UI all shipped
   - [x] `grant_character_xp` fires on enemy defeat
   - [x] XP awards table seeded (22 sources, 6 categories)
@@ -603,15 +601,15 @@ The original phase-grouped view follows below for context. Cross-reference task 
   - [x] Frontend `renderSuggestedActions` + disabled-state styling
   - [x] Structured-action bypass (`input_type: "structured"`)
   - [x] Combat composer integration ([#17] series)
-- [-] **T34 Combat UI** — combat banner wound-label render still open
+- [x] **T34 Combat UI**
   - [x] Spell picker (Scholar — floating overlay, mana check)
   - [x] Initiative panel ([#18], commit `6d9ba8a`)
   - [x] Zone system (engaged/ranged) — display, gating, AI charging, zone-change ([#19], `b8bbf11` + `d57953f`)
   - [x] Crit flash overlay (Nat 20 / Nat 1) ([#23], `74c350a`)
   - [x] Enemy HP shows bar AND number per [D3] — verified in code
   - [x] Condition badges on combatant rows — `app.js:4451-4454` (⚠ Przerażony, ☠ Zatruty, ⚡ Zaskoczony glyph map)
-  - [ ] Wound label text below player HP bar in **combat banner** _(still open — only the sheet renders it)_
-- [-] **T35 Character Sheet UI** — most spec items shipped; mobile bottom-tab still pending
+  - [x] Wound label text below player HP bar in **combat banner** — verified shipped: `app.js:4606` + `styles.css:5158`
+- [x] **T35 Character Sheet UI**
   - [x] HP bar · Mana bar (Scholar) · Level · gold · LCK
   - [x] Stat modifiers (color-coded), conditions chip row, Arcane Points
   - [x] Skills tab, Inventory tab (8-slot anatomical), Spells tab (Scholar), Identity tab
@@ -625,15 +623,15 @@ The original phase-grouped view follows below for context. Cross-reference task 
   - [x] Quest item drop blocker — Stage 4 S7 at `app.js:6347`
   - [x] Real-time animations — `hp-damage-flash` + `gold-pulse` keyframes in `styles.css:4165-4185`
   - [x] **8-slot equipment diagram** per [D1] — shipped (see T20 above)
-  - [ ] Mobile bottom tab bar (Gra | Postać | Ekwipunek) — _still open_
+  - [x] Mobile bottom tab bar (Gra | Postać | Ekwipunek) — verified shipped: `styles.css:4215`, `app.js:5054`, `index.html:1605`
 - [x] **T43 Player World Map** — fog-of-war hex grid, click-to-travel, swipe-close
-- [-] **T44 Debug System** — _admin backend exists, full spec'd UI missing per [D5]_
+- [x] **T44 Debug System** — fully shipped (verified 2026-05-25)
   - [x] Admin endpoints (`routers/debug.py`): `/player_state`, `/gm_decisions`, `/validation_flags`, `/settings/feature_flags`, `/reset_test_env`
-  - [ ] Player-facing debug drawer (right panel, 420px)
-  - [ ] Section tabs (game_state, last_intent, mechanic_result, llm_prompts, narrator_output)
-  - [ ] Slash commands: `/debug set-hp`, `/debug set-state`, `/debug reset-cooldowns`
-  - [ ] `debug_mode=True` in turn response payload for inline introspection
-  - [ ] Admin Panel "🐛 Debug" section that surfaces the existing endpoints in UI
+  - [x] Player-facing debug drawer (right panel, 420px) — `app.js:6957`, `styles.css:7784`
+  - [x] Section tabs (state, intent, mechanic, llm, narrator, timing) — `_renderDebugDrawerBody()` at `app.js:7039`
+  - [x] Slash commands: `/debug set-hp`, `/debug set-state`, `/debug reset-cooldowns` — `app.js:2531`, palette `app.js:6828`
+  - [x] Admin Panel "🐛 Debug" section — `sections/debug.js` mounted in `tools.js` as 3rd tab
+  - [-] `debug_mode=True` in turn response — **dropped** (drawer pulls `/api/debug/last-turn` directly; flag is redundant)
 
 ### Extra Frontend work
 
@@ -721,7 +719,7 @@ Phase 05  Combat            ███████████░  5.5/7   79%   
 Phase 06  Economy           ████████░░░░  6.5/10  65%   (T20/T24/T25V2/T26X partial)
 Phase 07  Narrator          ███████████░  3.5/4   88%   (T28 deceased context)
 Phase 08  Admin             ██████████░░  4.5/5   90%   (+sandbox bonus, T32/T33SA partial)
-Phase 09  Frontend          ██████████░░  4/5     80%   (T44 partial; hex world + T35 done)
+Phase 09  Frontend          ████████████  5/5    100%   (T44 verified shipped; hex world + T35 done)
 Phase 10  Polish            ████████████  5/5    100%   (T36-T39 + T45 all complete)
 Phase 11  Observability     ░░░░░░░░░░░░  0/4      0%
 Phase 12  AI Test Agent     ░░░░░░░░░░░░  0/10     0%
@@ -732,7 +730,11 @@ Bonus stages (not in original plan):
   Stage 11-E  Content library (weapons/armor/items/cons)      5/5   100%
   Stage 12-B  Księga Wiedzy quick tips                        7/7   100%
   Stage 12-C  Hex world expansion + GM biome context          7/7   100%
+  Stage 13-A  F1 Player accounts (soft-delete, friends)       3/3   100%
+  Stage 13-B  F3 Shake-to-roll + directional throw            4/4   100%
+  Stage 13-C  Between-campaigns idle panel                    1/1   100%
+  Stage 13-D  Fallen Hero → NPC promotion flow                1/1   100%
 
 Overall (original plan):  ~~~~~~~~~~~~~~~~  42/64  66%
-Overall (incl. bonus):    ~~~~~~~~~~~~~~~~  ~80 tasks complete
+Overall (incl. bonus):    ~~~~~~~~~~~~~~~~  ~90 tasks complete
 ```

@@ -11,6 +11,7 @@ This workspace is an **NFS mount** of `192.168.1.61:/home/piotrszmidt`. The loca
 - Repo path on DEV server: `/home/piotrszmidt/ai-gm`.
 - Verify dev changes at `https://aigm-dev.studio-colorbox.com/`.
 - Default to the DEV stack (`ai-gm-dev-*` containers); never touch PROD containers (`ai-gm-backend-1`, `ai-gm-frontend-1`) without explicit user request.
+- **NEVER open `ai_gm.db` directly through the sshfs mount** — concurrent writes via sshfs cause SQLite WAL corruption. All DB access must go through `ssh claude@192.168.1.61 'docker exec ai-gm-dev-backend-1 sqlite3 /data/ai_gm.db "<query>"'`. (Incident: #43)
 
 ## Environment Roles & Branch Flow
 

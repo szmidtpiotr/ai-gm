@@ -37,7 +37,7 @@ services:
       - LLM_API_KEY=${LLM_API_KEY:-}
       - DEFAULT_CAMPAIGN_LANGUAGE=${DEFAULT_CAMPAIGN_LANGUAGE:-pl}
       - GAME_LANG=${GAME_LANG:-pl-PL}
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/ai_gm_dev.db}
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////data/ai_gm.db}
       # Test Runner + /api/debug/* — w DEV domyślnie włączone; wyłącz: AI_TEST_MODE=0 w .env lub override.
       - AI_TEST_MODE=${AI_TEST_MODE:-1}
       # Same SQLite as auth/campaigns (raw sqlite3); isolated test_ai.db breaks E2E login.
@@ -155,9 +155,9 @@ services:
       context: .
       dockerfile: mcp_server/Dockerfile
     volumes:
-      - ./data-dev:/data:ro
+      - ./data-dev:/data
     environment:
-      - DB_PATH=/data/ai_gm_dev.db
+      - DB_PATH=/data/ai_gm.db
       - MCP_TRANSPORT=streamable-http
       - FASTMCP_HOST=0.0.0.0
       - FASTMCP_PORT=8400
