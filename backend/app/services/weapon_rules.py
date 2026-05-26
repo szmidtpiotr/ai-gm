@@ -212,6 +212,7 @@ def resolve_attack_roll_for_weapon(
     raw_roll: int,
     weapon_row: dict[str, Any] | None,
 ) -> dict[str, Any]:
+    from app.services.vitality_service import wound_penalty
     raw = max(1, min(20, _safe_int(raw_roll, 1)))
     test = attack_test_for_weapon_type(weapon_row.get("weapon_type") if weapon_row else None)
     attack_stat = effective_attack_stat_for_weapon(sheet, weapon_row)
@@ -220,7 +221,9 @@ def resolve_attack_roll_for_weapon(
     skill_rank = _safe_int(skills.get(test, 0), 0)
     proficiency = 2 if skill_rank >= 3 else 0
     weapon_bonus = two_handed_attack_modifier(sheet, weapon_row)
-    modifier = stat_mod + skill_rank + proficiency + weapon_bonus
+    wound = wound_penalty(sheet)
+    wound_atk = int(wound.get("atk") or 0)
+    modifier = stat_mod + skill_rank + proficiency + weapon_bonus + wound_atk
     total = raw + modifier
     return {
         "test": test,
@@ -230,6 +233,8 @@ def resolve_attack_roll_for_weapon(
         "skill_rank": skill_rank,
         "proficiency": proficiency,
         "weapon_bonus": weapon_bonus,
+        "wound_penalty": wound_atk,
+        "wound_tier": wound.get("tier") or "",
         "modifier": modifier,
         "total": total,
         "roll_type": "attack",

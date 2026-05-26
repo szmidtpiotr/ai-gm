@@ -76,6 +76,7 @@ SKILL_LABELS = _SKILL_LABEL_FALLBACK
 
 def calc_skill_modifier_info(sheet: dict, skill_key: str) -> dict:
     """Return full modifier breakdown for the Roll Popup."""
+    from app.services.vitality_service import wound_penalty
     stats = sheet.get("stats") or {}
     skills = sheet.get("skills") or {}
     governing_stat = _skill_stat(skill_key)
@@ -83,12 +84,17 @@ def calc_skill_modifier_info(sheet: dict, skill_key: str) -> dict:
     stat_mod = stat_modifier(stat_val)
     skill_rank = int(skills.get(skill_key, 0))
     proficiency = 2 if skill_rank >= 3 else 0
-    total = skill_rank + stat_mod + proficiency
+    # Issue #26 (Option A) — DEX-governed skills take the wound DEX penalty.
+    wound = wound_penalty(sheet)
+    wound_dex = int(wound.get("dex") or 0) if governing_stat == "DEX" else 0
+    total = skill_rank + stat_mod + proficiency + wound_dex
     return {
         "governing_stat": governing_stat,
         "skill_rank": skill_rank,
         "stat_mod": stat_mod,
         "proficiency": proficiency,
+        "wound_penalty": wound_dex,
+        "wound_tier": wound.get("tier") or "",
         "total": total,
     }
 

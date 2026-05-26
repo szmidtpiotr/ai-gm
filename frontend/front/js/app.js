@@ -6657,18 +6657,20 @@ function getWoundLabel(currentHp, maxHp) {
     const hp = Math.max(0, Number(currentHp) || 0);
     const max = Math.max(1, Number(maxHp) || 1);
     const pct = (hp / max) * 100;
+    // mechEffect mirrors backend wound_penalty() in vitality_service.py (issue #26 Option A).
     if (pct >= 76) return null;
-    if (pct >= 51) return { label: 'Ranny',             tier: 'minor',    color: '#ffc107' };
-    if (pct >= 26) return { label: 'Ciężko Ranny',      tier: 'impaired', color: '#ff9800' };
-    if (pct >= 11) return { label: 'Poważnie Ranny',    tier: 'desperate',color: '#f44336' };
-    return            { label: 'Na Skraju Śmierci', tier: 'near_death',color: '#7f0000' };
+    if (pct >= 51) return { label: 'Ranny',             tier: 'minor',    color: '#ffc107', mechEffect: '' };
+    if (pct >= 26) return { label: 'Ciężko Ranny',      tier: 'impaired', color: '#ff9800', mechEffect: '' };
+    if (pct >= 11) return { label: 'Poważnie Ranny',    tier: 'desperate',color: '#f44336', mechEffect: '-1 ATK' };
+    return            { label: 'Na Skraju Śmierci', tier: 'near_death',color: '#7f0000', mechEffect: '-2 ATK, -1 DEX' };
 }
 
 // Render markup for a wound label, or empty string when above threshold.
 function renderWoundLabelHTML(currentHp, maxHp) {
     const w = getWoundLabel(currentHp, maxHp);
     if (!w) return '';
-    return `<div class="wound-label wound-label--${w.tier}" aria-label="${w.label}"><span class="wound-label__orn">❦</span><span class="wound-label__text">${w.label}</span><span class="wound-label__orn">❦</span></div>`;
+    const tip = w.mechEffect ? `${w.label}: ${w.mechEffect}` : w.label;
+    return `<div class="wound-label wound-label--${w.tier}" aria-label="${tip}" title="${tip}"><span class="wound-label__orn">❦</span><span class="wound-label__text">${w.label}</span><span class="wound-label__orn">❦</span></div>`;
 }
 
 function escapeHtml(s) {

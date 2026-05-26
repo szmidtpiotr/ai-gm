@@ -39,6 +39,44 @@ def stat_modifier(stat_value: int) -> int:
     return (int(stat_value) - 10) // 2
 
 
+# ── Wound penalties (issue #26, Option A — mild) ───────────────────────────
+#
+# Low-HP characters take mechanical penalties in addition to the cosmetic
+# wound labels emitted from context_injector. Thresholds use the same HP%
+# breakpoints as the labels in context_injector._WOUND_LABELS so the visual
+# severity stamp matches the mechanical effect.
+#
+#   HP% range     Label                      ATK   DEX
+#   ──────────────────────────────────────────────────
+#   > 25%          (mild / none)             0     0
+#   11 – 25%       Poważnie ranny/a          -1    0
+#   1 – 10%        Ciężko ranny / Na skraju  -2   -1
+#
+# Returned dict is intentionally additive — callers add the values onto
+# their existing modifier totals without needing to know which tier fired.
+
+
+def wound_penalty(sheet: dict) -> dict[str, int]:
+    """Compute attack/DEX wound penalties from current HP fraction.
+
+    Returns ``{"atk": int <= 0, "dex": int <= 0, "tier": str}`` where tier
+    is ``""`` / ``"severe"`` / ``"critical"`` for downstream display.
+    """
+    try:
+        cur = int(sheet.get("current_hp") or 0)
+        mx = int(sheet.get("max_hp") or 0)
+    except (TypeError, ValueError):
+        return {"atk": 0, "dex": 0, "tier": ""}
+    if mx <= 0 or cur <= 0:
+        return {"atk": 0, "dex": 0, "tier": ""}
+    pct = (cur / mx) * 100.0
+    if pct <= 10:
+        return {"atk": -2, "dex": -1, "tier": "critical"}
+    if pct <= 25:
+        return {"atk": -1, "dex": 0, "tier": "severe"}
+    return {"atk": 0, "dex": 0, "tier": ""}
+
+
 def calculate_hp(archetype: str, con: int, level: int = 1) -> int:
     """
     HP = base_hp + CON_modifier × level.  Minimum 1.
