@@ -143,18 +143,65 @@ def _is_reading_context(text: str) -> bool:
 # Polish narrative mode still slipped through ~5% of the time. Without this
 # fallback the entire fight plays out as cinematic prose with zero HP / dice.
 _COMBAT_INTENT_VERBS = (
-    "atakuj", "atakuje", "uderzam", "uderzac", "walcze", "walczy",
-    "rzucam sie na", "skacze na", "bije", "bije sie",
-    "kopie", "kopnij", "tne", "tnac",
-    "strzelam", "strzelac", "klue", "klu sztyletem", "pcham noz",
-    "wyciagam bron", "biore zamach", "obalam",
+    # atakować
+    "atakuj", "atakuje", "zaatakuj", "zaatakuje",
+    # uderzać / bić
+    "uderzam", "uderzac", "uderz", "bij", "bije", "bije sie", "bijac",
+    # walczyć
+    "walcze", "walczy",
+    # machać / zamachiwać (swing) — "machając młotem", "zamach mieczem"
+    "macha", "machac", "macham", "machajac", "zamach", "wymach",
+    # ciąć / kroić
+    "tne", "tnac", "siekam", "siekan",
+    # kłuć / pchnąć / dźgać / ugodzić
+    "klue", "klu ", "pcham", "pchnij", "dzgam", "dzgac", "ugadzam", "ugodzam",
+    # strzelać / miotać
+    "strzelam", "strzelac", "miotam", "wypalac",
+    # rzucać się / skakać na
+    "rzucam sie na", "rzucam sie", "skacze na", "skacze",
+    # nacierać / szarżować / ruszać na
+    "naciera", "nacierac", "szarzuje", "szarze", "ruszam na", "ruszam sie na",
+    # kopać / obalać
+    "kopie", "kopnij", "obalam",
+    # wyciągać broń / brać zamach
+    "wyciagam bron", "biore zamach", "wyjmuje bron", "chwytam za bron",
+    # cios / wymierzać / zadawać
+    "cios", "zadaje cios", "wyprowadzam cios", "wymierzam", "wymierz",
+    # zabijać / ranić
+    "zabijam", "zabije", "ranie", "ranic",
+    # inne
+    "obalam", "przewracam", "powalem",
+    # pchnąć nożem / inne bronie
+    "pcham noz", "klu sztyletem",
+)
+
+# Weapon stems that signal combat context when combined with a motion verb.
+_COMBAT_WEAPON_STEMS = (
+    "mlot", "miecz", "sztylet", "szabl", "topor", "kord", "wloczni",
+    "bron", "luk", "kusza", "kij", "maczug", "berlo", "rapier", "buz", "noz",
+    "halabard", "morgenszt", "cep",
+)
+_COMBAT_MOTION_STEMS = (
+    "macha", "uderz", "wymach", "wymierz", "zamach", "cios",
+    "rzuc", "pchn", "dzgn", "kluj", "siekn", "walcz", "ataku",
+    "nacier", "szarz", "rusz", "skacz",
 )
 
 
 def _player_combat_intent(text: str) -> bool:
-    """Detect explicit attack declaration in player text."""
+    """Detect explicit attack declaration in player text.
+
+    Two paths:
+    1. Direct verb match against _COMBAT_INTENT_VERBS.
+    2. Weapon-context: player mentions a weapon item + a motion/action stem
+       (catches "machając młotem", "wymachuję toporem", "uderzyłem berłem").
+    """
     norm = _normalize_pl(text or "")
-    return any(v in norm for v in _COMBAT_INTENT_VERBS)
+    if any(v in norm for v in _COMBAT_INTENT_VERBS):
+        return True
+    has_weapon = any(ws in norm for ws in _COMBAT_WEAPON_STEMS)
+    has_motion = any(ms in norm for ms in _COMBAT_MOTION_STEMS)
+    return has_weapon and has_motion
 
 
 def _resolve_enemy_key_from_context(
