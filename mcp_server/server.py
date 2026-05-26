@@ -1308,10 +1308,14 @@ def submit_player_turn(action: str) -> str:
                     timeout=60,
                 )
                 prose = resolve_result.get("prose") or resolve_result.get("narrative") or ""
-                success = resolve_result.get("success")
-                nat20 = resolve_result.get("nat20")
-                nat1 = resolve_result.get("nat1")
-                dc = resolve_result.get("dc") or mods.get("dc", "?") if isinstance(mods, dict) else "?"
+                # Backend nests roll outcome under skill_test_result — see api/turns.py.
+                st_res = resolve_result.get("skill_test_result") or {}
+                success = st_res.get("success")
+                nat20 = st_res.get("nat20")
+                nat1 = st_res.get("nat1")
+                # For DC counter, opponent_total IS the DC threshold; for opposed it's the rolled total.
+                _opp_total = st_res.get("opponent_total")
+                dc = _opp_total if _opp_total is not None else (mods.get("dc", "?") if isinstance(mods, dict) else "?")
                 result_label = "SUKCES" if success else "PORAŻKA"
                 if nat20: result_label = "NAT 20 — KRYTYCZNY SUKCES!"
                 if nat1: result_label = "NAT 1 — KRYTYCZNA PORAŻKA!"

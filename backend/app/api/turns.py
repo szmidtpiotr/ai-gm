@@ -105,6 +105,35 @@ def _text_is_action_attempt(text: str) -> bool:
     if stripped.endswith("?"):
         return False
     return True
+
+
+_READING_PHRASES = (
+    "na glos", "glosno", "co tam jest napisane", "co jest napisane",
+    "tresc", "co tam pisze", "co pisze", "co tam mowi",
+)
+_READING_VERBS = (
+    "czytam", "odczytuje", "czytaj", "spogladam na", "patrze na",
+)
+_READING_TARGETS = (
+    "napis", "inskrypcj", "ksieg", "ksiazk", "zwoj", "pergamin",
+    "list", "notatk", "mape", "tabliczk", "rune",
+)
+
+
+def _is_reading_context(text: str) -> bool:
+    """Detect pure reading/examining actions so they bypass keyword-based skill routing.
+
+    Why: reading should never trigger a roll (system prompt rule, issue #12 BUG-02).
+    The pre-LLM keyword scanner matches words like ``odczytuje`` (arcana keyword) which
+    is also a normal reading verb in Polish. Without this guard, "odczytuję napis na
+    głos" wrongly fires an Arkana skill test before the LLM ever sees the request.
+    """
+    norm = _normalize_pl(text)
+    if any(p in norm for p in _READING_PHRASES):
+        return True
+    has_verb = any(v in norm for v in _READING_VERBS)
+    has_target = any(t in norm for t in _READING_TARGETS)
+    return has_verb and has_target
 # 9A-4c+ — gdy model nie generuje cue, dołącz „Open Shop” na podstawie intencji gracza i NPC w scenie.
 _TRADE_USER_INTENT_RE = re.compile(
     r"(kup|sprzed|towar|towary|towarem|handl|handel|sklep|poka|pokaz"
@@ -2871,7 +2900,9 @@ def create_turn(
 
         # ── Pre-LLM: scan player text against trigger_keywords ───────────────
         # If a keyword matches and we're not in combat, trigger skill test immediately.
-        if not text.startswith("__AI_GM") and _text_is_action_attempt(text):
+        # Reading actions (issue #12 BUG-02) bypass this scanner so e.g. "odczytuję napis"
+        # doesn't fire phantom Arkana — system prompt rule handles narration instead.
+        if not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text):
             try:
                 _txt_pre = _normalize_pl(text)
                 # Combat-class skills (attack / ranged_attack / two_handed) represent
@@ -3766,7 +3797,8 @@ def create_turn_stream(
         # Mirror of the same scanner in create_turn(); fires before the LLM
         # call so exploration actions that match trigger_keywords get a dice
         # prompt immediately instead of going straight to narrative.
-        if not roll_request and not text.startswith("__AI_GM") and _text_is_action_attempt(text):
+        # Reading-context guard (issue #12 BUG-02) — see _is_reading_context().
+        if not roll_request and not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text):
             try:
                 _txt_s = _normalize_pl(text)
                 _kw_rows_s = conn.execute(
