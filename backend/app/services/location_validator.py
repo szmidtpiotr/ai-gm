@@ -228,36 +228,56 @@ def _resolve_session_id(
     return session_id if session_id is not None else campaign_id
 
 
+def _label_match_score(target_norm: str, loc_label: str) -> int:
+    """Score how well *target_norm* (already lower/stripped) matches *loc_label*.
+
+    Considers both whole-string and the "Parent: Child" suffix — codebase
+    convention is "Cieszowice: Karczma Pod Lipą" style labels, where matching
+    only the whole string drops the score below threshold for bare-name targets.
+    """
+    loc_norm = (loc_label or "").lower()
+    score = fuzz.ratio(target_norm, loc_norm)
+    if ":" in loc_norm:
+        suffix = loc_norm.split(":", 1)[1].strip()
+        if suffix:
+            score = max(score, fuzz.ratio(target_norm, suffix))
+    return score
+
+
 def _fuzzy_match_location(target_label: str, locations: list[dict]) -> Optional[dict]:
     """
     Fuzzy match po label — zwraca najlepszy match jeśli score >= threshold.
-    
-    Returns:
-        Najlepsza pasująca lokalizacja lub None
+
+    Issue #41 (LOC-3): suffix-aware via _label_match_score so a bare child name
+    ("Karczma Pod Lipą") matches an existing "Parent: Child" labeled row.
     """
     best_match = None
     best_score = 0
-    
+    tgt_norm = target_label.strip().lower()
+
     for loc in locations:
-        score = fuzz.ratio(target_label.lower(), loc["label"].lower())
+        score = _label_match_score(tgt_norm, loc["label"] or "")
         if score > best_score and score >= FUZZY_MATCH_THRESHOLD:
             best_score = score
             best_match = loc
-    
+
     return best_match
 
 
 def _ask_llm_if_same_location(target_label: str, existing_label: str) -> bool:
     """
     Zapytaj LLM czy dwie nazwy to ta sama lokalizacja (fallback dla fuzzy match).
-    
-    Returns:
-        True jeśli LLM potwierdzi że to ta sama lokalizacja
+
+    Returns True if LLM confirms — or if the LLM is unreachable (fail-open).
+    The fuzzy match has already passed the 80% threshold; treating an LLM
+    outage as "different location" silently bloats the DB with duplicates
+    (issue #41 secondary). Trust the fuzzy match when the second opinion
+    isn't available.
     """
     prompt = f"""Czy "{target_label}" i "{existing_label}" opisują tę samą lokalizację w świecie gry?
 
 Odpowiedz TYLKO "TAK" lub "NIE"."""
-    
+
     try:
         response = generate_chat(
             messages=[
@@ -267,13 +287,18 @@ Odpowiedz TYLKO "TAK" lub "NIE"."""
             model=None,
             llm_config=None
         )
-        
+
         answer = (response or "").strip().upper()
         return answer.startswith("TAK")
-        
+
     except Exception as e:
-        logger.error("llm_same_location_check_error", error=str(e))
-        return False
+        logger.warning(
+            "llm_same_location_check_error_fail_open",
+            error=str(e),
+            target=target_label,
+            existing=existing_label,
+        )
+        return True
 
 
 def _get_session_current_location(session_id: int | str) -> Optional[dict]:
@@ -656,8 +681,11 @@ def validate_move(
         matched = _fuzzy_match_location(intent.target_label, all_locs)
         
         if matched:
-            # Sprawdź czy to ta sama (LLM potwierdzenie dla edge cases)
-            if fuzz.ratio(intent.target_label.lower(), matched["label"].lower()) < 95:
+            # Sprawdź czy to ta sama (LLM potwierdzenie dla edge cases).
+            # Use _label_match_score so "Parent: Child" labels stay confident
+            # against bare child-name targets without a second-opinion round-trip.
+            tgt_norm = intent.target_label.strip().lower()
+            if _label_match_score(tgt_norm, matched["label"]) < 95:
                 # Niedokładny match — zapytaj LLM
                 if not _ask_llm_if_same_location(intent.target_label, matched["label"]):
                     # LLM mówi że to inne miejsce
