@@ -21,6 +21,7 @@ from typing import Any
 from fastapi import APIRouter, Body, HTTPException
 
 from app.services import combat_service as combat
+from app.services.xp_service import get_hero_level as _get_hero_level
 
 DB_PATH = Path("/data/ai_gm.db")
 SANDBOX_TITLE_PREFIX = "[SANDBOX]"
@@ -253,7 +254,7 @@ def setup_sandbox(payload: dict = Body(...)) -> dict[str, Any]:
             "id": clone_row["id"],
             "name": clone_row["name"],
             "archetype": sheet.get("archetype"),
-            "level": int(sheet.get("level") or 1),
+            "level": _get_hero_level(sheet),
             "hp": int(sheet.get("current_hp") or sheet.get("max_hp") or 0),
             "max_hp": int(sheet.get("max_hp") or 0),
             "mana": int(sheet.get("current_mana") or 0),

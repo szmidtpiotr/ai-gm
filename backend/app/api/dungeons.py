@@ -16,13 +16,13 @@ def _get_db():
 
 
 def _get_hero_level(character_id: int) -> int:
+    from app.services.xp_service import get_hero_level
     conn = _get_db()
     try:
         char = conn.execute("SELECT sheet_json FROM characters WHERE id = ?", (character_id,)).fetchone()
         if not char:
             return 1
-        sheet = json.loads(char["sheet_json"] or "{}")
-        return int(sheet.get("level", 1) or 1)
+        return get_hero_level(json.loads(char["sheet_json"] or "{}"))
     finally:
         conn.close()
 

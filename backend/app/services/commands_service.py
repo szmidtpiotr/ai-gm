@@ -355,7 +355,7 @@ def _execute_roll_command(cur, conn, character_id: int, char_row, sheet: dict, s
 
 def _execute_xp_command(cur, conn, character_id: int, sheet: dict, arg: str) -> "CommandResult":
     """Admin `/debug xp add N` / `/debug xp set N` — direct XP injection for testing."""
-    from app.services.xp_service import grant_character_xp, apply_levelup_if_needed
+    from app.services.xp_service import grant_character_xp, apply_levelup_if_needed, get_hero_level
 
     parts = (arg or "").strip().split()
     if len(parts) < 2:
@@ -403,7 +403,7 @@ def _execute_xp_command(cur, conn, character_id: int, sheet: dict, arg: str) -> 
             "amount": n,
             "xp_available": int(sheet["xp_available"]),
             "xp_lifetime_earned": int(sheet.get("xp_lifetime_earned") or 0),
-            "level": int(sheet.get("level") or 1),
+            "level": get_hero_level(sheet),
             "level_up": levelup,
         }},
     )

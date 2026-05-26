@@ -222,7 +222,8 @@ def _build_character_sheet(
     con_mod = _stat_modifier(stats["CON"])
     int_mod = _stat_modifier(stats["INT"])
 
-    level = int(sheet.get("level", 1) or 1)
+    from app.services.xp_service import get_hero_level
+    level = get_hero_level(sheet)
     hp = calculate_hp(normalized_archetype, stats["CON"], level)
     mana = calculate_mana(normalized_archetype, stats["INT"], level)
     sheet["current_hp"] = hp

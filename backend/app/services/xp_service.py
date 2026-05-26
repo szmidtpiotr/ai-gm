@@ -170,6 +170,26 @@ def calc_level(xp_lifetime: int) -> int:
     return min(MAX_LEVEL, int(xp_lifetime) // XP_PER_LEVEL + 1)
 
 
+def get_hero_level(sheet: dict) -> int:
+    """Canonical hero level read. Prefers ``sheet['level']``; derives from
+    ``xp_lifetime_earned`` when missing/invalid.
+
+    Why: ``sheet_json.level`` can be absent on legacy characters whose sheet
+    was rewritten before the level-up code shipped (issue #38). Without this
+    helper, callers fall back to L1 even when the character has earned enough
+    XP for a higher level — silently under-scaling dungeons, spell tier gates,
+    etc.
+    """
+    raw = sheet.get("level")
+    try:
+        lvl = int(raw) if raw is not None else 0
+    except (TypeError, ValueError):
+        lvl = 0
+    if 1 <= lvl <= MAX_LEVEL:
+        return lvl
+    return calc_level(int(sheet.get("xp_lifetime_earned") or 0))
+
+
 def apply_levelup_if_needed(
     sheet: dict,
     conn: sqlite3.Connection,

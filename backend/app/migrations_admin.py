@@ -2067,6 +2067,36 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     """, "v2-game-dungeons-seed")
     # ─────────────────────────────────────────────────────────────────────────
 
+    # ── Issue #38: backfill sheet_json.level from xp_lifetime_earned ────────
+    # Older characters' sheets lost the `level` key during sheet rewrites;
+    # without it, every reader fell back to L1, silently under-scaling
+    # dungeons, spell tiers, and HP recompute. Fill in the canonical value
+    # derived from xp_lifetime_earned (calc_level formula, cap 10).
+    try:
+        backfill_rows = conn.execute(
+            """
+            SELECT id, sheet_json FROM characters
+            WHERE json_extract(sheet_json, '$.level') IS NULL
+               OR CAST(json_extract(sheet_json, '$.level') AS INTEGER) < 1
+            """
+        ).fetchall()
+        for _r in backfill_rows:
+            try:
+                _s = json.loads(_r[1] or "{}")
+                _xp = int(_s.get("xp_lifetime_earned") or 0)
+                _s["level"] = min(10, _xp // 100 + 1)
+                conn.execute(
+                    "UPDATE characters SET sheet_json = ? WHERE id = ?",
+                    (json.dumps(_s, ensure_ascii=False), _r[0]),
+                )
+            except Exception:
+                pass
+        if backfill_rows:
+            conn.commit()
+            logger.info("v2_migration_applied", label="v2-backfill-hero-level", count=len(backfill_rows))
+    except Exception as _bf_err:
+        logger.warning("v2_migration_failed", label="v2-backfill-hero-level", error=str(_bf_err))
+
     # ── Task 42: Character-first flow ────────────────────────────────────────
     _make_character_first_migration(conn)
 

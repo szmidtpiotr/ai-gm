@@ -84,6 +84,19 @@ def parse_json_safe(text, default=None):
         return default
 
 
+def hero_level(sheet: dict) -> int:
+    """Mirror of backend's xp_service.get_hero_level — derives level from
+    xp_lifetime_earned when sheet.level is missing (issue #38)."""
+    raw = sheet.get("level") if isinstance(sheet, dict) else None
+    try:
+        lvl = int(raw) if raw is not None else 0
+    except (TypeError, ValueError):
+        lvl = 0
+    if 1 <= lvl <= 10:
+        return lvl
+    return min(10, int(sheet.get("xp_lifetime_earned") or 0) // 100 + 1)
+
+
 def ts_cutoff(hours_back: int | None = None, period: str | None = None) -> str:
     """Return ISO cutoff timestamp for filtering."""
     if period:
@@ -321,7 +334,7 @@ def get_player_stats(
                         "id": cid,
                         "name": ch["name"],
                         "archetype": sheet.get("archetype") or sheet.get("class"),
-                        "level": sheet.get("level", 1),
+                        "level": hero_level(sheet),
                         "xp_lifetime_earned": sheet.get("xp_lifetime_earned", 0),
                         "campaigns_played": camp_count,
                         "total_turns": total_turns,
@@ -390,7 +403,7 @@ def get_campaign_summary(campaign_id: int) -> dict:
                 "id": char_id,
                 "name": char_row["name"],
                 "archetype": sheet.get("archetype") or sheet.get("class"),
-                "level": sheet.get("level", 1),
+                "level": hero_level(sheet),
                 "current_hp": sheet.get("current_hp"),
                 "max_hp": sheet.get("max_hp"),
                 "current_mana": sheet.get("current_mana"),
@@ -1239,7 +1252,7 @@ def initialize_player_session() -> str:
     sheet = char.get("sheet_json", {})
     hp = sheet.get("current_hp", "?")
     max_hp = sheet.get("max_hp", "?")
-    level = sheet.get("level", 1)
+    level = hero_level(sheet) if isinstance(sheet, dict) else 1
     archetype = sheet.get("archetype", "?")
     location = char.get("current_location_label", "nieznana lokacja")
     name = char.get("name", "?")

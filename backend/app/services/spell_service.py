@@ -92,7 +92,8 @@ def resolve_miscast(sheet: dict, enemy: dict, conn: sqlite3.Connection) -> dict:
     Apply miscast effects based on Scholar's level.
     Returns miscast result dict with self_damage, stun, narrative.
     """
-    level = int(sheet.get("level", 1) or 1)
+    from app.services.xp_service import get_hero_level
+    level = get_hero_level(sheet)
     cur_hp = int(sheet.get("current_hp", 0) or 0)
 
     result: dict[str, Any] = {"miscast": True, "self_damage": 0, "stun": True, "narrative": ""}
@@ -282,10 +283,11 @@ def learn_spell(character_id: int, spell_key: str) -> dict:
             (character_id,),
         ).fetchone()
         import json as _j
+        from app.services.xp_service import get_hero_level as _ghl
         char_level = 1
         if sj_row:
             try:
-                char_level = int(_j.loads(sj_row["sheet_json"] or "{}").get("level") or 1)
+                char_level = _ghl(_j.loads(sj_row["sheet_json"] or "{}"))
             except Exception:
                 char_level = 1
         conn.execute(

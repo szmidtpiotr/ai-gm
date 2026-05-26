@@ -11,6 +11,7 @@ from fastapi import APIRouter, Body, Depends, File, Header, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
+from app.services.xp_service import get_hero_level as _get_hero_level
 from app.services.admin_accounts import (
     create_account_admin,
     list_accounts,
@@ -126,6 +127,17 @@ ADMIN_SQLITE_PATH = "/data/ai_gm.db"
 ADMIN_DB_RESTORE_TMP = "/data/ai_gm_restore_tmp.db"
 ADMIN_DB_BAK_PATH = "/data/ai_gm.db.bak"
 _SAFE_SQLITE_TABLE = re.compile(r"^[a-zA-Z0-9_]+$")
+
+
+def _update_rarity(table: str, key: str, rarity: int) -> None:
+    if table not in {"game_config_weapons", "game_config_items", "game_config_consumables"}:
+        return
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn.execute(f"UPDATE {table} SET rarity = ?, updated_at = datetime('now') WHERE key = ?", (rarity, key))
+        conn.commit()
+    finally:
+        conn.close()
 
 PROMPTS_DIR = Path(__file__).resolve().parents[2] / "prompts"
 PROMPT_NAME_TO_FILE: dict[str, str] = {
@@ -329,6 +341,7 @@ class WeaponPatchReq(BaseModel):
     effect_json: str | None = None
     weapon_slot: str | None = None  # Stage 5
     is_active: bool | None = None
+    rarity: int | None = None
     force: bool = False
 
 
@@ -451,6 +464,7 @@ class ItemPatchReq(BaseModel):
     approved: int | None = None
     note: str | None = None
     is_active: bool | None = None
+    rarity: int | None = None
     force: bool = False
 
 
@@ -534,6 +548,7 @@ class ConsumablePatchReq(BaseModel):
     value_gp: int | None = None  # było base_price (8H)
     note: str | None = None
     is_active: bool | None = None
+    rarity: int | None = None
     force: bool = False
 
 
@@ -1233,6 +1248,11 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             is_active=req.is_active,
             force=req.force,
         )
+        if req.rarity is not None:
+            r = max(1, min(5, int(req.rarity)))
+            _update_rarity("game_config_weapons", key, r)
+            if isinstance(item, dict):
+                item["rarity"] = r
         return {"item": item}
     except KeyError:
         raise HTTPException(status_code=404, detail="Weapon not found") from None
@@ -1620,6 +1640,11 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             is_active=req.is_active,
             force=req.force,
         )
+        if req.rarity is not None:
+            r = max(1, min(5, int(req.rarity)))
+            _update_rarity("game_config_items", key, r)
+            if isinstance(item, dict):
+                item["rarity"] = r
         return {"item": item}
     except KeyError:
         raise HTTPException(status_code=404, detail="Item not found") from None
@@ -1754,6 +1779,11 @@ def admin_patch_consumable(key: str, req: ConsumablePatchReq, _: None = Depends(
             is_active=req.is_active,
             force=req.force,
         )
+        if req.rarity is not None:
+            r = max(1, min(5, int(req.rarity)))
+            _update_rarity("game_config_consumables", key, r)
+            if isinstance(item, dict):
+                item["rarity"] = r
         return {"item": item}
     except KeyError:
         raise HTTPException(status_code=404, detail="Consumable not found") from None
@@ -2272,7 +2302,7 @@ def admin_campaigns_live(_: None = Depends(require_admin_token)):
                 "char_name": r["char_name"],
                 "char_location": r["char_location"],
                 "char_archetype": sheet.get("archetype"),
-                "char_level": sheet.get("level"),
+                "char_level": _get_hero_level(sheet),
                 "char_current_hp": sheet.get("current_hp"),
                 "char_max_hp": sheet.get("max_hp"),
                 "char_conditions": conditions_raw,

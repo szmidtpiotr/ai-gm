@@ -276,10 +276,9 @@ def _end_summary_payload(
                     }
                 )
 
+    from app.services.xp_service import get_hero_level
     arch = str(sheet.get("archetype") or sheet.get("class") or "adventurer").strip()
-    level = sheet.get("level")
-    if level is None and sheet.get("xp_lifetime_earned") is not None:
-        level = max(1, min(10, int(sheet["xp_lifetime_earned"]) // 100 + 1))
+    level = get_hero_level(sheet)
     xp_lifetime = int(sheet.get("xp_lifetime_earned") or 0)
 
     # Pull ending title + summary from gm_plan_json for victory.
