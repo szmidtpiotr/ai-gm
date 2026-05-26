@@ -104,3 +104,4 @@
 - **Phase 11 · Test Campaigns**
   - [Combat Simulation](PHASE_11_TEST_CAMPAIGNS/01_COMBAT_SIMULATION.md)
   - [Aigm Fix Report Bug02 Bug03](PHASE_11_TEST_CAMPAIGNS/02_AIGM_Fix_Report_BUG02_BUG03.md)
+  - [Playtest Borys 2026-05-26](PHASE_11_TEST_CAMPAIGNS/03_Playtest_Borys_2026-05-26.md)

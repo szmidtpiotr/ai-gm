@@ -177,6 +177,8 @@ def save_llm_preset(
             conn.commit()
             # If this preset is currently active, push changes to the in-memory runtime
             # so the backend picks up the new values without requiring a restart.
+            # Also clear per-campaign model pins so all active campaigns follow the
+            # updated model immediately.
             active_id = get_active_global_preset_id()
             if active_id is not None and int(active_id) == int(preset_id):
                 set_runtime_config(
@@ -185,6 +187,8 @@ def save_llm_preset(
                     model=safe_model,
                     api_key=api_key_value,
                 )
+                conn.execute("UPDATE campaigns SET model_id = NULL WHERE status = 'active'")
+                conn.commit()
             return get_llm_preset(int(preset_id), mask_api_key=True)
 
         api_key_value = str(api_key or "").strip()
@@ -218,6 +222,9 @@ def activate_llm_preset(preset_id: int) -> dict[str, Any]:
         if not row:
             raise KeyError("not_found")
         _set_active_global_preset_id(conn, int(preset_id))
+        # Clear per-campaign model pins so every active campaign immediately
+        # follows the new preset's model. A NULL model_id means "use preset".
+        conn.execute("UPDATE campaigns SET model_id = NULL WHERE status = 'active'")
         conn.commit()
         set_runtime_config(
             provider=str(row["provider"] or ""),
