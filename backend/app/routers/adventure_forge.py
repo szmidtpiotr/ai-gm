@@ -940,46 +940,52 @@ def forge_delete_template(template_id: int, _: None = Depends(_require_admin)):
 
 # ── Generate full CampaignPlan for a template ─────────────────────────────────
 
-_GENERATE_PLAN_SYSTEM_PROMPT = """\
+def _build_generate_plan_system_prompt(act_count: int) -> str:
+    """Build the generate-plan system prompt with exactly act_count act entries in the schema.
+    Showing the correct number in the example is the only reliable way to get LLMs to honour it."""
+    acts_entries = ",\n    ".join(
+        f'{{"number": {i}, "title": "string", "summary": "string", "key_beats": ["string","string","string"], "completed": false}}'
+        for i in range(1, act_count + 1)
+    )
+    return f"""\
 Jesteś doświadczonym Mistrzem Gry mrocznego fantasy (styl WFRP).
 Twoim zadaniem jest stworzenie planu kampanii na podstawie szkicu przygody.
 Zwróć WYŁĄCZNIE poprawny obiekt JSON — bez markdown, bez komentarzy, bez tekstu poza JSON.
 Wszystkie wartości tekstowe pisz w języku polskim.
 
-SCHEMAT JSON (wypełnij każde pole):
-{
+SCHEMAT JSON — WYMAGANA LICZBA AKTÓW: {act_count} (dokładnie tyle wpisów w tablicy "acts"):
+{{
   "title": "string",
   "premise": "string",
   "acts": [
-    {"number": 1, "title": "string", "summary": "string", "key_beats": ["string","string","string"], "completed": false}
-    /* N acts — count passed in user prompt */
+    {acts_entries}
   ],
   "endings": [
-    {"id": "ending_primary", "title": "string", "type": "primary", "description": "string", "requirements": ["string","string"]},
-    {"id": "ending_alternate", "title": "string", "type": "alternate", "description": "string", "requirements": ["string"]}
+    {{"id": "ending_primary", "title": "string", "type": "primary", "description": "string", "requirements": ["string","string"]}},
+    {{"id": "ending_alternate", "title": "string", "type": "alternate", "description": "string", "requirements": ["string"]}}
   ],
   "key_npcs": [
-    {"key": "slug", "name": "string", "role": "string", "importance": "critical", "deviation_consequence": "branch", "alive": true, "personality_prompt": "string", "description": "string", "keyword_triggers": ["string"]}
+    {{"key": "slug", "name": "string", "role": "string", "importance": "critical", "deviation_consequence": "branch", "alive": true, "personality_prompt": "string", "description": "string", "keyword_triggers": ["string"]}}
   ],
   "key_locations": [
-    {"key": "slug", "name": "string", "role": "string", "description": "string — 2-3 zdania opisu dla MG (klimat, wygląd, przeznaczenie)", "visited": false}
+    {{"key": "slug", "name": "string", "role": "string", "description": "string — 2-3 zdania opisu dla MG (klimat, wygląd, przeznaczenie)", "visited": false}}
   ],
   "key_enemies": [
-    {"key": "slug", "name": "string", "tier": "standard", "hp_base": 20, "ac_base": 12, "damage_die": "1d6", "description": "string — wygląd i charakter wroga", "note": "string — specjalne zdolności i taktyki dla MG"}
+    {{"key": "slug", "name": "string", "tier": "standard", "hp_base": 20, "ac_base": 12, "damage_die": "1d6", "description": "string — wygląd i charakter wroga", "note": "string — specjalne zdolności i taktyki dla MG"}}
   ],
   "active_act": 1,
   "scene_log": [],
   "deviations": [],
   "branches": [],
-  "engine_private": {
+  "engine_private": {{
     "secret_predisposition_hint": "string",
     "hidden_twist": "string",
     "contingency": "string"
-  }
-}
+  }}
+}}
 
 ZASADY:
-1. LICZBA AKTÓW: DOKŁADNIE tyle ile podano w prompcie użytkownika (pole "Liczba aktów"). Nie mniej, nie więcej.
+1. LICZBA AKTÓW: schemat powyżej zawiera dokładnie {act_count} wpisów w tablicy "acts" — wygeneruj DOKŁADNIE tyle, nie mniej, nie więcej.
 2. Dokładnie 2 zakończenia: primary + alternate (oba moralnie niejednoznaczne).
 3. 3-6 kluczowych NPC, co najmniej jeden critical.
 4. 2-5 lokacji. Pierwsza to punkt startowy.
@@ -1075,8 +1081,18 @@ def forge_generate_template_plan(
                 "Stwórz pełny plan kampanii na podstawie powyższych danych."
             )
 
+        # Determine final act count to build the schema — must match what user_prompt says
+        if req_act_count and req_act_count > 0:
+            final_act_count = max(3, min(req_act_count, 12))
+        elif idea:
+            sd2 = json.loads(idea["structured_data"] or "{}")
+            idea_arc_count = len(sd2.get("arcs") or [])
+            final_act_count = max(3, idea_arc_count) if idea_arc_count else 5
+        else:
+            final_act_count = 5
+
         messages = [
-            {"role": "system", "content": _GENERATE_PLAN_SYSTEM_PROMPT},
+            {"role": "system", "content": _build_generate_plan_system_prompt(final_act_count)},
             {"role": "user", "content": user_prompt},
         ]
 
