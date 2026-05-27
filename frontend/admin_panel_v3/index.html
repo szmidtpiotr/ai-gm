@@ -1359,6 +1359,12 @@
     .se-effect-remove:hover { color:var(--red) }
     .se-effect-row { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:4px; font-size:0.78rem }
     .se-effect-row label { color:var(--t3); white-space:nowrap }
+    /* GM Private section — auto-growing textareas */
+    #tpl-gm-hint, #tpl-gm-twist, #tpl-gm-contingency {
+      field-sizing: content;
+      min-height: 80px;
+      resize: vertical;
+    }
   </style>
 </head>
 <body>
@@ -3218,17 +3224,26 @@
           <div id="tpl-tab-items" style="display:none">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
               <div class="card" style="padding:14px">
-                <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Broń kampanii</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                  <div style="font-size:0.83rem;font-weight:600;color:var(--t1)">Broń kampanii</div>
+                  <button class="btn btn-sm btn-secondary" onclick="forgeGeneratePlanItem('weapon', event)">🤖 Generuj AI</button>
+                </div>
                 <div id="tpl-items-weapon-list" style="display:flex;flex-direction:column;gap:8px"></div>
                 <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="_addTplItem('weapon')">+ Dodaj broń</button>
               </div>
               <div class="card" style="padding:14px">
-                <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Przedmioty (zbroja, ekwipunek)</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                  <div style="font-size:0.83rem;font-weight:600;color:var(--t1)">Przedmioty (zbroja, ekwipunek)</div>
+                  <button class="btn btn-sm btn-secondary" onclick="forgeGeneratePlanItem('item', event)">🤖 Generuj AI</button>
+                </div>
                 <div id="tpl-items-item-list" style="display:flex;flex-direction:column;gap:8px"></div>
                 <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="_addTplItem('item')">+ Dodaj przedmiot</button>
               </div>
               <div class="card" style="padding:14px">
-                <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Mikstury i konsumable</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                  <div style="font-size:0.83rem;font-weight:600;color:var(--t1)">Mikstury i konsumable</div>
+                  <button class="btn btn-sm btn-secondary" onclick="forgeGeneratePlanItem('consumable', event)">🤖 Generuj AI</button>
+                </div>
                 <div id="tpl-items-consumable-list" style="display:flex;flex-direction:column;gap:8px"></div>
                 <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="_addTplItem('consumable')">+ Dodaj miksturę</button>
               </div>
@@ -3246,10 +3261,10 @@
           <!-- GM Private (always visible, collapsible) -->
           <details style="margin-top:16px;border:1px solid var(--amber-border);border-radius:var(--r);overflow:hidden">
             <summary style="padding:10px 14px;background:var(--amber-light);cursor:pointer;font-size:0.8rem;font-weight:600;color:var(--amber)">🔒 GM Private (sekrety kampanii)</summary>
-            <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-              <div class="form-row"><label class="form-label">Sekretna predyspozycja</label><textarea id="tpl-gm-hint" class="form-input" rows="3" style="resize:vertical"></textarea></div>
-              <div class="form-row"><label class="form-label">Ukryty twist</label><textarea id="tpl-gm-twist" class="form-input" rows="3" style="resize:vertical"></textarea></div>
-              <div class="form-row"><label class="form-label">Plan awaryjny</label><textarea id="tpl-gm-contingency" class="form-input" rows="3" style="resize:vertical"></textarea></div>
+            <div style="padding:14px;display:flex;flex-direction:column;gap:10px">
+              <div class="form-row"><label class="form-label">Sekretna predyspozycja</label><textarea id="tpl-gm-hint" class="form-input" rows="4" style="resize:vertical" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea></div>
+              <div class="form-row"><label class="form-label">Ukryty twist</label><textarea id="tpl-gm-twist" class="form-input" rows="4" style="resize:vertical" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea></div>
+              <div class="form-row"><label class="form-label">Plan awaryjny</label><textarea id="tpl-gm-contingency" class="form-input" rows="4" style="resize:vertical" oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"></textarea></div>
             </div>
           </details>
         </div>
@@ -7852,9 +7867,6 @@
             '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openTemplateEditor(' + t.id + ')">Edytuj</button>' +
             '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();if(confirm(\'Usunąć szablon?\'))apiFetch(\'/api/admin/forge/templates/' + t.id + '\',{method:\'DELETE\'}).then(()=>{_sectionLoaded.delete(\'forge\');_loadForgeTemplates()})" style="margin-left:auto">🗑</button>' +
           '</div>' +
-          (t.status === 'published' ?
-            '<button class="btn btn-sm btn-primary" style="width:100%;margin-top:8px" onclick="event.stopPropagation();forgeLaunchCampaign(' + t.id + ',\'' + _esc(t.title||'Kampania') + '\')" title="Utwórz kampanię z tego szablonu">🚀 Utwórz kampanię</button>' :
-            '') +
         '</div>';
       }).join('');
     } catch(e) { grid.innerHTML = '<div style="color:var(--red);font-size:0.8rem">' + _esc(e.message) + '</div>'; }
@@ -7973,6 +7985,10 @@
       if (document.getElementById('tpl-gm-hint')) document.getElementById('tpl-gm-hint').value = ep.secret_predisposition_hint || '';
       if (document.getElementById('tpl-gm-twist')) document.getElementById('tpl-gm-twist').value = ep.hidden_twist || '';
       if (document.getElementById('tpl-gm-contingency')) document.getElementById('tpl-gm-contingency').value = ep.contingency || '';
+      ['tpl-gm-hint','tpl-gm-twist','tpl-gm-contingency'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; el.addEventListener('input', function(){ this.style.height='auto'; this.style.height=this.scrollHeight+'px'; }, {once:false}); }
+      });
     } catch(e) { _showToast(e.message || 'Błąd ładowania szablonu.', 'error'); }
   }
 
@@ -8229,6 +8245,25 @@
     if (!_tplEditorPlan) _tplEditorPlan = {};
     if (!_tplEditorPlan.key_items) _tplEditorPlan.key_items = [];
     openTplEntityModal('key_items', -1, entityType, { entity_type: entityType });
+  }
+
+  async function forgeGeneratePlanItem(entityType, evt) {
+    if (!_currentTplId) return;
+    const btn = evt ? evt.target : null;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    try {
+      const r = await apiFetch(`/api/admin/forge/templates/${_currentTplId}/generate-item`, {
+        method: 'POST',
+        body: JSON.stringify({ entity_type: entityType })
+      });
+      if (!_tplEditorPlan) _tplEditorPlan = {};
+      if (!_tplEditorPlan.key_items) _tplEditorPlan.key_items = [];
+      openTplEntityModal('key_items', -1, entityType, Object.assign({ entity_type: entityType }, r.item || {}));
+    } catch(e) {
+      _showToast('Błąd generowania: ' + (e.message || 'nieznany błąd'), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🤖 Generuj AI'; }
+    }
   }
 
   // ─── Template Entity Modal ───────────────────────────────────────────────────
@@ -8570,6 +8605,10 @@
       if (document.getElementById('tpl-gm-hint')) document.getElementById('tpl-gm-hint').value = ep.secret_predisposition_hint || '';
       if (document.getElementById('tpl-gm-twist')) document.getElementById('tpl-gm-twist').value = ep.hidden_twist || '';
       if (document.getElementById('tpl-gm-contingency')) document.getElementById('tpl-gm-contingency').value = ep.contingency || '';
+      ['tpl-gm-hint','tpl-gm-twist','tpl-gm-contingency'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; el.addEventListener('input', function(){ this.style.height='auto'; this.style.height=this.scrollHeight+'px'; }, {once:false}); }
+      });
       if (d.gm_plan_json?.title && document.getElementById('tpl-title')) {
         document.getElementById('tpl-title').value = d.gm_plan_json.title;
       }
@@ -8578,68 +8617,7 @@
     finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Generuj plan AI'; } }
   }
 
-  async function forgeLaunchCampaign(templateId, templateTitle) {
-    // Build a mini-modal inline
-    const existingModal = document.getElementById('forge-launch-modal');
-    if (existingModal) existingModal.remove();
-
-    // Fetch users list for the player dropdown
-    let usersHtml = '<option value="">— wybierz gracza —</option>';
-    try {
-      const d = await apiFetch('/api/admin/users');
-      const users = d.users || d || [];
-      usersHtml = '<option value="">— wybierz gracza —</option>' +
-        (Array.isArray(users) ? users : []).map(u =>
-          '<option value="' + u.id + '">' + _esc(u.username || u.name || ('User #' + u.id)) + '</option>'
-        ).join('');
-    } catch(e) { /* ignore, user must select manually */ }
-
-    const modal = document.createElement('div');
-    modal.id = 'forge-launch-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center';
-    modal.innerHTML =
-      '<div style="background:var(--canvas);border:1px solid var(--border);border-radius:var(--r2);width:min(420px,95vw);padding:20px;box-shadow:var(--shadow-lg)">' +
-        '<div style="font-size:0.95rem;font-weight:600;margin-bottom:14px">🚀 Nowa kampania z szablonu</div>' +
-        '<div style="font-size:0.78rem;color:var(--t3);margin-bottom:10px">Szablon: <strong>' + _esc(templateTitle) + '</strong></div>' +
-        '<div class="form-row" style="margin-bottom:10px"><label class="form-label">Tytuł kampanii</label>' +
-          '<input class="form-input" id="flm-title" type="text" value="' + _esc(templateTitle) + '"></div>' +
-        '<div class="form-row" style="margin-bottom:14px"><label class="form-label">Gracz</label>' +
-          '<select class="form-input" id="flm-user">' + usersHtml + '</select></div>' +
-        '<div style="display:flex;gap:8px;justify-content:flex-end">' +
-          '<button class="btn btn-sm btn-secondary" onclick="document.getElementById(\'forge-launch-modal\').remove()">Anuluj</button>' +
-          '<button class="btn btn-sm btn-primary" onclick="forgeLaunchCampaignConfirm(' + templateId + ')">Utwórz kampanię</button>' +
-        '</div>' +
-      '</div>';
-    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-    document.body.appendChild(modal);
-  }
-
-  async function forgeLaunchCampaignConfirm(templateId) {
-    const title = document.getElementById('flm-title')?.value?.trim();
-    const userId = parseInt(document.getElementById('flm-user')?.value);
-    if (!title) { _showToast('Podaj tytuł kampanii.', 'warn'); return; }
-    if (!userId) { _showToast('Wybierz gracza.', 'warn'); return; }
-    const btn = document.querySelector('#forge-launch-modal .btn-primary');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
-    try {
-      const d = await apiFetch('/api/campaigns', {
-        method: 'POST',
-        body: JSON.stringify({
-          title,
-          system_id: 'fantasy',
-          owner_user_id: userId,
-          template_id: templateId,
-          mode: 'pre_built',
-          status: 'active',
-        }),
-      });
-      document.getElementById('forge-launch-modal')?.remove();
-      _showToast('Kampania "' + _esc(title) + '" utworzona! ID: ' + d.id, 'success');
-    } catch(e) {
-      _showToast(e.message || 'Błąd tworzenia kampanii.', 'error');
-      if (btn) { btn.disabled = false; btn.textContent = 'Utwórz kampanię'; }
-    }
-  }
+  // forgeLaunchCampaign removed — publishing is now handled by forgePublishTemplate / forgeUnpublishTemplate
 
   // ── Voice ───────────────────────────────────────────────
   let _voiceConfig = null;
