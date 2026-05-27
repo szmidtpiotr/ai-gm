@@ -44,6 +44,7 @@ const screens = {
     heroes: document.getElementById('heroes-screen'),
     campaigns: document.getElementById('campaigns-screen'),
     newCampaign: document.getElementById('new-campaign-screen'),
+    campaignStyle: document.getElementById('campaign-style-screen'),
     characterWizard: document.getElementById('character-wizard-screen'),
     game: document.getElementById('game-screen')
 };
@@ -206,6 +207,14 @@ let characterData = null;
 let authToken = null;
 let currentUser = null;
 let debugMode = localStorage.getItem('aigm_debug') === '1';
+
+// --- Campaign style screen state ---
+let _pendingCampaignTitle = '';
+let _campaignStyleMode = 'solo';
+let _selectedHookIds = [];
+let _selectedTemplateId = null;
+let _hookPoolAll = [];
+let _hookTypeFilter = '';
 
 // --- Wizard state (real 4-step flow) ---
 let wizardCreatedChar = null;   // character returned from POST /campaigns/{id}/characters
@@ -1481,38 +1490,178 @@ async function handleCreateCampaign(e) {
     e.preventDefault();
 
     const name = elements.campaignNameInput.value.trim();
+    if (!name) { showToast('Wprowadź nazwę kampanii', 'error'); return; }
+    if (!currentUser?.id) { showToast('Nie jesteś zalogowany', 'error'); return; }
 
-    if (!name) {
-        showToast('Wprowadź nazwę kampanii', 'error');
-        return;
-    }
+    _pendingCampaignTitle = name;
+    _campaignStyleMode = 'solo';
+    _selectedHookIds = [];
+    _selectedTemplateId = null;
+    _hookPoolAll = [];
+    _hookTypeFilter = '';
 
-    if (!currentUser?.id) {
-        showToast('Nie jesteś zalogowany', 'error');
-        return;
-    }
+    _selectCampaignStyle('solo');
+    showScreen('campaignStyle');
+    _initCampaignStyleScreen();
+}
 
-    const submitBtn = elements.newCampaignForm.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-
+async function _initCampaignStyleScreen() {
+    // Load hook pool and templates in parallel
     try {
-        const campaign = await apiRequest('POST', '/campaigns', {
-            title: name,
+        const [hooksRes, tplRes] = await Promise.allSettled([
+            apiRequest('GET', '/campaign-templates/hooks/pool'),
+            apiRequest('GET', '/campaign-templates'),
+        ]);
+        _hookPoolAll = hooksRes.status === 'fulfilled' ? (hooksRes.value?.items || []) : [];
+        const templates = tplRes.status === 'fulfilled' ? (tplRes.value?.items || []) : [];
+        _renderHookPool();
+        _renderTemplateGrid(templates);
+    } catch (_) {}
+}
+
+function _selectCampaignStyle(mode) {
+    _campaignStyleMode = mode;
+    const soloBtnEl = document.getElementById('style-btn-solo');
+    const prebuiltBtnEl = document.getElementById('style-btn-prebuilt');
+    const soloCheck = document.getElementById('style-check-solo');
+    const prebuiltCheck = document.getElementById('style-check-prebuilt');
+    const hookSection = document.getElementById('hook-picker-section');
+    const tplSection = document.getElementById('template-picker-section');
+
+    if (mode === 'solo') {
+        soloBtnEl?.classList.add('adv-card--primary');
+        prebuiltBtnEl?.classList.remove('adv-card--primary');
+        if (soloCheck) soloCheck.style.display = '';
+        if (prebuiltCheck) prebuiltCheck.style.display = 'none';
+        if (hookSection) hookSection.style.display = '';
+        if (tplSection) tplSection.style.display = 'none';
+        _selectedTemplateId = null;
+    } else {
+        prebuiltBtnEl?.classList.add('adv-card--primary');
+        soloBtnEl?.classList.remove('adv-card--primary');
+        if (prebuiltCheck) prebuiltCheck.style.display = '';
+        if (soloCheck) soloCheck.style.display = 'none';
+        if (tplSection) tplSection.style.display = '';
+        if (hookSection) hookSection.style.display = 'none';
+        _selectedHookIds = [];
+    }
+}
+
+function _renderHookPool() {
+    const typeFilters = document.getElementById('hook-type-filters');
+    const grid = document.getElementById('hook-pool-grid');
+    if (!typeFilters || !grid) return;
+
+    const types = [...new Set(_hookPoolAll.map(h => h.hook_type))];
+    const typeLabels = { weapon:'⚔ Broń', enemy:'💀 Wrogowie', npc:'👤 NPC', location:'🗺 Lokacje', item:'🎒 Przedmioty', consumable:'🧪 Konsumpcja', armor:'🛡 Zbroja', event:'⚡ Zdarzenia', theme:'💡 Tematy' };
+
+    typeFilters.innerHTML = `<button class="chip${_hookTypeFilter==='' ? ' chip--active':''}" onclick="_filterHookPool('')">Wszystkie</button>`
+        + types.map(t => `<button class="chip${_hookTypeFilter===t?' chip--active':''}" onclick="_filterHookPool('${t}')">${typeLabels[t]||t}</button>`).join('');
+
+    const visible = _hookTypeFilter ? _hookPoolAll.filter(h => h.hook_type === _hookTypeFilter) : _hookPoolAll;
+
+    if (!visible.length) {
+        grid.innerHTML = '<p style="font-size:0.78rem;color:var(--text-secondary);text-align:center;padding:12px 0">Brak dostępnych wątków.</p>';
+        return;
+    }
+
+    grid.innerHTML = visible.map(h => {
+        const sel = _selectedHookIds.includes(h.id);
+        return `<button type="button" class="adv-card${sel?' adv-card--primary':''}" onclick="_toggleHook(${h.id})" style="opacity:${!sel && _selectedHookIds.length>=5?0.45:1}">
+          <span class="adv-card__icon">${typeLabels[h.hook_type]?.split(' ')[0]||'📌'}</span>
+          <div class="adv-card__body"><h3>${h.title}</h3><p>${(h.description||'').substring(0,100)}</p></div>
+          ${sel ? '<span style="color:var(--accent)">✓</span>' : ''}
+        </button>`;
+    }).join('');
+}
+
+function _filterHookPool(type) {
+    _hookTypeFilter = type;
+    _renderHookPool();
+}
+
+function _toggleHook(id) {
+    if (_selectedHookIds.includes(id)) {
+        _selectedHookIds = _selectedHookIds.filter(x => x !== id);
+    } else if (_selectedHookIds.length < 5) {
+        _selectedHookIds.push(id);
+    }
+    _renderHookPool();
+}
+
+function _renderTemplateGrid(templates) {
+    const grid = document.getElementById('template-pool-grid');
+    if (!grid) return;
+    if (!templates.length) {
+        grid.innerHTML = '<p style="font-size:0.78rem;color:var(--text-secondary);text-align:center;padding:12px 0">Brak gotowych przygód.</p>';
+        return;
+    }
+    const diffLabels = ['','★','★★','★★★','★★★★','★★★★★'];
+    grid.innerHTML = templates.map(t => {
+        const sel = _selectedTemplateId === t.id;
+        return `<button type="button" class="adv-card${sel?' adv-card--primary':''}" onclick="_selectTemplate(${t.id})">
+          <span class="adv-card__icon">📖</span>
+          <div class="adv-card__body">
+            <h3>${t.title}</h3>
+            <p>${(t.description||'').substring(0,120)}</p>
+            <p style="font-size:0.72rem;margin-top:4px;color:var(--text-secondary)">${diffLabels[t.difficulty_rating]||''} ${t.atmosphere||''}</p>
+          </div>
+          ${sel ? '<span style="color:var(--accent)">✓</span>' : ''}
+        </button>`;
+    }).join('');
+}
+
+function _selectTemplate(id) {
+    _selectedTemplateId = _selectedTemplateId === id ? null : id;
+    const grid = document.getElementById('template-pool-grid');
+    if (!grid) return;
+    grid.querySelectorAll('.adv-card').forEach((btn, i) => {
+        const isSelected = parseInt(btn.getAttribute('onclick')?.match(/\d+/)?.[0]) === _selectedTemplateId;
+        btn.classList.toggle('adv-card--primary', isSelected);
+        const check = btn.querySelector('span:last-child');
+        if (check && check !== btn.querySelector('.adv-card__icon') && check !== btn.querySelector('.adv-card__body')) {
+            check.remove();
+        }
+        if (isSelected) btn.insertAdjacentHTML('beforeend', '<span style="color:var(--accent)">✓</span>');
+    });
+}
+
+async function _finalCreateCampaign() {
+    if (!currentUser?.id) { showToast('Nie jesteś zalogowany', 'error'); return; }
+    if (_campaignStyleMode === 'pre_built' && !_selectedTemplateId) {
+        showToast('Wybierz gotową przygodę lub wróć do poprzedniej opcji', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('campaign-style-submit');
+    if (btn) btn.disabled = true;
+    const loadingToast = showToast('Tworzę kampanię…', 'info', 0);
+    try {
+        const payload = {
+            title: _pendingCampaignTitle,
             system_id: 'fantasy',
             model_id: 'default',
             owner_user_id: currentUser.id,
             language: 'pl',
-            mode: 'solo',
-            status: 'active'
-        });
+            mode: _campaignStyleMode === 'pre_built' ? 'pre_built' : 'solo',
+            status: 'active',
+        };
+        if (_campaignStyleMode === 'solo' && _selectedHookIds.length) {
+            payload.selected_hook_ids = _selectedHookIds;
+        }
+        if (_campaignStyleMode === 'pre_built' && _selectedTemplateId) {
+            payload.template_id = _selectedTemplateId;
+        }
+
+        const campaign = await apiRequest('POST', '/campaigns', payload);
         currentCampaignId = campaign.id;
         currentCampaign = campaign;
+        loadingToast?.remove?.();
         startCharacterWizard();
     } catch (error) {
-        console.error('Create campaign error:', error);
+        loadingToast?.remove?.();
         showToast(error.message || 'Nie udało się utworzyć kampanii', 'error');
-    } finally {
-        submitBtn.disabled = false;
+        if (btn) btn.disabled = false;
     }
 }
 
@@ -8212,6 +8361,10 @@ function initEventListeners() {
     // New Campaign
     elements.newCampaignForm?.addEventListener('submit', handleCreateCampaign);
     elements.btnNewCampaignBack?.addEventListener('click', () => showScreen('campaigns'));
+
+    // Campaign Style Screen
+    document.getElementById('campaign-style-back')?.addEventListener('click', () => showScreen('newCampaign'));
+    document.getElementById('campaign-style-submit')?.addEventListener('click', _finalCreateCampaign);
 
     // Idle hero panel
     document.getElementById('idle-hero-panel-backdrop')?.addEventListener('click', _hideIdleHeroPanel);

@@ -867,7 +867,7 @@ def forge_delete_template(template_id: int, _: None = Depends(_require_admin)):
 
 # ── Public template endpoint (player-facing) ─────────────────────────────────
 
-public_router = APIRouter(prefix="/api/campaign-templates", tags=["campaign-templates"])
+public_router = APIRouter(prefix="/campaign-templates", tags=["campaign-templates"])
 
 
 @public_router.get("")
@@ -879,5 +879,21 @@ def list_published_templates():
             "SELECT * FROM campaign_templates WHERE status = 'published' ORDER BY play_count DESC, created_at DESC"
         ).fetchall()
         return {"items": [_template_to_dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@public_router.get("/hooks/pool")
+def list_approved_hooks_public():
+    """Return approved hooks available for player hook selection during campaign creation."""
+    conn = _get_db()
+    try:
+        rows = conn.execute(
+            """SELECT id, hook_type, title, description, significance, quality_rating, times_used
+               FROM adventure_hooks
+               WHERE status IN ('approved', 'promoted')
+               ORDER BY quality_rating DESC, times_used ASC"""
+        ).fetchall()
+        return {"items": [dict(r) for r in rows]}
     finally:
         conn.close()

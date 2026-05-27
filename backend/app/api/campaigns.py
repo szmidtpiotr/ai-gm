@@ -120,6 +120,8 @@ class CampaignCreateRequest(BaseModel):
     language: str = DEFAULT_CAMPAIGN_LANGUAGE
     mode: str = "solo"
     status: str = "active"
+    template_id: int | None = None
+    selected_hook_ids: list[int] = []
 
 
 class GmPlanPatchRequest(BaseModel):
@@ -468,10 +470,29 @@ def create_campaign(req: CampaignCreateRequest):
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
+    # Resolve mode and pre-built plan from template if provided
+    mode = req.mode
+    prefilled_plan: str | None = None
+    template_id = req.template_id
+
+    if template_id:
+        tpl = conn.execute(
+            "SELECT gm_plan_json FROM campaign_templates WHERE id = ? AND status = 'published'",
+            (template_id,),
+        ).fetchone()
+        if not tpl:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Campaign template not found or not published")
+        mode = "pre_built"
+        prefilled_plan = tpl["gm_plan_json"]
+
+    selected_hook_ids_json = json.dumps(req.selected_hook_ids or [])
+
     cur.execute(
         """
-        INSERT INTO campaigns (title, system_id, model_id, owner_user_id, language, mode, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO campaigns (title, system_id, model_id, owner_user_id, language, mode, status,
+                               template_id, selected_hook_ids)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             req.title,
@@ -479,13 +500,23 @@ def create_campaign(req: CampaignCreateRequest):
             req.model_id,
             req.owner_user_id,
             req.language,
-            req.mode,
+            mode,
             req.status,
+            template_id,
+            selected_hook_ids_json,
         ),
     )
     conn.commit()
 
     campaign_id = cur.lastrowid
+
+    # For pre-built campaigns: copy template plan directly, skip LLM generation
+    if prefilled_plan and prefilled_plan.strip() and prefilled_plan.strip() != "{}":
+        conn.execute(
+            "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
+            (prefilled_plan, campaign_id),
+        )
+        conn.commit()
 
     row = conn.execute(
         """

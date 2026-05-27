@@ -646,6 +646,57 @@
     </main>
   </div>
 
+  <!-- CAMPAIGN STYLE SCREEN -->
+  <div id="campaign-style-screen" class="screen">
+    <header class="header">
+      <button type="button" class="header__back" id="campaign-style-back">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="header__center">
+        <span class="header__icon">✨</span>
+        <h1 class="header__title">Styl kampanii</h1>
+      </div>
+      <div class="header__right"></div>
+    </header>
+    <main class="wizard-content" style="overflow-y:auto;padding:16px 20px;">
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+        <button type="button" class="adv-card adv-card--primary" id="style-btn-solo" onclick="_selectCampaignStyle('solo')">
+          <span class="adv-card__icon">✨</span>
+          <div class="adv-card__body">
+            <h3>Własna przygoda</h3>
+            <p>AI-GM generuje kampanię specjalnie dla Twojej postaci</p>
+          </div>
+          <span id="style-check-solo" style="color:var(--accent)">✓</span>
+        </button>
+        <button type="button" class="adv-card" id="style-btn-prebuilt" onclick="_selectCampaignStyle('pre_built')">
+          <span class="adv-card__icon">📖</span>
+          <div class="adv-card__body">
+            <h3>Gotowa przygoda</h3>
+            <p>Wybierz gotową kampanię od administratora</p>
+          </div>
+          <span id="style-check-prebuilt" style="color:var(--accent);display:none">✓</span>
+        </button>
+      </div>
+      <div id="hook-picker-section">
+        <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:8px">Opcjonalnie: wybierz do 5 wątków, które AI-GM weźmie pod uwagę (pozostaw puste dla pełnej swobody).</p>
+        <div id="hook-type-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+        <div id="hook-pool-grid" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+      <div id="template-picker-section" style="display:none;">
+        <p style="font-size:0.78rem;color:var(--text-secondary);margin-bottom:10px">Wybierz gotową przygodę:</p>
+        <div id="template-pool-grid" style="display:flex;flex-direction:column;gap:10px;"></div>
+      </div>
+    </main>
+    <footer class="wizard-footer">
+      <button type="button" class="btn btn--primary btn--full" id="campaign-style-submit">
+        <span class="btn__icon">✨</span>
+        Stwórz kampanię
+      </button>
+    </footer>
+  </div>
+
   <!-- CHARACTER WIZARD SCREEN -->
   <div id="character-wizard-screen" class="screen">
     <header class="header">
