@@ -3029,6 +3029,57 @@
       </div>
     </div>
 
+    <!-- Forge Generate Plan Dialog -->
+    <div id="forge-plan-dialog" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.55);align-items:center;justify-content:center" onclick="if(event.target===this)document.getElementById('forge-plan-dialog').style.display='none'">
+      <div class="card" style="width:380px;padding:24px;display:flex;flex-direction:column;gap:14px;background:var(--canvas);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-lg)">
+        <div style="font-weight:700;font-size:1rem">Generuj Plan GM</div>
+        <div class="form-row">
+          <label class="form-label">Poziom trudności</label>
+          <select id="fpd-difficulty" class="form-input">
+            <option value="easy">Łatwa</option>
+            <option value="medium" selected>Średnia</option>
+            <option value="hard">Trudna</option>
+            <option value="epic">Epik</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Długość kampanii</label>
+          <select id="fpd-duration" class="form-input">
+            <option value="short">Krótka (3-4 akty)</option>
+            <option value="medium" selected>Średnia (5-6 aktów)</option>
+            <option value="long">Długa (7+ aktów)</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="document.getElementById('forge-plan-dialog').style.display='none'">Anuluj</button>
+          <button class="btn btn-primary" id="fpd-confirm-btn" onclick="forgeGeneratePlanConfirm()">Generuj</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sublocation Edit Dialog -->
+    <div id="subloc-edit-dialog" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.55);align-items:center;justify-content:center" onclick="if(event.target===this)document.getElementById('subloc-edit-dialog').style.display='none'">
+      <div style="background:var(--canvas);border:1px solid var(--border);border-radius:var(--r2);width:min(460px,95vw);padding:24px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow-lg)">
+        <div style="font-weight:700;font-size:1rem">Edytuj sublokację</div>
+        <div class="form-row">
+          <label class="form-label">Klucz (slug)</label>
+          <input id="sled-key" class="form-input" type="text" placeholder="np. krypta_north">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Nazwa</label>
+          <input id="sled-name" class="form-input" type="text" placeholder="np. Północna krypta">
+        </div>
+        <div class="form-row" style="grid-column:1/-1">
+          <label class="form-label">Opis</label>
+          <textarea id="sled-description" class="form-input" rows="3" style="resize:vertical" placeholder="Opis sublokacji…"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-ghost" onclick="document.getElementById('subloc-edit-dialog').style.display='none'">Anuluj</button>
+          <button class="btn btn-primary" onclick="saveSublocEdit()">Zapisz</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Hook Detail Modal -->
     <div class="modal-overlay" id="hook-modal" onclick="if(event.target===this)this.classList.remove('open')">
       <div class="modal" style="max-width:780px">
@@ -3170,7 +3221,11 @@
           <!-- Tab: Przegląd -->
           <div id="tpl-tab-overview">
             <div class="card" style="padding:16px;margin-bottom:12px">
-              <div class="form-row"><label class="form-label">Opis</label><textarea id="tpl-description" class="form-input" rows="3" style="resize:vertical"></textarea></div>
+              <div class="form-row">
+                <label class="form-label">Opis</label>
+                <textarea id="tpl-description" class="form-input" rows="3" style="resize:vertical"></textarea>
+                <button class="btn btn-sm btn-secondary" onclick="forgeGenerateTplDescription(event)" style="margin-top:6px">🤖 Generuj opis</button>
+              </div>
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
                 <div class="form-row"><label class="form-label">Klimat / atmosfera</label><input id="tpl-atmosphere" class="form-input" type="text" placeholder="np. mroczna, tajemnicza"></div>
                 <div class="form-row"><label class="form-label">Trudność (1-5)</label>
@@ -7880,6 +7935,29 @@
     } catch(e) { _showToast(e.message||'Błąd.','error'); }
   }
 
+  async function forgeGenerateTplDescription(evt) {
+    if (!_tplEditorData?.id) return;
+    const btn = evt ? evt.target : null;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    try {
+      const title = document.getElementById('tpl-title')?.value || _tplEditorData.title || '';
+      const atmosphere = document.getElementById('tpl-atmosphere')?.value || '';
+      const r = await apiFetch(`/api/admin/forge/templates/${_tplEditorData.id}/generate-description`, {
+        method: 'POST',
+        body: JSON.stringify({ title, atmosphere, gm_plan: _tplEditorPlan || {} })
+      });
+      const ta = document.getElementById('tpl-description');
+      if (ta && r.description) {
+        ta.value = r.description;
+        ta.dispatchEvent(new Event('input'));
+      }
+    } catch(e) {
+      _showToast('Błąd generowania opisu: ' + (e.message || 'nieznany błąd'), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '🤖 Generuj opis'; }
+    }
+  }
+
   async function forgeUnpublishTemplate(id) {
     try {
       await apiFetch(`/api/admin/forge/templates/${id}`, { method:'PATCH', body:JSON.stringify({status:'draft'}) });
@@ -8147,18 +8225,18 @@
     el.innerHTML = locations.map((l, i) => {
       const csTag = l.campaign_specific ? '<span style="font-size:0.65rem;padding:1px 5px;background:var(--blue-light,#dbeafe);color:var(--blue);border-radius:var(--r);margin-left:4px">kampania</span>' : '';
       const subs = (l.sub_locations||[]).length;
-      return '<div style="padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem">' +
+      return '<div style="padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor=\'var(--accent)\'" onmouseleave="this.style.borderColor=\'var(--border)\'" onclick="openTplEntityModal(\'key_locations\',' + i + ',\'location\',' + JSON.stringify(l).replace(/"/g,'&quot;') + ')">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">' +
-          '<div style="cursor:pointer" onclick="openTplEntityModal(\'key_locations\',' + i + ',\'location\',' + JSON.stringify(l).replace(/"/g,'&quot;') + ')">' +
+          '<div>' +
             '<strong>' + _esc(l.name||l.key||'Lokacja') + '</strong>' + csTag +
           '</div>' +
           '<div style="display:flex;gap:4px">' +
             (subs ? '<span style="font-size:0.7rem;color:var(--t3)">' + subs + ' sublok.</span>' : '') +
-            '<button class="btn btn-sm btn-secondary" style="padding:1px 6px;font-size:0.7rem" onclick="openGenerateSublocations(' + i + ',event)" title="Generuj sublokacje">+ sublok.</button>' +
+            '<button class="btn btn-sm btn-secondary" style="padding:1px 6px;font-size:0.7rem" onclick="event.stopPropagation();openGenerateSublocations(' + i + ',event)" title="Generuj sublokacje">+ sublok.</button>' +
           '</div>' +
         '</div>' +
         '<div style="color:var(--t3)">' + _esc(l.role||'') + '</div>' +
-        (subs ? '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">' + (l.sub_locations||[]).map(s=>'<span style="font-size:0.68rem;padding:1px 6px;background:var(--canvas);border:1px solid var(--border);border-radius:var(--r)">' + _esc(s.name) + '</span>').join('') + '</div>' : '') +
+        (subs ? '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">' + (l.sub_locations||[]).map((s,si)=>'<span title="' + _esc(s.description||'brak opisu') + '" style="font-size:0.68rem;padding:1px 6px;background:var(--canvas);border:1px solid var(--border);border-radius:var(--r);cursor:pointer" onclick="event.stopPropagation();openSublocEdit(' + i + ',' + si + ')">' + _esc(s.name) + (s.description?'':' ⚠') + '</span>').join('') + '</div>' : '') +
       '</div>';
     }).join('');
   }
@@ -8188,6 +8266,37 @@
       _showToast('Dodano ' + result.sub_locations.length + ' sublokacji.', 'success');
     } catch(e) { _showToast(e.message||'Błąd generowania.', 'error'); }
     finally { btn.textContent = origText; btn.disabled = false; }
+  }
+
+  let _sublocEditCtx = null; // { locIdx, subIdx }
+
+  function openSublocEdit(locIdx, subIdx) {
+    const loc = _tplEditorPlan?.key_locations?.[locIdx];
+    if (!loc) return;
+    const sub = (loc.sub_locations || [])[subIdx];
+    if (!sub) return;
+    _sublocEditCtx = { locIdx, subIdx };
+    document.getElementById('sled-key').value = sub.key || '';
+    document.getElementById('sled-name').value = sub.name || '';
+    document.getElementById('sled-description').value = sub.description || '';
+    document.getElementById('subloc-edit-dialog').style.display = 'flex';
+  }
+
+  function saveSublocEdit() {
+    if (!_sublocEditCtx) return;
+    const { locIdx, subIdx } = _sublocEditCtx;
+    const subs = _tplEditorPlan?.key_locations?.[locIdx]?.sub_locations;
+    if (!subs) return;
+    subs[subIdx] = {
+      ...subs[subIdx],
+      key: document.getElementById('sled-key').value.trim() || subs[subIdx].key,
+      name: document.getElementById('sled-name').value.trim() || subs[subIdx].name,
+      description: document.getElementById('sled-description').value.trim(),
+    };
+    document.getElementById('subloc-edit-dialog').style.display = 'none';
+    _sublocEditCtx = null;
+    _renderTplLocations(_tplEditorPlan.key_locations);
+    _showToast('Sublokacja zapisana.', 'success');
   }
 
   function _renderTplEnemies(enemies) {
@@ -8248,11 +8357,11 @@
   }
 
   async function forgeGeneratePlanItem(entityType, evt) {
-    if (!_currentTplId) return;
+    if (!_tplEditorData?.id) return;
     const btn = evt ? evt.target : null;
     if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
     try {
-      const r = await apiFetch(`/api/admin/forge/templates/${_currentTplId}/generate-item`, {
+      const r = await apiFetch(`/api/admin/forge/templates/${_tplEditorData.id}/generate-item`, {
         method: 'POST',
         body: JSON.stringify({ entity_type: entityType })
       });
@@ -8584,14 +8693,35 @@
     } catch(e) { _showToast(e.message,'error'); }
   }
 
-  async function forgeGeneratePlan() {
+  let _forgePlanTemplateId = null;
+
+  function forgeGeneratePlan() {
     if (!_tplEditorData) return;
+    _forgePlanTemplateId = _tplEditorData.id;
+    const dlg = document.getElementById('forge-plan-dialog');
+    if (dlg) { dlg.style.display = 'flex'; }
+  }
+
+  async function forgeGeneratePlanConfirm() {
+    const dlg = document.getElementById('forge-plan-dialog');
+    if (dlg) dlg.style.display = 'none';
+    const difficulty = document.getElementById('fpd-difficulty')?.value || 'medium';
+    const duration = document.getElementById('fpd-duration')?.value || 'medium';
+    const actHints = { short: 4, medium: 5, long: 7 };
+    const suggestedActs = actHints[duration] || 5;
+    await _doForgeGeneratePlan(_forgePlanTemplateId, difficulty, suggestedActs);
+  }
+
+  async function _doForgeGeneratePlan(templateId, difficulty, suggestedActs) {
+    if (!templateId) return;
     const btn = document.getElementById('tpl-generate-btn');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Generuję…'; }
     try {
       const payload = {};
-      if (_tplEditorData.adventure_idea_id) payload.adventure_idea_id = _tplEditorData.adventure_idea_id;
-      const d = await apiFetch('/api/admin/forge/templates/' + _tplEditorData.id + '/generate-plan', {
+      if (_tplEditorData?.adventure_idea_id) payload.adventure_idea_id = _tplEditorData.adventure_idea_id;
+      payload.difficulty = difficulty || 'medium';
+      payload.suggested_act_count = suggestedActs || 5;
+      const d = await apiFetch('/api/admin/forge/templates/' + templateId + '/generate-plan', {
         method: 'POST', body: JSON.stringify(payload),
       });
       _tplEditorPlan = d.gm_plan_json || {};

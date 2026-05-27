@@ -21,7 +21,7 @@ import sqlite3
 from typing import Any, Literal
 
 import structlog
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.services.llm_service import generate_chat
 
@@ -48,13 +48,27 @@ class PlotEnding(BaseModel):
     requirements: list[str]
 
 
+class PlotEnemy(BaseModel):
+    model_config = ConfigDict(extra='allow')
+    key: str
+    name: str
+    role: str = ""
+    tier: str = "standard"
+    description: str = ""
+    count: int = 1
+
+
 class PlotNPC(BaseModel):
+    model_config = ConfigDict(extra='allow')
     key: str
     name: str
     role: str
     importance: Literal["critical", "supporting", "replaceable"]
     deviation_consequence: Literal["ignore", "steer", "branch"]
     alive: bool = True
+    personality_prompt: str = ""
+    description: str = ""
+    keyword_triggers: list[str] = []
 
 
 class PlotLocation(BaseModel):
@@ -71,12 +85,14 @@ class EnginePrivate(BaseModel):
 
 
 class CampaignPlan(BaseModel):
+    model_config = ConfigDict(extra='allow')
     title: str
     premise: str
     acts: list[PlotAct]
     endings: list[PlotEnding]
     key_npcs: list[PlotNPC]
     key_locations: list[PlotLocation]
+    key_enemies: list[PlotEnemy] = []
     active_act: int = 1
     scene_log: list[str] = []
     deviations: list[str] = []
@@ -128,7 +144,10 @@ SCHEMAT JSON (wypełnij każde pole):
       "role": "string",
       "importance": "critical",
       "deviation_consequence": "branch",
-      "alive": true
+      "alive": true,
+      "personality_prompt": "string — 1-2 zdania osobowości",
+      "description": "string — wygląd i background",
+      "keyword_triggers": ["string"]
     }
   ],
   "key_locations": [
@@ -137,6 +156,16 @@ SCHEMAT JSON (wypełnij każde pole):
       "name": "string",
       "role": "starting_point",
       "visited": false
+    }
+  ],
+  "key_enemies": [
+    {
+      "key": "enemy_key_slug",
+      "name": "string",
+      "role": "string",
+      "tier": "standard",
+      "description": "string",
+      "count": 1
     }
   ],
   "active_act": 1,
@@ -153,11 +182,12 @@ SCHEMAT JSON (wypełnij każde pole):
 ZASADY OBOWIĄZKOWE:
 1. Dokładnie 3 akty.
 2. Dokładnie 2 zakończenia: jedno "primary", jedno "alternate". Oba muszą być moralnie niejednoznaczne — żadnego czystego triumfu ani czystego zła.
-3. 3-6 kluczowych postaci NPC (key_npcs). Co najmniej jedna krytyczna.
+3. 3-6 kluczowych postaci NPC (key_npcs). Co najmniej jedna krytyczna. Każdy NPC musi mieć wypełnione personality_prompt i description.
 4. 2-5 lokacji (key_locations). Pierwsza lokacja to punkt startowy.
 5. Akt 1 musi nawiązywać do co najmniej jednej Więzi bohatera.
 6. Antagonista/główny konflikt musi dotykać co najmniej jednej Słabości bohatera.
 7. Klucze NPC i lokacji (pola "key") muszą być lowercase_slug bez spacji, np. "innkeeper_boris", "loc_graustein".
+8. 1-3 kluczowych wrogów (key_enemies). Przynajmniej jeden odpowiada głównemu antagoniście lub typowemu zagrożeniu fabuły.
 """
 
 

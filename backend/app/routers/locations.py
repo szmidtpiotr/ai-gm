@@ -41,7 +41,7 @@ class LocationBase(BaseModel):
     npc_keys: List[str] = Field(default_factory=list)
     safe_for_rest: bool = False
     # Stage 2B-Schema provenance & reuse fields
-    created_by: str = Field(default="admin_manual", pattern="^(seed|admin_manual|admin_kreator|gm_runtime|import)$")
+    created_by: str = Field(default="admin_manual", pattern="^(seed|admin_manual|admin_kreator|gm_runtime|import|adventure_forge)$")
     location_subtype: Optional[str] = Field(default=None, max_length=50)
     biome: Optional[str] = Field(default=None, max_length=50)
     tier: int = Field(default=1, ge=1, le=5)

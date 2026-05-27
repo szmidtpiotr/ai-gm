@@ -123,13 +123,13 @@ Zadanie: przeanalizuj JSON przygody i wyodrębnij WSZYSTKIE hooki gotowe do wsta
 Dla każdego hooka wypełnij draft_data zgodnie ze schematem docelowej tabeli:
 
 WEAPON lub ARMOR (hook_type: weapon / armor):
-{"key": "slug", "label": "Nazwa", "damage_die": "1d6", "linked_stat": "STR", "allowed_classes": "warrior,rogue", "description": "...", "weapon_type": "melee|ranged|armor", "rarity": 1}
+{"key": "slug", "label": "Nazwa", "damage_die": "1d6", "linked_stat": "STR", "allowed_classes": "warrior,rogue", "description": "...", "weapon_type": "melee|ranged|armor", "rarity": 1, "note": "Zdolności specjalne dla MG (opcjonalne)", "effect_json": null}
 
 ITEM (hook_type: item):
-{"key": "slug", "label": "Nazwa", "item_type": "misc|tool|key|quest", "description": "...", "value_gp": 0, "rarity": 1}
+{"key": "slug", "label": "Nazwa", "item_type": "misc|tool|key|quest", "description": "...", "value_gp": 0, "rarity": 1, "effect_json": null}
 
 CONSUMABLE (hook_type: consumable):
-{"key": "slug", "label": "Nazwa", "description": "...", "effect_type": "heal|buff|misc", "base_price": 0, "rarity": 1}
+{"key": "slug", "label": "Nazwa", "description": "...", "effect_type": "heal|buff|misc", "base_price": 0, "rarity": 1, "effect_dice": "1d4", "effect_bonus": 0, "effect_target": "self"}
 
 ENEMY (hook_type: enemy):
 {"key": "slug", "label": "Nazwa", "hp_base": 20, "ac_base": 12, "attack_bonus": 3, "damage_die": "1d6", "description": "...", "tier": "standard|weak|elite|boss", "damage_type": "physical|fire|poison"}
@@ -285,7 +285,16 @@ def _ensure_unique_key(conn: sqlite3.Connection, table: str, base_key: str) -> s
 def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]:
     """Insert hook draft_data into the appropriate game config table.
     Returns (table_name, new_record_id)."""
-    d = hook["draft_data"]
+    raw_d = hook.get("draft_data")
+    if isinstance(raw_d, dict):
+        d = raw_d
+    elif isinstance(raw_d, str) and raw_d.strip():
+        try:
+            d = json.loads(raw_d)
+        except Exception:
+            d = {}
+    else:
+        d = {}
     htype = hook["hook_type"]
     now = datetime.utcnow().isoformat()
 
@@ -296,14 +305,18 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
         cur = conn.execute(
             """INSERT INTO game_config_weapons
                (key, label, damage_die, linked_stat, allowed_classes, description,
-                weapon_type, rarity, ai_generated, approved, review_status, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 'permanent', ?, ?)""",
+                weapon_type, rarity, note, effect_json,
+                ai_generated, approved, review_status, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, 'permanent', ?, ?)""",
             (key, label,
              d.get("damage_die", "1d6"), d.get("linked_stat", "STR"),
              d.get("allowed_classes", "warrior"),
              d.get("description", hook.get("description", "")),
              d.get("weapon_type", "armor" if htype == "armor" else "melee"),
-             _safe_int(d.get("rarity"), 1), now, now),
+             _safe_int(d.get("rarity"), 1),
+             d.get("note") or d.get("gm_note", ""),
+             json.dumps(d["effect_json"], ensure_ascii=False) if d.get("effect_json") and isinstance(d.get("effect_json"), dict) else (d.get("effect_json") if isinstance(d.get("effect_json"), str) else None),
+             now, now),
         )
         return table, cur.lastrowid
 
@@ -313,13 +326,15 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
         label = d.get("label") or hook["title"]
         cur = conn.execute(
             """INSERT INTO game_config_items
-               (key, label, item_type, description, value_gp, rarity,
+               (key, label, item_type, description, value_gp, rarity, effect_json,
                 ai_generated, approved, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)""",
             (key, label,
              d.get("item_type", "misc"),
              d.get("description", hook.get("description", "")),
-             _safe_int(d.get("value_gp"), 0), _safe_int(d.get("rarity"), 1), now, now),
+             _safe_int(d.get("value_gp"), 0), _safe_int(d.get("rarity"), 1),
+             json.dumps(d["effect_json"], ensure_ascii=False) if d.get("effect_json") and isinstance(d.get("effect_json"), dict) else (d.get("effect_json") if isinstance(d.get("effect_json"), str) else None),
+             now, now),
         )
         return table, cur.lastrowid
 
@@ -330,12 +345,16 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
         cur = conn.execute(
             """INSERT INTO game_config_consumables
                (key, label, description, effect_type, base_price, rarity,
-                ai_generated, approved, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?)""",
+                effect_dice, effect_bonus, effect_target, ai_generated, approved, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?)""",
             (key, label,
              d.get("description", hook.get("description", "")),
              d.get("effect_type", "misc"),
-             _safe_int(d.get("base_price"), 0), _safe_int(d.get("rarity"), 1), now, now),
+             _safe_int(d.get("base_price"), 0), _safe_int(d.get("rarity"), 1),
+             d.get("effect_dice") or None,
+             _safe_int(d.get("effect_bonus"), 0),
+             d.get("effect_target", "self"),
+             now, now),
         )
         return table, cur.lastrowid
 
@@ -389,7 +408,7 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
             """INSERT INTO game_locations
                (key, label, description, location_type, biome,
                 ai_generated, approved, review_status, created_by, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 1, 1, 'permanent', 'adventure_forge', ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, 1, 1, 'permanent', 'admin_kreator', ?, ?)""",
             (key, label,
              d.get("description", hook.get("description", "")),
              _LOC_TYPE_MAP.get(d.get("location_type", ""), "macro"),
@@ -960,7 +979,7 @@ SCHEMAT JSON (wypełnij każde pole):
 }
 
 ZASADY:
-1. Akty: tyle ile wynika ze szkicu (minimum 3, maximum 7).
+1. LICZBA AKTÓW: DOKŁADNIE tyle ile podano w prompcie użytkownika (pole "Liczba aktów"). Nie mniej, nie więcej.
 2. Dokładnie 2 zakończenia: primary + alternate (oba moralnie niejednoznaczne).
 3. 3-6 kluczowych NPC, co najmniej jeden critical.
 4. 2-5 lokacji. Pierwsza to punkt startowy.
@@ -973,6 +992,8 @@ ZASADY:
 
 class GeneratePlanReq(BaseModel):
     adventure_idea_id: Optional[int] = None
+    difficulty: Optional[str] = None          # 'easy'|'medium'|'hard'|'epic'
+    suggested_act_count: Optional[int] = None  # hint for number of acts
 
 
 @router.post("/templates/{template_id}/generate-plan")
@@ -997,6 +1018,13 @@ def forge_generate_template_plan(
                 "SELECT * FROM adventure_ideas WHERE id = ?", (idea_id,)
             ).fetchone()
 
+        # Resolve difficulty and act count from request params (override idea/template defaults)
+        difficulty_map = {
+            "easy": "Łatwa", "medium": "Średnia", "hard": "Trudna", "epic": "Epik"
+        }
+        req_difficulty = difficulty_map.get(req.difficulty or "", "") if req.difficulty else ""
+        req_act_count = req.suggested_act_count  # may be None
+
         # Build prompt from idea structured_data or template metadata
         if idea:
             sd = json.loads(idea["structured_data"] or "{}")
@@ -1008,13 +1036,21 @@ def forge_generate_template_plan(
                 f"  - ({h.get('type','')}) {h.get('title','')}: {h.get('description','')}"
                 for h in (sd.get("hooks") or [])
             )
-            user_prompt = (
+            arc_count = len(sd.get("arcs") or [])
+            if req_act_count and req_act_count > 0:
+                arc_instruction = f"WAŻNE: Stwórz DOKŁADNIE {req_act_count} aktów (nie mniej, nie więcej). Każdy akt z osobnym tytułem, podsumowaniem i key_beats.\n\n"
+            elif arc_count > 0:
+                arc_instruction = f"WAŻNE: Stwórz DOKŁADNIE {arc_count} aktów (nie mniej, nie więcej). Każdy akt z osobnym tytułem, podsumowaniem i key_beats.\n\n"
+            else:
+                arc_instruction = "Stwórz 3-5 aktów.\n\n"
+            effective_difficulty = req_difficulty or idea["difficulty"] or "Średnia"
+            user_prompt = arc_instruction + (
                 f"SZKIC PRZYGODY:\n"
                 f"Tytuł: {idea['title']}\n"
                 f"Przesłanka: {idea['premise']}\n"
                 f"Ton: {', '.join(json.loads(idea['tone'] or '[]'))}\n"
                 f"Motywy: {', '.join(json.loads(idea['themes'] or '[]'))}\n"
-                f"Trudność: {idea['difficulty']}\n"
+                f"Trudność: {effective_difficulty}\n"
                 f"Wciągacz gracza: {sd.get('player_hook','')}\n"
                 f"Sekret GM: {sd.get('gm_private','')}\n"
                 f"\nAKTY:\n{arcs_text}"
@@ -1022,19 +1058,19 @@ def forge_generate_template_plan(
                 "Stwórz pełny plan kampanii na podstawie tego szkicu. "
                 "Fabuła i NPC muszą bezpośrednio wynikać ze szkicu."
             )
-            arc_count = len(sd.get("arcs") or [])
-            if arc_count > 0:
-                user_prompt += f"\nLiczba aktów w szkicu: {arc_count}. Stwórz dokładnie {arc_count} aktów."
-            else:
-                user_prompt += "\nStwórz 3-5 aktów."
         else:
             # Fallback: generate from template metadata
-            user_prompt = (
+            if req_act_count and req_act_count > 0:
+                arc_instruction = f"WAŻNE: Stwórz DOKŁADNIE {req_act_count} aktów (nie mniej, nie więcej). Każdy akt z osobnym tytułem, podsumowaniem i key_beats.\n\n"
+            else:
+                arc_instruction = "Stwórz 3-5 aktów.\n\n"
+            effective_difficulty = req_difficulty or f"{tpl['difficulty_rating']}/5"
+            user_prompt = arc_instruction + (
                 f"SZABLON KAMPANII:\n"
                 f"Tytuł: {tpl['title']}\n"
                 f"Opis: {tpl['description']}\n"
                 f"Klimat: {tpl['atmosphere']}\n"
-                f"Trudność: {tpl['difficulty_rating']}/5\n"
+                f"Trudność: {effective_difficulty}\n"
                 "Stwórz pełny plan kampanii na podstawie powyższych danych."
             )
 
@@ -1148,6 +1184,7 @@ def forge_generate_sublocations(
         f"Opis: {req.location_description or 'brak'}\n\n"
         f"Zaproponuj 4-6 podlokacji (pomieszczenia, obszary, strefy) tej lokacji. "
         f"Klucze: lowercase_slug zaczynający się od '{req.location_key}_'. "
+        f"KAŻDA podlokacja MUSI mieć pole description (min. 1 zdanie opisujące lokację). "
         f"Opisy max 1 zdanie."
     )
 
