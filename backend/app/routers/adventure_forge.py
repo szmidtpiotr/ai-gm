@@ -1068,3 +1068,74 @@ def list_approved_hooks_public():
         return {"items": [dict(r) for r in rows]}
     finally:
         conn.close()
+
+
+class GenerateSublocationsReq(BaseModel):
+    location_key: str
+    location_name: str
+    location_description: str = ""
+
+
+@router.post("/templates/{template_id}/generate-sublocations")
+def forge_generate_sublocations(
+    template_id: int,
+    req: GenerateSublocationsReq,
+    _: None = Depends(_require_admin),
+):
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT * FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+    finally:
+        conn.close()
+
+    from app.services.llm_service import get_effective_config
+    import httpx
+
+    cfg = get_effective_config()
+
+    system_prompt = (
+        "Jesteś asystentem projektanta gier RPG. Zwracasz TYLKO JSON — żadnego tekstu poza JSON. "
+        'Format odpowiedzi: {"sub_locations": [{"key": "slug", "name": "Nazwa", "description": "Krótki opis"}]}'
+    )
+    user_prompt = (
+        f"Kampania: {tpl['title']}\n"
+        f"Lokacja nadrzędna: {req.location_name} (klucz: {req.location_key})\n"
+        f"Opis: {req.location_description or 'brak'}\n\n"
+        f"Zaproponuj 4-6 podlokacji (pomieszczenia, obszary, strefy) tej lokacji. "
+        f"Klucze: lowercase_slug zaczynający się od '{req.location_key}_'. "
+        f"Opisy max 1 zdanie."
+    )
+
+    headers = {"Content-Type": "application/json"}
+    if cfg.get("api_key"):
+        headers["Authorization"] = f"Bearer {cfg['api_key']}"
+
+    payload = {
+        "model": cfg["model"],
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.7,
+        "max_tokens": 600,
+    }
+
+    try:
+        resp = httpx.post(
+            cfg["base_url"].rstrip("/") + "/chat/completions",
+            json=payload, headers=headers, timeout=60
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        result = json.loads(content)
+        return {"sub_locations": result.get("sub_locations", [])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM error: {e}")

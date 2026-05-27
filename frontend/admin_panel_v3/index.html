@@ -2998,6 +2998,31 @@
       </div>
     </section>
 
+    <!-- Template Entity Edit Modal -->
+    <div id="tpl-entity-modal" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.55);align-items:center;justify-content:center" onclick="if(event.target===this)closeTplEntityModal()">
+      <div style="background:var(--canvas);border:1px solid var(--border);border-radius:var(--r2);width:min(720px,95vw);max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+          <div>
+            <span id="tpl-entity-modal-type-badge" style="font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:var(--r);background:var(--surface);border:1px solid var(--border);margin-right:8px"></span>
+            <span id="tpl-entity-modal-title" style="font-weight:600;font-size:0.95rem"></span>
+          </div>
+          <button onclick="closeTplEntityModal()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--t3);padding:4px 8px">✕</button>
+        </div>
+        <div style="padding:16px 20px">
+          <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:8px 12px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--r);cursor:pointer;font-size:0.82rem;font-weight:500">
+            <input type="checkbox" id="tpl-entity-campaign-specific" style="width:15px;height:15px">
+            <span>Specyficzne dla kampanii — nadpisuje globalny rekord w DB</span>
+          </label>
+          <div id="tpl-entity-form"></div>
+        </div>
+        <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn-sm btn-secondary" onclick="closeTplEntityModal()">Anuluj</button>
+          <button class="btn btn-sm btn-danger" id="tpl-entity-delete-btn" onclick="_deleteTplEntity()">🗑 Usuń</button>
+          <button class="btn btn-sm btn-primary" onclick="saveTplEntityEdits()">💾 Zapisz</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Hook Detail Modal -->
     <div class="modal-overlay" id="hook-modal" onclick="if(event.target===this)this.classList.remove('open')">
       <div class="modal" style="max-width:780px">
@@ -3132,6 +3157,7 @@
             <button class="stab" data-tpltab="acts">Akty</button>
             <button class="stab" data-tpltab="characters">Postaci &amp; Lokacje</button>
             <button class="stab" data-tpltab="endings">Zakończenia</button>
+            <button class="stab" data-tpltab="items">🎒 Przedmioty</button>
           </div>
 
           <!-- Tab: Przegląd -->
@@ -3163,11 +3189,16 @@
 
           <!-- Tab: Postaci & Lokacje -->
           <div id="tpl-tab-characters" style="display:none">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
               <div class="card" style="padding:14px">
                 <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Kluczowe Postaci NPC</div>
                 <div id="tpl-npcs-list" style="display:flex;flex-direction:column;gap:8px"></div>
                 <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="_addTplNPC()">+ Dodaj NPC</button>
+              </div>
+              <div class="card" style="padding:14px">
+                <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Kluczowe Wrogowie</div>
+                <div id="tpl-enemies-list" style="display:flex;flex-direction:column;gap:8px"></div>
+                <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="_addTplEnemy()">+ Dodaj wroga</button>
               </div>
               <div class="card" style="padding:14px">
                 <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Kluczowe Lokacje</div>
@@ -3180,6 +3211,35 @@
           <!-- Tab: Zakończenia -->
           <div id="tpl-tab-endings" style="display:none">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" id="tpl-endings-list"></div>
+          </div>
+
+          <!-- Tab: Przedmioty -->
+          <div id="tpl-tab-items" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div class="card" style="padding:14px">
+                <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Broń kampanii</div>
+                <div id="tpl-items-weapon-list" style="display:flex;flex-direction:column;gap:8px"></div>
+                <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="_addTplItem('weapon')">+ Dodaj broń</button>
+              </div>
+              <div class="card" style="padding:14px">
+                <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Przedmioty (zbroja, ekwipunek)</div>
+                <div id="tpl-items-item-list" style="display:flex;flex-direction:column;gap:8px"></div>
+                <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="_addTplItem('item')">+ Dodaj przedmiot</button>
+              </div>
+              <div class="card" style="padding:14px">
+                <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Mikstury i konsumable</div>
+                <div id="tpl-items-consumable-list" style="display:flex;flex-direction:column;gap:8px"></div>
+                <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="_addTplItem('consumable')">+ Dodaj miksturę</button>
+              </div>
+              <div class="card" style="padding:14px">
+                <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:4px">Jak to działa?</div>
+                <div style="font-size:0.78rem;color:var(--t3);line-height:1.5">
+                  Przedmioty oznaczone <strong>campaign_specific</strong> nadpisują globalne rekordy DB dla tej kampanii.<br><br>
+                  Przedmioty ze znacznikiem <strong>hidden</strong> są ukryte — pojawią się tylko gdy GM je odkryje lub LLM je umieści w scenie.<br><br>
+                  <strong>location_hint</strong> podpowiada AI gdzie ukryć przedmiot (np. "w zbrojowni").
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- GM Private (always visible, collapsible) -->
@@ -7809,7 +7869,7 @@
         btn.onclick = () => {
           document.querySelectorAll('#tpl-editor-tabs .stab').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
-          ['overview','acts','characters','endings'].forEach(t => {
+          ['overview','acts','characters','endings','items'].forEach(t => {
             const el = document.getElementById('tpl-tab-' + t);
             if (el) el.style.display = btn.dataset.tpltab === t ? '' : 'none';
           });
@@ -7820,8 +7880,10 @@
       _renderTplHooksList(d.hook_ids || []);
       _renderTplActs(_tplEditorPlan.acts || []);
       _renderTplNPCs(_tplEditorPlan.key_npcs || []);
+      _renderTplEnemies(_tplEditorPlan.key_enemies || []);
       _renderTplLocations(_tplEditorPlan.key_locations || []);
       _renderTplEndings(_tplEditorPlan.endings || []);
+      _renderTplItems(_tplEditorPlan.key_items || []);
       const ep = _tplEditorPlan.engine_private || {};
       if (document.getElementById('tpl-gm-hint')) document.getElementById('tpl-gm-hint').value = ep.secret_predisposition_hint || '';
       if (document.getElementById('tpl-gm-twist')) document.getElementById('tpl-gm-twist').value = ep.hidden_twist || '';
@@ -7838,7 +7900,7 @@
     _tplEditorPlan = null;
     // Reset to overview tab
     document.querySelectorAll('#tpl-editor-tabs .stab').forEach((b,i) => b.classList.toggle('active', i===0));
-    ['acts','characters','endings'].forEach(t => {
+    ['acts','characters','endings','items'].forEach(t => {
       const el = document.getElementById('tpl-tab-' + t);
       if (el) el.style.display = 'none';
     });
@@ -7957,45 +8019,334 @@
     const el = document.getElementById('tpl-npcs-list');
     if (!el) return;
     if (!npcs.length) { el.innerHTML = '<div style="font-size:0.78rem;color:var(--t3)">Brak NPC. Kliknij + Dodaj lub wygeneruj plan AI.</div>'; return; }
-    el.innerHTML = npcs.map((n, i) =>
-      '<div style="padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
-          '<strong>' + _esc(n.name||n.key||'NPC') + '</strong>' +
-          '<span style="font-size:0.7rem;padding:1px 6px;border-radius:var(--r);background:' + (n.importance==='critical'?'var(--red-light)':n.importance==='supporting'?'var(--amber-light)':'var(--surface)') + ';color:' + (n.importance==='critical'?'var(--red)':n.importance==='supporting'?'var(--amber)':'var(--t3)') + '">' + (n.importance||'?') + '</span>' +
+    el.innerHTML = npcs.map((n, i) => {
+      const importanceColor = n.importance==='critical'?'var(--red)':n.importance==='supporting'?'var(--amber)':'var(--t3)';
+      const importanceBg   = n.importance==='critical'?'var(--red-light)':n.importance==='supporting'?'var(--amber-light)':'var(--surface)';
+      const csTag = n.campaign_specific ? '<span style="font-size:0.65rem;padding:1px 5px;background:var(--blue-light,#dbeafe);color:var(--blue);border-radius:var(--r);margin-left:4px">kampania</span>' : '';
+      return '<div style="padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor=\'var(--accent)\'" onmouseleave="this.style.borderColor=\'var(--border)\'" onclick="openTplEntityModal(\'key_npcs\',' + i + ',\'npc\',' + JSON.stringify(n).replace(/"/g,'&quot;') + ')">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">' +
+          '<div><strong>' + _esc(n.name||n.key||'NPC') + '</strong>' + csTag + '</div>' +
+          '<span style="font-size:0.7rem;padding:1px 6px;border-radius:var(--r);background:' + importanceBg + ';color:' + importanceColor + '">' + (n.importance||'?') + '</span>' +
         '</div>' +
         '<div style="color:var(--t3)">' + _esc(n.role||'') + '</div>' +
-      '</div>'
-    ).join('');
+      '</div>';
+    }).join('');
   }
 
   function _addTplNPC() {
-    const name = prompt('Imię NPC:'); if (!name) return;
-    const role = prompt('Rola:') || '';
     if (!_tplEditorPlan) _tplEditorPlan = {};
     if (!_tplEditorPlan.key_npcs) _tplEditorPlan.key_npcs = [];
-    _tplEditorPlan.key_npcs.push({ key: name.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,''), name, role, importance:'supporting', deviation_consequence:'steer', alive:true });
-    _renderTplNPCs(_tplEditorPlan.key_npcs);
+    openTplEntityModal('key_npcs', -1, 'npc', {});
   }
 
   function _renderTplLocations(locations) {
     const el = document.getElementById('tpl-locations-list');
     if (!el) return;
     if (!locations.length) { el.innerHTML = '<div style="font-size:0.78rem;color:var(--t3)">Brak lokacji. Kliknij + Dodaj lub wygeneruj plan AI.</div>'; return; }
-    el.innerHTML = locations.map((l, i) =>
-      '<div style="padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem">' +
-        '<strong>' + _esc(l.name||l.key||'Lokacja') + '</strong>' +
+    el.innerHTML = locations.map((l, i) => {
+      const csTag = l.campaign_specific ? '<span style="font-size:0.65rem;padding:1px 5px;background:var(--blue-light,#dbeafe);color:var(--blue);border-radius:var(--r);margin-left:4px">kampania</span>' : '';
+      const subs = (l.sub_locations||[]).length;
+      return '<div style="padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">' +
+          '<div style="cursor:pointer" onclick="openTplEntityModal(\'key_locations\',' + i + ',\'location\',' + JSON.stringify(l).replace(/"/g,'&quot;') + ')">' +
+            '<strong>' + _esc(l.name||l.key||'Lokacja') + '</strong>' + csTag +
+          '</div>' +
+          '<div style="display:flex;gap:4px">' +
+            (subs ? '<span style="font-size:0.7rem;color:var(--t3)">' + subs + ' sublok.</span>' : '') +
+            '<button class="btn btn-sm btn-secondary" style="padding:1px 6px;font-size:0.7rem" onclick="openGenerateSublocations(' + i + ',event)" title="Generuj sublokacje">+ sublok.</button>' +
+          '</div>' +
+        '</div>' +
         '<div style="color:var(--t3)">' + _esc(l.role||'') + '</div>' +
-      '</div>'
-    ).join('');
+        (subs ? '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">' + (l.sub_locations||[]).map(s=>'<span style="font-size:0.68rem;padding:1px 6px;background:var(--canvas);border:1px solid var(--border);border-radius:var(--r)">' + _esc(s.name) + '</span>').join('') + '</div>' : '') +
+      '</div>';
+    }).join('');
   }
 
   function _addTplLocation() {
-    const name = prompt('Nazwa lokacji:'); if (!name) return;
-    const role = prompt('Rola:') || '';
     if (!_tplEditorPlan) _tplEditorPlan = {};
     if (!_tplEditorPlan.key_locations) _tplEditorPlan.key_locations = [];
-    _tplEditorPlan.key_locations.push({ key: name.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,''), name, role, visited:false });
-    _renderTplLocations(_tplEditorPlan.key_locations);
+    openTplEntityModal('key_locations', -1, 'location', {});
+  }
+
+  async function openGenerateSublocations(locIdx, event) {
+    if (!_tplEditorData?.id) return;
+    const loc = _tplEditorPlan?.key_locations?.[locIdx];
+    if (!loc) return;
+    const btn = event.currentTarget;
+    const origText = btn.textContent;
+    btn.textContent = '⏳'; btn.disabled = true;
+    try {
+      const result = await apiFetch('/api/admin/forge/templates/' + _tplEditorData.id + '/generate-sublocations', {
+        method: 'POST',
+        body: JSON.stringify({ location_key: loc.key, location_name: loc.name || loc.key, location_description: (loc.overrides||{}).description || '' })
+      });
+      if (!result.sub_locations?.length) { _showToast('Brak sugestii.', 'warn'); return; }
+      if (!_tplEditorPlan.key_locations[locIdx].sub_locations) _tplEditorPlan.key_locations[locIdx].sub_locations = [];
+      _tplEditorPlan.key_locations[locIdx].sub_locations.push(...result.sub_locations);
+      _renderTplLocations(_tplEditorPlan.key_locations);
+      _showToast('Dodano ' + result.sub_locations.length + ' sublokacji.', 'success');
+    } catch(e) { _showToast(e.message||'Błąd generowania.', 'error'); }
+    finally { btn.textContent = origText; btn.disabled = false; }
+  }
+
+  function _renderTplEnemies(enemies) {
+    const el = document.getElementById('tpl-enemies-list');
+    if (!el) return;
+    if (!enemies.length) { el.innerHTML = '<div style="font-size:0.78rem;color:var(--t3)">Brak wrogów. Kliknij + Dodaj.</div>'; return; }
+    const tierColor = { weak:'var(--t3)', standard:'var(--green)', elite:'var(--amber)', boss:'var(--red)' };
+    el.innerHTML = enemies.map((e, i) => {
+      const csTag = e.campaign_specific ? '<span style="font-size:0.65rem;padding:1px 5px;background:var(--blue-light,#dbeafe);color:var(--blue);border-radius:var(--r);margin-left:4px">kampania</span>' : '';
+      const tier = (e.overrides||e).tier || 'standard';
+      return '<div style="padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor=\'var(--accent)\'" onmouseleave="this.style.borderColor=\'var(--border)\'" onclick="openTplEntityModal(\'key_enemies\',' + i + ',\'enemy\',' + JSON.stringify(e).replace(/"/g,'&quot;') + ')">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+          '<div><strong>' + _esc(e.label||e.key||'Wróg') + '</strong>' + csTag + '</div>' +
+          '<span style="font-size:0.7rem;color:' + (tierColor[tier]||'var(--t3)') + '">' + tier + '</span>' +
+        '</div>' +
+        '<div style="color:var(--t3);font-size:0.72rem">HP ' + ((e.overrides||e).hp_base||'?') + ' · AC ' + ((e.overrides||e).ac_base||'?') + ' · ' + ((e.overrides||e).damage_die||'?') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function _addTplEnemy() {
+    if (!_tplEditorPlan) _tplEditorPlan = {};
+    if (!_tplEditorPlan.key_enemies) _tplEditorPlan.key_enemies = [];
+    openTplEntityModal('key_enemies', -1, 'enemy', {});
+  }
+
+  function _renderTplItems(items) {
+    const weaponEl = document.getElementById('tpl-items-weapon-list');
+    const itemEl   = document.getElementById('tpl-items-item-list');
+    const consEl   = document.getElementById('tpl-items-consumable-list');
+    const empty = '<div style="font-size:0.78rem;color:var(--t3)">Brak. Kliknij + Dodaj.</div>';
+    if (!weaponEl) return;
+    const weapons = items.filter(x => x.entity_type === 'weapon');
+    const itemsArr = items.filter(x => x.entity_type === 'item');
+    const cons   = items.filter(x => x.entity_type === 'consumable');
+    const renderList = (list, elRef) => {
+      if (!elRef) return;
+      if (!list.length) { elRef.innerHTML = empty; return; }
+      elRef.innerHTML = list.map((it) => {
+        const realIdx = items.indexOf(it);
+        const csTag = it.campaign_specific ? '<span style="font-size:0.65rem;padding:1px 5px;background:var(--blue-light,#dbeafe);color:var(--blue);border-radius:var(--r);margin-left:4px">kampania</span>' : '';
+        const hiddenTag = it.hidden ? '<span style="font-size:0.65rem;padding:1px 5px;background:var(--surface);color:var(--t3);border-radius:var(--r);margin-left:4px">ukryty</span>' : '';
+        return '<div style="padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem;cursor:pointer;transition:border-color .15s" onmouseenter="this.style.borderColor=\'var(--accent)\'" onmouseleave="this.style.borderColor=\'var(--border)\'" onclick="openTplEntityModal(\'key_items\',' + realIdx + ',\'' + it.entity_type + '\',' + JSON.stringify(it).replace(/"/g,'&quot;') + ')">' +
+          '<div><strong>' + _esc(it.label||it.key||'?') + '</strong>' + csTag + hiddenTag + '</div>' +
+          (it.location_hint ? '<div style="color:var(--t3);font-size:0.7rem">📍 ' + _esc(it.location_hint) + '</div>' : '') +
+        '</div>';
+      }).join('');
+    };
+    renderList(weapons, weaponEl);
+    renderList(itemsArr, itemEl);
+    renderList(cons, consEl);
+  }
+
+  function _addTplItem(entityType) {
+    if (!_tplEditorPlan) _tplEditorPlan = {};
+    if (!_tplEditorPlan.key_items) _tplEditorPlan.key_items = [];
+    openTplEntityModal('key_items', -1, entityType, { entity_type: entityType });
+  }
+
+  // ─── Template Entity Modal ───────────────────────────────────────────────────
+  let _tplEntityCtx = null; // { listKey, idx, type }
+
+  function openTplEntityModal(listKey, idx, type, data) {
+    _tplEntityCtx = { listKey, idx, type };
+    const modal = document.getElementById('tpl-entity-modal');
+    const typeLabels = {
+      npc:'NPC', enemy:'Wróg', weapon:'Broń', item:'Przedmiot',
+      consumable:'Mikstura', location:'Lokacja'
+    };
+    document.getElementById('tpl-entity-modal-type-badge').textContent = typeLabels[type] || type;
+    document.getElementById('tpl-entity-modal-title').textContent =
+      data.name || data.label || data.key || '(nowy)';
+    document.getElementById('tpl-entity-campaign-specific').checked = !!data.campaign_specific;
+    document.getElementById('tpl-entity-form').innerHTML = _renderEntityForm(type, data.overrides || data);
+    document.getElementById('tpl-entity-delete-btn').style.display = idx < 0 ? 'none' : '';
+    modal.style.display = 'flex';
+  }
+
+  function closeTplEntityModal() {
+    document.getElementById('tpl-entity-modal').style.display = 'none';
+    _tplEntityCtx = null;
+  }
+
+  function _deleteTplEntity() {
+    if (!_tplEntityCtx || _tplEntityCtx.idx < 0) return;
+    const { listKey, idx } = _tplEntityCtx;
+    if (!_tplEditorPlan?.[listKey]) return;
+    _tplEditorPlan[listKey].splice(idx, 1);
+    _refreshTplEntityList(listKey);
+    closeTplEntityModal();
+  }
+
+  function _refreshTplEntityList(listKey) {
+    if (listKey === 'key_npcs') _renderTplNPCs(_tplEditorPlan.key_npcs || []);
+    else if (listKey === 'key_locations') _renderTplLocations(_tplEditorPlan.key_locations || []);
+    else if (listKey === 'key_enemies' && typeof _renderTplEnemies === 'function') _renderTplEnemies(_tplEditorPlan.key_enemies || []);
+    else if (listKey === 'key_items' && typeof _renderTplItems === 'function') _renderTplItems(_tplEditorPlan.key_items || []);
+  }
+
+  function saveTplEntityEdits() {
+    if (!_tplEntityCtx) return;
+    const { listKey, idx, type } = _tplEntityCtx;
+    if (!_tplEditorPlan) _tplEditorPlan = {};
+    if (!_tplEditorPlan[listKey]) _tplEditorPlan[listKey] = [];
+
+    const campaignSpecific = document.getElementById('tpl-entity-campaign-specific').checked;
+    const formData = _collectEntityForm(type);
+    const existing = idx >= 0 ? (_tplEditorPlan[listKey][idx] || {}) : {};
+
+    const slug = (formData.key || formData.name || formData.label || '')
+      .toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+
+    const updated = {
+      ...existing,
+      key: formData.key || slug,
+      campaign_specific: campaignSpecific,
+      overrides: formData,
+    };
+    if (type === 'npc') { updated.name = formData.name || formData.key; updated.role = existing.role || ''; updated.importance = existing.importance || 'supporting'; updated.deviation_consequence = existing.deviation_consequence || 'steer'; updated.alive = existing.alive !== false; }
+    if (type === 'enemy') { updated.label = formData.label || formData.key; }
+    if (['weapon','item','consumable'].includes(type)) { updated.label = formData.label || formData.key; updated.entity_type = type; updated.hidden = formData.hidden || false; updated.location_hint = formData.location_hint || ''; }
+    if (type === 'location') { updated.name = formData.name || formData.key; updated.role = existing.role || ''; updated.visited = existing.visited || false; updated.sub_locations = existing.sub_locations || []; }
+
+    if (idx >= 0) {
+      _tplEditorPlan[listKey][idx] = updated;
+    } else {
+      _tplEditorPlan[listKey].push(updated);
+    }
+    _refreshTplEntityList(listKey);
+    closeTplEntityModal();
+  }
+
+  function _renderEntityForm(type, d) {
+    d = d || {};
+    const sel = (id, label, opts, val) =>
+      '<div class="form-row"><label class="form-label">' + label + '</label><select class="form-input" id="ef-' + id + '">' + opts.map(o => '<option value="' + (o.v||o) + '" ' + ((val||'')===(o.v||o)?'selected':'') + '>' + (o.l||o) + '</option>').join('') + '</select></div>';
+    const txt = (id, label, val, placeholder) =>
+      '<div class="form-row"><label class="form-label">' + label + '</label><input class="form-input" id="ef-' + id + '" type="text" value="' + _esc(val||'') + '" placeholder="' + (placeholder||'') + '"></div>';
+    const num = (id, label, val) =>
+      '<div class="form-row"><label class="form-label">' + label + '</label><input class="form-input" id="ef-' + id + '" type="number" value="' + (val||0) + '" style="max-width:100px"></div>';
+    const ta  = (id, label, val, rows) =>
+      '<div class="form-row" style="grid-column:1/-1"><label class="form-label">' + label + '</label><textarea class="form-input" id="ef-' + id + '" rows="' + (rows||2) + '" style="resize:vertical">' + _esc(val||'') + '</textarea></div>';
+    const chk = (id, label, val) =>
+      '<div class="form-row" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="ef-' + id + '" ' + (val?'checked':'') + '><label for="ef-' + id + '" class="form-label" style="margin:0">' + label + '</label></div>';
+    const G = (cols, ...fields) =>
+      '<div style="display:grid;grid-template-columns:' + cols + ';gap:10px;margin-bottom:4px">' + fields.join('') + '</div>';
+    const rarity = [{v:'1',l:'Pospolity'},{v:'2',l:'Niepospolity'},{v:'3',l:'Rzadki'},{v:'4',l:'Epicki'},{v:'5',l:'Legendarny'}];
+
+    if (type === 'npc') return G('1fr 1fr',
+      txt('key','Klucz (slug)',d.key),
+      txt('name','Imię / Nazwa',d.name||d.label),
+      sel('npc_type','Typ NPC',[{v:'neutral',l:'Neutralny'},{v:'friendly',l:'Przyjazny'},{v:'hostile',l:'Wrogi'},{v:'merchant',l:'Kupiec'},{v:'quest_giver',l:'Dawca zadań'},{v:'ally',l:'Sojusznik'}],d.npc_type),
+      chk('is_quest_giver','Dawca zadań',d.is_quest_giver),
+      chk('is_ally','Sojusznik',d.is_ally),
+      ta('personality_prompt','Osobowość / ton głosu',d.personality_prompt,2),
+      ta('description','Opis',d.description,3),
+      txt('keyword_triggers','Słowa kluczowe (przecinki)',Array.isArray(d.keyword_triggers)?d.keyword_triggers.join(', '):d.keyword_triggers||'')
+    );
+
+    if (type === 'enemy') return G('1fr 1fr',
+      txt('key','Klucz (slug)',d.key),
+      txt('label','Nazwa',d.label),
+      num('hp_base','HP bazowe',d.hp_base||10),
+      num('ac_base','AC bazowe',d.ac_base||10),
+      num('attack_bonus','Bonus do ataku',d.attack_bonus||0),
+      num('damage_bonus','Bonus do obrażeń',d.damage_bonus||0),
+      txt('damage_die','Kość obrażeń',d.damage_die||'1d6','np. 1d8+2'),
+      sel('damage_type','Typ obrażeń',[{v:'physical',l:'Fizyczne'},{v:'magic',l:'Magiczne'},{v:'poison',l:'Trucizna'}],d.damage_type||'physical'),
+      sel('tier','Tier',[{v:'weak',l:'Słaby'},{v:'standard',l:'Standardowy'},{v:'elite',l:'Elita'},{v:'boss',l:'Boss'}],d.tier||'standard'),
+      num('attacks_per_turn','Ataki/tura',d.attacks_per_turn||1),
+      num('xp_award','Nagroda XP',d.xp_award||0),
+      chk('fear_aura','Aura strachu',d.fear_aura),
+      num('fear_dc','DC strachu',d.fear_dc||12),
+      txt('conditions_immune','Odporności (przecinki)',d.conditions_immune||''),
+      ta('description','Opis',d.description,2),
+      ta('note','Notatka GM (zdolności)',d.note,2)
+    );
+
+    if (type === 'weapon') return G('1fr 1fr',
+      txt('key','Klucz (slug)',d.key),
+      txt('label','Nazwa',d.label),
+      txt('damage_die','Kość obrażeń',d.damage_die||'1d6','np. 1d8+2'),
+      sel('linked_stat','Statystyka',[{v:'STR',l:'STR'},{v:'DEX',l:'DEX'},{v:'INT',l:'INT'}],d.linked_stat||'STR'),
+      sel('weapon_type','Typ broni',[{v:'melee',l:'Biała'},{v:'ranged',l:'Dystansowa'},{v:'thrown',l:'Miotana'}],d.weapon_type||'melee'),
+      sel('weapon_slot','Slot',[{v:'main_hand',l:'Prawa ręka'},{v:'off_hand',l:'Lewa ręka'},{v:'two_handed',l:'Oburącz'},{v:'ranged',l:'Dystansowy'}],d.weapon_slot||'main_hand'),
+      sel('targeting','Cel',[{v:'single',l:'Pojedynczy'},{v:'aoe',l:'AOE'},{v:'self',l:'Własny'}],d.targeting||'single'),
+      chk('two_handed','Dwuręczna',d.two_handed),
+      chk('finesse','Finezja (DEX)',d.finesse),
+      num('range_m','Zasięg (m)',d.range_m||0),
+      num('value_gp','Wartość (zł)',d.value_gp||0),
+      sel('rarity','Rzadkość',rarity,String(d.rarity||1)),
+      txt('magic_school','Szkoła magii',d.magic_school||'','np. necromancy'),
+      ta('description','Opis',d.description,2),
+      ta('note','Notatka GM (efekty)',d.note,2),
+      ta('effect_json','effect_json (JSON)',typeof d.effect_json==='object'?JSON.stringify(d.effect_json):d.effect_json||'',2)
+      + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
+      + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
+    );
+
+    if (type === 'item') return G('1fr 1fr',
+      txt('key','Klucz (slug)',d.key),
+      txt('label','Nazwa',d.label),
+      sel('item_type','Typ',[{v:'misc',l:'Różne'},{v:'armor',l:'Zbroja'},{v:'gear',l:'Ekwipunek'},{v:'tool',l:'Narzędzie'},{v:'container',l:'Pojemnik'},{v:'lore',l:'Wiedza'},{v:'magic',l:'Magiczne'},{v:'quest',l:'Zadanie'}],d.item_type||'misc'),
+      sel('armor_coverage','Zasięg zbroi',[{v:'torso',l:'Tors'},{v:'head',l:'Głowa'},{v:'legs',l:'Nogi'},{v:'full',l:'Pełna'}],d.armor_coverage||'torso'),
+      num('ac_bonus','Bonus AC',d.ac_bonus||0),
+      num('value_gp','Wartość (zł)',d.value_gp||0),
+      num('weight_kg','Waga (kg)',d.weight_kg||0),
+      sel('rarity','Rzadkość',rarity,String(d.rarity||1)),
+      sel('effect_target','Cel efektu',[{v:'self',l:'Własny'},{v:'target',l:'Cel'},{v:'aoe',l:'AOE'}],d.effect_target||'self'),
+      txt('effect_type','Typ efektu',d.effect_type||'','np. ac_bonus'),
+      txt('effect_dice','Kość efektu',d.effect_dice||'','np. 1d4'),
+      num('effect_bonus','Bonus efektu',d.effect_bonus||0),
+      num('charges','Ładunki',d.charges||1),
+      ta('description','Opis',d.description,2),
+      ta('note','Notatka GM',d.note,2),
+      ta('effect_json','effect_json (JSON)',typeof d.effect_json==='object'?JSON.stringify(d.effect_json):d.effect_json||'',2)
+      + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
+      + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
+    );
+
+    if (type === 'consumable') return G('1fr 1fr',
+      txt('key','Klucz (slug)',d.key),
+      txt('label','Nazwa',d.label),
+      sel('effect_type','Typ efektu',[{v:'heal_hp',l:'Leczenie HP'},{v:'restore_mana',l:'Przywróć manę'},{v:'remove_condition',l:'Usuń stan'},{v:'stat_buff',l:'Bufor statystyki'},{v:'add_condition',l:'Dodaj stan'},{v:'misc',l:'Różne'}],d.effect_type||'misc'),
+      sel('effect_target','Cel',[{v:'self',l:'Własny'},{v:'target',l:'Cel'}],d.effect_target||'self'),
+      txt('effect_dice','Kość efektu',d.effect_dice||'','np. 2d4+2'),
+      num('effect_bonus','Bonus efektu',d.effect_bonus||0),
+      num('charges','Ładunki',d.charges||1),
+      num('base_price','Cena bazowa (zł)',d.base_price||0),
+      num('weight_kg','Waga (kg)',d.weight_kg||0),
+      sel('rarity','Rzadkość',rarity,String(d.rarity||1)),
+      ta('description','Opis',d.description,2),
+      ta('note','Notatka GM',d.note,2)
+      + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
+      + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
+    );
+
+    if (type === 'location') return G('1fr 1fr',
+      txt('key','Klucz (slug)',d.key),
+      txt('name','Nazwa',d.name||d.label),
+      sel('location_type','Typ',[{v:'dungeon',l:'Loch'},{v:'town',l:'Miasto'},{v:'wilderness',l:'Dzikie tereny'},{v:'building',l:'Budynek'},{v:'cave',l:'Jaskinia'},{v:'camp',l:'Obóz'},{v:'ruins',l:'Ruiny'}],d.location_type||'dungeon'),
+      sel('biome','Biom',[{v:'ruin',l:'Ruiny'},{v:'forest',l:'Las'},{v:'mountain',l:'Góry'},{v:'urban',l:'Miejski'},{v:'underground',l:'Podziemia'},{v:'coast',l:'Wybrzeże'},{v:'swamp',l:'Bagna'}],d.biome||'ruin'),
+      ta('description','Opis',d.description,3),
+      ta('role','Rola w kampanii',d.role,2)
+    );
+
+    return '<pre style="font-size:0.75rem;overflow:auto">' + _esc(JSON.stringify(d,null,2)) + '</pre>';
+  }
+
+  function _collectEntityForm(type) {
+    const v  = id => (document.getElementById('ef-'+id)||{}).value || '';
+    const n  = id => parseFloat((document.getElementById('ef-'+id)||{}).value) || 0;
+    const b  = id => !!(document.getElementById('ef-'+id)||{}).checked;
+    if (type === 'npc') return { key:v('key'), name:v('name'), npc_type:v('npc_type'), personality_prompt:v('personality_prompt'), description:v('description'), is_quest_giver:b('is_quest_giver'), is_ally:b('is_ally'), keyword_triggers: v('keyword_triggers').split(',').map(s=>s.trim()).filter(Boolean) };
+    if (type === 'enemy') return { key:v('key'), label:v('label'), hp_base:n('hp_base'), ac_base:n('ac_base'), attack_bonus:n('attack_bonus'), damage_bonus:n('damage_bonus'), damage_die:v('damage_die'), damage_type:v('damage_type'), tier:v('tier'), attacks_per_turn:n('attacks_per_turn'), xp_award:n('xp_award'), fear_aura:b('fear_aura'), fear_dc:n('fear_dc'), conditions_immune:v('conditions_immune'), description:v('description'), note:v('note') };
+    if (type === 'weapon') return { key:v('key'), label:v('label'), damage_die:v('damage_die'), linked_stat:v('linked_stat'), weapon_type:v('weapon_type'), weapon_slot:v('weapon_slot'), targeting:v('targeting'), two_handed:b('two_handed'), finesse:b('finesse'), range_m:n('range_m'), value_gp:n('value_gp'), rarity:n('rarity'), magic_school:v('magic_school'), description:v('description'), note:v('note'), effect_json:v('effect_json'), hidden:b('hidden'), location_hint:v('location_hint') };
+    if (type === 'item') return { key:v('key'), label:v('label'), item_type:v('item_type'), armor_coverage:v('armor_coverage'), ac_bonus:n('ac_bonus'), value_gp:n('value_gp'), weight_kg:n('weight_kg'), rarity:n('rarity'), effect_target:v('effect_target'), effect_type:v('effect_type'), effect_dice:v('effect_dice'), effect_bonus:n('effect_bonus'), charges:n('charges'), description:v('description'), note:v('note'), effect_json:v('effect_json'), hidden:b('hidden'), location_hint:v('location_hint') };
+    if (type === 'consumable') return { key:v('key'), label:v('label'), effect_type:v('effect_type'), effect_target:v('effect_target'), effect_dice:v('effect_dice'), effect_bonus:n('effect_bonus'), charges:n('charges'), base_price:n('base_price'), weight_kg:n('weight_kg'), rarity:n('rarity'), description:v('description'), note:v('note'), hidden:b('hidden'), location_hint:v('location_hint') };
+    if (type === 'location') return { key:v('key'), name:v('name'), location_type:v('location_type'), biome:v('biome'), description:v('description'), role:v('role') };
+    return {};
   }
 
   function _renderTplEndings(endings) {
@@ -8071,6 +8422,8 @@
     if (!plan.scene_log) plan.scene_log = [];
     if (!plan.deviations) plan.deviations = [];
     if (!plan.branches) plan.branches = [];
+    plan.key_enemies = _tplEditorPlan.key_enemies || [];
+    plan.key_items   = _tplEditorPlan.key_items || [];
     return plan;
   }
 
@@ -8124,8 +8477,10 @@
       _tplEditorPlan = d.gm_plan_json || {};
       _renderTplActs(_tplEditorPlan.acts || []);
       _renderTplNPCs(_tplEditorPlan.key_npcs || []);
+      _renderTplEnemies(_tplEditorPlan.key_enemies || []);
       _renderTplLocations(_tplEditorPlan.key_locations || []);
       _renderTplEndings(_tplEditorPlan.endings || []);
+      _renderTplItems(_tplEditorPlan.key_items || []);
       const ep = _tplEditorPlan.engine_private || {};
       if (document.getElementById('tpl-gm-hint')) document.getElementById('tpl-gm-hint').value = ep.secret_predisposition_hint || '';
       if (document.getElementById('tpl-gm-twist')) document.getElementById('tpl-gm-twist').value = ep.hidden_twist || '';
