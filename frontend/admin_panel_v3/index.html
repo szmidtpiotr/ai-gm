@@ -1484,8 +1484,7 @@
 
       <div class="nav-group-label">Studio</div>
       <button class="nav-item" data-section="dungeons"><span class="nav-item-icon">⛓</span>Lochy</button>
-      <button class="nav-item" data-section="ideas"><span class="nav-item-icon">◇</span>Bank pomysłów</button>
-      <button class="nav-item" data-section="designer"><span class="nav-item-icon">✦</span>Projektant</button>
+      <button class="nav-item" data-section="forge"><span class="nav-item-icon">⚒</span>Kuźnia</button>
 
       <div class="nav-group-label">Live</div>
 
@@ -2999,137 +2998,88 @@
       </div>
     </section>
 
-    <section class="section" id="section-ideas">
+    <!-- ── Kuźnia Kampanii ── -->
+    <section class="section" id="section-forge">
       <div class="section-header">
         <div>
-          <div class="section-heading">Bank pomysłów</div>
-          <div class="section-sub">Szkice fabularne wygenerowane przez AI Kreator</div>
-        </div>
-        <button class="btn btn-primary btn-sm">+ Nowy pomysł</button>
-      </div>
-
-      <div class="card" style="margin-bottom:0">
-        <div class="toolbar">
-          <div class="search-box">
-            <span class="search-box-icon">🔍</span>
-            <input type="text" placeholder="Szukaj pomysłów…">
-          </div>
-          <div class="filter-group">
-            <button class="chip on">Wszystkie</button>
-            <button class="chip">Fabuła</button>
-            <button class="chip">Postać</button>
-            <button class="chip">Lore</button>
-            <button class="chip">Mechanika</button>
-          </div>
-          <div class="toolbar-right">
-            <span style="font-size:0.75rem;color:var(--t3)">6 pomysłów</span>
-          </div>
+          <div class="section-heading">Kuźnia Kampanii</div>
+          <div class="section-sub">AI-assisted adventure design → hooks → DB records → campaign templates</div>
         </div>
       </div>
 
-      <div class="ideas-grid" style="padding-top:16px">
-        <div class="idea-card">
-          <div class="idea-card-top">
-            <span class="badge badge-blue">Fabuła</span>
-            <span class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span></span>
-          </div>
-          <div class="idea-title">Tajemnica Zaginionego Maga</div>
-          <div class="idea-premise">Miejscowi mówią że mag z wieży zniknął przed 10 laty. Jego notatki opisują portal do innej płaszczyzny, który miał otworzyć w nocy pełni.</div>
-          <div class="idea-card-bottom">
-            <span class="idea-date">24 maja</span>
-            <button class="btn-icon danger" title="Usuń">✕</button>
-          </div>
-        </div>
-        <div class="idea-card">
-          <div class="idea-card-top">
-            <span class="badge badge-green">Postać</span>
-            <span class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span><span class="star off">★</span></span>
-          </div>
-          <div class="idea-title">Bliźniak Antagonisty</div>
-          <div class="idea-premise">Główny wróg ma bliźniaka, który jest prostym rolnikiem. Gracze muszą zdecydować — czy wiedza o tym zmienia coś w ich misji?</div>
-          <div class="idea-card-bottom">
-            <span class="idea-date">23 maja</span>
-            <button class="btn-icon danger" title="Usuń">✕</button>
-          </div>
-        </div>
-        <div class="idea-card">
-          <div class="idea-card-top">
-            <span class="badge badge-amber">Lore</span>
-            <span class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span></span>
-          </div>
-          <div class="idea-title">Klątwa Starego Boga</div>
-          <div class="idea-premise">Stary kult zostawił klątwę na całej dolinie. Każdy kto spędzi tu noc śni o tym samym — zatopionej świątyni i chóralnym śpiewie.</div>
-          <div class="idea-card-bottom">
-            <span class="idea-date">22 maja</span>
-            <button class="btn-icon danger" title="Usuń">✕</button>
-          </div>
-        </div>
-        <div class="idea-card">
-          <div class="idea-card-top">
-            <span class="badge badge-slate">Mechanika</span>
-            <span class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span><span class="star off">★</span></span>
-          </div>
-          <div class="idea-title">System Reputacji Frakcji</div>
-          <div class="idea-premise">Każda frakcja śledzi reputację gracza osobno. Powyżej +20: zniżki, questy. Poniżej −10: wrogowie na ulicach.</div>
-          <div class="idea-card-bottom">
-            <span class="idea-date">21 maja</span>
-            <button class="btn-icon danger" title="Usuń">✕</button>
-          </div>
-        </div>
-        <div class="idea-card">
-          <div class="idea-card-top">
-            <span class="badge badge-blue">Fabuła</span>
-            <span class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span><span class="star off">★</span><span class="star off">★</span></span>
-          </div>
-          <div class="idea-title">Więzień w Wieży</div>
-          <div class="idea-premise">Wieża strażnicza kryje więźnia, który twierdzi że jest prawdziwym królem — i ma na to dowody trudne do obalenia.</div>
-          <div class="idea-card-bottom">
-            <span class="idea-date">20 maja</span>
-            <button class="btn-icon danger" title="Usuń">✕</button>
-          </div>
-        </div>
-        <div class="idea-card">
-          <div class="idea-card-top">
-            <span class="badge badge-slate">Mechanika</span>
-            <span class="stars"><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star on">★</span><span class="star off">★</span></span>
-          </div>
-          <div class="idea-title">Przekleństwo Broni</div>
-          <div class="idea-premise">Potężna broń ma własną wolę. Po 3 użyciach zaczyna szeptać do właściciela i wpływać na jego decyzje w określonych momentach.</div>
-          <div class="idea-card-bottom">
-            <span class="idea-date">19 maja</span>
-            <button class="btn-icon danger" title="Usuń">✕</button>
-          </div>
-        </div>
+      <div class="stab-bar" id="forge-tabs" style="margin-bottom:14px">
+        <button class="stab active" data-forgetab="agent">⚡ Agent AI</button>
+        <button class="stab" data-forgetab="hooks">⚓ Haki</button>
+        <button class="stab" data-forgetab="templates">📖 Szablony</button>
       </div>
 
-      <!-- Live ideas layout (replaces static grid on load) -->
-      <div id="ideas-live" style="display:none;grid-template-columns:380px 1fr;gap:14px;align-items:start">
-        <div class="card" style="display:flex;flex-direction:column;height:560px">
-          <div class="card-header"><span class="card-title">⚡ Warsztat AI</span></div>
-          <div id="ideas-chat-history" style="flex:1;overflow-y:auto;padding:12px;font-size:0.82rem;color:var(--t2);background:var(--surface);margin:0 12px;border-radius:var(--r);border:1px solid var(--border)">
-            <em style="color:var(--t3)">Opisz pomysł fabularny — AI dopyta i wygeneruje szkic.</em>
-          </div>
-          <div id="ideas-save-row" style="display:none;padding:8px 12px 0">
-            <button class="btn btn-primary btn-sm" style="width:100%" onclick="saveIdeaDraft()">💾 Zapisz do banku</button>
-          </div>
-          <div style="padding:10px 12px;display:flex;gap:8px">
-            <textarea class="form-input" id="ideas-input" rows="2" placeholder="Opisz pomysł…" style="flex:1;resize:none;font-size:0.82rem"></textarea>
-            <button class="btn btn-primary" id="ideas-send-btn" onclick="sendIdeaMsg()">➤</button>
-          </div>
-        </div>
-        <div>
-          <div class="card" style="margin-bottom:12px">
-            <div class="toolbar">
-              <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj pomysłów…" oninput="filterIdeas(this.value)"></div>
-              <div class="filter-group" id="ideas-cat-filter"><button class="chip on" data-cat="">Wszystkie</button></div>
-              <span style="font-size:0.75rem;color:var(--t3)" id="ideas-count">— pomysłów</span>
+      <!-- Tab: Agent AI -->
+      <div id="forge-tab-agent">
+        <div style="display:grid;grid-template-columns:400px 1fr;gap:14px;align-items:start">
+          <div class="card" style="display:flex;flex-direction:column;height:600px">
+            <div class="card-header"><span class="card-title">⚡ Agent AI</span></div>
+            <div id="forge-chat-history" style="flex:1;overflow-y:auto;padding:12px;font-size:0.82rem;color:var(--t2);background:var(--surface);margin:0 12px;border-radius:var(--r);border:1px solid var(--border)">
+              <em style="color:var(--t3)">Opisz swój pomysł na przygodę — Agent dopyta i zbuduje strukturę.</em>
+            </div>
+            <div id="forge-save-row" style="display:none;padding:8px 12px 0;gap:6px;display:none;flex-direction:column">
+              <button class="btn btn-primary btn-sm" style="width:100%" onclick="saveForgeIdea()">💾 Zapisz pomysł</button>
+            </div>
+            <div style="padding:10px 12px;display:flex;gap:8px">
+              <textarea class="form-input" id="forge-input" rows="2" placeholder="Opisz przygodę…" style="flex:1;resize:none;font-size:0.82rem" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendForgeMsg()}"></textarea>
+              <button class="btn btn-primary" id="forge-send-btn" onclick="sendForgeMsg()">➤</button>
             </div>
           </div>
-          <div class="ideas-grid" id="ideas-bank-grid">
-            <div style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem;grid-column:1/-1">Ładowanie…</div>
+          <div>
+            <div class="card" id="forge-draft-card" style="display:none">
+              <div class="card-header">
+                <span class="card-title">Podgląd szkicu</span>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-sm btn-secondary" onclick="saveForgeIdea()">💾 Zapisz</button>
+                </div>
+              </div>
+              <div id="forge-draft-preview" style="padding:12px;font-size:0.82rem;color:var(--t2)"></div>
+            </div>
+            <div class="card" id="forge-ideas-list-card">
+              <div class="card-header">
+                <span class="card-title">Zapisane pomysły</span>
+                <span id="forge-ideas-count" style="font-size:0.75rem;color:var(--t3)"></span>
+              </div>
+              <div id="forge-ideas-list" style="display:flex;flex-direction:column;gap:8px;max-height:440px;overflow-y:auto;padding:4px 0"></div>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- Tab: Haki -->
+      <div id="forge-tab-hooks" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+          <div class="stab-bar" id="forge-hooks-status-bar">
+            <button class="stab active" data-hookstatus="">Wszystkie</button>
+            <button class="stab" data-hookstatus="pending">Oczekujące</button>
+            <button class="stab" data-hookstatus="approved">Zatwierdzone</button>
+            <button class="stab" data-hookstatus="promoted">Promowane</button>
+          </div>
+          <div class="filter-group" id="forge-hooks-type-filter" style="margin-left:auto">
+            <button class="chip on" data-hooktype="">Wszystkie typy</button>
+            <button class="chip" data-hooktype="weapon">⚔ Broń</button>
+            <button class="chip" data-hooktype="enemy">💀 Wróg</button>
+            <button class="chip" data-hooktype="npc">👤 NPC</button>
+            <button class="chip" data-hooktype="location">🗺 Lokacja</button>
+            <button class="chip" data-hooktype="item">🎒 Przedmiot</button>
+          </div>
+        </div>
+        <div id="forge-hooks-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px"></div>
+      </div>
+
+      <!-- Tab: Szablony -->
+      <div id="forge-tab-templates" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="btn btn-primary btn-sm" onclick="openCreateTemplate()">+ Nowy szablon</button>
+          <span id="forge-templates-count" style="font-size:0.8rem;color:var(--t3);align-self:center"></span>
+        </div>
+        <div id="forge-templates-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
+      </div>
+
     </section>
 
 
@@ -3691,56 +3641,6 @@
     </section>
 
     <!-- ── Campaign Designer ── -->
-    <section class="section" id="section-designer">
-      <div class="section-header">
-        <div>
-          <div class="section-heading">Projektant Kampanii</div>
-          <div class="section-sub">Kreator haków fabularnych wspomagany AI</div>
-        </div>
-      </div>
-      <div class="two-col">
-        <div class="card">
-          <div class="card-header"><span class="card-title">Generator haków</span></div>
-          <div class="form-row"><label>Preset LLM</label>
-            <select id="des-preset" class="field-input" style="max-width:280px"></select>
-          </div>
-          <div class="stab-bar" id="des-mode-bar" style="margin:10px 0 8px">
-            <button class="stab active" data-desmode="prompt">Prompt</button>
-            <button class="stab" data-desmode="text">Tekst</button>
-            <button class="stab" data-desmode="file">Plik PDF/TXT</button>
-          </div>
-          <div id="des-mode-prompt">
-            <textarea id="des-prompt" class="field-input" rows="4" placeholder="Opisz klimat kampanii, setting, kluczowe postacie i konflikty…"></textarea>
-          </div>
-          <div id="des-mode-text" style="display:none">
-            <textarea id="des-text" class="field-input" rows="6" placeholder="Wklej tekst scenariusza, notatki, lore…"></textarea>
-          </div>
-          <div id="des-mode-file" style="display:none">
-            <input type="file" id="des-file" accept=".pdf,.txt,.md" style="font-size:0.82rem;display:block;margin-bottom:6px" />
-            <div id="des-file-preview" style="font-size:0.75rem;color:var(--t3)"></div>
-          </div>
-          <div class="form-row" style="margin-top:10px">
-            <label>Liczba haków</label>
-            <select id="des-count" class="field-input" style="width:80px">
-              <option value="3">3</option><option value="4">4</option><option value="5" selected>5</option><option value="6">6</option>
-            </select>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="desGenerate(this)" style="margin-top:8px">Generuj haki</button>
-          <div id="des-hooks-out" style="margin-top:14px"></div>
-        </div>
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">Biblioteka haków</span>
-            <span id="des-lib-count" style="font-size:0.75rem;color:var(--t3)"></span>
-          </div>
-          <div class="search-box" style="margin-bottom:10px">
-            <span class="search-box-icon">🔍</span>
-            <input type="text" placeholder="Szukaj…" oninput="desFilterLib(this.value)" />
-          </div>
-          <div id="des-lib" style="display:flex;flex-direction:column;gap:6px;max-height:600px;overflow-y:auto"></div>
-        </div>
-      </div>
-    </section>
 
     <!-- ── Combat Sandbox ── -->
 
@@ -3763,8 +3663,8 @@
   const LABELS = {
     overview:'Przegląd', campaigns:'Kampanie', content:'Zawartość',
     world:'Bestiariusz', dungeons:'Lochy', map:'Mapa',
-    mechanics:'Mechaniki', players:'Gracze', ideas:'Bank pomysłów',
-    invites:'Zaproszenia', designer:'Kreator haków',
+    mechanics:'Mechaniki', players:'Gracze', forge:'Kuźnia Kampanii',
+    invites:'Zaproszenia',
     tools:'Narzędzia', system:'System',
   };
 
@@ -4872,8 +4772,8 @@
     if (_sectionLoaded.has(key)) return;
     const fn = { overview:_loadOverview, campaigns:_loadCampaigns, content:()=>_loadContentTab('weapons'),
       world:()=>_loadWorldTab('npcs'), map:()=>_loadMapTab('builder'), mechanics:()=>_loadMechanicsTab('stats'),
-      dungeons:_loadDungeons, players:_loadPlayers, ideas:_loadIdeas,
-      system:_loadSystem, invites:_loadInvites, designer:_loadDesigner,
+      dungeons:_loadDungeons, players:_loadPlayers, forge:_loadForge,
+      system:_loadSystem, invites:_loadInvites,
       tools:_loadTools }[key];
     if (!fn) return;
     _sectionLoaded.add(key);
@@ -7273,134 +7173,322 @@
     finally { btn.disabled = false; btn.textContent = orig; }
   }
 
-  // ── Ideas Bank ──────────────────────────────────────────
-  let _ideasAll = [];
-  let _ideaSessionId = null;
-  let _ideaDraft = null;
+  // ── Kuźnia Kampanii ──────────────────────────────────────
+  let _forgeSessionId = 'forge-' + Date.now();
+  let _forgeDraft = null;
+  let _forgeHooksFilter = { status: '', type: '' };
+  let _forgeCurrentIdeaId = null;
 
-  async function _loadIdeas() {
-    const liveEl = document.getElementById('ideas-live');
-    const staticEl = document.querySelector('#section-ideas .ideas-grid');
-    if (liveEl) { liveEl.style.display = 'grid'; }
-    if (staticEl) staticEl.style.display = 'none';
-    _ideaSessionId = _ideaSessionId || ('sess-' + Date.now());
-    await _refreshIdeasBank();
+  async function _loadForge() {
+    _forgeSessionId = 'forge-' + Date.now();
+    // Wire forge tabs
+    document.getElementById('forge-tabs')?.querySelectorAll('.stab[data-forgetab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#forge-tabs .stab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const tab = btn.dataset.forgetab;
+        document.querySelectorAll('[id^="forge-tab-"]').forEach(p => p.style.display = 'none');
+        const panel = document.getElementById(`forge-tab-${tab}`);
+        if (panel) panel.style.display = '';
+        if (tab === 'hooks') _loadForgeHooks();
+        if (tab === 'templates') _loadForgeTemplates();
+      });
+    });
+    // Wire hooks status filter
+    document.getElementById('forge-hooks-status-bar')?.querySelectorAll('.stab[data-hookstatus]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#forge-hooks-status-bar .stab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _forgeHooksFilter.status = btn.dataset.hookstatus;
+        _loadForgeHooks();
+      });
+    });
+    // Wire hooks type filter
+    document.getElementById('forge-hooks-type-filter')?.querySelectorAll('.chip[data-hooktype]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#forge-hooks-type-filter .chip').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        _forgeHooksFilter.type = btn.dataset.hooktype;
+        _loadForgeHooks();
+      });
+    });
+    await _refreshForgeIdeas();
   }
 
-  async function _refreshIdeasBank() {
-    const grid = document.getElementById('ideas-bank-grid');
-    if (!grid) return;
+  async function _refreshForgeIdeas() {
     try {
-      const d = await apiFetch('/api/admin/ideas');
-      _ideasAll = d.items || [];
-      const catCount = document.getElementById('ideas-count');
-      if (catCount) catCount.textContent = `${_ideasAll.length} pomysłów`;
-      _renderIdeasGrid(_ideasAll);
-      const catFilter = document.getElementById('ideas-cat-filter');
-      if (catFilter) {
-        const cats = [...new Set(_ideasAll.map(i => i.category).filter(Boolean))];
-        const existing = catFilter.querySelectorAll('[data-cat]:not([data-cat=""])');
-        existing.forEach(e => e.remove());
-        cats.forEach(c => {
-          const btn = document.createElement('button');
-          btn.className = 'chip'; btn.dataset.cat = c; btn.textContent = c;
-          btn.onclick = () => { catFilter.querySelectorAll('.chip').forEach(b => b.classList.remove('on')); btn.classList.add('on'); _renderIdeasGrid(_ideasAll.filter(i => i.category === c)); };
-          catFilter.appendChild(btn);
-        });
-        catFilter.querySelector('[data-cat=""]').onclick = () => { catFilter.querySelectorAll('.chip').forEach(b => b.classList.remove('on')); catFilter.querySelector('[data-cat=""]').classList.add('on'); _renderIdeasGrid(_ideasAll); };
+      const d = await apiFetch('/api/admin/forge/ideas');
+      const items = d.items || [];
+      const list = document.getElementById('forge-ideas-list');
+      const count = document.getElementById('forge-ideas-count');
+      if (count) count.textContent = `${items.length} pomysłów`;
+      if (!list) return;
+      if (!items.length) {
+        list.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:0.8rem">Brak zapisanych pomysłów.</div>';
+        return;
       }
-    } catch(e) { const grid = document.getElementById('ideas-bank-grid'); if (grid) grid.innerHTML = `<div style="color:var(--red);text-align:center;padding:24px;grid-column:1/-1">${_esc(e.message)}</div>`; }
+      list.innerHTML = items.map(idea => `
+        <div class="card" style="padding:10px 12px;cursor:pointer;border:1px solid var(--border)" onclick="forgeOpenIdea(${idea.id})">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+            <div>
+              <div style="font-weight:600;font-size:0.85rem">${_esc(idea.title)}</div>
+              <div style="font-size:0.75rem;color:var(--t3)">${_esc(idea.difficulty||'')} · ${_esc(idea.status||'draft')} · ${idea.created_at?.substring(0,10)||''}</div>
+            </div>
+            <div style="display:flex;gap:4px;flex-shrink:0">
+              <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeExtractHooks(${idea.id},this)">Wyodrębnij haki</button>
+              <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();if(confirm('Archiwizować pomysł?'))apiFetch('/api/admin/forge/ideas/${idea.id}',{method:'PATCH',body:JSON.stringify({status:'archived'})}).then(()=>{_sectionLoaded.delete('forge');_loadForge()})">🗑</button>
+            </div>
+          </div>
+        </div>`).join('');
+    } catch(e) { console.warn('forge ideas', e.message); }
   }
 
-  function _renderIdeasGrid(items) {
-    const grid = document.getElementById('ideas-bank-grid');
-    if (!grid) return;
-    const catColor = c => ({story:'badge-blue',character:'badge-green',lore:'badge-amber',mechanic:'badge-slate',fabuła:'badge-blue',postać:'badge-green',mechanika:'badge-slate'}[c?.toLowerCase()]||'badge-slate');
-    if (!items.length) { grid.innerHTML = `<div style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem;grid-column:1/-1">Brak pomysłów</div>`; return; }
-    grid.innerHTML = items.map(idea => `<div class="idea-card" data-id="${idea.id}">
-      <div class="idea-card-top">
-        <span class="badge ${catColor(idea.category)}">${_esc(idea.category||'—')}</span>
-        ${_stars((idea.quality_rating||0) * 20)}
-      </div>
-      <div class="idea-title">${_esc(idea.title||'Bez tytułu')}</div>
-      <div class="idea-premise">${_esc((idea.premise||idea.description||(idea.structured_data&&(idea.structured_data.premise||idea.structured_data.setup))||'').toString().slice(0,150))}</div>
-      <div class="idea-card-bottom">
-        <span class="idea-date">${_timeAgo(idea.created_at)||'—'}</span>
-        <div style="display:flex;align-items:center;gap:4px">
-          <select class="form-input" style="padding:2px 4px;font-size:0.72rem;width:54px" onchange="rateIdea(${idea.id}, this.value)">
-            ${[1,2,3,4,5].map(r=>`<option value="${r}" ${(idea.quality_rating||0)===r?'selected':''}>${r}★</option>`).join('')}
-          </select>
-          <button class="btn-icon danger" title="Usuń" onclick="deleteIdea(${idea.id}, this)">✕</button>
-        </div>
-      </div>
-    </div>`).join('');
+  function forgeOpenIdea(id) {
+    _forgeCurrentIdeaId = id;
+    apiFetch(`/api/admin/forge/ideas/${id}`).then(idea => {
+      const card = document.getElementById('forge-draft-card');
+      const preview = document.getElementById('forge-draft-preview');
+      if (!card || !preview) return;
+      card.style.display = '';
+      const sd = idea.structured_data || {};
+      preview.innerHTML = `
+        <div style="margin-bottom:8px"><strong>${_esc(idea.title)}</strong> <span style="font-size:0.75rem;color:var(--t3)">${_esc(idea.difficulty||'')}</span></div>
+        <div style="font-size:0.82rem;color:var(--t2);margin-bottom:8px">${_esc(idea.premise||'')}</div>
+        <div style="font-size:0.75rem;color:var(--t3)">Ton: ${(idea.tone||[]).join(', ')||'—'} | Motywy: ${(idea.themes||[]).join(', ')||'—'}</div>
+        ${sd.arcs ? `<div style="margin-top:8px;font-size:0.75rem;color:var(--t3)">${sd.arcs.length} aktów · ${(sd.hooks||[]).length} hooków w szkicu</div>` : ''}
+        <div style="margin-top:10px">
+          <button class="btn btn-sm btn-primary" onclick="forgeExtractHooks(${id},this)">Wyodrębnij haki → DB</button>
+          <button class="btn btn-sm btn-secondary" onclick="forgeCreateTemplateFromIdea(${id})" style="margin-left:6px">→ Utwórz szablon</button>
+        </div>`;
+    }).catch(e => console.warn('forge open idea', e.message));
   }
 
-  function filterIdeas(q) {
-    const filtered = q ? _ideasAll.filter(i => (i.title||'').toLowerCase().includes(q.toLowerCase()) || (i.premise||i.description||'').toLowerCase().includes(q.toLowerCase())) : _ideasAll;
-    _renderIdeasGrid(filtered);
-  }
-
-  async function sendIdeaMsg() {
-    const input = document.getElementById('ideas-input');
-    const msg = input?.value.trim();
+  async function sendForgeMsg() {
+    const input = document.getElementById('forge-input');
+    const btn = document.getElementById('forge-send-btn');
+    if (!input || !btn) return;
+    const msg = input.value.trim();
     if (!msg) return;
-    const hist = document.getElementById('ideas-chat-history');
+    const hist = document.getElementById('forge-chat-history');
     hist.innerHTML += `<div style="margin-bottom:8px"><strong style="color:var(--t1)">Ty:</strong> ${_esc(msg)}</div>`;
     hist.scrollTop = hist.scrollHeight;
     input.value = '';
-    const btn = document.getElementById('ideas-send-btn');
-    if (btn) btn.disabled = true;
-    if (!_ideaSessionId) _ideaSessionId = 'sess-' + Date.now();
-    try {
-      const d = await apiFetch('/api/admin/ideas/workshop/message', {
-        method: 'POST', body: JSON.stringify({ session_id: _ideaSessionId, message: msg })
-      });
-      let reply = (d.reply || '').replace(/```json[\s\S]*?```/g, '').replace(/```[\s\S]*?```/g, '').trim();
-      if (d.ready_to_save && d.draft) {
-        _ideaDraft = d.draft;
-        const t = _esc(d.draft.title || 'szkic');
-        if (!reply) reply = `✅ Szkic „${t}" gotowy — kliknij „Zapisz do banku" poniżej.`;
-        const saveRow = document.getElementById('ideas-save-row');
-        if (saveRow) saveRow.style.display = '';
-      } else if (!reply) {
-        reply = '(AI przygotował szkic, ale bez opisu — spróbuj doprecyzować pomysł.)';
-      }
-      hist.innerHTML += `<div style="margin-bottom:10px;padding:8px 10px;background:var(--blue-light);border:1px solid var(--blue-border);border-radius:var(--r);color:var(--blue-text);font-size:0.82rem">${_esc(reply)}</div>`;
-      hist.scrollTop = hist.scrollHeight;
-    } catch(e) { hist.innerHTML += `<div style="color:var(--red);font-size:0.8rem">${_esc(e.message)}</div>`; }
-    if (btn) btn.disabled = false;
-  }
-
-  async function saveIdeaDraft() {
-    if (!_ideaDraft) return;
-    try {
-      await apiFetch('/api/admin/ideas/save', { method:'POST', body:JSON.stringify({ session_id: _ideaSessionId, idea_data: _ideaDraft }) });
-      showToast('Pomysł zapisany do banku!', 'success');
-      _ideaDraft = null;
-      _ideaSessionId = 'sess-' + Date.now();
-      const saveRow = document.getElementById('ideas-save-row');
-      if (saveRow) saveRow.style.display = 'none';
-      const hist = document.getElementById('ideas-chat-history');
-      if (hist) hist.innerHTML = '<em style="color:var(--t3)">Opisz nowy pomysł fabularny.</em>';
-      _refreshIdeasBank();
-    } catch(e) { showToast('Błąd: '+e.message, 'error'); }
-  }
-
-  async function rateIdea(id, rating) {
-    try {
-      await apiFetch(`/api/admin/ideas/${id}`, { method:'PATCH', body:JSON.stringify({ quality_rating: parseInt(rating,10) }) });
-    } catch(e) { showToast('Błąd oceny: '+e.message, 'error'); }
-  }
-
-  async function deleteIdea(id, btn) {
-    if (!confirm('Usunąć pomysł?')) return;
     btn.disabled = true;
     try {
-      await apiFetch(`/api/admin/ideas/${id}`, { method:'DELETE' });
-      _sectionLoaded.delete('ideas'); _loadIdeas();
-      showToast('Usunięto.', 'success');
-    } catch(e) { showToast('Błąd: '+e.message, 'error'); btn.disabled = false; }
+      const d = await apiFetch('/api/admin/forge/chat/message', {
+        method: 'POST',
+        body: JSON.stringify({ session_id: _forgeSessionId, message: msg }),
+      });
+      hist.innerHTML += `<div style="margin-bottom:12px;padding:8px;background:var(--blue-light);border-radius:var(--r);border:1px solid var(--blue-border);color:var(--blue-text)">${_esc(d.reply)}</div>`;
+      hist.scrollTop = hist.scrollHeight;
+      if (d.draft) {
+        _forgeDraft = d.draft;
+        const saveRow = document.getElementById('forge-save-row');
+        if (saveRow) saveRow.style.display = 'flex';
+      }
+      if (d.draft) {
+        const card = document.getElementById('forge-draft-card');
+        const preview = document.getElementById('forge-draft-preview');
+        if (card && preview) {
+          card.style.display = '';
+          const sd = d.draft;
+          preview.innerHTML = `<div style="font-weight:600;margin-bottom:4px">${_esc(sd.title||'(szkic)')}</div>
+            <div style="font-size:0.8rem;color:var(--t2);margin-bottom:6px">${_esc(sd.premise||'')}</div>
+            <div style="font-size:0.75rem;color:var(--t3)">Akty: ${(sd.arcs||[]).length} · Haki: ${(sd.hooks||[]).length} · Trudność: ${_esc(sd.difficulty||'?')}</div>`;
+        }
+      }
+    } catch(e) {
+      hist.innerHTML += `<div style="color:var(--red);font-size:0.8rem">${_esc(e.message)}</div>`;
+    }
+    btn.disabled = false;
+  }
+
+  async function saveForgeIdea() {
+    if (!_forgeDraft) { _showToast('Brak szkicu do zapisania.', 'warning'); return; }
+    try {
+      const d = await apiFetch('/api/admin/forge/chat/save', {
+        method: 'POST',
+        body: JSON.stringify({ session_id: _forgeSessionId, idea_data: _forgeDraft }),
+      });
+      _showToast(`Zapisano: ${d.idea?.title||'pomysł'}`, 'success');
+      _forgeDraft = null;
+      _forgeSessionId = 'forge-' + Date.now();
+      const saveRow = document.getElementById('forge-save-row');
+      if (saveRow) saveRow.style.display = 'none';
+      await _refreshForgeIdeas();
+    } catch(e) { _showToast(e.message||'Błąd zapisu.', 'error'); }
+  }
+
+  async function forgeExtractHooks(ideaId, btn) {
+    const orig = btn?.textContent || 'Wyodrębnij haki';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Ekstrahuję…'; }
+    try {
+      const d = await apiFetch(`/api/admin/forge/ideas/${ideaId}/extract-hooks`, { method: 'POST' });
+      _showToast(`Wyodrębniono ${d.hooks_created} hooków → zakładka Haki`, 'success');
+      // Switch to hooks tab
+      document.querySelectorAll('#forge-tabs .stab').forEach(b => b.classList.remove('active'));
+      const hookTab = document.querySelector('#forge-tabs .stab[data-forgetab="hooks"]');
+      if (hookTab) hookTab.classList.add('active');
+      document.querySelectorAll('[id^="forge-tab-"]').forEach(p => p.style.display = 'none');
+      const panel = document.getElementById('forge-tab-hooks');
+      if (panel) panel.style.display = '';
+      _forgeHooksFilter.status = 'pending';
+      document.querySelectorAll('#forge-hooks-status-bar .stab').forEach(b => {
+        b.classList.toggle('active', b.dataset.hookstatus === 'pending');
+      });
+      await _loadForgeHooks();
+    } catch(e) { _showToast(e.message||'Błąd ekstrakcji.', 'error'); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
+  }
+
+  const _HOOK_TYPE_LABELS = {
+    weapon:'⚔ Broń', armor:'🛡 Zbroja', item:'🎒 Przedmiot', consumable:'🧪 Mikstura',
+    enemy:'💀 Wróg', npc:'👤 NPC', location:'🗺 Lokacja', event:'📜 Wydarzenie', theme:'💡 Motyw',
+  };
+
+  async function _loadForgeHooks() {
+    const grid = document.getElementById('forge-hooks-grid');
+    if (!grid) return;
+    grid.innerHTML = '<div style="color:var(--t3);font-size:0.8rem;padding:8px">Ładowanie…</div>';
+    try {
+      const params = new URLSearchParams();
+      if (_forgeHooksFilter.status) params.set('status', _forgeHooksFilter.status);
+      if (_forgeHooksFilter.type) params.set('hook_type', _forgeHooksFilter.type);
+      const d = await apiFetch('/api/admin/forge/hooks?' + params.toString());
+      const hooks = d.items || [];
+      if (!hooks.length) {
+        grid.innerHTML = '<div style="color:var(--t3);font-size:0.8rem;padding:8px;grid-column:1/-1">Brak hooków.</div>';
+        return;
+      }
+      grid.innerHTML = hooks.map(h => {
+        const statusColor = {pending:'var(--amber)',approved:'var(--green)',promoted:'var(--blue)',rejected:'var(--red)',draft:'var(--t3)'}[h.status]||'var(--t3)';
+        const dd = h.draft_data || {};
+        const canPromote = ['weapon','armor','item','consumable','enemy','npc','location'].includes(h.hook_type);
+        return `<div class="card" style="padding:10px 12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span style="font-size:0.75rem;font-weight:600;color:var(--t3)">${_HOOK_TYPE_LABELS[h.hook_type]||h.hook_type}</span>
+            <span style="font-size:0.7rem;color:${statusColor};font-weight:600">${h.status}</span>
+          </div>
+          <div style="font-weight:600;font-size:0.85rem;margin-bottom:4px">${_esc(h.title)}</div>
+          <div style="font-size:0.75rem;color:var(--t2);margin-bottom:8px">${_esc((h.description||'').substring(0,100))}${(h.description||'').length>100?'…':''}</div>
+          ${dd.key ? `<div style="font-size:0.7rem;color:var(--t3);font-family:monospace;margin-bottom:6px">key: ${_esc(dd.key)}</div>` : ''}
+          <div style="display:flex;gap:4px;flex-wrap:wrap">
+            ${h.status === 'pending' ? `<button class="btn btn-sm btn-primary" onclick="forgeApproveHook(${h.id})">✓ Zatwierdź</button>` : ''}
+            ${canPromote && h.status === 'approved' ? `<button class="btn btn-sm btn-secondary" onclick="forgePromoteHook(${h.id},this)">⬆ Promuj do DB</button>` : ''}
+            ${h.promoted_table ? `<span style="font-size:0.7rem;color:var(--green);padding:2px 6px">✓ ${_esc(h.promoted_table)}</span>` : ''}
+            <button class="btn btn-sm btn-secondary" onclick="forgeRejectHook(${h.id})" style="margin-left:auto">✕</button>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) { grid.innerHTML = `<div style="color:var(--red);font-size:0.8rem;padding:8px">${_esc(e.message)}</div>`; }
+  }
+
+  async function forgeApproveHook(id) {
+    try {
+      await apiFetch(`/api/admin/forge/hooks/${id}`, { method:'PATCH', body:JSON.stringify({status:'approved'}) });
+      _showToast('Hak zatwierdzony.', 'success');
+      await _loadForgeHooks();
+    } catch(e) { _showToast(e.message||'Błąd.','error'); }
+  }
+
+  async function forgeRejectHook(id) {
+    if (!confirm('Odrzucić hak?')) return;
+    try {
+      await apiFetch(`/api/admin/forge/hooks/${id}`, { method:'PATCH', body:JSON.stringify({status:'rejected'}) });
+      _showToast('Hak odrzucony.', 'success');
+      await _loadForgeHooks();
+    } catch(e) { _showToast(e.message||'Błąd.','error'); }
+  }
+
+  async function forgePromoteHook(id, btn) {
+    const orig = btn?.textContent || '⬆ Promuj';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+    try {
+      const d = await apiFetch(`/api/admin/forge/hooks/${id}/promote`, { method:'POST' });
+      _showToast(`Promowano do ${d.promoted_table} (#${d.promoted_record_id})`, 'success');
+      await _loadForgeHooks();
+    } catch(e) { _showToast(e.message||'Błąd promocji.','error'); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
+  }
+
+  async function _loadForgeTemplates() {
+    const grid = document.getElementById('forge-templates-grid');
+    const count = document.getElementById('forge-templates-count');
+    if (!grid) return;
+    grid.innerHTML = '<div style="color:var(--t3);font-size:0.8rem">Ładowanie…</div>';
+    try {
+      const d = await apiFetch('/api/admin/forge/templates');
+      const templates = d.items || [];
+      if (count) count.textContent = `${templates.length} szablonów`;
+      if (!templates.length) {
+        grid.innerHTML = '<div style="color:var(--t3);font-size:0.8rem">Brak szablonów. Utwórz pierwszy z zapisanego pomysłu.</div>';
+        return;
+      }
+      grid.innerHTML = templates.map(t => {
+        const statusColor = t.status === 'published' ? 'var(--green)' : 'var(--t3)';
+        return `<div class="card" style="padding:12px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+            <span style="font-weight:600;font-size:0.88rem">${_esc(t.title)}</span>
+            <span style="font-size:0.7rem;color:${statusColor};font-weight:600">${t.status}</span>
+          </div>
+          <div style="font-size:0.78rem;color:var(--t2);margin-bottom:8px">${_esc((t.description||'').substring(0,120))}${(t.description||'').length>120?'…':''}</div>
+          <div style="font-size:0.72rem;color:var(--t3);margin-bottom:8px">⭐ ${t.difficulty_rating}/5 · 🎮 ${t.play_count} rozegrań · ${(t.hook_ids||[]).length} hooków</div>
+          <div style="display:flex;gap:4px">
+            ${t.status === 'draft' ? `<button class="btn btn-sm btn-primary" onclick="forgePublishTemplate(${t.id})">Opublikuj</button>` : `<button class="btn btn-sm btn-secondary" onclick="forgeUnpublishTemplate(${t.id})">Wycofaj</button>`}
+            <button class="btn btn-sm btn-secondary" onclick="if(confirm('Usunąć szablon?'))apiFetch('/api/admin/forge/templates/${t.id}',{method:'DELETE'}).then(()=>{_sectionLoaded.delete('forge');_loadForgeTemplates()})" style="margin-left:auto">🗑</button>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) { grid.innerHTML = `<div style="color:var(--red);font-size:0.8rem">${_esc(e.message)}</div>`; }
+  }
+
+  async function forgePublishTemplate(id) {
+    try {
+      await apiFetch(`/api/admin/forge/templates/${id}`, { method:'PATCH', body:JSON.stringify({status:'published'}) });
+      _showToast('Szablon opublikowany.', 'success');
+      await _loadForgeTemplates();
+    } catch(e) { _showToast(e.message||'Błąd.','error'); }
+  }
+
+  async function forgeUnpublishTemplate(id) {
+    try {
+      await apiFetch(`/api/admin/forge/templates/${id}`, { method:'PATCH', body:JSON.stringify({status:'draft'}) });
+      _showToast('Szablon wycofany.', 'success');
+      await _loadForgeTemplates();
+    } catch(e) { _showToast(e.message||'Błąd.','error'); }
+  }
+
+  async function forgeCreateTemplateFromIdea(ideaId) {
+    const title = prompt('Tytuł szablonu:');
+    if (!title) return;
+    try {
+      const t = await apiFetch('/api/admin/forge/templates', {
+        method:'POST',
+        body:JSON.stringify({ title, adventure_idea_id: ideaId }),
+      });
+      _showToast(`Szablon "${t.title}" utworzony.`, 'success');
+      // Switch to templates tab
+      document.querySelectorAll('#forge-tabs .stab').forEach(b => {
+        b.classList.toggle('active', b.dataset.forgetab === 'templates');
+      });
+      document.querySelectorAll('[id^="forge-tab-"]').forEach(p => p.style.display = 'none');
+      const panel = document.getElementById('forge-tab-templates');
+      if (panel) panel.style.display = '';
+      await _loadForgeTemplates();
+    } catch(e) { _showToast(e.message||'Błąd tworzenia szablonu.','error'); }
+  }
+
+  async function openCreateTemplate() {
+    const title = prompt('Tytuł nowego szablonu:');
+    if (!title) return;
+    try {
+      const t = await apiFetch('/api/admin/forge/templates', {
+        method:'POST',
+        body:JSON.stringify({ title }),
+      });
+      _showToast(`Szablon "${t.title}" utworzony.`, 'success');
+      await _loadForgeTemplates();
+    } catch(e) { _showToast(e.message||'Błąd.','error'); }
   }
 
   // ── Voice ───────────────────────────────────────────────
@@ -9172,128 +9260,6 @@
       await apiFetch(`/api/admin/invites/${id}`, { method: 'DELETE' });
       _showToast('Odwołano.', 'success');
       await _refreshInviteList();
-    } catch(e) { _showToast(e.message||'Błąd.','error'); btn.disabled = false; }
-  }
-
-  // ── Campaign Designer (Hook Factory) ─────────────────────────────────────────
-
-  let _desAllHooks = [];
-  let _desExtractedText = '';
-
-  async function _loadDesigner() {
-    // Load LLM presets into selector
-    try {
-      const d = await apiFetch('/api/admin/llm/global-settings');
-      const sel = document.getElementById('des-preset');
-      if (sel) {
-        const presets = d.presets || [];
-        const activeId = d.active_preset_id;
-        sel.innerHTML = `<option value="">Domyślny (aktywny)</option>` +
-          presets.map(p => `<option value="${p.id}"${p.id===activeId?' selected':''}>${_esc(p.label||p.provider)}</option>`).join('');
-      }
-    } catch {}
-    // Wire mode tabs
-    document.getElementById('des-mode-bar')?.querySelectorAll('.stab[data-desmode]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#des-mode-bar .stab').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        ['prompt','text','file'].forEach(m => { const el = document.getElementById(`des-mode-${m}`); if (el) el.style.display = btn.dataset.desmode===m?'':'none'; });
-      });
-    });
-    // Wire file input
-    document.getElementById('des-file')?.addEventListener('change', async (e) => {
-      const f = e.target.files?.[0]; if (!f) return;
-      const preview = document.getElementById('des-file-preview');
-      if (preview) preview.textContent = 'Wgrywanie…';
-      try {
-        const fd = new FormData(); fd.append('file', f);
-        const d = await apiFetch('/api/admin/campaign-designer/extract-pdf', { method: 'POST', body: fd });
-        _desExtractedText = d.text || '';
-        if (preview) preview.textContent = `Wyodrębniono ${d.pages||'?'} str., ${_desExtractedText.length} znaków${d.truncated?' (skrócono)':''}`;
-      } catch(ex) { if (preview) preview.textContent = 'Błąd: ' + ex.message; }
-    });
-    await _desRefreshLib();
-  }
-
-  async function desGenerate(btn) {
-    const mode = document.querySelector('#des-mode-bar .stab.active')?.dataset?.desmode || 'prompt';
-    let sourceText = '';
-    if (mode === 'prompt') sourceText = document.getElementById('des-prompt')?.value?.trim() || '';
-    else if (mode === 'text') sourceText = document.getElementById('des-text')?.value?.trim() || '';
-    else sourceText = _desExtractedText;
-    if (!sourceText) { _showToast('Podaj treść do generacji.', 'error'); return; }
-    const count = parseInt(document.getElementById('des-count')?.value) || 5;
-    const presetId = document.getElementById('des-preset')?.value || null;
-    btn.disabled = true; btn.textContent = '⏳ Generuję…';
-    const out = document.getElementById('des-hooks-out');
-    if (out) out.innerHTML = '<div style="color:var(--t3);font-size:0.82rem">Generowanie…</div>';
-    try {
-      const d = await apiFetch('/api/admin/campaign-designer/generate-hooks', { method: 'POST', body: JSON.stringify({ source_text: sourceText, count, preset_id: presetId ? parseInt(presetId) : null }) });
-      const hooks = d.hooks || [];
-      if (out) out.innerHTML = hooks.map((h, i) => `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
-        <input class="field-input des-hook-title" style="font-weight:600;margin-bottom:6px" value="${_esc(h.title||'')}" />
-        <div style="font-size:0.8rem;color:var(--t3);margin-bottom:6px;white-space:pre-wrap">${_esc(h.content||'')}</div>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-sm btn-primary" onclick="desSaveHook(this,'${_esc(h.content||'')}')">Zapisz</button>
-          <button class="btn btn-sm btn-secondary" onclick="this.closest('div').closest('div').remove()">Odrzuć</button>
-        </div>
-      </div>`).join('');
-    } catch(e) { _showToast(e.message || 'Błąd generacji.', 'error'); if (out) out.innerHTML = ''; }
-    finally { btn.disabled = false; btn.textContent = 'Generuj haki'; }
-  }
-
-  async function desSaveHook(btn, content) {
-    const title = btn.closest('div').closest('div').querySelector('.des-hook-title')?.value?.trim() || 'Hak fabularny';
-    btn.disabled = true; btn.textContent = '⏳';
-    try {
-      await apiFetch('/api/admin/campaign-designer/snippets', { method: 'POST', body: JSON.stringify({ snippet_type: 'hook', title, content }) });
-      btn.closest('div').closest('div').remove();
-      _showToast('Zapisano hak.', 'success');
-      await _desRefreshLib();
-    } catch(e) { _showToast(e.message||'Błąd.','error'); btn.disabled = false; btn.textContent = 'Zapisz'; }
-  }
-
-  async function _desRefreshLib() {
-    const libEl = document.getElementById('des-lib');
-    const countEl = document.getElementById('des-lib-count');
-    if (!libEl) return;
-    try {
-      const d = await apiFetch('/api/admin/campaign-designer/snippets?snippet_type=hook');
-      _desAllHooks = d.items || [];
-      if (countEl) countEl.textContent = `${_desAllHooks.length} haków`;
-      desFilterLib('');
-    } catch(e) { if (libEl) libEl.innerHTML = `<div style="color:var(--red,#e55)">${_esc(e.message)}</div>`; }
-  }
-
-  function desFilterLib(q) {
-    const libEl = document.getElementById('des-lib');
-    if (!libEl) return;
-    const filtered = q ? _desAllHooks.filter(h => (h.title+h.content).toLowerCase().includes(q.toLowerCase())) : _desAllHooks;
-    if (!filtered.length) { libEl.innerHTML = '<div style="color:var(--t3);font-size:0.82rem">Brak haków.</div>'; return; }
-    libEl.innerHTML = filtered.map(h => `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;cursor:pointer" onclick="this.querySelector('.des-full').style.display=this.querySelector('.des-full').style.display===''?'none':''">
-      <div style="font-weight:600;font-size:0.82rem;margin-bottom:4px">${_esc(h.title||'—')}</div>
-      <div style="font-size:0.75rem;color:var(--t3)">${_esc((h.content||'').slice(0,140))}…</div>
-      <div class="des-full" style="display:none;font-size:0.8rem;margin-top:8px;white-space:pre-wrap">${_esc(h.content||'')}</div>
-      <div style="display:flex;gap:6px;margin-top:8px">
-        <button class="btn btn-sm btn-secondary" data-hook-id="${h.id}" onclick="desCopyHook(this);event.stopPropagation()">Kopiuj</button>
-        <button class="btn btn-sm btn-danger" onclick="desDeleteHook(${h.id},this);event.stopPropagation()">Usuń</button>
-      </div>
-    </div>`).join('');
-  }
-
-  function desCopyHook(btn) {
-    const id = parseInt(btn.dataset.hookId);
-    const hook = _desAllHooks.find(h => h.id === id);
-    if (hook) navigator.clipboard.writeText(hook.content||'').then(() => _showToast('Skopiowano.', 'success'));
-  }
-
-  async function desDeleteHook(id, btn) {
-    if (!confirm('Usunąć hak?')) return;
-    btn.disabled = true;
-    try {
-      await apiFetch(`/api/admin/campaign-designer/snippets/${id}`, { method: 'DELETE' });
-      _showToast('Usunięto.', 'success');
-      await _desRefreshLib();
     } catch(e) { _showToast(e.message||'Błąd.','error'); btn.disabled = false; }
   }
 

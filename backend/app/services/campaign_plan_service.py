@@ -204,20 +204,35 @@ def _build_user_prompt(
     )
 
 
-# ── Ideas Bank query ───────────────────────────────────────────────────────
+# ── Adventure hooks seed query ────────────────────────────────────────────
 
-def _query_ideas_seeds(conn: sqlite3.Connection, limit: int = 3) -> list[dict]:
-    """Pull top-rated approved seeds from campaign_ideas."""
+def _query_hook_seeds(conn: sqlite3.Connection, campaign_id: int, limit: int = 5) -> list[dict]:
+    """Pull hook seeds for campaign plan generation.
+    Uses campaign's selected hooks first; falls back to global top-rated pool."""
     try:
-        rows = conn.execute(
-            """SELECT title, description
-               FROM campaign_ideas
-               WHERE category = 'seed'
-               AND review_status = 'approved'
-               ORDER BY quality_rating DESC, times_used ASC
-               LIMIT ?""",
-            (limit,)
-        ).fetchall()
+        row = conn.execute(
+            "SELECT selected_hook_ids FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        selected_ids = []
+        if row:
+            import json as _json
+            selected_ids = _json.loads(row[0] or "[]")
+
+        if selected_ids:
+            placeholders = ",".join("?" * len(selected_ids))
+            rows = conn.execute(
+                f"""SELECT title, description FROM adventure_hooks
+                    WHERE id IN ({placeholders}) AND status IN ('approved', 'promoted')""",
+                selected_ids,
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT title, description FROM adventure_hooks
+                   WHERE status IN ('approved', 'promoted')
+                   ORDER BY quality_rating DESC, times_used ASC
+                   LIMIT ?""",
+                (limit,),
+            ).fetchall()
         return [{"title": r[0], "premise": (r[1] or "")[:200]} for r in rows]
     except Exception:
         return []
@@ -262,8 +277,7 @@ def generate_v2_campaign_plan(
     weaknesses = identity.get("weaknesses") or []
     secret_predisposition = str(gm_only.get("secret_predisposition") or "").strip()
 
-    # Ideas Bank seeds
-    seeds = _query_ideas_seeds(conn)
+    seeds = _query_hook_seeds(conn, campaign_id)
 
     user_prompt = _build_user_prompt(
         name=name,

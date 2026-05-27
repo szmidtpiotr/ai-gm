@@ -14,10 +14,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 from app.services.xp_service import get_hero_level as _get_hero_level
 from app.services.admin_accounts import (
     create_account_admin,
+    hard_delete_account,
     list_accounts,
     reset_account_sheet,
     set_account_password,
-    soft_delete_account,
     update_account,
 )
 from app.services.admin_campaigns import (
@@ -2446,11 +2446,19 @@ def admin_recreate_character(
 
 @router.delete("/admin/accounts/{account_id}")
 def admin_delete_account(account_id: int, _: None = Depends(require_admin_token)):
+    """Permanently delete an account and the data it owns (heroes, owned
+    campaigns, membership/settings/token rows). The primary account cannot
+    be removed."""
     try:
-        soft_delete_account(account_id)
-        return {"ok": True}
+        return hard_delete_account(account_id)
     except KeyError:
         raise HTTPException(status_code=404, detail="Account not found") from None
+    except ValueError as e:
+        if str(e) == "cannot_delete_primary":
+            raise HTTPException(
+                status_code=409, detail="Nie można usunąć konta podstawowego (id 1)."
+            ) from None
+        raise HTTPException(status_code=422, detail="Invalid account") from None
 
 
 @router.get("/admin/users/{user_id}/llm-settings")
@@ -3672,8 +3680,10 @@ def admin_create_dungeon(
             """
             INSERT INTO game_dungeons
                 (key, label, location_key, rooms, enemy_pool, boss_enemy,
-                 loot_tier, atmosphere, cooldown_hours, min_level, is_active)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                 loot_tier, atmosphere, cooldown_hours, min_level, is_active,
+                 chest_loot_table_key, boss_loot_table_key, room_loot_chance,
+                 riddle_source, riddle_max_hints)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 key,
@@ -3687,6 +3697,11 @@ def admin_create_dungeon(
                 int(req.get("cooldown_hours") or 72),
                 int(req.get("min_level") or 1),
                 1 if req.get("is_active", 1) else 0,
+                req.get("chest_loot_table_key") or None,
+                req.get("boss_loot_table_key") or None,
+                float(req.get("room_loot_chance") or 0.15),
+                req.get("riddle_source") or "database",
+                int(req.get("riddle_max_hints") or 2),
             ),
         )
         conn.commit()
@@ -3708,6 +3723,8 @@ def admin_update_dungeon(
     allowed = {
         "label", "location_key", "rooms", "enemy_pool", "boss_enemy",
         "loot_tier", "atmosphere", "cooldown_hours", "min_level", "is_active",
+        "chest_loot_table_key", "boss_loot_table_key", "room_loot_chance",
+        "riddle_source", "riddle_max_hints",
     }
     updates = {k: v for k, v in req.items() if k in allowed}
     if not updates:
@@ -3895,8 +3912,9 @@ def admin_create_invite(
     authorization: str | None = Header(default=None),
 ):
     """Admin: create a personalised or open invite link."""
-    from app.core.jwt_auth import require_admin_role
-    admin_user_id = require_admin_role(authorization)
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
 
     code = _secrets.token_urlsafe(20)
     expires_at = (datetime.now(timezone.utc) + timedelta(hours=req.expires_hours)).isoformat()
@@ -3904,6 +3922,9 @@ def admin_create_invite(
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
+        # Use first admin user as creator (admin-token auth has no user identity)
+        row = conn.execute("SELECT id FROM users WHERE is_admin=1 ORDER BY id LIMIT 1").fetchone()
+        admin_user_id = row["id"] if row else 1
         conn.execute(
             """
             INSERT INTO user_invites (code, created_by, email, message, created_at, expires_at)
@@ -3930,8 +3951,9 @@ def admin_create_invite(
 @router.get("/admin/invites")
 def admin_list_invites(authorization: str | None = Header(default=None)):
     """Admin: list all invites."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
@@ -3953,8 +3975,9 @@ def admin_list_invites(authorization: str | None = Header(default=None)):
 @router.delete("/admin/invites/{invite_id}")
 def admin_revoke_invite(invite_id: int, authorization: str | None = Header(default=None)):
     """Admin: revoke (delete) an unused invite."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     try:
@@ -3972,8 +3995,9 @@ def admin_revoke_invite(invite_id: int, authorization: str | None = Header(defau
 @router.get("/admin/invite-tree")
 def admin_invite_tree(authorization: str | None = Header(default=None)):
     """Admin: return nested invite tree for D3.js visualization."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row

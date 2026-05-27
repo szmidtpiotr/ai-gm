@@ -119,6 +119,108 @@ def soft_delete_account(account_id: int) -> None:
     update_account(account_id, display_name=None, is_active=0, is_admin=None)
 
 
+def _safe_exec(conn: sqlite3.Connection, sql: str, params: tuple = ()) -> None:
+    """Run a DELETE/UPDATE, ignoring missing-table/column errors so the cascade
+    stays robust across environments with slightly different schemas."""
+    try:
+        conn.execute(sql, params)
+    except sqlite3.OperationalError:
+        pass
+
+
+def hard_delete_account(account_id: int) -> dict:
+    """Permanently remove a user and the data they own.
+
+    Deletes the user's characters (+ per-character dependent rows), the campaigns
+    they own (freeing any other users' heroes still linked), their membership /
+    LLM-settings / token / event rows, then the user row itself. FK enforcement is
+    off in this DB, so the cascade is performed explicitly. The primary account
+    (id 1) cannot be hard-deleted.
+    """
+    if int(account_id) == 1:
+        raise ValueError("cannot_delete_primary")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        current = _get_user(conn, account_id)
+        if not current:
+            raise KeyError("not_found")
+
+        char_ids = [
+            int(r["id"])
+            for r in conn.execute(
+                "SELECT id FROM characters WHERE user_id = ?", (account_id,)
+            ).fetchall()
+        ]
+        campaign_ids = [
+            int(r["id"])
+            for r in conn.execute(
+                "SELECT id FROM campaigns WHERE owner_user_id = ?", (account_id,)
+            ).fetchall()
+        ]
+
+        conn.execute("BEGIN")
+
+        # 1) Per-character dependent rows, then the characters themselves.
+        for cid in char_ids:
+            for tbl in (
+                "campaign_turns", "character_inventory", "character_spells",
+                "character_conditions", "character_xp_grants", "character_gold_log",
+                "character_campaign_history", "character_quests",
+                "character_dungeon_runs", "chat_messages", "active_combat",
+                "combat_turns", "combat_loot", "action_log", "game_events",
+            ):
+                _safe_exec(conn, f"DELETE FROM {tbl} WHERE character_id = ?", (cid,))
+        _safe_exec(conn, "DELETE FROM characters WHERE user_id = ?", (account_id,))
+
+        # 2) Owned campaigns — free any remaining (other users') heroes, then purge.
+        for camp_id in campaign_ids:
+            _safe_exec(
+                conn,
+                "UPDATE characters SET campaign_id = NULL, status = 'idle' WHERE campaign_id = ?",
+                (camp_id,),
+            )
+            for tbl in (
+                "campaign_turns", "campaign_members", "campaign_ai_summaries",
+                "active_combat", "combat_turns", "campaign_hex_data",
+                "campaign_catalog_state", "campaign_catalog_entities",
+                "campaign_known_npcs", "game_sessions", "chat_messages",
+                "events", "action_log", "llm_call_log", "game_events",
+            ):
+                _safe_exec(conn, f"DELETE FROM {tbl} WHERE campaign_id = ?", (camp_id,))
+            _safe_exec(conn, "DELETE FROM campaigns WHERE id = ?", (camp_id,))
+
+        # 3) User-scoped rows that aren't tied to a character/campaign above.
+        for tbl in (
+            "campaign_members", "user_llm_settings", "email_verification_tokens",
+            "password_reset_tokens", "game_events",
+        ):
+            _safe_exec(conn, f"DELETE FROM {tbl} WHERE user_id = ?", (account_id,))
+
+        # 4) Detach users this account invited, then remove the account.
+        _safe_exec(
+            conn,
+            "UPDATE users SET invited_by_user_id = NULL WHERE invited_by_user_id = ?",
+            (account_id,),
+        )
+        conn.execute("DELETE FROM users WHERE id = ?", (account_id,))
+
+        _audit(conn, str(account_id), "DELETE", dict(current), None)
+        conn.commit()
+        return {
+            "ok": True,
+            "deleted_id": account_id,
+            "characters_deleted": len(char_ids),
+            "campaigns_deleted": len(campaign_ids),
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def create_account_admin(
     *,
     username: str,

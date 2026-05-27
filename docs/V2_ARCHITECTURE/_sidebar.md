@@ -22,10 +22,12 @@
   - [Android-testing-rig](18_android-testing-rig.md)
   - [Auth UX Registration Profile](19_AUTH_UX_REGISTRATION_PROFILE.md)
   - [Mobile Test Design](20_MOBILE_TEST_DESIGN.md)
+  - [Voice Gpu Host Deployment](21_VOICE_GPU_HOST_DEPLOYMENT.md)
 
 - **Audits & Tasks**
   - [Audit 2026-05-18](AUDIT_2026_05_18.md)
   - [Decisions 2026-05-18](DECISIONS_2026_05_18.md)
+  - [MCP Server](MCP_SERVER.md)
   - [Rulebook](RULEBOOK.md)
   - [Narrative Items](TASK_NARRATIVE_ITEMS.md)
   - [T46 Test Plan](TASK_T46_TEST_PLAN.md)

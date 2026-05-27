@@ -68,6 +68,11 @@ WRITABLE_TABLES = {
     "game_config_enemies",
     "game_config_spells",
     "game_locations",
+    "npcs",
+    "game_config_armor",       # virtual → saves to game_config_items with item_type='armor'
+    "game_config_loot_tables",
+    "game_config_riddles",
+    "game_dungeons",
 }
 
 READ_ONLY_TABLES = {
@@ -427,6 +432,154 @@ SCHEMA_DESCRIPTORS: dict[str, dict] = {
             },
         },
     },
+    "npcs": {
+        "required": ["key", "label"],
+        "optional": ["npc_type", "description", "personality_prompt", "is_ally", "is_shop", "is_quest_giver"],
+        "fields": {
+            "key": {
+                "type": "text",
+                "question": "Podaj unikalny klucz (slug) dla NPC, np. 'stary_bartek' lub 'wiedźma_z_bagna'.",
+            },
+            "label": {
+                "type": "text",
+                "question": "Jak ma się nazywać ta postać NPC (imię lub tytuł)?",
+            },
+            "npc_type": {
+                "type": "single_choice",
+                "question": "Jaki to typ NPC?",
+                "options": [
+                    {"label": "neutral",     "description": "Neutralna postać tła (wieśniak, strażnik, mnich)"},
+                    {"label": "merchant",    "description": "Kupiec — handluje z graczem"},
+                    {"label": "quest_giver", "description": "Dawca zadań — daje misje"},
+                    {"label": "ally",        "description": "Sojusznik — pomaga graczowi w walce lub fabule"},
+                    {"label": "hostile",     "description": "Wrogi — zagrożenie lub antagonista"},
+                ],
+            },
+            "description": {
+                "type": "textarea",
+                "question": "Opis wyglądu i historii NPC dla GM (2-3 zdania, klimatyczny — wygląd, zachowanie, tło fabularne).",
+            },
+            "personality_prompt": {
+                "type": "textarea",
+                "question": "Osobowość i styl mowy NPC (dla GM/AI — np. 'Mówi ostrożnie, ważąc każde słowo. Zna mroczny sekret i podpowiada go pośrednio. Nie ufa obcym.').",
+            },
+            "is_ally": {
+                "type": "boolean",
+                "question": "Czy NPC jest sojusznikiem gracza?",
+            },
+            "is_shop": {
+                "type": "boolean",
+                "question": "Czy NPC prowadzi sklep i handluje z graczem?",
+            },
+            "is_quest_giver": {
+                "type": "boolean",
+                "question": "Czy NPC daje zadania (questy) graczowi?",
+            },
+        },
+    },
+    "game_config_armor": {
+        "required": ["key", "label", "ac_bonus", "armor_coverage", "value_gp"],
+        "optional": ["description", "note", "allowed_classes", "weight_kg"],
+        "fields": {
+            "key": {"type": "text", "question": "Podaj unikalny klucz (slug) dla zbroi, np. 'zelazna_kolczuga'."},
+            "label": {"type": "text", "question": "Jak ma się nazywać ta zbroja (wyświetlana nazwa)?"},
+            "ac_bonus": {
+                "type": "number", "question": "O ile punktów zwiększa Klasę Pancerza (AC)? Lekka=1-2, Średnia=3-4, Ciężka=5-7.",
+                "min": 1, "max": 8,
+            },
+            "armor_coverage": {
+                "type": "single_choice", "question": "Który obszar ciała chroni ta zbroja?",
+                "options": [
+                    {"label": "torso",    "description": "Tors (kirys, kolczuga, kaftan) — najpopularniejsza"},
+                    {"label": "head",     "description": "Głowa (hełm, kaptur, czepiec)"},
+                    {"label": "limb_arm", "description": "Ramię (rękawica, naramiennik)"},
+                    {"label": "limb_leg", "description": "Noga (nagolennik, but)"},
+                    {"label": "full",     "description": "Pełne pokrycie (zbroja płytowa) — zajmuje tors + kończyny"},
+                ],
+            },
+            "value_gp": {"type": "number", "question": "Ile kosztuje ta zbroja (w złotych monetach)?", "min": 0},
+            "description": {"type": "textarea", "question": "Opis zbroi dla GM (wygląd, materiał, historia, 2-3 zdania)."},
+            "note": {"type": "textarea", "question": "Zdolności specjalne (np. 'Odporna na ogień', 'Spowalnia o 1m')."},
+            "allowed_classes": {
+                "type": "multi_choice", "question": "Które klasy mogą nosić tę zbroję?",
+                "options": [
+                    {"label": "warrior", "description": "Wojownik"},
+                    {"label": "scholar", "description": "Uczony"},
+                    {"label": "ranger",  "description": "Łucznik/Strzelec"},
+                ],
+            },
+            "weight_kg": {"type": "number", "question": "Waga w kilogramach (np. 2.5, 8.0)?", "min": 0},
+        },
+    },
+    "game_config_loot_tables": {
+        "required": ["key", "label"],
+        "optional": ["description", "gold_min", "gold_max"],
+        "fields": {
+            "key": {"type": "text", "question": "Podaj unikalny klucz tabeli łupów, np. 'loot_bandits' lub 'loot_dungeon_chest'."},
+            "label": {"type": "text", "question": "Nazwa wyświetlana tabeli łupów (np. 'Łupy Bandytów', 'Skrzynka Lochowa')."},
+            "description": {"type": "textarea", "question": "Krótki opis skąd pochodzi ta tabela łupów (opcjonalnie)."},
+            "gold_min": {"type": "number", "question": "Minimalna ilość złota w łupach (0 = brak złota).", "min": 0},
+            "gold_max": {"type": "number", "question": "Maksymalna ilość złota w łupach.", "min": 0},
+        },
+    },
+    "game_config_riddles": {
+        "required": ["key", "text", "answer"],
+        "optional": ["answer_alts", "hints", "difficulty", "theme"],
+        "fields": {
+            "key": {"type": "text", "question": "Podaj unikalny klucz zagadki, np. 'riddle_smok_001'."},
+            "text": {"type": "textarea", "question": "Treść zagadki (pytanie, które usłyszy gracz). Napisz klimatycznie, w duchu mrocznej fantasy."},
+            "answer": {"type": "text", "question": "Główna poprawna odpowiedź (jedno słowo lub krótka fraza)."},
+            "answer_alts": {
+                "type": "textarea",
+                "question": "Alternatywne poprawne odpowiedzi w formacie JSON, np. [\"ogień\",\"płomień\"]. Zostaw puste jeśli jedna odpowiedź.",
+            },
+            "hints": {
+                "type": "textarea",
+                "question": "Podpowiedzi w formacie JSON, np. [\"Szuka tlenu\",\"Niszczy drewno\"]. Napisz 2-3 klimatyczne wskazówki.",
+            },
+            "difficulty": {
+                "type": "single_choice", "question": "Poziom trudności zagadki?",
+                "options": [
+                    {"label": "1", "description": "Łatwa — dla początkujących"},
+                    {"label": "2", "description": "Średnia — wymaga zastanowienia"},
+                    {"label": "3", "description": "Trudna — tylko dla mistrzów"},
+                ],
+            },
+            "theme": {
+                "type": "single_choice", "question": "Motyw tematyczny zagadki?",
+                "options": [
+                    {"label": "general",  "description": "Ogólna — pasuje wszędzie"},
+                    {"label": "dungeon",  "description": "Lochowa — zamki, podziemia, pułapki"},
+                    {"label": "magic",    "description": "Magiczna — zaklęcia, artefakty, runy"},
+                    {"label": "death",    "description": "Śmierć — kości, cienie, zaświaty"},
+                    {"label": "nature",   "description": "Przyroda — zwierzęta, las, żywioły"},
+                ],
+            },
+        },
+    },
+    "game_dungeons": {
+        "required": ["key", "label", "location_key", "rooms"],
+        "optional": ["atmosphere", "loot_tier", "min_level", "cooldown_hours", "boss_enemy"],
+        "fields": {
+            "key": {"type": "text", "question": "Podaj unikalny klucz lochu, np. 'dungeon_krypty_przeklety'."},
+            "label": {"type": "text", "question": "Nazwa lochu (wyświetlana dla gracza), np. 'Przeklęte Krypty'."},
+            "location_key": {"type": "text", "question": "Klucz lokacji, w której leży loch (musi istnieć w game_locations), np. 'ruiny_zapomniane'."},
+            "rooms": {"type": "number", "question": "Ile pokoi ma loch? (3-10, rekomendowane 5)", "min": 2, "max": 15},
+            "atmosphere": {"type": "textarea", "question": "Klimatyczny opis atmosfery lochu dla GM (mroczna proza, 2-3 zdania: wygląd, zapachy, dźwięki)."},
+            "loot_tier": {
+                "type": "single_choice", "question": "Poziom łupów w tym lochu?",
+                "options": [
+                    {"label": "poor",     "description": "Skromne — słabe łupy, graty"},
+                    {"label": "standard", "description": "Standardowe — przeciętne łupy"},
+                    {"label": "rich",     "description": "Bogate — wartościowe łupy"},
+                    {"label": "epic",     "description": "Epickie — rzadkie artefakty"},
+                ],
+            },
+            "min_level": {"type": "number", "question": "Minimalny poziom bohatera (1-10)?", "min": 1, "max": 10},
+            "cooldown_hours": {"type": "number", "question": "Czas odnowienia lochu w godzinach (np. 72 = 3 doby)?", "min": 1},
+            "boss_enemy": {"type": "text", "question": "Klucz przeciwnika-bossa (z game_config_enemies), np. 'lich_lord'. Zostaw puste jeśli brak bossa."},
+        },
+    },
     "game_locations": {
         "required": ["key", "label", "location_type", "location_subtype", "biome", "tier", "description"],
         "optional": ["parent_key", "safe_for_rest", "rules"],
@@ -619,6 +772,60 @@ TABELA game_config_spells — zaklęcia Uczonego (NIE mają effect_json):
   Dla obrony: '{"mana_cost":2,"ac_bonus":5,"duration":2}'
   Jeśli naprawdę brak sensu dla wyższej rangi — wstaw null (nie placeholder tekst).
 
+TABELA game_config_armor — zbroje i elementy ochronne (mroczna fantasy, klimatyczne nazwy):
+- 'key': slug z label (polskie znaki→ascii, spacje→_)
+- 'label': polska nazwa zbroi ("Żelazna Kolczuga", "Skórzana Napiersnica", "Hełm Kościany")
+- 'ac_bonus': 1-2=lekka, 3-4=średnia, 5-6=ciężka, 7-8=pełna płyta
+- 'armor_coverage': torso (najczęstsza), head, limb_arm, limb_leg, full (płytowa — daje bonus do torso+kończyn)
+- 'value_gp': wycena realistyczna: kolczuga=50-120gp, płyta=300-800gp, skóra=15-40gp
+- 'description': 2-3 zdania, mroczny klimat — wygląd, materiał, znaki użycia
+- 'note': specjalne właściwości (ognioodporność, błogosławieństwo/klątwa, waga) — krótko
+- 'allowed_classes': warrior może wszystko; scholar=lekkie (skóra, ac_bonus≤2); ranger=lekkie/średnie (ac_bonus≤4)
+- Nowa zbroja dostaje item_type='armor' automatycznie — NIE podawaj tego pola.
+
+TABELA game_config_loot_tables — tabele łupów (definiują co wpada z wrogów i skrzynek):
+- 'key': slug, np. 'loot_goblin_camp', 'loot_dungeon_chest_rare'. Zacznij od 'loot_'.
+- 'label': czytelna nazwa ("Łupy z Obozu Goblinów", "Skrzynka Rzadka")
+- 'description': jedno zdanie — skąd pochodzi ta tabela
+- 'gold_min'/'gold_max': zakres złota. 0/0 = bez złota. Realistyczne: weak=0-5, standard=5-25, elite=10-50, boss=20-100.
+- Wpisy (items/weapons/consumables) są dodawane ręcznie po stworzeniu tabeli — nie podawaj ich.
+
+TABELA game_config_riddles — zagadki do lochów (mroczne, klimatyczne, po polsku):
+- 'key': slug, np. 'riddle_ogien_001'. Dodaj numer jeśli podobne zagadki istnieją.
+- 'text': treść zagadki, którą słyszy gracz. Nie pytanie wprost — klimatyczna zagadka (np. "Jestem zimny jak śmierć, lecz parzę jak ogień...")
+- 'answer': główna odpowiedź — jedno słowo (np. "lód", "ogień", "czas")
+- 'answer_alts': JSON array synonimów (np. ["lód","mróz","lodowiec"]) — zawsze generuj 2-4 alternatyw
+- 'hints': JSON array 2-3 klimatycznych podpowiedzi (od ogólnej do konkretnej)
+- 'difficulty': 1=prosta, 2=średnia, 3=trudna
+- 'theme': general/dungeon/magic/death/nature — dobierz do klimatu zagadki
+
+TABELA game_dungeons — lochy do eksploracji:
+- 'key': slug z label (np. "Przeklęte Krypty" → "przekleta_krypta")
+- 'label': polska pełna nazwa ("Przeklęte Krypty Varathnula", "Kopalnia Zgniłej Miedzi")
+- 'location_key': musi być istniejącym kluczem z game_locations — zapytaj admina jeśli nie podał
+- 'rooms': 3-5 dla krótkich lochów, 6-10 dla standardowych. Domyślnie 5.
+- 'atmosphere': 2-4 zdania mrocznej prozy: wilgoć, zapachy, dźwięki, klimat fabularny
+- 'loot_tier': poor/standard/rich/epic — zależnie od min_level (1-3=standard, 4-6=rich, 7+=epic)
+- 'min_level': 1-3=łatwy, 4-6=średni, 7-9=trudny, 10=heroiczny
+- 'cooldown_hours': 24=szybko, 72=normalne, 168=tygodniowe
+- 'boss_enemy': klucz z game_config_enemies — pomiń jeśli admin nie podał
+
+TABELA npcs — postacie niezależne (NPCe) w świecie gry (mroczna fantasy, klimatyczne, polskie imiona):
+- 'key': slug z label (polskie znaki→ascii, spacje→_, np. "Stary Bartek" → "stary_bartek")
+- 'label': polska nazwa/imię NPC (może być z tytułem: "Wiedźma z Bagna", "Kapitan Straży", "Stary Bartek")
+- 'npc_type': DOKŁADNIE jedna wartość: neutral | merchant | quest_giver | ally | hostile
+  - karczmarze, strażnicy, wieśniacy, mnisi → "neutral"
+  - kupcy, handlarze, alchemicy ze sklepem → "merchant"
+  - starcy z misją, rycerze zakonni, tajemnicze postacie → "quest_giver"
+  - towarzysze, magowie-pomocnicy, wierny giermek → "ally"
+  - bandyci, rycerze wroga, antagoniści → "hostile"
+- 'description': 2-3 zdania, mroczna klimatyczna proza — wygląd fizyczny, charakterystyczny szczegół, atmosfera
+- 'personality_prompt': styl mowy i osobowość dla AI GM (1-3 zdania technicznego opisu: "Mówi ostrożnie...", "Używa archaicznego języka...", "Zawsze kłamie w trzech słowach...")
+- 'is_ally': 1 dla sojuszników, towarzyszy, opiekunów; 0 dla reszty
+- 'is_shop': 1 dla kupców, karczmarzy sprzedających zasoby; 0 dla reszty
+- 'is_quest_giver': 1 gdy NPC może dawać zadania; 0 dla reszty
+- Nowe NPCe trafiają do "Oczekujących" w Bestiariuszu — admin może je zatwierdzić lub odrzucić.
+
 TABELA game_locations — lokacje świata gry (mroczne, klimatyczne, polskie nazewnictwo):
 - 'key': slug z label (polskie znaki→ascii, spacje→_, np. "Karczma Pod Złotym Krukiem" → "karczma_pod_zlotym_krukiem")
 - 'label': polska nazwa lokacji, najlepiej z przedimkiem ("Karczma Pod...", "Ruiny Zapomnianego...", "Las Zgniłych Kości")
@@ -742,6 +949,20 @@ def smart_entry_schema(table: str, _: None = Depends(_require_admin)):
         "location_type": "Typ lokacji", "location_subtype": "Podtyp",
         "biome": "Biom", "parent_key": "Lokacja nadrzędna",
         "safe_for_rest": "Bezpieczna do odpoczynku", "rules": "Reguły (JSON)",
+        # NPCs
+        "npc_type": "Typ NPC", "personality_prompt": "Osobowość (prompt GM)",
+        "is_ally": "Sojusznik", "is_shop": "Kupiec", "is_quest_giver": "Dawca zadań",
+        # Armor
+        "ac_bonus": "Bonus AC", "armor_coverage": "Obszar ochrony",
+        # Loot tables
+        "gold_min": "Złoto min", "gold_max": "Złoto max",
+        # Riddles
+        "text": "Treść zagadki", "answer": "Odpowiedź", "answer_alts": "Alternatywne odpowiedzi (JSON)", "hints": "Podpowiedzi (JSON)",
+        "difficulty": "Trudność", "theme": "Motyw",
+        # Dungeons
+        "location_key": "Klucz lokacji", "rooms": "Liczba pokoi", "atmosphere": "Atmosfera",
+        "loot_tier": "Poziom łupów", "min_level": "Min. poziom", "cooldown_hours": "Odnowienie (h)",
+        "boss_enemy": "Boss (klucz wroga)",
     }
 
     fields = []
@@ -773,7 +994,16 @@ def smart_entry_list(table: str, _: None = Depends(_require_admin)):
         raise HTTPException(status_code=400, detail=f"Unknown table '{table}'")
     conn = _get_db()
     try:
-        rows = conn.execute(f"SELECT key, label FROM {table} ORDER BY label LIMIT 300").fetchall()
+        if table == "game_config_armor":
+            rows = conn.execute(
+                "SELECT key, label FROM game_config_items WHERE item_type='armor' ORDER BY label LIMIT 300"
+            ).fetchall()
+        elif table == "game_config_riddles":
+            rows = conn.execute(
+                "SELECT key, SUBSTR(text,1,60) as label FROM game_config_riddles ORDER BY key LIMIT 300"
+            ).fetchall()
+        else:
+            rows = conn.execute(f"SELECT key, label FROM {table} ORDER BY label LIMIT 300").fetchall()
         return {"items": [{"key": r["key"], "label": r["label"]} for r in rows]}
     except sqlite3.OperationalError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -785,7 +1015,8 @@ def smart_entry_list(table: str, _: None = Depends(_require_admin)):
 def smart_entry_record(table: str, key: str, _: None = Depends(_require_admin)):
     """Return a single record by key for editing."""
     _assert_writable(table)
-    record = _db_get(table, key)
+    real_table = "game_config_items" if table == "game_config_armor" else table
+    record = _db_get(real_table, key)
     if not record:
         raise HTTPException(status_code=404, detail=f"Record '{key}' not found in {table}")
     return record
@@ -926,6 +1157,21 @@ def smart_entry_save(
         elif isinstance(v, (dict, list)):
             # Fallback: serialize any other nested object to JSON string
             record[k] = json.dumps(v, ensure_ascii=False)
+
+    # game_config_armor: virtual → redirect to game_config_items with item_type='armor'
+    if table == "game_config_armor":
+        record["item_type"] = "armor"
+        table = "game_config_items"
+
+    # npcs: inject defaults + mark as pending for review
+    if table == "npcs":
+        if not target_key:
+            record.setdefault("review_status", "pending")
+            record.setdefault("is_active", 1)
+            record.setdefault("npc_type", "neutral")
+            record.setdefault("is_ally", 0)
+            record.setdefault("is_shop", 0)
+            record.setdefault("is_quest_giver", 0)
 
     # game_locations: inject provenance + resolve parent_key → parent_id
     if table == "game_locations":

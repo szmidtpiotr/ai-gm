@@ -85,38 +85,48 @@ Format odpowiedzi:
 def _extract_draft(text: str) -> tuple[Optional[dict], bool]:
     """
     Returns (draft_dict_or_None, ready_to_save).
-    Tries to find JSON in ```json ... ``` block first,
-    then tries to parse the whole text as JSON (for READY_TO_SAVE signal).
-    """
-    # Check for READY_TO_SAVE JSON object (may appear anywhere)
-    ready_pattern = re.search(r'\{[^{}]*"READY_TO_SAVE"\s*:\s*true[^{}]*\}', text, re.DOTALL)
-    if ready_pattern:
-        try:
-            obj = json.loads(ready_pattern.group(0))
-            draft = obj.get("draft")
-            return draft, True
-        except json.JSONDecodeError:
-            pass
 
-    # Also try parsing as pure JSON (when whole reply IS the READY_TO_SAVE object)
+    The LLM may emit the structured idea in several shapes:
+      * a ```json fenced block,
+      * a raw JSON object,
+      * either wrapping the draft under a "draft" key alongside a
+        "READY_TO_SAVE" flag, or being the draft object itself ({"category": ...}).
+    We collect every JSON candidate and pick the first that parses into a draft,
+    tolerating nested braces (which the previous regex could not).
+    """
+    candidates: list[str] = []
+
+    # 1) ```json ... ``` fenced block (the common case)
+    cb = re.search(r"```json\s*\n?(.*?)```", text, re.DOTALL)
+    if cb:
+        candidates.append(cb.group(1).strip())
+    # 2) generic ``` ... ``` block that holds an object
+    cb2 = re.search(r"```\s*\n?(\{.*?\})\s*```", text, re.DOTALL)
+    if cb2:
+        candidates.append(cb2.group(1).strip())
+    # 3) whole reply, if it is itself JSON
     stripped = text.strip()
     if stripped.startswith("{"):
-        try:
-            obj = json.loads(stripped)
-            if obj.get("READY_TO_SAVE"):
-                return obj.get("draft"), True
-        except json.JSONDecodeError:
-            pass
+        candidates.append(stripped)
+    # 4) first balanced-looking {...} span anywhere in the text (greedy, nested-safe)
+    span = re.search(r"\{.*\}", text, re.DOTALL)
+    if span:
+        candidates.append(span.group(0))
 
-    # Check for ```json ... ``` block
-    code_block = re.search(r"```json\s*\n(.*?)\n```", text, re.DOTALL)
-    if code_block:
+    for cand in candidates:
         try:
-            obj = json.loads(code_block.group(1))
-            if "category" in obj:
-                return obj, False
+            obj = json.loads(cand)
         except json.JSONDecodeError:
-            pass
+            continue
+        if not isinstance(obj, dict):
+            continue
+        ready = bool(obj.get("READY_TO_SAVE") or obj.get("ready_to_save"))
+        draft = obj.get("draft")
+        if isinstance(draft, dict) and draft:
+            return draft, ready
+        # The object itself is the draft (proposal turn — not necessarily ready).
+        if "category" in obj:
+            return obj, ready
 
     return None, False
 

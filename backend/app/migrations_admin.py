@@ -718,6 +718,105 @@ ADMIN_MIGRATIONS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_llm_log_type_date ON llm_call_log (call_type, created_at)",
+    # ── Voice service hosts — swappable TTS/STT backends (local CPU vs GPU box) ──
+    # The backend reverse-proxies /voice/* to whichever row has is_active=1, so an
+    # admin can repoint the game at a different machine from the panel, no restart.
+    """
+    CREATE TABLE IF NOT EXISTS voice_hosts (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        label      TEXT    NOT NULL,
+        base_url   TEXT    NOT NULL UNIQUE,
+        kind       TEXT    NOT NULL DEFAULT 'cpu',
+        is_active  INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    # Seed the two known hosts (idempotent — only insert when missing).
+    """
+    INSERT INTO voice_hosts (label, base_url, kind, is_active)
+    SELECT 'Lokalny (.61, CPU)', 'http://voice-service:8300', 'cpu', 1
+    WHERE NOT EXISTS (SELECT 1 FROM voice_hosts WHERE base_url = 'http://voice-service:8300')
+    """,
+    """
+    INSERT INTO voice_hosts (label, base_url, kind, is_active)
+    SELECT 'GPU (.16, GTX 1660)', 'http://192.168.1.16:8300', 'gpu', 0
+    WHERE NOT EXISTS (SELECT 1 FROM voice_hosts WHERE base_url = 'http://192.168.1.16:8300')
+    """,
+
+    # ── Kuźnia Kampanii: adventure ideas + hooks + templates + feedback ────────
+    """
+    CREATE TABLE IF NOT EXISTS adventure_ideas (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        title           TEXT    NOT NULL,
+        premise         TEXT    NOT NULL DEFAULT '',
+        tone            TEXT    NOT NULL DEFAULT '[]',
+        themes          TEXT    NOT NULL DEFAULT '[]',
+        difficulty      TEXT    NOT NULL DEFAULT 'medium',
+        structured_data TEXT    NOT NULL DEFAULT '{}',
+        status          TEXT    NOT NULL DEFAULT 'draft',
+        created_by      TEXT    NOT NULL DEFAULT 'admin',
+        created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS adventure_hooks (
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        adventure_idea_id   INTEGER,
+        hook_type           TEXT    NOT NULL,
+        title               TEXT    NOT NULL,
+        description         TEXT    NOT NULL DEFAULT '',
+        significance        TEXT    NOT NULL DEFAULT 'minor',
+        draft_data          TEXT    NOT NULL DEFAULT '{}',
+        status              TEXT    NOT NULL DEFAULT 'draft',
+        promoted_record_id  INTEGER,
+        promoted_table      TEXT,
+        quality_rating      REAL    NOT NULL DEFAULT 0,
+        times_used          INTEGER NOT NULL DEFAULT 0,
+        created_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_adventure_hooks_type_status ON adventure_hooks(hook_type, status)",
+    """
+    CREATE TABLE IF NOT EXISTS campaign_templates (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        title            TEXT    NOT NULL,
+        description      TEXT    NOT NULL DEFAULT '',
+        difficulty_rating INTEGER NOT NULL DEFAULT 2,
+        atmosphere       TEXT    NOT NULL DEFAULT '',
+        gm_plan_json     TEXT    NOT NULL DEFAULT '{}',
+        hook_ids         TEXT    NOT NULL DEFAULT '[]',
+        status           TEXT    NOT NULL DEFAULT 'draft',
+        play_count       INTEGER NOT NULL DEFAULT 0,
+        created_by       TEXT    NOT NULL DEFAULT 'admin',
+        created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS campaign_hook_feedback (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id  INTEGER NOT NULL,
+        character_id INTEGER NOT NULL,
+        hook_id      INTEGER NOT NULL,
+        encountered  INTEGER NOT NULL DEFAULT 0,
+        rating       INTEGER,
+        what_worked  TEXT,
+        what_didnt   TEXT,
+        created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(campaign_id, character_id, hook_id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS pending_questionnaires (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id  INTEGER NOT NULL,
+        character_id INTEGER NOT NULL,
+        status       TEXT    NOT NULL DEFAULT 'pending',
+        created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+        completed_at TEXT
+    )
+    """,
+    "ALTER TABLE campaigns ADD COLUMN template_id INTEGER",
+    "ALTER TABLE campaigns ADD COLUMN selected_hook_ids TEXT DEFAULT '[]'",
 ]
 
 ADMIN_SEEDS = [
@@ -3070,10 +3169,22 @@ def run_admin_migrations() -> None:
         _ensure_campaign_known_npcs(conn)
         _ensure_rogue_archetype(conn)
         _allow_nullable_campaign_model_id(conn)
+        _ensure_adventure_forge_cleanup(conn)
     finally:
         conn.close()
 
     logger.info("admin_migration_complete", phase="14.1")
+
+
+def _ensure_adventure_forge_cleanup(conn: sqlite3.Connection) -> None:
+    """Drop legacy Projektant + Bank Pomysłów tables replaced by Kuźnia."""
+    for table in ("campaign_snippets", "campaign_ideas"):
+        try:
+            conn.execute(f"DROP TABLE IF EXISTS {table}")
+            conn.commit()
+            logger.info("admin_migration_applied", label=f"drop-legacy-{table}")
+        except Exception as e:
+            logger.warning("admin_migration_skipped", label=f"drop-legacy-{table}", error=str(e))
 
 
 def _allow_nullable_campaign_model_id(conn: sqlite3.Connection) -> None:
