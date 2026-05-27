@@ -3050,6 +3050,7 @@
             </div>
           </div>
           <div id="hm-draft-form"></div>
+          <div id="hm-encounter-panel" style="display:none;margin-top:12px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)"></div>
         </div>
         <div class="modal-footer" style="justify-content:space-between">
           <div style="display:flex;gap:6px" id="hm-actions"></div>
@@ -7464,10 +7465,50 @@
         (Object.keys(hooksByType).length ? '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:6px;margin-top:10px">HOOKI W SZKICU</div>' + hooksHtml : '') +
 
         '<div style="display:flex;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">' +
+          '<button class="btn btn-sm btn-secondary" onclick="forgeReloadIdeaInChat(' + id + ')">↩ Kontynuuj w Warsztacie</button>' +
           '<button class="btn btn-sm btn-primary" onclick="forgeExtractHooks(' + id + ',this)">⚡ Wyodrębnij haki → DB</button>' +
           '<button class="btn btn-sm btn-secondary" onclick="forgeCreateTemplateFromIdea(' + id + ')" style="margin-left:4px">📖 Utwórz szablon</button>' +
         '</div>';
     }).catch(e => console.warn('forge open idea', e.message));
+  }
+
+  async function forgeReloadIdeaInChat(id) {
+    try {
+      const idea = await apiFetch(`/api/admin/forge/ideas/${id}`);
+      const sd = idea.structured_data || {};
+
+      // Reset session so we start fresh context
+      _forgeSessionId = 'forge-idea-' + id + '-' + Date.now();
+
+      // Switch to the Agent AI tab so the chat is visible
+      const agentTab = document.querySelector('#forge-tabs .stab[data-forgetab="agent"]');
+      if (agentTab) agentTab.click();
+
+      const chatContainer = document.getElementById('forge-chat-history');
+      if (!chatContainer) return;
+
+      // Inject context into chat display
+      const summary = [
+        idea.title,
+        idea.premise ? 'Premisa: ' + idea.premise.substring(0, 120) : '',
+        sd.arcs?.length ? 'Akty: ' + sd.arcs.map(a => a.title).join(', ') : '',
+        sd.player_hook ? 'Wciągacz: ' + sd.player_hook.substring(0, 100) : '',
+      ].filter(Boolean).join('\n');
+
+      chatContainer.innerHTML +=
+        '<div style="margin-bottom:8px;padding:8px 10px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--r);font-size:0.78rem">' +
+        '<div style="font-weight:600;color:var(--amber);margin-bottom:4px">↩ Załadowano szkic: ' + _esc(idea.title) + '</div>' +
+        '<pre style="margin:0;font-size:0.72rem;color:var(--t2);white-space:pre-wrap">' + _esc(summary) + '</pre>' +
+        '</div>';
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      // Pre-fill input with a continuation prompt
+      const input = document.getElementById('forge-input');
+      if (input) {
+        input.value = 'Chcę dopracować ten szkic. Co możemy poprawić lub rozbudować?';
+        input.focus();
+      }
+    } catch(e) { _showToast('Błąd ładowania szkicu.', 'error'); }
   }
 
   async function sendForgeMsg() {
@@ -7599,10 +7640,10 @@
   }
 
   async function forgeRejectHook(id) {
-    if (!confirm('Odrzucić hak?')) return;
+    if (!confirm('Usunąć hak?')) return;
     try {
-      await apiFetch(`/api/admin/forge/hooks/${id}`, { method:'PATCH', body:JSON.stringify({status:'rejected'}) });
-      _showToast('Hak odrzucony.', 'success');
+      await apiFetch(`/api/admin/forge/hooks/${id}`, { method:'DELETE' });
+      _showToast('Hak usunięty.', 'success');
       await _loadForgeHooks();
     } catch(e) { _showToast(e.message||'Błąd.','error'); }
   }
@@ -7616,6 +7657,34 @@
       await _loadForgeHooks();
     } catch(e) { _showToast(e.message||'Błąd promocji.','error'); }
     finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
+  }
+
+  async function forgeGenerateEncounter(id, btn) {
+    const orig = btn?.textContent || '🗡 Utwórz spotkanie';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generuję…'; }
+    try {
+      const d = await apiFetch(`/api/admin/forge/hooks/${id}/generate-encounter`, { method: 'POST' });
+      if (!d.encounter) { _showToast('Brak wyników.', 'warn'); return; }
+      // Update local data and show
+      if (_hookModalData) _hookModalData.draft_data = { ...(_hookModalData.draft_data || {}), encounter: d.encounter };
+      const encEl = document.getElementById('hm-encounter-panel');
+      if (encEl) { encEl.style.display = ''; encEl.innerHTML = _renderEncounterCard(d.encounter); }
+      _showToast('Spotkanie wygenerowane!', 'success');
+    } catch(e) { _showToast(e.message || 'Błąd generowania.', 'error'); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
+  }
+
+  function _renderEncounterCard(enc) {
+    if (!enc) return '';
+    const li = arr => Array.isArray(arr) ? arr.map(x => '<li style="font-size:0.78rem;margin-bottom:2px">' + _esc(typeof x === 'object' ? (x.name||'') + (x.count>1?' ×'+x.count:'') + (x.notes?' — '+x.notes:'') : x) + '</li>').join('') : '';
+    return '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:8px">🗡 SPOTKANIE</div>' +
+      '<div style="font-size:0.88rem;font-weight:600;margin-bottom:6px">' + _esc(enc.title||'') + '</div>' +
+      (enc.trigger_condition ? '<div style="font-size:0.75rem;color:var(--t3);margin-bottom:8px">⚡ Wyzwalacz: ' + _esc(enc.trigger_condition) + '</div>' : '') +
+      (enc.scene_setup ? '<p style="font-size:0.8rem;color:var(--t2);margin:0 0 10px">' + _esc(enc.scene_setup) + '</p>' : '') +
+      (enc.enemies?.length ? '<div style="margin-bottom:8px"><div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:4px">WROGOWIE</div><ul style="margin:0;padding-left:16px">' + li(enc.enemies) + '</ul></div>' : '') +
+      (enc.objectives?.length ? '<div style="margin-bottom:8px"><div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:4px">CELE</div><ul style="margin:0;padding-left:16px">' + li(enc.objectives) + '</ul></div>' : '') +
+      (enc.rewards ? '<div style="margin-bottom:8px;font-size:0.78rem;color:var(--t2)">🏆 XP ~' + (enc.rewards.xp_estimate||0) + ' · ' + _esc(enc.rewards.loot_notes||'') + '</div>' : '') +
+      (enc.gm_notes ? '<div style="padding:6px 8px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--r);font-size:0.78rem;color:var(--t1)">🔒 GM: ' + _esc(enc.gm_notes) + '</div>' : '');
   }
 
   // ── Hook Detail Modal ────────────────────────────────────
@@ -7651,6 +7720,18 @@
       if (ratingEl) ratingEl.textContent = '⭐ ' + (h.quality_rating||0).toFixed(1) + ' · użyte: ' + (h.times_used||0) + '×';
       const formEl = document.getElementById('hm-draft-form');
       if (formEl) formEl.innerHTML = _renderHookForm(h);
+      // Show encounter card if already generated
+      const encEl = document.getElementById('hm-encounter-panel');
+      if (encEl) {
+        const enc = (h.draft_data || {}).encounter;
+        if (enc) {
+          encEl.style.display = '';
+          encEl.innerHTML = _renderEncounterCard(enc);
+        } else {
+          encEl.style.display = 'none';
+          encEl.innerHTML = '';
+        }
+      }
       const actEl = document.getElementById('hm-actions');
       if (actEl) {
         const canPromote = ['weapon','armor','item','consumable','enemy','npc','location'].includes(h.hook_type);
@@ -7658,6 +7739,7 @@
           (h.status === 'pending' ? '<button class="btn btn-sm btn-primary" onclick="forgeApproveHook(' + h.id + ').then(()=>document.getElementById(\'hook-modal\').classList.remove(\'open\'))">✓ Zatwierdź</button>' : '') +
           (canPromote && h.status === 'approved' ? '<button class="btn btn-sm btn-secondary" onclick="forgePromoteHook(' + h.id + ',this).then(()=>document.getElementById(\'hook-modal\').classList.remove(\'open\'))">⬆ Promuj do DB</button>' : '') +
           (h.promoted_table ? '<span style="font-size:0.72rem;color:var(--green)">✓ ' + _esc(h.promoted_table) + ' #' + (h.promoted_record_id||'') + '</span>' : '') +
+          (h.status === 'approved' ? '<button class="btn btn-sm btn-secondary" id="hm-encounter-btn" onclick="forgeGenerateEncounter(' + h.id + ',this)">🗡 Utwórz spotkanie</button>' : '') +
           '<button class="btn btn-sm btn-secondary" onclick="forgeRejectHook(' + h.id + ').then(()=>document.getElementById(\'hook-modal\').classList.remove(\'open\'))" style="color:var(--red)">✕ Odrzuć</button>';
       }
       modal.classList.add('open');
@@ -7770,6 +7852,9 @@
             '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openTemplateEditor(' + t.id + ')">Edytuj</button>' +
             '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();if(confirm(\'Usunąć szablon?\'))apiFetch(\'/api/admin/forge/templates/' + t.id + '\',{method:\'DELETE\'}).then(()=>{_sectionLoaded.delete(\'forge\');_loadForgeTemplates()})" style="margin-left:auto">🗑</button>' +
           '</div>' +
+          (t.status === 'published' ?
+            '<button class="btn btn-sm btn-primary" style="width:100%;margin-top:8px" onclick="event.stopPropagation();forgeLaunchCampaign(' + t.id + ',\'' + _esc(t.title||'Kampania') + '\')" title="Utwórz kampanię z tego szablonu">🚀 Utwórz kampanię</button>' :
+            '') +
         '</div>';
       }).join('');
     } catch(e) { grid.innerHTML = '<div style="color:var(--red);font-size:0.8rem">' + _esc(e.message) + '</div>'; }
@@ -8491,6 +8576,69 @@
       _showToast('Plan kampanii wygenerowany!', 'success');
     } catch(e) { _showToast(e.message || 'Błąd generowania planu.', 'error'); }
     finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Generuj plan AI'; } }
+  }
+
+  async function forgeLaunchCampaign(templateId, templateTitle) {
+    // Build a mini-modal inline
+    const existingModal = document.getElementById('forge-launch-modal');
+    if (existingModal) existingModal.remove();
+
+    // Fetch users list for the player dropdown
+    let usersHtml = '<option value="">— wybierz gracza —</option>';
+    try {
+      const d = await apiFetch('/api/admin/users');
+      const users = d.users || d || [];
+      usersHtml = '<option value="">— wybierz gracza —</option>' +
+        (Array.isArray(users) ? users : []).map(u =>
+          '<option value="' + u.id + '">' + _esc(u.username || u.name || ('User #' + u.id)) + '</option>'
+        ).join('');
+    } catch(e) { /* ignore, user must select manually */ }
+
+    const modal = document.createElement('div');
+    modal.id = 'forge-launch-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center';
+    modal.innerHTML =
+      '<div style="background:var(--canvas);border:1px solid var(--border);border-radius:var(--r2);width:min(420px,95vw);padding:20px;box-shadow:var(--shadow-lg)">' +
+        '<div style="font-size:0.95rem;font-weight:600;margin-bottom:14px">🚀 Nowa kampania z szablonu</div>' +
+        '<div style="font-size:0.78rem;color:var(--t3);margin-bottom:10px">Szablon: <strong>' + _esc(templateTitle) + '</strong></div>' +
+        '<div class="form-row" style="margin-bottom:10px"><label class="form-label">Tytuł kampanii</label>' +
+          '<input class="form-input" id="flm-title" type="text" value="' + _esc(templateTitle) + '"></div>' +
+        '<div class="form-row" style="margin-bottom:14px"><label class="form-label">Gracz</label>' +
+          '<select class="form-input" id="flm-user">' + usersHtml + '</select></div>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+          '<button class="btn btn-sm btn-secondary" onclick="document.getElementById(\'forge-launch-modal\').remove()">Anuluj</button>' +
+          '<button class="btn btn-sm btn-primary" onclick="forgeLaunchCampaignConfirm(' + templateId + ')">Utwórz kampanię</button>' +
+        '</div>' +
+      '</div>';
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+  }
+
+  async function forgeLaunchCampaignConfirm(templateId) {
+    const title = document.getElementById('flm-title')?.value?.trim();
+    const userId = parseInt(document.getElementById('flm-user')?.value);
+    if (!title) { _showToast('Podaj tytuł kampanii.', 'warn'); return; }
+    if (!userId) { _showToast('Wybierz gracza.', 'warn'); return; }
+    const btn = document.querySelector('#forge-launch-modal .btn-primary');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+    try {
+      const d = await apiFetch('/api/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({
+          title,
+          system_id: 'fantasy',
+          owner_user_id: userId,
+          template_id: templateId,
+          mode: 'pre_built',
+          status: 'active',
+        }),
+      });
+      document.getElementById('forge-launch-modal')?.remove();
+      _showToast('Kampania "' + _esc(title) + '" utworzona! ID: ' + d.id, 'success');
+    } catch(e) {
+      _showToast(e.message || 'Błąd tworzenia kampanii.', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Utwórz kampanię'; }
+    }
   }
 
   // ── Voice ───────────────────────────────────────────────

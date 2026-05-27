@@ -699,6 +699,20 @@ def forge_patch_hook(hook_id: int, req: PatchHookReq, _: None = Depends(_require
         conn.close()
 
 
+@router.delete("/hooks/{hook_id}")
+def forge_delete_hook(hook_id: int, _: None = Depends(_require_admin)):
+    conn = _get_db()
+    try:
+        row = conn.execute("SELECT id FROM adventure_hooks WHERE id = ?", (hook_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Hook not found")
+        conn.execute("DELETE FROM adventure_hooks WHERE id = ?", (hook_id,))
+        conn.commit()
+        return {"ok": True, "deleted_id": hook_id}
+    finally:
+        conn.close()
+
+
 @router.post("/hooks/{hook_id}/promote")
 def forge_promote_hook(hook_id: int, _: None = Depends(_require_admin)):
     """Promote an approved hook to a real game DB record."""
@@ -1139,3 +1153,97 @@ def forge_generate_sublocations(
         return {"sub_locations": result.get("sub_locations", [])}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM error: {e}")
+
+
+@router.post("/hooks/{hook_id}/generate-encounter")
+def forge_generate_encounter(
+    hook_id: int,
+    _: None = Depends(_require_admin),
+):
+    """Expand an approved hook into a standalone mini-encounter JSON."""
+    conn = _get_db()
+    try:
+        row = conn.execute("SELECT * FROM adventure_hooks WHERE id = ?", (hook_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Hook not found")
+        hook = _hook_to_dict(row)
+    finally:
+        conn.close()
+
+    from app.services.llm_service import get_effective_config
+    import httpx
+
+    cfg = get_effective_config()
+
+    dd = hook.get("draft_data") or {}
+    if isinstance(dd, str):
+        try:
+            dd = json.loads(dd)
+        except Exception:
+            dd = {}
+
+    system_prompt = (
+        "Jesteś mistrzem gry RPG tworzącym spotkania. Zwracasz TYLKO JSON — żadnego tekstu poza JSON. "
+        'Format: {"title":"...","scene_setup":"...","trigger_condition":"...","enemies":[{"name":"...","count":1,"notes":"..."}],"objectives":["..."],"rewards":{"xp_estimate":50,"loot_notes":"..."},"gm_notes":"..."}'
+    )
+    user_prompt = (
+        f"Typ haka: {hook['hook_type']}\n"
+        f"Tytuł: {hook['title']}\n"
+        f"Opis: {hook['description']}\n"
+        f"Dane draftu: {json.dumps(dd, ensure_ascii=False)}\n\n"
+        "Stwórz standalone spotkanie (mini-przygodę) bazując na tym haku. "
+        "Spotkanie powinno być samowystarczalne — GM może je wstawić w dowolnym momencie kampanii. "
+        "Opis sceny max 3 zdania. Maksymalnie 3 wrogów. Cele: 1-3 punkty."
+    )
+
+    headers = {"Content-Type": "application/json"}
+    if cfg.get("api_key"):
+        headers["Authorization"] = f"Bearer {cfg['api_key']}"
+
+    payload = {
+        "model": cfg["model"],
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        "temperature": 0.8,
+        "max_tokens": 700,
+    }
+
+    try:
+        resp = httpx.post(
+            cfg["base_url"].rstrip("/") + "/chat/completions",
+            json=payload, headers=headers, timeout=60
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        encounter = json.loads(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM error: {e}")
+
+    # Save encounter into draft_data.encounter
+    conn = _get_db()
+    try:
+        current_dd = conn.execute(
+            "SELECT draft_data FROM adventure_hooks WHERE id = ?", (hook_id,)
+        ).fetchone()
+        existing_dd: dict = {}
+        if current_dd and current_dd["draft_data"]:
+            try:
+                existing_dd = json.loads(current_dd["draft_data"])
+            except Exception:
+                existing_dd = {}
+        existing_dd["encounter"] = encounter
+        conn.execute(
+            "UPDATE adventure_hooks SET draft_data = ? WHERE id = ?",
+            (json.dumps(existing_dd, ensure_ascii=False), hook_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"ok": True, "encounter": encounter}
