@@ -3030,9 +3030,15 @@
     </div>
 
     <!-- Forge Generate Plan Dialog -->
+    <!-- Shared plan-params dialog (Generuj plan GM + Stwórz szablon) -->
     <div id="forge-plan-dialog" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.55);align-items:center;justify-content:center" onclick="if(event.target===this)document.getElementById('forge-plan-dialog').style.display='none'">
-      <div class="card" style="width:380px;padding:24px;display:flex;flex-direction:column;gap:14px;background:var(--canvas);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-lg)">
-        <div style="font-weight:700;font-size:1rem">Generuj Plan GM</div>
+      <div class="card" style="width:420px;padding:24px;display:flex;flex-direction:column;gap:14px;background:var(--canvas);border:1px solid var(--border);border-radius:var(--r2);box-shadow:var(--shadow-lg)">
+        <div id="fpd-heading" style="font-weight:700;font-size:1rem">Generuj Plan GM</div>
+        <!-- title row — shown only when creating template from idea -->
+        <div class="form-row" id="fpd-title-row" style="display:none">
+          <label class="form-label">Tytuł szablonu *</label>
+          <input id="fpd-title" class="form-input" type="text" placeholder="np. Zamek Drachenfels">
+        </div>
         <div class="form-row">
           <label class="form-label">Poziom trudności</label>
           <select id="fpd-difficulty" class="form-input">
@@ -3043,11 +3049,15 @@
           </select>
         </div>
         <div class="form-row">
-          <label class="form-label">Długość kampanii</label>
-          <select id="fpd-duration" class="form-input">
-            <option value="short">Krótka (3-4 akty)</option>
-            <option value="medium" selected>Średnia (5-6 aktów)</option>
-            <option value="long">Długa (7+ aktów)</option>
+          <label class="form-label">Liczba aktów</label>
+          <select id="fpd-acts" class="form-input">
+            <option value="3">3 akty (krótka)</option>
+            <option value="4">4 akty</option>
+            <option value="5" selected>5 aktów (średnia)</option>
+            <option value="6">6 aktów</option>
+            <option value="7">7 aktów (długa)</option>
+            <option value="8">8 aktów</option>
+            <option value="9">9 aktów (epik)</option>
           </select>
         </div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -7537,7 +7547,7 @@
         '<div style="display:flex;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">' +
           '<button class="btn btn-sm btn-secondary" onclick="forgeReloadIdeaInChat(' + id + ')">↩ Kontynuuj w Warsztacie</button>' +
           '<button class="btn btn-sm btn-primary" onclick="forgeExtractHooks(' + id + ',this)">⚡ Wyodrębnij haki → DB</button>' +
-          '<button class="btn btn-sm btn-secondary" onclick="forgeCreateTemplateFromIdea(' + id + ')" style="margin-left:4px">📖 Utwórz szablon</button>' +
+          '<button class="btn btn-sm btn-secondary" onclick="forgeCreateTemplateFromIdea(' + id + ',' + JSON.stringify(idea.title) + ',' + (sd.arcs?.length||0) + ')" style="margin-left:4px">📖 Utwórz szablon</button>' +
         '</div>';
     }).catch(e => console.warn('forge open idea', e.message));
   }
@@ -7966,24 +7976,24 @@
     } catch(e) { _showToast(e.message||'Błąd.','error'); }
   }
 
-  async function forgeCreateTemplateFromIdea(ideaId) {
-    const title = prompt('Tytuł szablonu:');
-    if (!title) return;
-    try {
-      const t = await apiFetch('/api/admin/forge/templates', {
-        method:'POST',
-        body:JSON.stringify({ title, adventure_idea_id: ideaId }),
-      });
-      _showToast(`Szablon "${t.title}" utworzony.`, 'success');
-      // Switch to templates tab
-      document.querySelectorAll('#forge-tabs .stab').forEach(b => {
-        b.classList.toggle('active', b.dataset.forgetab === 'templates');
-      });
-      document.querySelectorAll('[id^="forge-tab-"]').forEach(p => p.style.display = 'none');
-      const panel = document.getElementById('forge-tab-templates');
-      if (panel) panel.style.display = '';
-      await _loadForgeTemplates();
-    } catch(e) { _showToast(e.message||'Błąd tworzenia szablonu.','error'); }
+  let _forgePlanIdeaId = null;   // set when creating template from idea
+  function forgeCreateTemplateFromIdea(ideaId, defaultTitle, arcCount) {
+    _forgePlanIdeaId = ideaId;
+    _forgePlanTemplateId = null;
+    const titleInput = document.getElementById('fpd-title');
+    if (titleInput) titleInput.value = defaultTitle || '';
+    // Pre-set acts select based on idea arc count
+    const actsSelect = document.getElementById('fpd-acts');
+    if (actsSelect && arcCount > 0) {
+      const clamp = Math.min(Math.max(arcCount, 3), 9);
+      const opt = actsSelect.querySelector(`option[value="${clamp}"]`);
+      if (opt) actsSelect.value = String(clamp);
+    }
+    document.getElementById('fpd-title-row').style.display = '';
+    document.getElementById('fpd-heading').textContent = 'Stwórz szablon i generuj plan';
+    document.getElementById('fpd-confirm-btn').textContent = 'Stwórz i generuj';
+    const dlg = document.getElementById('forge-plan-dialog');
+    if (dlg) dlg.style.display = 'flex';
   }
 
   async function openCreateTemplate() {
@@ -8697,25 +8707,60 @@
 
   function forgeGeneratePlan() {
     if (!_tplEditorData) return;
+    _forgePlanIdeaId = null;
     _forgePlanTemplateId = _tplEditorData.id;
+    // Pre-set acts count based on existing plan (or idea arc count if linked)
+    const existingActs = (_tplEditorPlan?.acts || []).length;
+    const actsSelect = document.getElementById('fpd-acts');
+    if (actsSelect && existingActs > 0) {
+      // Try to set the select to the matching option; default 5 if not found
+      const opt = actsSelect.querySelector(`option[value="${existingActs}"]`);
+      if (opt) actsSelect.value = String(existingActs);
+    }
+    document.getElementById('fpd-title-row').style.display = 'none';
+    document.getElementById('fpd-heading').textContent = 'Generuj Plan GM';
+    document.getElementById('fpd-confirm-btn').textContent = 'Generuj';
     const dlg = document.getElementById('forge-plan-dialog');
-    if (dlg) { dlg.style.display = 'flex'; }
+    if (dlg) dlg.style.display = 'flex';
   }
 
   async function forgeGeneratePlanConfirm() {
     const dlg = document.getElementById('forge-plan-dialog');
     if (dlg) dlg.style.display = 'none';
     const difficulty = document.getElementById('fpd-difficulty')?.value || 'medium';
-    const duration = document.getElementById('fpd-duration')?.value || 'medium';
-    const actHints = { short: 4, medium: 5, long: 7 };
-    const suggestedActs = actHints[duration] || 5;
-    await _doForgeGeneratePlan(_forgePlanTemplateId, difficulty, suggestedActs);
+    const suggestedActs = parseInt(document.getElementById('fpd-acts')?.value || '5', 10);
+
+    if (_forgePlanIdeaId && !_forgePlanTemplateId) {
+      // Creating new template from idea
+      const title = document.getElementById('fpd-title')?.value?.trim();
+      if (!title) { _showToast('Podaj tytuł szablonu.', 'error'); return; }
+      const btn = document.getElementById('fpd-confirm-btn');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+      try {
+        const t = await apiFetch('/api/admin/forge/templates', {
+          method: 'POST',
+          body: JSON.stringify({ title, adventure_idea_id: _forgePlanIdeaId }),
+        });
+        _showToast(`Szablon "${t.title}" utworzony — generuję plan…`, 'success');
+        // Switch to template editor immediately, then generate plan
+        await _loadForgeTemplates();
+        openTemplateEditor(t.id);
+        // Small delay to let editor render, then run generate
+        setTimeout(() => _doForgeGeneratePlan(t.id, difficulty, suggestedActs), 400);
+      } catch(e) {
+        _showToast(e.message || 'Błąd tworzenia szablonu.', 'error');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Stwórz i generuj'; }
+      }
+    } else {
+      await _doForgeGeneratePlan(_forgePlanTemplateId, difficulty, suggestedActs);
+    }
   }
 
   async function _doForgeGeneratePlan(templateId, difficulty, suggestedActs) {
     if (!templateId) return;
     const btn = document.getElementById('tpl-generate-btn');
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generuję…'; }
+    if (btn) { btn.disabled = true; btn.textContent = `⏳ Generuję ${suggestedActs} aktów…`; }
     try {
       const payload = {};
       if (_tplEditorData?.adventure_idea_id) payload.adventure_idea_id = _tplEditorData.adventure_idea_id;
