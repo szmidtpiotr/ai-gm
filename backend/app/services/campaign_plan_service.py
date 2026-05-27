@@ -55,6 +55,7 @@ class PlotEnemy(BaseModel):
     role: str = ""
     tier: str = "standard"
     description: str = ""
+    note: str = ""
     count: int = 1
 
 
@@ -72,9 +73,11 @@ class PlotNPC(BaseModel):
 
 
 class PlotLocation(BaseModel):
+    model_config = ConfigDict(extra='allow')
     key: str
     name: str
     role: str
+    description: str = ""
     visited: bool = False
 
 

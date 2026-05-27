@@ -962,10 +962,10 @@ SCHEMAT JSON (wypełnij każde pole):
     {"key": "slug", "name": "string", "role": "string", "importance": "critical", "deviation_consequence": "branch", "alive": true, "personality_prompt": "string", "description": "string", "keyword_triggers": ["string"]}
   ],
   "key_locations": [
-    {"key": "slug", "name": "string", "role": "string", "visited": false}
+    {"key": "slug", "name": "string", "role": "string", "description": "string — 2-3 zdania opisu dla MG (klimat, wygląd, przeznaczenie)", "visited": false}
   ],
   "key_enemies": [
-    {"key": "slug", "name": "string", "tier": "standard", "hp_base": 20, "ac_base": 12, "damage_die": "1d6", "description": "string"}
+    {"key": "slug", "name": "string", "tier": "standard", "hp_base": 20, "ac_base": 12, "damage_die": "1d6", "description": "string — wygląd i charakter wroga", "note": "string — specjalne zdolności i taktyki dla MG"}
   ],
   "active_act": 1,
   "scene_log": [],
@@ -985,8 +985,9 @@ ZASADY:
 4. 2-5 lokacji. Pierwsza to punkt startowy.
 5. Klucze NPC i lokacji: lowercase_slug, np. "innkeeper_boris".
 6. Każdy NPC musi zawierać pola: personality_prompt, description, keyword_triggers.
-7. key_enemies: 1-3 wrogów typowych dla fabuły.
-8. 1-3 kluczowych wrogów (key_enemies) typowych dla fabuły.
+7. 1-3 kluczowych wrogów (key_enemies) typowych dla fabuły.
+8. Każdy wróg MUSI mieć description (wygląd/charakter) i note (zdolności specjalne, taktyka).
+9. Każda lokacja MUSI mieć description (min. 2 zdania dla MG — klimat, wygląd, przeznaczenie).
 """
 
 
@@ -1375,9 +1376,24 @@ def forge_generate_template_item(
         raise HTTPException(status_code=400, detail="entity_type must be weapon, item, or consumable")
 
     type_schemas = {
-        "weapon": '{"entity_type":"weapon","key":"slug","label":"Nazwa","damage_die":"1d6","linked_stat":"STR","weapon_type":"melee","rarity":1,"description":"opis"}',
-        "item": '{"entity_type":"item","key":"slug","label":"Nazwa","item_type":"misc","value_gp":10,"rarity":1,"description":"opis"}',
-        "consumable": '{"entity_type":"consumable","key":"slug","label":"Nazwa","effect_type":"healing","base_price":15,"rarity":1,"description":"opis"}',
+        "weapon": (
+            '{"entity_type":"weapon","key":"slug","label":"Nazwa","damage_die":"1d6",'
+            '"linked_stat":"STR","weapon_type":"melee|ranged","rarity":1,'
+            '"description":"opis dla gracza","note":"zdolności specjalne i efekty dla MG",'
+            '"effect_json":null}'
+        ),
+        "item": (
+            '{"entity_type":"item","key":"slug","label":"Nazwa","item_type":"misc|gear|magic|quest",'
+            '"value_gp":10,"rarity":1,"description":"opis dla gracza",'
+            '"note":"efekty mechaniczne dla MG","effect_json":null}'
+        ),
+        "consumable": (
+            '{"entity_type":"consumable","key":"slug","label":"Nazwa",'
+            '"effect_type":"heal_hp|restore_mana|stat_buff|remove_condition|misc",'
+            '"effect_dice":"1d4","effect_bonus":0,"effect_target":"self",'
+            '"base_price":15,"rarity":1,"description":"opis dla gracza",'
+            '"note":"szczegóły efektu dla MG"}'
+        ),
     }
     type_labels = {"weapon": "broń", "item": "przedmiot", "consumable": "użytek/eliksir"}
 
