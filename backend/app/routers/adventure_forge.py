@@ -1245,3 +1245,132 @@ def forge_generate_encounter(
         conn.close()
 
     return {"ok": True, "encounter": encounter}
+
+
+# ── Generate campaign description ─────────────────────────────────────────────
+
+class GenerateDescriptionReq(BaseModel):
+    title: str = ""
+    atmosphere: str = ""
+    gm_plan: Optional[dict] = None
+
+
+@router.post("/templates/{template_id}/generate-description")
+def forge_generate_template_description(
+    template_id: int,
+    req: GenerateDescriptionReq,
+    _: None = Depends(_require_admin),
+):
+    """Generate a short campaign description for the template overview tab."""
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT * FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+    finally:
+        conn.close()
+
+    title = req.title or tpl["title"]
+    atmosphere = req.atmosphere or tpl["atmosphere"] or ""
+    plan = req.gm_plan or {}
+    premise = plan.get("premise", "")
+    acts = plan.get("acts", [])
+    acts_summary = "; ".join(a.get("title", "") for a in acts[:3] if a.get("title"))
+
+    system_prompt = (
+        "Jesteś copywriterem gier RPG. Piszesz krótkie, klimatyczne opisy kampanii. "
+        "Zwróć TYLKO JSON: {\"description\": \"string\"} — 2-4 zdania po polsku, "
+        "zachęcające gracza do wzięcia udziału w kampanii. Mroczny klimat WFRP."
+    )
+    user_prompt = (
+        f"Tytuł kampanii: {title}\n"
+        f"Klimat: {atmosphere or 'mroczne fantasy'}\n"
+        f"Przesłanka: {premise or '(brak)'}\n"
+        f"Akty: {acts_summary or '(brak)'}\n\n"
+        "Napisz zachęcający opis kampanii dla gracza (nie spoiluj fabuły)."
+    )
+
+    from app.services.campaign_plan_service import _extract_json as _cps_extract_json
+    try:
+        raw = (generate_chat(messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]) or "").strip()
+        result = _cps_extract_json(raw)
+        if result is None:
+            try:
+                result = json.loads(raw)
+            except Exception:
+                result = {"description": raw[:400]}
+        return {"ok": True, "description": result.get("description", raw[:400])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM error: {e}")
+
+
+# ── Generate campaign-specific item ──────────────────────────────────────────
+
+class GenerateItemReq(BaseModel):
+    entity_type: str  # weapon, item, consumable
+
+
+@router.post("/templates/{template_id}/generate-item")
+def forge_generate_template_item(
+    template_id: int,
+    req: GenerateItemReq,
+    _: None = Depends(_require_admin),
+):
+    """Generate a campaign-specific item/weapon/consumable for the template."""
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT * FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        gm_plan = json.loads(tpl["gm_plan_json"] or "{}")
+    finally:
+        conn.close()
+
+    entity_type = req.entity_type
+    if entity_type not in ("weapon", "item", "consumable"):
+        raise HTTPException(status_code=400, detail="entity_type must be weapon, item, or consumable")
+
+    type_schemas = {
+        "weapon": '{"entity_type":"weapon","key":"slug","label":"Nazwa","damage_die":"1d6","linked_stat":"STR","weapon_type":"melee","rarity":1,"description":"opis"}',
+        "item": '{"entity_type":"item","key":"slug","label":"Nazwa","item_type":"misc","value_gp":10,"rarity":1,"description":"opis"}',
+        "consumable": '{"entity_type":"consumable","key":"slug","label":"Nazwa","effect_type":"healing","base_price":15,"rarity":1,"description":"opis"}',
+    }
+    type_labels = {"weapon": "broń", "item": "przedmiot", "consumable": "użytek/eliksir"}
+
+    system_prompt = (
+        f"Jesteś projektantem gier RPG. Tworzysz {type_labels[entity_type]} dla kampanii. "
+        f"Zwróć TYLKO JSON pasujący do schematu: {type_schemas[entity_type]}\n"
+        "Klucz (key): lowercase_slug. Warto powiązać przedmiot z fabułą kampanii."
+    )
+    user_prompt = (
+        f"Kampania: {tpl['title']}\n"
+        f"Klimat: {tpl['atmosphere'] or 'mroczne fantasy'}\n"
+        f"Fabuła: {gm_plan.get('premise', '(brak)')}\n\n"
+        f"Stwórz tematyczny {type_labels[entity_type]} pasujący do tej kampanii."
+    )
+
+    from app.services.campaign_plan_service import _extract_json as _cps_extract_json
+    try:
+        raw = (generate_chat(messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]) or "").strip()
+        result = _cps_extract_json(raw)
+        if result is None:
+            try:
+                result = json.loads(raw)
+            except Exception:
+                raise HTTPException(status_code=500, detail="LLM returned no valid JSON")
+        result["entity_type"] = entity_type
+        return {"ok": True, "item": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"LLM error: {e}")
