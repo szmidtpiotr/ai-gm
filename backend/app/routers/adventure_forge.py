@@ -16,6 +16,16 @@ from pydantic import BaseModel
 from app.services.admin_auth import verify_admin_token
 from app.services.llm_service import generate_chat
 
+
+def _safe_int(val, default):
+    try:
+        return int(val) if val is not None and val != "" else default
+    except (ValueError, TypeError):
+        return default
+
+
+_LOC_TYPE_MAP = {"sub": "sub"}  # everything else → macro
+
 DB_PATH = "/data/ai_gm.db"
 
 router = APIRouter(prefix="/api/admin/forge", tags=["admin-adventure-forge"])
@@ -293,7 +303,7 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
              d.get("allowed_classes", "warrior"),
              d.get("description", hook.get("description", "")),
              d.get("weapon_type", "armor" if htype == "armor" else "melee"),
-             int(d.get("rarity", 1)), now, now),
+             _safe_int(d.get("rarity"), 1), now, now),
         )
         return table, cur.lastrowid
 
@@ -309,7 +319,7 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
             (key, label,
              d.get("item_type", "misc"),
              d.get("description", hook.get("description", "")),
-             int(d.get("value_gp", 0)), int(d.get("rarity", 1)), now, now),
+             _safe_int(d.get("value_gp"), 0), _safe_int(d.get("rarity"), 1), now, now),
         )
         return table, cur.lastrowid
 
@@ -325,7 +335,7 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
             (key, label,
              d.get("description", hook.get("description", "")),
              d.get("effect_type", "misc"),
-             int(d.get("base_price", 0)), int(d.get("rarity", 1)), now, now),
+             _safe_int(d.get("base_price"), 0), _safe_int(d.get("rarity"), 1), now, now),
         )
         return table, cur.lastrowid
 
@@ -339,8 +349,8 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
                 tier, damage_type, review_status, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'permanent', ?, ?)""",
             (key, label,
-             int(d.get("hp_base", 20)), int(d.get("ac_base", 12)),
-             int(d.get("attack_bonus", 3)), d.get("damage_die", "1d6"),
+             _safe_int(d.get("hp_base"), 20), _safe_int(d.get("ac_base"), 12),
+             _safe_int(d.get("attack_bonus"), 3), d.get("damage_die", "1d6"),
              d.get("description", hook.get("description", "")),
              d.get("tier", "standard"), d.get("damage_type", "physical"),
              now, now),
@@ -351,6 +361,11 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
         table = "npcs"
         key = _ensure_unique_key(conn, table, d.get("key") or _slugify(hook["title"]))
         label = d.get("label") or hook["title"]
+        existing_npc = conn.execute(
+            "SELECT id FROM npcs WHERE label = ?", (label,)
+        ).fetchone()
+        if existing_npc:
+            return "npcs", existing_npc["id"]
         description = d.get("description", hook.get("description", ""))
         personality_json = json.dumps({"description": description}, ensure_ascii=False)
         cur = conn.execute(
@@ -377,7 +392,7 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
                VALUES (?, ?, ?, ?, ?, 1, 1, 'permanent', 'adventure_forge', ?, ?)""",
             (key, label,
              d.get("description", hook.get("description", "")),
-             d.get("location_type", "macro"),
+             _LOC_TYPE_MAP.get(d.get("location_type", ""), "macro"),
              d.get("biome", ""),
              now, now),
         )
@@ -605,6 +620,13 @@ def forge_extract_hooks(idea_id: int, _: None = Depends(_require_admin)):
         created = []
         for h in hooks_raw:
             if not isinstance(h, dict) or not h.get("hook_type"):
+                continue
+            existing = conn.execute(
+                "SELECT id FROM adventure_hooks WHERE adventure_idea_id=? AND title=? AND hook_type=?",
+                (idea_id, h.get("title", "Hook"), h.get("hook_type", "event"))
+            ).fetchone()
+            if existing:
+                created.append(existing["id"])
                 continue
             cur = conn.execute(
                 """INSERT INTO adventure_hooks
@@ -910,19 +932,21 @@ SCHEMAT JSON (wypełnij każde pole):
   "title": "string",
   "premise": "string",
   "acts": [
-    {"number": 1, "title": "string", "summary": "string", "key_beats": ["string","string","string"], "completed": false},
-    {"number": 2, "title": "string", "summary": "string", "key_beats": ["string","string","string"], "completed": false},
-    {"number": 3, "title": "string", "summary": "string", "key_beats": ["string","string","string"], "completed": false}
+    {"number": 1, "title": "string", "summary": "string", "key_beats": ["string","string","string"], "completed": false}
+    /* N acts — count passed in user prompt */
   ],
   "endings": [
     {"id": "ending_primary", "title": "string", "type": "primary", "description": "string", "requirements": ["string","string"]},
     {"id": "ending_alternate", "title": "string", "type": "alternate", "description": "string", "requirements": ["string"]}
   ],
   "key_npcs": [
-    {"key": "slug", "name": "string", "role": "string", "importance": "critical", "deviation_consequence": "branch", "alive": true}
+    {"key": "slug", "name": "string", "role": "string", "importance": "critical", "deviation_consequence": "branch", "alive": true, "personality_prompt": "string", "description": "string", "keyword_triggers": ["string"]}
   ],
   "key_locations": [
     {"key": "slug", "name": "string", "role": "string", "visited": false}
+  ],
+  "key_enemies": [
+    {"key": "slug", "name": "string", "tier": "standard", "hp_base": 20, "ac_base": 12, "damage_die": "1d6", "description": "string"}
   ],
   "active_act": 1,
   "scene_log": [],
@@ -936,11 +960,14 @@ SCHEMAT JSON (wypełnij każde pole):
 }
 
 ZASADY:
-1. Dokładnie 3 akty.
+1. Akty: tyle ile wynika ze szkicu (minimum 3, maximum 7).
 2. Dokładnie 2 zakończenia: primary + alternate (oba moralnie niejednoznaczne).
 3. 3-6 kluczowych NPC, co najmniej jeden critical.
 4. 2-5 lokacji. Pierwsza to punkt startowy.
 5. Klucze NPC i lokacji: lowercase_slug, np. "innkeeper_boris".
+6. Każdy NPC musi zawierać pola: personality_prompt, description, keyword_triggers.
+7. key_enemies: 1-3 wrogów typowych dla fabuły.
+8. 1-3 kluczowych wrogów (key_enemies) typowych dla fabuły.
 """
 
 
@@ -995,6 +1022,11 @@ def forge_generate_template_plan(
                 "Stwórz pełny plan kampanii na podstawie tego szkicu. "
                 "Fabuła i NPC muszą bezpośrednio wynikać ze szkicu."
             )
+            arc_count = len(sd.get("arcs") or [])
+            if arc_count > 0:
+                user_prompt += f"\nLiczba aktów w szkicu: {arc_count}. Stwórz dokładnie {arc_count} aktów."
+            else:
+                user_prompt += "\nStwórz 3-5 aktów."
         else:
             # Fallback: generate from template metadata
             user_prompt = (
@@ -1106,11 +1138,6 @@ def forge_generate_sublocations(
     finally:
         conn.close()
 
-    from app.services.llm_service import get_effective_config
-    import httpx
-
-    cfg = get_effective_config()
-
     system_prompt = (
         "Jesteś asystentem projektanta gier RPG. Zwracasz TYLKO JSON — żadnego tekstu poza JSON. "
         'Format odpowiedzi: {"sub_locations": [{"key": "slug", "name": "Nazwa", "description": "Krótki opis"}]}'
@@ -1124,33 +1151,21 @@ def forge_generate_sublocations(
         f"Opisy max 1 zdanie."
     )
 
-    headers = {"Content-Type": "application/json"}
-    if cfg.get("api_key"):
-        headers["Authorization"] = f"Bearer {cfg['api_key']}"
-
-    payload = {
-        "model": cfg["model"],
-        "messages": [
+    from app.services.campaign_plan_service import _extract_json as _cps_extract_json
+    try:
+        raw = (generate_chat(messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.7,
-        "max_tokens": 600,
-    }
-
-    try:
-        resp = httpx.post(
-            cfg["base_url"].rstrip("/") + "/chat/completions",
-            json=payload, headers=headers, timeout=60
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"].strip()
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        result = json.loads(content)
+        ]) or "").strip()
+        result = _cps_extract_json(raw)
+        if result is None:
+            try:
+                result = json.loads(raw)
+            except Exception:
+                raise HTTPException(status_code=500, detail="LLM returned no valid JSON")
         return {"sub_locations": result.get("sub_locations", [])}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM error: {e}")
 
@@ -1169,11 +1184,6 @@ def forge_generate_encounter(
         hook = _hook_to_dict(row)
     finally:
         conn.close()
-
-    from app.services.llm_service import get_effective_config
-    import httpx
-
-    cfg = get_effective_config()
 
     dd = hook.get("draft_data") or {}
     if isinstance(dd, str):
@@ -1196,32 +1206,20 @@ def forge_generate_encounter(
         "Opis sceny max 3 zdania. Maksymalnie 3 wrogów. Cele: 1-3 punkty."
     )
 
-    headers = {"Content-Type": "application/json"}
-    if cfg.get("api_key"):
-        headers["Authorization"] = f"Bearer {cfg['api_key']}"
-
-    payload = {
-        "model": cfg["model"],
-        "messages": [
+    from app.services.campaign_plan_service import _extract_json as _cps_extract_json
+    try:
+        raw = (generate_chat(messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.8,
-        "max_tokens": 700,
-    }
-
-    try:
-        resp = httpx.post(
-            cfg["base_url"].rstrip("/") + "/chat/completions",
-            json=payload, headers=headers, timeout=60
-        )
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"].strip()
-        if content.startswith("```"):
-            content = content.split("```")[1]
-            if content.startswith("json"):
-                content = content[4:]
-        encounter = json.loads(content)
+        ]) or "").strip()
+        encounter = _cps_extract_json(raw)
+        if encounter is None:
+            try:
+                encounter = json.loads(raw)
+            except Exception:
+                raise HTTPException(status_code=500, detail="LLM returned no valid JSON for encounter")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM error: {e}")
 
