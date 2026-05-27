@@ -2998,6 +2998,41 @@
       </div>
     </section>
 
+    <!-- Hook Detail Modal -->
+    <div class="modal-overlay" id="hook-modal" onclick="if(event.target===this)this.classList.remove('open')">
+      <div class="modal" style="max-width:780px">
+        <div class="modal-header">
+          <div>
+            <div class="modal-title" id="hook-modal-title">Hak</div>
+            <div class="modal-subtitle" id="hook-modal-type"></div>
+          </div>
+          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('hook-modal').classList.remove('open')">✕</button>
+        </div>
+        <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div>
+            <div class="form-row">
+              <label class="form-label">Tytuł</label>
+              <input id="hm-title" class="form-input" type="text">
+            </div>
+            <div class="form-row">
+              <label class="form-label">Opis</label>
+              <textarea id="hm-description" class="form-input" rows="5" style="resize:vertical"></textarea>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <span id="hm-status-badge" style="font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:var(--r);background:var(--surface)"></span>
+              <span id="hm-significance-badge" style="font-size:0.72rem;color:var(--t3)"></span>
+              <span id="hm-rating" style="font-size:0.72rem;color:var(--t3);margin-left:auto"></span>
+            </div>
+          </div>
+          <div id="hm-draft-form"></div>
+        </div>
+        <div class="modal-footer" style="justify-content:space-between">
+          <div style="display:flex;gap:6px" id="hm-actions"></div>
+          <button class="btn btn-primary btn-sm" onclick="saveHookEdits()">💾 Zapisz</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Kuźnia Kampanii ── -->
     <section class="section" id="section-forge">
       <div class="section-header">
@@ -3078,6 +3113,86 @@
           <span id="forge-templates-count" style="font-size:0.8rem;color:var(--t3);align-self:center"></span>
         </div>
         <div id="forge-templates-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
+
+        <!-- Template Full Editor (hidden by default, shown when editing a template) -->
+        <div id="forge-template-editor" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">
+            <button class="btn btn-sm btn-secondary" onclick="_closeTemplateEditor()">← Szablony</button>
+            <input id="tpl-title" class="form-input" style="font-weight:600;font-size:0.95rem;max-width:320px" placeholder="Tytuł szablonu">
+            <span id="tpl-status-badge" style="font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:var(--r);background:var(--surface);border:1px solid var(--border)"></span>
+            <div style="margin-left:auto;display:flex;gap:6px">
+              <button class="btn btn-sm btn-secondary" id="tpl-publish-btn" onclick="_toggleTemplatePublish()"></button>
+              <button class="btn btn-sm btn-primary" onclick="forgeGeneratePlan()" id="tpl-generate-btn">⚡ Generuj plan AI</button>
+              <button class="btn btn-sm btn-primary" onclick="saveTemplateEdits()">💾 Zapisz</button>
+            </div>
+          </div>
+
+          <div class="stab-bar" id="tpl-editor-tabs" style="margin-bottom:14px">
+            <button class="stab active" data-tpltab="overview">Przegląd</button>
+            <button class="stab" data-tpltab="acts">Akty</button>
+            <button class="stab" data-tpltab="characters">Postaci &amp; Lokacje</button>
+            <button class="stab" data-tpltab="endings">Zakończenia</button>
+          </div>
+
+          <!-- Tab: Przegląd -->
+          <div id="tpl-tab-overview">
+            <div class="card" style="padding:16px;margin-bottom:12px">
+              <div class="form-row"><label class="form-label">Opis</label><textarea id="tpl-description" class="form-input" rows="3" style="resize:vertical"></textarea></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+                <div class="form-row"><label class="form-label">Klimat / atmosfera</label><input id="tpl-atmosphere" class="form-input" type="text" placeholder="np. mroczna, tajemnicza"></div>
+                <div class="form-row"><label class="form-label">Trudność (1-5)</label>
+                  <div id="tpl-difficulty-stars" style="display:flex;gap:4px;padding:4px 0"></div>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="padding:16px">
+              <div class="card-header" style="padding:0 0 10px;margin-bottom:10px;border-bottom:1px solid var(--border)">
+                <span class="card-title">Powiązane haki</span>
+                <button class="btn btn-sm btn-secondary" onclick="_openHookLinkPicker()">+ Dodaj hak</button>
+              </div>
+              <div id="tpl-hooks-list" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px">
+                <span style="font-size:0.78rem;color:var(--t3)">Brak powiązanych haków.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Akty -->
+          <div id="tpl-tab-acts" style="display:none">
+            <div id="tpl-acts-list" style="display:flex;flex-direction:column;gap:12px"></div>
+          </div>
+
+          <!-- Tab: Postaci & Lokacje -->
+          <div id="tpl-tab-characters" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div class="card" style="padding:14px">
+                <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Kluczowe Postaci NPC</div>
+                <div id="tpl-npcs-list" style="display:flex;flex-direction:column;gap:8px"></div>
+                <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="_addTplNPC()">+ Dodaj NPC</button>
+              </div>
+              <div class="card" style="padding:14px">
+                <div style="font-size:0.83rem;font-weight:600;color:var(--t1);margin-bottom:10px">Kluczowe Lokacje</div>
+                <div id="tpl-locations-list" style="display:flex;flex-direction:column;gap:8px"></div>
+                <button class="btn btn-sm btn-secondary" style="margin-top:8px;width:100%" onclick="_addTplLocation()">+ Dodaj lokację</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Zakończenia -->
+          <div id="tpl-tab-endings" style="display:none">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" id="tpl-endings-list"></div>
+          </div>
+
+          <!-- GM Private (always visible, collapsible) -->
+          <details style="margin-top:16px;border:1px solid var(--amber-border);border-radius:var(--r);overflow:hidden">
+            <summary style="padding:10px 14px;background:var(--amber-light);cursor:pointer;font-size:0.8rem;font-weight:600;color:var(--amber)">🔒 GM Private (sekrety kampanii)</summary>
+            <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+              <div class="form-row"><label class="form-label">Sekretna predyspozycja</label><textarea id="tpl-gm-hint" class="form-input" rows="3" style="resize:vertical"></textarea></div>
+              <div class="form-row"><label class="form-label">Ukryty twist</label><textarea id="tpl-gm-twist" class="form-input" rows="3" style="resize:vertical"></textarea></div>
+              <div class="form-row"><label class="form-label">Plan awaryjny</label><textarea id="tpl-gm-contingency" class="form-input" rows="3" style="resize:vertical"></textarea></div>
+            </div>
+          </details>
+        </div>
+
       </div>
 
     </section>
@@ -7251,15 +7366,47 @@
       if (!card || !preview) return;
       card.style.display = '';
       const sd = idea.structured_data || {};
-      preview.innerHTML = `
-        <div style="margin-bottom:8px"><strong>${_esc(idea.title)}</strong> <span style="font-size:0.75rem;color:var(--t3)">${_esc(idea.difficulty||'')}</span></div>
-        <div style="font-size:0.82rem;color:var(--t2);margin-bottom:8px">${_esc(idea.premise||'')}</div>
-        <div style="font-size:0.75rem;color:var(--t3)">Ton: ${(idea.tone||[]).join(', ')||'—'} | Motywy: ${(idea.themes||[]).join(', ')||'—'}</div>
-        ${sd.arcs ? `<div style="margin-top:8px;font-size:0.75rem;color:var(--t3)">${sd.arcs.length} aktów · ${(sd.hooks||[]).length} hooków w szkicu</div>` : ''}
-        <div style="margin-top:10px">
-          <button class="btn btn-sm btn-primary" onclick="forgeExtractHooks(${id},this)">Wyodrębnij haki → DB</button>
-          <button class="btn btn-sm btn-secondary" onclick="forgeCreateTemplateFromIdea(${id})" style="margin-left:6px">→ Utwórz szablon</button>
-        </div>`;
+      const toneStr = (idea.tone||[]).join(', ') || '—';
+      const themesStr = (idea.themes||[]).join(', ') || '—';
+
+      // Arcs accordion
+      const arcsHtml = (sd.arcs||[]).map((arc, i) => `
+        <details style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
+          <summary style="padding:8px 12px;background:var(--surface);cursor:pointer;font-size:0.82rem;font-weight:600;color:var(--t1)">
+            Akt ${i+1}: ${_esc(arc.title||'(bez tytułu)')}
+          </summary>
+          <div style="padding:10px 12px">
+            <p style="font-size:0.8rem;color:var(--t2);margin:0 0 6px">${_esc(arc.description||'')}</p>
+            ${arc.scene_goals?.length ? '<div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px">Cele scen:</div><ul style="margin:0 0 8px;padding-left:16px;font-size:0.78rem;color:var(--t2)">' + arc.scene_goals.map(g=>'<li>'+_esc(g)+'</li>').join('') + '</ul>' : ''}
+            ${arc.private_twist ? '<div style="font-size:0.75rem;color:var(--amber);font-style:italic;padding:4px 8px;background:var(--amber-light);border-radius:var(--r);border:1px solid var(--amber-border)">🔒 GM: ' + _esc(arc.private_twist) + '</div>' : ''}
+          </div>
+        </details>`).join('');
+
+      // Sketch hooks chips grouped by type
+      const hooksByType = {};
+      for (const h of (sd.hooks||[])) { if (!hooksByType[h.type]) hooksByType[h.type]=[]; hooksByType[h.type].push(h); }
+      const hooksHtml = Object.entries(hooksByType).map(([type, hs]) =>
+        '<div style="margin-bottom:6px"><span style="font-size:0.7rem;font-weight:600;color:var(--t3)">' + (_HOOK_TYPE_LABELS[type]||type) + ':</span> ' + hs.map(h=>'<span style="font-size:0.75rem;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin:1px 2px;display:inline-block">' + _esc(h.title) + '</span>').join('') + '</div>'
+      ).join('');
+
+      preview.innerHTML =
+        '<div style="margin-bottom:10px">' +
+          '<strong style="font-size:0.92rem">' + _esc(idea.title) + '</strong>' +
+          '<span style="font-size:0.72rem;color:var(--t3);margin-left:8px">' + _esc(idea.difficulty||'') + ' · ' + _esc(idea.status||'draft') + '</span>' +
+        '</div>' +
+        '<p style="font-size:0.82rem;color:var(--t2);margin-bottom:10px">' + _esc(idea.premise||'') + '</p>' +
+        '<div style="font-size:0.75rem;color:var(--t3);margin-bottom:10px">Ton: ' + _esc(toneStr) + ' · Motywy: ' + _esc(themesStr) + '</div>' +
+
+        (sd.player_hook ? '<div style="margin-bottom:10px;padding:8px 10px;background:var(--blue-light);border:1px solid var(--blue-border);border-radius:var(--r)"><div style="font-size:0.7rem;font-weight:600;color:var(--t3);margin-bottom:2px">⚡ WCIĄGACZ GRACZA</div><div style="font-size:0.8rem;color:var(--t1)">' + _esc(sd.player_hook) + '</div></div>' : '') +
+        (sd.gm_private ? '<div style="margin-bottom:10px;padding:8px 10px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--r)"><div style="font-size:0.7rem;font-weight:600;color:var(--amber);margin-bottom:2px">🔒 GM ONLY</div><div style="font-size:0.8rem;color:var(--t1)">' + _esc(sd.gm_private) + '</div></div>' : '') +
+
+        (sd.arcs?.length ? '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:6px">AKTY (' + sd.arcs.length + ')</div>' + arcsHtml : '') +
+        (Object.keys(hooksByType).length ? '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:6px;margin-top:10px">HOOKI W SZKICU</div>' + hooksHtml : '') +
+
+        '<div style="display:flex;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">' +
+          '<button class="btn btn-sm btn-primary" onclick="forgeExtractHooks(' + id + ',this)">⚡ Wyodrębnij haki → DB</button>' +
+          '<button class="btn btn-sm btn-secondary" onclick="forgeCreateTemplateFromIdea(' + id + ')" style="margin-left:4px">📖 Utwórz szablon</button>' +
+        '</div>';
     }).catch(e => console.warn('forge open idea', e.message));
   }
 
@@ -7364,23 +7511,23 @@
         const statusColor = {pending:'var(--amber)',approved:'var(--green)',promoted:'var(--blue)',rejected:'var(--red)',draft:'var(--t3)'}[h.status]||'var(--t3)';
         const dd = h.draft_data || {};
         const canPromote = ['weapon','armor','item','consumable','enemy','npc','location'].includes(h.hook_type);
-        return `<div class="card" style="padding:10px 12px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-            <span style="font-size:0.75rem;font-weight:600;color:var(--t3)">${_HOOK_TYPE_LABELS[h.hook_type]||h.hook_type}</span>
-            <span style="font-size:0.7rem;color:${statusColor};font-weight:600">${h.status}</span>
-          </div>
-          <div style="font-weight:600;font-size:0.85rem;margin-bottom:4px">${_esc(h.title)}</div>
-          <div style="font-size:0.75rem;color:var(--t2);margin-bottom:8px">${_esc((h.description||'').substring(0,100))}${(h.description||'').length>100?'…':''}</div>
-          ${dd.key ? `<div style="font-size:0.7rem;color:var(--t3);font-family:monospace;margin-bottom:6px">key: ${_esc(dd.key)}</div>` : ''}
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            ${h.status === 'pending' ? `<button class="btn btn-sm btn-primary" onclick="forgeApproveHook(${h.id})">✓ Zatwierdź</button>` : ''}
-            ${canPromote && h.status === 'approved' ? `<button class="btn btn-sm btn-secondary" onclick="forgePromoteHook(${h.id},this)">⬆ Promuj do DB</button>` : ''}
-            ${h.promoted_table ? `<span style="font-size:0.7rem;color:var(--green);padding:2px 6px">✓ ${_esc(h.promoted_table)}</span>` : ''}
-            <button class="btn btn-sm btn-secondary" onclick="forgeRejectHook(${h.id})" style="margin-left:auto">✕</button>
-          </div>
-        </div>`;
+        return '<div class="card" style="padding:10px 12px;cursor:pointer" onclick="openHookModal(' + h.id + ')">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
+            '<span style="font-size:0.75rem;font-weight:600;color:var(--t3)">' + (_HOOK_TYPE_LABELS[h.hook_type]||h.hook_type) + '</span>' +
+            '<span style="font-size:0.7rem;color:' + statusColor + ';font-weight:600">' + h.status + '</span>' +
+          '</div>' +
+          '<div style="font-weight:600;font-size:0.85rem;margin-bottom:4px">' + _esc(h.title) + '</div>' +
+          '<div style="font-size:0.75rem;color:var(--t2);margin-bottom:8px">' + _esc((h.description||'').substring(0,100)) + ((h.description||'').length>100?'…':'') + '</div>' +
+          (dd.key ? '<div style="font-size:0.7rem;color:var(--t3);font-family:monospace;margin-bottom:6px">key: ' + _esc(dd.key) + '</div>' : '') +
+          '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
+            (h.status === 'pending' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgeApproveHook(' + h.id + ').then(()=>_loadForgeHooks())">✓ Zatwierdź</button>' : '') +
+            (canPromote && h.status === 'approved' ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgePromoteHook(' + h.id + ',this)">⬆ Promuj do DB</button>' : '') +
+            (h.promoted_table ? '<span style="font-size:0.7rem;color:var(--green);padding:2px 6px">✓ ' + _esc(h.promoted_table) + '</span>' : '') +
+            '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeRejectHook(' + h.id + ')" style="margin-left:auto">✕</button>' +
+          '</div>' +
+        '</div>';
       }).join('');
-    } catch(e) { grid.innerHTML = `<div style="color:var(--red);font-size:0.8rem;padding:8px">${_esc(e.message)}</div>`; }
+    } catch(e) { grid.innerHTML = '<div style="color:var(--red);font-size:0.8rem;padding:8px">' + _esc(e.message) + '</div>'; }
   }
 
   async function forgeApproveHook(id) {
@@ -7411,6 +7558,131 @@
     finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
   }
 
+  // ── Hook Detail Modal ────────────────────────────────────
+  let _hookModalData = null;
+
+  async function openHookModal(id) {
+    const modal = document.getElementById('hook-modal');
+    if (!modal) return;
+    try {
+      const params = new URLSearchParams();
+      const d = await apiFetch('/api/admin/forge/hooks?' + params.toString());
+      const all = d.items || [];
+      let h = all.find(x => x.id === id);
+      // If not found in default list, try fetching with no status filter
+      if (!h) {
+        const d2 = await apiFetch('/api/admin/forge/hooks?status=');
+        h = (d2.items || []).find(x => x.id === id);
+      }
+      if (!h) { _showToast('Nie znaleziono haka.', 'error'); return; }
+      _hookModalData = h;
+      document.getElementById('hm-title').value = h.title || '';
+      document.getElementById('hm-description').value = h.description || '';
+      const titleEl = document.getElementById('hook-modal-title');
+      const typeEl = document.getElementById('hook-modal-type');
+      if (titleEl) titleEl.textContent = h.title || 'Hak';
+      if (typeEl) typeEl.textContent = (_HOOK_TYPE_LABELS[h.hook_type] || h.hook_type) + ' · ' + (h.significance || '');
+      const statusColors = {pending:'var(--amber)',approved:'var(--green)',promoted:'var(--blue-light)',rejected:'var(--red)',draft:'var(--t3)'};
+      const statusBadge = document.getElementById('hm-status-badge');
+      if (statusBadge) { statusBadge.textContent = h.status; statusBadge.style.color = statusColors[h.status] || 'var(--t3)'; }
+      const sigBadge = document.getElementById('hm-significance-badge');
+      if (sigBadge) sigBadge.textContent = 'Znaczenie: ' + (h.significance || '—');
+      const ratingEl = document.getElementById('hm-rating');
+      if (ratingEl) ratingEl.textContent = '⭐ ' + (h.quality_rating||0).toFixed(1) + ' · użyte: ' + (h.times_used||0) + '×';
+      const formEl = document.getElementById('hm-draft-form');
+      if (formEl) formEl.innerHTML = _renderHookForm(h);
+      const actEl = document.getElementById('hm-actions');
+      if (actEl) {
+        const canPromote = ['weapon','armor','item','consumable','enemy','npc','location'].includes(h.hook_type);
+        actEl.innerHTML =
+          (h.status === 'pending' ? '<button class="btn btn-sm btn-primary" onclick="forgeApproveHook(' + h.id + ').then(()=>document.getElementById(\'hook-modal\').classList.remove(\'open\'))">✓ Zatwierdź</button>' : '') +
+          (canPromote && h.status === 'approved' ? '<button class="btn btn-sm btn-secondary" onclick="forgePromoteHook(' + h.id + ',this).then(()=>document.getElementById(\'hook-modal\').classList.remove(\'open\'))">⬆ Promuj do DB</button>' : '') +
+          (h.promoted_table ? '<span style="font-size:0.72rem;color:var(--green)">✓ ' + _esc(h.promoted_table) + ' #' + (h.promoted_record_id||'') + '</span>' : '') +
+          '<button class="btn btn-sm btn-secondary" onclick="forgeRejectHook(' + h.id + ').then(()=>document.getElementById(\'hook-modal\').classList.remove(\'open\'))" style="color:var(--red)">✕ Odrzuć</button>';
+      }
+      modal.classList.add('open');
+    } catch(e) { _showToast(e.message || 'Błąd.', 'error'); }
+  }
+
+  function _renderHookForm(h) {
+    const dd = h.draft_data || {};
+    const field = (fid, label, val, type, opts) => {
+      if (opts) {
+        return '<div class="form-row"><label class="form-label">' + label + '</label><select class="form-input" id="hm-dd-' + fid + '">' + opts.map(o => '<option value="' + _esc(o) + '"' + (o==val?' selected':'') + '>' + _esc(o) + '</option>').join('') + '</select></div>';
+      }
+      return '<div class="form-row"><label class="form-label">' + label + '</label><input class="form-input" id="hm-dd-' + fid + '" type="' + (type||'text') + '" value="' + _esc(String(val??'')) + '"></div>';
+    };
+    const textarea = (fid, label, val) =>
+      '<div class="form-row"><label class="form-label">' + label + '</label><textarea class="form-input" id="hm-dd-' + fid + '" rows="3" style="resize:vertical">' + _esc(String(val??'')) + '</textarea></div>';
+    switch(h.hook_type) {
+      case 'weapon': case 'armor': return '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:8px">Draft Data — Broń/Zbroja</div>' +
+        field('key','Klucz (slug)',dd.key) + field('label','Etykieta',dd.label) + field('damage_die','Kości obrażeń',dd.damage_die) +
+        field('linked_stat','Statystyka',dd.linked_stat,'text',['STR','DEX','INT','WIS','CHA','CON']) +
+        field('weapon_type','Typ',dd.weapon_type,'text',['melee','ranged','armor']) +
+        field('rarity','Rzadkość',dd.rarity,'number') + textarea('description','Opis',dd.description);
+      case 'enemy': return '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:8px">Draft Data — Wróg</div>' +
+        field('key','Klucz (slug)',dd.key) + field('label','Etykieta',dd.label) + field('hp_base','HP',dd.hp_base,'number') +
+        field('ac_base','AC',dd.ac_base,'number') + field('attack_bonus','Bonus ataku',dd.attack_bonus,'number') +
+        field('damage_die','Kości obrażeń',dd.damage_die) + field('tier','Tier',dd.tier,'text',['weak','standard','elite','boss']) +
+        field('damage_type','Typ obrażeń',dd.damage_type,'text',['physical','fire','poison','cold','lightning']) +
+        textarea('description','Opis',dd.description);
+      case 'npc': return '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:8px">Draft Data — NPC</div>' +
+        field('key','Klucz (slug)',dd.key) + field('label','Imię/Etykieta',dd.label) +
+        field('npc_type','Typ NPC',dd.npc_type,'text',['neutral','merchant','quest_giver','ally','antagonist']) +
+        textarea('personality_prompt','Osobowość',dd.personality_prompt) + textarea('description','Opis',dd.description);
+      case 'location': return '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:8px">Draft Data — Lokacja</div>' +
+        field('key','Klucz (slug)',dd.key) + field('label','Nazwa',dd.label) +
+        field('location_type','Typ',dd.location_type,'text',['macro','micro','dungeon','settlement']) +
+        field('biome','Biom',dd.biome,'text',['forest','city','dungeon','ruin','plains','swamp','mountain','cave']) +
+        textarea('description','Opis',dd.description);
+      case 'item': return '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:8px">Draft Data — Przedmiot</div>' +
+        field('key','Klucz (slug)',dd.key) + field('label','Etykieta',dd.label) +
+        field('item_type','Typ',dd.item_type,'text',['misc','tool','key','quest','armor']) +
+        field('value_gp','Wartość (GP)',dd.value_gp,'number') + field('rarity','Rzadkość',dd.rarity,'number') +
+        textarea('description','Opis',dd.description);
+      case 'consumable': return '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:8px">Draft Data — Konsumpcja</div>' +
+        field('key','Klucz (slug)',dd.key) + field('label','Etykieta',dd.label) +
+        field('effect_type','Efekt',dd.effect_type,'text',['heal','buff','misc','damage','utility']) +
+        field('base_price','Cena bazowa',dd.base_price,'number') + field('rarity','Rzadkość',dd.rarity,'number') +
+        textarea('description','Opis',dd.description);
+      default: return '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:8px">Draft Data</div>' +
+        '<textarea class="form-input" id="hm-dd-raw" rows="8" style="font-family:monospace;font-size:0.75rem;resize:vertical">' + _esc(JSON.stringify(h.draft_data||{},null,2)) + '</textarea>';
+    }
+  }
+
+  async function saveHookEdits() {
+    if (!_hookModalData) return;
+    const h = _hookModalData;
+    const title = document.getElementById('hm-title')?.value?.trim() || h.title;
+    const description = document.getElementById('hm-description')?.value?.trim() || h.description;
+    const dd = { ...(h.draft_data || {}) };
+    const ddFields = {
+      weapon: ['key','label','damage_die','linked_stat','weapon_type','description'],
+      armor:  ['key','label','damage_die','linked_stat','weapon_type','description'],
+      enemy:  ['key','label','hp_base','ac_base','attack_bonus','damage_die','tier','damage_type','description'],
+      npc:    ['key','label','npc_type','personality_prompt','description'],
+      location: ['key','label','location_type','biome','description'],
+      item:   ['key','label','item_type','value_gp','rarity','description'],
+      consumable: ['key','label','effect_type','base_price','rarity','description'],
+    };
+    const numFields = ['hp_base','ac_base','attack_bonus','value_gp','base_price','rarity'];
+    for (const f of (ddFields[h.hook_type] || [])) {
+      const el = document.getElementById('hm-dd-' + f);
+      if (el) dd[f] = numFields.includes(f) ? (parseFloat(el.value)||0) : el.value;
+    }
+    const rawEl = document.getElementById('hm-dd-raw');
+    if (rawEl) { try { Object.assign(dd, JSON.parse(rawEl.value)); } catch {} }
+    try {
+      await apiFetch('/api/admin/forge/hooks/' + h.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ title, description, draft_data: dd }),
+      });
+      _showToast('Hak zapisany.', 'success');
+      document.getElementById('hook-modal')?.classList.remove('open');
+      await _loadForgeHooks();
+    } catch(e) { _showToast(e.message || 'Błąd zapisu.', 'error'); }
+  }
+
   async function _loadForgeTemplates() {
     const grid = document.getElementById('forge-templates-grid');
     const count = document.getElementById('forge-templates-count');
@@ -7419,27 +7691,28 @@
     try {
       const d = await apiFetch('/api/admin/forge/templates');
       const templates = d.items || [];
-      if (count) count.textContent = `${templates.length} szablonów`;
+      if (count) count.textContent = templates.length + ' szablonów';
       if (!templates.length) {
         grid.innerHTML = '<div style="color:var(--t3);font-size:0.8rem">Brak szablonów. Utwórz pierwszy z zapisanego pomysłu.</div>';
         return;
       }
       grid.innerHTML = templates.map(t => {
         const statusColor = t.status === 'published' ? 'var(--green)' : 'var(--t3)';
-        return `<div class="card" style="padding:12px">
-          <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-            <span style="font-weight:600;font-size:0.88rem">${_esc(t.title)}</span>
-            <span style="font-size:0.7rem;color:${statusColor};font-weight:600">${t.status}</span>
-          </div>
-          <div style="font-size:0.78rem;color:var(--t2);margin-bottom:8px">${_esc((t.description||'').substring(0,120))}${(t.description||'').length>120?'…':''}</div>
-          <div style="font-size:0.72rem;color:var(--t3);margin-bottom:8px">⭐ ${t.difficulty_rating}/5 · 🎮 ${t.play_count} rozegrań · ${(t.hook_ids||[]).length} hooków</div>
-          <div style="display:flex;gap:4px">
-            ${t.status === 'draft' ? `<button class="btn btn-sm btn-primary" onclick="forgePublishTemplate(${t.id})">Opublikuj</button>` : `<button class="btn btn-sm btn-secondary" onclick="forgeUnpublishTemplate(${t.id})">Wycofaj</button>`}
-            <button class="btn btn-sm btn-secondary" onclick="if(confirm('Usunąć szablon?'))apiFetch('/api/admin/forge/templates/${t.id}',{method:'DELETE'}).then(()=>{_sectionLoaded.delete('forge');_loadForgeTemplates()})" style="margin-left:auto">🗑</button>
-          </div>
-        </div>`;
+        return '<div class="card" style="padding:12px;cursor:pointer" onclick="openTemplateEditor(' + t.id + ')">' +
+          '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
+            '<span style="font-weight:600;font-size:0.88rem">' + _esc(t.title) + '</span>' +
+            '<span style="font-size:0.7rem;color:' + statusColor + ';font-weight:600">' + t.status + '</span>' +
+          '</div>' +
+          '<div style="font-size:0.78rem;color:var(--t2);margin-bottom:8px">' + _esc((t.description||'').substring(0,120)) + ((t.description||'').length>120?'…':'') + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--t3);margin-bottom:8px">⭐ ' + t.difficulty_rating + '/5 · 🎮 ' + t.play_count + ' rozegrań · ' + (t.hook_ids||[]).length + ' hooków</div>' +
+          '<div style="display:flex;gap:4px">' +
+            (t.status === 'draft' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgePublishTemplate(' + t.id + ')">Opublikuj</button>' : '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeUnpublishTemplate(' + t.id + ')">Wycofaj</button>') +
+            '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openTemplateEditor(' + t.id + ')">Edytuj</button>' +
+            '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();if(confirm(\'Usunąć szablon?\'))apiFetch(\'/api/admin/forge/templates/' + t.id + '\',{method:\'DELETE\'}).then(()=>{_sectionLoaded.delete(\'forge\');_loadForgeTemplates()})" style="margin-left:auto">🗑</button>' +
+          '</div>' +
+        '</div>';
       }).join('');
-    } catch(e) { grid.innerHTML = `<div style="color:var(--red);font-size:0.8rem">${_esc(e.message)}</div>`; }
+    } catch(e) { grid.innerHTML = '<div style="color:var(--red);font-size:0.8rem">' + _esc(e.message) + '</div>'; }
   }
 
   async function forgePublishTemplate(id) {
@@ -7486,9 +7759,383 @@
         method:'POST',
         body:JSON.stringify({ title }),
       });
-      _showToast(`Szablon "${t.title}" utworzony.`, 'success');
+      _showToast('Szablon "' + t.title + '" utworzony.', 'success');
       await _loadForgeTemplates();
+      // Open in editor immediately
+      if (t.id) openTemplateEditor(t.id);
     } catch(e) { _showToast(e.message||'Błąd.','error'); }
+  }
+
+  // ── Template Full Editor ─────────────────────────────────
+  let _tplEditorData = null;
+  let _tplEditorPlan = null;
+
+  async function openTemplateEditor(id) {
+    try {
+      const d = await apiFetch('/api/admin/forge/templates/' + id);
+      _tplEditorData = d;
+      _tplEditorPlan = d.gm_plan_json || {};
+
+      // Translate old arcs-keyed format → V2 acts array if acts are missing or unpopulated
+      if (_tplEditorPlan.arcs) {
+        const hasRealActs = (_tplEditorPlan.acts || []).some(a => a.title);
+        if (!hasRealActs) {
+          const arcsObj = _tplEditorPlan.arcs;
+          _tplEditorPlan.acts = Object.keys(arcsObj).sort().map(k => {
+            const a = arcsObj[k];
+            return { title: a.title || '', summary: a.roadmap || '', key_beats: a.scene_goals || [], completed: a.status === 'done' };
+          });
+        }
+      }
+
+      // Show editor, hide grid
+      document.getElementById('forge-templates-grid').style.display = 'none';
+      const createBtn = document.querySelector('[onclick="openCreateTemplate()"]');
+      if (createBtn) createBtn.style.display = 'none';
+      document.getElementById('forge-template-editor').style.display = '';
+
+      // Populate fields
+      document.getElementById('tpl-title').value = d.title || '';
+      document.getElementById('tpl-description').value = d.description || '';
+      document.getElementById('tpl-atmosphere').value = d.atmosphere || '';
+      _setTplDifficulty(d.difficulty_rating || 2);
+      const statusBadge = document.getElementById('tpl-status-badge');
+      if (statusBadge) { statusBadge.textContent = d.status; statusBadge.style.color = d.status === 'published' ? 'var(--green)' : 'var(--t3)'; }
+      const publishBtn = document.getElementById('tpl-publish-btn');
+      if (publishBtn) publishBtn.textContent = d.status === 'published' ? '↩ Wycofaj' : '✓ Opublikuj';
+
+      // Wire editor tabs
+      document.getElementById('tpl-editor-tabs')?.querySelectorAll('.stab[data-tpltab]').forEach(btn => {
+        btn.onclick = () => {
+          document.querySelectorAll('#tpl-editor-tabs .stab').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          ['overview','acts','characters','endings'].forEach(t => {
+            const el = document.getElementById('tpl-tab-' + t);
+            if (el) el.style.display = btn.dataset.tpltab === t ? '' : 'none';
+          });
+        };
+      });
+
+      // Render all tabs
+      _renderTplHooksList(d.hook_ids || []);
+      _renderTplActs(_tplEditorPlan.acts || []);
+      _renderTplNPCs(_tplEditorPlan.key_npcs || []);
+      _renderTplLocations(_tplEditorPlan.key_locations || []);
+      _renderTplEndings(_tplEditorPlan.endings || []);
+      const ep = _tplEditorPlan.engine_private || {};
+      if (document.getElementById('tpl-gm-hint')) document.getElementById('tpl-gm-hint').value = ep.secret_predisposition_hint || '';
+      if (document.getElementById('tpl-gm-twist')) document.getElementById('tpl-gm-twist').value = ep.hidden_twist || '';
+      if (document.getElementById('tpl-gm-contingency')) document.getElementById('tpl-gm-contingency').value = ep.contingency || '';
+    } catch(e) { _showToast(e.message || 'Błąd ładowania szablonu.', 'error'); }
+  }
+
+  function _closeTemplateEditor() {
+    document.getElementById('forge-template-editor').style.display = 'none';
+    document.getElementById('forge-templates-grid').style.display = '';
+    const createBtn = document.querySelector('[onclick="openCreateTemplate()"]');
+    if (createBtn) createBtn.style.display = '';
+    _tplEditorData = null;
+    _tplEditorPlan = null;
+    // Reset to overview tab
+    document.querySelectorAll('#tpl-editor-tabs .stab').forEach((b,i) => b.classList.toggle('active', i===0));
+    ['acts','characters','endings'].forEach(t => {
+      const el = document.getElementById('tpl-tab-' + t);
+      if (el) el.style.display = 'none';
+    });
+    if (document.getElementById('tpl-tab-overview')) document.getElementById('tpl-tab-overview').style.display = '';
+  }
+
+  let _tplDifficulty = 2;
+  function _setTplDifficulty(n) {
+    _tplDifficulty = n;
+    const container = document.getElementById('tpl-difficulty-stars');
+    if (!container) return;
+    // Populate stars if empty
+    if (!container.querySelector('button')) {
+      container.innerHTML = [1,2,3,4,5].map(i => '<button type="button" onclick="_setTplDifficulty(' + i + ')" id="tpl-star-' + i + '" style="font-size:1.2rem;background:none;border:none;cursor:pointer;padding:0">☆</button>').join('');
+    }
+    for (let i = 1; i <= 5; i++) {
+      const star = document.getElementById('tpl-star-' + i);
+      if (star) star.textContent = i <= n ? '★' : '☆';
+    }
+  }
+
+  function _renderTplHooksList(hookIds) {
+    const el = document.getElementById('tpl-hooks-list');
+    if (!el) return;
+    if (!hookIds.length) { el.innerHTML = '<span style="font-size:0.78rem;color:var(--t3)">Brak powiązanych haków.</span>'; return; }
+    apiFetch('/api/admin/forge/hooks?status=approved').then(d => {
+      const all = d.items || [];
+      const linked = all.filter(h => hookIds.includes(h.id));
+      if (!linked.length) { el.innerHTML = '<span style="font-size:0.78rem;color:var(--t3)">Brak powiązanych haków (hook_ids: ' + hookIds.join(',') + ').</span>'; return; }
+      el.innerHTML = linked.map(h =>
+        '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;padding:3px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)">' +
+          (_esc(_HOOK_TYPE_LABELS[h.hook_type]||h.hook_type)) + ' ' + _esc(h.title) +
+          '<button type="button" onclick="_removeTplHook(' + h.id + ')" style="background:none;border:none;cursor:pointer;color:var(--t3);padding:0;line-height:1">✕</button>' +
+        '</span>'
+      ).join('');
+    }).catch(() => { el.innerHTML = '<span style="font-size:0.75rem;color:var(--t3)">hook_ids: ' + hookIds.join(',') + '</span>'; });
+  }
+
+  function _removeTplHook(hookId) {
+    if (!_tplEditorData) return;
+    _tplEditorData.hook_ids = (_tplEditorData.hook_ids || []).filter(id => id !== hookId);
+    _renderTplHooksList(_tplEditorData.hook_ids);
+  }
+
+  async function _openHookLinkPicker() {
+    try {
+      const d = await apiFetch('/api/admin/forge/hooks?status=approved');
+      const all = d.items || [];
+      const current = _tplEditorData?.hook_ids || [];
+      if (!all.length) { _showToast('Brak zatwierdzonych haków.', 'error'); return; }
+      const selection = prompt('Zatwierdzone haki:\n' + all.map(h => h.id + ': [' + h.hook_type + '] ' + h.title).join('\n') + '\n\nWpisz ID haka do dodania:');
+      const hookId = parseInt(selection);
+      if (!hookId || isNaN(hookId)) return;
+      if (!current.includes(hookId)) {
+        _tplEditorData.hook_ids = [...current, hookId];
+        _renderTplHooksList(_tplEditorData.hook_ids);
+      }
+    } catch(e) { _showToast(e.message, 'error'); }
+  }
+
+  function _renderTplActs(acts) {
+    const el = document.getElementById('tpl-acts-list');
+    if (!el) return;
+    while (acts.length < 3) acts.push({ number: acts.length+1, title:'', summary:'', key_beats:[], completed:false });
+    el.innerHTML = acts.slice(0,3).map((act, i) =>
+      '<details open style="border:1px solid var(--border);border-radius:var(--r);overflow:hidden">' +
+        '<summary style="padding:10px 14px;background:var(--surface);cursor:pointer;font-weight:600;font-size:0.85rem;color:var(--t1)">Akt ' + (i+1) + ': <span id="tpl-act-title-label-' + i + '">' + _esc(act.title||'(bez tytułu)') + '</span></summary>' +
+        '<div style="padding:14px">' +
+          '<div class="form-row"><label class="form-label">Tytuł aktu</label>' +
+            '<input class="form-input" id="tpl-act-title-' + i + '" type="text" value="' + _esc(act.title||'') + '" oninput="document.getElementById(\'tpl-act-title-label-' + i + '\').textContent=this.value||\'(bez tytułu)\'"></div>' +
+          '<div class="form-row"><label class="form-label">Streszczenie</label>' +
+            '<textarea class="form-input" id="tpl-act-summary-' + i + '" rows="3" style="resize:vertical">' + _esc(act.summary||'') + '</textarea></div>' +
+          '<div class="form-row"><label class="form-label">Kluczowe zdarzenia (key_beats)</label>' +
+            '<div id="tpl-act-beats-' + i + '" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">' +
+              (act.key_beats||[]).map((b,bi) => '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)">' + _esc(b) + '<button type="button" onclick="_removeTplBeat(' + i + ',' + bi + ')" style="background:none;border:none;cursor:pointer;color:var(--t3);padding:0">✕</button></span>').join('') +
+            '</div>' +
+            '<div style="display:flex;gap:6px">' +
+              '<input class="form-input" id="tpl-act-beats-input-' + i + '" type="text" placeholder="Dodaj zdarzenie…" style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();_addTplBeat(' + i + ')}">' +
+              '<button class="btn btn-sm btn-secondary" onclick="_addTplBeat(' + i + ')">+ Dodaj</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</details>'
+    ).join('');
+  }
+
+  function _addTplBeat(actIdx) {
+    const input = document.getElementById('tpl-act-beats-input-' + actIdx);
+    if (!input || !input.value.trim()) return;
+    const beat = input.value.trim();
+    input.value = '';
+    if (!_tplEditorPlan) _tplEditorPlan = {};
+    if (!_tplEditorPlan.acts) _tplEditorPlan.acts = [{},{},{}];
+    if (!_tplEditorPlan.acts[actIdx]) _tplEditorPlan.acts[actIdx] = {};
+    if (!_tplEditorPlan.acts[actIdx].key_beats) _tplEditorPlan.acts[actIdx].key_beats = [];
+    _tplEditorPlan.acts[actIdx].key_beats.push(beat);
+    const beatsEl = document.getElementById('tpl-act-beats-' + actIdx);
+    if (beatsEl) {
+      const beats = _tplEditorPlan.acts[actIdx].key_beats;
+      beatsEl.innerHTML = beats.map((b,bi) => '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)">' + _esc(b) + '<button type="button" onclick="_removeTplBeat(' + actIdx + ',' + bi + ')" style="background:none;border:none;cursor:pointer;color:var(--t3);padding:0">✕</button></span>').join('');
+    }
+  }
+
+  function _removeTplBeat(actIdx, beatIdx) {
+    if (_tplEditorPlan?.acts?.[actIdx]?.key_beats) {
+      _tplEditorPlan.acts[actIdx].key_beats.splice(beatIdx, 1);
+      const beatsEl = document.getElementById('tpl-act-beats-' + actIdx);
+      if (beatsEl) {
+        const beats = _tplEditorPlan.acts[actIdx].key_beats;
+        beatsEl.innerHTML = beats.map((b,bi) => '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)">' + _esc(b) + '<button type="button" onclick="_removeTplBeat(' + actIdx + ',' + bi + ')" style="background:none;border:none;cursor:pointer;color:var(--t3);padding:0">✕</button></span>').join('');
+      }
+    }
+  }
+
+  function _renderTplNPCs(npcs) {
+    const el = document.getElementById('tpl-npcs-list');
+    if (!el) return;
+    if (!npcs.length) { el.innerHTML = '<div style="font-size:0.78rem;color:var(--t3)">Brak NPC. Kliknij + Dodaj lub wygeneruj plan AI.</div>'; return; }
+    el.innerHTML = npcs.map((n, i) =>
+      '<div style="padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
+          '<strong>' + _esc(n.name||n.key||'NPC') + '</strong>' +
+          '<span style="font-size:0.7rem;padding:1px 6px;border-radius:var(--r);background:' + (n.importance==='critical'?'var(--red-light)':n.importance==='supporting'?'var(--amber-light)':'var(--surface)') + ';color:' + (n.importance==='critical'?'var(--red)':n.importance==='supporting'?'var(--amber)':'var(--t3)') + '">' + (n.importance||'?') + '</span>' +
+        '</div>' +
+        '<div style="color:var(--t3)">' + _esc(n.role||'') + '</div>' +
+      '</div>'
+    ).join('');
+  }
+
+  function _addTplNPC() {
+    const name = prompt('Imię NPC:'); if (!name) return;
+    const role = prompt('Rola:') || '';
+    if (!_tplEditorPlan) _tplEditorPlan = {};
+    if (!_tplEditorPlan.key_npcs) _tplEditorPlan.key_npcs = [];
+    _tplEditorPlan.key_npcs.push({ key: name.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,''), name, role, importance:'supporting', deviation_consequence:'steer', alive:true });
+    _renderTplNPCs(_tplEditorPlan.key_npcs);
+  }
+
+  function _renderTplLocations(locations) {
+    const el = document.getElementById('tpl-locations-list');
+    if (!el) return;
+    if (!locations.length) { el.innerHTML = '<div style="font-size:0.78rem;color:var(--t3)">Brak lokacji. Kliknij + Dodaj lub wygeneruj plan AI.</div>'; return; }
+    el.innerHTML = locations.map((l, i) =>
+      '<div style="padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem">' +
+        '<strong>' + _esc(l.name||l.key||'Lokacja') + '</strong>' +
+        '<div style="color:var(--t3)">' + _esc(l.role||'') + '</div>' +
+      '</div>'
+    ).join('');
+  }
+
+  function _addTplLocation() {
+    const name = prompt('Nazwa lokacji:'); if (!name) return;
+    const role = prompt('Rola:') || '';
+    if (!_tplEditorPlan) _tplEditorPlan = {};
+    if (!_tplEditorPlan.key_locations) _tplEditorPlan.key_locations = [];
+    _tplEditorPlan.key_locations.push({ key: name.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,''), name, role, visited:false });
+    _renderTplLocations(_tplEditorPlan.key_locations);
+  }
+
+  function _renderTplEndings(endings) {
+    const el = document.getElementById('tpl-endings-list');
+    if (!el) return;
+    if (!endings.length) {
+      endings = [
+        { id:'ending_primary', title:'', type:'primary', description:'', requirements:[] },
+        { id:'ending_alternate', title:'', type:'alternate', description:'', requirements:[] },
+      ];
+    }
+    el.innerHTML = endings.slice(0,2).map((end, i) =>
+      '<div class="card" style="padding:14px">' +
+        '<div style="font-size:0.72rem;font-weight:600;color:' + (end.type==='primary'?'var(--blue)':'var(--amber)') + ';margin-bottom:8px">' + (end.type==='primary'?'★ ZAKOŃCZENIE GŁÓWNE':'◆ ZAKOŃCZENIE ALTERNATYWNE') + '</div>' +
+        '<div class="form-row"><label class="form-label">Tytuł</label><input class="form-input" id="tpl-end-title-' + i + '" type="text" value="' + _esc(end.title||'') + '"></div>' +
+        '<div class="form-row"><label class="form-label">Opis</label><textarea class="form-input" id="tpl-end-desc-' + i + '" rows="3" style="resize:vertical">' + _esc(end.description||'') + '</textarea></div>' +
+        '<div class="form-row"><label class="form-label" style="margin-bottom:4px">Warunki</label>' +
+          '<div id="tpl-end-reqs-' + i + '" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">' +
+            (end.requirements||[]).map((r,ri) => '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.75rem;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)">' + _esc(r) + '<button type="button" onclick="_removeTplReq(' + i + ',' + ri + ')" style="background:none;border:none;cursor:pointer;color:var(--t3);padding:0">✕</button></span>').join('') +
+          '</div>' +
+          '<div style="display:flex;gap:6px">' +
+            '<input class="form-input" id="tpl-end-req-input-' + i + '" type="text" placeholder="Dodaj warunek…" style="flex:1" onkeydown="if(event.key===\'Enter\'){event.preventDefault();_addTplReq(' + i + ')}">' +
+            '<button class="btn btn-sm btn-secondary" onclick="_addTplReq(' + i + ')">+</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    ).join('');
+  }
+
+  function _addTplReq(endIdx) {
+    const input = document.getElementById('tpl-end-req-input-' + endIdx);
+    if (!input || !input.value.trim()) return;
+    const req = input.value.trim(); input.value = '';
+    if (!_tplEditorPlan) _tplEditorPlan = {};
+    if (!_tplEditorPlan.endings) _tplEditorPlan.endings = [{requirements:[]},{requirements:[]}];
+    if (!_tplEditorPlan.endings[endIdx]) _tplEditorPlan.endings[endIdx] = {requirements:[]};
+    if (!_tplEditorPlan.endings[endIdx].requirements) _tplEditorPlan.endings[endIdx].requirements = [];
+    _tplEditorPlan.endings[endIdx].requirements.push(req);
+    _renderTplEndings(_tplEditorPlan.endings);
+  }
+
+  function _removeTplReq(endIdx, reqIdx) {
+    if (_tplEditorPlan?.endings?.[endIdx]?.requirements) {
+      _tplEditorPlan.endings[endIdx].requirements.splice(reqIdx, 1);
+      _renderTplEndings(_tplEditorPlan.endings);
+    }
+  }
+
+  function _collectTplPlan() {
+    const plan = { ...(_tplEditorPlan || {}) };
+    plan.acts = [0,1,2].map(i => ({
+      number: i+1,
+      title: document.getElementById('tpl-act-title-' + i)?.value || '',
+      summary: document.getElementById('tpl-act-summary-' + i)?.value || '',
+      key_beats: (plan.acts?.[i]?.key_beats || []),
+      completed: false,
+    }));
+    plan.endings = [0,1].map(i => ({
+      id: i===0?'ending_primary':'ending_alternate',
+      title: document.getElementById('tpl-end-title-' + i)?.value || '',
+      type: i===0?'primary':'alternate',
+      description: document.getElementById('tpl-end-desc-' + i)?.value || '',
+      requirements: plan.endings?.[i]?.requirements || [],
+    }));
+    plan.engine_private = {
+      secret_predisposition_hint: document.getElementById('tpl-gm-hint')?.value || '',
+      hidden_twist: document.getElementById('tpl-gm-twist')?.value || '',
+      contingency: document.getElementById('tpl-gm-contingency')?.value || '',
+    };
+    plan.title = document.getElementById('tpl-title')?.value || plan.title || '';
+    plan.premise = plan.premise || '';
+    if (!plan.active_act) plan.active_act = 1;
+    if (!plan.scene_log) plan.scene_log = [];
+    if (!plan.deviations) plan.deviations = [];
+    if (!plan.branches) plan.branches = [];
+    return plan;
+  }
+
+  async function saveTemplateEdits() {
+    if (!_tplEditorData) { _showToast('Brak danych szablonu.', 'error'); return; }
+    const plan = _collectTplPlan();
+    const payload = {
+      title: document.getElementById('tpl-title')?.value?.trim() || _tplEditorData.title,
+      description: document.getElementById('tpl-description')?.value?.trim(),
+      atmosphere: document.getElementById('tpl-atmosphere')?.value?.trim(),
+      difficulty_rating: _tplDifficulty,
+      gm_plan_json: plan,
+      hook_ids: _tplEditorData.hook_ids || [],
+    };
+    try {
+      await apiFetch('/api/admin/forge/templates/' + _tplEditorData.id, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      _showToast('Szablon zapisany.', 'success');
+      _tplEditorPlan = plan;
+    } catch(e) { _showToast(e.message || 'Błąd zapisu.', 'error'); }
+  }
+
+  async function _toggleTemplatePublish() {
+    if (!_tplEditorData) return;
+    const newStatus = _tplEditorData.status === 'published' ? 'draft' : 'published';
+    try {
+      await apiFetch('/api/admin/forge/templates/' + _tplEditorData.id, {
+        method: 'PATCH', body: JSON.stringify({ status: newStatus }),
+      });
+      _tplEditorData.status = newStatus;
+      const badge = document.getElementById('tpl-status-badge');
+      if (badge) { badge.textContent = newStatus; badge.style.color = newStatus==='published'?'var(--green)':'var(--t3)'; }
+      const btn = document.getElementById('tpl-publish-btn');
+      if (btn) btn.textContent = newStatus==='published'?'↩ Wycofaj':'✓ Opublikuj';
+      _showToast(newStatus==='published'?'Szablon opublikowany.':'Szablon wycofany.','success');
+    } catch(e) { _showToast(e.message,'error'); }
+  }
+
+  async function forgeGeneratePlan() {
+    if (!_tplEditorData) return;
+    const btn = document.getElementById('tpl-generate-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generuję…'; }
+    try {
+      const payload = {};
+      if (_tplEditorData.adventure_idea_id) payload.adventure_idea_id = _tplEditorData.adventure_idea_id;
+      const d = await apiFetch('/api/admin/forge/templates/' + _tplEditorData.id + '/generate-plan', {
+        method: 'POST', body: JSON.stringify(payload),
+      });
+      _tplEditorPlan = d.gm_plan_json || {};
+      _renderTplActs(_tplEditorPlan.acts || []);
+      _renderTplNPCs(_tplEditorPlan.key_npcs || []);
+      _renderTplLocations(_tplEditorPlan.key_locations || []);
+      _renderTplEndings(_tplEditorPlan.endings || []);
+      const ep = _tplEditorPlan.engine_private || {};
+      if (document.getElementById('tpl-gm-hint')) document.getElementById('tpl-gm-hint').value = ep.secret_predisposition_hint || '';
+      if (document.getElementById('tpl-gm-twist')) document.getElementById('tpl-gm-twist').value = ep.hidden_twist || '';
+      if (document.getElementById('tpl-gm-contingency')) document.getElementById('tpl-gm-contingency').value = ep.contingency || '';
+      if (d.gm_plan_json?.title && document.getElementById('tpl-title')) {
+        document.getElementById('tpl-title').value = d.gm_plan_json.title;
+      }
+      _showToast('Plan kampanii wygenerowany!', 'success');
+    } catch(e) { _showToast(e.message || 'Błąd generowania planu.', 'error'); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Generuj plan AI'; } }
   }
 
   // ── Voice ───────────────────────────────────────────────

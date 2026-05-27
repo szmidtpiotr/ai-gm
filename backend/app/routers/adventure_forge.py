@@ -430,6 +430,7 @@ class PatchTemplateReq(BaseModel):
     gm_plan_json: Optional[dict] = None
     hook_ids: Optional[list[int]] = None
     status: Optional[str] = None
+    adventure_idea_id: Optional[int] = None
 
 
 # ── Chat endpoints ────────────────────────────────────────────────────────────
@@ -759,6 +760,20 @@ def forge_list_templates(
         conn.close()
 
 
+@router.get("/templates/{template_id}")
+def forge_get_template(template_id: int, _: None = Depends(_require_admin)):
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Template not found")
+        return _template_to_dict(row)
+    finally:
+        conn.close()
+
+
 @router.post("/templates")
 def forge_create_template(req: CreateTemplateReq, _: None = Depends(_require_admin)):
     conn = _get_db()
@@ -843,6 +858,9 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
         if req.hook_ids is not None:
             updates.append("hook_ids = ?")
             params.append(json.dumps(req.hook_ids, ensure_ascii=False))
+        if req.adventure_idea_id is not None:
+            updates.append("adventure_idea_id = ?")
+            params.append(req.adventure_idea_id)
         if not updates:
             return _template_to_dict(row)
         params.append(template_id)
@@ -861,6 +879,159 @@ def forge_delete_template(template_id: int, _: None = Depends(_require_admin)):
         conn.execute("DELETE FROM campaign_templates WHERE id = ?", (template_id,))
         conn.commit()
         return {"ok": True, "id": template_id}
+    finally:
+        conn.close()
+
+
+# ── Generate full CampaignPlan for a template ─────────────────────────────────
+
+_GENERATE_PLAN_SYSTEM_PROMPT = """\
+Jesteś doświadczonym Mistrzem Gry mrocznego fantasy (styl WFRP).
+Twoim zadaniem jest stworzenie planu kampanii na podstawie szkicu przygody.
+Zwróć WYŁĄCZNIE poprawny obiekt JSON — bez markdown, bez komentarzy, bez tekstu poza JSON.
+Wszystkie wartości tekstowe pisz w języku polskim.
+
+SCHEMAT JSON (wypełnij każde pole):
+{
+  "title": "string",
+  "premise": "string",
+  "acts": [
+    {"number": 1, "title": "string", "summary": "string", "key_beats": ["string","string","string"], "completed": false},
+    {"number": 2, "title": "string", "summary": "string", "key_beats": ["string","string","string"], "completed": false},
+    {"number": 3, "title": "string", "summary": "string", "key_beats": ["string","string","string"], "completed": false}
+  ],
+  "endings": [
+    {"id": "ending_primary", "title": "string", "type": "primary", "description": "string", "requirements": ["string","string"]},
+    {"id": "ending_alternate", "title": "string", "type": "alternate", "description": "string", "requirements": ["string"]}
+  ],
+  "key_npcs": [
+    {"key": "slug", "name": "string", "role": "string", "importance": "critical", "deviation_consequence": "branch", "alive": true}
+  ],
+  "key_locations": [
+    {"key": "slug", "name": "string", "role": "string", "visited": false}
+  ],
+  "active_act": 1,
+  "scene_log": [],
+  "deviations": [],
+  "branches": [],
+  "engine_private": {
+    "secret_predisposition_hint": "string",
+    "hidden_twist": "string",
+    "contingency": "string"
+  }
+}
+
+ZASADY:
+1. Dokładnie 3 akty.
+2. Dokładnie 2 zakończenia: primary + alternate (oba moralnie niejednoznaczne).
+3. 3-6 kluczowych NPC, co najmniej jeden critical.
+4. 2-5 lokacji. Pierwsza to punkt startowy.
+5. Klucze NPC i lokacji: lowercase_slug, np. "innkeeper_boris".
+"""
+
+
+class GeneratePlanReq(BaseModel):
+    adventure_idea_id: Optional[int] = None
+
+
+@router.post("/templates/{template_id}/generate-plan")
+def forge_generate_template_plan(
+    template_id: int,
+    req: GeneratePlanReq,
+    _: None = Depends(_require_admin),
+):
+    """Generate a full CampaignPlan V2 JSON for a template from its linked adventure idea."""
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT * FROM campaign_templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        idea_id = req.adventure_idea_id or tpl["adventure_idea_id"]
+        idea = None
+        if idea_id:
+            idea = conn.execute(
+                "SELECT * FROM adventure_ideas WHERE id = ?", (idea_id,)
+            ).fetchone()
+
+        # Build prompt from idea structured_data or template metadata
+        if idea:
+            sd = json.loads(idea["structured_data"] or "{}")
+            arcs_text = ""
+            for arc in (sd.get("arcs") or []):
+                goals = "\n".join(f"    - {g}" for g in (arc.get("scene_goals") or []))
+                arcs_text += f"  Akt: {arc.get('title','')}\n  Opis: {arc.get('description','')}\n  Cele scen:\n{goals}\n  Twist GM: {arc.get('private_twist','')}\n\n"
+            hooks_text = "\n".join(
+                f"  - ({h.get('type','')}) {h.get('title','')}: {h.get('description','')}"
+                for h in (sd.get("hooks") or [])
+            )
+            user_prompt = (
+                f"SZKIC PRZYGODY:\n"
+                f"Tytuł: {idea['title']}\n"
+                f"Przesłanka: {idea['premise']}\n"
+                f"Ton: {', '.join(json.loads(idea['tone'] or '[]'))}\n"
+                f"Motywy: {', '.join(json.loads(idea['themes'] or '[]'))}\n"
+                f"Trudność: {idea['difficulty']}\n"
+                f"Wciągacz gracza: {sd.get('player_hook','')}\n"
+                f"Sekret GM: {sd.get('gm_private','')}\n"
+                f"\nAKTY:\n{arcs_text}"
+                f"\nHOOKI:\n{hooks_text}\n"
+                "Stwórz pełny plan kampanii na podstawie tego szkicu. "
+                "Fabuła i NPC muszą bezpośrednio wynikać ze szkicu."
+            )
+        else:
+            # Fallback: generate from template metadata
+            user_prompt = (
+                f"SZABLON KAMPANII:\n"
+                f"Tytuł: {tpl['title']}\n"
+                f"Opis: {tpl['description']}\n"
+                f"Klimat: {tpl['atmosphere']}\n"
+                f"Trudność: {tpl['difficulty_rating']}/5\n"
+                "Stwórz pełny plan kampanii na podstawie powyższych danych."
+            )
+
+        messages = [
+            {"role": "system", "content": _GENERATE_PLAN_SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        from app.services.llm_service import get_effective_config
+        llm_cfg = get_effective_config()
+        model = llm_cfg.get("model", "")
+        config = {k: v for k, v in llm_cfg.items() if k != "model"}
+
+        last_err = None
+        for attempt in range(1, 3):
+            try:
+                raw = (generate_chat(messages=messages, model=model, llm_config=config) or "").strip()
+                from app.services.campaign_plan_service import _extract_json, CampaignPlan
+                from pydantic import ValidationError
+                plan_dict = _extract_json(raw)
+                if not plan_dict:
+                    last_err = "LLM returned no valid JSON"
+                    messages.append({"role": "assistant", "content": raw})
+                    messages.append({"role": "user", "content": "Zwróć TYLKO poprawny JSON."})
+                    continue
+                plan = CampaignPlan.model_validate(plan_dict)
+                plan_public = plan.model_dump()
+                plan_json = json.dumps(plan_public, ensure_ascii=False)
+                conn.execute(
+                    "UPDATE campaign_templates SET gm_plan_json = ? WHERE id = ?",
+                    (plan_json, template_id),
+                )
+                if idea_id:
+                    conn.execute(
+                        "UPDATE campaign_templates SET adventure_idea_id = ? WHERE id = ?",
+                        (idea_id, template_id),
+                    )
+                conn.commit()
+                return {"ok": True, "template_id": template_id, "gm_plan_json": plan_public}
+            except Exception as e:
+                last_err = str(e)
+
+        raise HTTPException(status_code=500, detail=f"Plan generation failed: {last_err}")
     finally:
         conn.close()
 

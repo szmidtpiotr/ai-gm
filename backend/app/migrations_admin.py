@@ -787,6 +787,7 @@ ADMIN_MIGRATIONS = [
         hook_ids         TEXT    NOT NULL DEFAULT '[]',
         status           TEXT    NOT NULL DEFAULT 'draft',
         play_count       INTEGER NOT NULL DEFAULT 0,
+        adventure_idea_id INTEGER,
         created_by       TEXT    NOT NULL DEFAULT 'admin',
         created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
     )
@@ -817,6 +818,7 @@ ADMIN_MIGRATIONS = [
     """,
     "ALTER TABLE campaigns ADD COLUMN template_id INTEGER",
     "ALTER TABLE campaigns ADD COLUMN selected_hook_ids TEXT DEFAULT '[]'",
+    "ALTER TABLE campaign_templates ADD COLUMN adventure_idea_id INTEGER",
 ]
 
 ADMIN_SEEDS = [
