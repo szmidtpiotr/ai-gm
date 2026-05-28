@@ -819,6 +819,9 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE campaigns ADD COLUMN template_id INTEGER",
     "ALTER TABLE campaigns ADD COLUMN selected_hook_ids TEXT DEFAULT '[]'",
     "ALTER TABLE campaign_templates ADD COLUMN adventure_idea_id INTEGER",
+    "ALTER TABLE game_config_weapons ADD COLUMN template_id INTEGER REFERENCES campaign_templates(id) ON DELETE SET NULL",
+    "ALTER TABLE game_config_items ADD COLUMN template_id INTEGER REFERENCES campaign_templates(id) ON DELETE SET NULL",
+    "ALTER TABLE game_config_consumables ADD COLUMN template_id INTEGER REFERENCES campaign_templates(id) ON DELETE SET NULL",
 ]
 
 ADMIN_SEEDS = [

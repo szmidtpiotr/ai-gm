@@ -1547,6 +1547,382 @@ def take_short_rest() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Forge / Campaign-creation tools (admin API)
+# ---------------------------------------------------------------------------
+# Requires ADMIN_TOKEN env var — same token used by the admin panel.
+# Flow: forge_create_idea → forge_create_template → forge_generate_plan
+#       → forge_publish_template → forge_launch_campaign
+# Content: forge_create_game_entry for weapons / armor / items / enemies.
+
+_ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "")
+_FORGE_API = os.environ.get("GAME_API_URL", "http://backend:8000/api")
+
+
+def _admin_headers() -> dict:
+    return {"Content-Type": "application/json", "Authorization": f"Bearer {_ADMIN_TOKEN}"}
+
+
+def _admin_get(path: str, params: dict | None = None) -> dict:
+    with httpx.Client(timeout=30) as c:
+        r = c.get(f"{_FORGE_API}{path}", headers=_admin_headers(), params=params)
+        r.raise_for_status()
+        return r.json()
+
+
+def _admin_post(path: str, body: dict | None = None, timeout: float = 180) -> dict:
+    with httpx.Client(timeout=timeout) as c:
+        r = c.post(f"{_FORGE_API}{path}", json=body or {}, headers=_admin_headers())
+        r.raise_for_status()
+        return r.json()
+
+
+def _admin_patch(path: str, body: dict | None = None) -> dict:
+    with httpx.Client(timeout=30) as c:
+        r = c.patch(f"{_FORGE_API}{path}", json=body or {}, headers=_admin_headers())
+        r.raise_for_status()
+        return r.json()
+
+
+@mcp.tool()
+def forge_workflow_guide() -> str:
+    """
+    Returns step-by-step instructions for creating a campaign or game content via forge tools.
+    Call this first if unsure what to do next.
+    """
+    return """
+=== FORGE WORKFLOW GUIDE ===
+
+## CREATE CAMPAIGN (full flow)
+1. forge_create_idea(title, premise, tone, themes, difficulty)
+   → returns idea_id
+2. forge_create_template(idea_id, title, description, atmosphere, difficulty_rating)
+   → returns template_id
+3. forge_generate_plan(template_id, act_count=5)
+   → LLM generates acts, key_npcs, key_locations, endings (~30-60s)
+   → returns full gm_plan_json
+4. forge_list_templates()
+   → verify template looks good
+5. forge_publish_template(template_id)
+   → status: draft → published
+   → DONE. All players see it immediately in "Gotowe Kampanie" and start it themselves.
+   → Do NOT call forge_launch_campaign for normal player access.
+
+6. forge_launch_campaign(template_id, user_id, campaign_title)   [ADMIN ONLY]
+   → Force-creates a campaign for a specific user_id (e.g. gifting a campaign).
+   → Only use when explicitly asked to assign to a specific player.
+
+## CREATE GAME CONTENT
+forge_create_game_entry(entry_type, data)
+
+entry_type="weapon": {key, label, damage_die, linked_stat, weapon_type, weapon_slot, rarity, description, allowed_classes, effect_json (optional)}
+  weapon_type: melee|ranged|spell   ← EXACT VALUES ONLY (not one_handed/two_handed/thrown)
+  weapon_slot: main_hand|two_handed|off_hand_only|either   ← default: main_hand
+  linked_stat: STR|DEX|INT|WIS|CHA|LCK
+  rarity: 1=common|2=uncommon|3=rare|4=legendary   ← INTEGER, NOT string
+  damage_die: d4|d6|d8|d10|d12|2d6
+  allowed_classes: ["warrior"] or ["warrior","scholar"] or ["scholar"]
+
+entry_type="armor": {key, label, ac_bonus, item_type, rarity, description, allowed_classes, effect_json (optional)}
+  item_type: light|medium|heavy|shield
+  allowed_classes: ["warrior"] or ["warrior","scholar"]   ← NOTE: field is "allowed_classes" NOT "allowed_archetypes"
+  ac_bonus: integer (e.g. 2 for +2 AC)
+  rarity: 1=common|2=uncommon|3=rare|4=legendary   ← INTEGER, NOT string
+
+entry_type="enemy": {key, label, hp_base, ac_base, attack_bonus, damage_die, tier, description, loot_table_key}
+  tier: minion|standard|elite|boss
+
+entry_type="item": {key, label, item_type, value_gp, rarity, description, effect_json (optional)}
+  item_type: tool|quest|key|misc
+  rarity: 1=common|2=uncommon|3=rare|4=legendary   ← INTEGER, NOT string
+
+entry_type="consumable": {key, label, effect_type, base_price, rarity, description, effect_json (optional)}
+  effect_type: heal|buff|antidote|utility
+  rarity: 1=common|2=uncommon|3=rare|4=legendary   ← INTEGER, NOT string
+  NOTE: consumables have NO allowed_classes/allowed_archetypes field — omit it
+
+## EFFECT_JSON SCHEMA (EXACT — do NOT deviate or hallucinate)
+effect_json is OPTIONAL on weapons/armor/items/consumables. If provided MUST match this exact schema:
+
+{
+  "schema_version": 1,                    ← always exactly 1
+  "effect_category": "<category>",        ← one of 4 values below
+  "effects": [ <one or more effect objects> ]
+}
+
+ALLOWED effect_category values:
+  "gear_bonus"           → for weapons and armor (passive stat bonus)
+  "consumable_immediate" → for consumables and items (one-time use)
+  "character_condition"  → for conditions (poison, bleed, stun)
+  "aura"                 → persistent aura effects
+
+Each effect object in "effects" array:
+  { "type": "<type>", ...extra fields based on type }
+
+ALLOWED type values per category:
+  gear_bonus:           static_stat_modifier, narrative_only
+  consumable_immediate: heal_hp, restore_mana, apply_condition, remove_condition, narrative_only
+  character_condition:  periodic_save, static_stat_modifier, block_action, narrative_only
+  aura:                 periodic_save, static_stat_modifier, apply_condition, remove_condition, block_action, narrative_only
+
+EXTRA FIELDS per type (only include what the type needs):
+  static_stat_modifier → "stat": one of STR|DEX|CON|INT|WIS|CHA   "value": integer (e.g. 2 or -1)
+  heal_hp              → "value": integer OR dice string like "1d8" or "2d6+2"
+  restore_mana         → "value": integer OR dice string
+  apply_condition      → "condition_key": snake_case string (e.g. "poisoned", "stunned")
+  remove_condition     → "condition_key": snake_case string
+  periodic_save        → "dc_key": snake_case (refs DC table) OR "value": integer
+                         "tick": start_turn|each_round|on_use
+                         "expires": save_success|manual|duration_rounds:N  (e.g. duration_rounds:3)
+  block_action         → no extra fields
+  narrative_only       → no extra fields
+
+VALID EXAMPLES:
+  Healing potion:
+    {"schema_version":1,"effect_category":"consumable_immediate","effects":[{"type":"heal_hp","value":"1d8+2"}]}
+  Ring of Agility (+2 DEX):
+    {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_stat_modifier","stat":"DEX","value":2}]}
+  Poison condition (save each round):
+    {"schema_version":1,"effect_category":"character_condition","effects":[{"type":"periodic_save","dc_key":"poison_resist","tick":"each_round","expires":"save_success"}]}
+  Mana restore scroll:
+    {"schema_version":1,"effect_category":"consumable_immediate","effects":[{"type":"restore_mana","value":"1d6"}]}
+
+DO NOT invent fields. DO NOT use effect_json for simple flavor — omit it entirely for plain items.
+
+## TIPS
+- All keys must be snake_case, unique, lowercase
+- To create campaign-scoped items (visible in template editor): pass template_id=<id> in forge_create_game_entry. Admin promotes to global from the Szablon → Przedmioty tab.
+- After forge_generate_plan, plan is NOT auto-saved until tool returns success
+- forge_launch_campaign requires user_id (player's numeric ID from DB)
+- Campaign starts immediately after launch — player sees opening scene on first turn
+"""
+
+
+@mcp.tool()
+def forge_create_idea(
+    title: str,
+    premise: str,
+    tone: list[str],
+    themes: list[str],
+    difficulty: str = "medium",
+) -> str:
+    """
+    Save a new campaign idea to the forge.
+    tone: e.g. ["dark", "mysterious"] — adjectives describing atmosphere
+    themes: e.g. ["betrayal", "ancient curse", "political intrigue"]
+    difficulty: easy | medium | hard | epic
+    Returns idea_id to use in forge_create_template.
+    """
+    if not _ADMIN_TOKEN:
+        return "ERROR: ADMIN_TOKEN env var not set."
+    idea_data = {
+        "title": title,
+        "premise": premise,
+        "tone": tone,
+        "themes": themes,
+        "difficulty": difficulty,
+        "arcs": [],
+        "hooks": [],
+    }
+    try:
+        result = _admin_post("/admin/forge/chat/save", {"idea_data": idea_data})
+        idea = result.get("idea", {})
+        return f"OK idea_id={idea.get('id')} title={idea.get('title')!r}"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+@mcp.tool()
+def forge_create_template(
+    idea_id: int,
+    title: str,
+    description: str = "",
+    atmosphere: str = "",
+    difficulty_rating: int = 3,
+) -> str:
+    """
+    Create a campaign template linked to an idea.
+    difficulty_rating: 1-5
+    Returns template_id to use in forge_generate_plan.
+    """
+    if not _ADMIN_TOKEN:
+        return "ERROR: ADMIN_TOKEN env var not set."
+    try:
+        result = _admin_post("/admin/forge/templates", {
+            "title": title,
+            "description": description,
+            "atmosphere": atmosphere,
+            "difficulty_rating": difficulty_rating,
+            "adventure_idea_id": idea_id,
+            "gm_plan_json": {},
+            "hook_ids": [],
+        })
+        return f"OK template_id={result.get('id')} status={result.get('status')!r}"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+@mcp.tool()
+def forge_generate_plan(
+    template_id: int,
+    act_count: int = 5,
+    difficulty: str = "medium",
+) -> str:
+    """
+    Generate full CampaignPlan V2 (acts, key_npcs, key_locations, endings) via LLM.
+    Stores result in template.gm_plan_json. Takes 30-120s depending on LLM speed.
+    If this call times out, the plan may still have been saved — call forge_list_templates
+    to check status before retrying. Returns summary of generated plan on success.
+    """
+    if not _ADMIN_TOKEN:
+        return "ERROR: ADMIN_TOKEN env var not set."
+    try:
+        result = _admin_post(
+            f"/admin/forge/templates/{template_id}/generate-plan",
+            {"suggested_act_count": act_count, "difficulty": difficulty},
+            timeout=180,
+        )
+        plan = result.get("gm_plan_json") or {}
+        if isinstance(plan, str):
+            import json as _j
+            plan = _j.loads(plan)
+        acts = plan.get("acts", [])
+        locs = plan.get("key_locations", [])
+        npcs = plan.get("key_npcs", [])
+        return (
+            f"OK template_id={template_id}\n"
+            f"Acts({len(acts)}): {', '.join(a.get('title','?') for a in acts)}\n"
+            f"Locations({len(locs)}): {', '.join(l.get('name','?') for l in locs)}\n"
+            f"NPCs({len(npcs)}): {', '.join(n.get('name','?') for n in npcs)}"
+        )
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+@mcp.tool()
+def forge_publish_template(template_id: int) -> str:
+    """
+    Mark template as published so players can use it.
+    Must call after forge_generate_plan succeeds.
+    """
+    if not _ADMIN_TOKEN:
+        return "ERROR: ADMIN_TOKEN env var not set."
+    try:
+        result = _admin_patch(f"/admin/forge/templates/{template_id}", {"status": "published"})
+        return f"OK template_id={template_id} status={result.get('status')!r}"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+@mcp.tool()
+def forge_launch_campaign(
+    template_id: int,
+    user_id: int,
+    campaign_title: str,
+) -> str:
+    """
+    Create a campaign from a published template for a specific player.
+    user_id: numeric player ID (use get_player_stats or get_world_analytics to find).
+    Returns campaign_id — player can enter immediately.
+    """
+    if not _ADMIN_TOKEN:
+        return "ERROR: ADMIN_TOKEN env var not set."
+    try:
+        result = _admin_post("/campaigns", {
+            "title": campaign_title,
+            "system_id": "fantasy",
+            "model_id": "default",
+            "owner_user_id": user_id,
+            "language": "pl",
+            "mode": "pre_built",
+            "status": "active",
+            "template_id": template_id,
+            "selected_hook_ids": [],
+        })
+        return f"OK campaign_id={result.get('id')} title={result.get('title')!r}"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+@mcp.tool()
+def forge_list_templates(status: str = "published") -> str:
+    """
+    List campaign templates.
+    status: draft | published | all
+    """
+    if not _ADMIN_TOKEN:
+        return "ERROR: ADMIN_TOKEN env var not set."
+    try:
+        params = {} if status == "all" else {"status": status}
+        result = _admin_get("/admin/forge/templates", params)
+        templates = result if isinstance(result, list) else result.get("items", result.get("templates", []))
+        if not templates:
+            return f"No templates with status={status!r}"
+        lines = [
+            f"id={t['id']} status={t.get('status')!r} title={t.get('title')!r} "
+            f"plan={'YES' if t.get('gm_plan_json') and len(str(t.get('gm_plan_json',{})))>100 else 'NO'}"
+            for t in templates
+        ]
+        return "\n".join(lines)
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+@mcp.tool()
+def forge_create_game_entry(entry_type: str, data: dict, template_id: int | None = None) -> str:
+    """
+    Create a weapon / armor / item / consumable / enemy directly in the game DB.
+    entry_type: weapon | armor | item | consumable | enemy
+    data: dict matching the type's required fields (call forge_workflow_guide for field reference).
+    template_id: optional — link this entry to a campaign template (int ID). Admin can then promote to global from template editor.
+    Returns the saved record key.
+    """
+    if not _ADMIN_TOKEN:
+        return "ERROR: ADMIN_TOKEN env var not set."
+
+    table_map = {
+        "weapon": "game_config_weapons",
+        "armor": "game_config_armor",
+        "item": "game_config_items",
+        "consumable": "game_config_consumables",
+        "enemy": "game_config_enemies",
+    }
+    table = table_map.get(entry_type)
+    if not table:
+        return f"ERROR: unknown entry_type {entry_type!r}. Use: {list(table_map)}"
+
+    if template_id is not None:
+        data = dict(data)
+        data["template_id"] = template_id
+
+    key = data.get("key", "")
+    try:
+        result = _admin_post("/admin/smart-entry/save", {
+            "table": table,
+            "draft": data,
+            "session_id": "forge-mcp",
+            "target_key": None,
+        })
+        saved = result.get("record", {})
+        return f"OK key={result.get('key') or (saved.get('key') if saved else key)!r} table={table} mode=create"
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 409 and key:
+            # Key exists — update instead of insert
+            try:
+                result = _admin_post("/admin/smart-entry/save", {
+                    "table": table,
+                    "draft": data,
+                    "session_id": "forge-mcp",
+                    "target_key": key,
+                })
+                return f"OK key={key!r} table={table} mode=update (key already existed)"
+            except Exception as e2:
+                return f"ERROR on update after 409: {e2}"
+        return f"ERROR {e.response.status_code}: {e.response.text[:200]}"
+    except Exception as e:
+        return f"ERROR: {e}"
+
+
+# ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
 

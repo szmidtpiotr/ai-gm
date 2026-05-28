@@ -693,25 +693,30 @@ def _db_get(table: str, key: str) -> Optional[dict]:
 
 
 def _db_insert(table: str, record: dict) -> str:
-    """INSERT into table, returns key."""
+    """INSERT into table, returns key. Strips unknown columns to avoid OperationalError."""
     conn = _get_db()
     try:
-        cols = ", ".join(record.keys())
-        placeholders = ", ".join(["?" for _ in record])
+        known = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        filtered = {k: v for k, v in record.items() if k in known}
+        cols = ", ".join(filtered.keys())
+        placeholders = ", ".join(["?" for _ in filtered])
         conn.execute(
             f"INSERT INTO {table} ({cols}) VALUES ({placeholders})",
-            list(record.values()),
+            list(filtered.values()),
         )
         conn.commit()
-        return record["key"]
+        return filtered["key"]
     finally:
         conn.close()
 
 
 def _db_update_field(table: str, key: str, field: str, value: Any) -> None:
-    """UPDATE single field WHERE key = ?"""
+    """UPDATE single field WHERE key = ?. Skips unknown columns silently."""
     conn = _get_db()
     try:
+        known = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if field not in known:
+            return
         conn.execute(
             f"UPDATE {table} SET {field} = ? WHERE key = ?",
             (value, key),
@@ -1121,7 +1126,14 @@ def smart_entry_save(
     session = _sessions.get(req.session_id, {})
     table = req.table or session.get("table")
     draft = req.draft or session.get("draft", {})
-    target_key = req.target_key or session.get("target_key")
+    # Only use session target_key when req.target_key is absent AND req.table is also absent
+    # (i.e. pure session-driven UI flow). When caller provides explicit table, they own the key.
+    if req.target_key is not None:
+        target_key = req.target_key
+    elif req.table is not None:
+        target_key = None  # explicit table provided — treat as fresh INSERT unless key given
+    else:
+        target_key = session.get("target_key")
 
     if not table:
         raise HTTPException(status_code=400, detail="No table specified.")
@@ -1204,15 +1216,25 @@ def smart_entry_save(
     if target_key:
         # UPDATE existing record (skip immutable provenance fields)
         immutable = {"created_by"} if table == "game_locations" else set()
+        updated_fields = []
         for field, value in record.items():
             if field == "key" or field in immutable:
                 continue
             _db_update_field(table, target_key, field, value)
+            updated_fields.append(field)
+        import structlog as _sl
+        _sl.get_logger().info("smart_entry_save_update", table=table, key=target_key, fields=updated_fields[:10])
+        if req.session_id in _sessions:
+            _sessions[req.session_id]["target_key"] = None  # clear stale key after save
         return {"ok": True, "key": target_key, "table": table, "mode": "update"}
     else:
         # INSERT new record
         try:
             key = _db_insert(table, record)
+            import structlog as _sl
+            _sl.get_logger().info("smart_entry_save_create", table=table, key=key)
+            if req.session_id in _sessions:
+                _sessions[req.session_id]["target_key"] = None  # clear after save
             return {"ok": True, "key": key, "table": table, "mode": "create"}
         except sqlite3.IntegrityError as e:
             raise HTTPException(status_code=409, detail=f"Record already exists: {e}")

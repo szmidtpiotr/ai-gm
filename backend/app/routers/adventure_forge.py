@@ -603,7 +603,7 @@ def forge_patch_idea(idea_id: int, req: PatchIdeaReq, _: None = Depends(_require
 def forge_delete_idea(idea_id: int, _: None = Depends(_require_admin)):
     conn = _get_db()
     try:
-        conn.execute("UPDATE adventure_ideas SET status = 'archived' WHERE id = ?", (idea_id,))
+        conn.execute("DELETE FROM adventure_ideas WHERE id = ?", (idea_id,))
         conn.commit()
         return {"ok": True, "id": idea_id}
     finally:
@@ -1443,3 +1443,63 @@ def forge_generate_template_item(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM error: {e}")
+
+
+@router.get("/templates/{template_id}/db-items")
+def forge_get_template_db_items(template_id: int, _: None = Depends(_require_admin)):
+    """List all game_config entries (weapons/items/consumables) linked to this template."""
+    conn = _get_db()
+    try:
+        tpl = conn.execute("SELECT id FROM campaign_templates WHERE id=?", (template_id,)).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+        weapons = [dict(r) for r in conn.execute(
+            "SELECT key, label, weapon_type, damage_die, linked_stat, rarity, 'weapon' AS entry_type FROM game_config_weapons WHERE template_id=?",
+            (template_id,)
+        )]
+        items = [dict(r) for r in conn.execute(
+            "SELECT key, label, item_type, value_gp, rarity, 'item' AS entry_type FROM game_config_items WHERE template_id=? AND item_type != 'armor'",
+            (template_id,)
+        )]
+        armors = [dict(r) for r in conn.execute(
+            "SELECT key, label, item_type, ac_bonus, rarity, 'armor' AS entry_type FROM game_config_items WHERE template_id=? AND item_type = 'armor'",
+            (template_id,)
+        )]
+        consumables = [dict(r) for r in conn.execute(
+            "SELECT key, label, effect_type, base_price, rarity, 'consumable' AS entry_type FROM game_config_consumables WHERE template_id=?",
+            (template_id,)
+        )]
+        return {"weapons": weapons, "items": items, "armors": armors, "consumables": consumables}
+    finally:
+        conn.close()
+
+
+@router.post("/templates/{template_id}/db-items/{entry_type}/{key}/promote")
+def forge_promote_template_item(
+    template_id: int,
+    entry_type: str,
+    key: str,
+    _: None = Depends(_require_admin),
+):
+    """Promote a template-scoped item to global DB by removing template_id."""
+    table_map = {
+        "weapon": "game_config_weapons",
+        "item": "game_config_items",
+        "armor": "game_config_items",
+        "consumable": "game_config_consumables",
+    }
+    table = table_map.get(entry_type)
+    if not table:
+        raise HTTPException(status_code=400, detail=f"Unknown entry_type: {entry_type}")
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            f"SELECT key FROM {table} WHERE key=? AND template_id=?", (key, template_id)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"{entry_type} {key!r} not linked to template {template_id}")
+        conn.execute(f"UPDATE {table} SET template_id=NULL WHERE key=?", (key,))
+        conn.commit()
+        return {"ok": True, "key": key, "entry_type": entry_type, "status": "promoted_to_global"}
+    finally:
+        conn.close()
