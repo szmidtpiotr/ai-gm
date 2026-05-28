@@ -9809,18 +9809,72 @@ forge_create_game_entry("armor", {
     else if (tab === 'turns') {
       panel.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div>';
       try {
-        const d = await apiFetch(`/api/admin/campaigns/${campId}/turns?limit=10`);
+        const d = await apiFetch(`/api/admin/campaigns/${campId}/turns?limit=20`);
         const items = d.items || [];
         if (!items.length) { panel.innerHTML = '<p style="text-align:center;padding:24px;color:var(--t3)">Brak tur.</p>'; return; }
-        panel.innerHTML = `<div style="padding:0">` + items.map(t => `
-          <div style="border-bottom:1px solid var(--border);padding:10px 16px">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-              <span class="badge badge-slate">Tura ${t.turn_number||t.id}</span>
-              <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
+
+        const renderTurns = (debug) => {
+          return `<div style="padding:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid var(--border);background:var(--surface)">
+              <span style="font-size:0.75rem;color:var(--t3)">Ostatnie ${items.length} tur</span>
+              <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--t2);cursor:pointer">
+                <input type="checkbox" id="turns-debug-toggle" ${debug?'checked':''} style="cursor:pointer"> 🔍 Raw debug
+              </label>
             </div>
-            <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.8rem;color:var(--t2);margin-bottom:6px">${_esc((t.user_text||'').slice(0,200))}</div>
-            <div style="font-size:0.78rem;color:var(--t3)">${_esc((t.assistant_text||'').replace(/\{.*\}/s,'').trim().slice(0,300))}</div>
-          </div>`).join('') + `</div>`;
+            ${items.map(t => {
+              let narrative = '', parsed = null, tags = [], extraFields = {};
+              try {
+                parsed = JSON.parse(t.assistant_text || '{}');
+                narrative = parsed.narrative || '';
+                delete parsed.narrative;
+                // Collect interesting non-null fields
+                for (const [k,v] of Object.entries(parsed)) {
+                  if (v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && !v.length)) {
+                    extraFields[k] = v;
+                  }
+                }
+              } catch(e) {
+                narrative = (t.assistant_text||'').replace(/\{[\s\S]*\}/,'').trim();
+              }
+              // Extract tags from raw text
+              const rawTags = [...(t.assistant_text||'').matchAll(/\[([A-Z_]+:[^\]]*)\]/g)].map(m=>m[0]);
+              const routeBadgeColor = {narrative:'badge-slate',combat:'badge-red',skill_test:'badge-amber',skill_test_keyword:'badge-amber',structured:'badge-green'}[t.route]||'badge-slate';
+
+              if (debug) {
+                return `<div style="border-bottom:1px solid var(--border);padding:10px 16px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
+                    <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
+                  </div>
+                  <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.78rem;color:var(--amber);margin-bottom:4px">👤 ${_esc((t.user_text||'').slice(0,300))}</div>
+                  ${narrative ? `<div style="font-size:0.78rem;color:var(--t2);margin-bottom:4px;padding:6px 10px;background:var(--surface);border-radius:4px;border-left:2px solid var(--t3)">📖 ${_esc(narrative.slice(0,400))}${narrative.length>400?'…':''}</div>` : ''}
+                  ${rawTags.length ? `<div style="margin-bottom:4px;display:flex;flex-wrap:wrap;gap:4px">${rawTags.map(tag=>`<code style="font-size:0.7rem;background:#1a1a2e;color:#7eb8f7;padding:2px 6px;border-radius:3px">${_esc(tag)}</code>`).join('')}</div>` : ''}
+                  ${Object.keys(extraFields).length ? `<details style="margin-top:4px"><summary style="font-size:0.72rem;color:var(--t3);cursor:pointer">JSON fields (${Object.keys(extraFields).length})</summary><pre style="font-size:0.7rem;color:var(--t2);background:#0d0d1a;border-radius:4px;padding:8px;overflow-x:auto;margin-top:4px;max-height:200px;overflow-y:auto">${_esc(JSON.stringify(extraFields,null,2))}</pre></details>` : ''}
+                </div>`;
+              } else {
+                return `<div style="border-bottom:1px solid var(--border);padding:10px 16px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+                    <span class="badge ${routeBadgeColor}">T${t.turn_number||t.id} · ${_esc(t.route||'?')}</span>
+                    <span style="font-size:0.72rem;color:var(--t3)">${_timeAgo(t.created_at)}</span>
+                  </div>
+                  <div style="background:var(--surface);border-radius:4px;padding:6px 10px;font-size:0.8rem;color:var(--t2);margin-bottom:6px">${_esc((t.user_text||'').slice(0,200))}</div>
+                  <div style="font-size:0.78rem;color:var(--t3)">${_esc(narrative.slice(0,300))}${narrative.length>300?'…':''}</div>
+                  ${rawTags.length ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${rawTags.map(tag=>`<code style="font-size:0.68rem;background:var(--surface);color:var(--t3);padding:1px 5px;border-radius:3px">${_esc(tag)}</code>`).join('')}</div>` : ''}
+                </div>`;
+              }
+            }).join('')}
+          </div>`;
+        };
+
+        let _turnsDebug = false;
+        const reRender = () => {
+          panel.innerHTML = renderTurns(_turnsDebug);
+          panel.querySelector('#turns-debug-toggle').addEventListener('change', e => {
+            _turnsDebug = e.target.checked;
+            reRender();
+          });
+        };
+        reRender();
       } catch(e) { panel.innerHTML = `<p style="color:var(--red);padding:16px">${_esc(e.message)}</p>`; }
     }
 
