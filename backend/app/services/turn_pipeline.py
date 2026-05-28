@@ -819,7 +819,7 @@ ZASADY:
         conn.execute(
             """INSERT INTO campaign_turns
                (campaign_id, character_id, user_text, assistant_text, route, turn_number)
-               VALUES (?, ?, NULL, ?, 'narrative', 1)""",
+               VALUES (?, ?, '', ?, 'narrative', 1)""",
             (campaign_id, character_id, prose)
         )
         conn.commit()

@@ -45,6 +45,7 @@ const screens = {
     campaigns: document.getElementById('campaigns-screen'),
     newCampaign: document.getElementById('new-campaign-screen'),
     campaignStyle: document.getElementById('campaign-style-screen'),
+    prebuiltCampaign: document.getElementById('prebuilt-campaign-screen'),
     characterWizard: document.getElementById('character-wizard-screen'),
     game: document.getElementById('game-screen')
 };
@@ -226,10 +227,25 @@ let wizardSkillLevels = {};     // current level per original slot key
 let wizardSkillSwapMap = {};    // {origKey: newKey} for swapped slots
 let wizardSwapModeSlot = null;  // origKey currently showing inline swap select
 let wizardIdentityPreview = null;
+let wizardStatsRevealed = false;   // true after dice animation has played for this session
+let wizardSkillsRevealed = false;  // true after skill dice animation has played for this session
 const WIZARD_MAX_SWAPS = 4;
+const WIZARD_LOCKED_COUNT = 3;   // first N skill slots cannot be swapped to a different skill
 const WIZARD_STAT_MIN = 8;
 const WIZARD_STAT_MAX = 18;
 const ARCHETYPE_BONUS = { warrior: { STR: 2, CON: 1 }, scholar: { INT: 2, WIS: 1 }, rogue: { DEX: 2, LCK: 1 } };
+// Archetype-specific skill pools — swap candidates must come from here
+const ARCHETYPE_SKILL_POOL = {
+    warrior: new Set(['melee_attack','athletics','endurance','intimidation','survival','ranged_attack','stealth','persuasion']),
+    scholar:  new Set(['arcana','spell_attack','lore','investigation','medicine','awareness','alchemy','persuasion']),
+    rogue:    new Set(['stealth','ranged_attack','sleight_of_hand','persuasion','survival','intimidation','athletics','awareness']),
+};
+// Preferred skills per archetype (for sorting locked vs swappable slots)
+const ARCHETYPE_PREFERRED = {
+    warrior: ['melee_attack','athletics','endurance'],
+    scholar:  ['arcana','spell_attack','lore'],
+    rogue:    ['stealth','ranged_attack','sleight_of_hand'],
+};
 const ALL_SKILL_ROWS = [
     { key: 'athletics',       label: 'Atletyka',          stat: 'STR', hint: 'Wspinaczka, sprint, skoki, siłowe wyczyny. Wymagana przy pogoni i ucieczkach.' },
     { key: 'endurance',       label: 'Wytrzymałość',      stat: 'CON', hint: 'Odporność na ból, zmęczenie, trucizny i choroby. Decyduje o przetrwaniu ekstremalnych warunków.' },
@@ -1666,6 +1682,102 @@ async function _finalCreateCampaign() {
 }
 
 // ============================================================================
+// Prebuilt Campaign Screen — "Gotowa Kampania" flow
+// ============================================================================
+let _prebuiltTemplates = [];
+let _selectedPrebuiltId = null;
+
+async function openPrebuiltCampaignScreen() {
+    if (!currentUser?.id) { showToast('Nie jesteś zalogowany', 'error'); return; }
+    _selectedPrebuiltId = null;
+    showScreen('prebuiltCampaign');
+    const grid = document.getElementById('prebuilt-grid');
+    const loading = document.getElementById('prebuilt-loading');
+    const confirm = document.getElementById('prebuilt-confirm');
+    if (confirm) confirm.style.transform = 'translateY(100%)';
+    if (loading) loading.style.display = '';
+    if (grid) grid.innerHTML = '';
+    try {
+        const d = await apiRequest('GET', '/campaign-templates');
+        _prebuiltTemplates = d.items || [];
+        if (loading) loading.style.display = 'none';
+        if (!_prebuiltTemplates.length) {
+            if (grid) grid.innerHTML = '<p style="text-align:center;color:var(--text-secondary);padding:40px 0;font-size:0.85rem">Brak gotowych kampanii.<br>Administrator nie opublikował jeszcze żadnego scenariusza.</p>';
+            return;
+        }
+        _renderPrebuiltGrid();
+    } catch(e) {
+        if (loading) loading.style.display = 'none';
+        if (grid) grid.innerHTML = `<p style="text-align:center;color:var(--text-secondary);padding:40px 0;font-size:0.85rem">Błąd ładowania: ${e.message}</p>`;
+    }
+}
+
+function _renderPrebuiltGrid() {
+    const grid = document.getElementById('prebuilt-grid');
+    if (!grid) return;
+    const diffLabels = ['','★','★★','★★★','★★★★','★★★★★'];
+    grid.innerHTML = _prebuiltTemplates.map(t => {
+        const actCount = t.gm_plan_json?.acts?.length || 0;
+        return `<div class="adv-card" style="align-items:flex-start;padding:14px 16px;gap:12px;display:flex;flex-direction:column;cursor:default">
+          <div style="display:flex;gap:12px;width:100%">
+            <span class="adv-card__icon" style="font-size:1.5rem;flex-shrink:0">📖</span>
+            <div class="adv-card__body" style="flex:1;min-width:0">
+              <h3 style="margin-bottom:4px">${_esc(t.title)}</h3>
+              <p style="margin-bottom:6px">${_esc((t.description||'').substring(0,140))}${(t.description||'').length>140?'…':''}</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:0.7rem;color:var(--text-secondary)">
+                ${diffLabels[t.difficulty_rating] ? `<span>${diffLabels[t.difficulty_rating]}</span>` : ''}
+                ${t.atmosphere ? `<span>· ${_esc(t.atmosphere)}</span>` : ''}
+                ${actCount ? `<span>· ${actCount} aktów</span>` : ''}
+                ${t.play_count ? `<span>· 🎮 ${t.play_count}×</span>` : ''}
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn btn--primary" style="width:100%;margin-top:4px" onclick="_launchPrebuiltById(${t.id})">
+            🚀 Zagraj
+          </button>
+        </div>`;
+    }).join('');
+}
+
+function _pickPrebuilt(id) {
+    _selectedPrebuiltId = id;
+}
+
+async function _launchPrebuiltById(id) {
+    _selectedPrebuiltId = id;
+    const tpl = _prebuiltTemplates.find(t => t.id === id);
+    await _launchPrebuiltCampaign(tpl?.title || 'Kampania');
+}
+
+async function _launchPrebuiltCampaign(title) {
+    if (!currentUser?.id || !_selectedPrebuiltId) return;
+    title = title || _prebuiltTemplates.find(t => t.id === _selectedPrebuiltId)?.title || 'Kampania';
+    const btn = document.querySelector(`#prebuilt-grid button[onclick="_launchPrebuiltById(${_selectedPrebuiltId})"]`);
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳'; }
+    const loadingToast = showToast('Tworzę kampanię…', 'info', 0);
+    try {
+        const campaign = await apiRequest('POST', '/campaigns', {
+            title,
+            system_id: 'fantasy',
+            model_id: 'default',
+            owner_user_id: currentUser.id,
+            language: 'pl',
+            mode: 'pre_built',
+            status: 'active',
+            template_id: _selectedPrebuiltId,
+            selected_hook_ids: []
+        });
+        loadingToast?.remove?.();
+        // Use existing hero if selected — assign & enter game directly, no wizard
+        await selectCampaign(campaign);
+    } catch(e) {
+        loadingToast?.remove?.();
+        showToast(e.message || 'Nie udało się utworzyć kampanii', 'error');
+        if (btn) { btn.disabled = false; btn.innerHTML = '🚀 Zagraj'; }
+    }
+}
+
+// ============================================================================
 // Character Wizard — real 4-step flow
 // ============================================================================
 function startCharacterWizard() {
@@ -1679,6 +1791,8 @@ function startCharacterWizard() {
     wizardSkillSwapMap = {};
     wizardSwapModeSlot = null;
     wizardIdentityPreview = null;
+    wizardStatsRevealed = false;
+    wizardSkillsRevealed = false;
     _wizardRender();
     showScreen('characterWizard');
 }
@@ -1778,6 +1892,9 @@ const STAT_HINTS = {
 };
 
 function _renderStep2(c) {
+    // Show dice animation the first time stats are revealed this session
+    if (!wizardStatsRevealed) { _renderStep2Dice(c); return; }
+
     const archetype = wizardCreatedChar?.sheet_json?.archetype || 'warrior';
     const bonus = ARCHETYPE_BONUS[archetype] || {};
     const bonusStr = Object.entries(bonus).map(([k, v]) => `+${v} ${k}`).join(', ');
@@ -1814,7 +1931,7 @@ function _renderStep2(c) {
         : `<span class="wizard-preview-item wizard-preview-muted">✨ Mana: —</span>`;
 
     c.innerHTML = `
-        <div class="wizard-form">
+        <div class="wizard-form wiz-stats-reveal">
             <p class="wizard-hint">Przesuń punkty między statystykami. Zmniejsz stat (−) aby dodać do puli, wydaj pulę (+) na inne. Bonusy klasy dodawane automatycznie.</p>
             <div class="wizard-points">Niezapisane punkty: <strong>${wizardStatUnassigned}</strong></div>
             <p class="wizard-class-note">${bonusStr} dodawane automatycznie po potwierdzeniu</p>
@@ -1850,105 +1967,215 @@ function _renderStep2(c) {
     });
 }
 
-// Step 3 — Skill swaps + level adjustments (matching original frontend mechanic)
-function _renderStep3(c) {
-    const budgetUsed = _skillBudgetUsed();
-    const slotRows = ALL_SKILL_ROWS.filter(r => Number(wizardSkillSnapshot[r.key] || 0) > 0)
+function _renderStep2Dice(c) {
+    const STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA', 'LCK'];
+    const STAT_PL = { STR:'Siła', DEX:'Zręczność', CON:'Kondycja', INT:'Intelekt', WIS:'Mądrość', CHA:'Charyzma', LCK:'Szczęście' };
+
+    c.innerHTML = `
+        <div class="wiz-dice-stage">
+            <div class="wiz-dice-header">
+                <div class="wiz-dice-header-icon">🎲</div>
+                <h3>Kości rzucone…</h3>
+                <p>Los decyduje o losie bohatera</p>
+            </div>
+            <div class="wiz-dice-grid">
+                ${STATS.map(s => `
+                    <div class="wiz-dice-item">
+                        <div class="wiz-dice-face" id="wdice-${s}">?</div>
+                        <span class="wiz-dice-stat-abbr">${s}</span>
+                        <span class="wiz-dice-stat-name">${STAT_PL[s]}</span>
+                    </div>`).join('')}
+            </div>
+        </div>`;
+
+    // Cycle random numbers on each die face
+    const timers = {};
+    STATS.forEach(s => {
+        const face = document.getElementById(`wdice-${s}`);
+        if (face) timers[s] = setInterval(() => { face.textContent = Math.floor(Math.random() * 18) + 1; }, 75);
+    });
+
+    // Settle each die staggered (800ms initial delay, 180ms apart)
+    STATS.forEach((s, i) => {
+        setTimeout(() => {
+            const face = document.getElementById(`wdice-${s}`);
+            if (!face) return;
+            clearInterval(timers[s]);
+            face.textContent = wizardStatBases[s] ?? (s === 'LCK' ? 8 : 10);
+            face.classList.add('settled');
+        }, 800 + i * 180);
+    });
+
+    // After all settled + brief pause, switch to stat grid
+    setTimeout(() => {
+        wizardStatsRevealed = true;
+        _renderStep2(c);
+    }, 800 + STATS.length * 180 + 650);
+}
+
+// Step 3 — dice reveal + card-based skill layout with pool drawer
+function _rankDots(rank) {
+    const on = '<span class="wiz-rdot wiz-rdot--on">●</span>';
+    const off = '<span class="wiz-rdot">○</span>';
+    return rank >= 2 ? on+on : rank >= 1 ? on+off : off+off;
+}
+
+function _getSlotRows() {
+    const archetype = wizardCreatedChar?.sheet_json?.archetype || 'warrior';
+    const preferred = new Set(ARCHETYPE_PREFERRED[archetype] || []);
+    return ALL_SKILL_ROWS
+        .filter(r => Number(wizardSkillSnapshot[r.key] || 0) > 0)
         .sort((a, b) => {
-            const db = Number(wizardSkillSnapshot[b.key] || 0) - Number(wizardSkillSnapshot[a.key] || 0);
-            return db !== 0 ? db : a.key.localeCompare(b.key);
-        });
+            const dr = Number(wizardSkillSnapshot[b.key] || 0) - Number(wizardSkillSnapshot[a.key] || 0);
+            if (dr !== 0) return dr;
+            return (preferred.has(b.key) ? 1 : 0) - (preferred.has(a.key) ? 1 : 0);
+        })
+        .slice(0, 7);
+}
 
-    // Currently visible keys (original or swapped-in)
+function _renderStep3Reveal(c) {
+    const slotRows = _getSlotRows();
+    c.innerHTML = `
+        <div class="wiz-dice-stage">
+            <div class="wiz-dice-header">
+                <div class="wiz-dice-header-icon">🎯</div>
+                <h3>Los wyznacza twoje talenty…</h3>
+                <p>Kości decydują o umiejętnościach bohatera</p>
+            </div>
+            <div class="wiz-dice-grid">
+                ${slotRows.map((r, i) => `
+                    <div class="wiz-dice-item">
+                        <div class="wiz-dice-face${i < WIZARD_LOCKED_COUNT ? ' wiz-dice-face--gold' : ''}" id="sdice-${r.key}">?</div>
+                        <span class="wiz-dice-stat-abbr">${r.stat}</span>
+                        <span class="wiz-dice-stat-name">${i < WIZARD_LOCKED_COUNT ? '🔒' : '↔'}</span>
+                    </div>`).join('')}
+            </div>
+        </div>`;
+
+    const timers = {};
+    slotRows.forEach(r => {
+        const face = document.getElementById(`sdice-${r.key}`);
+        if (face) timers[r.key] = setInterval(() => { face.textContent = Math.floor(Math.random() * 6) + 1; }, 75);
+    });
+    slotRows.forEach((r, i) => {
+        setTimeout(() => {
+            const face = document.getElementById(`sdice-${r.key}`);
+            if (!face) return;
+            clearInterval(timers[r.key]);
+            face.textContent = Number(wizardSkillSnapshot[r.key] || 1);
+            face.classList.add('settled');
+        }, 700 + i * 160);
+    });
+    setTimeout(() => {
+        wizardSkillsRevealed = true;
+        _renderStep3(c);
+    }, 700 + slotRows.length * 160 + 600);
+}
+
+function _renderStep3(c) {
+    if (!wizardSkillsRevealed) { _renderStep3Reveal(c); return; }
+
+    const archetype = wizardCreatedChar?.sheet_json?.archetype || 'warrior';
+    const archPool  = ARCHETYPE_SKILL_POOL[archetype] || ARCHETYPE_SKILL_POOL.warrior;
+    const budgetUsed = _skillBudgetUsed();
+    const slotRows = _getSlotRows();
+
     const visibleKeys = new Set(slotRows.map(r => wizardSkillSwapMap[r.key] || r.key));
-
-    // Candidates: unrolled skills not currently visible
     const candidates = ALL_SKILL_ROWS
-        .filter(r => !Number(wizardSkillSnapshot[r.key] || 0) && !visibleKeys.has(r.key))
+        .filter(r => archPool.has(r.key) && !visibleKeys.has(r.key))
         .sort((a, b) => a.label.localeCompare(b.label));
 
-    let rows = slotRows.map(({ key: origKey }) => {
+    const buildCard = ({ key: origKey }, slotIndex) => {
+        const isLocked  = slotIndex < WIZARD_LOCKED_COUNT;
         const isSwapped = origKey in wizardSkillSwapMap;
         const currentKey = isSwapped ? wizardSkillSwapMap[origKey] : origKey;
         const curRow = _skillRow(currentKey);
-        const inSwapMode = wizardSwapModeSlot === origKey;
-
-        if (inSwapMode) {
-            const opts = candidates.map(cd =>
-                `<option value="${cd.key}" title="${_esc(cd.hint||'')}">${_esc(cd.label)} — ${cd.stat}</option>`
-            ).join('');
-            return `
-                <div class="wizard-skill-row wizard-skill-row--swapping" data-orig="${origKey}">
-                    <div class="wizard-skill-swap-row">
-                        <select class="wizard-skill-swap-sel" data-orig="${origKey}">
-                            <option value="">— Wybierz umiejętność —</option>${opts}
-                        </select>
-                        <button type="button" class="wizard-stat-btn" data-cancel-swap="${origKey}" title="Anuluj">✕</button>
-                    </div>
-                </div>`;
-        }
-
-        const rank = wizardSkillLevels[origKey] ?? Number(wizardSkillSnapshot[origKey] || 0);
-        const rankName = RANK_LABEL[rank] || rank;
-        const canPlus = _canAdjSkill(origKey, 1);
-        const canMinus = _canAdjSkill(origKey, -1);
+        const inPool  = !isLocked && wizardSwapModeSlot === origKey;
+        const rank    = wizardSkillLevels[origKey] ?? Number(wizardSkillSnapshot[origKey] || 0);
         const changed = isSwapped || rank !== Number(wizardSkillSnapshot[origKey] || 0);
-        const swapBtn = isSwapped
-            ? `<button type="button" class="wizard-skill-swap-btn wizard-skill-swap-btn--revert" data-revert="${origKey}" title="Cofnij zamianę">↩</button>`
-            : `<button type="button" class="wizard-skill-swap-btn" data-swap="${origKey}" title="Zamień skill">↔</button>`;
+        const canPlus  = _canAdjSkill(origKey, 1);
+        const canMinus = _canAdjSkill(origKey, -1);
 
-        const skillHint = curRow.hint || '';
-        return `
-            <div class="wizard-skill-row${changed ? ' wizard-skill-row--changed' : ''}" data-orig="${origKey}">
-                <span class="wizard-skill-name">
-                    ${_esc(curRow.label)} <span class="wizard-skill-stat">— ${curRow.stat}</span>
-                    ${skillHint ? `<span class="wizard-stat-hint" data-tooltip="${_esc(skillHint)}">?</span>` : ''}
-                    ${swapBtn}
-                </span>
-                <div class="wizard-stat-controls wizard-skill-controls">
-                    <button type="button" class="wizard-stat-btn" data-skill-dir="-" data-orig="${origKey}" ${canMinus ? '' : 'disabled'}>−</button>
-                    <span class="wizard-skill-rank">${rank} · ${rankName}</span>
-                    <button type="button" class="wizard-stat-btn" data-skill-dir="+" data-orig="${origKey}" ${canPlus ? '' : 'disabled'}>+</button>
-                </div>
+        const rankCtrl = `
+            <div class="wiz-scard-rank-ctrl">
+                <button class="wiz-scard-rank-btn" data-skill-dir="-" data-orig="${origKey}" ${canMinus?'':'disabled'}>−</button>
+                <span class="wiz-scard-rank-num">${rank}</span>
+                <button class="wiz-scard-rank-btn" data-skill-dir="+" data-orig="${origKey}" ${canPlus?'':'disabled'}>+</button>
             </div>`;
-    }).join('');
+
+        let actionEl;
+        if (isLocked)       actionEl = `<span class="wiz-scard-lock" title="Umiejętność podstawowa">🔒</span>`;
+        else if (isSwapped) actionEl = `<button class="wiz-scard-revert-btn" data-revert="${origKey}" title="Cofnij zamianę">↩</button>`;
+        else                actionEl = `<button class="wiz-scard-swap-btn" data-swap="${origKey}" title="Wymień umiejętność z puli">↔</button>`;
+
+        const poolHtml = inPool ? `
+            <div class="wiz-scard-pool">
+                <span class="wiz-scard-pool-label">Wybierz z puli archetypu:</span>
+                <div class="wiz-scard-pool-chips">
+                    ${candidates.map(cd => `
+                        <button class="wiz-pool-chip" data-replace="${origKey}" data-new="${cd.key}">
+                            ${_esc(cd.label)}<span class="wiz-pool-chip-stat">${cd.stat}</span>
+                        </button>`).join('')}
+                    ${!candidates.length ? '<span class="wiz-pool-empty">Brak dostępnych umiejętności</span>' : ''}
+                </div>
+                <button class="wiz-scard-pool-cancel" data-cancel-swap="${origKey}">✕ Anuluj</button>
+            </div>` : '';
+
+        return `
+            <div class="wiz-scard${isLocked?' wiz-scard--locked':' wiz-scard--swap'}${changed?' wiz-scard--changed':''}${inPool?' wiz-scard--open':''}"
+                 data-orig="${origKey}" style="--deal-i:${slotIndex}">
+                <div class="wiz-scard-body">
+                    <div class="wiz-scard-main">
+                        <span class="wiz-scard-name">${_esc(curRow.label)}</span>
+                        <span class="wiz-scard-stat">${curRow.stat}</span>
+                    </div>
+                    <div class="wiz-scard-foot">
+                        <span class="wiz-scard-dots">${_rankDots(rank)}</span>
+                        ${rankCtrl}
+                        ${actionEl}
+                    </div>
+                </div>
+                ${poolHtml}
+            </div>`;
+    };
+
+    const lockedCards = slotRows.slice(0, WIZARD_LOCKED_COUNT).map(buildCard).join('');
+    const swapCards   = slotRows.slice(WIZARD_LOCKED_COUNT).map((r, i) => buildCard(r, i + WIZARD_LOCKED_COUNT)).join('');
 
     c.innerHTML = `
-        <div class="wizard-form">
-            <p class="wizard-hint">Wylosowane umiejętności. Zamiana (↔) na inną bezpłatna. Zmiana poziomu (±) kosztuje punkty budżetu. Max ${WIZARD_MAX_SWAPS} łącznie.</p>
-            <div class="wizard-swaps">Zmieniono: <strong>${budgetUsed} / ${WIZARD_MAX_SWAPS}</strong></div>
-            <div class="wizard-skill-list">${rows}</div>
-            <button type="button" class="btn btn--secondary wizard-reset-btn" id="wiz-skill-reset">Reset</button>
+        <div class="wiz-skill-deck wiz-stats-reveal">
+            <div class="wiz-sdeck-hdr wiz-sdeck-hdr--locked">
+                <span>🔒 Podstawowe</span>
+                <span class="wiz-sdeck-count">${WIZARD_LOCKED_COUNT} sloty</span>
+            </div>
+            ${lockedCards}
+            <div class="wiz-sdeck-hdr wiz-sdeck-hdr--swap">
+                <span>↔ Wymienne</span>
+                <span class="wiz-sdeck-count">${slotRows.length - WIZARD_LOCKED_COUNT} sloty · Poziomy: ${budgetUsed}/${WIZARD_MAX_SWAPS}</span>
+            </div>
+            ${swapCards}
+            <button type="button" class="btn btn--secondary wizard-reset-btn" id="wiz-skill-reset" style="margin-top:10px">Reset</button>
         </div>
     `;
 
-    // Swap mode open
-    c.querySelectorAll('[data-swap]').forEach(btn => {
-        btn.addEventListener('click', () => { wizardSwapModeSlot = btn.dataset.swap; _renderStep3(c); });
-    });
-    // Swap mode cancel
-    c.querySelectorAll('[data-cancel-swap]').forEach(btn => {
-        btn.addEventListener('click', () => { wizardSwapModeSlot = null; _renderStep3(c); });
-    });
-    // Swap select chosen
-    c.querySelectorAll('.wizard-skill-swap-sel').forEach(sel => {
-        sel.addEventListener('change', () => {
-            if (!sel.value) return;
-            wizardSkillSwapMap[sel.dataset.orig] = sel.value;
+    c.querySelectorAll('[data-swap]').forEach(btn =>
+        btn.addEventListener('click', () => { wizardSwapModeSlot = btn.dataset.swap; _renderStep3(c); }));
+    c.querySelectorAll('[data-cancel-swap]').forEach(btn =>
+        btn.addEventListener('click', () => { wizardSwapModeSlot = null; _renderStep3(c); }));
+    c.querySelectorAll('[data-replace]').forEach(btn =>
+        btn.addEventListener('click', () => {
+            if (!btn.dataset.new) return;
+            wizardSkillSwapMap[btn.dataset.replace] = btn.dataset.new;
             wizardSwapModeSlot = null;
             _renderStep3(c);
-        });
-    });
-    // Revert swap
-    c.querySelectorAll('[data-revert]').forEach(btn => {
+        }));
+    c.querySelectorAll('[data-revert]').forEach(btn =>
         btn.addEventListener('click', () => {
             delete wizardSkillSwapMap[btn.dataset.revert];
             wizardSwapModeSlot = null;
             _renderStep3(c);
-        });
-    });
-    // Level +/-
-    c.querySelectorAll('[data-skill-dir]').forEach(btn => {
+        }));
+    c.querySelectorAll('[data-skill-dir]').forEach(btn =>
         btn.addEventListener('click', () => {
             const origKey = btn.dataset.orig;
             const delta = btn.dataset.skillDir === '+' ? 1 : -1;
@@ -1956,9 +2183,7 @@ function _renderStep3(c) {
             const cur = wizardSkillLevels[origKey] ?? Number(wizardSkillSnapshot[origKey] || 0);
             wizardSkillLevels[origKey] = cur + delta;
             _renderStep3(c);
-        });
-    });
-    // Reset
+        }));
     document.getElementById('wiz-skill-reset')?.addEventListener('click', () => {
         wizardSkillLevels = {};
         wizardSkillSwapMap = {};
@@ -1967,73 +2192,75 @@ function _renderStep3(c) {
     });
 }
 
-// Step 4 — Identity review (LLM-generated)
-const BOND_TYPES   = ['person','place','object','ideal'];
-const WEAKNESS_TYPES = ['fear','flaw','addiction','trauma'];
-const BOND_TYPE_LABELS     = {person:'Osoba',place:'Miejsce',object:'Przedmiot',ideal:'Ideał'};
+// Step 4 — Identity review — old-book visual, auto-resize textareas, no type dropdowns
+const BOND_TYPE_LABELS   = {person:'Osoba',place:'Miejsce',object:'Przedmiot',ideal:'Ideał'};
 const WEAKNESS_TYPE_LABELS = {fear:'Strach',flaw:'Wada',addiction:'Nałóg',trauma:'Trauma'};
-
-function _typeSelect(id, options, labels, current) {
-    return `<select id="${id}" class="wizard-type-select">${
-        options.map(o => `<option value="${o}"${o===current?' selected':''}>${labels[o]||o}</option>`).join('')
-    }</select>`;
-}
 
 function _renderStep4(c) {
     const p = wizardIdentityPreview;
     if (!p) {
-        c.innerHTML = `<div class="wizard-form"><p class="wizard-hint">GM konsultuje starsze, mroczniejsze księgi...</p></div>`;
+        c.innerHTML = `<div class="wiz-tome-loading">
+            <div class="wiz-tome-quill">🪶</div>
+            <p>GM konsultuje starsze, mroczniejsze księgi…</p>
+        </div>`;
         return;
     }
-    const bonds     = p.bonds     || [{description:p.bond||'',type:'ideal'},{description:'',type:'ideal'}];
-    const weaknesses= p.weaknesses|| [{description:p.flaw||'',type:'flaw'},{description:'',type:'flaw'}];
+    const bonds     = p.bonds     || [{description:p.bond||'',type:'person'},{description:'',type:'ideal'}];
+    const weaknesses= p.weaknesses|| [{description:p.flaw||'',type:'flaw'}, {description:'',type:'fear'}];
 
-    const _mkSelect = (id, types, labels, val) =>
-      `<select class="wiz-identity-type" id="${id}">
-        ${types.map(t=>`<option value="${t}"${val===t?' selected':''}>${labels[t]||t}</option>`).join('')}
-       </select>`;
+    const bondsHtml = bonds.slice(0,2).map((b,i) => {
+        const typeLabel = BOND_TYPE_LABELS[b.type] || 'Więź';
+        return `
+        <div class="wiz-tome-entry">
+            <span class="wiz-tome-entry-badge wiz-tome-entry-badge--bond">${typeLabel}</span>
+            <textarea id="wiz-bond-${i}" class="wiz-tome-textarea" data-bond-type="${b.type||'ideal'}"
+                placeholder="Opisz więź…">${_esc(b.description||'')}</textarea>
+        </div>`;
+    }).join('');
 
-    const bondsHtml = bonds.slice(0,2).map((b,i) => `
-        <div class="wiz-identity-pair">
-          <div class="wiz-identity-pair-header">
-            ${_mkSelect(`wiz-bond-type-${i}`, BOND_TYPES, BOND_TYPE_LABELS, b.type||'ideal')}
-          </div>
-          <textarea id="wiz-bond-${i}" rows="2" class="wiz-identity-textarea"
-            placeholder="Opisz więź…">${_esc(b.description||'')}</textarea>
-        </div>`).join('');
-
-    const weakHtml = weaknesses.slice(0,2).map((w,i) => `
-        <div class="wiz-identity-pair">
-          <div class="wiz-identity-pair-header">
-            ${_mkSelect(`wiz-weak-type-${i}`, WEAKNESS_TYPES, WEAKNESS_TYPE_LABELS, w.type||'flaw')}
-          </div>
-          <textarea id="wiz-weak-${i}" rows="2" class="wiz-identity-textarea"
-            placeholder="Opisz słabość…">${_esc(w.description||'')}</textarea>
-        </div>`).join('');
+    const weakHtml = weaknesses.slice(0,2).map((w,i) => {
+        const typeLabel = WEAKNESS_TYPE_LABELS[w.type] || 'Słabość';
+        return `
+        <div class="wiz-tome-entry">
+            <span class="wiz-tome-entry-badge wiz-tome-entry-badge--flaw">${typeLabel}</span>
+            <textarea id="wiz-weak-${i}" class="wiz-tome-textarea" data-weak-type="${w.type||'flaw'}"
+                placeholder="Opisz słabość…">${_esc(w.description||'')}</textarea>
+        </div>`;
+    }).join('');
 
     c.innerHTML = `
-        <div class="wiz-identity-grid">
-          <div class="wiz-identity-card">
-            <div class="wiz-identity-label">Wygląd</div>
-            <textarea id="wiz-appearance" rows="3" class="wiz-identity-textarea"
-              placeholder="Jak wygląda twój bohater?">${_esc(p.appearance)}</textarea>
-          </div>
-          <div class="wiz-identity-card">
-            <div class="wiz-identity-label">Osobowość</div>
-            <textarea id="wiz-personality" rows="3" class="wiz-identity-textarea"
-              placeholder="Jak zachowuje się twój bohater?">${_esc(p.personality)}</textarea>
-          </div>
-          <div class="wiz-identity-card">
-            <div class="wiz-identity-label">Więzi</div>
-            ${bondsHtml}
-          </div>
-          <div class="wiz-identity-card">
-            <div class="wiz-identity-label">Słabości</div>
-            ${weakHtml}
-          </div>
-          <div class="wiz-identity-hint">GM zna też to, o czym sam nie wiesz. Objawi się w swoim czasie.</div>
+        <div class="wiz-tome-page">
+            <div class="wiz-tome-section">
+                <h4 class="wiz-tome-label">Wygląd</h4>
+                <textarea id="wiz-appearance" class="wiz-tome-textarea"
+                    placeholder="Jak wygląda twój bohater?">${_esc(p.appearance||'')}</textarea>
+            </div>
+            <div class="wiz-tome-divider">✦</div>
+            <div class="wiz-tome-section">
+                <h4 class="wiz-tome-label">Osobowość</h4>
+                <textarea id="wiz-personality" class="wiz-tome-textarea"
+                    placeholder="Jak zachowuje się twój bohater?">${_esc(p.personality||'')}</textarea>
+            </div>
+            <div class="wiz-tome-divider">✦</div>
+            <div class="wiz-tome-section">
+                <h4 class="wiz-tome-label">Więzi</h4>
+                ${bondsHtml}
+            </div>
+            <div class="wiz-tome-divider">✦</div>
+            <div class="wiz-tome-section">
+                <h4 class="wiz-tome-label">Słabości</h4>
+                ${weakHtml}
+            </div>
+            <p class="wiz-tome-secret">🔒 GM zna też to, o czym sam nie wiesz. Objawi się w swoim czasie.</p>
         </div>
     `;
+
+    // Auto-resize all textareas to fit content
+    c.querySelectorAll('.wiz-tome-textarea').forEach(ta => {
+        const resize = () => { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; };
+        resize();
+        ta.addEventListener('input', resize);
+    });
 }
 
 function _esc(s) {
@@ -2139,13 +2366,21 @@ async function _wizardStep1Submit() {
 }
 
 async function _wizardStep3Submit() {
-    // Generate identity while transitioning to step 4
-    elements.wizardContent.innerHTML = `<div class="wizard-form"><p class="wizard-hint">Generowanie tożsamości postaci przez AI...</p></div>`;
     wizardStepNum = 3;
     elements.wizardStep.textContent = WIZARD_STEPS[3].subtitle;
     elements.wizardTitle.textContent = WIZARD_STEPS[3].title;
     elements.btnWizardPrev.style.display = 'block';
     elements.btnWizardNext.innerHTML = 'Rozpocznij przygodę <span class="btn__icon">✨</span>';
+    elements.btnWizardNext.disabled = true;
+
+    // Immersive loading state — GM is writing the identity
+    elements.wizardContent.innerHTML = `
+        <div class="wiz-tome-loading">
+            <div class="wiz-tome-quill">🪶</div>
+            <h3>Mistrz Gry kreuje twą historię</h3>
+            <p>Starożytne karty zapisują przeznaczenie…</p>
+            <div class="wiz-tome-loading-dots"><span></span><span></span><span></span></div>
+        </div>`;
 
     const charId = wizardCreatedChar?.id || wizardCreatedChar?.character_id;
     wizardIdentityPreview = await apiRequest('POST', `/characters/${charId}/generate-identity`);
@@ -2176,15 +2411,15 @@ async function _wizardFinalizeAndEnter() {
     const appearance = document.getElementById('wiz-appearance')?.value?.trim() || wizardIdentityPreview?.appearance || '';
     const personality = document.getElementById('wiz-personality')?.value?.trim() || wizardIdentityPreview?.personality || '';
 
-    const bonds = [0,1].map(i => ({
-        description: document.getElementById(`wiz-bond-${i}`)?.value?.trim() || '',
-        type: document.getElementById(`wiz-bond-type-${i}`)?.value || 'ideal',
-    })).filter(b => b.description);
+    const bonds = [0,1].map(i => {
+        const el = document.getElementById(`wiz-bond-${i}`);
+        return { description: el?.value?.trim() || '', type: el?.dataset?.bondType || 'ideal' };
+    }).filter(b => b.description);
 
-    const weaknesses = [0,1].map(i => ({
-        description: document.getElementById(`wiz-weak-${i}`)?.value?.trim() || '',
-        type: document.getElementById(`wiz-weak-type-${i}`)?.value || 'flaw',
-    })).filter(w => w.description);
+    const weaknesses = [0,1].map(i => {
+        const el = document.getElementById(`wiz-weak-${i}`);
+        return { description: el?.value?.trim() || '', type: el?.dataset?.weakType || 'flaw' };
+    }).filter(w => w.description);
 
     const result = await apiRequest('POST', `/characters/${charId}/finalize-sheet`, {
         stat_overrides: statOverrides,
@@ -8356,7 +8591,7 @@ function initEventListeners() {
 
     // Campaigns
     elements.btnNewCampaign?.addEventListener('click', showNewCampaignScreen);
-    elements.btnLogout?.addEventListener('click', handleLogout);
+    elements.btnLogout?.addEventListener('click', () => { loadHeroes().then(() => showScreen('heroes')); });
 
     // New Campaign
     elements.newCampaignForm?.addEventListener('submit', handleCreateCampaign);
@@ -8365,6 +8600,10 @@ function initEventListeners() {
     // Campaign Style Screen
     document.getElementById('campaign-style-back')?.addEventListener('click', () => showScreen('newCampaign'));
     document.getElementById('campaign-style-submit')?.addEventListener('click', _finalCreateCampaign);
+
+    // Prebuilt Campaign Screen
+    document.getElementById('prebuilt-back')?.addEventListener('click', () => showScreen('campaigns'));
+
 
     // Idle hero panel
     document.getElementById('idle-hero-panel-backdrop')?.addEventListener('click', _hideIdleHeroPanel);

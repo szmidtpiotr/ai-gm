@@ -1783,13 +1783,42 @@ def _require_gm_plan_before_narrative_llm(
     """
     T05: ensure gm_plan_json is ready before running the narrative LLM.
     If plan is missing, auto-generate it now (on-demand, first turn triggers it).
+    Pre-built campaigns (template_id set) keep the template plan untouched and
+    use generate_opening_scene() which reads key_locations for a location-specific intro.
     """
     from app.services.gm_plan_schema import gm_plan_is_ready
+    import json as _j
 
     try:
         raw = campaign["gm_plan_json"]
     except (KeyError, IndexError):
         raw = None
+
+    # Pre-built campaigns: the template plan is authoritative — never overwrite it.
+    # Use the dedicated opening-scene generator which reads key_locations from the plan.
+    try:
+        template_id = campaign["template_id"]
+    except (KeyError, IndexError):
+        template_id = None
+
+    if template_id and raw and raw.strip() not in ("", "{}"):
+        if _narrative_turn_count(conn, campaign_id) == 0:
+            try:
+                from app.services.turn_pipeline import generate_opening_scene
+                from app.services.user_llm_settings import get_user_llm_settings_full
+                char_row = conn.execute(
+                    "SELECT id, user_id FROM characters WHERE campaign_id = ? AND is_active = 1 LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                if char_row:
+                    _llm_cfg = get_user_llm_settings_full(int(char_row["user_id"] or 0))
+                    _model = _llm_cfg.get("model") or "gemma3:1b"
+                    generate_opening_scene(campaign_id, int(char_row["id"]), _model, _llm_cfg, conn)
+                    logger.info("prebuilt_opening_scene_generated", campaign_id=campaign_id)
+            except Exception as _oe:
+                logger.warning("prebuilt_opening_scene_failed", campaign_id=campaign_id, error=str(_oe))
+        return  # template plan is the plan — never fall through to overwrite
+
     if gm_plan_is_ready(raw):
         return
     if _narrative_turn_count(conn, campaign_id) > 0:

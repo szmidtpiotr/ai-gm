@@ -91,6 +91,37 @@ def normalize_gm_plan(raw: str | None) -> dict[str, Any]:
         }
 
     out = deepcopy(data)
+
+    # Campaign-plan-service V2 format: "acts" array + "key_locations" / "key_npcs" arrays.
+    # Convert to arcs-dict format so gm_plan_is_ready() and format_gm_plan_block() work.
+    # The conversion is in-memory only — the DB row is never rewritten here.
+    if "acts" in out and isinstance(out["acts"], list) and "arcs" not in out:
+        arcs: dict[str, Any] = {}
+        locs = [loc.get("name", "") for loc in (out.get("key_locations") or []) if loc.get("name")]
+        npcs = [npc.get("name", "") for npc in (out.get("key_npcs") or []) if npc.get("name")]
+        for act in out["acts"]:
+            if not isinstance(act, dict):
+                continue
+            num = act.get("number", 1)
+            arc_id = f"act_{num}"
+            beats = act.get("key_beats") or []
+            arcs[arc_id] = _ensure_arc_shape(arc_id, {
+                "id": arc_id,
+                "title": act.get("title", ""),
+                "status": "active" if num == 1 else "draft",
+                "roadmap": act.get("summary", ""),
+                "scene_goals": [str(b) for b in beats if b],
+                "hooks": {k: v for k, v in (
+                    [("locations", locs)] if locs else []
+                ) + (
+                    [("npcs", npcs)] if npcs else []
+                )},
+            })
+        out["arcs"] = arcs
+        out["active_arc_id"] = "act_1" if "act_1" in arcs else (next(iter(arcs), None))
+        out.setdefault("engine_private", {})
+        out["schema_version"] = GM_PLAN_SCHEMA_VERSION
+
     ver = _coerce_int(out.get("schema_version"), 0)
     if ver < GM_PLAN_SCHEMA_VERSION:
         arcs = out.get("arcs")

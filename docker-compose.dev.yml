@@ -165,6 +165,8 @@ services:
       - GAME_API_URL=http://backend:8000/api
       - TEST_USERNAME=demo
       - TEST_PASSWORD=demo
+      # Forge/admin tools — admin Bearer token for campaign creation
+      - ADMIN_TOKEN=mcp-forge-dev-2026
     ports:
       - "8400:8400"
     restart: unless-stopped

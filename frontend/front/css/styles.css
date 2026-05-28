@@ -1,5 +1,6 @@
 /* AI-GM Mobile-First Frontend - T28.5 */
 /* Based on Figma design v18-20 */
+@import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Cinzel:wght@400;600;700&display=swap');
 
 :root {
   /* Colors */
@@ -7304,12 +7305,10 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .settings-nav-mini-btn:hover { background: rgba(201,165,74,0.12); border-color: var(--accent); }
 .settings-nav-mini-btn svg { opacity: 0.7; }
 
-/* ── Wizard Step 4 — Identity ───────────────────────────────────────────────── */
+/* ── Wizard Step 4 — Tome / Identity (old-book redesign) ───────────────────── */
+/* Legacy classes kept for any surviving references */
 .wiz-identity-grid { display: flex; flex-direction: column; gap: 0; }
-.wiz-identity-card {
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  padding: 14px 0 10px;
-}
+.wiz-identity-card { border-bottom: 1px solid rgba(255,255,255,0.05); padding: 14px 0 10px; }
 .wiz-identity-card:last-child { border-bottom: none; }
 .wiz-identity-label {
   font-family: Cinzel, serif; font-size: 0.56rem; letter-spacing: 0.28em;
@@ -7317,29 +7316,82 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   display: flex; align-items: center; gap: 8px;
 }
 .wiz-identity-label::after { content:''; flex:1; height:1px; background: rgba(168,137,61,0.2); }
-.wiz-identity-textarea {
-  width: 100%; background: rgba(0,0,0,0.25); border: 1px solid rgba(168,137,61,0.12);
-  border-radius: 6px; color: var(--text-primary); padding: 10px 12px;
-  font-size: var(--font-size-sm); line-height: 1.6; resize: none; outline: none;
-  font-family: var(--font-family); transition: border-color 0.2s;
+/* New tome styles */
+.wiz-tome-page {
+  display: flex; flex-direction: column; gap: 0; padding-bottom: 16px;
 }
-.wiz-identity-textarea:focus { border-color: rgba(201,165,74,0.4); }
-.wiz-identity-pair { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
-.wiz-identity-pair:last-child { margin-bottom: 0; }
-.wiz-identity-pair-header { display: flex; align-items: center; gap: 8px; }
-.wiz-identity-type {
-  background: rgba(201,165,74,0.08); border: 1px solid rgba(201,165,74,0.15);
-  border-radius: 4px; padding: 4px 10px; color: var(--accent);
-  font-family: Cinzel, serif; font-size: 0.62rem; letter-spacing: 0.1em;
-  cursor: pointer; appearance: none; outline: none; transition: border-color 0.15s;
-  min-width: 110px;
+.wiz-tome-section { padding: 14px 0 6px; }
+.wiz-tome-label {
+  font-family: 'Cinzel', serif; font-size: 0.58rem; font-weight: 600;
+  letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent-dark);
+  margin-bottom: 10px; display: flex; align-items: center; gap: 10px;
 }
-.wiz-identity-type:focus { border-color: var(--accent); }
-.wiz-identity-hint {
-  font-size: var(--font-size-xs); color: var(--text-muted);
-  padding: 10px 0 2px; display: flex; align-items: center; gap: 6px;
+.wiz-tome-label::after { content:''; flex:1; height:1px; background: linear-gradient(to right, rgba(168,137,61,0.35), transparent); }
+.wiz-tome-divider {
+  text-align: center; font-size: 0.7rem; color: rgba(168,137,61,0.25);
+  letter-spacing: 0.6em; padding: 4px 0; user-select: none;
 }
-.wiz-identity-hint::before { content: '🔒'; font-size: 0.75rem; }
+.wiz-tome-entry { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.wiz-tome-entry:last-child { margin-bottom: 0; }
+.wiz-tome-entry-badge {
+  display: inline-block; font-family: 'Cinzel', serif; font-size: 0.55rem;
+  letter-spacing: 0.18em; text-transform: uppercase; padding: 3px 10px;
+  border-radius: 3px; align-self: flex-start; user-select: none;
+}
+.wiz-tome-entry-badge--bond {
+  background: rgba(201,165,74,0.08); border: 1px solid rgba(201,165,74,0.22);
+  color: var(--accent);
+}
+.wiz-tome-entry-badge--flaw {
+  background: rgba(160,50,50,0.10); border: 1px solid rgba(160,50,50,0.25);
+  color: #c47070;
+}
+.wiz-tome-textarea {
+  width: 100%; min-height: 56px; overflow: hidden; resize: none;
+  background: rgba(0,0,0,0.22); border: 1px solid rgba(168,137,61,0.14);
+  border-radius: 5px; color: var(--text-primary); padding: 10px 13px;
+  font-family: 'IM Fell English', Georgia, serif; font-size: 0.88rem;
+  line-height: 1.65; outline: none; transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+.wiz-tome-textarea:focus { border-color: rgba(201,165,74,0.38); background: rgba(0,0,0,0.28); }
+.wiz-tome-textarea::placeholder { color: rgba(154,149,140,0.45); font-style: italic; }
+.wiz-tome-secret {
+  font-size: 0.7rem; color: var(--text-muted); margin-top: 14px;
+  display: flex; align-items: center; gap: 6px; padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+/* GM loading state for step 4 */
+.wiz-tome-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 48px 24px; text-align: center;
+}
+.wiz-tome-quill {
+  font-size: 2.4rem; animation: wiz-quill-write 1.4s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+@keyframes wiz-quill-write {
+  0%,100% { transform: rotate(-12deg) translateY(0); }
+  25%      { transform: rotate(8deg)  translateY(-4px); }
+  50%      { transform: rotate(-6deg) translateY(1px); }
+  75%      { transform: rotate(10deg) translateY(-3px); }
+}
+.wiz-tome-loading h3 {
+  font-family: 'Cinzel', serif; font-size: 1rem; font-weight: 600;
+  color: var(--accent); letter-spacing: 0.06em;
+}
+.wiz-tome-loading p { font-size: 0.78rem; color: var(--text-muted); font-style: italic; }
+.wiz-tome-loading-dots { display: flex; gap: 6px; }
+.wiz-tome-loading-dots span {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--accent-dark);
+  animation: wiz-dot-pulse 1.2s ease-in-out infinite;
+}
+.wiz-tome-loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.wiz-tome-loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes wiz-dot-pulse {
+  0%,80%,100% { transform: scale(0.6); opacity: 0.4; }
+  40%          { transform: scale(1);   opacity: 1; }
+}
 
 /* ── Dungeon System ──────────────────────────────────────────────────────── */
 
@@ -9566,3 +9618,259 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   letter-spacing: 0.08em;
   margin-top: 8px;
 }
+
+/* ── Wizard Step 2 — Dice Roll Animation ─────────────────────────────────── */
+@keyframes wiz-dice-tumble {
+  0%,100% { transform: rotate(-6deg) scale(1);    }
+  25%      { transform: rotate(5deg)  scale(0.96); }
+  50%      { transform: rotate(-3deg) scale(1.03); }
+  75%      { transform: rotate(7deg)  scale(0.97); }
+}
+@keyframes wiz-dice-settle {
+  0%   { transform: scale(1.2); box-shadow: 0 0 22px rgba(201,165,74,0.65); border-color: var(--accent); }
+  60%  { transform: scale(0.96); }
+  100% { transform: scale(1);   box-shadow: 0 2px 6px rgba(0,0,0,0.6); border-color: rgba(201,165,74,0.4); }
+}
+@keyframes wiz-stats-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.wiz-dice-stage {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 24px; padding: 20px 0 8px;
+}
+.wiz-dice-header { text-align: center; }
+.wiz-dice-header-icon { font-size: 2rem; display: block; margin-bottom: 6px; }
+.wiz-dice-header h3 {
+  font-family: 'Cinzel', serif; font-size: 1.05rem; font-weight: 600;
+  color: var(--accent); letter-spacing: 0.06em; margin-bottom: 4px;
+}
+.wiz-dice-header p { font-size: 0.75rem; color: var(--text-muted); font-style: italic; }
+.wiz-dice-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 8px; width: 100%;
+}
+.wiz-dice-item { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.wiz-dice-face {
+  width: 40px; height: 40px;
+  background: linear-gradient(145deg, #281608 0%, #160b02 100%);
+  border: 2px solid rgba(201,165,74,0.65);
+  border-radius: 9px; display: flex; align-items: center; justify-content: center;
+  font-size: 1.05rem; font-weight: 700; color: #f5e2b0;
+  font-family: 'Cinzel', serif;
+  animation: wiz-dice-tumble 0.35s ease-in-out infinite;
+  box-shadow: 0 0 14px rgba(201,165,74,0.22), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.wiz-dice-face.settled {
+  animation: wiz-dice-settle 0.45s ease-out forwards;
+  font-size: 1.1rem;
+}
+.wiz-dice-stat-abbr {
+  font-family: 'Cinzel', serif; font-size: 0.55rem; font-weight: 700;
+  color: var(--accent); letter-spacing: 0.1em;
+}
+.wiz-dice-stat-name {
+  font-size: 0.5rem; color: var(--text-muted); letter-spacing: 0.03em;
+  text-align: center; line-height: 1.2;
+}
+/* Fade-in animation when stat grid appears after dice */
+.wiz-stats-reveal { animation: wiz-stats-fade-in 0.5s ease-out; }
+
+/* ── Wizard Step 3 — Locked skill indicator (legacy rows) ────────────────── */
+.wizard-skill-row--locked {
+  opacity: 0.88;
+  border-left: 2px solid rgba(201,165,74,0.18);
+}
+.wizard-skill-row--locked .wizard-skill-name { color: var(--text-secondary); }
+.wiz-skill-lock {
+  font-size: 0.65rem; opacity: 0.5; cursor: default; user-select: none;
+  flex-shrink: 0;
+}
+
+/* ── Wizard Step 3 — Card-based skill deck ───────────────────────────────── */
+@keyframes wiz-card-deal {
+  from { opacity: 0; transform: translateY(18px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Gold dice face for locked slots in step 3 reveal */
+.wiz-dice-face--gold {
+  border-color: var(--accent) !important;
+  background: linear-gradient(145deg, #2e1a04 0%, #1a0e02 100%) !important;
+  color: #f5d97a !important;
+  box-shadow: 0 0 18px rgba(201,165,74,0.45), inset 0 1px 0 rgba(255,255,255,0.08) !important;
+}
+
+/* Deck container */
+.wiz-skill-deck {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 2px 0 12px;
+}
+
+/* Section header */
+.wiz-sdeck-hdr {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 4px 4px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 2px;
+}
+.wiz-sdeck-hdr::before {
+  content: ''; flex: 0 0 3px; height: 14px; border-radius: 2px;
+  background: var(--accent);
+}
+.wiz-sdeck-hdr--swap::before { background: #6db5a0; }
+.wiz-sdeck-hdr > span:first-child {
+  font-family: 'Cinzel', serif; font-size: 0.68rem; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; margin: 0;
+  color: rgba(255,255,255,0.75);
+}
+.wiz-sdeck-count {
+  margin-left: auto; font-size: 0.6rem; color: var(--text-muted);
+  font-style: italic; white-space: nowrap;
+}
+
+/* Base card */
+.wiz-scard {
+  background: #1c1610;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  overflow: hidden;
+  opacity: 0;
+  animation: wiz-card-deal 0.35s cubic-bezier(.22,.68,0,1.2) forwards;
+  animation-delay: calc(var(--deal-i, 0) * 60ms);
+  transition: border-color 0.2s, background 0.2s;
+}
+.wiz-scard--locked {
+  border-left: 3px solid rgba(201,165,74,0.55);
+  background: #1e1810;
+}
+.wiz-scard--swap {
+  border-left: 3px solid rgba(109,181,160,0.3);
+}
+.wiz-scard--swap:hover:not(.wiz-scard--open) {
+  border-color: rgba(109,181,160,0.5);
+  background: #1a1e1c;
+}
+.wiz-scard--changed {
+  border-left-color: #6db5a0;
+  background: #181e1b;
+}
+.wiz-scard--open {
+  border-color: rgba(109,181,160,0.45);
+  background: #161d1a;
+}
+
+/* Card inner layout */
+.wiz-scard-body {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 10px;
+}
+.wiz-scard-main {
+  flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.wiz-scard-name {
+  font-size: 0.82rem; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  line-height: 1.2;
+}
+.wiz-scard--locked .wiz-scard-name { color: #e8d490; }
+.wiz-scard-stat {
+  font-family: 'Cinzel', serif; font-size: 0.6rem; font-weight: 700;
+  color: var(--text-muted); letter-spacing: 0.1em;
+}
+
+.wiz-scard-foot {
+  display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+}
+
+/* Rank dots */
+.wiz-scard-dots { display: flex; gap: 3px; align-items: center; }
+.wiz-rdot {
+  font-size: 0.7rem; color: rgba(255,255,255,0.18); line-height: 1;
+  user-select: none;
+}
+.wiz-rdot--on { color: var(--accent); }
+
+/* Rank +/- controls */
+.wiz-scard-rank-ctrl {
+  display: flex; align-items: center; gap: 3px;
+}
+.wiz-scard-rank-btn {
+  width: 22px; height: 22px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.55);
+  font-size: 0.85rem; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+.wiz-scard-rank-btn:hover:not(:disabled) {
+  background: rgba(201,165,74,0.15); color: var(--accent);
+  border-color: rgba(201,165,74,0.3);
+}
+.wiz-scard-rank-btn:disabled {
+  opacity: 0.25; cursor: default;
+}
+.wiz-scard-rank-num {
+  font-family: 'Cinzel', serif; font-size: 0.7rem; font-weight: 700;
+  color: var(--accent); min-width: 12px; text-align: center;
+}
+
+/* Action buttons (lock/swap/revert) */
+.wiz-scard-lock {
+  font-size: 0.75rem; opacity: 0.55; user-select: none; cursor: default;
+  padding: 3px;
+}
+.wiz-scard-swap-btn, .wiz-scard-revert-btn {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid rgba(109,181,160,0.25);
+  background: rgba(109,181,160,0.06); color: #6db5a0;
+  font-size: 0.95rem; cursor: pointer; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  padding: 0;
+}
+.wiz-scard-swap-btn:hover { background: rgba(109,181,160,0.14); border-color: rgba(109,181,160,0.5); transform: scale(1.08); }
+.wiz-scard-revert-btn { color: #c4907a; border-color: rgba(196,144,122,0.25); background: rgba(196,144,122,0.06); }
+.wiz-scard-revert-btn:hover { background: rgba(196,144,122,0.14); border-color: rgba(196,144,122,0.5); transform: scale(1.08); }
+
+/* Pool drawer */
+.wiz-scard-pool {
+  display: none;
+  padding: 8px 10px 10px;
+  border-top: 1px solid rgba(109,181,160,0.15);
+  background: rgba(0,0,0,0.18);
+}
+.wiz-scard--open .wiz-scard-pool { display: block; }
+.wiz-scard-pool-label {
+  font-size: 0.6rem; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.1em; display: block; margin-bottom: 7px;
+}
+.wiz-scard-pool-chips {
+  display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 7px;
+}
+.wiz-pool-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px; border-radius: 14px;
+  border: 1px solid rgba(109,181,160,0.3);
+  background: rgba(109,181,160,0.07); color: #a8d5c8;
+  font-size: 0.72rem; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+.wiz-pool-chip:hover {
+  background: rgba(109,181,160,0.18); border-color: rgba(109,181,160,0.6);
+  color: #d4eee8; transform: scale(1.04);
+}
+.wiz-pool-chip-stat {
+  font-family: 'Cinzel', serif; font-size: 0.55rem; font-weight: 700;
+  color: var(--text-muted); letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+.wiz-pool-empty {
+  font-size: 0.7rem; color: var(--text-muted); font-style: italic;
+}
+.wiz-scard-pool-cancel {
+  font-size: 0.65rem; color: var(--text-muted); background: none;
+  border: none; cursor: pointer; padding: 2px 4px;
+  transition: color 0.15s;
+}
+.wiz-scard-pool-cancel:hover { color: #e07070; }

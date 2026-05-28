@@ -6,32 +6,42 @@ import random
 from typing import Final
 
 # --- Skill budget (creation only) ---
+# All archetypes now roll exactly 7 active skills from their exclusive pool.
 SKILL_BUDGET: Final = {
     "warrior": {"slots": 8, "active_skills": 7},
-    "scholar": {"slots": 10, "active_skills": 8},
+    "scholar": {"slots": 8, "active_skills": 7},
+    "rogue":   {"slots": 8, "active_skills": 7},
 }
 
+# Preferred skills — rolled with 3× weight. First 3 of these become "locked" slots in UI.
 ARCHETYPE_SKILL_WEIGHTS: Final = {
-    "warrior": [
-        "athletics",
-        "melee_attack",
-        "endurance",
-        "intimidation",
-        "survival",
-    ],
-    "scholar": [
-        "arcana",
-        "lore",
-        "investigation",
-        "medicine",
-        "awareness",
-    ],
+    "warrior": ["melee_attack", "athletics", "endurance", "intimidation", "survival"],
+    "scholar": ["arcana", "spell_attack", "lore", "investigation", "medicine"],
+    "rogue":   ["stealth", "ranged_attack", "sleight_of_hand", "persuasion", "survival"],
+}
+
+# Exclusive per-archetype skill pool — only skills from this set are ever rolled for that archetype.
+# Warriors don't get Arcana; Scholars don't get Melee Attack, etc.
+ARCHETYPE_SKILL_EXCLUSIVE_POOL: Final = {
+    "warrior": frozenset({
+        "melee_attack", "athletics", "endurance", "intimidation",
+        "survival", "ranged_attack", "stealth", "persuasion",
+    }),
+    "scholar": frozenset({
+        "arcana", "spell_attack", "lore", "investigation",
+        "medicine", "awareness", "alchemy", "persuasion",
+    }),
+    "rogue": frozenset({
+        "stealth", "ranged_attack", "sleight_of_hand", "persuasion",
+        "survival", "intimidation", "athletics", "awareness",
+    }),
 }
 
 MAX_SKILL_LVL_AT_CREATION: Final = 2
 PLAYER_SWAP_SLOTS: Final = 4
+LOCKED_SKILL_COUNT: Final = 3  # first N skills shown in UI are locked (cannot swap to different skill)
 
-# Full skill key pool used at creation (matches prior backend + extras).
+# Full skill key pool used at creation (all known skills; fallback only).
 CREATION_SKILL_POOL: Final = frozenset(
     {
         "athletics",
@@ -81,8 +91,10 @@ def _weighted_sample_without_replacement(
 
 def roll_creation_skills(archetype: str, rng: random.Random | None = None) -> dict[str, int]:
     """
-    Weighted random skill ranks at creation. All keys in _CREATION_SKILL_POOL appear;
-    inactive skills are 0. Ranks are capped at MAX_SKILL_LVL_AT_CREATION.
+    Weighted random skill ranks at creation.
+    Skills are drawn exclusively from ARCHETYPE_SKILL_EXCLUSIVE_POOL[archetype]
+    so each class only gets thematically appropriate skills.
+    All keys in CREATION_SKILL_POOL appear in the returned dict; inactive skills = 0.
     """
     g = rng or random.Random()
     a = (archetype or "warrior").strip().lower()
@@ -90,7 +102,10 @@ def roll_creation_skills(archetype: str, rng: random.Random | None = None) -> di
         a = "warrior"
     cfg = SKILL_BUDGET[a]
     preferred = set(ARCHETYPE_SKILL_WEIGHTS.get(a, ()))
-    pool = sorted(CREATION_SKILL_POOL)
+
+    # Use archetype-exclusive pool; fall back to full pool if undefined
+    exclusive = ARCHETYPE_SKILL_EXCLUSIVE_POOL.get(a, CREATION_SKILL_POOL)
+    pool = sorted(exclusive)
 
     def wfn(key: str) -> int:
         return 3 if key in preferred else 1
@@ -102,6 +117,7 @@ def roll_creation_skills(archetype: str, rng: random.Random | None = None) -> di
     for pk in picked:
         ranks[pk] = 1
 
+    # Distribute rank-up points (slots - active = 1 extra rank-up)
     extra = int(cfg["slots"]) - len(picked)
     for _ in range(max(0, extra)):
         eligible = [k for k in picked if ranks[k] < MAX_SKILL_LVL_AT_CREATION]
