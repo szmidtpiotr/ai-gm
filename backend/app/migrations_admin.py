@@ -3159,6 +3159,90 @@ def _ensure_rogue_archetype(conn: sqlite3.Connection) -> None:
         logger.warning("rogue_archetype_seed_failed", error=str(e))
 
 
+def _ensure_rarity_loot_scaling(conn: sqlite3.Connection) -> None:
+    """Task 7 — Add rare/epic catalog items to boss/elite loot tables.
+
+    Rare items seeded:
+      - silent_guardian_blade  (rarity=3, weapon, 75gp) → boss tables w=8, elite w=5
+      - silent_guardian_helm   (rarity=3, item/armor, 45gp) → boss tables w=6, elite w=4
+      - ruin_explorer_cloak    (rarity=2, item/armor, 60gp) → elite tables w=6
+      - umbravale_explorer_bow (rarity=2, weapon, 50gp) → elite tables w=5
+      - forgotten_sage_staff   (rarity=4, weapon, 200gp) → boss tables only w=3
+
+    Idempotent: skips if entry already exists for (loot_table_key, key).
+    """
+    # --- verify catalog items exist before inserting ---
+    def _weapon_exists(key: str) -> bool:
+        r = conn.execute(
+            "SELECT 1 FROM game_config_weapons WHERE key=? AND COALESCE(is_active,1)=1",
+            (key,),
+        ).fetchone()
+        return r is not None
+
+    def _item_exists(key: str) -> bool:
+        r = conn.execute(
+            "SELECT 1 FROM game_config_items WHERE key=? AND COALESCE(is_active,1)=1",
+            (key,),
+        ).fetchone()
+        return r is not None
+
+    boss_weapon_guards = {
+        "silent_guardian_blade": (8, _weapon_exists("silent_guardian_blade"), "weapon_key"),
+        "forgotten_sage_staff": (3, _weapon_exists("forgotten_sage_staff"), "weapon_key"),
+    }
+    boss_item_guards = {
+        "silent_guardian_helm": (6, _item_exists("silent_guardian_helm"), "item_key"),
+    }
+    elite_weapon_guards = {
+        "silent_guardian_blade": (5, _weapon_exists("silent_guardian_blade"), "weapon_key"),
+        "umbravale_explorer_bow": (5, _weapon_exists("umbravale_explorer_bow"), "weapon_key"),
+    }
+    elite_item_guards = {
+        "silent_guardian_helm": (4, _item_exists("silent_guardian_helm"), "item_key"),
+        "ruin_explorer_cloak": (6, _item_exists("ruin_explorer_cloak"), "item_key"),
+    }
+
+    boss_tables = conn.execute(
+        """
+        SELECT DISTINCT loot_table_key FROM game_config_enemies
+        WHERE tier='boss' AND loot_table_key IS NOT NULL AND COALESCE(is_active,1)=1
+        """
+    ).fetchall()
+    elite_tables = conn.execute(
+        """
+        SELECT DISTINCT loot_table_key FROM game_config_enemies
+        WHERE tier='elite' AND loot_table_key IS NOT NULL AND COALESCE(is_active,1)=1
+        """
+    ).fetchall()
+
+    def _seed_entry(tbl_key: str, col: str, item_key: str, weight: int) -> None:
+        exists = conn.execute(
+            f"SELECT 1 FROM game_config_loot_entries WHERE loot_table_key=? AND {col}=?",
+            (tbl_key, item_key),
+        ).fetchone()
+        if exists:
+            return
+        conn.execute(
+            f"INSERT INTO game_config_loot_entries (loot_table_key, {col}, weight) VALUES (?,?,?)",
+            (tbl_key, item_key, weight),
+        )
+
+    for (tbl_key,) in boss_tables:
+        for ikey, (w, ok, col) in {**boss_weapon_guards, **boss_item_guards}.items():
+            if not ok:
+                continue
+            _seed_entry(tbl_key, col, ikey, w)
+
+    for (tbl_key,) in elite_tables:
+        for ikey, (w, ok, col) in {**elite_weapon_guards, **elite_item_guards}.items():
+            if not ok:
+                continue
+            _seed_entry(tbl_key, col, ikey, w)
+
+    conn.commit()
+    logger.info("admin_migration_applied", label="rarity-loot-scaling-task7")
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -3246,6 +3330,7 @@ def run_admin_migrations() -> None:
         _ensure_rogue_archetype(conn)
         _allow_nullable_campaign_model_id(conn)
         _ensure_adventure_forge_cleanup(conn)
+        _ensure_rarity_loot_scaling(conn)
     finally:
         conn.close()
 
