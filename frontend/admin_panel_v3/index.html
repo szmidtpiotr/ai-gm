@@ -1823,6 +1823,7 @@
                   <th><div class="th-inner">Rzadkość</div></th>
                   <th class="detail-col"><div class="th-inner">Aktywny</div></th>
                   <th class="detail-col"><div class="th-inner">🔒</div></th>
+                  <th class="detail-col"><div class="th-inner">Szablon</div></th>
                   <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
                 </tr>
               </thead>
@@ -3139,6 +3140,7 @@
         <button class="stab active" data-forgetab="agent">⚡ Agent AI</button>
         <button class="stab" data-forgetab="hooks">⚓ Haki</button>
         <button class="stab" data-forgetab="templates">📖 Szablony</button>
+        <button class="stab" data-forgetab="mcp">🔌 MCP</button>
       </div>
 
       <!-- Tab: Agent AI -->
@@ -3175,6 +3177,141 @@
               <div id="forge-ideas-list" style="display:flex;flex-direction:column;gap:8px;max-height:440px;overflow-y:auto;padding:4px 0"></div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Tab: MCP -->
+      <div id="forge-tab-mcp" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
+
+          <div class="card" style="padding:16px">
+            <div class="card-header"><span class="card-title">🔌 Konfiguracja MCP</span></div>
+            <div style="padding:14px 0 0;font-size:0.82rem;color:var(--t2);display:flex;flex-direction:column;gap:10px">
+              <div>
+                <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Typ transportu</div>
+                <div style="font-family:monospace;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:0.82rem">streamable-http</div>
+              </div>
+              <div>
+                <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">URL (DEV)</div>
+                <div style="font-family:monospace;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:0.82rem;word-break:break-all">https://aigm-mcp.studio-colorbox.com/</div>
+              </div>
+              <div>
+                <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Claude Desktop / Cursor config</div>
+                <pre style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;font-size:0.72rem;overflow-x:auto;margin:0">{
+  "mcpServers": {
+    "ai-gm": {
+      "type": "http",
+      "url": "https://aigm-mcp.studio-colorbox.com/"
+    }
+  }
+}</pre>
+              </div>
+              <div>
+                <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Dokumentacja</div>
+                <a href="https://modelcontextprotocol.io/docs" target="_blank" style="color:var(--accent);font-size:0.82rem">modelcontextprotocol.io/docs ↗</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="padding:16px">
+            <div class="card-header"><span class="card-title">🤖 Prompty dla agentów AI</span><span style="font-size:0.72rem;color:var(--t3);margin-left:8px">— wklej w Perplexity, Claude lub Cursor z MCP</span></div>
+            <div style="padding:14px 0 0;display:flex;flex-direction:column;gap:12px">
+
+              <div>
+                <div style="font-size:0.75rem;font-weight:700;color:var(--t1);margin-bottom:6px">Pełny workflow tworzenia kampanii (z przedmiotami)</div>
+                <div style="position:relative">
+                  <pre id="mcp-prompt-workflow" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;font-size:0.7rem;overflow-x:auto;margin:0;white-space:pre-wrap;max-height:140px;overflow-y:auto">Jesteś kreatywnym asystentem do tworzenia kampanii RPG w systemie AI-GM.
+Komunikuj się WYŁĄCZNIE po polsku.
+
+## TRYB PRACY
+
+### FAZA 1 — Rozmowa twórcza (zanim cokolwiek zapiszesz)
+Rozmawiaj z użytkownikiem jak z autorem scenariusza. Zadawaj pytania:
+- Jaki klimat/nastrój? (mroczny, epicki, komediowy, tajemniczy...)
+- Jaki motyw przewodni? (zemsta, odkrycie, polityka, klątwa...)
+- Jaki poziom trudności? (łatwy / średni / trudny / epicki)
+- Jakiego rodzaju bohaterowie pasują do tej historii?
+- Czy masz już pomysł na antagonistę albo kluczową lokację?
+
+Zbieraj pomysły, podsumuj je w kilku zdaniach i zapytaj użytkownika:
+"Czy to dobry kierunek? Mam tworzyć kampanię na tej podstawie?"
+
+Dopiero gdy użytkownik potwierdzi — przejdź do Fazy 2.
+
+### FAZA 2 — Budowanie kampanii przez MCP tools
+
+Zawsze zacznij od: forge_workflow_guide() — przeczytaj schemat przed tworzeniem.
+
+Kolejność kroków:
+1. forge_create_idea(title, premise, tone, themes, difficulty)
+2. forge_create_template(idea_id, title, description, atmosphere, difficulty_rating)
+3. forge_generate_plan(template_id, act_count=5)
+   → czekaj do 3 minut, jeśli timeout sprawdź forge_list_templates(status="all") czy plan=YES
+4. forge_publish_template(template_id)
+   → po tym gracze widzą kampanię natychmiast, NIE trzeba forge_launch_campaign
+
+### FAZA 3 — Przedmioty kampanii (OBOWIĄZKOWE)
+
+Każda kampania MUSI mieć unikalne przedmioty — to główny powód grania gotowych kampanii.
+Dodaj zawsze minimum: 2-3 bronie + 1-2 zbroje/przedmioty + 2-3 konsumable.
+Używaj template_id przy każdym tworzeniu!
+
+Przeczytaj schemat: forge_workflow_guide() — sekcja GAME ENTRIES.
+
+Dla broni:
+forge_create_game_entry("weapon", {
+  "key": "snake_case", "label": "Polska Nazwa",
+  "weapon_type": "melee|ranged|spell",
+  "weapon_slot": "main_hand|two_handed|off_hand_only|either",
+  "damage_die": "1d8", "linked_stat": "STR|DEX|INT|WIS",
+  "rarity": 1-4, "description": "opis kampanii", "allowed_classes": []
+}, template_id=TEMPLATE_ID)
+
+Dla konsumabli:
+forge_create_game_entry("consumable", {
+  "key": "snake_case", "label": "Polska Nazwa",
+  "effect_type": "heal_hp|restore_mana|stat_buff|remove_condition",
+  "effect_dice": "2d4", "base_price": 30,
+  "rarity": 1-4, "description": "opis"
+}, template_id=TEMPLATE_ID)
+
+### ZASADY
+- Nie wymyślaj pól spoza schematu
+- Klucze (key) zawsze lowercase_snake_case
+- Pytaj o potwierdzenie przed każdym nieodwracalnym krokiem (publish)
+- Podsumowuj co zostało stworzone po każdym kroku</pre>
+                  <button onclick="_copyMcpPrompt('mcp-prompt-workflow')" style="position:absolute;top:6px;right:6px;font-size:0.65rem;padding:2px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--t2)">Kopiuj</button>
+                </div>
+              </div>
+
+              <div>
+                <div style="font-size:0.75rem;font-weight:700;color:var(--t1);margin-bottom:6px">Tworzenie przedmiotów kampanii</div>
+                <div style="position:relative">
+                  <pre id="mcp-prompt-items" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;font-size:0.7rem;overflow-x:auto;margin:0;white-space:pre-wrap;max-height:100px;overflow-y:auto">Utwórz przedmioty dla kampanii o ID=TEMPLATE_ID.
+Minimum: 2-3 bronie + 1-2 przedmioty/zbroje + 2-3 konsumable.
+Wszystkie muszą być tematycznie spójne z klimatem kampanii.
+
+Broń — forge_create_game_entry("weapon", {
+  "key": "slug", "label": "Nazwa",
+  "weapon_type": "melee|ranged|spell",
+  "weapon_slot": "main_hand|two_handed|off_hand_only|either",
+  "damage_die": "1d8", "linked_stat": "STR|DEX|INT|WIS",
+  "rarity": 1-4, "description": "opis", "allowed_classes": []
+}, template_id=TEMPLATE_ID)
+
+Konsumable — forge_create_game_entry("consumable", {
+  "key": "slug", "label": "Nazwa",
+  "effect_type": "heal_hp|restore_mana|stat_buff|remove_condition",
+  "effect_dice": "2d4", "base_price": 30,
+  "rarity": 1-4, "description": "opis"
+}, template_id=TEMPLATE_ID)</pre>
+                  <button onclick="_copyMcpPrompt('mcp-prompt-items')" style="position:absolute;top:6px;right:6px;font-size:0.65rem;padding:2px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--t2)">Kopiuj</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -3322,14 +3459,6 @@
               </div>
             </div>
 
-            <!-- DB-linked items section -->
-            <div style="margin-top:16px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r)">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-                <div style="font-size:0.83rem;font-weight:700;color:var(--t1)">🗄 Przedmioty zapisane w bazie (powiązane z tym szablonem)</div>
-                <button class="btn btn-sm btn-secondary" onclick="_loadTplDbItems()">↺ Odśwież</button>
-              </div>
-              <div id="tpl-db-items-list" style="font-size:0.78rem;color:var(--t3)">Ładowanie…</div>
-            </div>
           </div>
 
           <!-- GM Private (always visible, collapsible) -->
@@ -4967,6 +5096,31 @@
     openSmartEntry(table);
   }
 
+  async function openSmartEntryForDbItem(entryType, key) {
+    const typeMap = { weapon:'weapon', armor:'item', item:'item', consumable:'consumable' };
+    const modalType = typeMap[entryType] || entryType;
+    const data = (window._tplDbItemsByType?.[entryType] || []).find(x => x.key === key) || { key };
+    // Map DB item to entity modal format (overrides = the data itself)
+    const entityData = { ...data, entity_type: modalType };
+    // Open modal in 'db_item' mode — save will PATCH the DB record, not edit plan JSON
+    _tplEntityCtx = { listKey: 'db_item', idx: -1, type: modalType, dbKey: key, dbEntryType: entryType };
+    const modal = document.getElementById('tpl-entity-modal');
+    const typeLabels = { weapon:'Broń (DB)', item:'Przedmiot (DB)', consumable:'Mikstura (DB)', location:'Lokacja' };
+    document.getElementById('tpl-entity-modal-type-badge').textContent = typeLabels[modalType] || modalType;
+    document.getElementById('tpl-entity-modal-title').textContent = data.label || data.key || '(DB)';
+    document.getElementById('tpl-entity-campaign-specific').checked = false;
+    document.getElementById('tpl-entity-campaign-specific').parentElement.style.display = 'none'; // hide for DB items
+    document.getElementById('tpl-entity-form').innerHTML = _renderEntityForm(modalType, entityData);
+    document.getElementById('tpl-entity-delete-btn').style.display = 'none'; // no delete from here
+    modal.style.display = 'flex';
+  }
+
+  function _copyMcpPrompt(elemId) {
+    const el = document.getElementById(elemId);
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent).then(() => _showToast('Skopiowano ✓', 'success'));
+  }
+
   // Auto-refresh tables when Smart Entry saves
   window.addEventListener('smart-entry-saved', e => {
     const t = e.detail?.table;
@@ -5273,6 +5427,7 @@
           <td>${_stars(w)}</td>
           <td class="detail-col">${w.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
           <td class="detail-col"><span class="lock-icon">${w.is_locked?'🔒':''}</span></td>
+          <td class="detail-col td-muted" style="font-size:0.72rem">${w.template_id ? '<span title="Przedmiot powiązany z szablonem #'+w.template_id+'" style="cursor:help">📖 #'+w.template_id+'</span>' : '—'}</td>
           <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
         </tr>`;
       }).join('');
@@ -8423,19 +8578,29 @@
     openTplEntityModal('key_enemies', -1, 'enemy', {});
   }
 
-  function _renderTplItems(items) {
+  function _renderTplItems(items, dbItemsByType) {
     const weaponEl = document.getElementById('tpl-items-weapon-list');
     const itemEl   = document.getElementById('tpl-items-item-list');
     const consEl   = document.getElementById('tpl-items-consumable-list');
-    const empty = '<div style="font-size:0.78rem;color:var(--t3)">Brak. Kliknij + Dodaj.</div>';
+    const empty = '<div style="font-size:0.78rem;color:var(--t3)">Brak. Kliknij + Dodaj lub 🤖 Generuj AI.</div>';
     if (!weaponEl) return;
-    const weapons = items.filter(x => x.entity_type === 'weapon');
-    const itemsArr = items.filter(x => x.entity_type === 'item');
-    const cons   = items.filter(x => x.entity_type === 'consumable');
-    const renderList = (list, elRef) => {
+    const db = dbItemsByType || window._tplDbItemsByType || {};
+    const RARITY = {1:'C',2:'U',3:'R',4:'L'};
+
+    const renderDbCard = (it) => {
+      const rarityLabel = RARITY[it.rarity] || it.rarity || '';
+      const summary = [it.weapon_type, it.damage_die, it.effect_type, it.item_type, rarityLabel].filter(Boolean).join(' · ');
+      return '<div style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);font-size:0.78rem;cursor:pointer;display:flex;align-items:center;gap:6px;transition:border-color .15s" onmouseenter="this.style.borderColor=\'var(--accent)\'" onmouseleave="this.style.borderColor=\'var(--border)\'" onclick="openSmartEntryForDbItem(\'' + _esc(it.entry_type) + '\',\'' + _esc(it.key) + '\')">' +
+        '<span style="font-size:0.6rem;padding:1px 4px;background:#d1fae5;color:#065f46;border-radius:3px;font-weight:700;white-space:nowrap">🔌 DB</span>' +
+        '<strong style="flex:1">' + _esc(it.label||it.key) + '</strong>' +
+        (summary ? '<span style="color:var(--t3);font-size:0.68rem">' + _esc(summary) + '</span>' : '') +
+        '<span style="font-size:0.65rem;color:var(--t3)" title="Promuj do globalnej bazy" onclick="event.stopPropagation();_promoteTplDbItem(\'' + _esc(it.entry_type) + '\',\'' + _esc(it.key) + '\',this)" style="cursor:pointer">⬆</span>' +
+      '</div>';
+    };
+
+    const renderList = (planList, dbList, elRef) => {
       if (!elRef) return;
-      if (!list.length) { elRef.innerHTML = empty; return; }
-      elRef.innerHTML = list.map((it) => {
+      const planHtml = planList.map((it) => {
         const realIdx = items.indexOf(it);
         const csTag = it.campaign_specific ? '<span style="font-size:0.65rem;padding:1px 5px;background:var(--blue-light,#dbeafe);color:var(--blue);border-radius:var(--r);margin-left:4px">kampania</span>' : '';
         const hiddenTag = it.hidden ? '<span style="font-size:0.65rem;padding:1px 5px;background:var(--surface);color:var(--t3);border-radius:var(--r);margin-left:4px">ukryty</span>' : '';
@@ -8443,49 +8608,32 @@
           '<div><strong>' + _esc(it.label||it.key||'?') + '</strong>' + csTag + hiddenTag + '</div>' +
           (it.location_hint ? '<div style="color:var(--t3);font-size:0.7rem">📍 ' + _esc(it.location_hint) + '</div>' : '') +
         '</div>';
-      }).join('');
+      });
+      const dbHtml = (dbList||[]).map(renderDbCard);
+      const allHtml = [...planHtml, ...dbHtml];
+      elRef.innerHTML = allHtml.length ? allHtml.join('') : empty;
     };
-    renderList(weapons, weaponEl);
-    renderList(itemsArr, itemEl);
-    renderList(cons, consEl);
+
+    const weapons = items.filter(x => x.entity_type === 'weapon');
+    const itemsArr = items.filter(x => x.entity_type === 'item');
+    const cons   = items.filter(x => x.entity_type === 'consumable');
+    renderList(weapons,  [...(db.weapon||[]), ...(db.armor||[])], weaponEl);
+    renderList(itemsArr, db.item||[], itemEl);
+    renderList(cons,     db.consumable||[], consEl);
   }
 
   async function _loadTplDbItems() {
-    const el = document.getElementById('tpl-db-items-list');
-    if (!el || !_tplEditorData?.id) return;
-    el.innerHTML = '<span style="color:var(--t3)">Ładowanie…</span>';
+    if (!_tplEditorData?.id) return;
     try {
       const d = await apiFetch('/api/admin/forge/templates/' + _tplEditorData.id + '/db-items');
-      const RARITY = {1:'common',2:'uncommon',3:'rare',4:'legendary'};
-      const TYPE_LABELS = {weapon:'⚔ Broń',item:'🎒 Przedmiot',armor:'🛡 Zbroja',consumable:'🧪 Konsumable'};
-      const all = [
-        ...(d.weapons||[]).map(x=>({...x,entry_type:'weapon'})),
-        ...(d.armors||[]).map(x=>({...x,entry_type:'armor'})),
-        ...(d.items||[]).map(x=>({...x,entry_type:'item'})),
-        ...(d.consumables||[]).map(x=>({...x,entry_type:'consumable'})),
-      ];
-      if (!all.length) { el.innerHTML = '<span style="color:var(--t3)">Brak. Poproś Perplexity: forge_create_game_entry(..., template_id=' + _tplEditorData.id + ')</span>'; return; }
-      el.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
-        all.map(it => {
-          const typeTag = TYPE_LABELS[it.entry_type] || it.entry_type;
-          const rarityLabel = RARITY[it.rarity] || it.rarity || '';
-          return '<div style="padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);font-size:0.75rem;min-width:180px">' +
-            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">' +
-              '<span style="font-size:0.65rem;color:var(--t3)">' + typeTag + '</span>' +
-              '<strong>' + _esc(it.label||it.key) + '</strong>' +
-            '</div>' +
-            '<div style="color:var(--t3);font-size:0.68rem;margin-bottom:6px">' +
-              (it.weapon_type ? it.weapon_type + ' · ' : '') +
-              (it.damage_die ? it.damage_die + ' · ' : '') +
-              (it.effect_type ? it.effect_type + ' · ' : '') +
-              rarityLabel +
-            '</div>' +
-            '<button class="btn btn-sm btn-secondary" style="font-size:0.68rem;padding:2px 8px" ' +
-              'onclick="_promoteTplDbItem(\'' + it.entry_type + '\',\'' + _esc(it.key) + '\',this)">⬆ Promuj do globalnej bazy</button>' +
-          '</div>';
-        }).join('') +
-      '</div>';
-    } catch(e) { el.innerHTML = '<span style="color:var(--red)">Błąd: ' + _esc(e.message||'nieznany') + '</span>'; }
+      window._tplDbItemsByType = {
+        weapon: (d.weapons||[]).map(x=>({...x,entry_type:'weapon'})),
+        armor:  (d.armors||[]).map(x=>({...x,entry_type:'armor'})),
+        item:   (d.items||[]).map(x=>({...x,entry_type:'item'})),
+        consumable: (d.consumables||[]).map(x=>({...x,entry_type:'consumable'})),
+      };
+      _renderTplItems(_tplEditorPlan?.key_items || [], window._tplDbItemsByType);
+    } catch(e) { console.warn('DB items load failed:', e.message); }
   }
 
   async function _promoteTplDbItem(entryType, key, btn) {
@@ -8548,6 +8696,10 @@
 
   function closeTplEntityModal() {
     document.getElementById('tpl-entity-modal').style.display = 'none';
+    const csRow = document.getElementById('tpl-entity-campaign-specific')?.parentElement;
+    if (csRow) csRow.style.display = '';
+    const delBtn = document.getElementById('tpl-entity-delete-btn');
+    if (delBtn) delBtn.style.display = '';
     _tplEntityCtx = null;
   }
 
@@ -8570,6 +8722,23 @@
   function saveTplEntityEdits() {
     if (!_tplEntityCtx) return;
     const { listKey, idx, type } = _tplEntityCtx;
+    // DB item: PATCH game_config_* record directly, then refresh lists
+    if (listKey === 'db_item') {
+      const { dbKey, dbEntryType } = _tplEntityCtx;
+      const tableMap = { weapon:'game_config_weapons', armor:'game_config_items', item:'game_config_items', consumable:'game_config_consumables' };
+      const table = tableMap[dbEntryType] || 'game_config_weapons';
+      const formData = _collectEntityForm(type);
+      apiFetch('/api/admin/smart-entry/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: 'tpl-entity-db', table, target_key: dbKey, draft: formData }),
+      }).then(() => {
+        _showToast('Zapisano ✓', 'success');
+        _loadTplDbItems();
+      }).catch(e => _showToast('Błąd zapisu: ' + e.message, 'error'));
+      closeTplEntityModal();
+      return;
+    }
     if (!_tplEditorPlan) _tplEditorPlan = {};
     if (!_tplEditorPlan[listKey]) _tplEditorPlan[listKey] = [];
 

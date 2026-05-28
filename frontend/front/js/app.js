@@ -1716,9 +1716,33 @@ function _renderPrebuiltGrid() {
     const grid = document.getElementById('prebuilt-grid');
     if (!grid) return;
     const diffLabels = ['','★','★★','★★★','★★★★','★★★★★'];
+    // Rarity border color by level
+    const RARITY_COLOR = ['','#4a4540','#3a7a4a','#3a5a8a','#b8902a','#7a3a9a'];
+    const RARITY_LABEL = ['','Pospolity','Niepospolity','Rzadki','Epicki','Legendarny'];
+    const TYPE_EMOJI = { weapon:'⚔', consumable:'🧪', item:'🛡', armor:'🛡' };
+    const TYPE_LABEL = { weapon:'Broń', consumable:'Mikstura', item:'Przedmiot', armor:'Zbroja' };
+
     grid.innerHTML = _prebuiltTemplates.map(t => {
         const actCount = t.gm_plan_json?.acts?.length || 0;
-        return `<div class="adv-card" style="align-items:flex-start;padding:14px 16px;gap:12px;display:flex;flex-direction:column;cursor:default">
+        const items = t.campaign_items || [];
+
+        const itemChips = items.length ? `
+          <div class="prebuilt-items-row">
+            <span class="prebuilt-items-label">Przedmioty kampanii:</span>
+            <div class="prebuilt-chips">
+              ${items.map(it => {
+                  const emoji = TYPE_EMOJI[it.entry_type] || '📦';
+                  const rc = RARITY_COLOR[it.rarity] || RARITY_COLOR[1];
+                  const safeData = JSON.stringify(it).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+                  return `<button class="item-chip" style="--chip-border:${rc}" onclick="showItemPopup(this,event)" data-item="${safeData}" title="${_esc(it.label)}">
+                    <span>${emoji}</span>
+                    <span class="item-chip__name">${_esc(it.label)}</span>
+                  </button>`;
+              }).join('')}
+            </div>
+          </div>` : '';
+
+        return `<div class="adv-card prebuilt-campaign-card" style="align-items:flex-start;padding:14px 16px;gap:10px;display:flex;flex-direction:column;cursor:default">
           <div style="display:flex;gap:12px;width:100%">
             <span class="adv-card__icon" style="font-size:1.5rem;flex-shrink:0">📖</span>
             <div class="adv-card__body" style="flex:1;min-width:0">
@@ -1732,11 +1756,84 @@ function _renderPrebuiltGrid() {
               </div>
             </div>
           </div>
-          <button type="button" class="btn btn--primary" style="width:100%;margin-top:4px" onclick="_launchPrebuiltById(${t.id})">
+          ${itemChips}
+          <button type="button" class="btn btn--primary" style="width:100%;margin-top:2px" onclick="_launchPrebuiltById(${t.id})">
             🚀 Zagraj
           </button>
         </div>`;
     }).join('');
+}
+
+const _RARITY_LABEL = ['','Pospolity','Niepospolity','Rzadki','Epicki','Legendarny'];
+const _RARITY_GLOW  = ['','rgba(74,69,64,.6)','rgba(58,122,74,.5)','rgba(58,90,138,.5)','rgba(184,144,42,.5)','rgba(122,58,154,.5)'];
+const _RARITY_COLOR = ['','#6b665e','#4a9a5a','#5a80c0','#c9a54a','#b06adc'];
+const _TYPE_LABEL_PL = { weapon:'Broń', consumable:'Mikstura', item:'Przedmiot', armor:'Zbroja' };
+
+function showItemPopup(chip, event) {
+    event.stopPropagation();
+    _closeItemPopup();
+    const item = JSON.parse(chip.dataset.item.replace(/&quot;/g,'"'));
+    const rColor = _RARITY_COLOR[item.rarity] || _RARITY_COLOR[1];
+    const rGlow  = _RARITY_GLOW[item.rarity]  || _RARITY_GLOW[1];
+    const rLabel = _RARITY_LABEL[item.rarity]  || '';
+    const typePL = _TYPE_LABEL_PL[item.entry_type] || item.entry_type;
+    const statLine = [
+        item.damage_die ? `<span class="ip-stat">⚡ ${_esc(item.damage_die)}</span>` : '',
+        item.effect_type ? `<span class="ip-stat">✦ ${_esc(item.effect_type)}</span>` : '',
+    ].filter(Boolean).join('');
+
+    const popup = document.createElement('div');
+    popup.id = 'item-popup';
+    popup._chip = chip;
+    popup.innerHTML = `
+      <div class="ip-glow" style="--ip-glow:${rGlow}"></div>
+      <div class="ip-accent-line" style="background:${rColor}"></div>
+      <div class="ip-header">
+        <span class="ip-type" style="color:${rColor}">${typePL}</span>
+        <button class="ip-close" onclick="_closeItemPopup()">✕</button>
+      </div>
+      <div class="ip-name">${_esc(item.label)}</div>
+      ${statLine ? `<div class="ip-stats">${statLine}</div>` : ''}
+      <div class="ip-rarity" style="color:${rColor}">◆ ${rLabel}</div>
+      ${item.description ? `<div class="ip-desc">${_esc(item.description)}</div>` : ''}
+    `;
+    document.body.appendChild(popup);
+
+    // Position: on mobile (< 600px) — bottom sheet; on desktop — near chip
+    const isMobile = window.innerWidth < 600;
+    if (!isMobile) {
+        const rect = chip.getBoundingClientRect();
+        const popupW = 260;
+        let left = rect.left;
+        if (left + popupW > window.innerWidth - 12) left = window.innerWidth - popupW - 12;
+        popup.style.position = 'fixed';
+        popup.style.left = left + 'px';
+        popup.style.top = (rect.top - 8) + 'px';
+        popup.style.transform = 'translateY(-100%)';
+        popup.classList.add('ip--desktop');
+    } else {
+        popup.classList.add('ip--sheet');
+        requestAnimationFrame(() => popup.classList.add('ip--sheet-open'));
+    }
+    chip.classList.add('item-chip--active');
+
+    // Close on outside click
+    setTimeout(() => {
+        document.addEventListener('click', _closeItemPopup, { once: true });
+    }, 0);
+}
+
+function _closeItemPopup() {
+    const p = document.getElementById('item-popup');
+    if (p) {
+        document.querySelectorAll('.item-chip--active').forEach(c => c.classList.remove('item-chip--active'));
+        if (p.classList.contains('ip--sheet')) {
+            p.classList.remove('ip--sheet-open');
+            setTimeout(() => p.remove(), 280);
+        } else {
+            p.remove();
+        }
+    }
 }
 
 function _pickPrebuilt(id) {

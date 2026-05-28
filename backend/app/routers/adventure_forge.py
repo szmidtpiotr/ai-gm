@@ -1148,7 +1148,23 @@ def list_published_templates():
         rows = conn.execute(
             "SELECT * FROM campaign_templates WHERE status = 'published' ORDER BY play_count DESC, created_at DESC"
         ).fetchall()
-        return {"items": [_template_to_dict(r) for r in rows]}
+        items = []
+        for r in rows:
+            d = _template_to_dict(r)
+            # Attach campaign-scoped items summary (key, label, entry_type, rarity, damage_die, effect_type, description)
+            tid = r["id"]
+            weapons = conn.execute(
+                "SELECT key, label, 'weapon' AS entry_type, rarity, damage_die, NULL AS effect_type, description FROM game_config_weapons WHERE template_id = ?", (tid,)
+            ).fetchall()
+            cons = conn.execute(
+                "SELECT key, label, 'consumable' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_consumables WHERE template_id = ?", (tid,)
+            ).fetchall()
+            its = conn.execute(
+                "SELECT key, label, 'item' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_items WHERE template_id = ?", (tid,)
+            ).fetchall()
+            d["campaign_items"] = [dict(x) for x in [*weapons, *cons, *its]]
+            items.append(d)
+        return {"items": items}
     finally:
         conn.close()
 
