@@ -2662,6 +2662,13 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         )
     """, "v2-hex-teleport-connections")
 
+    # forge_encounter_pool: links approved adventure_hooks to specific hexes
+    # for biome-aware encounter injection (Option C trigger system, issue #153)
+    _exec(
+        "ALTER TABLE world_hexes ADD COLUMN forge_encounter_pool TEXT DEFAULT '[]'",
+        "world-hexes-forge-encounter-pool",
+    )
+
     logger.info("v2_schema_migrations_complete")
 
 

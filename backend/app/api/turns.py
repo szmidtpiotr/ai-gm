@@ -3206,11 +3206,42 @@ def create_turn(
         assistant_text = (result.get("message") or "").strip()
         if not assistant_text:
             raise HTTPException(status_code=500, detail="Empty narrative response")
+
+        # Snapshot hex before location intent (for hex_enter encounter trigger)
+        _hex_before_enc = None
+        try:
+            _gs_pre_enc = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+            ).fetchone()
+            if _gs_pre_enc:
+                _sf_pre_enc = json.loads(_gs_pre_enc["session_flags"] or "{}")
+                _hex_before_enc = _sf_pre_enc.get("current_hex")
+        except Exception:
+            _hex_before_enc = None
+
         assistant_text = _process_location_intent(
             conn=conn,
             campaign_id=campaign_id,
             assistant_response=assistant_text,
         )
+
+        # Hex-enter encounter trigger: fire when current_hex changed
+        try:
+            _gs_post_enc = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+            ).fetchone()
+            if _gs_post_enc:
+                _sf_post_enc = json.loads(_gs_post_enc["session_flags"] or "{}")
+                _hex_after_enc = _sf_post_enc.get("current_hex")
+                if _hex_after_enc and _hex_after_enc != _hex_before_enc:
+                    from app.services.encounter_service import maybe_inject_encounter as _mie
+                    _mie(
+                        conn, campaign_id, "hex_enter",
+                        q=int(_hex_after_enc.get("q", 0)),
+                        r=int(_hex_after_enc.get("r", 0)),
+                    )
+        except Exception as _enc_trigger_err:
+            logger.warning("hex_enter_encounter_trigger_error", error=str(_enc_trigger_err))
 
         # ── [SKILL_TEST:] / [TRAP:] tag interception ─────────────────────────
         _skill_pending_narrator = None
@@ -3510,6 +3541,33 @@ def create_turn(
                 amount=grant_gold_amount,
                 new_total_gp=new_total,
             )
+
+        # N-turns encounter trigger: every 5 peaceful turns since last combat
+        try:
+            _n_turns_interval = 5
+            _last_combat_turn = conn.execute(
+                "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns WHERE campaign_id=? AND route='combat'",
+                (campaign_id,),
+            ).fetchone()[0]
+            _peaceful_since = conn.execute(
+                "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id=? AND turn_number > ? AND route != 'combat'",
+                (campaign_id, _last_combat_turn),
+            ).fetchone()[0]
+            if _peaceful_since > 0 and _peaceful_since % _n_turns_interval == 0:
+                from app.services.encounter_service import maybe_inject_encounter as _mie2
+                _gs_nturn = conn.execute(
+                    "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+                ).fetchone()
+                if _gs_nturn:
+                    _sf_nturn = json.loads(_gs_nturn["session_flags"] or "{}")
+                    _hex_nturn = _sf_nturn.get("current_hex")
+                    _mie2(
+                        conn, campaign_id, "n_turns",
+                        q=int(_hex_nturn.get("q", 0)) if _hex_nturn else None,
+                        r=int(_hex_nturn.get("r", 0)) if _hex_nturn else None,
+                    )
+        except Exception as _n_enc_err:
+            logger.warning("n_turns_encounter_trigger_error", error=str(_n_enc_err))
 
         # Issue #135 — inject [COMBAT_START] when player declared attack but
         # LLM omitted the tag. Keeps combat engine engaged in Polish narrative mode.

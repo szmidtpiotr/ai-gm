@@ -1602,91 +1602,9 @@ def forge_patch_encounter(
 
 # ── Debug: inject encounter into active campaign session ─────────────────────
 
-def _parse_stat(notes: str, pattern: str, default: int) -> int:
-    m = re.search(pattern, notes, re.IGNORECASE)
-    if m:
-        try:
-            return int(m.group(1))
-        except (ValueError, IndexError):
-            pass
-    return default
-
-
-def _ensure_encounter_enemies_in_db(conn: sqlite3.Connection, encounter: dict) -> dict:
-    """
-    For each enemy in encounter.enemies[], ensure a game_config_enemies row exists.
-    Parses HP/AC/attack/damage from notes text if present.
-    Creates a loot table stub if the enemy has none.
-    Adds/updates enemy_key field in the enemy dict.
-    Returns the (possibly mutated) encounter dict.
-    """
-    enemies = encounter.get("enemies") or []
-    for enemy in enemies:
-        name = str(enemy.get("name") or "").strip()
-        if not name:
-            continue
-        notes = str(enemy.get("notes") or "")
-
-        # Derive key
-        existing_key = str(enemy.get("enemy_key") or "").strip()
-        key = existing_key or _slugify(name)
-        if not key:
-            continue
-
-        # Check if already in DB
-        existing = conn.execute(
-            "SELECT key FROM game_config_enemies WHERE key = ?", (key,)
-        ).fetchone()
-
-        if not existing:
-            # Parse stats from notes (fallback to safe defaults)
-            hp = _parse_stat(notes, r"HP\s*bazowe?\s*(\d+)", 15)
-            ac = _parse_stat(notes, r"AC\s*bazowe?\s*(\d+)", 12)
-            atk = _parse_stat(notes, r"atak\s*\+(\d+)", 2)
-            dmg_m = re.search(r"obrażenia\s+(\d+d\d+)", notes, re.IGNORECASE)
-            dmg_die = dmg_m.group(1) if dmg_m else "1d6"
-            dmg_type_m = re.search(r"(\d+d\d+)\s+(fizyczne|ogień|lód|błyskawica|kwas|nekro|psycho|święte)", notes, re.IGNORECASE)
-            dmg_type = dmg_type_m.group(2).lower() if dmg_type_m else "physical"
-            # Map Polish damage type names
-            _dmg_type_map = {
-                "fizyczne": "physical", "ogień": "fire", "lód": "ice",
-                "błyskawica": "lightning", "kwas": "acid",
-                "nekro": "necrotic", "psycho": "psychic", "święte": "holy",
-            }
-            dmg_type = _dmg_type_map.get(dmg_type, dmg_type)
-
-            count = int(enemy.get("count") or 1)
-            tier = "standard"
-            if hp >= 50 or count == 1:
-                tier = "elite"
-
-            loot_key = f"loot_{key}"
-            conn.execute(
-                """
-                INSERT INTO game_config_enemies
-                  (key, label, hp_base, ac_base, attack_bonus, damage_die,
-                   damage_type, tier, xp_award, loot_table_key, drop_chance,
-                   description, review_status)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """,
-                (
-                    key, name, hp, ac, atk, dmg_die, dmg_type, tier,
-                    max(10, hp * 2),
-                    loot_key, 1.0,
-                    notes[:300] if notes else "",
-                    "pending_review",
-                ),
-            )
-            # Create a minimal loot table stub so combat engine finds it
-            conn.execute(
-                "INSERT OR IGNORE INTO game_config_loot_tables (key, label, gold_min, gold_max) VALUES (?,?,?,?)",
-                (loot_key, f"Łupy: {name}", 1, 5),
-            )
-
-        enemy["enemy_key"] = key
-
-    encounter["enemies"] = enemies
-    return encounter
+from app.services.encounter_service import (
+    ensure_encounter_enemies_in_db as _ensure_encounter_enemies_in_db,
+)
 
 
 class InjectEncounterReq(BaseModel):
