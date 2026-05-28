@@ -4,28 +4,21 @@ Created after balance test + loot audit (2026-05-28).
 
 ## High Priority (Next Sprint)
 
-### Task 1: Implement Shop NPC System
-- **Description**: Create `game_config_shops` + `game_shop_inventory` DB tables
+### Task 1: Implement Shop NPC System ✓ DONE
+- **Note**: System was pre-built (Phase 9A-4) using npcs.is_shop + npcs.shop_inventory_json. Not separate tables as proposed.
 - **Deliverables**:
-  - Schema: shops table (key, label, npc_type, location_key, base_markup, stock_reset_hours)
-  - Schema: inventory table (shop_key, item_key, qty_available, qty_base, sell_price, buy_price)
-  - Endpoints: `GET /api/shop/{key}/inventory`, `POST /api/shop/{key}/buy`, `POST /api/shop/{key}/sell`
-  - GM prompt integration: suggest shops, render keeper dialogue
-  - Admin UI: shop inventory browser in admin_panel_v3
-- **Reference**: `docs/SHOP_NPC_PROPOSAL.md`
-- **Dependency**: None (can run in parallel)
-- **Effort**: 6-8 hours
+  - ✓ Backend: GET /api/shop/{npc_id}, POST buy, POST sell, GET /by-key/{key}
+  - ✓ GM prompt: OPEN SHOP hard rule in system_prompt.txt
+  - ✓ Admin UI: 🛒 inventory editor modal on shop NPC rows (admin_panel_v3)
+  - ✓ GitHub issue #161
+- **Architecture**: npcs.is_shop=1 + npcs.shop_inventory_json ([{type,key},...]) — simpler than proposed, works with existing NPC catalog
 
-### Task 2: Seed Test Shops to DEV Database
-- **Description**: Add 3 starter shops + baseline inventory
+### Task 2: Seed Test Shops to DEV Database ✓ DONE
 - **Deliverables**:
-  - Tavern Czarnogrodu: healing potions (5×50g), bread (10×5g)
-  - Blacksmith Halafarda: longsword (2×300g), chainmail (1×500g)
-  - General Store: rope (qty 3), torches (qty 8), herbs (qty 4)
-  - Set base_markup=1.15–1.5, stock_reset_hours=24
-  - Link to existing campaign locations
-- **Dependency**: Task 1 (tables must exist)
-- **Effort**: 1 hour
+  - ✓ merchant_aldric: shortsword, health_potion, torch
+  - ✓ blacksmith_goran: shortsword, shortbow, leatherarmor
+  - ✓ seed_pending_npc_borys: healing_potion, rope_hemp, torch, bandage
+- **Note**: Qty limits not implemented (Phase 2). Pricing uses catalog value_gp.
 
 ### Task 3: Audit & Tune Loot Drop Rates
 - **Description**: Review all 93 loot tables, optimize weak-enemy drops
@@ -107,6 +100,7 @@ Created after balance test + loot audit (2026-05-28).
 | ad31b59 | Loot table audit + zero-reward fix | ✓ Done |
 | — | Shop NPC proposal doc | ✓ Done |
 | — | Task 4: Difficulty scaling (initiate_combat) | ✓ Done — issue #160 |
+| — | Task 1+2: Shop NPC system + seed | ✓ Done — issue #161 |
 
 ---
 

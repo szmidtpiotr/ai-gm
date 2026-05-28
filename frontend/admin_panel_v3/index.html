@@ -6078,11 +6078,86 @@ forge_create_game_entry("armor", {
           <td>${att}</td>
           <td class="td-muted">${_esc(loc)}</td>
           <td class="td-muted">${_esc(n.npc_type||'—')}</td>
-          <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
+          <td class="td-actions">${n.is_shop ? `<button class="btn btn-sm" style="font-size:0.72rem;padding:2px 6px;margin-right:4px" title="Ekwipunek sklepu" onclick="openShopInventoryModal(${n.id},this)">🛒</button>` : ''}<button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
         </tr>`;
       }).join('');
       _wireRowActions('npcs-table');
     } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
+  }
+
+  function openShopInventoryModal(npcId, btn) {
+    const row = btn.closest('tr');
+    const npcData = JSON.parse(decodeURIComponent(row.dataset.rjson || '{}'));
+    const npcLabel = npcData.label || String(npcId);
+    let _items = [];
+    try { _items = JSON.parse(npcData.shop_inventory_json || '[]'); } catch(e) {}
+
+    function _renderInvItems() {
+      if (!_items.length) return '<div style="color:var(--t3);font-size:0.8rem;text-align:center;padding:12px">Brak przedmiotów — dodaj poniżej.</div>';
+      return _items.map((it, i) =>
+        `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--surface2);border-radius:4px">
+          <span class="badge badge-${it.type==='weapon'?'red':it.type==='consumable'?'green':'amber'}" style="font-size:0.7rem">${_esc(it.type)}</span>
+          <code style="font-size:0.8rem;flex:1">${_esc(it.key)}</code>
+          <button class="btn-icon danger" style="font-size:0.75rem" onclick="_shopInvRemove(${i})">✕</button>
+        </div>`
+      ).join('');
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.id = 'shop-inv-modal-' + npcId;
+    overlay.innerHTML = `<div class="modal-box" style="max-width:460px">
+      <div class="modal-head"><span class="modal-title">🛒 Sklep: ${_esc(npcLabel)}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:8px">
+        <div id="shop-inv-list-${npcId}" style="display:flex;flex-direction:column;gap:4px;min-height:40px">${_renderInvItems()}</div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:2px 0">
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="shop-inv-type-${npcId}" class="form-input" style="width:130px">
+            <option value="weapon">weapon</option>
+            <option value="consumable">consumable</option>
+            <option value="item">item</option>
+            <option value="armor">armor</option>
+          </select>
+          <input id="shop-inv-key-${npcId}" class="form-input" style="flex:1" placeholder="klucz (np. longsword, health_potion)">
+          <button class="btn btn-secondary btn-sm" onclick="_shopInvAdd(${npcId})">+ Dodaj</button>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+        <button class="btn btn-primary" id="shop-inv-save-${npcId}" onclick="_shopInvSave(${npcId})">💾 Zapisz</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    window._shopInvRemove = function(i) {
+      _items.splice(i, 1);
+      const el = document.getElementById('shop-inv-list-' + npcId);
+      if (el) el.innerHTML = _renderInvItems();
+    };
+    window._shopInvAdd = function(id) {
+      const type = document.getElementById('shop-inv-type-' + id)?.value || 'item';
+      const key = (document.getElementById('shop-inv-key-' + id)?.value || '').trim();
+      if (!key) { _showToast('Podaj klucz przedmiotu.', 'error'); return; }
+      if (_items.some(it => it.key === key && it.type === type)) { _showToast('Już na liście.', 'error'); return; }
+      _items.push({ type, key });
+      const el = document.getElementById('shop-inv-list-' + id);
+      if (el) el.innerHTML = _renderInvItems();
+      const inp = document.getElementById('shop-inv-key-' + id);
+      if (inp) inp.value = '';
+    };
+    window._shopInvSave = async function(id) {
+      const btn = document.getElementById('shop-inv-save-' + id);
+      if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+      try {
+        await apiFetch(`/api/admin/npcs/${id}`, { method: 'PATCH', body: JSON.stringify({ shop_inventory_json: JSON.stringify(_items) }) });
+        _showToast('Ekwipunek sklepu zapisany.', 'success');
+        document.getElementById('shop-inv-modal-' + id)?.remove();
+        _worldLoaded.delete('npcs'); _loadNPCs();
+      } catch(e) {
+        _showToast(e.message || 'Błąd zapisu.', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Zapisz'; }
+      }
+    };
   }
 
   async function _loadBestiaryLoot() {
