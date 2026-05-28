@@ -159,6 +159,7 @@ class ContextInjector:
             self._build_content_index_block(mechanic_result),
             plan_update_block,
             self._build_available_enemies_block(),
+            self._build_active_encounter_block(session_flags),
             NARRATOR_CONSTRAINTS,
         ]
 
@@ -390,6 +391,31 @@ class ContextInjector:
         except Exception as exc:  # noqa: BLE001
             logger.warning("available_enemies_block_failed", error=str(exc))
             return ""
+
+    def _build_active_encounter_block(self, session_flags: dict) -> str:
+        """Inject admin-queued encounter so the GM uses it this turn."""
+        enc = session_flags.get("active_encounter")
+        if not enc or not isinstance(enc, dict):
+            return ""
+        enemies_lines = ""
+        for e in (enc.get("enemies") or []):
+            name = e.get("name", "?")
+            count = e.get("count", 1)
+            notes = e.get("notes", "")
+            enemies_lines += f"  - {name} ×{count}" + (f" ({notes})" if notes else "") + "\n"
+        objectives = "\n".join(f"  {i+1}. {o}" for i, o in enumerate(enc.get("objectives") or []))
+        rewards = enc.get("rewards") or {}
+        return (
+            "=== AKTYWNE SPOTKANIE (UŻYJ W TEJ TURZE) ===\n"
+            f"Tytuł: {enc.get('title','')}\n"
+            f"Wyzwalacz: {enc.get('trigger_condition','')}\n"
+            f"Scena: {enc.get('scene_setup','')}\n"
+            f"Wrogowie:\n{enemies_lines}"
+            f"Cele:\n{objectives}\n"
+            f"Nagrody: {rewards.get('xp_estimate',0)} XP — {rewards.get('loot_notes','')}\n"
+            f"Uwagi GM: {enc.get('gm_notes','')}\n"
+            "Poprowadź tę scenę naturalnie — włącz wyzwalacz do narracji, rozmieść wrogów i pozwól graczowi zareagować."
+        )
 
     def _build_plan_update_request_block(self, campaign_id: int, turn_number: int) -> str:
         """BUG-04 — inject plan update request when force_update_turns threshold exceeded."""

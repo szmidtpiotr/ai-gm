@@ -221,6 +221,15 @@ def process_v2_turn(
         logger.warning("turn_pipeline_narrator_error", error=str(e))
         prose_raw = _fallback_prose(action_type, mechanic_result)
 
+    # Clear one-shot active_encounter after it was consumed by the narrator
+    if refreshed_flags.get("active_encounter"):
+        refreshed_flags.pop("active_encounter", None)
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (json.dumps(refreshed_flags, ensure_ascii=False), campaign_id),
+        )
+        conn.commit()
+
     # Process CREATE tags and NPC_KILLED from narrator response
     prose, _ = process_create_tags(prose_raw, conn, campaign_id)
 

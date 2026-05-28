@@ -1530,3 +1530,152 @@ def forge_promote_template_item(
         return {"ok": True, "key": key, "entry_type": entry_type, "status": "promoted_to_global"}
     finally:
         conn.close()
+
+
+# ── Encounters list / edit ────────────────────────────────────────────────────
+
+@router.get("/encounters")
+def forge_list_encounters(_: None = Depends(_require_admin)):
+    """Return all hooks that have a generated encounter in draft_data.encounter."""
+    conn = _get_db()
+    try:
+        rows = conn.execute(
+            "SELECT id, hook_type, title, status, description, draft_data FROM adventure_hooks "
+            "WHERE draft_data LIKE '%\"encounter\"%' ORDER BY id DESC"
+        ).fetchall()
+        out = []
+        for r in rows:
+            dd = {}
+            try:
+                dd = json.loads(r["draft_data"] or "{}")
+            except Exception:
+                pass
+            enc = dd.get("encounter")
+            if not enc:
+                continue
+            out.append({
+                "hook_id": r["id"],
+                "hook_type": r["hook_type"],
+                "hook_title": r["title"],
+                "hook_status": r["status"],
+                "hook_description": r["description"],
+                "encounter": enc,
+            })
+        return {"encounters": out}
+    finally:
+        conn.close()
+
+
+class PatchEncounterReq(BaseModel):
+    encounter: dict
+
+
+@router.patch("/encounters/{hook_id}")
+def forge_patch_encounter(
+    hook_id: int,
+    req: PatchEncounterReq,
+    _: None = Depends(_require_admin),
+):
+    """Update encounter JSON stored in adventure_hooks.draft_data.encounter."""
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT draft_data FROM adventure_hooks WHERE id = ?", (hook_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Hook not found")
+        dd = {}
+        try:
+            dd = json.loads(row["draft_data"] or "{}")
+        except Exception:
+            pass
+        dd["encounter"] = req.encounter
+        conn.execute(
+            "UPDATE adventure_hooks SET draft_data = ? WHERE id = ?",
+            (json.dumps(dd, ensure_ascii=False), hook_id),
+        )
+        conn.commit()
+        return {"ok": True, "hook_id": hook_id, "encounter": req.encounter}
+    finally:
+        conn.close()
+
+
+# ── Debug: inject encounter into active campaign session ─────────────────────
+
+class InjectEncounterReq(BaseModel):
+    campaign_id: int
+    hook_id: int
+
+
+@router.post("/debug/inject-encounter")
+def forge_debug_inject_encounter(
+    req: InjectEncounterReq,
+    _: None = Depends(_require_admin),
+):
+    """Set session_flags.active_encounter so the next GM turn uses this encounter."""
+    conn = _get_db()
+    try:
+        hook_row = conn.execute(
+            "SELECT draft_data FROM adventure_hooks WHERE id = ?", (req.hook_id,)
+        ).fetchone()
+        if not hook_row:
+            raise HTTPException(status_code=404, detail="Hook not found")
+        dd = {}
+        try:
+            dd = json.loads(hook_row["draft_data"] or "{}")
+        except Exception:
+            pass
+        encounter = dd.get("encounter")
+        if not encounter:
+            raise HTTPException(status_code=400, detail="Hook has no generated encounter. Run generate-encounter first.")
+
+        sess_row = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (req.campaign_id,),
+        ).fetchone()
+        if not sess_row:
+            raise HTTPException(status_code=404, detail="No active session for this campaign")
+        flags = {}
+        try:
+            flags = json.loads(sess_row["session_flags"] or "{}")
+        except Exception:
+            pass
+        flags["active_encounter"] = encounter
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), sess_row["id"]),
+        )
+        conn.commit()
+        return {"ok": True, "campaign_id": req.campaign_id, "encounter_title": encounter.get("title")}
+    finally:
+        conn.close()
+
+
+@router.delete("/debug/inject-encounter/{campaign_id}")
+def forge_debug_clear_encounter(
+    campaign_id: int,
+    _: None = Depends(_require_admin),
+):
+    """Clear active_encounter from session_flags."""
+    conn = _get_db()
+    try:
+        sess_row = conn.execute(
+            "SELECT id, session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not sess_row:
+            raise HTTPException(status_code=404, detail="No session found")
+        flags = {}
+        try:
+            flags = json.loads(sess_row["session_flags"] or "{}")
+        except Exception:
+            pass
+        flags.pop("active_encounter", None)
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+            (json.dumps(flags, ensure_ascii=False), sess_row["id"]),
+        )
+        conn.commit()
+        return {"ok": True, "campaign_id": campaign_id, "cleared": True}
+    finally:
+        conn.close()
