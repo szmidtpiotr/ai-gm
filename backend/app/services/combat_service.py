@@ -1325,6 +1325,8 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
             raise ValueError("character not found")
 
         sheet = parse_character_sheet(ch["sheet_json"])
+        from app.services.xp_service import get_hero_level
+        player_level = get_hero_level(sheet)
         hp_cur, hp_max = _player_hp_pair(sheet)
         ac = _player_ac_from_sheet(sheet)
         # Add equipped armor AC bonus from inventory
@@ -1381,8 +1383,8 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         for ek, er in resolved_enemies:
             idx += 1
             slug = _enemy_slug(ek, idx)
-            hp_max_e = int(er["hp_base"] or 1)
-            ac_e = int(er["ac_base"] or 10)
+            hp_max_e = max(1, round(int(er["hp_base"] or 1) * (1.0 + 0.1 * (player_level - 1))))
+            ac_e = int(er["ac_base"] or 10) + (player_level - 1) // 3
             dex_e_mod = int(er["dex_modifier"] or 0)
             init_e = roll_d20() + dex_e_mod
             xp_award_e = 0
@@ -1410,6 +1412,7 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                     "xp_award": xp_award_e,
                     "tier": str(er["tier"] or "standard"),
                     "zone": _default_zone_for_enemy(er["key"], er["label"]),
+                    "damage_bonus": (player_level - 1) // 2,
                     # Stored now for opposed checks in upcoming [S1b] formulas (T30).
                     "skills": _parse_enemy_skills(er["skills_json"]),
                 }
@@ -2221,7 +2224,7 @@ def resolve_attack(
         dmg = 0
         if hit:
             expr = (enemy.get("damage_dice") or "1d6").strip().lower()
-            dmg = roll_damage_dice(expr, 0)
+            dmg = roll_damage_dice(expr, enemy.get("damage_bonus", 0))
             out["damage"] = dmg
             prev = int(p.get("hp_current", 0) or 0)
             next_hp = max(0, prev - dmg)

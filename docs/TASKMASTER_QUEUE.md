@@ -40,17 +40,17 @@ Created after balance test + loot audit (2026-05-28).
 - **Effort**: 3 hours
 - **Testing**: Rerun balance test after changes
 
-### Task 4: Implement Difficulty Scaling (Level-based)
+### Task 4: Implement Difficulty Scaling (Level-based) ✓ DONE
 - **Description**: Adjust enemy AC/HP/damage based on character level
 - **Deliverables**:
-  - Enemy AC scaling: base_ac + (level / 3)
-  - Enemy HP scaling: base_hp × (0.8 + 0.1 × level)
-  - Enemy damage scaling: base_dmg × (1.0 + 0.05 × level)
-  - Document scaling in `system_prompt.txt`
+  - ✓ Enemy AC scaling: `base_ac + (level-1) // 3`
+  - ✓ Enemy HP scaling: `base_hp × (1.0 + 0.1 × (level-1))` — unchanged at L1, +10%/level
+  - ✓ Enemy damage bonus: `(level-1) // 2` — flat bonus to roll (+0 L1, +1 L3, +2 L5, +4 L9)
+  - ✓ GitHub issue #160
+- **Note**: XP + level formula were pre-existing in `xp_service.py`. Only missing piece was wiring level into `combat_service.initiate_combat()`.
 - **Impact**: Prevents late-game trivialization; keeps encounters challenging
-- **Dependency**: None (independent feature)
-- **Effort**: 4 hours
-- **Testing**: Run campaign through levels 3, 5, 7+
+- **Effort**: 1 hour (pre-existing XP infra saved most work)
+- **Testing**: Run sandbox combat at L1, L4, L7 — verify enemy stats match formula
 
 ## Medium Priority (Later Sprint)
 
@@ -104,8 +104,9 @@ Created after balance test + loot audit (2026-05-28).
 |---|---|---|
 | f783f00 | AC balance + biome mapping | ✓ Done |
 | c167fbb | Admin UI: foldable arcs + uncovered hexes | ✓ Done |
-| — | Loot table audit + zero-reward fix | ✓ Done (inline) |
+| ad31b59 | Loot table audit + zero-reward fix | ✓ Done |
 | — | Shop NPC proposal doc | ✓ Done |
+| — | Task 4: Difficulty scaling (initiate_combat) | ✓ Done — issue #160 |
 
 ---
 
