@@ -8005,7 +8005,6 @@ forge_create_game_entry("armor", {
       document.getElementById('em-title').value = enc.title || '';
       document.getElementById('em-trigger').value = enc.trigger_condition || '';
       document.getElementById('em-scene').value = enc.scene_setup || '';
-      // Serialize enemies to text: "Nazwa ×N — notes"
       document.getElementById('em-enemies').value = (enc.enemies||[]).map(e=>`${e.name} ×${e.count||1}${e.notes?' — '+e.notes:''}`).join('\n');
       document.getElementById('em-objectives').value = (enc.objectives||[]).join('\n');
       const rew = enc.rewards || {};
@@ -8013,10 +8012,9 @@ forge_create_game_entry("armor", {
       document.getElementById('em-loot').value = rew.loot_notes || '';
       document.getElementById('em-gm-notes').value = enc.gm_notes || '';
 
-      // Populate campaign picker
-      await _populateEncounterCampaignPicker();
-
+      // Show modal first, then populate picker (don't block modal on picker error)
       document.getElementById('encounter-modal').style.display = '';
+      _populateEncounterCampaignPicker(); // async, fire-and-forget
     } catch(e) { _showToast(e.message, 'error'); }
   }
 
@@ -8024,9 +8022,11 @@ forge_create_game_entry("armor", {
     const sel = document.getElementById('em-campaign-picker');
     if (!sel) return;
     try {
-      const d = await apiFetch('/api/admin/campaigns?limit=30');
-      const campaigns = d.campaigns || d.items || d || [];
-      sel.innerHTML = campaigns.map(c => `<option value="${c.id}">${_esc(c.title||('Kampania #'+c.id))}</option>`).join('');
+      const d = await apiFetch('/api/admin/campaigns/live');
+      const campaigns = d.items || [];
+      sel.innerHTML = campaigns.length
+        ? campaigns.map(c => `<option value="${c.id}">${_esc(c.title||('Kampania #'+c.id))}</option>`).join('')
+        : '<option value="">Brak aktywnych kampanii</option>';
     } catch(e) { sel.innerHTML = '<option value="">Błąd ładowania</option>'; }
   }
 
