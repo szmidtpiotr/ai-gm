@@ -4309,11 +4309,19 @@ forge_create_game_entry("armor", {
   function filterCampaigns(chip, status) {
     document.querySelectorAll('#section-campaigns .filter-group .chip').forEach(c => c.classList.remove('on'));
     chip.classList.add('on');
+    const statusMap = { 'aktywne': 'aktywna', 'w walce': 'walce', 'zakończone': 'zakończona' };
+    const match = statusMap[status] || status;
+    // Filter table rows
     document.querySelectorAll('#campaigns-table tbody tr').forEach(row => {
       if (!status) { row.style.display = ''; return; }
       const badge = row.querySelector('.badge')?.textContent?.toLowerCase() || '';
-      const statusMap = { 'aktywne': 'aktywna', 'w walce': 'walce', 'zakończone': 'zakończona' };
-      row.style.display = badge.includes(statusMap[status] || status) ? '' : 'none';
+      row.style.display = badge.includes(match) ? '' : 'none';
+    });
+    // Filter cards view
+    document.querySelectorAll('#campaigns-cards-grid > .card').forEach(card => {
+      if (!status) { card.style.display = ''; return; }
+      const badge = card.querySelector('.badge')?.textContent?.toLowerCase() || '';
+      card.style.display = badge.includes(match) ? '' : 'none';
     });
   }
 
