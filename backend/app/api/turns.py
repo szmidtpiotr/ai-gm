@@ -3226,6 +3226,7 @@ def create_turn(
         )
 
         # Hex-enter encounter trigger: fire when current_hex changed
+        _hex_after_enc = None
         try:
             _gs_post_enc = conn.execute(
                 "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
@@ -3648,6 +3649,9 @@ def create_turn(
             out.update(combat_extra)
         if open_shop_npc_key:
             out["open_shop"] = open_shop_npc_key
+        # Hex travel signal: frontend uses this to auto-update map pin
+        if _hex_after_enc and _hex_before_enc and _hex_after_enc != _hex_before_enc:
+            out["hex_changed"] = {"from": _hex_before_enc, "to": _hex_after_enc}
         if _dungeon_clear_result:
             out["dungeon_cleared"] = _dungeon_clear_result
         return out

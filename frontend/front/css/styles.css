@@ -1916,6 +1916,13 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
 .composer__map-btn:hover {
     opacity: 1;
 }
+@keyframes mapBtnPulse {
+    0%,100% { opacity: 0.7; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.25); }
+}
+.map-btn--pulse {
+    animation: mapBtnPulse 0.5s ease-in-out 3;
+}
 
 .composer__dice {
   width: 44px;

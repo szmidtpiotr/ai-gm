@@ -3868,6 +3868,22 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         _suggestedActions = result.suggested_actions || _suggestedActions || [];
         renderSuggestedActions(_suggestedActions);
 
+        // Auto-update hex map pin when GM narration changed current_hex
+        if (result.hex_changed) {
+            const { from: hFrom, to: hTo } = result.hex_changed;
+            if (_wmap.hexes && _wmap.hexes.length) {
+                _wmap.currentHex = hTo;
+                _wmRender();
+            }
+            // Pulse the map button to signal location changed
+            const mapBtns = [document.getElementById('open-map-btn'), document.getElementById('composer-map-btn')];
+            mapBtns.forEach(btn => {
+                if (!btn) return;
+                btn.classList.add('map-btn--pulse');
+                setTimeout(() => btn.classList.remove('map-btn--pulse'), 2000);
+            });
+        }
+
         await refreshCharacterData();
         await pollCombatState();
         // BUG-02: clock now ticks every turn — refresh header display.
