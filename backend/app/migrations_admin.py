@@ -3112,6 +3112,14 @@ def _ensure_campaign_known_npcs(conn: sqlite3.Connection) -> None:
         "ON campaign_known_npcs(campaign_id, updated_at DESC)"
     )
     conn.commit()
+    # Task 8: shop reputation — purchase_count column
+    try:
+        conn.execute(
+            "ALTER TABLE campaign_known_npcs ADD COLUMN purchase_count INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # already exists
 
 
 def _ensure_hex_spawn_weights(conn: sqlite3.Connection) -> None:

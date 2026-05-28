@@ -332,11 +332,38 @@ class ContextInjector:
         for npc in npcs:
             name = npc.get("label") or npc.get("name") or npc.get("key", "?")
             attitude = npc.get("attitude") or npc.get("npc_type") or "neutralny"
-            lines.append(f"NPC: {name} [{attitude}]")
-            personality = (npc.get("personality_prompt") or "").strip()
-            if personality:
-                truncated = personality[:MAX_PERSONALITY_PROMPT_LEN]
-                lines.append(f"Osobowość: {truncated}")
+            is_shop = int(npc.get("is_shop") or 0) == 1
+            shop_tag = " [KUPIEC]" if is_shop else ""
+            lines.append(f"NPC: {name} [{attitude}]{shop_tag}")
+            # Prefer structured personality_json for shop NPCs; fall back to text prompt
+            personality_rendered = ""
+            if is_shop and npc.get("personality_json"):
+                try:
+                    pjson = json.loads(str(npc["personality_json"]))
+                    traits = str(pjson.get("personality") or "").strip()
+                    topics = pjson.get("topics") or []
+                    secret = str(pjson.get("secret") or "").strip()
+                    if traits:
+                        personality_rendered = traits[:MAX_PERSONALITY_PROMPT_LEN]
+                    if topics:
+                        personality_rendered += f"; lubi rozmawiać o: {', '.join(str(t) for t in topics[:3])}"
+                    if secret:
+                        personality_rendered += f"; sekret (tylko MG): {secret[:80]}"
+                except Exception:
+                    pass
+            if not personality_rendered:
+                personality_rendered = (npc.get("personality_prompt") or "").strip()[:MAX_PERSONALITY_PROMPT_LEN]
+            if personality_rendered:
+                lines.append(f"Osobowość: {personality_rendered}")
+            # Inject shop wares so GM can reference them in dialogue
+            if is_shop and npc.get("shop_inventory_json"):
+                try:
+                    inv = json.loads(str(npc["shop_inventory_json"]))
+                    wares = [str(e.get("key") or "") for e in inv if e.get("key")]
+                    if wares:
+                        lines.append(f"Asortyment: {', '.join(wares[:8])}")
+                except Exception:
+                    pass
             has_content = True
 
         if combat_roster:
@@ -706,16 +733,39 @@ class ContextInjector:
     def _get_npcs_in_location(self, location_key: str) -> list[dict]:
         if not location_key:
             return []
-        # V2 join table
+        seen_keys: set[str] = set()
+        result: list[dict] = []
+
+        # V2 join table (location_npc_assignments)
         rows = self.conn.execute(
-            """SELECT n.key, n.label, n.npc_type, n.personality_prompt
+            """SELECT n.key, n.label, n.npc_type, n.personality_prompt,
+                      n.personality_json, n.is_shop, n.shop_inventory_json
                FROM location_npc_assignments lna
                JOIN npcs n ON n.key = lna.npc_key
                WHERE lna.location_key = ? AND lna.is_active = 1 AND n.is_active = 1""",
             (location_key,)
         ).fetchall()
-        if rows:
-            return [dict(r) for r in rows]
+        for r in rows:
+            seen_keys.add(str(r["key"]))
+            result.append(dict(r))
+
+        # npc_locations table — used by shop NPCs seeded via migrations
+        shop_rows = self.conn.execute(
+            """SELECT n.key, n.label, n.npc_type, n.personality_prompt,
+                      n.personality_json, n.is_shop, n.shop_inventory_json
+               FROM npc_locations nl
+               JOIN npcs n ON n.id = nl.npc_id
+               WHERE nl.location_key = ? AND COALESCE(n.is_active, 1) = 1""",
+            (location_key,)
+        ).fetchall()
+        for r in shop_rows:
+            if str(r["key"]) not in seen_keys:
+                seen_keys.add(str(r["key"]))
+                result.append(dict(r))
+
+        if result:
+            return result
+
         # Fallback: old npc_keys JSON on game_locations
         loc_row = self.conn.execute(
             "SELECT npc_keys FROM game_locations WHERE key = ?", (location_key,)
@@ -726,10 +776,13 @@ class ContextInjector:
             keys = json.loads(loc_row[0])
         except (json.JSONDecodeError, TypeError):
             return []
-        result = []
         for npc_key in keys:
+            if npc_key in seen_keys:
+                continue
             row = self.conn.execute(
-                "SELECT key, label, npc_type, personality_prompt FROM npcs WHERE key = ? AND is_active = 1",
+                """SELECT key, label, npc_type, personality_prompt,
+                          personality_json, is_shop, shop_inventory_json
+                   FROM npcs WHERE key = ? AND is_active = 1""",
                 (npc_key,)
             ).fetchone()
             if row:

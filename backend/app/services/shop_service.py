@@ -311,6 +311,22 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         apply_character_gold_delta(character_id, price, "shop_purchase_refund")
         raise
 
+    # Reputation tracking: bump purchase count for this shop NPC in the campaign.
+    try:
+        from app.services.npc_memory_service import increment_npc_purchase_count
+        with _conn() as rep_conn:
+            char_row = rep_conn.execute(
+                "SELECT campaign_id FROM characters WHERE id = ? LIMIT 1",
+                (int(character_id),),
+            ).fetchone()
+            if char_row and char_row["campaign_id"]:
+                increment_npc_purchase_count(
+                    campaign_id=int(char_row["campaign_id"]),
+                    npc_id=int(npc_id),
+                )
+    except Exception:
+        pass  # Non-critical; never fail a purchase over reputation tracking
+
     return {
         "gold_gp": int(new_gold),
         "item": {

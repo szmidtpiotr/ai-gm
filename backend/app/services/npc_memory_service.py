@@ -24,6 +24,8 @@ DEFAULT_CONTEXT_LIMIT = 10
 
 VALID_RELATIONS = ("friendly", "neutral", "hostile")
 
+_PURCHASE_COUNT_COL = "purchase_count"
+
 
 def _conn() -> sqlite3.Connection:
     c = sqlite3.connect(DB_PATH)
@@ -172,6 +174,40 @@ def update_npc_relation(
             conn.close()
 
 
+def increment_npc_purchase_count(
+    *,
+    campaign_id: int,
+    npc_id: int,
+    conn: sqlite3.Connection | None = None,
+) -> None:
+    """Bump purchase_count on the campaign_known_npcs row for this shop NPC.
+
+    No-op if the NPC isn't in the roster yet (first purchase before first
+    dialogue is unusual but shouldn't crash).
+    """
+    managed = conn is None
+    if managed:
+        conn = _conn()
+    try:
+        try:
+            conn.execute(
+                """
+                UPDATE campaign_known_npcs
+                SET purchase_count = COALESCE(purchase_count, 0) + 1,
+                    updated_at = datetime('now')
+                WHERE campaign_id = ? AND npc_id = ?
+                """,
+                (int(campaign_id), int(npc_id)),
+            )
+            if managed:
+                conn.commit()
+        except Exception:
+            pass  # Column may not exist on old DBs; silently skip
+    finally:
+        if managed:
+            conn.close()
+
+
 def get_recent_known_npcs(
     campaign_id: int,
     limit: int = DEFAULT_CONTEXT_LIMIT,
@@ -191,8 +227,10 @@ def get_recent_known_npcs(
             SELECT
                 k.id, k.npc_name, k.role, k.first_met_location, k.first_met_turn,
                 k.notes, k.relation_status, k.updated_at, k.npc_id,
+                COALESCE(k.purchase_count, 0) AS purchase_count,
                 n.description AS catalog_description,
-                n.personality_json AS catalog_personality_json
+                n.personality_json AS catalog_personality_json,
+                COALESCE(n.is_shop, 0) AS is_shop
             FROM campaign_known_npcs k
             LEFT JOIN npcs n ON n.id = k.npc_id
             WHERE k.campaign_id = ?
@@ -230,14 +268,31 @@ def format_known_npcs_block(
             bits.append(f"— spotkany w: {r['first_met_location']}")
         rel = relation_pl.get(str(r.get("relation_status") or "neutral"), "neutralny")
         bits.append(f"— relacja: {rel}")
+        purchase_count = int(r.get("purchase_count") or 0)
+        if purchase_count > 0:
+            if purchase_count >= 5:
+                bits.append(f"— stały klient ({purchase_count} zakupów)")
+            else:
+                bits.append(f"— był klientem ({purchase_count}× zakup)")
         line = "- " + " ".join(bits)
         if r.get("notes"):
             line += f"; notatka: {r['notes']}"
         if r.get("catalog_description"):
-            # Trim long catalog descriptions — first sentence is usually enough.
             desc = str(r["catalog_description"]).strip()
             first = desc.split(". ", 1)[0]
             if first and first not in (r.get("notes") or ""):
                 line += f" (katalog: {first[:120]})"
+        # Inject personality traits for shop NPCs so GM can flavor their dialogue
+        if r.get("is_shop") and r.get("catalog_personality_json"):
+            try:
+                pjson = json.loads(str(r["catalog_personality_json"]))
+                personality = str(pjson.get("personality") or "").strip()
+                topics = pjson.get("topics") or []
+                if personality:
+                    line += f"; charakter: {personality[:100]}"
+                if topics:
+                    line += f"; tematy: {', '.join(str(t) for t in topics[:3])}"
+            except Exception:
+                pass
         lines.append(line)
     return "\n".join(lines)
