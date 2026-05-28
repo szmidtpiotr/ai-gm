@@ -1370,6 +1370,70 @@ ADMIN_SEEDS = [
     """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('character_conditions_list','general','Stany i efekty','Zatruty: -2 do rzutów. Ogłuszony: traci turę. Krwawiący: traci HP co turę. Spowolniony: redukuje akcje. Przerażony: penalty do ataków. Stany można leczyć odpoczynkiem, zaklęciami lub miksturami.',30)""",
     """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('inventory_slots','general','Plecak i ekwipunek','Broń trzymana w dłoni to Główna Ręka. Tarcza lub broń zapasowa to Druga Ręka. Zbroja zajmuje slot Tułów. Przedmioty, mikstury i materiały trafiają do Plecaka. Sprawdź aktualny ekwipunek w karcie postaci.',40)""",
     """INSERT OR IGNORE INTO knowledge_book (tip_key, category, title, body, sort_order) VALUES ('economy_gold','general','Złoto i handel','Złoto (sz) zdobywasz z lootów, questów i sprzedaży. Możesz kupować od kupców podczas eksploracji. Cena zależy od reputacji i CHA. Nie trać złota na rzeczy zbędne — dobre wyposażenie ratuje życie.',50)""",
+    # Phase 9A-4 — Shop NPC: Borys Kowal seed + npc_locations for all 3 shop NPCs
+    """
+    INSERT OR IGNORE INTO npcs
+    (key, label, npc_type, description, personality_json, is_shop, shop_inventory_json, is_active, created_at, updated_at)
+    VALUES (
+        'seed_pending_npc_borys', 'Borys Kowal', 'merchant',
+        'Handlarz materiałami survivalowymi i aptekarskimi.',
+        '{"personality":"spokojny, praktyczny, ceni doświadczenie survivalowe","topics":["materiały","leczenie","przetrwanie"],"secret":null}',
+        1,
+        '[{"type":"consumable","key":"healing_potion"},{"type":"item","key":"rope_hemp"},{"type":"consumable","key":"torch"},{"type":"item","key":"bandage"}]',
+        1, datetime('now'), datetime('now')
+    )
+    """,
+    """
+    INSERT OR IGNORE INTO npc_locations (npc_id, location_key)
+    SELECT id, 'volhynia_targowisko' FROM npcs WHERE key = 'merchant_aldric'
+    AND EXISTS (SELECT 1 FROM game_locations WHERE key = 'volhynia_targowisko')
+    """,
+    """
+    INSERT OR IGNORE INTO npc_locations (npc_id, location_key)
+    SELECT id, 'volhynia_kupiecka' FROM npcs WHERE key = 'merchant_aldric'
+    AND EXISTS (SELECT 1 FROM game_locations WHERE key = 'volhynia_kupiecka')
+    """,
+    """
+    INSERT OR IGNORE INTO npc_locations (npc_id, location_key)
+    SELECT id, 'wolanka_kuznia' FROM npcs WHERE key = 'blacksmith_goran'
+    AND EXISTS (SELECT 1 FROM game_locations WHERE key = 'wolanka_kuznia')
+    """,
+    """
+    INSERT OR IGNORE INTO npc_locations (npc_id, location_key)
+    SELECT id, 'volhynia_targowisko' FROM npcs WHERE key = 'seed_pending_npc_borys'
+    AND EXISTS (SELECT 1 FROM game_locations WHERE key = 'volhynia_targowisko')
+    """,
+    # Task 6 — Archer loot table expansion (was 1 entry → 7 entries, archer-themed)
+    """
+    INSERT INTO game_config_loot_entries (loot_table_key, weapon_key, weight)
+    SELECT 'loot_bandit_archer', 'shortbow', 30
+    WHERE NOT EXISTS (SELECT 1 FROM game_config_loot_entries WHERE loot_table_key='loot_bandit_archer' AND weapon_key='shortbow')
+    """,
+    """
+    INSERT INTO game_config_loot_entries (loot_table_key, weapon_key, weight)
+    SELECT 'loot_bandit_archer', 'dagger', 20
+    WHERE NOT EXISTS (SELECT 1 FROM game_config_loot_entries WHERE loot_table_key='loot_bandit_archer' AND weapon_key='dagger')
+    """,
+    """
+    INSERT INTO game_config_loot_entries (loot_table_key, item_key, weight)
+    SELECT 'loot_bandit_archer', 'rope_hemp', 20
+    WHERE NOT EXISTS (SELECT 1 FROM game_config_loot_entries WHERE loot_table_key='loot_bandit_archer' AND item_key='rope_hemp')
+    """,
+    """
+    INSERT INTO game_config_loot_entries (loot_table_key, item_key, weight)
+    SELECT 'loot_bandit_archer', 'leather_gloves', 15
+    WHERE NOT EXISTS (SELECT 1 FROM game_config_loot_entries WHERE loot_table_key='loot_bandit_archer' AND item_key='leather_gloves')
+    """,
+    """
+    INSERT INTO game_config_loot_entries (loot_table_key, item_key, weight)
+    SELECT 'loot_bandit_archer', 'bandage', 15
+    WHERE NOT EXISTS (SELECT 1 FROM game_config_loot_entries WHERE loot_table_key='loot_bandit_archer' AND item_key='bandage')
+    """,
+    """
+    INSERT INTO game_config_loot_entries (loot_table_key, item_key, weight)
+    SELECT 'loot_bandit_archer', 'belt_pouch', 10
+    WHERE NOT EXISTS (SELECT 1 FROM game_config_loot_entries WHERE loot_table_key='loot_bandit_archer' AND item_key='belt_pouch')
+    """,
 ]
 
 
