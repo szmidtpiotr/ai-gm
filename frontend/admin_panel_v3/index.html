@@ -3191,9 +3191,9 @@
       </div>
 
       <!-- Encounter edit modal -->
-      <div id="encounter-modal" class="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9000;overflow-y:auto">
-        <div style="background:var(--surface2);border-radius:var(--r);max-width:700px;margin:40px auto;padding:20px;position:relative">
-          <button onclick="document.getElementById('encounter-modal').style.display='none'" style="position:absolute;top:12px;right:14px;background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer">✕</button>
+      <div id="encounter-modal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+        <div class="modal" style="max-width:700px">
+          <button onclick="document.getElementById('encounter-modal').classList.remove('open')" style="position:absolute;top:12px;right:14px;background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer">✕</button>
           <div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px" id="em-hook-badge"></div>
           <div style="font-weight:700;font-size:1rem;margin-bottom:14px" id="em-hook-title"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -3231,7 +3231,7 @@
             </label>
           </div>
           <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap" id="em-footer">
-            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('encounter-modal').style.display='none'">Anuluj</button>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('encounter-modal').classList.remove('open')">Anuluj</button>
             <div style="display:flex;gap:6px;align-items:center">
               <select id="em-campaign-picker" class="input" style="font-size:0.8rem;padding:4px 8px"></select>
               <button class="btn btn-sm btn-secondary" id="em-inject-btn" onclick="_injectEncounterFromModal()">⚡ Wstrzyknij do kampanii</button>
@@ -8013,7 +8013,7 @@ forge_create_game_entry("armor", {
       document.getElementById('em-gm-notes').value = enc.gm_notes || '';
 
       // Show modal first, then populate picker (don't block modal on picker error)
-      document.getElementById('encounter-modal').style.display = '';
+      document.getElementById('encounter-modal').classList.add('open');
       _populateEncounterCampaignPicker(); // async, fire-and-forget
     } catch(e) { _showToast(e.message, 'error'); }
   }
@@ -8062,7 +8062,7 @@ forge_create_game_entry("armor", {
         body: JSON.stringify({ encounter }),
       });
       _showToast('Spotkanie zapisane!', 'success');
-      document.getElementById('encounter-modal').style.display = 'none';
+      document.getElementById('encounter-modal').classList.remove('open');
       _loadForgeEncounters();
     } catch(e) { _showToast(e.message, 'error'); }
   }
@@ -8079,7 +8079,7 @@ forge_create_game_entry("armor", {
         body: JSON.stringify({ campaign_id: campaignId, hook_id: _currentEncounter.hook_id }),
       });
       _showToast('Spotkanie wstrzyknięte do kampanii! Następna tura gracza je użyje.', 'success');
-      document.getElementById('encounter-modal').style.display = 'none';
+      document.getElementById('encounter-modal').classList.remove('open');
     } catch(e) { _showToast(e.message, 'error'); }
     finally { if (btn) { btn.disabled = false; btn.textContent = '⚡ Wstrzyknij do kampanii'; } }
   }
