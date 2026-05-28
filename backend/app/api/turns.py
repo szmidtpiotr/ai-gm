@@ -487,6 +487,31 @@ def _process_location_intent(
                             )
             except Exception as _hex_sync_err:
                 logger.warning("hex_sync_on_location_move_failed", error=str(_hex_sync_err))
+            # Link new gm_runtime location to the current world_hex so it appears on the admin map
+            if result.is_new_location:
+                try:
+                    _loc_key_row = conn.execute(
+                        "SELECT key FROM game_locations WHERE id = ? LIMIT 1",
+                        (result.resolved_location_id,),
+                    ).fetchone()
+                    _gs_for_hex = conn.execute(
+                        "SELECT session_flags FROM game_sessions WHERE id = ? LIMIT 1",
+                        (session_id,),
+                    ).fetchone()
+                    if _loc_key_row and _gs_for_hex:
+                        import json as _jnewloc
+                        _sf_for_hex = _jnewloc.loads(_gs_for_hex["session_flags"] or "{}")
+                        _cur_hex = _sf_for_hex.get("current_hex")
+                        if _cur_hex and isinstance(_cur_hex, dict):
+                            _nhq, _nhr = int(_cur_hex.get("q", 0)), int(_cur_hex.get("r", 0))
+                            conn.execute(
+                                """UPDATE world_hexes SET location_key = ?
+                                   WHERE q = ? AND r = ? AND is_active = 1
+                                   AND (location_key IS NULL OR location_key = '')""",
+                                (_loc_key_row["key"], _nhq, _nhr),
+                            )
+                except Exception as _newloc_hex_err:
+                    logger.warning("new_location_hex_link_failed", error=str(_newloc_hex_err))
             conn.commit()
             logger.info(
                 "location_updated_from_gm_response",

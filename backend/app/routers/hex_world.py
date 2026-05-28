@@ -431,3 +431,32 @@ def hex_chain_travel(campaign_id: int, req: HexTravelReq):
         return result
     finally:
         conn.close()
+
+
+@router.get("/locations-map")
+def get_locations_map(authorization: str | None = Header(default=None)):
+    """All game_locations that have a world_hex assigned, with hex coords and approval status."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT gl.id, gl.key, gl.label, gl.created_by,
+                   COALESCE(gl.approved, 1) AS approved,
+                   gl.description, gl.source_campaign_id,
+                   wh.q, wh.r, wh.hex_type
+            FROM game_locations gl
+            JOIN world_hexes wh ON wh.location_key = gl.key
+            WHERE gl.is_active = 1 AND wh.is_active = 1
+            ORDER BY gl.created_by DESC
+            """
+        ).fetchall()
+        locations = []
+        for r in rows:
+            d = dict(r)
+            d["pending"] = (d["created_by"] == "gm_runtime" or d["approved"] == 0)
+            locations.append(d)
+        pending_count = sum(1 for loc in locations if loc["pending"])
+        return {"locations": locations, "pending_count": pending_count}
+    finally:
+        conn.close()
