@@ -56,7 +56,7 @@ def build_suggested_actions(
         state = (game_state or "").upper()
         if state in ("COMBAT",):
             actions = _build_combat_actions(conn, character_id)
-        elif state in ("NARRATIVE", "DIALOGUE", ""):
+        elif state in ("NARRATIVE", "DIALOGUE", "", "SKILL_TEST_PENDING"):
             actions = _build_narrative_actions(conn, campaign_id, session_flags)
         else:
             actions = []
@@ -102,6 +102,18 @@ def _build_narrative_actions(
     actions: list[SuggestedAction] = []
 
     current_loc_key = session_flags.get("current_location_key") or ""
+    if not current_loc_key:
+        try:
+            row = conn.execute(
+                "SELECT gl.key FROM game_sessions gs "
+                "JOIN game_locations gl ON gs.current_location_id = gl.id "
+                "WHERE gs.campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if row:
+                current_loc_key = row["key"] or ""
+        except Exception:
+            pass
 
     # 1) NPCs present at current location
     if current_loc_key:
