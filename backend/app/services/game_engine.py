@@ -345,13 +345,22 @@ def _build_active_encounter_block(conn: sqlite3.Connection, campaign_id: int) ->
         if not enc or not isinstance(enc, dict):
             return ""
         enemies_lines = ""
+        first_enemy_key = ""
+        all_enemy_keys: list[str] = []
         for e in (enc.get("enemies") or []):
-            enemies_lines += f"  - {e.get('name','?')} ×{e.get('count',1)}"
+            enemy_key = e.get("enemy_key") or ""
+            if enemy_key:
+                if not first_enemy_key:
+                    first_enemy_key = enemy_key
+                all_enemy_keys.append(enemy_key)
+            key_note = f" [DB: {enemy_key}]" if enemy_key else ""
+            enemies_lines += f"  - {e.get('name','?')} ×{e.get('count',1)}{key_note}"
             if e.get("notes"):
-                enemies_lines += f" ({e['notes']})"
+                enemies_lines += f" — {e['notes']}"
             enemies_lines += "\n"
         objectives = "\n".join(f"  {i+1}. {o}" for i, o in enumerate(enc.get("objectives") or []))
         rew = enc.get("rewards") or {}
+        combat_tag_keys = ",".join(all_enemy_keys) if all_enemy_keys else "unknown_attacker"
         return (
             "=== AKTYWNE SPOTKANIE (UŻYJ W TEJ TURZE) ===\n"
             f"Tytuł: {enc.get('title','')}\n"
@@ -361,7 +370,8 @@ def _build_active_encounter_block(conn: sqlite3.Connection, campaign_id: int) ->
             f"Cele:\n{objectives}\n"
             f"Nagrody: {rew.get('xp_estimate',0)} XP — {rew.get('loot_notes','')}\n"
             f"Uwagi GM: {enc.get('gm_notes','')}\n"
-            "Poprowadź tę scenę naturalnie — włącz wyzwalacz do narracji i pozwól graczowi zareagować."
+            "Poprowadź tę scenę naturalnie — włącz wyzwalacz do narracji i pozwól graczowi zareagować.\n"
+            f"Gdy gracz zaatakuje lub wywoła walkę, zakończ narrację tagiem: [COMBAT_START:{combat_tag_keys}]"
         )
     except Exception as _exc:
         logger.warning("active_encounter_block_failed", error=str(_exc))

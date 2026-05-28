@@ -212,9 +212,29 @@ def _resolve_enemy_key_from_context(
     """Best-effort enemy_key resolution from the current GM response + last
     few turns. Falls back to `unknown_attacker` if nothing matches.
 
-    Matches against `game_config_enemies.label` (case-insensitive substring)
-    in the most-recent narrative context.
+    Priority:
+    1. active_encounter in session_flags — uses injected enemy_key directly
+    2. game_config_enemies.label substring match in narrative
     """
+    import json as _json
+    # Priority 1: active_encounter enemy_key (injected encounter still in flags)
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if gs:
+            flags = _json.loads(gs["session_flags"] or "{}")
+            enc = flags.get("active_encounter")
+            if enc and isinstance(enc, dict):
+                enemies = enc.get("enemies") or []
+                for e in enemies:
+                    ek = str(e.get("enemy_key") or "").strip()
+                    if ek:
+                        return ek
+    except Exception:
+        pass
+
     haystack_parts: list[str] = [str(assistant_text or "")]
     try:
         rows = conn.execute(

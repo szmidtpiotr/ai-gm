@@ -2481,7 +2481,7 @@
           <div class="toolbar">
             <div class="search-box">
               <span class="search-box-icon">🔍</span>
-              <input type="text" placeholder="Szukaj wrogów…" oninput="filterTableGeneric(this,'enemies-table','td-name')">
+              <input type="text" placeholder="Szukaj wrogów…" oninput="filterTableGeneric(this,'world-enemies-table','td-name')">
             </div>
             <button class="btn btn-primary btn-sm" onclick="openEnemyFormModal(null)">+ Dodaj wroga</button>
             <div class="toolbar-right">
@@ -2520,7 +2520,14 @@
 
         <!-- Tabele Łupów -->
         <div class="stab-panel" id="wtab-loot">
-          <div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem" id="world-loot-container">Ładowanie…</div>
+          <div class="toolbar">
+            <div class="search-box">
+              <span class="search-box-icon">🔍</span>
+              <input type="text" placeholder="Szukaj tabel łupów…" oninput="filterTableGeneric(this,'world-loot-table','td-name')">
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="_openAddLootTableModal()">+ Dodaj tabelę</button>
+          </div>
+          <div id="world-loot-container"><div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div></div>
         </div>
 
         <!-- Oczekujące — pending NPC and enemies -->
@@ -6044,7 +6051,7 @@ forge_create_game_entry("armor", {
       container.innerHTML = `<div class="table-wrap"><table class="data-table" id="world-loot-table">
         <thead><tr>
           <th><div class="th-inner">Klucz</div></th>
-          <th class="td-sticky"><div class="th-inner">Nazwa</div></th>
+          <th class="td-sticky"><div class="th-inner sorted">Nazwa <span class="sort-icon asc">▲</span></div></th>
           <th><div class="th-inner">Złoto min</div></th>
           <th><div class="th-inner">Złoto max</div></th>
           <th><div class="th-inner">Wpisy</div></th>
@@ -6063,6 +6070,39 @@ forge_create_game_entry("armor", {
         </tr>`).join('')}</tbody>
       </table></div>`;
     } catch(e) { container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">${_esc(e.message)}</div>`; }
+  }
+
+  function _openAddLootTableModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `<div class="modal-box" style="width:420px">
+      <div class="modal-head"><span class="modal-title">Nowa tabela łupów</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="modal-body" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+        <div><label class="form-label">Klucz *</label><input class="form-input form-mono" id="nlt-key" placeholder="np. loot_bandyta"></div>
+        <div><label class="form-label">Nazwa *</label><input class="form-input" id="nlt-label" placeholder="Łupy bandyty"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><label class="form-label">Złoto min</label><input class="form-input" id="nlt-gmin" type="number" value="1"></div>
+          <div><label class="form-label">Złoto max</label><input class="form-input" id="nlt-gmax" type="number" value="5"></div>
+        </div>
+        <button class="btn btn-primary" onclick="_submitAddLootTable(this)">Utwórz</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+  }
+
+  async function _submitAddLootTable(btn) {
+    const key = document.getElementById('nlt-key')?.value?.trim();
+    const label = document.getElementById('nlt-label')?.value?.trim();
+    const gold_min = parseInt(document.getElementById('nlt-gmin')?.value) || 1;
+    const gold_max = parseInt(document.getElementById('nlt-gmax')?.value) || 5;
+    if (!key || !label) { _showToast('Klucz i nazwa wymagane.', 'error'); return; }
+    btn.disabled = true;
+    try {
+      await apiFetch('/api/admin/loot-tables', { method:'POST', body: JSON.stringify({ key, label, gold_min, gold_max }) });
+      btn.closest('.modal-overlay').remove();
+      _showToast('Tabela utworzona.', 'success');
+      _worldLoaded.delete('loot'); _loadBestiaryLoot();
+    } catch(e) { _showToast(e.message||'Błąd.','error'); btn.disabled = false; }
   }
 
   async function _deleteBestiaryLootTable(key, btn) {
@@ -9770,13 +9810,22 @@ forge_create_game_entry("armor", {
       panel.style.gap = '8px';
       panel.style.padding = '16px';
       panel.innerHTML = `
-        <div id="workshop-history" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);padding:10px;min-height:200px;background:var(--surface);font-size:0.82rem;color:var(--t2)">
+        <div id="workshop-history" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:var(--r);padding:10px;min-height:140px;background:var(--surface);font-size:0.82rem;color:var(--t2)">
           <em style="color:var(--t3)">Napisz wiadomość, żeby porozmawiać z AI o tej kampanii.</em>
         </div>
         <div style="display:flex;gap:8px">
           <textarea class="form-input" id="workshop-input" rows="2" placeholder="Opisz zmianę w planie GM lub zapytaj o kampanię…" style="flex:1;resize:none"></textarea>
           <button class="btn btn-primary" id="workshop-send-btn" onclick="sendWorkshopMsg(${campId}, this)">Wyślij</button>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+          <div style="font-size:0.78rem;font-weight:600;color:var(--t2);margin-bottom:8px;letter-spacing:0.04em">⚡ WSTRZYKNIJ SPOTKANIE</div>
+          <div style="font-size:0.75rem;color:var(--t3);margin-bottom:8px">Wybierz spotkanie — zostanie użyte w następnej turze gracza.</div>
+          <div id="workshop-encounter-list" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto">
+            <em style="font-size:0.75rem;color:var(--t3)">Ładowanie spotkań…</em>
+          </div>
         </div>`;
+      _loadWorkshopEncounters(campId);
+    }
     }
   }
 
@@ -9790,6 +9839,47 @@ forge_create_game_entry("armor", {
       btn.closest('[data-loaded]').innerHTML = '';
       _loadCampTab(campId, 'plan', btn.closest('[data-loaded]'), btn.closest('.modal-overlay'));
     } catch(e) { showToast('Błąd: '+e.message, 'error'); btn.disabled = false; }
+  }
+
+  async function _loadWorkshopEncounters(campId) {
+    const list = document.getElementById('workshop-encounter-list');
+    if (!list) return;
+    try {
+      const d = await apiFetch('/api/admin/forge/encounters');
+      const encs = d.encounters || [];
+      if (!encs.length) {
+        list.innerHTML = '<em style="font-size:0.75rem;color:var(--t3)">Brak spotkań. Utwórz w Kuźni → Spotkania.</em>';
+        return;
+      }
+      list.innerHTML = encs.map(e => {
+        const enemies = (e.encounter?.enemies||[]).map(x => `${x.name}×${x.count||1}`).join(', ');
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--surface-raised);border:1px solid var(--border);border-radius:var(--r);gap:8px">
+          <div style="min-width:0">
+            <div style="font-size:0.8rem;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(e.encounter?.title||e.hook_title)}</div>
+            <div style="font-size:0.72rem;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(enemies)}</div>
+          </div>
+          <button class="btn btn-sm btn-primary" style="white-space:nowrap;flex-shrink:0" onclick="_injectEncounterFromWorkshop(${campId},${e.hook_id},this)">⚡ Wstrzyknij</button>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      list.innerHTML = `<em style="font-size:0.75rem;color:var(--red)">${_esc(e.message)}</em>`;
+    }
+  }
+
+  async function _injectEncounterFromWorkshop(campId, hookId, btn) {
+    btn.disabled = true; btn.textContent = '⏳';
+    try {
+      await apiFetch('/api/admin/forge/debug/inject-encounter', {
+        method: 'POST',
+        body: JSON.stringify({ campaign_id: campId, hook_id: hookId }),
+      });
+      btn.textContent = '✅';
+      _showToast('Spotkanie wstrzyknięte! Następna tura gracza je użyje.', 'success');
+      setTimeout(() => { btn.textContent = '⚡ Wstrzyknij'; btn.disabled = false; }, 3000);
+    } catch(e) {
+      _showToast(e.message||'Błąd.', 'error');
+      btn.textContent = '⚡ Wstrzyknij'; btn.disabled = false;
+    }
   }
 
   async function sendWorkshopMsg(campId, btn) {

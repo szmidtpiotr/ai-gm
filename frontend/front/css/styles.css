@@ -6810,6 +6810,61 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 
 #dice-result-intent[hidden] { display: none !important; }
 
+/* ── Combat dice overlay card ─────────────────────────────────────────────── */
+#dice-combat-card {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  animation: dice-result-fade 0.3s ease;
+}
+#dice-combat-card[hidden] { display: none !important; }
+
+#dice-combat-header {
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  color: #c9961a;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+#dice-combat-num {
+  font-family: 'Cinzel', serif;
+  font-size: 5.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #c9961a;
+  text-shadow: 0 0 40px rgba(201, 150, 26, 0.5);
+}
+#dice-combat-num.nat20 { color: #ffd700; text-shadow: 0 0 60px rgba(255, 215, 0, 0.8); }
+#dice-combat-num.nat1  { color: #9b2020; text-shadow: 0 0 40px rgba(155, 32, 32, 0.6); }
+
+#dice-combat-detail {
+  margin-top: 8px;
+  font-size: 1rem;
+  color: rgba(200, 170, 110, 0.8);
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+#dice-combat-verdict {
+  margin-top: 12px;
+  font-family: 'Cinzel', serif;
+  font-size: 1.5rem;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  text-align: center;
+}
+#dice-combat-verdict.hit    { color: #4caf78; text-shadow: 0 0 20px rgba(76, 175, 120, 0.4); }
+#dice-combat-verdict.miss   { color: #9b2020; text-shadow: 0 0 20px rgba(155, 32, 32, 0.3); }
+#dice-combat-verdict.nat20  { color: #ffd700; text-shadow: 0 0 30px rgba(255, 215, 0, 0.6); }
+#dice-combat-verdict.nat1   { color: #9b2020; }
+
 /* ── World Map Panel — Task 43 ───────────────────────────────────────────── */
 .wmap-panel {
   position: fixed;

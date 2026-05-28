@@ -4355,14 +4355,18 @@ function showSkillTestPopup(pending) {
 
         // Close after 5.5 s, or immediately on tap/click anywhere on the overlay
         let _closed = false;
+        const _savedDismiss = window.dismissDiceRoll;
         async function _closeResult() {
             if (_closed) return;
             _closed = true;
             overlay.removeEventListener('click', _closeResult);
+            window.dismissDiceRoll = _savedDismiss;
             overlay.hidden = true;
             if (skillCard) skillCard.hidden = false;
             await resolveSkillTest(pending.skill_test_id, rolled, null);
         }
+        // Override ✕ button so it resolves-and-stays rather than navigate-away
+        window.dismissDiceRoll = _closeResult;
         setTimeout(_closeResult, 5500);
         overlay.addEventListener('click', _closeResult, { once: true });
     }
@@ -5241,14 +5245,18 @@ async function fetchAndAppendNewCombatTurns() {
                 return Number(a.id) - Number(b.id);
             });
         for (const row of newRows) {
-            appendCombatTurnCard(row);
+            appendCombatTurnCard(row, true);
             lastRenderedCombatTurnId = Math.max(lastRenderedCombatTurnId, Number(row.id));
         }
-        if (newRows.length > 0) scrollToBottom();
+        if (newRows.length > 0 && !_combatRollBusy && _combatRollQueue.length === 0) scrollToBottom();
     } catch (_e) {}
 }
 
-function appendCombatTurnCard(row) {
+// ── Combat dice roll animation queue ─────────────────────────────────────────
+const _combatRollQueue = [];
+let _combatRollBusy = false;
+
+function _buildCombatBubble(row) {
     const evt = String(row.event_type || '');
     const actor = String(row.actor || '');
     let html = '';
@@ -5261,11 +5269,11 @@ function appendCombatTurnCard(row) {
         const where = meta.to === 'engaged' ? 'zwarcie' : 'dystans';
         const verb = meta.charged ? 'szarżuje' : (actor === 'player' ? 'przemieszcza się' : 'cofa się');
         html = `<div class="cturn cturn--move"><span class="cturn__icon">🚶</span><span class="cturn__text">${who} ${verb} ${arrow} ${where}</span></div>`;
+        const side = actor === 'player' ? 'player' : 'enemy';
         const bubble = document.createElement('div');
-        bubble.className = `chat-bubble chat-bubble--cturn-${actor === 'player' ? 'player' : 'enemy'}`;
+        bubble.className = `chat-bubble chat-bubble--cturn-${side}`;
         bubble.innerHTML = html;
-        elements.chatMessages.appendChild(bubble);
-        return;
+        return bubble;
     }
 
     if (evt === 'death') {
@@ -5306,12 +5314,160 @@ function appendCombatTurnCard(row) {
         </div>`;
     }
 
-    if (!html) return;
-    const bubble = document.createElement('div');
+    if (!html) return null;
     const side = actor === 'player' ? 'player' : (actor === 'enemy' ? 'enemy' : 'death');
+    const bubble = document.createElement('div');
     bubble.className = `chat-bubble chat-bubble--cturn-${side}`;
     bubble.innerHTML = html;
-    elements.chatMessages.appendChild(bubble);
+    return bubble;
+}
+
+function _showCombatDiceRoll(row, onDone) {
+    const actor = String(row.actor || '');
+    const hit = row.hit === 1 || row.hit === true;
+    const rv = row.roll_value != null ? Number(row.roll_value) : null;
+    const dmg = row.damage != null ? Number(row.damage) : null;
+    const nat20 = rv === 20;
+    const nat1 = rv === 1;
+
+    let meta = {};
+    try { meta = typeof row.narrative === 'string' ? JSON.parse(row.narrative) : {}; } catch (_e) {}
+
+    const overlay    = document.getElementById('dice-overlay');
+    const container  = document.getElementById('dice-container');
+    const combatCard = document.getElementById('dice-combat-card');
+    const skillCard  = document.getElementById('dice-skill-card');
+    const resultCard = document.getElementById('dice-result-card');
+    const headerEl   = document.getElementById('dice-combat-header');
+    const numEl      = document.getElementById('dice-combat-num');
+    const detailEl   = document.getElementById('dice-combat-detail');
+    const verdictEl  = document.getElementById('dice-combat-verdict');
+
+    // Header
+    if (actor === 'player') {
+        const label = String(meta.attack_label || 'ATAK').toUpperCase();
+        const tgt = String(row.target_name || 'Wróg');
+        headerEl.textContent = `⚔️ ${label} → ${tgt}`;
+    } else {
+        const enemyName = String(meta.enemy_name || row.target_name || 'Wróg');
+        headerEl.textContent = `🗡️ ATAK WROGA — ${enemyName}`;
+    }
+
+    // Hide other cards, show overlay
+    if (skillCard) skillCard.hidden = true;
+    if (resultCard) resultCard.hidden = true;
+    combatCard.hidden = true;
+    numEl.textContent = '';
+    numEl.className = '';
+    verdictEl.textContent = '';
+    verdictEl.className = '';
+    detailEl.textContent = '';
+    overlay.hidden = false;
+
+    function _showCombatResult(rolled) {
+        numEl.textContent = rolled;
+        numEl.className = nat20 ? 'nat20' : nat1 ? 'nat1' : '';
+
+        const ac = meta.target_ac != null ? ` vs AC ${meta.target_ac}` : (meta.target_ac != null ? '' : '');
+        const rawD20 = actor === 'enemy' && meta.raw_d20 != null ? meta.raw_d20 : rolled;
+        const acNote = meta.target_ac != null ? ` vs AC ${meta.target_ac}` : '';
+        detailEl.textContent = `Rzut: ${rawD20}${acNote}`;
+
+        if (nat20) {
+            verdictEl.textContent = '✦ Naturalny 20!';
+            verdictEl.className = 'nat20';
+        } else if (nat1) {
+            verdictEl.textContent = '✧ Naturalny 1';
+            verdictEl.className = 'nat1';
+        } else if (hit) {
+            verdictEl.textContent = `✅ TRAFIENIE · ${dmg != null ? dmg : '?'} obrażeń`;
+            verdictEl.className = 'hit';
+        } else {
+            verdictEl.textContent = '❌ PUDŁO';
+            verdictEl.className = 'miss';
+        }
+        combatCard.hidden = false;
+
+        // Auto-close after 2.5s — no click needed during combat
+        setTimeout(() => {
+            overlay.hidden = true;
+            combatCard.hidden = true;
+            if (skillCard) skillCard.hidden = false;
+            onDone();
+        }, 2500);
+    }
+
+    const committedD20 = rv !== null ? Math.max(1, Math.min(20, rv)) : null;
+
+    requestAnimationFrame(() => {
+        if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
+            // Fallback: number spin
+            let ticks = 0;
+            const iv = setInterval(() => {
+                numEl.textContent = Math.ceil(Math.random() * 20);
+                if (++ticks >= 14) {
+                    clearInterval(iv);
+                    _showCombatResult(committedD20 !== null ? committedD20 : Math.ceil(Math.random() * 20));
+                }
+            }, 55);
+            return;
+        }
+        try {
+            if (!_diceBox) {
+                _diceBox = new DICE.dice_box(container);
+            } else {
+                _diceBox.clear();
+                _diceBox.reinit(container);
+            }
+            _diceBox.setDice('1d20');
+        } catch (_err) {
+            let ticks = 0;
+            const iv = setInterval(() => {
+                numEl.textContent = Math.ceil(Math.random() * 20);
+                if (++ticks >= 14) { clearInterval(iv); _showCombatResult(committedD20 !== null ? committedD20 : Math.ceil(Math.random() * 20)); }
+            }, 55);
+            return;
+        }
+        const beforeRoll = committedD20 !== null ? () => [committedD20] : null;
+        _diceBox.start_throw(beforeRoll, (notation) => {
+            setTimeout(() => _showCombatResult(notation.result[0]), 600);
+        });
+    });
+}
+
+function _processCombatRollQueue() {
+    if (_combatRollBusy || _combatRollQueue.length === 0) return;
+    _combatRollBusy = true;
+    const { row, animate } = _combatRollQueue.shift();
+    const bubble = _buildCombatBubble(row);
+
+    if (!animate || String(row.event_type) !== 'attack') {
+        if (bubble) elements.chatMessages.appendChild(bubble);
+        _combatRollBusy = false;
+        _processCombatRollQueue();
+        return;
+    }
+
+    _showCombatDiceRoll(row, () => {
+        if (bubble) {
+            elements.chatMessages.appendChild(bubble);
+            scrollToBottom();
+        }
+        _combatRollBusy = false;
+        _processCombatRollQueue();
+    });
+}
+
+function appendCombatTurnCard(row, animate = false) {
+    const evt = String(row.event_type || '');
+    // Non-attack events bypass queue — append immediately
+    if (evt !== 'attack' || !animate) {
+        const bubble = _buildCombatBubble(row);
+        if (bubble) elements.chatMessages.appendChild(bubble);
+        return;
+    }
+    _combatRollQueue.push({ row, animate });
+    _processCombatRollQueue();
 }
 
 function pickEnemyTarget(cs) {
