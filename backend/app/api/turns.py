@@ -510,6 +510,35 @@ def _process_location_intent(
                                    AND (location_key IS NULL OR location_key = '')""",
                                 (_loc_key_row["key"], _nhq, _nhr),
                             )
+                            # Also update hex_type from location biome if hex is still default 'plains'
+                            try:
+                                loc_biome = conn.execute(
+                                    "SELECT biome FROM game_locations WHERE key = ?", (_loc_key_row["key"],)
+                                ).fetchone()
+                                biome = (loc_biome["biome"] if loc_biome else None) or ""
+                                BIOME_TO_HEX_TYPE = {
+                                    "forest": "forest",
+                                    "swamp": "swamp",
+                                    "mountain": "mountains",
+                                    "mountains": "mountains",
+                                    "urban": "town",
+                                    "dungeon": "dungeon",
+                                    "ruin": "ruins",
+                                    "underground": "dungeon",
+                                    "coast": "plains",
+                                    "desert": "plains",
+                                    "tundra": "plains",
+                                    "rural": "plains",
+                                    "plains": "plains",
+                                }
+                                mapped_type = BIOME_TO_HEX_TYPE.get(biome.lower())
+                                if mapped_type and mapped_type != "plains":
+                                    conn.execute(
+                                        "UPDATE world_hexes SET hex_type = ? WHERE q = ? AND r = ? AND hex_type = 'plains'",
+                                        (mapped_type, _nhq, _nhr),
+                                    )
+                            except Exception:
+                                pass
                 except Exception as _newloc_hex_err:
                     logger.warning("new_location_hex_link_failed", error=str(_newloc_hex_err))
             conn.commit()

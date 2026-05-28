@@ -2175,8 +2175,8 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                             ).fetchone()
                             if not session_id:
                                 conn.execute(
-                                    "INSERT INTO game_sessions (campaign_id, session_flags) VALUES (?, ?)",
-                                    (campaign_id, "{}"),
+                                    "INSERT OR IGNORE INTO game_sessions (id, campaign_id, session_flags) VALUES (?, ?, '{}')",
+                                    (str(campaign_id), campaign_id),
                                 )
                                 conn.commit()
 

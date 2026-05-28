@@ -75,10 +75,14 @@ def _stat_mod(sheet: dict, stat: str) -> int:
 
 
 def _player_ac_from_sheet(sheet: dict) -> int:
+    dex_mod = _stat_mod(sheet, "DEX")
+    archetype = str(sheet.get("archetype") or "").strip().lower()
+    archetype_ac = {"warrior": 2, "rogue": 1}.get(archetype, 0)
     d = sheet.get("defense")
     if isinstance(d, dict) and d.get("base") is not None:
-        return int(d["base"])
-    return 10 + _stat_mod(sheet, "DEX")
+        # Legacy sheets with explicit base — add archetype bonus on top
+        return int(d["base"]) + archetype_ac
+    return 10 + dex_mod + archetype_ac
 
 
 def _player_hp_pair(sheet: dict) -> tuple[int, int]:
@@ -1323,6 +1327,20 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         sheet = parse_character_sheet(ch["sheet_json"])
         hp_cur, hp_max = _player_hp_pair(sheet)
         ac = _player_ac_from_sheet(sheet)
+        # Add equipped armor AC bonus from inventory
+        try:
+            armor_row = conn.execute(
+                """SELECT gi.ac_bonus FROM character_inventory ci
+                   JOIN game_config_items gi ON gi.key = ci.item_key
+                   WHERE ci.character_id = ? AND ci.equipped = 1
+                     AND gi.item_type = 'armor' AND gi.ac_bonus > 0
+                   ORDER BY gi.ac_bonus DESC LIMIT 1""",
+                (character_id,),
+            ).fetchone()
+            if armor_row:
+                ac += int(armor_row[0] or 0)
+        except Exception:
+            pass
         dex_mod = _stat_mod(sheet, "DEX")
         init_player = roll_d20() + dex_mod
         ability_stats = _ability_stats_seven(sheet)
