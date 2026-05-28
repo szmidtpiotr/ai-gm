@@ -60,14 +60,13 @@ Created after balance test + loot audit (2026-05-28).
 - **Bug found**: npc_locations fix is DEV-only SQL. Needs seed migration for fresh deployments.
 - **GitHub**: See issue #163
 
-### Task 6: Increase Loot Item Drop Rates (Phase 2)
-- **Description**: Post-tuning, increase item drop chances for weak enemies
+### Task 6: Increase Loot Item Drop Rates (Phase 2) ✓ DONE
 - **Deliverables**:
-  - Goblin: 85% empty → 65% empty (10% item → 25% item)
-  - Bandit: Reduce empty weight, add equipment drops
-  - Verify distribution still feels random (not predictable)
-- **Dependency**: Task 3 (audit must be complete)
-- **Effort**: 2 hours
+  - ✓ loot_bandit_archer: 1 entry → 7 entries (shortbow 30, dagger 20, rope_hemp 20, leather_gloves 15, bandage 15, belt_pouch 10, eye_drops_clarity 35). Total weight 145.
+  - ✓ shop NPC npc_locations seeded in migrations (4 entries for merchant_aldric, blacksmith_goran, seed_pending_npc_borys)
+  - ✓ seed_pending_npc_borys added to ADMIN_SEEDS (was DEV-only SQL)
+  - ✓ GitHub issue #164
+- **Note**: Goblin and bandit tables were already fine — Task 6 description was stale (based on pre-audit state). Real gap was bandit_archer at 1 entry only.
 
 ### Task 7: Rarity-based Loot Scaling
 - **Description**: Rare/epic items should be scarce; common items common
@@ -106,6 +105,7 @@ Created after balance test + loot audit (2026-05-28).
 | — | Task 1+2: Shop NPC system + seed | ✓ Done — issue #161 |
 | — | Task 3: Loot audit + pending enemy fixes | ✓ Done — issue #162 |
 | — | Task 5: Playtest — shop/scaling/loot verified | ✓ Done — issue #163 |
+| 9e88620 | Task 6: archer loot expansion + shop NPC seed migration | ✓ Done — issue #164 |
 
 ---
 
