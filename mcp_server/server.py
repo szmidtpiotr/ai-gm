@@ -1612,33 +1612,55 @@ def forge_workflow_guide() -> str:
    → Only use when explicitly asked to assign to a specific player.
 
 ## CREATE GAME CONTENT
-forge_create_game_entry(entry_type, data)
+forge_create_game_entry(entry_type, data, template_id=None)
 
-entry_type="weapon": {key, label, damage_die, linked_stat, weapon_type, weapon_slot, rarity, description, allowed_classes, effect_json (optional)}
-  weapon_type: melee|ranged|spell   ← EXACT VALUES ONLY (not one_handed/two_handed/thrown)
-  weapon_slot: main_hand|two_handed|off_hand_only|either   ← default: main_hand
-  linked_stat: STR|DEX|INT|WIS|CHA|LCK
-  rarity: 1=common|2=uncommon|3=rare|4=legendary   ← INTEGER, NOT string
-  damage_die: d4|d6|d8|d10|d12|2d6
-  allowed_classes: ["warrior"] or ["warrior","scholar"] or ["scholar"]
+entry_type="weapon":
+  REQUIRED: key, label, damage_die, linked_stat, weapon_type, weapon_slot, rarity, description, allowed_classes
+  OPTIONAL:  two_handed, finesse, targeting, range_m, value_gp, magic_school, note, effect_json, hidden, location_hint
 
-entry_type="armor": {key, label, ac_bonus, item_type, rarity, description, allowed_classes, effect_json (optional)}
-  item_type: light|medium|heavy|shield
-  allowed_classes: ["warrior"] or ["warrior","scholar"]   ← NOTE: field is "allowed_classes" NOT "allowed_archetypes"
-  ac_bonus: integer (e.g. 2 for +2 AC)
-  rarity: 1=common|2=uncommon|3=rare|4=legendary   ← INTEGER, NOT string
+  weapon_type:  melee|ranged|spell   ← EXACT VALUES (not one_handed/two_handed/thrown)
+  weapon_slot:  main_hand|two_handed|off_hand_only|either   ← default: main_hand
+  linked_stat:  STR|DEX|INT|WIS|CHA|LCK
+  rarity:       1=common|2=uncommon|3=rare|4=legendary   ← INTEGER, NOT string
+  damage_die:   d4|d6|d8|d10|d12|2d6   ← no leading "1" needed
+  allowed_classes: [] for all classes, ["warrior"] or ["warrior","scholar"] to restrict
+  two_handed:   true|false   ← true only when weapon_slot="two_handed"
+  finesse:      true|false   ← true for DEX-based melee weapons
+  targeting:    single|aoe|adjacent   ← default: single
+  range_m:      integer (0 for melee, >0 for ranged)
+  value_gp:     integer (gold value)
+  magic_school: "" or e.g. "nekromancja" (only for spell weapons)
+  note:         "" or short GM-only note (special rules, lore, activation)
+  hidden:       false (true = GM must reveal it to player)
+  location_hint: "" or hint where item can be found
 
-entry_type="enemy": {key, label, hp_base, ac_base, attack_bonus, damage_die, tier, description, loot_table_key}
+entry_type="armor":
+  REQUIRED: key, label, ac_bonus, item_type, rarity, description, allowed_classes
+  item_type:    light|medium|heavy|shield
+  ac_bonus:     integer (e.g. 2 for +2 AC)
+  allowed_classes: [] for all, ["warrior"] to restrict
+  rarity:       1-4 integer
+
+entry_type="enemy":
+  REQUIRED: key, label, hp_base, ac_base, attack_bonus, damage_die, tier, description
   tier: minion|standard|elite|boss
+  loot_table_key: optional string
 
-entry_type="item": {key, label, item_type, value_gp, rarity, description, effect_json (optional)}
+entry_type="item":
+  REQUIRED: key, label, item_type, value_gp, rarity, description
   item_type: tool|quest|key|misc
-  rarity: 1=common|2=uncommon|3=rare|4=legendary   ← INTEGER, NOT string
+  rarity: 1-4 integer
 
-entry_type="consumable": {key, label, effect_type, base_price, rarity, description, effect_json (optional)}
-  effect_type: heal|buff|antidote|utility
-  rarity: 1=common|2=uncommon|3=rare|4=legendary   ← INTEGER, NOT string
-  NOTE: consumables have NO allowed_classes/allowed_archetypes field — omit it
+entry_type="consumable":
+  REQUIRED: key, label, effect_type, base_price, rarity, description
+  OPTIONAL:  effect_dice, effect_bonus, charges, weight_kg, note, effect_json
+  effect_type:  heal_hp|restore_mana|stat_buff|remove_condition|add_condition|misc   ← EXACT VALUES
+  base_price:   integer (gold cost)
+  effect_dice:  e.g. "2d4" or "1d8+2" (how much HP healed etc.)
+  effect_bonus: integer (flat bonus on top of dice)
+  charges:      integer (default 1)
+  rarity:       1-4 integer
+  NOTE: consumables have NO allowed_classes field — omit it
 
 ## EFFECT_JSON SCHEMA (EXACT — do NOT deviate or hallucinate)
 effect_json is OPTIONAL on weapons/armor/items/consumables. If provided MUST match this exact schema:
