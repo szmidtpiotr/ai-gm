@@ -89,13 +89,25 @@ Created after balance test + loot audit (2026-05-28).
   - ✓ GitHub issue #166
 - **Note**: Reputation is purchase count only. Disposition change (friendly/hostile) based on count is deferred.
 
-### Task 9: Rental System (Borrow gear, pay daily)
-- **Description**: Allow players to rent expensive items instead of buying
-- **Effort**: 4 hours
+### Task 9: Rental System (Borrow gear, pay daily) ✓ DONE
+- **Deliverables**:
+  - ✓ `character_rentals` table — tracks item, duration, expires_at_turn, inventory_id
+  - ✓ `rent_item()` — upfront payment for N turns at 10% item value/turn; item granted with source='rental'
+  - ✓ `return_rental()` — removes item from inventory, marks rental returned
+  - ✓ Lazy expiry: `_expire_stale_rentals()` called on every shop visit, removes expired items
+  - ✓ `GET /shop/{npc_id}` now includes `rental_fee_gp` per item + `active_rentals` list
+  - ✓ `POST /shop/{npc_id}/rent`, `POST /shop/rentals/{id}/return` endpoints
+  - ✓ GitHub issue #167
+- **Note**: No pro-rata refund on early return. Fee ratio 0.10 is starting value, tune from playtest.
 
-### Task 10: Trade-in System (Old equipment → discount)
-- **Description**: Sell old sword, get discount on new one
-- **Effort**: 2 hours
+### Task 10: Trade-in System (Old equipment → discount) ✓ DONE
+- **Deliverables**:
+  - ✓ `buy_item()` accepts optional `trade_in_inventory_id`
+  - ✓ Discount = CHA-adjusted sell ratio on traded item's value_gp
+  - ✓ Trade-in item removed atomically; effective_price = max(0, price - discount)
+  - ✓ Response includes `trade_in.discount_gp` + `price_paid_gp`
+  - ✓ Backwards-compatible — field is optional
+  - ✓ GitHub issue #168
 
 ---
 
@@ -114,6 +126,7 @@ Created after balance test + loot audit (2026-05-28).
 | 9e88620 | Task 6: archer loot expansion + shop NPC seed migration | ✓ Done — issue #164 |
 | 60b81ce | Task 7: rarity loot scaling — boss/elite rare+epic drops | ✓ Done — issue #165 |
 | 4fb9678 | Task 8: shopkeeper dialogue + purchase_count reputation | ✓ Done — issue #166 |
+| 7744de0 | Task 9+10: rental system + trade-in discount | ✓ Done — issues #167, #168 |
 
 ---
 
