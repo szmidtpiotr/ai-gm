@@ -330,6 +330,67 @@ def _inject_character_inventory_context(
         logger.warning("inventory_context_injection_failed", error=str(exc))
 
 
+def _build_active_encounter_block(conn: sqlite3.Connection, campaign_id: int) -> str:
+    """Return a formatted encounter block if admin injected one, else ''."""
+    import json as _json
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            return ""
+        flags = _json.loads(row[0] or "{}")
+        enc = flags.get("active_encounter")
+        if not enc or not isinstance(enc, dict):
+            return ""
+        enemies_lines = ""
+        for e in (enc.get("enemies") or []):
+            enemies_lines += f"  - {e.get('name','?')} ×{e.get('count',1)}"
+            if e.get("notes"):
+                enemies_lines += f" ({e['notes']})"
+            enemies_lines += "\n"
+        objectives = "\n".join(f"  {i+1}. {o}" for i, o in enumerate(enc.get("objectives") or []))
+        rew = enc.get("rewards") or {}
+        return (
+            "=== AKTYWNE SPOTKANIE (UŻYJ W TEJ TURZE) ===\n"
+            f"Tytuł: {enc.get('title','')}\n"
+            f"Wyzwalacz: {enc.get('trigger_condition','')}\n"
+            f"Scena: {enc.get('scene_setup','')}\n"
+            f"Wrogowie:\n{enemies_lines}"
+            f"Cele:\n{objectives}\n"
+            f"Nagrody: {rew.get('xp_estimate',0)} XP — {rew.get('loot_notes','')}\n"
+            f"Uwagi GM: {enc.get('gm_notes','')}\n"
+            "Poprowadź tę scenę naturalnie — włącz wyzwalacz do narracji i pozwól graczowi zareagować."
+        )
+    except Exception as _exc:
+        logger.warning("active_encounter_block_failed", error=str(_exc))
+        return ""
+
+
+def _clear_active_encounter(conn: sqlite3.Connection, campaign_id: int) -> None:
+    """Remove active_encounter from session_flags after it fires."""
+    import json as _json
+    try:
+        row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            return
+        flags = _json.loads(row[0] or "{}")
+        if "active_encounter" not in flags:
+            return
+        flags.pop("active_encounter")
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (_json.dumps(flags, ensure_ascii=False), campaign_id),
+        )
+        conn.commit()
+    except Exception as _exc:
+        logger.warning("clear_active_encounter_failed", error=str(_exc))
+
+
 def _inject_location_llm_context(
     conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
 ) -> None:
@@ -647,6 +708,14 @@ def build_narrative_messages(
         if isinstance(first, dict) and first.get("role") == "system":
             first["content"] = f"{first.get('content', '').rstrip()}\n\n{death_append}"
 
+    # active_encounter injection — GM-injected one-shot encounter scene
+    if has_db_conn and not roll_result_message and messages:
+        _enc_block = _build_active_encounter_block(conn, int(campaign["id"]))
+        if _enc_block:
+            first = messages[0]
+            if isinstance(first, dict) and first.get("role") == "system":
+                first["content"] = f"{first.get('content', '').rstrip()}\n\n{_enc_block}"
+
     # Skill test tag instruction — injected when player text hints at skill use
     if not combat_block and not roll_result_message and has_db_conn and messages:
         _st_block = _skill_test_tag_instruction(conn, int(campaign["id"]), user_text, character=character)
@@ -720,4 +789,5 @@ def run_narrative_turn(
         roll_result_data=roll_result_data,
     )
     reply = generate_chat(messages=messages, model=model, llm_config=llm_config)
+    _clear_active_encounter(conn, int(campaign["id"]))
     return {"message": reply}
