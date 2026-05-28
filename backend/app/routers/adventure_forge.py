@@ -1470,19 +1470,30 @@ def forge_get_template_db_items(template_id: int, _: None = Depends(_require_adm
         if not tpl:
             raise HTTPException(status_code=404, detail="Template not found")
         weapons = [dict(r) for r in conn.execute(
-            "SELECT key, label, weapon_type, damage_die, linked_stat, rarity, 'weapon' AS entry_type FROM game_config_weapons WHERE template_id=?",
+            """SELECT key, label, weapon_type, weapon_slot, damage_die, linked_stat, rarity,
+                      two_handed, finesse, targeting, range_m, value_gp, magic_school,
+                      description, note, effect_json,
+                      'weapon' AS entry_type
+               FROM game_config_weapons WHERE template_id=?""",
             (template_id,)
         )]
         items = [dict(r) for r in conn.execute(
-            "SELECT key, label, item_type, value_gp, rarity, 'item' AS entry_type FROM game_config_items WHERE template_id=? AND item_type != 'armor'",
+            """SELECT key, label, item_type, value_gp, rarity, description, note, effect_json,
+                      'item' AS entry_type
+               FROM game_config_items WHERE template_id=? AND item_type != 'armor'""",
             (template_id,)
         )]
         armors = [dict(r) for r in conn.execute(
-            "SELECT key, label, item_type, ac_bonus, rarity, 'armor' AS entry_type FROM game_config_items WHERE template_id=? AND item_type = 'armor'",
+            """SELECT key, label, item_type, ac_bonus, rarity, description, note, effect_json,
+                      'armor' AS entry_type
+               FROM game_config_items WHERE template_id=? AND item_type = 'armor'""",
             (template_id,)
         )]
         consumables = [dict(r) for r in conn.execute(
-            "SELECT key, label, effect_type, base_price, rarity, 'consumable' AS entry_type FROM game_config_consumables WHERE template_id=?",
+            """SELECT key, label, effect_type, effect_dice, effect_bonus, base_price, charges,
+                      rarity, description, note,
+                      'consumable' AS entry_type
+               FROM game_config_consumables WHERE template_id=?""",
             (template_id,)
         )]
         return {"weapons": weapons, "items": items, "armors": armors, "consumables": consumables}

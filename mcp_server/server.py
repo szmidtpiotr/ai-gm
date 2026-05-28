@@ -1616,7 +1616,7 @@ forge_create_game_entry(entry_type, data, template_id=None)
 
 entry_type="weapon":
   REQUIRED: key, label, damage_die, linked_stat, weapon_type, weapon_slot, rarity, description, allowed_classes
-  OPTIONAL:  two_handed, finesse, targeting, range_m, value_gp, magic_school, note, effect_json, hidden, location_hint
+  OPTIONAL:  two_handed, finesse, targeting, range_m, value_gp, magic_school, note, effect_json
 
   weapon_type:  melee|ranged|spell   ← EXACT VALUES (not one_handed/two_handed/thrown)
   weapon_slot:  main_hand|two_handed|off_hand_only|either   ← default: main_hand
@@ -1631,8 +1631,6 @@ entry_type="weapon":
   value_gp:     integer (gold value)
   magic_school: "" or e.g. "nekromancja" (only for spell weapons)
   note:         "" or short GM-only note (special rules, lore, activation)
-  hidden:       false (true = GM must reveal it to player)
-  location_hint: "" or hint where item can be found
 
 entry_type="armor":
   REQUIRED: key, label, ac_bonus, item_type, rarity, description, allowed_classes
