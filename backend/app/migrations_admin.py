@@ -3339,10 +3339,43 @@ def run_admin_migrations() -> None:
         _allow_nullable_campaign_model_id(conn)
         _ensure_adventure_forge_cleanup(conn)
         _ensure_rarity_loot_scaling(conn)
+        _ensure_character_rentals(conn)
     finally:
         conn.close()
 
     logger.info("admin_migration_complete", phase="14.1")
+
+
+def _ensure_character_rentals(conn: sqlite3.Connection) -> None:
+    """Task 9 — per-character rental records for borrowed shop items."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS character_rentals (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id    INTEGER NOT NULL,
+            campaign_id     INTEGER,
+            npc_id          INTEGER NOT NULL,
+            item_type       TEXT NOT NULL,
+            item_key        TEXT NOT NULL,
+            label           TEXT NOT NULL DEFAULT '',
+            rental_fee_gp   INTEGER NOT NULL,
+            total_paid_gp   INTEGER NOT NULL,
+            duration_turns  INTEGER NOT NULL,
+            rented_at_turn  INTEGER NOT NULL DEFAULT 0,
+            expires_at_turn INTEGER NOT NULL,
+            inventory_id    INTEGER,
+            status          TEXT NOT NULL DEFAULT 'active'
+                              CHECK (status IN ('active', 'returned', 'expired')),
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_character_rentals_active "
+        "ON character_rentals(character_id, npc_id, status)"
+    )
+    conn.commit()
 
 
 def _ensure_adventure_forge_cleanup(conn: sqlite3.Connection) -> None:

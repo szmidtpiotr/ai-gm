@@ -1,4 +1,4 @@
-"""Phase 9A-4 — NPC shop service (buy/sell)."""
+"""Phase 9A-4 — NPC shop service (buy/sell/rent/trade-in)."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from app.services.loot_service import (
 )
 
 SELL_RATIO = 0.5
+RENTAL_FEE_RATIO = 0.10  # 10% of item value per turn
 
 
 def _conn() -> sqlite3.Connection:
@@ -245,25 +246,91 @@ def _character_sellables(
     return out
 
 
+def _get_character_campaign_id(conn: sqlite3.Connection, character_id: int) -> int | None:
+    row = conn.execute(
+        "SELECT campaign_id FROM characters WHERE id = ? LIMIT 1",
+        (int(character_id),),
+    ).fetchone()
+    return int(row["campaign_id"]) if row and row["campaign_id"] else None
+
+
+def _get_campaign_current_turn(conn: sqlite3.Connection, campaign_id: int) -> int:
+    row = conn.execute(
+        "SELECT COALESCE(MAX(turn_number), 0) AS t FROM campaign_turns WHERE campaign_id = ?",
+        (int(campaign_id),),
+    ).fetchone()
+    return int(row["t"]) if row else 0
+
+
+def _expire_stale_rentals(conn: sqlite3.Connection, character_id: int, npc_id: int, current_turn: int) -> int:
+    """Remove items for expired rentals. Returns count of expired rows."""
+    expired = conn.execute(
+        """
+        SELECT id, inventory_id FROM character_rentals
+        WHERE character_id = ? AND npc_id = ? AND status = 'active' AND expires_at_turn <= ?
+        """,
+        (int(character_id), int(npc_id), current_turn),
+    ).fetchall()
+    for row in expired:
+        if row["inventory_id"]:
+            conn.execute(
+                "DELETE FROM character_inventory WHERE id = ? AND character_id = ?",
+                (int(row["inventory_id"]), int(character_id)),
+            )
+        conn.execute(
+            "UPDATE character_rentals SET status = 'expired', updated_at = datetime('now') WHERE id = ?",
+            (int(row["id"]),),
+        )
+    if expired:
+        conn.commit()
+    return len(expired)
+
+
 def get_shop_inventory(npc_id: int, character_id: int) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
         cha = _get_character_cha(conn, character_id)
         ratio = _cha_sell_ratio(cha)
         entries = _parse_shop_inventory(str(npc["shop_inventory_json"] or "[]"))
+
+        campaign_id = _get_character_campaign_id(conn, character_id)
+        current_turn = _get_campaign_current_turn(conn, campaign_id) if campaign_id else 0
+
+        # Lazy expiry: clear overdue rentals when player visits shop
+        _expire_stale_rentals(conn, character_id, int(npc["id"]), current_turn)
+
         items = []
         for e in entries:
             cat = _catalog_item(conn, e["type"], e["key"])
             if cat and int(cat.get("value_gp") or 0) > 0:
-                items.append(cat)
+                rental_fee = max(1, int(math.floor(int(cat["value_gp"]) * RENTAL_FEE_RATIO)))
+                items.append({**cat, "rental_fee_gp": rental_fee})
+
         sell_items = _character_sellables(conn, character_id, ratio)
+
+        active_rentals = conn.execute(
+            """
+            SELECT id, item_type, item_key, label, rental_fee_gp, total_paid_gp,
+                   duration_turns, rented_at_turn, expires_at_turn, status
+            FROM character_rentals
+            WHERE character_id = ? AND npc_id = ? AND status = 'active'
+            ORDER BY expires_at_turn ASC
+            """,
+            (int(character_id), int(npc["id"])),
+        ).fetchall()
+
     return {
         "npc": {"id": int(npc["id"]), "key": npc["key"], "label": npc["label"]},
         "items": items,
         "sell_items": sell_items,
+        "active_rentals": [
+            {**dict(r), "turns_remaining": max(0, int(r["expires_at_turn"]) - current_turn)}
+            for r in active_rentals
+        ],
         "character_gold": int(get_character_gold(character_id)),
         "sell_ratio": ratio,
         "cha": cha,
+        "rental_fee_ratio": RENTAL_FEE_RATIO,
     }
 
 
@@ -273,7 +340,13 @@ def get_shop_inventory_by_key(npc_key: str, character_id: int) -> dict[str, Any]
     return get_shop_inventory(int(npc["id"]), character_id)
 
 
-def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> dict[str, Any]:
+def buy_item(
+    character_id: int,
+    npc_id: int,
+    item_type: str,
+    item_key: str,
+    trade_in_inventory_id: int | None = None,
+) -> dict[str, Any]:
     with _conn() as conn:
         npc = _load_shop_npc(conn, npc_id)
         entries = _parse_shop_inventory(str(npc["shop_inventory_json"] or "[]"))
@@ -290,28 +363,78 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
         if price <= 0:
             raise ValueError("price_or_catalog_missing")
 
-    # Validate gold first for cleaner error mapping.
+        # Trade-in: validate and calculate discount
+        trade_in_info: dict[str, Any] | None = None
+        trade_discount = 0
+        if trade_in_inventory_id is not None:
+            ti_row = conn.execute(
+                """
+                SELECT id, item_key, weapon_key, consumable_key
+                FROM character_inventory
+                WHERE id = ? AND character_id = ?
+                LIMIT 1
+                """,
+                (int(trade_in_inventory_id), int(character_id)),
+            ).fetchone()
+            if not ti_row:
+                raise ValueError("trade_in_not_found")
+            ti_type = ""
+            ti_key = ""
+            if ti_row["weapon_key"]:
+                ti_type = "weapon"
+                ti_key = str(ti_row["weapon_key"])
+            elif ti_row["consumable_key"]:
+                ti_type = "consumable"
+                ti_key = str(ti_row["consumable_key"])
+            elif ti_row["item_key"]:
+                ti_type = "item"
+                ti_key = str(ti_row["item_key"])
+            if not ti_type or not ti_key:
+                raise ValueError("trade_in_not_sellable")
+            ti_cat = _catalog_item(conn, ti_type, ti_key)
+            if ti_cat:
+                cha = _get_character_cha(conn, character_id)
+                ratio = _cha_sell_ratio(cha)
+                ti_base = int(ti_cat["value_gp"] or 0)
+                trade_discount = max(1, int(math.floor(ti_base * ratio))) if ti_base > 0 else 0
+                trade_in_info = {
+                    "inventory_id": int(ti_row["id"]),
+                    "type": str(ti_cat.get("type") or ti_type),
+                    "key": ti_key,
+                    "label": ti_cat["label"],
+                    "value_gp": ti_base,
+                    "discount_gp": trade_discount,
+                }
+
+    effective_price = max(0, price - trade_discount)
+
     cur_gold = int(get_character_gold(character_id))
-    if cur_gold < price:
+    if cur_gold < effective_price:
         raise ValueError("insufficient_gold")
 
-    # Use existing economy and loot services.
-    new_gold = apply_character_gold_delta(character_id, -price, "shop_purchase")
-    loot_payload: dict[str, Any]
+    # Remove trade-in item before paying (trade-in submitted = item leaves inventory)
+    if trade_in_info:
+        with _conn() as conn2:
+            conn2.execute(
+                "DELETE FROM character_inventory WHERE id = ? AND character_id = ?",
+                (trade_in_info["inventory_id"], int(character_id)),
+            )
+            conn2.commit()
+
+    new_gold = apply_character_gold_delta(character_id, -effective_price, "shop_purchase")
     t = str(item_type).strip().lower()
     if t == "weapon":
-        loot_payload = {"weapon_key": str(item_key).strip(), "quantity": 1}
+        loot_payload: dict[str, Any] = {"weapon_key": str(item_key).strip(), "quantity": 1}
     else:
         loot_payload = {"item_key": str(item_key).strip(), "quantity": 1}
 
     try:
         grant_loot_to_character(character_id, [loot_payload], source="purchase")
     except Exception:
-        # Best effort rollback of deducted gold.
-        apply_character_gold_delta(character_id, price, "shop_purchase_refund")
+        apply_character_gold_delta(character_id, effective_price, "shop_purchase_refund")
         raise
 
-    # Reputation tracking: bump purchase count for this shop NPC in the campaign.
+    # Reputation tracking
     try:
         from app.services.npc_memory_service import increment_npc_purchase_count
         with _conn() as rep_conn:
@@ -327,8 +450,9 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
     except Exception:
         pass  # Non-critical; never fail a purchase over reputation tracking
 
-    return {
+    result: dict[str, Any] = {
         "gold_gp": int(new_gold),
+        "price_paid_gp": effective_price,
         "item": {
             "type": cat["type"],
             "key": cat["key"],
@@ -336,6 +460,14 @@ def buy_item(character_id: int, npc_id: int, item_type: str, item_key: str) -> d
             "value_gp": int(cat["value_gp"] or 0),
         },
     }
+    if trade_in_info:
+        result["trade_in"] = {
+            "type": trade_in_info["type"],
+            "key": trade_in_info["key"],
+            "label": trade_in_info["label"],
+            "discount_gp": trade_discount,
+        }
+    return result
 
 
 def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
@@ -396,5 +528,149 @@ def sell_item(character_id: int, inventory_id: int) -> dict[str, Any]:
             "type": item_type,
             "key": item_key,
             "label": cat["label"],
+        },
+    }
+
+
+def rent_item(
+    character_id: int,
+    npc_id: int,
+    item_type: str,
+    item_key: str,
+    duration_turns: int,
+) -> dict[str, Any]:
+    if int(duration_turns) < 1:
+        raise ValueError("invalid_duration")
+
+    with _conn() as conn:
+        npc = _load_shop_npc(conn, npc_id)
+        entries = _parse_shop_inventory(str(npc["shop_inventory_json"] or "[]"))
+        allowed = any(
+            e["type"] == str(item_type).strip().lower() and e["key"] == str(item_key).strip()
+            for e in entries
+        )
+        if not allowed:
+            raise ValueError("item_not_in_shop")
+        cat = _catalog_item(conn, item_type, item_key)
+        if not cat or int(cat["value_gp"] or 0) <= 0:
+            raise ValueError("price_or_catalog_missing")
+
+        campaign_id = _get_character_campaign_id(conn, character_id)
+        current_turn = _get_campaign_current_turn(conn, campaign_id) if campaign_id else 0
+
+    rental_fee = max(1, int(math.floor(int(cat["value_gp"]) * RENTAL_FEE_RATIO)))
+    total_cost = rental_fee * int(duration_turns)
+    expires_at_turn = current_turn + int(duration_turns)
+
+    cur_gold = int(get_character_gold(character_id))
+    if cur_gold < total_cost:
+        raise ValueError("insufficient_gold")
+
+    new_gold = apply_character_gold_delta(character_id, -total_cost, "shop_rental")
+
+    t = str(item_type).strip().lower()
+    loot_payload: dict[str, Any]
+    if t == "weapon":
+        loot_payload = {"weapon_key": str(item_key).strip(), "quantity": 1}
+    else:
+        loot_payload = {"item_key": str(item_key).strip(), "quantity": 1}
+
+    inventory_id: int | None = None
+    try:
+        grant_loot_to_character(character_id, [loot_payload], source="rental")
+        # Retrieve inventory_id of the just-granted item to track it for expiry removal
+        with _conn() as conn2:
+            if t == "weapon":
+                inv_row = conn2.execute(
+                    "SELECT id FROM character_inventory WHERE character_id = ? AND weapon_key = ? ORDER BY id DESC LIMIT 1",
+                    (int(character_id), str(item_key).strip()),
+                ).fetchone()
+            else:
+                inv_row = conn2.execute(
+                    "SELECT id FROM character_inventory WHERE character_id = ? AND item_key = ? ORDER BY id DESC LIMIT 1",
+                    (int(character_id), str(item_key).strip()),
+                ).fetchone()
+            inventory_id = int(inv_row["id"]) if inv_row else None
+    except Exception:
+        apply_character_gold_delta(character_id, total_cost, "shop_rental_refund")
+        raise
+
+    with _conn() as conn3:
+        cur = conn3.execute(
+            """
+            INSERT INTO character_rentals
+                (character_id, campaign_id, npc_id, item_type, item_key, label,
+                 rental_fee_gp, total_paid_gp, duration_turns,
+                 rented_at_turn, expires_at_turn, inventory_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(character_id),
+                campaign_id,
+                int(npc_id),
+                str(item_type).strip().lower(),
+                str(item_key).strip(),
+                cat["label"],
+                rental_fee,
+                total_cost,
+                int(duration_turns),
+                current_turn,
+                expires_at_turn,
+                inventory_id,
+            ),
+        )
+        conn3.commit()
+        rental_id = cur.lastrowid
+
+    return {
+        "rental_id": rental_id,
+        "gold_gp": int(new_gold),
+        "rental_fee_gp": rental_fee,
+        "total_paid_gp": total_cost,
+        "duration_turns": int(duration_turns),
+        "rented_at_turn": current_turn,
+        "expires_at_turn": expires_at_turn,
+        "item": {
+            "type": cat["type"],
+            "key": cat["key"],
+            "label": cat["label"],
+            "value_gp": int(cat["value_gp"] or 0),
+        },
+    }
+
+
+def return_rental(character_id: int, rental_id: int) -> dict[str, Any]:
+    with _conn() as conn:
+        row = conn.execute(
+            """
+            SELECT id, item_type, item_key, label, inventory_id, status
+            FROM character_rentals
+            WHERE id = ? AND character_id = ?
+            LIMIT 1
+            """,
+            (int(rental_id), int(character_id)),
+        ).fetchone()
+        if not row:
+            raise ValueError("rental_not_found")
+        if str(row["status"]) != "active":
+            raise ValueError("rental_not_active")
+
+        if row["inventory_id"]:
+            conn.execute(
+                "DELETE FROM character_inventory WHERE id = ? AND character_id = ?",
+                (int(row["inventory_id"]), int(character_id)),
+            )
+        conn.execute(
+            "UPDATE character_rentals SET status = 'returned', updated_at = datetime('now') WHERE id = ?",
+            (int(row["id"]),),
+        )
+        conn.commit()
+
+    return {
+        "ok": True,
+        "returned_item": {
+            "type": str(row["item_type"]),
+            "key": str(row["item_key"]),
+            "label": str(row["label"] or row["item_key"]),
         },
     }
