@@ -80,9 +80,14 @@ Created after balance test + loot audit (2026-05-28).
 
 ## Low Priority (Future)
 
-### Task 8: Shop Keeper Dialogue & Reputation
-- **Description**: Dynamic NPC personality + player reputation system
-- **Effort**: 8+ hours (involves GM prompt tuning)
+### Task 8: Shop Keeper Dialogue & Reputation ✓ DONE
+- **Deliverables**:
+  - ✓ context_injector: shop NPCs visible via `npc_locations` table; `[KUPIEC]` tag + `personality_json` traits + shop wares in GM prompt
+  - ✓ npc_memory_service: `purchase_count` tracking; "stały klient" label at ≥5 purchases; shop NPC personality in known-NPC block
+  - ✓ shop_service: `buy_item` increments `purchase_count` on `campaign_known_npcs`
+  - ✓ migrations: `purchase_count` column added to `campaign_known_npcs`
+  - ✓ GitHub issue #166
+- **Note**: Reputation is purchase count only. Disposition change (friendly/hostile) based on count is deferred.
 
 ### Task 9: Rental System (Borrow gear, pay daily)
 - **Description**: Allow players to rent expensive items instead of buying
@@ -108,6 +113,7 @@ Created after balance test + loot audit (2026-05-28).
 | — | Task 5: Playtest — shop/scaling/loot verified | ✓ Done — issue #163 |
 | 9e88620 | Task 6: archer loot expansion + shop NPC seed migration | ✓ Done — issue #164 |
 | 60b81ce | Task 7: rarity loot scaling — boss/elite rare+epic drops | ✓ Done — issue #165 |
+| 4fb9678 | Task 8: shopkeeper dialogue + purchase_count reputation | ✓ Done — issue #166 |
 
 ---
 
