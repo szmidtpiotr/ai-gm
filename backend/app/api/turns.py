@@ -3580,6 +3580,19 @@ def create_turn(
         if combat_was_active and not new_combat:
             combat_extra = _maybe_advance_combat_after_player_narrative(campaign_id)
 
+        # Extract travel_hint from JSON field (preferred) or legacy [TRAVEL_HINT:] tag
+        import re as _re
+        _travel_hint_label: str | None = None
+        if isinstance(_parsed_json, dict):
+            _th = _parsed_json.get("travel_hint")
+            if _th and isinstance(_th, str):
+                _travel_hint_label = _th.strip()
+        if not _travel_hint_label:
+            _travel_hint_match = _re.search(r'\[TRAVEL_HINT:([^\]]+)\]', clean_assistant or '')
+            if _travel_hint_match:
+                _travel_hint_label = _travel_hint_match.group(1).strip()
+                clean_assistant = _re.sub(r'\s*\[TRAVEL_HINT:[^\]]+\]', '', clean_assistant).strip()
+
         result_out = (
             {**result, "message": clean_assistant} if isinstance(result, dict) else result
         )
@@ -3611,6 +3624,7 @@ def create_turn(
                 game_state=_game_state_for_sa,
                 session_flags=_sf_for_sa,
                 llm_suggested=_llm_suggested,
+                travel_hint=_travel_hint_label,
             )
         except Exception as _sa_err:
             logger.warning("suggested_actions_build_error", error=str(_sa_err))

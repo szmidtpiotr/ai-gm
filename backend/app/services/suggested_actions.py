@@ -28,6 +28,7 @@ class SuggestedAction:
     enabled: bool = True
     reason: Optional[str] = None   # tooltip when disabled
     icon: Optional[str] = None
+    highlight: bool = False        # pulse/glow animation on the pill
 
     def to_dict(self) -> dict:
         d: dict = {"label": self.label, "action": self.action, "enabled": self.enabled}
@@ -35,6 +36,8 @@ class SuggestedAction:
             d["reason"] = self.reason
         if self.icon:
             d["icon"] = self.icon
+        if self.highlight:
+            d["highlight"] = True
         return d
 
 
@@ -45,6 +48,7 @@ def build_suggested_actions(
     game_state: str | None,
     session_flags: dict,
     llm_suggested: list[dict] | None = None,
+    travel_hint: str | None = None,
 ) -> list[dict]:
     """
     Build up to MAX_ACTIONS quick-action buttons for the player UI.
@@ -81,6 +85,18 @@ def build_suggested_actions(
                     reason=item.get("reason"),
                     icon=item.get("icon"),
                 ))
+
+        # Travel hint pill — shown when GM signals travel is appropriate
+        if travel_hint:
+            travel_pill = SuggestedAction(
+                label=f"Podróżuj → {travel_hint}",
+                action="OPEN_MAP",
+                enabled=True,
+                icon="🗺",
+                highlight=True,
+            )
+            # Insert at start so it's the most prominent
+            actions.insert(0, travel_pill)
 
         # Cap at MAX_ACTIONS
         actions = actions[:MAX_ACTIONS]

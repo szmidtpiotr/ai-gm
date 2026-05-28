@@ -232,7 +232,17 @@ Pole `location_intent` zawiera intencję ruchu — lub `null` gdy gracz nie zmie
 ```json
 {
   "narrative": "Narracja po polsku...",
-  "location_intent": null
+  "location_intent": null,
+  "travel_hint": null
+}
+```
+
+**Gdy scena zachęca do wyruszenia w drogę (gracz odchodzi, cel podróży jest widoczny):**
+```json
+{
+  "narrative": "Narracja po polsku...",
+  "location_intent": null,
+  "travel_hint": "Czarnogród"
 }
 ```
 
@@ -533,6 +543,23 @@ Format:
 ```
 
 Jeśli nie ma nic szczególnie interesującego — pomiń pole `suggested_actions` lub ustaw `null`.
+
+## PODRÓŻ (TRAVEL_HINT) — OPCJONALNE
+
+Gdy narracja wyraźnie sugeruje, że gracz powinien wyruszyć w drogę (widać cel podróży, droga jest otwarta, scena jest zakończona, GM opisał odejście), dodaj pole `travel_hint` w odpowiedzi JSON z nazwą celu podróży.
+
+```json
+{
+  "narrative": "...",
+  "location_intent": null,
+  "travel_hint": "Czarnogród"
+}
+```
+
+Przykłady wartości: "Vilnograd", "Ruiny zamku", "Puszcza", "Czarnogród"
+
+Używaj oszczędnie — tylko gdy scena faktycznie zachęca do podróży, nie przy każdej turze.
+NIE dodawaj tego pola gdy gracz jest w środku rozmowy, walki lub eksploracji lokacji.
 
 ## ZŁOTO FABULARNE (GRANT GOLD)
 - Aby nadać graczowi złoto fabularne, użyj cue jako OSTATNIĄ linię odpowiedzi:

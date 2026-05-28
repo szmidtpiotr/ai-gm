@@ -3730,7 +3730,9 @@ function renderSuggestedActions(actions) {
     container.style.display = 'flex';
     actions.forEach((a, i) => {
         const btn = document.createElement('button');
-        btn.className = 'suggested-action-btn' + (a.enabled ? '' : ' disabled');
+        let btnClass = 'suggested-action-btn' + (a.enabled ? '' : ' disabled');
+        if (a.highlight) btnClass += ' suggested-action-btn--travel';
+        btn.className = btnClass;
         btn.style.setProperty('--i', i);
         btn.textContent = (a.icon ? a.icon + ' ' : '') + a.label;
         if (!a.enabled) {
@@ -3752,6 +3754,11 @@ async function sendStructuredAction(actionStr, displayLabel) {
     // Stage 2B R4: BUILD_CAMP goes through a dedicated endpoint, not the narrator.
     if (actionStr === 'BUILD_CAMP') {
         await handleBuildCamp();
+        return;
+    }
+
+    if (actionStr === 'OPEN_MAP') {
+        _wmOpen();
         return;
     }
 
@@ -10031,6 +10038,8 @@ function initWorldMap() {
   if (!_wmap.panel) return;
 
   document.getElementById('open-map-btn')?.addEventListener('click', _wmOpen);
+  const composerMapBtn = document.getElementById('composer-map-btn');
+  if (composerMapBtn) composerMapBtn.addEventListener('click', _wmOpen);
   document.getElementById('wmap-close-btn')?.addEventListener('click', _wmClose);
 
   // Swipe right on map panel to close (mobile)
