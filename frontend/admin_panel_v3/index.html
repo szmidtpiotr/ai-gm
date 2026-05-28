@@ -3252,34 +3252,63 @@ Kolejność kroków:
 
 ### FAZA 3 — Przedmioty kampanii (OBOWIĄZKOWE)
 
-Każda kampania MUSI mieć unikalne przedmioty — to główny powód grania gotowych kampanii.
-Dodaj zawsze minimum: 2-3 bronie + 1-2 zbroje/przedmioty + 2-3 konsumable.
-Używaj template_id przy każdym tworzeniu!
+Każda kampania MUSI mieć unikalne przedmioty. Dodaj minimum: 2-3 bronie + 1-2 zbroje + 2-3 konsumable.
+Zawsze podaj template_id=ID przy każdym forge_create_game_entry!
 
-Przeczytaj schemat: forge_workflow_guide() — sekcja GAME ENTRIES.
-
-Dla broni:
+Broń — pełny schemat:
 forge_create_game_entry("weapon", {
-  "key": "snake_case", "label": "Polska Nazwa",
-  "weapon_type": "melee|ranged|spell",
-  "weapon_slot": "main_hand|two_handed|off_hand_only|either",
-  "damage_die": "1d8", "linked_stat": "STR|DEX|INT|WIS",
-  "rarity": 1-4, "description": "opis kampanii", "allowed_classes": []
+  "key": "snake_case_unikalny",
+  "label": "Polska Nazwa",
+  "weapon_type": "melee",         ← TYLKO: melee | ranged | spell
+  "weapon_slot": "main_hand",     ← main_hand | two_handed | off_hand_only | either
+  "damage_die": "d8",             ← TYLKO: d4 | d6 | d8 | d10 | d12  (BEZ "1" z przodu!)
+  "linked_stat": "STR",           ← TYLKO: STR | DEX | INT  (tylko te trzy!)
+  "rarity": 2,                    ← INTEGER: 1=pospolity 2=niepospolity 3=rzadki 4=epicki
+  "description": "Opis dla gracza.",
+  "allowed_classes": [],          ← [] = wszystkie klasy
+  "two_handed": false,            ← true gdy weapon_slot="two_handed"
+  "finesse": false,               ← true dla broni DEX-based
+  "targeting": "single",          ← single | aoe | line
+  "range_m": 0,                   ← 0 dla melee, np. 20 dla łuku ranged
+  "value_gp": 50,
+  "note": ""                      ← notatka GM (zdolności specjalne)
 }, template_id=TEMPLATE_ID)
 
-Dla konsumabli:
+Konsumable:
 forge_create_game_entry("consumable", {
-  "key": "snake_case", "label": "Polska Nazwa",
-  "effect_type": "heal_hp|restore_mana|stat_buff|remove_condition",
-  "effect_dice": "2d4", "base_price": 30,
-  "rarity": 1-4, "description": "opis"
+  "key": "snake_case_unikalny",
+  "label": "Polska Nazwa",
+  "effect_type": "heal_hp",       ← TYLKO: heal_hp | restore_mana | cure_condition | buff
+  "effect_dice": "2d4",           ← kość efektu, np. "2d4" (dla heal_hp = HP przywrócone)
+  "effect_bonus": 0,              ← flat bonus do efektu
+  "base_price": 30,               ← WYMAGANE — cena w złocie
+  "charges": 1,
+  "rarity": 1,                    ← INTEGER 1-4
+  "description": "Opis dla gracza."
+}, template_id=TEMPLATE_ID)
+
+Zbroja:
+forge_create_game_entry("armor", {
+  "key": "snake_case_unikalny",
+  "label": "Polska Nazwa",
+  "ac_bonus": 2,                  ← WYMAGANE — bonus do AC
+  "armor_coverage": "torso",      ← TYLKO: torso | head | limb_arm | limb_leg | full
+  "value_gp": 80,                 ← WYMAGANE — cena
+  "rarity": 2,
+  "description": "Opis dla gracza.",
+  "weight_kg": 5.0
 }, template_id=TEMPLATE_ID)
 
 ### ZASADY
 - Nie wymyślaj pól spoza schematu
-- Klucze (key) zawsze lowercase_snake_case
-- Pytaj o potwierdzenie przed każdym nieodwracalnym krokiem (publish)
-- Podsumowuj co zostało stworzone po każdym kroku</pre>
+- key: zawsze lowercase_snake_case, unikalne między sesjami
+- rarity: ZAWSZE liczba całkowita (1/2/3/4), nigdy string
+- damage_die: TYLKO d4/d6/d8/d10/d12 — bez prefiksu "1"
+- linked_stat: TYLKO STR/DEX/INT
+- effect_type: TYLKO heal_hp/restore_mana/cure_condition/buff
+- base_price dla konsumabli: WYMAGANE
+- Pytaj o potwierdzenie przed publish
+- Podsumowuj po każdym kroku</pre>
                   <button onclick="_copyMcpPrompt('mcp-prompt-workflow')" style="position:absolute;top:6px;right:6px;font-size:0.65rem;padding:2px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--t2)">Kopiuj</button>
                 </div>
               </div>
@@ -3287,23 +3316,52 @@ forge_create_game_entry("consumable", {
               <div>
                 <div style="font-size:0.75rem;font-weight:700;color:var(--t1);margin-bottom:6px">Tworzenie przedmiotów kampanii</div>
                 <div style="position:relative">
-                  <pre id="mcp-prompt-items" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;font-size:0.7rem;overflow-x:auto;margin:0;white-space:pre-wrap;max-height:100px;overflow-y:auto">Utwórz przedmioty dla kampanii o ID=TEMPLATE_ID.
-Minimum: 2-3 bronie + 1-2 przedmioty/zbroje + 2-3 konsumable.
-Wszystkie muszą być tematycznie spójne z klimatem kampanii.
+                  <pre id="mcp-prompt-items" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;font-size:0.7rem;overflow-x:auto;margin:0;white-space:pre-wrap;max-height:220px;overflow-y:auto">Utwórz przedmioty dla kampanii o ID=TEMPLATE_ID.
+Minimum: 2-3 bronie + 1-2 zbroje/przedmioty + 2-3 konsumable.
+Wszystkie muszą pasować klimatem do kampanii.
 
-Broń — forge_create_game_entry("weapon", {
-  "key": "slug", "label": "Nazwa",
-  "weapon_type": "melee|ranged|spell",
-  "weapon_slot": "main_hand|two_handed|off_hand_only|either",
-  "damage_die": "1d8", "linked_stat": "STR|DEX|INT|WIS",
-  "rarity": 1-4, "description": "opis", "allowed_classes": []
+## BROŃ (weapon)
+forge_create_game_entry("weapon", {
+  "key": "snake_case_unikalny",
+  "label": "Polska Nazwa",
+  "weapon_type": "melee",          ← TYLKO: melee | ranged | spell
+  "weapon_slot": "main_hand",      ← main_hand | two_handed | off_hand_only | either
+  "damage_die": "d8",              ← TYLKO: d4 | d6 | d8 | d10 | d12  (BEZ "1" z przodu!)
+  "linked_stat": "STR",            ← TYLKO: STR | DEX | INT  (tylko te trzy!)
+  "rarity": 2,                     ← INTEGER: 1=pospolity 2=niepospolity 3=rzadki 4=epicki
+  "description": "Opis przedmiotu dla gracza.",
+  "allowed_classes": [],           ← [] = wszystkie klasy
+  "two_handed": false,             ← true gdy weapon_slot="two_handed"
+  "finesse": false,                ← true dla broni DEX-based (np. sztylet)
+  "targeting": "single",           ← single | aoe | line
+  "range_m": 0,                    ← 0 dla melee; np. 20 dla łuku
+  "value_gp": 50,
+  "note": ""                       ← notatka GM (zdolności specjalne)
 }, template_id=TEMPLATE_ID)
 
-Konsumable — forge_create_game_entry("consumable", {
-  "key": "slug", "label": "Nazwa",
-  "effect_type": "heal_hp|restore_mana|stat_buff|remove_condition",
-  "effect_dice": "2d4", "base_price": 30,
-  "rarity": 1-4, "description": "opis"
+## KONSUMABLE (consumable)
+forge_create_game_entry("consumable", {
+  "key": "snake_case_unikalny",
+  "label": "Polska Nazwa",
+  "effect_type": "heal_hp",        ← TYLKO: heal_hp | restore_mana | cure_condition | buff
+  "effect_dice": "2d4",            ← kość efektu (dla heal_hp = HP przywrócone)
+  "effect_bonus": 0,               ← flat bonus do efektu
+  "base_price": 30,                ← WYMAGANE — cena w złocie
+  "charges": 1,
+  "rarity": 1,                     ← INTEGER 1-4
+  "description": "Opis dla gracza."
+}, template_id=TEMPLATE_ID)
+
+## ZBROJA (armor)
+forge_create_game_entry("armor", {
+  "key": "snake_case_unikalny",
+  "label": "Polska Nazwa",
+  "ac_bonus": 2,                   ← WYMAGANE — bonus do AC (liczba całkowita)
+  "armor_coverage": "torso",       ← TYLKO: torso | head | limb_arm | limb_leg | full
+  "value_gp": 80,                  ← WYMAGANE — cena
+  "rarity": 2,                     ← INTEGER 1-4
+  "description": "Opis dla gracza.",
+  "weight_kg": 5.0
 }, template_id=TEMPLATE_ID)</pre>
                   <button onclick="_copyMcpPrompt('mcp-prompt-items')" style="position:absolute;top:6px;right:6px;font-size:0.65rem;padding:2px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--t2)">Kopiuj</button>
                 </div>
