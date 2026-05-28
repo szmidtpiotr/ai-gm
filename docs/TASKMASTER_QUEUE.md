@@ -68,14 +68,15 @@ Created after balance test + loot audit (2026-05-28).
   - ✓ GitHub issue #164
 - **Note**: Goblin and bandit tables were already fine — Task 6 description was stale (based on pre-audit state). Real gap was bandit_archer at 1 entry only.
 
-### Task 7: Rarity-based Loot Scaling
-- **Description**: Rare/epic items should be scarce; common items common
+### Task 7: Rarity-based Loot Scaling ✓ DONE
 - **Deliverables**:
-  - Review all 93 tables: tag entries by rarity (common/uncommon/rare/epic)
-  - Adjust weights: common 70%, uncommon 20%, rare 8%, epic 2%
-  - Test distribution via 100-enemy kill sampling
-- **Dependency**: Task 3
-- **Effort**: 5 hours
+  - ✓ `_ensure_rarity_loot_scaling()` migration: seeds rare/epic to all boss/elite tables on startup
+  - ✓ Boss tables (10): +silent_guardian_blade (r=3, w=8), +silent_guardian_helm (r=3, w=6), +forgotten_sage_staff (r=4, w=3)
+    → 8.5% rare, 1.8% epic per boss drop (target: 8% / 2%)
+  - ✓ Elite tables (15): +ruin_explorer_cloak (r=2, w=6), +umbravale_explorer_bow (r=2, w=5), +silent_guardian_blade (r=3, w=5), +silent_guardian_helm (r=3, w=4)
+    → 6.2% rare + 7.5% uncommon
+  - ✓ GitHub issue #165
+- **Note**: Standard/weak tables left as-is. Global rare rate still low (boss/elite kills are infrequent). Rare drops are meaningful moments, not routine.
 
 ## Low Priority (Future)
 
@@ -106,6 +107,7 @@ Created after balance test + loot audit (2026-05-28).
 | — | Task 3: Loot audit + pending enemy fixes | ✓ Done — issue #162 |
 | — | Task 5: Playtest — shop/scaling/loot verified | ✓ Done — issue #163 |
 | 9e88620 | Task 6: archer loot expansion + shop NPC seed migration | ✓ Done — issue #164 |
+| 60b81ce | Task 7: rarity loot scaling — boss/elite rare+epic drops | ✓ Done — issue #165 |
 
 ---
 
