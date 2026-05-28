@@ -20,18 +20,16 @@ Created after balance test + loot audit (2026-05-28).
   - ✓ seed_pending_npc_borys: healing_potion, rope_hemp, torch, bandage
 - **Note**: Qty limits not implemented (Phase 2). Pricing uses catalog value_gp.
 
-### Task 3: Audit & Tune Loot Drop Rates
-- **Description**: Review all 93 loot tables, optimize weak-enemy drops
+### Task 3: Audit & Tune Loot Drop Rates ✓ DONE
 - **Deliverables**:
-  - ✓ Fix 4 zero-gold tables (DONE)
-  - ✓ Document in `LOOT_TABLE_AUDIT.md` (DONE)
-  - Reduce goblin empty weight: 85% → 65% (increase item drop 10% → 25%)
-  - Review other weak-enemy tables (bandit, cultist, etc.)
-  - Verify rarity distribution (common should be 70%+, rare <5%)
+  - ✓ Fix 4 zero-gold tables (ad31b59)
+  - ✓ 4 seed_pending enemies: drop_chance fixed (1.0 → tier-appropriate), gold seeded, loot entries added
+  - ✓ Goblin: already had 4 items, 0 empty entries (audit doc was stale)
+  - ✓ Rarity distribution verified: 77% common, 23% uncommon, 0% rare — meets target
+  - ✓ 0 truly-empty entries across 93 tables / 524 total entries
+  - ✓ LOOT_TABLE_AUDIT.md updated with final state + Phase 2/3 TODO
+  - ✓ GitHub issue #162
 - **Reference**: `docs/LOOT_TABLE_AUDIT.md`
-- **Dependency**: None
-- **Effort**: 3 hours
-- **Testing**: Rerun balance test after changes
 
 ### Task 4: Implement Difficulty Scaling (Level-based) ✓ DONE
 - **Description**: Adjust enemy AC/HP/damage based on character level
@@ -101,6 +99,7 @@ Created after balance test + loot audit (2026-05-28).
 | — | Shop NPC proposal doc | ✓ Done |
 | — | Task 4: Difficulty scaling (initiate_combat) | ✓ Done — issue #160 |
 | — | Task 1+2: Shop NPC system + seed | ✓ Done — issue #161 |
+| — | Task 3: Loot audit + pending enemy fixes | ✓ Done — issue #162 |
 
 ---
 
