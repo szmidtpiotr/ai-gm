@@ -3236,6 +3236,51 @@
               <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Uwagi GM</div>
               <textarea id="em-gm-notes" class="input" rows="3" style="width:100%;resize:vertical"></textarea>
             </label>
+            <!-- Trigger system config -->
+            <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
+              <div style="font-size:0.78rem;font-weight:700;color:var(--t2);margin-bottom:10px;letter-spacing:0.04em">⚙ AUTOMATYCZNE WYZWALANIE</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                  <div style="font-size:0.75rem;color:var(--t3);margin-bottom:6px">Typy wyzwalaczy</div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer">
+                      <input type="checkbox" id="em-trig-hex" value="hex_enter">
+                      <span>🗺 hex_enter <span style="font-size:0.7rem;color:var(--t3)">— wejście na nowy hex</span></span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer">
+                      <input type="checkbox" id="em-trig-nturns" value="n_turns" onchange="document.getElementById('em-nturns-row').style.display=this.checked?'flex':'none'">
+                      <span>🕒 n_turns <span style="font-size:0.7rem;color:var(--t3)">— co N spokojnych tur</span></span>
+                    </label>
+                    <div id="em-nturns-row" style="display:none;align-items:center;gap:6px;padding-left:22px">
+                      <span style="font-size:0.75rem;color:var(--t3)">Co</span>
+                      <input id="em-nturns-interval" type="number" min="1" max="20" value="5" class="input" style="width:60px;padding:3px 6px;font-size:0.82rem">
+                      <span style="font-size:0.75rem;color:var(--t3)">tur</span>
+                    </div>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer">
+                      <input type="checkbox" id="em-trig-combat" value="combat_end">
+                      <span>⚔ combat_end <span style="font-size:0.7rem;color:var(--t3)">— po zakończeniu walki</span></span>
+                    </label>
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <label>
+                    <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Prawdopodobieństwo wyzwolenia</div>
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <input id="em-probability" type="range" min="0" max="1" step="0.05" value="0.25" style="flex:1" oninput="document.getElementById('em-prob-val').textContent=Math.round(this.value*100)+'%'">
+                      <span id="em-prob-val" style="font-size:0.82rem;font-weight:600;color:var(--t1);min-width:36px">25%</span>
+                    </div>
+                  </label>
+                  <label>
+                    <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Biomy (przecinek: plains,forest,dungeon,city,road)</div>
+                    <input id="em-biomes" class="input" style="width:100%" placeholder="np. forest,plains">
+                  </label>
+                  <label>
+                    <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Tagi (przecinek)</div>
+                    <input id="em-tags" class="input" style="width:100%" placeholder="np. undead,hostile,ambush">
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap" id="em-footer">
             <button class="btn btn-sm btn-secondary" onclick="document.getElementById('encounter-modal').classList.remove('open')">Anuluj</button>
@@ -8060,6 +8105,20 @@ forge_create_game_entry("armor", {
       document.getElementById('em-loot').value = rew.loot_notes || '';
       document.getElementById('em-gm-notes').value = enc.gm_notes || '';
 
+      // Trigger config
+      const trigTypes = enc.trigger_types || [];
+      document.getElementById('em-trig-hex').checked = trigTypes.includes('hex_enter');
+      document.getElementById('em-trig-nturns').checked = trigTypes.includes('n_turns');
+      document.getElementById('em-trig-combat').checked = trigTypes.includes('combat_end');
+      const nturnsInterval = enc.n_turns_interval || 5;
+      document.getElementById('em-nturns-interval').value = nturnsInterval;
+      document.getElementById('em-nturns-row').style.display = trigTypes.includes('n_turns') ? 'flex' : 'none';
+      const prob = enc.trigger_probability !== undefined ? enc.trigger_probability : 0.25;
+      document.getElementById('em-probability').value = prob;
+      document.getElementById('em-prob-val').textContent = Math.round(prob * 100) + '%';
+      document.getElementById('em-biomes').value = (enc.biomes || []).join(', ');
+      document.getElementById('em-tags').value = (enc.tags || []).join(', ');
+
       // Show modal first, then populate picker (don't block modal on picker error)
       document.getElementById('encounter-modal').classList.add('open');
       _populateEncounterCampaignPicker(); // async, fire-and-forget
@@ -8087,9 +8146,20 @@ forge_create_game_entry("armor", {
       return { name: line.trim(), count: 1, notes: '' };
     }) : [];
     const objectives = document.getElementById('em-objectives').value.trim().split('\n').filter(Boolean);
+    const trigTypes = [];
+    if (document.getElementById('em-trig-hex').checked) trigTypes.push('hex_enter');
+    if (document.getElementById('em-trig-nturns').checked) trigTypes.push('n_turns');
+    if (document.getElementById('em-trig-combat').checked) trigTypes.push('combat_end');
+    const biomes = document.getElementById('em-biomes').value.split(',').map(s=>s.trim()).filter(Boolean);
+    const tags = document.getElementById('em-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
     return {
       title: document.getElementById('em-title').value.trim(),
       trigger_condition: document.getElementById('em-trigger').value.trim(),
+      trigger_types: trigTypes,
+      trigger_probability: parseFloat(document.getElementById('em-probability').value) || 0.25,
+      n_turns_interval: parseInt(document.getElementById('em-nturns-interval').value) || 5,
+      biomes,
+      tags,
       scene_setup: document.getElementById('em-scene').value.trim(),
       enemies,
       objectives,
