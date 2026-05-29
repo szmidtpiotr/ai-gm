@@ -426,6 +426,7 @@ def _promote_hook_to_db(conn: sqlite3.Connection, hook: dict) -> tuple[str, int]
 class ForgeMessageReq(BaseModel):
     session_id: str
     message: str
+    draft_override: Optional[dict] = None  # admin-edited draft to inject as context
 
 
 class SaveIdeaReq(BaseModel):
@@ -472,7 +473,16 @@ class PatchTemplateReq(BaseModel):
 @router.post("/chat/message")
 def forge_chat_message(req: ForgeMessageReq, _: None = Depends(_require_admin)):
     session = _get_or_create_session(req.session_id)
-    session["history"].append({"role": "user", "content": req.message})
+    if req.draft_override:
+        session["draft"] = req.draft_override
+        user_content = (
+            f"[Kontekst: Admin ręcznie zaktualizował szkic. Aktualny stan:\n"
+            f"{json.dumps(req.draft_override, ensure_ascii=False, indent=2)}]\n\n"
+            f"{req.message}"
+        )
+    else:
+        user_content = req.message
+    session["history"].append({"role": "user", "content": user_content})
 
     messages = [{"role": "system", "content": FORGE_SYSTEM_PROMPT}] + session["history"]
     try:

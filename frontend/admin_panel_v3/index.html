@@ -1530,6 +1530,154 @@
       font-size: 0.7rem;
       letter-spacing: 0.04em;
     }
+
+    /* ── Forge workspace (2-col + ideas row) ── */
+    .forge-workspace {
+      display: flex;
+      gap: 12px;
+      height: 640px;
+      margin-bottom: 12px;
+    }
+    .forge-chat-card {
+      flex: 0 0 38%;
+      min-width: 280px;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Scenario column */
+    .forge-scenario-col {
+      flex: 1;
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .forge-scenario-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      opacity: 0.5;
+    }
+    .forge-scenario-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      background: var(--surface);
+    }
+    .forge-scenario-title-input {
+      flex: 1;
+      background: none;
+      border: none;
+      outline: none;
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--t1);
+      min-width: 0;
+    }
+    .forge-scenario-title-input::placeholder { color: var(--t3); font-weight: 400; }
+    .forge-dirty-badge {
+      font-size: 0.7rem;
+      color: var(--amber, #c9a227);
+      white-space: nowrap;
+    }
+    .forge-scenario-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .fsc-section { display: flex; flex-direction: column; gap: 5px; }
+    .fsc-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--t3);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .fsc-textarea {
+      width: 100%;
+      background: var(--canvas);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--t1);
+      font-size: 0.82rem;
+      line-height: 1.55;
+      padding: 8px 10px;
+      resize: vertical;
+      box-sizing: border-box;
+      font-family: inherit;
+    }
+    .fsc-textarea--amber { border-color: var(--amber-border, rgba(201,162,39,0.3)); background: var(--amber-light, rgba(201,162,39,0.04)); }
+    .fsc-arc-card {
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: var(--canvas);
+      overflow: hidden;
+    }
+    .fsc-arc-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      width: 100%;
+      text-align: left;
+      color: var(--t1);
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .fsc-arc-head:hover { background: rgba(255,255,255,0.04); }
+    .fsc-arc-body { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+    .fsc-arc-body.hidden { display: none; }
+    .fsc-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      color: var(--t2);
+      background: var(--canvas);
+    }
+    /* Ideas row */
+    .forge-ideas-row {
+      padding: 10px 0 4px;
+      border-top: 1px solid var(--border);
+    }
+    .forge-ideas-chips {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: thin;
+    }
+    .forge-idea-chip {
+      flex-shrink: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 8px 12px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+      max-width: 220px;
+    }
+    .forge-idea-chip:hover { border-color: var(--blue, #3b82f6); }
+    .forge-idea-chip-title { font-size: 0.8rem; font-weight: 600; color: var(--t1); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .forge-idea-chip-sub { font-size: 0.72rem; color: var(--t3); }
   </style>
 </head>
 <body>
@@ -3352,69 +3500,108 @@
 
       <!-- Tab: Agent AI -->
       <div id="forge-tab-agent">
-        <div class="forge-agent-layout" id="forge-agent-layout">
 
-          <!-- Main chat column (2/3) -->
+        <!-- Two-column workspace -->
+        <div class="forge-workspace">
+
+          <!-- LEFT: Chat -->
           <div class="card forge-chat-card">
-            <div class="card-header" style="border-bottom:1px solid var(--border);flex-shrink:0">
+            <div class="card-header" style="flex-shrink:0">
               <span class="card-title">⚡ Agent AI</span>
               <div style="display:flex;gap:6px;align-items:center">
-                <span style="font-size:0.72rem;color:var(--t3)">Ctrl+Enter wysyła</span>
-                <button class="btn btn-ghost btn-sm" id="forge-new-btn" onclick="_forgeNewSession()" title="Nowa rozmowa">↺ Nowa</button>
+                <span style="font-size:0.7rem;color:var(--t3)">Ctrl+Enter = wyślij</span>
+                <button class="btn btn-ghost btn-sm" onclick="_forgeNewSession()">↺ Nowa</button>
               </div>
             </div>
-
             <div id="forge-chat-history" class="forge-chat-history">
               <div class="forge-bubble forge-bubble--hint">
                 Opisz swój pomysł na przygodę — Agent dopyta i zbuduje strukturę.<br>
-                <span style="font-size:0.75rem;opacity:0.7">Użyj Ctrl+Enter aby wysłać wiadomość.</span>
+                <span style="font-size:0.74rem;opacity:0.65">Ctrl+Enter wysyła · Enter = nowa linia</span>
               </div>
             </div>
-
-            <div id="forge-save-row" style="display:none;padding:8px 14px 0;flex-direction:column">
-              <button class="btn btn-primary btn-sm" style="width:100%" onclick="saveForgeIdea()">💾 Zapisz pomysł do Banku</button>
-            </div>
-
             <div class="forge-input-row">
               <textarea class="form-input forge-textarea" id="forge-input" rows="3"
-                placeholder="Opisz przygodę… (Enter = nowa linia, Ctrl+Enter = wyślij)"
+                placeholder="Napisz do agenta…"
                 onkeydown="_forgeInputKey(event)"></textarea>
-              <button class="btn btn-primary forge-send-btn" id="forge-send-btn" onclick="sendForgeMsg()" title="Wyślij (Ctrl+Enter)">➤</button>
+              <button class="btn btn-primary forge-send-btn" id="forge-send-btn" onclick="sendForgeMsg()">➤</button>
             </div>
           </div>
 
-          <!-- Collapsible ideas sidebar (1/3) -->
-          <div class="forge-ideas-sidebar" id="forge-ideas-sidebar">
-            <div class="forge-sidebar-header">
-              <span class="card-title" style="font-size:0.82rem">Zapisane pomysły</span>
-              <span id="forge-ideas-count" style="font-size:0.72rem;color:var(--t3)"></span>
-              <button class="btn btn-ghost btn-sm forge-sidebar-toggle" id="forge-sidebar-toggle"
-                onclick="_forgeSidebarToggle()" title="Zwiń panel">◀</button>
+          <!-- RIGHT: Live scenario editor -->
+          <div class="forge-scenario-col" id="forge-scenario-col">
+
+            <!-- Empty state -->
+            <div id="forge-scenario-empty" class="forge-scenario-empty">
+              <div style="font-size:1.8rem;margin-bottom:8px">📋</div>
+              <div style="font-size:0.82rem;color:var(--t3)">Szkic pojawi się tutaj gdy Agent wygeneruje strukturę.</div>
             </div>
 
-            <div class="forge-sidebar-body" id="forge-sidebar-body">
-              <div class="card forge-draft-inset" id="forge-draft-card" style="display:none">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                  <span style="font-size:0.78rem;font-weight:600;color:var(--t1)">Szkic gotowy</span>
+            <!-- Scenario panel (shown when draft exists) -->
+            <div id="forge-scenario-panel" style="display:none;display:flex;flex-direction:column;height:100%">
+              <!-- Scenario header -->
+              <div class="forge-scenario-header">
+                <input id="fsc-title" class="forge-scenario-title-input" placeholder="Tytuł przygody"
+                  oninput="_forgeMarkDirty()">
+                <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+                  <span id="fsc-dirty-badge" class="forge-dirty-badge" style="display:none">● niezapisane</span>
+                  <button class="btn btn-sm btn-secondary" id="fsc-send-btn" onclick="_forgeSendEditsToAgent()"
+                    title="Wyślij zmiany do Agenta aby kontynuował na podstawie edycji">📤 Wyślij do Agenta</button>
                   <button class="btn btn-sm btn-primary" onclick="saveForgeIdea()">💾 Zapisz</button>
                 </div>
-                <div id="forge-draft-preview" style="font-size:0.78rem;color:var(--t2)"></div>
               </div>
 
-              <div id="forge-ideas-list" style="display:flex;flex-direction:column;gap:8px"></div>
+              <!-- Scenario body (scrollable) -->
+              <div class="forge-scenario-body" id="forge-scenario-body">
+
+                <div class="fsc-section">
+                  <div class="fsc-label">Premisa</div>
+                  <textarea id="fsc-premise" class="fsc-textarea" rows="3"
+                    placeholder="Główna premisa przygody…" oninput="_forgeMarkDirty()"></textarea>
+                </div>
+
+                <div class="fsc-section" id="fsc-meta-row" style="display:none">
+                  <div style="display:flex;gap:8px;flex-wrap:wrap" id="fsc-chips"></div>
+                </div>
+
+                <div class="fsc-section" id="fsc-arcs-section" style="display:none">
+                  <div class="fsc-label">Akty <span id="fsc-arcs-count" style="font-size:0.72rem;color:var(--t3)"></span></div>
+                  <div id="fsc-arcs" style="display:flex;flex-direction:column;gap:8px"></div>
+                </div>
+
+                <div class="fsc-section" id="fsc-hooks-section" style="display:none">
+                  <div class="fsc-label">Hooki <span id="fsc-hooks-count" style="font-size:0.72rem;color:var(--t3)"></span></div>
+                  <div id="fsc-hooks-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+                </div>
+
+                <div class="fsc-section" id="fsc-player-hook-section" style="display:none">
+                  <div class="fsc-label">⚡ Wciągacz gracza</div>
+                  <textarea id="fsc-player-hook" class="fsc-textarea" rows="2"
+                    oninput="_forgeMarkDirty()"></textarea>
+                </div>
+
+                <div class="fsc-section" id="fsc-gm-section" style="display:none">
+                  <div class="fsc-label" style="color:var(--amber,#c9a227)">🔒 GM prywatne</div>
+                  <textarea id="fsc-gm-private" class="fsc-textarea fsc-textarea--amber" rows="2"
+                    oninput="_forgeMarkDirty()"></textarea>
+                </div>
+
+              </div>
             </div>
           </div>
-
-          <!-- Collapsed strip (shown when sidebar folded) -->
-          <div class="forge-sidebar-strip" id="forge-sidebar-strip" style="display:none">
-            <button class="forge-strip-btn" onclick="_forgeSidebarToggle()" title="Rozwiń panel pomysłów">
-              <span class="forge-strip-label">Pomysły</span>
-              <span id="forge-strip-count" style="font-size:0.72rem;font-weight:700;color:var(--amber,#c9a227)"></span>
-              <span style="font-size:0.9rem">▶</span>
-            </button>
-          </div>
-
         </div>
+
+        <!-- IDEAS ROW below both columns -->
+        <div class="forge-ideas-row" id="forge-ideas-row">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <span style="font-size:0.8rem;font-weight:600;color:var(--t2)">📚 Zapisane pomysły</span>
+            <span id="forge-ideas-count" style="font-size:0.72rem;color:var(--t3)"></span>
+          </div>
+          <div id="forge-ideas-list" class="forge-ideas-chips"></div>
+        </div>
+
+        <!-- hidden forge-draft-card kept for compat -->
+        <div id="forge-draft-card" style="display:none"><div id="forge-draft-preview"></div></div>
+
       </div>
 
       <!-- Tab: Spotkania -->
@@ -8266,6 +8453,7 @@ forge_create_game_entry("armor", {
   // ── Kuźnia Kampanii ──────────────────────────────────────
   let _forgeSessionId = 'forge-' + Date.now();
   let _forgeDraft = null;
+  let _forgeScenarioDirty = false;
   let _forgeHooksFilter = { status: '', type: '' };
   let _forgeCurrentIdeaId = null;
 
@@ -8315,20 +8503,16 @@ forge_create_game_entry("armor", {
       if (count) count.textContent = `${items.length} pomysłów`;
       if (!list) return;
       if (!items.length) {
-        list.innerHTML = '<div style="padding:12px;color:var(--t3);font-size:0.8rem">Brak zapisanych pomysłów.</div>';
+        list.innerHTML = '<div style="color:var(--t3);font-size:0.78rem;padding:6px 0">Brak zapisanych pomysłów.</div>';
         return;
       }
       list.innerHTML = items.map(idea => `
-        <div class="card" style="padding:10px 12px;cursor:pointer;border:1px solid var(--border)" onclick="forgeOpenIdea(${idea.id})">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-            <div>
-              <div style="font-weight:600;font-size:0.85rem">${_esc(idea.title)}</div>
-              <div style="font-size:0.75rem;color:var(--t3)">${_esc(idea.difficulty||'')} · ${_esc(idea.status||'draft')} · ${idea.created_at?.substring(0,10)||''}</div>
-            </div>
-            <div style="display:flex;gap:4px;flex-shrink:0">
-              <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeExtractHooks(${idea.id},this)">Wyodrębnij haki</button>
-              <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();if(confirm('Usunąć pomysł na stałe?'))apiFetch('/api/admin/forge/ideas/${idea.id}',{method:'DELETE'}).then(()=>{_sectionLoaded.delete('forge');_loadForge()})">🗑</button>
-            </div>
+        <div class="forge-idea-chip" onclick="forgeOpenIdea(${idea.id})" title="${_esc(idea.premise||'')}">
+          <div class="forge-idea-chip-title">${_esc(idea.title)}</div>
+          <div class="forge-idea-chip-sub">${_esc(idea.difficulty||'?')} · ${idea.created_at?.substring(0,10)||''}</div>
+          <div style="display:flex;gap:4px;margin-top:5px">
+            <button class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:2px 6px" onclick="event.stopPropagation();forgeExtractHooks(${idea.id},this)">Haki ⚓</button>
+            <button class="btn btn-sm" style="font-size:0.7rem;padding:2px 6px;color:var(--red)" onclick="event.stopPropagation();if(confirm('Usunąć?'))apiFetch('/api/admin/forge/ideas/${idea.id}',{method:'DELETE'}).then(()=>{_sectionLoaded.delete('forge');_loadForge()})">🗑</button>
           </div>
         </div>`).join('');
     } catch(e) { console.warn('forge ideas', e.message); }
@@ -8339,6 +8523,31 @@ forge_create_game_entry("armor", {
     apiFetch(`/api/admin/forge/ideas/${id}`).then(idea => {
       const card = document.getElementById('forge-draft-card');
       const preview = document.getElementById('forge-draft-preview');
+      // Switch to agent tab
+      const agentTab = document.querySelector('#forge-tabs .stab[data-forgetab="agent"]');
+      if (agentTab && !agentTab.classList.contains('active')) agentTab.click();
+      // Load into scenario panel
+      const sd = idea.structured_data || {};
+      const draftFromIdea = {
+        title: idea.title,
+        premise: idea.premise,
+        tone: idea.tone || [],
+        themes: idea.themes || [],
+        difficulty: idea.difficulty,
+        arcs: sd.arcs || [],
+        hooks: sd.hooks || [],
+        player_hook: sd.player_hook,
+        gm_private: sd.gm_private,
+      };
+      _forgeDraft = draftFromIdea;
+      _forgeRenderScenario(draftFromIdea);
+      // Also inject into chat as context
+      const hist = document.getElementById('forge-chat-history');
+      if (hist) {
+        hist.querySelectorAll('.forge-bubble--hint').forEach(el => el.remove());
+        _forgeAppendBubble(hist, 'forge-bubble forge-bubble--context',
+          `<strong>↩ Załadowano: ${_esc(idea.title)}</strong><br><span style="font-size:0.74rem;color:var(--t2)">${_esc(idea.premise?.substring(0,120)||'')}</span>`);
+      }
       if (!card || !preview) return;
       card.style.display = '';
       const sd = idea.structured_data || {};
@@ -8449,34 +8658,139 @@ forge_create_game_entry("armor", {
   }
 
   function _forgeSidebarToggle() {
-    const sidebar = document.getElementById('forge-ideas-sidebar');
-    const strip = document.getElementById('forge-sidebar-strip');
-    const btn = document.getElementById('forge-sidebar-toggle');
-    const isOpen = sidebar && sidebar.style.display !== 'none';
-    if (isOpen) {
-      if (sidebar) sidebar.style.display = 'none';
-      if (strip) strip.style.display = '';
-      // sync count on strip
-      const cnt = document.getElementById('forge-ideas-count');
-      const stripCnt = document.getElementById('forge-strip-count');
-      if (cnt && stripCnt) stripCnt.textContent = cnt.textContent;
-    } else {
-      if (sidebar) sidebar.style.display = '';
-      if (strip) strip.style.display = 'none';
-    }
+    // legacy noop — sidebar removed in new layout
   }
 
   function _forgeNewSession() {
     _forgeDraft = null;
+    _forgeScenarioDirty = false;
     _forgeSessionId = 'forge-' + Date.now();
     const hist = document.getElementById('forge-chat-history');
-    if (hist) hist.innerHTML = '<div class="forge-bubble forge-bubble--hint">Opisz swój pomysł na przygodę — Agent dopyta i zbuduje strukturę.<br><span style="font-size:0.75rem;opacity:0.7">Użyj Ctrl+Enter aby wysłać wiadomość.</span></div>';
-    const saveRow = document.getElementById('forge-save-row');
-    if (saveRow) saveRow.style.display = 'none';
-    const card = document.getElementById('forge-draft-card');
-    if (card) card.style.display = 'none';
+    if (hist) hist.innerHTML = '<div class="forge-bubble forge-bubble--hint">Opisz swój pomysł na przygodę — Agent dopyta i zbuduje strukturę.<br><span style="font-size:0.74rem;opacity:0.65">Ctrl+Enter wysyła · Enter = nowa linia</span></div>';
     const input = document.getElementById('forge-input');
     if (input) { input.value = ''; input.focus(); }
+    // Reset scenario panel
+    document.getElementById('forge-scenario-empty').style.display = '';
+    const panel = document.getElementById('forge-scenario-panel');
+    if (panel) panel.style.display = 'none';
+  }
+
+  function _forgeMarkDirty() {
+    _forgeScenarioDirty = true;
+    const badge = document.getElementById('fsc-dirty-badge');
+    if (badge) badge.style.display = '';
+  }
+
+  function _forgeRenderScenario(draft) {
+    if (!draft) return;
+    const empty = document.getElementById('forge-scenario-empty');
+    const panel = document.getElementById('forge-scenario-panel');
+    if (empty) empty.style.display = 'none';
+    if (panel) panel.style.display = 'flex';
+
+    // Title + premise
+    const titleEl = document.getElementById('fsc-title');
+    if (titleEl) titleEl.value = draft.title || '';
+    const premiseEl = document.getElementById('fsc-premise');
+    if (premiseEl) premiseEl.value = draft.premise || '';
+
+    // Meta chips
+    const chipsEl = document.getElementById('fsc-chips');
+    const metaRow = document.getElementById('fsc-meta-row');
+    if (chipsEl) {
+      const chips = [];
+      if (draft.difficulty) chips.push(`⚔ ${draft.difficulty}`);
+      (draft.tone || []).forEach(t => chips.push(`🎭 ${t}`));
+      (draft.themes || []).forEach(t => chips.push(`◈ ${t}`));
+      if (chips.length) {
+        chipsEl.innerHTML = chips.map(c => `<span class="fsc-chip">${_esc(c)}</span>`).join('');
+        if (metaRow) metaRow.style.display = '';
+      }
+    }
+
+    // Arcs
+    const arcsEl = document.getElementById('fsc-arcs');
+    const arcsSection = document.getElementById('fsc-arcs-section');
+    const arcsCount = document.getElementById('fsc-arcs-count');
+    const arcs = draft.arcs || [];
+    if (arcsEl && arcs.length) {
+      if (arcsCount) arcsCount.textContent = `(${arcs.length})`;
+      arcsEl.innerHTML = arcs.map((arc, i) => {
+        const goals = (arc.scene_goals || []).map(g => `<li>${_esc(g)}</li>`).join('');
+        return `<div class="fsc-arc-card">
+          <button class="fsc-arc-head" onclick="this.nextElementSibling.classList.toggle('hidden')">
+            <span style="color:var(--t3);font-size:0.72rem">Akt ${i+1}</span>
+            <span style="flex:1">${_esc(arc.title || '')}</span>
+            <span style="font-size:0.7rem;color:var(--t3)">▾</span>
+          </button>
+          <div class="fsc-arc-body">
+            <textarea class="fsc-textarea" rows="2" data-arc="${i}" data-field="description"
+              oninput="_forgeMarkDirty()">${_esc(arc.description || '')}</textarea>
+            ${goals ? `<div style="font-size:0.75rem;color:var(--t3);margin-top:2px">Cele scen:</div><ul style="margin:2px 0;padding-left:16px;font-size:0.78rem;color:var(--t2)">${goals}</ul>` : ''}
+            ${arc.private_twist ? `<div style="font-size:0.75rem;color:var(--amber,#c9a227);font-style:italic;margin-top:2px">🔒 ${_esc(arc.private_twist)}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+      if (arcsSection) arcsSection.style.display = '';
+    }
+
+    // Hooks
+    const hooksSection = document.getElementById('fsc-hooks-section');
+    const hooksList = document.getElementById('fsc-hooks-list');
+    const hooksCount = document.getElementById('fsc-hooks-count');
+    const hooks = draft.hooks || [];
+    if (hooksList && hooks.length) {
+      if (hooksCount) hooksCount.textContent = `(${hooks.length})`;
+      const _typeColor = { weapon:'var(--red)', enemy:'var(--orange,#e07040)', npc:'var(--blue)', location:'var(--green)', item:'var(--purple,#8a5af0)' };
+      hooksList.innerHTML = hooks.map(h =>
+        `<span class="fsc-chip" style="border-color:${_typeColor[h.hook_type||h.type]||'var(--border)'};color:${_typeColor[h.hook_type||h.type]||'var(--t2)'}">${_esc(h.title||h.label||'')}</span>`
+      ).join('');
+      if (hooksSection) hooksSection.style.display = '';
+    }
+
+    // Player hook + GM private
+    const ph = draft.player_hook;
+    const phSection = document.getElementById('fsc-player-hook-section');
+    const phEl = document.getElementById('fsc-player-hook');
+    if (ph && phEl) { phEl.value = ph; if (phSection) phSection.style.display = ''; }
+
+    const gm = draft.gm_private;
+    const gmSection = document.getElementById('fsc-gm-section');
+    const gmEl = document.getElementById('fsc-gm-private');
+    if (gm && gmEl) { gmEl.value = gm; if (gmSection) gmSection.style.display = ''; }
+
+    // Reset dirty state after render
+    _forgeScenarioDirty = false;
+    const badge = document.getElementById('fsc-dirty-badge');
+    if (badge) badge.style.display = 'none';
+  }
+
+  function _forgeCollectScenario() {
+    // Collect current scenario panel values back into draft object
+    const draft = JSON.parse(JSON.stringify(_forgeDraft || {}));
+    const titleEl = document.getElementById('fsc-title');
+    if (titleEl) draft.title = titleEl.value;
+    const premiseEl = document.getElementById('fsc-premise');
+    if (premiseEl) draft.premise = premiseEl.value;
+    const phEl = document.getElementById('fsc-player-hook');
+    if (phEl) draft.player_hook = phEl.value;
+    const gmEl = document.getElementById('fsc-gm-private');
+    if (gmEl) draft.gm_private = gmEl.value;
+    // Arc descriptions
+    document.querySelectorAll('[data-arc][data-field="description"]').forEach(ta => {
+      const i = parseInt(ta.dataset.arc);
+      if (draft.arcs && draft.arcs[i]) draft.arcs[i].description = ta.value;
+    });
+    return draft;
+  }
+
+  async function _forgeSendEditsToAgent() {
+    const collected = _forgeCollectScenario();
+    _forgeDraft = collected;
+    const input = document.getElementById('forge-input');
+    const currentMsg = input?.value?.trim() || 'Zaktualizowałem szkic. Kontynuuj na podstawie tych zmian.';
+    if (input) input.value = '';
+    await _forgeSendMessage(currentMsg, collected);
   }
 
   function _forgeAppendBubble(hist, cls, html) {
@@ -8493,38 +8807,42 @@ forge_create_game_entry("armor", {
     if (!input || !btn) return;
     const msg = input.value.trim();
     if (!msg) return;
-    const hist = document.getElementById('forge-chat-history');
-    // Remove hint bubble on first send
-    hist.querySelectorAll('.forge-bubble--hint').forEach(el => el.remove());
-    _forgeAppendBubble(hist, 'forge-bubble--user', _esc(msg).replace(/\n/g, '<br>'));
     input.value = '';
-    btn.disabled = true;
+    // If admin edited scenario, collect and pass as override
+    const draftOverride = _forgeScenarioDirty ? _forgeCollectScenario() : null;
+    if (draftOverride) _forgeDraft = draftOverride;
+    await _forgeSendMessage(msg, draftOverride);
+    btn.disabled = false;
+    input.focus();
+  }
+
+  async function _forgeSendMessage(msg, draftOverride) {
+    const btn = document.getElementById('forge-send-btn');
+    if (btn) btn.disabled = true;
+    const hist = document.getElementById('forge-chat-history');
+    hist.querySelectorAll('.forge-bubble--hint').forEach(el => el.remove());
+    // Show override indicator if edits sent
+    if (draftOverride) {
+      _forgeAppendBubble(hist, 'forge-bubble forge-bubble--context',
+        '<strong>📤 Wysłano zaktualizowany szkic do Agenta</strong>');
+    }
+    _forgeAppendBubble(hist, 'forge-bubble--user', _esc(msg).replace(/\n/g, '<br>'));
     try {
+      const body = { session_id: _forgeSessionId, message: msg };
+      if (draftOverride) body.draft_override = draftOverride;
       const d = await apiFetch('/api/admin/forge/chat/message', {
         method: 'POST',
-        body: JSON.stringify({ session_id: _forgeSessionId, message: msg }),
+        body: JSON.stringify(body),
       });
       _forgeAppendBubble(hist, 'forge-bubble--ai', _formatForgeText(d.reply));
       if (d.draft) {
         _forgeDraft = d.draft;
-        const saveRow = document.getElementById('forge-save-row');
-        if (saveRow) saveRow.style.display = 'flex';
-        const card = document.getElementById('forge-draft-card');
-        const preview = document.getElementById('forge-draft-preview');
-        if (card && preview) {
-          card.style.display = '';
-          const sd = d.draft;
-          preview.innerHTML =
-            `<div style="font-weight:600;margin-bottom:4px">${_esc(sd.title||'(szkic)')}</div>` +
-            `<div style="font-size:0.78rem;color:var(--t2);margin-bottom:6px">${_esc(sd.premise||'')}</div>` +
-            `<div style="font-size:0.72rem;color:var(--t3)">Akty: ${(sd.arcs||[]).length} · Haki: ${(sd.hooks||[]).length} · Trudność: ${_esc(sd.difficulty||'?')}</div>`;
-        }
+        _forgeRenderScenario(d.draft);
       }
     } catch(e) {
       _forgeAppendBubble(hist, 'forge-bubble--error', _esc(e.message));
     }
-    btn.disabled = false;
-    input.focus();
+    if (btn) btn.disabled = false;
   }
 
   async function saveForgeIdea() {
@@ -10293,8 +10611,8 @@ forge_create_game_entry("armor", {
     if (!text) { showToast('Wpisz tekst.', 'error'); return; }
     btn.disabled = true; if (status) status.textContent = 'Generuję…';
     try {
-      const voice = _voiceConfig?.tts_voice || 'pl_PL-darkman-medium';
-      const url = `/voice/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voice)}`;
+      const speed = _voiceConfig?.tts_speed ?? 1.0;
+      const url = `/voice/tts?text=${encodeURIComponent(text)}&speed=${speed}`;
       const r = await fetch(url);
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const blob = await r.blob();
