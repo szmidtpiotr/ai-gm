@@ -722,11 +722,12 @@ def _maybe_handle_blocked_player_combat_turn(
     combat = cs.get_active_combat(campaign_id)
     if not combat or str(combat.get("status") or "") != "active":
         return None
-    if str(combat.get("current_turn") or "") != "player":
-        return None
+    # Block narrative during ALL active combat turns (player or enemy)
+
 
     turn_effects = cs.evaluate_current_turn_conditions(campaign_id)
-    if not turn_effects.get("blocked"):
+    condition_blocked = bool(turn_effects.get("blocked"))
+    if not condition_blocked:
         # BUG-186: narrative must not process during active combat even when no condition blocks
         assistant_text = "Walka trwa! Użyj interfejsu walki, by wykonać akcję bojową."
     else:
@@ -752,7 +753,9 @@ def _maybe_handle_blocked_player_combat_turn(
         user_text=user_text,
         assistant_text=assistant_text,
     )
-    combat_extra = _maybe_advance_combat_after_player_narrative(campaign_id)
+    # Only advance when a real condition (stun/paralysis) blocks the player.
+    # "Walka trwa!" is not a blocking condition — no turn consumed.
+    combat_extra = _maybe_advance_combat_after_player_narrative(campaign_id) if condition_blocked else None
 
     out: dict[str, Any] = {
         "id": log["id"],
