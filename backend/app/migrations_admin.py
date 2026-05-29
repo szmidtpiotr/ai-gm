@@ -2733,6 +2733,14 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
         "world-hexes-forge-encounter-pool",
     )
 
+    # Step D: local submap support — map_level + parent_hex_id columns + scoped unique index
+    _exec("ALTER TABLE world_hexes ADD COLUMN map_level INTEGER NOT NULL DEFAULT 0", "world-hexes-map-level")
+    _exec("ALTER TABLE world_hexes ADD COLUMN parent_hex_id INTEGER REFERENCES world_hexes(id)", "world-hexes-parent-hex-id")
+    # Drop old unique index on (q,r) — conflicts when local hexes reuse coords
+    _exec("DROP INDEX IF EXISTS idx_world_hexes_coords", "world-hexes-drop-old-idx")
+    # New unique: (q, r, parent_hex_id) — world hexes use parent_hex_id=NULL (→ -1), local hexes each have their own parent
+    _exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_world_hexes_qr_scope ON world_hexes(q, r, COALESCE(parent_hex_id, -1))", "world-hexes-qr-scope-idx")
+
     logger.info("v2_schema_migrations_complete")
 
 

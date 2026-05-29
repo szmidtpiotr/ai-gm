@@ -5000,7 +5000,7 @@ def resolve_skill_test_endpoint(
 # ── Player World Map — Task 43 ────────────────────────────────────────────────
 
 @router.get("/campaigns/{campaign_id}/world-map")
-def get_campaign_world_map(campaign_id: int, character_id: int = 0):
+def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: int = None, parent_r: int = None):
     """
     Player-facing hex world map with fog of war.
     Returns only discovered hexes + empty outlines for adjacent unvisited.
@@ -5013,6 +5013,36 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0):
     conn = _sq.connect(DB_PATH)
     conn.row_factory = _sq.Row
     try:
+        # Local submap mode — return all hexes for a specific city/castle
+        if parent_q is not None and parent_r is not None:
+            parent = conn.execute(
+                "SELECT id, hex_type, label FROM world_hexes WHERE q = ? AND r = ? AND map_level = 0 LIMIT 1",
+                (parent_q, parent_r),
+            ).fetchone()
+            if not parent:
+                return {"hexes": [], "teleport_connections": [], "current_hex": None, "hex_types": {}, "local_mode": True, "parent_label": None}
+            parent_id = parent["id"]
+            local_hexes_rows = conn.execute(
+                "SELECT q, r, hex_type, label, atmosphere FROM world_hexes WHERE parent_hex_id = ? AND map_level = 1 AND is_active = 1",
+                (parent_id,),
+            ).fetchall()
+            local_hexes = [
+                {"q": row["q"], "r": row["r"], "hex_type": row["hex_type"],
+                 "label": row["label"], "status": "discovered"}
+                for row in local_hexes_rows
+            ]
+            hex_types = {r["hex_type"]: dict(r) for r in conn.execute(
+                "SELECT hex_type, label, map_color, map_icon FROM hex_type_config WHERE is_active = 1"
+            ).fetchall()}
+            return {
+                "hexes": local_hexes,
+                "teleport_connections": [],
+                "current_hex": None,
+                "hex_types": hex_types,
+                "local_mode": True,
+                "parent_label": parent["label"] or f"({parent_q},{parent_r})",
+            }
+
         # Hex neighbour directions (flat-top)
         _DIRS = [(1,0),(-1,0),(0,1),(0,-1),(1,-1),(-1,1)]
 

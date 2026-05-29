@@ -532,6 +532,96 @@ def generate_world(body: GenerateWorldReq, authorization: str | None = Header(de
         conn.close()
 
 
+class GenerateLocalReq(BaseModel):
+    parent_q: int
+    parent_r: int
+    seed: int = 0
+
+
+_LOCAL_TYPES = {
+    "town": [
+        {"hex_type": "square",   "label": "Rynek",           "atmosphere": "Gwarny plac miejski pełen kupców", "icon": "🏛️", "color": "#c8a44a"},
+        {"hex_type": "inn",      "label": "Karczma",         "atmosphere": "Przytulna gospoda z zapachem piwa",  "icon": "🍺", "color": "#a05a2a"},
+        {"hex_type": "temple",   "label": "Świątynia",       "atmosphere": "Święte miejsce modlitwy i spokoju", "icon": "⛪", "color": "#c8c840"},
+        {"hex_type": "market",   "label": "Targowisko",      "atmosphere": "Hałaśliwy targ pełen towarów",      "icon": "🛒", "color": "#a89060"},
+        {"hex_type": "street",   "label": "Ulica",           "atmosphere": "Brukowana ulica między domami",      "icon": "🛣️", "color": "#8a8070"},
+        {"hex_type": "gate",     "label": "Brama Miejska",   "atmosphere": "Masywna brama strzegąca wejścia",   "icon": "🚪", "color": "#707070"},
+        {"hex_type": "smithy",   "label": "Kuźnia",          "atmosphere": "Kowalnia z łoskotem młota",         "icon": "⚒️", "color": "#7a5a3a"},
+    ],
+    "castle": [
+        {"hex_type": "keep",      "label": "Donżon",         "atmosphere": "Główna wieża zamkowa, centrum dowodzenia", "icon": "🗼", "color": "#5a5a8a"},
+        {"hex_type": "barracks",  "label": "Koszary",        "atmosphere": "Zakwaterowanie straży zamkowej",    "icon": "⚔️", "color": "#6a6a7a"},
+        {"hex_type": "courtyard", "label": "Dziedziniec",    "atmosphere": "Otwarty plac między murami zamku",  "icon": "🏰", "color": "#7a7a8a"},
+        {"hex_type": "armory",    "label": "Zbrojownia",     "atmosphere": "Magazyn broni i pancerzy",          "icon": "🛡️", "color": "#5a5a6a"},
+        {"hex_type": "wall",      "label": "Mury Zamkowe",   "atmosphere": "Solidne kamienne mury obronne",    "icon": "🧱", "color": "#606060"},
+    ],
+}
+_LOCAL_FALLBACK = [
+    {"hex_type": "street", "label": None, "atmosphere": "Nieznany teren lokalny", "icon": "🛣️", "color": "#8a8070"},
+]
+
+
+@router.post("/generate-local")
+def generate_local_map(body: GenerateLocalReq, authorization: str | None = Header(default=None)):
+    """Generate a 7×7 local submap for a town or castle world hex."""
+    _require_admin(authorization)
+
+    rng = random.Random(body.seed or (body.parent_q * 137 + body.parent_r * 31))
+    conn = _get_db()
+    try:
+        # Find parent world hex
+        parent = conn.execute(
+            "SELECT id, hex_type FROM world_hexes WHERE q = ? AND r = ? AND map_level = 0 LIMIT 1",
+            (body.parent_q, body.parent_r),
+        ).fetchone()
+        if not parent:
+            return {"ok": False, "error": "parent_hex_not_found"}
+
+        parent_id = parent["id"]
+        parent_type = parent["hex_type"]
+        pool = _LOCAL_TYPES.get(parent_type, _LOCAL_FALLBACK)
+
+        # Seed hex_type_config for any new local types (ignore duplicates)
+        for entry in (pool if pool is not _LOCAL_FALLBACK else []):
+            conn.execute(
+                """INSERT OR IGNORE INTO hex_type_config(hex_type, label, map_color, map_icon, is_active)
+                   VALUES (?, ?, ?, ?, 1)""",
+                (entry["hex_type"], entry["label"], entry["color"], entry["icon"]),
+            )
+
+        # Delete existing local hexes for this parent
+        conn.execute(
+            "DELETE FROM world_hexes WHERE parent_hex_id = ? AND map_level = 1",
+            (parent_id,),
+        )
+
+        # Generate 7×7 grid centered at (0,0) in local coords
+        center_entry = pool[0]
+        hexes_created = 0
+        for lq in range(-3, 4):
+            for lr in range(-3, 4):
+                # Skip corners for a rounder map (optional: cube-distance > 3)
+                if abs(lq) + abs(lr) + abs(-lq - lr) > 6:
+                    continue
+                if lq == 0 and lr == 0:
+                    entry = center_entry
+                else:
+                    entry = rng.choice(pool)
+                label = entry["label"] if rng.random() < 0.4 else None
+                conn.execute(
+                    """INSERT OR REPLACE INTO world_hexes
+                       (q, r, hex_type, label, atmosphere, encounter_chance, encounter_pool,
+                        is_active, created_by_gm, map_level, parent_hex_id)
+                       VALUES (?, ?, ?, ?, ?, 0.05, '[]', 1, 0, 1, ?)""",
+                    (lq, lr, entry["hex_type"], label, entry["atmosphere"], parent_id),
+                )
+                hexes_created += 1
+        conn.commit()
+        return {"ok": True, "hexes_created": hexes_created, "parent_type": parent_type}
+    finally:
+        conn.close()
+
+
 # ── Player-facing map endpoint ─────────────────────────────────────────────────
 
 @router.get("/player-map/{campaign_id}")

@@ -9525,6 +9525,8 @@ const _wmap = {
   travelPath: [],        // [{q,r}] active travel path from backend
   travelHead: -1,        // index of currently animated hex (-1 = none)
   journal: null,         // #wmap-travel-journal element
+  level: 0,             // 0 = world, 1 = local
+  parentHex: null,       // {q, r, label} when in local mode
 };
 
 const _WH = 32; // hex size px
@@ -9662,6 +9664,15 @@ function _wmOnHexClick(e) {
     ? `Jesteś tutaj: ${label}`
     : `Podróżujesz do ${label}`;
   confirm.querySelector('#wmap-confirm-info').textContent = info;
+  // Zoom-in button for town/castle hexes (world mode only)
+  const zoomBtn = confirm.querySelector('#wmap-btn-zoom');
+  if (zoomBtn) {
+    const canZoom = _wmap.level === 0 && (hex.hex_type === 'town' || hex.hex_type === 'castle') && hex.status === 'discovered';
+    zoomBtn.style.display = canZoom ? '' : 'none';
+    if (canZoom) {
+      zoomBtn.onclick = () => _wmZoomIn(q, r, label);
+    }
+  }
   confirm.removeAttribute('hidden');
 }
 
@@ -10052,6 +10063,10 @@ async function _wmOpen() {
     _wmap.teleports = data.teleport_connections || [];
     _wmap.currentHex = data.current_hex;
     _wmap.hexTypes = data.hex_types || {};
+    _wmap.level = 0;
+    _wmap.parentHex = null;
+    const backBtn = document.getElementById('wmap-back-btn');
+    if (backBtn) backBtn.setAttribute('hidden', '');
 
     // Center on discovered hexes
     const disc = _wmap.hexes.filter(h => h.status === 'discovered');
@@ -10074,6 +10089,48 @@ function _wmClose() {
   setTimeout(() => _wmap.panel.setAttribute('hidden', ''), 280);
   _wmap.confirm.setAttribute('hidden', '');
   _wmap.pendingTravel = null;
+}
+
+async function _wmZoomIn(q, r, label) {
+  if (!currentCampaignId) return;
+  try {
+    const data = await apiRequest('GET', `/campaigns/${currentCampaignId}/world-map?character_id=${characterData?.id||0}&parent_q=${q}&parent_r=${r}`);
+    if (!data.hexes || !data.hexes.length) {
+      showToast('Brak mapy lokalnej dla tego miejsca.', 'info'); return;
+    }
+    _wmap.hexes = data.hexes;
+    _wmap.teleports = [];
+    _wmap.currentHex = null;
+    _wmap.hexTypes = data.hex_types || {};
+    _wmap.level = 1;
+    _wmap.parentHex = { q, r, label: data.parent_label || label };
+    _wmap.zoom = 1.4;
+    _wmap.pan = { x: 0, y: 0 };
+    _wmap.confirm.setAttribute('hidden', '');
+    _wmap.pendingTravel = null;
+    // Center on local hexes
+    const pixels = _wmap.hexes.map(h => _wmHexToPixel(h.q, h.r));
+    if (pixels.length) {
+      const cx = pixels.reduce((s,p)=>s+p.x,0)/pixels.length;
+      const cy = pixels.reduce((s,p)=>s+p.y,0)/pixels.length;
+      const rect = _wmap.svg.getBoundingClientRect();
+      _wmap.pan = { x: (rect.width||360)/2 - cx*_wmap.zoom, y: (rect.height||500)/2 - cy*_wmap.zoom };
+    }
+    _wmRender();
+    // Show back button
+    const backBtn = document.getElementById('wmap-back-btn');
+    if (backBtn) { backBtn.textContent = `← ${_wmap.parentHex.label}`; backBtn.removeAttribute('hidden'); }
+  } catch (err) {
+    showToast(err.message || 'Błąd ładowania mapy lokalnej', 'error');
+  }
+}
+
+async function _wmBack() {
+  _wmap.level = 0;
+  _wmap.parentHex = null;
+  const backBtn = document.getElementById('wmap-back-btn');
+  if (backBtn) backBtn.setAttribute('hidden', '');
+  await _wmOpen();
 }
 
 function initWorldMap() {
@@ -10100,6 +10157,7 @@ function initWorldMap() {
     _wmap.confirm.setAttribute('hidden', '');
     _wmap.pendingTravel = null;
   });
+  document.getElementById('wmap-back-btn')?.addEventListener('click', _wmBack);
 
   // Zoom
   _wmap.svg.addEventListener('wheel', e => {
