@@ -3779,7 +3779,13 @@ def admin_get_campaign_hex_map(campaign_id: int, _: None = Depends(require_admin
                 "discovered": bool(ov.get("discovered", 0)), "encounter_cleared": bool(ov.get("encounter_cleared", 0)),
                 "campaign_label": ov.get("campaign_label") or "", "campaign_notes": ov.get("campaign_notes") or "",
                 "narrative_encounter": ov.get("narrative_encounter") or "", "has_overlay": bool(ov)})
-        return {"hexes": result, "hex_types": {r["hex_type"]: dict(r) for r in ht_rows}, "campaign_id": campaign_id}
+        sess = conn.execute("SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1", (campaign_id,)).fetchone()
+        current_hex = None
+        if sess:
+            import json as _j
+            flags = _j.loads(sess["session_flags"] or "{}")
+            current_hex = flags.get("current_hex")
+        return {"hexes": result, "hex_types": {r["hex_type"]: dict(r) for r in ht_rows}, "campaign_id": campaign_id, "current_hex": current_hex}
     finally:
         conn.close()
 

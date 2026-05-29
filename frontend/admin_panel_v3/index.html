@@ -9469,6 +9469,101 @@ forge_create_game_entry("armor", {
     ).join('');
   }
 
+  function _renderAdminHexMap(hexes, hexTypes, currentHex) {
+    if (!hexes || !hexes.length) {
+      return `<div id="admin-hex-map-svg-wrap" style="padding:24px;text-align:center;color:var(--t3)">Brak danych mapy.</div>`;
+    }
+    const HEX_SIZE = 18;
+    const hexToPixel = (q, r) => ({ x: HEX_SIZE * 1.5 * q, y: HEX_SIZE * Math.sqrt(3) * (r + q / 2) });
+    const corners = size => Array.from({length:6}, (_,i) => {
+      const angle = Math.PI / 180 * (60 * i);
+      return `${(size * Math.cos(angle)).toFixed(2)},${(size * Math.sin(angle)).toFixed(2)}`;
+    }).join(' ');
+    const pts = corners(HEX_SIZE - 1);
+    const typeColors = {
+      forest: '#1a3320', mountain: '#3a2a1a', plains: '#1e2b10',
+      water: '#0a1e30', desert: '#2e2010', dungeon: '#2a1030',
+      town: '#1a1e2e', road: '#1e1a14', default: '#181818'
+    };
+    const pixels = hexes.map(h => hexToPixel(h.q, h.r));
+    const minX = Math.min(...pixels.map(p => p.x)) - HEX_SIZE * 1.2;
+    const minY = Math.min(...pixels.map(p => p.y)) - HEX_SIZE * 1.2;
+    const maxX = Math.max(...pixels.map(p => p.x)) + HEX_SIZE * 1.2;
+    const maxY = Math.max(...pixels.map(p => p.y)) + HEX_SIZE * 1.2;
+    const vw = (maxX - minX).toFixed(1);
+    const vh = (maxY - minY).toFixed(1);
+    const hexGroups = hexes.map(h => {
+      const px = hexToPixel(h.q, h.r);
+      const tx = (px.x - minX).toFixed(1);
+      const ty = (px.y - minY).toFixed(1);
+      const htColor = hexTypes[h.hex_type] && hexTypes[h.hex_type].map_color;
+      const fill = htColor || typeColors[h.hex_type] || typeColors.default;
+      const isCurrent = currentHex && h.q === currentHex.q && h.r === currentHex.r;
+      let stroke = '#333', strokeW = '0.5';
+      if (isCurrent) { stroke = '#f0c040'; strokeW = '2'; }
+      else if (h.discovered) { stroke = '#4a8a4a'; strokeW = '1'; }
+      const opacity = (h.discovered || isCurrent) ? '1' : '0.45';
+      const indicators = [];
+      if (isCurrent) indicators.push(`<circle cx="0" cy="0" r="4" fill="#f0c040" opacity="0.9"/>`);
+      else if (h.encounter_cleared) indicators.push(`<text x="0" y="3" text-anchor="middle" font-size="7" fill="#4a8" opacity="0.9">✓</text>`);
+      if (h.campaign_label) indicators.push(`<circle cx="${(HEX_SIZE*0.5).toFixed(1)}" cy="${-(HEX_SIZE*0.55).toFixed(1)}" r="2.5" fill="#8af" opacity="0.85"/>`);
+      return `<g data-q="${h.q}" data-r="${h.r}" transform="translate(${tx},${ty})" style="cursor:pointer" opacity="${opacity}">
+        <polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>
+        ${indicators.join('')}
+      </g>`;
+    });
+    return `<div id="admin-hex-map-svg-wrap" style="overflow:auto;max-height:420px;background:#0d0d0d;border:1px solid var(--border);border-radius:var(--r)">
+      <svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}" xmlns="http://www.w3.org/2000/svg" style="display:block;min-width:${vw}px">
+        ${hexGroups.join('\n        ')}
+      </svg>
+    </div>`;
+  }
+
+  function _showHexEditModal({ campId, q, r, hex }) {
+    document.getElementById('hex-edit-modal')?.remove();
+    const m = document.createElement('div');
+    m.id = 'hex-edit-modal';
+    m.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7)';
+    m.innerHTML = `
+      <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#333);border-radius:10px;padding:24px;width:340px;max-width:95vw;position:relative">
+        <button onclick="document.getElementById('hex-edit-modal').remove()" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;color:var(--t3,#888);font-size:1.1rem">✕</button>
+        <div style="font-weight:700;font-size:1rem;margin-bottom:16px;color:var(--text,#e0d8c8)">Hex (${q}, ${r})</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--t2,#b0a080)">
+            <input type="checkbox" id="hxe-disc" ${hex.discovered?'checked':''}> Odkryty
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--t2,#b0a080)">
+            <input type="checkbox" id="hxe-clear" ${hex.encounter_cleared?'checked':''}> Encounter oczyszczony
+          </label>
+          <div>
+            <label style="font-size:0.78rem;color:var(--t3,#888);display:block;margin-bottom:4px">Etykieta kampanii</label>
+            <input id="hxe-label" type="text" class="form-input" value="${_esc(hex.campaign_label||'')}" placeholder="np. Ruiny Starego Zamku" style="width:100%">
+          </div>
+          <div>
+            <label style="font-size:0.78rem;color:var(--t3,#888);display:block;margin-bottom:4px">Notatki GM</label>
+            <textarea id="hxe-notes" class="form-input" rows="2" style="width:100%;resize:vertical">${_esc(hex.campaign_notes||'')}</textarea>
+          </div>
+          <button id="hxe-save" class="btn btn-primary" style="margin-top:4px">Zapisz</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(m);
+    m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+    m.querySelector('#hxe-save').addEventListener('click', async () => {
+      const payload = {
+        discovered: m.querySelector('#hxe-disc').checked,
+        encounter_cleared: m.querySelector('#hxe-clear').checked,
+        campaign_label: m.querySelector('#hxe-label').value.trim() || null,
+        campaign_notes: m.querySelector('#hxe-notes').value.trim() || null,
+      };
+      try {
+        await apiFetch(`/api/admin/campaigns/${campId}/hex-map/${q}/${r}`, {method:'PATCH', body: JSON.stringify(payload)});
+        _showToast('Zapisano hex', 'success');
+        m.remove();
+      } catch(e) { _showToast(e.message, 'error'); }
+    });
+  }
+
   function _addTplReq(endIdx) {
     const input = document.getElementById('tpl-end-req-input-' + endIdx);
     if (!input || !input.value.trim()) return;
@@ -10062,27 +10157,29 @@ forge_create_game_entry("armor", {
       try {
         const d = await apiFetch(`/api/admin/campaigns/${campId}/hex-map`);
         const hexes = d.hexes || [];
-        const discovered = hexes.filter(h => h.discovered);
-        const undiscovered = hexes.filter(h => h.has_overlay && !h.discovered);
-        const tabsHtml = `
-          <div style="display:flex;gap:8px;border-bottom:1px solid var(--border);margin-bottom:12px;padding-bottom:8px">
-            <button class="chip" data-mapfilter="discovered" onclick="(e)=>{ document.querySelectorAll('[data-mapfilter]').forEach(x=>x.classList.remove('active')); e.target.classList.add('active'); document.getElementById('map-hexes').innerHTML = document.getElementById('map-discovered').innerHTML; }" style="font-size:0.8rem">✓ Odkryte (${discovered.length})</button>
-            <button class="chip" data-mapfilter="undiscovered" onclick="(e)=>{ document.querySelectorAll('[data-mapfilter]').forEach(x=>x.classList.remove('active')); e.target.classList.add('active'); document.getElementById('map-hexes').innerHTML = document.getElementById('map-undiscovered').innerHTML; }" style="font-size:0.8rem">🔍 Nieodkryte (${undiscovered.length})</button>
-          </div>
-        `;
-        const discoveredTable = `<table class="data-table"><thead><tr><th>q,r</th><th>Typ</th><th>Oczyszczony</th><th>Etykieta</th><th>Notatki</th></tr></thead><tbody>${discovered.map(h=>`<tr><td class="td-mono">${h.q},${h.r}</td><td><span class="badge badge-slate">${_esc(h.hex_type||'—')}</span></td><td style="text-align:center">${h.encounter_cleared?'✓':'—'}</td><td class="td-muted">${_esc(h.campaign_label||h.label||'—')}</td><td class="td-muted" style="font-size:0.72rem">${_esc((h.campaign_notes||'').slice(0,60)||'—')}</td></tr>`).join('')}</tbody></table>`;
-        const undiscoveredTable = `<table class="data-table"><thead><tr><th>q,r</th><th>Typ</th><th>Etykieta</th><th>Notatki</th></tr></thead><tbody>${undiscovered.map(h=>`<tr><td class="td-mono">${h.q},${h.r}</td><td><span class="badge badge-slate">${_esc(h.hex_type||'—')}</span></td><td class="td-muted">${_esc(h.campaign_label||h.label||'—')}</td><td class="td-muted" style="font-size:0.72rem">${_esc((h.campaign_notes||'').slice(0,60)||'—')}</td></tr>`).join('')}</tbody></table>`;
-        panel.innerHTML = tabsHtml + `<div id="map-hexes" class="table-wrap" style="max-height:400px;overflow-y:auto">${discoveredTable}</div><div id="map-discovered" style="display:none">${discoveredTable}</div><div id="map-undiscovered" style="display:none">${undiscoveredTable}</div>`;
-        // Set up tab click handlers
-        panel.querySelectorAll('[data-mapfilter]').forEach((btn, idx) => {
-          if (idx === 0) btn.classList.add('active');
-          btn.addEventListener('click', (e) => {
-            panel.querySelectorAll('[data-mapfilter]').forEach(x => x.classList.remove('active'));
-            e.target.classList.add('active');
-            const filterType = e.target.dataset.mapfilter;
-            panel.getElementById('map-hexes').innerHTML = panel.getElementById(`map-${filterType}`).innerHTML;
+        const hexTypes = d.hex_types || {};
+        const currentHex = d.current_hex || null;
+        const overlay_hexes = hexes.filter(h => h.has_overlay || h.discovered || h.campaign_label);
+        const svgHtml = _renderAdminHexMap(hexes, hexTypes, currentHex);
+        panel.innerHTML = `
+          <div style="font-size:0.78rem;color:var(--t3);margin-bottom:8px">${hexes.length} heksów · ${overlay_hexes.length} z nakładką · <span style="color:var(--t3)">Kliknij hex aby edytować</span></div>
+          ${svgHtml}
+          <div style="margin-top:8px;font-size:0.72rem;color:var(--t3);display:flex;gap:16px;flex-wrap:wrap">
+            <span><span style="display:inline-block;width:10px;height:10px;background:#f0c040;border-radius:50%;margin-right:4px"></span>Aktualna pozycja</span>
+            <span><span style="display:inline-block;width:10px;height:10px;border:1px solid #4a8a4a;border-radius:50%;margin-right:4px"></span>Odkryty</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:#8af;border-radius:50%;margin-right:4px"></span>Ma etykietę</span>
+          </div>`;
+        const hexData = {};
+        hexes.forEach(h => { hexData[`${h.q},${h.r}`] = h; });
+        const svgWrap = panel.querySelector('#admin-hex-map-svg-wrap');
+        if (svgWrap) {
+          svgWrap.addEventListener('click', e => {
+            const g = e.target.closest('g[data-q]');
+            if (!g) return;
+            const q = parseInt(g.dataset.q), r = parseInt(g.dataset.r);
+            _showHexEditModal({ campId, q, r, hex: hexData[`${q},${r}`] || {} });
           });
-        });
+        }
       } catch(e) { panel.innerHTML = `<p style="color:var(--red)">${_esc(e.message)}</p>`; }
     }
 

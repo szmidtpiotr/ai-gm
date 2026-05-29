@@ -3725,7 +3725,15 @@ function renderSuggestedActions(actions) {
     container.innerHTML = '';
     if (!actions || !actions.length) {
         container.style.display = 'none';
+        _hideTravelHintModal();
         return;
+    }
+    // Show travel modal if travel hint present
+    const travelAction = actions.find(a => a.action === 'OPEN_MAP' && a.highlight);
+    if (travelAction) {
+        _showTravelHintModal(travelAction.label.replace(/^[🗺️\s]*Podróżuj → /, '').replace(/^[🗺️\s]*/, ''));
+    } else {
+        _hideTravelHintModal();
     }
     container.style.display = 'flex';
     actions.forEach((a, i) => {
@@ -9959,6 +9967,27 @@ const _TERRAIN_DEFAULT = { g: 'linear-gradient(160deg,#0A0810 0%,#16141E 50%,#20
 
 let _travelCinematicTimer = null;
 
+function _showTravelHintModal(label) {
+  const modal = document.getElementById('travel-hint-modal');
+  if (!modal) return;
+  const titleEl = document.getElementById('travel-hint-modal-title');
+  if (titleEl) titleEl.textContent = 'Podróżuj → ' + label;
+  modal.removeAttribute('hidden');
+  document.getElementById('travel-hint-go')?.addEventListener('click', () => {
+    _hideTravelHintModal();
+    _wmOpen();
+  }, { once: true });
+  document.getElementById('travel-hint-stay')?.addEventListener('click', () => {
+    _hideTravelHintModal();
+    renderSuggestedActions([]);
+  }, { once: true });
+}
+
+function _hideTravelHintModal() {
+  const modal = document.getElementById('travel-hint-modal');
+  if (modal) modal.setAttribute('hidden', '');
+}
+
 function _showTravelCinematic({ hexType, destLabel, atmo, tip }) {
   return new Promise(resolve => {
     const overlay = document.getElementById('travel-cinematic');
@@ -10010,6 +10039,7 @@ function _showTravelCinematic({ hexType, destLabel, atmo, tip }) {
 }
 
 async function _wmOpen() {
+  _hideTravelHintModal();
   if (!currentCampaignId || !characterData?.id) {
     showToast('Wybierz postać aby otworzyć mapę.', 'info'); return;
   }

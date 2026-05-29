@@ -7188,6 +7188,46 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   display: flex; align-items: center; gap: 7px;
 }
 
+/* GM Travel Hint Modal */
+.travel-hint-modal {
+  position: fixed; inset: 0; z-index: 1200;
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+.travel-hint-modal[hidden] { display: none !important; }
+.travel-hint-modal__backdrop {
+  position: absolute; inset: 0;
+  background: rgba(0,0,0,0.72);
+  backdrop-filter: blur(3px);
+}
+.travel-hint-modal__card {
+  position: relative; z-index: 1;
+  background: #1a1510; border: 1px solid #c9a54a55;
+  border-radius: 12px; padding: 28px 32px;
+  text-align: center; max-width: 320px; width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+.travel-hint-modal__icon { font-size: 2.4rem; margin-bottom: 12px; }
+.travel-hint-modal__title {
+  font-family: Cinzel, serif; font-size: 1rem; font-weight: 700;
+  color: #c9a54a; margin-bottom: 4px;
+}
+.travel-hint-modal__subtitle {
+  font-size: 0.75rem; color: #7a6a4a; margin-bottom: 20px;
+}
+.travel-hint-modal__btns { display: flex; flex-direction: column; gap: 10px; }
+.travel-hint-modal__btn {
+  padding: 10px 20px; border-radius: 8px; border: none;
+  font-size: 0.9rem; cursor: pointer; font-family: inherit; transition: opacity 0.15s;
+}
+.travel-hint-modal__btn:hover { opacity: 0.85; }
+.travel-hint-modal__btn--go {
+  background: #c9a54a; color: #0d0b08; font-weight: 700;
+}
+.travel-hint-modal__btn--stay {
+  background: #2a2010; color: #9a8a6a; border: 1px solid #3a3020;
+}
+
 /* ── Full-screen Travel Cinematic Overlay ───────────────────────────────────── */
 .travel-cinematic {
   position: fixed; inset: 0; z-index: 9800;
