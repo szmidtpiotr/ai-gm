@@ -1695,3 +1695,94 @@ def forge_debug_clear_encounter(
         return {"ok": True, "campaign_id": campaign_id, "cleared": True}
     finally:
         conn.close()
+
+
+# ── Step E: Hex allocation for Kuźnia templates ───────────────────────────────
+
+def _hex_distance(q1: int, r1: int, q2: int, r2: int) -> int:
+    return (abs(q1 - q2) + abs(q1 + r1 - q2 - r2) + abs(r1 - r2)) // 2
+
+
+@router.post("/templates/{template_id}/allocate-hex")
+def forge_allocate_hex(template_id: int, _: None = Depends(_require_admin)):
+    """Find a free world hex cluster for this template and assign it.
+    Prefers town/plains hexes far from other templates' start hexes."""
+    conn = _get_db()
+    try:
+        tpl = conn.execute(
+            "SELECT id, title FROM campaign_templates WHERE id = ?",
+            (template_id,),
+        ).fetchone()
+        if not tpl:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        taken = [
+            (int(r["start_hex_q"]), int(r["start_hex_r"]))
+            for r in conn.execute(
+                "SELECT start_hex_q, start_hex_r FROM campaign_templates "
+                "WHERE start_hex_q IS NOT NULL AND id != ?",
+                (template_id,),
+            ).fetchall()
+        ]
+
+        world_hexes = [
+            {"q": int(r["q"]), "r": int(r["r"]), "hex_type": r["hex_type"], "label": r["label"]}
+            for r in conn.execute(
+                "SELECT q, r, hex_type, label FROM world_hexes WHERE map_level = 0 AND is_active = 1"
+            ).fetchall()
+        ]
+
+        if not world_hexes:
+            raise HTTPException(status_code=422, detail="No world hexes — generate world first")
+
+        _PREF = {"town": 3, "plains": 2, "castle": 1}
+        best = None
+        best_score = -1
+        for h in world_hexes:
+            pref = _PREF.get(h["hex_type"], 0)
+            min_dist = min((_hex_distance(h["q"], h["r"], tq, tr) for tq, tr in taken), default=999)
+            score = min_dist * 10 + pref
+            if score > best_score:
+                best_score = score
+                best = h
+
+        if not best:
+            raise HTTPException(status_code=422, detail="Could not find suitable hex")
+
+        conn.execute(
+            "UPDATE campaign_templates SET start_hex_q = ?, start_hex_r = ? WHERE id = ?",
+            (best["q"], best["r"], template_id),
+        )
+        conn.commit()
+
+        _DIRS = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
+        hex_set = {(h["q"], h["r"]): h for h in world_hexes}
+        cluster = [best]
+        for dq, dr in _DIRS:
+            nb = hex_set.get((best["q"] + dq, best["r"] + dr))
+            if nb:
+                cluster.append(nb)
+
+        return {
+            "ok": True,
+            "template_id": template_id,
+            "start_hex": {"q": best["q"], "r": best["r"], "label": best["label"], "hex_type": best["hex_type"]},
+            "cluster": cluster,
+        }
+    finally:
+        conn.close()
+
+
+@router.delete("/templates/{template_id}/allocate-hex")
+def forge_deallocate_hex(template_id: int, _: None = Depends(_require_admin)):
+    """Remove hex allocation from a template."""
+    conn = _get_db()
+    try:
+        conn.execute(
+            "UPDATE campaign_templates SET start_hex_q = NULL, start_hex_r = NULL WHERE id = ?",
+            (template_id,),
+        )
+        conn.commit()
+        return {"ok": True, "template_id": template_id}
+    finally:
+        conn.close()

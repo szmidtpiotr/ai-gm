@@ -474,10 +474,12 @@ def create_campaign(req: CampaignCreateRequest):
     mode = req.mode
     prefilled_plan: str | None = None
     template_id = req.template_id
+    tpl_start_hex_q: int | None = None
+    tpl_start_hex_r: int | None = None
 
     if template_id:
         tpl = conn.execute(
-            "SELECT gm_plan_json FROM campaign_templates WHERE id = ? AND status = 'published'",
+            "SELECT gm_plan_json, start_hex_q, start_hex_r FROM campaign_templates WHERE id = ? AND status = 'published'",
             (template_id,),
         ).fetchone()
         if not tpl:
@@ -485,6 +487,8 @@ def create_campaign(req: CampaignCreateRequest):
             raise HTTPException(status_code=404, detail="Campaign template not found or not published")
         mode = "pre_built"
         prefilled_plan = tpl["gm_plan_json"]
+        tpl_start_hex_q = tpl["start_hex_q"]
+        tpl_start_hex_r = tpl["start_hex_r"]
 
     selected_hook_ids_json = json.dumps(req.selected_hook_ids or [])
 
@@ -515,6 +519,18 @@ def create_campaign(req: CampaignCreateRequest):
         conn.execute(
             "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
             (prefilled_plan, campaign_id),
+        )
+        conn.commit()
+
+    # Seed starting hex from template allocation (Step E)
+    if tpl_start_hex_q is not None and tpl_start_hex_r is not None:
+        conn.execute(
+            "INSERT OR IGNORE INTO game_sessions (id, campaign_id, session_flags) VALUES (?, ?, '{}')",
+            (str(campaign_id), campaign_id),
+        )
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = json_patch(session_flags, ?) WHERE campaign_id = ?",
+            (json.dumps({"current_hex": {"q": tpl_start_hex_q, "r": tpl_start_hex_r}}), campaign_id),
         )
         conn.commit()
 

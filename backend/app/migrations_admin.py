@@ -2741,6 +2741,10 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
     # New unique: (q, r, parent_hex_id) — world hexes use parent_hex_id=NULL (→ -1), local hexes each have their own parent
     _exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_world_hexes_qr_scope ON world_hexes(q, r, COALESCE(parent_hex_id, -1))", "world-hexes-qr-scope-idx")
 
+    # Step E: Kuźnia hex allocation — start_hex on campaign_templates
+    _exec("ALTER TABLE campaign_templates ADD COLUMN start_hex_q INTEGER", "campaign-templates-start-hex-q")
+    _exec("ALTER TABLE campaign_templates ADD COLUMN start_hex_r INTEGER", "campaign-templates-start-hex-r")
+
     logger.info("v2_schema_migrations_complete")
 
 

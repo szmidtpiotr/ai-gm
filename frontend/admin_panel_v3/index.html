@@ -8719,9 +8719,11 @@ forge_create_game_entry("armor", {
           '</div>' +
           '<div style="font-size:0.78rem;color:var(--t2);margin-bottom:8px">' + _esc((t.description||'').substring(0,120)) + ((t.description||'').length>120?'…':'') + '</div>' +
           '<div style="font-size:0.72rem;color:var(--t3);margin-bottom:8px">⭐ ' + t.difficulty_rating + '/5 · 🎮 ' + t.play_count + ' rozegrań · ' + (t.hook_ids||[]).length + ' hooków</div>' +
+          (t.start_hex_q != null ? '<div style="font-size:0.72rem;color:var(--amber,#c9a227);margin-bottom:6px">📍 Start: (' + t.start_hex_q + ', ' + t.start_hex_r + ')</div>' : '<div style="font-size:0.72rem;color:var(--t3);margin-bottom:6px">📍 Brak przydzielonego terenu</div>') +
           '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
             (t.status === 'draft' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgePublishTemplate(' + t.id + ')">Opublikuj</button>' : '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeUnpublishTemplate(' + t.id + ')">Wycofaj</button>') +
             '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openTemplateEditor(' + t.id + ')">Edytuj</button>' +
+            '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeAllocateHex(' + t.id + ')">🗺 Przydziel teren</button>' +
             (t.status === 'published' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgeLaunchCampaignFromTemplate(' + t.id + ')" style="background:var(--green);border-color:var(--green)">🚀 Uruchom kampanię</button>' : '') +
             '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();if(confirm(\'Usunąć szablon?\'))apiFetch(\'/api/admin/forge/templates/' + t.id + '\',{method:\'DELETE\'}).then(()=>{_sectionLoaded.delete(\'forge\');_loadForgeTemplates()})" style="margin-left:auto">🗑</button>' +
           '</div>' +
@@ -8736,6 +8738,15 @@ forge_create_game_entry("armor", {
       _showToast('Szablon opublikowany.', 'success');
       await _loadForgeTemplates();
     } catch(e) { _showToast(e.message||'Błąd.','error'); }
+  }
+
+  async function forgeAllocateHex(id) {
+    try {
+      const r = await apiFetch(`/api/admin/forge/templates/${id}/allocate-hex`, { method: 'POST' });
+      const h = r.start_hex || {};
+      _showToast(`Przydzielono teren: ${h.label || ''}(${h.q}, ${h.r})`, 'success');
+      await _loadForgeTemplates();
+    } catch(e) { _showToast(e.message || 'Błąd przydziału terenu.', 'error'); }
   }
 
   async function forgeLaunchCampaignFromTemplate(templateId) {
@@ -8764,6 +8775,7 @@ forge_create_game_entry("armor", {
         </div>
         <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;padding:16px">
           <div style="font-size:0.78rem;color:var(--t2)">Szablon: <strong>${_esc(templateTitle)}</strong></div>
+          ${((_forgeTemplatesCache.find(t=>t.id===templateId)||{}).start_hex_q!=null) ? `<div style="font-size:0.72rem;color:var(--amber,#c9a227)">📍 Start na mapie: (${(_forgeTemplatesCache.find(t=>t.id===templateId)||{}).start_hex_q}, ${(_forgeTemplatesCache.find(t=>t.id===templateId)||{}).start_hex_r})</div>` : ''}
           <div>
             <label class="form-label">Tytuł kampanii</label>
             <input id="launch-camp-title" class="form-input" value="${_esc(templateTitle)}" placeholder="Tytuł kampanii">
