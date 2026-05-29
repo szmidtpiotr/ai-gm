@@ -5,6 +5,8 @@ Admin endpoints for the hex grid world map.
 from __future__ import annotations
 
 import json
+import math
+import random
 import sqlite3
 from typing import Optional
 
@@ -73,6 +75,11 @@ class CampaignHexOverlay(BaseModel):
     narrative_encounter: Optional[str] = None
     campaign_label: Optional[str] = None
     campaign_notes: Optional[str] = None
+
+
+class GenerateWorldReq(BaseModel):
+    seed: int = 42
+    radius: int = 25  # half-size; full grid = (2*radius) × (2*radius)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -274,6 +281,253 @@ def delete_teleport(conn_id: int, authorization: str | None = Header(default=Non
         conn.execute("DELETE FROM hex_teleport_connections WHERE id = ?", (conn_id,))
         conn.commit()
         return {"ok": True}
+    finally:
+        conn.close()
+
+
+# ── Procedural world generation ───────────────────────────────────────────────
+
+def _smooth_noise(x: float, y: float, seed: int = 0) -> float:
+    """Value noise in [0,1] using integer hash + bilinear interpolation."""
+    xi, yi = int(math.floor(x)), int(math.floor(y))
+    xf, yf = x - xi, y - yi
+
+    def _h(a: int, b: int) -> float:
+        n = (a * 1234567 + b * 7654321 + seed * 9999991) & 0xFFFFFFFF
+        n = ((n ^ (n >> 7)) * 2654435761) & 0xFFFFFFFF
+        n = ((n ^ (n >> 13)) * 2246822519) & 0xFFFFFFFF
+        return (n >> 16) / 65535.0
+
+    sx = xf * xf * (3 - 2 * xf)
+    sy = yf * yf * (3 - 2 * yf)
+    return (
+        _h(xi, yi) * (1 - sx) * (1 - sy)
+        + _h(xi + 1, yi) * sx * (1 - sy)
+        + _h(xi, yi + 1) * (1 - sx) * sy
+        + _h(xi + 1, yi + 1) * sx * sy
+    )
+
+
+_ATMOSPHERE_MAP = {
+    "plains":    "Rozległe równiny szeleszczą trawą",
+    "forest":    "Gęste drzewa przesłaniają niebo",
+    "hills":     "Pagórkowaty teren z szerokim widokiem",
+    "lake":      "Spokojne wody odbijają niebo",
+    "mountains": "Skaliste szczyty ginące w chmurach",
+    "swamp":     "Mokradła cuchnące gnijącą roślinnością",
+    "river":     "Wartki potok przebija się przez teren",
+    "ruins":     "Starożytne ruiny skryte w cieniu",
+    "road":      "Ubita droga przez odkryte tereny",
+    "cave":      "Ciemne wejście do podziemnej jaskini",
+    "town":      "Tętniące życiem miasto targowe",
+    "castle":    "Potężna forteca z kamiennymi murami",
+    "dungeon":   "Mroczne lochy pełne niebezpieczeństw",
+}
+
+_TOWN_NAMES = ["Millhaven", "Ironforge", "Shadowmere", "Brightwater", "Duskholm"]
+
+
+def _biome(elevation: float, moisture: float) -> str:
+    if elevation < 0.22:
+        return "lake"
+    if elevation < 0.35 and moisture > 0.55:
+        return "swamp"
+    if elevation < 0.45:
+        return "plains" if moisture < 0.5 else "forest"
+    if elevation < 0.60:
+        return "hills" if moisture < 0.5 else "forest"
+    return "mountains"
+
+
+@router.post("/generate")
+def generate_world(body: GenerateWorldReq, authorization: str | None = Header(default=None)):
+    """Generate a procedural world grid using noise-based terrain. Overwrites existing hexes."""
+    _require_admin(authorization)
+
+    seed = body.seed
+    radius = body.radius
+    rng = random.Random(seed)
+
+    # ── Step 1: generate base terrain for every hex in the grid ──────────────
+    # elevation map keyed by (q, r) — needed for river pathfinding later
+    elevation_map: dict[tuple[int, int], float] = {}
+    hexes: dict[tuple[int, int], dict] = {}
+
+    for q in range(-radius, radius):
+        for r in range(-radius, radius):
+            elev = _smooth_noise(q * 0.12, r * 0.12, seed)
+            moist = _smooth_noise(q * 0.09, r * 0.09, seed + 31337)
+            elevation_map[(q, r)] = elev
+            terrain = _biome(elev, moist)
+            hexes[(q, r)] = {
+                "q": q,
+                "r": r,
+                "hex_type": terrain,
+                "label": None,
+                "atmosphere": _ATMOSPHERE_MAP.get(terrain, "Nieznany teren"),
+            }
+
+    # ── Step 2: overlay pass ──────────────────────────────────────────────────
+    # Helper: pick a random hex matching a predicate, remove from free pool
+    def _pick(pred, pool_list, count=1):
+        candidates = [c for c in pool_list if pred(c)]
+        rng.shuffle(candidates)
+        picked = candidates[:count]
+        for c in picked:
+            pool_list.remove(c)
+        return picked
+
+    free = list(hexes.keys())  # mutable pool of unoccupied coords
+
+    # -- rivers: 3 runs of 6-9 hexes from mountain toward lower elevation -----
+    mountain_coords = [c for c in free if hexes[c]["hex_type"] == "mountains"]
+    for _ in range(3):
+        if not mountain_coords:
+            break
+        starts = _pick(lambda c: hexes[c]["hex_type"] == "mountains", mountain_coords, 1)
+        if not starts:
+            break
+        cur = starts[0]
+        length = rng.randint(6, 9)
+        run = [cur]
+        if cur in free:
+            free.remove(cur)
+        for _step in range(length - 1):
+            directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
+            rng.shuffle(directions)
+            best_next = None
+            best_elev = elevation_map.get(cur, 1.0)
+            for dq, dr in directions:
+                nb = (cur[0] + dq, cur[1] + dr)
+                if nb in hexes and nb not in run:
+                    nb_elev = elevation_map.get(nb, 1.0)
+                    if nb_elev <= best_elev:
+                        best_elev = nb_elev
+                        best_next = nb
+            if best_next is None:
+                break
+            run.append(best_next)
+            if best_next in free:
+                free.remove(best_next)
+            cur = best_next
+        for coord in run:
+            hexes[coord]["hex_type"] = "river"
+            hexes[coord]["atmosphere"] = _ATMOSPHERE_MAP["river"]
+            hexes[coord]["label"] = None
+
+    # -- roads: 2 straight-ish paths of 8-15 hexes across plains --------------
+    plains_pool = [c for c in free if hexes[c]["hex_type"] == "plains"]
+    for _ in range(2):
+        if len(plains_pool) < 2:
+            break
+        start_list = _pick(lambda c: hexes[c]["hex_type"] == "plains", plains_pool, 1)
+        if not start_list:
+            break
+        cur = start_list[0]
+        if cur in free:
+            free.remove(cur)
+        length = rng.randint(8, 15)
+        run = [cur]
+        directions = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, -1), (-1, 1)]
+        chosen_dir = rng.choice(directions)
+        for _step in range(length - 1):
+            # mostly straight with slight drift
+            if rng.random() < 0.75:
+                step_dir = chosen_dir
+            else:
+                step_dir = rng.choice(directions)
+            nb = (cur[0] + step_dir[0], cur[1] + step_dir[1])
+            if nb not in hexes or nb in run:
+                break
+            run.append(nb)
+            if nb in free:
+                free.remove(nb)
+            if nb in plains_pool:
+                plains_pool.remove(nb)
+            cur = nb
+        for coord in run:
+            hexes[coord]["hex_type"] = "road"
+            hexes[coord]["atmosphere"] = _ATMOSPHERE_MAP["road"]
+            hexes[coord]["label"] = None
+
+    # -- ruins: 8 random non-water hexes --------------------------------------
+    ruin_picks = _pick(
+        lambda c: hexes[c]["hex_type"] not in ("lake", "river"),
+        free, 8,
+    )
+    for coord in ruin_picks:
+        hexes[coord]["hex_type"] = "ruins"
+        hexes[coord]["atmosphere"] = _ATMOSPHERE_MAP["ruins"]
+
+    # -- caves: 5 mountain/hills hexes ----------------------------------------
+    cave_picks = _pick(
+        lambda c: hexes[c]["hex_type"] in ("mountains", "hills"),
+        free, 5,
+    )
+    for i, coord in enumerate(cave_picks, start=1):
+        hexes[coord]["hex_type"] = "cave"
+        hexes[coord]["atmosphere"] = _ATMOSPHERE_MAP["cave"]
+        hexes[coord]["label"] = f"Jaskinia {i}"
+
+    # -- towns: 3 plains hexes spread ≥ 10 hexes apart ------------------------
+    town_names = list(_TOWN_NAMES)
+    rng.shuffle(town_names)
+    placed_towns: list[tuple[int, int]] = []
+    plains_free = [c for c in free if hexes[c]["hex_type"] == "plains"]
+    rng.shuffle(plains_free)
+    for coord in plains_free:
+        if len(placed_towns) >= 3:
+            break
+        too_close = any(
+            abs(coord[0] - t[0]) + abs(coord[1] - t[1]) < 10
+            for t in placed_towns
+        )
+        if too_close:
+            continue
+        placed_towns.append(coord)
+        if coord in free:
+            free.remove(coord)
+        hexes[coord]["hex_type"] = "town"
+        hexes[coord]["atmosphere"] = _ATMOSPHERE_MAP["town"]
+        hexes[coord]["label"] = town_names[len(placed_towns) - 1] if len(placed_towns) <= len(town_names) else None
+
+    # -- castle: 1 hills hex ---------------------------------------------------
+    castle_picks = _pick(
+        lambda c: hexes[c]["hex_type"] == "hills",
+        free, 1,
+    )
+    for coord in castle_picks:
+        hexes[coord]["hex_type"] = "castle"
+        hexes[coord]["atmosphere"] = _ATMOSPHERE_MAP["castle"]
+        hexes[coord]["label"] = "Zamek Nocny Szczyt"
+
+    # -- dungeons: 2 non-water hexes -------------------------------------------
+    dungeon_labels = ["Lochy Zapomnianych Królów", "Krypta Mrocznych Dusz"]
+    dungeon_picks = _pick(
+        lambda c: hexes[c]["hex_type"] not in ("lake", "river"),
+        free, 2,
+    )
+    for i, coord in enumerate(dungeon_picks):
+        hexes[coord]["hex_type"] = "dungeon"
+        hexes[coord]["atmosphere"] = _ATMOSPHERE_MAP["dungeon"]
+        hexes[coord]["label"] = dungeon_labels[i] if i < len(dungeon_labels) else None
+
+    # ── Step 3: bulk upsert into DB ───────────────────────────────────────────
+    conn = _get_db()
+    try:
+        counts: dict[str, int] = {}
+        for hx in hexes.values():
+            conn.execute(
+                """INSERT OR REPLACE INTO world_hexes
+                   (q, r, hex_type, label, atmosphere,
+                    encounter_chance, encounter_pool,
+                    is_active, created_by_gm)
+                   VALUES (?, ?, ?, ?, ?, 0.15, '[]', 1, 0)""",
+                (hx["q"], hx["r"], hx["hex_type"], hx["label"], hx["atmosphere"]),
+            )
+            counts[hx["hex_type"]] = counts.get(hx["hex_type"], 0) + 1
+        conn.commit()
+        return {"ok": True, "hexes_created": len(hexes), "counts": counts}
     finally:
         conn.close()
 

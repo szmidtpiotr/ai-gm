@@ -2408,6 +2408,7 @@
           <button class="stab active" data-wtab="npcs">NPC</button>
           <button class="stab" data-wtab="enemies">Wrogowie</button>
           <button class="stab" data-wtab="loot">Tabele Łupów</button>
+          <button class="stab" data-wtab="hexmap">🌍 Mapa</button>
           <button class="stab" data-wtab="pending">Oczekujące <span class="nav-badge" id="world-pending-badge" style="display:none">0</span></button>
         </div>
 
@@ -2533,6 +2534,39 @@
         <!-- Oczekujące — pending NPC and enemies -->
         <div class="stab-panel" id="wtab-pending">
           <div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem" id="world-pending-container">Ładowanie…</div>
+        </div>
+
+        <div class="stab-panel" id="wtab-hexmap">
+          <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
+            <!-- Stats row -->
+            <div id="hexmap-stats" style="display:flex;gap:12px;flex-wrap:wrap">
+              <div class="card" style="padding:10px 14px;flex:1;min-width:120px">
+                <div style="font-size:1.4rem;font-weight:700;color:var(--text)" id="hexmap-total">—</div>
+                <div style="font-size:0.72rem;color:var(--t3)">Heksów w świecie</div>
+              </div>
+              <div class="card" style="padding:10px 14px;flex:1;min-width:120px" id="hexmap-types-card">
+                <div style="font-size:0.78rem;color:var(--t3)">Ładowanie…</div>
+              </div>
+            </div>
+            <!-- Generate form -->
+            <div class="card" style="padding:16px">
+              <div style="font-weight:600;margin-bottom:12px">Generuj proceduralno świat</div>
+              <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+                <div>
+                  <label style="font-size:0.78rem;color:var(--t3);display:block;margin-bottom:4px">Seed (liczba całkowita)</label>
+                  <input type="number" id="hexmap-seed" class="form-input" value="42" style="width:120px">
+                </div>
+                <div>
+                  <label style="font-size:0.78rem;color:var(--t3);display:block;margin-bottom:4px">Promień (heksów)</label>
+                  <input type="number" id="hexmap-radius" class="form-input" value="25" min="5" max="50" style="width:90px">
+                </div>
+                <button class="btn btn-primary" id="hexmap-gen-btn" onclick="hexmapGenerate()">🌍 Generuj świat</button>
+              </div>
+              <div style="font-size:0.72rem;color:var(--t3);margin-top:8px">Wygeneruje (2×promień)² heksów. Istniejące dane kampanii (campaign_hex_data) zostaną zachowane.</div>
+            </div>
+            <!-- Result -->
+            <div id="hexmap-result" style="display:none"></div>
+          </div>
         </div>
 
       </div>
@@ -5389,7 +5423,7 @@ forge_create_game_entry("armor", {
 
   function _loadWorldTab(tab) {
     if (_worldLoaded.has(tab)) return Promise.resolve();
-    const fn = { npcs:_loadNPCs, enemies:_loadEnemies, loot:_loadBestiaryLoot, pending:_loadBestiaryPending }[tab];
+    const fn = { npcs:_loadNPCs, enemies:_loadEnemies, loot:_loadBestiaryLoot, pending:_loadBestiaryPending, hexmap:_hexmapLoadStats }[tab];
     if (!fn) return Promise.resolve();
     _worldLoaded.add(tab);
     return fn().catch(err => { _worldLoaded.delete(tab); console.warn('World tab failed:', tab, err.message); });
@@ -5401,6 +5435,56 @@ forge_create_game_entry("armor", {
     if (!fn) return Promise.resolve();
     _worldLoaded.add(tab);
     return fn().catch(err => { _worldLoaded.delete(tab); console.warn('Map tab failed:', tab, err.message); });
+  }
+
+  // ── Hexmap tab ───────────────────────────────────────────
+  async function hexmapGenerate() {
+    const btn = document.getElementById('hexmap-gen-btn');
+    const seed = parseInt(document.getElementById('hexmap-seed').value) || 42;
+    const radius = parseInt(document.getElementById('hexmap-radius').value) || 25;
+    if (radius > 50) { _showToast('Maks promień: 50', 'warn'); return; }
+    btn.disabled = true;
+    btn.textContent = '⏳ Generowanie…';
+    const resEl = document.getElementById('hexmap-result');
+    resEl.style.display = 'none';
+    try {
+      const d = await apiFetch('/api/admin/world/generate', {
+        method: 'POST',
+        body: JSON.stringify({ seed, radius }),
+      });
+      resEl.style.display = 'block';
+      const counts = d.counts || {};
+      const rows = Object.entries(counts).sort((a,b)=>b[1]-a[1])
+        .map(([t,n]) => `<tr><td style="color:var(--t2)">${_esc(t)}</td><td style="text-align:right;font-weight:600">${n}</td></tr>`).join('');
+      resEl.innerHTML = `
+        <div class="card" style="padding:14px;border-color:var(--green)">
+          <div style="color:var(--green);font-weight:600;margin-bottom:10px">✓ Wygenerowano ${d.hexes_created} heksów (seed: ${seed})</div>
+          <table style="width:100%;font-size:0.82rem">${rows}</table>
+        </div>`;
+      _hexmapLoadStats();
+    } catch(e) {
+      resEl.style.display = 'block';
+      resEl.innerHTML = `<div style="color:var(--red);padding:10px">${_esc(e.message)}</div>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🌍 Generuj świat';
+    }
+  }
+
+  async function _hexmapLoadStats() {
+    try {
+      const d = await apiFetch('/api/admin/world/map');
+      const hexes = d.hexes || [];
+      const el = document.getElementById('hexmap-total');
+      if (el) el.textContent = hexes.length;
+      const counts = {};
+      hexes.forEach(h => { counts[h.hex_type] = (counts[h.hex_type]||0)+1; });
+      const card = document.getElementById('hexmap-types-card');
+      if (card) {
+        const top5 = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,5);
+        card.innerHTML = top5.map(([t,n])=>`<span style="font-size:0.78rem;color:var(--t2)">${_esc(t)}: <strong>${n}</strong></span>`).join(' · ') || '<span style="color:var(--t3);font-size:0.78rem">Brak heksów</span>';
+      }
+    } catch(_e) {}
   }
 
   // ── Render helpers ──────────────────────────────────────
