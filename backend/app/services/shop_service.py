@@ -446,6 +446,7 @@ def buy_item(
                 increment_npc_purchase_count(
                     campaign_id=int(char_row["campaign_id"]),
                     npc_id=int(npc_id),
+                    npc_name=str(npc["label"]) if npc["label"] else None,
                 )
     except Exception:
         pass  # Non-critical; never fail a purchase over reputation tracking

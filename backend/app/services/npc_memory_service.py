@@ -178,31 +178,47 @@ def increment_npc_purchase_count(
     *,
     campaign_id: int,
     npc_id: int,
+    npc_name: str | None = None,
     conn: sqlite3.Connection | None = None,
 ) -> None:
-    """Bump purchase_count on the campaign_known_npcs row for this shop NPC.
+    """Bump purchase_count for this shop NPC.
 
-    No-op if the NPC isn't in the roster yet (first purchase before first
-    dialogue is unusual but shouldn't crash).
+    If npc_name is provided, UPSERTs a minimal roster entry so purchases
+    are tracked even before the player has a dialogue encounter with the NPC.
+    Without npc_name, falls back to UPDATE-only (no-op if not in roster yet).
     """
     managed = conn is None
     if managed:
         conn = _conn()
     try:
         try:
-            conn.execute(
-                """
-                UPDATE campaign_known_npcs
-                SET purchase_count = COALESCE(purchase_count, 0) + 1,
-                    updated_at = datetime('now')
-                WHERE campaign_id = ? AND npc_id = ?
-                """,
-                (int(campaign_id), int(npc_id)),
-            )
+            if npc_name:
+                conn.execute(
+                    """
+                    INSERT INTO campaign_known_npcs
+                        (campaign_id, npc_id, npc_name, relation_status, purchase_count)
+                    VALUES (?, ?, ?, 'neutral', 1)
+                    ON CONFLICT(campaign_id, npc_name) DO UPDATE SET
+                        npc_id = excluded.npc_id,
+                        purchase_count = COALESCE(campaign_known_npcs.purchase_count, 0) + 1,
+                        updated_at = datetime('now')
+                    """,
+                    (int(campaign_id), int(npc_id), str(npc_name)),
+                )
+            else:
+                conn.execute(
+                    """
+                    UPDATE campaign_known_npcs
+                    SET purchase_count = COALESCE(purchase_count, 0) + 1,
+                        updated_at = datetime('now')
+                    WHERE campaign_id = ? AND npc_id = ?
+                    """,
+                    (int(campaign_id), int(npc_id)),
+                )
             if managed:
                 conn.commit()
         except Exception:
-            pass  # Column may not exist on old DBs; silently skip
+            pass  # silently skip on schema mismatch
     finally:
         if managed:
             conn.close()
