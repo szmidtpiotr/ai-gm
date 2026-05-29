@@ -395,12 +395,24 @@ def resolve_chain_travel(
             flags["current_hex"] = {"q": arrived_hex[0], "r": arrived_hex[1]}
             # Also update location context for narrator if arrived hex has a linked location
             arrived_data = hexes.get(arrived_hex, {})
-            if arrived_data.get("location_key"):
-                flags["current_location_key"] = arrived_data["location_key"]
+            loc_key = arrived_data.get("location_key")
+            if loc_key:
+                flags["current_location_key"] = loc_key
             conn.execute(
                 "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
                 (json.dumps(flags, ensure_ascii=False), campaign_id),
             )
+            # Sync current_location_id to the macro location for arrived hex
+            if loc_key:
+                loc_row = conn.execute(
+                    "SELECT id FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1",
+                    (loc_key,),
+                ).fetchone()
+                if loc_row:
+                    conn.execute(
+                        "UPDATE game_sessions SET current_location_id = ? WHERE campaign_id = ?",
+                        (loc_row["id"], campaign_id),
+                    )
 
         # Mark hex as discovered for this campaign
         q, r = arrived_hex
