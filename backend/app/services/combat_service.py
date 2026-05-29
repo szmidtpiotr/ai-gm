@@ -2137,6 +2137,7 @@ def resolve_attack(
 
             _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
             conn.commit()
+            advance_turn(campaign_id)  # rotate to next actor (enemy turn)
             out["combat_state"] = load_combat_snapshot(campaign_id)
             return out
 

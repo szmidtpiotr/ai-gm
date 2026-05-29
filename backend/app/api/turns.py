@@ -510,6 +510,11 @@ def _process_location_intent(
                                    AND (location_key IS NULL OR location_key = '')""",
                                 (_loc_key_row["key"], _nhq, _nhr),
                             )
+                            # BUG-186: stamp hex coords onto game_locations so player hex map resolves
+                            conn.execute(
+                                "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ? WHERE key = ? AND world_hex_q IS NULL",
+                                (_nhq, _nhr, _loc_key_row["key"]),
+                            )
                             # Also update hex_type from location biome if hex is still default 'plains'
                             try:
                                 loc_biome = conn.execute(
@@ -722,13 +727,14 @@ def _maybe_handle_blocked_player_combat_turn(
 
     turn_effects = cs.evaluate_current_turn_conditions(campaign_id)
     if not turn_effects.get("blocked"):
-        return None
-
-    assistant_text = str(
-        turn_effects.get("message") or "Warunek blokuje akcję bohatera w tej turze."
-    ).strip()
-    if not assistant_text:
-        assistant_text = "Warunek blokuje akcję bohatera w tej turze."
+        # BUG-186: narrative must not process during active combat even when no condition blocks
+        assistant_text = "Walka trwa! Użyj interfejsu walki, by wykonać akcję bojową."
+    else:
+        assistant_text = str(
+            turn_effects.get("message") or "Warunek blokuje akcję bohatera w tej turze."
+        ).strip()
+        if not assistant_text:
+            assistant_text = "Warunek blokuje akcję bohatera w tej turze."
 
     log = create_turn_log(
         conn=conn,
@@ -3218,7 +3224,25 @@ def create_turn(
                             )
                             conn.commit()
                         logger.info("skill_test_triggered_by_keywords", skill=_pre_match, text_snippet=text[:40])
-                        return _with_turn_trace({"skill_test_pending": _pending_pre, "prose": None, "route": "skill_test_keyword"}, turn_id)
+                        # BUG-186: save turn row so turn_number is non-null
+                        _log_pre = create_turn_log(
+                            conn=conn,
+                            campaign_id=campaign_id,
+                            character_id=payload.character_id,
+                            user_text=text,
+                            assistant_text=None,
+                            route="skill_test_keyword",
+                        )
+                        conn.commit()
+                        return _with_turn_trace({
+                            "id": _log_pre["id"],
+                            "campaign_id": _log_pre["campaign_id"],
+                            "turn_number": _log_pre["turn_number"],
+                            "created_at": _log_pre["created_at"],
+                            "skill_test_pending": _pending_pre,
+                            "prose": None,
+                            "route": "skill_test_keyword",
+                        }, turn_id)
             except Exception as _pre_err:
                 logger.warning("pre_llm_keyword_scan_error: %s", str(_pre_err))
 
@@ -5026,6 +5050,17 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: in
                 "SELECT q, r, hex_type, label, atmosphere FROM world_hexes WHERE parent_hex_id = ? AND map_level = 1 AND is_active = 1",
                 (parent_id,),
             ).fetchall()
+            # Auto-generate local submap on first zoom into a town/castle
+            if not local_hexes_rows and parent["hex_type"] in ("town", "castle"):
+                try:
+                    from app.routers.hex_world import _auto_generate_local_hexes
+                    _auto_generate_local_hexes(conn, parent_q, parent_r)
+                    local_hexes_rows = conn.execute(
+                        "SELECT q, r, hex_type, label, atmosphere FROM world_hexes WHERE parent_hex_id = ? AND map_level = 1 AND is_active = 1",
+                        (parent_id,),
+                    ).fetchall()
+                except Exception:
+                    pass
             local_hexes = [
                 {"q": row["q"], "r": row["r"], "hex_type": row["hex_type"],
                  "label": row["label"], "status": "discovered"}
