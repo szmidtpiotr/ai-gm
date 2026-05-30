@@ -251,6 +251,7 @@ def _hook_to_dict(row: sqlite3.Row) -> dict:
 
 
 def _template_to_dict(row: sqlite3.Row) -> dict:
+    keys = row.keys()
     return {
         "id": row["id"],
         "title": row["title"],
@@ -263,6 +264,8 @@ def _template_to_dict(row: sqlite3.Row) -> dict:
         "play_count": row["play_count"],
         "created_by": row["created_by"],
         "created_at": row["created_at"],
+        "start_hex_q": row["start_hex_q"] if "start_hex_q" in keys else None,
+        "start_hex_r": row["start_hex_r"] if "start_hex_r" in keys else None,
     }
 
 
