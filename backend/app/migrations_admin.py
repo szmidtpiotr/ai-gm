@@ -849,6 +849,7 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_weapons ADD COLUMN template_id INTEGER REFERENCES campaign_templates(id) ON DELETE SET NULL",
     "ALTER TABLE game_config_items ADD COLUMN template_id INTEGER REFERENCES campaign_templates(id) ON DELETE SET NULL",
     "ALTER TABLE game_config_consumables ADD COLUMN template_id INTEGER REFERENCES campaign_templates(id) ON DELETE SET NULL",
+    "ALTER TABLE game_locations ADD COLUMN image_url TEXT DEFAULT NULL",
 ]
 
 ADMIN_SEEDS = [

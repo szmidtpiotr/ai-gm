@@ -1834,6 +1834,130 @@
     .mcp-iframe-wrap { display:flex; justify-content:center; align-items:flex-start; padding:16px; background:var(--bg); min-height:680px; }
     .mcp-iframe-wrap iframe { width:390px; height:720px; border:none; border-radius:24px; box-shadow:0 0 0 2px var(--border),0 8px 40px rgba(0,0,0,.6); display:block; flex-shrink:0; }
     .mcp-live-sel { font-size:0.82rem; }
+    /* ─────────────────────── IMAGE GEN ─────────────────────── */
+    .img-preset {
+      padding: 4px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--t2);
+      cursor: pointer;
+      transition: all 0.1s;
+      white-space: nowrap;
+    }
+    .img-preset:hover, .img-preset.on {
+      background: var(--blue-light);
+      border-color: var(--blue-border);
+      color: var(--blue-text);
+    }
+    .img-thumb-card {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.1s, box-shadow 0.1s;
+      aspect-ratio: 1;
+    }
+    .img-thumb-card:hover {
+      border-color: var(--border-strong);
+      box-shadow: var(--shadow-md);
+    }
+    .img-thumb-card img { width:100%; height:100%; object-fit:cover; display:block; }
+    .img-thumb-overlay {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.72));
+      padding: 20px 8px 6px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .img-thumb-card:hover .img-thumb-overlay { opacity: 1; }
+    .img-thumb-filename {
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.9);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex: 1;
+      margin-right: 4px;
+    }
+    .img-thumb-del {
+      background: rgba(220,38,38,0.85);
+      color: white;
+      border: none;
+      border-radius: 3px;
+      width: 20px; height: 20px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.1s;
+    }
+    .img-thumb-del:hover { background: #dc2626; }
+    /* Lightbox */
+    #img-lightbox {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.82);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      backdrop-filter: blur(4px);
+    }
+    #img-lightbox.open { display: flex; }
+    .img-lightbox-inner {
+      background: var(--canvas);
+      border-radius: var(--r-lg);
+      overflow: hidden;
+      max-width: 92vw;
+      max-height: 92vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+    }
+    .img-lightbox-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .img-lightbox-bar span {
+      font-size: 0.78rem;
+      color: var(--t2);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: var(--f-mono);
+    }
+    /* Generating pulse */
+    @keyframes img-pulse-border {
+      0%, 100% { box-shadow: 0 0 0 3px rgba(37,99,235,0.08); }
+      50%       { box-shadow: 0 0 0 3px rgba(37,99,235,0.25); }
+    }
+    #img-prompt.generating {
+      border-color: var(--blue);
+      animation: img-pulse-border 1.4s ease-in-out infinite;
+    }
+    /* Spinner */
+    .img-spinner {
+      width: 28px; height: 28px;
+      border: 2px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -4071,6 +4195,7 @@
         <button class="stab" data-toolstab="rest">⛺ Rest Sandbox</button>
         <button class="stab" data-toolstab="knowledge">📖 Wiedza</button>
         <button class="stab" data-toolstab="mcp">⬡ MCP</button>
+        <button class="stab" data-toolstab="images">🖼 Obrazy</button>
       </div>
 
       <!-- Test Runner panel -->
@@ -4222,7 +4347,135 @@
       <div class="stab-panel" id="toolstab-mcp" style="display:none">
         <div style="padding:24px;text-align:center;color:var(--t3);font-size:0.85rem">Ładowanie MCP…</div>
       </div>
+
+      <!-- Images tab -->
+      <div class="stab-panel" id="toolstab-images" style="display:none">
+        <div style="display:grid;grid-template-columns:380px 1fr;gap:14px;margin-top:14px">
+
+          <!-- LEFT: Generator + Preview -->
+          <div style="display:flex;flex-direction:column;gap:12px">
+
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">🎨 Generator</span>
+                <span class="card-count" id="img-gen-status">gotowy</span>
+              </div>
+
+              <!-- Preset chips -->
+              <div style="padding:12px 14px 0;display:flex;gap:6px;flex-wrap:wrap">
+                <button class="img-preset" data-preset="tile" data-prefix="top-down dungeon room tile, dark stone walls, torch lighting, fantasy RPG board game art, illustrated drawing style, Betrayal at House on the Hill aesthetic, square format, no text, no letters,">🏰 Dungeon Tile</button>
+                <button class="img-preset" data-preset="enemy" data-prefix="fantasy RPG enemy portrait, dark fantasy illustrated style, game card art, black background, detailed drawing, no text, no letters,">👹 Enemy Portrait</button>
+                <button class="img-preset" data-preset="item" data-prefix="fantasy RPG item artwork, isolated on black background, magical glow, detailed illustration, game icon style, no text, no letters,">⚔ Item Art</button>
+                <button class="img-preset" data-preset="map" data-prefix="fantasy map icon, top-down view, small tile symbol, RPG cartography style, parchment aesthetic, no text,">🗺 Map Icon</button>
+              </div>
+
+              <!-- Reference image section -->
+              <div id="img-ref-section" style="padding:8px 14px 0;border-top:1px solid var(--border);margin-top:6px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+                  <span style="font-size:0.68rem;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.05em">Referencja</span>
+                  <label class="btn btn-sm btn-secondary" style="cursor:pointer;padding:3px 8px;font-size:0.72rem">
+                    📎 Upload
+                    <input type="file" id="img-ref-upload" accept="image/*" style="display:none" onchange="imgRefUpload(this)">
+                  </label>
+                  <button class="btn btn-sm btn-secondary" style="font-size:0.72rem;padding:3px 8px" onclick="imgRefFromGallery()">🖼 Z galerii</button>
+                  <button id="img-ref-clear" class="btn btn-sm btn-danger" style="font-size:0.72rem;padding:3px 8px;display:none" onclick="imgRefClear()">✕ Usuń</button>
+                </div>
+                <div id="img-ref-preview" style="display:none;margin-bottom:6px">
+                  <img id="img-ref-thumb" src="" alt="ref" style="height:60px;border-radius:var(--r-sm);border:1px solid var(--border-strong);object-fit:cover">
+                  <span style="font-size:0.7rem;color:var(--t3);margin-left:8px" id="img-ref-label">—</span>
+                </div>
+                <div id="img-ref-denoise-row" style="display:none;align-items:center;gap:8px">
+                  <label style="font-size:0.68rem;color:var(--t3);white-space:nowrap">Wpływ: <span id="img-ref-denoise-val">60%</span></label>
+                  <input type="range" id="img-ref-denoise" min="10" max="95" value="60" style="flex:1;accent-color:var(--blue);margin:0">
+                </div>
+              </div>
+
+              <!-- Prompt -->
+              <div style="padding:10px 14px;display:flex;flex-direction:column;gap:10px">
+                <textarea id="img-prompt" class="form-input" rows="5"
+                  placeholder="Opisz scenę, pokój, postać lub przedmiot…"
+                  style="resize:none;font-size:0.82rem;line-height:1.55;transition:border-color 0.2s,box-shadow 0.2s"></textarea>
+
+                <!-- Settings -->
+                <div style="display:flex;gap:10px;align-items:flex-end">
+                  <div style="display:flex;flex-direction:column;gap:3px">
+                    <label style="font-size:0.68rem;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.05em">Rozmiar</label>
+                    <select id="img-size" class="form-input" style="font-size:0.78rem;padding:5px 8px;width:auto">
+                      <option value="512x512">512 × 512</option>
+                      <option value="768x768">768 × 768</option>
+                      <option value="1024x1024">1024 × 1024</option>
+                      <option value="1280x1280">1280 × 1280</option>
+                      <option value="512x768">512 × 768 (portret)</option>
+                      <option value="768x1024">768 × 1024 (portret)</option>
+                      <option value="1024x576">1024 × 576 (pejzaż)</option>
+                    </select>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:3px;flex:1">
+                    <label style="font-size:0.68rem;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.05em">Kroki: <span id="img-steps-val">4</span></label>
+                    <input type="range" id="img-steps" min="4" max="20" value="4" style="width:100%;accent-color:var(--blue);margin:0">
+                  </div>
+                </div>
+
+                <button class="btn btn-primary" id="img-gen-btn" onclick="imgGenerate()"
+                  style="width:100%;padding:9px 14px;font-size:0.85rem;justify-content:center">
+                  🎨 Generuj
+                </button>
+              </div>
+            </div>
+
+            <!-- Preview -->
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Podgląd</span>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-sm btn-secondary" id="img-refine-btn" style="display:none" onclick="imgUseLastAsRef()">🔄 Użyj jako ref</button>
+                  <button class="btn btn-sm btn-secondary" id="img-copy-url-btn" style="display:none" onclick="imgCopyPreviewUrl()">📋 Kopiuj URL</button>
+                </div>
+              </div>
+              <div id="img-preview-area" style="padding:14px;min-height:160px;display:flex;align-items:center;justify-content:center">
+                <div style="text-align:center;color:var(--t3)">
+                  <div style="font-size:36px;margin-bottom:8px;opacity:0.25">🖼</div>
+                  <div style="font-size:0.78rem">Wygenerowany obraz pojawi się tutaj</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: Gallery -->
+          <div class="card" style="display:flex;flex-direction:column;min-height:500px">
+            <div class="card-header">
+              <span class="card-title">Galeria</span>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span class="card-count" id="img-gallery-count">—</span>
+                <button class="btn btn-sm btn-secondary" onclick="_loadImgGallery()">⟳ Odśwież</button>
+              </div>
+            </div>
+            <div style="flex:1;overflow-y:auto;padding:14px">
+              <div id="img-gallery-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+                <div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--t3)">
+                  <div style="font-size:32px;margin-bottom:8px;opacity:0.25">🖼</div>
+                  <div style="font-size:0.8rem">Brak wygenerowanych obrazów</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>
+
+    <!-- Image Lightbox -->
+    <div id="img-lightbox" onclick="if(event.target===this)imgCloseLightbox()">
+      <div class="img-lightbox-inner">
+        <div class="img-lightbox-bar">
+          <span id="img-lightbox-filename">—</span>
+          <button class="btn btn-sm btn-secondary" onclick="imgLightboxUseAsRef()">📌 Użyj jako ref</button>
+          <button id="img-lb-copy-btn" class="btn btn-sm btn-secondary" onclick="imgLightboxCopy()">📋 Kopiuj URL</button>
+          <button class="btn btn-sm btn-secondary" onclick="imgCloseLightbox()">✕</button>
+        </div>
+        <img id="img-lightbox-img" src="" alt=""
+          style="max-width:88vw;max-height:80vh;display:block;object-fit:contain">
+      </div>
+    </div>
     <section class="section" id="section-system">
       <div class="section-header">
         <div>
@@ -6570,7 +6823,7 @@
         <td class="td-muted">${_esc(l.biome||l.location_subtype||'—')}</td>
         <td class="td-mono">${l.tier||'—'}</td>
         <td>${l.safe_for_rest ? '<span class="badge badge-green">🛏 Safe</span>' : '<span class="td-muted">—</span>'}</td>
-        <td class="td-actions"><button class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:2px 6px;margin-right:4px" title="Przypisz NPC/Wrogów" onclick="openLocNpcModal('${_esc(l.key)}')">👤</button><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
+        <td class="td-actions"><button class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:2px 6px;margin-right:4px" title="Przypisz NPC/Wrogów" onclick="openLocNpcModal('${_esc(l.key)}')">👤</button><button class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:2px 6px;margin-right:4px" title="Generuj obraz" onclick="openLocImageModal('${_esc(l.key)}',${enc})">${l.image_url ? '🖼' : '🎨'}</button><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
       </tr>`;
     };
     const renderBranch = (parentKey, depth) => {
@@ -13352,6 +13605,7 @@
         if (tab === 'rest')      _loadRestSandbox().catch(e =>   { _toolsTabLoaded.delete(tab); console.warn('tools rest tab', e.message); });
         if (tab === 'knowledge') _loadToolsKnowledge().catch(e =>{ _toolsTabLoaded.delete(tab); console.warn('tools knowledge tab', e.message); });
         if (tab === 'mcp')       _loadToolsMcp().catch(e =>      { _toolsTabLoaded.delete(tab); console.warn('tools mcp tab', e.message); });
+        if (tab === 'images')    _loadImgGallery().catch(e =>   { _toolsTabLoaded.delete(tab); console.warn('tools images tab', e.message); });
       }
     });
   });
@@ -13881,6 +14135,561 @@
     const table = document.getElementById('kreator-fab')?.dataset?.table;
     if (table) openSmartEntry(table);
   }
+
+  /* ═══════════════════════════════════════════════════════════
+     LOCATION IMAGE GENERATION — per-location 🎨 modal
+  ═══════════════════════════════════════════════════════════ */
+
+  function _buildLocImagePrompt(loc) {
+    const typeMap = {dungeon:'dark dungeon interior',town:'medieval fantasy town',wilderness:'open wilderness landscape',building:'fantasy building interior',cave:'deep cave chamber',camp:'campsite in forest',ruins:'ancient crumbling ruins'};
+    const biomeMap = {ruin:'ruined stone',forest:'dense ancient forest',mountain:'rocky mountain peaks',urban:'stone city streets',underground:'underground cavern',coast:'coastal cliffs',swamp:'misty bog swamp'};
+    const type = typeMap[loc.location_type] || (loc.location_type || 'location');
+    const biome = biomeMap[loc.biome] || (loc.biome || '');
+    const desc = (loc.description || '').slice(0, 150).trim();
+    const parts = [biome, type, loc.label || loc.key, desc, 'fantasy RPG location art, atmospheric illustrated style, moody cinematic lighting, no text, no letters'].filter(Boolean);
+    return parts.join(', ');
+  }
+
+  async function openLocImageModal(key, loc) {
+    if (typeof loc === 'string') { try { loc = JSON.parse(decodeURIComponent(loc)); } catch(_) { loc = {key}; } }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.id = 'loc-img-overlay';
+
+    let _liRefB64 = '', _liRefFilename = '', _liPendingUrl = '', _liPendingFilename = '';
+
+    const render = () => {
+      const hasRef = !!(_liRefB64 || _liRefFilename);
+      overlay.innerHTML = `<div class="modal-box" style="max-width:600px">
+        <div class="modal-head">
+          <span class="modal-title">🎨 Obraz — ${_esc(loc.label || loc.key)}</span>
+          <button class="modal-close" id="li-close">✕</button>
+        </div>
+        <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+
+          <!-- Living Prompt -->
+          <div>
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+              <label class="form-label" style="margin:0">Prompt</label>
+              <span style="display:inline-flex;align-items:center;gap:4px;font-size:0.65rem;padding:1px 6px;background:var(--blue-light);color:var(--blue-text);border-radius:var(--r-sm);border:1px solid var(--blue-border)">✦ auto</span>
+              <button id="li-rebuild-prompt" class="btn btn-sm btn-secondary" style="font-size:0.65rem;padding:1px 5px;margin-left:auto">↺ Odbuduj</button>
+            </div>
+            <textarea id="li-prompt" class="form-input" rows="3" style="resize:vertical;font-size:0.8rem;border-left:2px solid #0d9488">${_esc(_buildLocImagePrompt(loc))}</textarea>
+          </div>
+
+          <!-- Style reference -->
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-size:0.7rem;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.05em">Styl ref:</span>
+            ${_liRefFilename || _liRefB64 ? `
+              <img src="${_liRefFilename ? '/images/tiles/'+_esc(_liRefFilename) : 'data:image/png;base64,'+_liRefB64.slice(0,20)+'...'}" style="height:32px;width:32px;object-fit:cover;border-radius:var(--r-sm);border:1px solid var(--border)">
+              <span style="font-size:0.7rem;color:var(--t2)">${_esc(_liRefFilename || 'upload')}</span>
+              <button id="li-ref-clear" class="btn btn-sm btn-danger" style="font-size:0.65rem;padding:1px 5px">✕</button>
+              <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:140px">
+                <label style="font-size:0.68rem;color:var(--t3);white-space:nowrap">Wpływ: <span id="li-denoise-val">60%</span></label>
+                <input type="range" id="li-denoise" min="10" max="90" value="60" style="flex:1;accent-color:#0d9488">
+              </div>
+            ` : `
+              <label class="btn btn-sm btn-secondary" style="cursor:pointer;font-size:0.7rem;padding:2px 8px">📎 Upload<input type="file" id="li-ref-upload" accept="image/*" style="display:none"></label>
+              <button id="li-ref-gallery" class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:2px 8px">🖼 Z galerii</button>
+            `}
+          </div>
+
+          <!-- Controls row -->
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="li-size" class="form-input" style="width:auto;font-size:0.78rem;padding:5px 8px">
+              <option value="512x512">512×512</option>
+              <option value="768x768">768×768</option>
+              <option value="1024x1024">1024×1024</option>
+              <option value="1024x576">1024×576 pejzaż</option>
+            </select>
+            <label style="font-size:0.7rem;color:var(--t3);white-space:nowrap">Kroki: <span id="li-steps-val">6</span></label>
+            <input type="range" id="li-steps" min="4" max="16" value="6" style="flex:1;min-width:80px;accent-color:var(--blue)">
+            <button id="li-gen-btn" class="btn btn-primary" style="white-space:nowrap">${hasRef ? '🔄 Refinuj' : '🎨 Generuj'}</button>
+          </div>
+
+          <!-- Preview -->
+          <div id="li-preview" style="width:100%;height:220px;background:#1e1e2e;border-radius:var(--r);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
+            ${_liPendingUrl
+              ? `<img src="${_esc(_liPendingUrl)}" style="width:100%;height:100%;object-fit:cover">
+                 <div style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.6);color:#aaa;font-size:0.62rem;padding:2px 6px;border-radius:var(--r-sm) 0 var(--r-sm) 0">${_esc(_liPendingFilename)}</div>`
+              : loc.image_url
+                ? `<img src="${_esc(loc.image_url)}" style="width:100%;height:100%;object-fit:cover">
+                   <div style="position:absolute;top:6px;left:6px;background:rgba(5,150,105,0.85);color:#fff;font-size:0.62rem;padding:2px 6px;border-radius:var(--r-sm)">✓ Aktualny obraz</div>`
+                : `<div style="text-align:center;color:#555"><div style="font-size:2rem;opacity:.3">🖼</div><div style="font-size:0.75rem;margin-top:4px">Brak obrazu — wygeneruj poniżej</div></div>`
+            }
+          </div>
+        </div>
+        <div class="modal-foot" style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;gap:8px;flex-wrap:wrap">
+          <div style="display:flex;gap:6px">
+            ${loc.image_url ? `<button id="li-remove-btn" class="btn btn-secondary" style="color:var(--red);font-size:0.78rem">✕ Usuń obraz</button>` : ''}
+          </div>
+          <div style="display:flex;gap:8px">
+            <button id="li-cancel" class="btn btn-secondary">Anuluj</button>
+            ${_liPendingUrl ? `<button id="li-accept-btn" class="btn btn-primary">✓ Zatwierdź obraz</button>` : ''}
+          </div>
+        </div>
+      </div>`;
+
+      // Wire close / cancel
+      overlay.querySelector('#li-close').onclick = () => overlay.remove();
+      overlay.querySelector('#li-cancel').onclick = () => overlay.remove();
+      overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+      // Rebuild prompt
+      const rebuildBtn = overlay.querySelector('#li-rebuild-prompt');
+      if (rebuildBtn) rebuildBtn.onclick = () => {
+        const ta = overlay.querySelector('#li-prompt');
+        if (ta) ta.value = _buildLocImagePrompt(loc);
+      };
+
+      // Steps slider
+      const stepsEl = overlay.querySelector('#li-steps');
+      const stepsVal = overlay.querySelector('#li-steps-val');
+      if (stepsEl) stepsEl.oninput = () => { if (stepsVal) stepsVal.textContent = stepsEl.value; };
+
+      // Denoise slider
+      const denoiseEl = overlay.querySelector('#li-denoise');
+      const denoiseVal = overlay.querySelector('#li-denoise-val');
+      if (denoiseEl) denoiseEl.oninput = () => { if (denoiseVal) denoiseVal.textContent = denoiseEl.value + '%'; };
+
+      // Ref clear
+      const refClear = overlay.querySelector('#li-ref-clear');
+      if (refClear) refClear.onclick = () => { _liRefB64 = ''; _liRefFilename = ''; render(); };
+
+      // Ref upload
+      const uploadEl = overlay.querySelector('#li-ref-upload');
+      if (uploadEl) uploadEl.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          _liRefB64 = ev.target.result.split(',')[1];
+          _liRefFilename = '';
+          render();
+        };
+        reader.readAsDataURL(file);
+      };
+
+      // Ref gallery
+      const galleryBtn = overlay.querySelector('#li-ref-gallery');
+      if (galleryBtn) galleryBtn.onclick = async () => {
+        try {
+          const d = await apiFetch('/api/admin/images/list');
+          const imgs = d.images || [];
+          if (!imgs.length) { _showToast('Brak obrazów w galerii', 'warn'); return; }
+          // Mini gallery picker
+          const pick = document.createElement('div');
+          pick.className = 'modal-overlay open';
+          pick.style.zIndex = '10002';
+          pick.innerHTML = `<div class="modal-box" style="max-width:520px">
+            <div class="modal-head"><span>Wybierz referencję styl</span><button id="pick-x">✕</button></div>
+            <div style="padding:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-height:340px;overflow-y:auto">
+              ${imgs.map(img => `<div style="aspect-ratio:1;cursor:pointer;border-radius:var(--r-sm);overflow:hidden;border:2px solid transparent" data-fn="${_esc(img.filename)}" class="li-pick-thumb">
+                <img src="${_esc(img.url)}" style="width:100%;height:100%;object-fit:cover" loading="lazy">
+              </div>`).join('')}
+            </div>
+          </div>`;
+          document.body.appendChild(pick);
+          pick.querySelector('#pick-x').onclick = () => pick.remove();
+          pick.onclick = e => { if (e.target === pick) pick.remove(); };
+          pick.querySelectorAll('.li-pick-thumb').forEach(el => {
+            el.onmouseenter = () => el.style.borderColor = 'var(--blue)';
+            el.onmouseleave = () => el.style.borderColor = 'transparent';
+            el.onclick = () => {
+              _liRefFilename = el.dataset.fn;
+              _liRefB64 = '';
+              pick.remove();
+              render();
+            };
+          });
+        } catch(e) { _showToast('Błąd galerii: ' + e.message, 'error'); }
+      };
+
+      // Generate / Refine
+      const genBtn = overlay.querySelector('#li-gen-btn');
+      if (genBtn) genBtn.onclick = async () => {
+        const prompt = overlay.querySelector('#li-prompt').value.trim();
+        if (!prompt) { _showToast('Prompt wymagany', 'warn'); return; }
+        const sizeVal = overlay.querySelector('#li-size').value;
+        const [w, h] = sizeVal.split('x').map(Number);
+        const steps = parseInt(overlay.querySelector('#li-steps').value);
+        const denoise = denoiseEl ? parseInt(denoiseEl.value) / 100 : 0.6;
+
+        genBtn.disabled = true;
+        genBtn.textContent = '⏳…';
+        const preview = overlay.querySelector('#li-preview');
+        preview.innerHTML = '<div style="text-align:center;color:#555"><div class="img-spinner"></div><div style="font-size:0.75rem;margin-top:8px;color:#888">Generowanie…</div></div>';
+
+        try {
+          let data;
+          if (_liRefFilename) {
+            data = await apiFetch('/api/admin/images/refine', { method:'POST', body: JSON.stringify({ source_filename: _liRefFilename, prompt, denoise, steps }) });
+          } else if (_liRefB64) {
+            data = await apiFetch('/api/admin/images/refine-upload', { method:'POST', body: JSON.stringify({ upload_b64: _liRefB64, prompt, denoise, steps }) });
+          } else {
+            data = await apiFetch('/api/admin/images/generate', { method:'POST', body: JSON.stringify({ prompt, width: w, height: h, steps }) });
+          }
+          _liPendingUrl = data.url;
+          _liPendingFilename = data.filename;
+          render();
+        } catch(e) {
+          _showToast('Błąd: ' + e.message, 'error');
+          preview.innerHTML = `<div style="color:var(--red);font-size:0.78rem;text-align:center;padding:20px">Błąd: ${_esc(e.message)}</div>`;
+        } finally {
+          genBtn.disabled = false;
+          genBtn.textContent = (_liRefB64 || _liRefFilename) ? '🔄 Refinuj' : '🎨 Generuj';
+        }
+      };
+
+      // Accept
+      const acceptBtn = overlay.querySelector('#li-accept-btn');
+      if (acceptBtn) acceptBtn.onclick = async () => {
+        try {
+          await apiFetch(`/api/locations/admin/locations/${encodeURIComponent(key)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ image_url: _liPendingUrl })
+          });
+          loc.image_url = _liPendingUrl;
+          _liPendingUrl = '';
+          _liPendingFilename = '';
+          _showToast('Obraz przypisany do lokacji ✓', 'success');
+          render();
+          _worldLoaded.delete('locations');
+          _loadLocations();
+        } catch(e) { _showToast('Błąd zapisu: ' + e.message, 'error'); }
+      };
+
+      // Remove existing image
+      const removeBtn = overlay.querySelector('#li-remove-btn');
+      if (removeBtn) removeBtn.onclick = async () => {
+        if (!confirm('Usunąć obraz z lokacji?')) return;
+        try {
+          await apiFetch(`/api/locations/admin/locations/${encodeURIComponent(key)}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ image_url: null })
+          });
+          loc.image_url = null;
+          _showToast('Obraz usunięty.', 'info');
+          render();
+          _worldLoaded.delete('locations');
+          _loadLocations();
+        } catch(e) { _showToast('Błąd: ' + e.message, 'error'); }
+      };
+    };
+
+    document.body.appendChild(overlay);
+    render();
+  }
+
+  /* ═══════════════════════════════════════════════════════════
+     IMAGE GENERATOR — Narzędzia → Obrazy tab
+  ═══════════════════════════════════════════════════════════ */
+  let _imgLastUrl = '';
+  let _imgLastFilename = '';
+  let _imgActivePreset = '';
+  let _imgRefB64 = '';
+  let _imgRefFilename = '';
+  let _imgGalleryPickMode = false;
+
+  // Preset buttons
+  document.querySelectorAll('.img-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ta = document.getElementById('img-prompt');
+      const preset = btn.dataset.preset;
+      const prefix = btn.dataset.prefix + ' ';
+      // Toggle: click same preset again to clear
+      if (_imgActivePreset === preset) {
+        document.querySelectorAll('.img-preset').forEach(b => {
+          ta.value = ta.value.replace(b.dataset.prefix + ' ', '').trim();
+          b.classList.remove('on');
+        });
+        _imgActivePreset = '';
+      } else {
+        // Remove any existing prefix
+        document.querySelectorAll('.img-preset').forEach(b => {
+          ta.value = ta.value.replace(b.dataset.prefix + ' ', '').trim();
+          b.classList.remove('on');
+        });
+        ta.value = prefix + ta.value.trimStart();
+        btn.classList.add('on');
+        _imgActivePreset = preset;
+      }
+      ta.focus();
+    });
+  });
+
+  // Steps slider
+  (function() {
+    const s = document.getElementById('img-steps');
+    const v = document.getElementById('img-steps-val');
+    if (s) s.addEventListener('input', () => { if (v) v.textContent = s.value; });
+  })();
+
+  // Denoise slider (reference section)
+  (function() {
+    const s = document.getElementById('img-ref-denoise');
+    const v = document.getElementById('img-ref-denoise-val');
+    if (s) s.addEventListener('input', () => { if (v) v.textContent = s.value + '%'; });
+  })();
+
+  function _imgRefShowState() {
+    const hasRef = !!(_imgRefB64 || _imgRefFilename);
+    const clearBtn = document.getElementById('img-ref-clear');
+    const preview  = document.getElementById('img-ref-preview');
+    const denoiseRow = document.getElementById('img-ref-denoise-row');
+    const genBtn   = document.getElementById('img-gen-btn');
+    if (clearBtn)  clearBtn.style.display   = hasRef ? '' : 'none';
+    if (preview)   preview.style.display    = hasRef ? '' : 'none';
+    if (denoiseRow) denoiseRow.style.display = hasRef ? 'flex' : 'none';
+    if (genBtn)    genBtn.innerHTML = hasRef ? '🔄 Refined Generuj' : '🎨 Generuj';
+  }
+
+  function imgRefUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const fullB64 = e.target.result; // data:image/...;base64,XXX
+      _imgRefB64 = fullB64.split(',')[1];
+      _imgRefFilename = '';
+      const thumb = document.getElementById('img-ref-thumb');
+      const label = document.getElementById('img-ref-label');
+      if (thumb) { thumb.src = fullB64; }
+      if (label) label.textContent = file.name;
+      _imgRefShowState();
+    };
+    reader.readAsDataURL(file);
+    input.value = ''; // allow re-selecting same file
+  }
+
+  function imgRefFromGallery() {
+    _imgGalleryPickMode = true;
+    _showToast('Kliknij obraz w galerii jako referencję', 'info');
+    const grid = document.getElementById('img-gallery-grid');
+    if (!grid) return;
+    grid.style.outline = '2px dashed var(--blue)';
+    grid.style.borderRadius = 'var(--r)';
+    // Reload gallery with pick-mode overlay
+    _loadImgGallery();
+  }
+
+  function imgRefClear() {
+    _imgRefB64 = '';
+    _imgRefFilename = '';
+    _imgGalleryPickMode = false;
+    const thumb = document.getElementById('img-ref-thumb');
+    const label = document.getElementById('img-ref-label');
+    const upload = document.getElementById('img-ref-upload');
+    const grid = document.getElementById('img-gallery-grid');
+    if (thumb) thumb.src = '';
+    if (label) label.textContent = '—';
+    if (upload) upload.value = '';
+    if (grid) { grid.style.outline = ''; grid.style.borderRadius = ''; }
+    _imgRefShowState();
+    _loadImgGallery();
+  }
+
+  function _imgPickAsRef(filename, url) {
+    _imgRefFilename = filename;
+    _imgRefB64 = '';
+    _imgGalleryPickMode = false;
+    const thumb = document.getElementById('img-ref-thumb');
+    const label = document.getElementById('img-ref-label');
+    const grid = document.getElementById('img-gallery-grid');
+    if (thumb) { thumb.src = url; }
+    if (label) label.textContent = filename;
+    if (grid) { grid.style.outline = ''; grid.style.borderRadius = ''; }
+    _imgRefShowState();
+    _loadImgGallery();
+    _showToast('Ustawiono referencję: ' + filename, 'success');
+  }
+
+  async function _loadImgGallery() {
+    const grid = document.getElementById('img-gallery-grid');
+    const count = document.getElementById('img-gallery-count');
+    if (!grid) return;
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--t3)"><div class="img-spinner"></div>Ładowanie…</div>';
+    try {
+      const data = await apiFetch('/api/admin/images/list');
+      const imgs = data.images || [];
+      if (count) count.textContent = imgs.length;
+      if (!imgs.length) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:var(--t3)"><div style="font-size:32px;margin-bottom:8px;opacity:0.25">🖼</div><div style="font-size:0.8rem">Brak wygenerowanych obrazów</div></div>';
+        return;
+      }
+      const pickMode = _imgGalleryPickMode;
+      grid.innerHTML = imgs.map(img => `
+        <div class="img-thumb-card" onclick="${pickMode
+          ? `_imgPickAsRef('${img.filename}','${img.url}')`
+          : `imgOpenLightbox('${img.url}','${img.filename}')`
+        }">
+          <img src="${img.url}" alt="${img.filename}" loading="lazy">
+          <div class="img-thumb-overlay">
+            <span class="img-thumb-filename">${img.filename}</span>
+            ${pickMode
+              ? `<button class="img-thumb-del" style="background:var(--blue)" onclick="event.stopPropagation();_imgPickAsRef('${img.filename}','${img.url}')">📌 Ref</button>`
+              : `<button class="img-thumb-del" onclick="event.stopPropagation();imgDelete('${img.filename}')">🗑</button>`
+            }
+          </div>
+        </div>
+      `).join('');
+    } catch(e) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--red);font-size:0.8rem">Błąd: ${e.message}</div>`;
+    }
+  }
+
+  async function imgGenerate() {
+    const prompt = document.getElementById('img-prompt').value.trim();
+    if (!prompt) { _showToast('Wpisz opis obrazu.', 'warn'); return; }
+
+    const sizeVal = document.getElementById('img-size').value;
+    const [w, h] = sizeVal.split('x').map(Number);
+    const steps = parseInt(document.getElementById('img-steps').value);
+    const denoiseEl = document.getElementById('img-ref-denoise');
+    const denoise = denoiseEl ? parseInt(denoiseEl.value) / 100 : 0.6;
+    const hasRef = !!(_imgRefB64 || _imgRefFilename);
+
+    const btn = document.getElementById('img-gen-btn');
+    const status = document.getElementById('img-gen-status');
+    const previewArea = document.getElementById('img-preview-area');
+    const promptEl = document.getElementById('img-prompt');
+    const copyBtn = document.getElementById('img-copy-url-btn');
+    const refineBtn = document.getElementById('img-refine-btn');
+
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Generowanie…';
+    promptEl.classList.add('generating');
+    if (status) status.textContent = '0s…';
+    if (copyBtn) copyBtn.style.display = 'none';
+    if (refineBtn) refineBtn.style.display = 'none';
+
+    const start = Date.now();
+    const timer = setInterval(() => {
+      if (status) status.textContent = `${Math.round((Date.now()-start)/1000)}s…`;
+    }, 1000);
+
+    previewArea.innerHTML = '<div style="text-align:center;padding:20px;color:var(--t3)"><div class="img-spinner"></div><div style="font-size:0.78rem">' + (hasRef ? 'Refinowanie obrazu…' : 'Generowanie obrazu…') + '</div></div>';
+
+    try {
+      let data;
+      if (_imgRefFilename) {
+        data = await apiFetch('/api/admin/images/refine', {
+          method: 'POST',
+          body: JSON.stringify({ source_filename: _imgRefFilename, prompt, denoise, steps })
+        });
+      } else if (_imgRefB64) {
+        data = await apiFetch('/api/admin/images/refine-upload', {
+          method: 'POST',
+          body: JSON.stringify({ upload_b64: _imgRefB64, prompt, denoise, steps })
+        });
+      } else {
+        data = await apiFetch('/api/admin/images/generate', {
+          method: 'POST',
+          body: JSON.stringify({ prompt, width: w, height: h, steps })
+        });
+      }
+
+      _imgLastUrl = data.url;
+      _imgLastFilename = data.filename;
+
+      previewArea.innerHTML = `
+        <img src="${data.url}" alt="Generated"
+          style="max-width:100%;max-height:320px;border-radius:var(--r);display:block;margin:0 auto;box-shadow:var(--shadow-md);cursor:pointer"
+          onclick="imgOpenLightbox('${data.url}','${data.filename}')">
+      `;
+      if (copyBtn) copyBtn.style.display = '';
+      if (refineBtn) refineBtn.style.display = '';
+      if (status) status.textContent = `${Math.round((Date.now()-start)/1000)}s`;
+      _showToast(hasRef ? 'Obraz zrefinowany!' : 'Obraz wygenerowany!', 'success');
+      _loadImgGallery();
+    } catch(e) {
+      previewArea.innerHTML = `<div style="color:var(--red);font-size:0.8rem;text-align:center;padding:20px">Błąd: ${e.message}</div>`;
+      if (status) status.textContent = 'błąd';
+      _showToast('Błąd: ' + e.message, 'error');
+    } finally {
+      clearInterval(timer);
+      btn.disabled = false;
+      btn.innerHTML = (_imgRefB64 || _imgRefFilename) ? '🔄 Refined Generuj' : '🎨 Generuj';
+      promptEl.classList.remove('generating');
+    }
+  }
+
+  function imgUseLastAsRef() {
+    if (!_imgLastFilename) return;
+    _imgRefFilename = _imgLastFilename;
+    _imgRefB64 = '';
+    const thumb = document.getElementById('img-ref-thumb');
+    const label = document.getElementById('img-ref-label');
+    if (thumb) thumb.src = _imgLastUrl;
+    if (label) label.textContent = _imgLastFilename;
+    _imgRefShowState();
+    _showToast('Ostatni obraz ustawiony jako referencja', 'success');
+  }
+
+  function imgCopyPreviewUrl() {
+    const origin = window.location.origin;
+    const url = _imgLastUrl.startsWith('http') ? _imgLastUrl : origin + '/' + _imgLastUrl.replace(/^\//, '');
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = document.getElementById('img-copy-url-btn');
+      const orig = btn.innerHTML;
+      btn.innerHTML = '✓ Skopiowano';
+      setTimeout(() => btn.innerHTML = orig, 2000);
+    });
+  }
+
+  async function imgDelete(filename) {
+    if (!confirm(`Usunąć ${filename}?`)) return;
+    try {
+      await apiFetch(`/api/admin/images/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+      _showToast('Obraz usunięty.', 'info');
+      _loadImgGallery();
+    } catch(e) {
+      _showToast('Błąd usuwania: ' + e.message, 'error');
+    }
+  }
+
+  function imgOpenLightbox(url, filename) {
+    const img = document.getElementById('img-lightbox-img');
+    const fn = document.getElementById('img-lightbox-filename');
+    if (img) img.src = url;
+    if (fn) fn.textContent = filename;
+    document.getElementById('img-lightbox').classList.add('open');
+  }
+
+  function imgCloseLightbox() {
+    document.getElementById('img-lightbox').classList.remove('open');
+  }
+
+  function imgLightboxCopy() {
+    const url = document.getElementById('img-lightbox-img').src;
+    navigator.clipboard.writeText(url).then(() => {
+      const btn = document.getElementById('img-lb-copy-btn');
+      const orig = btn.innerHTML;
+      btn.innerHTML = '✓ Skopiowano';
+      setTimeout(() => btn.innerHTML = orig, 2000);
+    });
+  }
+
+  function imgLightboxUseAsRef() {
+    const filename = document.getElementById('img-lightbox-filename').textContent;
+    const url = document.getElementById('img-lightbox-img').src;
+    if (!filename || filename === '—') return;
+    _imgRefFilename = filename;
+    _imgRefB64 = '';
+    const thumb = document.getElementById('img-ref-thumb');
+    const label = document.getElementById('img-ref-label');
+    if (thumb) thumb.src = url;
+    if (label) label.textContent = filename;
+    _imgRefShowState();
+    imgCloseLightbox();
+    _showToast('Ustawiono referencję: ' + filename, 'success');
+  }
+
+  // Close lightbox on Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') imgCloseLightbox();
+  });
 </script>
 
 <button id="kreator-fab" title="Kreator AI" onclick="_fabClick()">✨</button>

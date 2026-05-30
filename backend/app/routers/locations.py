@@ -652,6 +652,9 @@ async def patch_location(
         if "approved" in data:
             updates.append("approved = ?")
             params.append(1 if data["approved"] else 0)
+        if "image_url" in data:
+            updates.append("image_url = ?")
+            params.append(str(data["image_url"]).strip() if data["image_url"] else None)
 
         if not updates:
             return location
