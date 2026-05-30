@@ -39,6 +39,16 @@ _XP_GRANT_RE= re.compile(r"\[XP_GRANT:\s*([^:\]]+):\s*(\d+)\s*\]", re.I)
 SESSION_GAP_MINUTES = 30
 XP_GRANT_SESSION_CAP = 50  # XS12 cap per session
 
+_ALL_NARRATIVE_TAGS_RE = re.compile(
+    r"\[(?:XP_GRANT|BEAT_COMPLETE|QUEST_COMPLETE|DUNGEON_CLEAR|CAMPAIGN_END|DISCOVERY)"
+    r":[^\]]*\]\s*",
+    re.I,
+)
+
+def strip_narrative_tags(text: str) -> str:
+    """Remove all GM-only directive tags from player-visible narrative text."""
+    return _ALL_NARRATIVE_TAGS_RE.sub("", text).strip()
+
 
 # ── Core helper ───────────────────────────────────────────────────────────────
 

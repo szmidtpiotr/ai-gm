@@ -2088,6 +2088,7 @@
       <div class="nav-group-label">Live</div>
 
       <button class="nav-item" data-section="invites"><span class="nav-item-icon">✉</span>Zaproszenia</button>
+      <button class="nav-item" data-section="bugreports"><span class="nav-item-icon">🐞</span>Zgłoszenia <span class="nav-badge" id="br-nav-badge" style="display:none">0</span></button>
 
       <div class="nav-group-label">System</div>
       <button class="nav-item" data-section="tools"><span class="nav-item-icon">⚒</span>Narzędzia</button>
@@ -4583,6 +4584,12 @@
           <div class="card-header"><span class="card-title">🪦 Konfiguracja wskrzeszania</span></div>
           <div style="padding:14px;display:flex;flex-direction:column;gap:12px;max-width:520px">
             <div style="font-size:0.78rem;color:var(--t3)">Definiuje, ile razy gracz może wskrzesić zmarłą postać. Tryb <code>fixed</code> — sztywny limit (<em>default_uses</em>); <code>percent_of_xp</code> — limit zależny od XP; <code>unlimited</code> — bez limitu.</div>
+            <div class="form-row" style="flex-direction:row;align-items:center;gap:10px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600">
+                <input type="checkbox" id="sys-res-enabled"> Włącz wskrzeszenia (globalnie)
+              </label>
+              <span style="font-size:0.72rem;color:var(--t3)">(wyłączone = żaden gracz nie może wskrzesić)</span>
+            </div>
             <div class="form-row"><label class="form-label">Tryb</label>
               <select class="form-input" id="sys-res-mode">
                 <option value="fixed">fixed (sztywny limit)</option>
@@ -4944,6 +4951,67 @@
     <!-- ── Campaign Designer ── -->
 
     <!-- ── Combat Sandbox ── -->
+
+    <!-- ── Bug Reports ── -->
+    <section class="section" id="section-bugreports">
+      <div class="section-header">
+        <div>
+          <div class="section-heading">Zgłoszenia błędów</div>
+          <div class="section-sub" id="br-sub">Raporty od testerów</div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" id="br-sync-all-btn" onclick="syncAllBrGitHub()">🔄 Sync GitHub</button>
+          <button class="btn btn-secondary btn-sm" onclick="_sectionLoaded.delete('bugreports');_loadBugReports()">⟳ Odśwież</button>
+        </div>
+      </div>
+
+      <div class="stat-grid" style="margin-bottom:16px">
+        <div class="stat-card">
+          <div class="stat-label">Łącznie zgłoszeń</div>
+          <div class="stat-row"><div class="stat-value" id="br-total">—</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Przesłano do GitHub</div>
+          <div class="stat-row"><div class="stat-value" id="br-github">—</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Tylko lokalne</div>
+          <div class="stat-row"><div class="stat-value" id="br-local">—</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <div class="table-wrap" style="overflow-x:auto">
+          <table class="data-table" id="br-table">
+            <thead><tr>
+              <th>Data</th>
+              <th>Gracz</th>
+              <th>Obserwacja</th>
+              <th>GitHub</th>
+              <th>Status</th>
+              <th>Akcje</th>
+            </tr></thead>
+            <tbody id="br-tbody"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--t3)">Ładowanie…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Detail modal -->
+      <div id="br-drawer-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:800;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeBrDrawer()">
+        <div id="br-drawer" style="background:var(--bg2,#161310);border:1px solid var(--border);border-radius:12px;width:100%;max-width:680px;max-height:90vh;min-width:320px;min-height:200px;overflow:auto;resize:both;padding:24px;box-shadow:0 16px 64px rgba(0,0,0,0.7)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px">
+            <div style="font-weight:700;font-size:15px">Zgłoszenie #<span id="br-detail-id"></span> <span id="br-gh-status-badge"></span></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-secondary btn-sm" id="br-toggle-btn" onclick="toggleBrView()">{ } JSON</button>
+              <button class="btn btn-secondary btn-sm" id="br-sync-btn" onclick="syncBrGitHub()">🔄 Sync GitHub</button>
+              <button class="btn btn-danger btn-sm" id="br-delete-btn" onclick="deleteBrReport()">🗑 Usuń</button>
+              <button class="btn-icon" onclick="closeBrDrawer()">✕</button>
+            </div>
+          </div>
+          <div id="br-detail-body"></div>
+        </div>
+      </div>
+    </section>
 
 
   </main>
@@ -5475,6 +5543,7 @@
         {name:'biome',         label:'Biom',   type:'text'},
         {name:'tier',          label:'Tier',   type:'number'},
         {name:'description',   label:'Opis',   type:'textarea'},
+        {name:'image_url',     label:'Obraz',  type:'image-preview'},
       ], reload: () => { _worldLoaded.delete('locations'); _loadLocations(); }, noDelete:true },
     'npcs-table':        { endpoint:'/api/admin/npcs',        keyField:'id', fields:[
         {name:'label',              label:'Imię',               type:'text'},
@@ -5500,6 +5569,10 @@
       if (f.type === 'textarea') {
         return `<div class="form-row"><label class="form-label">${_esc(f.label)}</label><textarea class="form-input" name="${f.name}" rows="2">${_esc(v||'')}</textarea></div>`;
       }
+      if (f.type === 'image-preview') {
+        if (!v) return `<div class="form-row"><label class="form-label">${_esc(f.label)}</label><div style="font-size:0.75rem;color:var(--t3);padding:6px 0">Brak obrazu</div></div>`;
+        return `<div class="form-row"><label class="form-label">${_esc(f.label)}</label><div style="margin-top:4px"><img src="${_esc(v)}" style="max-width:100%;max-height:200px;border-radius:var(--r);border:1px solid var(--border);object-fit:contain;display:block"><div style="font-size:0.68rem;color:var(--t3);margin-top:4px;word-break:break-all">${_esc(v)}</div></div></div>`;
+      }
       const step = f.step ? ` step="${f.step}"` : '';
       return `<div class="form-row"><label class="form-label">${_esc(f.label)}</label><input class="form-input" name="${f.name}" type="${f.type}" value="${_esc(v??'')}"${step}></div>`;
     }).join('');
@@ -5518,6 +5591,7 @@
     overlay.querySelector('#gen-save-btn').onclick = async () => {
       const payload = {};
       for (const f of cfg.fields) {
+        if (f.type === 'image-preview') continue;
         const el = overlay.querySelector(`[name="${f.name}"]`);
         if (!el) continue;
         if (f.type === 'checkbox') payload[f.name] = el.checked;
@@ -6107,7 +6181,7 @@
     const fn = { overview:_loadOverview, campaigns:_loadCampaigns, content:()=>_loadContentTab('weapons'),
       world:()=>_loadWorldTab('npcs'), map:()=>_loadMapTab('builder'), mechanics:()=>_loadMechanicsTab('stats'),
       dungeons:_loadDungeons, players:_loadPlayers, forge:_loadForge,
-      system:_loadSystem, invites:_loadInvites,
+      system:_loadSystem, invites:_loadInvites, bugreports:_loadBugReports,
       tools:_loadTools }[key];
     if (!fn) return;
     _sectionLoaded.add(key);
@@ -6507,7 +6581,7 @@
         <td>${tierBadge(e.tier)}</td>
         <td><span class="badge badge-amber">⚔ Zwarcie</span></td>
         <td class="td-muted">${_esc(e.loot_table_key||'—')}</td>
-        <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
+        <td class="td-actions"><button class="btn-icon" style="font-size:0.8rem" title="Obraz" onclick="openEnemyImageModal('${_esc(e.key)}','${enc}')">🖼</button> <button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
       </tr>`;
       }).join('');
       const pg = document.querySelector('#stab-enemies .pagination span');
@@ -6823,7 +6897,7 @@
         <td class="td-muted">${_esc(l.biome||l.location_subtype||'—')}</td>
         <td class="td-mono">${l.tier||'—'}</td>
         <td>${l.safe_for_rest ? '<span class="badge badge-green">🛏 Safe</span>' : '<span class="td-muted">—</span>'}</td>
-        <td class="td-actions"><button class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:2px 6px;margin-right:4px" title="Przypisz NPC/Wrogów" onclick="openLocNpcModal('${_esc(l.key)}')">👤</button><button class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:2px 6px;margin-right:4px" title="Generuj obraz" onclick="openLocImageModal('${_esc(l.key)}',${enc})">${l.image_url ? '🖼' : '🎨'}</button><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
+        <td class="td-actions"><button class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:2px 6px;margin-right:4px" title="Przypisz NPC/Wrogów" onclick="openLocNpcModal('${_esc(l.key)}')">👤</button><button class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:2px 6px;margin-right:4px" title="Generuj obraz" onclick="openLocImageModal('${_esc(l.key)}','${enc}')">${l.image_url ? '🖼' : '🎨'}</button><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
       </tr>`;
     };
     const renderBranch = (parentKey, depth) => {
@@ -6989,7 +7063,7 @@
           <td>${att}</td>
           <td class="td-muted">${_esc(loc)}</td>
           <td class="td-muted">${_esc(n.npc_type||'—')}</td>
-          <td class="td-actions">${n.is_shop ? `<button class="btn btn-sm" style="font-size:0.72rem;padding:2px 6px;margin-right:4px" title="Ekwipunek sklepu" onclick="openShopInventoryModal(${n.id},this)">🛒</button>` : ''}<button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
+          <td class="td-actions">${n.is_shop ? `<button class="btn btn-sm" style="font-size:0.72rem;padding:2px 6px;margin-right:4px" title="Ekwipunek sklepu" onclick="openShopInventoryModal(${n.id},this)">🛒</button>` : ''}<button class="btn-icon" style="font-size:0.8rem" title="Obraz" onclick="openNpcImageModal('${_esc(n.id??n.key)}','${enc}')">🖼</button> <button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
         </tr>`;
       }).join('');
       _wireRowActions('npcs-table');
@@ -7771,6 +7845,7 @@
       tbody.innerHTML = items.map(e => {
         const skillsJson = e.skills_json ? (typeof e.skills_json === 'string' ? e.skills_json : JSON.stringify(e.skills_json)) : '';
         const immuneJson = e.immune_json ? (typeof e.immune_json === 'string' ? e.immune_json : JSON.stringify(e.immune_json)) : '';
+        const enc = encodeURIComponent(JSON.stringify(e));
         return `<tr>
         <td class="td-mono" style="font-size:0.72rem">${_esc(e.key)}</td>
         <td class="td-sticky td-name editable" onclick="mechPatchEdit(this,'/api/admin/enemies/${_esc(e.key)}','label')">${_esc(e.label||e.key)}</td>
@@ -7790,6 +7865,7 @@
         <td><span class="badge ${e.is_active?'badge-green':'badge-slate'}">${e.is_active?'●':'○'}</span></td>
         <td class="detail-col"><span class="lock-icon">${e.is_locked?'🔒':''}</span></td>
         <td class="td-actions">
+          <button class="btn-icon" style="font-size:0.8rem" title="Obraz" onclick="openEnemyImageModal('${_esc(e.key)}','${enc}')">🖼</button>
           <button class="btn-icon" title="Edytuj" onclick="openEnemyFormModal(${JSON.stringify(e).replace(/"/g,'&quot;')})">✎</button>
           <button class="btn-icon danger" title="Usuń" onclick="deleteEnemy('${_esc(e.key)}',this)">✕</button>
         </td>
@@ -7822,30 +7898,48 @@
     const DMG_TYPES = ['physical','fire','cold','poison','magic','lightning'];
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay open';
-    overlay.innerHTML = `<div class="modal-box" style="max-width:560px">
-      <div class="modal-head"><span>${isEdit ? 'Edytuj wroga: '+_esc(p.label||p.key) : 'Nowy wróg'}</span><button onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-      <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        ${isEdit ? '' : `<div class="form-row" style="grid-column:1/-1"><label>Klucz *</label><input id="ef-key" class="field-input form-mono" placeholder="np. goblin_archer" /></div>`}
-        <div class="form-row" style="grid-column:1/-1"><label>Nazwa *</label><input id="ef-label" class="field-input" value="${_esc(p.label||'')}" /></div>
-        <div class="form-row"><label>Poziom</label>
-          <select id="ef-tier" class="field-input">${TIERS.map(t=>`<option value="${t}"${p.tier===t?' selected':''}>${t}</option>`).join('')}</select>
-        </div>
-        <div class="form-row"><label>Typ dmg</label>
-          <select id="ef-dmgtype" class="field-input">${DMG_TYPES.map(t=>`<option value="${t}"${p.damage_type===t?' selected':''}>${t}</option>`).join('')}</select>
-        </div>
-        <div class="form-row"><label>HP bazowe</label><input id="ef-hp" class="field-input" type="number" value="${p.hp_base??''}" /></div>
-        <div class="form-row"><label>AC bazowe</label><input id="ef-ac" class="field-input" type="number" value="${p.ac_base??''}" /></div>
-        <div class="form-row"><label>Bonus ataku</label><input id="ef-atk" class="field-input" type="number" value="${p.attack_bonus??''}" /></div>
-        <div class="form-row"><label>Kość obrażeń</label><input id="ef-die" class="field-input" placeholder="np. 1d6" value="${_esc(p.damage_die||'')}" /></div>
-        <div class="form-row"><label>Bonus dmg</label><input id="ef-dmgb" class="field-input" type="number" value="${p.damage_bonus??''}" /></div>
-        <div class="form-row"><label>Ataki/turę</label><input id="ef-apts" class="field-input" type="number" min="1" value="${p.attacks_per_turn??1}" /></div>
-        <div class="form-row"><label>Nagroda XP</label><input id="ef-xp" class="field-input" type="number" value="${p.xp_award??''}" /></div>
-        <div class="form-row"><label>Drop %</label><input id="ef-drop" class="field-input" type="number" min="0" max="100" value="${p.drop_chance!=null?Math.round(p.drop_chance*100):''}" /></div>
-        <div class="form-row" style="grid-column:1/-1"><label>Opis</label><textarea id="ef-desc" class="field-input" rows="2">${_esc(p.description||'')}</textarea></div>
-        <div class="form-row" style="grid-column:1/-1"><label>Notatka (specjalne zdolności)</label><textarea id="ef-note" class="field-input" rows="2">${_esc(p.note||'')}</textarea></div>
-        <div class="form-row"><label><input type="checkbox" id="ef-active" ${p.is_active!==false?'checked':''} /> Aktywny</label></div>
+    overlay.onclick = ev => { if (ev.target === overlay) overlay.remove(); };
+    overlay.innerHTML = `<div class="modal" style="max-width:560px">
+      <div class="modal-header">
+        <div class="modal-title">${isEdit ? 'Edytuj wroga: '+_esc(p.label||p.key) : 'Nowy wróg'}</div>
+        <button class="btn-icon" onclick="this.closest('.modal-overlay').remove()">✕</button>
       </div>
-      <div class="modal-foot">
+      <div class="modal-body" style="overflow-y:auto;max-height:calc(100vh - 140px)">
+        <div class="form-grid">
+          ${isEdit ? '' : `<div class="form-field form-full"><label class="form-label required">Klucz</label><input id="ef-key" class="form-input mono" placeholder="np. goblin_archer" /></div>`}
+          <div class="form-field form-full"><label class="form-label required">Nazwa</label><input id="ef-label" class="form-input" value="${_esc(p.label||'')}" /></div>
+          <div class="form-field"><label class="form-label">Poziom</label>
+            <select id="ef-tier" class="form-select">${TIERS.map(t=>`<option value="${t}"${p.tier===t?' selected':''}>${t}</option>`).join('')}</select>
+          </div>
+          <div class="form-field"><label class="form-label">Typ dmg</label>
+            <select id="ef-dmgtype" class="form-select">${DMG_TYPES.map(t=>`<option value="${t}"${p.damage_type===t?' selected':''}>${t}</option>`).join('')}</select>
+          </div>
+          <div class="form-field"><label class="form-label">HP bazowe</label><input id="ef-hp" class="form-input mono" type="number" value="${p.hp_base??''}" /></div>
+          <div class="form-field"><label class="form-label">AC bazowe</label><input id="ef-ac" class="form-input mono" type="number" value="${p.ac_base??''}" /></div>
+          <div class="form-field"><label class="form-label">Bonus ataku</label><input id="ef-atk" class="form-input mono" type="number" value="${p.attack_bonus??''}" /></div>
+          <div class="form-field"><label class="form-label">Kość obrażeń</label><input id="ef-die" class="form-input mono" placeholder="np. 1d6" value="${_esc(p.damage_die||'')}" /></div>
+          <div class="form-field"><label class="form-label">Bonus dmg</label><input id="ef-dmgb" class="form-input mono" type="number" value="${p.damage_bonus??''}" /></div>
+          <div class="form-field"><label class="form-label">Ataki/turę</label><input id="ef-apts" class="form-input mono" type="number" min="1" value="${p.attacks_per_turn??1}" /></div>
+          <div class="form-field"><label class="form-label">Nagroda XP</label><input id="ef-xp" class="form-input mono" type="number" value="${p.xp_award??''}" /></div>
+          <div class="form-field"><label class="form-label">Drop %</label><input id="ef-drop" class="form-input mono" type="number" min="0" max="100" value="${p.drop_chance!=null?Math.round(p.drop_chance*100):''}" /></div>
+          <div class="form-field form-full"><label class="form-label">Opis</label><textarea id="ef-desc" class="form-textarea" rows="2">${_esc(p.description||'')}</textarea></div>
+          <div class="form-field form-full"><label class="form-label">Notatka (specjalne zdolności)</label><textarea id="ef-note" class="form-textarea" rows="2">${_esc(p.note||'')}</textarea></div>
+          <div class="form-field form-full">
+            <label class="form-label">Obraz</label>
+            <div style="display:flex;gap:12px;align-items:center">
+              <div style="width:64px;height:80px;border-radius:6px;border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:var(--canvas)">
+                ${p.image_url ? `<img src="${_esc(p.image_url)}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover;border-radius:5px">` : `<span style="font-size:1.4rem;color:var(--t3)">🖼</span>`}
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:0.75rem;color:var(--t3)">${p.image_url ? 'Obraz przypisany' : 'Brak obrazu'}</span>
+                ${isEdit ? `<button type="button" class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').remove();openEnemyImageModal('${_esc(p.key)}','${encodeURIComponent(JSON.stringify(p))}')">🖼 Generuj / zmień obraz</button>` : ''}
+              </div>
+            </div>
+          </div>
+          <div class="form-field"><label class="form-label" style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="ef-active" ${p.is_active!==false?'checked':''} /> Aktywny</label></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--border);flex-shrink:0">
         <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
         <button class="btn btn-primary" onclick="saveEnemyForm('${_esc(p.key||'')}',this)">Zapisz</button>
       </div>
@@ -8852,7 +8946,7 @@
             <div><div class="td-name">${_esc(u.username)}</div><div class="td-muted">${_esc(u.display_name||'')}</div></div>
           </div>
         </td>
-        <td>${u.is_admin?'<span class="badge badge-red">Admin</span>':'<span class="badge badge-blue">Gracz</span>'}</td>
+        <td>${u.is_admin?'<span class="badge badge-red">Admin</span>':'<span class="badge badge-blue">Gracz</span>'}${u.is_tester?'<span class="badge badge-amber" style="margin-left:4px">Tester</span>':''}</td>
         <td class="td-muted">${u.campaigns_count??0} kampanii</td>
         <td class="td-mono">—</td>
         <td class="td-muted">${_timeAgo(u.created_at)||'—'}</td>
@@ -8961,6 +9055,7 @@
         <div class="form-row"><label class="form-label">Nazwa wyświetlana</label><input class="form-input" id="pd-display" value="${_esc(u.display_name||'')}"></div>
         <div class="form-row"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="pd-admin" ${u.is_admin?'checked':''}${u.id===1?' disabled':''}> Administrator</label></div>
         <div class="form-row"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="pd-active" ${isActive?'checked':''}${u.id===1?' disabled':''}> Konto aktywne</label></div>
+        <div class="form-row"><label style="display:flex;gap:8px;align-items:center;cursor:pointer"><input type="checkbox" id="pd-tester" ${u.is_tester?'checked':''}> Tester (może zgłaszać błędy)</label></div>
         <div style="display:flex;gap:8px;margin-top:14px">
           <button class="btn btn-primary btn-sm" onclick="_savePdrawerInfo(${userId},this)">Zapisz</button>
         </div>
@@ -8984,6 +9079,7 @@
         display_name: document.getElementById('pd-display').value.trim() || null,
         is_admin: document.getElementById('pd-admin').checked ? 1 : 0,
         is_active: document.getElementById('pd-active').checked ? 1 : 0,
+        is_tester: document.getElementById('pd-tester').checked ? 1 : 0,
       };
       await apiFetch(`/api/admin/accounts/${userId}`, { method:'PATCH', body: JSON.stringify(payload) });
       _showToast('Zapisano.', 'success');
@@ -9087,15 +9183,18 @@
     const pane = document.getElementById('pdrawer-camps');
     pane.innerHTML = '<div style="padding:20px;text-align:center;color:var(--t3)">Ładowanie…</div>';
     try {
-      const [resUses, activity] = await Promise.all([
+      const [resUses, activity, resCfg] = await Promise.all([
         apiFetch(`/api/admin/users/${userId}/resurrection-uses`).catch(()=>({uses_remaining:null})),
         apiFetch(`/api/admin/users/${userId}/activity`).catch(()=>({items:[]})),
+        apiFetch('/api/admin/resurrection-config').catch(()=>null),
       ]);
       const camps = activity.items || activity.campaigns || [];
       const usesRemaining = resUses.uses_remaining;  // null = bez limitu (∞)
+      const globalResEnabled = resCfg ? !!(resCfg.enabled) : true;
       const STATUS = { active:'Aktywna', ended:'Zakończona', aborted:'Przerwana' };
       const SBADGE = { active:'badge-green', ended:'badge-slate', aborted:'badge-red' };
       pane.innerHTML = `
+        ${!globalResEnabled ? `<div style="padding:8px 12px;background:var(--amber-dim,#3a2d00);border:1px solid var(--amber,#f59e0b);border-radius:6px;margin-bottom:10px;font-size:0.78rem;color:var(--amber,#f59e0b)">⚠ Wskrzeszenia są globalnie <strong>wyłączone</strong> (System → Wskrzeszenie). Ustawienie limitów nie zadziała, dopóki nie włączysz tej opcji.</div>` : ''}
         <div class="card" style="padding:12px;margin-bottom:12px">
           <div style="font-size:0.85rem;font-weight:600;margin-bottom:8px">✦ Wskrzeszenia tego gracza</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
@@ -12092,6 +12191,8 @@
     try {
       const cfg = await apiFetch('/api/admin/resurrection-config');
       const set = (id,v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+      const enabledEl = document.getElementById('sys-res-enabled');
+      if (enabledEl) enabledEl.checked = !!(cfg.enabled);
       set('sys-res-mode', cfg.mode || 'fixed');
       set('sys-res-default', cfg.default_uses ?? '');
       set('sys-res-cap', cfg.cap_percent ?? '');
@@ -12103,6 +12204,7 @@
           btn.disabled = true; const orig = btn.textContent; btn.textContent = '⏳';
           try {
             const payload = {
+              enabled: !!(document.getElementById('sys-res-enabled')?.checked),
               mode: document.getElementById('sys-res-mode').value,
               default_uses: parseInt(document.getElementById('sys-res-default').value,10),
               cap_percent: parseInt(document.getElementById('sys-res-cap').value,10),
@@ -12666,15 +12768,17 @@
       const bgGrid = document.getElementById('vis-bg-grid');
       if (bgGrid) {
         const bgMap = bgs.backgrounds || {};
+        const _bgTs = Date.now();
         bgGrid.innerHTML = _VIS_SCREENS.map(scr => {
           const url = bgMap[scr];
           return `<div style="border:1px solid var(--border);border-radius:8px;padding:8px">
             <div style="font-size:0.75rem;font-weight:600;margin-bottom:6px">${scr}</div>
-            ${url ? `<img src="${_esc(url)}" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:6px" />` : `<div style="height:60px;background:var(--surface);border-radius:4px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:0.7rem">Brak</div>`}
+            ${url ? `<img src="${_esc(url)}?t=${_bgTs}" style="width:100%;height:60px;object-fit:cover;border-radius:4px;margin-bottom:6px" />` : `<div style="height:60px;background:var(--surface);border-radius:4px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:0.7rem">Brak</div>`}
             <div style="display:flex;gap:4px;flex-wrap:wrap">
               <label class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:0.7rem;cursor:pointer">
                 Wgraj<input type="file" accept="image/*" style="display:none" onchange="visUploadBg('${scr}',this)" />
               </label>
+              <button class="btn btn-sm btn-secondary" style="padding:2px 6px;font-size:0.7rem" onclick="visPickBg('${scr}')">🖼 Galeria</button>
               ${url ? `<button class="btn btn-sm btn-danger" style="padding:2px 6px;font-size:0.7rem" onclick="visDeleteBg('${scr}',this)">Usuń</button>` : ''}
             </div>
           </div>`;
@@ -12713,6 +12817,409 @@
       _showToast('Usunięto.', 'success');
       _sysTabLoaded.delete('visual'); await _loadSysVisual();
     } catch(e) { _showToast(e.message || 'Błąd.', 'error'); btn.disabled = false; }
+  }
+
+  async function visPickBg(screen) {
+    let modal = document.getElementById('vis-gallery-modal');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.id = 'vis-gallery-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `<div style="background:var(--surface);border-radius:12px;width:min(720px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <strong>Galeria obrazów — ekran: ${screen}</strong>
+        <button onclick="document.getElementById('vis-gallery-modal').remove()" style="background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+      </div>
+      <div id="vis-gallery-grid" style="padding:12px;overflow-y:auto;flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">
+        <div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--t3)">Ładowanie...</div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    const grid = document.getElementById('vis-gallery-grid');
+    try {
+      const data = await apiFetch('/api/admin/images/list');
+      const imgs = data.images || [];
+      if (!imgs.length) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--t3)">Brak obrazów w galerii. Wygeneruj je w zakładce Lokacje.</div>';
+        return;
+      }
+      grid.innerHTML = imgs.map(img => {
+        const enc = encodeURIComponent(img.url);
+        const encF = encodeURIComponent(img.filename);
+        return `<div onclick="visPickBgSelect('${_esc(screen)}','${enc}','${encF}')"
+             style="border:2px solid var(--border);border-radius:6px;overflow:hidden;cursor:pointer;transition:border-color .15s"
+             onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          <img src="${_esc(img.url)}" style="width:100%;height:90px;object-fit:cover;display:block" loading="lazy" />
+          <div style="padding:3px 5px;font-size:0.62rem;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_esc(img.filename)}">${_esc(img.filename)}</div>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--danger)">${_esc(e.message)}</div>`;
+    }
+  }
+
+  async function visPickBgSelect(screen, encUrl, encFilename) {
+    document.getElementById('vis-gallery-modal')?.remove();
+    const filename = decodeURIComponent(encFilename);
+    try {
+      await apiFetch(`/api/admin/ui/bg/${screen}/from-tile`, {
+        method: 'POST',
+        body: JSON.stringify({ filename }),
+      });
+      _showToast(`Tło ekranu "${screen}" ustawione.`, 'success');
+      _sysTabLoaded.delete('visual');
+      await _loadSysVisual();
+    } catch(e) { _showToast(e.message || 'Błąd.', 'error'); }
+  }
+
+  function _buildEnemyImagePrompt(e) {
+    const tierMap = { weak:'weak creature, fragile enemy', standard:'standard fantasy enemy, combat ready', elite:'elite dangerous creature, powerful warrior', boss:'massive boss monster, terrifying creature, legendary' };
+    const typeMap = { humanoid:'humanoid fantasy character, warrior stance', beast:'wild beast, animal creature', undead:'undead creature, dark fantasy', demon:'demonic entity, corrupted being', dragon:'draconic creature, scales and claws', golem:'stone construct, magical golem', spirit:'ethereal spirit, ghostly form' };
+    const tier = tierMap[e.tier] || 'fantasy creature';
+    const typeHint = (() => {
+      const d = (e.description || '').toLowerCase();
+      for (const [k,v] of Object.entries(typeMap)) if (d.includes(k)) return v;
+      return 'fantasy enemy creature';
+    })();
+    return [typeHint, tier, 'character portrait', 'dramatic side lighting', 'detailed fantasy illustration', 'dark moody atmosphere', 'no text', 'no UI'].join(', ');
+  }
+
+  function _buildNpcImagePrompt(n) {
+    const typeMap = { merchant:'friendly merchant, shop keeper, rich clothing', quest_giver:'wise quest giver, village elder, distinguished', neutral:'neutral NPC character, townsperson', ally:'heroic ally character, adventurer companion' };
+    const type = typeMap[n.npc_type] || 'fantasy NPC character';
+    const isAlly = n.is_ally ? 'heroic, trustworthy, adventurer' : '';
+    return [type, isAlly, 'character portrait', 'warm fantasy lighting', 'detailed illustration', 'friendly expression', 'no text', 'no UI'].filter(Boolean).join(', ');
+  }
+
+  async function openEnemyImageModal(key, encData) {
+    const e = typeof encData === 'string' ? JSON.parse(decodeURIComponent(encData)) : encData;
+    const initialPrompt = _buildEnemyImagePrompt(e);
+    const m = document.createElement('div');
+    m.id = 'enemy-img-modal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+    m.innerHTML = `<div style="background:var(--surface);border-radius:12px;width:min(560px,96vw);max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <strong>🖼 Obraz: ${_esc(e.label||key)}</strong>
+        <span id="ei-trans-badge" style="font-size:0.68rem;background:var(--border);border-radius:4px;padding:2px 6px;color:var(--t3)">✦ auto</span>
+        <button onclick="document.getElementById('enemy-img-modal').remove()" style="margin-left:auto;background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+      </div>
+      <div class="modal-body" style="overflow-y:auto;flex:1;padding:16px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:4px">Prompt (EN)</label>
+          <textarea id="ei-prompt" style="resize:none;width:100%;box-sizing:border-box;overflow:hidden;field-sizing:content;min-height:72px;max-height:240px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--t1);font-size:0.82rem">${_esc(initialPrompt)}</textarea>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:0.75rem;color:var(--t3)">Rozmiar</label>
+          <select id="ei-size" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--t1);font-size:0.8rem">
+            <option value="576x1024" selected>576×1024 portret ★</option>
+            <option value="768x1024">768×1024 portret 3:4</option>
+            <option value="512x512">512×512</option>
+            <option value="768x768">768×768</option>
+          </select>
+          <label style="font-size:0.75rem;color:var(--t3)">Kroki</label>
+          <input type="number" id="ei-steps" value="4" min="1" max="20" style="width:52px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:var(--t1);font-size:0.8rem">
+        </div>
+        <div id="ei-preview" style="min-height:60px;border-radius:8px;border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:0.8rem">
+          ${e.image_url ? `<img src="${_esc(e.image_url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">` : 'Brak obrazu'}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="ei-gen-btn" class="btn btn-primary" style="flex:1">⚡ Generuj</button>
+          <button id="ei-ref-btn" class="btn btn-secondary" style="flex:1" disabled>🔄 Popraw</button>
+          <button class="btn btn-secondary" style="flex:none" onclick="eiOpenGallery('${_esc(key)}')">🖼 Galeria</button>
+        </div>
+      </div>
+      <div class="modal-foot" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
+        <button id="ei-accept-btn" class="btn btn-success" disabled>✓ Akceptuj i zapisz</button>
+        <button id="ei-remove-btn" class="btn btn-danger" ${e.image_url?'':'disabled'} style="font-size:0.8rem">✕ Usuń obraz</button>
+        <button onclick="document.getElementById('enemy-img-modal').remove()" class="btn btn-secondary">Anuluj</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click', ev => { if (ev.target === m) m.remove(); });
+
+    let _lastFilename = null;
+    let _lastUrl = null;
+    const ta = document.getElementById('ei-prompt');
+    const _autoResize = t => { t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,240)+'px'; };
+    ta.addEventListener('input', () => _autoResize(ta)); _autoResize(ta);
+
+    document.getElementById('ei-gen-btn').onclick = async () => {
+      const btn = document.getElementById('ei-gen-btn');
+      btn.disabled = true; btn.textContent = '⏳ Generuję…';
+      try {
+        const [w,h] = (document.getElementById('ei-size').value||'576x1024').split('x').map(Number);
+        const steps = parseInt(document.getElementById('ei-steps').value)||4;
+        const r = await apiFetch('/api/admin/images/generate',{method:'POST',body:JSON.stringify({prompt:ta.value.trim()||initialPrompt,width:w,height:h,steps})});
+        _lastFilename = r.filename; _lastUrl = r.url;
+        const prev = document.getElementById('ei-preview');
+        prev.innerHTML = `<img src="${_esc(r.url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+        document.getElementById('ei-ref-btn').disabled = false;
+        document.getElementById('ei-accept-btn').disabled = false;
+      } catch(ex) { _showToast(ex.message||'Błąd generowania','error'); }
+      finally { btn.disabled=false; btn.textContent='⚡ Generuj'; }
+    };
+
+    document.getElementById('ei-ref-btn').onclick = async () => {
+      if (!_lastFilename) return;
+      const btn = document.getElementById('ei-ref-btn');
+      btn.disabled=true; btn.textContent='⏳ Poprawa…';
+      try {
+        const steps = parseInt(document.getElementById('ei-steps').value)||8;
+        const r = await apiFetch('/api/admin/images/refine',{method:'POST',body:JSON.stringify({source_filename:_lastFilename,prompt:ta.value.trim(),denoise:0.6,steps})});
+        _lastFilename=r.filename; _lastUrl=r.url;
+        document.getElementById('ei-preview').innerHTML=`<img src="${_esc(r.url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+      } catch(ex){ _showToast(ex.message||'Błąd','error'); }
+      finally{ btn.disabled=false; btn.textContent='🔄 Popraw'; }
+    };
+
+    document.getElementById('ei-accept-btn').onclick = async () => {
+      if (!_lastUrl) return;
+      try {
+        await apiFetch(`/api/admin/enemies/${encodeURIComponent(key)}`,{method:'PATCH',body:JSON.stringify({image_url:_lastUrl})});
+        _showToast('Obraz zapisany.','success');
+        m.remove();
+        const eRow = document.querySelector(`#enemies-table tr[data-key="${CSS.escape(key)}"]`);
+        if (eRow) { const cur=JSON.parse(decodeURIComponent(eRow.dataset.rjson||'{}')); cur.image_url=_lastUrl; eRow.dataset.rjson=encodeURIComponent(JSON.stringify(cur)); }
+        _loadEnemiesContent();
+      } catch(ex){ _showToast(ex.message||'Błąd zapisu','error'); }
+    };
+
+    document.getElementById('ei-remove-btn').onclick = async () => {
+      try {
+        await apiFetch(`/api/admin/enemies/${encodeURIComponent(key)}`,{method:'PATCH',body:JSON.stringify({image_url:null})});
+        _showToast('Obraz usunięty.','success');
+        document.getElementById('ei-preview').innerHTML='Brak obrazu';
+        document.getElementById('ei-remove-btn').disabled=true;
+        const eRow=document.querySelector(`#enemies-table tr[data-key="${CSS.escape(key)}"]`);
+        if(eRow){const cur=JSON.parse(decodeURIComponent(eRow.dataset.rjson||'{}'));cur.image_url=null;eRow.dataset.rjson=encodeURIComponent(JSON.stringify(cur));}
+      } catch(ex){ _showToast(ex.message||'Błąd','error'); }
+    };
+
+    setTimeout(async () => {
+      if (!e.description) return;
+      try {
+        const r = await apiFetch('/api/admin/images/describe-prompt',{method:'POST',body:JSON.stringify({text:e.description,context:`enemy tier:${e.tier||'standard'}, type:creature`})});
+        if (r.keywords) {
+          const extra = 'character portrait, dramatic side lighting, dark fantasy illustration, no text, no UI';
+          ta.value = r.keywords + ', ' + extra; _autoResize(ta);
+          const badge = document.getElementById('ei-trans-badge');
+          if (badge) { badge.textContent='✦ auto+AI'; badge.style.background='#7c3aed33'; badge.style.color='#a78bfa'; }
+        }
+      } catch{}
+    }, 100);
+  }
+
+  async function eiOpenGallery(key) {
+    let modal = document.createElement('div');
+    modal.id = 'ei-gallery-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML = `<div style="background:var(--surface);border-radius:12px;width:min(720px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <strong>Galeria obrazów</strong>
+        <button onclick="document.getElementById('ei-gallery-modal').remove()" style="background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+      </div>
+      <div id="ei-gallery-grid" style="padding:12px;overflow-y:auto;flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">
+        <div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--t3)">Ładowanie...</div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', ev => { if(ev.target===modal) modal.remove(); });
+    const grid = document.getElementById('ei-gallery-grid');
+    try {
+      const data = await apiFetch('/api/admin/images/list');
+      const imgs = data.images || [];
+      if (!imgs.length) { grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--t3)">Brak obrazów.</div>'; return; }
+      grid.innerHTML = imgs.map(img => {
+        const encUrl = encodeURIComponent(img.url);
+        return `<div onclick="eiPickGallery('${_esc(key)}','${encUrl}')" style="border:2px solid var(--border);border-radius:6px;overflow:hidden;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          <img src="${_esc(img.url)}" style="width:100%;height:90px;object-fit:cover;display:block" loading="lazy">
+          <div style="padding:3px 5px;font-size:0.62rem;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(img.filename)}</div>
+        </div>`;
+      }).join('');
+    } catch(ex){ grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;color:var(--danger)">${_esc(ex.message)}</div>`; }
+  }
+
+  async function eiPickGallery(key, encUrl) {
+    document.getElementById('ei-gallery-modal')?.remove();
+    const url = decodeURIComponent(encUrl);
+    const prev = document.getElementById('ei-preview');
+    if (prev) prev.innerHTML = `<img src="${_esc(url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+    const acceptBtn2 = document.getElementById('ei-accept-btn');
+    if (acceptBtn2) {
+      acceptBtn2.disabled = false;
+      acceptBtn2.onclick = async () => {
+        try {
+          await apiFetch(`/api/admin/enemies/${encodeURIComponent(key)}`,{method:'PATCH',body:JSON.stringify({image_url:url})});
+          _showToast('Obraz zapisany.','success');
+          document.getElementById('enemy-img-modal')?.remove();
+          _loadEnemiesContent();
+        } catch(ex){ _showToast(ex.message||'Błąd','error'); }
+      };
+    }
+  }
+
+  async function openNpcImageModal(id, encData) {
+    const n = typeof encData === 'string' ? JSON.parse(decodeURIComponent(encData)) : encData;
+    const initialPrompt = _buildNpcImagePrompt(n);
+    const m = document.createElement('div');
+    m.id = 'npc-img-modal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+    m.innerHTML = `<div style="background:var(--surface);border-radius:12px;width:min(560px,96vw);max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <strong>🖼 Obraz NPC: ${_esc(n.label||id)}</strong>
+        <span id="ni-trans-badge" style="font-size:0.68rem;background:var(--border);border-radius:4px;padding:2px 6px;color:var(--t3)">✦ auto</span>
+        <button onclick="document.getElementById('npc-img-modal').remove()" style="margin-left:auto;background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+      </div>
+      <div class="modal-body" style="overflow-y:auto;flex:1;padding:16px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:4px">Prompt (EN)</label>
+          <textarea id="ni-prompt" style="resize:none;width:100%;box-sizing:border-box;overflow:hidden;field-sizing:content;min-height:72px;max-height:240px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--t1);font-size:0.82rem">${_esc(initialPrompt)}</textarea>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:0.75rem;color:var(--t3)">Rozmiar</label>
+          <select id="ni-size" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--t1);font-size:0.8rem">
+            <option value="576x1024" selected>576×1024 portret ★</option>
+            <option value="768x1024">768×1024 portret 3:4</option>
+            <option value="512x512">512×512</option>
+          </select>
+          <label style="font-size:0.75rem;color:var(--t3)">Kroki</label>
+          <input type="number" id="ni-steps" value="4" min="1" max="20" style="width:52px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:var(--t1);font-size:0.8rem">
+        </div>
+        <div id="ni-preview" style="min-height:60px;border-radius:8px;border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:0.8rem">
+          ${n.image_url ? `<img src="${_esc(n.image_url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">` : 'Brak obrazu'}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="ni-gen-btn" class="btn btn-primary" style="flex:1">⚡ Generuj</button>
+          <button id="ni-ref-btn" class="btn btn-secondary" style="flex:1" disabled>🔄 Popraw</button>
+          <button class="btn btn-secondary" style="flex:none" onclick="niOpenGallery('${_esc(String(id))}')">🖼 Galeria</button>
+        </div>
+      </div>
+      <div class="modal-foot" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
+        <button id="ni-accept-btn" class="btn btn-success" disabled>✓ Akceptuj i zapisz</button>
+        <button id="ni-remove-btn" class="btn btn-danger" ${n.image_url?'':'disabled'} style="font-size:0.8rem">✕ Usuń obraz</button>
+        <button onclick="document.getElementById('npc-img-modal').remove()" class="btn btn-secondary">Anuluj</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click', ev => { if (ev.target===m) m.remove(); });
+
+    let _lastFilename=null, _lastUrl=null;
+    const ta=document.getElementById('ni-prompt');
+    const _autoResize=t=>{t.style.height='auto';t.style.height=Math.min(t.scrollHeight,240)+'px';};
+    ta.addEventListener('input',()=>_autoResize(ta)); _autoResize(ta);
+
+    document.getElementById('ni-gen-btn').onclick = async () => {
+      const btn=document.getElementById('ni-gen-btn');
+      btn.disabled=true; btn.textContent='⏳ Generuję…';
+      try {
+        const [w,h]=(document.getElementById('ni-size').value||'576x1024').split('x').map(Number);
+        const steps=parseInt(document.getElementById('ni-steps').value)||4;
+        const r=await apiFetch('/api/admin/images/generate',{method:'POST',body:JSON.stringify({prompt:ta.value.trim()||initialPrompt,width:w,height:h,steps})});
+        _lastFilename=r.filename; _lastUrl=r.url;
+        document.getElementById('ni-preview').innerHTML=`<img src="${_esc(r.url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+        document.getElementById('ni-ref-btn').disabled=false;
+        document.getElementById('ni-accept-btn').disabled=false;
+      } catch(ex){_showToast(ex.message||'Błąd generowania','error');}
+      finally{btn.disabled=false;btn.textContent='⚡ Generuj';}
+    };
+
+    document.getElementById('ni-ref-btn').onclick = async () => {
+      if(!_lastFilename) return;
+      const btn=document.getElementById('ni-ref-btn');
+      btn.disabled=true; btn.textContent='⏳ Poprawa…';
+      try {
+        const steps=parseInt(document.getElementById('ni-steps').value)||8;
+        const r=await apiFetch('/api/admin/images/refine',{method:'POST',body:JSON.stringify({source_filename:_lastFilename,prompt:ta.value.trim(),denoise:0.6,steps})});
+        _lastFilename=r.filename; _lastUrl=r.url;
+        document.getElementById('ni-preview').innerHTML=`<img src="${_esc(r.url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+      } catch(ex){_showToast(ex.message||'Błąd','error');}
+      finally{btn.disabled=false;btn.textContent='🔄 Popraw';}
+    };
+
+    document.getElementById('ni-accept-btn').onclick = async () => {
+      if(!_lastUrl) return;
+      try {
+        await apiFetch(`/api/admin/npcs/${encodeURIComponent(String(id))}`,{method:'PATCH',body:JSON.stringify({image_url:_lastUrl})});
+        _showToast('Obraz NPC zapisany.','success');
+        m.remove();
+        const nRow=document.querySelector(`#npcs-table tr[data-key="${CSS.escape(String(id))}"]`);
+        if(nRow){const cur=JSON.parse(decodeURIComponent(nRow.dataset.rjson||'{}'));cur.image_url=_lastUrl;nRow.dataset.rjson=encodeURIComponent(JSON.stringify(cur));}
+        _loadNPCs();
+      } catch(ex){_showToast(ex.message||'Błąd zapisu','error');}
+    };
+
+    document.getElementById('ni-remove-btn').onclick = async () => {
+      try {
+        await apiFetch(`/api/admin/npcs/${encodeURIComponent(String(id))}`,{method:'PATCH',body:JSON.stringify({image_url:null})});
+        _showToast('Obraz usunięty.','success');
+        document.getElementById('ni-preview').innerHTML='Brak obrazu';
+        document.getElementById('ni-remove-btn').disabled=true;
+      } catch(ex){_showToast(ex.message||'Błąd','error');}
+    };
+
+    setTimeout(async () => {
+      if (!n.description) return;
+      try {
+        const r=await apiFetch('/api/admin/images/describe-prompt',{method:'POST',body:JSON.stringify({text:n.description,context:`NPC type:${n.npc_type||'neutral'}`})});
+        if (r.keywords) {
+          const extra='character portrait, warm fantasy lighting, detailed illustration, no text, no UI';
+          ta.value=r.keywords+', '+extra; _autoResize(ta);
+          const badge=document.getElementById('ni-trans-badge');
+          if(badge){badge.textContent='✦ auto+AI';badge.style.background='#7c3aed33';badge.style.color='#a78bfa';}
+        }
+      } catch{}
+    }, 100);
+  }
+
+  async function niOpenGallery(id) {
+    let modal=document.createElement('div');
+    modal.id='ni-gallery-modal';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;display:flex;align-items:center;justify-content:center';
+    modal.innerHTML=`<div style="background:var(--surface);border-radius:12px;width:min(720px,95vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+        <strong>Galeria obrazów</strong>
+        <button onclick="document.getElementById('ni-gallery-modal').remove()" style="background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+      </div>
+      <div id="ni-gallery-grid" style="padding:12px;overflow-y:auto;flex:1;display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">
+        <div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--t3)">Ładowanie...</div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click',ev=>{if(ev.target===modal)modal.remove();});
+    const grid=document.getElementById('ni-gallery-grid');
+    try {
+      const data=await apiFetch('/api/admin/images/list');
+      const imgs=data.images||[];
+      if(!imgs.length){grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--t3)">Brak obrazów.</div>';return;}
+      grid.innerHTML=imgs.map(img=>{
+        const encUrl=encodeURIComponent(img.url);
+        return `<div onclick="niPickGallery('${_esc(id)}','${encUrl}')" style="border:2px solid var(--border);border-radius:6px;overflow:hidden;cursor:pointer;transition:border-color .15s" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          <img src="${_esc(img.url)}" style="width:100%;height:90px;object-fit:cover;display:block" loading="lazy">
+          <div style="padding:3px 5px;font-size:0.62rem;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(img.filename)}</div>
+        </div>`;
+      }).join('');
+    } catch(ex){grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;color:var(--danger)">${_esc(ex.message)}</div>`;}
+  }
+
+  async function niPickGallery(id, encUrl) {
+    document.getElementById('ni-gallery-modal')?.remove();
+    const url=decodeURIComponent(encUrl);
+    const prev=document.getElementById('ni-preview');
+    if(prev) prev.innerHTML=`<img src="${_esc(url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+    const acceptBtn=document.getElementById('ni-accept-btn');
+    if(acceptBtn){
+      acceptBtn.disabled=false;
+      acceptBtn.onclick=async()=>{
+        try {
+          await apiFetch(`/api/admin/npcs/${encodeURIComponent(id)}`,{method:'PATCH',body:JSON.stringify({image_url:url})});
+          _showToast('Obraz NPC zapisany.','success');
+          document.getElementById('npc-img-modal')?.remove();
+          _loadNPCs();
+        } catch(ex){_showToast(ex.message||'Błąd','error');}
+      };
+    }
   }
 
   // ── Mechanics ────────────────────────────────────────────
@@ -14141,12 +14648,39 @@
   ═══════════════════════════════════════════════════════════ */
 
   function _buildLocImagePrompt(loc) {
-    const typeMap = {dungeon:'dark dungeon interior',town:'medieval fantasy town',wilderness:'open wilderness landscape',building:'fantasy building interior',cave:'deep cave chamber',camp:'campsite in forest',ruins:'ancient crumbling ruins'};
-    const biomeMap = {ruin:'ruined stone',forest:'dense ancient forest',mountain:'rocky mountain peaks',urban:'stone city streets',underground:'underground cavern',coast:'coastal cliffs',swamp:'misty bog swamp'};
-    const type = typeMap[loc.location_type] || (loc.location_type || 'location');
-    const biome = biomeMap[loc.biome] || (loc.biome || '');
-    const desc = (loc.description || '').slice(0, 150).trim();
-    const parts = [biome, type, loc.label || loc.key, desc, 'fantasy RPG location art, atmospheric illustrated style, moody cinematic lighting, no text, no letters'].filter(Boolean);
+    const typeMap = {
+      dungeon:'dark dungeon interior, torchlit stone corridors',
+      town:'medieval fantasy town square, cobblestone streets',
+      city:'medieval fantasy city, stone buildings, busy streets',
+      wilderness:'open wilderness landscape, untamed nature',
+      building:'fantasy building interior, wooden beams',
+      cave:'deep cave chamber, stalactites, bioluminescent glow',
+      camp:'campsite in ancient forest, firelight',
+      ruins:'ancient crumbling ruins, moss-covered stone',
+      forest:'dense enchanted forest, rays of light through canopy',
+      road:'winding dirt road through forest',
+      tavern:'cozy medieval tavern interior, fireplace',
+      temple:'ancient stone temple, mystical atmosphere',
+      tower:'stone wizard tower interior',
+      harbor:'fantasy harbor, sailing ships, misty sea',
+      market:'bustling medieval market, colorful stalls',
+    };
+    const biomeMap = {
+      ruin:'ruined stone architecture',forest:'ancient woodland',
+      mountain:'rocky mountain terrain',urban:'stone city architecture',
+      underground:'underground cavern',coast:'coastal sea cliffs',
+      swamp:'misty swamp bog',plains:'open grassy plains',
+      desert:'arid desert landscape',tundra:'frozen tundra',
+    };
+    const moodMap = {
+      safe:'warm welcoming light',dangerous:'ominous dark atmosphere',
+      mysterious:'eerie mystical fog',sacred:'divine golden light',
+    };
+    const type = typeMap[loc.location_type] || typeMap[loc.location_subtype] || 'fantasy RPG location';
+    const biome = biomeMap[loc.biome] || '';
+    const mood = loc.safe_for_rest ? moodMap.safe : (moodMap[loc.mood] || '');
+    const tier = loc.tier ? `tier ${loc.tier} difficulty area` : '';
+    const parts = [biome, type, mood, tier, 'fantasy RPG location art, atmospheric illustrated style, moody cinematic lighting, detailed, no text, no letters, no UI'].filter(Boolean);
     return parts.join(', ');
   }
 
@@ -14161,21 +14695,21 @@
 
     const render = () => {
       const hasRef = !!(_liRefB64 || _liRefFilename);
-      overlay.innerHTML = `<div class="modal-box" style="max-width:600px">
+      overlay.innerHTML = `<div class="modal-box" style="max-width:660px;max-height:92vh;display:flex;flex-direction:column">
         <div class="modal-head">
           <span class="modal-title">🎨 Obraz — ${_esc(loc.label || loc.key)}</span>
           <button class="modal-close" id="li-close">✕</button>
         </div>
-        <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:12px">
+        <div class="modal-body" style="padding:14px 16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;flex:1">
 
           <!-- Living Prompt -->
           <div>
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
               <label class="form-label" style="margin:0">Prompt</label>
-              <span style="display:inline-flex;align-items:center;gap:4px;font-size:0.65rem;padding:1px 6px;background:var(--blue-light);color:var(--blue-text);border-radius:var(--r-sm);border:1px solid var(--blue-border)">✦ auto</span>
+              <span class="li-trans-badge" style="display:inline-flex;align-items:center;gap:4px;font-size:0.65rem;padding:1px 6px;background:var(--blue-light);color:var(--blue-text);border-radius:var(--r-sm);border:1px solid var(--blue-border)" title="AI doda tłumaczenie opisu lokacji">✦ auto</span>
               <button id="li-rebuild-prompt" class="btn btn-sm btn-secondary" style="font-size:0.65rem;padding:1px 5px;margin-left:auto">↺ Odbuduj</button>
             </div>
-            <textarea id="li-prompt" class="form-input" rows="3" style="resize:vertical;font-size:0.8rem;border-left:2px solid #0d9488">${_esc(_buildLocImagePrompt(loc))}</textarea>
+            <textarea id="li-prompt" class="form-input" rows="3" style="resize:none;font-size:0.8rem;border-left:2px solid #0d9488;width:100%;box-sizing:border-box;overflow:hidden;field-sizing:content;min-height:72px;max-height:240px">${_esc(_buildLocImagePrompt(loc))}</textarea>
           </div>
 
           <!-- Style reference -->
@@ -14198,33 +14732,37 @@
           <!-- Controls row -->
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <select id="li-size" class="form-input" style="width:auto;font-size:0.78rem;padding:5px 8px">
+              <option value="576x1024" selected>576×1024 portret ★</option>
+              <option value="768x1024">768×1024 portret 3:4</option>
               <option value="512x512">512×512</option>
               <option value="768x768">768×768</option>
-              <option value="1024x1024">1024×1024</option>
               <option value="1024x576">1024×576 pejzaż</option>
             </select>
             <label style="font-size:0.7rem;color:var(--t3);white-space:nowrap">Kroki: <span id="li-steps-val">6</span></label>
             <input type="range" id="li-steps" min="4" max="16" value="6" style="flex:1;min-width:80px;accent-color:var(--blue)">
+            <button id="li-pick-gallery" class="btn btn-secondary" style="white-space:nowrap;font-size:0.78rem" title="Wybierz istniejący obraz z galerii">🖼 Galeria</button>
             <button id="li-gen-btn" class="btn btn-primary" style="white-space:nowrap">${hasRef ? '🔄 Refinuj' : '🎨 Generuj'}</button>
           </div>
 
           <!-- Preview -->
-          <div id="li-preview" style="width:100%;height:220px;background:#1e1e2e;border-radius:var(--r);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
+          <div id="li-preview" style="width:100%;min-height:280px;background:#1e1e2e;border-radius:var(--r);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
             ${_liPendingUrl
-              ? `<img src="${_esc(_liPendingUrl)}" style="width:100%;height:100%;object-fit:cover">
-                 <div style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.6);color:#aaa;font-size:0.62rem;padding:2px 6px;border-radius:var(--r-sm) 0 var(--r-sm) 0">${_esc(_liPendingFilename)}</div>`
+              ? `<img src="${_esc(_liPendingUrl)}" style="max-width:100%;max-height:480px;object-fit:contain">
+                 <div style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.6);color:#aaa;font-size:0.62rem;padding:2px 6px;border-radius:var(--r-sm) 0 var(--r-sm) 0">${_esc(_liPendingFilename)}</div>
+                 <div style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.55);color:#ccc;font-size:0.65rem;padding:2px 8px;border-radius:var(--r-sm)">Edytuj prompt ↑ i kliknij Generuj ponownie</div>`
               : loc.image_url
-                ? `<img src="${_esc(loc.image_url)}" style="width:100%;height:100%;object-fit:cover">
+                ? `<img src="${_esc(loc.image_url)}" style="max-width:100%;max-height:480px;object-fit:contain">
                    <div style="position:absolute;top:6px;left:6px;background:rgba(5,150,105,0.85);color:#fff;font-size:0.62rem;padding:2px 6px;border-radius:var(--r-sm)">✓ Aktualny obraz</div>`
                 : `<div style="text-align:center;color:#555"><div style="font-size:2rem;opacity:.3">🖼</div><div style="font-size:0.75rem;margin-top:4px">Brak obrazu — wygeneruj poniżej</div></div>`
             }
           </div>
         </div>
-        <div class="modal-foot" style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;gap:8px;flex-wrap:wrap">
+        <div class="modal-foot" style="display:flex;justify-content:space-between;align-items:center;padding:10px 16px;gap:8px;flex-wrap:wrap;flex-shrink:0;border-top:1px solid var(--border)">
           <div style="display:flex;gap:6px">
             ${loc.image_url ? `<button id="li-remove-btn" class="btn btn-secondary" style="color:var(--red);font-size:0.78rem">✕ Usuń obraz</button>` : ''}
           </div>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;align-items:center">
+            ${_liPendingUrl ? `<span style="font-size:0.65rem;color:var(--t3)">edytuj prompt i kliknij Generuj ponownie</span>` : ''}
             <button id="li-cancel" class="btn btn-secondary">Anuluj</button>
             ${_liPendingUrl ? `<button id="li-accept-btn" class="btn btn-primary">✓ Zatwierdź obraz</button>` : ''}
           </div>
@@ -14236,11 +14774,15 @@
       overlay.querySelector('#li-cancel').onclick = () => overlay.remove();
       overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
 
+      // Auto-resize textarea helper
+      const _autoResize = ta => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 240) + 'px'; };
+      const promptEl = overlay.querySelector('#li-prompt');
+      if (promptEl) { promptEl.oninput = () => _autoResize(promptEl); requestAnimationFrame(() => _autoResize(promptEl)); }
+
       // Rebuild prompt
       const rebuildBtn = overlay.querySelector('#li-rebuild-prompt');
       if (rebuildBtn) rebuildBtn.onclick = () => {
-        const ta = overlay.querySelector('#li-prompt');
-        if (ta) ta.value = _buildLocImagePrompt(loc);
+        if (promptEl) { promptEl.value = _buildLocImagePrompt(loc); _autoResize(promptEl); }
       };
 
       // Steps slider
@@ -14306,6 +14848,41 @@
         } catch(e) { _showToast('Błąd galerii: ' + e.message, 'error'); }
       };
 
+      // Pick existing image from gallery → assign directly (no generation)
+      const pickGalleryBtn = overlay.querySelector('#li-pick-gallery');
+      if (pickGalleryBtn) pickGalleryBtn.onclick = async () => {
+        try {
+          const d = await apiFetch('/api/admin/images/list');
+          const imgs = d.images || [];
+          if (!imgs.length) { _showToast('Brak obrazów w galerii', 'warn'); return; }
+          const pick = document.createElement('div');
+          pick.className = 'modal-overlay open';
+          pick.style.zIndex = '10002';
+          pick.innerHTML = `<div class="modal-box" style="max-width:580px;max-height:90vh;display:flex;flex-direction:column">
+            <div class="modal-head" style="flex-shrink:0"><span>Wybierz obraz dla lokacji</span><button id="lpick-x">✕</button></div>
+            <div style="padding:12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;overflow-y:auto;flex:1">
+              ${imgs.map(img => `<div style="cursor:pointer;border-radius:var(--r-sm);overflow:hidden;border:2px solid transparent;position:relative" data-fn="${_esc(img.filename)}" data-url="${_esc(img.url)}" class="lpick-thumb">
+                <img src="${_esc(img.url)}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block" loading="lazy">
+                <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);font-size:0.58rem;color:#aaa;padding:2px 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(img.filename)}</div>
+              </div>`).join('')}
+            </div>
+          </div>`;
+          document.body.appendChild(pick);
+          pick.querySelector('#lpick-x').onclick = () => pick.remove();
+          pick.onclick = e => { if (e.target === pick) pick.remove(); };
+          pick.querySelectorAll('.lpick-thumb').forEach(el => {
+            el.onmouseenter = () => el.style.borderColor = 'var(--green,#10b981)';
+            el.onmouseleave = () => el.style.borderColor = 'transparent';
+            el.onclick = () => {
+              _liPendingUrl = el.dataset.url;
+              _liPendingFilename = el.dataset.fn;
+              pick.remove();
+              render();
+            };
+          });
+        } catch(e) { _showToast('Błąd galerii: ' + e.message, 'error'); }
+      };
+
       // Generate / Refine
       const genBtn = overlay.querySelector('#li-gen-btn');
       if (genBtn) genBtn.onclick = async () => {
@@ -14345,19 +14922,28 @@
       // Accept
       const acceptBtn = overlay.querySelector('#li-accept-btn');
       if (acceptBtn) acceptBtn.onclick = async () => {
+        console.log('[loc-img] accept clicked, key=', key, 'pendingUrl=', _liPendingUrl);
         try {
-          await apiFetch(`/api/locations/admin/locations/${encodeURIComponent(key)}`, {
+          const patchUrl = `/api/locations/admin/locations/${encodeURIComponent(key)}`;
+          console.log('[loc-img] sending PATCH to', patchUrl);
+          await apiFetch(patchUrl, {
             method: 'PATCH',
             body: JSON.stringify({ image_url: _liPendingUrl })
           });
           loc.image_url = _liPendingUrl;
+          // Immediately update data-rjson on the row so edit modal shows fresh data
+          const locRow = document.querySelector(`#locations-table tr[data-key="${CSS.escape(key)}"]`);
+          if (locRow) locRow.dataset.rjson = encodeURIComponent(JSON.stringify(loc));
           _liPendingUrl = '';
           _liPendingFilename = '';
           _showToast('Obraz przypisany do lokacji ✓', 'success');
           render();
           _worldLoaded.delete('locations');
           _loadLocations();
-        } catch(e) { _showToast('Błąd zapisu: ' + e.message, 'error'); }
+        } catch(e) {
+          console.error('[loc-img] accept error:', e);
+          _showToast('Błąd zapisu: ' + e.message, 'error');
+        }
       };
 
       // Remove existing image
@@ -14370,6 +14956,8 @@
             body: JSON.stringify({ image_url: null })
           });
           loc.image_url = null;
+          const locRowRm = document.querySelector(`#locations-table tr[data-key="${CSS.escape(key)}"]`);
+          if (locRowRm) locRowRm.dataset.rjson = encodeURIComponent(JSON.stringify(loc));
           _showToast('Obraz usunięty.', 'info');
           render();
           _worldLoaded.delete('locations');
@@ -14380,6 +14968,30 @@
 
     document.body.appendChild(overlay);
     render();
+
+    // Async: translate Polish description → English keywords, inject into prompt
+    if (loc.description && loc.description.trim()) {
+      const context = [loc.location_type, loc.biome, loc.location_subtype].filter(Boolean).join(', ');
+      apiFetch('/api/admin/images/describe-prompt', {
+        method: 'POST',
+        body: JSON.stringify({ text: loc.description, context })
+      }).then(d => {
+        if (!d.keywords) return;
+        const ta = overlay.querySelector('#li-prompt');
+        if (!ta || !overlay.isConnected) return;
+        // Append translated description keywords before the style suffix
+        const current = ta.value;
+        const styleIdx = current.lastIndexOf('fantasy RPG location art');
+        const base = styleIdx > 0 ? current.slice(0, styleIdx).replace(/,\s*$/, '') : current;
+        const style = styleIdx > 0 ? current.slice(styleIdx) : 'fantasy RPG location art, atmospheric illustrated style, moody cinematic lighting, detailed, no text, no letters, no UI';
+        ta.value = [base, d.keywords, style].filter(Boolean).join(', ');
+        // Trigger auto-resize
+        ta.dispatchEvent(new Event('input'));
+        // Show subtle indicator
+        const badge = overlay.querySelector('.li-trans-badge');
+        if (badge) { badge.textContent = '✦ auto+AI'; badge.style.background = 'var(--green-light)'; badge.style.color = 'var(--green-text)'; badge.style.borderColor = 'var(--green-border)'; }
+      }).catch(() => {}); // silent fail — base prompt still usable
+    }
   }
 
   /* ═══════════════════════════════════════════════════════════
@@ -14688,8 +15300,300 @@
 
   // Close lightbox on Escape
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') imgCloseLightbox();
+    if (e.key === 'Escape') { imgCloseLightbox(); closeBrDrawer(); }
   });
+
+  // ── Bug Reports ──────────────────────────────────────────
+  let _brItems = [];
+  let _brCurrentId = null;
+  let _brCurrentCtxJson = null;
+  let _brViewMode = 'text'; // 'text' | 'json'
+
+  function _brStatusBadge(status, hasGH) {
+    if (!hasGH) return '';
+    if (status === 'closed') return '<span class="badge badge-green" style="margin-left:6px">✓ closed</span>';
+    return '<span class="badge badge-amber" style="margin-left:6px">● open</span>';
+  }
+
+  async function _loadBugReports() {
+    const tbody = document.getElementById('br-tbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--t3)">Ładowanie…</td></tr>`;
+    try {
+      const d = await apiFetch('/api/admin/bug-reports');
+      _brItems = d.items || [];
+      const withGH = _brItems.filter(r => r.github_issue_url).length;
+      const local = _brItems.length - withGH;
+
+      const total = document.getElementById('br-total');
+      const gh = document.getElementById('br-github');
+      const loc = document.getElementById('br-local');
+      const sub = document.getElementById('br-sub');
+      const badge = document.getElementById('br-nav-badge');
+
+      if (total) total.textContent = _brItems.length;
+      if (gh) gh.textContent = withGH;
+      if (loc) loc.textContent = local;
+      if (sub) sub.textContent = `${_brItems.length} zgłoszeń · ${withGH} na GitHub`;
+      if (badge) { badge.textContent = _brItems.length; badge.style.display = _brItems.length ? '' : 'none'; }
+
+      if (!tbody) return;
+      if (!_brItems.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--t3)">Brak zgłoszeń.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = _brItems.map((r, i) => {
+        const obs = _esc((r.observation || '').slice(0, 80)) + (r.observation?.length > 80 ? '…' : '');
+        const date = r.created_at ? r.created_at.slice(0, 16).replace('T', ' ') : '—';
+        const ghLink = r.github_issue_url
+          ? `<a href="${_esc(r.github_issue_url)}" target="_blank" class="badge badge-green" style="text-decoration:none">#${r.github_issue_number}</a>`
+          : `<span class="badge badge-slate">lokalne</span>`;
+        const statusCell = r.github_issue_url
+          ? (r.github_status === 'closed'
+              ? `<span class="badge badge-green">✓ closed</span>`
+              : `<span class="badge badge-amber">● open</span>`)
+          : '—';
+        return `<tr style="cursor:pointer" onclick="openBrDrawer(${i})">
+          <td class="td-mono" style="font-size:0.78rem;white-space:nowrap">${date}</td>
+          <td><span class="badge badge-blue">${_esc(r.username || '?')}</span></td>
+          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obs}</td>
+          <td>${ghLink}</td>
+          <td>${statusCell}</td>
+          <td><button class="btn-icon" onclick="event.stopPropagation();openBrDrawer(${i})">▶</button></td>
+        </tr>`;
+      }).join('');
+    } catch(e) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:#e55">${_esc(e.message)}</td></tr>`;
+    }
+  }
+
+  function _brRenderText(r, ctx) {
+    const char = ctx.character || {};
+    const camp = ctx.campaign || {};
+    const turns = ctx.last_turns || [];
+    const inventory = ctx.inventory || [];
+    const combatRolls = ctx.combat_rolls || [];
+    const activeCombat = ctx.active_combat || {};
+
+    const charLine = char.name
+      ? `${_esc(char.name)} — HP: ${char.hp_current}/${char.hp_max}${char.mana_current != null ? `, mana: ${char.mana_current}/${char.mana_max}` : ''}, level ${char.level}, ${_esc(char.archetype || '?')}, gold: ${char.gold || 0}`
+      : '(brak danych postaci)';
+    const statsHtml = char.stats
+      ? Object.entries(char.stats).map(([k,v]) => `<span class="badge badge-slate" style="margin:2px">${k}: ${v}</span>`).join(' ')
+      : '—';
+    const condHtml = (char.conditions||[]).length
+      ? (char.conditions||[]).map(c => `<span class="badge badge-red" style="margin:2px">${_esc(String(c))}</span>`).join(' ')
+      : '<span style="color:var(--t3);font-size:0.82rem">brak</span>';
+
+    const turnsHtml = turns.length
+      ? turns.map(t => {
+          const raw = t.assistant_text || '';
+          let pretty = raw;
+          try { pretty = JSON.stringify(JSON.parse(raw), null, 2); } catch {}
+          const hasRaw = raw.length > 0;
+          return `
+          <div class="br-turn-card" style="margin-bottom:10px;padding:8px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:0.79rem">
+            <div style="display:flex;justify-content:space-between;align-items:center;color:var(--t3);margin-bottom:4px">
+              <span>Tura ${t.turn_number} [${t.route || '?'}] · ${(t.created_at||'').slice(0,16)}</span>
+              ${hasRaw ? `<button onclick="_toggleTurnJson(this)" style="font-size:0.68rem;padding:1px 7px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--t3);cursor:pointer;white-space:nowrap">{ } JSON</button>` : ''}
+            </div>
+            <div class="br-turn-text">
+              <div><b>Gracz:</b> ${_esc((t.user_text||'').slice(0,300))}</div>
+              ${hasRaw ? `<div style="margin-top:4px;color:var(--t2)"><b>GM:</b> ${_esc(raw.slice(0,500))}</div>` : ''}
+            </div>
+            ${hasRaw ? `<pre class="br-turn-json" style="display:none;background:rgba(0,0,0,0.4);border-radius:6px;padding:10px;font-size:0.71rem;line-height:1.5;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:320px;margin-top:6px">${_esc(pretty)}</pre>` : ''}
+          </div>`;
+        }).join('')
+      : '<div style="color:var(--t3);font-size:0.82rem">Brak tur.</div>';
+
+    const invHtml = inventory.length
+      ? inventory.map(i => {
+          const key = i.item_key || i.weapon_key || i.consumable_key || '?';
+          const label = i.label || key;
+          return `<span class="badge badge-slate" style="margin:2px">${_esc(label)} ×${i.quantity}${i.equipped ? ' ⚔' : ''}</span>`;
+        }).join(' ')
+      : '<span style="color:var(--t3);font-size:0.82rem">pusty</span>';
+
+    let combatHtml = '';
+    if (activeCombat.round != null) {
+      const combatants = (activeCombat.combatants || []).map(c =>
+        typeof c === 'object'
+          ? `<span class="badge ${c.type === 'player' ? 'badge-blue' : 'badge-red'}" style="margin:2px">${_esc(c.name||'?')} HP:${c.hp_current??'?'}/${c.hp_max??'?'} z:${c.zone||'?'}</span>`
+          : ''
+      ).join(' ');
+      combatHtml = `<div style="margin-bottom:6px;font-size:0.8rem">Runda ${activeCombat.round}, status: ${_esc(activeCombat.status||'?')}, tura: ${_esc(String(activeCombat.current_turn||'?'))}</div>${combatants}`;
+    }
+    const rollsHtml = combatRolls.length
+      ? combatRolls.map(roll => {
+          const hit = roll.hit ? '✅' : '❌';
+          const parts = [`T${roll.turn_number}`, hit, `<b>${_esc(roll.actor||'?')}</b>`, `[${_esc(roll.event_type||'?')}]`];
+          if (roll.target_name) parts.push(`→ ${_esc(roll.target_name)}`);
+          if (roll.roll_value != null) parts.push(`d20=${roll.roll_value}`);
+          if (roll.damage != null) parts.push(`dmg=${roll.damage}`);
+          if (roll.hp_after != null) parts.push(`hp_after=${roll.hp_after}`);
+          return `<div style="font-size:0.78rem;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.05)">${parts.join(' ')}${roll.narrative ? `<br><span style="color:var(--t3)">${_esc(String(roll.narrative).slice(0,150))}</span>` : ''}</div>`;
+        }).join('')
+      : '<div style="color:var(--t3);font-size:0.82rem">Brak rzutów walki.</div>';
+
+    return `
+      <div style="margin-bottom:16px">
+        <div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px">OBSERWACJA</div>
+        <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:12px;font-size:0.9rem;line-height:1.5">${_esc(r.observation || '—')}</div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px">REPRODUKCJA</div>
+        <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:12px;font-size:0.85rem;line-height:1.5;white-space:pre-wrap">${_esc(r.reproduction || '—')}</div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:0.75rem;color:var(--t3);margin-bottom:6px">STAN POSTACI</div>
+        <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:12px;font-size:0.82rem">
+          <div style="margin-bottom:6px">${charLine}</div>
+          <div style="margin-bottom:6px">${statsHtml}</div>
+          <div>Kondycje: ${condHtml}</div>
+          ${camp.title ? `<div style="margin-top:6px;color:var(--t3)">Kampania: <b>${_esc(camp.title)}</b> (ID: ${camp.id}, ${camp.status})</div>` : ''}
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:0.75rem;color:var(--t3);margin-bottom:6px">EKWIPUNEK</div>
+        <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;font-size:0.82rem">${invHtml}</div>
+      </div>
+      ${(activeCombat.round != null || combatRolls.length) ? `
+      <div style="margin-bottom:12px">
+        <div style="font-size:0.75rem;color:var(--t3);margin-bottom:6px">WALKA${activeCombat.round != null ? ' (aktywna)' : ''}</div>
+        <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:10px;font-size:0.82rem">
+          ${combatHtml}
+          <div style="margin-top:8px;font-size:0.72rem;color:var(--t3);margin-bottom:4px">RZUTY (${combatRolls.length})</div>
+          ${rollsHtml}
+        </div>
+      </div>` : ''}
+      <div style="margin-bottom:12px">
+        <div style="font-size:0.75rem;color:var(--t3);margin-bottom:6px">OSTATNIE TURY (${turns.length})</div>
+        ${turnsHtml}
+      </div>
+      <div style="font-size:0.78rem;color:var(--t3);border-top:1px solid var(--border);padding-top:12px;display:flex;gap:12px;flex-wrap:wrap">
+        <span>Gracz: <b>${_esc(r.username || '?')}</b></span>
+        <span>ID kampanii: ${r.campaign_id || '—'}</span>
+        <span>Data: ${(r.created_at||'').slice(0,16)}</span>
+        ${r.github_issue_url ? `<a href="${_esc(r.github_issue_url)}" target="_blank" class="badge badge-green" style="text-decoration:none">GitHub #${r.github_issue_number}</a>` : '<span class="badge badge-slate">brak GitHub</span>'}
+      </div>`;
+  }
+
+  function _brRenderJson(r) {
+    let pretty = r.context_json || '{}';
+    try { pretty = JSON.stringify(JSON.parse(pretty), null, 2); } catch {}
+    return `<pre style="background:rgba(0,0,0,0.35);border-radius:8px;padding:14px;font-size:0.75rem;line-height:1.5;overflow:auto;white-space:pre-wrap;word-break:break-all;max-height:60vh">${_esc(pretty)}</pre>`;
+  }
+
+  function openBrDrawer(idx) {
+    const r = _brItems[idx];
+    if (!r) return;
+    _brCurrentId = r.id;
+    _brCurrentCtxJson = r.context_json;
+    _brViewMode = 'text';
+
+    document.getElementById('br-detail-id').textContent = r.id;
+    document.getElementById('br-delete-btn').disabled = false;
+
+    const toggleBtn = document.getElementById('br-toggle-btn');
+    if (toggleBtn) toggleBtn.textContent = '{ } JSON';
+
+    const syncBtn = document.getElementById('br-sync-btn');
+    if (syncBtn) { syncBtn.disabled = !r.github_issue_url; syncBtn.textContent = '🔄 Sync GitHub'; }
+
+    const statusBadge = document.getElementById('br-gh-status-badge');
+    if (statusBadge) statusBadge.innerHTML = _brStatusBadge(r.github_status, !!r.github_issue_url);
+
+    let ctx = {};
+    try { ctx = JSON.parse(r.context_json || '{}'); } catch {}
+    document.getElementById('br-detail-body').innerHTML = _brRenderText(r, ctx);
+
+    const backdrop = document.getElementById('br-drawer-backdrop');
+    backdrop.style.display = 'flex';
+  }
+
+  function _toggleTurnJson(btn) {
+    const card = btn.closest('.br-turn-card');
+    const pre = card.querySelector('.br-turn-json');
+    const textDiv = card.querySelector('.br-turn-text');
+    const showJson = pre.style.display === 'none';
+    pre.style.display = showJson ? 'block' : 'none';
+    textDiv.style.display = showJson ? 'none' : '';
+    btn.textContent = showJson ? '≡ Text' : '{ } JSON';
+  }
+
+  function toggleBrView() {
+    const r = _brItems.find(x => x.id === _brCurrentId);
+    if (!r) return;
+    const btn = document.getElementById('br-toggle-btn');
+    if (_brViewMode === 'text') {
+      _brViewMode = 'json';
+      btn.textContent = '≡ Text';
+      document.getElementById('br-detail-body').innerHTML = _brRenderJson(r);
+    } else {
+      _brViewMode = 'text';
+      btn.textContent = '{ } JSON';
+      let ctx = {};
+      try { ctx = JSON.parse(r.context_json || '{}'); } catch {}
+      document.getElementById('br-detail-body').innerHTML = _brRenderText(r, ctx);
+    }
+  }
+
+  async function syncBrGitHub() {
+    if (!_brCurrentId) return;
+    const btn = document.getElementById('br-sync-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳…';
+    try {
+      const d = await apiFetch(`/api/admin/bug-reports/${_brCurrentId}/sync-github`, { method: 'POST' });
+      const status = d.github_status;
+      // update local cache
+      const r = _brItems.find(x => x.id === _brCurrentId);
+      if (r) r.github_status = status;
+      const badge = document.getElementById('br-gh-status-badge');
+      if (badge) badge.innerHTML = _brStatusBadge(status, true);
+      _showToast(`GitHub status: ${status}`, 'success');
+    } catch(e) { _showToast(e.message || 'Sync error.', 'error'); }
+    finally { btn.disabled = false; btn.textContent = '🔄 Sync GitHub'; }
+  }
+
+  async function syncAllBrGitHub() {
+    const btn = document.getElementById('br-sync-all-btn');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Sync…';
+    try {
+      const d = await apiFetch('/api/admin/bug-reports/sync-all-github', { method: 'POST' });
+      // update local cache statuses
+      if (d.statuses) {
+        for (const [id, status] of Object.entries(d.statuses)) {
+          const r = _brItems.find(x => String(x.id) === String(id));
+          if (r) r.github_status = status;
+        }
+      }
+      _showToast(`Sync: ${d.synced} zaktualizowano${d.errors ? `, ${d.errors} błędów` : ''}`, d.errors ? 'error' : 'success');
+      _sectionLoaded.delete('bugreports');
+      _loadBugReports();
+    } catch(e) { _showToast(e.message || 'Błąd sync.', 'error'); }
+    finally { btn.disabled = false; btn.textContent = '🔄 Sync GitHub'; }
+  }
+
+  function closeBrDrawer() {
+    document.getElementById('br-drawer-backdrop').style.display = 'none';
+    _brCurrentId = null;
+  }
+
+  async function deleteBrReport() {
+    if (!_brCurrentId) return;
+    if (!confirm(`Usunąć zgłoszenie #${_brCurrentId}?`)) return;
+    const btn = document.getElementById('br-delete-btn');
+    btn.disabled = true;
+    try {
+      await apiFetch(`/api/admin/bug-reports/${_brCurrentId}`, { method: 'DELETE' });
+      closeBrDrawer();
+      _sectionLoaded.delete('bugreports');
+      _loadBugReports();
+      _showToast('Usunięto.', 'success');
+    } catch(e) { _showToast(e.message || 'Błąd.', 'error'); btn.disabled = false; }
+  }
 </script>
 
 <button id="kreator-fab" title="Kreator AI" onclick="_fabClick()">✨</button>

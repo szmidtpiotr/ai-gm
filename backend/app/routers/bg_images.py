@@ -1,11 +1,15 @@
 """Upload and serve custom background images for the mobile frontend screens."""
 import os
+import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
+from pydantic import BaseModel
 
 from app.services.admin_auth import verify_admin_token
+
+TILES_DIR = Path(os.getenv("IMAGES_TILES_DIR", "/app/tiles"))
 
 router = APIRouter()
 
@@ -85,7 +89,44 @@ def serve_background(screen: str):
     p = _bg_path(screen)
     if not p:
         raise HTTPException(status_code=404, detail="No custom background for this screen")
-    return FileResponse(str(p))
+    return FileResponse(str(p), headers={"Cache-Control": "no-store"})
+
+
+class AssignTileRequest(BaseModel):
+    filename: str
+
+
+@router.post("/admin/ui/bg/{screen}/from-tile", status_code=200)
+def assign_tile_as_background(
+    screen: str,
+    req: AssignTileRequest,
+    _: None = Depends(_require_admin),
+):
+    """Copy an existing generated tile directly to the backgrounds dir — no re-upload needed."""
+    if screen not in ALLOWED_SCREENS:
+        raise HTTPException(status_code=400, detail=f"Unknown screen '{screen}'")
+
+    fname = req.filename
+    if "/" in fname or "\\" in fname or fname.startswith("."):
+        raise HTTPException(status_code=400, detail="invalid filename")
+
+    src = TILES_DIR / fname
+    if not src.exists():
+        raise HTTPException(status_code=404, detail="tile not found")
+
+    ext = src.suffix.lower()
+    if ext not in ALLOWED_EXT:
+        raise HTTPException(status_code=400, detail=f"unsupported extension: {ext}")
+
+    BACKGROUNDS_DIR.mkdir(parents=True, exist_ok=True)
+
+    for old_ext in ALLOWED_EXT:
+        old = BACKGROUNDS_DIR / f"bg-{screen}{old_ext}"
+        if old.exists():
+            old.unlink()
+
+    shutil.copy2(str(src), str(BACKGROUNDS_DIR / f"bg-{screen}{ext}"))
+    return {"ok": True, "screen": screen, "url": f"/api/ui/bg/{screen}"}
 
 
 @router.get("/ui/backgrounds")

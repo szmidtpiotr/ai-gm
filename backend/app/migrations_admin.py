@@ -850,6 +850,8 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_config_items ADD COLUMN template_id INTEGER REFERENCES campaign_templates(id) ON DELETE SET NULL",
     "ALTER TABLE game_config_consumables ADD COLUMN template_id INTEGER REFERENCES campaign_templates(id) ON DELETE SET NULL",
     "ALTER TABLE game_locations ADD COLUMN image_url TEXT DEFAULT NULL",
+    "ALTER TABLE game_config_enemies ADD COLUMN image_url TEXT DEFAULT NULL",
+    "ALTER TABLE npcs ADD COLUMN image_url TEXT DEFAULT NULL",
 ]
 
 ADMIN_SEEDS = [
@@ -3429,10 +3431,13 @@ def run_admin_migrations() -> None:
         _ensure_character_rentals(conn)
         _ensure_hex_has_submap(conn)
         _ensure_game_locations_hex_linkage(conn)
+        _ensure_is_tester_column(conn)
+        _ensure_bug_reports_table(conn)
+        _ensure_bug_reports_github_status(conn)
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="14.2")
+    logger.info("admin_migration_complete", phase="14.4")
 
 
 def _ensure_character_rentals(conn: sqlite3.Connection) -> None:
@@ -3535,3 +3540,39 @@ def _ensure_hex_has_submap(conn: sqlite3.Connection) -> None:
         )
         conn.commit()
         logger.info("admin_migration_applied", label="hex-has-submap")
+
+
+def _ensure_is_tester_column(conn: sqlite3.Connection) -> None:
+    """Add is_tester flag to users table for beta tester bug reporting."""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+    if "is_tester" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN is_tester INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+        logger.info("admin_migration_applied", label="users-is-tester")
+
+
+def _ensure_bug_reports_table(conn: sqlite3.Connection) -> None:
+    """Create bug_reports table for tester submissions."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS bug_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            campaign_id INTEGER,
+            observation TEXT NOT NULL,
+            reproduction TEXT,
+            context_json TEXT,
+            github_issue_url TEXT,
+            github_issue_number INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    conn.commit()
+    logger.info("admin_migration_applied", label="bug-reports-table")
+
+
+def _ensure_bug_reports_github_status(conn: sqlite3.Connection) -> None:
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(bug_reports)").fetchall()]
+    if "github_status" not in cols:
+        conn.execute("ALTER TABLE bug_reports ADD COLUMN github_status TEXT")
+        conn.commit()
+        logger.info("admin_migration_applied", label="bug-reports-github-status")

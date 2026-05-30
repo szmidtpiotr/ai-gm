@@ -54,6 +54,8 @@ class LocationBase(BaseModel):
     local_hex_r: Optional[int] = None
     is_generic: int = 0
     hex_type_key: Optional[str] = None
+    # Cosmetic image (added in location-image migration)
+    image_url: Optional[str] = None
 
 
 class LocationCreate(LocationBase):

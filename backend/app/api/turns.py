@@ -3530,6 +3530,7 @@ def create_turn(
             import re as _xs_re
             from app.services.xp_sources import (
                 process_narrative_xp_tags,
+                strip_narrative_tags,
                 grant_first_location_visit,
                 grant_first_npc_talk,
                 grant_session_start,
@@ -3572,6 +3573,15 @@ def create_turn(
                 conn.commit()
         except Exception as _xs_err:
             logger.warning("narrative_xp_hooks_error", error=str(_xs_err))
+
+        # Strip GM-only directive tags from player-visible text after XP processing
+        try:
+            from app.services.xp_sources import strip_narrative_tags as _strip_tags
+            _narrative_part, _parsed_part = _extract_narrative_for_cues(clean_assistant)
+            _stripped = _strip_tags(_narrative_part)
+            clean_assistant = _repack_narrative(clean_assistant, _stripped, _parsed_part)
+        except Exception as _strip_err:
+            logger.warning("narrative_tag_strip_error", error=str(_strip_err))
 
         log = create_turn_log(
             conn=conn,
@@ -4439,6 +4449,7 @@ def create_turn_stream(
                 hook_conn.close()
             new_combat = None
             combat_extra = None
+            _npc_dialogue_key = None
             if full_raw.strip():
                 clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
                 # Stage 3 Z4 — apply + strip [APPLY_CONDITION:condition_key:enemy_key]
@@ -4479,6 +4490,13 @@ def create_turn_stream(
                             grant_item_descriptions[_entry_s[0]] = _entry_s[1]
                 grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
                 clean_text = _repack_narrative(clean_text, _narrative_for_cues_s, _parsed_json_s)
+                # Strip GM-only directive tags before saving (XP already processed from full_raw)
+                try:
+                    from app.services.xp_sources import strip_narrative_tags as _strip_tags_s
+                    _narr_s, _pjson_s2 = _extract_narrative_for_cues(clean_text)
+                    clean_text = _repack_narrative(clean_text, _strip_tags_s(_narr_s), _pjson_s2)
+                except Exception as _ste:
+                    logger.warning("narrative_tag_strip_stream_error", error=str(_ste))
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(
@@ -4565,8 +4583,9 @@ def create_turn_stream(
                         _xp_total2 += grant_session_start(save_conn, _xp_char_id2, campaign_id_val, _xp_turn2)
                         _dlg_m2 = _xs_re2.match(r"^DIALOGUE:(.+)$", (user_text_val or "").strip(), _xs_re2.I)
                         if _dlg_m2:
+                            _npc_dialogue_key = _dlg_m2.group(1).strip()
                             _xp_total2 += grant_first_npc_talk(
-                                save_conn, _xp_char_id2, campaign_id_val, _dlg_m2.group(1).strip(), _xp_turn2
+                                save_conn, _xp_char_id2, campaign_id_val, _npc_dialogue_key, _xp_turn2
                             )
                         for _bm2 in _xs_re2.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", full_raw or "", _xs_re2.I):
                             _xp_total2 += grant_beat_complete(save_conn, _xp_char_id2, campaign_id_val, _bm2.group(1), _xp_turn2)
@@ -4704,6 +4723,21 @@ def create_turn_stream(
                     _sf_done_conn.close()
             except Exception:
                 pass
+            if _npc_dialogue_key:
+                try:
+                    _npc_img_conn = sqlite3.connect(DB_PATH)
+                    _npc_img_conn.row_factory = sqlite3.Row
+                    try:
+                        _npc_img_row = _npc_img_conn.execute(
+                            "SELECT key, label, image_url FROM npcs WHERE key = ? AND is_active = 1 LIMIT 1",
+                            (_npc_dialogue_key,),
+                        ).fetchone()
+                        if _npc_img_row and _npc_img_row["image_url"]:
+                            yield f"data: [NPC_INTERACTION]{json.dumps({'key': _npc_img_row['key'], 'label': _npc_img_row['label'], 'image_url': _npc_img_row['image_url']}, ensure_ascii=False)}\n\n"
+                    finally:
+                        _npc_img_conn.close()
+                except Exception:
+                    pass
             yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(

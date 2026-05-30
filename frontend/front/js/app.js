@@ -476,6 +476,7 @@ async function handleLogin(e) {
                 username: response.username || username,
                 display_name: response.display_name,
                 is_admin: response.is_admin,
+                is_tester: !!response.is_tester,
                 role: response.role || (response.is_admin ? 'admin' : 'player'),
             };
             // Stage 10 A2 — store JWT pair when present (backend now emits them).
@@ -3893,10 +3894,39 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
 
         await refreshCharacterData();
         await pollCombatState();
+
+        // Show initiative roll results when combat just started
+        if (result.combat_started) {
+            const combatants = result.combat_started.combatants || [];
+            const sorted = [...combatants].sort((a, b) => (b.initiative_roll || 0) - (a.initiative_roll || 0));
+            if (sorted.length && sorted.some(c => c.initiative_roll != null)) {
+                const lines = sorted.map(c => {
+                    const name = c.name || (c.type === 'player' ? (characterData?.name || 'Gracz') : c.id);
+                    const roll = c.initiative_roll != null ? c.initiative_roll : '?';
+                    return `• ${name}: **${roll}**`;
+                });
+                const firstTurn = result.combat_started.current_turn;
+                const firstCombatant = sorted[0];
+                const firstLabel = firstCombatant?.type === 'player'
+                    ? (characterData?.name || 'Gracz')
+                    : (firstCombatant?.name || 'Wróg');
+                appendMessage({
+                    role: 'system',
+                    content: `⚔ **Inicjatywa:**\n${lines.join('\n')}\n\n${firstLabel} zaczyna!`,
+                    created_at: new Date(),
+                });
+                scrollToBottom();
+            }
+        }
+
         // BUG-02: clock now ticks every turn — refresh header display.
         fetchAndRenderClock(currentCampaignId);
         _refreshDebugBlocks();
         updateInputPlaceholder();
+
+        if (result.npc_interaction?.image_url) {
+            showNpcReveal(result.npc_interaction);
+        }
 
         // T38: victory auto-trigger when [CAMPAIGN_END] tag fired this turn
         if (result.campaign_ended) {
@@ -4001,6 +4031,10 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             return;
         }
 
+        if (payload.startsWith('[NPC_INTERACTION]')) {
+            result.npc_interaction = JSON.parse(payload.slice(17));
+            return;
+        }
         if (payload.startsWith('[COMBAT_STARTED]')) {
             result.combat_started = JSON.parse(payload.slice(16));
             return;
@@ -4689,6 +4723,7 @@ let lastCombatState = null;
 let enemyTurnInFlight = false;
 let pendingLoot = null;
 let pendingGold = 0;
+let _encounterRevealShown = false;
 
 function startCombatPolling() {
     stopCombatPolling();
@@ -4732,8 +4767,14 @@ async function pollCombatState() {
         renderCombatUI(cs);
 
         if (!wasActive) {
+            _encounterRevealShown = false;
             window.clog?.event('combat_started', { round: cs.round, current_turn: cs.current_turn });
             showCombatUI();
+            const _firstEnemy = (Array.isArray(cs.combatants) ? cs.combatants : []).find(c => c?.type === 'enemy');
+            if (_firstEnemy?.enemy_key && !_encounterRevealShown) {
+                _encounterRevealShown = true;
+                showEncounterReveal(_firstEnemy.enemy_key, _firstEnemy.name);
+            }
         }
 
         // Auto-trigger enemy turn when it's not the player's turn
@@ -4771,6 +4812,68 @@ function _showEnemyTurnOverlay(show, enemyName) {
     const sub = document.getElementById('combat-status-overlay-sub');
     if (sub) sub.textContent = enemyName ? `Działa: ${enemyName}` : '';
     overlay.classList.add('combat-status-overlay--visible');
+}
+
+async function showEncounterReveal(enemyKey, enemyName) {
+    try {
+        const label = enemyName || 'Wróg';
+        const overlay = document.createElement('div');
+        overlay.className = 'encounter-reveal';
+        overlay.innerHTML = `
+            <div class="encounter-reveal__card">
+                <img class="encounter-reveal__img" id="er-img-${enemyKey}" src="" alt="${label}" style="display:none">
+                <div class="encounter-reveal__footer">
+                    <div class="encounter-reveal__name">${label}</div>
+                    <div class="encounter-reveal__hint">Dotknij aby zamknąć</div>
+                </div>
+            </div>`;
+        document.body.appendChild(overlay);
+
+        const dismiss = () => {
+            overlay.classList.add('encounter-reveal--out');
+            setTimeout(() => overlay.remove(), 350);
+        };
+        overlay.addEventListener('click', dismiss);
+        const autoTimer = setTimeout(dismiss, 4000);
+
+        requestAnimationFrame(() => overlay.classList.add('encounter-reveal--in'));
+
+        // Load image async — show overlay immediately, image appears when ready
+        const data = await fetch(`/api/enemies/${encodeURIComponent(enemyKey)}`).then(r => r.ok ? r.json() : null);
+        const imageUrl = data?.enemy?.image_url;
+        if (!imageUrl) {
+            clearTimeout(autoTimer);
+            dismiss();
+            return;
+        }
+        const img = overlay.querySelector(`#er-img-${enemyKey}`);
+        if (img && overlay.isConnected) {
+            img.src = `${imageUrl}?t=${Date.now()}`;
+            img.style.display = '';
+        }
+    } catch (_) {}
+}
+
+function showNpcReveal(npc) {
+    if (!npc?.image_url) return;
+    const overlay = document.createElement('div');
+    overlay.className = 'encounter-reveal encounter-reveal--npc';
+    overlay.innerHTML = `
+        <div class="encounter-reveal__card">
+            <img class="encounter-reveal__img" src="${npc.image_url}?t=${Date.now()}" alt="${npc.label || 'NPC'}">
+            <div class="encounter-reveal__footer">
+                <div class="encounter-reveal__name">${npc.label || 'NPC'}</div>
+                <div class="encounter-reveal__hint">Dotknij aby zamknąć</div>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    const dismiss = () => {
+        overlay.classList.add('encounter-reveal--out');
+        setTimeout(() => overlay.remove(), 350);
+    };
+    overlay.addEventListener('click', dismiss);
+    setTimeout(dismiss, 4000);
+    requestAnimationFrame(() => overlay.classList.add('encounter-reveal--in'));
 }
 
 async function handleEnemyTurn() {
@@ -4923,6 +5026,7 @@ function hideCombatUI() {
     enemyTurnInFlight = false;
     pendingLoot = null;
     pendingGold = 0;
+    _encounterRevealShown = false;
     elements.combatBanner.hidden = true;
     elements.combatComposer.hidden = true;
     elements.composer?.classList.remove('composer--hidden');
@@ -7520,6 +7624,9 @@ function updateAdminSettingsVisibility() {
     // to keep the production view clean.
     _refreshDebugToggleVisibility();
 
+    // Bug report button — visible only for is_tester users
+    _refreshBugReportButton();
+
     if (isAdmin) pollServiceHealth();
 }
 
@@ -9499,11 +9606,12 @@ async function loadBgSettings() {
         if (!resp.ok) return;
         const data = await resp.json();
         const bgs = data.backgrounds || {};
+        const ts = Date.now();
         for (const [screen, url] of Object.entries(bgs)) {
             if (url) {
                 document.documentElement.style.setProperty(
                     `--bg-screen-${screen}`,
-                    `url("${url}")`
+                    `url("${url}?t=${ts}")`
                 );
             }
         }
@@ -10840,4 +10948,147 @@ function showDeleteHeroModal(heroName) {
     cancelBtn.addEventListener('click', () => { overlay.remove(); resolve(false); });
     overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
   });
+}
+
+// ── Bug Report System ─────────────────────────────────────────
+const _capturedJsErrors = [];
+(function _installErrorCapture() {
+    const _orig = window.onerror;
+    window.onerror = function(message, filename, lineno, colno, error) {
+        _capturedJsErrors.push({ message: String(message), filename, lineno, colno, ts: Date.now() });
+        if (_capturedJsErrors.length > 30) _capturedJsErrors.shift();
+        if (_orig) return _orig.apply(this, arguments);
+    };
+})();
+
+function _makeDraggable(el) {
+    let startX, startY, startLeft, startTop, dragging = false;
+    const STORAGE_KEY = 'aigm_bugreport_pos';
+
+    function applyStoredPos() {
+        try {
+            const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+            if (p) { el.style.left = p.left; el.style.top = p.top; el.style.right = 'auto'; el.style.bottom = 'auto'; }
+        } catch {}
+    }
+    applyStoredPos();
+
+    function onStart(cx, cy) {
+        dragging = true;
+        startX = cx; startY = cy;
+        const rect = el.getBoundingClientRect();
+        startLeft = rect.left; startTop = rect.top;
+        el.style.left = startLeft + 'px'; el.style.top = startTop + 'px';
+        el.style.right = 'auto'; el.style.bottom = 'auto';
+    }
+    function onMove(cx, cy) {
+        if (!dragging) return;
+        el.style.left = Math.max(0, Math.min(window.innerWidth - 50, startLeft + cx - startX)) + 'px';
+        el.style.top = Math.max(0, Math.min(window.innerHeight - 50, startTop + cy - startY)) + 'px';
+    }
+    function onEnd(wasTap) {
+        if (!dragging) return;
+        dragging = false;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ left: el.style.left, top: el.style.top })); } catch {}
+        if (wasTap) openBugReportModal();
+    }
+
+    el.addEventListener('mousedown', e => { e.preventDefault(); const moved = { v: false }; onStart(e.clientX, e.clientY);
+        const mm = e2 => { if (Math.abs(e2.clientX - startX) > 4 || Math.abs(e2.clientY - startY) > 4) moved.v = true; onMove(e2.clientX, e2.clientY); };
+        const mu = () => { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); onEnd(!moved.v); };
+        document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu); });
+
+    el.addEventListener('touchstart', e => { const t = e.touches[0]; const moved = { v: false }; onStart(t.clientX, t.clientY);
+        const tm = e2 => { const t2 = e2.touches[0]; if (Math.abs(t2.clientX - startX) > 4 || Math.abs(t2.clientY - startY) > 4) moved.v = true; onMove(t2.clientX, t2.clientY); };
+        const te = () => { el.removeEventListener('touchmove', tm); el.removeEventListener('touchend', te); onEnd(!moved.v); };
+        el.addEventListener('touchmove', tm, { passive: true }); el.addEventListener('touchend', te); }, { passive: true });
+}
+
+function _refreshBugReportButton() {
+    const isTester = currentUser?.is_tester === true || currentUser?.is_tester === 1;
+    let btn = document.getElementById('bug-report-btn');
+    if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'bug-report-btn';
+        btn.title = 'Zgłoś błąd (przeciągnij, żeby przenieść)';
+        btn.innerHTML = '🐞';
+        _makeDraggable(btn);
+        document.body.appendChild(btn);
+
+        const overlay = document.createElement('div');
+        overlay.id = 'bug-report-overlay';
+        overlay.hidden = true;
+        overlay.innerHTML = `
+          <div class="bug-modal" role="dialog" aria-modal="true" aria-label="Zgłoszenie błędu">
+            <div class="bug-modal__header">
+              <span class="bug-modal__title">Zgłoś błąd</span>
+              <button class="bug-modal__close" onclick="closeBugReportModal()" aria-label="Zamknij">✕</button>
+            </div>
+            <div>
+              <label for="bug-observation">Co zaobserwowałeś?</label>
+              <textarea id="bug-observation" rows="4" placeholder="Opisz co się stało..."></textarea>
+            </div>
+            <div>
+              <label for="bug-reproduction">Jak to odtworzyć?</label>
+              <textarea id="bug-reproduction" rows="3" placeholder="Kroki które doprowadziły do błędu..."></textarea>
+            </div>
+            <div class="bug-modal__actions">
+              <button class="bug-modal__cancel" onclick="closeBugReportModal()">Anuluj</button>
+              <button class="bug-modal__submit" id="bug-submit-btn" onclick="submitBugReport()">Wyślij zgłoszenie</button>
+            </div>
+            <div class="bug-modal__note">Szczegóły techniczne (stan gry, ostatnie ruchy) są dołączane automatycznie.</div>
+          </div>`;
+        overlay.addEventListener('click', e => { if (e.target === overlay) closeBugReportModal(); });
+        document.body.appendChild(overlay);
+    }
+    btn.hidden = !isTester;
+}
+
+function openBugReportModal() {
+    document.getElementById('bug-report-overlay').hidden = false;
+    document.getElementById('bug-observation').value = '';
+    document.getElementById('bug-reproduction').value = '';
+    document.getElementById('bug-submit-btn').disabled = false;
+    document.getElementById('bug-submit-btn').textContent = 'Wyślij zgłoszenie';
+    document.getElementById('bug-observation').focus();
+}
+
+function closeBugReportModal() {
+    document.getElementById('bug-report-overlay').hidden = true;
+}
+
+async function submitBugReport() {
+    const observation = (document.getElementById('bug-observation').value || '').trim();
+    const reproduction = (document.getElementById('bug-reproduction').value || '').trim();
+
+    if (!observation) {
+        document.getElementById('bug-observation').focus();
+        return;
+    }
+
+    const btn = document.getElementById('bug-submit-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Wysyłanie...';
+
+    try {
+        const payload = {
+            observation,
+            reproduction,
+            campaign_id: currentCampaignId || null,
+            js_errors: _capturedJsErrors.slice(-10),
+        };
+
+        const resp = await apiRequest('POST', '/bug-report', payload);
+
+        if (resp.ok) {
+            closeBugReportModal();
+            showToast('Zgłoszenie wysłane! Dziękujemy.', 'success');
+        } else {
+            throw new Error('Nieoczekiwana odpowiedź serwera');
+        }
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Wyślij zgłoszenie';
+        showToast('Błąd wysyłania zgłoszenia: ' + (e.message || 'nieznany błąd'), 'error');
+    }
 }

@@ -1195,8 +1195,26 @@ def initialize_player_session() -> str:
             _config_mode = f"pinned to campaign {_pinned_campaign_id}"
     if campaign is None:
         active = [c for c in campaigns if c.get("status") == "active"]
-        campaign = active[0] if active else campaigns[0]
-        _config_mode = "auto-selected"
+        # Prefer campaign with most recent activity
+        if active:
+            try:
+                with sqlite3.connect(DB_PATH) as _db:
+                    ids = [c["id"] for c in active]
+                    placeholders = ",".join("?" * len(ids))
+                    row = _db.execute(
+                        f"SELECT campaign_id FROM campaign_turns WHERE campaign_id IN ({placeholders}) "
+                        f"ORDER BY id DESC LIMIT 1",
+                        ids,
+                    ).fetchone()
+                    if row:
+                        campaign = next((c for c in active if c["id"] == row[0]), active[0])
+                    else:
+                        campaign = active[0]
+            except Exception:
+                campaign = active[0]
+        else:
+            campaign = campaigns[0]
+        _config_mode = "auto-selected (most recent)"
 
     _session_campaign_id = campaign["id"]
 

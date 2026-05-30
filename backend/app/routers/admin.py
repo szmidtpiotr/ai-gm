@@ -220,6 +220,7 @@ class AccountPatchReq(BaseModel):
     display_name: str | None = None
     is_active: int | None = None
     is_admin: int | None = Field(default=None, description="0 = player, 1 = admin")
+    is_tester: int | None = Field(default=None, description="0 = normal, 1 = beta tester (can submit bug reports)")
 
 
 class AccountPasswordResetReq(BaseModel):
@@ -388,6 +389,7 @@ class EnemyPatchReq(BaseModel):
     drop_chance: float | None = None
     note: str | None = None
     is_active: bool | None = None
+    image_url: str | None = None
     force: bool = False
 
 
@@ -1401,6 +1403,7 @@ def admin_patch_enemy(key: str, req: EnemyPatchReq, _: None = Depends(require_ad
             note=req.note,
             drop_chance=req.drop_chance,
             is_active=req.is_active,
+            image_url=req.image_url,
             force=req.force,
         )
         return {"item": item}
@@ -1450,6 +1453,24 @@ def admin_delete_enemy(key: str, req: EnemyDeleteReq, _: None = Depends(require_
         raise HTTPException(status_code=404, detail="Enemy not found") from None
     except PermissionError:
         raise HTTPException(status_code=423, detail="Row is locked. Use force=true to override.") from None
+
+
+@router.get("/enemies/{key}")
+def get_enemy_public(key: str):
+    """Public: returns enemy data including image_url for player frontend."""
+    import sqlite3 as _sqlite3
+    conn = _sqlite3.connect("/data/ai_gm.db")
+    conn.row_factory = _sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT key, label, description, tier, hp_base, image_url FROM game_config_enemies WHERE key = ? AND is_active = 1",
+            (str(key),)
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Enemy not found")
+    return {"enemy": dict(row)}
 
 
 @router.get("/admin/npcs")
@@ -2127,6 +2148,7 @@ def admin_patch_account(
             display_name=req.display_name,
             is_active=req.is_active,
             is_admin=req.is_admin,
+            is_tester=req.is_tester,
         )
         return {"item": item}
     except KeyError:
@@ -2157,6 +2179,156 @@ def admin_set_account_password(
         raise HTTPException(status_code=404, detail="Account not found") from None
     except ValueError:
         raise HTTPException(status_code=422, detail="Password must be at least 8 characters") from None
+
+
+@router.get("/admin/bug-reports")
+def admin_bug_reports(_: None = Depends(require_admin_token)):
+    conn = sqlite3.connect("/data/ai_gm.db")
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT br.id, br.user_id, COALESCE(u.username, '?') AS username,
+                   br.campaign_id, br.observation, br.reproduction,
+                   br.context_json, br.github_issue_url, br.github_issue_number,
+                   COALESCE(br.github_status, 'open') AS github_status,
+                   br.created_at
+            FROM bug_reports br
+            LEFT JOIN users u ON u.id = br.user_id
+            ORDER BY br.created_at DESC
+            LIMIT 500
+            """
+        ).fetchall()
+        items = []
+        for r in rows:
+            items.append({
+                "id": r["id"],
+                "user_id": r["user_id"],
+                "username": r["username"],
+                "campaign_id": r["campaign_id"],
+                "observation": r["observation"],
+                "reproduction": r["reproduction"],
+                "context_json": r["context_json"],
+                "github_issue_url": r["github_issue_url"],
+                "github_issue_number": r["github_issue_number"],
+                "github_status": r["github_status"],
+                "created_at": r["created_at"],
+            })
+        return {"items": items, "total": len(items)}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/bug-reports/{report_id}")
+def admin_delete_bug_report(report_id: int, _: None = Depends(require_admin_token)):
+    conn = sqlite3.connect("/data/ai_gm.db")
+    try:
+        cur = conn.execute("DELETE FROM bug_reports WHERE id = ?", (report_id,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Report not found")
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+@router.post("/admin/bug-reports/sync-all-github")
+async def admin_sync_all_bug_reports_github(_: None = Depends(require_admin_token)):
+    import httpx as _httpx
+    github_pat = os.getenv("GITHUB_PAT", "").strip()
+    github_repo = os.getenv("GITHUB_REPO", "szmidtpiotr/ai-gm").strip()
+    if not github_pat:
+        raise HTTPException(status_code=503, detail="GITHUB_PAT not configured")
+
+    conn = sqlite3.connect("/data/ai_gm.db")
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT id, github_issue_number FROM bug_reports WHERE github_issue_number IS NOT NULL"
+        ).fetchall()
+        rows = [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+    synced = 0
+    errors = 0
+    statuses: dict = {}
+    async with _httpx.AsyncClient(timeout=10.0) as client:
+        for row in rows:
+            try:
+                resp = await client.get(
+                    f"https://api.github.com/repos/{github_repo}/issues/{row['github_issue_number']}",
+                    headers={
+                        "Authorization": f"Bearer {github_pat}",
+                        "Accept": "application/vnd.github+json",
+                        "X-GitHub-Api-Version": "2022-11-28",
+                    },
+                )
+                if resp.status_code == 200:
+                    state = resp.json().get("state", "open")
+                    conn2 = sqlite3.connect("/data/ai_gm.db")
+                    try:
+                        conn2.execute(
+                            "UPDATE bug_reports SET github_status = ? WHERE id = ?",
+                            (state, row["id"]),
+                        )
+                        conn2.commit()
+                    finally:
+                        conn2.close()
+                    statuses[str(row["id"])] = state
+                    synced += 1
+                else:
+                    errors += 1
+            except Exception:
+                errors += 1
+
+    return {"ok": True, "synced": synced, "errors": errors, "statuses": statuses}
+
+
+@router.post("/admin/bug-reports/{report_id}/sync-github")
+async def admin_sync_bug_report_github(report_id: int, _: None = Depends(require_admin_token)):
+    import httpx as _httpx
+    conn = sqlite3.connect("/data/ai_gm.db")
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT github_issue_number FROM bug_reports WHERE id = ?", (report_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Report not found")
+    issue_num = row["github_issue_number"]
+    if not issue_num:
+        raise HTTPException(status_code=422, detail="No GitHub issue linked to this report")
+
+    github_pat = os.getenv("GITHUB_PAT", "").strip()
+    github_repo = os.getenv("GITHUB_REPO", "szmidtpiotr/ai-gm").strip()
+    if not github_pat:
+        raise HTTPException(status_code=503, detail="GITHUB_PAT not configured")
+
+    async with _httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"https://api.github.com/repos/{github_repo}/issues/{issue_num}",
+            headers={
+                "Authorization": f"Bearer {github_pat}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+        )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"GitHub API returned {resp.status_code}")
+
+    state = resp.json().get("state", "open")
+    conn2 = sqlite3.connect("/data/ai_gm.db")
+    try:
+        conn2.execute("UPDATE bug_reports SET github_status = ? WHERE id = ?", (state, report_id))
+        conn2.commit()
+    finally:
+        conn2.close()
+
+    return {"ok": True, "github_status": state}
 
 
 @router.get("/admin/users/{user_id}/activity")

@@ -44,12 +44,13 @@ def list_accounts() -> list[dict]:
                 u.created_at,
                 COALESCE(u.is_active, 1) AS is_active,
                 COALESCE(u.is_admin, 0) AS is_admin,
+                COALESCE(u.is_tester, 0) AS is_tester,
                 COUNT(DISTINCT c.id) AS characters_count,
                 COUNT(DISTINCT cp.id) AS campaigns_count
             FROM users u
             LEFT JOIN characters c ON c.user_id = u.id
             LEFT JOIN campaigns cp ON cp.owner_user_id = u.id
-            GROUP BY u.id, u.username, u.display_name, u.created_at, u.is_active, u.is_admin
+            GROUP BY u.id, u.username, u.display_name, u.created_at, u.is_active, u.is_admin, u.is_tester
             ORDER BY u.id ASC
             """
         ).fetchall()
@@ -67,7 +68,8 @@ def _get_user(conn: sqlite3.Connection, account_id: int) -> dict | None:
             display_name,
             created_at,
             COALESCE(is_active, 1) AS is_active,
-            COALESCE(is_admin, 0) AS is_admin
+            COALESCE(is_admin, 0) AS is_admin,
+            COALESCE(is_tester, 0) AS is_tester
         FROM users
         WHERE id = ?
         """,
@@ -82,6 +84,7 @@ def update_account(
     display_name: str | None,
     is_active: int | None,
     is_admin: int | None = None,
+    is_tester: int | None = None,
 ) -> dict:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -99,13 +102,17 @@ def update_account(
         if next_is_admin not in (0, 1):
             raise ValueError("invalid_is_admin")
 
+        next_is_tester = int(is_tester) if is_tester is not None else int(current.get("is_tester", 0))
+        if next_is_tester not in (0, 1):
+            raise ValueError("invalid_is_tester")
+
         conn.execute(
             """
             UPDATE users
-            SET display_name = ?, is_active = ?, is_admin = ?
+            SET display_name = ?, is_active = ?, is_admin = ?, is_tester = ?
             WHERE id = ?
             """,
-            (next_display_name, next_is_active, next_is_admin, account_id),
+            (next_display_name, next_is_active, next_is_admin, next_is_tester, account_id),
         )
         updated = _get_user(conn, account_id)
         _audit(conn, str(account_id), "UPDATE", current, updated)

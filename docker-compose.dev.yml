@@ -51,6 +51,9 @@ services:
       # Inny agent: docker-compose.override.yml albo zmienna tylko w override (patrz README w komentarzu niżej).
       - AI_TEST_AGENT_URL=http://test-agent:4000
       - AI_TEST_SCENARIOS_DIR=${AI_TEST_SCENARIOS_DIR:-/data/ai_test_scenarios}
+      - GITHUB_PAT=${GITHUB_PAT:-}
+      - GITHUB_REPO=${GITHUB_REPO:-szmidtpiotr/ai-gm}
+      - JWT_SECRET=${JWT_SECRET:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
@@ -58,6 +61,8 @@ services:
       - ./ai_test_agent/scenarios:/data/ai_test_scenarios:rw
       # W obrazie jest tylko katalog backend/ (/app) — monorepo env.test trafia do /app/env.test (load_repo_env).
       - ./env.test:/app/env.test:ro
+      # Shared image store: backend writes, nginx frontend serves as /images/tiles/*
+      - ./frontend/images/tiles:/app/tiles:rw
     labels:
       - service=backend-dev
     networks:

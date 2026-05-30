@@ -549,7 +549,7 @@ def apply_resurrection(
 
     # ── Revive: HP, status, death flags, cooldowns ───────────────────────
     max_hp = int(sheet.get("max_hp") or 1)
-    revive_hp = max(1, max_hp // 2)
+    revive_hp = max_hp
     sheet["current_hp"] = revive_hp
     sheet["death_saves_failed"] = 0
     sheet["short_rests_used"] = 0
@@ -561,6 +561,15 @@ def apply_resurrection(
         "UPDATE characters SET sheet_json = ?, status = 'active' WHERE id = ?",
         (json.dumps(sheet, ensure_ascii=False), character_id),
     )
+
+    # Reactivate campaign if it was ended by this character's death
+    if campaign_id:
+        conn.execute(
+            """UPDATE campaigns
+               SET status = 'active', ended_at = NULL, death_reason = NULL
+               WHERE id = ? AND status = 'ended'""",
+            (campaign_id,),
+        )
 
     # Wipe dungeon cooldown rows
     try:

@@ -67,6 +67,8 @@ from app.routers.adventure_forge import router as adventure_forge_router, public
 from app.routers.hex_world import router as hex_world_router
 from app.routers.voice_proxy import public_router as voice_public_router
 from app.routers.voice_proxy import admin_router as voice_admin_router
+from app.routers.admin_images import router as admin_images_router
+from app.routers.bug_report import router as bug_report_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -371,6 +373,8 @@ app.include_router(campaign_templates_router, prefix="/api")
 app.include_router(hex_world_router)
 app.include_router(voice_public_router)
 app.include_router(voice_admin_router)
+app.include_router(admin_images_router)
+app.include_router(bug_report_router, prefix="/api")
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")
     app.include_router(test_runner_router, prefix="/api")

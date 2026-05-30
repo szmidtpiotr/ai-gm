@@ -39,6 +39,7 @@ class NpcPatchReq(BaseModel):
     shop_inventory_json: str | None = None
     is_active: int | None = None
     location_keys: list[str] | None = None
+    image_url: str | None = None
 
 
 def _derive_primary_npc_type(is_shop: int, is_quest_giver: int, is_ally: int) -> str:
