@@ -11155,4 +11155,3 @@ function _urlBase64ToUint8Array(base64String) {
     const rawData = atob(base64);
     return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
 }
-}

@@ -4712,7 +4712,7 @@ def admin_push_subscriptions(
     _: None = Depends(require_admin_token),
 ):
     """List all users with their push subscription count."""
-    conn = sqlite3.connect(resolve_db_path())
+    conn = sqlite3.connect("/data/ai_gm.db")
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
