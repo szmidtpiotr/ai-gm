@@ -3434,6 +3434,7 @@ def run_admin_migrations() -> None:
         _ensure_is_tester_column(conn)
         _ensure_bug_reports_table(conn)
         _ensure_bug_reports_github_status(conn)
+        _ensure_push_subscriptions_table(conn)
     finally:
         conn.close()
 
@@ -3576,3 +3577,24 @@ def _ensure_bug_reports_github_status(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE bug_reports ADD COLUMN github_status TEXT")
         conn.commit()
         logger.info("admin_migration_applied", label="bug-reports-github-status")
+
+
+def _ensure_push_subscriptions_table(conn: sqlite3.Connection) -> None:
+    """Web Push subscription storage — one row per (user, browser endpoint)."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_push_subscriptions (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL,
+            endpoint   TEXT NOT NULL,
+            p256dh     TEXT NOT NULL,
+            auth       TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(user_id, endpoint)
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_push_subs_user "
+        "ON user_push_subscriptions(user_id)"
+    )
+    conn.commit()
+    logger.info("admin_migration_applied", label="push-subscriptions-table")

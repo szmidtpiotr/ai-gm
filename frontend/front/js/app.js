@@ -492,6 +492,7 @@ async function handleLogin(e) {
             localStorage.setItem('user', JSON.stringify(currentUser));
             window.clog?.setContext({ user_id: currentUser.id, username: currentUser.username });
             window.clog?.event('login_success', { user_id: currentUser.id });
+            registerPushNotifications().catch(() => {});
 
             console.log('[Login] Success, loading heroes...');
             const displayName = currentUser.display_name || currentUser.username;
@@ -11091,4 +11092,67 @@ async function submitBugReport() {
         btn.textContent = 'Wyślij zgłoszenie';
         showToast('Błąd wysyłania zgłoszenia: ' + (e.message || 'nieznany błąd'), 'error');
     }
+}
+
+// ============================================================================
+// Web Push Notifications
+// ============================================================================
+async function registerPushNotifications() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    let vapidPublicKey;
+    try {
+        const resp = await fetch('/api/push/vapid-public-key');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        vapidPublicKey = data.publicKey;
+    } catch (e) {
+        return;
+    }
+    if (!vapidPublicKey) return;
+
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.ready;
+
+    const existingSub = await reg.pushManager.getSubscription();
+    if (existingSub) {
+        // Already subscribed — re-send to backend to ensure it's current
+        await _sendSubscriptionToBackend(existingSub);
+        return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return;
+
+    const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: _urlBase64ToUint8Array(vapidPublicKey),
+    });
+
+    await _sendSubscriptionToBackend(sub);
+}
+
+async function _sendSubscriptionToBackend(sub) {
+    const token = localStorage.getItem('aigm_access_token') || localStorage.getItem('token');
+    if (!token) return;
+    try {
+        await fetch('/api/users/push-subscription', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(sub.toJSON()),
+        });
+    } catch (e) {
+        console.warn('[Push] Failed to register subscription:', e);
+    }
+}
+
+function _urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = atob(base64);
+    return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+}
 }
