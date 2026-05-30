@@ -801,7 +801,8 @@ def get_pending_locations(conn: sqlite3.Connection) -> list[dict]:
             """SELECT key, label, location_type, description, review_status,
                       created_by, location_subtype, biome, tier, canonical,
                       safe_for_rest, parent_key, source_campaign_id,
-                      ai_generated, is_active, temporary
+                      ai_generated, is_active, temporary,
+                      world_hex_q, world_hex_r
                FROM game_locations
                WHERE review_status = 'pending_review' AND is_active = 1
                ORDER BY rowid DESC LIMIT 100"""

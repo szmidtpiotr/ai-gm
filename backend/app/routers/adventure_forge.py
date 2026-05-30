@@ -80,7 +80,14 @@ TWOJE ZADANIE:
 3. Dostosuj szkic na podstawie feedbacku
 4. Gdy admin powie "zapisz", "zatwierdź" lub "save" — zwróć JSON z kluczem "READY_TO_SAVE": true i pełnym szkicem
 
-FORMAT JSON gdy proponujesz szkic:
+ZASADA ABSOLUTNA — JSON:
+- Gdy zwracasz lub aktualizujesz szkic, ZAWSZE zwróć KOMPLETNY zaktualizowany szkic w bloku ```json
+- NIGDY nie zwracaj częściowego patcha, diff-a ani tylko zmienionych pól
+- Jeśli admin zaakceptuje propozycję zmian — natychmiast wygeneruj pełny zaktualizowany JSON
+- JSON MUSI być w bloku ```json ... ``` — nigdy jako surowy tekst
+- Tekst odpowiedzi (poza blokiem JSON) może być krótki — 1-2 zdania komentarza
+
+FORMAT JSON gdy proponujesz lub aktualizujesz szkic:
 ```json
 {
   "title": "Tytuł przygody",
@@ -495,10 +502,15 @@ def forge_chat_message(req: ForgeMessageReq, _: None = Depends(_require_admin)):
     if draft:
         session["draft"] = draft
 
-    # Strip raw JSON block from displayed reply so chat stays readable
+    # Strip JSON blocks from displayed reply so chat stays readable
     display_reply = re.sub(r"```json.*?```", "", reply, flags=re.DOTALL).strip()
+    # Also strip bare JSON objects that look like a draft (large objects with title/arcs/hooks)
+    if draft and not display_reply:
+        display_reply = "✓ Szkic zaktualizowany."
+    elif draft and re.search(r"\{[^{}]{200,}\}", display_reply, re.DOTALL):
+        display_reply = re.sub(r"\{[^{}]{200,}\}", "", display_reply, flags=re.DOTALL).strip()
     if not display_reply:
-        display_reply = reply
+        display_reply = "✓ Szkic zaktualizowany." if draft else reply
 
     return {
         "session_id": req.session_id,
@@ -886,12 +898,13 @@ def forge_create_template(req: CreateTemplateReq, _: None = Depends(_require_adm
 
         cur = conn.execute(
             """INSERT INTO campaign_templates
-               (title, description, difficulty_rating, atmosphere, gm_plan_json, hook_ids, status, created_by)
-               VALUES (?, ?, ?, ?, ?, ?, 'draft', 'admin')""",
+               (title, description, difficulty_rating, atmosphere, gm_plan_json, hook_ids, status, created_by, adventure_idea_id)
+               VALUES (?, ?, ?, ?, ?, ?, 'draft', 'admin', ?)""",
             (
                 req.title, req.description, req.difficulty_rating, req.atmosphere,
                 json.dumps(gm_plan, ensure_ascii=False),
                 json.dumps(hook_ids, ensure_ascii=False),
+                req.adventure_idea_id,
             ),
         )
         conn.commit()
@@ -1172,7 +1185,26 @@ def list_published_templates():
             its = conn.execute(
                 "SELECT key, label, 'item' AS entry_type, rarity, NULL AS damage_die, effect_type, description FROM game_config_items WHERE template_id = ?", (tid,)
             ).fetchall()
-            d["campaign_items"] = [dict(x) for x in [*weapons, *cons, *its]]
+            db_items = [dict(x) for x in [*weapons, *cons, *its]]
+            # Also include plan items from gm_plan_json.key_items not already in DB
+            existing_keys = {it["key"] for it in db_items}
+            plan = json.loads(r["gm_plan_json"] or "{}") if r["gm_plan_json"] else {}
+            for pit in (plan.get("key_items") or []):
+                if not pit.get("key") or pit.get("hidden") or pit["key"] in existing_keys:
+                    continue
+                ov = pit.get("overrides") or {}
+                etype = pit.get("entity_type") or ov.get("entity_type") or "item"
+                db_items.append({
+                    "key": pit["key"],
+                    "label": pit.get("label") or ov.get("label", pit["key"]),
+                    "entry_type": etype,
+                    "rarity": ov.get("rarity") or 1,
+                    "damage_die": ov.get("damage_die"),
+                    "effect_type": ov.get("effect_type"),
+                    "description": ov.get("description", ""),
+                })
+                existing_keys.add(pit["key"])
+            d["campaign_items"] = db_items
             items.append(d)
         return {"items": items}
     finally:
@@ -1751,7 +1783,9 @@ def forge_allocate_hex(template_id: int, _: None = Depends(_require_admin)):
         for h in world_hexes:
             pref = _PREF.get(h["hex_type"], 0)
             min_dist = min((_hex_distance(h["q"], h["r"], tq, tr) for tq, tr in taken), default=999)
-            score = min_dist * 10 + pref
+            # Penalise hexes far from world centre so templates cluster in the middle
+            center_dist = _hex_distance(0, 0, h["q"], h["r"])
+            score = min_dist * 10 + pref - center_dist * 2
             if score > best_score:
                 best_score = score
                 best = h

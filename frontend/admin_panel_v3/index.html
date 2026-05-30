@@ -1531,32 +1531,18 @@
       letter-spacing: 0.04em;
     }
 
-    /* ── Forge workspace (2-col + ideas row) ── */
-    .forge-workspace {
-      display: flex;
-      gap: 12px;
-      height: 640px;
-      margin-bottom: 12px;
-    }
-    .forge-chat-card {
-      flex: 0 0 38%;
-      min-width: 280px;
-      display: flex;
-      flex-direction: column;
-    }
-    /* Scenario column */
+    /* ── Forge layout (full-width scenario + floating chat) ── */
+    /* Scenario column — full width */
     .forge-scenario-col {
-      flex: 1;
+      width: 100%;
       border: 1px solid var(--border);
       border-radius: var(--r);
       background: var(--surface);
       display: flex;
       flex-direction: column;
-      overflow: hidden;
-      min-width: 0;
     }
     .forge-scenario-empty {
-      flex: 1;
+      padding: 48px 0;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -1572,6 +1558,9 @@
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
       background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 2;
     }
     .forge-scenario-title-input {
       flex: 1;
@@ -1590,12 +1579,10 @@
       white-space: nowrap;
     }
     .forge-scenario-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px 14px;
+      padding: 16px 20px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 16px;
     }
     .fsc-section { display: flex; flex-direction: column; gap: 5px; }
     .fsc-label {
@@ -1614,9 +1601,11 @@
       font-size: 0.82rem;
       line-height: 1.55;
       padding: 8px 10px;
-      resize: vertical;
+      resize: none;
+      overflow: hidden;
       box-sizing: border-box;
       font-family: inherit;
+      min-height: 48px;
     }
     .fsc-textarea--amber { border-color: var(--amber-border, rgba(201,162,39,0.3)); background: var(--amber-light, rgba(201,162,39,0.04)); }
     .fsc-arc-card {
@@ -1653,11 +1642,30 @@
       color: var(--t2);
       background: var(--canvas);
     }
-    /* Ideas row */
-    .forge-ideas-row {
-      padding: 10px 0 4px;
-      border-top: 1px solid var(--border);
+    /* Collapsible saved ideas above editor */
+    .forge-ideas-shelf {
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      background: var(--surface);
+      margin-bottom: 10px;
+      overflow: hidden;
     }
+    .forge-ideas-shelf-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .forge-ideas-shelf-header:hover { background: rgba(255,255,255,0.03); }
+    .forge-ideas-shelf-toggle { font-size: 0.7rem; color: var(--t3); transition: transform 0.2s; }
+    .forge-ideas-shelf.open .forge-ideas-shelf-toggle { transform: rotate(180deg); }
+    .forge-ideas-shelf-body {
+      display: none;
+      padding: 6px 14px 12px;
+    }
+    .forge-ideas-shelf.open .forge-ideas-shelf-body { display: block; }
     .forge-ideas-chips {
       display: flex;
       gap: 8px;
@@ -1667,7 +1675,7 @@
     }
     .forge-idea-chip {
       flex-shrink: 0;
-      background: var(--surface);
+      background: var(--canvas);
       border: 1px solid var(--border);
       border-radius: var(--r);
       padding: 8px 12px;
@@ -1678,6 +1686,154 @@
     .forge-idea-chip:hover { border-color: var(--blue, #3b82f6); }
     .forge-idea-chip-title { font-size: 0.8rem; font-weight: 600; color: var(--t1); margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .forge-idea-chip-sub { font-size: 0.72rem; color: var(--t3); }
+    /* Floating draggable chat */
+    .forge-float-chat {
+      position: fixed;
+      right: 28px;
+      bottom: 28px;
+      width: 390px;
+      height: 480px;
+      z-index: 1000;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      resize: both;
+      min-width: 280px;
+      min-height: 200px;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .forge-float-chat.ffc-hidden {
+      opacity: 0;
+      transform: translateY(12px) scale(0.97);
+      pointer-events: none;
+    }
+    .forge-float-drag-handle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      cursor: grab;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .forge-float-drag-handle:active { cursor: grabbing; }
+    .forge-float-drag-dots {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .forge-float-drag-dots span {
+      display: flex;
+      gap: 2px;
+    }
+    .forge-float-drag-dots span::before,
+    .forge-float-drag-dots span::after {
+      content: '';
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--t3);
+    }
+    .forge-float-chat .forge-chat-history {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .forge-float-chat .forge-input-row {
+      flex-shrink: 0;
+    }
+    /* Floating toggle button */
+    .forge-chat-toggle-btn {
+      position: fixed;
+      right: 28px;
+      bottom: 28px;
+      z-index: 999;
+      background: var(--blue, #3b82f6);
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      padding: 10px 18px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(59,130,246,0.4);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .forge-chat-toggle-btn:hover { filter: brightness(1.1); }
+    .forge-chat-toggle-btn.fct-hidden { opacity: 0; pointer-events: none; }
+    /* Typing indicator */
+    .forge-typing-dots { display: inline-flex; gap: 4px; align-items: center; padding: 2px 0; }
+    .forge-typing-dots span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--t3);
+      animation: forge-dot-bounce 1.1s infinite ease-in-out;
+    }
+    .forge-typing-dots span:nth-child(2) { animation-delay: 0.18s; }
+    .forge-typing-dots span:nth-child(3) { animation-delay: 0.36s; }
+    @keyframes forge-dot-bounce {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+      30% { transform: translateY(-5px); opacity: 1; }
+    }
+    /* ── MCP tab ─────────────────────────────────────────────────────────────── */
+    .mcp-tab { display:flex; flex-direction:column; gap:16px; }
+    .mcp-server-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:20px; }
+    .mcp-server-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:14px; }
+    .mcp-server-name { font-size:1.05rem; font-weight:700; color:var(--t1); }
+    .mcp-server-sub  { font-size:0.8rem; color:var(--t3); margin-top:3px; }
+    .mcp-status-badge { font-size:0.78rem; font-weight:600; padding:4px 12px; border-radius:20px; white-space:nowrap; border:1px solid transparent; }
+    .mcp-checking { color:var(--t2); background:var(--bg); }
+    .mcp-online   { color:#4ade80; background:rgba(39,174,96,.12); border-color:rgba(39,174,96,.4); }
+    .mcp-offline  { color:#f87171; background:rgba(192,57,43,.12); border-color:rgba(192,57,43,.4); }
+    .mcp-url-row  { display:flex; align-items:center; gap:10px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:8px 12px; margin-bottom:10px; }
+    .mcp-url-code { flex:1; font-family:monospace; font-size:0.85rem; color:var(--amber,#f59e0b); word-break:break-all; }
+    .mcp-copy-btn { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); color:var(--t2); font-size:0.75rem; padding:4px 10px; cursor:pointer; white-space:nowrap; }
+    .mcp-copy-btn:hover { background:var(--bg); color:var(--t1); }
+    .mcp-meta-row { display:flex; gap:10px; font-size:0.8rem; color:var(--t3); flex-wrap:wrap; }
+    .mcp-meta-row strong { color:var(--t2); }
+    .mcp-two-col { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    @media(max-width:960px) { .mcp-two-col { grid-template-columns:1fr; } }
+    .mcp-connect-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:18px; }
+    .mcp-section-title { font-size:0.9rem; font-weight:600; color:var(--t1); margin-bottom:12px; }
+    .mcp-connect-steps { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+    .mcp-step { font-size:0.82rem; display:flex; align-items:baseline; gap:8px; }
+    .mcp-step-label { font-size:0.78rem; color:var(--t3); }
+    .mcp-code-block { background:var(--bg); border:1px solid var(--border); border-radius:var(--r); padding:10px 12px; font-family:monospace; font-size:0.78rem; color:var(--amber,#f59e0b); white-space:pre; overflow-x:auto; line-height:1.55; }
+    .mcp-examples-title { font-size:0.78rem; color:var(--t3); margin-bottom:6px; }
+    .mcp-examples { list-style:none; display:flex; flex-direction:column; gap:4px; }
+    .mcp-examples li { font-size:0.8rem; color:var(--t2); padding:5px 10px; background:var(--bg); border-radius:var(--r); border-left:2px solid var(--amber,#f59e0b); }
+    .mcp-tools-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:20px; }
+    .mcp-tools-list { display:flex; flex-direction:column; }
+    .mcp-tool-row { display:flex; align-items:baseline; gap:8px; padding:8px 0; border-bottom:1px solid var(--border); }
+    .mcp-tool-row:last-child { border-bottom:none; }
+    .mcp-tool-name { font-family:monospace; font-size:0.8rem; color:var(--t2); }
+    .mcp-tool-star { color:var(--amber,#f59e0b); font-weight:700; }
+    .mcp-tool-desc { flex:1; font-size:0.8rem; color:var(--t3); line-height:1.4; }
+    .mcp-tool-badge { font-size:0.62rem; font-weight:600; text-transform:uppercase; letter-spacing:.04em; padding:1px 5px; border-radius:3px; flex-shrink:0; }
+    .mcp-tool-write { background:rgba(201,162,39,.15); color:var(--amber,#f59e0b); border:1px solid rgba(201,162,39,.3); }
+    .mcp-tool-read  { background:rgba(59,130,246,.1); color:#3b82f6; border:1px solid rgba(59,130,246,.2); }
+    .mcp-config-section { margin-top:20px; padding:16px 20px; border:1px solid var(--border); border-radius:var(--r); background:var(--surface); }
+    .mcp-config-section h4 { margin:0 0 12px; font-size:0.9rem; font-weight:600; color:var(--t1); }
+    .mcp-config-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+    .mcp-config-row label { font-size:0.82rem; color:var(--t3); white-space:nowrap; }
+    .mcp-cfg-status { font-size:0.8rem; color:var(--t3); margin-top:6px; }
+    .mcp-cfg-camp-display { font-size:0.85rem; color:var(--t2); padding:4px 10px; background:var(--bg); border:1px solid var(--border); border-radius:var(--r); white-space:nowrap; min-width:120px; }
+    .mcp-live-section { margin-top:20px; border:1px solid var(--border); border-radius:var(--r); overflow:hidden; background:var(--surface); }
+    .mcp-live-header { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--border); gap:12px; }
+    .mcp-live-title { font-weight:600; font-size:0.92rem; color:var(--t1); white-space:nowrap; }
+    .mcp-reload-btn { background:var(--surface); border:1px solid var(--border); color:var(--t2); border-radius:6px; padding:4px 12px; font-size:0.82rem; cursor:pointer; }
+    .mcp-reload-btn:hover { background:var(--bg); color:var(--t1); }
+    .mcp-diag-bar { padding:6px 16px; font-size:0.78rem; color:var(--t2); background:var(--bg); border-bottom:1px solid var(--border); font-family:monospace; }
+    .mcp-iframe-wrap { display:flex; justify-content:center; align-items:flex-start; padding:16px; background:var(--bg); min-height:680px; }
+    .mcp-iframe-wrap iframe { width:390px; height:720px; border:none; border-radius:24px; box-shadow:0 0 0 2px var(--border),0 8px 40px rgba(0,0,0,.6); display:block; flex-shrink:0; }
+    .mcp-live-sel { font-size:0.82rem; }
   </style>
 </head>
 <body>
@@ -2721,7 +2877,6 @@
           <button class="stab active" data-wtab="npcs">NPC</button>
           <button class="stab" data-wtab="enemies">Wrogowie</button>
           <button class="stab" data-wtab="loot">Tabele Łupów</button>
-          <button class="stab" data-wtab="hexmap">🌍 Mapa</button>
           <button class="stab" data-wtab="pending">Oczekujące <span class="nav-badge" id="world-pending-badge" style="display:none">0</span></button>
         </div>
 
@@ -2849,38 +3004,6 @@
           <div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem" id="world-pending-container">Ładowanie…</div>
         </div>
 
-        <div class="stab-panel" id="wtab-hexmap">
-          <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
-            <!-- Stats row -->
-            <div id="hexmap-stats" style="display:flex;gap:12px;flex-wrap:wrap">
-              <div class="card" style="padding:10px 14px;flex:1;min-width:120px">
-                <div style="font-size:1.4rem;font-weight:700;color:var(--text)" id="hexmap-total">—</div>
-                <div style="font-size:0.72rem;color:var(--t3)">Heksów w świecie</div>
-              </div>
-              <div class="card" style="padding:10px 14px;flex:1;min-width:120px" id="hexmap-types-card">
-                <div style="font-size:0.78rem;color:var(--t3)">Ładowanie…</div>
-              </div>
-            </div>
-            <!-- Generate form -->
-            <div class="card" style="padding:16px">
-              <div style="font-weight:600;margin-bottom:12px">Generuj proceduralno świat</div>
-              <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
-                <div>
-                  <label style="font-size:0.78rem;color:var(--t3);display:block;margin-bottom:4px">Seed (liczba całkowita)</label>
-                  <input type="number" id="hexmap-seed" class="form-input" value="42" style="width:120px">
-                </div>
-                <div>
-                  <label style="font-size:0.78rem;color:var(--t3);display:block;margin-bottom:4px">Promień (heksów)</label>
-                  <input type="number" id="hexmap-radius" class="form-input" value="25" min="5" max="50" style="width:90px">
-                </div>
-                <button class="btn btn-primary" id="hexmap-gen-btn" onclick="hexmapGenerate()">🌍 Generuj świat</button>
-              </div>
-              <div style="font-size:0.72rem;color:var(--t3);margin-top:8px">Wygeneruje (2×promień)² heksów. Istniejące dane kampanii (campaign_hex_data) zostaną zachowane.</div>
-            </div>
-            <!-- Result -->
-            <div id="hexmap-result" style="display:none"></div>
-          </div>
-        </div>
 
       </div>
     </section>
@@ -2901,6 +3024,7 @@
       <div class="card">
         <div class="section-tabs" id="map-tabs">
           <button class="stab active" data-mtap="builder">Mapa</button>
+          <button class="stab" data-mtap="generate">🌍 Generuj świat</button>
           <button class="stab" data-mtap="locations">Lokacje</button>
           <button class="stab" data-mtap="terrain">Teren</button>
           <button class="stab" data-mtap="review">Do zatwierdzenia</button>
@@ -2956,6 +3080,7 @@
                   <th><div class="th-inner">Czas podróży (h)</div></th>
                   <th><div class="th-inner">Enc. %</div></th>
                   <th><div class="th-inner">Aktywny</div></th>
+                  <th><div class="th-inner" title="Czy ten teren może mieć lokalną podmapę (miasto, lochy, ruiny itp.)">Submap</div></th>
                   <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
                 </tr>
               </thead>
@@ -2969,13 +3094,61 @@
           <div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div>
         </div>
 
+        <!-- Generuj świat -->
+        <div class="stab-panel" id="wtab-generate">
+          <div style="padding:16px;display:flex;flex-direction:column;gap:16px">
+            <!-- Nav shortcut -->
+            <div style="display:flex;justify-content:flex-end">
+              <button class="btn btn-sm btn-secondary" onclick="document.querySelector('[data-mtap=builder]')?.click()">🗺 Otwórz budowniczego →</button>
+            </div>
+            <!-- Stats row -->
+            <div id="hexmap-stats" style="display:flex;gap:12px;flex-wrap:wrap">
+              <div class="card" style="padding:10px 14px;flex:1;min-width:120px">
+                <div style="font-size:1.4rem;font-weight:700;color:var(--text)" id="hexmap-total">—</div>
+                <div style="font-size:0.72rem;color:var(--t3)">Heksów w świecie</div>
+              </div>
+              <div class="card" style="padding:10px 14px;flex:1;min-width:120px" id="hexmap-types-card">
+                <div style="font-size:0.78rem;color:var(--t3)">Ładowanie…</div>
+              </div>
+            </div>
+            <!-- Generate form -->
+            <div class="card" style="padding:16px">
+              <div style="font-weight:600;margin-bottom:12px">Generuj proceduralnie świat</div>
+              <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+                <div>
+                  <label style="font-size:0.78rem;color:var(--t3);display:block;margin-bottom:4px">Seed (liczba całkowita)</label>
+                  <input type="number" id="hexmap-seed" class="form-input" value="42" style="width:120px">
+                </div>
+                <div>
+                  <label style="font-size:0.78rem;color:var(--t3);display:block;margin-bottom:4px">Promień (heksów)</label>
+                  <input type="number" id="hexmap-radius" class="form-input" value="25" min="5" max="50" style="width:90px">
+                </div>
+                <button class="btn btn-primary" id="hexmap-gen-btn" onclick="hexmapGenerate()">🌍 Generuj świat</button>
+              </div>
+              <div style="font-size:0.72rem;color:var(--t3);margin-top:8px">Wygeneruje (2×promień)² heksów. Istniejące dane kampanii (campaign_hex_data) zostaną zachowane.</div>
+            </div>
+            <!-- Result -->
+            <div id="hexmap-result" style="display:none"></div>
+            <!-- Danger zone -->
+            <div class="card" style="padding:16px;border:1px solid var(--red,#dc2626)">
+              <div style="font-weight:600;margin-bottom:8px;color:var(--red,#dc2626)">⚠ Strefa niebezpieczna</div>
+              <div style="font-size:0.78rem;color:var(--t3);margin-bottom:12px">Usuwa wszystkie heksy świata globalnego, odkrycia kampanii oraz pozycje graczy na mapie. Akcja nieodwracalna.</div>
+              <button class="btn btn-sm" style="background:#7f1d1d;color:#fca5a5;border:1px solid #dc2626" onclick="hexmapClearWorld()">🗑 Wyczyść mapę świata</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Budowniczy świata -->
         <div class="stab-panel active" id="wtab-builder">
           <div class="wb-layout" id="wb-root">
             <div class="wb-sidebar" id="wb-sidebar">
-              <div style="font-size:0.65rem;font-weight:700;color:var(--t3);letter-spacing:0.1em;padding:8px 10px 4px">TEREN</div>
+              <div style="display:flex;gap:3px;padding:6px 6px 2px">
+                <button id="wb-mode-select" class="btn btn-sm btn-primary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Zaznacz heks">⬡ Wybierz</button>
+                <button id="wb-mode-paint" class="btn btn-sm btn-secondary" style="flex:1;font-size:0.68rem;padding:4px 3px" title="Maluj heksy">🖌 Maluj</button>
+              </div>
+              <div style="font-size:0.65rem;font-weight:700;color:var(--t3);letter-spacing:0.1em;padding:4px 10px 2px">TEREN</div>
               <div class="wb-palette" id="wb-palette"></div>
-              <div class="wb-hint">Kliknij puste → maluj<br>Kliknij hex → edytuj<br>Alt+drag → przesuń<br>Scroll → zoom</div>
+              <div class="wb-hint" id="wb-hint">Wybierz typ, kliknij puste → maluj<br>Kliknij hex → edytuj<br>Alt+drag → przesuń<br>Scroll → zoom</div>
               <div id="wb-zoom-label" style="font-size:0.68rem;color:var(--t3);padding:2px 8px">Zoom: 100%</div>
               <button onclick="wbCenter()" style="margin:6px 8px;font-size:0.7rem;padding:5px 8px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer;width:calc(100% - 16px)">⊡ Dopasuj</button>
             </div>
@@ -3495,113 +3668,117 @@
         <button class="stab" data-forgetab="hooks">⚓ Haki</button>
         <button class="stab" data-forgetab="templates">📖 Szablony</button>
         <button class="stab" data-forgetab="encounters">⚔ Spotkania</button>
-        <button class="stab" data-forgetab="mcp">🔌 MCP</button>
       </div>
 
       <!-- Tab: Agent AI -->
       <div id="forge-tab-agent">
 
-        <!-- Two-column workspace -->
-        <div class="forge-workspace">
-
-          <!-- LEFT: Chat -->
-          <div class="card forge-chat-card">
-            <div class="card-header" style="flex-shrink:0">
-              <span class="card-title">⚡ Agent AI</span>
-              <div style="display:flex;gap:6px;align-items:center">
-                <span style="font-size:0.7rem;color:var(--t3)">Ctrl+Enter = wyślij</span>
-                <button class="btn btn-ghost btn-sm" onclick="_forgeNewSession()">↺ Nowa</button>
-              </div>
-            </div>
-            <div id="forge-chat-history" class="forge-chat-history">
-              <div class="forge-bubble forge-bubble--hint">
-                Opisz swój pomysł na przygodę — Agent dopyta i zbuduje strukturę.<br>
-                <span style="font-size:0.74rem;opacity:0.65">Ctrl+Enter wysyła · Enter = nowa linia</span>
-              </div>
-            </div>
-            <div class="forge-input-row">
-              <textarea class="form-input forge-textarea" id="forge-input" rows="3"
-                placeholder="Napisz do agenta…"
-                onkeydown="_forgeInputKey(event)"></textarea>
-              <button class="btn btn-primary forge-send-btn" id="forge-send-btn" onclick="sendForgeMsg()">➤</button>
-            </div>
+        <!-- Collapsible saved ideas shelf (above scenario editor) -->
+        <div class="forge-ideas-shelf" id="forge-ideas-shelf">
+          <div class="forge-ideas-shelf-header" onclick="_forgeIdeasShelfToggle()">
+            <span style="font-size:0.8rem;font-weight:600;color:var(--t2)">📚 Zapisane pomysły</span>
+            <span id="forge-ideas-count" style="font-size:0.72rem;color:var(--t3);margin-right:auto"></span>
+            <span class="forge-ideas-shelf-toggle">▼</span>
           </div>
-
-          <!-- RIGHT: Live scenario editor -->
-          <div class="forge-scenario-col" id="forge-scenario-col">
-
-            <!-- Empty state -->
-            <div id="forge-scenario-empty" class="forge-scenario-empty">
-              <div style="font-size:1.8rem;margin-bottom:8px">📋</div>
-              <div style="font-size:0.82rem;color:var(--t3)">Szkic pojawi się tutaj gdy Agent wygeneruje strukturę.</div>
-            </div>
-
-            <!-- Scenario panel (shown when draft exists) -->
-            <div id="forge-scenario-panel" style="display:none;display:flex;flex-direction:column;height:100%">
-              <!-- Scenario header -->
-              <div class="forge-scenario-header">
-                <input id="fsc-title" class="forge-scenario-title-input" placeholder="Tytuł przygody"
-                  oninput="_forgeMarkDirty()">
-                <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-                  <span id="fsc-dirty-badge" class="forge-dirty-badge" style="display:none">● niezapisane</span>
-                  <button class="btn btn-sm btn-secondary" id="fsc-send-btn" onclick="_forgeSendEditsToAgent()"
-                    title="Wyślij zmiany do Agenta aby kontynuował na podstawie edycji">📤 Wyślij do Agenta</button>
-                  <button class="btn btn-sm btn-primary" onclick="saveForgeIdea()">💾 Zapisz</button>
-                </div>
-              </div>
-
-              <!-- Scenario body (scrollable) -->
-              <div class="forge-scenario-body" id="forge-scenario-body">
-
-                <div class="fsc-section">
-                  <div class="fsc-label">Premisa</div>
-                  <textarea id="fsc-premise" class="fsc-textarea" rows="3"
-                    placeholder="Główna premisa przygody…" oninput="_forgeMarkDirty()"></textarea>
-                </div>
-
-                <div class="fsc-section" id="fsc-meta-row" style="display:none">
-                  <div style="display:flex;gap:8px;flex-wrap:wrap" id="fsc-chips"></div>
-                </div>
-
-                <div class="fsc-section" id="fsc-arcs-section" style="display:none">
-                  <div class="fsc-label">Akty <span id="fsc-arcs-count" style="font-size:0.72rem;color:var(--t3)"></span></div>
-                  <div id="fsc-arcs" style="display:flex;flex-direction:column;gap:8px"></div>
-                </div>
-
-                <div class="fsc-section" id="fsc-hooks-section" style="display:none">
-                  <div class="fsc-label">Hooki <span id="fsc-hooks-count" style="font-size:0.72rem;color:var(--t3)"></span></div>
-                  <div id="fsc-hooks-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-                </div>
-
-                <div class="fsc-section" id="fsc-player-hook-section" style="display:none">
-                  <div class="fsc-label">⚡ Wciągacz gracza</div>
-                  <textarea id="fsc-player-hook" class="fsc-textarea" rows="2"
-                    oninput="_forgeMarkDirty()"></textarea>
-                </div>
-
-                <div class="fsc-section" id="fsc-gm-section" style="display:none">
-                  <div class="fsc-label" style="color:var(--amber,#c9a227)">🔒 GM prywatne</div>
-                  <textarea id="fsc-gm-private" class="fsc-textarea fsc-textarea--amber" rows="2"
-                    oninput="_forgeMarkDirty()"></textarea>
-                </div>
-
-              </div>
-            </div>
+          <div class="forge-ideas-shelf-body">
+            <div id="forge-ideas-list" class="forge-ideas-chips"></div>
           </div>
         </div>
 
-        <!-- IDEAS ROW below both columns -->
-        <div class="forge-ideas-row" id="forge-ideas-row">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-            <span style="font-size:0.8rem;font-weight:600;color:var(--t2)">📚 Zapisane pomysły</span>
-            <span id="forge-ideas-count" style="font-size:0.72rem;color:var(--t3)"></span>
+        <!-- Full-width scenario editor -->
+        <div class="forge-scenario-col" id="forge-scenario-col">
+
+          <!-- Empty state -->
+          <div id="forge-scenario-empty" class="forge-scenario-empty">
+            <div style="font-size:1.8rem;margin-bottom:8px">📋</div>
+            <div style="font-size:0.82rem;color:var(--t3)">Szkic pojawi się tutaj gdy Agent wygeneruje strukturę.</div>
+            <div style="margin-top:12px">
+              <button class="btn btn-sm btn-secondary" onclick="_forgeToggleChat()">⚡ Otwórz Agenta AI</button>
+            </div>
           </div>
-          <div id="forge-ideas-list" class="forge-ideas-chips"></div>
+
+          <!-- Scenario panel (shown when draft exists) -->
+          <div id="forge-scenario-panel" style="display:none">
+            <!-- Scenario header -->
+            <div class="forge-scenario-header">
+              <input id="fsc-title" class="forge-scenario-title-input" placeholder="Tytuł przygody"
+                oninput="_forgeMarkDirty()">
+              <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+                <span id="fsc-dirty-badge" class="forge-dirty-badge" style="display:none">● niezapisane</span>
+                <button class="btn btn-sm btn-secondary" onclick="_forgeToggleChat()" title="Otwórz/zamknij okno czatu">⚡ Agent</button>
+                <button class="btn btn-sm btn-secondary" id="fsc-send-btn" onclick="_forgeSendEditsToAgent()"
+                  title="Wyślij zmiany do Agenta aby kontynuował na podstawie edycji">📤 Wyślij</button>
+                <button class="btn btn-sm btn-primary" onclick="saveForgeIdea()">💾 Zapisz</button>
+              </div>
+            </div>
+
+            <!-- Scenario body -->
+            <div class="forge-scenario-body" id="forge-scenario-body">
+
+              <div class="fsc-section">
+                <div class="fsc-label">Premisa</div>
+                <textarea id="fsc-premise" class="fsc-textarea"
+                  placeholder="Główna premisa przygody…" oninput="_forgeMarkDirty();_fscAutoResize(this)"></textarea>
+              </div>
+
+              <div class="fsc-section" id="fsc-meta-row" style="display:none">
+                <div style="display:flex;gap:8px;flex-wrap:wrap" id="fsc-chips"></div>
+              </div>
+
+              <div class="fsc-section" id="fsc-arcs-section" style="display:none">
+                <div class="fsc-label">Akty <span id="fsc-arcs-count" style="font-size:0.72rem;color:var(--t3)"></span></div>
+                <div id="fsc-arcs" style="display:flex;flex-direction:column;gap:8px"></div>
+              </div>
+
+              <div class="fsc-section" id="fsc-hooks-section" style="display:none">
+                <div class="fsc-label">Hooki <span id="fsc-hooks-count" style="font-size:0.72rem;color:var(--t3)"></span></div>
+                <div id="fsc-hooks-list" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+              </div>
+
+              <div class="fsc-section" id="fsc-player-hook-section" style="display:none">
+                <div class="fsc-label">⚡ Wciągacz gracza</div>
+                <textarea id="fsc-player-hook" class="fsc-textarea"
+                  oninput="_forgeMarkDirty();_fscAutoResize(this)"></textarea>
+              </div>
+
+              <div class="fsc-section" id="fsc-gm-section" style="display:none">
+                <div class="fsc-label" style="color:var(--amber,#c9a227)">🔒 GM prywatne</div>
+                <textarea id="fsc-gm-private" class="fsc-textarea fsc-textarea--amber"
+                  oninput="_forgeMarkDirty();_fscAutoResize(this)"></textarea>
+              </div>
+
+              <div id="fsc-actions" style="display:none;gap:6px;padding-top:12px;border-top:1px solid var(--border);flex-wrap:wrap"></div>
+
+            </div>
+          </div>
         </div>
 
         <!-- hidden forge-draft-card kept for compat -->
         <div id="forge-draft-card" style="display:none"><div id="forge-draft-preview"></div></div>
 
+      </div>
+
+      <!-- Floating draggable Agent chat (rendered outside tab, fixed to viewport) -->
+      <div class="forge-float-chat ffc-hidden" id="forge-float-chat">
+        <div class="forge-float-drag-handle" id="forge-float-drag-handle">
+          <div class="forge-float-drag-dots"><span></span><span></span><span></span></div>
+          <span style="font-size:0.82rem;font-weight:600;color:var(--t1);flex:1">⚡ Agent AI</span>
+          <span style="font-size:0.7rem;color:var(--t3)">Ctrl+Enter = wyślij</span>
+          <button class="btn btn-ghost btn-sm" onclick="_forgeNewSession()" style="padding:2px 6px">↺</button>
+          <button onclick="_forgeToggleChat()" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:1rem;padding:0 2px;line-height:1">✕</button>
+        </div>
+        <div id="forge-chat-history" class="forge-chat-history" style="flex:1;min-height:0">
+          <div class="forge-bubble forge-bubble--hint">
+            Opisz swój pomysł na przygodę — Agent dopyta i zbuduje strukturę.<br>
+            <span style="font-size:0.74rem;opacity:0.65">Ctrl+Enter wysyła · Enter = nowa linia</span>
+          </div>
+        </div>
+        <div class="forge-input-row" style="flex-shrink:0">
+          <textarea class="form-input forge-textarea" id="forge-input" rows="3"
+            placeholder="Napisz do agenta…"
+            onkeydown="_forgeInputKey(event)"></textarea>
+          <button class="btn btn-primary forge-send-btn" id="forge-send-btn" onclick="sendForgeMsg()">➤</button>
+        </div>
       </div>
 
       <!-- Tab: Spotkania -->
@@ -3615,290 +3792,106 @@
 
       <!-- Encounter edit modal -->
       <div id="encounter-modal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('open')">
-        <div class="modal" style="max-width:700px">
-          <button onclick="document.getElementById('encounter-modal').classList.remove('open')" style="position:absolute;top:12px;right:14px;background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer">✕</button>
-          <div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px" id="em-hook-badge"></div>
-          <div style="font-weight:700;font-size:1rem;margin-bottom:14px" id="em-hook-title"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <label style="grid-column:1/-1">
-              <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Tytuł spotkania</div>
-              <input id="em-title" class="input" style="width:100%">
-            </label>
-            <label style="grid-column:1/-1">
-              <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Wyzwalacz</div>
-              <input id="em-trigger" class="input" style="width:100%">
-            </label>
-            <label style="grid-column:1/-1">
-              <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Opis sceny</div>
-              <textarea id="em-scene" class="input" rows="3" style="width:100%;resize:vertical"></textarea>
-            </label>
-            <label style="grid-column:1/-1">
-              <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Wrogowie (jeden na linię: Nazwa ×N — notatka)</div>
-              <textarea id="em-enemies" class="input" rows="4" style="width:100%;resize:vertical;font-family:monospace;font-size:0.82rem"></textarea>
-            </label>
-            <label style="grid-column:1/-1">
-              <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Cele (jeden na linię)</div>
-              <textarea id="em-objectives" class="input" rows="3" style="width:100%;resize:vertical"></textarea>
-            </label>
-            <label>
-              <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">XP szacunkowe</div>
-              <input id="em-xp" class="input" type="number" style="width:100%">
-            </label>
-            <label>
-              <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Notatka o łupach</div>
-              <input id="em-loot" class="input" style="width:100%">
-            </label>
-            <label style="grid-column:1/-1">
-              <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Uwagi GM</div>
-              <textarea id="em-gm-notes" class="input" rows="3" style="width:100%;resize:vertical"></textarea>
-            </label>
-            <!-- Trigger system config -->
-            <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:12px;margin-top:4px">
-              <div style="font-size:0.78rem;font-weight:700;color:var(--t2);margin-bottom:10px;letter-spacing:0.04em">⚙ AUTOMATYCZNE WYZWALANIE</div>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                <div>
-                  <div style="font-size:0.75rem;color:var(--t3);margin-bottom:6px">Typy wyzwalaczy</div>
-                  <div style="display:flex;flex-direction:column;gap:6px">
-                    <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer">
-                      <input type="checkbox" id="em-trig-hex" value="hex_enter">
-                      <span>🗺 hex_enter <span style="font-size:0.7rem;color:var(--t3)">— wejście na nowy hex</span></span>
-                    </label>
-                    <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer">
-                      <input type="checkbox" id="em-trig-nturns" value="n_turns" onchange="document.getElementById('em-nturns-row').style.display=this.checked?'flex':'none'">
-                      <span>🕒 n_turns <span style="font-size:0.7rem;color:var(--t3)">— co N spokojnych tur</span></span>
-                    </label>
-                    <div id="em-nturns-row" style="display:none;align-items:center;gap:6px;padding-left:22px">
-                      <span style="font-size:0.75rem;color:var(--t3)">Co</span>
-                      <input id="em-nturns-interval" type="number" min="1" max="20" value="5" class="input" style="width:60px;padding:3px 6px;font-size:0.82rem">
-                      <span style="font-size:0.75rem;color:var(--t3)">tur</span>
+        <div class="modal" style="max-width:860px">
+          <div class="modal-header">
+            <div>
+              <div class="modal-title" id="em-hook-title">Spotkanie</div>
+              <div class="modal-subtitle" id="em-hook-badge"></div>
+            </div>
+            <button class="btn btn-sm btn-secondary" onclick="document.getElementById('encounter-modal').classList.remove('open')">✕</button>
+          </div>
+          <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <!-- Left column: form fields -->
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div class="form-row">
+                <label class="form-label">Tytuł spotkania</label>
+                <input id="em-title" class="form-input" type="text" oninput="_previewEncounterFromForm()">
+              </div>
+              <div class="form-row">
+                <label class="form-label">Wyzwalacz</label>
+                <input id="em-trigger" class="form-input" type="text" oninput="_previewEncounterFromForm()">
+              </div>
+              <div class="form-row">
+                <label class="form-label">Opis sceny</label>
+                <textarea id="em-scene" class="form-input" rows="1" style="resize:none;overflow:hidden" oninput="_fscAutoResize(this);_previewEncounterFromForm()"></textarea>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Wrogowie <span style="font-size:0.7rem;color:var(--t3)">(Nazwa ×N — notatka, jeden na linię)</span></label>
+                <textarea id="em-enemies" class="form-input" rows="1" style="resize:none;overflow:hidden;font-family:monospace;font-size:0.82rem" oninput="_fscAutoResize(this);_previewEncounterFromForm()"></textarea>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Cele <span style="font-size:0.7rem;color:var(--t3)">(jeden na linię)</span></label>
+                <textarea id="em-objectives" class="form-input" rows="1" style="resize:none;overflow:hidden" oninput="_fscAutoResize(this);_previewEncounterFromForm()"></textarea>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div class="form-row">
+                  <label class="form-label">XP szacunkowe</label>
+                  <input id="em-xp" class="form-input" type="number" oninput="_previewEncounterFromForm()">
+                </div>
+                <div class="form-row">
+                  <label class="form-label">Notatka o łupach</label>
+                  <input id="em-loot" class="form-input" oninput="_previewEncounterFromForm()">
+                </div>
+              </div>
+              <div class="form-row">
+                <label class="form-label">Uwagi GM</label>
+                <textarea id="em-gm-notes" class="form-input" rows="1" style="resize:none;overflow:hidden" oninput="_fscAutoResize(this);_previewEncounterFromForm()"></textarea>
+              </div>
+            </div>
+            <!-- Right column: live preview + collapsed trigger config -->
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em">Podgląd</div>
+              <div id="em-preview" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px;flex:1;overflow-y:auto;max-height:280px;min-height:100px">
+                <div style="color:var(--t3);font-size:0.8rem;text-align:center;padding:20px">Wypełnij pola aby zobaczyć podgląd.</div>
+              </div>
+              <details style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px">
+                <summary style="font-size:0.75rem;font-weight:700;color:var(--t3);cursor:pointer;user-select:none;letter-spacing:.05em;text-transform:uppercase;list-style:none">⚙ Automatyczne wyzwalanie ▾</summary>
+                <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+                  <div style="font-size:0.75rem;color:var(--t3);font-weight:600">Typy wyzwalaczy</div>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer">
+                    <input type="checkbox" id="em-trig-hex" value="hex_enter">
+                    <span>hex_enter <span style="color:var(--t3)">— wejście na hex</span></span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer">
+                    <input type="checkbox" id="em-trig-nturns" value="n_turns" onchange="document.getElementById('em-nturns-row').style.display=this.checked?'flex':'none'">
+                    <span>n_turns <span style="color:var(--t3)">— co N spokojnych tur</span></span>
+                  </label>
+                  <div id="em-nturns-row" style="display:none;align-items:center;gap:6px;padding-left:20px">
+                    <span style="font-size:0.75rem;color:var(--t3)">Co</span>
+                    <input id="em-nturns-interval" type="number" min="1" max="20" value="5" class="form-input" style="width:64px;padding:3px 8px">
+                    <span style="font-size:0.75rem;color:var(--t3)">tur</span>
+                  </div>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer">
+                    <input type="checkbox" id="em-trig-combat" value="combat_end">
+                    <span>combat_end <span style="color:var(--t3)">— po walce</span></span>
+                  </label>
+                  <div class="form-row" style="margin-top:4px">
+                    <label class="form-label">Prawdopodobieństwo</label>
+                    <div style="display:flex;align-items:center;gap:10px">
+                      <input id="em-probability" type="range" min="0" max="1" step="0.05" value="0.25" style="flex:1" oninput="document.getElementById('em-prob-val').textContent=Math.round(this.value*100)+'%'">
+                      <span id="em-prob-val" style="font-size:0.85rem;font-weight:700;color:var(--t1);min-width:36px">25%</span>
                     </div>
-                    <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer">
-                      <input type="checkbox" id="em-trig-combat" value="combat_end">
-                      <span>⚔ combat_end <span style="font-size:0.7rem;color:var(--t3)">— po zakończeniu walki</span></span>
-                    </label>
+                  </div>
+                  <div class="form-row">
+                    <label class="form-label">Biomy <span style="font-size:0.7rem;color:var(--t3)">(plains,forest,dungeon…)</span></label>
+                    <input id="em-biomes" class="form-input" placeholder="np. forest,plains">
+                  </div>
+                  <div class="form-row">
+                    <label class="form-label">Tagi <span style="font-size:0.7rem;color:var(--t3)">(przecinek)</span></label>
+                    <input id="em-tags" class="form-input" placeholder="np. undead,hostile">
                   </div>
                 </div>
-                <div style="display:flex;flex-direction:column;gap:10px">
-                  <label>
-                    <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Prawdopodobieństwo wyzwolenia</div>
-                    <div style="display:flex;align-items:center;gap:8px">
-                      <input id="em-probability" type="range" min="0" max="1" step="0.05" value="0.25" style="flex:1" oninput="document.getElementById('em-prob-val').textContent=Math.round(this.value*100)+'%'">
-                      <span id="em-prob-val" style="font-size:0.82rem;font-weight:600;color:var(--t1);min-width:36px">25%</span>
-                    </div>
-                  </label>
-                  <label>
-                    <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Biomy (przecinek: plains,forest,dungeon,city,road)</div>
-                    <input id="em-biomes" class="input" style="width:100%" placeholder="np. forest,plains">
-                  </label>
-                  <label>
-                    <div style="font-size:0.75rem;color:var(--t3);margin-bottom:3px">Tagi (przecinek)</div>
-                    <input id="em-tags" class="input" style="width:100%" placeholder="np. undead,hostile,ambush">
-                  </label>
-                </div>
-              </div>
+              </details>
             </div>
           </div>
-          <div style="display:flex;gap:8px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap" id="em-footer">
+          <div class="modal-footer" style="justify-content:space-between">
             <button class="btn btn-sm btn-secondary" onclick="document.getElementById('encounter-modal').classList.remove('open')">Anuluj</button>
-            <div style="display:flex;gap:6px;align-items:center">
-              <select id="em-campaign-picker" class="input" style="font-size:0.8rem;padding:4px 8px"></select>
-              <button class="btn btn-sm btn-secondary" id="em-inject-btn" onclick="_injectEncounterFromModal()">⚡ Wstrzyknij do kampanii</button>
-            </div>
-            <button class="btn btn-sm btn-primary" onclick="_saveEncounterEdits()">💾 Zapisz zmiany</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tab: MCP -->
-      <div id="forge-tab-mcp" style="display:none">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
-
-          <div class="card" style="padding:16px">
-            <div class="card-header"><span class="card-title">🔌 Konfiguracja MCP</span></div>
-            <div style="padding:14px 0 0;font-size:0.82rem;color:var(--t2);display:flex;flex-direction:column;gap:10px">
-              <div>
-                <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Typ transportu</div>
-                <div style="font-family:monospace;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:0.82rem">streamable-http</div>
-              </div>
-              <div>
-                <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">URL (DEV)</div>
-                <div style="font-family:monospace;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:6px 10px;font-size:0.82rem;word-break:break-all">https://aigm-mcp.studio-colorbox.com/</div>
-              </div>
-              <div>
-                <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Claude Desktop / Cursor config</div>
-                <pre style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;font-size:0.72rem;overflow-x:auto;margin:0">{
-  "mcpServers": {
-    "ai-gm": {
-      "type": "http",
-      "url": "https://aigm-mcp.studio-colorbox.com/"
-    }
-  }
-}</pre>
-              </div>
-              <div>
-                <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Dokumentacja</div>
-                <a href="https://modelcontextprotocol.io/docs" target="_blank" style="color:var(--accent);font-size:0.82rem">modelcontextprotocol.io/docs ↗</a>
-              </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="em-campaign-picker" class="form-input" style="font-size:0.8rem;padding:4px 10px;min-width:160px"></select>
+              <button class="btn btn-sm btn-secondary" id="em-inject-btn" onclick="_injectEncounterFromModal()">⚡ Wstrzyknij</button>
+              <button class="btn btn-sm btn-primary" onclick="_saveEncounterEdits()">💾 Zapisz zmiany</button>
             </div>
           </div>
-
-          <div class="card" style="padding:16px">
-            <div class="card-header"><span class="card-title">🤖 Prompty dla agentów AI</span><span style="font-size:0.72rem;color:var(--t3);margin-left:8px">— wklej w Perplexity, Claude lub Cursor z MCP</span></div>
-            <div style="padding:14px 0 0;display:flex;flex-direction:column;gap:12px">
-
-              <div>
-                <div style="font-size:0.75rem;font-weight:700;color:var(--t1);margin-bottom:6px">Pełny workflow tworzenia kampanii (z przedmiotami)</div>
-                <div style="position:relative">
-                  <pre id="mcp-prompt-workflow" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;font-size:0.7rem;overflow-x:auto;margin:0;white-space:pre-wrap;max-height:140px;overflow-y:auto">Jesteś kreatywnym asystentem do tworzenia kampanii RPG w systemie AI-GM.
-Komunikuj się WYŁĄCZNIE po polsku.
-
-## TRYB PRACY
-
-### FAZA 1 — Rozmowa twórcza (zanim cokolwiek zapiszesz)
-Rozmawiaj z użytkownikiem jak z autorem scenariusza. Zadawaj pytania:
-- Jaki klimat/nastrój? (mroczny, epicki, komediowy, tajemniczy...)
-- Jaki motyw przewodni? (zemsta, odkrycie, polityka, klątwa...)
-- Jaki poziom trudności? (łatwy / średni / trudny / epicki)
-- Jakiego rodzaju bohaterowie pasują do tej historii?
-- Czy masz już pomysł na antagonistę albo kluczową lokację?
-
-Zbieraj pomysły, podsumuj je w kilku zdaniach i zapytaj użytkownika:
-"Czy to dobry kierunek? Mam tworzyć kampanię na tej podstawie?"
-
-Dopiero gdy użytkownik potwierdzi — przejdź do Fazy 2.
-
-### FAZA 2 — Budowanie kampanii przez MCP tools
-
-Zawsze zacznij od: forge_workflow_guide() — przeczytaj schemat przed tworzeniem.
-
-Kolejność kroków:
-1. forge_create_idea(title, premise, tone, themes, difficulty)
-2. forge_create_template(idea_id, title, description, atmosphere, difficulty_rating)
-3. forge_generate_plan(template_id, act_count=5)
-   → czekaj do 3 minut, jeśli timeout sprawdź forge_list_templates(status="all") czy plan=YES
-4. forge_publish_template(template_id)
-   → po tym gracze widzą kampanię natychmiast, NIE trzeba forge_launch_campaign
-
-### FAZA 3 — Przedmioty kampanii (OBOWIĄZKOWE)
-
-Każda kampania MUSI mieć unikalne przedmioty. Dodaj minimum: 2-3 bronie + 1-2 zbroje + 2-3 konsumable.
-Zawsze podaj template_id=ID przy każdym forge_create_game_entry!
-
-Broń — pełny schemat:
-forge_create_game_entry("weapon", {
-  "key": "snake_case_unikalny",
-  "label": "Polska Nazwa",
-  "weapon_type": "melee",         ← TYLKO: melee | ranged | spell
-  "weapon_slot": "main_hand",     ← main_hand | two_handed | off_hand_only | either
-  "damage_die": "d8",             ← TYLKO: d4 | d6 | d8 | d10 | d12  (BEZ "1" z przodu!)
-  "linked_stat": "STR",           ← TYLKO: STR | DEX | INT  (tylko te trzy!)
-  "rarity": 2,                    ← INTEGER: 1=pospolity 2=niepospolity 3=rzadki 4=epicki
-  "description": "Opis dla gracza.",
-  "allowed_classes": [],          ← [] = wszystkie klasy
-  "two_handed": false,            ← true gdy weapon_slot="two_handed"
-  "finesse": false,               ← true dla broni DEX-based
-  "targeting": "single",          ← single | aoe | line
-  "range_m": 0,                   ← 0 dla melee, np. 20 dla łuku ranged
-  "value_gp": 50,
-  "note": ""                      ← notatka GM (zdolności specjalne)
-}, template_id=TEMPLATE_ID)
-
-Konsumable:
-forge_create_game_entry("consumable", {
-  "key": "snake_case_unikalny",
-  "label": "Polska Nazwa",
-  "effect_type": "heal_hp",       ← TYLKO: heal_hp | restore_mana | cure_condition | buff
-  "effect_dice": "2d4",           ← kość efektu, np. "2d4" (dla heal_hp = HP przywrócone)
-  "effect_bonus": 0,              ← flat bonus do efektu
-  "base_price": 30,               ← WYMAGANE — cena w złocie
-  "charges": 1,
-  "rarity": 1,                    ← INTEGER 1-4
-  "description": "Opis dla gracza."
-}, template_id=TEMPLATE_ID)
-
-Zbroja:
-forge_create_game_entry("armor", {
-  "key": "snake_case_unikalny",
-  "label": "Polska Nazwa",
-  "ac_bonus": 2,                  ← WYMAGANE — bonus do AC
-  "armor_coverage": "torso",      ← TYLKO: torso | head | limb_arm | limb_leg | full
-  "value_gp": 80,                 ← WYMAGANE — cena
-  "rarity": 2,
-  "description": "Opis dla gracza.",
-  "weight_kg": 5.0
-}, template_id=TEMPLATE_ID)
-
-### ZASADY
-- Nie wymyślaj pól spoza schematu
-- key: zawsze lowercase_snake_case, unikalne między sesjami
-- rarity: ZAWSZE liczba całkowita (1/2/3/4), nigdy string
-- damage_die: TYLKO d4/d6/d8/d10/d12 — bez prefiksu "1"
-- linked_stat: TYLKO STR/DEX/INT
-- effect_type: TYLKO heal_hp/restore_mana/cure_condition/buff
-- base_price dla konsumabli: WYMAGANE
-- Pytaj o potwierdzenie przed publish
-- Podsumowuj po każdym kroku</pre>
-                  <button onclick="_copyMcpPrompt('mcp-prompt-workflow')" style="position:absolute;top:6px;right:6px;font-size:0.65rem;padding:2px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--t2)">Kopiuj</button>
-                </div>
-              </div>
-
-              <div>
-                <div style="font-size:0.75rem;font-weight:700;color:var(--t1);margin-bottom:6px">Tworzenie przedmiotów kampanii</div>
-                <div style="position:relative">
-                  <pre id="mcp-prompt-items" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;font-size:0.7rem;overflow-x:auto;margin:0;white-space:pre-wrap;max-height:220px;overflow-y:auto">Utwórz przedmioty dla kampanii o ID=TEMPLATE_ID.
-Minimum: 2-3 bronie + 1-2 zbroje/przedmioty + 2-3 konsumable.
-Wszystkie muszą pasować klimatem do kampanii.
-
-## BROŃ (weapon)
-forge_create_game_entry("weapon", {
-  "key": "snake_case_unikalny",
-  "label": "Polska Nazwa",
-  "weapon_type": "melee",          ← TYLKO: melee | ranged | spell
-  "weapon_slot": "main_hand",      ← main_hand | two_handed | off_hand_only | either
-  "damage_die": "d8",              ← TYLKO: d4 | d6 | d8 | d10 | d12  (BEZ "1" z przodu!)
-  "linked_stat": "STR",            ← TYLKO: STR | DEX | INT  (tylko te trzy!)
-  "rarity": 2,                     ← INTEGER: 1=pospolity 2=niepospolity 3=rzadki 4=epicki
-  "description": "Opis przedmiotu dla gracza.",
-  "allowed_classes": [],           ← [] = wszystkie klasy
-  "two_handed": false,             ← true gdy weapon_slot="two_handed"
-  "finesse": false,                ← true dla broni DEX-based (np. sztylet)
-  "targeting": "single",           ← single | aoe | line
-  "range_m": 0,                    ← 0 dla melee; np. 20 dla łuku
-  "value_gp": 50,
-  "note": ""                       ← notatka GM (zdolności specjalne)
-}, template_id=TEMPLATE_ID)
-
-## KONSUMABLE (consumable)
-forge_create_game_entry("consumable", {
-  "key": "snake_case_unikalny",
-  "label": "Polska Nazwa",
-  "effect_type": "heal_hp",        ← TYLKO: heal_hp | restore_mana | cure_condition | buff
-  "effect_dice": "2d4",            ← kość efektu (dla heal_hp = HP przywrócone)
-  "effect_bonus": 0,               ← flat bonus do efektu
-  "base_price": 30,                ← WYMAGANE — cena w złocie
-  "charges": 1,
-  "rarity": 1,                     ← INTEGER 1-4
-  "description": "Opis dla gracza."
-}, template_id=TEMPLATE_ID)
-
-## ZBROJA (armor)
-forge_create_game_entry("armor", {
-  "key": "snake_case_unikalny",
-  "label": "Polska Nazwa",
-  "ac_bonus": 2,                   ← WYMAGANE — bonus do AC (liczba całkowita)
-  "armor_coverage": "torso",       ← TYLKO: torso | head | limb_arm | limb_leg | full
-  "value_gp": 80,                  ← WYMAGANE — cena
-  "rarity": 2,                     ← INTEGER 1-4
-  "description": "Opis dla gracza.",
-  "weight_kg": 5.0
-}, template_id=TEMPLATE_ID)</pre>
-                  <button onclick="_copyMcpPrompt('mcp-prompt-items')" style="position:absolute;top:6px;right:6px;font-size:0.65rem;padding:2px 8px;background:var(--bg2);border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--t2)">Kopiuj</button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
         </div>
       </div>
 
@@ -4225,18 +4218,9 @@ forge_create_game_entry("armor", {
         </div>
       </div>
 
-      <!-- MCP panel -->
+      <!-- MCP panel — filled by _loadToolsMcp() -->
       <div class="stab-panel" id="toolstab-mcp" style="display:none">
-        <div class="card" style="margin-top:12px">
-          <div class="card-header"><span class="card-title">MCP — status i narzędzia</span></div>
-          <div style="padding:14px;color:var(--t3);font-size:0.85rem">
-            <p style="margin-bottom:8px">Model Context Protocol — dostęp do narzędzi gry przez AI.</p>
-            <p>Szczegółowe statystyki MCP dostępne w <a href="/admin2/#analytics" target="_blank" style="color:var(--accent)">panelu v2 ↗</a></p>
-            <div style="margin-top:14px" id="mcp-status-display">
-              <div style="color:var(--t3);font-size:0.8rem">Ładowanie statusu…</div>
-            </div>
-          </div>
-        </div>
+        <div style="padding:24px;text-align:center;color:var(--t3);font-size:0.85rem">Ładowanie MCP…</div>
       </div>
     </section>
     <section class="section" id="section-system">
@@ -4436,7 +4420,7 @@ forge_create_game_entry("armor", {
       <div class="stab-panel" id="systab-voice" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
           <div>
-            <span style="font-weight:600;font-size:0.95rem">Piper TTS · Whisper STT</span>
+            <span style="font-weight:600;font-size:0.95rem">TTS · Whisper STT</span>
             <span style="font-size:0.78rem;color:var(--t3);margin-left:8px">Serwer głosu AI-GM</span>
           </div>
           <div id="voice-status-badge"><span class="badge badge-slate">Sprawdzanie…</span></div>
@@ -4460,11 +4444,86 @@ forge_create_game_entry("armor", {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
           <div class="card">
             <div class="card-header"><span class="card-title">TTS — Synteza mowy</span><span id="v-tts-enabled"></span></div>
-            <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">
-              <div class="form-row"><label class="form-label">Głos</label><select class="form-input" id="v-voice-select"></select></div>
-              <div class="form-row"><label class="form-label">Prędkość</label><input class="form-input" type="number" id="v-tts-speed-input" step="0.05" min="0.5" max="2" style="width:100px"></div>
-              <div class="form-row"><label class="form-label">Noise scale</label><input class="form-input" type="number" id="v-tts-noise-input" step="0.01" min="0" max="1" style="width:100px"></div>
-              <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+            <div style="padding:12px 16px;display:flex;flex-direction:column;gap:14px">
+
+              <!-- Voice -->
+              <div>
+                <div class="form-row"><label class="form-label">Głos</label><select class="form-input" id="v-voice-select"></select></div>
+              </div>
+
+              <!-- Speed -->
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <label class="form-label" style="margin:0">Prędkość mowy</label>
+                  <strong style="font-size:0.85rem;color:var(--accent)" id="v-tts-speed-val">1.0</strong>
+                </div>
+                <input type="range" id="v-tts-speed-input" min="0.5" max="2.0" step="0.05" value="1.0" style="width:100%" oninput="document.getElementById('v-tts-speed-val').textContent=parseFloat(this.value).toFixed(2)">
+                <div style="font-size:0.7rem;color:var(--t3);margin-top:3px">Tempo wymowy. 1.0 = naturalne, 0.8 = wolniej, 1.3 = szybciej.</div>
+              </div>
+
+              <!-- Noise scale (Piper) -->
+              <div style="opacity:0.6">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <label class="form-label" style="margin:0;color:var(--t3)">Noise scale <span style="font-size:0.68rem">(tylko Piper)</span></label>
+                  <strong style="font-size:0.85rem;color:var(--t3)" id="v-tts-noise-val">0.67</strong>
+                </div>
+                <input type="range" id="v-tts-noise-input" min="0" max="1" step="0.01" value="0.667" style="width:100%" oninput="document.getElementById('v-tts-noise-val').textContent=parseFloat(this.value).toFixed(2)">
+                <div style="font-size:0.7rem;color:var(--t3);margin-top:3px">Wariancja głosu Piper. Wyższa = bardziej zróżnicowana intonacja.</div>
+              </div>
+
+              <div style="border-top:1px solid var(--border);padding-top:4px;font-size:0.72rem;color:var(--accent);font-weight:600;letter-spacing:0.03em">⚙ F5-TTS</div>
+
+              <!-- NFE steps -->
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <label class="form-label" style="margin:0">Kroki dyfuzji (NFE)</label>
+                  <strong style="font-size:0.85rem;color:var(--accent)" id="v-tts-nfe-val">32</strong>
+                </div>
+                <input type="range" id="v-tts-nfe-input" min="4" max="64" step="1" value="32" style="width:100%" oninput="document.getElementById('v-tts-nfe-val').textContent=this.value">
+                <div style="font-size:0.7rem;color:var(--t3);margin-top:3px">Liczba kroków modelu dyfuzji. 16 = szybciej, 32 = balans, 64 = najlepsza jakość (ale wolniej).</div>
+              </div>
+
+              <!-- CFG strength -->
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <label class="form-label" style="margin:0">Wierność głosu (CFG)</label>
+                  <strong style="font-size:0.85rem;color:var(--accent)" id="v-tts-cfg-val">2.0</strong>
+                </div>
+                <input type="range" id="v-tts-cfg-input" min="0" max="5" step="0.1" value="2.0" style="width:100%" oninput="document.getElementById('v-tts-cfg-val').textContent=parseFloat(this.value).toFixed(1)">
+                <div style="font-size:0.7rem;color:var(--t3);margin-top:3px">Siła dopasowania do referencyjnego głosu. Zalecane 1.5–2.5. Zbyt wysoka wartość może powodować artefakty.</div>
+              </div>
+
+              <!-- Cross-fade duration -->
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <label class="form-label" style="margin:0">Cross-fade segmentów</label>
+                  <strong style="font-size:0.85rem;color:var(--accent)" id="v-tts-crossfade-val">0.15</strong>
+                </div>
+                <input type="range" id="v-tts-crossfade-input" min="0" max="1" step="0.01" value="0.15" style="width:100%" oninput="document.getElementById('v-tts-crossfade-val').textContent=parseFloat(this.value).toFixed(2)">
+                <div style="font-size:0.7rem;color:var(--t3);margin-top:3px">Długość wygładzenia przejścia między segmentami długiego tekstu (sekundy). 0 = bez wygładzenia.</div>
+              </div>
+
+              <!-- Sway sampling coef -->
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <label class="form-label" style="margin:0">Sway sampling</label>
+                  <strong style="font-size:0.85rem;color:var(--accent)" id="v-tts-sway-val">-1.0</strong>
+                </div>
+                <input type="range" id="v-tts-sway-input" min="-1" max="1" step="0.05" value="-1" style="width:100%" oninput="document.getElementById('v-tts-sway-val').textContent=parseFloat(this.value).toFixed(2)">
+                <div style="font-size:0.7rem;color:var(--t3);margin-top:3px">Eksperymentalny sampler. -1 = wyłączony (domyślnie). Dodatnie wartości mogą poprawić jakość przy niskim NFE.</div>
+              </div>
+
+              <!-- Seed -->
+              <div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                  <label class="form-label" style="margin:0">Seed</label>
+                  <label style="display:flex;gap:6px;align-items:center;font-size:0.75rem;color:var(--t3)"><input type="checkbox" id="v-tts-seed-random" checked onchange="_onSeedRandomToggle()"> losowy</label>
+                </div>
+                <input class="form-input" type="number" id="v-tts-seed-input" value="-1" min="-1" style="width:120px" disabled>
+                <div style="font-size:0.7rem;color:var(--t3);margin-top:3px">-1 = losowy wynik przy każdym wywołaniu. Stała liczba daje powtarzalne audio (przydatne do testów).</div>
+              </div>
+
+              <div style="display:flex;gap:8px;align-items:center;margin-top:2px">
                 <button class="btn btn-primary btn-sm" onclick="saveTTSConfig(this)">Zapisz TTS</button>
                 <button class="btn btn-sm btn-secondary" id="v-tts-toggle-btn" onclick="toggleVoiceTTS()">Włącz / Wyłącz</button>
               </div>
@@ -4617,7 +4676,15 @@ forge_create_game_entry("armor", {
       </div>
       <div class="card">
         <div class="card-header"><span class="card-title">Drzewo graczy</span></div>
-        <div id="invite-tree" style="padding:8px;overflow:auto;max-height:500px;font-family:monospace;font-size:0.8rem"></div>
+        <div id="invite-tree-svg-wrap" style="overflow-x:auto;min-height:300px;background:rgba(0,0,0,0.15);border-radius:8px;padding:16px;position:relative;margin:8px">
+          <div id="inv-tree-loading" style="text-align:center;padding:60px;color:var(--t3)">Ładowanie drzewa…</div>
+          <svg id="invite-tree-svg" style="display:block"></svg>
+        </div>
+        <div style="padding:8px 12px 12px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.78rem;color:var(--t3)">
+          <span><span style="color:#4caf78">●</span> Aktywny (&lt;30 dni, ≥10 tur)</span>
+          <span><span style="color:#c9944a">●</span> Mało aktywny (1–9 tur)</span>
+          <span><span style="color:#6b665e">●</span> Nieaktywny</span>
+        </div>
       </div>
     </section>
 
@@ -4879,7 +4946,7 @@ forge_create_game_entry("armor", {
     document.querySelectorAll('#map-tabs .stab').forEach(b => b.classList.toggle('active', b === btn));
     document.querySelectorAll('#section-map .stab-panel').forEach(p =>
       p.classList.toggle('active', p.id === `wtab-${tab}`));
-    _loadMapTab(tab);
+    _loadMapTab(tab).then(() => { if (tab === 'builder') setTimeout(wbCenter, 80); });
   });
 
   // Edit modal — weapons
@@ -5805,7 +5872,7 @@ forge_create_game_entry("armor", {
 
   function _loadWorldTab(tab) {
     if (_worldLoaded.has(tab)) return Promise.resolve();
-    const fn = { npcs:_loadNPCs, enemies:_loadEnemies, loot:_loadBestiaryLoot, pending:_loadBestiaryPending, hexmap:_hexmapLoadStats }[tab];
+    const fn = { npcs:_loadNPCs, enemies:_loadEnemies, loot:_loadBestiaryLoot, pending:_loadBestiaryPending }[tab];
     if (!fn) return Promise.resolve();
     _worldLoaded.add(tab);
     return fn().catch(err => { _worldLoaded.delete(tab); console.warn('World tab failed:', tab, err.message); });
@@ -5813,7 +5880,7 @@ forge_create_game_entry("armor", {
 
   function _loadMapTab(tab) {
     if (_worldLoaded.has(tab)) return Promise.resolve();
-    const fn = { locations:_loadLocations, review:_loadPendingLocations, terrain:_loadTerrain, builder:_loadBuilder }[tab];
+    const fn = { locations:_loadLocations, review:_loadPendingLocations, terrain:_loadTerrain, builder:_loadBuilder, generate:_hexmapLoadStats }[tab];
     if (!fn) return Promise.resolve();
     _worldLoaded.add(tab);
     return fn().catch(err => { _worldLoaded.delete(tab); console.warn('Map tab failed:', tab, err.message); });
@@ -5842,6 +5909,9 @@ forge_create_game_entry("armor", {
         <div class="card" style="padding:14px;border-color:var(--green)">
           <div style="color:var(--green);font-weight:600;margin-bottom:10px">✓ Wygenerowano ${d.hexes_created} heksów (seed: ${seed})</div>
           <table style="width:100%;font-size:0.82rem">${rows}</table>
+          <div style="margin-top:12px">
+            <button class="btn btn-sm btn-secondary" onclick="document.querySelector('[data-mtap=builder]')?.click()">🗺 Przejdź do budowniczego →</button>
+          </div>
         </div>`;
       _hexmapLoadStats();
     } catch(e) {
@@ -5850,6 +5920,23 @@ forge_create_game_entry("armor", {
     } finally {
       btn.disabled = false;
       btn.textContent = '🌍 Generuj świat';
+    }
+  }
+
+  async function hexmapClearWorld() {
+    const word = prompt('Wpisz DELETE aby potwierdzić wyczyszczenie całej mapy świata:');
+    if (word !== 'DELETE') { _showToast('Anulowano.', 'info'); return; }
+    try {
+      const d = await apiFetch('/api/admin/world/clear', { method: 'DELETE' });
+      _showToast(`Usunięto ${d.hexes_deleted} heksów. Mapa wyczyszczona.`, 'success');
+      _worldLoaded.delete('generate');
+      _worldLoaded.delete('builder');
+      // Clear builder SVG immediately so stale map is not visible
+      const svg = document.getElementById('wb-svg');
+      if (svg) svg.innerHTML = '';
+      await _hexmapLoadStats();
+    } catch(e) {
+      _showToast(e.message || 'Błąd czyszczenia.', 'error');
     }
   }
 
@@ -6483,7 +6570,7 @@ forge_create_game_entry("armor", {
         <td class="td-muted">${_esc(l.biome||l.location_subtype||'—')}</td>
         <td class="td-mono">${l.tier||'—'}</td>
         <td>${l.safe_for_rest ? '<span class="badge badge-green">🛏 Safe</span>' : '<span class="td-muted">—</span>'}</td>
-        <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
+        <td class="td-actions"><button class="btn btn-sm btn-secondary" style="font-size:0.7rem;padding:2px 6px;margin-right:4px" title="Przypisz NPC/Wrogów" onclick="openLocNpcModal('${_esc(l.key)}')">👤</button><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
       </tr>`;
     };
     const renderBranch = (parentKey, depth) => {
@@ -6524,6 +6611,111 @@ forge_create_game_entry("armor", {
       _renderLocTree();
       _wireRowActions('locations-table');
     } catch(e) { tbody.innerHTML = _errRow(7, e.message); }
+  }
+
+  async function openLocNpcModal(locKey) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:640px">
+      <div class="modal-head"><span>👤 NPC / Wrogowie — <code>${_esc(locKey)}</code></span><button id="lnm-x">✕</button></div>
+      <div style="padding:16px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <div style="font-size:0.75rem;font-weight:600;color:var(--t2);margin-bottom:6px">NPC w lokacji</div>
+          <div id="lnm-npc-chips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px"></div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <select id="lnm-npc-sel" style="flex:1;background:var(--bg3);color:var(--t1);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:0.78rem">
+              <option value="">— wybierz NPC —</option>
+            </select>
+            <button class="btn btn-sm btn-secondary" id="lnm-npc-add">+ Dodaj</button>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem;font-weight:600;color:var(--t2);margin-bottom:6px">Wrogowie w lokacji</div>
+          <div id="lnm-enemy-chips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:28px"></div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <select id="lnm-enemy-sel" style="flex:1;background:var(--bg3);color:var(--t1);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:0.78rem">
+              <option value="">— wybierz wroga —</option>
+            </select>
+            <button class="btn btn-sm btn-secondary" id="lnm-enemy-add">+ Dodaj</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" id="lnm-cancel">Anuluj</button>
+        <button class="btn btn-primary" id="lnm-save">✓ Zapisz</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    let npcKeys = [], enemyKeys = [];
+
+    const renderChips = (containerId, keys, type) => {
+      const el = overlay.querySelector(containerId);
+      if (!keys.length) { el.innerHTML = '<span style="color:var(--t3);font-size:0.75rem">Brak</span>'; return; }
+      el.innerHTML = keys.map(k =>
+        `<span style="display:flex;align-items:center;gap:4px;background:var(--bg3);padding:3px 8px;border-radius:12px;font-size:0.75rem">${_esc(k)}<button data-remove="${_esc(k)}" data-type="${type}" style="background:none;border:none;cursor:pointer;color:var(--t3);font-size:0.8rem;padding:0 0 0 2px">×</button></span>`
+      ).join('');
+    };
+    const refreshChips = () => {
+      renderChips('#lnm-npc-chips', npcKeys, 'npc');
+      renderChips('#lnm-enemy-chips', enemyKeys, 'enemy');
+    };
+
+    overlay.addEventListener('click', e => {
+      const btn = e.target.closest('[data-remove]');
+      if (!btn) return;
+      if (btn.dataset.type === 'npc') npcKeys = npcKeys.filter(x => x !== btn.dataset.remove);
+      else enemyKeys = enemyKeys.filter(x => x !== btn.dataset.remove);
+      refreshChips();
+    });
+
+    try {
+      const [loc, npcsData, enemiesData] = await Promise.all([
+        apiFetch(`/api/locations/${locKey}`),
+        apiFetch('/api/admin/npcs'),
+        apiFetch('/api/admin/enemies'),
+      ]);
+      npcKeys = Array.isArray(loc.npc_keys) ? [...loc.npc_keys] : [];
+      enemyKeys = Array.isArray(loc.enemy_keys) ? [...loc.enemy_keys] : [];
+      refreshChips();
+      const npcSel = overlay.querySelector('#lnm-npc-sel');
+      const enemySel = overlay.querySelector('#lnm-enemy-sel');
+      (npcsData.data||npcsData.items||[]).forEach(n => {
+        const opt = document.createElement('option');
+        opt.value = String(n.key||n.id||'');
+        opt.textContent = n.label||n.key||String(n.id);
+        npcSel.appendChild(opt);
+      });
+      (enemiesData.items||[]).forEach(e => {
+        const opt = document.createElement('option');
+        opt.value = e.key;
+        opt.textContent = `${e.label||e.key} (T${e.tier||1})`;
+        enemySel.appendChild(opt);
+      });
+    } catch(err) { _showToast(err.message||'Błąd ładowania.','error'); }
+
+    overlay.querySelector('#lnm-npc-add').onclick = () => {
+      const v = overlay.querySelector('#lnm-npc-sel').value;
+      if (v && !npcKeys.includes(v)) { npcKeys.push(v); refreshChips(); }
+    };
+    overlay.querySelector('#lnm-enemy-add').onclick = () => {
+      const v = overlay.querySelector('#lnm-enemy-sel').value;
+      if (v && !enemyKeys.includes(v)) { enemyKeys.push(v); refreshChips(); }
+    };
+
+    const closeModal = () => overlay.remove();
+    overlay.querySelector('#lnm-x').onclick = closeModal;
+    overlay.querySelector('#lnm-cancel').onclick = closeModal;
+    overlay.querySelector('#lnm-save').onclick = async () => {
+      try {
+        await apiFetch(`/api/locations/admin/locations/${encodeURIComponent(locKey)}`, {
+          method: 'PATCH', body: JSON.stringify({ npc_keys: npcKeys, enemy_keys: enemyKeys }),
+        });
+        _showToast('Zapisano NPC/Wrogów.', 'success');
+        _worldLoaded.delete('locations');
+        closeModal();
+      } catch(err) { _showToast(err.message||'Błąd zapisu.','error'); }
+    };
   }
 
   async function _loadNPCs() {
@@ -6706,20 +6898,28 @@ forge_create_game_entry("armor", {
     if (!container) return;
     container.innerHTML = '<div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div>';
     try {
-      const [locRes] = await Promise.allSettled([
+      const [locRes, subRes] = await Promise.allSettled([
         apiFetch('/api/admin/world/pending/locations'),
+        apiFetch('/api/admin/world/hexes/submappable'),
       ]);
       const locs = locRes.status==='fulfilled' ? (locRes.value?.items||locRes.value||[]) : [];
+      const submappable = subRes.status==='fulfilled' ? (subRes.value?.hexes||[]) : [];
       const totalPending = locs.length;
-      if (!totalPending) {
+      if (!totalPending && !submappable.length) {
         container.innerHTML = '<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Brak oczekujących</div><div class="empty-sub">Wszystkie wpisy zatwierdzone.</div></div>';
         return;
       }
-      const mkLocRow = p => `<tr>
+      const mkLocRow = p => {
+        const hasCoords = p.world_hex_q != null && p.world_hex_r != null;
+        const coordCell = hasCoords
+          ? `<td class="td-mono" style="font-size:0.72rem;white-space:nowrap">(${p.world_hex_q},${p.world_hex_r})</td>`
+          : `<td class="td-muted" style="font-size:0.72rem">—</td>`;
+        return `<tr>
         <td class="td-mono" style="font-size:0.72rem">${_esc(p.key)}</td>
         <td class="td-sticky td-name">${_esc(p.label||p.key)}</td>
         <td class="td-muted">${_esc(p.location_type||'—')}</td>
         <td class="td-muted">${_esc(p.biome||'—')}</td>
+        ${coordCell}
         <td class="td-muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc((p.description||'').slice(0,70))}</td>
         <td class="td-actions" style="white-space:nowrap">
           <button class="btn btn-sm btn-primary" style="font-size:0.72rem" onclick="reviewEntity('location','${_esc(p.key)}','approve',this)">✓ Zatwierdź</button>
@@ -6727,20 +6927,300 @@ forge_create_game_entry("armor", {
           <button class="btn btn-sm btn-danger" style="font-size:0.72rem" onclick="reviewEntity('location','${_esc(p.key)}','discard',this)">✕</button>
         </td>
       </tr>`;
-      container.innerHTML = `<div class="table-wrap"><table class="data-table" id="pending-loc-table">
+      };
+      const locSection = totalPending ? `<div class="table-wrap"><table class="data-table" id="pending-loc-table">
         <thead><tr>
           <th><div class="th-inner">Klucz</div></th>
           <th class="td-sticky"><div class="th-inner">Nazwa</div></th>
           <th><div class="th-inner">Typ</div></th>
           <th><div class="th-inner">Biom</div></th>
+          <th><div class="th-inner">Koord.</div></th>
           <th><div class="th-inner">Opis</div></th>
           <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
         </tr></thead>
         <tbody>${locs.map(mkLocRow).join('')}</tbody>
-      </table></div>`;
+      </table></div>` : '';
+      const subSection = submappable.length ? `
+        <div style="padding:10px 16px 6px;font-weight:600;font-size:0.82rem;color:var(--t2);border-top:1px solid var(--border);margin-top:${totalPending?'12px':'0'}">
+          🏘️ Heksy z podmapą (${submappable.length})
+          <span style="font-size:0.7rem;font-weight:400;color:var(--t3);margin-left:8px">Typy terenu które mogą posiadać lokalną podmapę</span>
+        </div>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr>
+            <th><div class="th-inner">Typ</div></th>
+            <th><div class="th-inner">Koord.</div></th>
+            <th class="td-sticky"><div class="th-inner">Etykieta</div></th>
+            <th><div class="th-inner">Submap</div></th>
+            <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
+          </tr></thead>
+          <tbody>${submappable.map(h => `<tr>
+            <td style="white-space:nowrap"><span style="font-size:1rem">${_esc(h.map_icon||'⬡')}</span> <span class="td-muted" style="font-size:0.75rem">${_esc(h.type_label||h.hex_type)}</span></td>
+            <td class="td-mono" style="font-size:0.72rem">(${h.q},${h.r})</td>
+            <td class="td-sticky td-name">${_esc(h.label||'—')}</td>
+            <td><span class="badge ${h.submap_exists?'badge-green':'badge-slate'}">${h.submap_exists?'✓ Istnieje':'Brak'}</span></td>
+            <td class="td-actions" style="white-space:nowrap">
+              ${h.submap_exists?`<button class="btn btn-sm btn-primary" style="font-size:0.72rem" onclick="openSubmapModal(${h.q},${h.r})">✎ Edytuj</button> `:''}
+              <select id="sub-sz-${h.q}-${h.r}" style="background:var(--bg3);color:var(--t1);border:1px solid var(--border);border-radius:4px;padding:2px 3px;font-size:0.68rem;height:26px">
+                <option value="1">S (7)</option><option value="2">M (19)</option><option value="3" selected>L (37)</option><option value="4">XL (61)</option>
+              </select>
+              <button class="btn btn-sm btn-secondary" style="font-size:0.72rem"
+                onclick="pendingGenSubmap(${h.q},${h.r},this)">
+                ${h.submap_exists?'↺ Regen':'🏘 Generuj'}
+              </button>
+            </td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : '';
+      container.innerHTML = locSection + subSection;
     } catch(e) {
       container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);font-size:0.8rem">${_esc(e.message)}</div>`;
     }
+  }
+
+  async function pendingGenSubmap(q, r, btn) {
+    const szSel = document.getElementById(`sub-sz-${q}-${r}`);
+    const radius = szSel ? parseInt(szSel.value) : 3;
+    btn.disabled = true; btn.textContent = '⏳';
+    try {
+      await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify({parent_q: q, parent_r: r, seed: 0, radius}) });
+      await openSubmapModal(q, r);
+      _worldLoaded.delete('review');
+      await _loadPendingLocations();
+    } catch(e) {
+      _showToast(e.message || 'Błąd generowania podmopy.', 'error');
+      btn.disabled = false; btn.textContent = '🏘 Generuj';
+    }
+  }
+
+  async function openSubmapModal(q, r) {
+    const [data, typesData] = await Promise.all([
+      apiFetch(`/api/admin/world/local-map/${q}/${r}`),
+      apiFetch('/api/admin/world/hex-types'),
+    ]);
+    if (!data.ok) { _showToast(data.error || 'Brak podmopy.', 'error'); return; }
+    const hexes = data.hexes || [];
+    const parent = data.parent || {};
+    const allTypes = {};
+    for (const t of (typesData.hex_types || [])) allTypes[t.hex_type] = t;
+
+    const hexMap = {};
+    for (const h of hexes) hexMap[`${h.q},${h.r}`] = h;
+
+    let selectedType = hexes[0]?.hex_type || Object.keys(allTypes)[0] || 'plains';
+    let isPainting = false;
+    let editorMode = 'paint'; // 'paint' | 'location'
+
+    const SZ = 30;
+    const h2p = (lq, lr) => ({ x: SZ * 1.5 * lq, y: SZ * (Math.sqrt(3)/2*lq + Math.sqrt(3)*lr) });
+    const hexPts = (s) => Array.from({length:6}, (_,i) => {
+      const a = Math.PI/3*i;
+      return `${(s*Math.cos(a)).toFixed(1)},${(s*Math.sin(a)).toFixed(1)}`;
+    }).join(' ');
+
+    const pxList = hexes.map(h => h2p(h.q, h.r));
+    const minX = Math.min(...pxList.map(p=>p.x)) - SZ*1.5;
+    const minY = Math.min(...pxList.map(p=>p.y)) - SZ*1.5;
+    const maxX = Math.max(...pxList.map(p=>p.x)) + SZ*1.5;
+    const maxY = Math.max(...pxList.map(p=>p.y)) + SZ*1.5;
+    const vw = (maxX-minX).toFixed(1), vh = (maxY-minY).toFixed(1);
+
+    const submapTypeKeys = [...new Set(hexes.map(h=>h.hex_type))];
+    const otherTypeKeys = Object.keys(allTypes).filter(k=>!submapTypeKeys.includes(k));
+
+    const buildSvg = () => hexes.map(h => {
+      const {x,y} = h2p(h.q, h.r);
+      const tx=(x-minX).toFixed(1), ty=(y-minY).toFixed(1);
+      const t = allTypes[h.hex_type] || {};
+      const fill = t.map_color || '#1a2020';
+      const label = (h.label||'').slice(0,10);
+      const icon = t.map_icon || '';
+      return `<g data-lq="${h.q}" data-lr="${h.r}" transform="translate(${tx},${ty})" style="cursor:crosshair">
+        <polygon points="${hexPts(SZ-1.5)}" fill="${fill}" stroke="#555" stroke-width="0.8"/>
+        <text class="smod-icon" x="0" y="-3" text-anchor="middle" font-size="12" style="pointer-events:none">${icon}</text>
+        <text x="0" y="11" text-anchor="middle" font-size="6" fill="#ccc" style="pointer-events:none">${_esc(label)}</text>
+      </g>`;
+    }).join('');
+
+    const paletteGroup = (label, keys) => !keys.length ? '' : `
+      <div style="font-size:0.58rem;color:var(--t3);margin:6px 4px 2px;text-transform:uppercase;letter-spacing:0.06em">${label}</div>
+      ${keys.map(k => {
+        const t = allTypes[k] || {label:k, map_icon:'⬡'};
+        return `<div class="smod-type" data-type="${_esc(k)}" style="padding:4px 6px;cursor:pointer;border-radius:4px;display:flex;align-items:center;gap:5px;font-size:0.72rem">
+          <span style="font-size:0.9rem">${_esc(t.map_icon||'⬡')}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(t.label||k)}</span>
+        </div>`;
+      }).join('')}`;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:940px;height:88vh;display:flex;flex-direction:column">
+      <div class="modal-head">
+        <span>🏘️ Edytor podmopy: ${_esc(parent.label||`(${q},${r})`)} — ${hexes.length} heks.</span>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button id="smod-mode-paint" class="btn btn-sm btn-primary" style="font-size:0.72rem">🖌 Maluj</button>
+          <button id="smod-mode-loc" class="btn btn-sm btn-secondary" style="font-size:0.72rem">🔗 Lokacja</button>
+          <button id="smod-x">✕</button>
+        </div>
+      </div>
+      <div style="display:flex;flex:1;overflow:hidden">
+        <div id="smod-palette" style="width:155px;flex-shrink:0;overflow-y:auto;padding:6px;border-right:1px solid var(--border);background:var(--bg2)">
+          <div style="font-size:0.68rem;font-weight:600;color:var(--t2);margin-bottom:4px;padding:0 4px">Wybrany typ:</div>
+          <div id="smod-cur" style="padding:4px 6px;background:var(--bg3);border-radius:4px;font-size:0.75rem;margin-bottom:6px;border:1px solid var(--accent)">—</div>
+          ${paletteGroup('W podmapie', submapTypeKeys)}
+          ${paletteGroup('Inne', otherTypeKeys)}
+        </div>
+        <div style="flex:1;overflow:hidden;background:#080608;position:relative">
+          <svg id="smod-svg" viewBox="0 0 ${vw} ${vh}" style="width:100%;height:100%;display:block;user-select:none">${buildSvg()}</svg>
+          <div id="smod-tip" style="position:absolute;display:none;background:#222;color:#ccc;font-size:0.68rem;padding:2px 7px;border-radius:3px;pointer-events:none;z-index:10"></div>
+        </div>
+        <div id="smod-loc-panel" style="width:215px;flex-shrink:0;overflow-y:auto;padding:10px;border-left:1px solid var(--border);background:var(--bg2);display:none">
+          <div style="font-size:0.68rem;font-weight:600;color:var(--t2);margin-bottom:8px">Lokacja heksa</div>
+          <div id="smod-loc-info" style="font-size:0.75rem;color:var(--t3);padding:8px;background:var(--bg3);border-radius:4px;margin-bottom:8px">Kliknij heks aby zobaczyć lokację.</div>
+          <div id="smod-loc-form" style="display:none">
+            <div style="font-size:0.68rem;color:var(--t3);margin-bottom:4px">Przypisz lokację:</div>
+            <select id="smod-loc-sel" style="width:100%;background:var(--bg3);color:var(--t1);border:1px solid var(--border);border-radius:4px;padding:4px;font-size:0.75rem;margin-bottom:8px"></select>
+            <button id="smod-loc-assign" class="btn btn-sm btn-primary" style="width:100%;font-size:0.75rem">✓ Przypisz</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <select id="smod-sz" style="background:var(--bg3);color:var(--t1);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:0.75rem">
+          <option value="1">S – 7 heks.</option><option value="2">M – 19 heks.</option><option value="3" selected>L – 37 heks.</option><option value="4">XL – 61 heks.</option>
+        </select>
+        <button class="btn btn-secondary" id="smod-regen">↺ Regeneruj</button>
+        <button class="btn btn-primary" id="smod-ok">✓ Przyjmij</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    // Highlight selected type chip
+    const refreshPalette = () => {
+      overlay.querySelectorAll('.smod-type').forEach(c => {
+        const active = c.dataset.type === selectedType;
+        c.style.background = active ? 'var(--bg3)' : 'transparent';
+        c.style.outline = active ? '1px solid var(--accent,#6366f1)' : 'none';
+      });
+      const t = allTypes[selectedType] || {};
+      const cur = overlay.querySelector('#smod-cur');
+      if (cur) cur.textContent = `${t.map_icon||'⬡'} ${t.label||selectedType}`;
+    };
+    refreshPalette();
+
+    const refreshMode = () => {
+      const isPaint = editorMode === 'paint';
+      overlay.querySelector('#smod-mode-paint').className = `btn btn-sm ${isPaint ? 'btn-primary' : 'btn-secondary'}`;
+      overlay.querySelector('#smod-mode-loc').className = `btn btn-sm ${!isPaint ? 'btn-primary' : 'btn-secondary'}`;
+      overlay.querySelector('#smod-palette').style.display = isPaint ? '' : 'none';
+      overlay.querySelector('#smod-loc-panel').style.display = isPaint ? 'none' : '';
+      const svgEl = overlay.querySelector('#smod-svg');
+      svgEl.querySelectorAll('[data-lq]').forEach(g => g.style.cursor = isPaint ? 'crosshair' : 'pointer');
+    };
+    refreshMode();
+
+    overlay.querySelector('#smod-mode-paint').onclick = () => { editorMode = 'paint'; refreshMode(); };
+    overlay.querySelector('#smod-mode-loc').onclick = () => { editorMode = 'location'; refreshMode(); };
+
+    overlay.querySelector('#smod-palette').addEventListener('click', e => {
+      const chip = e.target.closest('.smod-type');
+      if (!chip) return;
+      selectedType = chip.dataset.type;
+      refreshPalette();
+    });
+
+    const paintHex = (lq, lr) => {
+      const key = `${lq},${lr}`;
+      if (!hexMap[key] || hexMap[key].hex_type === selectedType) return;
+      hexMap[key].hex_type = selectedType;
+      const t = allTypes[selectedType] || {};
+      const g = overlay.querySelector(`[data-lq="${lq}"][data-lr="${lr}"]`);
+      if (g) {
+        g.querySelector('polygon').setAttribute('fill', t.map_color || '#333');
+        const iconEl = g.querySelector('.smod-icon');
+        if (iconEl) iconEl.textContent = t.map_icon || '';
+      }
+      apiFetch(`/api/admin/world/local-hexes/${q}/${r}/${lq}/${lr}`, {
+        method: 'PATCH', body: JSON.stringify({ hex_type: selectedType }),
+      }).catch(e => console.warn('patch local hex:', e.message));
+    };
+
+    const loadLocPanel = async (lq, lr) => {
+      const info = overlay.querySelector('#smod-loc-info');
+      const form = overlay.querySelector('#smod-loc-form');
+      const sel = overlay.querySelector('#smod-loc-sel');
+      info.textContent = '⏳ Ładowanie…';
+      form.style.display = 'none';
+      try {
+        const d = await apiFetch(`/api/admin/world/hex-location/${q}/${r}/${lq}/${lr}`);
+        const specific = d.specific;
+        const generic = d.generic;
+        const current = specific || generic;
+        const isGeneric = !specific && !!generic;
+        info.innerHTML = current
+          ? `<div style="font-weight:600;margin-bottom:3px">${_esc(current.label||current.key||'')}</div>
+             <div style="font-size:0.68rem;color:var(--t3)">${isGeneric ? '⬡ Generyczna (fallback)' : '⭐ Specyficzna'}</div>
+             ${current.description ? `<div style="font-size:0.68rem;color:var(--t3);margin-top:4px;line-height:1.4">${_esc(current.description.slice(0,120))}${current.description.length>120?'…':''}</div>` : ''}`
+          : `<div style="color:var(--t3);font-size:0.72rem">Brak lokacji dla tego heksa.</div>`;
+        if (d.candidates?.length) {
+          sel.innerHTML = d.candidates.map(c =>
+            `<option value="${_esc(c.key)}" ${current && c.key === current.key && !isGeneric ? 'selected' : ''}>${_esc(c.label||c.key||'')}${c.is_generic?' (generyczna)':''}</option>`
+          ).join('');
+          form.style.display = '';
+          overlay.querySelector('#smod-loc-assign').onclick = async () => {
+            const locKey = sel.value;
+            try {
+              await apiFetch(`/api/admin/world/assign-hex-location/${q}/${r}/${lq}/${lr}`, {
+                method: 'PATCH', body: JSON.stringify({ location_key: locKey }),
+              });
+              _showToast('Przypisano lokację.', 'success');
+              await loadLocPanel(lq, lr);
+            } catch(err) { _showToast(err.message||'Błąd.','error'); }
+          };
+        }
+      } catch(err) { info.textContent = `Błąd: ${err.message}`; }
+    };
+
+    const svg = overlay.querySelector('#smod-svg');
+    const tip = overlay.querySelector('#smod-tip');
+    const stopPaint = () => { isPainting = false; };
+
+    svg.addEventListener('mousedown', e => {
+      const g = e.target.closest('[data-lq]'); if (!g) return;
+      if (editorMode === 'paint') {
+        isPainting = true;
+        paintHex(parseInt(g.dataset.lq), parseInt(g.dataset.lr));
+      } else {
+        loadLocPanel(parseInt(g.dataset.lq), parseInt(g.dataset.lr));
+      }
+    });
+    svg.addEventListener('mousemove', e => {
+      const g = e.target.closest('[data-lq]');
+      if (g) {
+        const lq=g.dataset.lq, lr=g.dataset.lr;
+        const h = hexMap[`${lq},${lr}`];
+        if (h) {
+          const t = allTypes[h.hex_type]||{};
+          tip.style.display='block';
+          tip.style.left=(e.offsetX+12)+'px'; tip.style.top=(e.offsetY+8)+'px';
+          tip.textContent=`(${lq},${lr}) ${t.label||h.hex_type}${h.label?' — '+h.label:''}`;
+        }
+        if (editorMode === 'paint' && isPainting) paintHex(parseInt(lq), parseInt(lr));
+      } else { tip.style.display='none'; }
+    });
+    document.addEventListener('mouseup', stopPaint);
+    svg.addEventListener('mouseleave', () => { tip.style.display='none'; });
+
+    const closeModal = () => { document.removeEventListener('mouseup', stopPaint); overlay.remove(); };
+    overlay.querySelector('#smod-x').onclick = closeModal;
+    overlay.querySelector('#smod-ok').onclick = closeModal;
+
+    overlay.querySelector('#smod-regen').onclick = async (e) => {
+      const btn = e.currentTarget;
+      const radius = parseInt(overlay.querySelector('#smod-sz')?.value || '3');
+      btn.disabled = true; btn.textContent = '⏳';
+      try {
+        await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify({parent_q:q, parent_r:r, seed:Math.floor(Math.random()*99999), radius}) });
+        closeModal();
+        await openSubmapModal(q, r);
+      } catch(err) { _showToast(err.message||'Błąd.','error'); btn.disabled=false; btn.textContent='↺ Regeneruj'; }
+    };
   }
 
   async function approveKanon(entityType, key, btn) {
@@ -7169,7 +7649,7 @@ forge_create_game_entry("armor", {
       const rows = await apiFetch('/api/admin/hex-terrain-config');
       const items = Array.isArray(rows) ? rows : (rows.items || []);
       const totalW = items.reduce((s,r) => s+(r.spawn_weight||0), 0);
-      if (!items.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--t3)">Brak typów terenu</td></tr>`; return; }
+      if (!items.length) { tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--t3)">Brak typów terenu</td></tr>`; return; }
       tbody.innerHTML = items.map(r => {
         const pct = totalW > 0 && r.spawn_weight > 0 ? ((r.spawn_weight/totalW)*100).toFixed(1) : '0';
         return `<tr>
@@ -7196,14 +7676,21 @@ forge_create_game_entry("armor", {
               onkeydown="if(event.key==='Enter')this.blur()" />
           </td>
           <td><span class="badge ${r.is_active?'badge-green':'badge-slate'}">${r.is_active?'●':'○'}</span></td>
+          <td style="text-align:center">
+            <input type="checkbox" title="Może mieć podmapę lokalną" ${r.has_submap?'checked':''}
+              onchange="terrainPatch('${_esc(r.hex_type)}','has_submap',this.checked?'1':'0',this)" />
+          </td>
           <td class="td-actions"><button class="btn-icon" title="Edytuj" onclick="openTerrainFormModal(${JSON.stringify(r).replace(/"/g,'&quot;')})">✎</button></td>
         </tr>`;
       }).join('');
-    } catch(e) { tbody.innerHTML = _errRow(8, e.message); }
+    } catch(e) { tbody.innerHTML = _errRow(9, e.message); }
   }
 
   async function terrainPatch(key, field, rawValue, input) {
-    let value = field === 'encounter_pct' ? parseFloat(rawValue)/100 : parseFloat(rawValue);
+    let value;
+    if (field === 'encounter_pct') value = parseFloat(rawValue)/100;
+    else if (field === 'has_submap') value = parseInt(rawValue);
+    else value = parseFloat(rawValue);
     if (isNaN(value)) return;
     const apiField = field === 'encounter_pct' ? 'encounter_base_chance' : field;
     try {
@@ -7282,6 +7769,7 @@ forge_create_game_entry("armor", {
   let _wbLocations = {}; // keyed by "q,r"
   let _wbSelected = null;
   let _wbPaintType = 'forest';
+  let _wbPaintMode = false;
   let _wbDrawingTp = null;
   let _wbZoom = 1.0;
   let _wbPan = { x: 400, y: 280 };
@@ -7318,10 +7806,12 @@ forge_create_game_entry("armor", {
       const rz = _WB_SIZE * _wbZoom;
       const cfg = _wbHexTypes[hex.hex_type] || { map_color:'#4a6a4a', map_icon:'' };
       const sel = _wbSelected && _wbSelected.q === hex.q && _wbSelected.r === hex.r;
+      const hl = !sel && _wbPaintType && hex.hex_type === _wbPaintType;
       html += `<polygon class="whx" data-q="${hex.q}" data-r="${hex.r}"
         points="${_wbHexCorners(sx, sy, rz - 1)}"
-        fill="${cfg.map_color}" stroke="${sel ? '#f0c040' : '#222'}" stroke-width="${sel ? 2 : 0.7}"
-        style="cursor:pointer"/>`;
+        fill="${cfg.map_color}" stroke="${sel ? '#f0c040' : hl ? '#38bdf8' : '#222'}"
+        stroke-width="${sel ? 2 : hl ? 2 : 0.7}"
+        style="cursor:${_wbPaintMode ? 'crosshair' : 'pointer'}"/>`;
       if (_wbZoom >= 0.45 && cfg.map_icon)
         html += `<text x="${sx}" y="${sy - rz * 0.05}" text-anchor="middle"
           font-size="${Math.max(9, 13 * _wbZoom)}" style="pointer-events:none">${cfg.map_icon}</text>`;
@@ -7399,7 +7889,9 @@ forge_create_game_entry("armor", {
       await _wbCreateTeleport(_wbDrawingTp.q, _wbDrawingTp.r, q, r);
       _wbDrawingTp = null; return;
     }
-    if (_wbHexes[_wbKey(q, r)]) {
+    if (_wbPaintMode) {
+      await _wbPaint(q, r);
+    } else if (_wbHexes[_wbKey(q, r)]) {
       _wbSelected = {q, r}; _wbRender();
       const loc = _wbLocations[_wbKey(q, r)];
       if (loc) _wbShowLocationDetail(loc);
@@ -7545,6 +8037,7 @@ forge_create_game_entry("armor", {
         <button class="primary-btn" id="wbd-save" style="flex:1;font-size:0.72rem;padding:5px 8px">Zapisz</button>
         <button class="secondary-btn" id="wbd-tp" style="font-size:0.72rem;padding:5px 8px" title="Połącz z innym hexem">⤷</button>
       </div>
+      ${cfg.has_submap ? `<div style="display:flex;gap:4px;margin-top:6px"><select id="wbd-local-sz" style="background:var(--bg3);color:var(--t1);border:1px solid var(--border);border-radius:4px;padding:3px 4px;font-size:0.68rem;flex-shrink:0"><option value="1">S (7)</option><option value="2">M (19)</option><option value="3" selected>L (37)</option><option value="4">XL (61)</option></select><button id="wbd-gen-local" style="flex:1;font-size:0.7rem;padding:5px 6px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;color:var(--t2);cursor:pointer">🏘️ Generuj podmapę</button></div>` : ''}
       <div style="margin-top:10px;font-size:0.68rem;color:var(--t3)">Połączenia specjalne:</div>
       ${myTps.length ? myTps.map(t => {
         const other = (t.from_q === hex.q && t.from_r === hex.r) ? `→(${t.to_q},${t.to_r})` : `←(${t.from_q},${t.from_r})`;
@@ -7563,6 +8056,17 @@ forge_create_game_entry("armor", {
       encounter_chance: parseFloat(p.querySelector('#wbd-enc').value) || 0.15,
       encounter_pool: p.querySelector('#wbd-pool').value.split(',').map(s => s.trim()).filter(Boolean),
     });
+    const _genLocalBtn = p.querySelector('#wbd-gen-local');
+    if (_genLocalBtn) _genLocalBtn.onclick = async () => {
+      const radius = parseInt(p.querySelector('#wbd-local-sz')?.value || '3');
+      _genLocalBtn.disabled = true; _genLocalBtn.textContent = '⏳';
+      try {
+        const res = await apiFetch('/api/admin/world/generate-local', { method:'POST', body: JSON.stringify({parent_q: hex.q, parent_r: hex.r, seed: 0, radius}) });
+        _showToast(`Wygenerowano ${res.hexes_created} lokalnych heksów.`, 'success');
+        await openSubmapModal(hex.q, hex.r);
+      } catch(e) { _showToast(e.message || 'Błąd', 'error'); }
+      finally { _genLocalBtn.disabled = false; _genLocalBtn.textContent = '🏘️ Generuj podmapę'; }
+    };
     p.querySelector('#wbd-tp').onclick = () => {
       _wbDrawingTp = { q: hex.q, r: hex.r };
       _showToast('Kliknij docelowy hex. Kliknij ten sam → anuluj.', 'info');
@@ -7610,8 +8114,16 @@ forge_create_game_entry("armor", {
         style="background:${v.map_color};color:#e8e4dc" title="${_esc(v.label)}">${v.map_icon || '⬡'}</button>`
     ).join('');
     pal.querySelectorAll('.wb-pb').forEach(b => b.onclick = () => {
-      _wbPaintType = b.dataset.type; _wbDrawingTp = null; _wbRenderPalette();
+      _wbPaintType = b.dataset.type === _wbPaintType ? null : b.dataset.type; _wbDrawingTp = null; _wbRenderPalette(); _wbRender();
     });
+    const mSelect = document.getElementById('wb-mode-select');
+    const mPaint = document.getElementById('wb-mode-paint');
+    if (mSelect && mPaint) {
+      mSelect.className = `btn btn-sm ${!_wbPaintMode ? 'btn-primary' : 'btn-secondary'}`;
+      mPaint.className = `btn btn-sm ${_wbPaintMode ? 'btn-primary' : 'btn-secondary'}`;
+      mSelect.onclick = () => { _wbPaintMode = false; _wbRenderPalette(); _wbRender(); };
+      mPaint.onclick = () => { _wbPaintMode = true; _wbRenderPalette(); _wbRender(); };
+    }
   }
 
   function _wbCenter() {
@@ -8521,12 +9033,10 @@ forge_create_game_entry("armor", {
   function forgeOpenIdea(id) {
     _forgeCurrentIdeaId = id;
     apiFetch(`/api/admin/forge/ideas/${id}`).then(idea => {
-      const card = document.getElementById('forge-draft-card');
-      const preview = document.getElementById('forge-draft-preview');
       // Switch to agent tab
       const agentTab = document.querySelector('#forge-tabs .stab[data-forgetab="agent"]');
       if (agentTab && !agentTab.classList.contains('active')) agentTab.click();
-      // Load into scenario panel
+      // Build draft and load into editable scenario panel
       const sd = idea.structured_data || {};
       const draftFromIdea = {
         title: idea.title,
@@ -8541,58 +9051,22 @@ forge_create_game_entry("armor", {
       };
       _forgeDraft = draftFromIdea;
       _forgeRenderScenario(draftFromIdea);
-      // Also inject into chat as context
+      // Action buttons in scenario body
+      const actionsEl = document.getElementById('fsc-actions');
+      if (actionsEl) {
+        actionsEl.style.display = 'flex';
+        actionsEl.innerHTML =
+          `<button class="btn btn-sm btn-secondary" onclick="forgeReloadIdeaInChat(${id})">↩ Kontynuuj w Warsztacie</button>` +
+          `<button class="btn btn-sm btn-primary" onclick="forgeExtractHooks(${id},this)">⚡ Wyodrębnij haki → DB</button>` +
+          `<button class="btn btn-sm btn-secondary" onclick="forgeCreateTemplateFromIdea(${id},${JSON.stringify(idea.title).replace(/"/g,'&quot;')},${sd.arcs?.length||0})">📖 Utwórz szablon</button>`;
+      }
+      // Inject context into chat
       const hist = document.getElementById('forge-chat-history');
       if (hist) {
         hist.querySelectorAll('.forge-bubble--hint').forEach(el => el.remove());
         _forgeAppendBubble(hist, 'forge-bubble forge-bubble--context',
           `<strong>↩ Załadowano: ${_esc(idea.title)}</strong><br><span style="font-size:0.74rem;color:var(--t2)">${_esc(idea.premise?.substring(0,120)||'')}</span>`);
       }
-      if (!card || !preview) return;
-      card.style.display = '';
-      const sd = idea.structured_data || {};
-      const toneStr = (idea.tone||[]).join(', ') || '—';
-      const themesStr = (idea.themes||[]).join(', ') || '—';
-
-      // Arcs accordion
-      const arcsHtml = (sd.arcs||[]).map((arc, i) => `
-        <details style="margin-bottom:8px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden">
-          <summary style="padding:8px 12px;background:var(--surface);cursor:pointer;font-size:0.82rem;font-weight:600;color:var(--t1)">
-            Akt ${i+1}: ${_esc(arc.title||'(bez tytułu)')}
-          </summary>
-          <div style="padding:10px 12px">
-            <p style="font-size:0.8rem;color:var(--t2);margin:0 0 6px">${_esc(arc.description||'')}</p>
-            ${arc.scene_goals?.length ? '<div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px">Cele scen:</div><ul style="margin:0 0 8px;padding-left:16px;font-size:0.78rem;color:var(--t2)">' + arc.scene_goals.map(g=>'<li>'+_esc(g)+'</li>').join('') + '</ul>' : ''}
-            ${arc.private_twist ? '<div style="font-size:0.75rem;color:var(--amber);font-style:italic;padding:4px 8px;background:var(--amber-light);border-radius:var(--r);border:1px solid var(--amber-border)">🔒 GM: ' + _esc(arc.private_twist) + '</div>' : ''}
-          </div>
-        </details>`).join('');
-
-      // Sketch hooks chips grouped by type
-      const hooksByType = {};
-      for (const h of (sd.hooks||[])) { if (!hooksByType[h.type]) hooksByType[h.type]=[]; hooksByType[h.type].push(h); }
-      const hooksHtml = Object.entries(hooksByType).map(([type, hs]) =>
-        '<div style="margin-bottom:6px"><span style="font-size:0.7rem;font-weight:600;color:var(--t3)">' + (_HOOK_TYPE_LABELS[type]||type) + ':</span> ' + hs.map(h=>'<span style="font-size:0.75rem;padding:2px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);margin:1px 2px;display:inline-block">' + _esc(h.title) + '</span>').join('') + '</div>'
-      ).join('');
-
-      preview.innerHTML =
-        '<div style="margin-bottom:10px">' +
-          '<strong style="font-size:0.92rem">' + _esc(idea.title) + '</strong>' +
-          '<span style="font-size:0.72rem;color:var(--t3);margin-left:8px">' + _esc(idea.difficulty||'') + ' · ' + _esc(idea.status||'draft') + '</span>' +
-        '</div>' +
-        '<p style="font-size:0.82rem;color:var(--t2);margin-bottom:10px">' + _esc(idea.premise||'') + '</p>' +
-        '<div style="font-size:0.75rem;color:var(--t3);margin-bottom:10px">Ton: ' + _esc(toneStr) + ' · Motywy: ' + _esc(themesStr) + '</div>' +
-
-        (sd.player_hook ? '<div style="margin-bottom:10px;padding:8px 10px;background:var(--blue-light);border:1px solid var(--blue-border);border-radius:var(--r)"><div style="font-size:0.7rem;font-weight:600;color:var(--t3);margin-bottom:2px">⚡ WCIĄGACZ GRACZA</div><div style="font-size:0.8rem;color:var(--t1)">' + _esc(sd.player_hook) + '</div></div>' : '') +
-        (sd.gm_private ? '<div style="margin-bottom:10px;padding:8px 10px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--r)"><div style="font-size:0.7rem;font-weight:600;color:var(--amber);margin-bottom:2px">🔒 GM ONLY</div><div style="font-size:0.8rem;color:var(--t1)">' + _esc(sd.gm_private) + '</div></div>' : '') +
-
-        (sd.arcs?.length ? '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:6px">AKTY (' + sd.arcs.length + ')</div>' + arcsHtml : '') +
-        (Object.keys(hooksByType).length ? '<div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:6px;margin-top:10px">HOOKI W SZKICU</div>' + hooksHtml : '') +
-
-        '<div style="display:flex;gap:6px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">' +
-          '<button class="btn btn-sm btn-secondary" onclick="forgeReloadIdeaInChat(' + id + ')">↩ Kontynuuj w Warsztacie</button>' +
-          '<button class="btn btn-sm btn-primary" onclick="forgeExtractHooks(' + id + ',this)">⚡ Wyodrębnij haki → DB</button>' +
-          '<button class="btn btn-sm btn-secondary" onclick="forgeCreateTemplateFromIdea(' + id + ',' + JSON.stringify(idea.title).replace(/"/g,'&quot;') + ',' + (sd.arcs?.length||0) + ')" style="margin-left:4px">📖 Utwórz szablon</button>' +
-        '</div>';
     }).catch(e => console.warn('forge open idea', e.message));
   }
 
@@ -8649,6 +9123,68 @@ forge_create_game_entry("armor", {
     return `<p>${s}</p>`;
   }
 
+  function _fscAutoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight + 2) + 'px';
+  }
+
+  function _fscAutoResizeAll() {
+    document.querySelectorAll('.fsc-textarea').forEach(el => _fscAutoResize(el));
+  }
+
+  function _forgeToggleChat() {
+    const fc = document.getElementById('forge-float-chat');
+    if (!fc) return;
+    const isHidden = fc.classList.contains('ffc-hidden');
+    fc.classList.toggle('ffc-hidden', !isHidden);
+    if (isHidden) {
+      // just opened — focus input
+      const inp = document.getElementById('forge-input');
+      if (inp) setTimeout(() => inp.focus(), 150);
+    }
+  }
+
+  function _forgeIdeasShelfToggle() {
+    const shelf = document.getElementById('forge-ideas-shelf');
+    if (shelf) shelf.classList.toggle('open');
+  }
+
+  // Draggable float chat
+  (function _forgeDragInit() {
+    let dragging = false, ox = 0, oy = 0;
+    document.addEventListener('DOMContentLoaded', () => {
+      const handle = document.getElementById('forge-float-drag-handle');
+      const chat = document.getElementById('forge-float-chat');
+      if (!handle || !chat) return;
+      handle.addEventListener('mousedown', e => {
+        if (e.target.tagName === 'BUTTON') return;
+        dragging = true;
+        const rect = chat.getBoundingClientRect();
+        ox = e.clientX - rect.left;
+        oy = e.clientY - rect.top;
+        chat.style.transition = 'none';
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        let x = e.clientX - ox;
+        let y = e.clientY - oy;
+        const maxX = window.innerWidth - chat.offsetWidth;
+        const maxY = window.innerHeight - chat.offsetHeight;
+        x = Math.max(0, Math.min(x, maxX));
+        y = Math.max(0, Math.min(y, maxY));
+        chat.style.left = x + 'px';
+        chat.style.right = 'auto';
+        chat.style.top = y + 'px';
+        chat.style.bottom = 'auto';
+      });
+      document.addEventListener('mouseup', () => {
+        dragging = false;
+        if (chat) chat.style.transition = '';
+      });
+    });
+  })();
+
   function _forgeInputKey(e) {
     if (e.key === 'Enter' && e.ctrlKey) {
       e.preventDefault();
@@ -8658,7 +9194,7 @@ forge_create_game_entry("armor", {
   }
 
   function _forgeSidebarToggle() {
-    // legacy noop — sidebar removed in new layout
+    // legacy noop
   }
 
   function _forgeNewSession() {
@@ -8670,9 +9206,12 @@ forge_create_game_entry("armor", {
     const input = document.getElementById('forge-input');
     if (input) { input.value = ''; input.focus(); }
     // Reset scenario panel
-    document.getElementById('forge-scenario-empty').style.display = '';
+    const empty = document.getElementById('forge-scenario-empty');
+    if (empty) empty.style.display = '';
     const panel = document.getElementById('forge-scenario-panel');
     if (panel) panel.style.display = 'none';
+    const actionsEl = document.getElementById('fsc-actions');
+    if (actionsEl) { actionsEl.style.display = 'none'; actionsEl.innerHTML = ''; }
   }
 
   function _forgeMarkDirty() {
@@ -8686,7 +9225,7 @@ forge_create_game_entry("armor", {
     const empty = document.getElementById('forge-scenario-empty');
     const panel = document.getElementById('forge-scenario-panel');
     if (empty) empty.style.display = 'none';
-    if (panel) panel.style.display = 'flex';
+    if (panel) panel.style.display = 'block';
 
     // Title + premise
     const titleEl = document.getElementById('fsc-title');
@@ -8716,7 +9255,7 @@ forge_create_game_entry("armor", {
     if (arcsEl && arcs.length) {
       if (arcsCount) arcsCount.textContent = `(${arcs.length})`;
       arcsEl.innerHTML = arcs.map((arc, i) => {
-        const goals = (arc.scene_goals || []).map(g => `<li>${_esc(g)}</li>`).join('');
+        const goalsVal = (arc.scene_goals || []).join('\n');
         return `<div class="fsc-arc-card">
           <button class="fsc-arc-head" onclick="this.nextElementSibling.classList.toggle('hidden')">
             <span style="color:var(--t3);font-size:0.72rem">Akt ${i+1}</span>
@@ -8724,9 +9263,12 @@ forge_create_game_entry("armor", {
             <span style="font-size:0.7rem;color:var(--t3)">▾</span>
           </button>
           <div class="fsc-arc-body">
-            <textarea class="fsc-textarea" rows="2" data-arc="${i}" data-field="description"
-              oninput="_forgeMarkDirty()">${_esc(arc.description || '')}</textarea>
-            ${goals ? `<div style="font-size:0.75rem;color:var(--t3);margin-top:2px">Cele scen:</div><ul style="margin:2px 0;padding-left:16px;font-size:0.78rem;color:var(--t2)">${goals}</ul>` : ''}
+            <textarea class="fsc-textarea" data-arc="${i}" data-field="description"
+              oninput="_forgeMarkDirty();_fscAutoResize(this)">${_esc(arc.description || '')}</textarea>
+            <div style="font-size:0.75rem;color:var(--t3);margin-top:4px">Cele scen <span style="opacity:0.6">(jedna na linię)</span></div>
+            <textarea class="fsc-textarea" data-arc="${i}" data-field="scene_goals"
+              placeholder="Cel sceny 1&#10;Cel sceny 2&#10;…"
+              oninput="_forgeMarkDirty();_fscAutoResize(this)">${_esc(goalsVal)}</textarea>
             ${arc.private_twist ? `<div style="font-size:0.75rem;color:var(--amber,#c9a227);font-style:italic;margin-top:2px">🔒 ${_esc(arc.private_twist)}</div>` : ''}
           </div>
         </div>`;
@@ -8763,6 +9305,8 @@ forge_create_game_entry("armor", {
     _forgeScenarioDirty = false;
     const badge = document.getElementById('fsc-dirty-badge');
     if (badge) badge.style.display = 'none';
+    // Auto-resize all textareas after content set
+    setTimeout(_fscAutoResizeAll, 0);
   }
 
   function _forgeCollectScenario() {
@@ -8776,10 +9320,16 @@ forge_create_game_entry("armor", {
     if (phEl) draft.player_hook = phEl.value;
     const gmEl = document.getElementById('fsc-gm-private');
     if (gmEl) draft.gm_private = gmEl.value;
-    // Arc descriptions
+    // Arc descriptions + scene_goals
     document.querySelectorAll('[data-arc][data-field="description"]').forEach(ta => {
       const i = parseInt(ta.dataset.arc);
       if (draft.arcs && draft.arcs[i]) draft.arcs[i].description = ta.value;
+    });
+    document.querySelectorAll('[data-arc][data-field="scene_goals"]').forEach(ta => {
+      const i = parseInt(ta.dataset.arc);
+      if (draft.arcs && draft.arcs[i]) {
+        draft.arcs[i].scene_goals = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+      }
     });
     return draft;
   }
@@ -8808,8 +9358,8 @@ forge_create_game_entry("armor", {
     const msg = input.value.trim();
     if (!msg) return;
     input.value = '';
-    // If admin edited scenario, collect and pass as override
-    const draftOverride = _forgeScenarioDirty ? _forgeCollectScenario() : null;
+    // Always pass current scenario so LLM knows full state (collect latest edits too)
+    const draftOverride = _forgeDraft ? _forgeCollectScenario() : null;
     if (draftOverride) _forgeDraft = draftOverride;
     await _forgeSendMessage(msg, draftOverride);
     btn.disabled = false;
@@ -8821,12 +9371,13 @@ forge_create_game_entry("armor", {
     if (btn) btn.disabled = true;
     const hist = document.getElementById('forge-chat-history');
     hist.querySelectorAll('.forge-bubble--hint').forEach(el => el.remove());
-    // Show override indicator if edits sent
-    if (draftOverride) {
-      _forgeAppendBubble(hist, 'forge-bubble forge-bubble--context',
-        '<strong>📤 Wysłano zaktualizowany szkic do Agenta</strong>');
-    }
     _forgeAppendBubble(hist, 'forge-bubble--user', _esc(msg).replace(/\n/g, '<br>'));
+    // Typing indicator
+    const thinking = document.createElement('div');
+    thinking.className = 'forge-bubble forge-bubble--ai forge-bubble--thinking';
+    thinking.innerHTML = '<span class="forge-typing-dots"><span></span><span></span><span></span></span>';
+    hist.appendChild(thinking);
+    hist.scrollTop = hist.scrollHeight;
     try {
       const body = { session_id: _forgeSessionId, message: msg };
       if (draftOverride) body.draft_override = draftOverride;
@@ -8834,12 +9385,14 @@ forge_create_game_entry("armor", {
         method: 'POST',
         body: JSON.stringify(body),
       });
+      thinking.remove();
       _forgeAppendBubble(hist, 'forge-bubble--ai', _formatForgeText(d.reply));
       if (d.draft) {
         _forgeDraft = d.draft;
         _forgeRenderScenario(d.draft);
       }
     } catch(e) {
+      thinking.remove();
       _forgeAppendBubble(hist, 'forge-bubble--error', _esc(e.message));
     }
     if (btn) btn.disabled = false;
@@ -8958,6 +9511,10 @@ forge_create_game_entry("armor", {
 
       // Show modal first, then populate picker (don't block modal on picker error)
       document.getElementById('encounter-modal').classList.add('open');
+      ['em-scene','em-enemies','em-objectives','em-gm-notes'].forEach(id => {
+        const el = document.getElementById(id); if (el) _fscAutoResize(el);
+      });
+      _previewEncounterFromForm();
       _populateEncounterCampaignPicker(); // async, fire-and-forget
     } catch(e) { _showToast(e.message, 'error'); }
   }
@@ -9130,6 +9687,27 @@ forge_create_game_entry("armor", {
       (enc.objectives?.length ? '<div style="margin-bottom:8px"><div style="font-size:0.75rem;font-weight:600;color:var(--t3);margin-bottom:4px">CELE</div><ul style="margin:0;padding-left:16px">' + li(enc.objectives) + '</ul></div>' : '') +
       (enc.rewards ? '<div style="margin-bottom:8px;font-size:0.78rem;color:var(--t2)">🏆 XP ~' + (enc.rewards.xp_estimate||0) + ' · ' + _esc(enc.rewards.loot_notes||'') + '</div>' : '') +
       (enc.gm_notes ? '<div style="padding:6px 8px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--r);font-size:0.78rem;color:var(--t1)">🔒 GM: ' + _esc(enc.gm_notes) + '</div>' : '');
+  }
+
+  function _previewEncounterFromForm() {
+    const g = id => document.getElementById(id);
+    const parseEnemiesTxt = txt => (txt || '').split('\n').filter(Boolean).map(line => {
+      const m = line.match(/^(.+?)\s*[×x](\d+)\s*(?:[—-]\s*(.+))?$/);
+      return m ? { name: m[1].trim(), count: parseInt(m[2]), notes: m[3]?.trim() } : { name: line.trim(), count: 1 };
+    });
+    const enc = {
+      title: g('em-title')?.value || '',
+      trigger_condition: g('em-trigger')?.value || '',
+      scene_setup: g('em-scene')?.value || '',
+      enemies: parseEnemiesTxt(g('em-enemies')?.value || ''),
+      objectives: (g('em-objectives')?.value || '').split('\n').filter(Boolean),
+      rewards: { xp_estimate: parseInt(g('em-xp')?.value) || 0, loot_notes: g('em-loot')?.value || '' },
+      gm_notes: g('em-gm-notes')?.value || '',
+    };
+    const preview = g('em-preview');
+    if (!preview) return;
+    const html = _renderEncounterCard(enc);
+    preview.innerHTML = html || '<div style="color:var(--t3);font-size:0.8rem;text-align:center;padding:20px">Wypełnij pola aby zobaczyć podgląd.</div>';
   }
 
   // ── Hook Detail Modal ────────────────────────────────────
@@ -10170,35 +10748,45 @@ forge_create_game_entry("armor", {
       const fill = htColor || typeColors[h.hex_type] || typeColors.default;
       const isCurrent = currentHex && h.q === currentHex.q && h.r === currentHex.r;
       let stroke = '#333', strokeW = '0.5';
-      if (isCurrent) { stroke = '#f0c040'; strokeW = '2'; }
+      if (isCurrent) { stroke = '#ff2222'; strokeW = '2.5'; }
       else if (h.discovered) { stroke = '#4a8a4a'; strokeW = '1'; }
       const opacity = (h.discovered || isCurrent) ? '1' : '0.45';
       const indicators = [];
-      if (isCurrent) indicators.push(`<circle cx="0" cy="0" r="4" fill="#f0c040" opacity="0.9"/>`);
-      else if (h.encounter_cleared) indicators.push(`<text x="0" y="3" text-anchor="middle" font-size="7" fill="#4a8" opacity="0.9">✓</text>`);
+      if (isCurrent) {
+        // Red pointer triangle pointing down
+        indicators.push(`<polygon points="0,-7 5,2 -5,2" fill="#ff2222" opacity="0.95"/>`);
+        indicators.push(`<circle cx="0" cy="0" r="2.5" fill="#fff" opacity="0.9"/>`);
+      } else if (h.encounter_cleared) indicators.push(`<text x="0" y="3" text-anchor="middle" font-size="7" fill="#4a8" opacity="0.9">✓</text>`);
       if (h.campaign_label) indicators.push(`<circle cx="${(HEX_SIZE*0.5).toFixed(1)}" cy="${-(HEX_SIZE*0.55).toFixed(1)}" r="2.5" fill="#8af" opacity="0.85"/>`);
       return `<g data-q="${h.q}" data-r="${h.r}" transform="translate(${tx},${ty})" style="cursor:pointer" opacity="${opacity}">
         <polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}"/>
         ${indicators.join('')}
       </g>`;
     });
-    return `<div id="admin-hex-map-svg-wrap" style="overflow:auto;max-height:420px;background:#0d0d0d;border:1px solid var(--border);border-radius:var(--r)">
+    return `<div id="admin-hex-map-svg-wrap" style="overflow:auto;height:calc(100vh - 260px);min-height:300px;background:#0d0d0d;border:1px solid var(--border);border-radius:var(--r)">
       <svg viewBox="0 0 ${vw} ${vh}" width="${vw}" height="${vh}" xmlns="http://www.w3.org/2000/svg" style="display:block;min-width:${vw}px">
         ${hexGroups.join('\n        ')}
       </svg>
     </div>`;
   }
 
+  const _HEX_TYPES = ['plains','forest','hills','lake','mountains','swamp','town','castle','road','river','ruins','cave','dungeon'];
+
   function _showHexEditModal({ campId, q, r, hex }) {
     document.getElementById('hex-edit-modal')?.remove();
     const m = document.createElement('div');
     m.id = 'hex-edit-modal';
     m.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7)';
+    const typeOptions = _HEX_TYPES.map(t => `<option value="${t}"${t===(hex.hex_type||'')?'selected':''}>${t}</option>`).join('');
     m.innerHTML = `
-      <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#333);border-radius:10px;padding:24px;width:340px;max-width:95vw;position:relative">
+      <div style="background:var(--surface,#1a1a1a);border:1px solid var(--border,#333);border-radius:10px;padding:24px;width:360px;max-width:95vw;position:relative">
         <button onclick="document.getElementById('hex-edit-modal').remove()" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;color:var(--t3,#888);font-size:1.1rem">✕</button>
         <div style="font-weight:700;font-size:1rem;margin-bottom:16px;color:var(--text,#e0d8c8)">Hex (${q}, ${r})</div>
         <div style="display:flex;flex-direction:column;gap:10px">
+          <div>
+            <label style="font-size:0.78rem;color:var(--t3,#888);display:block;margin-bottom:4px">Typ terenu (globalna zmiana)</label>
+            <select id="hxe-type" class="form-input" style="width:100%">${typeOptions}</select>
+          </div>
           <label style="display:flex;align-items:center;gap:8px;font-size:0.85rem;color:var(--t2,#b0a080)">
             <input type="checkbox" id="hxe-disc" ${hex.discovered?'checked':''}> Odkryty
           </label>
@@ -10220,6 +10808,7 @@ forge_create_game_entry("armor", {
     document.body.appendChild(m);
     m.addEventListener('click', e => { if (e.target === m) m.remove(); });
     m.querySelector('#hxe-save').addEventListener('click', async () => {
+      const newType = m.querySelector('#hxe-type').value;
       const payload = {
         discovered: m.querySelector('#hxe-disc').checked,
         encounter_cleared: m.querySelector('#hxe-clear').checked,
@@ -10227,7 +10816,13 @@ forge_create_game_entry("armor", {
         campaign_notes: m.querySelector('#hxe-notes').value.trim() || null,
       };
       try {
-        await apiFetch(`/api/admin/campaigns/${campId}/hex-map/${q}/${r}`, {method:'PATCH', body: JSON.stringify(payload)});
+        const promises = [
+          apiFetch(`/api/admin/campaigns/${campId}/hex-map/${q}/${r}`, {method:'PATCH', body: JSON.stringify(payload)}),
+        ];
+        if (newType !== (hex.hex_type||'')) {
+          promises.push(apiFetch(`/api/admin/world/hexes/${q}/${r}`, {method:'PATCH', body: JSON.stringify({hex_type: newType})}));
+        }
+        await Promise.all(promises);
         _showToast('Zapisano hex', 'success');
         m.remove();
       } catch(e) { _showToast(e.message, 'error'); }
@@ -10447,8 +11042,24 @@ forge_create_game_entry("armor", {
         const voices = voicesResp.voices || [];
         voiceSel.innerHTML = voices.map(v => `<option value="${_esc(v)}" ${v===config.tts_voice?'selected':''}>${_esc(v)}</option>`).join('');
       }
-      setInp('v-tts-speed-input', config.tts_speed);
-      setInp('v-tts-noise-input', config.tts_noise_scale);
+      const setSlider = (inputId, valId, val, digits) => {
+        const el = document.getElementById(inputId);
+        const vEl = document.getElementById(valId);
+        if (el && val != null) { el.value = val; }
+        if (vEl && val != null) { vEl.textContent = digits != null ? parseFloat(val).toFixed(digits) : val; }
+      };
+      setSlider('v-tts-speed-input', 'v-tts-speed-val', config.tts_speed, 2);
+      setSlider('v-tts-noise-input', 'v-tts-noise-val', config.tts_noise_scale, 2);
+      setSlider('v-tts-nfe-input', 'v-tts-nfe-val', config.tts_nfe_step, 0);
+      setSlider('v-tts-cfg-input', 'v-tts-cfg-val', config.tts_cfg_strength, 1);
+      setSlider('v-tts-crossfade-input', 'v-tts-crossfade-val', config.tts_cross_fade_duration, 2);
+      setSlider('v-tts-sway-input', 'v-tts-sway-val', config.tts_sway_sampling_coef, 2);
+      const seedVal = config.tts_seed ?? -1;
+      const seedRandom = seedVal === -1;
+      const seedChk = document.getElementById('v-tts-seed-random');
+      const seedInp = document.getElementById('v-tts-seed-input');
+      if (seedChk) seedChk.checked = seedRandom;
+      if (seedInp) { seedInp.value = seedVal; seedInp.disabled = seedRandom; }
 
       // STT editable fields
       const modelSel = document.getElementById('v-stt-model-select');
@@ -10477,14 +11088,38 @@ forge_create_game_entry("armor", {
     }
   }
 
+  function _onSeedRandomToggle() {
+    const chk = document.getElementById('v-tts-seed-random');
+    const inp = document.getElementById('v-tts-seed-input');
+    if (!chk || !inp) return;
+    inp.disabled = chk.checked;
+    if (chk.checked) {
+      inp.value = -1;
+    } else {
+      // Switch to fixed seed — default to 42 so saving won't re-trigger random mode
+      if (parseInt(inp.value, 10) === -1) inp.value = 42;
+    }
+  }
+
   async function saveTTSConfig(btn) {
     const voice = document.getElementById('v-voice-select')?.value;
     const speed = parseFloat(document.getElementById('v-tts-speed-input')?.value);
     const noise = parseFloat(document.getElementById('v-tts-noise-input')?.value);
+    const nfe = parseInt(document.getElementById('v-tts-nfe-input')?.value, 10);
+    const cfg = parseFloat(document.getElementById('v-tts-cfg-input')?.value);
+    const crossfade = parseFloat(document.getElementById('v-tts-crossfade-input')?.value);
+    const sway = parseFloat(document.getElementById('v-tts-sway-input')?.value);
+    const seedRandom = document.getElementById('v-tts-seed-random')?.checked;
+    const seed = seedRandom ? -1 : parseInt(document.getElementById('v-tts-seed-input')?.value, 10);
     const payload = {};
     if (voice) payload.tts_voice = voice;
     if (!isNaN(speed)) payload.tts_speed = speed;
     if (!isNaN(noise)) payload.tts_noise_scale = noise;
+    if (!isNaN(nfe)) payload.tts_nfe_step = nfe;
+    if (!isNaN(cfg)) payload.tts_cfg_strength = cfg;
+    if (!isNaN(crossfade)) payload.tts_cross_fade_duration = crossfade;
+    if (!isNaN(sway)) payload.tts_sway_sampling_coef = sway;
+    if (!isNaN(seed)) payload.tts_seed = seed;
     if (btn) btn.disabled = true;
     try {
       await apiFetch('/voice/config', { method:'POST', body:JSON.stringify(payload) });
@@ -10657,10 +11292,13 @@ forge_create_game_entry("armor", {
   async function openCampaignModal(campId) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay open';
-    overlay.innerHTML = `<div class="modal-box" style="width:720px;max-height:88vh;display:flex;flex-direction:column">
+    overlay.innerHTML = `<div class="modal-box" id="camp-modal-box" style="width:min(1100px,96vw);max-height:94vh;display:flex;flex-direction:column;transition:all 0.2s">
       <div class="modal-head">
         <span class="modal-title" id="camp-modal-title">Kampania #${campId}</span>
-        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button title="Pełny ekran" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 7px;cursor:pointer;color:var(--t2);font-size:0.85rem" onclick="(function(btn){const box=document.getElementById('camp-modal-box');const isMax=box.dataset.max==='1';if(isMax){box.style.cssText='width:min(1100px,96vw);max-height:94vh;display:flex;flex-direction:column;transition:all 0.2s';box.dataset.max='0';btn.textContent='⛶';}else{box.style.cssText='position:fixed;inset:10px;width:auto;max-height:none;display:flex;flex-direction:column;transition:all 0.2s;border-radius:8px';box.dataset.max='1';btn.textContent='⊡';}})(this)">⛶</button>
+          <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+        </div>
       </div>
       <div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 16px;flex-shrink:0">
         ${['overview','plan','turns','map','npcs','workshop'].map((t,i) => `<button class="stab${i===0?' active':''}" data-ctab="${t}" style="border-radius:0;border-bottom:none;margin-bottom:-1px">${{overview:'Przegląd',plan:'Plan GM',turns:'Tury',map:'Mapa',npcs:'👥 Znani NPC',workshop:'Warsztat'}[t]}</button>`).join('')}
@@ -12121,10 +12759,14 @@ forge_create_game_entry("armor", {
     if (!host) return;
     host.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</div>';
     try {
-      const d = await apiFetch('/api/admin/knowledge');
+      const d = await apiFetch('/api/admin/knowledge-book');
       const items = d.items || [];
-      if (!items.length) { host.innerHTML = '<div style="text-align:center;padding:24px;color:var(--t3)">Brak wskazówek.</div>'; return; }
-      host.innerHTML = `<div class="card"><div class="card-header"><span class="card-title">Wiedza gracza</span><span class="card-count">${items.length}</span></div>
+      const addBtn = `<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button class="btn btn-sm btn-primary" onclick="openKnowledgeModal(null);document.getElementById('toolstab-knowledge-content')._reload=_loadToolsKnowledge">+ Dodaj wskazówkę</button></div>`;
+      if (!items.length) {
+        host.innerHTML = addBtn + '<div style="text-align:center;padding:24px;color:var(--t3)">Brak wskazówek.</div>';
+        return;
+      }
+      host.innerHTML = addBtn + `<div class="card"><div class="card-header"><span class="card-title">Księga Wiedzy</span><span class="card-count">${items.length}</span></div>
         <div class="table-wrap"><table class="data-table" id="tools-knowledge-table"><thead><tr>
           <th><div class="th-inner">Klucz</div></th>
           <th class="td-sticky"><div class="th-inner">Tytuł</div></th>
@@ -12133,23 +12775,338 @@ forge_create_game_entry("armor", {
           <th><div class="th-inner">Aktywna</div></th>
           <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
         </tr></thead><tbody>${items.map(k => `<tr>
-          <td class="td-mono" style="font-size:0.72rem">${_esc(k.key)}</td>
+          <td class="td-mono" style="font-size:0.72rem">${_esc(k.tip_key)}</td>
           <td class="td-sticky td-name">${_esc(k.title)}</td>
           <td class="td-muted">${_esc(k.category||'—')}</td>
           <td class="td-mono">${k.sort_order??0}</td>
           <td>${k.is_active?'<span class="badge badge-green">✓</span>':'<span class="badge badge-slate">—</span>'}</td>
-          <td class="td-actions"><button class="btn-icon" onclick="openKnowledgeModal(${JSON.stringify(k).replace(/"/g,'&quot;')})">✎</button></td>
+          <td class="td-actions">
+            <button class="btn-icon" onclick="openKnowledgeModal(${JSON.stringify(k).replace(/"/g,'&quot;')})">✎</button>
+            <button class="btn-icon btn-icon--danger" onclick="_deleteKnowledgeTip('${_esc(k.tip_key)}')">🗑</button>
+          </td>
         </tr>`).join('')}</tbody></table></div></div>`;
+      host._reload = _loadToolsKnowledge;
     } catch(e) { host.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red)">${_esc(e.message)}</div>`; }
   }
 
-  async function _loadToolsMcp() {
-    const el = document.getElementById('mcp-status-display');
-    if (!el) return;
+  async function _deleteKnowledgeTip(key) {
+    if (!confirm(`Usunąć wskazówkę "${key}"?`)) return;
     try {
-      const d = await apiFetch('/api/admin/system/health').catch(() => null);
-      el.innerHTML = d ? `<div class="info-grid">${Object.entries(d).slice(0,6).map(([k,v])=>`<div class="info-row"><span class="info-key">${_esc(k)}</span><span class="info-val">${_esc(String(v))}</span></div>`).join('')}</div>` : '<div style="color:var(--t3)">Status niedostępny.</div>';
-    } catch(e) { el.innerHTML = `<div style="color:var(--red)">${_esc(e.message)}</div>`; }
+      await apiFetch(`/api/admin/knowledge-book/${key}`, { method: 'DELETE' });
+      _showToast('Usunięto.', 'success');
+      _loadToolsKnowledge();
+    } catch(e) { _showToast(e.message, 'error'); }
+  }
+
+  // ── MCP helpers ───────────────────────────────────────────────────────────────
+  let _mcpDemoToken = null;
+  let _mcpDemoCamps = [];
+
+  const _MCP_URL = "https://aigm-dev.studio-colorbox.com/mcp";
+  const _MCP_TOOLS = [
+    { name:"initialize_player_session", star:true,  write:true,  desc:"Loguje się jako gracz testowy i ładuje aktywną kampanię + postać. Wywołaj jako pierwsze." },
+    { name:"submit_player_turn",        star:true,  write:true,  desc:"Wysyła akcję gracza do MG i zwraca narrację. Główna pętla rozgrywki." },
+    { name:"change_player_zone",        star:false, write:true,  desc:"Przełącza strefę walki: zwarcie ↔ dystans." },
+    { name:"flee_from_combat",          star:false, write:true,  desc:"Próba ucieczki z walki (traci XP i łupy)." },
+    { name:"get_campaign_summary",      star:true,  write:false, desc:"Pełny snapshot kampanii: postać, plan MG, tury, ekwipunek, NPCs." },
+    { name:"get_full_campaign_context", star:false, write:false, desc:"Dump w markdown — idealny do wklejenia w Perplexity / ChatGPT." },
+    { name:"get_system_health",         star:false, write:false, desc:"Aktywne kampanie, rozmiar DB, ostatni LLM call, błędy ostatniej godziny." },
+    { name:"get_llm_performance",       star:false, write:false, desc:"Statystyki wywołań LLM wg okresu (24h / 7d / 30d) i typu." },
+    { name:"get_player_stats",          star:false, write:false, desc:"Aktywność graczy: tury, śmierci, XP, aktywna kampania." },
+    { name:"get_world_analytics",       star:false, write:false, desc:"Lokacje, wrogowie, pending review, hexes, bank pomysłów." },
+    { name:"query_game_events",         star:false, write:false, desc:"Filtrowany log zdarzeń (combat_victory, player_death, long_rest…)." },
+    { name:"query_action_log",          star:false, write:false, desc:"Paginowany log tur kampanii wg trasy / zakresu tur." },
+    { name:"get_error_log",             star:false, write:false, desc:"Błędy i ostrzeżenia z game_events + llm_call_log." },
+  ];
+
+  async function _loadToolsMcp() {
+    const host = document.getElementById('toolstab-mcp');
+    if (!host) return;
+    const writeCount = _MCP_TOOLS.filter(t => t.write).length;
+    const readCount  = _MCP_TOOLS.filter(t => !t.write).length;
+    host.innerHTML = `<div class="mcp-tab" style="margin-top:12px">
+      <div class="mcp-server-card">
+        <div class="mcp-server-header">
+          <div>
+            <div class="mcp-server-name">🤖 AI-GM MCP Server</div>
+            <div class="mcp-server-sub">Model Context Protocol — AI-queryable + playable game</div>
+          </div>
+          <span class="mcp-status-badge mcp-checking" id="mcp-tab-badge">⏳ Checking…</span>
+        </div>
+        <div class="mcp-url-row">
+          <code class="mcp-url-code">${_MCP_URL}</code>
+          <button class="mcp-copy-btn" id="mcp-copy-btn">📋 Kopiuj</button>
+        </div>
+        <div class="mcp-meta-row">
+          <span>Transport: <strong>Streamable HTTP</strong></span>
+          <span>·</span>
+          <span>Narzędzia: <strong>${_MCP_TOOLS.length}</strong> (${writeCount} write, ${readCount} read)</span>
+          <span>·</span>
+          <span>Dostęp: <strong>Read + Write</strong></span>
+        </div>
+      </div>
+      <div class="mcp-two-col">
+        <div class="mcp-connect-card">
+          <div class="mcp-section-title">🔍 Perplexity</div>
+          <div class="mcp-connect-steps">
+            <div class="mcp-step"><span class="mcp-step-label">URL:</span><code>${_MCP_URL}</code></div>
+            <div class="mcp-step"><span class="mcp-step-label">Type:</span><code>Streamable HTTP</code></div>
+          </div>
+          <div class="mcp-examples-title">Prompt startowy dla Perplexity:</div>
+          <ul class="mcp-examples">
+            <li>„Wywołaj initialize_player_session, potem get_full_campaign_context i zagraj kilka tur."</li>
+            <li>„Jesteś wojownikiem w polskim RPG. Zacznij od initialize_player_session."</li>
+          </ul>
+        </div>
+        <div class="mcp-connect-card">
+          <div class="mcp-section-title">⌨️ Claude Code / Desktop</div>
+          <div class="mcp-connect-steps" style="margin-bottom:14px">
+            <div class="mcp-step-label" style="margin-bottom:6px">Claude Code CLI:</div>
+            <pre class="mcp-code-block">claude mcp add ai-gm \\
+  --transport http \\
+  ${_MCP_URL}</pre>
+          </div>
+          <div class="mcp-connect-steps">
+            <div class="mcp-step-label" style="margin-bottom:6px">claude_desktop_config.json:</div>
+            <pre class="mcp-code-block">{ "mcpServers": {
+  "ai-gm": {
+    "url": "${_MCP_URL}"
+  }
+}}</pre>
+          </div>
+        </div>
+      </div>
+      <div class="mcp-tools-card">
+        <div class="mcp-section-title">🔧 ${_MCP_TOOLS.length} dostępnych narzędzi</div>
+        <div class="mcp-tools-list">${_MCP_TOOLS.map(t => `
+          <div class="mcp-tool-row">
+            <code class="mcp-tool-name${t.star?' mcp-tool-star':''}">${t.star?'★ ':''}${t.name}</code>
+            <span class="mcp-tool-badge${t.write?' mcp-tool-write':' mcp-tool-read'}">${t.write?'write':'read'}</span>
+            <span class="mcp-tool-desc">${t.desc}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="mcp-config-section">
+        <h4>Konfiguracja sesji MCP</h4>
+        <div class="mcp-config-row">
+          <label>Gracz:</label>
+          <select id="mcp-cfg-user" class="field-input mcp-live-sel" disabled style="font-size:0.82rem"><option value="">Ładowanie…</option></select>
+          <label>Bohater:</label>
+          <select id="mcp-cfg-hero" class="field-input mcp-live-sel" disabled style="font-size:0.82rem"><option value="">— wybierz gracza —</option></select>
+          <label>Kampania:</label>
+          <span id="mcp-cfg-camp-display" class="mcp-cfg-camp-display">—</span>
+          <button id="mcp-cfg-save" class="btn btn-primary btn-sm" disabled>Zapisz</button>
+        </div>
+        <div id="mcp-cfg-status" class="mcp-cfg-status">Ładowanie aktywnej sesji…</div>
+      </div>
+      <div class="mcp-live-section">
+        <div class="mcp-live-header">
+          <span class="mcp-live-title">🎮 Podgląd na żywo</span>
+          <select id="mcp-camp-sel" class="field-input mcp-live-sel" disabled style="font-size:0.82rem"><option value="">Ładowanie kampanii…</option></select>
+          <button id="mcp-iframe-reload" class="mcp-reload-btn">↺ Załaduj</button>
+        </div>
+        <div id="mcp-diag-bar" class="mcp-diag-bar" hidden></div>
+        <div class="mcp-iframe-wrap">
+          <iframe id="mcp-player-iframe" src="about:blank"></iframe>
+        </div>
+      </div>
+    </div>`;
+
+    document.getElementById('mcp-copy-btn')?.addEventListener('click', () => {
+      navigator.clipboard.writeText(_MCP_URL).then(() => {
+        const btn = document.getElementById('mcp-copy-btn');
+        btn.textContent = '✓ Skopiowano';
+        setTimeout(() => { btn.textContent = '📋 Kopiuj'; }, 2000);
+      }).catch(() => {});
+    });
+
+    document.getElementById('mcp-iframe-reload')?.addEventListener('click', _mcpLoadSelectedCampaign);
+    document.getElementById('mcp-camp-sel')?.addEventListener('change', _mcpLoadSelectedCampaign);
+
+    _mcpInitDemoCampaigns();
+    _mcpInitConfig();
+
+    const badge = document.getElementById('mcp-tab-badge');
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 5000);
+      const resp = await fetch('/mcp', {
+        method:'POST', signal:ctrl.signal,
+        headers:{'Content-Type':'application/json','Accept':'application/json, text/event-stream'},
+        body:JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'admin-panel',version:'1'}}}),
+      });
+      clearTimeout(t);
+      badge.className = resp.ok ? 'mcp-status-badge mcp-online' : 'mcp-status-badge mcp-offline';
+      badge.textContent = resp.ok ? '● Online' : '● Offline';
+    } catch {
+      badge.className = 'mcp-status-badge mcp-offline';
+      badge.textContent = '● Offline';
+    }
+  }
+
+  async function _mcpApiFetch(path, options = {}) {
+    const token = localStorage.getItem('aigm_admin_token') || '';
+    const headers = new Headers(options.headers || {});
+    if (!headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+    const resp = await fetch(`/api${path}`, { ...options, headers });
+    let body = null;
+    try { body = await resp.json(); } catch { /* non-json */ }
+    if (!resp.ok) {
+      const msg = body?.detail || `HTTP ${resp.status}`;
+      throw new Error(String(msg).slice(0, 200));
+    }
+    return body;
+  }
+
+  async function _mcpInitConfig() {
+    const userSel  = document.getElementById('mcp-cfg-user');
+    const heroSel  = document.getElementById('mcp-cfg-hero');
+    const campDisp = document.getElementById('mcp-cfg-camp-display');
+    const saveBtn  = document.getElementById('mcp-cfg-save');
+    const statusEl = document.getElementById('mcp-cfg-status');
+    let _heroMap = {}, _pinnedHeroId = null;
+
+    try {
+      const cfg = await _mcpApiFetch('/admin/mcp/config');
+      _pinnedHeroId = cfg.hero_id ?? null;
+      if (statusEl) statusEl.textContent = cfg.hero_name
+        ? `Aktywna: bohater „${cfg.hero_name}" → kampania „${cfg.campaign_title ?? '—'}"`
+        : 'Brak przypietej sesji — MCP używa auto-wykrywania.';
+    } catch(e) { if (statusEl) statusEl.textContent = `Błąd ładowania: ${e.message}`; }
+
+    const updateCampDisplay = () => {
+      const hero = _heroMap[heroSel?.value];
+      if (campDisp) campDisp.textContent = hero?.campaign_id ? `#${hero.campaign_id} ${hero.campaign_title||''}`.trim() : '—';
+      if (saveBtn) saveBtn.disabled = false;
+    };
+
+    const populateHeroes = async (userId) => {
+      if (!heroSel) return;
+      heroSel.innerHTML = `<option value="">— brak (auto) —</option>`;
+      heroSel.disabled = true; if (campDisp) campDisp.textContent = '—'; if (saveBtn) saveBtn.disabled = true;
+      if (!_mcpDemoToken) return;
+      try {
+        const url = userId ? `/api/characters?user_id=${userId}` : `/api/characters`;
+        const resp = await fetch(url, { headers:{'Authorization':`Bearer ${_mcpDemoToken}`} });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        const heroes = data.heroes || (Array.isArray(data) ? data : []);
+        _heroMap = {};
+        heroes.forEach(h => {
+          _heroMap[String(h.id)] = h;
+          const opt = document.createElement('option');
+          opt.value = String(h.id);
+          opt.textContent = `${h.name}  (${h.campaign_title || `kampania #${h.campaign_id}` || 'brak kampanii'})`;
+          heroSel.appendChild(opt);
+        });
+        heroSel.disabled = false; if (saveBtn) saveBtn.disabled = false;
+        if (_pinnedHeroId && _heroMap[String(_pinnedHeroId)]) {
+          heroSel.value = String(_pinnedHeroId); updateCampDisplay();
+          const uid = _heroMap[String(_pinnedHeroId)]?.user_id;
+          if (uid && userSel) userSel.value = String(uid);
+        }
+      } catch(e) { heroSel.innerHTML = `<option value="">⚠ ${e.message}</option>`; heroSel.disabled = false; if (saveBtn) saveBtn.disabled = false; }
+    };
+
+    const populateUsers = async () => {
+      let waited = 0;
+      const waitAndLoad = () => { if (_mcpDemoToken || waited >= 3000) _doPopulate(); else { waited += 150; setTimeout(waitAndLoad, 150); } };
+      const _doPopulate = async () => {
+        try {
+          const resp = await fetch('/api/characters', { headers:{'Authorization':`Bearer ${_mcpDemoToken}`} });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const data = await resp.json();
+          const heroes = data.heroes || (Array.isArray(data) ? data : []);
+          const seen = new Map();
+          heroes.forEach(h => { if (h.user_id && !seen.has(h.user_id)) seen.set(h.user_id, h.user_id); });
+          if (userSel) {
+            userSel.innerHTML = `<option value="">— wszyscy gracze —</option>`;
+            seen.forEach(uid => { const opt=document.createElement('option'); opt.value=String(uid); opt.textContent=`Gracz #${uid}`; userSel.appendChild(opt); });
+            userSel.disabled = false;
+          }
+          populateHeroes(null);
+        } catch(e) { if (userSel) { userSel.innerHTML = `<option value="">⚠ ${e.message}</option>`; userSel.disabled = false; } populateHeroes(null); }
+      };
+      waitAndLoad();
+    };
+
+    userSel?.addEventListener('change', () => { _pinnedHeroId = null; populateHeroes(userSel.value ? parseInt(userSel.value) : null); });
+    heroSel?.addEventListener('change', updateCampDisplay);
+    saveBtn?.addEventListener('click', async () => {
+      saveBtn.disabled = true; saveBtn.textContent = 'Zapisywanie…';
+      const hero = _heroMap[heroSel?.value] ?? null;
+      const heroId = hero ? parseInt(heroSel.value) : null;
+      const campId = hero?.campaign_id ?? null;
+      try {
+        await _mcpApiFetch('/admin/mcp/config', { method:'PUT', body:JSON.stringify({campaign_id:campId,hero_id:heroId}) });
+        if (statusEl) statusEl.textContent = hero ? `Aktywna: bohater „${hero.name}" → kampania „${hero.campaign_title||campId}"` : 'Brak przypietej sesji.';
+        _showToast('Konfiguracja MCP zapisana', 'success');
+        if (campId) { const sel=document.getElementById('mcp-camp-sel'); if (sel) { sel.value=String(campId); _mcpLoadSelectedCampaign(); } }
+      } catch(e) { _showToast(`Błąd zapisu: ${e.message}`, 'error'); }
+      finally { saveBtn.disabled = false; saveBtn.textContent = 'Zapisz'; }
+    });
+    populateUsers();
+  }
+
+  async function _mcpInitDemoCampaigns() {
+    const sel = document.getElementById('mcp-camp-sel');
+    try {
+      const loginResp = await fetch('/api/auth/login', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username:'demo', password:'demo'}),
+      });
+      if (!loginResp.ok) throw new Error(`Login failed ${loginResp.status}`);
+      const auth = await loginResp.json();
+      _mcpDemoToken = auth.access_token;
+      localStorage.setItem('token', auth.access_token);
+      localStorage.setItem('aigm_access_token', auth.access_token);
+      if (auth.refresh_token) localStorage.setItem('aigm_refresh_token', auth.refresh_token);
+      localStorage.setItem('user', JSON.stringify({id:auth.user_id,username:auth.username,display_name:auth.display_name,is_admin:auth.is_admin}));
+      const campsResp = await fetch('/api/campaigns', { headers:{'Authorization':`Bearer ${_mcpDemoToken}`} });
+      if (!campsResp.ok) throw new Error('Brak dostępu do kampanii');
+      const campsData = await campsResp.json();
+      const all = (campsData.campaigns || (Array.isArray(campsData) ? campsData : [])).sort((a,b) => (b.id??0)-(a.id??0));
+      _mcpDemoCamps = all;
+      if (sel) {
+        sel.innerHTML = '';
+        const active = all.filter(c => c.status === 'active'), ended = all.filter(c => c.status !== 'active');
+        if (active.length) { const g=document.createElement('optgroup'); g.label='Aktywne'; active.forEach(c => { const o=document.createElement('option'); o.value=c.id; o.textContent=`#${c.id} ${c.title||'Kampania'}`; g.appendChild(o); }); sel.appendChild(g); }
+        if (ended.length)  { const g=document.createElement('optgroup'); g.label='Zakończone'; ended.forEach(c => { const o=document.createElement('option'); o.value=c.id; o.textContent=`#${c.id} ${c.title||'Kampania'}`; g.appendChild(o); }); sel.appendChild(g); }
+        if (!all.length) sel.innerHTML = `<option value="">Brak kampanii</option>`;
+        sel.disabled = false;
+        if (active.length) sel.value = String(active[0].id); else if (all.length) sel.value = String(all[0].id);
+        _mcpLoadSelectedCampaign();
+      }
+    } catch(e) { if (sel) { sel.disabled = false; sel.innerHTML = `<option value="">⚠ ${e.message}</option>`; } }
+  }
+
+  function _mcpLoadSelectedCampaign() {
+    const sel = document.getElementById('mcp-camp-sel');
+    const iframe = document.getElementById('mcp-player-iframe');
+    const diagBar = document.getElementById('mcp-diag-bar');
+    if (!iframe) return;
+    const campId = sel?.value;
+    if (!campId) return;
+    const camp = _mcpDemoCamps.find(c => String(c.id) === String(campId));
+    if (camp?.character_id) localStorage.setItem('aigm_hero_id', String(camp.character_id));
+    localStorage.setItem('aigm_campaign_id', String(campId));
+    if (diagBar) { diagBar.textContent = '⏳ Ładowanie…'; diagBar.hidden = false; }
+    iframe.addEventListener('load', function _onLoad() {
+      iframe.removeEventListener('load', _onLoad);
+      setTimeout(() => {
+        try {
+          const doc = iframe.contentDocument;
+          if (!doc) { if (diagBar) { diagBar.textContent = '⚠ brak dostępu do iframe (cross-origin?)'; diagBar.hidden = false; } return; }
+          const active = doc.querySelector('.screen--active');
+          const screenId = active?.id || 'none';
+          const heroName = doc.getElementById('character-name-display')?.textContent?.trim() || '—';
+          const msgCount = doc.getElementById('chat-messages')?.childElementCount ?? 0;
+          if (diagBar) { diagBar.textContent = `Ekran: ${screenId} | Bohater: ${heroName} | Wiad: ${msgCount}`; diagBar.hidden = false; }
+        } catch(e) { if (diagBar) { diagBar.textContent = `⚠ Błąd iframe: ${e.message}`; diagBar.hidden = false; } }
+      }, 2500);
+    });
+    iframe.src = '/?_t=' + Date.now();
   }
 
   async function _loadKnowledge() {
@@ -12214,6 +13171,7 @@ forge_create_game_entry("armor", {
       else await apiFetch('/api/admin/knowledge-book', { method: 'POST', body: JSON.stringify(body) });
       btn.closest('.modal-overlay').remove();
       _sectionLoaded.delete('knowledge'); await _loadKnowledge();
+      _loadToolsKnowledge();
       _showToast(existingKey ? 'Zapisano.' : 'Dodano wskazówkę.', 'success');
     } catch(e) { _showToast(e.message || 'Błąd.', 'error'); btn.disabled = false; btn.textContent = 'Zapisz'; }
   }
@@ -12235,23 +13193,100 @@ forge_create_game_entry("armor", {
   }
 
   async function _refreshInviteTree() {
-    const treeEl = document.getElementById('invite-tree');
-    if (!treeEl) return;
+    // Load D3 dynamically once
+    if (!window.d3) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js';
+        s.onload = resolve; s.onerror = reject;
+        document.head.appendChild(s);
+      });
+    }
+    let treeData;
     try {
-      const d = await apiFetch('/api/admin/invite-tree');
-      const root = d.tree;
-      const STATUS_COLOR = { active:'var(--green)', low:'var(--amber,#f59e0b)', cold:'var(--t3)' };
-      function renderNode(node, depth) {
-        const col = STATUS_COLOR[node.status] || 'var(--t3)';
-        const indent = '  '.repeat(depth);
-        const info = `[${node.turns||0} tur]`;
-        let html = `<div style="margin:2px 0;color:${col}">${indent}${depth>0?'└─ ':''}${_esc(node.name||node.username||'?')} <span style="color:var(--t3);font-size:0.72rem">${info}</span></div>`;
-        if (node.children?.length) html += node.children.map(c => renderNode(c, depth+1)).join('');
-        return html;
-      }
-      const nodes = Array.isArray(root) ? root : (root ? [root] : []);
-      treeEl.innerHTML = nodes.length ? nodes.map(n => renderNode(n, 0)).join('') : '<div style="color:var(--t3);padding:12px">Brak danych drzewa.</div>';
-    } catch(e) { if (treeEl) treeEl.innerHTML = `<div style="color:var(--red,#e55)">${_esc(e.message)}</div>`; }
+      const resp = await apiFetch('/api/admin/invite-tree');
+      treeData = resp.tree;
+    } catch(e) {
+      const loadEl = document.getElementById('inv-tree-loading');
+      if (loadEl) loadEl.textContent = 'Błąd: ' + (e.message || 'nieznany');
+      return;
+    }
+    const loadEl = document.getElementById('inv-tree-loading');
+    if (loadEl) loadEl.style.display = 'none';
+    if (!treeData || (Array.isArray(treeData) && !treeData.length)) {
+      const wrap = document.getElementById('invite-tree-svg-wrap');
+      if (wrap) wrap.innerHTML = '<div style="text-align:center;padding:60px;color:var(--t3)">Brak danych drzewa zaproszeń.</div>';
+      return;
+    }
+    const rootData = Array.isArray(treeData)
+      ? { id:0, name:'AI-GM', username:'root', status:'active', turns:0, children:treeData }
+      : treeData;
+    _drawInviteTree(rootData);
+  }
+
+  function _drawInviteTree(rootData) {
+    const d3 = window.d3;
+    const wrap = document.getElementById('invite-tree-svg-wrap');
+    if (!wrap) return;
+    const svgEl = document.getElementById('invite-tree-svg');
+    if (svgEl) svgEl.innerHTML = '';
+    const activityColor = { active:'#4caf78', low:'#c9944a', cold:'#6b665e' };
+    const margin = { top:24, right:140, bottom:24, left:100 };
+    const dx = 44, dy = 180;
+    const root = d3.hierarchy(rootData);
+    root.descendants().forEach(d => { if (d.depth > 1) { d._children = d.children; d.children = null; } });
+    const tree = d3.tree().nodeSize([dx, dy]);
+    const svg = d3.select('#invite-tree-svg');
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+    const linkGen = d3.linkHorizontal().x(d => d.y).y(d => d.x);
+    const gLinks = g.append('g').attr('fill','none').attr('stroke','#3a3d50').attr('stroke-width',1.5);
+    const gNodes = g.append('g').attr('cursor','pointer');
+    function update(source) {
+      tree(root);
+      let x0 = Infinity, x1 = -Infinity;
+      root.each(d => { if (d.x > x1) x1 = d.x; if (d.x < x0) x0 = d.x; });
+      const height = x1 - x0 + margin.top + margin.bottom + dx*2;
+      const width  = root.height * dy + margin.left + margin.right + 60;
+      svg.attr('width', Math.max(width,400)).attr('height', Math.max(height,200));
+      g.attr('transform', `translate(${margin.left},${margin.top + (-x0 + dx)})`);
+      const links = gLinks.selectAll('path').data(root.links(), d => d.target.data.id);
+      links.enter().append('path').attr('opacity',0)
+        .attr('d', () => { const o={x:source.x0??source.x,y:source.y0??source.y}; return linkGen({source:o,target:o}); })
+        .merge(links).transition().duration(250).attr('opacity',1).attr('d',linkGen);
+      links.exit().transition().duration(250).attr('opacity',0)
+        .attr('d', () => { const o={x:source.x,y:source.y}; return linkGen({source:o,target:o}); }).remove();
+      const nodes = gNodes.selectAll('g.inv-node').data(root.descendants(), d => d.data.id);
+      const nodeEnter = nodes.enter().append('g').attr('class','inv-node')
+        .attr('transform', () => `translate(${source.y0??source.y},${source.x0??source.x})`).attr('opacity',0)
+        .on('click', (event, d) => {
+          if (d._children || d.children) {
+            if (d.children) { d._children = d.children; d.children = null; } else { d.children = d._children; d._children = null; }
+            update(d);
+          }
+        });
+      nodeEnter.append('circle').attr('r',10).attr('fill','transparent')
+        .attr('stroke', d => activityColor[d.data.status]||'#6b665e')
+        .attr('stroke-width', d => d._children ? 2 : 0).attr('stroke-dasharray','3,2');
+      nodeEnter.append('circle').attr('class','inv-node-circle').attr('r',6)
+        .attr('fill', d => activityColor[d.data.status]||'#6b665e').attr('stroke','#0f1117').attr('stroke-width',1.5);
+      nodeEnter.append('text').attr('class','inv-node-label').attr('dy','0.32em')
+        .attr('x', d => (d.children||d._children) ? -14 : 14)
+        .attr('text-anchor', d => (d.children||d._children) ? 'end' : 'start')
+        .attr('fill','#c9a54a').attr('font-size','12px').text(d => d.data.name||d.data.username);
+      nodeEnter.append('text').attr('class','inv-node-turns').attr('dy','0.32em').attr('y',-13)
+        .attr('text-anchor','middle').attr('fill', d => activityColor[d.data.status]||'#6b665e')
+        .attr('font-size','10px').text(d => d.data.turns > 0 ? `${d.data.turns}t` : '');
+      const nodeMerge = nodeEnter.merge(nodes);
+      nodeMerge.transition().duration(250).attr('transform', d => `translate(${d.y},${d.x})`).attr('opacity',1);
+      nodeMerge.select('circle.inv-node-circle').attr('fill', d => activityColor[d.data.status]||'#6b665e');
+      nodeMerge.select('circle:first-child').attr('stroke-width', d => d._children ? 2 : 0);
+      nodeMerge.select('text.inv-node-label')
+        .attr('x', d => (d.children||d._children) ? -14 : 14)
+        .attr('text-anchor', d => (d.children||d._children) ? 'end' : 'start');
+      nodes.exit().transition().duration(250).attr('transform', () => `translate(${source.y},${source.x})`).attr('opacity',0).remove();
+      root.each(d => { d.x0 = d.x; d.y0 = d.y; });
+    }
+    root.x0 = 0; root.y0 = 0; update(root);
   }
 
   async function _refreshInviteList() {

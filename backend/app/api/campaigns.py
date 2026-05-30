@@ -532,6 +532,13 @@ def create_campaign(req: CampaignCreateRequest):
             "UPDATE game_sessions SET session_flags = json_patch(session_flags, ?) WHERE campaign_id = ?",
             (json.dumps({"current_hex": {"q": tpl_start_hex_q, "r": tpl_start_hex_r}}), campaign_id),
         )
+        # Mark the starting hex as discovered so player sees it on map immediately
+        conn.execute(
+            """INSERT INTO campaign_hex_data (campaign_id, hex_q, hex_r, discovered)
+               VALUES (?, ?, ?, 1)
+               ON CONFLICT(campaign_id, hex_q, hex_r) DO UPDATE SET discovered = 1""",
+            (campaign_id, tpl_start_hex_q, tpl_start_hex_r),
+        )
         conn.commit()
 
     row = conn.execute(

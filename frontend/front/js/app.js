@@ -3884,12 +3884,11 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
                 _wmRender();
             }
             // Pulse the map button to signal location changed
-            const mapBtns = [document.getElementById('open-map-btn'), document.getElementById('composer-map-btn')];
-            mapBtns.forEach(btn => {
-                if (!btn) return;
-                btn.classList.add('map-btn--pulse');
-                setTimeout(() => btn.classList.remove('map-btn--pulse'), 2000);
-            });
+            const mapBtn = document.getElementById('open-map-btn');
+            if (mapBtn) {
+                mapBtn.classList.add('map-btn--pulse');
+                setTimeout(() => mapBtn.classList.remove('map-btn--pulse'), 2000);
+            }
         }
 
         await refreshCharacterData();
@@ -5419,13 +5418,21 @@ function _showCombatDiceRoll(row, onDone) {
         }
         combatCard.hidden = false;
 
-        // Auto-close after 2.5s — no click needed during combat
-        setTimeout(() => {
+        let _combatClosed = false;
+        const _closeCombat = () => {
+            if (_combatClosed) return;
+            _combatClosed = true;
+            overlay.removeEventListener('click', _closeCombat);
+            window.dismissDiceRoll = _savedCombatDismiss;
             overlay.hidden = true;
             combatCard.hidden = true;
             if (skillCard) skillCard.hidden = false;
             onDone();
-        }, 2500);
+        };
+        const _savedCombatDismiss = window.dismissDiceRoll;
+        window.dismissDiceRoll = _closeCombat;
+        overlay.addEventListener('click', _closeCombat, { once: true });
+        setTimeout(_closeCombat, 2500);
     }
 
     const committedD20 = rv !== null ? Math.max(1, Math.min(20, rv)) : null;
@@ -10141,8 +10148,7 @@ function initWorldMap() {
   if (!_wmap.panel) return;
 
   document.getElementById('open-map-btn')?.addEventListener('click', _wmOpen);
-  const composerMapBtn = document.getElementById('composer-map-btn');
-  if (composerMapBtn) composerMapBtn.addEventListener('click', _wmOpen);
+  // composer-map-btn removed from HTML
   document.getElementById('wmap-close-btn')?.addEventListener('click', _wmClose);
 
   // Swipe right on map panel to close (mobile)

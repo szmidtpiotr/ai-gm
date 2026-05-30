@@ -3590,7 +3590,7 @@ def admin_list_hex_terrain_config(_: None = Depends(require_admin_token)):
     try:
         rows = conn.execute(
             "SELECT hex_type, label, map_icon, map_color, travel_hours, "
-            "encounter_base_chance, spawn_weight, is_active "
+            "encounter_base_chance, spawn_weight, is_active, has_submap "
             "FROM hex_type_config ORDER BY spawn_weight DESC, hex_type"
         ).fetchall()
         return [dict(r) for r in rows]
@@ -3603,7 +3603,7 @@ def admin_update_hex_terrain_config(
     hex_type: str, req: dict = Body(...), _: None = Depends(require_admin_token)
 ):
     allowed = {"label", "map_icon", "map_color", "travel_hours",
-               "encounter_base_chance", "spawn_weight", "is_active"}
+               "encounter_base_chance", "spawn_weight", "is_active", "has_submap"}
     updates = {k: v for k, v in req.items() if k in allowed}
     if not updates:
         raise HTTPException(status_code=400, detail="No valid fields to update")
@@ -3641,6 +3641,16 @@ def admin_create_hex_terrain_config(
                 req.get("encounter_base_chance", 0.15),
                 req.get("spawn_weight", 0),
             ),
+        )
+        # Auto-create a generic location for this terrain type
+        generic_key = f"generic_{req['hex_type']}"
+        conn.execute(
+            """INSERT OR IGNORE INTO game_locations
+               (key, label, description, location_type, is_active,
+                review_status, is_generic, hex_type_key, created_by)
+               VALUES (?, ?, ?, 'sub', 1, 'approved', 1, ?, 'seed')""",
+            (generic_key, req["label"],
+             f"Domyślna lokacja terenu: {req['label']}", req["hex_type"]),
         )
         conn.commit()
         return {"ok": True}

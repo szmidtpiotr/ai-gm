@@ -104,8 +104,8 @@ def _load_hex_graph(conn: sqlite3.Connection) -> dict[tuple[int, int], dict]:
     """
     hexes: dict[tuple[int, int], dict] = {}
     rows = conn.execute(
-        "SELECT q, r, hex_type, label, encounter_chance, encounter_pool, location_key "
-        "FROM world_hexes WHERE is_active = 1"
+        "SELECT q, r, hex_type, label, encounter_chance, encounter_pool, location_key, map_level "
+        "FROM world_hexes WHERE is_active = 1 AND (map_level = 0 OR map_level IS NULL)"
     ).fetchall()
     for row in rows:
         q, r = int(row["q"]), int(row["r"])
@@ -330,7 +330,12 @@ def resolve_chain_travel(
                     teleport_used = dict(edge)
                 break
         if not is_tp:
-            total_hours += 1.0  # 1 hour per hex
+            # Check if hex is a local submap hex (inside a city/castle) → 1 minute per hex
+            hex_data = hexes.get(cur, {})
+            if hex_data.get("map_level") == 1:
+                total_hours += 1.0 / 60.0
+            else:
+                total_hours += 1.0  # 1 hour per world hex
 
     # Roll encounters along path (skip start hex)
     encounter_result = None
@@ -555,6 +560,39 @@ def _find_canonical_location_for_name(
     return random.choice(rows) if rows else None
 
 
+def _find_best_spawn_hex(conn: sqlite3.Connection) -> dict | None:
+    """Find best existing world hex for a new campaign spawn.
+    Prefers town/plains near world centre; skips hexes already occupied by another campaign."""
+    used: set[tuple[int, int]] = set()
+    for row in conn.execute("SELECT session_flags FROM game_sessions"):
+        try:
+            flags = json.loads(row["session_flags"] or "{}")
+            ch = flags.get("current_hex")
+            if ch:
+                used.add((int(ch["q"]), int(ch["r"])))
+        except Exception:
+            pass
+
+    _PREF = {"town": 4, "castle": 3, "plains": 2, "hills": 1}
+    best: dict | None = None
+    best_score = -9999
+    for row in conn.execute(
+        "SELECT q, r, hex_type, label FROM world_hexes WHERE map_level = 0 AND is_active = 1"
+    ).fetchall():
+        q, r = int(row["q"]), int(row["r"])
+        if (q, r) in used:
+            continue
+        pref = _PREF.get(row["hex_type"] or "", 0)
+        if pref == 0:
+            continue  # only prefer typed hexes
+        center_dist = abs(q) + abs(r) + abs(-q - r)  # cube distance from (0,0)
+        score = pref * 10 - center_dist
+        if score > best_score:
+            best_score = score
+            best = {"q": q, "r": r, "hex_type": row["hex_type"], "label": row["label"]}
+    return best
+
+
 def _find_nearby_empty_hex(
     conn: sqlite3.Connection,
     max_distance: int = 4,
@@ -631,21 +669,27 @@ def resolve_starting_hex(
         hex_type = matched_hex["hex_type"]
         label = matched_hex["label"]
     else:
-        # Create new hex near existing world
-        sq, sr = _find_nearby_empty_hex(conn, max_distance=4)
-        hex_type = _infer_hex_type_from_name(starting_location_name or "")
-        label = None  # global label stays empty — campaign layer will hold the specific name
-        is_new = True
-
-        # Insert into world_hexes
-        conn.execute(
-            """INSERT OR IGNORE INTO world_hexes
-               (q, r, hex_type, label, encounter_chance, encounter_pool,
-                created_by_gm, created_by_campaign_id, discovered_in_campaign_id)
-               VALUES (?,?,?,?,?,?,0,?,?)""",
-            (sq, sr, hex_type, label, 0.15 if hex_type not in ("town", "castle") else 0.0,
-             "[]", campaign_id, campaign_id),
-        )
+        # Prefer an existing world hex (town/plains near centre) over creating an edge hex
+        existing = _find_best_spawn_hex(conn)
+        if existing:
+            sq, sr = existing["q"], existing["r"]
+            hex_type = existing["hex_type"]
+            label = existing["label"]
+            is_new = False
+        else:
+            # Fall back: create new hex near existing world
+            sq, sr = _find_nearby_empty_hex(conn, max_distance=4)
+            hex_type = _infer_hex_type_from_name(starting_location_name or "")
+            label = None
+            is_new = True
+            conn.execute(
+                """INSERT OR IGNORE INTO world_hexes
+                   (q, r, hex_type, label, encounter_chance, encounter_pool,
+                    created_by_gm, created_by_campaign_id, discovered_in_campaign_id)
+                   VALUES (?,?,?,?,?,?,0,?,?)""",
+                (sq, sr, hex_type, label, 0.15 if hex_type not in ("town", "castle") else 0.0,
+                 "[]", campaign_id, campaign_id),
+            )
 
     # Campaign-specific overlay: store the specific location name as campaign_label
     campaign_label = starting_location_name if is_new or starting_location_name else None

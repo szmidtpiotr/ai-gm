@@ -47,6 +47,13 @@ class LocationBase(BaseModel):
     tier: int = Field(default=1, ge=1, le=5)
     canonical: bool = True
     source_campaign_id: Optional[int] = None
+    # Hex-world linkage (added in hex_linkage migration)
+    world_hex_q: Optional[int] = None
+    world_hex_r: Optional[int] = None
+    local_hex_q: Optional[int] = None
+    local_hex_r: Optional[int] = None
+    is_generic: int = 0
+    hex_type_key: Optional[str] = None
 
 
 class LocationCreate(LocationBase):

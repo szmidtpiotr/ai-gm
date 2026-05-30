@@ -742,6 +742,33 @@ ADMIN_MIGRATIONS = [
     SELECT 'GPU (.16, GTX 1660)', 'http://192.168.1.16:8300', 'gpu', 0
     WHERE NOT EXISTS (SELECT 1 FROM voice_hosts WHERE base_url = 'http://192.168.1.16:8300')
     """,
+    """
+    INSERT INTO voice_hosts (label, base_url, kind, is_active)
+    SELECT 'F5-TTS (.170, Desktop GPU)', 'http://192.168.1.170:8301', 'gpu', 0
+    WHERE NOT EXISTS (SELECT 1 FROM voice_hosts WHERE base_url = 'http://192.168.1.170:8301')
+    """,
+    # ── Voice config — persisted in game DB so it survives host switches ────────
+    """
+    CREATE TABLE IF NOT EXISTS voice_config (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+    )
+    """,
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('tts_enabled', '1')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('stt_enabled', '0')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('tts_speed', '1.0')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('tts_voice', 'piotr')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('tts_noise_scale', '0.667')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('tts_nfe_step', '32')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('tts_cfg_strength', '2.0')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('tts_cross_fade_duration', '0.15')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('tts_sway_sampling_coef', '-1.0')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('tts_seed', '-1')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('stt_model', 'base')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('stt_language', 'pl')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('stt_beam_size', '5')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('vad_filter', '0')",
+    "INSERT OR IGNORE INTO voice_config (key, value) VALUES ('stt_silence_auto_stop_ms', '2000')",
 
     # ── Kuźnia Kampanii: adventure ideas + hooks + templates + feedback ────────
     """
@@ -2661,6 +2688,17 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
             created_at                  TEXT DEFAULT (datetime('now'))
         )
     """, "v2-world-hexes")
+    # Remove duplicate (q, r) rows before creating the unique index — keep the
+    # highest rowid (latest insert) per coordinate pair.
+    try:
+        conn.execute("""
+            DELETE FROM world_hexes WHERE rowid NOT IN (
+                SELECT MAX(rowid) FROM world_hexes GROUP BY q, r
+            )
+        """)
+        conn.commit()
+    except Exception:
+        pass
     _exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_world_hexes_coords ON world_hexes(q, r)",
           "v2-world-hexes-idx")
 
@@ -3263,6 +3301,42 @@ def _ensure_rarity_loot_scaling(conn: sqlite3.Connection) -> None:
     logger.info("admin_migration_applied", label="rarity-loot-scaling-task7")
 
 
+def _ensure_game_locations_hex_linkage(conn: sqlite3.Connection) -> None:
+    """Add hex-linkage columns to game_locations and seed generic locations per terrain type."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(game_locations)").fetchall()}
+    new_cols = [
+        ("world_hex_q", "INTEGER"),
+        ("world_hex_r", "INTEGER"),
+        ("local_hex_q", "INTEGER"),
+        ("local_hex_r", "INTEGER"),
+        ("is_generic", "INTEGER NOT NULL DEFAULT 0"),
+        ("hex_type_key", "TEXT"),
+    ]
+    changed = False
+    for col, defn in new_cols:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE game_locations ADD COLUMN {col} {defn}")
+            changed = True
+    if changed:
+        conn.commit()
+    # Seed generic locations for all terrain types that don't have one yet
+    terrain_types = conn.execute(
+        "SELECT hex_type, label FROM hex_type_config"
+    ).fetchall()
+    for t in terrain_types:
+        key = f"generic_{t['hex_type']}"
+        conn.execute(
+            """INSERT OR IGNORE INTO game_locations
+               (key, label, description, location_type, is_active,
+                review_status, is_generic, hex_type_key, created_by)
+               VALUES (?, ?, ?, 'sub', 1, 'approved', 1, ?, 'seed')""",
+            (key, t["label"],
+             f"Domyślna lokacja terenu: {t['label']}", t["hex_type"]),
+        )
+    conn.commit()
+    logger.info("admin_migration_applied", label="game-locations-hex-linkage")
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -3352,10 +3426,12 @@ def run_admin_migrations() -> None:
         _ensure_adventure_forge_cleanup(conn)
         _ensure_rarity_loot_scaling(conn)
         _ensure_character_rentals(conn)
+        _ensure_hex_has_submap(conn)
+        _ensure_game_locations_hex_linkage(conn)
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="14.1")
+    logger.info("admin_migration_complete", phase="14.2")
 
 
 def _ensure_character_rentals(conn: sqlite3.Connection) -> None:
@@ -3444,3 +3520,17 @@ def _allow_nullable_campaign_model_id(conn: sqlite3.Connection) -> None:
         logger.info("admin_migration_campaign_model_id_nullable")
     finally:
         conn.execute("PRAGMA foreign_keys = ON")
+
+
+def _ensure_hex_has_submap(conn: sqlite3.Connection) -> None:
+    """Add has_submap flag to hex_type_config and seed defaults for types that support local maps."""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(hex_type_config)").fetchall()]
+    if "has_submap" not in cols:
+        conn.execute("ALTER TABLE hex_type_config ADD COLUMN has_submap INTEGER NOT NULL DEFAULT 0")
+        # Seed has_submap=1 for types that should support local map zoom-in
+        conn.execute(
+            "UPDATE hex_type_config SET has_submap = 1 WHERE hex_type IN (?, ?, ?, ?, ?, ?, ?)",
+            ("town", "castle", "ruins", "cave", "dungeon", "temple", "dungeon"),
+        )
+        conn.commit()
+        logger.info("admin_migration_applied", label="hex-has-submap")
