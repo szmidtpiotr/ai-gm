@@ -2091,6 +2091,7 @@
       <button class="nav-item" data-section="bugreports"><span class="nav-item-icon">🐞</span>Zgłoszenia <span class="nav-badge" id="br-nav-badge" style="display:none">0</span></button>
 
       <div class="nav-group-label">System</div>
+      <button class="nav-item" data-section="push"><span class="nav-item-icon">🔔</span>Push</button>
       <button class="nav-item" data-section="tools"><span class="nav-item-icon">⚒</span>Narzędzia</button>
       <button class="nav-item" data-section="system"><span class="nav-item-icon">⎔</span>System</button>
     </nav>
@@ -5013,6 +5014,68 @@
       </div>
     </section>
 
+    <!-- ── Push Notifications ── -->
+    <section class="section" id="section-push">
+      <div class="section-header">
+        <div>
+          <div class="section-heading">🔔 Push Notifications</div>
+          <div class="section-sub" id="push-sub">Status subskrypcji + testy</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="_sectionLoaded.delete('push');_loadPush()">⟳ Odśwież</button>
+      </div>
+
+      <!-- Stats -->
+      <div class="stat-grid" style="margin-bottom:16px">
+        <div class="stat-card">
+          <div class="stat-label">Łącznie graczy</div>
+          <div class="stat-row"><div class="stat-value" id="push-total">—</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Z aktywną subskrypcją</div>
+          <div class="stat-row"><div class="stat-value" id="push-subscribed" style="color:var(--green,#4caf50)">—</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Bez subskrypcji</div>
+          <div class="stat-row"><div class="stat-value" id="push-unsubscribed" style="color:var(--red,#e53935)">—</div></div>
+        </div>
+      </div>
+
+      <!-- Send test form -->
+      <div class="card" style="margin-bottom:16px;padding:20px">
+        <div style="font-weight:600;margin-bottom:12px;font-size:14px">Wyślij testowe powiadomienie</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <div style="flex:1;min-width:160px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Gracz</div>
+            <select id="push-target-user" class="input" style="width:100%">
+              <option value="">— wybierz gracza —</option>
+            </select>
+          </div>
+          <div style="flex:2;min-width:200px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Treść (opcjonalnie)</div>
+            <input id="push-test-body" class="input" style="width:100%" placeholder="Push notifications działają!" />
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="_sendTestPush()" style="white-space:nowrap">🔔 Wyślij test</button>
+        </div>
+        <div id="push-test-result" style="margin-top:10px;font-size:13px;display:none"></div>
+      </div>
+
+      <!-- Subscriptions table -->
+      <div class="card" style="overflow:hidden">
+        <div class="table-wrap" style="overflow-x:auto">
+          <table class="data-table" id="push-table">
+            <thead><tr>
+              <th>Gracz</th>
+              <th>Status</th>
+              <th>Subskrypcji</th>
+              <th>Ostatnia rejestracja</th>
+              <th>Akcja</th>
+            </tr></thead>
+            <tbody id="push-tbody"><tr><td colspan="5" style="text-align:center;padding:32px;color:var(--t3)">Ładowanie…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
 
   </main>
 </div>
@@ -6182,7 +6245,7 @@
       world:()=>_loadWorldTab('npcs'), map:()=>_loadMapTab('builder'), mechanics:()=>_loadMechanicsTab('stats'),
       dungeons:_loadDungeons, players:_loadPlayers, forge:_loadForge,
       system:_loadSystem, invites:_loadInvites, bugreports:_loadBugReports,
-      tools:_loadTools }[key];
+      tools:_loadTools, push:_loadPush }[key];
     if (!fn) return;
     _sectionLoaded.add(key);
     fn().catch(err => { _sectionLoaded.delete(key); console.warn('Load failed:', key, err.message); });
@@ -15315,6 +15378,77 @@
     return '<span class="badge badge-amber" style="margin-left:6px">● open</span>';
   }
 
+  // ── Push Notifications ──────────────────────────────────────────────────────
+  let _pushData = [];
+
+  async function _loadPush() {
+    const tbody = document.getElementById('push-tbody');
+    if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--t3)">Ładowanie…</td></tr>`;
+    try {
+      _pushData = await apiFetch('/api/admin/push/subscriptions');
+      const total = _pushData.length;
+      const subscribed = _pushData.filter(r => r.subscription_count > 0).length;
+      document.getElementById('push-total').textContent = total;
+      document.getElementById('push-subscribed').textContent = subscribed;
+      document.getElementById('push-unsubscribed').textContent = total - subscribed;
+      document.getElementById('push-sub').textContent = `${subscribed} z ${total} graczy ma aktywne powiadomienia`;
+
+      // populate select
+      const sel = document.getElementById('push-target-user');
+      if (sel) {
+        sel.innerHTML = '<option value="">— wybierz gracza —</option>' +
+          _pushData.map(r => `<option value="${r.user_id}">[${r.subscription_count > 0 ? '✅' : '⬜'}] ${r.username}${r.display_name ? ' — '+r.display_name : ''}</option>`).join('');
+      }
+
+      if (tbody) {
+        tbody.innerHTML = _pushData.map(r => {
+          const hasSub = r.subscription_count > 0;
+          const statusBadge = hasSub
+            ? `<span style="color:var(--green,#4caf50);font-weight:600">✅ Aktywna</span>`
+            : `<span style="color:var(--t3)">⬜ Brak</span>`;
+          const lastSub = r.last_subscribed_at ? new Date(r.last_subscribed_at).toLocaleString('pl-PL') : '—';
+          return `<tr>
+            <td><b>${r.username}</b>${r.display_name ? '<br><span style="color:var(--t3);font-size:12px">'+r.display_name+'</span>' : ''}</td>
+            <td>${statusBadge}</td>
+            <td style="text-align:center">${r.subscription_count}</td>
+            <td style="font-size:12px;color:var(--t3)">${lastSub}</td>
+            <td>${hasSub ? `<button class="btn btn-secondary btn-sm" onclick="_quickTestPush(${r.user_id},'${r.username}')">🔔 Test</button>` : '<span style="color:var(--t3);font-size:12px">—</span>'}</td>
+          </tr>`;
+        }).join('') || `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--t3)">Brak użytkowników</td></tr>`;
+      }
+    } catch(e) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--red)">Błąd: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function _sendTestPush() {
+    const userId = parseInt(document.getElementById('push-target-user').value);
+    if (!userId) { alert('Wybierz gracza'); return; }
+    const body = document.getElementById('push-test-body').value.trim() || 'Push notifications działają!';
+    const resultEl = document.getElementById('push-test-result');
+    resultEl.style.display = 'none';
+    try {
+      await apiFetch('/api/admin/push/send-test', { method:'POST', body: JSON.stringify({ user_id: userId, body }) });
+      resultEl.style.display = 'block';
+      resultEl.style.color = 'var(--green,#4caf50)';
+      resultEl.textContent = '✅ Powiadomienie wysłane! Sprawdź urządzenie gracza.';
+    } catch(e) {
+      resultEl.style.display = 'block';
+      resultEl.style.color = 'var(--red,#e53935)';
+      resultEl.textContent = '❌ Błąd: ' + e.message;
+    }
+  }
+
+  async function _quickTestPush(userId, username) {
+    try {
+      await apiFetch('/api/admin/push/send-test', { method:'POST', body: JSON.stringify({ user_id: userId, body: `Test dla ${username} — powiadomienia działają!` }) });
+      showToast(`Push wysłany do ${username}`, 'success');
+    } catch(e) {
+      showToast('Błąd: ' + e.message, 'error');
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
+
   async function _loadBugReports() {
     const tbody = document.getElementById('br-tbody');
     if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--t3)">Ładowanie…</td></tr>`;
@@ -15594,6 +15728,74 @@
       _showToast('Usunięto.', 'success');
     } catch(e) { _showToast(e.message || 'Błąd.', 'error'); btn.disabled = false; }
   }
+
+  // ── Hash-based routing — persist section + subtab across F5 ────────────────
+  // Format: #section  or  #section/subtab
+  const _SUBTAB_ATTRS = {
+    content:   ['#content-tabs',   'data-tab'],
+    world:     ['#world-tabs',     'data-wtab'],
+    map:       ['#map-tabs',       'data-mtap'],
+    mechanics: ['#mech-stab-bar',  'data-mtab'],
+    system:    ['#sys-stab-bar',   'data-systab'],
+    overview:  ['#overview-tabs',  'data-anatab'],
+  };
+
+  function _updateHash(section, subtab) {
+    const hash = subtab ? `#${section}/${subtab}` : `#${section}`;
+    history.replaceState(null, '', hash);
+  }
+
+  // Patch switchSection to write section into hash
+  const _origSwitchSection = switchSection;
+  // eslint-disable-next-line no-func-assign
+  switchSection = function(key) {
+    _origSwitchSection(key);
+    // Preserve existing subtab in hash if same section
+    const cur = location.hash.slice(1).split('/');
+    if (cur[0] === key && cur[1]) {
+      _updateHash(key, cur[1]);
+    } else {
+      _updateHash(key);
+    }
+  };
+
+  // Patch each subtab container to write subtab into hash on click
+  (function _patchSubtabHashes() {
+    const patches = [
+      { sel: '#content-tabs',  attr: 'data-tab',    section: 'content'   },
+      { sel: '#world-tabs',    attr: 'data-wtab',   section: 'world'     },
+      { sel: '#map-tabs',      attr: 'data-mtap',   section: 'map'       },
+      { sel: '#mech-stab-bar', attr: 'data-mtab',   section: 'mechanics' },
+      { sel: '#sys-stab-bar',  attr: 'data-systab', section: 'system'    },
+      { sel: '#overview-tabs', attr: 'data-anatab', section: 'overview'  },
+    ];
+    patches.forEach(({ sel, attr, section }) => {
+      document.querySelector(sel)?.addEventListener('click', e => {
+        const btn = e.target.closest(`.stab[${attr}]`);
+        if (btn) _updateHash(section, btn.getAttribute(attr));
+      }, true); // capture so it fires before other handlers
+    });
+  })();
+
+  function _applyHash() {
+    const raw = location.hash.slice(1);
+    if (!raw) return;
+    const [section, subtab] = raw.split('/');
+    if (!section) return;
+    _origSwitchSection(section); // use original to avoid re-writing hash
+    if (subtab) {
+      const entry = _SUBTAB_ATTRS[section];
+      if (entry) {
+        const [containerId, attr] = entry;
+        const btn = document.querySelector(`${containerId} .stab[${attr}="${subtab}"]`);
+        if (btn) btn.click();
+      }
+    }
+  }
+
+  window.addEventListener('hashchange', _applyHash);
+  // Apply on load after all handlers registered
+  requestAnimationFrame(_applyHash);
 </script>
 
 <button id="kreator-fab" title="Kreator AI" onclick="_fabClick()">✨</button>

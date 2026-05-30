@@ -4702,3 +4702,60 @@ def admin_email_test(
             detail="Email sending failed — check SMTP configuration",
         )
     return {"ok": True}
+
+
+# ── Push Notification Admin ──────────────────────────────────────────────────
+
+@router.get("/admin/push/subscriptions")
+def admin_push_subscriptions(
+    authorization: str | None = Header(default=None),
+    _: None = Depends(require_admin_token),
+):
+    """List all users with their push subscription count."""
+    conn = sqlite3.connect(resolve_db_path())
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT u.id, u.username, u.display_name,
+                   COUNT(s.id) AS subscription_count,
+                   MAX(s.created_at) AS last_subscribed_at
+            FROM users u
+            LEFT JOIN user_push_subscriptions s ON s.user_id = u.id
+            WHERE COALESCE(u.is_active, 1) = 1
+              AND u.deleted_at IS NULL
+            GROUP BY u.id
+            ORDER BY subscription_count DESC, u.username ASC
+            """
+        ).fetchall()
+    finally:
+        conn.close()
+
+    return [
+        {
+            "user_id": r["id"],
+            "username": r["username"],
+            "display_name": r["display_name"],
+            "subscription_count": r["subscription_count"],
+            "last_subscribed_at": r["last_subscribed_at"],
+        }
+        for r in rows
+    ]
+
+
+class PushTestReq(BaseModel):
+    user_id: int
+    title: str = "AI-GM — test powiadomienia"
+    body: str = "Push notifications działają poprawnie!"
+
+
+@router.post("/admin/push/send-test")
+def admin_push_send_test(
+    req: PushTestReq,
+    authorization: str | None = Header(default=None),
+    _: None = Depends(require_admin_token),
+):
+    """Send a test push notification to a specific user."""
+    from app.services.push_notification_service import send_push
+    send_push(req.user_id, req.title, req.body, url="/")
+    return {"ok": True, "user_id": req.user_id}
