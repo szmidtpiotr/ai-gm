@@ -4138,6 +4138,43 @@ def admin_create_invite(
         conn.close()
 
 
+@router.post("/admin/invites/{code}/send-email")
+def admin_send_invite_email(code: str, authorization: str | None = Header(default=None)):
+    """Admin: send (or re-send) an invite email for an existing invite code."""
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT email, message FROM user_invites WHERE code=?", (code,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Invite not found")
+        email = row["email"]
+        if not email:
+            raise HTTPException(status_code=400, detail="Invite has no email address")
+        message = row["message"]
+
+        admin_row = conn.execute(
+            "SELECT username FROM users WHERE is_admin=1 ORDER BY id LIMIT 1"
+        ).fetchone()
+        inviter_name = admin_row["username"] if admin_row else "AI-GM"
+
+        base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+        invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+
+        from app.services.email_service import send_invite_email
+        sent = send_invite_email(email, inviter_name, message, invite_link)
+        if not sent:
+            raise HTTPException(status_code=500, detail="Email send failed — check SMTP config")
+        return {"ok": True, "sent": True, "to": email}
+    finally:
+        conn.close()
+
+
 @router.get("/admin/invites")
 def admin_list_invites(authorization: str | None = Header(default=None)):
     """Admin: list all invites."""
@@ -4803,6 +4840,7 @@ _GAME_MODE_DEFAULTS = {
     "dungeon_enabled": True,
     "prebuilt_enabled": True,
     "ai_campaign_enabled": True,
+    "multiplayer_enabled": True,
 }
 
 
@@ -4818,10 +4856,31 @@ def _get_game_mode_flags(conn) -> dict:
         return dict(_GAME_MODE_DEFAULTS)
 
 
+def _get_user_game_mode_flags(conn, user_id: int) -> dict | None:
+    """Returns per-user override flags JSON, or None if no override set."""
+    row = conn.execute(
+        "SELECT game_mode_flags FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    if not row or not row["game_mode_flags"]:
+        return None
+    try:
+        return json.loads(row["game_mode_flags"])
+    except Exception:
+        return None
+
+
+def _merge_game_mode_flags(global_flags: dict, user_overrides: dict | None) -> dict:
+    """User overrides take precedence over global flags for keys that are set."""
+    if not user_overrides:
+        return global_flags
+    return {**global_flags, **{k: v for k, v in user_overrides.items() if v is not None}}
+
+
 class GameModeFlagsReq(BaseModel):
     dungeon_enabled: bool | None = None
     prebuilt_enabled: bool | None = None
     ai_campaign_enabled: bool | None = None
+    multiplayer_enabled: bool | None = None
 
 
 @router.get("/game-modes")
@@ -4854,12 +4913,10 @@ def admin_patch_game_modes(
     conn.row_factory = sqlite3.Row
     try:
         flags = _get_game_mode_flags(conn)
-        if req.dungeon_enabled is not None:
-            flags["dungeon_enabled"] = req.dungeon_enabled
-        if req.prebuilt_enabled is not None:
-            flags["prebuilt_enabled"] = req.prebuilt_enabled
-        if req.ai_campaign_enabled is not None:
-            flags["ai_campaign_enabled"] = req.ai_campaign_enabled
+        for field in ("dungeon_enabled", "prebuilt_enabled", "ai_campaign_enabled", "multiplayer_enabled"):
+            val = getattr(req, field, None)
+            if val is not None:
+                flags[field] = val
         conn.execute(
             "INSERT INTO game_config_meta (key, value) VALUES (?, ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -4867,5 +4924,79 @@ def admin_patch_game_modes(
         )
         conn.commit()
         return {"ok": True, "flags": flags}
+    finally:
+        conn.close()
+
+
+@router.get("/admin/users/{user_id}/game-modes")
+def admin_get_user_game_modes(user_id: int, _: None = Depends(require_admin_token)):
+    """Read per-user game mode overrides and effective merged flags."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        global_flags = _get_game_mode_flags(conn)
+        overrides = _get_user_game_mode_flags(conn, user_id)
+        effective = _merge_game_mode_flags(global_flags, overrides)
+        return {"ok": True, "global_flags": global_flags, "overrides": overrides or {}, "effective": effective}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/users/{user_id}/game-modes")
+def admin_patch_user_game_modes(
+    user_id: int,
+    req: GameModeFlagsReq,
+    _: None = Depends(require_admin_token),
+):
+    """Set per-user game mode overrides. Pass null to clear an override and fall back to global."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        existing = _get_user_game_mode_flags(conn, user_id) or {}
+        for field in ("dungeon_enabled", "prebuilt_enabled", "ai_campaign_enabled", "multiplayer_enabled"):
+            val = getattr(req, field, None)
+            if val is not None:
+                existing[field] = val
+        new_json = json.dumps(existing) if existing else None
+        conn.execute(
+            "UPDATE users SET game_mode_flags = ? WHERE id = ?",
+            (new_json, user_id),
+        )
+        conn.commit()
+        global_flags = _get_game_mode_flags(conn)
+        effective = _merge_game_mode_flags(global_flags, existing if existing else None)
+        return {"ok": True, "overrides": existing, "effective": effective}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/users/{user_id}/game-modes")
+def admin_clear_user_game_modes(user_id: int, _: None = Depends(require_admin_token)):
+    """Clear all per-user overrides (revert to global flags)."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("UPDATE users SET game_mode_flags = NULL WHERE id = ?", (user_id,))
+        conn.commit()
+        return {"ok": True, "overrides": {}, "effective": _get_game_mode_flags(conn)}
+    finally:
+        conn.close()
+
+
+@router.get("/user/game-modes")
+def user_get_game_modes(
+    authorization: str | None = Header(default=None),
+):
+    """Authenticated endpoint — returns effective flags merged with per-user overrides."""
+    from app.core.jwt_auth import require_current_user
+    payload = require_current_user(authorization)
+    user_id = int(payload.get("sub") or 0)
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        global_flags = _get_game_mode_flags(conn)
+        overrides = _get_user_game_mode_flags(conn, user_id)
+        effective = _merge_game_mode_flags(global_flags, overrides)
+        return {"ok": True, "flags": effective}
     finally:
         conn.close()

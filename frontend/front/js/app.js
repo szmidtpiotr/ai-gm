@@ -11399,7 +11399,10 @@ async function _sendSubscriptionToBackend(sub) {
 
 async function applyGameModeFlags() {
     try {
-        const res = await fetch('/api/game-modes');
+        const token = localStorage.getItem('aigm_access_token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const endpoint = token ? '/api/user/game-modes' : '/api/game-modes';
+        const res = await fetch(endpoint, { headers });
         if (!res.ok) return;
         const { flags = {} } = await res.json();
 
@@ -11410,6 +11413,7 @@ async function applyGameModeFlags() {
         flags.ai_campaign_enabled === false ? hide('new-campaign-btn') : show('new-campaign-btn');
         flags.prebuilt_enabled    === false ? hide('prebuilt-btn')     : show('prebuilt-btn');
         flags.dungeon_enabled     === false ? hide('dungeon-picker-btn') : show('dungeon-picker-btn');
+        flags.multiplayer_enabled === false ? hide('multiplayer-lobby-btn') : show('multiplayer-lobby-btn');
 
         // Multiplayer lobby mode tiles
         const aiTile  = document.getElementById('lobby-mode-ai');

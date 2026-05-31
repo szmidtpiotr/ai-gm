@@ -4911,6 +4911,14 @@
                 <span style="display:block;font-size:0.78rem;color:var(--t3)">Krótkie farmowalne lochy z własnym loot systemem.</span>
               </span>
             </label>
+
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+              <input type="checkbox" id="gm-multiplayer" style="width:18px;height:18px;accent-color:var(--accent)">
+              <span>
+                <strong style="font-size:0.92rem">Multiplayer (Wyprawa grupowa)</strong>
+                <span style="display:block;font-size:0.78rem;color:var(--t3)">Lobby wieloosobowe — gracz może tworzyć i dołączać do grupowych sesji.</span>
+              </span>
+            </label>
           </div>
         </div>
       </div>
@@ -4953,28 +4961,59 @@
       <div class="section-header">
         <div>
           <div class="section-heading">Zaproszenia</div>
-          <div class="section-sub">Genealogia graczy i linki zaproszeniowe</div>
+          <div class="section-sub">Zapraszaj graczy i przeglądaj genealogię drużyny</div>
         </div>
       </div>
-      <div class="two-col" style="margin-bottom:12px">
-        <div class="card">
-          <div class="card-header"><span class="card-title">Wygeneruj zaproszenie</span></div>
-          <div class="form-row"><label>E-mail (opcjonalnie)</label><input id="inv-email" class="field-input form-mono" type="email" placeholder="gracz@example.com" /></div>
-          <div class="form-row" style="margin-top:8px"><label>Wiadomość (opcjonalnie)</label><textarea id="inv-msg" class="field-input" rows="2" placeholder="Cześć! Zapraszam Cię…"></textarea></div>
-          <button class="btn btn-primary btn-sm" onclick="createInvite(this)" style="margin-top:8px">Wygeneruj link</button>
-          <div id="inv-result" style="display:none;margin-top:10px;padding:10px;background:var(--surface);border-radius:6px;font-size:0.82rem">
-            <div style="font-weight:600;margin-bottom:4px">Link zaproszeniowy:</div>
-            <div class="form-mono" id="inv-link" style="word-break:break-all;color:var(--accent)"></div>
-            <button class="btn btn-sm btn-secondary" onclick="navigator.clipboard.writeText(document.getElementById('inv-link').textContent).then(()=>_showToast('Skopiowano.',\"success\"))" style="margin-top:6px">Kopiuj</button>
+
+      <div class="two-col" style="margin-bottom:12px;align-items:start">
+
+        <!-- LEFT: invite generator -->
+        <div class="card" style="display:flex;flex-direction:column;gap:0">
+          <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+            <span class="card-title">⚔ Nowe zaproszenie</span>
+            <button class="btn btn-sm btn-secondary" onclick="_invRollMessage()" title="Losuj inną wiadomość" style="padding:3px 10px;font-size:0.76rem">🎲 Losuj wiadomość</button>
+          </div>
+          <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+            <div class="form-row" style="margin:0">
+              <label style="font-size:0.78rem;font-weight:600;color:var(--t2);margin-bottom:4px">E-mail gracza (opcjonalnie)</label>
+              <input id="inv-email" class="field-input form-mono" type="email" placeholder="gracz@example.com" style="font-size:0.82rem" />
+            </div>
+            <div class="form-row" style="margin:0">
+              <label style="font-size:0.78rem;font-weight:600;color:var(--t2);margin-bottom:4px">Treść wiadomości</label>
+              <textarea id="inv-msg" class="field-input" rows="6" style="font-size:0.8rem;line-height:1.5;resize:vertical" placeholder="Kliknij 🎲 Losuj wiadomość lub wpisz własną…"></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="createInvite(this)" style="width:100%;font-weight:600">⚔ Generuj zaproszenie</button>
+          </div>
+
+          <!-- Result panel -->
+          <div id="inv-result" style="display:none;border-top:1px solid var(--border)">
+            <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
+              <div style="font-size:0.75rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em">Gotowe do wysłania</div>
+
+              <!-- Full message preview -->
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.8rem;line-height:1.6;white-space:pre-wrap;font-family:inherit;color:var(--t1);max-height:220px;overflow-y:auto" id="inv-full-msg"></div>
+
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-primary btn-sm" style="flex:1" onclick="_invCopyFullMsg()">📋 Kopiuj wiadomość</button>
+                <button class="btn btn-sm btn-secondary" style="flex:1" onclick="_invCopyLink()">🔗 Kopiuj sam link</button>
+              </div>
+              <button id="inv-send-email-btn" class="btn btn-sm" style="display:none;width:100%;background:linear-gradient(135deg,#2a6b3a,#1e5230);color:#a8f0b8;border:1px solid #2a6b3a;font-weight:600" onclick="_invSendEmail(this)">📧 Wyślij e-mail</button>
+
+              <div style="font-size:0.72rem;color:var(--t3);padding:6px 8px;background:var(--surface);border-radius:6px;word-break:break-all;font-family:monospace" id="inv-link"></div>
+            </div>
           </div>
         </div>
+
+        <!-- RIGHT: active invites list -->
         <div class="card">
-          <div class="card-header"><span class="card-title">Aktywne zaproszenia</span></div>
-          <div id="invites-list" style="font-size:0.82rem"></div>
+          <div class="card-header"><span class="card-title">📬 Aktywne zaproszenia</span></div>
+          <div id="invites-list" style="font-size:0.82rem;padding:8px 16px 12px"></div>
         </div>
       </div>
+
+      <!-- Player tree -->
       <div class="card">
-        <div class="card-header"><span class="card-title">Drzewo graczy</span></div>
+        <div class="card-header"><span class="card-title">🌳 Drzewo graczy</span></div>
         <div id="invite-tree-svg-wrap" style="overflow-x:auto;min-height:300px;background:rgba(0,0,0,0.15);border-radius:8px;padding:16px;position:relative;margin:8px">
           <div id="inv-tree-loading" style="text-align:center;padding:60px;color:var(--t3)">Ładowanie drzewa…</div>
           <svg id="invite-tree-svg" style="display:block"></svg>
@@ -9140,11 +9179,13 @@
           <button class="pdrawer-tab active" data-pdtab="info">Info</button>
           <button class="pdrawer-tab" data-pdtab="camps">Kampanie</button>
           <button class="pdrawer-tab" data-pdtab="llm">LLM</button>
+          <button class="pdrawer-tab" data-pdtab="modes">Tryby gry</button>
         </div>
         <div class="pdrawer-body">
           <div class="pdrawer-pane active" id="pdrawer-info"><div style="padding:20px;text-align:center;color:var(--t3)">Ładowanie…</div></div>
           <div class="pdrawer-pane" id="pdrawer-camps"></div>
           <div class="pdrawer-pane" id="pdrawer-llm"></div>
+          <div class="pdrawer-pane" id="pdrawer-modes"></div>
         </div>
         <div class="pdrawer-foot">
           <button class="btn btn-secondary" onclick="_closePlayerDrawer()">Zamknij</button>
@@ -9157,8 +9198,10 @@
     document.getElementById('pdrawer-info').innerHTML = '<div style="padding:20px;text-align:center;color:var(--t3)">Ładowanie…</div>';
     const campsPane = document.getElementById('pdrawer-camps');
     const llmPane = document.getElementById('pdrawer-llm');
+    const modesPane = document.getElementById('pdrawer-modes');
     campsPane.innerHTML = ''; campsPane.dataset.loaded = '';
     llmPane.innerHTML = '';  llmPane.dataset.loaded = '';
+    if (modesPane) { modesPane.innerHTML = ''; modesPane.dataset.loaded = ''; }
     _switchPdrawerTab('info');
     backdrop.classList.add('open');
     drawer.classList.add('open');
@@ -9171,6 +9214,7 @@
     if (!_pdrawerCurrentUser) return;
     if (tab === 'camps' && !document.getElementById('pdrawer-camps').dataset.loaded) _loadPdrawerCamps(_pdrawerCurrentUser.id);
     if (tab === 'llm' && !document.getElementById('pdrawer-llm').dataset.loaded) _loadPdrawerLlm(_pdrawerCurrentUser.id);
+    if (tab === 'modes' && !document.getElementById('pdrawer-modes').dataset.loaded) _loadPdrawerModes(_pdrawerCurrentUser.id);
   }
 
   async function _loadPdrawerInfo(userId) {
@@ -9390,6 +9434,72 @@
       document.getElementById('pdrawer-camps').dataset.loaded = '';
       _loadPdrawerCamps(userId);
     } catch(e) { _showToast(e.message || 'Błąd wskrzeszenia.', 'error'); btn.disabled = false; btn.textContent = '✦ Wskrześ bohatera (force)'; }
+  }
+
+  const _MODE_LABELS = {
+    ai_campaign_enabled:  { label: 'Kampania AI',              desc: 'Generowanie kampanii przez AI na żywo.' },
+    prebuilt_enabled:     { label: 'Gotowa kampania',           desc: 'Wybór z predefiniowanych szablonów przygód.' },
+    dungeon_enabled:      { label: 'Loch (Dungeon Run)',        desc: 'Farmowalne lochy z własnym loot systemem.' },
+    multiplayer_enabled:  { label: 'Multiplayer (Wyprawa grupowa)', desc: 'Lobby wieloosobowe — tworzenie i dołączanie do sesji grupowych.' },
+  };
+
+  async function _loadPdrawerModes(userId) {
+    const pane = document.getElementById('pdrawer-modes');
+    pane.innerHTML = '<div style="padding:20px;text-align:center;color:var(--t3)">Ładowanie…</div>';
+    try {
+      const d = await apiFetch(`/api/admin/users/${userId}/game-modes`);
+      const { global_flags = {}, overrides = {}, effective = {} } = d;
+      pane.innerHTML = `
+        <div style="padding:12px">
+          <p style="font-size:0.78rem;color:var(--t3);margin:0 0 12px">
+            Puste = brak nadpisania (używa globalnego ustawienia). Zaznacz lub odznacz, aby wymusić wartość dla tego gracza.
+          </p>
+          <div style="display:flex;flex-direction:column;gap:14px" id="pdrawer-modes-checks">
+            ${Object.entries(_MODE_LABELS).map(([key, {label, desc}]) => {
+              const isOverridden = key in overrides;
+              const val = effective[key] !== false;
+              return `
+              <div style="display:flex;align-items:flex-start;gap:10px">
+                <input type="checkbox" data-modekey="${key}" ${val ? 'checked' : ''} ${isOverridden ? 'data-overridden="1"' : ''}
+                  style="width:17px;height:17px;margin-top:2px;accent-color:var(--accent);flex-shrink:0">
+                <span>
+                  <strong style="font-size:0.88rem">${label}</strong>
+                  ${isOverridden ? '<span style="font-size:0.7rem;color:var(--accent);margin-left:6px">nadpisano</span>' : '<span style="font-size:0.7rem;color:var(--t3);margin-left:6px">globalne: '+( global_flags[key] !== false ? '✓' : '✗' )+'</span>'}
+                  <span style="display:block;font-size:0.75rem;color:var(--t3)">${desc}</span>
+                </span>
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="display:flex;gap:8px;margin-top:16px">
+            <button class="btn btn-primary btn-sm" onclick="_savePdrawerModes(${userId},this)">Zapisz nadpisania</button>
+            <button class="btn btn-secondary btn-sm" onclick="_clearPdrawerModes(${userId},this)">Wyczyść (wróć do globalnych)</button>
+          </div>
+        </div>`;
+      pane.dataset.loaded = '1';
+    } catch(e) { pane.innerHTML = `<div style="padding:20px;color:var(--red)">${_esc(e.message)}</div>`; }
+  }
+
+  async function _savePdrawerModes(userId, btn) {
+    btn.disabled = true;
+    const checks = document.querySelectorAll('#pdrawer-modes-checks input[type=checkbox]');
+    const payload = {};
+    checks.forEach(cb => { payload[cb.dataset.modekey] = cb.checked; });
+    try {
+      await apiFetch(`/api/admin/users/${userId}/game-modes`, { method: 'PATCH', body: JSON.stringify(payload) });
+      _showToast('Tryby gracza zapisane.', 'success');
+      document.getElementById('pdrawer-modes').dataset.loaded = '';
+      _loadPdrawerModes(userId);
+    } catch(e) { _showToast(e.message || 'Błąd.', 'error'); btn.disabled = false; }
+  }
+
+  async function _clearPdrawerModes(userId, btn) {
+    btn.disabled = true;
+    try {
+      await apiFetch(`/api/admin/users/${userId}/game-modes`, { method: 'DELETE' });
+      _showToast('Nadpisania wyczyszczone.', 'success');
+      document.getElementById('pdrawer-modes').dataset.loaded = '';
+      _loadPdrawerModes(userId);
+    } catch(e) { _showToast(e.message || 'Błąd.', 'error'); btn.disabled = false; }
   }
 
   async function _loadPdrawerLlm(userId) {
@@ -14079,6 +14189,7 @@
   // ── Invites ───────────────────────────────────────────────────────────────────
 
   async function _loadInvites() {
+    _invRollMessage(); // auto-populate template on first load
     await Promise.all([_refreshInviteTree(), _refreshInviteList()]);
   }
 
@@ -14196,20 +14307,135 @@
     } catch(e) { if (listEl) listEl.innerHTML = `<div style="color:var(--red,#e55)">${_esc(e.message)}</div>`; }
   }
 
+  const _INV_BASE_URL = 'https://aigm-dev.studio-colorbox.com';
+
+  const _INV_TEMPLATES = [
+    `Witaj, Wędrowcze!
+
+Otwieram przed Tobą bramy mrocznego świata AI-GM — gry fabularnej, gdzie sztuczna inteligencja wciela się w rolę Mistrza Gry.
+
+Czeka na Ciebie:
+⚔ Epickie kampanie w klimacie dark fantasy
+🔮 Tajemnicze lochy i potwory do pokonania
+📖 Historia, którą sam piszesz każdym rzutem kości
+
+Dołącz do drużyny tutaj:
+[LINK]
+
+Do zobaczenia przy stole!`,
+
+    `Hej!
+
+Odkryłem coś wyjątkowego — AI-GM, gra RPG prowadzona przez sztuczną inteligencję. Mistrz Gry nigdy nie śpi, nie zapomina i zawsze ma dla Ciebie misję.
+
+Zarejestruj się moim linkiem i zacznij przygodę:
+[LINK]
+
+Twój bohater czeka. Nie każ mu czekać zbyt długo. ⚔`,
+
+    `Zaproszenie do gry: AI-GM
+
+Wyobraź sobie grę RPG, gdzie nie musisz czekać na Mistrza Gry — AI prowadzi sesję 24/7, pamięta każdą Twoją decyzję i adaptuje świat do Twoich wyborów.
+
+Wojownik, Uczony czy Łowca — kim zostaniesz?
+
+Zarejestruj się tutaj:
+[LINK]
+
+Link ważny przez 72 godziny.`,
+
+    `Czeka na Ciebie wezwanie!
+
+Świat AI-GM potrzebuje nowych bohaterów. Mroczne krainy, starożytne zagadki, wrogowie czyhający w każdym zaułku — i sztuczna inteligencja jako Twój osobisty Mistrz Gry.
+
+Odpowiedz na wezwanie:
+[LINK]
+
+Niech kości się toczą! 🎲`,
+  ];
+
+  let _invCurrentLink = '';
+  let _invLastCode = '';
+  let _invLastEmail = '';
+
+  function _invRollMessage() {
+    const t = _INV_TEMPLATES[Math.floor(Math.random() * _INV_TEMPLATES.length)];
+    const el = document.getElementById('inv-msg');
+    if (el) el.value = t.replace('[LINK]', _invCurrentLink || '[link zostanie wstawiony po wygenerowaniu]');
+  }
+
+  function _invBuildFullMsg(link) {
+    const msgEl = document.getElementById('inv-msg');
+    const raw = msgEl?.value?.trim() || '';
+    if (!raw) return link;
+    return raw.includes(link) ? raw : raw + '\n\n' + link;
+  }
+
+  function _invCopyFullMsg() {
+    const text = document.getElementById('inv-full-msg')?.textContent || _invCurrentLink;
+    navigator.clipboard.writeText(text).then(() => _showToast('Wiadomość skopiowana.', 'success'));
+  }
+
+  function _invCopyLink() {
+    navigator.clipboard.writeText(_invCurrentLink).then(() => _showToast('Link skopiowany.', 'success'));
+  }
+
+  async function _invSendEmail(btn) {
+    if (!_invLastCode) { _showToast('Najpierw wygeneruj zaproszenie.', 'error'); return; }
+    if (!_invLastEmail) { _showToast('Brak adresu e-mail.', 'error'); return; }
+    btn.disabled = true; btn.textContent = '⏳ Wysyłam…';
+    try {
+      await apiFetch(`/api/admin/invites/${_invLastCode}/send-email`, { method: 'POST' });
+      _showToast(`E-mail wysłany do ${_invLastEmail}`, 'success');
+      btn.textContent = '✓ Wysłano';
+    } catch(e) {
+      _showToast(e.message || 'Błąd wysyłki e-mail.', 'error');
+      btn.disabled = false; btn.textContent = '📧 Wyślij e-mail';
+    }
+  }
+
   async function createInvite(btn) {
     const email = document.getElementById('inv-email')?.value?.trim() || null;
     const message = document.getElementById('inv-msg')?.value?.trim() || null;
     btn.disabled = true; btn.textContent = '⏳';
     try {
       const d = await apiFetch('/api/admin/invites', { method: 'POST', body: JSON.stringify({ email, message }) });
+      // Build full link — backend may return relative path if APP_BASE_URL not set
+      const rawLink = d.invite_link || '';
+      _invCurrentLink = rawLink.startsWith('http') ? rawLink : `${_INV_BASE_URL}${rawLink}`;
+      _invLastCode = d.code || '';
+      _invLastEmail = email || '';
+
       const linkEl = document.getElementById('inv-link');
       const resultEl = document.getElementById('inv-result');
-      if (linkEl) linkEl.textContent = d.invite_link || '';
+      const fullMsgEl = document.getElementById('inv-full-msg');
+      const msgEl = document.getElementById('inv-msg');
+      const sendBtn = document.getElementById('inv-send-email-btn');
+
+      if (linkEl) linkEl.textContent = _invCurrentLink;
+
+      // Build full message: replace [LINK] placeholder or append link
+      const msgRaw = msgEl?.value?.trim() || '';
+      const fullMsg = msgRaw
+        ? (msgRaw.includes('[LINK]') ? msgRaw.replace('[LINK]', _invCurrentLink) : msgRaw + '\n\n' + _invCurrentLink)
+        : _invCurrentLink;
+      if (fullMsgEl) fullMsgEl.textContent = fullMsg;
+
+      // Update textarea to show final message with real link
+      if (msgEl && msgRaw.includes('[LINK]')) msgEl.value = msgRaw.replace('[LINK]', _invCurrentLink);
+
+      // Show send button only when email is provided; reset state
+      if (sendBtn) {
+        sendBtn.style.display = email ? '' : 'none';
+        sendBtn.disabled = false;
+        sendBtn.textContent = '📧 Wyślij e-mail';
+      }
+
       if (resultEl) resultEl.style.display = '';
       _showToast('Zaproszenie wygenerowane.', 'success');
       await _refreshInviteList();
     } catch(e) { _showToast(e.message || 'Błąd generowania.', 'error'); }
-    finally { btn.disabled = false; btn.textContent = 'Wygeneruj link'; }
+    finally { btn.disabled = false; btn.textContent = '⚔ Generuj zaproszenie'; }
   }
 
   async function revokeInvite(id, btn) {
@@ -14700,23 +14926,25 @@
     try {
       const d = await apiFetch('/api/admin/game-modes');
       const flags = d.flags || {};
-      const ai = document.getElementById('gm-ai-campaign');
-      const pre = document.getElementById('gm-prebuilt');
-      const dun = document.getElementById('gm-dungeon');
-      if (ai)  ai.checked  = flags.ai_campaign_enabled !== false;
-      if (pre) pre.checked = flags.prebuilt_enabled    !== false;
-      if (dun) dun.checked = flags.dungeon_enabled     !== false;
+      const set = (id, key) => { const el = document.getElementById(id); if (el) el.checked = flags[key] !== false; };
+      set('gm-ai-campaign', 'ai_campaign_enabled');
+      set('gm-prebuilt',    'prebuilt_enabled');
+      set('gm-dungeon',     'dungeon_enabled');
+      set('gm-multiplayer', 'multiplayer_enabled');
     } catch(e) { console.warn('game-modes load', e.message); }
   }
 
   async function saveGameModes() {
-    const ai  = document.getElementById('gm-ai-campaign')?.checked ?? true;
-    const pre = document.getElementById('gm-prebuilt')?.checked    ?? true;
-    const dun = document.getElementById('gm-dungeon')?.checked      ?? true;
+    const get = id => document.getElementById(id)?.checked ?? true;
     try {
       await apiFetch('/api/admin/game-modes', {
         method: 'PATCH',
-        body: JSON.stringify({ ai_campaign_enabled: ai, prebuilt_enabled: pre, dungeon_enabled: dun }),
+        body: JSON.stringify({
+          ai_campaign_enabled: get('gm-ai-campaign'),
+          prebuilt_enabled:    get('gm-prebuilt'),
+          dungeon_enabled:     get('gm-dungeon'),
+          multiplayer_enabled: get('gm-multiplayer'),
+        }),
       });
       _showToast('Tryby gry zapisane', 'success');
     } catch(e) { _showToast('Błąd zapisu: ' + e.message, 'error'); }

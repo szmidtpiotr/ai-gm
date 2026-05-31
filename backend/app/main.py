@@ -245,6 +245,8 @@ RAW_MIGRATIONS = [
     "ALTER TABLE game_config_weapons     ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE game_config_items       ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE game_config_consumables ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
+
+    "ALTER TABLE users ADD COLUMN game_mode_flags TEXT DEFAULT NULL",
 ]
 
 
