@@ -167,7 +167,7 @@ def send_push_to_campaign_players(
     conn = _db()
     try:
         rows = conn.execute(
-            "SELECT user_id FROM campaign_players WHERE campaign_id = ? AND status = 'accepted'",
+            "SELECT user_id FROM campaign_members WHERE campaign_id = ? AND status = 'accepted'",
             (campaign_id,),
         ).fetchall()
     finally:
