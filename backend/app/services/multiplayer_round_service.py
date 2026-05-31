@@ -9,6 +9,7 @@ Flow:
 
 import json
 import sqlite3
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from app.core.db_runtime import resolve_db_path
@@ -74,6 +75,18 @@ def _get_campaign_member_count(campaign_id: int, conn: sqlite3.Connection) -> in
     return int(row["cnt"]) if row else 0
 
 
+def _get_round_timer_minutes(campaign_id: int, conn: sqlite3.Connection) -> int:
+    row = conn.execute(
+        "SELECT COALESCE(round_timer_minutes, round_timer_hours*60, 1440) as t FROM campaigns WHERE id=?",
+        (campaign_id,),
+    ).fetchone()
+    return int(row["t"]) if row else 1440
+
+
+def _make_deadline(timer_minutes: int) -> str:
+    return (datetime.now(timezone.utc) + timedelta(minutes=timer_minutes)).isoformat()
+
+
 def get_or_create_current_round(campaign_id: int) -> dict:
     conn = _db()
     try:
@@ -89,9 +102,11 @@ def get_or_create_current_round(campaign_id: int) -> dict:
             (campaign_id,),
         ).fetchone()
         next_num = (int(last["mx"]) + 1) if last and last["mx"] else 1
+        timer_min = _get_round_timer_minutes(campaign_id, conn)
+        deadline = _make_deadline(timer_min)
         cur = conn.execute(
-            "INSERT INTO campaign_rounds (campaign_id, round_number, status) VALUES (?, ?, 'collecting')",
-            (campaign_id, next_num),
+            "INSERT INTO campaign_rounds (campaign_id, round_number, status, deadline) VALUES (?, ?, 'collecting', ?)",
+            (campaign_id, next_num, deadline),
         )
         conn.commit()
         row = conn.execute(
@@ -111,25 +126,32 @@ def submit_action(
 ) -> dict:
     conn = _db()
     try:
+        # Accept both collecting AND narrating rounds (prevents phantom new rounds on re-edit races)
         round_row = conn.execute(
-            "SELECT * FROM campaign_rounds WHERE campaign_id = ? AND status = 'collecting' "
+            "SELECT * FROM campaign_rounds WHERE campaign_id = ? AND status IN ('collecting', 'narrating') "
             "ORDER BY round_number DESC LIMIT 1",
             (campaign_id,),
         ).fetchone()
+
+        just_transitioned = False
         if not round_row:
             last = conn.execute(
                 "SELECT MAX(round_number) as mx FROM campaign_rounds WHERE campaign_id = ?",
                 (campaign_id,),
             ).fetchone()
             next_num = (int(last["mx"]) + 1) if last and last["mx"] else 1
+            timer_min = _get_round_timer_minutes(campaign_id, conn)
+            deadline = _make_deadline(timer_min)
             cur = conn.execute(
-                "INSERT INTO campaign_rounds (campaign_id, round_number, status) VALUES (?, ?, 'collecting')",
-                (campaign_id, next_num),
+                "INSERT INTO campaign_rounds (campaign_id, round_number, status, deadline) VALUES (?, ?, 'collecting', ?)",
+                (campaign_id, next_num, deadline),
             )
             conn.commit()
             round_id = cur.lastrowid
+            prev_status = "collecting"
         else:
             round_id = int(round_row["id"])
+            prev_status = round_row["status"]
 
         conn.execute(
             """
@@ -151,20 +173,22 @@ def submit_action(
         ).fetchone()["cnt"])
         total = _get_campaign_member_count(campaign_id, conn)
 
-        status = "collecting"
-        if total > 0 and submitted >= total:
+        status = prev_status  # preserve narrating if already set
+        if prev_status == "collecting" and total > 0 and submitted >= total:
             conn.execute(
                 "UPDATE campaign_rounds SET status='narrating', closed_at=datetime('now') WHERE id=?",
                 (round_id,),
             )
             conn.commit()
             status = "narrating"
+            just_transitioned = True
 
         return {
             "round_id": round_id,
             "status": status,
             "submitted": submitted,
             "total": total,
+            "just_transitioned": just_transitioned,
         }
     finally:
         conn.close()
@@ -177,8 +201,8 @@ def trigger_narration(round_id: int) -> None:
             "SELECT r.*, r.campaign_id FROM campaign_rounds r WHERE r.id = ?",
             (round_id,),
         ).fetchone()
-        if not row:
-            return
+        if not row or row["status"] != "narrating":
+            return  # already done or not ready
         campaign_id = int(row["campaign_id"])
         round_number = int(row["round_number"])
 
@@ -245,6 +269,17 @@ def trigger_narration(round_id: int) -> None:
 
     logger.info("multiplayer_narration_done", round_id=round_id, campaign_id=campaign_id)
 
+    try:
+        from app.services.push_notification_service import send_push_to_campaign_players
+        send_push_to_campaign_players(
+            campaign_id,
+            "Narracja gotowa 📜",
+            "Mistrz Gry opisał rundę. Czas na Twoją kolejną akcję!",
+            url="/",
+        )
+    except Exception as e:
+        logger.warning("push_narration_failed", error=str(e)[:100])
+
 
 def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
     conn = _db()
@@ -265,6 +300,16 @@ def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
             "SELECT action_text FROM campaign_round_actions WHERE round_id = ? AND user_id = ?",
             (round_id, user_id),
         ).fetchone()
+        # Deliver pending host-transfer note (one-time, clear on read)
+        host_note = None
+        camp_row = conn.execute(
+            "SELECT host_note FROM campaigns WHERE id=? AND host_user_id=?",
+            (campaign_id, user_id),
+        ).fetchone()
+        if camp_row and camp_row["host_note"]:
+            host_note = camp_row["host_note"]
+            conn.execute("UPDATE campaigns SET host_note=NULL WHERE id=?", (campaign_id,))
+            conn.commit()
         return {
             "round_id": round_id,
             "round_number": int(row["round_number"]),
@@ -274,7 +319,59 @@ def get_round_status(campaign_id: int, user_id: int) -> Optional[dict]:
             "total_players": total,
             "my_submitted": my_action is not None,
             "my_action": my_action["action_text"] if my_action else None,
+            "host_note": host_note,
         }
+    finally:
+        conn.close()
+
+
+def leave_campaign(campaign_id: int, user_id: int) -> dict:
+    conn = _db()
+    try:
+        conn.execute(
+            "UPDATE campaign_members SET status='left' WHERE campaign_id=? AND user_id=?",
+            (campaign_id, user_id),
+        )
+        camp = conn.execute(
+            "SELECT host_user_id FROM campaigns WHERE id=?", (campaign_id,)
+        ).fetchone()
+        new_host_id = None
+        new_host_name = None
+        if camp and int(camp["host_user_id"]) == user_id:
+            next_member = conn.execute(
+                """SELECT m.user_id, u.display_name, u.username
+                   FROM campaign_members m
+                   JOIN users u ON u.id = m.user_id
+                   WHERE m.campaign_id=? AND m.user_id!=? AND m.status='accepted'
+                   ORDER BY m.id ASC LIMIT 1""",
+                (campaign_id, user_id),
+            ).fetchone()
+            if next_member:
+                new_host_id = int(next_member["user_id"])
+                new_host_name = next_member["display_name"] or next_member["username"]
+                conn.execute(
+                    "UPDATE campaigns SET host_user_id=?, host_note=? WHERE id=?",
+                    (new_host_id, "Zostałeś nowym Mistrzem Gry tej kampanii! Poprzedni gospodarz opuścił sesję.", campaign_id),
+                )
+            else:
+                conn.execute(
+                    "UPDATE campaigns SET status='inactive' WHERE id=?",
+                    (campaign_id,),
+                )
+        conn.commit()
+        try:
+            from app.services.push_notification_service import send_push_to_campaign_players
+            import threading
+            if new_host_id:
+                threading.Thread(
+                    target=send_push_to_campaign_players,
+                    args=(campaign_id, "Gracz opuścił grę", "Gracz opuścił sesję."),
+                    kwargs={"url": "/", "exclude_user_id": user_id},
+                    daemon=True,
+                ).start()
+        except Exception as e:
+            logger.warning("push_leave_failed", error=str(e)[:100])
+        return {"left": True, "new_host_user_id": new_host_id, "new_host_name": new_host_name}
     finally:
         conn.close()
 
@@ -291,17 +388,63 @@ def get_round_narration(campaign_id: int, user_id: int) -> Optional[dict]:
         ).fetchone()
         if not row or not row["narrative_json"]:
             return None
+        round_id = int(row["id"])
         data = json.loads(row["narrative_json"])
         character_name = row["character_name"]
         my_note = None
         if character_name and data.get("player_notes"):
             my_note = data["player_notes"].get(character_name)
+        actions = conn.execute(
+            "SELECT character_name, action_text FROM campaign_round_actions "
+            "WHERE round_id=? ORDER BY submitted_at",
+            (round_id,),
+        ).fetchall()
         return {
-            "round_id": int(row["id"]),
+            "round_id": round_id,
             "round_number": int(row["round_number"]),
             "narrative": data.get("narrative", ""),
             "roll_cues": data.get("roll_cues", []),
             "my_note": my_note,
+            "actions": [{"character_name": a["character_name"], "action_text": a["action_text"]} for a in actions],
         }
+    finally:
+        conn.close()
+
+
+def get_rounds_history(campaign_id: int, user_id: int) -> list:
+    """Return all completed rounds with actions + narration for full chat restore."""
+    conn = _db()
+    try:
+        rounds = conn.execute(
+            "SELECT * FROM campaign_rounds WHERE campaign_id=? AND status='done' ORDER BY round_number",
+            (campaign_id,),
+        ).fetchall()
+        result = []
+        for r in rounds:
+            round_id = int(r["id"])
+            if not r["narrative_json"]:
+                continue
+            data = json.loads(r["narrative_json"])
+            actions = conn.execute(
+                "SELECT character_name, action_text FROM campaign_round_actions "
+                "WHERE round_id=? ORDER BY submitted_at",
+                (round_id,),
+            ).fetchall()
+            my_action = conn.execute(
+                "SELECT character_name FROM campaign_round_actions WHERE round_id=? AND user_id=?",
+                (round_id, user_id),
+            ).fetchone()
+            char_name = my_action["character_name"] if my_action else None
+            my_note = None
+            if char_name and data.get("player_notes"):
+                my_note = data["player_notes"].get(char_name)
+            result.append({
+                "round_id": round_id,
+                "round_number": int(r["round_number"]),
+                "narrative": data.get("narrative", ""),
+                "actions": [{"character_name": a["character_name"], "action_text": a["action_text"]} for a in actions],
+                "my_note": my_note,
+            })
+        return result
     finally:
         conn.close()
