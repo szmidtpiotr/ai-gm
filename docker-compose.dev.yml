@@ -28,6 +28,7 @@ services:
       start_period: 90s
     ports:
       - "8100:8000"
+    env_file: .env
     environment:
       - OLLAMA_LOAD_TIMEOUT=300s
       - OLLAMA_TIMEOUT=240
