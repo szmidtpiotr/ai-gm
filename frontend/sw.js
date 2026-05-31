@@ -11,11 +11,13 @@ self.addEventListener('push', function(event) {
     }
     const options = {
         body: data.body || '',
-        icon: '/front/icon-192.png',
-        badge: '/front/icon-72.png',
+        icon: data.icon || '/front/icon-192.png',
+        badge: data.badge || '/front/icon-72.png',
         data: { url: data.url || '/' },
         requireInteraction: false,
     };
+    if (data.image) options.image = data.image;
+    if (data.vibrate) options.vibrate = data.vibrate;
     event.waitUntil(
         self.registration.showNotification(data.title || 'AI-GM', options)
     );

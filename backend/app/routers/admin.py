@@ -4747,6 +4747,11 @@ class PushTestReq(BaseModel):
     user_id: int
     title: str = "AI-GM — test powiadomienia"
     body: str = "Push notifications działają poprawnie!"
+    icon: str | None = None
+    badge: str | None = None
+    image: str | None = None
+    vibrate: list | None = None
+    url: str = "/"
 
 
 @router.post("/admin/push/send-test")
@@ -4757,5 +4762,12 @@ def admin_push_send_test(
 ):
     """Send a test push notification to a specific user."""
     from app.services.push_notification_service import send_push
-    send_push(req.user_id, req.title, req.body, url="/")
+    send_push(
+        req.user_id, req.title, req.body,
+        url=req.url,
+        icon=req.icon or None,
+        badge=req.badge or None,
+        image=req.image or None,
+        vibrate=req.vibrate or None,
+    )
     return {"ok": True, "user_id": req.user_id}

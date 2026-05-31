@@ -5042,21 +5042,50 @@
 
       <!-- Send test form -->
       <div class="card" style="margin-bottom:16px;padding:20px">
-        <div style="font-weight:600;margin-bottom:12px;font-size:14px">Wyślij testowe powiadomienie</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-          <div style="flex:1;min-width:160px">
-            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Gracz</div>
+        <div style="font-weight:600;margin-bottom:14px;font-size:14px">🔔 Wyślij testowe powiadomienie</div>
+
+        <!-- Row 1: target + title + body -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="flex:1;min-width:150px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Gracz *</div>
             <select id="push-target-user" class="input" style="width:100%">
               <option value="">— wybierz gracza —</option>
             </select>
           </div>
-          <div style="flex:2;min-width:200px">
-            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Treść (opcjonalnie)</div>
+          <div style="flex:2;min-width:180px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Tytuł</div>
+            <input id="push-test-title" class="input" style="width:100%" placeholder="AI-GM — test powiadomienia" />
+          </div>
+          <div style="flex:2;min-width:180px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Treść</div>
             <input id="push-test-body" class="input" style="width:100%" placeholder="Push notifications działają!" />
           </div>
-          <button class="btn btn-primary btn-sm" onclick="_sendTestPush()" style="white-space:nowrap">🔔 Wyślij test</button>
         </div>
-        <div id="push-test-result" style="margin-top:10px;font-size:13px;display:none"></div>
+
+        <!-- Row 2: visual options -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="flex:2;min-width:180px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Ikona URL <span style="opacity:0.5">(opcjonalnie, zastąpi domyślną)</span></div>
+            <input id="push-test-icon" class="input" style="width:100%" placeholder="/front/icon-192.png" />
+          </div>
+          <div style="flex:2;min-width:180px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Obraz (baner) URL <span style="opacity:0.5">(Chrome Android)</span></div>
+            <input id="push-test-image" class="input" style="width:100%" placeholder="https://... lub /images/..." />
+          </div>
+          <div style="flex:1;min-width:140px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">Wibracja <span style="opacity:0.5">ms,przerwa,ms</span></div>
+            <input id="push-test-vibrate" class="input" style="width:100%" placeholder="200,100,200" />
+          </div>
+          <div style="flex:1;min-width:140px">
+            <div style="font-size:11px;color:var(--t3);margin-bottom:4px">URL po kliknięciu</div>
+            <input id="push-test-url" class="input" style="width:100%" placeholder="/" />
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="btn btn-primary btn-sm" onclick="_sendTestPush()">🔔 Wyślij test</button>
+          <div id="push-test-result" style="font-size:13px;display:none"></div>
+        </div>
       </div>
 
       <!-- Subscriptions table -->
@@ -15424,11 +15453,21 @@
   async function _sendTestPush() {
     const userId = parseInt(document.getElementById('push-target-user').value);
     if (!userId) { alert('Wybierz gracza'); return; }
+    const title = document.getElementById('push-test-title').value.trim() || 'AI-GM — test powiadomienia';
     const body = document.getElementById('push-test-body').value.trim() || 'Push notifications działają!';
+    const icon = document.getElementById('push-test-icon').value.trim() || null;
+    const image = document.getElementById('push-test-image').value.trim() || null;
+    const vibrateRaw = document.getElementById('push-test-vibrate').value.trim();
+    const vibrate = vibrateRaw ? vibrateRaw.split(',').map(v => parseInt(v.trim())).filter(n => !isNaN(n)) : null;
+    const url = document.getElementById('push-test-url').value.trim() || '/';
     const resultEl = document.getElementById('push-test-result');
     resultEl.style.display = 'none';
+    const payload = { user_id: userId, title, body, url };
+    if (icon) payload.icon = icon;
+    if (image) payload.image = image;
+    if (vibrate && vibrate.length) payload.vibrate = vibrate;
     try {
-      await apiFetch('/api/admin/push/send-test', { method:'POST', body: JSON.stringify({ user_id: userId, body }) });
+      await apiFetch('/api/admin/push/send-test', { method:'POST', body: JSON.stringify(payload) });
       resultEl.style.display = 'block';
       resultEl.style.color = 'var(--green,#4caf50)';
       resultEl.textContent = '✅ Powiadomienie wysłane! Sprawdź urządzenie gracza.';

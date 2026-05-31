@@ -586,6 +586,7 @@ function _showUndeleteModal(undoDeadlineIso, username, password) {
 }
 
 function handleLogout() {
+    window.multiplayerUI?.deactivate();
     authToken = null;
     currentUser = null;
     currentHero = null;
@@ -2634,6 +2635,12 @@ async function enterGame(campaign) {
         if (campaign?.id) localStorage.setItem('aigm_campaign_id', campaign.id);
     } catch {}
 
+    // Multiplayer mode: activate round UI, suppress solo composer
+    window.multiplayerUI?.deactivate();
+    if (campaign?.mode === 'multiplayer' && characterData?.id) {
+        window.multiplayerUI?.activate(campaign.id, characterData.id, characterData.name || 'Bohater');
+    }
+
     const sheet = characterData?.sheet_json || characterData || {};
     elements.characterNameDisplay.textContent = characterData?.name || 'Bohater';
     const level = sheet.level || characterData?.level || 1;
@@ -4329,6 +4336,7 @@ window.dismissDiceRoll = async function() {
         }
     }
     // Go back to campaign chooser
+    window.multiplayerUI?.deactivate();
     currentCampaignId = null;
     currentCampaign = null;
     characterData = null;
@@ -11098,38 +11106,60 @@ async function submitBugReport() {
 // Web Push Notifications
 // ============================================================================
 async function registerPushNotifications() {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        console.warn('[Push] Not supported in this browser');
+        return;
+    }
 
     let vapidPublicKey;
     try {
         const resp = await fetch('/api/push/vapid-public-key');
-        if (!resp.ok) return;
+        if (!resp.ok) { console.warn('[Push] VAPID key fetch failed:', resp.status); return; }
         const data = await resp.json();
         vapidPublicKey = data.publicKey;
     } catch (e) {
+        console.warn('[Push] VAPID key fetch error:', e);
         return;
     }
-    if (!vapidPublicKey) return;
+    if (!vapidPublicKey) { console.warn('[Push] No VAPID key returned'); return; }
 
-    const reg = await navigator.serviceWorker.register('/sw.js');
-    await navigator.serviceWorker.ready;
+    let reg;
+    try {
+        reg = await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+        console.log('[Push] SW registered, scope:', reg.scope);
+    } catch (e) {
+        console.warn('[Push] SW registration failed:', e);
+        return;
+    }
 
-    const existingSub = await reg.pushManager.getSubscription();
+    let existingSub;
+    try {
+        existingSub = await reg.pushManager.getSubscription();
+    } catch (e) {
+        console.warn('[Push] getSubscription error:', e);
+        return;
+    }
     if (existingSub) {
-        // Already subscribed — re-send to backend to ensure it's current
+        console.log('[Push] Already subscribed, re-sending to backend');
         await _sendSubscriptionToBackend(existingSub);
         return;
     }
 
     const permission = await Notification.requestPermission();
+    console.log('[Push] Permission:', permission);
     if (permission !== 'granted') return;
 
-    const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: _urlBase64ToUint8Array(vapidPublicKey),
-    });
-
-    await _sendSubscriptionToBackend(sub);
+    try {
+        const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: _urlBase64ToUint8Array(vapidPublicKey),
+        });
+        console.log('[Push] Subscribed, sending to backend');
+        await _sendSubscriptionToBackend(sub);
+    } catch (e) {
+        console.warn('[Push] Subscribe failed:', e);
+    }
 }
 
 async function _sendSubscriptionToBackend(sub) {

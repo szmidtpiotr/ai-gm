@@ -46,6 +46,7 @@ from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.api.client_logs import router as client_logs_router
 from app.api.knowledge import router as knowledge_router
+from app.api.multiplayer import router as multiplayer_router
 from app.migrations_admin import run_admin_migrations
 from app.services.llm_admin_service import hydrate_runtime_from_stored_preset
 from app.routers.admin import router as admin_router
@@ -377,6 +378,7 @@ app.include_router(voice_admin_router)
 app.include_router(admin_images_router)
 app.include_router(bug_report_router, prefix="/api")
 app.include_router(push_notifications_router, prefix="/api")
+app.include_router(multiplayer_router, prefix="/api")
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")
     app.include_router(test_runner_router, prefix="/api")

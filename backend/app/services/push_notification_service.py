@@ -83,7 +83,16 @@ def _get_subscriptions_for_user(user_id: int, conn: sqlite3.Connection) -> list:
     ).fetchall()
 
 
-def send_push(user_id: int, title: str, body: str, url: str = "/") -> None:
+def send_push(
+    user_id: int,
+    title: str,
+    body: str,
+    url: str = "/",
+    icon: Optional[str] = None,
+    badge: Optional[str] = None,
+    image: Optional[str] = None,
+    vibrate: Optional[list] = None,
+) -> None:
     if not _is_configured():
         logger.warning("push_not_configured", user_id=user_id)
         return
@@ -103,7 +112,16 @@ def send_push(user_id: int, title: str, body: str, url: str = "/") -> None:
     if not rows:
         return
 
-    payload = json.dumps({"title": title, "body": body, "url": url})
+    data: dict = {"title": title, "body": body, "url": url}
+    if icon:
+        data["icon"] = icon
+    if badge:
+        data["badge"] = badge
+    if image:
+        data["image"] = image
+    if vibrate:
+        data["vibrate"] = vibrate
+    payload = json.dumps(data)
     stale_endpoints = []
 
     for row in rows:

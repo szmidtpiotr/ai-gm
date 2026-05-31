@@ -3435,6 +3435,7 @@ def run_admin_migrations() -> None:
         _ensure_bug_reports_table(conn)
         _ensure_bug_reports_github_status(conn)
         _ensure_push_subscriptions_table(conn)
+        _ensure_campaign_rounds_tables(conn)
     finally:
         conn.close()
 
@@ -3577,6 +3578,47 @@ def _ensure_bug_reports_github_status(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE bug_reports ADD COLUMN github_status TEXT")
         conn.commit()
         logger.info("admin_migration_applied", label="bug-reports-github-status")
+
+
+def _ensure_campaign_rounds_tables(conn: sqlite3.Connection) -> None:
+    """Multiplayer round system — collects player actions per round, stores GM narration."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS campaign_rounds (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id     INTEGER NOT NULL,
+            round_number    INTEGER NOT NULL DEFAULT 1,
+            status          TEXT NOT NULL DEFAULT 'collecting'
+                              CHECK (status IN ('collecting', 'narrating', 'done')),
+            deadline        TEXT,
+            narrative_json  TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            closed_at       TEXT,
+            UNIQUE(campaign_id, round_number)
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_campaign_rounds_campaign "
+        "ON campaign_rounds(campaign_id, status)"
+    )
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS campaign_round_actions (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            round_id        INTEGER NOT NULL REFERENCES campaign_rounds(id),
+            campaign_id     INTEGER NOT NULL,
+            user_id         INTEGER NOT NULL,
+            character_id    INTEGER NOT NULL,
+            character_name  TEXT NOT NULL,
+            action_text     TEXT NOT NULL,
+            submitted_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(round_id, user_id)
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_campaign_round_actions_round "
+        "ON campaign_round_actions(round_id)"
+    )
+    conn.commit()
+    logger.info("admin_migration_applied", label="campaign-rounds-tables")
 
 
 def _ensure_push_subscriptions_table(conn: sqlite3.Connection) -> None:

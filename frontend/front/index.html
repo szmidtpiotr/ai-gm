@@ -862,6 +862,26 @@
       <div class="composer__voice-status" id="voice-status" hidden></div>
     </footer>
 
+    <!-- Multiplayer private note — shown after narration, per-player only -->
+    <div id="multiplayer-private-note" hidden style="margin:8px 12px;padding:10px 14px;background:rgba(124,77,255,.12);border-left:3px solid var(--accent,#7c4dff);border-radius:6px;font-size:14px;line-height:1.5">
+      <div style="font-size:11px;opacity:.6;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Tylko dla Ciebie</div>
+      <div class="mp-note-body"></div>
+    </div>
+
+    <!-- Multiplayer composer (replaces normal composer in multiplayer campaigns) -->
+    <footer id="multiplayer-composer" class="composer" hidden>
+      <div id="mp-counter" style="font-size:12px;opacity:.55;text-align:right;padding:2px 12px 0"></div>
+      <div id="mp-status" style="font-size:13px;padding:6px 12px;opacity:.8"></div>
+      <div style="display:flex;gap:8px;padding:6px 12px 10px;align-items:flex-end">
+        <textarea id="mp-action-input" rows="2"
+          style="flex:1;resize:none;border-radius:10px;padding:10px 12px;font-size:15px;background:var(--bg2,#1e1e2e);color:var(--t1,#cdd6f4);border:1px solid var(--border,#313244);outline:none;font-family:inherit"
+          placeholder="Co robi Twoja postać w tej rundzie?"></textarea>
+        <button id="mp-submit-btn" type="button" class="composer__send" style="height:44px;padding:0 18px;font-size:14px;border-radius:10px;white-space:nowrap">
+          Wyślij akcję
+        </button>
+      </div>
+    </footer>
+
     <!-- Combat composer (replaces normal composer during combat) -->
     <footer id="combat-composer" class="combat-composer" hidden>
       <button type="button" class="combat-btn combat-btn--attack" id="combat-attack-btn" data-clog="combat_attack_button">
@@ -1828,6 +1848,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
+  <script src="./js/multiplayer_ui.js?v=1"></script>
   <script src="./js/app.js?v=wound-effects-26"></script>
 </body>
 </html>
