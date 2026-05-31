@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=f13-friends">
+  <link rel="stylesheet" href="./css/styles.css?v=f16-party-chat">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -598,7 +598,7 @@
 
       <!-- Pending multiplayer invites -->
       <div id="mp-invites-section" style="display:none;margin-bottom:12px">
-        <div class="campaigns-section-label" style="display:block">Zaproszenia multiplayer</div>
+        <div class="campaigns-section-label">Zaproszenia multiplayer</div>
         <div id="mp-invites-list"></div>
       </div>
 
@@ -619,82 +619,176 @@
       <button type="button" class="header__back" onclick="showScreen('campaigns')">‹</button>
       <div class="header__center"><h1 class="header__title">Nowe Lobby</h1></div>
     </header>
-    <main style="padding:20px;max-width:480px;margin:0 auto">
-      <div class="form-group" style="margin-bottom:16px">
-        <label class="form-label">Nazwa sesji</label>
-        <input id="lobby-title" class="input" placeholder="np. Mroczna Dolina z kumplami" style="width:100%">
+    <main class="lf-body">
+
+      <!-- Ornamental crest -->
+      <div class="lf-crest" aria-hidden="true">
+        <div class="lf-crest__rule"></div>
+        <svg class="lf-crest__icon" width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <circle cx="18" cy="18" r="16" stroke="currentColor" stroke-width="1" opacity=".35"/>
+          <circle cx="18" cy="18" r="10" stroke="currentColor" stroke-width="1" opacity=".2"/>
+          <line x1="6" y1="6" x2="30" y2="30" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="30" y1="6" x2="6" y2="30" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="18" cy="18" r="2.5" fill="currentColor"/>
+        </svg>
+        <div class="lf-crest__rule lf-crest__rule--r"></div>
       </div>
-      <div class="form-group" style="margin-bottom:16px">
-        <label class="form-label">Timer per runda</label>
-        <select id="lobby-timer" class="input" style="width:100%">
-          <option value="12">12 godzin</option>
-          <option value="24" selected>24 godziny</option>
-          <option value="48">48 godzin</option>
+      <p class="lf-tagline">Przywołaj drużynę do walki</p>
+
+      <!-- Session name -->
+      <div class="lf-section">
+        <label class="lf-legend" for="lobby-title">Nazwa wyprawy</label>
+        <input id="lobby-title" class="lf-quest-input" type="text"
+          placeholder="Nadaj imię swej przygodzie…" autocomplete="off">
+      </div>
+
+      <!-- Timer -->
+      <div class="lf-section">
+        <div class="lf-legend-row">
+          <label class="lf-legend">Timer rundy</label>
+          <span class="lf-badge">
+            <input id="lobby-timer" type="number" min="1" max="4320" value="1440"
+              oninput="updateLobbyTimerHint()">
+            <span class="lf-badge__unit">min</span>
+            <span class="lf-badge__sep">·</span>
+            <span id="lobby-timer-hint" class="lf-badge__hint"></span>
+          </span>
+        </div>
+        <div class="lf-chips">
+          <button type="button" class="lf-chip" data-minutes="5"    onclick="setLobbyTimer(5)">5 min</button>
+          <button type="button" class="lf-chip" data-minutes="30"   onclick="setLobbyTimer(30)">30 min</button>
+          <button type="button" class="lf-chip" data-minutes="60"   onclick="setLobbyTimer(60)">1 h</button>
+          <button type="button" class="lf-chip" data-minutes="240"  onclick="setLobbyTimer(240)">4 h</button>
+          <button type="button" class="lf-chip" data-minutes="720"  onclick="setLobbyTimer(720)">12 h</button>
+          <button type="button" class="lf-chip lf-chip--on" data-minutes="1440" onclick="setLobbyTimer(1440)">24 h</button>
+          <button type="button" class="lf-chip" data-minutes="2880" onclick="setLobbyTimer(2880)">48 h</button>
+          <button type="button" class="lf-chip" data-minutes="4320" onclick="setLobbyTimer(4320)">72 h</button>
+        </div>
+      </div>
+
+      <!-- Max players -->
+      <div class="lf-section">
+        <label class="lf-legend">Drużyna</label>
+        <select id="lobby-max-players" hidden>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4" selected>4</option>
         </select>
-        <p id="lobby-timer-hint" style="font-size:12px;opacity:.55;margin-top:4px"></p>
+        <div class="lf-tiles">
+          <button type="button" class="lf-tile" data-players="2" onclick="setLobbyMaxPlayers(2)">
+            <span class="lf-tile__icon" aria-hidden="true">
+              <svg width="22" height="14" viewBox="0 0 22 14"><circle cx="6" cy="7" r="4" fill="currentColor" opacity=".6"/><circle cx="16" cy="7" r="4" fill="currentColor" opacity=".6"/></svg>
+            </span>
+            <span class="lf-tile__num">II</span>
+            <span class="lf-tile__sub">gracze</span>
+          </button>
+          <button type="button" class="lf-tile" data-players="3" onclick="setLobbyMaxPlayers(3)">
+            <span class="lf-tile__icon" aria-hidden="true">
+              <svg width="30" height="14" viewBox="0 0 30 14"><circle cx="6" cy="7" r="4" fill="currentColor" opacity=".6"/><circle cx="15" cy="7" r="4" fill="currentColor" opacity=".6"/><circle cx="24" cy="7" r="4" fill="currentColor" opacity=".6"/></svg>
+            </span>
+            <span class="lf-tile__num">III</span>
+            <span class="lf-tile__sub">gracze</span>
+          </button>
+          <button type="button" class="lf-tile lf-tile--on" data-players="4" onclick="setLobbyMaxPlayers(4)">
+            <span class="lf-tile__icon" aria-hidden="true">
+              <svg width="38" height="14" viewBox="0 0 38 14"><circle cx="5" cy="7" r="4" fill="currentColor" opacity=".6"/><circle cx="14" cy="7" r="4" fill="currentColor" opacity=".6"/><circle cx="23" cy="7" r="4" fill="currentColor" opacity=".6"/><circle cx="32" cy="7" r="4" fill="currentColor" opacity=".6"/></svg>
+            </span>
+            <span class="lf-tile__num">IV</span>
+            <span class="lf-tile__sub">graczy</span>
+          </button>
+        </div>
       </div>
-      <div class="form-group" style="margin-bottom:24px">
-        <label class="form-label">Maks. graczy</label>
-        <select id="lobby-max-players" class="input" style="width:100%">
-          <option value="2">2 graczy</option>
-          <option value="3">3 graczy</option>
-          <option value="4" selected>4 graczy</option>
-        </select>
-      </div>
-      <button type="button" class="btn btn-primary" style="width:100%" onclick="createLobby()">Utwórz lobby</button>
-      <div id="create-lobby-error" style="color:var(--red,#e53935);font-size:13px;margin-top:8px;display:none"></div>
+
+      <!-- Create -->
+      <button type="button" class="lf-create-btn" onclick="createLobby()">
+        <span class="lf-create-btn__ornament" aria-hidden="true">✦</span>
+        Utwórz Lobby
+        <span class="lf-create-btn__ornament" aria-hidden="true">✦</span>
+      </button>
+      <div id="create-lobby-error" class="lf-error"></div>
+
     </main>
   </div>
 
   <!-- LOBBY VIEW SCREEN -->
   <div id="lobby-screen" class="screen">
     <header class="header">
-      <button type="button" class="header__back" onclick="showScreen('campaigns')">‹</button>
+      <button type="button" class="header__back" onclick="_leaveLobbyNavOnly()">‹</button>
       <div class="header__center">
         <h1 class="header__title" id="lobby-screen-title">Lobby</h1>
         <p class="header__subtitle" id="lobby-screen-subtitle"></p>
       </div>
     </header>
-    <main style="padding:20px;max-width:480px;margin:0 auto">
-      <!-- Player list -->
-      <div id="lobby-members-list" style="margin-bottom:20px"></div>
+    <main class="lf-body">
+
+      <!-- Ornamental crest -->
+      <div class="lf-crest" aria-hidden="true">
+        <div class="lf-crest__rule"></div>
+        <svg class="lf-crest__icon" width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <circle cx="18" cy="18" r="16" stroke="currentColor" stroke-width="1" opacity=".35"/>
+          <circle cx="18" cy="18" r="10" stroke="currentColor" stroke-width="1" opacity=".2"/>
+          <line x1="6" y1="6" x2="30" y2="30" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="30" y1="6" x2="6" y2="30" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="18" cy="18" r="2.5" fill="currentColor"/>
+        </svg>
+        <div class="lf-crest__rule lf-crest__rule--r"></div>
+      </div>
+      <p class="lf-tagline">Drużyna się gromadzi</p>
+
+      <!-- Party slots -->
+      <div class="lf-section">
+        <label class="lf-legend">Drużyna</label>
+        <div id="lobby-members-list" class="lf-party"></div>
+      </div>
 
       <!-- Invite section (host only) -->
-      <div id="lobby-invite-section" style="margin-bottom:20px;display:none">
-        <div style="font-size:13px;font-weight:600;margin-bottom:8px;opacity:.7;text-transform:uppercase;letter-spacing:.05em">Zaproś gracza</div>
-        <div style="display:flex;gap:8px;margin-bottom:8px">
-          <input id="lobby-invite-username" class="input" placeholder="Nazwa użytkownika" style="flex:1">
-          <button type="button" class="btn btn-sm" onclick="inviteByUsername()">Zaproś</button>
+      <div id="lobby-invite-section" class="lf-section" style="display:none">
+        <label class="lf-legend">Zaproś gracza</label>
+        <div class="lf-invite-row">
+          <input id="lobby-invite-username" class="lf-quest-input" type="text"
+            placeholder="@nazwa gracza…" autocomplete="off">
+          <button type="button" class="lf-invite-btn" onclick="inviteByUsername()">Zaproś</button>
         </div>
-        <button type="button" class="btn btn-sm" style="width:100%" onclick="generateInviteLink()">🔗 Generuj link zaproszenia</button>
-        <div id="lobby-invite-link-box" style="display:none;margin-top:8px;padding:10px;background:var(--bg2,#1e1e2e);border-radius:8px;word-break:break-all;font-size:12px">
-          <div id="lobby-invite-link-text"></div>
-          <button type="button" class="btn btn-sm" style="margin-top:6px" onclick="copyInviteLink()">📋 Kopiuj</button>
+        <button type="button" class="lf-link-btn" onclick="generateInviteLink()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+          Generuj link zaproszenia
+        </button>
+        <div id="lobby-invite-link-box" class="lf-link-box" style="display:none">
+          <div id="lobby-invite-link-text" class="lf-link-text"></div>
+          <button type="button" class="lf-chip" onclick="copyInviteLink()">Kopiuj link</button>
         </div>
-        <div id="lobby-invite-msg" style="font-size:13px;margin-top:6px"></div>
+        <div id="lobby-invite-msg" class="lf-msg"></div>
       </div>
 
-      <!-- Guest actions -->
-      <div id="lobby-guest-section" style="margin-bottom:20px;display:none">
-        <p style="font-size:14px;opacity:.7">Czekasz na hosta, który rozpocznie grę.</p>
-        <button type="button" class="btn" style="width:100%;margin-top:10px;background:var(--bg3,#2a2a3e);font-size:13px" onclick="leaveMpLobbyFromScreen()">Opuść lobby</button>
+      <!-- Guest message -->
+      <div id="lobby-guest-section" class="lf-section" style="display:none">
+        <p class="lf-guest-msg">Czekamy aż drużyna się zgromadzi…</p>
+        <button type="button" class="lf-leave-btn" onclick="leaveMpLobbyFromScreen()">Opuść lobby</button>
       </div>
 
-      <!-- Start button (host only) -->
+      <!-- Start / ready (host only) -->
       <div id="lobby-start-section" style="display:none">
-        <button type="button" id="lobby-start-btn" class="btn btn-primary" style="width:100%" onclick="startLobby()">▶ Rozpocznij grę</button>
-        <p id="lobby-start-hint" style="font-size:12px;opacity:.55;text-align:center;margin-top:6px"></p>
+        <button type="button" id="lobby-start-btn" class="lf-create-btn" onclick="startLobby()">
+          <span class="lf-create-btn__ornament" aria-hidden="true">✦</span>
+          Rozpocznij wyprawę
+          <span class="lf-create-btn__ornament" aria-hidden="true">✦</span>
+        </button>
+        <p id="lobby-start-hint" class="lf-start-hint"></p>
       </div>
 
-      <!-- Join invite link flow -->
-      <div id="lobby-join-link-section" style="margin-bottom:20px;display:none">
-        <div style="font-size:13px;font-weight:600;margin-bottom:8px;opacity:.7;text-transform:uppercase;letter-spacing:.05em">Dołącz przez link</div>
-        <div style="display:flex;gap:8px">
-          <input id="lobby-join-token-input" class="input" placeholder="Wklej token z linku..." style="flex:1">
-          <button type="button" class="btn btn-sm" onclick="joinViaToken()">Dołącz</button>
+      <!-- Join via invite link -->
+      <div id="lobby-join-link-section" class="lf-section" style="display:none">
+        <label class="lf-legend">Dołącz przez link</label>
+        <div class="lf-invite-row">
+          <input id="lobby-join-token-input" class="lf-quest-input" type="text" placeholder="Wklej token z linku…">
+          <button type="button" class="lf-invite-btn" onclick="joinViaToken()">Dołącz</button>
         </div>
-        <div id="lobby-join-msg" style="font-size:13px;margin-top:6px"></div>
+        <div id="lobby-join-msg" class="lf-msg"></div>
       </div>
+
     </main>
   </div>
 
@@ -928,6 +1022,48 @@
       </div>
     </main>
 
+    <!-- Party chat panel (multiplayer only, shown by multiplayer_ui.js) -->
+    <div id="party-chat-panel" hidden>
+      <div class="mp-chat-panel">
+        <button type="button" class="mp-chat-panel__toggle" onclick="window.multiplayerUI?.togglePartyChat()" aria-expanded="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Czat drużyny
+          <span class="mp-chat-panel__badge" id="mp-chat-badge" hidden>0</span>
+        </button>
+        <div class="mp-chat-panel__body" id="mp-chat-body" hidden>
+          <div class="mp-chat-panel__messages" id="mp-chat-messages"></div>
+          <div class="mp-chat-panel__composer">
+            <input type="text" id="mp-chat-input" placeholder="Powiedz coś drużynie… (/whisper Imię tekst)" maxlength="500"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendPartyMessage();}">
+            <button type="button" onclick="sendPartyMessage()" class="mp-chat-panel__send">→</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Multiplayer private note — foldable tab above input, shown after narration -->
+    <div id="multiplayer-private-note" class="mp-note" hidden>
+      <button class="mp-note__tab" type="button" onclick="mpNoteToggle()" aria-expanded="false">
+        <span class="mp-note__tab-icon" aria-hidden="true">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+        </span>
+        <span class="mp-note__tab-label">Szept Mistrza Gry</span>
+        <span class="mp-note__tab-badge">Tylko dla Ciebie</span>
+        <span class="mp-note__tab-chevron" aria-hidden="true">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+        </span>
+      </button>
+      <div class="mp-note__panel">
+        <div class="mp-note-body"></div>
+        <button class="mp-note__dismiss" type="button" onclick="mpNoteToggle()">Rozumiem</button>
+      </div>
+    </div>
+
     <footer class="composer" id="composer">
       <div id="suggested-actions" style="display:none"></div>
       <div class="composer__input-wrap">
@@ -960,12 +1096,6 @@
       <span id="char-counter" class="char-counter" style="display:none"></span>
       <div class="composer__voice-status" id="voice-status" hidden></div>
     </footer>
-
-    <!-- Multiplayer private note — shown after narration, per-player only -->
-    <div id="multiplayer-private-note" hidden style="margin:8px 12px;padding:10px 14px;background:rgba(124,77,255,.12);border-left:3px solid var(--accent,#7c4dff);border-radius:6px;font-size:14px;line-height:1.5">
-      <div style="font-size:11px;opacity:.6;margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em">Tylko dla Ciebie</div>
-      <div class="mp-note-body"></div>
-    </div>
 
     <!-- Multiplayer composer (replaces normal composer in multiplayer campaigns) -->
     <footer id="multiplayer-composer" class="composer" hidden>
@@ -1357,6 +1487,53 @@
 
         <!-- Navigation moved to top mini-nav -->
 
+        <!-- Multiplayer host timer control (hidden unless host in active MP game) -->
+        <div id="mp-timer-section" style="display:none;padding:12px 0 4px">
+          <div style="font-size:12px;font-weight:600;opacity:.6;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Timer rundy</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+            <input id="mp-timer-input" type="number" class="input" min="1" max="4320"
+              style="width:80px;text-align:center;font-size:14px;padding:6px 8px" oninput="updateMpTimerHint()">
+            <span style="opacity:.6;font-size:13px">minut</span>
+            <span id="mp-timer-hint" style="font-size:12px;opacity:.5"></span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
+            <button type="button" class="btn btn-sm" onclick="setMpTimer(5)">5m</button>
+            <button type="button" class="btn btn-sm" onclick="setMpTimer(30)">30m</button>
+            <button type="button" class="btn btn-sm" onclick="setMpTimer(60)">1h</button>
+            <button type="button" class="btn btn-sm" onclick="setMpTimer(240)">4h</button>
+            <button type="button" class="btn btn-sm" onclick="setMpTimer(1440)">24h</button>
+            <button type="button" class="btn btn-sm" onclick="setMpTimer(2880)">48h</button>
+            <button type="button" class="btn btn-sm" onclick="setMpTimer(4320)">72h</button>
+          </div>
+          <button type="button" class="btn btn-primary" style="width:100%;font-size:13px;padding:8px" onclick="saveMpTimer()">Zapisz timer</button>
+          <div id="mp-timer-msg" style="font-size:12px;margin-top:6px;text-align:center"></div>
+        </div>
+
+        <!-- Multiplayer leave button (hidden unless in MP game) -->
+        <div id="mp-leave-section" style="display:none;padding:12px 0 4px">
+          <button type="button" id="mp-leave-game-btn" onclick="window.multiplayerUI?.leave()"
+            style="width:100%;padding:10px 16px;background:rgba(229,57,53,.12);border:1px solid rgba(229,57,53,.3);border-radius:8px;color:var(--red,#e53935);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Opuść grę multiplayer
+          </button>
+        </div>
+
+        <!-- Multiplayer invite (hidden unless in MP game) -->
+        <div id="mp-invite-section" style="display:none;padding:4px 0 8px">
+          <div class="settings-divider" style="margin-bottom:12px">
+            <span class="settings-divider__ornament">⚔</span>
+          </div>
+          <label style="font-size:11px;font-weight:700;color:var(--accent,#c9a54a);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:block">Zaproś gracza</label>
+          <div style="display:flex;gap:8px;margin-bottom:6px">
+            <input id="game-invite-username" type="text" placeholder="@nazwa gracza…" autocomplete="off"
+              style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 12px;color:inherit;font-size:13px;outline:none"
+              onkeydown="if(event.key==='Enter')inviteFromGame()">
+            <button type="button" onclick="inviteFromGame()"
+              style="padding:8px 14px;background:rgba(201,165,74,.15);border:1px solid rgba(201,165,74,.35);border-radius:8px;color:var(--accent,#c9a54a);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">Zaproś</button>
+          </div>
+          <div id="game-invite-msg" style="font-size:12px;min-height:16px;text-align:center"></div>
+        </div>
+
         <!-- Admin Section (hidden by default) -->
         <div class="settings-divider settings-divider--danger" id="admin-settings-divider" style="display: none;">
           <span class="settings-divider__ornament">⚠</span>
@@ -1409,58 +1586,6 @@
             <textarea id="debug-log-preview" class="settings-debug-log__preview" readonly placeholder="Tu pojawi się podgląd przed skopiowaniem…"></textarea>
           </div>
 
-          <div class="settings-admin-actions">
-            <button type="button" class="settings-admin-btn" id="reset-campaign-btn">
-              <span class="settings-admin-btn__icon">↺</span>
-              <div class="settings-admin-btn__content">
-                <span class="settings-admin-btn__title">Reset kampanii</span>
-                <span class="settings-admin-btn__desc">Czyści historię czatu</span>
-              </div>
-            </button>
-
-            <button type="button" class="settings-admin-btn" id="reset-character-btn">
-              <span class="settings-admin-btn__icon">⟲</span>
-              <div class="settings-admin-btn__content">
-                <span class="settings-admin-btn__title">Reset postaci</span>
-                <span class="settings-admin-btn__desc">Przywraca stan początkowy</span>
-              </div>
-            </button>
-
-            <button type="button" class="settings-admin-btn settings-admin-btn--test" id="test-death-btn">
-              <span class="settings-admin-btn__icon">💀</span>
-              <div class="settings-admin-btn__content">
-                <span class="settings-admin-btn__title">Test: Śmierć</span>
-                <span class="settings-admin-btn__desc">Pokaż ekran śmierci</span>
-              </div>
-            </button>
-          </div>
-        </section>
-
-        <!-- Credits -->
-        <section class="settings-group" id="settings-group-credits">
-          <header class="settings-group__header settings-group__header--toggle" data-fold="settings-fold-credits">
-            <span class="settings-group__icon">✦</span>
-            <h3 class="settings-group__title">Podziękowania</h3>
-            <span class="settings-group__chevron">›</span>
-          </header>
-          <div class="settings-fold" id="settings-fold-credits" hidden>
-            <div class="settings-credits">
-              <div class="settings-credit-item">
-                <span class="settings-credit-label">🎲 3D Dice Roller</span>
-                <a class="settings-credit-link" href="https://github.com/sarahRosannaBusch/dice" target="_blank" rel="noopener">
-                  Sarah Rosanna Busch
-                </a>
-                <span class="settings-credit-note">Three.js + Cannon.js physics dice · MIT licence</span>
-              </div>
-              <div class="settings-credit-item">
-                <span class="settings-credit-label">🎲 Original dice engine</span>
-                <a class="settings-credit-link" href="https://github.com/byWulf/dice-roller" target="_blank" rel="noopener">
-                  Anton Natarov (Teal)
-                </a>
-                <span class="settings-credit-note">Base Three.js dice implementation</span>
-              </div>
-            </div>
-          </div>
         </section>
 
       </div>
@@ -1816,16 +1941,32 @@
 
   <!-- Stage 4 S12: mobile bottom tab bar (visible below 768px only) -->
   <nav id="mobile-bottom-bar" class="mobile-bottom-bar" aria-label="Główna nawigacja">
-    <button type="button" class="mbb-btn mbb-btn--active" data-mbb="game">
-      <span class="mbb-btn__icon" aria-hidden="true">🎲</span>
+    <button type="button" class="mbb-btn mbb-btn--active" data-mbb="game" style="position:relative">
+      <span class="mbb-btn__icon" aria-hidden="true">
+        <!-- Scroll / game log -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+      </span>
       <span class="mbb-btn__label">Gra</span>
+      <span id="mp-chat-nav-badge" class="mp-chat-nav-badge" hidden>●</span>
     </button>
     <button type="button" class="mbb-btn" data-mbb="character">
-      <span class="mbb-btn__icon" aria-hidden="true">👤</span>
+      <span class="mbb-btn__icon" aria-hidden="true">
+        <!-- Shield / hero -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </span>
       <span class="mbb-btn__label">Postać</span>
     </button>
     <button type="button" class="mbb-btn" data-mbb="inventory">
-      <span class="mbb-btn__icon" aria-hidden="true">🎒</span>
+      <span class="mbb-btn__icon" aria-hidden="true">
+        <!-- Chest / inventory -->
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 8h14M5 8a2 2 0 1 1 0-4h14a2 2 0 1 1 0 4M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8M10 12h4"/>
+        </svg>
+      </span>
       <span class="mbb-btn__label">Ekwipunek</span>
     </button>
   </nav>
@@ -1947,7 +2088,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/multiplayer_ui.js?v=8"></script>
-  <script src="./js/app.js?v=multiplayer-lobby-6"></script>
+  <script src="./js/multiplayer_ui.js?v=22"></script>
+  <script src="./js/app.js?v=multiplayer-lobby-11"></script>
 </body>
 </html>
