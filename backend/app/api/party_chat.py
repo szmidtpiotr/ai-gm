@@ -85,6 +85,8 @@ def post_party_chat(
         raise HTTPException(status_code=400, detail="Empty message")
     if len(req.message) > 500:
         raise HTTPException(status_code=400, detail="Message too long (max 500 chars)")
+    if len(req.character_name) > 100:
+        raise HTTPException(status_code=400, detail="character_name too long (max 100 chars)")
 
     conn = _db()
     try:
