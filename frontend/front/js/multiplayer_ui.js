@@ -62,8 +62,13 @@
     function _setComposerState(enabled, placeholder) {
         const inp = _input();
         const btn = _sendBtn();
-        if (inp) { inp.disabled = !enabled; if (placeholder) inp.placeholder = placeholder; }
-        if (btn) { btn.disabled = !enabled; btn.style.opacity = enabled ? '' : '0.3'; }
+        if (inp) {
+            if (inp.disabled !== !enabled) inp.disabled = !enabled;
+            if (placeholder && inp.placeholder !== placeholder) inp.placeholder = placeholder;
+        }
+        if (btn) {
+            if (btn.disabled !== !enabled) { btn.disabled = !enabled; btn.style.opacity = enabled ? '' : '0.3'; }
+        }
     }
 
     function _injectStatusBar() {
@@ -145,9 +150,16 @@
                 return;
             }
             if (s.status === 'done') {
-                _setComposerState(false, 'GM tworzy narrację...');
-                _updateStatusBar({ ...base, statusText: 'GM pisze...' });
-                await _fetchNarration();
+                if (s.round_id === _lastShownRoundId) {
+                    // Narration already shown; new round not yet created — keep enabled
+                    _setComposerState(true, 'Twoja akcja w tej rundzie...');
+                    _pollTimer = setTimeout(_poll, POLL_WAITING_MS);
+                } else {
+                    _setComposerState(false, 'GM tworzy narrację...');
+                    _updateStatusBar({ ...base, statusText: 'GM pisze...' });
+                    await _fetchNarration();
+                }
+                return;
             }
         } catch (e) {
             console.warn('[MP] poll error:', e);
@@ -161,8 +173,8 @@
             const n = await _apiFetch(`/campaigns/${_campaignId}/round/narration`);
             if (!_active) return;
             if (n.round_id === _lastShownRoundId) {
-                // Already displayed — start next round directly
-                _startNextRound();
+                // Already displayed — wait for new round without toggling UI
+                _pollTimer = setTimeout(_poll, POLL_WAITING_MS);
                 return;
             }
             _lastShownRoundId = n.round_id;
