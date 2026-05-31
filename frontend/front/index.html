@@ -23,8 +23,8 @@
           <span class="login__icon login__icon--main">📜</span>
           <span class="login__icon">🔥</span>
         </div>
-        <h1 class="login__title">AI-GM</h1>
-        <p class="login__subtitle">Mroczna kraina czeka na bohatera</p>
+        <h1 class="login__title" data-ui-text="login.title">AI-GM</h1>
+        <p class="login__subtitle" data-ui-text="login.subtitle">Mroczna kraina czeka na bohatera</p>
       </div>
 
       <form id="login-form" class="login__form">
@@ -43,7 +43,7 @@
       </form>
 
       <footer class="login__footer">
-        <p class="login__quote">"W mroku świec, historie się rodzą..."</p>
+        <p class="login__quote" data-ui-text="login.quote">"W mroku świec, historie się rodzą..."</p>
         <div class="login__links">
           <button type="button" class="login__link" id="forgot-password-link">Nie pamiętasz hasła?</button>
           <span class="login__link-sep">·</span>
@@ -220,7 +220,7 @@
 
         <div class="onboarding__text" id="onboarding-text">
           <p class="onboarding__subtitle">Mroczna kraina wita cię,</p>
-          <h1 class="onboarding__title">wędrowcze</h1>
+          <h1 class="onboarding__title" data-ui-text="onboarding.greeting">wędrowcze</h1>
           <p class="onboarding__lore">Przygoda czeka. Każdy wybór kształtuje Twoją legendę.</p>
         </div>
 
@@ -509,7 +509,7 @@
         <span class="header__icon">⚔</span>
       </div>
       <div class="header__center">
-        <h1 class="header__title">Moi Bohaterowie</h1>
+        <h1 class="header__title" data-ui-text="heroes.title">Moi Bohaterowie</h1>
         <p class="header__subtitle" id="heroes-welcome">Witaj</p>
       </div>
       <button type="button" class="header__action" id="heroes-profile-btn" title="Mój Profil">
@@ -548,7 +548,7 @@
         <span class="header__icon">📜</span>
       </div>
       <div class="header__center">
-        <h1 class="header__title">Kampanie</h1>
+        <h1 class="header__title" data-ui-text="campaigns.title">Kampanie</h1>
         <p class="header__subtitle" id="welcome-user">Witaj</p>
       </div>
       <button type="button" class="header__action" id="logout-btn" title="Wybór bohatera">
@@ -1099,7 +1099,7 @@
             <line x1="8" y1="23" x2="16" y2="23"/>
           </svg>
         </button>
-        <input type="text" id="chat-input" class="composer__input" placeholder="Co robisz? Możesz pisać swobodnie...">
+        <input type="text" id="chat-input" class="composer__input" data-ui-text="game.composer_placeholder" placeholder="Co robisz? Możesz pisać swobodnie...">
         <button type="button" class="composer__palette" id="palette-btn" title="Komendy (Ctrl+/)" aria-label="Otwórz paletę komend">⌘</button>
         <div class="composer__tts-reading" id="tts-reading-overlay" hidden title="Dotknij, aby zatrzymać">
           <span></span><span></span><span></span><span></span><span></span>
@@ -1128,7 +1128,7 @@
       <div style="display:flex;gap:8px;padding:6px 12px 10px;align-items:flex-end">
         <textarea id="mp-action-input" rows="2"
           style="flex:1;resize:none;border-radius:10px;padding:10px 12px;font-size:15px;background:var(--bg2,#1e1e2e);color:var(--t1,#cdd6f4);border:1px solid var(--border,#313244);outline:none;font-family:inherit"
-          placeholder="Co robi Twoja postać w tej rundzie?"></textarea>
+          data-ui-text="game.composer_combat_placeholder" placeholder="Co robi Twoja postać w tej rundzie?"></textarea>
         <button id="mp-submit-btn" type="button" class="composer__send" style="height:44px;padding:0 18px;font-size:14px;border-radius:10px;white-space:nowrap">
           Wyślij akcję
         </button>
@@ -1721,7 +1721,7 @@
         </div>
         <div class="death-text">
           <p class="death-subtitle">Twój bohater</p>
-          <h1 class="death-title">poległ...</h1>
+          <h1 class="death-title" data-ui-text="game.death_title">poległ...</h1>
           <p class="death-name" id="death-character-name">Bohater</p>
         </div>
         <p class="death-epitaph" id="death-epitaph-text">Ciemność pochłonęła kolejną duszę...</p>
@@ -1774,7 +1774,7 @@
         </div>
         <div class="victory-text">
           <p class="victory-subtitle">Twoja przygoda dobiegła</p>
-          <h1 class="victory-title">triumfalnego końca</h1>
+          <h1 class="victory-title" data-ui-text="game.victory_title">triumfalnego końca</h1>
           <p class="victory-name" id="victory-character-name">Bohater</p>
           <p class="victory-meta" id="victory-character-meta"></p>
         </div>

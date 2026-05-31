@@ -4494,6 +4494,7 @@
         <button class="stab" data-systab="resurrection">Wskrzeszenie</button>
         <button class="stab" data-systab="email">Email</button>
         <button class="stab" data-systab="visual">Wygląd</button>
+        <button class="stab" data-systab="teksty">🗒 Teksty</button>
         <button class="stab" data-systab="voice">🔊 Głos</button>
         <button class="stab" data-systab="narration">📜 Narracja</button>
         <button class="stab" data-systab="gamemodes">🎮 Tryby gry</button>
@@ -4678,6 +4679,27 @@
         </div>
       </div>
 
+      <!-- Teksty stab — UI text CMS -->
+      <div class="stab-panel" id="systab-teksty" style="display:none">
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-header">
+            <span class="card-title">Teksty UI</span>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="txt-screen-filter" class="field-input" style="width:160px;font-size:0.82rem" onchange="_loadSysTeksty()">
+                <option value="">Wszystkie ekrany</option>
+                <option value="login">Logowanie</option>
+                <option value="heroes">Bohaterowie</option>
+                <option value="campaigns">Kampanie</option>
+                <option value="game">Gra</option>
+                <option value="onboarding">Onboarding</option>
+              </select>
+              <span class="badge badge-slate" id="txt-count-badge">—</span>
+            </div>
+          </div>
+          <div id="txt-list" style="display:flex;flex-direction:column;gap:10px;padding:4px 0"></div>
+        </div>
+      </div>
+
       <!-- Voice stab — Piper TTS · Whisper STT -->
       <div class="stab-panel" id="systab-voice" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
@@ -4794,13 +4816,18 @@
           <div class="card">
             <div class="card-header"><span class="card-title">STT — Rozpoznawanie mowy</span><span id="v-stt-enabled"></span></div>
             <div style="padding:12px 16px;display:flex;flex-direction:column;gap:10px">
-              <div class="form-row"><label class="form-label">Model</label>
+              <div>
+                <label class="form-label" style="margin-bottom:6px">Model Whisper</label>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px" id="whisper-preset-grid"></div>
+              </div>
+              <div class="form-row"><label class="form-label">Model (ręcznie)</label>
                 <select class="form-input" id="v-stt-model-select">
                   <option value="tiny">tiny</option>
                   <option value="base">base</option>
                   <option value="small">small</option>
                   <option value="medium">medium</option>
                   <option value="large-v2">large-v2</option>
+                  <option value="large-v3">large-v3</option>
                 </select>
               </div>
               <div class="form-row"><label class="form-label">Język (ISO)</label><input class="form-input" type="text" id="v-stt-lang-input" maxlength="5" placeholder="pl" style="width:80px"></div>
@@ -4975,8 +5002,24 @@
           </div>
           <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
             <div class="form-row" style="margin:0">
+              <label style="font-size:0.78rem;font-weight:600;color:var(--t2);margin-bottom:4px">Nadawca (nazwa w e-mailu)</label>
+              <input id="inv-sender" class="field-input" type="text" placeholder="Piotr Szmidt" value="Piotr Szmidt" style="font-size:0.82rem" />
+            </div>
+            <div class="form-row" style="margin:0">
               <label style="font-size:0.78rem;font-weight:600;color:var(--t2);margin-bottom:4px">E-mail gracza (opcjonalnie)</label>
               <input id="inv-email" class="field-input form-mono" type="email" placeholder="gracz@example.com" style="font-size:0.82rem" />
+            </div>
+            <div class="form-row" style="margin:0">
+              <label style="font-size:0.78rem;font-weight:600;color:var(--t2);margin-bottom:4px">Limit użyć</label>
+              <select id="inv-max-uses" class="field-input" style="font-size:0.82rem">
+                <option value="1">1 — jednorazowe (dla konkretnej osoby)</option>
+                <option value="5">5 użyć</option>
+                <option value="10">10 użyć</option>
+                <option value="25" selected>25 użyć (batch startowy)</option>
+                <option value="50">50 użyć</option>
+                <option value="100">100 użyć</option>
+                <option value="0">∞ — bez limitu</option>
+              </select>
             </div>
             <div class="form-row" style="margin:0">
               <label style="font-size:0.78rem;font-weight:600;color:var(--t2);margin-bottom:4px">Treść wiadomości</label>
@@ -4988,7 +5031,10 @@
           <!-- Result panel -->
           <div id="inv-result" style="display:none;border-top:1px solid var(--border)">
             <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px">
-              <div style="font-size:0.75rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em">Gotowe do wysłania</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div style="font-size:0.75rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em">Gotowe do wysłania</div>
+                <span id="inv-batch-badge" style="display:none;font-size:0.7rem;background:rgba(124,111,224,0.2);color:#a090e0;border:1px solid rgba(124,111,224,0.35);border-radius:4px;padding:1px 7px;font-weight:600"></span>
+              </div>
 
               <!-- Full message preview -->
               <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.8rem;line-height:1.6;white-space:pre-wrap;font-family:inherit;color:var(--t1);max-height:220px;overflow-y:auto" id="inv-full-msg"></div>
@@ -11656,6 +11702,7 @@
       // STT editable fields
       const modelSel = document.getElementById('v-stt-model-select');
       if (modelSel && config.stt_model) modelSel.value = config.stt_model;
+      _renderWhisperPresets(config.stt_model || 'base');
       setInp('v-stt-lang-input', config.stt_language);
       setInp('v-stt-beam-input', config.stt_beam_size);
       setChk('v-stt-vad-check', config.vad_filter);
@@ -11719,6 +11766,41 @@
       showToast('TTS zapisano.', 'success');
     } catch(e) { showToast('Błąd: '+e.message, 'error'); }
     finally { if (btn) btn.disabled = false; }
+  }
+
+  const _WHISPER_PRESETS = [
+    { model:'tiny',     size:'39 MB',  vram:'~200 MB',  desc:'najszybszy' },
+    { model:'base',     size:'74 MB',  vram:'~400 MB',  desc:'szybki' },
+    { model:'small',    size:'244 MB', vram:'~600 MB',  desc:'zbalansowany' },
+    { model:'medium',   size:'769 MB', vram:'~1.5 GB',  desc:'dobry PL' },
+    { model:'large-v2', size:'1.5 GB', vram:'~3 GB',    desc:'świetny' },
+    { model:'large-v3', size:'1.5 GB', vram:'~3 GB',    desc:'najlepszy PL ★' },
+  ];
+
+  function _renderWhisperPresets(activeModel) {
+    const grid = document.getElementById('whisper-preset-grid');
+    if (!grid) return;
+    grid.innerHTML = _WHISPER_PRESETS.map(p => {
+      const on = p.model === activeModel;
+      return `<div class="preset-card${on?' active':''}" onclick="selectWhisperPreset('${p.model}')" style="cursor:pointer;padding:7px 9px">
+        <div class="preset-card-top">
+          <div class="preset-dot${on?' active':''}"></div>
+          <span class="preset-name" style="font-size:0.8rem">${p.model}</span>
+        </div>
+        <div style="font-size:0.68rem;color:var(--t3)">${p.size} · ${p.vram}</div>
+        <div style="font-size:0.68rem;color:${on?'var(--blue)':'var(--t2)'};margin-top:2px">${p.desc}</div>
+      </div>`;
+    }).join('');
+  }
+
+  async function selectWhisperPreset(model) {
+    try {
+      await apiFetch('/voice/config', { method:'POST', body:JSON.stringify({ stt_model:model }) });
+      const sel = document.getElementById('v-stt-model-select');
+      if (sel) sel.value = model;
+      _renderWhisperPresets(model);
+      showToast(`Model STT: ${model}`, 'success');
+    } catch(e) { showToast('Błąd: '+e.message, 'error'); }
   }
 
   async function saveSTTConfig(btn) {
@@ -12423,7 +12505,7 @@
   function _loadSysTab(tab) {
     if (_sysTabLoaded.has(tab)) return;
     _sysTabLoaded.add(tab);
-    const fn = { llm: _loadSysLlm, database: _loadSysDatabase, config: () => {}, slash: _loadSysSlash, email: _loadSysEmail, visual: _loadSysVisual, resurrection: _loadSysResurrection, voice: _loadVoice, narration: _loadNarration, gamemodes: _loadGameModes }[tab];
+    const fn = { llm: _loadSysLlm, database: _loadSysDatabase, config: () => {}, slash: _loadSysSlash, email: _loadSysEmail, visual: _loadSysVisual, resurrection: _loadSysResurrection, teksty: _loadSysTeksty, voice: _loadVoice, narration: _loadNarration, gamemodes: _loadGameModes }[tab];
     if (fn) fn().catch(e => { _sysTabLoaded.delete(tab); console.warn('sys tab', tab, e.message); });
   }
 
@@ -13113,6 +13195,194 @@
       await _loadSysVisual();
     } catch(e) { _showToast(e.message || 'Błąd.', 'error'); }
   }
+
+  // ── Teksty tab ─────────────────────────────────────────────────────────────
+  let _txtData = [];
+
+  async function _loadSysTeksty() {
+    try {
+      const data = await apiFetch('/api/admin/ui-texts');
+      _txtData = data.texts || [];
+    } catch(e) { _showToast(e.message || 'Błąd ładowania tekstów.', 'error'); return; }
+    _renderTxtList();
+  }
+
+  function _renderTxtList() {
+    const filter = document.getElementById('txt-screen-filter')?.value || '';
+    const list = document.getElementById('txt-list');
+    if (!list) return;
+    const items = filter ? _txtData.filter(t => t.screen === filter) : _txtData;
+    const badge = document.getElementById('txt-count-badge');
+    if (badge) badge.textContent = items.length;
+    list.innerHTML = '';
+    if (!items.length) {
+      list.innerHTML = '<p style="color:var(--t3);padding:12px;text-align:center">Brak tekstów w tej kategorii.</p>';
+      return;
+    }
+    items.forEach(t => list.appendChild(_buildTxtCard(t)));
+  }
+
+  function _buildTxtCard(t) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.cssText = 'padding:14px;border-radius:10px;background:var(--bg2)';
+    const hasOverride = t.custom_text != null || t.font_family || t.font_size || t.font_weight || t.color || t.text_transform || t.letter_spacing || t.extra_css;
+    card.innerHTML = `
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="font-family:monospace;font-size:0.78rem;background:var(--bg3);padding:2px 6px;border-radius:4px;color:var(--t2)">${t.key}</span>
+            <span class="badge badge-slate" style="font-size:0.72rem">${t.screen || '—'}</span>
+            ${hasOverride ? '<span class="badge badge-green" style="font-size:0.72rem">Zmieniony</span>' : ''}
+          </div>
+          <div style="margin-top:4px;font-size:0.82rem;color:var(--t3)">${t.description || ''}</div>
+        </div>
+        ${hasOverride ? `<button class="btn btn-sm btn-secondary" onclick="_txtReset('${t.key}',this)" style="white-space:nowrap;font-size:0.78rem">↺ Reset</button>` : ''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:3px">Oryginalny tekst</label>
+          <div style="font-size:0.82rem;color:var(--t2);padding:6px 8px;background:var(--bg3);border-radius:6px;word-break:break-word">${_esc(t.original_text || '—')}</div>
+        </div>
+        <div>
+          <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:3px">Własny tekst <span style="color:var(--t4)">(puste = oryginał)</span></label>
+          <input type="text" class="field-input" data-txt-key="${t.key}" data-txt-field="custom_text"
+            value="${_esc(t.custom_text || '')}"
+            placeholder="${_esc(t.original_text || '')}"
+            style="width:100%;font-size:0.82rem">
+        </div>
+      </div>
+      <details style="margin-top:4px">
+        <summary style="font-size:0.78rem;color:var(--t3);cursor:pointer;user-select:none">Formatowanie ▸</summary>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+          <div>
+            <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:3px">Czcionka</label>
+            <select class="field-input" data-txt-key="${t.key}" data-txt-field="font_family" style="width:100%;font-size:0.82rem">
+              <option value="">—</option>
+              <option value="Inter, sans-serif" ${t.font_family==='Inter, sans-serif'?'selected':''}>Inter</option>
+              <option value="'Cinzel', serif" ${t.font_family==="'Cinzel', serif"?'selected':''}>Cinzel</option>
+              <option value="'Lora', serif" ${t.font_family==="'Lora', serif"?'selected':''}>Lora</option>
+              <option value="'Playfair Display', serif" ${t.font_family==="'Playfair Display', serif"?'selected':''}>Playfair Display</option>
+              <option value="'IM Fell English', serif" ${t.font_family==="'IM Fell English', serif"?'selected':''}>IM Fell English</option>
+              <option value="'Uncial Antiqua', cursive" ${t.font_family==="'Uncial Antiqua', cursive"?'selected':''}>Uncial Antiqua</option>
+              <option value="monospace" ${t.font_family==='monospace'?'selected':''}>Monospace</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:3px">Rozmiar</label>
+            <input type="text" class="field-input" data-txt-key="${t.key}" data-txt-field="font_size"
+              value="${_esc(t.font_size || '')}" placeholder="np. 1.5rem, 24px"
+              style="width:100%;font-size:0.82rem">
+          </div>
+          <div>
+            <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:3px">Grubość</label>
+            <select class="field-input" data-txt-key="${t.key}" data-txt-field="font_weight" style="width:100%;font-size:0.82rem">
+              <option value="">—</option>
+              <option value="400" ${t.font_weight==='400'?'selected':''}>400 (normal)</option>
+              <option value="500" ${t.font_weight==='500'?'selected':''}>500 (medium)</option>
+              <option value="600" ${t.font_weight==='600'?'selected':''}>600 (semibold)</option>
+              <option value="700" ${t.font_weight==='700'?'selected':''}>700 (bold)</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:3px">Kolor</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input type="color" data-txt-key="${t.key}" data-txt-field="color"
+                value="${t.color || '#ffffff'}"
+                style="width:36px;height:28px;border:none;border-radius:4px;cursor:pointer;background:transparent">
+              <input type="text" class="field-input" data-txt-key="${t.key}" data-txt-field="color_hex"
+                value="${_esc(t.color || '')}" placeholder="#ffffff"
+                style="flex:1;font-size:0.82rem">
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:3px">Transformacja</label>
+            <select class="field-input" data-txt-key="${t.key}" data-txt-field="text_transform" style="width:100%;font-size:0.82rem">
+              <option value="">—</option>
+              <option value="uppercase" ${t.text_transform==='uppercase'?'selected':''}>UPPERCASE</option>
+              <option value="lowercase" ${t.text_transform==='lowercase'?'selected':''}>lowercase</option>
+              <option value="capitalize" ${t.text_transform==='capitalize'?'selected':''}>Capitalize</option>
+              <option value="none" ${t.text_transform==='none'?'selected':''}>Brak</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:3px">Odstęp liter</label>
+            <input type="text" class="field-input" data-txt-key="${t.key}" data-txt-field="letter_spacing"
+              value="${_esc(t.letter_spacing || '')}" placeholder="np. 0.05em, 2px"
+              style="width:100%;font-size:0.82rem">
+          </div>
+        </div>
+        <div style="margin-top:8px">
+          <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:3px">Dodatkowe CSS <span style="color:var(--t4)">(zaawansowane)</span></label>
+          <input type="text" class="field-input" data-txt-key="${t.key}" data-txt-field="extra_css"
+            value="${_esc(t.extra_css || '')}" placeholder="np. text-shadow: 0 2px 8px #000"
+            style="width:100%;font-size:0.82rem">
+        </div>
+      </details>
+      <div style="display:flex;justify-content:flex-end;margin-top:10px">
+        <button class="btn btn-sm btn-primary" onclick="_txtSave('${t.key}',this)">Zapisz</button>
+      </div>`;
+    // sync color picker ↔ text input
+    const colorPicker = card.querySelector(`input[type=color][data-txt-key="${t.key}"]`);
+    const colorHex    = card.querySelector(`input[data-txt-field="color_hex"][data-txt-key="${t.key}"]`);
+    if (colorPicker && colorHex) {
+      colorPicker.addEventListener('input', () => { colorHex.value = colorPicker.value; });
+      colorHex.addEventListener('input', () => {
+        if (/^#[0-9a-f]{6}$/i.test(colorHex.value)) colorPicker.value = colorHex.value;
+      });
+    }
+    return card;
+  }
+
+  async function _txtSave(key, btn) {
+    btn.disabled = true;
+    btn.textContent = '...';
+    const container = btn.closest('.card');
+    const pick = (field) => {
+      const el = container.querySelector(`[data-txt-key="${key}"][data-txt-field="${field}"]`);
+      return el ? (el.value.trim() || null) : undefined;
+    };
+    // color: use typed hex value only; color picker is just a visual aid
+    const payload = {
+      custom_text:    pick('custom_text'),
+      font_family:    pick('font_family'),
+      font_size:      pick('font_size'),
+      font_weight:    pick('font_weight'),
+      color:          pick('color_hex'),
+      text_transform: pick('text_transform'),
+      letter_spacing: pick('letter_spacing'),
+      extra_css:      pick('extra_css'),
+    };
+    // strip undefined fields
+    Object.keys(payload).forEach(k => { if (payload[k] === undefined) delete payload[k]; });
+    try {
+      await apiFetch(`/api/admin/ui-texts/${key}`, {
+        method: 'PATCH',
+        body: JSON.stringify(payload),
+      });
+      _showToast('Zapisano.', 'success');
+      const idx = _txtData.findIndex(t => t.key === key);
+      if (idx >= 0) Object.assign(_txtData[idx], payload);
+      _renderTxtList();
+    } catch(e) {
+      _showToast(e.message || 'Błąd zapisu.', 'error');
+      btn.disabled = false; btn.textContent = 'Zapisz';
+    }
+  }
+
+  async function _txtReset(key, btn) {
+    if (!confirm(`Przywrócić oryginalny tekst dla "${key}"?`)) return;
+    btn.disabled = true;
+    try {
+      await apiFetch(`/api/admin/ui-texts/${key}/reset`, { method: 'POST' });
+      _showToast('Przywrócono oryginał.', 'success');
+      await _loadSysTeksty();
+    } catch(e) {
+      _showToast(e.message || 'Błąd.', 'error');
+      btn.disabled = false;
+    }
+  }
+  // ── end Teksty tab ──────────────────────────────────────────────────────────
 
   function _buildEnemyImagePrompt(e) {
     const tierMap = { weak:'weak creature, fragile enemy', standard:'standard fantasy enemy, combat ready', elite:'elite dangerous creature, powerful warrior', boss:'massive boss monster, terrifying creature, legendary' };
@@ -14297,13 +14567,28 @@
       const d = await apiFetch('/api/admin/invites');
       const invites = d.invites || [];
       if (!invites.length) { listEl.innerHTML = '<div style="color:var(--t3)">Brak aktywnych zaproszeń.</div>'; return; }
-      listEl.innerHTML = invites.map(inv => `<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <div>
-          <div class="td-mono" style="font-size:0.75rem">${_esc(inv.email||'—')}</div>
-          <div style="color:var(--t3);font-size:0.72rem">Od: ${_esc(inv.creator_name||'—')} · ${_esc(inv.expires_at?.slice(0,10)||'?')}</div>
-        </div>
-        ${!inv.used_at ? `<button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:0.72rem" onclick="revokeInvite(${inv.id},this)">Odwołaj</button>` : '<span class="badge badge-green">Użyte</span>'}
-      </div>`).join('');
+      listEl.innerHTML = invites.map(inv => {
+        const maxU = inv.max_uses ?? 1;
+        const usedC = inv.uses_count ?? 0;
+        const exhausted = maxU > 0 && usedC >= maxU;
+        let badge;
+        if (maxU === 1) {
+          badge = inv.used_at ? '<span class="badge badge-green">Użyte</span>' : '';
+        } else {
+          const limitLabel = maxU === 0 ? '∞' : String(maxU);
+          const color = exhausted ? '#4caf78' : '#a090e0';
+          badge = `<span style="font-size:0.7rem;background:rgba(160,144,224,0.15);color:${color};border:1px solid ${color}44;border-radius:4px;padding:1px 7px">${usedC}/${limitLabel}</span>`;
+        }
+        const canRevoke = !inv.used_at && !exhausted;
+        const revokeBtn = canRevoke ? `<button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:0.72rem" onclick="revokeInvite(${inv.id},this)">Odwołaj</button>` : '';
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="min-width:0;flex:1">
+            <div class="td-mono" style="font-size:0.75rem">${_esc(inv.email||'(otwarte)')}</div>
+            <div style="color:var(--t3);font-size:0.72rem">Od: ${_esc(inv.creator_name||'—')} · wygasa ${_esc(inv.expires_at?.slice(0,10)||'?')}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">${badge}${revokeBtn}</div>
+        </div>`;
+      }).join('');
     } catch(e) { if (listEl) listEl.innerHTML = `<div style="color:var(--red,#e55)">${_esc(e.message)}</div>`; }
   }
 
@@ -14384,8 +14669,12 @@ Niech kości się toczą! 🎲`,
     if (!_invLastCode) { _showToast('Najpierw wygeneruj zaproszenie.', 'error'); return; }
     if (!_invLastEmail) { _showToast('Brak adresu e-mail.', 'error'); return; }
     btn.disabled = true; btn.textContent = '⏳ Wysyłam…';
+    const inviterName = document.getElementById('inv-sender')?.value?.trim() || 'AI-GM';
     try {
-      await apiFetch(`/api/admin/invites/${_invLastCode}/send-email`, { method: 'POST' });
+      await apiFetch(`/api/admin/invites/${_invLastCode}/send-email`, {
+        method: 'POST',
+        body: JSON.stringify({ inviter_name: inviterName }),
+      });
       _showToast(`E-mail wysłany do ${_invLastEmail}`, 'success');
       btn.textContent = '✓ Wysłano';
     } catch(e) {
@@ -14397,9 +14686,10 @@ Niech kości się toczą! 🎲`,
   async function createInvite(btn) {
     const email = document.getElementById('inv-email')?.value?.trim() || null;
     const message = document.getElementById('inv-msg')?.value?.trim() || null;
+    const max_uses = parseInt(document.getElementById('inv-max-uses')?.value ?? '1', 10);
     btn.disabled = true; btn.textContent = '⏳';
     try {
-      const d = await apiFetch('/api/admin/invites', { method: 'POST', body: JSON.stringify({ email, message }) });
+      const d = await apiFetch('/api/admin/invites', { method: 'POST', body: JSON.stringify({ email, message, max_uses }) });
       // Build full link — backend may return relative path if APP_BASE_URL not set
       const rawLink = d.invite_link || '';
       _invCurrentLink = rawLink.startsWith('http') ? rawLink : `${_INV_BASE_URL}${rawLink}`;
@@ -14429,6 +14719,14 @@ Niech kości się toczą! 🎲`,
         sendBtn.style.display = email ? '' : 'none';
         sendBtn.disabled = false;
         sendBtn.textContent = '📧 Wyślij e-mail';
+      }
+
+      // Show batch badge if multi-use
+      const batchBadgeEl = document.getElementById('inv-batch-badge');
+      if (batchBadgeEl) {
+        if (max_uses === 0) { batchBadgeEl.textContent = '∞ bez limitu'; batchBadgeEl.style.display = ''; }
+        else if (max_uses > 1) { batchBadgeEl.textContent = `batch · ${max_uses} użyć`; batchBadgeEl.style.display = ''; }
+        else batchBadgeEl.style.display = 'none';
       }
 
       if (resultEl) resultEl.style.display = '';

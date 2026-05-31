@@ -852,6 +852,9 @@ ADMIN_MIGRATIONS = [
     "ALTER TABLE game_locations ADD COLUMN image_url TEXT DEFAULT NULL",
     "ALTER TABLE game_config_enemies ADD COLUMN image_url TEXT DEFAULT NULL",
     "ALTER TABLE npcs ADD COLUMN image_url TEXT DEFAULT NULL",
+    # Multi-use invite links — max_uses=0 means unlimited; uses_count tracks redemptions
+    "ALTER TABLE user_invites ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE user_invites ADD COLUMN uses_count INTEGER NOT NULL DEFAULT 0",
 ]
 
 ADMIN_SEEDS = [
@@ -3439,6 +3442,7 @@ def run_admin_migrations() -> None:
         _ensure_campaign_rounds_tables(conn)
         _ensure_multiplayer_lobby_schema(conn)
         _ensure_party_chat_table(conn)
+        _ensure_ui_texts_table(conn)
     finally:
         conn.close()
 
@@ -3734,3 +3738,36 @@ def _ensure_party_chat_table(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE party_messages ADD COLUMN whisper_to TEXT")
     conn.commit()
     logger.info("admin_migration_applied", label="party-chat-whisper")
+
+
+def _ensure_ui_texts_table(conn: sqlite3.Connection) -> None:
+    """UI Texts CMS — catalogue of player-visible strings editable from admin panel."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS ui_texts (
+            key           TEXT PRIMARY KEY,
+            screen        TEXT NOT NULL DEFAULT '',
+            description   TEXT NOT NULL DEFAULT '',
+            original_text TEXT NOT NULL DEFAULT '',
+            custom_text   TEXT,
+            font_family   TEXT,
+            font_size     TEXT,
+            font_weight   TEXT,
+            color         TEXT,
+            text_transform TEXT,
+            letter_spacing TEXT,
+            extra_css     TEXT,
+            updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+
+    # Seed the catalogue — uses INSERT OR IGNORE so existing custom overrides survive
+    from app.routers.admin_ui_texts import SEED_CATALOGUE
+    for entry in SEED_CATALOGUE:
+        conn.execute(
+            """INSERT OR IGNORE INTO ui_texts (key, screen, description, original_text)
+               VALUES (:key, :screen, :description, :original_text)""",
+            entry,
+        )
+    conn.commit()
+    logger.info("admin_migration_applied", label="ui-texts-table")

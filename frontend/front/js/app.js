@@ -395,6 +395,9 @@ async function apiRequest(method, endpoint, body = null) {
 // ============================================================================
 // Screen Navigation
 // ============================================================================
+// Screens that should persist in URL hash so F5 restores the same screen
+const _HASH_SCREENS = new Set(['heroes', 'campaigns']);
+
 function showScreen(screenName) {
     console.log('[Screen] Switching to:', screenName);
     Object.values(screens).forEach(screen => {
@@ -404,6 +407,12 @@ function showScreen(screenName) {
     if (screens[screenName]) {
         screens[screenName].classList.add('screen--active');
         currentScreen = screenName;
+        if (_HASH_SCREENS.has(screenName)) {
+            history.replaceState(null, '', `#${screenName}`);
+        } else if (!_HASH_SCREENS.has(screenName) && location.hash) {
+            // Clear hash when navigating away from a persisted screen
+            history.replaceState(null, '', location.pathname);
+        }
         // S12 follow-up: bottom bar is a game-screen affordance only.
         // Toggle a body class so CSS can both gate the bar's display AND
         // make room at the bottom of #game-screen so the composer isn't covered.
@@ -2739,6 +2748,47 @@ async function loadVisualSettings() {
         _visualSettings = res?.settings || null;
     } catch {
         _visualSettings = null;
+    }
+}
+
+// UI Texts CMS — apply admin-configured text and style overrides to all
+// elements carrying [data-ui-text] attributes. Fetched once on init.
+async function loadUiTextOverrides() {
+    try {
+        const res = await fetch('/api/ui/texts', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const texts = data?.texts || [];
+        if (!texts.length) return;
+        const map = {};
+        texts.forEach(t => { map[t.key] = t; });
+        document.querySelectorAll('[data-ui-text]').forEach(el => {
+            const entry = map[el.getAttribute('data-ui-text')];
+            if (!entry) return;
+            if (entry.custom_text != null) {
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    el.placeholder = entry.custom_text;
+                } else {
+                    el.textContent = entry.custom_text;
+                }
+            }
+            const styleProps = {
+                fontFamily:    entry.font_family,
+                fontSize:      entry.font_size,
+                fontWeight:    entry.font_weight,
+                color:         entry.color,
+                textTransform: entry.text_transform,
+                letterSpacing: entry.letter_spacing,
+            };
+            Object.entries(styleProps).forEach(([prop, val]) => {
+                if (val != null) el.style[prop] = val;
+            });
+            if (entry.extra_css) {
+                el.setAttribute('style', (el.getAttribute('style') || '') + ';' + entry.extra_css);
+            }
+        });
+    } catch {
+        // non-critical — silently skip
     }
 }
 
@@ -9769,6 +9819,9 @@ async function init() {
     // Warm the alias-aware slash-command cache (non-blocking)
     _fetchPublicSlashCommands();
 
+    // Apply admin text/style overrides early so they're visible before first screen
+    loadUiTextOverrides();
+
     if (checkUrlRouting()) return;
 
     if (checkAuth()) {
@@ -9778,7 +9831,14 @@ async function init() {
         if (elements.welcomeUser) elements.welcomeUser.textContent = `Witaj, ${displayName}`;
         await loadHeroes();
         if (await tryRestoreSession()) return;
-        showScreen('heroes');
+        // Restore screen from URL hash (e.g. F5 on campaigns screen)
+        const _hashScreen = location.hash.slice(1);
+        if (_hashScreen === 'campaigns') {
+            await loadCampaigns();
+            showScreen('campaigns');
+        } else {
+            showScreen('heroes');
+        }
     } else {
         showScreen('login');
     }
@@ -11146,44 +11206,63 @@ const _capturedJsErrors = [];
 })();
 
 function _makeDraggable(el) {
-    let startX, startY, startLeft, startTop, dragging = false;
+    let startY, startTop, dragging = false;
     const STORAGE_KEY = 'aigm_bugreport_pos';
+    const MARGIN = 8;
+
+    function parentH() {
+        const p = el.parentElement || document.getElementById('game-screen') || document.body;
+        return p.clientHeight || window.innerHeight;
+    }
+
+    function clampTop(top) {
+        const h = el.offsetHeight || 44;
+        return Math.max(MARGIN, Math.min(parentH() - h - MARGIN, top));
+    }
 
     function applyStoredPos() {
         try {
             const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-            if (p) { el.style.left = p.left; el.style.top = p.top; el.style.right = 'auto'; el.style.bottom = 'auto'; }
+            if (p && p.top != null) {
+                el.style.top    = clampTop(parseFloat(p.top) || 0) + 'px';
+                el.style.bottom = 'auto';
+                el.style.left   = 'auto';
+                el.style.right  = '16px';
+            }
         } catch {}
     }
     applyStoredPos();
+    window.addEventListener('resize', applyStoredPos);
 
     function onStart(cx, cy) {
         dragging = true;
-        startX = cx; startY = cy;
+        startY = cy;
         const rect = el.getBoundingClientRect();
-        startLeft = rect.left; startTop = rect.top;
-        el.style.left = startLeft + 'px'; el.style.top = startTop + 'px';
-        el.style.right = 'auto'; el.style.bottom = 'auto';
+        const parentRect = (el.parentElement || document.getElementById('game-screen') || document.body).getBoundingClientRect();
+        startTop = rect.top - parentRect.top;
+        el.style.top    = startTop + 'px';
+        el.style.bottom = 'auto';
+        el.style.left   = 'auto';
+        el.style.right  = '16px';
     }
     function onMove(cx, cy) {
         if (!dragging) return;
-        el.style.left = Math.max(0, Math.min(window.innerWidth - 50, startLeft + cx - startX)) + 'px';
-        el.style.top = Math.max(0, Math.min(window.innerHeight - 50, startTop + cy - startY)) + 'px';
+        el.style.top = clampTop(startTop + cy - startY) + 'px';
     }
     function onEnd(wasTap) {
         if (!dragging) return;
         dragging = false;
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ left: el.style.left, top: el.style.top })); } catch {}
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ top: el.style.top })); } catch {}
         if (wasTap) openBugReportModal();
     }
 
-    el.addEventListener('mousedown', e => { e.preventDefault(); const moved = { v: false }; onStart(e.clientX, e.clientY);
-        const mm = e2 => { if (Math.abs(e2.clientX - startX) > 4 || Math.abs(e2.clientY - startY) > 4) moved.v = true; onMove(e2.clientX, e2.clientY); };
+    el.addEventListener('mousedown', e => { e.preventDefault(); const sy = e.clientY; const moved = { v: false }; onStart(e.clientX, e.clientY);
+        const mm = e2 => { if (Math.abs(e2.clientY - sy) > 4) moved.v = true; onMove(e2.clientX, e2.clientY); };
         const mu = () => { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); onEnd(!moved.v); };
         document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu); });
 
-    el.addEventListener('touchstart', e => { const t = e.touches[0]; const moved = { v: false }; onStart(t.clientX, t.clientY);
-        const tm = e2 => { const t2 = e2.touches[0]; if (Math.abs(t2.clientX - startX) > 4 || Math.abs(t2.clientY - startY) > 4) moved.v = true; onMove(t2.clientX, t2.clientY); };
+    el.addEventListener('touchstart', e => { const t = e.touches[0]; const sy = t.clientY; const moved = { v: false }; onStart(t.clientX, t.clientY);
+        const tm = e2 => { const t2 = e2.touches[0]; if (Math.abs(t2.clientY - sy) > 4) moved.v = true; onMove(t2.clientX, t2.clientY); };
         const te = () => { el.removeEventListener('touchmove', tm); el.removeEventListener('touchend', te); onEnd(!moved.v); };
         el.addEventListener('touchmove', tm, { passive: true }); el.addEventListener('touchend', te); }, { passive: true });
 }
@@ -11197,7 +11276,7 @@ function _refreshBugReportButton() {
         btn.title = 'Zgłoś błąd (przeciągnij, żeby przenieść)';
         btn.innerHTML = '🐞';
         _makeDraggable(btn);
-        document.body.appendChild(btn);
+        (document.getElementById('game-screen') || document.body).appendChild(btn);
 
         const overlay = document.createElement('div');
         overlay.id = 'bug-report-overlay';
