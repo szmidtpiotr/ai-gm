@@ -11052,11 +11052,12 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 }
 
 /* ── Party Chat Panel ──────────────────────────────────────────────── */
-#party-chat-panel { width: 100%; }
+#party-chat-panel { width: 100%; position: relative; z-index: 20; }
 
 .mp-chat-panel {
   border-top: 1px solid rgba(255,255,255,.08);
   background: rgba(0,0,0,.18);
+  position: relative;
 }
 
 .mp-chat-panel__toggle {
@@ -11089,6 +11090,15 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 }
 
 .mp-chat-panel__body {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: rgba(10,9,8,.97);
+  border: 1px solid rgba(255,255,255,.1);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
   padding: 0 12px 8px;
 }
 

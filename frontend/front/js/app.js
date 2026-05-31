@@ -160,8 +160,6 @@ const elements = {
 
     // Admin Settings
     adminSettingsSection: document.getElementById('admin-settings-section'),
-    btnResetCampaign: document.getElementById('reset-campaign-btn'),
-    btnResetCharacter: document.getElementById('reset-character-btn'),
 
     // Service status dots
     svcDotBackend: document.getElementById('svc-dot-backend'),
@@ -302,6 +300,7 @@ function _canAdjSkill(origKey, delta) {
 // Stage 10 A2 — auto-refresh state. _refreshInFlight prevents a stampede when
 // multiple parallel requests get 401 simultaneously; they all await the same promise.
 let _refreshInFlight = null;
+let _mpInviteInterval = null;
 async function _tryRefreshAccessToken() {
     const refresh = localStorage.getItem('aigm_refresh_token');
     if (!refresh) return null;
@@ -413,6 +412,11 @@ function showScreen(screenName) {
         if (screenName !== 'game' && typeof stopCombatPolling === 'function') {
             stopCombatPolling();
             if (typeof hideCombatUI === 'function') hideCombatUI();
+        }
+        if (screenName === 'campaigns') {
+            if (!_mpInviteInterval) _mpInviteInterval = setInterval(loadPendingMpInvites, 10000);
+        } else {
+            clearInterval(_mpInviteInterval); _mpInviteInterval = null;
         }
         // Hide dungeon HUD on any screen except game
         if (screenName !== 'game') {
@@ -1248,37 +1252,50 @@ async function loadPendingMpInvites() {
         section.style.display = '';
 
         const lobbyHtml = lobbies.map(l => `
-          <div style="background:var(--bg2,#1e1e2e);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-left:3px solid var(--accent,#7c4dff)">
-            <div>
-              <div style="font-weight:600;font-size:14px">👥 ${l.title}</div>
-              <div style="font-size:12px;opacity:.6">host: ${l.host_username} · ${l.accepted_count}/${l.max_players} graczy · oczekuje na start</div>
+          <div class="mp-list-card mp-list-card--lobby">
+            <div class="mp-list-card__icon">👥</div>
+            <div class="mp-list-card__body">
+              <div class="mp-list-card__title">${l.title}</div>
+              <div class="mp-list-card__meta">${l.host_username} · ${l.accepted_count}/${l.max_players} graczy · lobby</div>
             </div>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-sm" style="font-size:12px" onclick="_showLobbyScreen(${l.campaign_id})">Wejdź</button>
-              ${l.role !== 'owner' ? `<button class="btn btn-sm" style="background:var(--bg3,#2a2a3e);font-size:12px" onclick="leaveMpLobby(${l.campaign_id})">Opuść</button>` : ''}
+            <div class="mp-list-card__actions">
+              <button class="lf-invite-btn" onclick="_showLobbyScreen(${l.campaign_id})">Wejdź</button>
+              ${l.role !== 'owner' ? `<button class="lf-invite-btn lf-invite-btn--muted" onclick="leaveMpLobby(${l.campaign_id})">Opuść</button>` : ''}
             </div>
           </div>`).join('');
 
         const inviteHtml = invites.map(inv => `
-          <div style="background:var(--bg2,#1e1e2e);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
-            <div>
-              <div style="font-weight:600;font-size:14px">${inv.title}</div>
-              <div style="font-size:12px;opacity:.6">od ${inv.host_username} · ${inv.max_players} graczy · zaproszenie</div>
+          <div class="mp-list-card mp-list-card--invite">
+            <div class="mp-list-card__icon">⚔</div>
+            <div class="mp-list-card__body">
+              <div class="mp-list-card__title">${inv.title}</div>
+              <div class="mp-list-card__meta">od @${inv.host_username} · ${inv.max_players} graczy</div>
             </div>
-            <div style="display:flex;gap:6px">
-              <button class="btn btn-sm" style="background:var(--green,#4caf50);font-size:12px" onclick="acceptMpInvite(${inv.campaign_id})">✓ Dołącz</button>
-              <button class="btn btn-sm" style="background:var(--bg3,#2a2a3e);font-size:12px" onclick="declineMpInvite(${inv.campaign_id})">✕</button>
+            <div class="mp-list-card__badge">zaproszenie</div>
+            <div class="mp-list-card__actions">
+              <button class="lf-invite-btn" onclick="acceptMpInvite(${inv.campaign_id})">Dołącz</button>
+              <button class="lf-invite-btn lf-invite-btn--muted" onclick="declineMpInvite(${inv.campaign_id})">✕</button>
             </div>
           </div>`).join('');
 
-        const activeHtml = activeGames.map(g => `
-          <div style="background:var(--bg2,#1e1e2e);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-left:3px solid var(--green,#4caf50)">
-            <div>
-              <div style="font-weight:600;font-size:14px">⚔ ${g.title}</div>
-              <div style="font-size:12px;opacity:.6">host: ${g.host_username} · ${g.player_count} graczy · w trakcie gry</div>
+        const activeHtml = activeGames.map(g => {
+            const leaveLabel = g.role === 'owner' ? 'Zakończ' : 'Opuść';
+            const leaveConfirm = g.role === 'owner'
+                ? `Zakończyć sesję multiplayer dla wszystkich?`
+                : `Opuścić sesję multiplayer?`;
+            return `
+          <div class="mp-list-card mp-list-card--active">
+            <div class="mp-list-card__icon">⚔</div>
+            <div class="mp-list-card__body">
+              <div class="mp-list-card__title">${g.title}</div>
+              <div class="mp-list-card__meta">${g.host_username} · ${g.player_count} graczy · w trakcie</div>
             </div>
-            <button class="btn btn-sm" style="background:var(--green,#4caf50);font-size:12px" onclick="enterMpGame(${g.campaign_id})">Graj</button>
-          </div>`).join('');
+            <div class="mp-list-card__actions">
+              <button class="lf-invite-btn" onclick="enterMpGame(${g.campaign_id})">Graj</button>
+              <button class="lf-invite-btn lf-invite-btn--muted" onclick="confirmLeaveMpGame(${g.campaign_id}, '${leaveConfirm}')">${leaveLabel}</button>
+            </div>
+          </div>`;
+        }).join('');
 
         list.innerHTML = activeHtml + lobbyHtml + inviteHtml;
     } catch (e) {
@@ -1321,6 +1338,11 @@ async function enterMpGame(campaignId) {
     } catch (e) {
         showToast('Błąd wejścia do gry: ' + e.message, 'error');
     }
+}
+
+async function confirmLeaveMpGame(campaignId, message) {
+    if (!confirm(message || 'Opuścić sesję multiplayer?')) return;
+    await leaveMpLobby(campaignId);
 }
 
 async function leaveMpLobby(campaignId) {
@@ -2844,7 +2866,9 @@ async function enterGame(campaign) {
             if (characterData) populateCharacterSheet(characterData);
             scrollToBottom();
             if (characterData?.id) {
-                window.multiplayerUI?.activate(campaign.id, characterData.id, characterData.name || 'Bohater');
+                const isHost = campaign.host_user_id === (currentUser?.id);
+                const timerMin = campaign.round_timer_minutes || ((campaign.round_timer_hours || 24) * 60);
+                window.multiplayerUI?.activate(campaign.id, characterData.id, characterData.name || 'Bohater', isHost, timerMin);
             }
             return;
         } else {
@@ -2887,7 +2911,9 @@ async function enterGame(campaign) {
     window.clog?.setContext({ campaign_id: campaign.id, character_id: characterData?.id, screen: 'game' });
     window.clog?.event('game_entered', { campaign_id: campaign.id, character_id: characterData?.id });
     if (campaign?.mode === 'multiplayer' && characterData?.id) {
-        window.multiplayerUI?.activate(campaign.id, characterData.id, characterData.name || 'Bohater');
+        const isHost = campaign.host_user_id === (currentUser?.id);
+        const timerMin = campaign.round_timer_minutes || ((campaign.round_timer_hours || 24) * 60);
+        window.multiplayerUI?.activate(campaign.id, characterData.id, characterData.name || 'Bohater', isHost, timerMin);
     }
     startCombatPolling();
 
@@ -4291,6 +4317,13 @@ async function handleSendMessage() {
     if (!content) return;
     if (window.multiplayerUI?.isActive() && !content.startsWith('/')) {
         await window.multiplayerUI.handleSubmit();
+        return;
+    }
+    // Redirect /whisper to party chat when multiplayer is active
+    if (window.multiplayerUI?.isActive() && /^\/whisper\s+\S+\s+.+$/i.test(content)) {
+        elements.chatInput.value = '';
+        hideCharCounter();
+        await window.multiplayerUI._sendChat?.(content);
         return;
     }
 
@@ -7755,6 +7788,9 @@ function updateAdminSettingsVisibility() {
     if (adminSection) adminSection.style.display = isAdmin ? 'block' : 'none';
     if (adminDivider) adminDivider.style.display = isAdmin ? 'flex' : 'none';
 
+    const mpInviteSection = document.getElementById('mp-invite-section');
+    if (mpInviteSection) mpInviteSection.style.display = currentCampaign?.mode === 'multiplayer' ? 'block' : 'none';
+
     // Stage 8 D3 — show the 🐛 toggle only when (admin) AND (debugMode on
     // via Settings → "🐛 Pokaż debug pod wiadomościami GM"). Hidden otherwise
     // to keep the production view clean.
@@ -9253,16 +9289,6 @@ function initEventListeners() {
         try { sessionStorage.removeItem('aigm_active_session'); } catch {}
         await loadHeroes();
         showScreen('heroes');
-    });
-
-    // Admin actions (C04-C06)
-    elements.btnResetCampaign?.addEventListener('click', handleResetCampaign);
-    elements.btnResetCharacter?.addEventListener('click', handleResetCharacter);
-
-    // Death screen test button
-    document.getElementById('test-death-btn')?.addEventListener('click', () => {
-        closeSettings();
-        showDeathScreen(characterData?.name || 'Bohater');
     });
 
     // Death screen buttons
@@ -11160,14 +11186,18 @@ function _refreshBugReportButton() {
         overlay.innerHTML = `
           <div class="bug-modal" role="dialog" aria-modal="true" aria-label="Zgłoszenie błędu">
             <div class="bug-modal__header">
-              <span class="bug-modal__title">Zgłoś błąd</span>
+              <span class="bug-modal__title" id="bug-modal-title">Zgłoś błąd</span>
               <button class="bug-modal__close" onclick="closeBugReportModal()" aria-label="Zamknij">✕</button>
             </div>
-            <div>
-              <label for="bug-observation">Co zaobserwowałeś?</label>
-              <textarea id="bug-observation" rows="4" placeholder="Opisz co się stało..."></textarea>
+            <div style="display:flex;gap:8px;margin-bottom:14px">
+              <button id="bug-type-bug" onclick="_setBugType('bug')" style="flex:1;padding:7px 0;border-radius:6px;border:2px solid #e55;background:rgba(220,50,50,0.18);color:#ff8080;font-size:0.82rem;cursor:pointer;font-weight:600">🐛 Błąd</button>
+              <button id="bug-type-feature" onclick="_setBugType('feature')" style="flex:1;padding:7px 0;border-radius:6px;border:2px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.45);font-size:0.82rem;cursor:pointer">💡 Sugestia</button>
             </div>
             <div>
+              <label for="bug-observation" id="bug-obs-label">Co zaobserwowałeś?</label>
+              <textarea id="bug-observation" rows="4" placeholder="Opisz co się stało..."></textarea>
+            </div>
+            <div id="bug-repro-row">
               <label for="bug-reproduction">Jak to odtworzyć?</label>
               <textarea id="bug-reproduction" rows="3" placeholder="Kroki które doprowadziły do błędu..."></textarea>
             </div>
@@ -11183,12 +11213,50 @@ function _refreshBugReportButton() {
     btn.hidden = !isTester;
 }
 
+let _bugReportType = 'bug';
+
+function _setBugType(type) {
+    _bugReportType = type;
+    const isBug = type === 'bug';
+    const btnBug = document.getElementById('bug-type-bug');
+    const btnFeat = document.getElementById('bug-type-feature');
+    const title = document.getElementById('bug-modal-title');
+    const obsLabel = document.getElementById('bug-obs-label');
+    const reproRow = document.getElementById('bug-repro-row');
+    const obs = document.getElementById('bug-observation');
+
+    if (isBug) {
+        btnBug.style.borderColor = '#e55';
+        btnBug.style.background = 'rgba(220,50,50,0.18)';
+        btnBug.style.color = '#ff8080';
+        btnFeat.style.borderColor = 'rgba(255,255,255,0.15)';
+        btnFeat.style.background = 'rgba(255,255,255,0.06)';
+        btnFeat.style.color = 'rgba(255,255,255,0.45)';
+        title.textContent = 'Zgłoś błąd';
+        obsLabel.textContent = 'Co zaobserwowałeś?';
+        obs.placeholder = 'Opisz co się stało...';
+        reproRow.style.display = '';
+    } else {
+        btnFeat.style.borderColor = '#7c5';
+        btnFeat.style.background = 'rgba(80,200,80,0.15)';
+        btnFeat.style.color = '#9f9';
+        btnBug.style.borderColor = 'rgba(255,255,255,0.15)';
+        btnBug.style.background = 'rgba(255,255,255,0.06)';
+        btnBug.style.color = 'rgba(255,255,255,0.45)';
+        title.textContent = 'Zgłoś sugestię';
+        obsLabel.textContent = 'Co chciałbyś zmienić lub dodać?';
+        obs.placeholder = 'Opisz pomysł lub sugestię...';
+        reproRow.style.display = 'none';
+    }
+}
+
 function openBugReportModal() {
     document.getElementById('bug-report-overlay').hidden = false;
     document.getElementById('bug-observation').value = '';
     document.getElementById('bug-reproduction').value = '';
     document.getElementById('bug-submit-btn').disabled = false;
     document.getElementById('bug-submit-btn').textContent = 'Wyślij zgłoszenie';
+    _setBugType('bug');
     document.getElementById('bug-observation').focus();
 }
 
@@ -11213,6 +11281,7 @@ async function submitBugReport() {
         const payload = {
             observation,
             reproduction,
+            report_type: _bugReportType,
             campaign_id: currentCampaignId || null,
             js_errors: _capturedJsErrors.slice(-10),
         };
