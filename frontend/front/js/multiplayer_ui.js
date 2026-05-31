@@ -191,7 +191,7 @@
         } catch (e) {
             // non-critical poll errors ignored
         }
-        _chatPollTimer = setTimeout(_pollChat, 5000);
+        if (_active) _chatPollTimer = setTimeout(_pollChat, 5000);
     }
 
     function _startChatPoll() {
