@@ -47,7 +47,9 @@ const screens = {
     campaignStyle: document.getElementById('campaign-style-screen'),
     prebuiltCampaign: document.getElementById('prebuilt-campaign-screen'),
     characterWizard: document.getElementById('character-wizard-screen'),
-    game: document.getElementById('game-screen')
+    game: document.getElementById('game-screen'),
+    'create-lobby-screen': document.getElementById('create-lobby-screen'),
+    'lobby-screen': document.getElementById('lobby-screen'),
 };
 
 const elements = {
@@ -1234,21 +1236,37 @@ async function loadPendingMpInvites() {
     const list = document.getElementById('mp-invites-list');
     if (!section || !list) return;
     try {
-        const data = await apiRequest('GET', '/multiplayer/my-invites');
-        const invites = data.invites || [];
-        if (invites.length === 0) { section.style.display = 'none'; return; }
+        const [invData, lobbyData] = await Promise.all([
+            apiRequest('GET', '/multiplayer/my-invites'),
+            apiRequest('GET', '/multiplayer/my-lobbies'),
+        ]);
+        const invites = invData.invites || [];
+        const lobbies = lobbyData.lobbies || [];
+        if (invites.length === 0 && lobbies.length === 0) { section.style.display = 'none'; return; }
         section.style.display = '';
-        list.innerHTML = invites.map(inv => `
+
+        const lobbyHtml = lobbies.map(l => `
+          <div style="background:var(--bg2,#1e1e2e);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-left:3px solid var(--accent,#7c4dff)">
+            <div>
+              <div style="font-weight:600;font-size:14px">👥 ${l.title}</div>
+              <div style="font-size:12px;opacity:.6">host: ${l.host_username} · ${l.accepted_count}/${l.max_players} graczy · oczekuje na start</div>
+            </div>
+            <button class="btn btn-sm" style="font-size:12px" onclick="_showLobbyScreen(${l.campaign_id})">Wejdź</button>
+          </div>`).join('');
+
+        const inviteHtml = invites.map(inv => `
           <div style="background:var(--bg2,#1e1e2e);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div>
               <div style="font-weight:600;font-size:14px">${inv.title}</div>
-              <div style="font-size:12px;opacity:.6">od ${inv.host_username} · ${inv.max_players} graczy</div>
+              <div style="font-size:12px;opacity:.6">od ${inv.host_username} · ${inv.max_players} graczy · zaproszenie</div>
             </div>
             <div style="display:flex;gap:6px">
               <button class="btn btn-sm" style="background:var(--green,#4caf50);font-size:12px" onclick="acceptMpInvite(${inv.campaign_id})">✓ Dołącz</button>
               <button class="btn btn-sm" style="background:var(--bg3,#2a2a3e);font-size:12px" onclick="declineMpInvite(${inv.campaign_id})">✕</button>
             </div>
           </div>`).join('');
+
+        list.innerHTML = lobbyHtml + inviteHtml;
     } catch (e) {
         section.style.display = 'none';
     }
@@ -9632,7 +9650,10 @@ async function tryRestoreSession() {
             }
         }
 
-        // Hero found but no active campaign — go to campaign chooser
+        // Hero found but no active campaign — check for pending lobby restore
+        if (typeof tryRestoreLobbySession === 'function' && await tryRestoreLobbySession()) {
+            return true;
+        }
         await loadCampaigns();
         showScreen('campaigns');
         return true;

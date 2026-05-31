@@ -389,6 +389,33 @@ def my_pending_invites(
         conn.close()
 
 
+# ── My active lobbies ─────────────────────────────────────────────────────────
+
+@router.get("/multiplayer/my-lobbies")
+def my_active_lobbies(
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    conn = _db()
+    try:
+        rows = conn.execute(
+            """SELECT c.id as campaign_id, c.title, c.system_id, c.round_timer_hours,
+                      c.max_players, c.host_user_id, u.username as host_username,
+                      m.status, m.role,
+                      (SELECT COUNT(*) FROM campaign_members cm WHERE cm.campaign_id=c.id AND cm.status='accepted') as accepted_count
+               FROM campaign_members m
+               JOIN campaigns c ON c.id=m.campaign_id
+               JOIN users u ON u.id=c.host_user_id
+               WHERE m.user_id=? AND c.mode='multiplayer'
+                 AND m.status='accepted' AND c.lobby_status='open'""",
+            (uid,),
+        ).fetchall()
+        return {"lobbies": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
 # ── Round endpoints ────────────────────────────────────────────────────────────
 
 class SubmitActionReq(BaseModel):

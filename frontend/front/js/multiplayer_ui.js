@@ -324,9 +324,31 @@ async function createLobby() {
 
 async function _showLobbyScreen(campaignId) {
     _lobbyId = campaignId;
+    localStorage.setItem('aigm_lobby_id', String(campaignId));
     if (typeof showScreen === 'function') showScreen('lobby-screen');
     await _refreshLobby();
     _startLobbyPoll();
+}
+
+function _clearLobbySession() {
+    _lobbyId = null;
+    localStorage.removeItem('aigm_lobby_id');
+    _stopLobbyPoll();
+}
+
+async function tryRestoreLobbySession() {
+    const saved = localStorage.getItem('aigm_lobby_id');
+    if (!saved) return false;
+    try {
+        // Verify lobby still open and user is a member
+        const data = await _lobbyFetch(`/multiplayer/campaigns/${saved}/lobby`);
+        if (data.lobby_status !== 'open') { _clearLobbySession(); return false; }
+        await _showLobbyScreen(Number(saved));
+        return true;
+    } catch (e) {
+        _clearLobbySession();
+        return false;
+    }
 }
 
 async function _refreshLobby() {
@@ -380,10 +402,9 @@ function _renderLobby(data) {
     }
 
     if (data.lobby_status === 'started') {
-        _stopLobbyPoll();
-        // Campaign is started — load it as a multiplayer campaign
+        _clearLobbySession();
         if (typeof loadCampaigns === 'function') {
-            loadCampaigns().then(() => { if (typeof showScreen === 'function') showScreen('campaigns-screen'); });
+            loadCampaigns().then(() => { if (typeof showScreen === 'function') showScreen('campaigns'); });
         }
     }
 }
@@ -441,10 +462,10 @@ async function startLobby() {
     if (!_lobbyId) return;
     try {
         await _lobbyFetch(`/multiplayer/campaigns/${_lobbyId}/start`, { method: 'POST' });
-        _stopLobbyPoll();
+        _clearLobbySession();
         if (typeof loadCampaigns === 'function') {
             await loadCampaigns();
-            if (typeof showScreen === 'function') showScreen('campaigns-screen');
+            if (typeof showScreen === 'function') showScreen('campaigns');
         }
     } catch (e) {
         const hint = document.getElementById('lobby-start-hint');
