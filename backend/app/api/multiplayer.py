@@ -1,5 +1,6 @@
 """Multiplayer API — lobby creation, invites, round submission, narration."""
 
+import json
 import secrets
 import sqlite3
 import threading
@@ -20,6 +21,19 @@ logger = get_logger(__name__)
 INVITE_TTL_DAYS = 7
 
 
+def _send_invite_push(user_id: int, camp_title: str) -> None:
+    try:
+        from app.services.push_notification_service import send_push
+        send_push(
+            user_id,
+            "Nowe zaproszenie ⚔",
+            f"Zostałeś zaproszony do \"{camp_title}\". Otwórz Kampanie, aby dołączyć.",
+            url="/",
+        )
+    except Exception as e:
+        logger.warning("push_invite_failed", error=str(e)[:100])
+
+
 def _db() -> sqlite3.Connection:
     conn = sqlite3.connect(resolve_db_path())
     conn.row_factory = sqlite3.Row
@@ -31,8 +45,12 @@ def _db() -> sqlite3.Connection:
 class CreateLobbyReq(BaseModel):
     title: str
     system_id: str = "fantasy"
-    round_timer_hours: int = 24
+    round_timer_minutes: int = 1440  # default 24h
     max_players: int = 4
+
+
+class UpdateTimerReq(BaseModel):
+    round_timer_minutes: int
 
 
 @router.post("/multiplayer/campaigns")
@@ -46,18 +64,19 @@ def create_lobby(
         raise HTTPException(status_code=400, detail="title required")
     if body.max_players < 2 or body.max_players > 4:
         raise HTTPException(status_code=400, detail="max_players must be 2-4")
-    if body.round_timer_hours not in (12, 24, 48):
-        raise HTTPException(status_code=400, detail="round_timer_hours must be 12, 24 or 48")
+    if body.round_timer_minutes < 1 or body.round_timer_minutes > 4320:
+        raise HTTPException(status_code=400, detail="round_timer_minutes must be 1–4320")
 
     conn = _db()
     try:
         cur = conn.execute(
             """INSERT INTO campaigns
                (title, system_id, owner_user_id, mode, status,
-                round_timer_hours, max_players, host_user_id, lobby_status)
-               VALUES (?, ?, ?, 'multiplayer', 'active', ?, ?, ?, 'open')""",
+                round_timer_hours, round_timer_minutes, max_players, host_user_id, lobby_status)
+               VALUES (?, ?, ?, 'multiplayer', 'active', ?, ?, ?, ?, 'open')""",
             (body.title.strip(), body.system_id, uid,
-             body.round_timer_hours, body.max_players, uid),
+             max(1, body.round_timer_minutes // 60), body.round_timer_minutes,
+             body.max_players, uid),
         )
         campaign_id = cur.lastrowid
         conn.execute(
@@ -66,6 +85,36 @@ def create_lobby(
         )
         conn.commit()
         return {"campaign_id": campaign_id, "title": body.title.strip(), "lobby_status": "open"}
+    finally:
+        conn.close()
+
+
+@router.patch("/multiplayer/campaigns/{campaign_id}/timer")
+def update_round_timer(
+    campaign_id: int,
+    body: UpdateTimerReq,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    if body.round_timer_minutes < 1 or body.round_timer_minutes > 4320:
+        raise HTTPException(status_code=400, detail="round_timer_minutes must be 1–4320")
+    conn = _db()
+    try:
+        camp = conn.execute(
+            "SELECT host_user_id FROM campaigns WHERE id=? AND mode='multiplayer'",
+            (campaign_id,),
+        ).fetchone()
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        if camp["host_user_id"] != uid:
+            raise HTTPException(status_code=403, detail="Only host can change timer")
+        conn.execute(
+            "UPDATE campaigns SET round_timer_minutes=?, round_timer_hours=? WHERE id=?",
+            (body.round_timer_minutes, max(1, body.round_timer_minutes // 60), campaign_id),
+        )
+        conn.commit()
+        return {"round_timer_minutes": body.round_timer_minutes}
     finally:
         conn.close()
 
@@ -80,7 +129,9 @@ def get_lobby(
     conn = _db()
     try:
         camp = conn.execute(
-            "SELECT id, title, system_id, round_timer_hours, max_players, host_user_id, lobby_status "
+            "SELECT id, title, system_id, round_timer_hours, "
+            "COALESCE(round_timer_minutes, round_timer_hours*60) as round_timer_minutes, "
+            "max_players, host_user_id, lobby_status "
             "FROM campaigns WHERE id=? AND mode='multiplayer'",
             (campaign_id,),
         ).fetchone()
@@ -99,6 +150,7 @@ def get_lobby(
             "title": camp["title"],
             "system_id": camp["system_id"],
             "round_timer_hours": camp["round_timer_hours"],
+            "round_timer_minutes": int(camp["round_timer_minutes"]),
             "max_players": camp["max_players"],
             "host_user_id": camp["host_user_id"],
             "lobby_status": camp["lobby_status"],
@@ -144,9 +196,6 @@ def invite_by_username(
             raise HTTPException(status_code=404, detail="Lobby not found")
         if camp["host_user_id"] != uid:
             raise HTTPException(status_code=403, detail="Only host can invite")
-        if camp["lobby_status"] != "open":
-            raise HTTPException(status_code=400, detail="Lobby already started")
-
         target = conn.execute(
             "SELECT id, username FROM users WHERE username=?", (body.username.strip(),)
         ).fetchone()
@@ -167,9 +216,20 @@ def invite_by_username(
             (campaign_id, target["id"]),
         )
         conn.commit()
-        return {"invited": target["username"], "status": "pending"}
+        invited_uid = int(target["id"])
+        username = target["username"]
+        camp_title_row = conn.execute("SELECT title FROM campaigns WHERE id=?", (campaign_id,)).fetchone()
+        camp_title = camp_title_row["title"] if camp_title_row else "kampanii"
     finally:
         conn.close()
+
+    if invited_uid:
+        threading.Thread(
+            target=_send_invite_push,
+            args=(invited_uid, camp_title),
+            daemon=True,
+        ).start()
+    return {"invited": username, "status": "pending"}
 
 
 @router.post("/multiplayer/campaigns/{campaign_id}/invite-link")
@@ -276,10 +336,101 @@ def accept_invite(
             "UPDATE campaign_members SET status='accepted' WHERE campaign_id=? AND user_id=?",
             (campaign_id, uid),
         )
+        camp = conn.execute(
+            "SELECT title, lobby_status FROM campaigns WHERE id=?", (campaign_id,)
+        ).fetchone()
+        joining_name = conn.execute(
+            "SELECT display_name, username FROM users WHERE id=?", (uid,)
+        ).fetchone()
+        existing = conn.execute(
+            """SELECT u.display_name, u.username FROM campaign_members m
+               JOIN users u ON u.id = m.user_id
+               WHERE m.campaign_id=? AND m.user_id!=? AND m.status='accepted'""",
+            (campaign_id, uid),
+        ).fetchall()
         conn.commit()
+        # Fire arrival narration if joining a started campaign
+        if camp and camp["lobby_status"] == "started" and joining_name:
+            new_name = joining_name["display_name"] or joining_name["username"]
+            existing_names = [(r["display_name"] or r["username"]) for r in existing]
+            campaign_title = camp["title"]
+            threading.Thread(
+                target=_narrate_arrival,
+                args=(campaign_id, new_name, existing_names, campaign_title),
+                daemon=True,
+            ).start()
         return {"status": "accepted"}
     finally:
         conn.close()
+
+
+_ARRIVAL_SYSTEM = (
+    "Jesteś Mistrzem Gry w tekstowej grze RPG osadzonej w mrocznym świecie fantasy. "
+    "Odpowiadasz WYŁĄCZNIE po polsku. Narruj w TRZECIEJ osobie. "
+    'Odpowiedź MUSI być poprawnym JSON: {"narrative": "narracja przybycia postaci"}'
+)
+
+
+def _narrate_arrival(campaign_id: int, new_player: str, existing: list, title: str) -> None:
+    from app.services import llm_service
+
+    others = ", ".join(existing) if existing else "grupą podróżnych"
+    user_msg = (
+        f"Kampania: {title}\n"
+        f"Drużyna w grze: {others}\n"
+        f"Dołącza nowy gracz: {new_player}\n\n"
+        "Napisz krótką narrację (2-3 zdania) opisującą jak ta postać dołącza do drużyny — "
+        "przypadkowe spotkanie na drodze, w karczmie, otwarcie celi więziennej, wspólna ucieczka itp. "
+        "Narruj naturalnie, jakby to był zbieg okoliczności lub przeznaczenie."
+    )
+    try:
+        cfg = llm_service.get_effective_config()
+        provider = cfg["provider"]
+        if provider == "openai":
+            driver = llm_service.OpenAIDriver()
+        elif provider == "azure":
+            driver = llm_service.AzureDriver()
+        else:
+            driver = llm_service.OllamaDriver()
+        raw = driver.generate_chat(
+            base_url=cfg["base_url"],
+            model=cfg["model"],
+            messages=[
+                {"role": "system", "content": _ARRIVAL_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+            api_key=cfg.get("api_key", ""),
+        )
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        parsed = json.loads(clean)
+    except Exception as e:
+        logger.error("arrival_narration_failed", campaign_id=campaign_id, error=str(e)[:200])
+        parsed = {"narrative": f"{new_player} dołącza do drużyny, gotowy na nadchodzące przygody."}
+
+    conn = _db()
+    try:
+        conn.execute(
+            """INSERT OR IGNORE INTO campaign_rounds (campaign_id, round_number, status, narrative_json, closed_at)
+               VALUES (?, (SELECT COALESCE(MAX(round_number), 0)+1 FROM campaign_rounds WHERE campaign_id=?),
+                       'done', ?, datetime('now'))""",
+            (campaign_id, campaign_id, json.dumps(parsed, ensure_ascii=False)),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    logger.info("arrival_narration_done", campaign_id=campaign_id, new_player=new_player)
+
+
+@router.post("/multiplayer/campaigns/{campaign_id}/leave")
+def leave_multiplayer_campaign(
+    campaign_id: int,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    return svc.leave_campaign(campaign_id, uid)
 
 
 @router.post("/multiplayer/campaigns/{campaign_id}/decline")
@@ -338,7 +489,7 @@ def start_lobby(
     conn = _db()
     try:
         camp = conn.execute(
-            "SELECT host_user_id, lobby_status FROM campaigns WHERE id=? AND mode='multiplayer'",
+            "SELECT host_user_id, lobby_status, title FROM campaigns WHERE id=? AND mode='multiplayer'",
             (campaign_id,),
         ).fetchone()
         if not camp:
@@ -348,20 +499,97 @@ def start_lobby(
         if camp["lobby_status"] != "open":
             raise HTTPException(status_code=400, detail="Already started")
 
-        accepted = int(conn.execute(
-            "SELECT COUNT(*) FROM campaign_members WHERE campaign_id=? AND status='accepted'",
+        players = conn.execute(
+            """SELECT u.display_name, u.username FROM campaign_members m
+               JOIN users u ON u.id = m.user_id
+               WHERE m.campaign_id=? AND m.status='accepted'""",
             (campaign_id,),
-        ).fetchone()[0])
-        if accepted < 2:
-            raise HTTPException(status_code=400, detail="Need at least 2 accepted players to start")
+        ).fetchall()
+        player_names = [(r["display_name"] or r["username"]) for r in players]
 
         conn.execute(
             "UPDATE campaigns SET lobby_status='started' WHERE id=?", (campaign_id,)
         )
+        # Reserve round 1 immediately (status='done', narrative_json=NULL).
+        # Frontend polls status → sees 'done' → waits for narration.
+        # LLM thread fills in narrative_json when ready.
+        conn.execute(
+            "INSERT OR IGNORE INTO campaign_rounds (campaign_id, round_number, status) VALUES (?, 1, 'done')",
+            (campaign_id,),
+        )
+        opening_round = conn.execute(
+            "SELECT id FROM campaign_rounds WHERE campaign_id=? AND round_number=1",
+            (campaign_id,),
+        ).fetchone()
+        opening_round_id = int(opening_round["id"])
         conn.commit()
-        return {"campaign_id": campaign_id, "lobby_status": "started", "players": accepted}
+
+        threading.Thread(
+            target=_narrate_opening,
+            args=(campaign_id, opening_round_id, camp["title"], player_names),
+            daemon=True,
+        ).start()
+
+        return {"campaign_id": campaign_id, "lobby_status": "started", "players": len(player_names)}
     finally:
         conn.close()
+
+
+_OPENING_SYSTEM = (
+    "Jesteś Mistrzem Gry w tekstowej grze RPG osadzonej w mrocznym świecie fantasy. "
+    "Odpowiadasz WYŁĄCZNIE po polsku. Narruj w TRZECIEJ osobie. "
+    'Odpowiedź MUSI być poprawnym JSON: {"narrative": "narracja otwierająca"}'
+)
+
+
+def _narrate_opening(campaign_id: int, round_id: int, title: str, players: list) -> None:
+    from app.services import llm_service
+
+    names = ", ".join(players) if players else "bohater"
+    user_msg = (
+        f"Kampania: {title}\n"
+        f"Drużyna: {names}\n\n"
+        "Napisz narrację otwierającą sesję RPG (3-4 zdania). "
+        "Opisz mroczne miejsce gdzie drużyna się znajduje — karczmę, ruiny, las, lochy — "
+        "i nastrój sceny. Zaintryguj graczy, zasugeruj nadchodzące niebezpieczeństwo lub tajemnicę. "
+        "Nie zadawaj pytań graczom — to opis sceny otwierającej."
+    )
+    try:
+        cfg = llm_service.get_effective_config()
+        provider = cfg["provider"]
+        if provider == "openai":
+            driver = llm_service.OpenAIDriver()
+        elif provider == "azure":
+            driver = llm_service.AzureDriver()
+        else:
+            driver = llm_service.OllamaDriver()
+        raw = driver.generate_chat(
+            base_url=cfg["base_url"],
+            model=cfg["model"],
+            messages=[
+                {"role": "system", "content": _OPENING_SYSTEM},
+                {"role": "user", "content": user_msg},
+            ],
+            api_key=cfg.get("api_key", ""),
+        )
+        clean = raw.strip()
+        if clean.startswith("```"):
+            clean = clean.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        parsed = json.loads(clean)
+    except Exception as e:
+        logger.error("opening_narration_failed", campaign_id=campaign_id, error=str(e)[:200])
+        parsed = {"narrative": "Przygoda się zaczyna. Mroczny świat czeka na bohaterów."}
+
+    conn = _db()
+    try:
+        conn.execute(
+            "UPDATE campaign_rounds SET narrative_json=?, closed_at=datetime('now') WHERE id=?",
+            (json.dumps(parsed, ensure_ascii=False), round_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    logger.info("opening_narration_done", campaign_id=campaign_id)
 
 
 # ── My pending invites ────────────────────────────────────────────────────────
@@ -467,7 +695,7 @@ def submit_round_action(
         action_text=body.action_text.strip(),
     )
 
-    if result["status"] == "narrating":
+    if result.get("just_transitioned"):
         threading.Thread(
             target=svc.trigger_narration,
             args=(result["round_id"],),
@@ -501,3 +729,14 @@ def get_round_narration(
     if narration is None:
         raise HTTPException(status_code=404, detail="No completed narration available")
     return narration
+
+
+@router.get("/campaigns/{campaign_id}/rounds/history")
+def get_rounds_history(
+    campaign_id: int,
+    authorization: Optional[str] = Header(None),
+    user_id: Optional[int] = Query(None),
+):
+    uid = resolve_authed_user_id(authorization, user_id)
+    rounds = svc.get_rounds_history(campaign_id, uid)
+    return {"rounds": rounds}
