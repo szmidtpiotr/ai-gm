@@ -5001,7 +5001,7 @@
       <div id="br-drawer-backdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:800;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeBrDrawer()">
         <div id="br-drawer" style="background:var(--bg2,#161310);border:1px solid var(--border);border-radius:12px;width:100%;max-width:680px;max-height:90vh;min-width:320px;min-height:200px;overflow:auto;resize:both;padding:24px;box-shadow:0 16px 64px rgba(0,0,0,0.7)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px">
-            <div style="font-weight:700;font-size:15px">Zgłoszenie #<span id="br-detail-id"></span> <span id="br-gh-status-badge"></span></div>
+            <div style="font-weight:700;font-size:15px">Zgłoszenie #<span id="br-detail-id"></span> <span id="br-type-badge"></span> <span id="br-gh-status-badge"></span></div>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <button class="btn btn-secondary btn-sm" id="br-toggle-btn" onclick="toggleBrView()">{ } JSON</button>
               <button class="btn btn-secondary btn-sm" id="br-sync-btn" onclick="syncBrGitHub()">🔄 Sync GitHub</button>
@@ -15441,12 +15441,26 @@
             <td>${statusBadge}</td>
             <td style="text-align:center">${r.subscription_count}</td>
             <td style="font-size:12px;color:var(--t3)">${lastSub}</td>
-            <td>${hasSub ? `<button class="btn btn-secondary btn-sm" onclick="_quickTestPush(${r.user_id},'${r.username}')">🔔 Test</button>` : '<span style="color:var(--t3);font-size:12px">—</span>'}</td>
+            <td style="display:flex;gap:6px;align-items:center">
+              ${hasSub ? `<button class="btn btn-secondary btn-sm" onclick="_quickTestPush(${r.user_id},'${r.username}')">🔔 Test</button>` : '<span style="color:var(--t3);font-size:12px">—</span>'}
+              ${hasSub ? `<button class="btn btn-sm" style="background:rgba(229,57,53,.12);border:1px solid rgba(229,57,53,.3);color:var(--red,#e53935)" onclick="_revokePushSubscription(${r.user_id},'${r.username}')" title="Usuń subskrypcję — gracz będzie pytany o zgodę ponownie">✕ Usuń</button>` : ''}
+            </td>
           </tr>`;
         }).join('') || `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--t3)">Brak użytkowników</td></tr>`;
       }
     } catch(e) {
       if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--red)">Błąd: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function _revokePushSubscription(userId, username) {
+    if (!confirm(`Usunąć subskrypcję push dla @${username}?\nGracz będzie pytany o zgodę ponownie przy kolejnym logowaniu.`)) return;
+    try {
+      await apiFetch(`/api/admin/push/subscriptions/${userId}`, { method: 'DELETE' });
+      _sectionLoaded.delete('push');
+      _loadPush();
+    } catch(e) {
+      alert('Błąd: ' + e.message);
     }
   }
 
@@ -15525,10 +15539,13 @@
               ? `<span class="badge badge-green">✓ closed</span>`
               : `<span class="badge badge-amber">● open</span>`)
           : '—';
+        const typeCell = r.report_type === 'feature'
+          ? `<span class="badge badge-green" style="font-size:0.7rem">💡</span>`
+          : `<span class="badge badge-red" style="font-size:0.7rem">🐛</span>`;
         return `<tr style="cursor:pointer" onclick="openBrDrawer(${i})">
           <td class="td-mono" style="font-size:0.78rem;white-space:nowrap">${date}</td>
-          <td><span class="badge badge-blue">${_esc(r.username || '?')}</span></td>
-          <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obs}</td>
+          <td>${typeCell} <span class="badge badge-blue">${_esc(r.username || '?')}</span></td>
+          <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${obs}</td>
           <td>${ghLink}</td>
           <td>${statusCell}</td>
           <td><button class="btn-icon" onclick="event.stopPropagation();openBrDrawer(${i})">▶</button></td>
@@ -15665,6 +15682,10 @@
 
     document.getElementById('br-detail-id').textContent = r.id;
     document.getElementById('br-delete-btn').disabled = false;
+    const typeBadge = document.getElementById('br-type-badge');
+    if (typeBadge) typeBadge.innerHTML = r.report_type === 'feature'
+      ? '<span class="badge badge-green">💡 Sugestia</span>'
+      : '<span class="badge badge-red">🐛 Błąd</span>';
 
     const toggleBtn = document.getElementById('br-toggle-btn');
     if (toggleBtn) toggleBtn.textContent = '{ } JSON';

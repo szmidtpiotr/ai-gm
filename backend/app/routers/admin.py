@@ -2190,6 +2190,7 @@ def admin_bug_reports(_: None = Depends(require_admin_token)):
             """
             SELECT br.id, br.user_id, COALESCE(u.username, '?') AS username,
                    br.campaign_id, br.observation, br.reproduction,
+                   COALESCE(br.report_type, 'bug') AS report_type,
                    br.context_json, br.github_issue_url, br.github_issue_number,
                    COALESCE(br.github_status, 'open') AS github_status,
                    br.created_at
@@ -2208,6 +2209,7 @@ def admin_bug_reports(_: None = Depends(require_admin_token)):
                 "campaign_id": r["campaign_id"],
                 "observation": r["observation"],
                 "reproduction": r["reproduction"],
+                "report_type": r["report_type"],
                 "context_json": r["context_json"],
                 "github_issue_url": r["github_issue_url"],
                 "github_issue_number": r["github_issue_number"],
@@ -4771,3 +4773,21 @@ def admin_push_send_test(
         vibrate=req.vibrate or None,
     )
     return {"ok": True, "user_id": req.user_id}
+
+
+@router.delete("/admin/push/subscriptions/{user_id}")
+def admin_revoke_push_subscriptions(
+    user_id: int,
+    authorization: str | None = Header(default=None),
+    _: None = Depends(require_admin_token),
+):
+    """Delete all push subscriptions for a user — forces re-permission on next login."""
+    conn = sqlite3.connect("/data/ai_gm.db")
+    try:
+        deleted = conn.execute(
+            "DELETE FROM user_push_subscriptions WHERE user_id = ?", (user_id,)
+        ).rowcount
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "user_id": user_id, "deleted": deleted}

@@ -30,7 +30,8 @@ def _now_iso() -> str:
 
 class BugReportReq(BaseModel):
     observation: str
-    reproduction: str
+    reproduction: str = ""
+    report_type: str = "bug"
     campaign_id: int | None = None
     js_errors: list[dict] | None = None
 
@@ -326,7 +327,10 @@ async def submit_bug_report(
     ctx = _collect_context(user_id, req.campaign_id)
     ua = (user_agent or "unknown")[:300]
 
-    title = f"[BUG] {ctx['user'].get('username','?')} — {(req.observation or '')[:60]}"
+    is_feature = (req.report_type or "bug") == "feature"
+    type_tag = "[FEATURE]" if is_feature else "[BUG]"
+    gh_labels = ["enhancement", "tester-report"] if is_feature else ["bug", "tester-report"]
+    title = f"{type_tag} {ctx['user'].get('username','?')} — {(req.observation or '')[:60]}"
     body = _build_github_body(req, ctx, ua)
 
     github_issue_url: str | None = None
@@ -345,7 +349,7 @@ async def submit_bug_report(
                     json={
                         "title": title,
                         "body": body,
-                        "labels": ["bug", "tester-report"],
+                        "labels": gh_labels,
                     },
                 )
                 if resp.status_code == 201:
@@ -366,15 +370,16 @@ async def submit_bug_report(
         conn_save.execute(
             """
             INSERT INTO bug_reports
-                (user_id, campaign_id, observation, reproduction, context_json,
+                (user_id, campaign_id, observation, reproduction, report_type, context_json,
                  github_issue_url, github_issue_number, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
                 req.campaign_id,
                 req.observation,
                 req.reproduction,
+                req.report_type or "bug",
                 json.dumps(ctx, ensure_ascii=False),
                 github_issue_url,
                 github_issue_number,
