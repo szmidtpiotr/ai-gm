@@ -2040,11 +2040,49 @@
           <label class="form-label">Opis / zdolności specjalne</label>
           <textarea class="form-textarea" id="f-desc" rows="3" placeholder="Opis broni — wyświetlany GM-owi, opcjonalne."></textarea>
         </div>
+        <div class="form-field form-full" id="f-effect-json-row">
+          <label class="form-label" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <span>Effect JSON <span style="font-size:0.72rem;color:#666;font-weight:normal">(efekty mechaniczne on hit)</span></span>
+            <button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px" onclick="openEffectBuilder(_editEffectJson,'weapon','Efekty broni — on hit',_onWeaponEffectSaved)">Edytuj efekty</button>
+          </label>
+          <div id="f-effect-json-preview" style="background:#111;border:1px solid #2a2a2a;border-radius:4px;padding:8px;font-size:0.72rem;color:#666;font-family:monospace;min-height:32px;word-break:break-all;cursor:pointer" onclick="openEffectBuilder(_editEffectJson,'weapon','Efekty broni — on hit',_onWeaponEffectSaved)" title="Kliknij aby edytować">— brak efektu mechanicznego —</div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal()">Anuluj</button>
       <button class="btn btn-primary" onclick="saveModal()">Zapisz zmiany</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Effect JSON Builder Overlay ── -->
+<div class="modal-overlay" id="ej-builder-overlay" onclick="if(event.target===this)closeEffectBuilder()">
+  <div class="modal" style="max-width:700px;width:95vw">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">Edytor efektów mechanicznych</div>
+        <div class="modal-subtitle" id="ej-builder-subtitle" style="font-size:0.78rem;color:#888"></div>
+      </div>
+      <button class="btn-icon" onclick="closeEffectBuilder()">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:68vh;overflow-y:auto">
+      <div id="ej-category-row" style="margin-bottom:12px">
+        <label class="form-label" style="display:block;margin-bottom:4px">Kategoria efektu</label>
+        <select id="ej-modal-category" class="form-input" style="max-width:300px" onchange="_ejModalCatChange()">
+          <option value="">— brak efektu mechanicznego —</option>
+        </select>
+      </div>
+      <div id="ej-modal-effects-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+      <button type="button" id="ej-modal-add-btn" style="background:#2d5a1b;color:#fff;border:none;border-radius:4px;padding:5px 14px;cursor:pointer;font-size:0.85rem;margin-bottom:14px;display:none" onclick="_ejModalAddEffect()">+ Dodaj efekt</button>
+      <div style="background:#0d0d0d;border:1px solid #222;border-radius:4px;padding:10px">
+        <div style="font-size:0.68rem;color:#555;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em">Podgląd JSON</div>
+        <pre id="ej-modal-preview" style="margin:0;font-size:0.72rem;color:#8bc34a;word-break:break-all;white-space:pre-wrap;font-family:monospace">— brak efektu —</pre>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeEffectBuilder()">Anuluj</button>
+      <button class="btn btn-primary" onclick="_ejModalConfirm()">Zatwierdź efekt</button>
     </div>
   </div>
 </div>
@@ -5485,6 +5523,14 @@
     _loadMapTab(tab).then(() => { if (tab === 'builder') setTimeout(wbCenter, 80); });
   });
 
+  let _editEffectJson = null;
+
+  function _onWeaponEffectSaved(data) {
+    _editEffectJson = data;
+    const p = document.getElementById('f-effect-json-preview');
+    if (p) p.textContent = data ? JSON.stringify(data) : '— brak efektu mechanicznego —';
+  }
+
   // Edit modal — weapons
   function openEditModal(w) {
     _editKey = w.key;
@@ -5500,6 +5546,12 @@
     document.getElementById('f-price').value = w.value_gp != null ? w.value_gp : '';
     document.getElementById('f-desc').value = w.description || w.note || '';
     setStars('f-rarity', Math.round((w.value_gp || 0) / 100) || 1);
+    // effect_json
+    let ejVal = w.effect_json || null;
+    if (typeof ejVal === 'string') { try { ejVal = JSON.parse(ejVal); } catch(e) { ejVal = null; } }
+    _editEffectJson = ejVal;
+    const ejPrev = document.getElementById('f-effect-json-preview');
+    if (ejPrev) ejPrev.textContent = ejVal ? JSON.stringify(ejVal) : '— brak efektu mechanicznego —';
     document.getElementById('edit-modal').classList.add('open');
   }
 
@@ -5536,6 +5588,7 @@
     if (!isNaN(vGp)) payload.value_gp = vGp;
     const desc = document.getElementById('f-desc').value.trim();
     if (desc) payload.description = desc;
+    payload.effect_json = _editEffectJson !== null ? JSON.stringify(_editEffectJson) : null;
     try {
       await apiFetch(`/api/admin/weapons/${_editKey}`, {method:'PATCH', body:JSON.stringify(payload)});
       _showToast('Zapisano.', 'success');
@@ -6315,6 +6368,7 @@
     document.getElementById('tpl-entity-campaign-specific').checked = false;
     document.getElementById('tpl-entity-campaign-specific').parentElement.style.display = 'none'; // hide for DB items
     document.getElementById('tpl-entity-form').innerHTML = _renderEntityForm(modalType, entityData);
+    if (modalType === 'item' || modalType === 'weapon') _ejPopulate(entityData.effect_json ?? null);
     document.getElementById('tpl-entity-delete-btn').style.display = 'none'; // no delete from here
     modal.style.display = 'flex';
   }
@@ -11119,6 +11173,7 @@
       data.name || data.label || data.key || '(nowy)';
     document.getElementById('tpl-entity-campaign-specific').checked = !!data.campaign_specific;
     document.getElementById('tpl-entity-form').innerHTML = _renderEntityForm(type, data.overrides || data);
+    if (type === 'item' || type === 'weapon') _ejPopulate(data.overrides?.effect_json ?? data.effect_json ?? null);
     document.getElementById('tpl-entity-delete-btn').style.display = idx < 0 ? 'none' : '';
     modal.style.display = 'flex';
   }
@@ -11198,6 +11253,213 @@
     closeTplEntityModal();
   }
 
+  const EFFECT_JSON_SCHEMA = {
+    categories: {
+      gear_bonus: {
+        label: 'Bonus wyposażenia',
+        allowed_types: ['static_stat_modifier']
+      },
+      character_condition: {
+        label: 'Stan postaci',
+        allowed_types: ['periodic_save', 'static_stat_modifier', 'block_action']
+      },
+      aura: {
+        label: 'Aura',
+        allowed_types: ['periodic_save', 'static_stat_modifier', 'apply_condition', 'remove_condition', 'block_action']
+      }
+    },
+    effect_types: {
+      static_stat_modifier: {
+        label: 'Modyfikator statystyki (+stat)',
+        fields: [
+          { id: 'stat', label: 'Statystyka', type: 'select', options: ['STR','DEX','CON','INT','WIS','CHA'] },
+          { id: 'value', label: 'Wartość', type: 'text', placeholder: '1 lub 1d4' },
+          { id: 'tick', label: 'Tick', type: 'select', options: ['on_use','start_turn','each_round'] }
+        ]
+      },
+      periodic_save: {
+        label: 'Rzut obronny (co rundę)',
+        fields: [
+          { id: 'dc_key', label: 'Klucz DC', type: 'text', placeholder: 'np. dc_medium' },
+          { id: 'condition_key', label: 'Stan przy fail', type: 'text', placeholder: 'np. frightened' },
+          { id: 'tick', label: 'Tick', type: 'select', options: ['start_turn','each_round'] },
+          { id: 'expires', label: 'Rundy (0=stały)', type: 'number' }
+        ]
+      },
+      apply_condition: {
+        label: 'Nałóż stan',
+        fields: [
+          { id: 'condition_key', label: 'Klucz stanu', type: 'text', placeholder: 'np. frightened' },
+          { id: 'tick', label: 'Tick', type: 'select', options: ['on_use','start_turn','each_round'] },
+          { id: 'expires', label: 'Rundy (0=stały)', type: 'number' }
+        ]
+      },
+      remove_condition: {
+        label: 'Usuń stan',
+        fields: [
+          { id: 'condition_key', label: 'Klucz stanu', type: 'text', placeholder: 'np. frightened' },
+          { id: 'tick', label: 'Tick', type: 'select', options: ['on_use','start_turn','each_round'] }
+        ]
+      },
+      block_action: {
+        label: 'Zablokuj akcję',
+        fields: [
+          { id: 'tick', label: 'Tick', type: 'select', options: ['start_turn','each_round'] },
+          { id: 'expires', label: 'Rundy (0=stały)', type: 'number' }
+        ]
+      }
+    }
+  };
+
+  function _ejCategoryChange() {
+    _ejRenderEffects([]);
+    _ejUpdatePreview();
+    const cat = (document.getElementById('ef-ej-category')||{}).value;
+    const addBtn = document.getElementById('ef-ej-add-btn');
+    if (addBtn) addBtn.style.display = cat ? 'inline-block' : 'none';
+  }
+
+  function _ejGetAllowedTypes() {
+    const cat = (document.getElementById('ef-ej-category')||{}).value;
+    return cat ? (EFFECT_JSON_SCHEMA.categories[cat]||{}).allowed_types || [] : [];
+  }
+
+  function _ejRenderEffectRow(idx, effectData) {
+    const allowedTypes = _ejGetAllowedTypes();
+    const typeOpts = allowedTypes.map(t =>
+      `<option value="${t}" ${(effectData.type||''===t)?'selected':''}>${EFFECT_JSON_SCHEMA.effect_types[t]?.label||t}</option>`
+    ).join('');
+
+    const selectedType = effectData.type || allowedTypes[0] || '';
+    const typeDef = EFFECT_JSON_SCHEMA.effect_types[selectedType] || { fields: [] };
+
+    const fieldHtml = typeDef.fields.map(f => {
+      const val = effectData[f.id] !== undefined ? effectData[f.id] : '';
+      if (f.type === 'select') {
+        const opts = f.options.map(o => `<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('');
+        return `<select class="form-input ej-field" data-field="${f.id}" style="max-width:110px" onchange="_ejUpdatePreview()"><option value="">— ${f.label} —</option>${opts}</select>`;
+      } else if (f.type === 'number') {
+        return `<input class="form-input ej-field" data-field="${f.id}" type="number" value="${val||0}" placeholder="${f.label}" style="max-width:70px" oninput="_ejUpdatePreview()">`;
+      } else {
+        return `<input class="form-input ej-field" data-field="${f.id}" type="text" value="${_esc(String(val||''))}" placeholder="${f.placeholder||f.label}" style="max-width:120px" oninput="_ejUpdatePreview()">`;
+      }
+    }).join('');
+
+    return `<div class="ej-effect-row" data-idx="${idx}" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:6px;background:#1a1a1a;border-radius:4px;margin-bottom:4px">
+    <select class="form-input ej-type-sel" style="max-width:190px" onchange="_ejTypeChange(this,${idx})">${typeOpts}</select>
+    <span class="ej-fields" style="display:flex;gap:6px;flex-wrap:wrap">${fieldHtml}</span>
+    <button type="button" style="background:#c0392b;color:#fff;border:none;border-radius:3px;padding:2px 7px;cursor:pointer" onclick="_ejRemoveEffect(${idx})">×</button>
+  </div>`;
+  }
+
+  function _ejTypeChange(sel, idx) {
+    const row = sel.closest('.ej-effect-row');
+    if (!row) return;
+    const newType = sel.value;
+    const typeDef = EFFECT_JSON_SCHEMA.effect_types[newType] || { fields: [] };
+    const fieldsSpan = row.querySelector('.ej-fields');
+    if (fieldsSpan) {
+      fieldsSpan.innerHTML = typeDef.fields.map(f => {
+        if (f.type === 'select') {
+          const opts = f.options.map(o => `<option value="${o}">${o}</option>`).join('');
+          return `<select class="form-input ej-field" data-field="${f.id}" style="max-width:110px" onchange="_ejUpdatePreview()"><option value="">— ${f.label} —</option>${opts}</select>`;
+        } else if (f.type === 'number') {
+          return `<input class="form-input ej-field" data-field="${f.id}" type="number" value="0" placeholder="${f.label}" style="max-width:70px" oninput="_ejUpdatePreview()">`;
+        } else {
+          return `<input class="form-input ej-field" data-field="${f.id}" type="text" value="" placeholder="${f.placeholder||f.label}" style="max-width:120px" oninput="_ejUpdatePreview()">`;
+        }
+      }).join('');
+    }
+    _ejUpdatePreview();
+  }
+
+  function _ejRenderEffects(effectsData) {
+    const list = document.getElementById('ef-ej-effects-list');
+    if (!list) return;
+    list.innerHTML = effectsData.map((e, i) => _ejRenderEffectRow(i, e)).join('');
+  }
+
+  function _ejAddEffect() {
+    const list = document.getElementById('ef-ej-effects-list');
+    if (!list) return;
+    const allowedTypes = _ejGetAllowedTypes();
+    if (!allowedTypes.length) return;
+    const idx = list.children.length;
+    const div = document.createElement('div');
+    div.innerHTML = _ejRenderEffectRow(idx, { type: allowedTypes[0] });
+    list.appendChild(div.firstElementChild);
+    _ejUpdatePreview();
+  }
+
+  function _ejRemoveEffect(idx) {
+    const list = document.getElementById('ef-ej-effects-list');
+    if (!list) return;
+    const rows = list.querySelectorAll('.ej-effect-row');
+    if (rows[idx]) rows[idx].remove();
+    list.querySelectorAll('.ej-effect-row').forEach((row, i) => {
+      row.dataset.idx = i;
+      const btn = row.querySelector('button[onclick^="_ejRemove"]');
+      if (btn) btn.setAttribute('onclick', `_ejRemoveEffect(${i})`);
+      const typeSel = row.querySelector('.ej-type-sel');
+      if (typeSel) typeSel.setAttribute('onchange', `_ejTypeChange(this,${i})`);
+    });
+    _ejUpdatePreview();
+  }
+
+  function _ejSerialize() {
+    const cat = (document.getElementById('ef-ej-category')||{}).value;
+    if (!cat) return null;
+    const list = document.getElementById('ef-ej-effects-list');
+    if (!list) return null;
+    const effects = [];
+    list.querySelectorAll('.ej-effect-row').forEach(row => {
+      const type = (row.querySelector('.ej-type-sel')||{}).value;
+      if (!type) return;
+      const effect = { type };
+      row.querySelectorAll('.ej-field').forEach(el => {
+        const field = el.dataset.field;
+        if (!field) return;
+        const val = el.value;
+        if (val === '' || val === null) return;
+        if (el.type === 'number') effect[field] = parseFloat(val) || 0;
+        else effect[field] = val;
+      });
+      effects.push(effect);
+    });
+    if (!effects.length) return null;
+    return { schema_version: 1, effect_category: cat, effects };
+  }
+
+  function _ejUpdatePreview() {
+    const preview = document.getElementById('ef-ej-preview');
+    if (!preview) return;
+    const data = _ejSerialize();
+    preview.textContent = data ? JSON.stringify(data) : '— brak efektu —';
+  }
+
+  function _ejPopulate(effectJson) {
+    const catSel = document.getElementById('ef-ej-category');
+    if (!catSel) return;
+    let parsed = effectJson;
+    if (typeof parsed === 'string') {
+      try { parsed = JSON.parse(parsed); } catch(e) { parsed = null; }
+    }
+    if (!parsed || !parsed.effect_category || !EFFECT_JSON_SCHEMA.categories[parsed.effect_category]) {
+      catSel.value = '';
+      const list = document.getElementById('ef-ej-effects-list');
+      if (list) list.innerHTML = '';
+      const addBtn = document.getElementById('ef-ej-add-btn');
+      if (addBtn) addBtn.style.display = 'none';
+      _ejUpdatePreview();
+      return;
+    }
+    catSel.value = parsed.effect_category;
+    const addBtn = document.getElementById('ef-ej-add-btn');
+    if (addBtn) addBtn.style.display = 'inline-block';
+    _ejRenderEffects(parsed.effects || []);
+    _ejUpdatePreview();
+  }
+
   function _renderEntityForm(type, d) {
     d = d || {};
     const sel = (id, label, opts, val) =>
@@ -11260,7 +11522,17 @@
       txt('magic_school','Szkoła magii',d.magic_school||'','np. necromancy'),
       ta('description','Opis',d.description,2),
       ta('note','Notatka GM (efekty)',d.note,2),
-      ta('effect_json','effect_json (JSON)',typeof d.effect_json==='object'?JSON.stringify(d.effect_json):d.effect_json||'',2)
+      '<div class="form-row" style="grid-column:1/-1"><label class="form-label">Effect JSON</label>' +
+      '<div id="ef-effect-json-builder" style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+      '<select id="ef-ej-category" class="form-input" style="max-width:220px" onchange="_ejCategoryChange()">' +
+      '<option value="">— brak efektu mechanicznego —</option>' +
+      Object.entries(EFFECT_JSON_SCHEMA.categories).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('') +
+      '</select></div>' +
+      '<div id="ef-ej-effects-list"></div>' +
+      '<button type="button" id="ef-ej-add-btn" style="display:none;margin-top:4px;background:#2d5a1b;color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer" onclick="_ejAddEffect()">+ Dodaj efekt</button>' +
+      '<div id="ef-ej-preview" style="font-size:0.7rem;color:#666;margin-top:6px;word-break:break-all;font-family:monospace"></div>' +
+      '</div></div>'
       + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
       + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
     );
@@ -11281,7 +11553,17 @@
       num('charges','Ładunki',d.charges||1),
       ta('description','Opis',d.description,2),
       ta('note','Notatka GM',d.note,2),
-      ta('effect_json','effect_json (JSON)',typeof d.effect_json==='object'?JSON.stringify(d.effect_json):d.effect_json||'',2)
+      '<div class="form-row" style="grid-column:1/-1"><label class="form-label">Effect JSON</label>' +
+      '<div id="ef-effect-json-builder" style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">' +
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+      '<select id="ef-ej-category" class="form-input" style="max-width:220px" onchange="_ejCategoryChange()">' +
+      '<option value="">— brak efektu mechanicznego —</option>' +
+      Object.entries(EFFECT_JSON_SCHEMA.categories).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('') +
+      '</select></div>' +
+      '<div id="ef-ej-effects-list"></div>' +
+      '<button type="button" id="ef-ej-add-btn" style="display:none;margin-top:4px;background:#2d5a1b;color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer" onclick="_ejAddEffect()">+ Dodaj efekt</button>' +
+      '<div id="ef-ej-preview" style="font-size:0.7rem;color:#666;margin-top:6px;word-break:break-all;font-family:monospace"></div>' +
+      '</div></div>'
       + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
       + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
     );
@@ -11321,8 +11603,8 @@
     const b  = id => !!(document.getElementById('ef-'+id)||{}).checked;
     if (type === 'npc') return { key:v('key'), name:v('name'), npc_type:v('npc_type'), personality_prompt:v('personality_prompt'), description:v('description'), is_quest_giver:b('is_quest_giver'), is_ally:b('is_ally'), keyword_triggers: v('keyword_triggers').split(',').map(s=>s.trim()).filter(Boolean) };
     if (type === 'enemy') return { key:v('key'), label:v('label'), hp_base:n('hp_base'), ac_base:n('ac_base'), attack_bonus:n('attack_bonus'), damage_bonus:n('damage_bonus'), damage_die:v('damage_die'), damage_type:v('damage_type'), tier:v('tier'), attacks_per_turn:n('attacks_per_turn'), xp_award:n('xp_award'), fear_aura:b('fear_aura'), fear_dc:n('fear_dc'), conditions_immune:v('conditions_immune'), description:v('description'), note:v('note') };
-    if (type === 'weapon') return { key:v('key'), label:v('label'), damage_die:v('damage_die'), linked_stat:v('linked_stat'), weapon_type:v('weapon_type'), weapon_slot:v('weapon_slot'), targeting:v('targeting'), two_handed:b('two_handed'), finesse:b('finesse'), range_m:n('range_m'), value_gp:n('value_gp'), rarity:n('rarity'), magic_school:v('magic_school'), description:v('description'), note:v('note'), effect_json:v('effect_json'), hidden:b('hidden'), location_hint:v('location_hint') };
-    if (type === 'item') return { key:v('key'), label:v('label'), item_type:v('item_type'), armor_coverage:v('armor_coverage'), ac_bonus:n('ac_bonus'), value_gp:n('value_gp'), weight_kg:n('weight_kg'), rarity:n('rarity'), effect_target:v('effect_target'), effect_type:v('effect_type'), effect_dice:v('effect_dice'), effect_bonus:n('effect_bonus'), charges:n('charges'), description:v('description'), note:v('note'), effect_json:v('effect_json'), hidden:b('hidden'), location_hint:v('location_hint') };
+    if (type === 'weapon') return { key:v('key'), label:v('label'), damage_die:v('damage_die'), linked_stat:v('linked_stat'), weapon_type:v('weapon_type'), weapon_slot:v('weapon_slot'), targeting:v('targeting'), two_handed:b('two_handed'), finesse:b('finesse'), range_m:n('range_m'), value_gp:n('value_gp'), rarity:n('rarity'), magic_school:v('magic_school'), description:v('description'), note:v('note'), effect_json:_ejSerialize(), hidden:b('hidden'), location_hint:v('location_hint') };
+    if (type === 'item') return { key:v('key'), label:v('label'), item_type:v('item_type'), armor_coverage:v('armor_coverage'), ac_bonus:n('ac_bonus'), value_gp:n('value_gp'), weight_kg:n('weight_kg'), rarity:n('rarity'), effect_target:v('effect_target'), effect_type:v('effect_type'), effect_dice:v('effect_dice'), effect_bonus:n('effect_bonus'), charges:n('charges'), description:v('description'), note:v('note'), effect_json:_ejSerialize(), hidden:b('hidden'), location_hint:v('location_hint') };
     if (type === 'consumable') return { key:v('key'), label:v('label'), effect_type:v('effect_type'), effect_target:v('effect_target'), effect_dice:v('effect_dice'), effect_bonus:n('effect_bonus'), charges:n('charges'), base_price:n('base_price'), weight_kg:n('weight_kg'), rarity:n('rarity'), description:v('description'), note:v('note'), hidden:b('hidden'), location_hint:v('location_hint') };
     if (type === 'location') return { key:v('key'), name:v('name'), location_type:v('location_type'), biome:v('biome'), description:v('description'), role:v('role') };
     return {};
@@ -16446,6 +16728,303 @@ Niech kości się toczą! 🎲`,
   window.addEventListener('hashchange', _applyHash);
   // Apply on load after all handlers registered
   requestAnimationFrame(_applyHash);
+
+  // ─── Shared Effect JSON Builder ──────────────────────────────────────────────
+  // To extend: add new entry to _EJ_WEAPON_TYPES or _EJ_STANDARD_TYPES + add key
+  // to relevant category's allowed_types in _EJ_STANDARD_CATS.
+  const _EJ_WEAPON_TYPES = {
+    extra_damage: {
+      label: 'Dodatkowe obrażenia (on hit)',
+      fields: [
+        { id: 'dice',        label: 'Kość',         type: 'text',   placeholder: '1d6' },
+        { id: 'damage_type', label: 'Typ obrażeń',  type: 'select', options: ['physical','fire','poison','cold','lightning','necrotic','radiant','magic'] }
+      ]
+    },
+    on_hit_save: {
+      label: 'Rzut obronny przy trafieniu',
+      fields: [
+        { id: 'stat',            label: 'Save stat',    type: 'select',           options: ['STR','DEX','CON','INT','WIS','CHA'] },
+        { id: 'dc',              label: 'DC',            type: 'number' },
+        { id: '_on_fail_type',   label: 'Efekt (fail)', type: 'select',           options: ['apply_condition','extra_damage'] },
+        { id: 'condition_key',   label: 'Stan (fail)',  type: 'condition_select' },
+        { id: 'duration_rounds', label: 'Rundy',        type: 'number' }
+      ]
+    },
+    remove_condition: {
+      label: 'Usuń stan (on hit)',
+      fields: [
+        { id: 'condition_key', label: 'Stan', type: 'condition_select' }
+      ]
+    },
+    skill_modifier: {
+      label: 'Modyfikator umiejętności',
+      fields: [
+        { id: 'skill_key', label: 'Umiejętność', type: 'skill_select' },
+        { id: 'value',     label: 'Wartość',     type: 'text', placeholder: '+1 lub -1' },
+        { id: 'tick',      label: 'Kiedy',       type: 'select', options: ['on_use','start_turn','each_round'] }
+      ]
+    }
+  };
+
+  const _EJ_STANDARD_CATS = {
+    gear_bonus:          { label: 'Bonus wyposażenia (pasywny)',   allowed_types: ['static_stat_modifier','skill_modifier','narrative_only'] },
+    character_condition: { label: 'Stan postaci',                  allowed_types: ['periodic_save','static_stat_modifier','skill_modifier','block_action','heal_hp','restore_mana','narrative_only'] },
+    consumable_immediate:{ label: 'Efekt jednorazowy (eliksir)',   allowed_types: ['heal_hp','restore_mana','apply_condition','remove_condition','skill_modifier','narrative_only'] },
+    aura:                { label: 'Aura',                          allowed_types: ['periodic_save','static_stat_modifier','skill_modifier','apply_condition','remove_condition','block_action','narrative_only'] }
+  };
+
+  const _EJ_STANDARD_TYPES = {
+    static_stat_modifier: { label: 'Modyfikator statystyki', fields: [
+      { id: 'stat',  label: 'Stat',    type: 'select', options: ['STR','DEX','CON','INT','WIS','CHA'] },
+      { id: 'value', label: 'Wartość', type: 'text',   placeholder: '2 lub -1' },
+      { id: 'tick',  label: 'Kiedy',   type: 'select', options: ['on_use','start_turn','each_round'] }
+    ]},
+    skill_modifier: { label: 'Modyfikator umiejętności', fields: [
+      { id: 'skill_key', label: 'Umiejętność', type: 'skill_select' },
+      { id: 'value',     label: 'Wartość',     type: 'text', placeholder: '+1 lub -1' },
+      { id: 'tick',      label: 'Kiedy',       type: 'select', options: ['on_use','start_turn','each_round'] }
+    ]},
+    periodic_save: { label: 'Rzut obronny (co rundę)', fields: [
+      { id: 'stat',   label: 'Stat',     type: 'select', options: ['STR','DEX','CON','INT','WIS','CHA'] },
+      { id: 'dc_key', label: 'Klucz DC', type: 'text',   placeholder: 'dc_medium' },
+      { id: 'tick',   label: 'Kiedy',    type: 'select', options: ['start_turn','each_round'] },
+      { id: 'expires',label: 'Wygasa',   type: 'text',   placeholder: 'save_success / duration_rounds:3' }
+    ]},
+    heal_hp:       { label: 'Leczenie HP',         fields: [{ id: 'value', label: 'Kość/wartość', type: 'text', placeholder: '2d6+2' }] },
+    restore_mana:  { label: 'Przywrócenie many',   fields: [{ id: 'value', label: 'Kość/wartość', type: 'text', placeholder: '1d4'   }] },
+    apply_condition: { label: 'Nałóż stan', fields: [
+      { id: 'condition_key', label: 'Stan',   type: 'condition_select' },
+      { id: 'expires',       label: 'Wygasa', type: 'text', placeholder: 'duration_rounds:3' }
+    ]},
+    remove_condition: { label: 'Usuń stan', fields: [
+      { id: 'condition_key', label: 'Stan', type: 'condition_select' }
+    ]},
+    block_action: { label: 'Zablokuj akcję', fields: [
+      { id: 'tick',   label: 'Kiedy',  type: 'select', options: ['start_turn','each_round'] },
+      { id: 'expires',label: 'Wygasa', type: 'text',   placeholder: 'duration_rounds:2' }
+    ]},
+    narrative_only: { label: 'Tylko narracyjny', fields: [
+      { id: 'value', label: 'Opis', type: 'text', placeholder: 'Opis efektu narracyjnego' }
+    ]}
+  };
+
+  let _ejMode = 'weapon';
+  let _ejOnSave = null;
+  let _ejConditions = [];
+  let _ejSkills = [];
+  let _ejDataLoaded = false;
+
+  async function _ejLoadDynamicData() {
+    if (_ejDataLoaded) return;
+    try {
+      const [cRes, sRes] = await Promise.all([
+        apiFetch('/api/admin/conditions'),
+        apiFetch('/api/admin/skills')
+      ]);
+      _ejConditions = (cRes.items || []).map(c => ({ v: c.key, l: c.label || c.key }));
+      _ejSkills     = (sRes.items || []).map(s => ({ v: s.key, l: s.label || s.key }));
+      _ejDataLoaded = true;
+    } catch(e) { console.warn('EJ builder: failed to load conditions/skills', e); }
+  }
+
+  async function openEffectBuilder(currentJson, mode, title, onSave) {
+    _ejMode = mode || 'weapon';
+    _ejOnSave = onSave || null;
+    document.getElementById('ej-builder-subtitle').textContent = title || '';
+    const catRow = document.getElementById('ej-category-row');
+    const catSel = document.getElementById('ej-modal-category');
+    const addBtn = document.getElementById('ej-modal-add-btn');
+    if (_ejMode === 'standard') {
+      catRow.style.display = '';
+      catSel.innerHTML = '<option value="">— brak efektu mechanicznego —</option>' +
+        Object.entries(_EJ_STANDARD_CATS).map(([k,v]) => `<option value="${k}">${v.label}</option>`).join('');
+      addBtn.style.display = 'none';
+    } else {
+      catRow.style.display = 'none';
+      addBtn.style.display = 'inline-block';
+    }
+    await _ejLoadDynamicData();
+    _ejModalPopulate(currentJson);
+    document.getElementById('ej-builder-overlay').classList.add('open');
+  }
+
+  function closeEffectBuilder() {
+    document.getElementById('ej-builder-overlay').classList.remove('open');
+  }
+
+  function _ejModalConfirm() {
+    const data = _ejModalSerialize();
+    if (_ejOnSave) _ejOnSave(data);
+    closeEffectBuilder();
+  }
+
+  function _ejModalCatChange() {
+    document.getElementById('ej-modal-effects-list').innerHTML = '';
+    const cat = document.getElementById('ej-modal-category').value;
+    document.getElementById('ej-modal-add-btn').style.display = cat ? 'inline-block' : 'none';
+    _ejModalUpdatePreview();
+  }
+
+  function _ejModalGetTypes() {
+    if (_ejMode === 'weapon') return _EJ_WEAPON_TYPES;
+    const cat = document.getElementById('ej-modal-category')?.value;
+    if (!cat || !_EJ_STANDARD_CATS[cat]) return {};
+    return Object.fromEntries(
+      (_EJ_STANDARD_CATS[cat].allowed_types || []).map(k => [k, _EJ_STANDARD_TYPES[k]]).filter(([,v]) => v)
+    );
+  }
+
+  function _ejModalRenderField(f, val) {
+    const v = val !== undefined && val !== null ? val : '';
+    const lbl = `<span style="font-size:0.68rem;color:#888;display:block;margin-bottom:2px">${f.label}</span>`;
+    const wrap = inner => `<label style="display:flex;flex-direction:column">${lbl}${inner}</label>`;
+    if (f.type === 'select') {
+      const opts = (f.options || []).map(o => `<option value="${o}" ${v===o?'selected':''}>${o}</option>`).join('');
+      return wrap(`<select class="form-input ej-modal-field" data-field="${f.id}" style="max-width:140px" onchange="_ejModalUpdatePreview()"><option value="">—</option>${opts}</select>`);
+    } else if (f.type === 'condition_select') {
+      const opts = _ejConditions.map(o => `<option value="${o.v}" ${v===o.v?'selected':''}>${o.l}</option>`).join('');
+      return wrap(`<select class="form-input ej-modal-field" data-field="${f.id}" style="max-width:180px" onchange="_ejModalUpdatePreview()"><option value="">— wybierz stan —</option>${opts}</select>`);
+    } else if (f.type === 'skill_select') {
+      const opts = _ejSkills.map(o => `<option value="${o.v}" ${v===o.v?'selected':''}>${o.l}</option>`).join('');
+      return wrap(`<select class="form-input ej-modal-field" data-field="${f.id}" style="max-width:200px" onchange="_ejModalUpdatePreview()"><option value="">— wybierz umiejętność —</option>${opts}</select>`);
+    } else if (f.type === 'number') {
+      return wrap(`<input class="form-input ej-modal-field" data-field="${f.id}" type="number" value="${v||0}" style="max-width:80px" oninput="_ejModalUpdatePreview()">`);
+    } else {
+      return wrap(`<input class="form-input ej-modal-field" data-field="${f.id}" type="text" value="${_esc(String(v))}" placeholder="${f.placeholder||f.label}" style="max-width:150px" oninput="_ejModalUpdatePreview()">`);
+    }
+  }
+
+  function _ejModalRenderEffectRow(idx, effectData) {
+    const types = _ejModalGetTypes();
+    const typeKeys = Object.keys(types);
+    // Flatten on_fail for on_hit_save
+    const flat = { ...effectData };
+    if (effectData.on_fail) {
+      flat._on_fail_type   = effectData.on_fail.type || 'apply_condition';
+      flat.condition_key   = flat.condition_key   || effectData.on_fail.condition_key   || '';
+      flat.duration_rounds = flat.duration_rounds || effectData.on_fail.duration_rounds || 2;
+    }
+    const selectedType = flat.type || typeKeys[0] || '';
+    const typeOpts = typeKeys.map(t =>
+      `<option value="${t}" ${t===selectedType?'selected':''}>${types[t]?.label||t}</option>`
+    ).join('');
+    const typeDef = types[selectedType] || { fields: [] };
+    const fieldHtml = typeDef.fields.map(f => _ejModalRenderField(f, flat[f.id])).join('');
+    return `<div class="ej-modal-row" data-idx="${idx}" style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;padding:10px;background:#181818;border-radius:4px;border:1px solid #2a2a2a">
+      <label style="font-size:0.7rem;color:#888;display:flex;flex-direction:column;gap:2px">Typ efektu<select class="form-input ej-modal-type" style="max-width:220px" onchange="_ejModalTypeChange(this,${idx})">${typeOpts}</select></label>
+      <span class="ej-modal-fields" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">${fieldHtml}</span>
+      <button type="button" style="background:#c0392b;color:#fff;border:none;border-radius:3px;padding:4px 10px;cursor:pointer;font-size:0.9rem;flex-shrink:0;align-self:flex-end" onclick="_ejModalRemove(${idx})">×</button>
+    </div>`;
+  }
+
+  function _ejModalTypeChange(sel, idx) {
+    const row = sel.closest('.ej-modal-row');
+    if (!row) return;
+    const types = _ejModalGetTypes();
+    const typeDef = types[sel.value] || { fields: [] };
+    const span = row.querySelector('.ej-modal-fields');
+    if (span) span.innerHTML = typeDef.fields.map(f => _ejModalRenderField(f, '')).join('');
+    _ejModalUpdatePreview();
+  }
+
+  function _ejModalAddEffect() {
+    const list = document.getElementById('ej-modal-effects-list');
+    if (!list) return;
+    const types = _ejModalGetTypes();
+    const firstType = Object.keys(types)[0];
+    if (!firstType) return;
+    const idx = list.children.length;
+    const div = document.createElement('div');
+    div.innerHTML = _ejModalRenderEffectRow(idx, { type: firstType });
+    list.appendChild(div.firstElementChild);
+    _ejModalUpdatePreview();
+  }
+
+  function _ejModalRemove(idx) {
+    const list = document.getElementById('ej-modal-effects-list');
+    if (!list) return;
+    list.querySelectorAll('.ej-modal-row')[idx]?.remove();
+    list.querySelectorAll('.ej-modal-row').forEach((row, i) => {
+      row.dataset.idx = i;
+      row.querySelector('.ej-modal-type')?.setAttribute('onchange', `_ejModalTypeChange(this,${i})`);
+      row.querySelector('button[onclick^="_ejModalRemove"]')?.setAttribute('onclick', `_ejModalRemove(${i})`);
+    });
+    _ejModalUpdatePreview();
+  }
+
+  function _ejModalCollectRow(row) {
+    const type = row.querySelector('.ej-modal-type')?.value;
+    if (!type) return null;
+    const effect = { type };
+    row.querySelectorAll('.ej-modal-field').forEach(el => {
+      const field = el.dataset.field;
+      if (!field || field.startsWith('_')) return;
+      const val = el.value;
+      if (val === '' || val === null || val === undefined) return;
+      effect[field] = el.type === 'number' ? (parseFloat(val) || 0) : val;
+    });
+    if (type === 'on_hit_save') {
+      const failTypeSel = row.querySelector('[data-field="_on_fail_type"]');
+      const failType = failTypeSel?.value || 'apply_condition';
+      const onFail = { type: failType };
+      if (failType === 'apply_condition') {
+        const ck = row.querySelector('[data-field="condition_key"]')?.value;
+        const dr = row.querySelector('[data-field="duration_rounds"]')?.value;
+        if (ck) onFail.condition_key = ck;
+        onFail.duration_rounds = parseInt(dr) || 2;
+      }
+      effect.on_fail = onFail;
+      delete effect.condition_key;
+      delete effect.duration_rounds;
+    }
+    return effect;
+  }
+
+  function _ejModalSerialize() {
+    const list = document.getElementById('ej-modal-effects-list');
+    if (!list) return null;
+    const effects = [];
+    list.querySelectorAll('.ej-modal-row').forEach(row => {
+      const e = _ejModalCollectRow(row);
+      if (e) effects.push(e);
+    });
+    if (!effects.length) return null;
+    if (_ejMode === 'weapon') return { effects };
+    const cat = document.getElementById('ej-modal-category')?.value;
+    if (!cat) return null;
+    return { schema_version: 1, effect_category: cat, effects };
+  }
+
+  function _ejModalPopulate(json) {
+    let parsed = json;
+    if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch(e) { parsed = null; } }
+    const list = document.getElementById('ej-modal-effects-list');
+    if (!list) return;
+    if (_ejMode === 'standard') {
+      const catSel = document.getElementById('ej-modal-category');
+      const addBtn = document.getElementById('ej-modal-add-btn');
+      if (parsed?.effect_category && _EJ_STANDARD_CATS[parsed.effect_category]) {
+        catSel.value = parsed.effect_category;
+        addBtn.style.display = 'inline-block';
+      } else {
+        catSel.value = '';
+        addBtn.style.display = 'none';
+        list.innerHTML = '';
+        _ejModalUpdatePreview();
+        return;
+      }
+    }
+    const effects = parsed?.effects || [];
+    list.innerHTML = effects.map((e, i) => _ejModalRenderEffectRow(i, e)).join('');
+    _ejModalUpdatePreview();
+  }
+
+  function _ejModalUpdatePreview() {
+    const preview = document.getElementById('ej-modal-preview');
+    if (!preview) return;
+    const data = _ejModalSerialize();
+    preview.textContent = data ? JSON.stringify(data, null, 2) : '— brak efektu —';
+  }
 </script>
 
 <button id="kreator-fab" title="Kreator AI" onclick="_fabClick()">✨</button>
