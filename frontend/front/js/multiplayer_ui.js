@@ -498,6 +498,19 @@ async function joinViaToken() {
     }
 }
 
+async function leaveMpLobbyFromScreen() {
+    if (!_lobbyId) return;
+    const id = _lobbyId;
+    try {
+        await _lobbyFetch(`/multiplayer/campaigns/${id}/decline`, { method: 'POST' });
+        _clearLobbySession();
+        if (typeof loadCampaigns === 'function') await loadCampaigns();
+        if (typeof showScreen === 'function') showScreen('campaigns');
+    } catch (e) {
+        console.warn('[Lobby] leave error:', e);
+    }
+}
+
 // Handle ?join=TOKEN in URL on page load
 (function _checkJoinParam() {
     const params = new URLSearchParams(location.search);

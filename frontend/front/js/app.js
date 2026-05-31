@@ -1251,7 +1251,10 @@ async function loadPendingMpInvites() {
               <div style="font-weight:600;font-size:14px">👥 ${l.title}</div>
               <div style="font-size:12px;opacity:.6">host: ${l.host_username} · ${l.accepted_count}/${l.max_players} graczy · oczekuje na start</div>
             </div>
-            <button class="btn btn-sm" style="font-size:12px" onclick="_showLobbyScreen(${l.campaign_id})">Wejdź</button>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm" style="font-size:12px" onclick="_showLobbyScreen(${l.campaign_id})">Wejdź</button>
+              ${l.role !== 'owner' ? `<button class="btn btn-sm" style="background:var(--bg3,#2a2a3e);font-size:12px" onclick="leaveMpLobby(${l.campaign_id})">Opuść</button>` : ''}
+            </div>
           </div>`).join('');
 
         const inviteHtml = invites.map(inv => `
@@ -1275,8 +1278,7 @@ async function loadPendingMpInvites() {
 async function acceptMpInvite(campaignId) {
     try {
         await apiRequest('POST', `/multiplayer/campaigns/${campaignId}/accept`);
-        await loadPendingMpInvites();
-        _showLobbyScreen(campaignId);
+        await _showLobbyScreen(campaignId);
     } catch (e) {
         showToast('Nie udało się dołączyć: ' + e.message, 'error');
     }
@@ -1285,6 +1287,16 @@ async function acceptMpInvite(campaignId) {
 async function declineMpInvite(campaignId) {
     try {
         await apiRequest('POST', `/multiplayer/campaigns/${campaignId}/decline`);
+        await loadPendingMpInvites();
+    } catch (e) {
+        showToast('Błąd: ' + e.message, 'error');
+    }
+}
+
+async function leaveMpLobby(campaignId) {
+    try {
+        await apiRequest('POST', `/multiplayer/campaigns/${campaignId}/decline`);
+        localStorage.removeItem('aigm_lobby_id');
         await loadPendingMpInvites();
     } catch (e) {
         showToast('Błąd: ' + e.message, 'error');
