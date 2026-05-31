@@ -3434,13 +3434,15 @@ def run_admin_migrations() -> None:
         _ensure_is_tester_column(conn)
         _ensure_bug_reports_table(conn)
         _ensure_bug_reports_github_status(conn)
+        _ensure_bug_reports_report_type(conn)
         _ensure_push_subscriptions_table(conn)
         _ensure_campaign_rounds_tables(conn)
         _ensure_multiplayer_lobby_schema(conn)
+        _ensure_party_chat_table(conn)
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="14.4")
+    logger.info("admin_migration_complete", phase="14.5")
 
 
 def _ensure_character_rentals(conn: sqlite3.Connection) -> None:
@@ -3581,6 +3583,14 @@ def _ensure_bug_reports_github_status(conn: sqlite3.Connection) -> None:
         logger.info("admin_migration_applied", label="bug-reports-github-status")
 
 
+def _ensure_bug_reports_report_type(conn: sqlite3.Connection) -> None:
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(bug_reports)").fetchall()]
+    if "report_type" not in cols:
+        conn.execute("ALTER TABLE bug_reports ADD COLUMN report_type TEXT NOT NULL DEFAULT 'bug'")
+        conn.commit()
+        logger.info("admin_migration_applied", label="bug-reports-report-type")
+
+
 def _ensure_campaign_rounds_tables(conn: sqlite3.Connection) -> None:
     """Multiplayer round system — collects player actions per round, stores GM narration."""
     conn.execute("""
@@ -3652,9 +3662,14 @@ def _ensure_multiplayer_lobby_schema(conn: sqlite3.Connection) -> None:
         ("max_players", "INTEGER NOT NULL DEFAULT 4"),
         ("host_user_id", "INTEGER"),
         ("lobby_status", "TEXT NOT NULL DEFAULT 'open'"),
+        ("round_timer_minutes", "INTEGER"),
     ]:
         if col not in existing:
             conn.execute(f"ALTER TABLE campaigns ADD COLUMN {col} {defn}")
+    # Backfill round_timer_minutes from round_timer_hours for existing rows
+    conn.execute(
+        "UPDATE campaigns SET round_timer_minutes = round_timer_hours * 60 WHERE round_timer_minutes IS NULL"
+    )
 
     # Status column on campaign_members (pending/accepted/declined)
     mem_cols = [r[1] for r in conn.execute("PRAGMA table_info(campaign_members)").fetchall()]
@@ -3685,3 +3700,30 @@ def _ensure_multiplayer_lobby_schema(conn: sqlite3.Connection) -> None:
     )
     conn.commit()
     logger.info("admin_migration_applied", label="multiplayer-lobby-schema")
+
+    # host_note column on campaigns (one-time host-transfer notification delivery)
+    camp_cols2 = [r[1] for r in conn.execute("PRAGMA table_info(campaigns)").fetchall()]
+    if "host_note" not in camp_cols2:
+        conn.execute("ALTER TABLE campaigns ADD COLUMN host_note TEXT")
+    conn.commit()
+    logger.info("admin_migration_applied", label="multiplayer-host-transfer")
+
+
+def _ensure_party_chat_table(conn: sqlite3.Connection) -> None:
+    """Party chat messages table."""
+    # Party chat messages table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS party_messages (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+            user_id     INTEGER NOT NULL REFERENCES users(id),
+            character_name TEXT NOT NULL,
+            message     TEXT NOT NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_party_messages_campaign ON party_messages(campaign_id, created_at)"
+    )
+    conn.commit()
+    logger.info("admin_migration_applied", label="party-chat-table")
