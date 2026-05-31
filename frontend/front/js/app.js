@@ -2749,11 +2749,7 @@ async function enterGame(campaign) {
         if (campaign?.id) localStorage.setItem('aigm_campaign_id', campaign.id);
     } catch {}
 
-    // Multiplayer mode: activate round UI, suppress solo composer
     window.multiplayerUI?.deactivate();
-    if (campaign?.mode === 'multiplayer' && characterData?.id) {
-        window.multiplayerUI?.activate(campaign.id, characterData.id, characterData.name || 'Bohater');
-    }
 
     const sheet = characterData?.sheet_json || characterData || {};
     elements.characterNameDisplay.textContent = characterData?.name || 'Bohater';
@@ -2841,8 +2837,18 @@ async function enterGame(campaign) {
                     }
                 }
             }
+        } else if (campaign?.mode === 'multiplayer') {
+            // MP campaign — no solo turns, skip __AI_GM_OPEN, just show game screen
+            showScreen('game');
+            updateAdminSettingsVisibility();
+            if (characterData) populateCharacterSheet(characterData);
+            scrollToBottom();
+            if (characterData?.id) {
+                window.multiplayerUI?.activate(campaign.id, characterData.id, characterData.name || 'Bohater');
+            }
+            return;
         } else {
-            // No turns yet — new campaign. Send an empty opening turn to trigger plan gen + opening scene
+            // No turns yet — new solo campaign. Send an empty opening turn to trigger plan gen + opening scene
             showScreen('game');
             updateAdminSettingsVisibility();
             if (characterData) populateCharacterSheet(characterData);
@@ -2880,6 +2886,9 @@ async function enterGame(campaign) {
     scrollToBottom();
     window.clog?.setContext({ campaign_id: campaign.id, character_id: characterData?.id, screen: 'game' });
     window.clog?.event('game_entered', { campaign_id: campaign.id, character_id: characterData?.id });
+    if (campaign?.mode === 'multiplayer' && characterData?.id) {
+        window.multiplayerUI?.activate(campaign.id, characterData.id, characterData.name || 'Bohater');
+    }
     startCombatPolling();
 
     // Stage 10-C+ Bug 1 fix — on F5 / resume, the campaign GET payload carries
@@ -4278,12 +4287,12 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
 }
 
 async function handleSendMessage() {
-    if (window.multiplayerUI?.isActive()) {
+    const content = elements.chatInput.value.trim();
+    if (!content) return;
+    if (window.multiplayerUI?.isActive() && !content.startsWith('/')) {
         await window.multiplayerUI.handleSubmit();
         return;
     }
-    const content = elements.chatInput.value.trim();
-    if (!content) return;
 
     elements.chatInput.value = '';
     hideCharCounter();

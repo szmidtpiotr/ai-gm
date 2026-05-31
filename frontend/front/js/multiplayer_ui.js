@@ -10,6 +10,7 @@
     let _pollTimer = null;
     let _active = false;
     let _lastShownRoundId = null;
+    let _sendEnabled = true;
 
     const POLL_WAITING_MS = 4000;
     const POLL_NARRATING_MS = 3000;
@@ -60,16 +61,24 @@
     }
 
     function _setComposerState(enabled, placeholder) {
+        _sendEnabled = enabled;
         const inp = _input();
-        const btn = _sendBtn();
         if (inp) {
-            if (inp.disabled !== !enabled) inp.disabled = !enabled;
             if (placeholder && inp.placeholder !== placeholder) inp.placeholder = placeholder;
         }
-        if (btn) {
-            if (btn.disabled !== !enabled) { btn.disabled = !enabled; btn.style.opacity = enabled ? '' : '0.3'; }
-        }
+        _syncSendBtn();
     }
+
+    function _syncSendBtn() {
+        const btn = _sendBtn();
+        const inp = _input();
+        if (!btn) return;
+        const isSlash = (inp?.value || '').startsWith('/');
+        const shouldEnable = _sendEnabled || isSlash;
+        if (btn.disabled !== !shouldEnable) { btn.disabled = !shouldEnable; btn.style.opacity = shouldEnable ? '' : '0.3'; }
+    }
+
+    function _onInputEvent() { _syncSendBtn(); }
 
     function _injectStatusBar() {
         if (document.getElementById('mp-status-bar')) return;
@@ -239,6 +248,10 @@
         _characterName = characterName;
         _active = true;
         _lastShownRoundId = null;
+        _sendEnabled = true;
+
+        const inp = _input();
+        if (inp) { inp.removeEventListener('input', _onInputEvent); inp.addEventListener('input', _onInputEvent); }
 
         _injectStatusBar();
         _hideNote();
@@ -251,9 +264,14 @@
         _campaignId = null;
         _characterId = null;
         _characterName = null;
+        _sendEnabled = true;
+
+        const inp = _input();
+        if (inp) { inp.removeEventListener('input', _onInputEvent); inp.placeholder = 'Co robisz? Możesz pisać swobodnie...'; }
 
         _removeStatusBar();
-        _setComposerState(true, 'Co robisz? Możesz pisać swobodnie...');
+        const btn = _sendBtn();
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; }
         _hideNote();
     }
 
