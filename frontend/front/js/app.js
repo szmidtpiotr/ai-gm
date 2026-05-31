@@ -4390,6 +4390,7 @@ async function handleSendMessage() {
     }
 
     await sendTurn(content, 'free_text');
+    _tryShowContextTip(); // non-blocking — context-aware tip every TIP_TURN_INTERVAL turns
 }
 
 // ── Skill Test Roll Popup — dice.js 3D physics (issue #65) ──────────────────
@@ -6422,6 +6423,143 @@ async function _handleTriggeredTips(keys) {
             showToast(`Nowa wskazówka: ${tip.title}`, 'info', 4000);
         }
     }
+}
+
+// ── Context-aware knowledge tip popup ────────────────────────────────────────
+// Shows an unseen tip from the knowledge book every TIP_TURN_INTERVAL turns.
+// Category weighted by current game context (combat / archetype / fallback).
+
+const TIP_TURN_INTERVAL = 5;       // show tip every N turns
+const TIP_DISPLAY_MS    = 12000;   // auto-dismiss after N ms
+
+// Category SVG art — inline so no extra network request
+const CATEGORY_ART = {
+    combat: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M34 6L42 14L18 38L6 42L10 30L34 6Z" stroke="#c9a54a" stroke-width="2.5" stroke-linejoin="round" fill="rgba(201,165,74,0.12)"/>
+        <line x1="29" y1="11" x2="37" y2="19" stroke="#c9a54a" stroke-width="2"/>
+        <path d="M6 42L10 38" stroke="#e8c87a" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="38" cy="10" r="3" fill="rgba(201,165,74,0.3)" stroke="#c9a54a" stroke-width="1.5"/>
+    </svg>`,
+    magic: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="22" r="10" stroke="#9b7fe0" stroke-width="2" fill="rgba(155,127,224,0.12)"/>
+        <path d="M24 8V12M24 32V36M8 22H12M36 22H40" stroke="#9b7fe0" stroke-width="2" stroke-linecap="round"/>
+        <path d="M24 19L25.8 21.4L28.6 22L26.6 24.2L27 27L24 25.6L21 27L21.4 24.2L19.4 22L22.2 21.4L24 19Z" fill="#9b7fe0" stroke="#9b7fe0" stroke-width="1" stroke-linejoin="round"/>
+        <circle cx="36" cy="12" r="2" fill="rgba(155,127,224,0.5)"/>
+        <circle cx="12" cy="34" r="1.5" fill="rgba(155,127,224,0.4)"/>
+    </svg>`,
+    exploration: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="24" r="15" stroke="#6aaa8a" stroke-width="2" fill="rgba(106,170,138,0.1)"/>
+        <path d="M24 9V24L30 30" stroke="#6aaa8a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9 24H39M24 9V39" stroke="#6aaa8a" stroke-width="1" stroke-dasharray="3 3" opacity="0.4"/>
+        <circle cx="24" cy="24" r="2.5" fill="#6aaa8a"/>
+        <path d="M28 16L32 12" stroke="#e8c87a" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="33" cy="11" r="1.5" fill="#e8c87a" opacity="0.8"/>
+    </svg>`,
+    mechanics: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="24" cy="24" r="8" stroke="#7ab8d4" stroke-width="2" fill="rgba(122,184,212,0.1)"/>
+        <circle cx="24" cy="24" r="2.5" fill="#7ab8d4"/>
+        <path d="M24 10V16M24 32V38M10 24H16M32 24H38" stroke="#7ab8d4" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M14.1 14.1L18.3 18.3M29.7 29.7L33.9 33.9M33.9 14.1L29.7 18.3M18.3 29.7L14.1 33.9" stroke="#7ab8d4" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+    </svg>`,
+    general: `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M10 8H32L38 14V40H10V8Z" stroke="#c9a54a" stroke-width="2" stroke-linejoin="round" fill="rgba(201,165,74,0.08)"/>
+        <path d="M32 8V14H38" stroke="#c9a54a" stroke-width="2" stroke-linejoin="round"/>
+        <line x1="16" y1="20" x2="32" y2="20" stroke="#c9a54a" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+        <line x1="16" y1="26" x2="32" y2="26" stroke="#c9a54a" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+        <line x1="16" y1="32" x2="26" y2="32" stroke="#c9a54a" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+    </svg>`,
+};
+let   _tipTurnCounter   = 0;
+let   _tipDismissTimer  = null;
+
+function _pickContextCategory() {
+    if (combatActive) return 'combat';
+    const sheet = (typeof characterData?.sheet_json === 'string'
+        ? JSON.parse(characterData.sheet_json || '{}')
+        : characterData?.sheet_json) || {};
+    const arch = (sheet.archetype || '').toLowerCase();
+    if (arch === 'scholar') return 'magic';
+    return null; // null = any category
+}
+
+async function _tryShowContextTip() {
+    _tipTurnCounter++;
+    if (_tipTurnCounter < TIP_TURN_INTERVAL) return;
+    _tipTurnCounter = 0;
+
+    const tips = await _loadKnowledgeTips();
+    if (!tips.length) return;
+    const seen = _getSeenTips();
+    const preferCat = _pickContextCategory();
+
+    // Build weighted candidate list: preferred category first, then rest
+    const unseen = tips.filter(t => !seen.has(t.tip_key));
+    if (!unseen.length) {
+        // All seen — reset session seen list and try again next cycle
+        try { localStorage.removeItem('aigm_seen_tips'); } catch {}
+        return;
+    }
+    const preferred = preferCat ? unseen.filter(t => t.category === preferCat) : [];
+    const fallback  = preferCat ? unseen.filter(t => t.category !== preferCat) : unseen;
+    const pool      = preferred.length ? preferred : fallback;
+    const tip       = pool[Math.floor(Math.random() * pool.length)];
+
+    _showKnowledgeTipPopup(tip);
+}
+
+const _CAT_LABELS = { combat: 'Walka', magic: 'Magia', exploration: 'Eksploracja', mechanics: 'Mechaniki', general: 'Ogólne' };
+
+function _showKnowledgeTipPopup(tip) {
+    const popup    = document.getElementById('knowledge-tip-popup');
+    const titleEl  = document.getElementById('ktip-title');
+    const textEl   = document.getElementById('ktip-text');
+    const artEl    = document.getElementById('ktip-art');
+    const labelEl  = document.getElementById('ktip-label');
+    const progress = document.getElementById('ktip-progress');
+    if (!popup || !titleEl || !textEl) return;
+
+    if (_tipDismissTimer) { clearTimeout(_tipDismissTimer); _tipDismissTimer = null; }
+
+    titleEl.textContent = tip.title;
+    textEl.textContent  = tip.body;
+    if (labelEl) labelEl.textContent = _CAT_LABELS[tip.category] || 'Wskazówka';
+    if (artEl) artEl.innerHTML = CATEGORY_ART[tip.category] || CATEGORY_ART.general;
+
+    // Reset progress bar — set custom property and restart animation via reflow
+    if (progress) {
+        progress.style.setProperty('--ktip-dur', `${TIP_DISPLAY_MS / 1000}s`);
+        progress.style.animation = 'none';
+        void progress.offsetWidth;
+        progress.style.animation = '';
+    }
+
+    popup.classList.remove('ktip-popup--out');
+    popup.hidden = false;
+    _markTipSeen(tip.tip_key);
+
+    _tipDismissTimer = setTimeout(() => _dismissKnowledgeTipPopup(), TIP_DISPLAY_MS);
+}
+
+function _dismissKnowledgeTipPopup() {
+    const popup = document.getElementById('knowledge-tip-popup');
+    if (!popup || popup.hidden) return;
+    if (_tipDismissTimer) { clearTimeout(_tipDismissTimer); _tipDismissTimer = null; }
+    popup.classList.add('ktip-popup--out');
+    popup.addEventListener('animationend', () => {
+        popup.hidden = true;
+        popup.classList.remove('ktip-popup--out');
+    }, { once: true });
+}
+
+function _openKnowledgeTipInSheet() {
+    _dismissKnowledgeTipPopup();
+    // Open character sheet to knowledge tab
+    const sheetDrawer = document.getElementById('sheet-drawer');
+    if (sheetDrawer && !sheetDrawer.classList.contains('open')) {
+        sheetDrawer.classList.add('open');
+        document.body.classList.add('drawer-open');
+    }
+    _switchSheetTab('knowledge');
 }
 
 // ── Rest Buttons ──────────────────────────────────────────────────────────────
@@ -9301,6 +9439,8 @@ function initEventListeners() {
         if (_activeTurnAbort) { _cancelActiveTurn(); return; }
         handleSendMessage();
     });
+    document.getElementById('ktip-close-btn')?.addEventListener('click', _dismissKnowledgeTipPopup);
+    document.getElementById('ktip-more-btn')?.addEventListener('click', _openKnowledgeTipInSheet);
     elements.chatInput?.addEventListener('keypress', handleKeyPress);
     elements.chatInput?.addEventListener('input', updateCharCounter);
     initSlashAutocomplete(elements.chatInput);

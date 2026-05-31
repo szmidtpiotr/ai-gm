@@ -1088,6 +1088,21 @@
       </div>
     </div>
 
+    <!-- Knowledge tip popup — context-aware, slides above composer -->
+    <div id="knowledge-tip-popup" class="ktip-popup" hidden aria-live="polite">
+      <div class="ktip-popup__inner">
+        <div class="ktip-popup__art" id="ktip-art"></div>
+        <div class="ktip-popup__body">
+          <div class="ktip-popup__label" id="ktip-label">Wskazówka</div>
+          <div class="ktip-popup__title" id="ktip-title"></div>
+          <div class="ktip-popup__text" id="ktip-text"></div>
+          <button type="button" class="ktip-popup__more" id="ktip-more-btn">Ksiega Wiedzy →</button>
+        </div>
+        <button type="button" class="ktip-popup__close" id="ktip-close-btn" aria-label="Zamknij wskazówkę">✕</button>
+      </div>
+      <div class="ktip-popup__progress" id="ktip-progress"></div>
+    </div>
+
     <footer class="composer" id="composer">
       <div id="suggested-actions" style="display:none"></div>
       <div class="composer__input-wrap">
