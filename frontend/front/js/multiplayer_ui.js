@@ -277,3 +277,213 @@
 
     window.multiplayerUI = { activate, deactivate };
 })();
+
+// ── Lobby UI (global functions called from HTML onclick) ─────────────────────
+
+let _lobbyId = null;
+let _lobbyPollTimer = null;
+let _inviteLinkToken = null;
+
+function _lobbyToken() {
+    return localStorage.getItem('aigm_access_token') || localStorage.getItem('token') || '';
+}
+
+async function _lobbyFetch(path, opts = {}) {
+    const resp = await fetch('/api' + path, {
+        ...opts,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${_lobbyToken()}`,
+            ...(opts.headers || {}),
+        },
+    });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        throw new Error(err.detail || resp.statusText);
+    }
+    return resp.json();
+}
+
+async function createLobby() {
+    const title = document.getElementById('lobby-title')?.value.trim();
+    const timer = parseInt(document.getElementById('lobby-timer')?.value || '24');
+    const maxPlayers = parseInt(document.getElementById('lobby-max-players')?.value || '4');
+    const errEl = document.getElementById('create-lobby-error');
+    if (!title) { if (errEl) { errEl.textContent = 'Podaj nazwę sesji'; errEl.style.display = 'block'; } return; }
+    try {
+        const data = await _lobbyFetch('/multiplayer/campaigns', {
+            method: 'POST',
+            body: JSON.stringify({ title, round_timer_hours: timer, max_players: maxPlayers }),
+        });
+        _lobbyId = data.campaign_id;
+        await _showLobbyScreen(_lobbyId);
+    } catch (e) {
+        if (errEl) { errEl.textContent = 'Błąd: ' + e.message; errEl.style.display = 'block'; }
+    }
+}
+
+async function _showLobbyScreen(campaignId) {
+    _lobbyId = campaignId;
+    if (typeof showScreen === 'function') showScreen('lobby-screen');
+    await _refreshLobby();
+    _startLobbyPoll();
+}
+
+async function _refreshLobby() {
+    if (!_lobbyId) return;
+    try {
+        const data = await _lobbyFetch(`/multiplayer/campaigns/${_lobbyId}/lobby`);
+        _renderLobby(data);
+    } catch (e) {
+        console.warn('[Lobby] refresh error:', e);
+    }
+}
+
+function _renderLobby(data) {
+    const titleEl = document.getElementById('lobby-screen-title');
+    const subEl = document.getElementById('lobby-screen-subtitle');
+    if (titleEl) titleEl.textContent = data.title;
+    if (subEl) subEl.textContent = `${data.round_timer_hours}h/runda · max ${data.max_players} graczy`;
+
+    const membersEl = document.getElementById('lobby-members-list');
+    if (membersEl) {
+        membersEl.innerHTML = data.members.map(m => {
+            const badge = m.status === 'accepted' ? '✅' : m.status === 'pending' ? '⏳' : '❌';
+            const kickBtn = data.is_host && m.role !== 'owner'
+                ? `<button onclick="kickPlayer(${m.user_id})" style="font-size:11px;opacity:.6;background:none;border:none;cursor:pointer;color:var(--t3)">✕</button>`
+                : '';
+            return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border,.1)">
+                <span style="font-size:18px">${badge}</span>
+                <span style="flex:1">${m.display_name}<span style="opacity:.5;font-size:12px"> @${m.username}</span></span>
+                <span style="font-size:11px;opacity:.5">${m.role === 'owner' ? 'Host' : ''}</span>
+                ${kickBtn}
+            </div>`;
+        }).join('');
+    }
+
+    const inviteSection = document.getElementById('lobby-invite-section');
+    const guestSection = document.getElementById('lobby-guest-section');
+    const startSection = document.getElementById('lobby-start-section');
+    const joinSection = document.getElementById('lobby-join-link-section');
+
+    if (inviteSection) inviteSection.style.display = data.is_host ? 'block' : 'none';
+    if (guestSection) guestSection.style.display = data.is_host ? 'none' : 'block';
+    if (startSection) startSection.style.display = data.is_host ? 'block' : 'none';
+    if (joinSection) joinSection.style.display = data.is_host ? 'none' : 'none'; // hidden for now
+
+    if (data.is_host) {
+        const startBtn = document.getElementById('lobby-start-btn');
+        const hint = document.getElementById('lobby-start-hint');
+        const canStart = data.accepted_count >= 2;
+        if (startBtn) startBtn.disabled = !canStart;
+        if (hint) hint.textContent = canStart ? `${data.accepted_count} graczy gotowych` : `Potrzeba min. 2 graczy (${data.accepted_count}/${data.max_players})`;
+    }
+
+    if (data.lobby_status === 'started') {
+        _stopLobbyPoll();
+        // Campaign is started — load it as a multiplayer campaign
+        if (typeof loadCampaigns === 'function') {
+            loadCampaigns().then(() => { if (typeof showScreen === 'function') showScreen('campaigns-screen'); });
+        }
+    }
+}
+
+function _startLobbyPoll() {
+    _stopLobbyPoll();
+    _lobbyPollTimer = setInterval(_refreshLobby, 5000);
+}
+
+function _stopLobbyPoll() {
+    if (_lobbyPollTimer) { clearInterval(_lobbyPollTimer); _lobbyPollTimer = null; }
+}
+
+async function inviteByUsername() {
+    const input = document.getElementById('lobby-invite-username');
+    const msgEl = document.getElementById('lobby-invite-msg');
+    const username = input?.value.trim();
+    if (!username || !_lobbyId) return;
+    try {
+        await _lobbyFetch(`/multiplayer/campaigns/${_lobbyId}/invite/username`, {
+            method: 'POST',
+            body: JSON.stringify({ username }),
+        });
+        if (msgEl) { msgEl.textContent = `✅ Zaproszono @${username}`; msgEl.style.color = 'var(--green,#4caf50)'; }
+        if (input) input.value = '';
+        await _refreshLobby();
+    } catch (e) {
+        if (msgEl) { msgEl.textContent = '❌ ' + e.message; msgEl.style.color = 'var(--red,#e53935)'; }
+    }
+}
+
+async function generateInviteLink() {
+    if (!_lobbyId) return;
+    const boxEl = document.getElementById('lobby-invite-link-box');
+    const textEl = document.getElementById('lobby-invite-link-text');
+    const msgEl = document.getElementById('lobby-invite-msg');
+    try {
+        const data = await _lobbyFetch(`/multiplayer/campaigns/${_lobbyId}/invite-link`, { method: 'POST' });
+        _inviteLinkToken = data.token;
+        const url = `${location.origin}/?join=${data.token}`;
+        if (textEl) textEl.textContent = url;
+        if (boxEl) boxEl.style.display = 'block';
+        if (msgEl) { msgEl.textContent = `Ważny do: ${new Date(data.expires_at).toLocaleDateString('pl-PL')}`; msgEl.style.color = ''; }
+    } catch (e) {
+        if (msgEl) { msgEl.textContent = '❌ ' + e.message; msgEl.style.color = 'var(--red,#e53935)'; }
+    }
+}
+
+function copyInviteLink() {
+    const textEl = document.getElementById('lobby-invite-link-text');
+    if (textEl?.textContent) navigator.clipboard?.writeText(textEl.textContent).catch(() => {});
+}
+
+async function startLobby() {
+    if (!_lobbyId) return;
+    try {
+        await _lobbyFetch(`/multiplayer/campaigns/${_lobbyId}/start`, { method: 'POST' });
+        _stopLobbyPoll();
+        if (typeof loadCampaigns === 'function') {
+            await loadCampaigns();
+            if (typeof showScreen === 'function') showScreen('campaigns-screen');
+        }
+    } catch (e) {
+        const hint = document.getElementById('lobby-start-hint');
+        if (hint) { hint.textContent = '❌ ' + e.message; hint.style.color = 'var(--red,#e53935)'; }
+    }
+}
+
+async function kickPlayer(targetUserId) {
+    if (!_lobbyId) return;
+    try {
+        await _lobbyFetch(`/multiplayer/campaigns/${_lobbyId}/players/${targetUserId}`, { method: 'DELETE' });
+        await _refreshLobby();
+    } catch (e) {
+        console.warn('[Lobby] kick error:', e);
+    }
+}
+
+async function joinViaToken() {
+    const input = document.getElementById('lobby-join-token-input');
+    const msgEl = document.getElementById('lobby-join-msg');
+    const token = input?.value.trim();
+    if (!token) return;
+    try {
+        const data = await _lobbyFetch(`/multiplayer/join/${token}`);
+        _lobbyId = data.campaign_id;
+        if (msgEl) { msgEl.textContent = `✅ Dołączyłeś do "${data.title}"`; msgEl.style.color = 'var(--green,#4caf50)'; }
+        await _showLobbyScreen(data.campaign_id);
+    } catch (e) {
+        if (msgEl) { msgEl.textContent = '❌ ' + e.message; msgEl.style.color = 'var(--red,#e53935)'; }
+    }
+}
+
+// Handle ?join=TOKEN in URL on page load
+(function _checkJoinParam() {
+    const params = new URLSearchParams(location.search);
+    const token = params.get('join');
+    if (!token) return;
+    // Remove param from URL without reload
+    history.replaceState(null, '', location.pathname);
+    // Wait for auth before processing
+    window._pendingJoinToken = token;
+})();

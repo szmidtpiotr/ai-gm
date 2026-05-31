@@ -586,6 +586,20 @@
           </div>
           <span class="adv-card__arrow">›</span>
         </button>
+        <button type="button" class="adv-card" id="multiplayer-lobby-btn" onclick="showScreen('create-lobby-screen')">
+          <div class="adv-card__icon">👥</div>
+          <div class="adv-card__body">
+            <h3>Multiplayer</h3>
+            <p>Graj z innymi graczami — utwórz lobby lub dołącz przez link</p>
+          </div>
+          <span class="adv-card__arrow">›</span>
+        </button>
+      </div>
+
+      <!-- Pending multiplayer invites -->
+      <div id="mp-invites-section" style="display:none;margin-bottom:12px">
+        <div class="campaigns-section-label" style="display:block">Zaproszenia multiplayer</div>
+        <div id="mp-invites-list"></div>
       </div>
 
       <!-- Active campaigns -->
@@ -595,6 +609,90 @@
         <span class="empty-state__icon">📜</span>
         <h3>Brak aktywnych kampanii</h3>
         <p>Rozpocznij nową przygodę powyżej</p>
+      </div>
+    </main>
+  </div>
+
+  <!-- CREATE MULTIPLAYER LOBBY SCREEN -->
+  <div id="create-lobby-screen" class="screen">
+    <header class="header">
+      <button type="button" class="header__back" onclick="showScreen('campaigns-screen')">‹</button>
+      <div class="header__center"><h1 class="header__title">Nowe Lobby</h1></div>
+    </header>
+    <main style="padding:20px;max-width:480px;margin:0 auto">
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Nazwa sesji</label>
+        <input id="lobby-title" class="input" placeholder="np. Mroczna Dolina z kumplami" style="width:100%">
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Timer per runda</label>
+        <select id="lobby-timer" class="input" style="width:100%">
+          <option value="12">12 godzin</option>
+          <option value="24" selected>24 godziny</option>
+          <option value="48">48 godzin</option>
+        </select>
+        <p id="lobby-timer-hint" style="font-size:12px;opacity:.55;margin-top:4px"></p>
+      </div>
+      <div class="form-group" style="margin-bottom:24px">
+        <label class="form-label">Maks. graczy</label>
+        <select id="lobby-max-players" class="input" style="width:100%">
+          <option value="2">2 graczy</option>
+          <option value="3">3 graczy</option>
+          <option value="4" selected>4 graczy</option>
+        </select>
+      </div>
+      <button type="button" class="btn btn-primary" style="width:100%" onclick="createLobby()">Utwórz lobby</button>
+      <div id="create-lobby-error" style="color:var(--red,#e53935);font-size:13px;margin-top:8px;display:none"></div>
+    </main>
+  </div>
+
+  <!-- LOBBY VIEW SCREEN -->
+  <div id="lobby-screen" class="screen">
+    <header class="header">
+      <button type="button" class="header__back" onclick="showScreen('campaigns-screen')">‹</button>
+      <div class="header__center">
+        <h1 class="header__title" id="lobby-screen-title">Lobby</h1>
+        <p class="header__subtitle" id="lobby-screen-subtitle"></p>
+      </div>
+    </header>
+    <main style="padding:20px;max-width:480px;margin:0 auto">
+      <!-- Player list -->
+      <div id="lobby-members-list" style="margin-bottom:20px"></div>
+
+      <!-- Invite section (host only) -->
+      <div id="lobby-invite-section" style="margin-bottom:20px;display:none">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;opacity:.7;text-transform:uppercase;letter-spacing:.05em">Zaproś gracza</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input id="lobby-invite-username" class="input" placeholder="Nazwa użytkownika" style="flex:1">
+          <button type="button" class="btn btn-sm" onclick="inviteByUsername()">Zaproś</button>
+        </div>
+        <button type="button" class="btn btn-sm" style="width:100%" onclick="generateInviteLink()">🔗 Generuj link zaproszenia</button>
+        <div id="lobby-invite-link-box" style="display:none;margin-top:8px;padding:10px;background:var(--bg2,#1e1e2e);border-radius:8px;word-break:break-all;font-size:12px">
+          <div id="lobby-invite-link-text"></div>
+          <button type="button" class="btn btn-sm" style="margin-top:6px" onclick="copyInviteLink()">📋 Kopiuj</button>
+        </div>
+        <div id="lobby-invite-msg" style="font-size:13px;margin-top:6px"></div>
+      </div>
+
+      <!-- Guest actions -->
+      <div id="lobby-guest-section" style="margin-bottom:20px;display:none">
+        <p style="font-size:14px;opacity:.7">Czekasz na hosta, który rozpocznie grę.</p>
+      </div>
+
+      <!-- Start button (host only) -->
+      <div id="lobby-start-section" style="display:none">
+        <button type="button" id="lobby-start-btn" class="btn btn-primary" style="width:100%" onclick="startLobby()">▶ Rozpocznij grę</button>
+        <p id="lobby-start-hint" style="font-size:12px;opacity:.55;text-align:center;margin-top:6px"></p>
+      </div>
+
+      <!-- Join invite link flow -->
+      <div id="lobby-join-link-section" style="margin-bottom:20px;display:none">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px;opacity:.7;text-transform:uppercase;letter-spacing:.05em">Dołącz przez link</div>
+        <div style="display:flex;gap:8px">
+          <input id="lobby-join-token-input" class="input" placeholder="Wklej token z linku..." style="flex:1">
+          <button type="button" class="btn btn-sm" onclick="joinViaToken()">Dołącz</button>
+        </div>
+        <div id="lobby-join-msg" style="font-size:13px;margin-top:6px"></div>
       </div>
     </main>
   </div>

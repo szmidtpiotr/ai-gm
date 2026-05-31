@@ -3436,6 +3436,7 @@ def run_admin_migrations() -> None:
         _ensure_bug_reports_github_status(conn)
         _ensure_push_subscriptions_table(conn)
         _ensure_campaign_rounds_tables(conn)
+        _ensure_multiplayer_lobby_schema(conn)
     finally:
         conn.close()
 
@@ -3640,3 +3641,47 @@ def _ensure_push_subscriptions_table(conn: sqlite3.Connection) -> None:
     )
     conn.commit()
     logger.info("admin_migration_applied", label="push-subscriptions-table")
+
+
+def _ensure_multiplayer_lobby_schema(conn: sqlite3.Connection) -> None:
+    """Multiplayer lobby — campaign columns + invite tokens + member status."""
+    # Extra columns on campaigns
+    existing = [r[1] for r in conn.execute("PRAGMA table_info(campaigns)").fetchall()]
+    for col, defn in [
+        ("round_timer_hours", "INTEGER NOT NULL DEFAULT 24"),
+        ("max_players", "INTEGER NOT NULL DEFAULT 4"),
+        ("host_user_id", "INTEGER"),
+        ("lobby_status", "TEXT NOT NULL DEFAULT 'open'"),
+    ]:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE campaigns ADD COLUMN {col} {defn}")
+
+    # Status column on campaign_members (pending/accepted/declined)
+    mem_cols = [r[1] for r in conn.execute("PRAGMA table_info(campaign_members)").fetchall()]
+    if "status" not in mem_cols:
+        conn.execute(
+            "ALTER TABLE campaign_members ADD COLUMN status TEXT NOT NULL DEFAULT 'accepted'"
+        )
+    if "character_id" not in mem_cols:
+        conn.execute("ALTER TABLE campaign_members ADD COLUMN character_id INTEGER")
+
+    # Invite-token table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS campaign_invites (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id INTEGER NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+            token       TEXT NOT NULL UNIQUE,
+            created_by  INTEGER NOT NULL REFERENCES users(id),
+            expires_at  TEXT NOT NULL,
+            used_at     TEXT,
+            used_by     INTEGER REFERENCES users(id)
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_campaign_invites_token ON campaign_invites(token)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_campaign_invites_campaign ON campaign_invites(campaign_id)"
+    )
+    conn.commit()
+    logger.info("admin_migration_applied", label="multiplayer-lobby-schema")

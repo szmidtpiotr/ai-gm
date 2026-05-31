@@ -505,6 +505,15 @@ async function handleLogin(e) {
             } catch (e) {
                 console.error('[Login] loadHeroes failed:', e);
             }
+            if (window._pendingJoinToken) {
+                const token = window._pendingJoinToken;
+                delete window._pendingJoinToken;
+                showScreen('campaigns');
+                const tokenInput = document.getElementById('lobby-join-token-input');
+                if (tokenInput) tokenInput.value = token;
+                joinViaToken();
+                return;
+            }
             if (!response.onboarded_at) {
                 showOnboardingCinematic();
             } else {
@@ -1220,8 +1229,53 @@ async function _proceedFromIdlePanel() {
 // ============================================================================
 // Campaigns
 // ============================================================================
+async function loadPendingMpInvites() {
+    const section = document.getElementById('mp-invites-section');
+    const list = document.getElementById('mp-invites-list');
+    if (!section || !list) return;
+    try {
+        const data = await apiRequest('GET', '/multiplayer/my-invites');
+        const invites = data.invites || [];
+        if (invites.length === 0) { section.style.display = 'none'; return; }
+        section.style.display = '';
+        list.innerHTML = invites.map(inv => `
+          <div style="background:var(--bg2,#1e1e2e);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div>
+              <div style="font-weight:600;font-size:14px">${inv.title}</div>
+              <div style="font-size:12px;opacity:.6">od ${inv.host_username} · ${inv.max_players} graczy</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm" style="background:var(--green,#4caf50);font-size:12px" onclick="acceptMpInvite(${inv.campaign_id})">✓ Dołącz</button>
+              <button class="btn btn-sm" style="background:var(--bg3,#2a2a3e);font-size:12px" onclick="declineMpInvite(${inv.campaign_id})">✕</button>
+            </div>
+          </div>`).join('');
+    } catch (e) {
+        section.style.display = 'none';
+    }
+}
+
+async function acceptMpInvite(campaignId) {
+    try {
+        await apiRequest('POST', `/multiplayer/campaigns/${campaignId}/accept`);
+        await loadPendingMpInvites();
+        _showLobbyScreen(campaignId);
+    } catch (e) {
+        showToast('Nie udało się dołączyć: ' + e.message, 'error');
+    }
+}
+
+async function declineMpInvite(campaignId) {
+    try {
+        await apiRequest('POST', `/multiplayer/campaigns/${campaignId}/decline`);
+        await loadPendingMpInvites();
+    } catch (e) {
+        showToast('Błąd: ' + e.message, 'error');
+    }
+}
+
 async function loadCampaigns() {
     console.log('[Campaigns] Loading for user:', currentUser?.id);
+    loadPendingMpInvites();
     try {
         const response = await apiRequest('GET', '/campaigns');
         console.log('[Campaigns] Raw response:', response);
