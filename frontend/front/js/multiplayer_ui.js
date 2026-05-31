@@ -503,6 +503,8 @@
         _chatOpen = false;
         const chatPanel = document.getElementById('party-chat-panel');
         if (chatPanel) chatPanel.hidden = true;
+        const chatContainer = _chatMessages();
+        if (chatContainer) chatContainer.innerHTML = '';
         _currentRoundNumber = null;
         _currentDeadline = null;
         _campaignId = null;
