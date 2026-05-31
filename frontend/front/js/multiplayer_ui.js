@@ -721,7 +721,11 @@ function setLobbyMode(mode) {
     document.getElementById('lobby-mode-prebuilt')?.classList.toggle('lf-tile--on', mode === 'prebuilt');
     const tplSection = document.getElementById('lobby-template-section');
     if (tplSection) tplSection.style.display = mode === 'prebuilt' ? '' : 'none';
+    // Hide name input in prebuilt mode — title comes from template
+    const nameSection = document.getElementById('lobby-name-section');
+    if (nameSection) nameSection.style.display = mode === 'prebuilt' ? 'none' : '';
     if (mode === 'prebuilt' && !_lobbyTemplates.length) _loadLobbyTemplates();
+    if (mode === 'ai') { _lobbyTemplateId = null; document.getElementById('lobby-tpl-summary')?.style.setProperty('display','none'); }
 }
 
 async function _loadLobbyTemplates() {
@@ -734,36 +738,55 @@ async function _loadLobbyTemplates() {
             list.innerHTML = '<div style="opacity:.5;font-size:13px;padding:8px 0">Brak opublikowanych przygód</div>';
             return;
         }
-        list.innerHTML = _lobbyTemplates.map(t => `
-            <button type="button" class="lf-tpl-card" data-tpl-id="${t.id}" onclick="selectLobbyTemplate(${t.id}, ${JSON.stringify(t.title)})">
-                <span class="lf-tpl-card__title">${t.title}</span>
-                ${t.difficulty_rating ? `<span class="lf-tpl-card__diff">★${t.difficulty_rating}</span>` : ''}
-            </button>`).join('');
+        list.innerHTML = '';
+        for (const t of _lobbyTemplates) {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'lf-tpl-card';
+            btn.dataset.tplId = t.id;
+            btn.innerHTML = `<span class="lf-tpl-card__title">${t.title}</span>${t.difficulty_rating ? `<span class="lf-tpl-card__diff">★${t.difficulty_rating}</span>` : ''}`;
+            btn.addEventListener('click', () => selectLobbyTemplate(t.id));
+            list.appendChild(btn);
+        }
     } catch (e) {
         list.innerHTML = '<div style="opacity:.5;font-size:13px;padding:8px 0">Błąd ładowania szablonów</div>';
     }
 }
 
-function selectLobbyTemplate(id, title) {
+function selectLobbyTemplate(id) {
     _lobbyTemplateId = id;
+    const tpl = _lobbyTemplates.find(t => t.id === id);
     document.querySelectorAll('.lf-tpl-card').forEach(c => c.classList.toggle('lf-tpl-card--on', parseInt(c.dataset.tplId) === id));
-    const titleInput = document.getElementById('lobby-title');
-    if (titleInput && !titleInput.value.trim()) titleInput.value = title;
+    // Show summary
+    const summary = document.getElementById('lobby-tpl-summary');
+    if (summary && tpl) {
+        const desc = tpl.description || '';
+        const atm = tpl.atmosphere ? `<em style="opacity:.6;font-size:11px">${tpl.atmosphere}</em>` : '';
+        summary.innerHTML = (desc ? `<p style="margin:0 0 4px">${desc}</p>` : '') + atm;
+        summary.style.display = desc || tpl.atmosphere ? '' : 'none';
+    }
 }
 
 async function createLobby() {
-    const title = document.getElementById('lobby-title')?.value.trim();
     const timerMinutes = parseInt(document.getElementById('lobby-timer')?.value || '1440');
     const maxPlayers = parseInt(document.getElementById('lobby-max-players')?.value || '4');
     const errEl = document.getElementById('create-lobby-error');
     const btn = document.querySelector('#create-lobby-screen .lf-create-btn');
-    if (!title) { if (errEl) { errEl.textContent = 'Podaj nazwę sesji'; errEl.style.display = 'block'; } return; }
+
+    let title;
+    if (_lobbyMode === 'prebuilt') {
+        if (!_lobbyTemplateId) {
+            if (errEl) { errEl.textContent = 'Wybierz przygodę z listy'; errEl.style.display = 'block'; }
+            return;
+        }
+        title = _lobbyTemplates.find(t => t.id === _lobbyTemplateId)?.title || 'Kampania';
+    } else {
+        title = document.getElementById('lobby-title')?.value.trim();
+        if (!title) { if (errEl) { errEl.textContent = 'Podaj nazwę sesji'; errEl.style.display = 'block'; } return; }
+    }
+
     if (timerMinutes < 1 || timerMinutes > 4320) {
         if (errEl) { errEl.textContent = 'Timer: 1–4320 minut'; errEl.style.display = 'block'; }
-        return;
-    }
-    if (_lobbyMode === 'prebuilt' && !_lobbyTemplateId) {
-        if (errEl) { errEl.textContent = 'Wybierz gotową przygodę lub zmień tryb na AI'; errEl.style.display = 'block'; }
         return;
     }
     // Disable to prevent duplicate creation on double-click or page refresh

@@ -656,10 +656,11 @@
         <div id="lobby-template-list" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto">
           <div style="opacity:.5;font-size:13px;padding:8px 0">Ładowanie…</div>
         </div>
+        <div id="lobby-tpl-summary" style="display:none;margin-top:10px;padding:10px 12px;background:rgba(201,165,74,.06);border:1px solid rgba(201,165,74,.18);border-radius:10px;font-size:13px;color:var(--text-secondary);line-height:1.5"></div>
       </div>
 
-      <!-- Session name -->
-      <div class="lf-section">
+      <!-- Session name (hidden in prebuilt mode — title comes from template) -->
+      <div class="lf-section" id="lobby-name-section">
         <label class="lf-legend" for="lobby-title">Nazwa wyprawy</label>
         <input id="lobby-title" class="lf-quest-input" type="text"
           placeholder="Nadaj imię swej przygodzie…" autocomplete="off">
@@ -2113,7 +2114,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/multiplayer_ui.js?v=30"></script>
+  <script src="./js/multiplayer_ui.js?v=31"></script>
   <script src="./js/app.js?v=multiplayer-lobby-17"></script>
 </body>
 </html>
