@@ -1236,13 +1236,15 @@ async function loadPendingMpInvites() {
     const list = document.getElementById('mp-invites-list');
     if (!section || !list) return;
     try {
-        const [invData, lobbyData] = await Promise.all([
+        const [invData, lobbyData, activeData] = await Promise.all([
             apiRequest('GET', '/multiplayer/my-invites'),
             apiRequest('GET', '/multiplayer/my-lobbies'),
+            apiRequest('GET', '/multiplayer/my-active-games'),
         ]);
         const invites = invData.invites || [];
         const lobbies = lobbyData.lobbies || [];
-        if (invites.length === 0 && lobbies.length === 0) { section.style.display = 'none'; return; }
+        const activeGames = activeData.games || [];
+        if (invites.length === 0 && lobbies.length === 0 && activeGames.length === 0) { section.style.display = 'none'; return; }
         section.style.display = '';
 
         const lobbyHtml = lobbies.map(l => `
@@ -1269,7 +1271,16 @@ async function loadPendingMpInvites() {
             </div>
           </div>`).join('');
 
-        list.innerHTML = lobbyHtml + inviteHtml;
+        const activeHtml = activeGames.map(g => `
+          <div style="background:var(--bg2,#1e1e2e);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;border-left:3px solid var(--green,#4caf50)">
+            <div>
+              <div style="font-weight:600;font-size:14px">⚔ ${g.title}</div>
+              <div style="font-size:12px;opacity:.6">host: ${g.host_username} · ${g.player_count} graczy · w trakcie gry</div>
+            </div>
+            <button class="btn btn-sm" style="background:var(--green,#4caf50);font-size:12px" onclick="enterMpGame(${g.campaign_id})">Graj</button>
+          </div>`).join('');
+
+        list.innerHTML = activeHtml + lobbyHtml + inviteHtml;
     } catch (e) {
         section.style.display = 'none';
     }
@@ -1290,6 +1301,25 @@ async function declineMpInvite(campaignId) {
         await loadPendingMpInvites();
     } catch (e) {
         showToast('Błąd: ' + e.message, 'error');
+    }
+}
+
+async function enterMpGame(campaignId) {
+    if (!currentHero) { showToast('Wybierz bohatera przed wejściem do gry', 'error'); return; }
+    try {
+        const camp = await apiRequest('GET', `/campaigns/${campaignId}`);
+        currentCampaignId = campaignId;
+        currentCampaign = camp;
+        characterData = {
+            id: currentHero.id,
+            name: currentHero.name,
+            character_name: currentHero.name,
+            user_id: currentHero.user_id ?? currentUser?.id,
+            ...currentHero,
+        };
+        await enterGame(camp);
+    } catch (e) {
+        showToast('Błąd wejścia do gry: ' + e.message, 'error');
     }
 }
 

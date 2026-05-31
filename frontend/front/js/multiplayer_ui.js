@@ -403,7 +403,9 @@ function _renderLobby(data) {
 
     if (data.lobby_status === 'started') {
         _clearLobbySession();
-        if (typeof loadCampaigns === 'function') {
+        if (typeof enterMpGame === 'function') {
+            enterMpGame(data.campaign_id);
+        } else if (typeof loadCampaigns === 'function') {
             loadCampaigns().then(() => { if (typeof showScreen === 'function') showScreen('campaigns'); });
         }
     }
@@ -460,10 +462,13 @@ function copyInviteLink() {
 
 async function startLobby() {
     if (!_lobbyId) return;
+    const id = _lobbyId;
     try {
-        await _lobbyFetch(`/multiplayer/campaigns/${_lobbyId}/start`, { method: 'POST' });
+        await _lobbyFetch(`/multiplayer/campaigns/${id}/start`, { method: 'POST' });
         _clearLobbySession();
-        if (typeof loadCampaigns === 'function') {
+        if (typeof enterMpGame === 'function') {
+            await enterMpGame(id);
+        } else if (typeof loadCampaigns === 'function') {
             await loadCampaigns();
             if (typeof showScreen === 'function') showScreen('campaigns');
         }
