@@ -4278,6 +4278,10 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
 }
 
 async function handleSendMessage() {
+    if (window.multiplayerUI?.isActive()) {
+        await window.multiplayerUI.handleSubmit();
+        return;
+    }
     const content = elements.chatInput.value.trim();
     if (!content) return;
 

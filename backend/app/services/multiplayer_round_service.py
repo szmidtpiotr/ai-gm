@@ -68,7 +68,7 @@ def _db() -> sqlite3.Connection:
 
 def _get_campaign_member_count(campaign_id: int, conn: sqlite3.Connection) -> int:
     row = conn.execute(
-        "SELECT COUNT(*) as cnt FROM campaign_members WHERE campaign_id = ?",
+        "SELECT COUNT(*) as cnt FROM campaign_members WHERE campaign_id = ? AND status='accepted'",
         (campaign_id,),
     ).fetchone()
     return int(row["cnt"]) if row else 0
