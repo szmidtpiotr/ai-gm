@@ -149,6 +149,8 @@ def list_campaigns():
             c.status,
             c.created_at,
             c.gm_plan_json,
+            c.host_user_id,
+            c.round_timer_minutes,
             (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count,
             (SELECT ch.id FROM characters ch WHERE ch.campaign_id = c.id AND ch.is_active = 1 LIMIT 1) AS character_id
         FROM campaigns c
@@ -229,7 +231,7 @@ def get_campaign(
         row = conn.execute(
             """
             SELECT id, title, system_id, model_id, owner_user_id, language, mode, status, created_at,
-                   gm_plan_json
+                   gm_plan_json, host_user_id, round_timer_minutes
             FROM campaigns
             WHERE id = ?
             """,

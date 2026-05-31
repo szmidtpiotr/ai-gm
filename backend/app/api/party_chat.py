@@ -44,6 +44,7 @@ def get_party_chat(
             raise HTTPException(status_code=403, detail="Not a member of this campaign")
 
         # Resolve caller's character name (needed to show whispers addressed to them)
+        # 1. Most recent submitted action (most reliable in-game name)
         caller_char = conn.execute(
             "SELECT character_name FROM campaign_round_actions "
             "WHERE campaign_id=? AND user_id=? "
@@ -51,6 +52,32 @@ def get_party_chat(
             (campaign_id, uid),
         ).fetchone()
         caller_char_name = caller_char["character_name"] if caller_char else None
+
+        # 2. Fallback: character assigned to this user for this campaign
+        if not caller_char_name:
+            char_row = conn.execute(
+                "SELECT c.name FROM characters c "
+                "JOIN campaign_members cm ON cm.character_id = c.id "
+                "WHERE cm.campaign_id=? AND cm.user_id=? AND cm.status='accepted' LIMIT 1",
+                (campaign_id, uid),
+            ).fetchone()
+            caller_char_name = char_row["name"] if char_row else None
+
+        # 3. Fallback: any character owned by this user active in this campaign
+        if not caller_char_name:
+            char_row = conn.execute(
+                "SELECT name FROM characters WHERE user_id=? AND campaign_id=? LIMIT 1",
+                (uid, campaign_id),
+            ).fetchone()
+            caller_char_name = char_row["name"] if char_row else None
+
+        # 4. Broadest fallback: any character owned by this user (handles new players with no actions yet)
+        if not caller_char_name:
+            char_row = conn.execute(
+                "SELECT name FROM characters WHERE user_id=? ORDER BY id DESC LIMIT 1",
+                (uid,),
+            ).fetchone()
+            caller_char_name = char_row["name"] if char_row else None
 
         whisper_filter = "(whisper_to IS NULL OR user_id=? OR whisper_to=?)"
         params_extra = (uid, caller_char_name or "")

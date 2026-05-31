@@ -22,6 +22,7 @@ const SLASH_COMMANDS = [
     { cmd: '/sheet',   desc: 'Otwórz kartę postaci' },
     { cmd: '/mem',     desc: 'Pytanie o przeszłość z podsumowań (bez wpływu na narrację)' },
     { cmd: '/helpme',  desc: 'Doradca OOC — wskazówki poza fabułą' },
+    { cmd: '/whisper', desc: 'Wyślij szept do gracza: /whisper Imię wiadomość', multiplayerOnly: true },
     { cmd: '/admin',   desc: 'Komendy admina: add | set | remove | clear | combat | quest | show', adminOnly: true },
     { cmd: '/debug',   desc: 'Debug: dump-state | set-hp N | set-state STATE | reset-cooldowns | roll SKILL', adminOnly: true },
     { cmd: '/roll',    desc: 'Admin: wymuś test umiejętności. /roll skradanie → kostek; /roll skradanie 18 → wstrzyknij wartość 18', adminOnly: true },
@@ -3193,8 +3194,10 @@ async function handleSlashCommand(text) {
     const t = _expandSlashAlias(original);
 
     if (/^\/help(\s|$)/i.test(t)) {
+        const mpActive = !!window.multiplayerUI?.isActive();
         const lines = SLASH_COMMANDS
             .filter(c => !c.adminOnly || playerIsAdmin())
+            .filter(c => !c.multiplayerOnly || mpActive)
             .map(c => `\`${c.cmd}\` — ${c.desc}`)
             .join('\n');
         appendMessage({ role: 'system', content: `**Komendy:**\n${lines}`, created_at: new Date() });
@@ -3502,17 +3505,17 @@ function _expandSlashAlias(text) {
     return canon + text.slice(first.length);
 }
 
-// Effective list: server (alias-aware) + admin-only commands from hardcoded for admins.
+// Effective list: server (alias-aware) + admin-only + multiplayerOnly commands merged in.
 function _effectiveSlashCommands() {
     const base = (_publicSlashCache || SLASH_COMMANDS).slice();
-    if (playerIsAdmin()) {
-        // Server omits admin-only commands (player_enabled=false). Merge them in.
-        const seen = new Set(base.map(c => c.cmd));
-        for (const c of SLASH_COMMANDS) {
-            if (c.adminOnly && !seen.has(c.cmd)) base.push(c);
-        }
+    const seen = new Set(base.map(c => c.cmd));
+    for (const c of SLASH_COMMANDS) {
+        if (c.adminOnly && !seen.has(c.cmd) && playerIsAdmin()) base.push(c);
+        if (c.multiplayerOnly && !seen.has(c.cmd)) base.push(c);
     }
-    return base;
+    // Tag commands known as multiplayerOnly regardless of source (server doesn't carry this flag)
+    const mpOnly = new Set(SLASH_COMMANDS.filter(c => c.multiplayerOnly).map(c => c.cmd));
+    return base.map(c => mpOnly.has(c.cmd) ? { ...c, multiplayerOnly: true } : c);
 }
 
 async function _fetchRollSkills() {
@@ -7788,8 +7791,8 @@ function updateAdminSettingsVisibility() {
     if (adminSection) adminSection.style.display = isAdmin ? 'block' : 'none';
     if (adminDivider) adminDivider.style.display = isAdmin ? 'flex' : 'none';
 
-    const mpInviteSection = document.getElementById('mp-invite-section');
-    if (mpInviteSection) mpInviteSection.style.display = currentCampaign?.mode === 'multiplayer' ? 'block' : 'none';
+    const mpMultiplayerSection = document.getElementById('mp-multiplayer-section');
+    if (mpMultiplayerSection) mpMultiplayerSection.style.display = currentCampaign?.mode === 'multiplayer' ? '' : 'none';
 
     // Stage 8 D3 — show the 🐛 toggle only when (admin) AND (debugMode on
     // via Settings → "🐛 Pokaż debug pod wiadomościami GM"). Hidden otherwise
@@ -7825,6 +7828,7 @@ function _buildPaletteItems() {
     const source = _effectiveSlashCommands();
     for (const c of source) {
         if (c.adminOnly && !playerIsAdmin()) continue;
+        if (c.multiplayerOnly && !window.multiplayerUI?.isActive()) continue;
         items.push({
             label: c.cmd,
             desc: c.desc || '',
@@ -9322,12 +9326,14 @@ function initSettingsFolds() {
         if (isOpen) {
             fold.removeAttribute('hidden');
             if (chevron) chevron.classList.add('settings-group__chevron--open');
+            header.classList.add('is-open');
         }
 
         header.addEventListener('click', () => {
             const open = fold.hasAttribute('hidden');
             fold.toggleAttribute('hidden', !open);
             if (chevron) chevron.classList.toggle('settings-group__chevron--open', open);
+            header.classList.toggle('is-open', open);
             localStorage.setItem(storageKey, open ? 'open' : 'closed');
         });
     });
@@ -9552,6 +9558,10 @@ function initSlashAutocomplete(inputEl) {
         if (/^roll(\s|$)/i.test(token)) {
             return { idx, query: token, isRoll: true };
         }
+        // /whisper [name] — suggests session player names
+        if (/^whisper(\s|$)/i.test(token)) {
+            return { idx, query: token, isWhisper: true };
+        }
         if (/\s/.test(token)) return null;
         return { idx, query: token, isAdmin: false };
     }
@@ -9644,6 +9654,13 @@ function initSlashAutocomplete(inputEl) {
                 showPopup();
             });
             return; // async path — skip synchronous found assignment
+        } else if (ctx.isWhisper) {
+            if (!window.multiplayerUI?.isActive()) { hide(); return; }
+            const partial = ctx.query.replace(/^whisper\s*/i, '').toLowerCase();
+            const players = window.multiplayerUI.getSessionPlayers();
+            found = players
+                .filter(name => !partial || name.toLowerCase().startsWith(partial))
+                .map(name => ({ cmd: '/whisper ' + name, desc: 'szept prywatny' }));
         } else {
             // Use alias-aware list from server; kick off async fetch if not cached
             if (!_publicSlashCache) {
@@ -9654,6 +9671,7 @@ function initSlashAutocomplete(inputEl) {
             const list = _effectiveSlashCommands();
             found = list
                 .filter(c => !c.adminOnly || playerIsAdmin())
+                .filter(c => !c.multiplayerOnly || !!window.multiplayerUI?.isActive())
                 .filter(c => c.cmd.slice(1).startsWith(q) || (q.length > 1 && c.desc.toLowerCase().includes(q)));
         }
         if (!found.length) { hide(); return; }
