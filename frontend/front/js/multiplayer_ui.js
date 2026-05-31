@@ -23,6 +23,7 @@
     let _chatOpen = false;
     let _chatUnread = 0;
     let _chatPollTimer = null;
+    let _sessionPlayers = new Set(); // character names seen in this session (excludes self)
 
     const POLL_WAITING_MS = 2000;
     const POLL_NARRATING_MS = 2000;
@@ -151,16 +152,31 @@
     function _chatBadge() { return document.getElementById('mp-chat-badge'); }
     function _chatNavBadge() { return document.getElementById('mp-chat-nav-badge'); }
 
+    function _appendWhisperToMainChat(msg) {
+        const mainChat = document.getElementById('chat-messages');
+        if (!mainChat) return;
+        const bubble = document.createElement('div');
+        const side = msg.is_mine ? 'sent' : 'recv';
+        bubble.className = 'chat-bubble chat-bubble--whisper chat-bubble--whisper-' + side;
+        const label = msg.is_mine
+            ? '🤫 → ' + _safe(msg.whisper_to)
+            : '🤫 ' + _safe(msg.character_name) + ' → Ty';
+        bubble.innerHTML =
+            '<div class="chat-bubble__content"><em>' + _safe(msg.message) + '</em></div>' +
+            '<div class="chat-bubble__meta"><span class="bubble-meta__left"><span class="bubble-meta__name">' + label + '</span></span></div>';
+        mainChat.appendChild(bubble);
+        mainChat.scrollTop = mainChat.scrollHeight;
+    }
+
     function _appendChatMessage(msg) {
-        const el = document.createElement('div');
         const isWhisper = !!msg.whisper_to;
-        el.className = 'mp-chat-msg ' +
-            (msg.is_mine ? 'mp-chat-msg--mine' : 'mp-chat-msg--other') +
-            (isWhisper ? ' mp-chat-msg--whisper' : '');
-        const label = isWhisper
-            ? (msg.is_mine ? '🤫 → ' + msg.whisper_to : '🤫 ' + msg.character_name)
-            : msg.character_name;
-        el.innerHTML = '<div class="mp-chat-msg__name">' + _safe(label) + '</div>' + _safe(msg.message);
+        if (isWhisper) {
+            _appendWhisperToMainChat(msg);
+            return;
+        }
+        const el = document.createElement('div');
+        el.className = 'mp-chat-msg ' + (msg.is_mine ? 'mp-chat-msg--mine' : 'mp-chat-msg--other');
+        el.innerHTML = '<div class="mp-chat-msg__name">' + _safe(msg.character_name) + '</div>' + _safe(msg.message);
         const container = _chatMessages();
         if (container) {
             container.appendChild(el);
@@ -185,6 +201,7 @@
             for (const msg of (data.messages || [])) {
                 _appendChatMessage(msg);
                 if (_chatLastId < msg.id) _chatLastId = msg.id;
+                if (!msg.is_mine && msg.character_name) _sessionPlayers.add(msg.character_name);
                 if (!_chatOpen && !msg.is_mine) _chatUnread++;
             }
             _updateChatBadge();
@@ -286,6 +303,9 @@
     function _appendRound(round, skipOwnAction = false) {
         for (const action of (round.actions || [])) {
             if (skipOwnAction && action.character_name === _characterName) continue;
+            if (action.character_name && action.character_name !== _characterName) {
+                _sessionPlayers.add(action.character_name);
+            }
             _appendActionBubble(action.character_name, action.action_text);
         }
         _appendNarration(round.narrative || '', round.my_note || null);
@@ -339,7 +359,17 @@
         try {
             const s = await _apiFetch(`/campaigns/${_campaignId}/round/status`);
             if (!_active) return;
-            if (s.host_note) _showNote(s.host_note);
+            if (s.host_note) {
+                _showNote(s.host_note);
+                // Receiving host_note means this user is now host (backend only sends it to new host_user_id)
+                _isHost = true;
+                const mpTimerSection = document.getElementById('mp-timer-section');
+                if (mpTimerSection) {
+                    mpTimerSection.style.display = '';
+                    const inp = document.getElementById('mp-timer-input');
+                    if (inp) { inp.value = _campaignTimerMinutes; updateMpTimerHint?.(); }
+                }
+            }
             const roundNum = s.round_number;
             if (_currentRoundNumber !== null && roundNum !== _currentRoundNumber) {
                 _appendRoundDivider(roundNum);
@@ -468,8 +498,8 @@
 
         _injectStatusBar();
         _hideNote();
-        const mpLeaveSection = document.getElementById('mp-leave-section');
-        if (mpLeaveSection) mpLeaveSection.style.display = '';
+        const mpSection = document.getElementById('mp-multiplayer-section');
+        if (mpSection) mpSection.style.display = '';
         const mpTimerSection = document.getElementById('mp-timer-section');
         if (mpTimerSection) {
             mpTimerSection.style.display = _isHost ? '' : 'none';
@@ -505,8 +535,6 @@
         _chatLastId = 0;
         _chatUnread = 0;
         _chatOpen = false;
-        const chatPanel = document.getElementById('party-chat-panel');
-        if (chatPanel) chatPanel.hidden = false;
         _startChatPoll();
     }
 
@@ -518,6 +546,7 @@
         _chatLastId = 0;
         _chatUnread = 0;
         _chatOpen = false;
+        _sessionPlayers.clear();
         const chatPanel = document.getElementById('party-chat-panel');
         if (chatPanel) chatPanel.hidden = true;
         const chatContainer = _chatMessages();
@@ -537,8 +566,8 @@
         const btn = _sendBtn();
         if (btn) { btn.disabled = false; btn.style.opacity = ''; }
         _hideNote();
-        const mpLeaveSection = document.getElementById('mp-leave-section');
-        if (mpLeaveSection) mpLeaveSection.style.display = 'none';
+        const mpSection = document.getElementById('mp-multiplayer-section');
+        if (mpSection) mpSection.style.display = 'none';
         const mpTimerSection = document.getElementById('mp-timer-section');
         if (mpTimerSection) mpTimerSection.style.display = 'none';
     }
@@ -556,7 +585,7 @@
         }
     }
 
-    window.multiplayerUI = { activate, deactivate, isActive: () => _active, handleSubmit, leave, togglePartyChat, _sendChat: _sendPartyMessage, _getCampaignId: () => _campaignId };
+    window.multiplayerUI = { activate, deactivate, isActive: () => _active, handleSubmit, leave, togglePartyChat, _sendChat: _sendPartyMessage, _getCampaignId: () => _campaignId, getSessionPlayers: () => Array.from(_sessionPlayers) };
 })();
 
 async function inviteFromGame() {

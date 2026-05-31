@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=f17-chat-fix">
+  <link rel="stylesheet" href="./css/styles.css?v=f24-revert-fab">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -1487,51 +1487,53 @@
 
         <!-- Navigation moved to top mini-nav -->
 
-        <!-- Multiplayer host timer control (hidden unless host in active MP game) -->
-        <div id="mp-timer-section" style="display:none;padding:12px 0 4px">
-          <div style="font-size:12px;font-weight:600;opacity:.6;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Timer rundy</div>
-          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
-            <input id="mp-timer-input" type="number" class="input" min="1" max="4320"
-              style="width:80px;text-align:center;font-size:14px;padding:6px 8px" oninput="updateMpTimerHint()">
-            <span style="opacity:.6;font-size:13px">minut</span>
-            <span id="mp-timer-hint" style="font-size:12px;opacity:.5"></span>
+        <!-- Multiplayer section (leave + invite + timer, hidden unless in MP game) -->
+        <div id="mp-multiplayer-section" style="display:none">
+          <div class="settings-divider" style="margin:4px 0 12px">
+            <span class="settings-divider__ornament" style="font-size:11px;font-weight:700;letter-spacing:.08em">⚔ MULTIPLAYER</span>
           </div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">
-            <button type="button" class="btn btn-sm" onclick="setMpTimer(5)">5m</button>
-            <button type="button" class="btn btn-sm" onclick="setMpTimer(30)">30m</button>
-            <button type="button" class="btn btn-sm" onclick="setMpTimer(60)">1h</button>
-            <button type="button" class="btn btn-sm" onclick="setMpTimer(240)">4h</button>
-            <button type="button" class="btn btn-sm" onclick="setMpTimer(1440)">24h</button>
-            <button type="button" class="btn btn-sm" onclick="setMpTimer(2880)">48h</button>
-            <button type="button" class="btn btn-sm" onclick="setMpTimer(4320)">72h</button>
-          </div>
-          <button type="button" class="btn btn-primary" style="width:100%;font-size:13px;padding:8px" onclick="saveMpTimer()">Zapisz timer</button>
-          <div id="mp-timer-msg" style="font-size:12px;margin-top:6px;text-align:center"></div>
-        </div>
 
-        <!-- Multiplayer leave button (hidden unless in MP game) -->
-        <div id="mp-leave-section" style="display:none;padding:12px 0 4px">
-          <button type="button" id="mp-leave-game-btn" onclick="window.multiplayerUI?.leave()"
-            style="width:100%;padding:10px 16px;background:rgba(229,57,53,.12);border:1px solid rgba(229,57,53,.3);border-radius:8px;color:var(--red,#e53935);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            Opuść grę multiplayer
-          </button>
-        </div>
+          <!-- Leave -->
+          <div id="mp-leave-section" style="padding:0 0 10px">
+            <button type="button" id="mp-leave-game-btn" onclick="window.multiplayerUI?.leave()"
+              style="width:100%;padding:10px 16px;background:rgba(229,57,53,.12);border:1px solid rgba(229,57,53,.3);border-radius:8px;color:var(--red,#e53935);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              Opuść grę multiplayer
+            </button>
+          </div>
 
-        <!-- Multiplayer invite (hidden unless in MP game) -->
-        <div id="mp-invite-section" style="display:none;padding:4px 0 8px">
-          <div class="settings-divider" style="margin-bottom:12px">
-            <span class="settings-divider__ornament">⚔</span>
+          <!-- Invite -->
+          <div id="mp-invite-section" style="padding:0 0 10px">
+            <label style="font-size:10px;font-family:'Cinzel',serif;font-weight:700;color:rgba(201,165,74,0.5);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px;display:block">Zaproś gracza</label>
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+              <input id="game-invite-username" type="text" placeholder="@nazwa gracza…" autocomplete="off"
+                style="flex:1;background:rgba(0,0,0,0.4);border:1px solid rgba(201,165,74,0.25);border-radius:8px;padding:8px 12px;color:rgba(255,255,255,0.85);font-size:13px;outline:none"
+                onkeydown="if(event.key==='Enter')inviteFromGame()">
+              <button type="button" onclick="inviteFromGame()"
+                style="padding:8px 14px;background:rgba(201,165,74,.12);border:1px solid rgba(201,165,74,.4);border-radius:8px;color:var(--accent,#c9a54a);font-size:12px;font-family:'Cinzel',serif;font-weight:700;letter-spacing:.06em;cursor:pointer;white-space:nowrap;text-transform:uppercase">Zaproś</button>
+            </div>
+            <div id="game-invite-msg" style="font-size:12px;min-height:16px;text-align:center;color:rgba(201,165,74,0.5)"></div>
           </div>
-          <label style="font-size:11px;font-weight:700;color:var(--accent,#c9a54a);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:block">Zaproś gracza</label>
-          <div style="display:flex;gap:8px;margin-bottom:6px">
-            <input id="game-invite-username" type="text" placeholder="@nazwa gracza…" autocomplete="off"
-              style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 12px;color:inherit;font-size:13px;outline:none"
-              onkeydown="if(event.key==='Enter')inviteFromGame()">
-            <button type="button" onclick="inviteFromGame()"
-              style="padding:8px 14px;background:rgba(201,165,74,.15);border:1px solid rgba(201,165,74,.35);border-radius:8px;color:var(--accent,#c9a54a);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap">Zaproś</button>
+
+          <!-- Timer (host only, toggled by JS) -->
+          <div id="mp-timer-section" style="display:none;padding:0 0 4px">
+            <label style="font-size:10px;font-family:'Cinzel',serif;font-weight:700;color:rgba(201,165,74,0.5);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;display:block">Timer rundy</label>
+            <div style="display:flex;gap:5px;align-items:center;flex-wrap:nowrap">
+              <input id="mp-timer-input" type="number" min="1" max="4320"
+                style="width:54px;flex-shrink:0;text-align:center;font-size:13px;font-weight:700;font-family:'Cinzel',serif;color:var(--accent,#c9a54a);padding:6px 4px;background:rgba(0,0,0,0.4);border:1px solid rgba(201,165,74,0.3);border-radius:7px;outline:none;-moz-appearance:textfield"
+                oninput="updateMpTimerHint()">
+              <button type="button" onclick="setMpTimer(5)"    style="flex:1;padding:6px 2px;background:rgba(201,165,74,0.07);border:1px solid rgba(201,165,74,0.22);border-radius:6px;color:rgba(201,165,74,0.75);font-size:10px;font-family:'Cinzel',serif;font-weight:700;cursor:pointer;min-width:0">5m</button>
+              <button type="button" onclick="setMpTimer(30)"   style="flex:1;padding:6px 2px;background:rgba(201,165,74,0.07);border:1px solid rgba(201,165,74,0.22);border-radius:6px;color:rgba(201,165,74,0.75);font-size:10px;font-family:'Cinzel',serif;font-weight:700;cursor:pointer;min-width:0">30m</button>
+              <button type="button" onclick="setMpTimer(60)"   style="flex:1;padding:6px 2px;background:rgba(201,165,74,0.07);border:1px solid rgba(201,165,74,0.22);border-radius:6px;color:rgba(201,165,74,0.75);font-size:10px;font-family:'Cinzel',serif;font-weight:700;cursor:pointer;min-width:0">1h</button>
+              <button type="button" onclick="setMpTimer(240)"  style="flex:1;padding:6px 2px;background:rgba(201,165,74,0.07);border:1px solid rgba(201,165,74,0.22);border-radius:6px;color:rgba(201,165,74,0.75);font-size:10px;font-family:'Cinzel',serif;font-weight:700;cursor:pointer;min-width:0">4h</button>
+              <button type="button" onclick="setMpTimer(1440)" style="flex:1;padding:6px 2px;background:rgba(201,165,74,0.07);border:1px solid rgba(201,165,74,0.22);border-radius:6px;color:rgba(201,165,74,0.75);font-size:10px;font-family:'Cinzel',serif;font-weight:700;cursor:pointer;min-width:0">24h</button>
+              <button type="button" onclick="setMpTimer(2880)" style="flex:1;padding:6px 2px;background:rgba(201,165,74,0.07);border:1px solid rgba(201,165,74,0.22);border-radius:6px;color:rgba(201,165,74,0.75);font-size:10px;font-family:'Cinzel',serif;font-weight:700;cursor:pointer;min-width:0">48h</button>
+              <button type="button" onclick="setMpTimer(4320)" style="flex:1;padding:6px 2px;background:rgba(201,165,74,0.07);border:1px solid rgba(201,165,74,0.22);border-radius:6px;color:rgba(201,165,74,0.75);font-size:10px;font-family:'Cinzel',serif;font-weight:700;cursor:pointer;min-width:0">72h</button>
+              <button type="button" onclick="saveMpTimer()"
+                style="flex-shrink:0;padding:6px 10px;background:rgba(201,165,74,0.14);border:1px solid rgba(201,165,74,0.4);border-radius:7px;color:var(--accent,#c9a54a);font-size:10px;font-family:'Cinzel',serif;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;white-space:nowrap">Zapisz</button>
+            </div>
+            <div id="mp-timer-msg" style="font-size:11px;margin-top:5px;text-align:center;color:rgba(201,165,74,0.5)"></div>
           </div>
-          <div id="game-invite-msg" style="font-size:12px;min-height:16px;text-align:center"></div>
         </div>
 
         <!-- Admin Section (hidden by default) -->
@@ -1949,7 +1951,7 @@
         </svg>
       </span>
       <span class="mbb-btn__label">Gra</span>
-      <span id="mp-chat-nav-badge" class="mp-chat-nav-badge" hidden>●</span>
+      <span id="mp-chat-nav-badge" class="mp-chat-nav-badge" hidden style="display:none!important">●</span>
     </button>
     <button type="button" class="mbb-btn" data-mbb="character">
       <span class="mbb-btn__icon" aria-hidden="true">
@@ -2088,7 +2090,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/multiplayer_ui.js?v=22"></script>
-  <script src="./js/app.js?v=multiplayer-lobby-12"></script>
+  <script src="./js/multiplayer_ui.js?v=29"></script>
+  <script src="./js/app.js?v=multiplayer-lobby-17"></script>
 </body>
 </html>
