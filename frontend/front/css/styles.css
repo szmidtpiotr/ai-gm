@@ -11168,3 +11168,9 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   border-radius: 50%;
   display: block;
 }
+
+.mp-chat-msg--whisper {
+  font-style: italic;
+  opacity: .85;
+  border-style: dashed !important;
+}

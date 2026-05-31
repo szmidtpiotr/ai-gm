@@ -3727,3 +3727,10 @@ def _ensure_party_chat_table(conn: sqlite3.Connection) -> None:
     )
     conn.commit()
     logger.info("admin_migration_applied", label="party-chat-table")
+
+    # whisper_to column for /whisper command
+    pm_cols = [r[1] for r in conn.execute("PRAGMA table_info(party_messages)").fetchall()]
+    if "whisper_to" not in pm_cols:
+        conn.execute("ALTER TABLE party_messages ADD COLUMN whisper_to TEXT")
+    conn.commit()
+    logger.info("admin_migration_applied", label="party-chat-whisper")

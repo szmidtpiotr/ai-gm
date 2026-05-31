@@ -23,6 +23,7 @@ def _db() -> sqlite3.Connection:
 class ChatMessageReq(BaseModel):
     message: str
     character_name: str
+    whisper_to: Optional[str] = None
 
 
 @router.get("/multiplayer/campaigns/{campaign_id}/chat")
@@ -42,17 +43,29 @@ def get_party_chat(
         if not member:
             raise HTTPException(status_code=403, detail="Not a member of this campaign")
 
+        # Resolve caller's character name (needed to show whispers addressed to them)
+        caller_char = conn.execute(
+            "SELECT character_name FROM campaign_round_actions "
+            "WHERE campaign_id=? AND user_id=? "
+            "ORDER BY submitted_at DESC LIMIT 1",
+            (campaign_id, uid),
+        ).fetchone()
+        caller_char_name = caller_char["character_name"] if caller_char else None
+
+        whisper_filter = "(whisper_to IS NULL OR user_id=? OR whisper_to=?)"
+        params_extra = (uid, caller_char_name or "")
+
         if since_id:
             rows = conn.execute(
-                "SELECT id, user_id, character_name, message, created_at "
-                "FROM party_messages WHERE campaign_id=? AND id>? ORDER BY id ASC LIMIT 50",
-                (campaign_id, since_id),
+                "SELECT id, user_id, character_name, message, created_at, whisper_to "
+                "FROM party_messages WHERE campaign_id=? AND id>? AND " + whisper_filter + " ORDER BY id ASC LIMIT 50",
+                (campaign_id, since_id) + params_extra,
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT id, user_id, character_name, message, created_at "
-                "FROM party_messages WHERE campaign_id=? ORDER BY id DESC LIMIT 50",
-                (campaign_id,),
+                "SELECT id, user_id, character_name, message, created_at, whisper_to "
+                "FROM party_messages WHERE campaign_id=? AND " + whisper_filter + " ORDER BY id DESC LIMIT 50",
+                (campaign_id,) + params_extra,
             ).fetchall()
             rows = list(reversed(rows))
 
@@ -65,6 +78,7 @@ def get_party_chat(
                     "message": r["message"],
                     "created_at": r["created_at"],
                     "is_mine": r["user_id"] == uid,
+                    "whisper_to": r["whisper_to"],
                 }
                 for r in rows
             ]
@@ -98,8 +112,9 @@ def post_party_chat(
             raise HTTPException(status_code=403, detail="Not a member of this campaign")
 
         row = conn.execute(
-            "INSERT INTO party_messages (campaign_id, user_id, character_name, message) VALUES (?, ?, ?, ?) RETURNING id, created_at",
-            (campaign_id, uid, req.character_name, req.message.strip()),
+            "INSERT INTO party_messages (campaign_id, user_id, character_name, message, whisper_to) "
+            "VALUES (?, ?, ?, ?, ?) RETURNING id, created_at",
+            (campaign_id, uid, req.character_name, req.message.strip(), req.whisper_to),
         ).fetchone()
         conn.commit()
         msg_id = int(row["id"])
@@ -108,12 +123,31 @@ def post_party_chat(
         conn.close()
 
     import threading
-    from app.services.push_notification_service import send_push_to_campaign_players
-    threading.Thread(
-        target=send_push_to_campaign_players,
-        args=(campaign_id, f"{req.character_name} 💬", req.message.strip()[:80]),
-        kwargs={"url": "/", "exclude_user_id": uid},
-        daemon=True,
-    ).start()
+    from app.services.push_notification_service import send_push_to_campaign_players, send_push
+
+    if req.whisper_to:
+        def _push_whisper():
+            from app.core.db_runtime import resolve_db_path
+            import sqlite3 as _sqlite3
+            conn2 = _sqlite3.connect(resolve_db_path())
+            conn2.row_factory = _sqlite3.Row
+            try:
+                target = conn2.execute(
+                    "SELECT user_id FROM campaign_round_actions WHERE campaign_id=? AND character_name=? "
+                    "ORDER BY submitted_at DESC LIMIT 1",
+                    (campaign_id, req.whisper_to),
+                ).fetchone()
+                if target:
+                    send_push(int(target["user_id"]), f"🤫 Szept od {req.character_name}", req.message.strip()[:80], url="/")
+            finally:
+                conn2.close()
+        threading.Thread(target=_push_whisper, daemon=True).start()
+    else:
+        threading.Thread(
+            target=send_push_to_campaign_players,
+            args=(campaign_id, f"{req.character_name} 💬", req.message.strip()[:80]),
+            kwargs={"url": "/", "exclude_user_id": uid},
+            daemon=True,
+        ).start()
 
     return {"id": msg_id, "created_at": created_at}

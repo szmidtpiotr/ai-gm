@@ -153,8 +153,14 @@
 
     function _appendChatMessage(msg) {
         const el = document.createElement('div');
-        el.className = 'mp-chat-msg ' + (msg.is_mine ? 'mp-chat-msg--mine' : 'mp-chat-msg--other');
-        el.innerHTML = '<div class="mp-chat-msg__name">' + _safe(msg.character_name) + '</div>' + _safe(msg.message);
+        const isWhisper = !!msg.whisper_to;
+        el.className = 'mp-chat-msg ' +
+            (msg.is_mine ? 'mp-chat-msg--mine' : 'mp-chat-msg--other') +
+            (isWhisper ? ' mp-chat-msg--whisper' : '');
+        const label = isWhisper
+            ? (msg.is_mine ? '🤫 → ' + msg.whisper_to : '🤫 ' + msg.character_name)
+            : msg.character_name;
+        el.innerHTML = '<div class="mp-chat-msg__name">' + _safe(label) + '</div>' + _safe(msg.message);
         const container = _chatMessages();
         if (container) {
             container.appendChild(el);
@@ -214,10 +220,21 @@
 
     async function _sendPartyMessage(message) {
         if (!_campaignId || !message.trim()) return;
+        let whisperTo = null;
+        let actualMsg = message.trim();
+        const whisperMatch = actualMsg.match(/^\/whisper\s+(\S+)\s+(.+)$/i);
+        if (whisperMatch) {
+            whisperTo = whisperMatch[1];
+            actualMsg = whisperMatch[2];
+        }
         try {
             await _apiFetch('/multiplayer/campaigns/' + _campaignId + '/chat', {
                 method: 'POST',
-                body: JSON.stringify({ message: message.trim(), character_name: _characterName || 'Gracz' }),
+                body: JSON.stringify({
+                    message: actualMsg,
+                    character_name: _characterName || 'Gracz',
+                    whisper_to: whisperTo,
+                }),
             });
         } catch (e) {
             console.warn('[Chat] send error:', e);
