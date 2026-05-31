@@ -359,6 +359,13 @@ def accept_invite(
                 args=(campaign_id, new_name, existing_names, campaign_title),
                 daemon=True,
             ).start()
+            from app.services.push_notification_service import send_push_to_campaign_players
+            threading.Thread(
+                target=send_push_to_campaign_players,
+                args=(campaign_id, f"{new_name} dołączył!", f"{new_name} pojawia się w kampanii \"{camp['title']}\"."),
+                kwargs={"url": "/", "exclude_user_id": uid},
+                daemon=True,
+            ).start()
         return {"status": "accepted"}
     finally:
         conn.close()
@@ -527,6 +534,14 @@ def start_lobby(
         threading.Thread(
             target=_narrate_opening,
             args=(campaign_id, opening_round_id, camp["title"], player_names),
+            daemon=True,
+        ).start()
+
+        from app.services.push_notification_service import send_push_to_campaign_players
+        threading.Thread(
+            target=send_push_to_campaign_players,
+            args=(campaign_id, "Gra rozpoczęta! 🎲", f'Kampania "{camp["title"]}" ruszyła. Czas na przygodę!'),
+            kwargs={"url": "/"},
             daemon=True,
         ).start()
 
