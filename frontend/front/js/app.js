@@ -416,6 +416,7 @@ function showScreen(screenName) {
         }
         if (screenName === 'campaigns') {
             if (!_mpInviteInterval) _mpInviteInterval = setInterval(loadPendingMpInvites, 10000);
+            applyGameModeFlags();
         } else {
             clearInterval(_mpInviteInterval); _mpInviteInterval = null;
         }
@@ -11393,6 +11394,30 @@ async function _sendSubscriptionToBackend(sub) {
         });
     } catch (e) {
         console.warn('[Push] Failed to register subscription:', e);
+    }
+}
+
+async function applyGameModeFlags() {
+    try {
+        const res = await fetch('/api/game-modes');
+        if (!res.ok) return;
+        const { flags = {} } = await res.json();
+
+        const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
+        const show = (id) => { const el = document.getElementById(id); if (el) el.style.display = ''; };
+
+        // Solo campaign buttons
+        flags.ai_campaign_enabled === false ? hide('new-campaign-btn') : show('new-campaign-btn');
+        flags.prebuilt_enabled    === false ? hide('prebuilt-btn')     : show('prebuilt-btn');
+        flags.dungeon_enabled     === false ? hide('dungeon-picker-btn') : show('dungeon-picker-btn');
+
+        // Multiplayer lobby mode tiles
+        const aiTile  = document.getElementById('lobby-mode-ai');
+        const preTile = document.getElementById('lobby-mode-prebuilt');
+        if (aiTile)  aiTile.style.display  = flags.ai_campaign_enabled  === false ? 'none' : '';
+        if (preTile) preTile.style.display = flags.prebuilt_enabled      === false ? 'none' : '';
+    } catch (e) {
+        console.warn('[GameModes] fetch failed, defaults apply', e.message);
     }
 }
 

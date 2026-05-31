@@ -4496,6 +4496,7 @@
         <button class="stab" data-systab="visual">Wygląd</button>
         <button class="stab" data-systab="voice">🔊 Głos</button>
         <button class="stab" data-systab="narration">📜 Narracja</button>
+        <button class="stab" data-systab="gamemodes">🎮 Tryby gry</button>
       </div>
 
       <!-- LLM tab -->
@@ -4873,6 +4874,43 @@
                 <div id="tone-desc" style="font-size:0.78rem;color:var(--t3);line-height:1.5">Zrównoważony: narracja zachowuje powagę sytuacji bez przesadnego dramatyzmu.</div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game modes tab -->
+      <div class="stab-panel" id="systab-gamemodes" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Tryby gry</span>
+            <button class="btn btn-sm btn-primary" onclick="saveGameModes()">Zapisz</button>
+          </div>
+          <div style="padding:14px;display:flex;flex-direction:column;gap:18px">
+            <p style="color:var(--t3);font-size:0.82rem;margin:0">Włącz lub wyłącz tryby dostępne dla graczy na ekranie kampanii.</p>
+
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+              <input type="checkbox" id="gm-ai-campaign" style="width:18px;height:18px;accent-color:var(--accent)">
+              <span>
+                <strong style="font-size:0.92rem">Kampania AI</strong>
+                <span style="display:block;font-size:0.78rem;color:var(--t3)">Gracz opisuje pomysł, AI generuje kampanię na żywo.</span>
+              </span>
+            </label>
+
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+              <input type="checkbox" id="gm-prebuilt" style="width:18px;height:18px;accent-color:var(--accent)">
+              <span>
+                <strong style="font-size:0.92rem">Gotowa kampania</strong>
+                <span style="display:block;font-size:0.78rem;color:var(--t3)">Gracz wybiera z predefiniowanych szablonów przygód.</span>
+              </span>
+            </label>
+
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+              <input type="checkbox" id="gm-dungeon" style="width:18px;height:18px;accent-color:var(--accent)">
+              <span>
+                <strong style="font-size:0.92rem">Loch (Dungeon Run)</strong>
+                <span style="display:block;font-size:0.78rem;color:var(--t3)">Krótkie farmowalne lochy z własnym loot systemem.</span>
+              </span>
+            </label>
           </div>
         </div>
       </div>
@@ -5561,7 +5599,7 @@
     const url = _buildUrl(path);
     const r = await fetch(url, { ...opts, headers: h });
     if (r.status === 401) { _showLogin(); throw new Error('401'); }
-    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `HTTP ${r.status}`); }
+    if (!r.ok) { const e = await r.json().catch(() => ({})); const det = e.detail; throw new Error(Array.isArray(det) ? det.map(d => d.msg || JSON.stringify(d)).join('; ') : (det || `HTTP ${r.status}`)); }
     return r.json();
   }
 
@@ -12275,7 +12313,7 @@
   function _loadSysTab(tab) {
     if (_sysTabLoaded.has(tab)) return;
     _sysTabLoaded.add(tab);
-    const fn = { llm: _loadSysLlm, database: _loadSysDatabase, config: () => {}, slash: _loadSysSlash, email: _loadSysEmail, visual: _loadSysVisual, resurrection: _loadSysResurrection, voice: _loadVoice, narration: _loadNarration }[tab];
+    const fn = { llm: _loadSysLlm, database: _loadSysDatabase, config: () => {}, slash: _loadSysSlash, email: _loadSysEmail, visual: _loadSysVisual, resurrection: _loadSysResurrection, voice: _loadVoice, narration: _loadNarration, gamemodes: _loadGameModes }[tab];
     if (fn) fn().catch(e => { _sysTabLoaded.delete(tab); console.warn('sys tab', tab, e.message); });
   }
 
@@ -12761,7 +12799,7 @@
       const g = id => document.getElementById(id);
       if (g('em-host')) g('em-host').value = d.smtp_host || '';
       if (g('em-port')) g('em-port').value = d.smtp_port || 587;
-      if (g('em-tls'))  g('em-tls').checked = !!d.smtp_use_tls;
+      if (g('em-tls'))  g('em-tls').checked = d.smtp_use_tls === '1' || d.smtp_use_tls === true || d.smtp_use_tls === 1;
       if (g('em-user')) g('em-user').value = d.smtp_username || '';
       if (g('em-from-addr')) g('em-from-addr').value = d.smtp_from_address || '';
       if (g('em-from-name')) g('em-from-name').value = d.smtp_from_name || '';
@@ -12773,8 +12811,8 @@
     const g = id => document.getElementById(id);
     const body = {
       smtp_host: g('em-host')?.value?.trim() || '',
-      smtp_port: parseInt(g('em-port')?.value) || 587,
-      smtp_use_tls: g('em-tls')?.checked ?? true,
+      smtp_port: String(parseInt(g('em-port')?.value) || 587),
+      smtp_use_tls: g('em-tls')?.checked ? '1' : '0',
       smtp_username: g('em-user')?.value?.trim() || '',
       smtp_from_address: g('em-from-addr')?.value?.trim() || '',
       smtp_from_name: g('em-from-name')?.value?.trim() || '',
@@ -14656,6 +14694,32 @@
       const ta = document.getElementById('prompt-textarea');
       if (ta && d?.content) ta.value = d.content;
     } catch(e) { console.warn('narration', e.message); }
+  }
+
+  async function _loadGameModes() {
+    try {
+      const d = await apiFetch('/api/admin/game-modes');
+      const flags = d.flags || {};
+      const ai = document.getElementById('gm-ai-campaign');
+      const pre = document.getElementById('gm-prebuilt');
+      const dun = document.getElementById('gm-dungeon');
+      if (ai)  ai.checked  = flags.ai_campaign_enabled !== false;
+      if (pre) pre.checked = flags.prebuilt_enabled    !== false;
+      if (dun) dun.checked = flags.dungeon_enabled     !== false;
+    } catch(e) { console.warn('game-modes load', e.message); }
+  }
+
+  async function saveGameModes() {
+    const ai  = document.getElementById('gm-ai-campaign')?.checked ?? true;
+    const pre = document.getElementById('gm-prebuilt')?.checked    ?? true;
+    const dun = document.getElementById('gm-dungeon')?.checked      ?? true;
+    try {
+      await apiFetch('/api/admin/game-modes', {
+        method: 'PATCH',
+        body: JSON.stringify({ ai_campaign_enabled: ai, prebuilt_enabled: pre, dungeon_enabled: dun }),
+      });
+      _showToast('Tryby gry zapisane', 'success');
+    } catch(e) { _showToast('Błąd zapisu: ' + e.message, 'error'); }
   }
 
   // ── App init ─────────────────────────────────────────────

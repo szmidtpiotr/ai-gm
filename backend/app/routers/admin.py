@@ -4263,8 +4263,9 @@ def admin_set_invite_limit(
     authorization: str | None = Header(default=None),
 ):
     """Admin: override a user's weekly invite limit."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
     limit = int(body.get("invite_weekly_limit", 3))
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
@@ -4538,8 +4539,9 @@ _SMTP_KEYS = frozenset([
 @router.get("/admin/email/config")
 def admin_email_config_get(authorization: str | None = Header(default=None)):
     """Get SMTP configuration keys from game_config_meta."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
@@ -4571,8 +4573,9 @@ def admin_email_config_patch(
     authorization: str | None = Header(default=None),
 ):
     """Update SMTP config keys in game_config_meta (upsert)."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
 
     data = {k: v for k, v in req.model_dump().items() if v is not None and k in _SMTP_KEYS}
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
@@ -4689,8 +4692,9 @@ def admin_email_test(
     authorization: str | None = Header(default=None),
 ):
     """Send a test email to the given address."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    if not verify_admin_token(token):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
 
     to = req.to.strip()
     if not to:
@@ -4791,3 +4795,77 @@ def admin_revoke_push_subscriptions(
     finally:
         conn.close()
     return {"ok": True, "user_id": user_id, "deleted": deleted}
+
+
+# ── Game mode feature flags ────────────────────────────────────────────────────
+_GAME_MODE_FLAGS_KEY = "game_mode_flags"
+_GAME_MODE_DEFAULTS = {
+    "dungeon_enabled": True,
+    "prebuilt_enabled": True,
+    "ai_campaign_enabled": True,
+}
+
+
+def _get_game_mode_flags(conn) -> dict:
+    row = conn.execute(
+        "SELECT value FROM game_config_meta WHERE key = ?", (_GAME_MODE_FLAGS_KEY,)
+    ).fetchone()
+    if not row:
+        return dict(_GAME_MODE_DEFAULTS)
+    try:
+        return {**_GAME_MODE_DEFAULTS, **json.loads(row["value"])}
+    except Exception:
+        return dict(_GAME_MODE_DEFAULTS)
+
+
+class GameModeFlagsReq(BaseModel):
+    dungeon_enabled: bool | None = None
+    prebuilt_enabled: bool | None = None
+    ai_campaign_enabled: bool | None = None
+
+
+@router.get("/game-modes")
+def public_get_game_modes():
+    """Public endpoint — returns which game modes are enabled (no auth required)."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return {"ok": True, "flags": _get_game_mode_flags(conn)}
+    finally:
+        conn.close()
+
+
+@router.get("/admin/game-modes")
+def admin_get_game_modes(_: None = Depends(require_admin_token)):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return {"ok": True, "flags": _get_game_mode_flags(conn)}
+    finally:
+        conn.close()
+
+
+@router.patch("/admin/game-modes")
+def admin_patch_game_modes(
+    req: GameModeFlagsReq,
+    _: None = Depends(require_admin_token),
+):
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        flags = _get_game_mode_flags(conn)
+        if req.dungeon_enabled is not None:
+            flags["dungeon_enabled"] = req.dungeon_enabled
+        if req.prebuilt_enabled is not None:
+            flags["prebuilt_enabled"] = req.prebuilt_enabled
+        if req.ai_campaign_enabled is not None:
+            flags["ai_campaign_enabled"] = req.ai_campaign_enabled
+        conn.execute(
+            "INSERT INTO game_config_meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (_GAME_MODE_FLAGS_KEY, json.dumps(flags)),
+        )
+        conn.commit()
+        return {"ok": True, "flags": flags}
+    finally:
+        conn.close()
