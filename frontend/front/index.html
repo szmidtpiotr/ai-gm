@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=f24-revert-fab">
+  <link rel="stylesheet" href="./css/styles.css?v=f25-mp-modes">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -634,6 +634,29 @@
         <div class="lf-crest__rule lf-crest__rule--r"></div>
       </div>
       <p class="lf-tagline">Przywołaj drużynę do walki</p>
+
+      <!-- Mode selector: AI-generated vs prebuilt template -->
+      <div class="lf-section">
+        <label class="lf-legend">Rodzaj przygody</label>
+        <div class="lf-tiles" id="lobby-mode-tiles">
+          <button type="button" class="lf-tile lf-tile--on" id="lobby-mode-ai" onclick="setLobbyMode('ai')">
+            <span class="lf-tile__icon" aria-hidden="true">✨</span>
+            <span class="lf-tile__sub">AI generuje</span>
+          </button>
+          <button type="button" class="lf-tile" id="lobby-mode-prebuilt" onclick="setLobbyMode('prebuilt')">
+            <span class="lf-tile__icon" aria-hidden="true">📜</span>
+            <span class="lf-tile__sub">Gotowa przygoda</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Template picker (shown when mode=prebuilt) -->
+      <div class="lf-section" id="lobby-template-section" style="display:none">
+        <label class="lf-legend">Wybierz przygodę</label>
+        <div id="lobby-template-list" style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto">
+          <div style="opacity:.5;font-size:13px;padding:8px 0">Ładowanie…</div>
+        </div>
+      </div>
 
       <!-- Session name -->
       <div class="lf-section">
@@ -2090,7 +2113,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/multiplayer_ui.js?v=29"></script>
+  <script src="./js/multiplayer_ui.js?v=30"></script>
   <script src="./js/app.js?v=multiplayer-lobby-17"></script>
 </body>
 </html>

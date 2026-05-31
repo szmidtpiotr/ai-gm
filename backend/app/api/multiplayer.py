@@ -47,6 +47,7 @@ class CreateLobbyReq(BaseModel):
     system_id: str = "fantasy"
     round_timer_minutes: int = 1440  # default 24h
     max_players: int = 4
+    template_id: Optional[int] = None
 
 
 class UpdateTimerReq(BaseModel):
@@ -69,14 +70,31 @@ def create_lobby(
 
     conn = _db()
     try:
+        gm_plan_json = "{}"
+        lobby_title = body.title.strip()
+        template_id = body.template_id
+
+        if template_id:
+            tpl = conn.execute(
+                "SELECT title, gm_plan_json FROM campaign_templates WHERE id=? AND status='published'",
+                (template_id,),
+            ).fetchone()
+            if not tpl:
+                raise HTTPException(status_code=404, detail="Template not found or not published")
+            if tpl["gm_plan_json"] and tpl["gm_plan_json"].strip() not in ("", "{}"):
+                gm_plan_json = tpl["gm_plan_json"]
+            if not lobby_title:
+                lobby_title = tpl["title"]
+
         cur = conn.execute(
             """INSERT INTO campaigns
                (title, system_id, owner_user_id, mode, status,
-                round_timer_hours, round_timer_minutes, max_players, host_user_id, lobby_status)
-               VALUES (?, ?, ?, 'multiplayer', 'active', ?, ?, ?, ?, 'open')""",
-            (body.title.strip(), body.system_id, uid,
+                round_timer_hours, round_timer_minutes, max_players, host_user_id, lobby_status,
+                template_id, gm_plan_json)
+               VALUES (?, ?, ?, 'multiplayer', 'active', ?, ?, ?, ?, 'open', ?, ?)""",
+            (lobby_title, body.system_id, uid,
              max(1, body.round_timer_minutes // 60), body.round_timer_minutes,
-             body.max_players, uid),
+             body.max_players, uid, template_id, gm_plan_json),
         )
         campaign_id = cur.lastrowid
         conn.execute(
@@ -84,7 +102,7 @@ def create_lobby(
             (campaign_id, uid),
         )
         conn.commit()
-        return {"campaign_id": campaign_id, "title": body.title.strip(), "lobby_status": "open"}
+        return {"campaign_id": campaign_id, "title": lobby_title, "lobby_status": "open"}
     finally:
         conn.close()
 
@@ -496,7 +514,7 @@ def start_lobby(
     conn = _db()
     try:
         camp = conn.execute(
-            "SELECT host_user_id, lobby_status, title FROM campaigns WHERE id=? AND mode='multiplayer'",
+            "SELECT host_user_id, lobby_status, title, COALESCE(gm_plan_json, '{}') as gm_plan_json FROM campaigns WHERE id=? AND mode='multiplayer'",
             (campaign_id,),
         ).fetchone()
         if not camp:
@@ -506,13 +524,32 @@ def start_lobby(
         if camp["lobby_status"] != "open":
             raise HTTPException(status_code=400, detail="Already started")
 
-        players = conn.execute(
-            """SELECT u.display_name, u.username FROM campaign_members m
+        members = conn.execute(
+            """SELECT u.display_name, u.username, c.name as char_name, c.sheet_json
+               FROM campaign_members m
                JOIN users u ON u.id = m.user_id
+               LEFT JOIN characters c ON c.id = m.character_id
                WHERE m.campaign_id=? AND m.status='accepted'""",
             (campaign_id,),
         ).fetchall()
-        player_names = [(r["display_name"] or r["username"]) for r in players]
+
+        party_info = []
+        for r in members:
+            char_name = r["char_name"] or (r["display_name"] or r["username"])
+            archetype, level = "", 1
+            try:
+                if r["sheet_json"]:
+                    sheet = json.loads(r["sheet_json"])
+                    archetype = sheet.get("archetype", "")
+                    level = sheet.get("level", 1)
+            except Exception:
+                pass
+            desc = char_name
+            if archetype:
+                desc += f" ({archetype}, poz. {level})"
+            party_info.append(desc)
+
+        player_names = [(r["display_name"] or r["username"]) for r in members]
 
         conn.execute(
             "UPDATE campaigns SET lobby_status='started' WHERE id=?", (campaign_id,)
@@ -533,7 +570,7 @@ def start_lobby(
 
         threading.Thread(
             target=_narrate_opening,
-            args=(campaign_id, opening_round_id, camp["title"], player_names),
+            args=(campaign_id, opening_round_id, camp["title"], party_info, camp["gm_plan_json"]),
             daemon=True,
         ).start()
 
@@ -557,14 +594,30 @@ _OPENING_SYSTEM = (
 )
 
 
-def _narrate_opening(campaign_id: int, round_id: int, title: str, players: list) -> None:
+def _narrate_opening(campaign_id: int, round_id: int, title: str, players: list, gm_plan_json: str = "{}") -> None:
     from app.services import llm_service
 
     names = ", ".join(players) if players else "bohater"
+
+    # Extract first-arc premise from pre-built template plan
+    premise = ""
+    try:
+        plan = json.loads(gm_plan_json) if gm_plan_json and gm_plan_json.strip() not in ("", "{}") else {}
+        arcs = plan.get("arcs") or []
+        if arcs:
+            first = arcs[0]
+            premise = first.get("premise") or first.get("title") or ""
+    except Exception:
+        pass
+
     user_msg = (
         f"Kampania: {title}\n"
-        f"Drużyna: {names}\n\n"
-        "Napisz narrację otwierającą sesję RPG (3-4 zdania). "
+        f"Drużyna: {names}\n"
+    )
+    if premise:
+        user_msg += f"Prolog przygody: {premise}\n"
+    user_msg += (
+        "\nNapisz narrację otwierającą sesję RPG (3-4 zdania). "
         "Opisz mroczne miejsce gdzie drużyna się znajduje — karczmę, ruiny, las, lochy — "
         "i nastrój sceny. Zaintryguj graczy, zasugeruj nadchodzące niebezpieczeństwo lub tajemnicę. "
         "Nie zadawaj pytań graczom — to opis sceny otwierającej."

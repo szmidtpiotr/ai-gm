@@ -709,6 +709,48 @@ async function _lobbyFetch(path, opts = {}) {
     return resp.json();
 }
 
+// ── Lobby mode & template selection ──────────────────────────────────────────
+
+let _lobbyMode = 'ai'; // 'ai' | 'prebuilt'
+let _lobbyTemplateId = null;
+let _lobbyTemplates = [];
+
+function setLobbyMode(mode) {
+    _lobbyMode = mode;
+    document.getElementById('lobby-mode-ai')?.classList.toggle('lf-tile--on', mode === 'ai');
+    document.getElementById('lobby-mode-prebuilt')?.classList.toggle('lf-tile--on', mode === 'prebuilt');
+    const tplSection = document.getElementById('lobby-template-section');
+    if (tplSection) tplSection.style.display = mode === 'prebuilt' ? '' : 'none';
+    if (mode === 'prebuilt' && !_lobbyTemplates.length) _loadLobbyTemplates();
+}
+
+async function _loadLobbyTemplates() {
+    const list = document.getElementById('lobby-template-list');
+    if (!list) return;
+    try {
+        const data = await _lobbyFetch('/campaign-templates');
+        _lobbyTemplates = data.items || [];
+        if (!_lobbyTemplates.length) {
+            list.innerHTML = '<div style="opacity:.5;font-size:13px;padding:8px 0">Brak opublikowanych przygód</div>';
+            return;
+        }
+        list.innerHTML = _lobbyTemplates.map(t => `
+            <button type="button" class="lf-tpl-card" data-tpl-id="${t.id}" onclick="selectLobbyTemplate(${t.id}, ${JSON.stringify(t.title)})">
+                <span class="lf-tpl-card__title">${t.title}</span>
+                ${t.difficulty_rating ? `<span class="lf-tpl-card__diff">★${t.difficulty_rating}</span>` : ''}
+            </button>`).join('');
+    } catch (e) {
+        list.innerHTML = '<div style="opacity:.5;font-size:13px;padding:8px 0">Błąd ładowania szablonów</div>';
+    }
+}
+
+function selectLobbyTemplate(id, title) {
+    _lobbyTemplateId = id;
+    document.querySelectorAll('.lf-tpl-card').forEach(c => c.classList.toggle('lf-tpl-card--on', parseInt(c.dataset.tplId) === id));
+    const titleInput = document.getElementById('lobby-title');
+    if (titleInput && !titleInput.value.trim()) titleInput.value = title;
+}
+
 async function createLobby() {
     const title = document.getElementById('lobby-title')?.value.trim();
     const timerMinutes = parseInt(document.getElementById('lobby-timer')?.value || '1440');
@@ -720,14 +762,22 @@ async function createLobby() {
         if (errEl) { errEl.textContent = 'Timer: 1–4320 minut'; errEl.style.display = 'block'; }
         return;
     }
+    if (_lobbyMode === 'prebuilt' && !_lobbyTemplateId) {
+        if (errEl) { errEl.textContent = 'Wybierz gotową przygodę lub zmień tryb na AI'; errEl.style.display = 'block'; }
+        return;
+    }
     // Disable to prevent duplicate creation on double-click or page refresh
     if (btn) { btn.disabled = true; btn.textContent = 'Przyzywanie…'; }
+    const payload = { title, round_timer_minutes: timerMinutes, max_players: maxPlayers };
+    if (_lobbyMode === 'prebuilt' && _lobbyTemplateId) payload.template_id = _lobbyTemplateId;
     try {
         const data = await _lobbyFetch('/multiplayer/campaigns', {
             method: 'POST',
-            body: JSON.stringify({ title, round_timer_minutes: timerMinutes, max_players: maxPlayers }),
+            body: JSON.stringify(payload),
         });
         _lobbyId = data.campaign_id;
+        // Reset mode state for next lobby creation
+        _lobbyMode = 'ai'; _lobbyTemplateId = null; _lobbyTemplates = [];
         await _showLobbyScreen(_lobbyId);
     } catch (e) {
         if (errEl) { errEl.textContent = 'Błąd: ' + e.message; errEl.style.display = 'block'; }
