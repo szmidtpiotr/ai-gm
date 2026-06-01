@@ -7642,8 +7642,7 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   display: flex; align-items: center; gap: 10px; flex-wrap: nowrap;
   box-shadow: 0 2px 12px rgba(201,117,26,0.12); }
 .dungeon-hud[hidden] { display: none; }
-/* Shift game chat down when dungeon HUD is active */
-.game-screen--dungeon #chat-container { padding-top: var(--dungeon-hud-h, 41px); }
+/* Shift game chat down when dungeon HUD (+tile card) is active — see tile card CSS block below */
 .dungeon-hud__label { font-family: Cinzel, serif; font-size: 0.78rem; color: #e09030;
   letter-spacing: 0.06em; flex-shrink: 0; text-shadow: 0 0 8px rgba(201,117,26,0.4); }
 .dungeon-hud__progress { display: flex; gap: 5px; flex: 1; align-items: center; }
@@ -7701,34 +7700,89 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   color: #0d0904; font-weight: 700; padding: 10px 28px; cursor: pointer; font-size: 0.9rem; }
 .dungeon-complete-btn:hover { background: #e8951a; }
 
-/* ── Dungeon Map ─────────────────────────────────────────────────────────── */
-.dmap-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.75);
-  display: flex; align-items: flex-end; justify-content: center;
-  z-index: 1050; padding-bottom: 0; }
+/* ── Dungeon Room Reveal ─────────────────────────────────────────────────── */
+.drr-overlay { position: fixed; inset: 0; z-index: 1100;
+  background: #000; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; }
+.drr-overlay[hidden] { display: none; }
+.drr-image { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0;
+  opacity: 0.85; }
+.drr-content { position: absolute; bottom: 80px; z-index: 1; text-align: center; padding: 0 24px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.85) 40%);
+  width: 100%; }
+.drr-label { font-family: Cinzel, serif; font-size: 1.6rem; color: #c9a060;
+  text-shadow: 0 2px 12px #000; margin-bottom: 6px; }
+.drr-desc { font-size: 0.85rem; color: #b09060; text-shadow: 0 1px 6px #000;
+  max-width: 420px; margin: 0 auto; line-height: 1.5; }
+.drr-enter-btn { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+  z-index: 2; background: rgba(201,117,26,0.15); border: 1px solid #c9751a;
+  color: #c9a060; font-family: Cinzel, serif; font-size: 0.9rem; letter-spacing: 0.1em;
+  padding: 10px 32px; border-radius: 6px; cursor: pointer; }
+.drr-enter-btn:hover { background: rgba(201,117,26,0.3); color: #e8c080; }
+
+/* ── Dungeon Map (full screen) ───────────────────────────────────────────── */
+.dmap-overlay { position: fixed; inset: 0; background: rgba(5,3,1,0.96);
+  display: flex; flex-direction: column; z-index: 1050; }
 .dmap-overlay[hidden] { display: none; }
 
-.dmap-box { background: #0d0904; border: 1px solid #3a2510; border-bottom: none;
-  border-radius: 14px 14px 0 0; width: 100%; max-width: 600px;
-  box-shadow: 0 -4px 40px rgba(0,0,0,0.8); }
-
 .dmap-header { display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 18px 10px; border-bottom: 1px solid #2a1a08; }
+  padding: 12px 18px 10px; border-bottom: 1px solid #2a1a08; flex-shrink: 0; }
 .dmap-title { font-family: Cinzel, serif; font-size: 0.82rem; color: #c9751a; letter-spacing: 0.08em; }
-.dmap-close { background: none; border: none; color: #666; cursor: pointer; font-size: 1rem; padding: 4px 8px; }
+.dmap-close { background: none; border: none; color: #666; cursor: pointer; font-size: 1.2rem; padding: 4px 10px; }
 .dmap-close:hover { color: #eee; }
 
-.dmap-canvas-wrap { overflow-x: auto; padding: 16px 18px 12px; }
-.dmap-svg { display: block; min-height: 90px; }
+.dmap-canvas-wrap { flex: 1; overflow: hidden; position: relative;
+  cursor: grab; touch-action: none; display: flex; align-items: center; justify-content: center; }
+.dmap-canvas-wrap.grabbing { cursor: grabbing; }
+.dmap-svg { display: block; transform-origin: 0 0; will-change: transform; }
 
-.dmap-legend { display: flex; gap: 14px; padding: 8px 18px 14px;
+.dmap-legend { display: flex; gap: 14px; padding: 8px 18px 14px; flex-shrink: 0;
   font-size: 0.68rem; color: #4a3a20; }
 .dmap-leg--current { color: #c9751a; }
 .dmap-leg--cleared { color: #5a8040; }
 
-/* Map toggle button in HUD */
+/* Map + room buttons in HUD */
 .dungeon-hud__map-btn { background: none; border: 1px solid #3a2510; border-radius: 5px;
-  font-size: 0.85rem; padding: 3px 7px; cursor: pointer; color: #7a6040; line-height: 1; }
+  padding: 4px 7px; cursor: pointer; color: #7a6040; line-height: 1; display: flex; align-items: center; }
 .dungeon-hud__map-btn:hover { border-color: #c9751a; color: #c9a060; }
+.dungeon-hud__room-btn { background: none; border: 1px solid #3a2510; border-radius: 5px;
+  font-size: 0.85rem; padding: 3px 7px; cursor: pointer; color: #7a6040; line-height: 1; }
+.dungeon-hud__room-btn:hover { border-color: #c9751a; color: #c9a060; }
+
+/* ── Dungeon Tile Card (tile system) ─────────────────────────────────────── */
+.dungeon-tile-card {
+  position: fixed;
+  top: calc(var(--dungeon-hud-top, 64px) + var(--dungeon-hud-h, 40px));
+  left: var(--dungeon-hud-left, 0);
+  width: var(--dungeon-hud-width, 100%);
+  z-index: 190;
+  background: rgba(9,6,3,0.97);
+  border-bottom: 1px solid rgba(201,117,26,0.18);
+  display: flex;
+  align-items: stretch;
+  max-height: 80px;
+  overflow: hidden;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.55);
+}
+.dungeon-tile-card[hidden] { display: none; }
+.game-screen--dungeon #chat-container {
+  padding-top: calc(var(--dungeon-hud-h, 41px) + var(--dungeon-tile-card-h, 0px));
+}
+.dtc-thumb-wrap { flex-shrink: 0; width: 80px; background: #050302; overflow: hidden; }
+.dtc-image { width: 80px; height: 80px; object-fit: cover; display: block; opacity: 0.82; }
+.dtc-body { flex: 1; padding: 7px 12px; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+.dtc-header { display: flex; align-items: baseline; gap: 8px; }
+.dtc-label { font-family: Cinzel, serif; font-size: 0.79rem; color: #d4a060; letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+.dtc-index { font-size: 0.63rem; color: #6a5030; flex-shrink: 0; }
+.dtc-desc { font-size: 0.7rem; color: #7a6a4a; line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.dtc-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.dtc-tag { font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; line-height: 1.4; }
+.dtc-tag--enemy { background: rgba(180,50,20,0.18); color: #c07060; border: 1px solid rgba(180,50,20,0.28); }
+.dtc-tag--hazard { background: rgba(200,120,20,0.14); color: #b08030; border: 1px solid rgba(200,120,20,0.24); }
+.dtc-tag--riddle { background: rgba(100,80,160,0.18); color: #a090c0; border: 1px solid rgba(100,80,160,0.28); }
+.dtc-exits { flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 6px 10px; min-width: 72px; }
+.dtc-door-btn { background: #1a1208; border: 1px solid rgba(201,117,26,0.5); border-radius: 5px; color: #c9a060; font-size: 0.68rem; padding: 3px 7px; cursor: pointer; white-space: nowrap; transition: background 0.12s; }
+.dtc-door-btn:hover { background: #c9751a; color: #0d0904; border-color: #c9751a; }
 
 /* ── Spell Picker ────────────────────────────────────────────────────────── */
 .combat-btn--spell { background: linear-gradient(135deg, #3730a3, #6d28d9); border-color: #818cf8; }
@@ -10360,7 +10414,7 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 
 /* ── Bug Report Button & Modal ─────────────────────────────── */
 #bug-report-btn {
-  position: absolute;
+  position: fixed;
   bottom: 175px;
   right: 16px;
   z-index: 900;

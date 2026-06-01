@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=f25-mp-modes">
+  <link rel="stylesheet" href="./css/styles.css?v=dungeon-tiles-map1">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -587,6 +587,14 @@
           <div class="adv-card__body">
             <h3>Loch</h3>
             <p>Ekspedycja do losowego lochu — szybka walka, łupy, bez fabuły</p>
+          </div>
+          <span class="adv-card__arrow">›</span>
+        </button>
+        <button type="button" class="adv-card adv-card--dungeon" id="dungeon-tiles-btn">
+          <div class="adv-card__icon">🗺</div>
+          <div class="adv-card__body">
+            <h3>Loch (Kafelki)</h3>
+            <p>Odkrywaj lochy kafelek po kafelku — wizualne komnaty z obrazami, wrogami i zagadkami</p>
           </div>
           <span class="adv-card__arrow">›</span>
         </button>
@@ -1928,7 +1936,13 @@
     <div class="dungeon-hud__progress" id="dungeon-hud-progress"></div>
     <div class="dungeon-hud__room-type" id="dungeon-hud-room-type"></div>
     <button type="button" class="dungeon-hud__advance" id="dungeon-advance-btn" hidden>Przejdź dalej →</button>
-    <button type="button" class="dungeon-hud__map-btn" id="dungeon-map-btn" title="Pokaż mapę lochu">🗺</button>
+    <button type="button" class="dungeon-hud__room-btn" id="dungeon-room-btn" title="Pokaż komnatę">👁</button>
+    <button type="button" class="dungeon-hud__map-btn" id="dungeon-map-btn" title="Mapa lochu">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+        <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+        <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+      </svg>
+    </button>
     <button type="button" class="dungeon-hud__exit" id="dungeon-exit-btn">✕ Wyjdź</button>
   </div>
 
@@ -1944,21 +1958,49 @@
     <button type="button" class="dungeon-riddle-hint-btn" id="dungeon-riddle-hint-btn">Podpowiedź</button>
   </div>
 
-  <!-- Dungeon Map Overlay -->
+  <!-- Dungeon Tile Card (tile system) -->
+  <div id="dungeon-tile-card" class="dungeon-tile-card" hidden>
+    <div class="dtc-thumb-wrap" id="dtc-thumb-wrap">
+      <img id="dtc-image" class="dtc-image" src="" alt="">
+    </div>
+    <div class="dtc-body">
+      <div class="dtc-header">
+        <span class="dtc-label" id="dtc-label">—</span>
+        <span class="dtc-index" id="dtc-index"></span>
+      </div>
+      <div class="dtc-desc" id="dtc-desc"></div>
+      <div class="dtc-tags" id="dtc-tags"></div>
+    </div>
+    <div class="dtc-exits" id="dtc-exits"></div>
+  </div>
+
+  <!-- Dungeon Room Reveal Overlay -->
+  <div id="dungeon-room-reveal" class="drr-overlay" hidden>
+    <img class="drr-image" id="drr-image" src="" alt="">
+    <div class="drr-content">
+      <div class="drr-label" id="drr-label"></div>
+      <div class="drr-desc" id="drr-desc"></div>
+    </div>
+    <button type="button" class="drr-enter-btn" id="drr-close">Wejdź →</button>
+  </div>
+
+  <!-- Dungeon Map Overlay (full screen) -->
   <div id="dungeon-map-overlay" class="dmap-overlay" hidden>
-    <div class="dmap-box">
-      <div class="dmap-header">
-        <span class="dmap-title">🗺 Mapa Lochu</span>
-        <button type="button" class="dmap-close" id="dmap-close-btn">✕</button>
-      </div>
-      <div class="dmap-canvas-wrap">
-        <svg id="dmap-svg" class="dmap-svg"></svg>
-      </div>
-      <div class="dmap-legend">
-        <span>■ Nieznane</span>
-        <span class="dmap-leg--current">■ Obecna</span>
-        <span class="dmap-leg--cleared">■ Wyczyszczona</span>
-      </div>
+    <div class="dmap-header">
+      <span class="dmap-title">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px;margin-right:6px">
+          <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+          <line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>
+        </svg>Mapa Lochu</span>
+      <button type="button" class="dmap-close" id="dmap-close-btn">✕</button>
+    </div>
+    <div class="dmap-canvas-wrap" id="dmap-canvas-wrap">
+      <svg id="dmap-svg" class="dmap-svg"></svg>
+    </div>
+    <div class="dmap-legend">
+      <span>■ Nieznane</span>
+      <span class="dmap-leg--current">■ Obecna</span>
+      <span class="dmap-leg--cleared">■ Wyczyszczona</span>
     </div>
   </div>
 
@@ -2134,6 +2176,6 @@
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
   <script src="./js/multiplayer_ui.js?v=31"></script>
-  <script src="./js/app.js?v=multiplayer-lobby-19"></script>
+  <script src="./js/app.js?v=dungeon-tiles-map1"></script>
 </body>
 </html>

@@ -10814,6 +10814,13 @@ async function handleCombatSpellAttack(spellKey) {
 let _activeDungeonRun = null;
 let _dungeonCampaignId = null;
 
+function _isTileRun(run) { return run?.system === 'tiles'; }
+function _currentTile(run) {
+    if (!_isTileRun(run)) return null;
+    const idx = run.current_index ?? 0;
+    return run.tiles?.[idx] ?? null;
+}
+
 const ROOM_TYPE_ICONS = {
     combat: '⚔', boss: '💀', riddle: '🔮', trap: '⚙', chest: '🎁', rest: '🕯'
 };
@@ -10845,6 +10852,53 @@ async function openDungeonPicker() {
                 <div class="dungeon-card__body">
                     <div class="dungeon-card__name">${escapeHtml(d.label || d.key)}</div>
                     <div class="dungeon-card__meta">${d.rooms || '?'} komnat · Poz. ${d.min_level || 1}+</div>
+                    <div class="dungeon-card__atm">${escapeHtml((d.atmosphere || '').slice(0, 80))}</div>
+                </div>
+                ${onCooldown
+                    ? `<div class="dungeon-card__cooldown">⏳ ${hoursLeft}</div>`
+                    : `<div class="dungeon-card__arrow">›</div>`
+                }`;
+            if (!onCooldown) {
+                card.addEventListener('click', () => {
+                    overlay.setAttribute('hidden', '');
+                    enterDungeon(d.key);
+                });
+            }
+            list.appendChild(card);
+        });
+    } catch (err) {
+        list.innerHTML = `<p class="dungeon-picker-empty">Błąd: ${escapeHtml(err.message || '?')}</p>`;
+    }
+}
+
+async function openDungeonTilesPicker() {
+    if (!currentHero?.id) { showToast('Wybierz bohatera aby wejść do lochu', 'error'); return; }
+    const overlay = document.getElementById('dungeon-picker-overlay');
+    const list = document.getElementById('dungeon-picker-list');
+    overlay.removeAttribute('hidden');
+    list.innerHTML = '<div class="dungeon-picker-loading">Ładowanie lochów (kafelki)…</div>';
+
+    try {
+        const data = await apiRequest('GET', `/dungeons?character_id=${currentHero.id}`);
+        // Only tile-based dungeons (have tile_category_key set)
+        const dungeons = (data.dungeons || []).filter(d => d.tile_category_key);
+        if (!dungeons.length) {
+            list.innerHTML = '<p class="dungeon-picker-empty">Brak dostępnych lochów kafelkowych. Administrator musi skonfigurować lochy z kafelkami.</p>';
+            return;
+        }
+        list.innerHTML = '';
+        dungeons.forEach(d => {
+            const cd = d.cooldown || {};
+            const onCooldown = cd.on_cooldown;
+            const hoursLeft = cd.hours_remaining ? `${cd.hours_remaining}h` : '';
+            const card = document.createElement('button');
+            card.className = 'dungeon-card' + (onCooldown ? ' dungeon-card--cooldown' : '');
+            card.disabled = !!onCooldown;
+            card.innerHTML = `
+                <div class="dungeon-card__icon">🗺</div>
+                <div class="dungeon-card__body">
+                    <div class="dungeon-card__name">${escapeHtml(d.label || d.key)}</div>
+                    <div class="dungeon-card__meta">${d.rooms || '?'} komnat · Poz. ${d.min_level || 1}+ · Kafelki</div>
                     <div class="dungeon-card__atm">${escapeHtml((d.atmosphere || '').slice(0, 80))}</div>
                 </div>
                 ${onCooldown
@@ -10927,30 +10981,45 @@ function updateDungeonHUD() {
 
     if (label) label.textContent = `⛏ ${run.dungeon_label || 'Loch'}`;
 
-    if (progress) {
-        const total = run.total_rooms || 1;
-        const cur = run.current_room || 1;
-        const pips = Array.from({length: total}, (_, i) => {
-            const room = run.rooms?.[i];
-            const cleared = room?.cleared;
-            const isCurrent = i + 1 === cur;
-            const icon = ROOM_TYPE_ICONS[room?.room_type] || '●';
-            return `<span class="dungeon-pip${cleared ? ' cleared' : ''}${isCurrent ? ' current' : ''}" title="${room?.room_type || ''}">${icon}</span>`;
-        }).join('');
-        progress.innerHTML = pips;
+    if (_isTileRun(run)) {
+        const total = run.total_tiles || 1;
+        const cur = run.current_index ?? 0;
+        if (progress) {
+            const pips = Array.from({length: total}, (_, i) => {
+                const t = run.tiles?.[i];
+                const cleared = !!t?.cleared;
+                const isCurrent = i === cur;
+                const icon = t?.is_boss_tile ? '💀' : (cleared ? '✦' : '●');
+                return `<span class="dungeon-pip${cleared?' cleared':''}${isCurrent?' current':''}" title="${t?.label||''}">${icon}</span>`;
+            }).join('');
+            progress.innerHTML = pips;
+        }
+        const tile = run.tiles?.[cur];
+        if (roomType) roomType.textContent = tile?.is_boss_tile ? '💀 BOSS' : (tile?.label || 'Komnata');
+        if (advBtn) advBtn.hidden = !(tile?.cleared) || !!run.completed;
+    } else {
+        if (progress) {
+            const total = run.total_rooms || 1;
+            const cur = run.current_room || 1;
+            const pips = Array.from({length: total}, (_, i) => {
+                const room = run.rooms?.[i];
+                const cleared = room?.cleared;
+                const isCurrent = i + 1 === cur;
+                const icon = ROOM_TYPE_ICONS[room?.room_type] || '●';
+                return `<span class="dungeon-pip${cleared ? ' cleared' : ''}${isCurrent ? ' current' : ''}" title="${room?.room_type || ''}">${icon}</span>`;
+            }).join('');
+            progress.innerHTML = pips;
+        }
+        const currentRoom = run.rooms?.find(r => r.room_id === run.current_room);
+        if (roomType && currentRoom) {
+            const typeNames = {combat:'Walka', boss:'BOSS', riddle:'Zagadka', trap:'Pułapka', chest:'Skrzynia', rest:'Odpoczynek'};
+            roomType.textContent = typeNames[currentRoom.room_type] || currentRoom.room_type;
+        }
+        const cleared = currentRoom?.cleared;
+        if (advBtn) advBtn.hidden = !cleared || run.completed;
     }
 
-    const currentRoom = run.rooms?.find(r => r.room_id === run.current_room);
-    if (roomType && currentRoom) {
-        const typeNames = {combat:'Walka', boss:'BOSS', riddle:'Zagadka', trap:'Pułapka', chest:'Skrzynia', rest:'Odpoczynek'};
-        roomType.textContent = typeNames[currentRoom.room_type] || currentRoom.room_type;
-    }
-
-    // Show advance button only if current room is cleared and dungeon not complete
-    const cleared = currentRoom?.cleared;
-    if (advBtn) advBtn.hidden = !cleared || run.completed;
-
-    // Refresh map if it's open
+    // Refresh map if open
     if (!document.getElementById('dungeon-map-overlay')?.hidden) {
         renderDungeonMap(run);
     }
@@ -10972,6 +11041,18 @@ function _positionDungeonHUD() {
     });
 }
 
+function _positionDungeonTileCard() {
+    const card = document.getElementById('dungeon-tile-card');
+    if (!card || card.hidden) {
+        document.documentElement.style.setProperty('--dungeon-tile-card-h', '0px');
+        return;
+    }
+    requestAnimationFrame(() => {
+        const h = card.getBoundingClientRect().height;
+        document.documentElement.style.setProperty('--dungeon-tile-card-h', `${h}px`);
+    });
+}
+
 function showDungeonHUD(show) {
     const hud = document.getElementById('dungeon-hud');
     if (!hud) return;
@@ -10981,23 +11062,33 @@ function showDungeonHUD(show) {
         _positionDungeonHUD();
         gameScreen?.classList.add('game-screen--dungeon');
     } else {
+        document.getElementById('dungeon-tile-card')?.setAttribute('hidden', '');
+        _positionDungeonTileCard();
         gameScreen?.classList.remove('game-screen--dungeon');
     }
 }
 
-// Reposition HUD on window resize
+// Reposition HUD + tile card on window resize
 window.addEventListener('resize', () => {
-    if (!document.getElementById('dungeon-hud')?.hidden) _positionDungeonHUD();
+    if (!document.getElementById('dungeon-hud')?.hidden) {
+        _positionDungeonHUD();
+        _positionDungeonTileCard();
+    }
 });
 
 function renderCurrentRoom() {
     const run = _activeDungeonRun;
     if (!run) return;
+
+    if (_isTileRun(run)) {
+        _renderTileCard(run);
+        return;
+    }
+
+    // Legacy riddle panel
     const room = run.rooms?.find(r => r.room_id === run.current_room);
     if (!room) return;
-
     const riddlePanel = document.getElementById('dungeon-riddle-panel');
-
     if (room.room_type === 'riddle' && !room.cleared) {
         if (riddlePanel) {
             riddlePanel.removeAttribute('hidden');
@@ -11011,13 +11102,98 @@ function renderCurrentRoom() {
     }
 }
 
-async function _dungeonAdvance() {
+const _DIR_LABELS = {N:'Północ ↑', S:'Południe ↓', E:'Wschód →', W:'Zachód ←'};
+const _HAZARD_ICONS = {burning:'🔥', flooding:'💧', poison:'☠', darkness:'🌑', cold:'❄', cursed:'💀'};
+
+function _renderTileCard(run) {
+    const card = document.getElementById('dungeon-tile-card');
+    if (!card) return;
+    const tile = _currentTile(run);
+    if (!tile) { card.setAttribute('hidden', ''); _positionDungeonTileCard(); return; }
+
+    // Image
+    const imgEl = document.getElementById('dtc-image');
+    const thumbWrap = document.getElementById('dtc-thumb-wrap');
+    if (imgEl && thumbWrap) {
+        if (tile.image_url) {
+            imgEl.src = tile.image_url;
+            thumbWrap.style.display = '';
+        } else {
+            thumbWrap.style.display = 'none';
+        }
+    }
+
+    // Label + index
+    const labelEl = document.getElementById('dtc-label');
+    if (labelEl) labelEl.textContent = (tile.is_boss_tile ? '💀 ' : '') + (tile.label || 'Komnata');
+    const indexEl = document.getElementById('dtc-index');
+    if (indexEl) indexEl.textContent = `${(run.current_index ?? 0) + 1} / ${run.total_tiles || '?'}`;
+
+    // Description
+    const descEl = document.getElementById('dtc-desc');
+    if (descEl) descEl.textContent = tile.room_description || '';
+
+    // Tags: enemies, hazards, riddle
+    const tagsEl = document.getElementById('dtc-tags');
+    if (tagsEl) {
+        const tags = [];
+        (tile.enemies || []).forEach(e => {
+            tags.push(`<span class="dtc-tag dtc-tag--enemy">⚔ ${escapeHtml(e.label || e.enemy_key || '?')} ×${e.count || 1}</span>`);
+        });
+        (tile.active_states || []).forEach(h => {
+            tags.push(`<span class="dtc-tag dtc-tag--hazard">${_HAZARD_ICONS[h.type] || '⚠'} ${escapeHtml(h.type)}</span>`);
+        });
+        if (tile.riddle && !tile.riddle?.solved) {
+            tags.push(`<span class="dtc-tag dtc-tag--riddle">🔮 Zagadka</span>`);
+        }
+        tagsEl.innerHTML = tags.join('');
+    }
+
+    // No door suggestions — player advances via "Przejdź dalej" or door is auto-chosen
+    // Show riddle panel if tile has an unsolved riddle
+    const exitsEl = document.getElementById('dtc-exits');
+    if (exitsEl) exitsEl.innerHTML = '';
+    const riddlePanel = document.getElementById('dungeon-riddle-panel');
+    if (tile.riddle && !tile.riddle?.solved) {
+        if (riddlePanel) {
+            riddlePanel.removeAttribute('hidden');
+            const txt = document.getElementById('dungeon-riddle-text');
+            if (txt) txt.textContent = tile.riddle.text || '…';
+            const hint = document.getElementById('dungeon-riddle-hint');
+            if (hint) { hint.textContent = ''; hint.setAttribute('hidden', ''); }
+        }
+    } else {
+        riddlePanel?.setAttribute('hidden', '');
+    }
+
+    card.removeAttribute('hidden');
+    _positionDungeonTileCard();
+}
+
+function showDungeonRoomReveal(tile) {
+    const overlay = document.getElementById('dungeon-room-reveal');
+    if (!overlay) return;
+    const img = document.getElementById('drr-image');
+    if (img) { img.src = tile.image_url || ''; img.style.display = tile.image_url ? '' : 'none'; }
+    const lbl = document.getElementById('drr-label');
+    if (lbl) lbl.textContent = (tile.is_boss_tile ? '💀 ' : '') + (tile.label || 'Komnata');
+    const desc = document.getElementById('drr-desc');
+    if (desc) desc.textContent = tile.room_description || '';
+    overlay.removeAttribute('hidden');
+    // Close on button, overlay click, or escape
+    const close = () => overlay.setAttribute('hidden', '');
+    document.getElementById('drr-close')?.addEventListener('click', close, { once: true });
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); }, { once: true });
+    const esc = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } };
+    document.addEventListener('keydown', esc);
+}
+
+async function _dungeonAdvance(doorChosen = null) {
     if (!_dungeonCampaignId || !characterData?.id) return;
     try {
-        const resp = await apiRequest('POST', '/dungeons/advance-room', {
-            campaign_id: _dungeonCampaignId,
-            character_id: characterData.id,
-        });
+        const body = { campaign_id: _dungeonCampaignId, character_id: characterData.id };
+        if (doorChosen) body.door_chosen = doorChosen;
+        const resp = await apiRequest('POST', '/dungeons/advance-room', body);
         _activeDungeonRun = resp.dungeon_run;
 
         if (resp.narrative) {
@@ -11030,9 +11206,11 @@ async function _dungeonAdvance() {
         } else {
             updateDungeonHUD();
             renderCurrentRoom();
-            // Auto-open map on first advance (room 2) so player learns the layout exists
-            const newRoom = _activeDungeonRun?.current_room;
-            if (newRoom === 2) openDungeonMap(true);
+            // Show room reveal for tile system
+            if (_isTileRun(_activeDungeonRun)) {
+                const tile = _currentTile(_activeDungeonRun);
+                if (tile) showDungeonRoomReveal(tile);
+            }
         }
     } catch (err) {
         showToast(err.message || 'Błąd', 'error');
@@ -11141,9 +11319,95 @@ const ROOM_TYPE_LABELS = {
     trap: 'Pułapka', chest: 'Skrzynia', rest: 'Odpoczynek'
 };
 
+function _renderTileMap(run, svg) {
+    const tiles = run.tiles || [];
+    const curIdx = run.current_index ?? 0;
+    const discovered = new Set((run.discovered_positions || []).map(p => `${p[0]},${p[1]}`));
+    if (!tiles.length) { svg.innerHTML = ''; return; }
+
+    const S = 58, GAP = 14, PAD = 18;
+    const STEP = S + GAP;
+
+    const positions = tiles.map(t => t.position || [0, 0]);
+    const minCol = Math.min(...positions.map(p => p[0]));
+    const minRow = Math.min(...positions.map(p => p[1]));
+    const maxRow = Math.max(...positions.map(p => p[1]));
+    const maxCol = Math.max(...positions.map(p => p[0]));
+
+    const tX = c => PAD + (c - minCol) * STEP;
+    const tY = r => PAD + (maxRow - r) * STEP;  // flip Y so North = up
+    const cX = c => tX(c) + S / 2;
+    const cY = r => tY(r) + S / 2;
+
+    const svgW = (maxCol - minCol + 1) * STEP + GAP + PAD * 2;
+    const svgH = (maxRow - minRow + 1) * STEP + GAP + PAD * 2;
+    svg.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
+    svg.setAttribute('width', svgW);
+    svg.setAttribute('height', svgH);
+
+    let html = '<defs>';
+    tiles.forEach((t, i) => {
+        const pos = t.position || [0, 0];
+        html += `<clipPath id="dtmc-${i}"><rect x="${tX(pos[0])}" y="${tY(pos[1])}" width="${S}" height="${S}" rx="6"/></clipPath>`;
+    });
+    html += '</defs>';
+
+    // Corridors first (behind tiles)
+    tiles.forEach((tile, i) => {
+        const next = tiles[i + 1];
+        if (!next) return;
+        const p1 = tile.position || [0, 0];
+        const p2 = next.position || [0, 0];
+        const dist = Math.abs(p2[0]-p1[0]) + Math.abs(p2[1]-p1[1]);
+        if (dist !== 1) return;
+        const known = discovered.has(`${p1[0]},${p1[1]}`);
+        const dx = p2[0]-p1[0], dy = p2[1]-p1[1];
+        // line from edge of tile 1 to edge of tile 2 (skip tile areas)
+        html += `<line x1="${cX(p1[0])+dx*(S/2+1)}" y1="${cY(p1[1])+dy*(S/2+1)}" x2="${cX(p2[0])-dx*(S/2+1)}" y2="${cY(p2[1])-dy*(S/2+1)}" stroke="#4a3010" stroke-width="4" opacity="${known?0.55:0.1}"/>`;
+    });
+
+    // Tiles
+    tiles.forEach((tile, i) => {
+        const pos = tile.position || [0, 0];
+        const x = tX(pos[0]), y = tY(pos[1]);
+        const isCurrent = i === curIdx;
+        const isCleared = !!tile.cleared;
+        const isKnown = discovered.has(`${pos[0]},${pos[1]}`);
+        const isBoss = !!tile.is_boss_tile;
+
+        let fill = '#0d0904', stroke = '#2a1a08', strokeW = 1, opacity = '0.55';
+        if (isCurrent) { fill='#1a1005'; stroke='#c9751a'; strokeW=2; opacity='1'; }
+        else if (isCleared) { fill='#100e08'; stroke='#3a2808'; opacity='0.8'; }
+        if (isBoss && isKnown) { stroke='#8a2010'; fill='#140802'; }
+
+        html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}" opacity="${opacity}"/>`;
+        if (isCurrent) html += `<rect x="${x-2}" y="${y-2}" width="${S+4}" height="${S+4}" rx="8" fill="none" stroke="#c9751a" stroke-width="1" opacity="0.3"/>`;
+
+        if (isKnown && tile.image_url) {
+            html += `<image href="${escapeHtml(tile.image_url)}" x="${x}" y="${y}" width="${S}" height="${S}" preserveAspectRatio="xMidYMid slice" clip-path="url(#dtmc-${i})" opacity="${isCleared?0.45:0.75}"/>`;
+            // Dark overlay tint over image
+            html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="6" fill="${fill}" opacity="${isCurrent?0.25:0.55}"/>`;
+        }
+
+        if (!isKnown) {
+            html += `<text x="${x+S/2}" y="${y+S/2}" text-anchor="middle" dominant-baseline="middle" font-size="18" fill="#2a2010">?</text>`;
+        } else {
+            const shortLabel = (tile.label || '').slice(0, 8);
+            html += `<text x="${x+S/2}" y="${y+S-7}" text-anchor="middle" font-size="6" fill="${isCurrent?'#d4a060':'#5a4a28'}" font-family="sans-serif" style="text-transform:uppercase;letter-spacing:0.06em">${shortLabel}</text>`;
+            if (isBoss) html += `<text x="${x+S/2}" y="${y+22}" text-anchor="middle" font-size="14" style="pointer-events:none">💀</text>`;
+            if (isCleared && !isCurrent) html += `<text x="${x+S-10}" y="${y+12}" text-anchor="middle" font-size="9" fill="#5a8040" style="pointer-events:none">✓</text>`;
+        }
+        html += `<text x="${x+7}" y="${y+11}" text-anchor="middle" font-size="7" fill="${isKnown?'#6a5a30':'#2a2010'}" style="pointer-events:none">${i+1}</text>`;
+    });
+
+    svg.innerHTML = html;
+}
+
 function renderDungeonMap(run) {
     const svg = document.getElementById('dmap-svg');
     if (!svg || !run) return;
+
+    if (_isTileRun(run)) { _renderTileMap(run, svg); return; }
 
     const rooms = run.rooms || [];
     const currentRoomId = run.current_room || 1;
@@ -11265,14 +11529,108 @@ function renderDungeonMap(run) {
     svg.innerHTML = html;
 }
 
-function openDungeonMap(autoClose = false) {
+// ── Dungeon map pan/zoom state ─────────────────────────────────────────────
+const _dmapState = { scale: 1, tx: 0, ty: 0, dragging: false, lastX: 0, lastY: 0, pinchDist: 0 };
+
+function _dmapApplyTransform() {
+    const svg = document.getElementById('dmap-svg');
+    if (svg) svg.style.transform = `translate(${_dmapState.tx}px,${_dmapState.ty}px) scale(${_dmapState.scale})`;
+}
+
+function _dmapFitToScreen() {
+    const wrap = document.getElementById('dmap-canvas-wrap');
+    const svg = document.getElementById('dmap-svg');
+    if (!wrap || !svg) return;
+    const svgW = parseFloat(svg.getAttribute('width') || 200);
+    const svgH = parseFloat(svg.getAttribute('height') || 200);
+    const wW = wrap.clientWidth, wH = wrap.clientHeight;
+    const scale = Math.min((wW - 32) / svgW, (wH - 32) / svgH, 2);
+    _dmapState.scale = scale;
+    _dmapState.tx = (wW - svgW * scale) / 2;
+    _dmapState.ty = (wH - svgH * scale) / 2;
+    _dmapApplyTransform();
+}
+
+function _dmapInitEvents() {
+    const wrap = document.getElementById('dmap-canvas-wrap');
+    if (!wrap || wrap._dmapEventsInit) return;
+    wrap._dmapEventsInit = true;
+
+    // Mouse wheel zoom
+    wrap.addEventListener('wheel', e => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.85 : 1.18;
+        const rect = wrap.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        _dmapState.tx = mx - (mx - _dmapState.tx) * delta;
+        _dmapState.ty = my - (my - _dmapState.ty) * delta;
+        _dmapState.scale = Math.min(4, Math.max(0.3, _dmapState.scale * delta));
+        _dmapApplyTransform();
+    }, { passive: false });
+
+    // Mouse drag pan
+    wrap.addEventListener('mousedown', e => {
+        _dmapState.dragging = true; _dmapState.lastX = e.clientX; _dmapState.lastY = e.clientY;
+        wrap.classList.add('grabbing');
+    });
+    document.addEventListener('mousemove', e => {
+        if (!_dmapState.dragging) return;
+        _dmapState.tx += e.clientX - _dmapState.lastX;
+        _dmapState.ty += e.clientY - _dmapState.lastY;
+        _dmapState.lastX = e.clientX; _dmapState.lastY = e.clientY;
+        _dmapApplyTransform();
+    });
+    document.addEventListener('mouseup', () => {
+        _dmapState.dragging = false;
+        wrap.classList.remove('grabbing');
+    });
+
+    // Touch pinch + drag
+    wrap.addEventListener('touchstart', e => {
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            _dmapState.pinchDist = Math.hypot(dx, dy);
+        } else if (e.touches.length === 1) {
+            _dmapState.dragging = true;
+            _dmapState.lastX = e.touches[0].clientX; _dmapState.lastY = e.touches[0].clientY;
+        }
+    }, { passive: true });
+    wrap.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.hypot(dx, dy);
+            const delta = dist / (_dmapState.pinchDist || dist);
+            _dmapState.pinchDist = dist;
+            const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            const rect = wrap.getBoundingClientRect();
+            const mx = cx - rect.left, my = cy - rect.top;
+            _dmapState.tx = mx - (mx - _dmapState.tx) * delta;
+            _dmapState.ty = my - (my - _dmapState.ty) * delta;
+            _dmapState.scale = Math.min(4, Math.max(0.3, _dmapState.scale * delta));
+            _dmapApplyTransform();
+        } else if (e.touches.length === 1 && _dmapState.dragging) {
+            _dmapState.tx += e.touches[0].clientX - _dmapState.lastX;
+            _dmapState.ty += e.touches[0].clientY - _dmapState.lastY;
+            _dmapState.lastX = e.touches[0].clientX; _dmapState.lastY = e.touches[0].clientY;
+            _dmapApplyTransform();
+        }
+    }, { passive: false });
+    wrap.addEventListener('touchend', () => { _dmapState.dragging = false; _dmapState.pinchDist = 0; });
+}
+
+function openDungeonMap() {
     const overlay = document.getElementById('dungeon-map-overlay');
     if (!overlay) return;
     renderDungeonMap(_activeDungeonRun);
     overlay.removeAttribute('hidden');
-    if (autoClose) {
-        setTimeout(() => overlay.setAttribute('hidden', ''), 3500);
-    }
+    _dmapInitEvents();
+    // Reset transform + fit SVG to screen after render
+    Object.assign(_dmapState, { scale: 1, tx: 0, ty: 0 });
+    requestAnimationFrame(_dmapFitToScreen);
 }
 
 function closeDungeonMap() {
@@ -11281,13 +11639,24 @@ function closeDungeonMap() {
 
 function initDungeon() {
     document.getElementById('dungeon-picker-btn')?.addEventListener('click', openDungeonPicker);
+    document.getElementById('dungeon-tiles-btn')?.addEventListener('click', openDungeonTilesPicker);
     document.getElementById('dungeon-picker-close')?.addEventListener('click', () => {
         document.getElementById('dungeon-picker-overlay')?.setAttribute('hidden', '');
     });
-    document.getElementById('dungeon-advance-btn')?.addEventListener('click', _dungeonAdvance);
+    document.getElementById('dungeon-advance-btn')?.addEventListener('click', () => _dungeonAdvance());
+    document.getElementById('dtc-exits')?.addEventListener('click', e => {
+        const btn = e.target.closest('.dtc-door-btn');
+        if (btn?.dataset.door) _dungeonAdvance(btn.dataset.door);
+    });
     document.getElementById('dungeon-exit-btn')?.addEventListener('click', _exitDungeon);
     document.getElementById('dungeon-complete-btn')?.addEventListener('click', _exitDungeon);
-    document.getElementById('dungeon-map-btn')?.addEventListener('click', () => openDungeonMap());
+    document.getElementById('dungeon-map-btn')?.addEventListener('click', openDungeonMap);
+    document.getElementById('dungeon-room-btn')?.addEventListener('click', () => {
+        if (_activeDungeonRun && _isTileRun(_activeDungeonRun)) {
+            const tile = _currentTile(_activeDungeonRun);
+            if (tile) showDungeonRoomReveal(tile);
+        }
+    });
     document.getElementById('dmap-close-btn')?.addEventListener('click', closeDungeonMap);
     document.getElementById('dungeon-map-overlay')?.addEventListener('click', (e) => {
         if (e.target === document.getElementById('dungeon-map-overlay')) closeDungeonMap();
@@ -11381,8 +11750,7 @@ function _makeDraggable(el) {
     const MARGIN = 8;
 
     function parentH() {
-        const p = el.parentElement || document.getElementById('game-screen') || document.body;
-        return p.clientHeight || window.innerHeight;
+        return window.innerHeight;
     }
 
     function clampTop(top) {
@@ -11446,7 +11814,7 @@ function _refreshBugReportButton() {
         btn.title = 'Zgłoś błąd (przeciągnij, żeby przenieść)';
         btn.innerHTML = '🐞';
         _makeDraggable(btn);
-        (document.getElementById('game-screen') || document.body).appendChild(btn);
+        document.body.appendChild(btn);
 
         const overlay = document.createElement('div');
         overlay.id = 'bug-report-overlay';
@@ -11661,7 +12029,8 @@ async function applyGameModeFlags() {
         // Solo campaign buttons
         flags.ai_campaign_enabled === false ? hide('new-campaign-btn') : show('new-campaign-btn');
         flags.prebuilt_enabled    === false ? hide('prebuilt-btn')     : show('prebuilt-btn');
-        flags.dungeon_enabled     === false ? hide('dungeon-picker-btn') : show('dungeon-picker-btn');
+        flags.dungeon_enabled       === false ? hide('dungeon-picker-btn')  : show('dungeon-picker-btn');
+        flags.dungeon_tiles_enabled === false ? hide('dungeon-tiles-btn')   : show('dungeon-tiles-btn');
         flags.multiplayer_enabled === false ? hide('multiplayer-lobby-btn') : show('multiplayer-lobby-btn');
 
         // Multiplayer lobby mode tiles
