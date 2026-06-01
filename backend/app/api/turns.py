@@ -5097,8 +5097,23 @@ def resolve_skill_test_endpoint(
                 logger.info("skill_test_narrator_fallback_ok")
             except Exception as e2:
                 logger.warning("skill_test_narrator_fallback_error", error=str(e2))
-                outcome = result.get("outcome", "")
-                prose_raw = "Sukces!" if "SUCCESS" in outcome else "Niepowodzenie."
+                prose_raw = ""
+
+        # Guard: if LLM returned None or empty (no exception raised), use a minimal
+        # outcome line so the frontend always has prose to display. (#236)
+        if not prose_raw.strip():
+            _outcome_str = result.get("outcome", "")
+            _skill_lbl = pending.get("skill_label") or pending.get("skill_key") or "Test"
+            if result.get("nat20"):
+                prose_raw = f"{_skill_lbl} — wyjątkowy sukces!"
+            elif result.get("nat1"):
+                prose_raw = f"{_skill_lbl} — fumble."
+            elif "SUCCESS" in _outcome_str:
+                prose_raw = f"{_skill_lbl} — sukces."
+            else:
+                prose_raw = f"{_skill_lbl} — niepowodzenie."
+            logger.warning("skill_test_narrator_empty_fallback",
+                           campaign_id=campaign_id, outcome=_outcome_str)
 
         prose, _ = _proc_tags(prose_raw, conn, campaign_id)
 
