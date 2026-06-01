@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
+from app.core.jwt_auth import assert_character_owner, require_current_user
 from pydantic import BaseModel
 
 from app.services import loot_service
@@ -29,7 +30,9 @@ class UseRequest(BaseModel):
 
 
 @router.get("/inventory/{character_id}")
-def get_inventory(character_id: int):
+def get_inventory(character_id: int, authorization: str | None = Header(default=None)):
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     try:
         data = loot_service.get_character_inventory(character_id)
         return {"ok": True, "data": data}
@@ -41,7 +44,9 @@ def get_inventory(character_id: int):
 
 
 @router.post("/inventory/{character_id}/equip")
-def post_inventory_equip(character_id: int, body: EquipRequest):
+def post_inventory_equip(character_id: int, body: EquipRequest, authorization: str | None = Header(default=None)):
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     try:
         slot_raw = body.slot
         if slot_raw is None or (isinstance(slot_raw, str) and not str(slot_raw).strip()):
@@ -59,7 +64,9 @@ def post_inventory_equip(character_id: int, body: EquipRequest):
 
 
 @router.post("/inventory/{character_id}/use")
-def post_inventory_use(character_id: int, body: UseRequest):
+def post_inventory_use(character_id: int, body: UseRequest, authorization: str | None = Header(default=None)):
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     try:
         data = loot_service.use_inventory_item(character_id, body.inventory_id)
         return {"ok": True, "data": data}
@@ -75,7 +82,9 @@ def post_inventory_use(character_id: int, body: UseRequest):
 
 
 @router.delete("/inventory/{character_id}/{inventory_id}")
-def delete_inventory_entry(character_id: int, inventory_id: int, force: bool = Query(False)):
+def delete_inventory_entry(character_id: int, inventory_id: int, force: bool = Query(False), authorization: str | None = Header(default=None)):
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     try:
         data = loot_service.delete_inventory_item(character_id, inventory_id, force=force)
         return {"ok": True, "data": data}
@@ -103,7 +112,9 @@ def get_item(key: str):
 
 
 @router.get("/characters/{character_id}/gold")
-def get_character_gold(character_id: int):
+def get_character_gold(character_id: int, authorization: str | None = Header(default=None)):
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     try:
         g = loot_service.get_character_gold(character_id)
         return {"ok": True, "data": {"gold_gp": g}}
@@ -115,7 +126,9 @@ def get_character_gold(character_id: int):
 
 
 @router.post("/characters/{character_id}/gold")
-def post_character_gold_delta(character_id: int, body: GoldDeltaRequest):
+def post_character_gold_delta(character_id: int, body: GoldDeltaRequest, authorization: str | None = Header(default=None)):
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     try:
         if int(body.delta) == 0:
             raise HTTPException(status_code=400, detail="delta must be non-zero")

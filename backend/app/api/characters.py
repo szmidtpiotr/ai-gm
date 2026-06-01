@@ -6,7 +6,7 @@ import re
 import sqlite3
 
 from fastapi import APIRouter, Body, Header, HTTPException, Query
-from app.core.jwt_auth import resolve_authed_user_id
+from app.core.jwt_auth import assert_character_owner, require_current_user, resolve_authed_user_id
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.character_creation_config import (
     CREATION_SKILL_POOL,
@@ -863,12 +863,14 @@ def _list_heroes_for_user(user_id: int, enriched: bool) -> dict:
 
 
 @router.get("/characters/{character_id}/history")
-def get_character_history(character_id: int):
+def get_character_history(character_id: int, authorization: str | None = Header(default=None)):
     """Stage 6 H2 — past campaigns for a hero, most recent first.
 
     Joins the campaigns table so the UI doesn't need a second fetch.
     LEFT JOIN: history row survives even if the campaign was hard-deleted.
     """
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -897,8 +899,10 @@ def get_character_history(character_id: int):
 
 
 @router.get("/characters/{character_id}/hex-map")
-def get_character_hex_map(character_id: int):
+def get_character_hex_map(character_id: int, authorization: str | None = Header(default=None)):
     """J6 — union of discovered hexes across all campaigns this character participated in."""
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -1293,7 +1297,9 @@ def list_characters(campaign_id: int):
 
 
 @router.get("/characters/{character_id}")
-def get_character(character_id: int):
+def get_character(character_id: int, authorization: str | None = Header(default=None)):
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
@@ -1349,7 +1355,9 @@ def get_character(character_id: int):
 
 
 @router.get("/characters/{character_id}/sheet")
-def get_character_sheet(character_id: int):
+def get_character_sheet(character_id: int, authorization: str | None = Header(default=None)):
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
 
@@ -1412,7 +1420,9 @@ class GrantMgXpRequest(BaseModel):
 
 
 @router.get("/characters/{character_id}/xp")
-def get_character_xp(character_id: int):
+def get_character_xp(character_id: int, authorization: str | None = Header(default=None)):
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
@@ -2799,7 +2809,9 @@ def reset_character_progress(character_id: int):
         conn.close()
 
 @router.get("/characters/{character_id}/spells")
-def get_character_spells_public(character_id: int):
+def get_character_spells_public(character_id: int, authorization: str | None = Header(default=None)):
     """Player-facing: return spell book for a character."""
+    _jwt = require_current_user(authorization)
+    assert_character_owner(_jwt, character_id)
     from app.services.spell_service import get_character_spells
     return {"spells": get_character_spells(character_id)}

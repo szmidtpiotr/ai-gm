@@ -315,9 +315,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AI Game Master PL", lifespan=lifespan)
 
+
+def _get_cors_origins() -> list[str]:
+    raw = os.environ.get("CORS_ORIGINS", "https://aigm-dev.studio-colorbox.com,https://aigm.studio-colorbox.com")
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

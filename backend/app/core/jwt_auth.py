@@ -199,3 +199,26 @@ def require_admin_role(
         status_code=401,
         detail="Missing authentication (send Authorization: Bearer <access_token>)",
     )
+
+
+def assert_character_owner(jwt_payload: dict, character_id: int) -> None:
+    """Raise 403 if the authenticated user does not own the character. Admins bypass."""
+    if int(jwt_payload.get("is_admin") or 0) == 1 or str(jwt_payload.get("role") or "").lower() == "admin":
+        return
+    jwt_uid = int(jwt_payload.get("sub") or 0)
+    if not jwt_uid:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    import sqlite3 as _sqlite3
+    from app.core.db_runtime import resolve_db_path as _resolve_db_path
+    _conn = _sqlite3.connect(_resolve_db_path())
+    try:
+        row = _conn.execute(
+            "SELECT user_id FROM characters WHERE id = ? AND is_active = 1",
+            (character_id,),
+        ).fetchone()
+    finally:
+        _conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Character not found")
+    if int(row[0] or 0) != jwt_uid:
+        raise HTTPException(status_code=403, detail="Forbidden")

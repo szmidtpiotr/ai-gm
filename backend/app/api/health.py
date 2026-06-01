@@ -1,8 +1,9 @@
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Header, Query
 
+from app.core.jwt_auth import current_user_optional
 from app.core.logging import get_logger, get_uptime_seconds
 from app.services.llm_service import get_health
 from app.services.loki_settings import get_effective_loki_base, get_stored_loki_url
@@ -45,7 +46,13 @@ async def _loki_health() -> dict[str, Any]:
 
 
 @router.get("/health")
-async def health(user_id: int | None = Query(default=None)):
+async def health(
+    user_id: int | None = Query(default=None),
+    authorization: str | None = Header(default=None),
+):
+    caller = current_user_optional(authorization)
+    if caller is None:
+        return {"status": "ok"}
     llm = get_health(get_user_llm_settings_full(user_id) if user_id else None)
     loki = await _loki_health()
     return {
