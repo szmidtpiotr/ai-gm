@@ -532,6 +532,9 @@
 
         _poll();
 
+        const chatPanel = document.getElementById('party-chat-panel');
+        if (chatPanel) chatPanel.hidden = false;
+
         _chatLastId = 0;
         _chatUnread = 0;
         _chatOpen = false;
