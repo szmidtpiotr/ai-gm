@@ -3005,7 +3005,10 @@ async function enterGame(campaign) {
 
     updateAdminSettingsVisibility();
     showScreen('game');
-    scrollToBottom();
+    // Use rAF so the browser has painted the newly-visible screen before we
+    // measure scrollHeight — a plain synchronous call may under-scroll when
+    // the chat div was hidden (display:none) during turn injection. (#238)
+    requestAnimationFrame(() => scrollToBottom());
     window.clog?.setContext({ campaign_id: campaign.id, character_id: characterData?.id, screen: 'game' });
     window.clog?.event('game_entered', { campaign_id: campaign.id, character_id: characterData?.id });
     if (campaign?.mode === 'multiplayer' && characterData?.id) {
