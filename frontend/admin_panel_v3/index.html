@@ -3342,6 +3342,8 @@
         <div class="stab-bar" id="dungeons-stab-bar">
           <button class="stab active" data-dtab="dungeons">Lochy</button>
           <button class="stab" data-dtab="riddles">Zagadki</button>
+          <button class="stab" data-dtab="tiles">Kafelki</button>
+          <button class="stab" data-dtab="tilecats">Kategorie</button>
         </div>
 
         <!-- Lochy tab -->
@@ -3458,6 +3460,36 @@
           </div>
           <div class="pagination"><span id="riddles-count">—</span></div>
         </div><!-- /dtab-riddles -->
+
+        <!-- Kafelki tab (Dungeon Tile Card System, issue #224) -->
+        <div class="stab-panel" id="dtab-tiles">
+          <div class="toolbar" style="flex-wrap:wrap;gap:10px">
+            <div class="search-box"><span class="search-box-icon">🔍</span>
+              <input type="text" id="tile-search" placeholder="Szukaj kafelka…" oninput="_filterTiles()">
+            </div>
+            <div class="filter-group" id="tile-cat-filter">
+              <button class="chip on" data-cat="">Wszystkie</button>
+              <!-- categories populated by JS -->
+            </div>
+            <span class="td-muted" style="font-size:0.78rem;margin-left:auto" id="tiles-count-info">—</span>
+          </div>
+          <div id="tiles-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;padding:8px 4px">
+            <div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--t3)">Ładowanie…</div>
+          </div>
+        </div><!-- /dtab-tiles -->
+
+        <!-- Kategorie tab -->
+        <div class="stab-panel" id="dtab-tilecats">
+          <div class="table-wrap">
+            <table class="data-table" id="tilecats-table">
+              <thead><tr>
+                <th>Klucz</th><th>Nazwa</th><th>Opis</th><th>Styl prompt</th>
+                <th>Aktywna</th><th class="td-actions">Akcje</th>
+              </tr></thead>
+              <tbody><tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Ładowanie…</td></tr></tbody>
+            </table>
+          </div>
+        </div><!-- /dtab-tilecats -->
 
       </div>
     </section>
@@ -6730,7 +6762,7 @@
       tbody.innerHTML = items.map(c => `<tr>
         <td class="col-check"><input type="checkbox" class="camp-row-check" onchange="rowCheck('camp')"></td>
         <td class="td-sticky"><div class="campaign-row-name">${_esc(c.title)}</div><div class="campaign-row-sub"><span class="td-muted" style="margin-right:6px">#${c.id}</span>${_timeAgo(c.last_turn_at)||'brak tur'}</div></td>
-        <td class="td-mono">${_esc(c.char_name||'—')}</td>
+        <td class="td-mono">${_esc(c.char_name||'—')}${c.owner_username?`<div class="td-muted" style="font-size:0.74rem">@${_esc(c.owner_username)}</div>`:''}</td>
         <td>${c.char_archetype?`<span class="type-badge">${_esc(archMap[c.char_archetype]||c.char_archetype)}</span>`:'<span class="td-muted">—</span>'}</td>
         <td class="td-mono">${c.char_level??'—'}</td>
         <td>${_hp(c.char_current_hp, c.char_max_hp)}</td>
@@ -6763,6 +6795,7 @@
         </div>
         <div style="display:flex;gap:8px;font-size:0.78rem;color:var(--t2);margin-bottom:10px">
           <span>${_esc(c.char_name||'?')}</span>
+          ${c.owner_username?`<span class="td-muted">@${_esc(c.owner_username)}</span>`:''}
           ${c.char_archetype ? `<span class="type-badge">${_esc(archMap[c.char_archetype]||c.char_archetype)}</span>` : ''}
           <span class="td-muted">Poz. ${c.char_level??'—'}</span>
         </div>
@@ -9132,12 +9165,335 @@
     document.querySelectorAll('#section-dungeons .stab-panel').forEach(p => p.classList.toggle('active', p.id === `dtab-${tab}`));
     const hdrBtn = document.getElementById('dungeons-header-btns');
     if (hdrBtn) {
-      if (tab === 'riddles') hdrBtn.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openNewRiddleModal()">+ Nowa zagadka</button>';
-      else hdrBtn.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openNewDungeonModal()">+ Nowy loch</button>';
+      if (tab === 'riddles')       hdrBtn.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openNewRiddleModal()">+ Nowa zagadka</button>';
+      else if (tab === 'tiles')    hdrBtn.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openNewTileModal()">+ Nowy kafelek</button>';
+      else if (tab === 'tilecats') hdrBtn.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openNewTileCategoryModal()">+ Nowa kategoria</button>';
+      else                          hdrBtn.innerHTML = '<button class="btn btn-primary btn-sm" onclick="openNewDungeonModal()">+ Nowy loch</button>';
     }
-    if (tab === 'riddles' && !document.querySelector('#riddles-table tbody tr[data-key]')) _loadRiddles();
+    if (tab === 'riddles'  && !document.querySelector('#riddles-table tbody tr[data-key]')) _loadRiddles();
+    if (tab === 'tiles'    && !document.querySelector('#tiles-grid .tile-card')) _loadDungeonTiles();
+    if (tab === 'tilecats' && !document.querySelector('#tilecats-table tbody tr[data-key]')) _loadTileCategories();
     _fabUpdate();
   });
+
+  // ── Dungeon Tiles (Kafelki, issue #224) ───────────────────────────────────────
+  let _tileCategoriesCache = null;
+  let _tilesCache = [];
+
+  async function _ensureTileCategories(force) {
+    if (_tileCategoriesCache && !force) return _tileCategoriesCache;
+    const d = await apiFetch('/api/admin/dungeon-tile-categories');
+    _tileCategoriesCache = d.categories || [];
+    return _tileCategoriesCache;
+  }
+
+  async function _loadDungeonTiles() {
+    const grid = document.getElementById('tiles-grid');
+    const filter = document.getElementById('tile-cat-filter');
+    if (!grid) return;
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--t3)">Ładowanie…</div>';
+    try {
+      const cats = await _ensureTileCategories();
+      if (filter) {
+        filter.innerHTML = '<button class="chip on" data-cat="">Wszystkie</button>' +
+          cats.map(c => `<button class="chip" data-cat="${_esc(c.key)}">${_esc(c.label)}</button>`).join('');
+        filter.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => {
+          filter.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+          b.classList.add('on');
+          _renderTilesGrid();
+        }));
+      }
+      const r = await apiFetch('/api/admin/dungeon-tiles?include_inactive=true');
+      _tilesCache = r.tiles || [];
+      _renderTilesGrid();
+    } catch (e) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:#ef4444">Błąd: ${_esc(e.message)}</div>`;
+    }
+  }
+
+  function _renderTilesGrid() {
+    const grid = document.getElementById('tiles-grid');
+    if (!grid) return;
+    const activeCat = document.querySelector('#tile-cat-filter .chip.on')?.dataset.cat || '';
+    const q = (document.getElementById('tile-search')?.value || '').toLowerCase().trim();
+    const list = _tilesCache.filter(t =>
+      (!activeCat || t.category_key === activeCat) &&
+      (!q || (t.label || '').toLowerCase().includes(q))
+    );
+    const info = document.getElementById('tiles-count-info');
+    if (info) info.textContent = `${list.length}/${_tilesCache.length} kafli`;
+    if (!list.length) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--t3)">Brak kafli — kliknij „+ Nowy kafelek"</div>';
+      return;
+    }
+    grid.innerHTML = list.map(t => _renderTileCard(t)).join('');
+  }
+
+  function _renderTileCard(t) {
+    const doors = (t.doors || []).join('+') || '—';
+    const bossBadge = t.is_boss_tile ? '<span class="badge badge-red" style="font-size:0.65rem">BOSS</span>' : '';
+    const inactiveBadge = !t.is_active ? '<span class="badge badge-slate" style="font-size:0.65rem">◯</span>' : '';
+    const imgHtml = t.image_url
+      ? `<img src="${_esc(t.image_url)}" style="width:100%;height:100%;object-fit:cover;display:block">`
+      : `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--t3);font-size:0.75rem;text-align:center;padding:8px">Brak obrazu<br><span style="font-size:0.65rem">kliknij Generuj</span></div>`;
+    return `<div class="tile-card" style="background:var(--surface2,#1a1a26);border:1px solid var(--border,#2a2a40);border-radius:8px;overflow:hidden;cursor:pointer" onclick="openEditTileModal(${t.id})">
+      <div style="position:relative;aspect-ratio:1;background:#0a0a0f">
+        ${imgHtml}
+        <div style="position:absolute;top:6px;left:6px;display:flex;gap:4px">${bossBadge}${inactiveBadge}</div>
+        <div style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.7);color:#facc15;padding:2px 6px;border-radius:4px;font-size:0.65rem;font-family:monospace">${_esc(doors)}</div>
+      </div>
+      <div style="padding:8px 10px">
+        <div style="font-weight:600;font-size:0.82rem;line-height:1.2">${_esc(t.label || '—')}</div>
+        <div style="color:var(--t3);font-size:0.7rem;margin-top:2px">${_esc(t.category_key)}</div>
+      </div>
+    </div>`;
+  }
+
+  function _filterTiles() { _renderTilesGrid(); }
+
+  async function openNewTileModal() {
+    const cats = await _ensureTileCategories();
+    if (!cats.length) { showToast('Brak kategorii. Najpierw utwórz kategorię.', 'warn'); return; }
+    _openTileForm(null, cats);
+  }
+
+  async function openEditTileModal(tileId) {
+    try {
+      const r = await apiFetch(`/api/admin/dungeon-tiles/${tileId}`);
+      const cats = await _ensureTileCategories();
+      _openTileForm(r.tile, cats);
+    } catch (e) { showToast('Nie można pobrać kafelka: ' + e.message, 'error'); }
+  }
+
+  function _openTileForm(prefill, cats) {
+    const p = prefill || {};
+    const doors = (p.doors || []).slice();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `<div class="modal-box" style="width:720px;max-height:90vh;overflow:auto">
+      <div class="modal-head"><span class="modal-title">${p.id ? 'Edytuj kafelek' : 'Nowy kafelek'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <div>
+          <label class="form-label">Nazwa *</label>
+          <input id="tf-label" class="form-input" value="${_esc(p.label || '')}">
+
+          <label class="form-label" style="margin-top:10px">Kategoria *</label>
+          <select id="tf-cat" class="form-input">
+            ${cats.map(c => `<option value="${_esc(c.key)}" ${p.category_key === c.key ? 'selected' : ''}>${_esc(c.label)}</option>`).join('')}
+          </select>
+
+          <label class="form-label" style="margin-top:10px">Drzwi (N/S/E/W) *</label>
+          <div id="tf-doors" style="display:flex;gap:8px;flex-wrap:wrap">
+            ${['N','S','E','W'].map(d => `<label style="display:flex;align-items:center;gap:4px;font-family:monospace;cursor:pointer">
+              <input type="checkbox" data-door="${d}" ${doors.includes(d) ? 'checked' : ''}> ${d}
+            </label>`).join('')}
+          </div>
+
+          <label class="form-label" style="margin-top:10px">Opis pokoju (do AI GM + prompt obrazu)</label>
+          <textarea id="tf-desc" class="form-input" rows="3" style="resize:vertical">${_esc(p.room_description || '')}</textarea>
+
+          <label class="form-label" style="margin-top:10px">Wrogowie (JSON)</label>
+          <textarea id="tf-enemies" class="form-input" rows="2" style="font-family:monospace;font-size:0.78rem">${_esc(JSON.stringify(p.enemies || [], null, 0))}</textarea>
+          <span style="font-size:0.7rem;color:var(--t3)">np. <code>[{"enemy_key":"szczur","count":2}]</code></span>
+
+          <label class="form-label" style="margin-top:10px">Przedmioty (JSON)</label>
+          <textarea id="tf-items" class="form-input" rows="2" style="font-family:monospace;font-size:0.78rem">${_esc(JSON.stringify(p.items || [], null, 0))}</textarea>
+          <span style="font-size:0.7rem;color:var(--t3)">np. <code>[{"item_key":"klucz","chance":0.5}]</code></span>
+
+          <label class="form-label" style="margin-top:10px">Klucz zagadki</label>
+          <input id="tf-riddle" class="form-input" value="${_esc(p.riddle_key || '')}" placeholder="riddle_xxx lub puste">
+
+          <label class="form-label" style="margin-top:10px">Aktywne stany (JSON, effect_json format)</label>
+          <textarea id="tf-states" class="form-input" rows="2" style="font-family:monospace;font-size:0.78rem">${_esc(JSON.stringify(p.active_states || [], null, 0))}</textarea>
+          <span style="font-size:0.7rem;color:var(--t3)">np. <code>[{"type":"burning","damage_die":"1d4","save_stat":"DEX","dc":12}]</code></span>
+
+          <label class="form-label" style="margin-top:10px">Warunki wyjścia (JSON)</label>
+          <textarea id="tf-exits" class="form-input" rows="2" style="font-family:monospace;font-size:0.78rem">${_esc(JSON.stringify(p.exit_conditions || [], null, 0))}</textarea>
+          <span style="font-size:0.7rem;color:var(--t3)">typy: <code>enemies_cleared</code>, <code>riddle_solved</code>, <code>item_in_inventory</code>, <code>stat_roll</code></span>
+
+          <div style="display:flex;gap:14px;margin-top:14px">
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="tf-boss" ${p.is_boss_tile ? 'checked' : ''}> Kafelek bossa
+            </label>
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="tf-active" ${p.is_active !== false ? 'checked' : ''}> Aktywny
+            </label>
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Podgląd obrazu</label>
+          <div id="tf-img-preview" style="width:100%;aspect-ratio:1;background:#0a0a0f;border:1px solid var(--border);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center">
+            ${p.image_url
+              ? `<img src="${_esc(p.image_url)}" style="width:100%;height:100%;object-fit:cover">`
+              : '<div style="color:var(--t3);font-size:0.85rem">Brak obrazu</div>'}
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-primary btn-sm" style="flex:1" id="tf-generate-btn" ${!p.id ? 'disabled title="Zapisz kafelek najpierw"' : ''}>🎨 Generuj obraz</button>
+          </div>
+          ${p.image_gen_prompt ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:0.78rem;color:var(--t3)">Ostatni prompt</summary><div style="font-size:0.72rem;font-family:monospace;color:var(--t3);background:#0a0a0f;padding:8px;border-radius:4px;margin-top:4px;white-space:pre-wrap">${_esc(p.image_gen_prompt)}</div></details>` : ''}
+          ${p.id ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+            <div style="color:var(--t3);font-size:0.75rem">ID: <span style="font-family:monospace">${p.id}</span></div>
+            <div style="color:var(--t3);font-size:0.75rem">URL: <span style="font-family:monospace;word-break:break-all">${_esc(p.image_url || '—')}</span></div>
+          </div>` : ''}
+        </div>
+      </div>
+      <div class="modal-foot" style="display:flex;gap:8px;justify-content:flex-end;padding:14px">
+        ${p.id ? `<button class="btn btn-secondary btn-sm" onclick="deleteTile(${p.id})">🗑 Usuń</button>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+        <button class="btn btn-primary btn-sm" id="tf-save-btn">Zapisz</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#tf-save-btn').addEventListener('click', () => _saveTile(overlay, p.id));
+    if (p.id) {
+      overlay.querySelector('#tf-generate-btn').addEventListener('click', () => _generateTileImage(p.id, overlay));
+    }
+  }
+
+  function _parseJsonField(el, label) {
+    const v = (el.value || '').trim();
+    if (!v) return [];
+    try { return JSON.parse(v); }
+    catch (e) { throw new Error(`Niepoprawny JSON w polu "${label}": ${e.message}`); }
+  }
+
+  async function _saveTile(overlay, tileId) {
+    try {
+      const payload = {
+        label: overlay.querySelector('#tf-label').value.trim(),
+        category_key: overlay.querySelector('#tf-cat').value,
+        doors: Array.from(overlay.querySelectorAll('#tf-doors input:checked')).map(i => i.dataset.door),
+        room_description: overlay.querySelector('#tf-desc').value,
+        enemies: _parseJsonField(overlay.querySelector('#tf-enemies'), 'wrogowie'),
+        items: _parseJsonField(overlay.querySelector('#tf-items'), 'przedmioty'),
+        active_states: _parseJsonField(overlay.querySelector('#tf-states'), 'stany'),
+        exit_conditions: _parseJsonField(overlay.querySelector('#tf-exits'), 'warunki wyjścia'),
+        riddle_key: overlay.querySelector('#tf-riddle').value.trim() || null,
+        is_boss_tile: overlay.querySelector('#tf-boss').checked,
+        is_active: overlay.querySelector('#tf-active').checked,
+      };
+      if (!payload.label) throw new Error('Nazwa jest wymagana');
+      if (!payload.doors.length) throw new Error('Wybierz przynajmniej 1 drzwi');
+
+      if (tileId) {
+        await apiFetch(`/api/admin/dungeon-tiles/${tileId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        showToast('Zapisano', 'success');
+      } else {
+        const r = await apiFetch('/api/admin/dungeon-tiles', { method: 'POST', body: JSON.stringify(payload) });
+        showToast(`Utworzono kafelek #${r.id}`, 'success');
+      }
+      overlay.remove();
+      _loadDungeonTiles();
+    } catch (e) {
+      showToast('Błąd: ' + e.message, 'error');
+    }
+  }
+
+  async function deleteTile(tileId) {
+    if (!confirm('Usunąć kafelek (oznaczy jako nieaktywny)?')) return;
+    try {
+      await apiFetch(`/api/admin/dungeon-tiles/${tileId}`, { method: 'DELETE' });
+      showToast('Kafelek usunięty', 'success');
+      document.querySelector('.modal-overlay')?.remove();
+      _loadDungeonTiles();
+    } catch (e) { showToast('Błąd: ' + e.message, 'error'); }
+  }
+
+  async function _generateTileImage(tileId, overlay) {
+    const btn = overlay.querySelector('#tf-generate-btn');
+    const preview = overlay.querySelector('#tf-img-preview');
+    if (!btn || !preview) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Generowanie (~30s)…';
+    preview.innerHTML = '<div style="color:var(--t3)">Generowanie…</div>';
+    try {
+      const r = await apiFetch(`/api/admin/dungeon-tiles/${tileId}/generate-image`, { method: 'POST', body: '{}' });
+      preview.innerHTML = `<img src="${_esc(r.image_url)}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover">`;
+      showToast('Obraz wygenerowany (zapisz aby zaktualizować inne pola)', 'success');
+      // Refresh tile grid in background so card thumbnail updates
+      _loadDungeonTiles();
+    } catch (e) {
+      preview.innerHTML = `<div style="color:#ef4444;padding:14px;text-align:center;font-size:0.78rem">${_esc(e.message)}</div>`;
+      showToast('Błąd generacji: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🎨 Generuj obraz';
+    }
+  }
+
+  // ── Tile categories ─────────────────────────────────────────────────────────
+  async function _loadTileCategories() {
+    const tbody = document.querySelector('#tilecats-table tbody');
+    if (!tbody) return;
+    tbody.innerHTML = _loading(6);
+    try {
+      const r = await apiFetch('/api/admin/dungeon-tile-categories');
+      const items = r.categories || [];
+      _tileCategoriesCache = items;
+      if (!items.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak kategorii</td></tr>`; return; }
+      tbody.innerHTML = items.map(c => `<tr data-key="${_esc(c.key)}">
+        <td class="td-sticky td-mono">${_esc(c.key)}</td>
+        <td class="td-name">${_esc(c.label)}</td>
+        <td class="td-muted">${_esc(c.description || '—')}</td>
+        <td class="td-muted" style="font-size:0.72rem">${_esc(c.style_modifier || '—')}</td>
+        <td>${c.is_active ? '<span class="badge badge-green">●</span>' : '<span class="badge badge-slate">○</span>'}</td>
+        <td class="td-actions">
+          <button class="btn-icon" title="Edytuj" onclick='openEditTileCategoryModal(${JSON.stringify(c).replace(/"/g,"&quot;")})'>✎</button>
+        </td>
+      </tr>`).join('');
+    } catch (e) { tbody.innerHTML = _errRow(6, e.message); }
+  }
+
+  function openNewTileCategoryModal() { _openTileCatForm(null); }
+  function openEditTileCategoryModal(c) { _openTileCatForm(c); }
+
+  function _openTileCatForm(prefill) {
+    const p = prefill || {};
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `<div class="modal-box" style="width:480px">
+      <div class="modal-head"><span class="modal-title">${p.key ? 'Edytuj kategorię' : 'Nowa kategoria'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="modal-body">
+        <label class="form-label">Klucz (kebab-case) *</label>
+        <input id="tcf-key" class="form-input" value="${_esc(p.key || '')}" ${p.key ? 'disabled' : ''}>
+        <label class="form-label" style="margin-top:10px">Nazwa *</label>
+        <input id="tcf-label" class="form-input" value="${_esc(p.label || '')}">
+        <label class="form-label" style="margin-top:10px">Opis</label>
+        <textarea id="tcf-desc" class="form-input" rows="2">${_esc(p.description || '')}</textarea>
+        <label class="form-label" style="margin-top:10px">Modyfikator stylu (do promptu obrazu)</label>
+        <textarea id="tcf-style" class="form-input" rows="2" style="font-family:monospace;font-size:0.78rem">${_esc(p.style_modifier || '')}</textarea>
+        <span style="font-size:0.7rem;color:var(--t3)">np. <code>dark stone dungeon walls, torch sconces, medieval</code></span>
+      </div>
+      <div class="modal-foot" style="display:flex;gap:8px;justify-content:flex-end;padding:14px">
+        <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+        <button class="btn btn-primary btn-sm" id="tcf-save">Zapisz</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#tcf-save').addEventListener('click', async () => {
+      const key = overlay.querySelector('#tcf-key').value.trim();
+      const label = overlay.querySelector('#tcf-label').value.trim();
+      if (!key || !label) { showToast('Klucz i nazwa są wymagane', 'error'); return; }
+      const payload = {
+        key, label,
+        description: overlay.querySelector('#tcf-desc').value,
+        style_modifier: overlay.querySelector('#tcf-style').value,
+      };
+      try {
+        if (p.key) {
+          await apiFetch(`/api/admin/dungeon-tile-categories/${p.key}`, { method: 'PATCH', body: JSON.stringify(payload) });
+          showToast('Zapisano', 'success');
+        } else {
+          await apiFetch('/api/admin/dungeon-tile-categories', { method: 'POST', body: JSON.stringify(payload) });
+          showToast('Utworzono kategorię', 'success');
+        }
+        overlay.remove();
+        _tileCategoriesCache = null;
+        _loadTileCategories();
+      } catch (e) { showToast('Błąd: ' + e.message, 'error'); }
+    });
+  }
 
   // ── Riddles (Zagadki) ─────────────────────────────────────────────────────────
   function filterRiddles(chip, diff) {
