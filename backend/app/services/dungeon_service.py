@@ -1,6 +1,24 @@
-"""Dungeon run service — Task 41 V2 (room types, riddles, loot tiers, death handling)."""
+"""Dungeon run service.
+
+Two implementations live here side-by-side:
+
+1. **Legacy procedural rooms** (functions suffixed `_legacy`) — original Task 41 V2 design
+   with random room types (combat/chest/trap/riddle/rest). Frozen as of 2026-06-01 per
+   issue #224. Do not extend; bug fixes only.
+
+2. **Tile-based dungeon** (delegated to `dungeon_tile_service.py`) — Betrayal-style
+   pre-authored tile cards with N/S/E/W door matching. Active by default.
+
+Routing is controlled by env var `DUNGEON_SYSTEM`:
+    - `tiles` (default): new tile system
+    - `legacy`: rollback to procedural rooms
+
+Helper functions (CRUD, cooldown, scaling, loot rolls) are SHARED between both modes
+and not duplicated.
+"""
 from __future__ import annotations
 import json
+import os
 import random
 import re
 import sqlite3
@@ -9,6 +27,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 DB_PATH = "/data/ai_gm.db"
+
+
+def _use_legacy() -> bool:
+    """True if backend should use the legacy procedural room system."""
+    return (os.getenv("DUNGEON_SYSTEM") or "tiles").strip().lower() == "legacy"
 
 # Room type weights default (boss always last, not in weights)
 DEFAULT_ROOM_WEIGHTS = {"combat": 50, "chest": 15, "trap": 15, "riddle": 10, "rest": 10}
@@ -252,7 +275,8 @@ def _roll_loot_table(conn: sqlite3.Connection, table_key: str) -> list[dict]:
 
 # ── Dungeon instance generation ───────────────────────────────────────────────
 
-def generate_dungeon_instance(dungeon_key: str, hero_level: int) -> dict:
+def _generate_dungeon_instance_legacy(dungeon_key: str, hero_level: int) -> dict:
+    """LEGACY procedural room generation. Frozen 2026-06-01 — see module docstring."""
     dungeon = get_dungeon(dungeon_key)
     if not dungeon:
         raise ValueError(f"Dungeon not found: {dungeon_key}")
@@ -401,13 +425,14 @@ def _save_flags(conn: sqlite3.Connection, campaign_id: int, flags: dict) -> None
     conn.commit()
 
 
-def enter_dungeon(campaign_id: int, character_id: int, dungeon_key: str,
-                  hero_level: int, previous_campaign_id: int | None = None) -> dict:
+def _enter_dungeon_legacy(campaign_id: int, character_id: int, dungeon_key: str,
+                          hero_level: int, previous_campaign_id: int | None = None) -> dict:
+    """LEGACY entry. Frozen — see module docstring."""
     cd = check_cooldown(character_id, dungeon_key)
     if cd.get("on_cooldown"):
         raise PermissionError(f"dungeon_on_cooldown|{cd.get('cooldown_until')}|{cd.get('hours_remaining')}")
 
-    instance = generate_dungeon_instance(dungeon_key, hero_level)
+    instance = _generate_dungeon_instance_legacy(dungeon_key, hero_level)
 
     conn, flags = _load_flags(campaign_id)
     try:
@@ -421,7 +446,8 @@ def enter_dungeon(campaign_id: int, character_id: int, dungeon_key: str,
     return instance
 
 
-def advance_room(campaign_id: int) -> dict:
+def _advance_room_legacy(campaign_id: int) -> dict:
+    """LEGACY advance. Frozen — see module docstring."""
     conn, flags = _load_flags(campaign_id)
     try:
         run = flags.get("dungeon_run")
@@ -442,6 +468,40 @@ def advance_room(campaign_id: int) -> dict:
         return run
     finally:
         conn.close()
+
+
+# ── PUBLIC ROUTER FUNCTIONS ──────────────────────────────────────────────────
+# Route to legacy or tile system based on DUNGEON_SYSTEM env var.
+
+def enter_dungeon(campaign_id: int, character_id: int, dungeon_key: str,
+                  hero_level: int, previous_campaign_id: int | None = None) -> dict:
+    if _use_legacy():
+        return _enter_dungeon_legacy(campaign_id, character_id, dungeon_key,
+                                     hero_level, previous_campaign_id)
+    from app.services.dungeon_tile_service import enter_dungeon_tiles
+    return enter_dungeon_tiles(campaign_id, character_id, dungeon_key,
+                               hero_level, previous_campaign_id)
+
+
+def advance_room(campaign_id: int, character_id: int | None = None,
+                 door_chosen: str | None = None) -> dict:
+    if _use_legacy():
+        return _advance_room_legacy(campaign_id)
+    from app.services.dungeon_tile_service import advance_room_tiles
+    return advance_room_tiles(campaign_id, character_id or 0, door_chosen)
+
+
+def generate_dungeon_instance(dungeon_key: str, hero_level: int) -> dict:
+    """Legacy-compatible entry point retained for any direct callers.
+
+    For the new tile system, instances are generated inside enter_dungeon_tiles.
+    """
+    if _use_legacy():
+        return _generate_dungeon_instance_legacy(dungeon_key, hero_level)
+    # In tile mode this function should not be called; raise to surface misuse.
+    raise RuntimeError(
+        "generate_dungeon_instance() is legacy-only. In tile mode, call enter_dungeon() instead."
+    )
 
 
 def get_active_dungeon_run(campaign_id: int) -> dict | None:
@@ -476,8 +536,18 @@ def clear_dungeon_run(campaign_id: int) -> None:
 # ── Non-combat room resolution ────────────────────────────────────────────────
 
 def resolve_room(campaign_id: int, character_id: int, player_input: str | None = None) -> dict:
+    """Router: routes to legacy or tile-mode riddle/state resolution."""
+    if _use_legacy():
+        return _resolve_room_legacy(campaign_id, character_id, player_input)
+    from app.services.dungeon_tile_service import resolve_riddle_tiles
+    if player_input:
+        return resolve_riddle_tiles(campaign_id, player_input)
+    return {"ok": False, "narrative": "Brak akcji do wykonania"}
+
+
+def _resolve_room_legacy(campaign_id: int, character_id: int, player_input: str | None = None) -> dict:
     """
-    Resolve the current non-combat room (riddle/trap/chest/rest).
+    LEGACY: Resolve current non-combat room (riddle/trap/chest/rest). Frozen.
     Returns {success, narrative, loot, heal_pct, advance_available}.
     """
     conn, flags = _load_flags(campaign_id)

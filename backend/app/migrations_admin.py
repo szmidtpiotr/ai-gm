@@ -3448,6 +3448,7 @@ def run_admin_migrations() -> None:
         _ensure_multiplayer_lobby_schema(conn)
         _ensure_party_chat_table(conn)
         _ensure_ui_texts_table(conn)
+        _ensure_dungeon_tile_schema(conn)
     finally:
         conn.close()
 
@@ -3776,3 +3777,79 @@ def _ensure_ui_texts_table(conn: sqlite3.Connection) -> None:
         )
     conn.commit()
     logger.info("admin_migration_applied", label="ui-texts-table")
+
+
+def _ensure_dungeon_tile_schema(conn: sqlite3.Connection) -> None:
+    """Dungeon Tile Card System (issue #224) — tile-based dungeon generation."""
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS dungeon_tile_categories (
+            key             TEXT PRIMARY KEY,
+            label           TEXT NOT NULL,
+            description     TEXT NOT NULL DEFAULT '',
+            style_modifier  TEXT NOT NULL DEFAULT '',
+            sort_order      INTEGER NOT NULL DEFAULT 0,
+            is_active       INTEGER NOT NULL DEFAULT 1,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS dungeon_tiles (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            category_key         TEXT NOT NULL,
+            label                TEXT NOT NULL,
+            image_url            TEXT,
+            image_gen_prompt     TEXT,
+            doors_json           TEXT NOT NULL DEFAULT '[]',
+            room_description     TEXT NOT NULL DEFAULT '',
+            enemies_json         TEXT NOT NULL DEFAULT '[]',
+            items_json           TEXT NOT NULL DEFAULT '[]',
+            active_states_json   TEXT NOT NULL DEFAULT '[]',
+            riddle_key           TEXT,
+            exit_conditions_json TEXT NOT NULL DEFAULT '[]',
+            is_boss_tile         INTEGER NOT NULL DEFAULT 0,
+            is_active            INTEGER NOT NULL DEFAULT 1,
+            created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (category_key) REFERENCES dungeon_tile_categories(key)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dungeon_tiles_category ON dungeon_tiles(category_key, is_active)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dungeon_tiles_boss ON dungeon_tiles(category_key, is_boss_tile, is_active)")
+    conn.commit()
+
+    # Extend game_dungeons for tile-based mode
+    for sql in [
+        "ALTER TABLE game_dungeons ADD COLUMN tile_category_key TEXT",
+        "ALTER TABLE game_dungeons ADD COLUMN difficulty_config_json TEXT NOT NULL DEFAULT "
+        "'{\"1\":{\"tiles\":4},\"2\":{\"tiles\":6},\"3\":{\"tiles\":8},\"4\":{\"tiles\":10}}'",
+        "ALTER TABLE game_dungeons ADD COLUMN boss_tile_id INTEGER",
+    ]:
+        try:
+            conn.execute(sql); conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower(): raise
+
+    # Seed default categories
+    categories = [
+        ("dungeon",  "Loch",          "Klasyczne podziemia, kamienne ściany, pochodnie",
+         "dark stone dungeon walls, torch sconces, medieval", 10),
+        ("basement", "Piwnica",       "Piwnice, składy, mury z cegły",
+         "basement cellar, brick walls, lantern light", 20),
+        ("attic",    "Strych",        "Zakurzone strychy, drewniane belki",
+         "dusty attic, wooden beams and floorboards, sunlight cracks", 30),
+        ("cave",     "Jaskinia",      "Naturalne jaskinie, stalaktyty, świecące kryształy",
+         "natural cave chamber, rock walls, stalactites, glowing crystals", 40),
+        ("crypt",    "Krypta",        "Starożytne krypty, kości, sarkofagi",
+         "ancient crypt, bone decorations, stone sarcophagi, cold moonlight", 50),
+    ]
+    for key, label, desc, style, order in categories:
+        conn.execute(
+            """INSERT OR IGNORE INTO dungeon_tile_categories
+               (key, label, description, style_modifier, sort_order)
+               VALUES (?, ?, ?, ?, ?)""",
+            (key, label, desc, style, order),
+        )
+    conn.commit()
+    logger.info("admin_migration_applied", label="dungeon-tile-schema")
