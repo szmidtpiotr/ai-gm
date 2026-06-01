@@ -10669,7 +10669,10 @@ function initWorldMap() {
   _wmap.journal = document.getElementById('wmap-travel-journal');
   if (!_wmap.panel) return;
 
-  document.getElementById('open-map-btn')?.addEventListener('click', _wmOpen);
+  document.getElementById('open-map-btn')?.addEventListener('click', () => {
+    if (_activeDungeonRun && _isTileRun(_activeDungeonRun)) { openDungeonMap(); return; }
+    _wmOpen();
+  });
   // composer-map-btn removed from HTML
   document.getElementById('wmap-close-btn')?.addEventListener('click', _wmClose);
 
@@ -11362,11 +11365,11 @@ function _renderTileMap(run, svg) {
         if (dist !== 1) return;
         const known = discovered.has(`${p1[0]},${p1[1]}`);
         const dx = p2[0]-p1[0], dy = p2[1]-p1[1];
-        // line from edge of tile 1 to edge of tile 2 (skip tile areas)
-        html += `<line x1="${cX(p1[0])+dx*(S/2+1)}" y1="${cY(p1[1])+dy*(S/2+1)}" x2="${cX(p2[0])-dx*(S/2+1)}" y2="${cY(p2[1])-dy*(S/2+1)}" stroke="#4a3010" stroke-width="4" opacity="${known?0.55:0.1}"/>`;
+        // corridors always drawn — full path visible even for undiscovered rooms
+        html += `<line x1="${cX(p1[0])+dx*(S/2+1)}" y1="${cY(p1[1])+dy*(S/2+1)}" x2="${cX(p2[0])-dx*(S/2+1)}" y2="${cY(p2[1])-dy*(S/2+1)}" stroke="#3a2510" stroke-width="4" opacity="${known?0.55:0.3}"/>`;
     });
 
-    // Tiles
+    // Tiles — all shown; undiscovered dimmed so player sees the path shape
     tiles.forEach((tile, i) => {
         const pos = tile.position || [0, 0];
         const x = tX(pos[0]), y = tY(pos[1]);
@@ -11375,29 +11378,34 @@ function _renderTileMap(run, svg) {
         const isKnown = discovered.has(`${pos[0]},${pos[1]}`);
         const isBoss = !!tile.is_boss_tile;
 
-        let fill = '#0d0904', stroke = '#2a1a08', strokeW = 1, opacity = '0.55';
-        if (isCurrent) { fill='#1a1005'; stroke='#c9751a'; strokeW=2; opacity='1'; }
-        else if (isCleared) { fill='#100e08'; stroke='#3a2808'; opacity='0.8'; }
+        let fill, stroke, strokeW = 1, opacity;
+        if (isCurrent)      { fill='#1a1005'; stroke='#c9751a'; strokeW=2; opacity='1'; }
+        else if (isCleared) { fill='#100e08'; stroke='#3a2808'; opacity='0.75'; }
+        else if (isKnown)   { fill='#0d0904'; stroke='#2a1a08'; opacity='0.9'; }
+        else                { fill='#111008'; stroke='#2a2015'; opacity='0.55'; } // visible but dimmed
+
         if (isBoss && isKnown) { stroke='#8a2010'; fill='#140802'; }
 
         html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}" opacity="${opacity}"/>`;
-        if (isCurrent) html += `<rect x="${x-2}" y="${y-2}" width="${S+4}" height="${S+4}" rx="8" fill="none" stroke="#c9751a" stroke-width="1" opacity="0.3"/>`;
+        if (isCurrent) html += `<rect x="${x-2}" y="${y-2}" width="${S+4}" height="${S+4}" rx="8" fill="none" stroke="#c9751a" stroke-width="1.5" opacity="0.5"/>`;
 
         if (isKnown && tile.image_url) {
             html += `<image href="${escapeHtml(tile.image_url)}" x="${x}" y="${y}" width="${S}" height="${S}" preserveAspectRatio="xMidYMid slice" clip-path="url(#dtmc-${i})" opacity="${isCleared?0.45:0.75}"/>`;
-            // Dark overlay tint over image
-            html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="6" fill="${fill}" opacity="${isCurrent?0.25:0.55}"/>`;
+            html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="6" fill="${fill}" opacity="${isCurrent?0.25:0.5}"/>`;
         }
 
-        if (!isKnown) {
-            html += `<text x="${x+S/2}" y="${y+S/2}" text-anchor="middle" dominant-baseline="middle" font-size="18" fill="#2a2010">?</text>`;
-        } else {
+        const labelColor = isCurrent ? '#d4a060' : (isKnown ? '#5a4a28' : '#2a2515');
+        const numColor   = isKnown ? '#6a5a30' : '#3a3020';
+        if (isKnown) {
             const shortLabel = (tile.label || '').slice(0, 8);
-            html += `<text x="${x+S/2}" y="${y+S-7}" text-anchor="middle" font-size="6" fill="${isCurrent?'#d4a060':'#5a4a28'}" font-family="sans-serif" style="text-transform:uppercase;letter-spacing:0.06em">${shortLabel}</text>`;
+            html += `<text x="${x+S/2}" y="${y+S-7}" text-anchor="middle" font-size="6" fill="${labelColor}" font-family="sans-serif" style="text-transform:uppercase;letter-spacing:0.06em">${shortLabel}</text>`;
             if (isBoss) html += `<text x="${x+S/2}" y="${y+22}" text-anchor="middle" font-size="14" style="pointer-events:none">💀</text>`;
             if (isCleared && !isCurrent) html += `<text x="${x+S-10}" y="${y+12}" text-anchor="middle" font-size="9" fill="#5a8040" style="pointer-events:none">✓</text>`;
+        } else {
+            // Undiscovered: show boss skull hint only
+            if (isBoss) html += `<text x="${x+S/2}" y="${y+S/2}" text-anchor="middle" dominant-baseline="middle" font-size="16" opacity="0.4" style="pointer-events:none">💀</text>`;
         }
-        html += `<text x="${x+7}" y="${y+11}" text-anchor="middle" font-size="7" fill="${isKnown?'#6a5a30':'#2a2010'}" style="pointer-events:none">${i+1}</text>`;
+        html += `<text x="${x+7}" y="${y+11}" text-anchor="middle" font-size="7" fill="${numColor}" style="pointer-events:none">${i+1}</text>`;
     });
 
     svg.innerHTML = html;
@@ -11556,12 +11564,11 @@ function _dmapInitEvents() {
     if (!wrap || wrap._dmapEventsInit) return;
     wrap._dmapEventsInit = true;
 
-    // Mouse wheel zoom
+    // Mouse wheel zoom — center to canvas center, gentle step
     wrap.addEventListener('wheel', e => {
         e.preventDefault();
-        const delta = e.deltaY > 0 ? 0.85 : 1.18;
-        const rect = wrap.getBoundingClientRect();
-        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const delta = e.deltaY > 0 ? 0.93 : 1.07;
+        const mx = wrap.clientWidth / 2, my = wrap.clientHeight / 2;
         _dmapState.tx = mx - (mx - _dmapState.tx) * delta;
         _dmapState.ty = my - (my - _dmapState.ty) * delta;
         _dmapState.scale = Math.min(4, Math.max(0.3, _dmapState.scale * delta));
@@ -11650,7 +11657,6 @@ function initDungeon() {
     });
     document.getElementById('dungeon-exit-btn')?.addEventListener('click', _exitDungeon);
     document.getElementById('dungeon-complete-btn')?.addEventListener('click', _exitDungeon);
-    document.getElementById('dungeon-map-btn')?.addEventListener('click', openDungeonMap);
     document.getElementById('dungeon-room-btn')?.addEventListener('click', () => {
         if (_activeDungeonRun && _isTileRun(_activeDungeonRun)) {
             const tile = _currentTile(_activeDungeonRun);

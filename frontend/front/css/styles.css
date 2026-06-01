@@ -7741,13 +7741,17 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .dmap-leg--current { color: #c9751a; }
 .dmap-leg--cleared { color: #5a8040; }
 
-/* Map + room buttons in HUD */
-.dungeon-hud__map-btn { background: none; border: 1px solid #3a2510; border-radius: 5px;
-  padding: 4px 7px; cursor: pointer; color: #7a6040; line-height: 1; display: flex; align-items: center; }
-.dungeon-hud__map-btn:hover { border-color: #c9751a; color: #c9a060; }
+/* Room button in HUD */
 .dungeon-hud__room-btn { background: none; border: 1px solid #3a2510; border-radius: 5px;
   font-size: 0.85rem; padding: 3px 7px; cursor: pointer; color: #7a6040; line-height: 1; }
 .dungeon-hud__room-btn:hover { border-color: #c9751a; color: #c9a060; }
+
+/* Tile card: full viewport width on mobile */
+@media (max-width: 640px) {
+  .dungeon-tile-card { left: 0 !important; width: 100vw !important; }
+  .dtc-image { width: 72px; height: 72px; }
+  .dtc-thumb-wrap { width: 72px; }
+}
 
 /* ── Dungeon Tile Card (tile system) ─────────────────────────────────────── */
 .dungeon-tile-card {
