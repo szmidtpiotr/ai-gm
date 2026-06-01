@@ -185,11 +185,13 @@ def draw_tile_sequence(
         if not boss_pool:
             # Fallback: allow boss to be drawn from non-boss pool
             boss_pool = non_boss
-        if len(non_boss) + len(boss_pool) < tile_count:
+        available = len(non_boss) + len(boss_pool)
+        if available < 2:
             raise ValueError(
-                f"Insufficient tiles in category '{category_key}': need {tile_count}, "
-                f"have {len(non_boss)} regular + {len(boss_pool)} boss"
+                f"Category '{category_key}' has fewer than 2 tiles — cannot build dungeon"
             )
+        # Cap requested count to what's actually in the DB
+        tile_count = min(tile_count, available)
     finally:
         conn.close()
 
@@ -325,18 +327,15 @@ def resolve_tile_content(tile_id: int, hero_level: int) -> dict | None:
 # ── Dungeon run orchestration (tile mode) ─────────────────────────────────────
 
 def _tile_count_for_difficulty(dungeon: dict, hero_level: int) -> int:
-    """Resolve tile count from difficulty_config_json. Falls back to game_dungeons.rooms."""
-    try:
-        cfg = json.loads(dungeon.get("difficulty_config_json") or "{}")
-    except Exception:
-        cfg = {}
-    # Difficulty = clamp(hero_level / 3 + 1, 1, max_configured)
-    keys = sorted((int(k) for k in cfg.keys()), default=[1, 2, 3, 4])
-    if not keys:
-        return int(dungeon.get("rooms") or 5)
-    diff = max(1, min(keys[-1], (hero_level // 3) + 1))
-    entry = cfg.get(str(diff), {})
-    return int(entry.get("tiles") or dungeon.get("rooms") or 4) + 1  # +1 = boss
+    """Resolve tile count (non-boss tiles + 1 boss = total).
+
+    Priority: dungeon.tile_count (explicit admin choice) → dungeon.rooms fallback.
+    difficulty_config_json is ignored — tile count is an authoring decision, not a
+    computed difficulty variable.
+    """
+    if dungeon.get("tile_count"):
+        return int(dungeon["tile_count"])
+    return int(dungeon.get("rooms") or 4)
 
 
 def enter_dungeon_tiles(

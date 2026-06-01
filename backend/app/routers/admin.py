@@ -3889,8 +3889,9 @@ def admin_create_dungeon(
                 (key, label, location_key, rooms, enemy_pool, boss_enemy,
                  loot_tier, atmosphere, cooldown_hours, min_level, is_active,
                  chest_loot_table_key, boss_loot_table_key, room_loot_chance,
-                 riddle_source, riddle_max_hints)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 riddle_source, riddle_max_hints,
+                 tile_category_key, tile_count, boss_tile_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 key,
@@ -3909,6 +3910,9 @@ def admin_create_dungeon(
                 float(req.get("room_loot_chance") or 0.15),
                 req.get("riddle_source") or "database",
                 int(req.get("riddle_max_hints") or 2),
+                req.get("tile_category_key") or None,
+                int(req["tile_count"]) if req.get("tile_count") else None,
+                int(req["boss_tile_id"]) if req.get("boss_tile_id") else None,
             ),
         )
         conn.commit()
@@ -3932,6 +3936,7 @@ def admin_update_dungeon(
         "loot_tier", "atmosphere", "cooldown_hours", "min_level", "is_active",
         "chest_loot_table_key", "boss_loot_table_key", "room_loot_chance",
         "riddle_source", "riddle_max_hints",
+        "tile_category_key", "tile_count", "boss_tile_id",
     }
     updates = {k: v for k, v in req.items() if k in allowed}
     if not updates:
@@ -4884,6 +4889,7 @@ def admin_revoke_push_subscriptions(
 _GAME_MODE_FLAGS_KEY = "game_mode_flags"
 _GAME_MODE_DEFAULTS = {
     "dungeon_enabled": True,
+    "dungeon_tiles_enabled": True,
     "prebuilt_enabled": True,
     "ai_campaign_enabled": True,
     "multiplayer_enabled": True,
@@ -4924,6 +4930,7 @@ def _merge_game_mode_flags(global_flags: dict, user_overrides: dict | None) -> d
 
 class GameModeFlagsReq(BaseModel):
     dungeon_enabled: bool | None = None
+    dungeon_tiles_enabled: bool | None = None
     prebuilt_enabled: bool | None = None
     ai_campaign_enabled: bool | None = None
     multiplayer_enabled: bool | None = None
@@ -4959,7 +4966,7 @@ def admin_patch_game_modes(
     conn.row_factory = sqlite3.Row
     try:
         flags = _get_game_mode_flags(conn)
-        for field in ("dungeon_enabled", "prebuilt_enabled", "ai_campaign_enabled", "multiplayer_enabled"):
+        for field in ("dungeon_enabled", "dungeon_tiles_enabled", "prebuilt_enabled", "ai_campaign_enabled", "multiplayer_enabled"):
             val = getattr(req, field, None)
             if val is not None:
                 flags[field] = val
@@ -4999,7 +5006,7 @@ def admin_patch_user_game_modes(
     conn.row_factory = sqlite3.Row
     try:
         existing = _get_user_game_mode_flags(conn, user_id) or {}
-        for field in ("dungeon_enabled", "prebuilt_enabled", "ai_campaign_enabled", "multiplayer_enabled"):
+        for field in ("dungeon_enabled", "dungeon_tiles_enabled", "prebuilt_enabled", "ai_campaign_enabled", "multiplayer_enabled"):
             val = getattr(req, field, None)
             if val is not None:
                 existing[field] = val

@@ -5006,7 +5006,15 @@
               <input type="checkbox" id="gm-dungeon" style="width:18px;height:18px;accent-color:var(--accent)">
               <span>
                 <strong style="font-size:0.92rem">Loch (Dungeon Run)</strong>
-                <span style="display:block;font-size:0.78rem;color:var(--t3)">Krótkie farmowalne lochy z własnym loot systemem.</span>
+                <span style="display:block;font-size:0.78rem;color:var(--t3)">Krótkie farmowalne lochy z własnym loot systemem. (stary system)</span>
+              </span>
+            </label>
+
+            <label style="display:flex;align-items:center;gap:12px;cursor:pointer">
+              <input type="checkbox" id="gm-dungeon-tiles" style="width:18px;height:18px;accent-color:var(--accent)">
+              <span>
+                <strong style="font-size:0.92rem">Loch (Kafelki)</strong>
+                <span style="display:block;font-size:0.78rem;color:var(--t3)">Nowy system kafelkowy — wizualne komnaty z obrazami, wrogami i zagadkami. Wymaga skonfigurowanych kafelków.</span>
               </span>
             </label>
 
@@ -8974,38 +8982,82 @@
     } catch(e) { _showToast(e.message||'Błąd.','error'); btn.disabled = false; btn.textContent = 'Utwórz konto'; }
   }
 
-  function openNewDungeonModal() {
+  async function _dungeonTileCatOptions(selected) {
+    try {
+      const d = await apiFetch('/api/admin/dungeon-tile-categories');
+      const cats = d.categories || d.items || [];
+      return `<option value="">— (tryb proceduralny) —</option>` +
+        cats.map(c=>`<option value="${_esc(c.key)}" ${c.key===selected?'selected':''}>${_esc(c.label)} (${_esc(c.key)})</option>`).join('');
+    } catch { return `<option value="">— błąd ładowania kategorii —</option>`; }
+  }
+
+  async function _dungeonBossTileOptions(categoryKey, selectedId) {
+    if (!categoryKey) return `<option value="">— wybierz kategorię —</option>`;
+    try {
+      const d = await apiFetch(`/api/admin/dungeon-tiles?category_key=${encodeURIComponent(categoryKey)}&include_inactive=false`);
+      const tiles = (d.tiles || d.items || []).filter(t => t.is_boss_tile);
+      if (!tiles.length) return `<option value="">— brak kafelków boss w kategorii —</option>`;
+      return `<option value="">Losowy boss z kategorii</option>` +
+        tiles.map(t=>`<option value="${t.id}" ${t.id==selectedId?'selected':''}>${_esc(t.label)}</option>`).join('');
+    } catch { return `<option value="">— błąd ładowania —</option>`; }
+  }
+
+  function _dungeonModeToggle(prefix) {
+    const cat = document.getElementById(`${prefix}-tile-cat`)?.value || '';
+    const tileSection = document.getElementById(`${prefix}-tile-section`);
+    const legacySection = document.getElementById(`${prefix}-legacy-section`);
+    if (tileSection) tileSection.style.display = cat ? '' : 'none';
+    if (legacySection) legacySection.style.display = cat ? 'none' : '';
+  }
+
+  async function openNewDungeonModal() {
+    const catOpts = await _dungeonTileCatOptions('');
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay open';
-    overlay.innerHTML = `<div class="modal-box" style="width:560px">
+    overlay.innerHTML = `<div class="modal-box" style="width:600px">
       <div class="modal-head"><span class="modal-title">Nowy loch</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Klucz * (snake_case)</label><input id="nd-key" class="form-input form-mono" placeholder="np. dungeon_forest"></div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Nazwa *</label><input id="nd-label" class="form-input" placeholder="Leśna Jaskinia"></div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Klucz lokacji</label><input id="nd-loc" class="form-input form-mono" placeholder="Zostaw puste = jak klucz lochu"></div>
-        <div class="form-row"><label class="form-label">Pokoje (1–20)</label><input id="nd-rooms" class="form-input" type="number" value="5" min="1" max="20"></div>
         <div class="form-row"><label class="form-label">Min. poziom</label><input id="nd-lvl" class="form-input" type="number" value="1" min="1" max="20"></div>
-        <div class="form-row"><label class="form-label">Jakość łupów</label>
-          <select id="nd-loot" class="form-input">
-            <option value="poor">Słabe</option><option value="standard" selected>Standardowe</option><option value="rich">Bogate</option>
-          </select>
-        </div>
         <div class="form-row"><label class="form-label">Cooldown (h)</label><input id="nd-cool" class="form-input" type="number" value="72" min="1" max="720"></div>
-        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Pula wrogów (klucze oddzielone przecinkami)</label><input id="nd-pool" class="form-input form-mono" placeholder='goblin_warrior,skeleton_archer'></div>
-        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Boss (klucz wroga, opcjonalnie)</label><input id="nd-boss" class="form-input form-mono" placeholder="goblin_shaman"></div>
-        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Atmosfera</label><textarea id="nd-atmo" class="form-input" rows="3" placeholder="Ciasne tunele, smród gnijącego mięsa…"></textarea></div>
-        <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:8px;margin-top:2px"><label class="form-label" style="font-weight:600;color:var(--t2)">Tabele łupów</label></div>
-        <div class="form-row"><label class="form-label">Łupy ze skrzyń</label><input id="nd-chest" class="form-input form-mono" placeholder="np. chest_goblin_warren"></div>
-        <div class="form-row"><label class="form-label">Łupy z bossa</label><input id="nd-bloot" class="form-input form-mono" placeholder="np. boss_goblin_warren"></div>
-        <div class="form-row"><label class="form-label">Szansa łupu z komnaty</label><input id="nd-rloot" class="form-input" type="number" value="0.15" min="0" max="1" step="0.05"></div>
-        <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:8px;margin-top:2px"><label class="form-label" style="font-weight:600;color:var(--t2)">Zagadki</label></div>
-        <div class="form-row"><label class="form-label">Źródło zagadek</label>
-          <select id="nd-rsrc" class="form-input">
-            <option value="database" selected>Baza danych</option><option value="llm">LLM (eksperymentalne)</option><option value="mixed">Mieszane</option>
-          </select>
+        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Atmosfera</label><textarea id="nd-atmo" class="form-input" rows="2" placeholder="Ciasne tunele, smród gnijącego mięsa…"></textarea></div>
+
+        <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--accent);padding-top:8px;margin-top:4px">
+          <label class="form-label" style="font-weight:700;color:var(--accent)">🗺 Tryb Kafelkowy</label>
+          <span style="font-size:0.75rem;color:var(--t3);display:block;margin-top:2px">Wybierz kategorię kafelków aby włączyć tryb kafelkowy. Pozostaw puste dla trybu proceduralnego (stary system).</span>
         </div>
-        <div class="form-row"><label class="form-label">Maks. podpowiedzi</label><input id="nd-rhints" class="form-input" type="number" value="2" min="0" max="5"></div>
-        <div class="form-row" style="grid-column:1/-1;display:flex;align-items:center;gap:8px">
+        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Kategoria kafelków</label>
+          <select id="nd-tile-cat" class="form-input" onchange="_dungeonModeToggle('nd'); _ndReloadBossTiles()">${catOpts}</select>
+        </div>
+
+        <div id="nd-tile-section" style="display:none;grid-column:1/-1;display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-row"><label class="form-label">Liczba kafelków (bez bossa)</label><input id="nd-tile-count" class="form-input" type="number" value="3" min="1" max="20" placeholder="3"></div>
+            <div class="form-row"><label class="form-label">Kafelek boss</label>
+              <select id="nd-boss-tile" class="form-input"><option value="">Losowy boss z kategorii</option></select>
+            </div>
+          </div>
+        </div>
+
+        <div id="nd-legacy-section" style="grid-column:1/-1">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Pokoje (1–20)</label><input id="nd-rooms" class="form-input" type="number" value="5" min="1" max="20"></div>
+            <div class="form-row"><label class="form-label" style="color:var(--t3)">Jakość łupów</label>
+              <select id="nd-loot" class="form-input">
+                <option value="poor">Słabe</option><option value="standard" selected>Standardowe</option><option value="rich">Bogate</option>
+              </select>
+            </div>
+            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Pula wrogów (klucze oddzielone przecinkami)</label><input id="nd-pool" class="form-input form-mono" placeholder='goblin_warrior,skeleton_archer'></div>
+            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Boss (klucz wroga)</label><input id="nd-boss" class="form-input form-mono" placeholder="goblin_shaman"></div>
+            <div class="form-row"><label class="form-label" style="color:var(--t3)">Łupy ze skrzyń</label><input id="nd-chest" class="form-input form-mono"></div>
+            <div class="form-row"><label class="form-label" style="color:var(--t3)">Łupy z bossa</label><input id="nd-bloot" class="form-input form-mono"></div>
+            <div class="form-row"><label class="form-label" style="color:var(--t3)">Szansa łupu z komnaty</label><input id="nd-rloot" class="form-input" type="number" value="0.15" min="0" max="1" step="0.05"></div>
+          </div>
+        </div>
+
+        <div class="form-row" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);padding-top:8px;margin-top:4px">
           <input type="checkbox" id="nd-active" checked style="margin:0">
           <label for="nd-active" class="form-label" style="margin:0;cursor:pointer">Aktywny</label>
         </div>
@@ -9019,28 +9071,40 @@
     overlay.querySelector('#nd-key').focus();
   }
 
+  async function _ndReloadBossTiles() {
+    const cat = document.getElementById('nd-tile-cat')?.value || '';
+    const sel = document.getElementById('nd-boss-tile');
+    if (!sel) return;
+    sel.innerHTML = await _dungeonBossTileOptions(cat, null);
+    _dungeonModeToggle('nd');
+  }
+
   async function _doCreateDungeon(btn) {
     const g = id => document.getElementById(id);
     const key = g('nd-key')?.value?.trim();
     const label = g('nd-label')?.value?.trim();
     if (!key || !label) { _showToast('Klucz i nazwa są wymagane.','error'); return; }
+    const tileMode = !!(g('nd-tile-cat')?.value);
     const poolRaw = g('nd-pool')?.value?.trim() || '';
     const enemy_pool = poolRaw ? JSON.stringify(poolRaw.split(',').map(s=>s.trim()).filter(Boolean)) : '[]';
     const body = { key, label,
       location_key: g('nd-loc')?.value?.trim() || key,
-      rooms: parseInt(g('nd-rooms')?.value)||5,
-      loot_tier: g('nd-loot')?.value||'standard',
-      cooldown_hours: parseInt(g('nd-cool')?.value)||72,
       min_level: parseInt(g('nd-lvl')?.value)||1,
-      enemy_pool,
-      boss_enemy: g('nd-boss')?.value?.trim()||null,
+      cooldown_hours: parseInt(g('nd-cool')?.value)||72,
       atmosphere: g('nd-atmo')?.value?.trim()||null,
-      chest_loot_table_key: g('nd-chest')?.value?.trim()||null,
-      boss_loot_table_key: g('nd-bloot')?.value?.trim()||null,
-      room_loot_chance: parseFloat(g('nd-rloot')?.value)||0.15,
-      riddle_source: g('nd-rsrc')?.value||'database',
-      riddle_max_hints: parseInt(g('nd-rhints')?.value)||2,
       is_active: g('nd-active')?.checked ? 1 : 0,
+      tile_category_key: g('nd-tile-cat')?.value || null,
+      tile_count: tileMode ? (parseInt(g('nd-tile-count')?.value)||3) : null,
+      boss_tile_id: tileMode ? (parseInt(g('nd-boss-tile')?.value)||null) : null,
+      // legacy fields
+      rooms: tileMode ? 5 : (parseInt(g('nd-rooms')?.value)||5),
+      loot_tier: tileMode ? 'standard' : (g('nd-loot')?.value||'standard'),
+      enemy_pool: tileMode ? '[]' : enemy_pool,
+      boss_enemy: tileMode ? null : (g('nd-boss')?.value?.trim()||null),
+      chest_loot_table_key: tileMode ? null : (g('nd-chest')?.value?.trim()||null),
+      boss_loot_table_key: tileMode ? null : (g('nd-bloot')?.value?.trim()||null),
+      room_loot_chance: tileMode ? 0.15 : (parseFloat(g('nd-rloot')?.value)||0.15),
+      riddle_source: 'database', riddle_max_hints: 2,
     };
     btn.disabled = true; btn.textContent = '⏳';
     try {
@@ -9061,33 +9125,53 @@
     } catch(e) { _showToast(e.message||'Błąd.','error'); btn.disabled = false; }
   }
 
-  function openEditDungeonModal(dg) {
+  async function openEditDungeonModal(dg) {
     const poolArr = (() => { try { const p = typeof dg.enemy_pool==='string' ? JSON.parse(dg.enemy_pool||'[]') : (dg.enemy_pool||[]); return p.join(','); } catch { return ''; } })();
-    const selLoot = t => ['poor','standard','rich'].map(v=>`<option value="${v}" ${(dg.loot_tier||'standard')===v?'selected':''}>${{poor:'Słabe',standard:'Standardowe',rich:'Bogate'}[v]}</option>`).join('');
-    const selRiddle = s => ['database','llm','mixed'].map(v=>`<option value="${v}" ${(dg.riddle_source||'database')===v?'selected':''}>${{database:'Baza danych',llm:'LLM (eksperymentalne)',mixed:'Mieszane'}[v]}</option>`).join('');
+    const selLoot = ['poor','standard','rich'].map(v=>`<option value="${v}" ${(dg.loot_tier||'standard')===v?'selected':''}>${{poor:'Słabe',standard:'Standardowe',rich:'Bogate'}[v]}</option>`).join('');
+    const catOpts = await _dungeonTileCatOptions(dg.tile_category_key||'');
+    const bossOpts = await _dungeonBossTileOptions(dg.tile_category_key||'', dg.boss_tile_id);
+    const isTile = !!(dg.tile_category_key);
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay open';
-    overlay.innerHTML = `<div class="modal-box" style="width:560px">
+    overlay.innerHTML = `<div class="modal-box" style="width:600px">
       <div class="modal-head"><span class="modal-title">Edytuj: ${_esc(dg.label||dg.key)}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Klucz</label><input class="form-input form-mono" value="${_esc(dg.key)}" disabled></div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Nazwa</label><input id="ed-label" class="form-input" value="${_esc(dg.label||'')}"></div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Klucz lokacji</label><input id="ed-loc" class="form-input form-mono" value="${_esc(dg.location_key||'')}"></div>
-        <div class="form-row"><label class="form-label">Pokoje (1–20)</label><input id="ed-rooms" class="form-input" type="number" value="${dg.rooms||5}" min="1" max="20"></div>
         <div class="form-row"><label class="form-label">Min. poziom</label><input id="ed-lvl" class="form-input" type="number" value="${dg.min_level||1}" min="1" max="20"></div>
-        <div class="form-row"><label class="form-label">Jakość łupów</label><select id="ed-loot" class="form-input">${selLoot()}</select></div>
         <div class="form-row"><label class="form-label">Cooldown (h)</label><input id="ed-cool" class="form-input" type="number" value="${dg.cooldown_hours||72}" min="1" max="720"></div>
-        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Pula wrogów (klucze oddzielone przecinkami)</label><input id="ed-pool" class="form-input form-mono" value="${_esc(poolArr)}"></div>
-        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Boss (klucz wroga, opcjonalnie)</label><input id="ed-boss" class="form-input form-mono" value="${_esc(dg.boss_enemy||'')}"></div>
-        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Atmosfera</label><textarea id="ed-atmo" class="form-input" rows="3">${_esc(dg.atmosphere||'')}</textarea></div>
-        <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:8px;margin-top:2px"><label class="form-label" style="font-weight:600;color:var(--t2)">Tabele łupów</label></div>
-        <div class="form-row"><label class="form-label">Łupy ze skrzyń</label><input id="ed-chest" class="form-input form-mono" value="${_esc(dg.chest_loot_table_key||'')}"></div>
-        <div class="form-row"><label class="form-label">Łupy z bossa</label><input id="ed-bloot" class="form-input form-mono" value="${_esc(dg.boss_loot_table_key||'')}"></div>
-        <div class="form-row"><label class="form-label">Szansa łupu z komnaty</label><input id="ed-rloot" class="form-input" type="number" value="${dg.room_loot_chance??0.15}" min="0" max="1" step="0.05"></div>
-        <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:8px;margin-top:2px"><label class="form-label" style="font-weight:600;color:var(--t2)">Zagadki</label></div>
-        <div class="form-row"><label class="form-label">Źródło zagadek</label><select id="ed-rsrc" class="form-input">${selRiddle()}</select></div>
-        <div class="form-row"><label class="form-label">Maks. podpowiedzi</label><input id="ed-rhints" class="form-input" type="number" value="${dg.riddle_max_hints??2}" min="0" max="5"></div>
-        <div class="form-row" style="grid-column:1/-1;display:flex;align-items:center;gap:8px">
+        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Atmosfera</label><textarea id="ed-atmo" class="form-input" rows="2">${_esc(dg.atmosphere||'')}</textarea></div>
+
+        <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--accent);padding-top:8px;margin-top:4px">
+          <label class="form-label" style="font-weight:700;color:var(--accent)">🗺 Tryb Kafelkowy</label>
+        </div>
+        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Kategoria kafelków</label>
+          <select id="ed-tile-cat" class="form-input" onchange="_dungeonModeToggle('ed'); _edReloadBossTiles()">${catOpts}</select>
+        </div>
+
+        <div id="ed-tile-section" style="${isTile?'':'display:none;'}grid-column:1/-1">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-row"><label class="form-label">Liczba kafelków (bez bossa)</label><input id="ed-tile-count" class="form-input" type="number" value="${dg.tile_count||3}" min="1" max="20"></div>
+            <div class="form-row"><label class="form-label">Kafelek boss</label>
+              <select id="ed-boss-tile" class="form-input">${bossOpts}</select>
+            </div>
+          </div>
+        </div>
+
+        <div id="ed-legacy-section" style="${isTile?'display:none;':''}grid-column:1/-1">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Pokoje (1–20)</label><input id="ed-rooms" class="form-input" type="number" value="${dg.rooms||5}" min="1" max="20"></div>
+            <div class="form-row"><label class="form-label" style="color:var(--t3)">Jakość łupów</label><select id="ed-loot" class="form-input">${selLoot}</select></div>
+            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Pula wrogów (klucze oddzielone przecinkami)</label><input id="ed-pool" class="form-input form-mono" value="${_esc(poolArr)}"></div>
+            <div class="form-row" style="grid-column:1/-1"><label class="form-label" style="color:var(--t3)">Boss (klucz wroga)</label><input id="ed-boss" class="form-input form-mono" value="${_esc(dg.boss_enemy||'')}"></div>
+            <div class="form-row"><label class="form-label" style="color:var(--t3)">Łupy ze skrzyń</label><input id="ed-chest" class="form-input form-mono" value="${_esc(dg.chest_loot_table_key||'')}"></div>
+            <div class="form-row"><label class="form-label" style="color:var(--t3)">Łupy z bossa</label><input id="ed-bloot" class="form-input form-mono" value="${_esc(dg.boss_loot_table_key||'')}"></div>
+            <div class="form-row"><label class="form-label" style="color:var(--t3)">Szansa łupu z komnaty</label><input id="ed-rloot" class="form-input" type="number" value="${dg.room_loot_chance??0.15}" min="0" max="1" step="0.05"></div>
+          </div>
+        </div>
+
+        <div class="form-row" style="grid-column:1/-1;display:flex;align-items:center;gap:8px;border-top:1px solid var(--border);padding-top:8px;margin-top:4px">
           <input type="checkbox" id="ed-active" ${dg.is_active?'checked':''} style="margin:0">
           <label for="ed-active" class="form-label" style="margin:0;cursor:pointer">Aktywny</label>
         </div>
@@ -9100,26 +9184,37 @@
     document.body.appendChild(overlay);
   }
 
+  async function _edReloadBossTiles() {
+    const cat = document.getElementById('ed-tile-cat')?.value || '';
+    const sel = document.getElementById('ed-boss-tile');
+    if (!sel) return;
+    sel.innerHTML = await _dungeonBossTileOptions(cat, null);
+    _dungeonModeToggle('ed');
+  }
+
   async function _doSaveDungeon(key, btn) {
     const g = id => document.getElementById(id);
+    const tileMode = !!(g('ed-tile-cat')?.value);
     const poolRaw = g('ed-pool')?.value?.trim() || '';
     const enemy_pool = JSON.stringify(poolRaw ? poolRaw.split(',').map(s=>s.trim()).filter(Boolean) : []);
     const body = {
       label: g('ed-label')?.value?.trim(),
       location_key: g('ed-loc')?.value?.trim()||key,
-      rooms: parseInt(g('ed-rooms')?.value)||5,
-      loot_tier: g('ed-loot')?.value||'standard',
-      cooldown_hours: parseInt(g('ed-cool')?.value)||72,
       min_level: parseInt(g('ed-lvl')?.value)||1,
+      cooldown_hours: parseInt(g('ed-cool')?.value)||72,
       is_active: g('ed-active')?.checked ? 1 : 0,
-      enemy_pool,
-      boss_enemy: g('ed-boss')?.value?.trim()||null,
       atmosphere: g('ed-atmo')?.value?.trim()||null,
-      chest_loot_table_key: g('ed-chest')?.value?.trim()||null,
-      boss_loot_table_key: g('ed-bloot')?.value?.trim()||null,
-      room_loot_chance: parseFloat(g('ed-rloot')?.value)||0.15,
-      riddle_source: g('ed-rsrc')?.value||'database',
-      riddle_max_hints: parseInt(g('ed-rhints')?.value)||2,
+      tile_category_key: g('ed-tile-cat')?.value || null,
+      tile_count: tileMode ? (parseInt(g('ed-tile-count')?.value)||3) : null,
+      boss_tile_id: tileMode ? (parseInt(g('ed-boss-tile')?.value)||null) : null,
+      rooms: tileMode ? 5 : (parseInt(g('ed-rooms')?.value)||5),
+      loot_tier: tileMode ? 'standard' : (g('ed-loot')?.value||'standard'),
+      enemy_pool: tileMode ? '[]' : enemy_pool,
+      boss_enemy: tileMode ? null : (g('ed-boss')?.value?.trim()||null),
+      chest_loot_table_key: tileMode ? null : (g('ed-chest')?.value?.trim()||null),
+      boss_loot_table_key: tileMode ? null : (g('ed-bloot')?.value?.trim()||null),
+      room_loot_chance: tileMode ? 0.15 : (parseFloat(g('ed-rloot')?.value)||0.15),
+      riddle_source: 'database', riddle_max_hints: 2,
     };
     btn.disabled = true; btn.textContent = '⏳';
     try {
@@ -9144,8 +9239,7 @@
         <td class="td-sticky td-mono">${_esc(dg.key)}</td>
         <td class="td-name">${_esc(dg.label||dg.key)}</td>
         <td class="td-muted">${dg.min_level?dg.min_level+'+':'—'}</td>
-        <td class="td-mono editable" onclick="startEdit(this)">${dg.rooms??'—'}</td>
-        <td><span class="badge ${tierBadge(dg.loot_tier)}">${_esc(dg.loot_tier||'—')}</span></td>
+        <td>${dg.tile_category_key ? `<span class="badge badge-blue" title="Tryb kafelkowy: ${_esc(dg.tile_category_key)}">🗺 ${_esc(dg.tile_category_key)}</span>` : `<span class="badge badge-slate" title="Tryb proceduralny">⚙ ${dg.rooms??'?'}p</span>`}</td>
         <td class="td-mono editable" onclick="startEdit(this)">${dg.cooldown_hours?dg.cooldown_hours+'h':'—'}</td>
         <td class="td-mono">${dg.active_runs ?? dg.active_runs_count ?? dg.runs_active ?? '—'}</td>
         <td><span class="badge ${dg.is_active?'badge-green':'badge-slate'}">${dg.is_active?'● Aktywny':'○ Nieaktywny'}</span></td>
@@ -9179,6 +9273,7 @@
   // ── Dungeon Tiles (Kafelki, issue #224) ───────────────────────────────────────
   let _tileCategoriesCache = null;
   let _tilesCache = [];
+  let _tileEnemyImgCache = {};  // key → image_url, used by tile grid card overlay render
 
   async function _ensureTileCategories(force) {
     if (_tileCategoriesCache && !force) return _tileCategoriesCache;
@@ -9203,8 +9298,12 @@
           _renderTilesGrid();
         }));
       }
-      const r = await apiFetch('/api/admin/dungeon-tiles?include_inactive=true');
+      const [r, er] = await Promise.all([
+        apiFetch('/api/admin/dungeon-tiles?include_inactive=true'),
+        apiFetch('/api/admin/enemies').catch(()=>({items:[]})),
+      ]);
       _tilesCache = r.tiles || [];
+      _tileEnemyImgCache = Object.fromEntries((er.items||[]).filter(e=>e.image_url).map(e=>[e.key, e.image_url]));
       _renderTilesGrid();
     } catch (e) {
       grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:#ef4444">Błąd: ${_esc(e.message)}</div>`;
@@ -9231,20 +9330,38 @@
 
   function _renderTileCard(t) {
     const doors = (t.doors || []).join('+') || '—';
-    const bossBadge = t.is_boss_tile ? '<span class="badge badge-red" style="font-size:0.65rem">BOSS</span>' : '';
-    const inactiveBadge = !t.is_active ? '<span class="badge badge-slate" style="font-size:0.65rem">◯</span>' : '';
+    const hasContent = (t.enemies||[]).length || (t.items||[]).length || t.riddle_key;
+    const bossBadge    = t.is_boss_tile ? '<span style="background:#dc2626;color:#fff;border-radius:4px;padding:1px 6px;font-size:.6rem;font-weight:700;letter-spacing:.05em">BOSS</span>' : '';
+    const inactiveBadge = !t.is_active ? '<span style="background:rgba(0,0,0,.6);color:#888;border-radius:4px;padding:1px 5px;font-size:.6rem">OFF</span>' : '';
+    const contentDot   = hasContent ? '<span style="background:rgba(245,158,11,.9);width:6px;height:6px;border-radius:50%;display:inline-block" title="Zawiera wrogów/przedmioty"></span>' : '';
     const imgHtml = t.image_url
-      ? `<img src="${_esc(t.image_url)}" style="width:100%;height:100%;object-fit:cover;display:block">`
-      : `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--t3);font-size:0.75rem;text-align:center;padding:8px">Brak obrazu<br><span style="font-size:0.65rem">kliknij Generuj</span></div>`;
-    return `<div class="tile-card" style="background:var(--surface2,#1a1a26);border:1px solid var(--border,#2a2a40);border-radius:8px;overflow:hidden;cursor:pointer" onclick="openEditTileModal(${t.id})">
-      <div style="position:relative;aspect-ratio:1;background:#0a0a0f">
+      ? `<img src="${_esc(t.image_url)}" style="width:100%;height:100%;object-fit:cover;display:block;transition:transform .2s" class="tc-img">`
+      : `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--t3);font-size:.72rem;text-align:center;padding:10px;gap:6px;background:linear-gradient(135deg,#0a0a12,#0f0f1e)"><span style="font-size:1.8rem;opacity:.3">🏰</span>Brak obrazu</div>`;
+    // Read-only sprite overlay using saved positions per enemy
+    let overlayHtml = '';
+    if (t.image_url && Array.isArray(t.enemies)) {
+      const sprites = [];
+      t.enemies.forEach(e => {
+        const url = _tileEnemyImgCache[e.enemy_key];
+        if (!url) return;
+        const ovs = Array.isArray(e.overlays) ? e.overlays : [];
+        ovs.forEach(o => o && sprites.push({ url, ...o }));
+      });
+      overlayHtml = sprites.map(s =>
+        `<img src="${_esc(s.url)}" style="position:absolute;left:${s.x*100}%;top:${s.y*100}%;width:${(s.scale||.35)*100}%;height:${(s.scale||.35)*100}%;transform:translate(-50%,-50%) rotate(${s.rot||0}deg);object-fit:contain;mix-blend-mode:screen;pointer-events:none">`
+      ).join('');
+    }
+    return `<div class="tile-card" style="background:#111120;border:1px solid #222235;border-radius:10px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .12s;position:relative" onclick="openEditTileModal(${t.id})" onmouseenter="this.style.borderColor='#f59e0b33';this.querySelector('.tc-img')&&(this.querySelector('.tc-img').style.transform='scale(1.04)')" onmouseleave="this.style.borderColor='#222235';this.querySelector('.tc-img')&&(this.querySelector('.tc-img').style.transform='')">
+      <div style="position:relative;aspect-ratio:1;background:#0a0a0f;overflow:hidden">
         ${imgHtml}
-        <div style="position:absolute;top:6px;left:6px;display:flex;gap:4px">${bossBadge}${inactiveBadge}</div>
-        <div style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,0.7);color:#facc15;padding:2px 6px;border-radius:4px;font-size:0.65rem;font-family:monospace">${_esc(doors)}</div>
+        ${overlayHtml}
+        <div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 55%,rgba(0,0,0,.75));pointer-events:none"></div>
+        <div style="position:absolute;top:6px;left:6px;display:flex;gap:4px;align-items:center">${bossBadge}${inactiveBadge}${contentDot}</div>
+        <div style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.75);color:#facc15;padding:2px 7px;border-radius:4px;font-size:.62rem;font-family:monospace;border:1px solid rgba(245,158,11,.3)">${_esc(doors)}</div>
       </div>
-      <div style="padding:8px 10px">
-        <div style="font-weight:600;font-size:0.82rem;line-height:1.2">${_esc(t.label || '—')}</div>
-        <div style="color:var(--t3);font-size:0.7rem;margin-top:2px">${_esc(t.category_key)}</div>
+      <div style="padding:8px 10px 10px">
+        <div style="font-weight:600;font-size:.82rem;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(t.label || '—')}</div>
+        <div style="color:var(--t3);font-size:.68rem;margin-top:2px;opacity:.7">${_esc(t.category_key)}</div>
       </div>
     </div>`;
   }
@@ -9267,120 +9384,656 @@
 
   function _openTileForm(prefill, cats) {
     const p = prefill || {};
-    const doors = (p.doors || []).slice();
+
+    // Inject tile-form styles once
+    if (!document.getElementById('tf-styles')) {
+      const s = document.createElement('style'); s.id = 'tf-styles';
+      s.textContent = `
+        .tf-section{background:rgba(10,10,20,.6);border:1px solid var(--border,#2a2a40);border-radius:8px;padding:14px 16px}
+        .tf-section-head{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#f59e0b;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+        .tf-chips-row{display:flex;flex-wrap:wrap;gap:6px;min-height:8px;margin-bottom:10px}
+        .tf-chip{display:inline-flex;align-items:center;gap:5px;background:#1e1e30;border:1px solid #2a2a40;border-radius:6px;padding:3px 8px;font-size:.79rem;line-height:1.35}
+        .tf-chip-del{background:none;border:none;color:#777;cursor:pointer;padding:0 2px;font-size:.82rem;line-height:1}
+        .tf-chip-del:hover{color:#ef4444}
+        .tf-add-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+        .tf-door-btn{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:2px solid var(--border,#2a2a40);border-radius:8px;cursor:pointer;font-family:monospace;font-weight:700;font-size:1rem;color:#777;transition:all .15s;user-select:none}
+        .tf-door-btn.on{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.12)}
+        .tf-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+        .tf-toggle input[type=checkbox]{display:none}
+        .tf-toggle-track{width:36px;height:20px;background:#2a2a40;border-radius:10px;position:relative;transition:background .2s;flex-shrink:0}
+        .tf-toggle-track::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s}
+        .tf-toggle input:checked~.tf-toggle-track{background:#f59e0b}
+        .tf-toggle input:checked~.tf-toggle-track::after{transform:translateX(16px)}
+        .tf-toggle-label{font-size:.82rem;color:var(--t2,#bbb)}
+        .tf-param-lbl{font-size:.72rem;color:#888;display:flex;flex-direction:column;gap:3px}
+        .tf-modal-body::-webkit-scrollbar{width:6px}
+        .tf-modal-body::-webkit-scrollbar-thumb{background:#2a2a40;border-radius:3px}
+        .tf-ov-sprite{transition:outline-color .1s}
+        .tf-ov-sprite:hover{outline-color:#f59e0b !important}
+        .tf-ov-collide{outline:2px solid #ef4444 !important}
+      `;
+      document.head.appendChild(s);
+    }
+
+    // ── Mutable state ─────────────────────────────────────────
+    let _tfEnemies = JSON.parse(JSON.stringify(p.enemies        || []));
+    let _tfItems   = JSON.parse(JSON.stringify(p.items          || []));
+    let _tfStates  = JSON.parse(JSON.stringify(p.active_states  || []));
+    let _tfExits   = JSON.parse(JSON.stringify(p.exit_conditions|| []));
+
+    // ── Pools loaded async ────────────────────────────────────
+    let _epPool = [];
+    let _ipPool = { item:[], weapon:[], consumable:[] };
+    let _rpPool = [];
+
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay open';
-    overlay.innerHTML = `<div class="modal-box" style="width:720px;max-height:90vh;overflow:auto">
-      <div class="modal-head"><span class="modal-title">${p.id ? 'Edytuj kafelek' : 'Nowy kafelek'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-      <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
-        <div>
-          <label class="form-label">Nazwa *</label>
-          <input id="tf-label" class="form-input" value="${_esc(p.label || '')}">
+    overlay.innerHTML = `
+<div class="modal-box" style="width:880px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+  <div class="modal-head" style="flex-shrink:0;background:#0f0f1a;border-bottom:1px solid var(--border)">
+    <span class="modal-title" style="font-size:.95rem">${p.id ? '✎ Edytuj kafelek' : '＋ Nowy kafelek'}</span>
+    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+  </div>
+  <div class="tf-modal-body" style="overflow-y:auto;flex:1;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
 
-          <label class="form-label" style="margin-top:10px">Kategoria *</label>
-          <select id="tf-cat" class="form-input">
-            ${cats.map(c => `<option value="${_esc(c.key)}" ${p.category_key === c.key ? 'selected' : ''}>${_esc(c.label)}</option>`).join('')}
-          </select>
+    <!-- Row 1: basics + image -->
+    <div style="display:grid;grid-template-columns:1fr 252px;gap:18px;align-items:start">
+      <div style="display:flex;flex-direction:column;gap:12px">
 
-          <label class="form-label" style="margin-top:10px">Drzwi (N/S/E/W) *</label>
-          <div id="tf-doors" style="display:flex;gap:8px;flex-wrap:wrap">
-            ${['N','S','E','W'].map(d => `<label style="display:flex;align-items:center;gap:4px;font-family:monospace;cursor:pointer">
-              <input type="checkbox" data-door="${d}" ${doors.includes(d) ? 'checked' : ''}> ${d}
-            </label>`).join('')}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label class="form-label">Nazwa <span style="color:#f59e0b">*</span></label>
+            <input id="tf-label" class="form-input" value="${_esc(p.label || '')}" placeholder="np. Komnata strażników">
           </div>
-
-          <label class="form-label" style="margin-top:10px">Opis pokoju (do AI GM + prompt obrazu)</label>
-          <textarea id="tf-desc" class="form-input" rows="3" style="resize:vertical">${_esc(p.room_description || '')}</textarea>
-
-          <label class="form-label" style="margin-top:10px">Wrogowie (JSON)</label>
-          <textarea id="tf-enemies" class="form-input" rows="2" style="font-family:monospace;font-size:0.78rem">${_esc(JSON.stringify(p.enemies || [], null, 0))}</textarea>
-          <span style="font-size:0.7rem;color:var(--t3)">np. <code>[{"enemy_key":"szczur","count":2}]</code></span>
-
-          <label class="form-label" style="margin-top:10px">Przedmioty (JSON)</label>
-          <textarea id="tf-items" class="form-input" rows="2" style="font-family:monospace;font-size:0.78rem">${_esc(JSON.stringify(p.items || [], null, 0))}</textarea>
-          <span style="font-size:0.7rem;color:var(--t3)">np. <code>[{"item_key":"klucz","chance":0.5}]</code></span>
-
-          <label class="form-label" style="margin-top:10px">Klucz zagadki</label>
-          <input id="tf-riddle" class="form-input" value="${_esc(p.riddle_key || '')}" placeholder="riddle_xxx lub puste">
-
-          <label class="form-label" style="margin-top:10px">Aktywne stany (JSON, effect_json format)</label>
-          <textarea id="tf-states" class="form-input" rows="2" style="font-family:monospace;font-size:0.78rem">${_esc(JSON.stringify(p.active_states || [], null, 0))}</textarea>
-          <span style="font-size:0.7rem;color:var(--t3)">np. <code>[{"type":"burning","damage_die":"1d4","save_stat":"DEX","dc":12}]</code></span>
-
-          <label class="form-label" style="margin-top:10px">Warunki wyjścia (JSON)</label>
-          <textarea id="tf-exits" class="form-input" rows="2" style="font-family:monospace;font-size:0.78rem">${_esc(JSON.stringify(p.exit_conditions || [], null, 0))}</textarea>
-          <span style="font-size:0.7rem;color:var(--t3)">typy: <code>enemies_cleared</code>, <code>riddle_solved</code>, <code>item_in_inventory</code>, <code>stat_roll</code></span>
-
-          <div style="display:flex;gap:14px;margin-top:14px">
-            <label style="display:flex;align-items:center;gap:6px">
-              <input type="checkbox" id="tf-boss" ${p.is_boss_tile ? 'checked' : ''}> Kafelek bossa
-            </label>
-            <label style="display:flex;align-items:center;gap:6px">
-              <input type="checkbox" id="tf-active" ${p.is_active !== false ? 'checked' : ''}> Aktywny
-            </label>
+          <div>
+            <label class="form-label">Kategoria <span style="color:#f59e0b">*</span></label>
+            <select id="tf-cat" class="form-input">
+              ${cats.map(c => `<option value="${_esc(c.key)}" ${p.category_key===c.key?'selected':''}>${_esc(c.label)}</option>`).join('')}
+            </select>
           </div>
         </div>
+
         <div>
-          <label class="form-label">Podgląd obrazu</label>
-          <div id="tf-img-preview" style="width:100%;aspect-ratio:1;background:#0a0a0f;border:1px solid var(--border);border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center">
-            ${p.image_url
-              ? `<img src="${_esc(p.image_url)}" style="width:100%;height:100%;object-fit:cover">`
-              : '<div style="color:var(--t3);font-size:0.85rem">Brak obrazu</div>'}
+          <label class="form-label">Drzwi <span style="color:#f59e0b">*</span> <span style="font-size:.7rem;color:var(--t3);font-weight:400">(N=góra S=dół E=prawo W=lewo)</span></label>
+          <div id="tf-doors" style="display:flex;gap:8px;margin-top:6px">
+            ${['N','S','E','W'].map(d=>`<label class="tf-door-btn${(p.doors||[]).includes(d)?' on':''}" data-d="${d}"><input type="checkbox" data-door="${d}" ${(p.doors||[]).includes(d)?'checked':''} style="display:none"><span>${d}</span></label>`).join('')}
           </div>
-          <div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn btn-primary btn-sm" style="flex:1" id="tf-generate-btn" ${!p.id ? 'disabled title="Zapisz kafelek najpierw"' : ''}>🎨 Generuj obraz</button>
-          </div>
-          ${p.image_gen_prompt ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:0.78rem;color:var(--t3)">Ostatni prompt</summary><div style="font-size:0.72rem;font-family:monospace;color:var(--t3);background:#0a0a0f;padding:8px;border-radius:4px;margin-top:4px;white-space:pre-wrap">${_esc(p.image_gen_prompt)}</div></details>` : ''}
-          ${p.id ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-            <div style="color:var(--t3);font-size:0.75rem">ID: <span style="font-family:monospace">${p.id}</span></div>
-            <div style="color:var(--t3);font-size:0.75rem">URL: <span style="font-family:monospace;word-break:break-all">${_esc(p.image_url || '—')}</span></div>
-          </div>` : ''}
+        </div>
+
+        <div style="display:flex;gap:20px">
+          <label class="tf-toggle"><input type="checkbox" id="tf-boss" ${p.is_boss_tile?'checked':''}><span class="tf-toggle-track"></span><span class="tf-toggle-label">Kafelek bossa</span></label>
+          <label class="tf-toggle"><input type="checkbox" id="tf-active" ${p.is_active!==false?'checked':''}><span class="tf-toggle-track"></span><span class="tf-toggle-label">Aktywny</span></label>
+        </div>
+
+        <div>
+          <label class="form-label">Opis pokoju <span style="font-size:.7rem;color:var(--t3);font-weight:400">(AI GM + prompt obrazu)</span></label>
+          <textarea id="tf-desc" class="form-input" rows="3" style="resize:vertical" placeholder="np. Stara komnata strażnicza z rdzawą zbroją na ścianie…">${_esc(p.room_description||'')}</textarea>
         </div>
       </div>
-      <div class="modal-foot" style="display:flex;gap:8px;justify-content:flex-end;padding:14px">
-        ${p.id ? `<button class="btn btn-secondary btn-sm" onclick="deleteTile(${p.id})">🗑 Usuń</button>` : ''}
-        <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
-        <button class="btn btn-primary btn-sm" id="tf-save-btn">Zapisz</button>
+
+      <div>
+        <label class="form-label">Obraz kafelka</label>
+        <div id="tf-img-preview" style="width:100%;aspect-ratio:1;background:#060610;border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center">
+          ${p.image_url?`<img src="${_esc(p.image_url)}" style="width:100%;height:100%;object-fit:cover">`:`<div style="color:var(--t3);font-size:.78rem;text-align:center;padding:14px;line-height:1.7">Brak obrazu<br><span style="font-size:.68rem;opacity:.5">Zapisz najpierw,<br>potem Generuj</span></div>`}
+        </div>
+        <button class="btn btn-primary btn-sm" id="tf-generate-btn" style="width:100%;margin-top:8px" ${!p.id?'disabled':''}>🎨 Generuj obraz</button>
+        ${p.image_gen_prompt?`<details style="margin-top:5px"><summary style="cursor:pointer;font-size:.68rem;color:var(--t3)">Prompt</summary><div style="font-size:.65rem;color:var(--t3);background:#0a0a0f;padding:7px;border-radius:4px;margin-top:3px;white-space:pre-wrap;max-height:80px;overflow:auto;font-family:monospace">${_esc(p.image_gen_prompt)}</div></details>`:''}
+        ${p.id?`<div style="margin-top:6px;font-size:.7rem;color:var(--t3)">ID: <code style="font-family:monospace">#${p.id}</code></div>`:''}
       </div>
-    </div>`;
+    </div>
+
+    <!-- Enemies -->
+    <div class="tf-section">
+      <div class="tf-section-head">⚔ Wrogowie</div>
+      <div id="tf-enemies-chips" class="tf-chips-row"></div>
+      <div class="tf-add-row">
+        <select id="tf-enemy-sel" class="form-input" style="flex:1;min-width:200px"><option value="">⏳ Ładowanie…</option></select>
+        <label class="tf-param-lbl">Ilość<input id="tf-enemy-count" type="number" class="form-input" value="1" min="1" max="20" style="width:68px"></label>
+        <button class="btn btn-secondary btn-sm" id="tf-enemy-add-btn">+ Dodaj</button>
+      </div>
+    </div>
+
+    <!-- Sprite overlay editor -->
+    <div class="tf-section" id="tf-overlay-section" style="${p.image_url?'':'display:none'}">
+      <div class="tf-section-head" style="display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:8px">
+        <span>🎯 Pozycje sprite'ów na kafelku</span>
+        <span style="display:flex;gap:8px;align-items:center;font-weight:400;text-transform:none;letter-spacing:0">
+          <button type="button" class="btn btn-secondary btn-sm" id="tf-ov-arrange" title="Rozmieść automatycznie (siatka, bez kolizji)">🎲 Auto</button>
+          <label class="tf-toggle" style="font-size:.72rem"><input type="checkbox" id="tf-ov-collision-warn" checked><span class="tf-toggle-track"></span><span class="tf-toggle-label">Pokaż kolizje</span></label>
+        </span>
+      </div>
+      <div style="font-size:.72rem;color:var(--t3);margin-bottom:8px">Przeciągnij = przesuń &nbsp;|&nbsp; kółko myszy = skala &nbsp;|&nbsp; Shift+przeciągnij = obrót</div>
+      <div id="tf-overlay-surface" style="position:relative;width:100%;max-width:520px;aspect-ratio:1;background:#060610;border:1px solid var(--border);border-radius:10px;overflow:hidden;user-select:none;touch-action:none">
+        <div id="tf-overlay-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:.78rem;text-align:center;padding:14px">Brak obrazu kafelka lub wrogów<br><span style="font-size:.7rem;opacity:.6">Wygeneruj obraz kafelka i dodaj wroga z obrazem (🖼)</span></div>
+      </div>
+    </div>
+
+    <!-- Items -->
+    <div class="tf-section">
+      <div class="tf-section-head">💎 Przedmioty / łupy</div>
+      <div id="tf-items-chips" class="tf-chips-row"></div>
+      <div class="tf-add-row">
+        <select id="tf-item-type" class="form-input" style="width:148px">
+          <option value="item">Przedmiot</option>
+          <option value="weapon">Broń</option>
+          <option value="consumable">Konsumable</option>
+        </select>
+        <select id="tf-item-sel" class="form-input" style="flex:1;min-width:180px"><option value="">⏳ Ładowanie…</option></select>
+        <label class="tf-param-lbl">Szansa %<input id="tf-item-chance" type="number" class="form-input" value="50" min="1" max="100" style="width:68px"></label>
+        <button class="btn btn-secondary btn-sm" id="tf-item-add-btn">+ Dodaj</button>
+      </div>
+    </div>
+
+    <!-- Riddle -->
+    <div class="tf-section">
+      <div class="tf-section-head">❓ Zagadka <span style="font-size:.7rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)">(opcjonalna — wymaga osobnego warunku wyjścia riddle_solved)</span></div>
+      <select id="tf-riddle-sel" class="form-input" style="max-width:520px"><option value="">⏳ Ładowanie…</option></select>
+    </div>
+
+    <!-- Active States -->
+    <div class="tf-section">
+      <div class="tf-section-head">🔥 Aktywne stany <span style="font-size:.7rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)">(efekty oddziałujące co turę na gracza)</span></div>
+      <div id="tf-states-chips" class="tf-chips-row"></div>
+      <div class="tf-add-row">
+        <select id="tf-state-type" class="form-input" style="width:185px">
+          <option value="burning">🔥 Płonący (burning)</option>
+          <option value="flooding">🌊 Zalany (flooding)</option>
+          <option value="poison_gas">☠ Trujący gaz</option>
+          <option value="cold">❄ Zimno (cold)</option>
+          <option value="lightning">⚡ Błyskawica</option>
+          <option value="cursed">💀 Przeklęty (cursed)</option>
+        </select>
+        <div id="tf-state-params" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"></div>
+        <button class="btn btn-secondary btn-sm" id="tf-state-add-btn" style="margin-left:auto;flex-shrink:0">+ Dodaj</button>
+      </div>
+    </div>
+
+    <!-- Exit Conditions -->
+    <div class="tf-section">
+      <div class="tf-section-head">🚪 Warunki wyjścia</div>
+      <div style="font-size:.74rem;color:var(--t3);margin-bottom:8px">Brak warunków = wyjście zawsze otwarte. Dodaj warunek by zablokować przejście.</div>
+      <div id="tf-exits-chips" class="tf-chips-row"></div>
+      <div class="tf-add-row">
+        <select id="tf-exit-type" class="form-input" style="width:220px">
+          <option value="enemies_cleared">⚔ Wrogowie pokonani</option>
+          <option value="riddle_solved">❓ Zagadka rozwiązana</option>
+          <option value="item_in_inventory">🎒 Przedmiot w ekwipunku</option>
+          <option value="stat_roll">🎲 Test statystyki</option>
+        </select>
+        <div id="tf-exit-params" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"></div>
+        <button class="btn btn-secondary btn-sm" id="tf-exit-add-btn" style="margin-left:auto;flex-shrink:0">+ Dodaj</button>
+      </div>
+    </div>
+
+  </div>
+  <div class="modal-foot" style="flex-shrink:0;display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border)">
+    ${p.id?`<button class="btn btn-secondary btn-sm" id="tf-del-btn">🗑 Usuń</button>`:''}
+    <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+    <button class="btn btn-primary btn-sm" id="tf-save-btn">💾 Zapisz kafelek</button>
+  </div>
+</div>`;
     document.body.appendChild(overlay);
 
-    overlay.querySelector('#tf-save-btn').addEventListener('click', () => _saveTile(overlay, p.id));
-    if (p.id) {
-      overlay.querySelector('#tf-generate-btn').addEventListener('click', () => _generateTileImage(p.id, overlay));
+    // ── Door buttons ──────────────────────────────────────────
+    overlay.querySelectorAll('#tf-doors .tf-door-btn').forEach(lbl => {
+      lbl.addEventListener('click', () => {
+        const cb = lbl.querySelector('input');
+        cb.checked = !cb.checked;
+        lbl.classList.toggle('on', cb.checked);
+      });
+    });
+
+    // ── Render chips ──────────────────────────────────────────
+    const STATE_ICON = { burning:'🔥', flooding:'🌊', poison_gas:'☠', cold:'❄', lightning:'⚡', cursed:'💀' };
+    const EXIT_LABEL = { enemies_cleared:'Wrogowie pokonani', riddle_solved:'Zagadka rozwiązana', item_in_inventory:'Przedmiot w ekwipunku', stat_roll:'Test statystyki' };
+    const EXIT_ICON  = { enemies_cleared:'⚔', riddle_solved:'❓', item_in_inventory:'🎒', stat_roll:'🎲' };
+    const TIER_CLS   = { boss:'badge-red', elite:'badge-amber', 4:'badge-red', 3:'badge-amber', 2:'badge-blue', 1:'badge-slate' };
+
+    function _rfEnemy() {
+      const el = overlay.querySelector('#tf-enemies-chips');
+      if (!el) return;
+      if (!_tfEnemies.length) { el.innerHTML = '<span style="font-size:.75rem;color:var(--t3)">Brak wrogów</span>'; return; }
+      el.innerHTML = _tfEnemies.map((e,i)=>{
+        const info = _epPool.find(x=>x.key===e.enemy_key);
+        const t = info?.tier; const tcls = TIER_CLS[t]||'badge-slate';
+        const tierBadge = t!=null ? `<span class="badge ${tcls}" style="font-size:.62rem">${t}</span>` : '';
+        const hasImg = info?.image_url ? ' style="color:#f59e0b"' : '';
+        return `<span class="tf-chip">⚔ <b>${_esc(info?.label||e.enemy_key)}</b> ${tierBadge} <span style="color:#f59e0b;font-family:monospace;font-size:.85em">×${e.count||1}</span><button class="tf-chip-del" data-type="enemy-img" data-key="${_esc(e.enemy_key)}" title="Generuj obraz wroga"${hasImg}>🖼</button><button class="tf-chip-del" data-type="enemy" data-idx="${i}" title="Usuń">✕</button></span>`;
+      }).join('');
+      // Sync sprite overlay editor whenever enemy chips re-render
+      if (typeof _renderOverlayEditor === 'function') _renderOverlayEditor();
     }
+    function _rfItem() {
+      const el = overlay.querySelector('#tf-items-chips');
+      if (!el) return;
+      if (!_tfItems.length) { el.innerHTML = '<span style="font-size:.75rem;color:var(--t3)">Brak przedmiotów</span>'; return; }
+      const TC = { item:'badge-blue', weapon:'badge-red', consumable:'badge-green' };
+      const TL = { item:'item', weapon:'broń', consumable:'kons.' };
+      el.innerHTML = _tfItems.map((it,i)=>{
+        const tp = it.weapon_key?'weapon':it.consumable_key?'consumable':'item';
+        const key = it.weapon_key||it.consumable_key||it.item_key||'?';
+        const pool = [...(_ipPool.item||[]),...(_ipPool.weapon||[]),...(_ipPool.consumable||[])];
+        const info = pool.find(x=>x.key===key);
+        const pct = Math.round((it.chance||0.5)*100);
+        return `<span class="tf-chip">💎 <b>${_esc(info?.label||key)}</b> <span class="badge ${TC[tp]}" style="font-size:.62rem">${TL[tp]}</span> <span style="color:#f59e0b;font-family:monospace;font-size:.85em">${pct}%</span><button class="tf-chip-del" data-type="item" data-idx="${i}" title="Usuń">✕</button></span>`;
+      }).join('');
+    }
+    function _rfState() {
+      const el = overlay.querySelector('#tf-states-chips');
+      if (!el) return;
+      if (!_tfStates.length) { el.innerHTML = '<span style="font-size:.75rem;color:var(--t3)">Brak stanów</span>'; return; }
+      el.innerHTML = _tfStates.map((s,i)=>{
+        let d = `${STATE_ICON[s.type]||'●'} <b>${s.type}</b>`;
+        if (s.damage_die) d += ` <span style="color:#f59e0b">${s.damage_die}</span>`;
+        if (s.save_stat)  d += ` save:<span style="color:#93c5fd">${s.save_stat}</span>`;
+        if (s.dc)         d += ` DC<span style="color:#f59e0b">${s.dc}</span>`;
+        return `<span class="tf-chip">${d}<button class="tf-chip-del" data-type="state" data-idx="${i}" title="Usuń">✕</button></span>`;
+      }).join('');
+    }
+    function _rfExit() {
+      const el = overlay.querySelector('#tf-exits-chips');
+      if (!el) return;
+      if (!_tfExits.length) { el.innerHTML = '<span style="font-size:.75rem;color:var(--t3)">Brak warunków — wyjście zawsze otwarte</span>'; return; }
+      el.innerHTML = _tfExits.map((x,i)=>{
+        let d = `${EXIT_ICON[x.type]||'●'} <b>${EXIT_LABEL[x.type]||x.type}</b>`;
+        if (x.item_key) {
+          const pool = [...(_ipPool.item||[]),...(_ipPool.weapon||[]),...(_ipPool.consumable||[])];
+          d += `: ${_esc(pool.find(it=>it.key===x.item_key)?.label||x.item_key)}`;
+        }
+        if (x.stat) d += ` <span style="color:#93c5fd">${x.stat}</span>`;
+        if (x.dc)   d += ` DC<span style="color:#f59e0b">${x.dc}</span>`;
+        return `<span class="tf-chip">${d}<button class="tf-chip-del" data-type="exit" data-idx="${i}" title="Usuń">✕</button></span>`;
+      }).join('');
+    }
+
+    // ── Sprite overlay editor ─────────────────────────────────
+    // Each _tfEnemies[i] gets `overlays: [{x, y, scale, rot}]` length=count.
+    // x,y: 0–1 relative to tile surface. scale: 0.1–0.8. rot: degrees.
+    function _ensureOverlays(entry) {
+      const want = Math.max(1, entry.count || 1);
+      entry.overlays = Array.isArray(entry.overlays) ? entry.overlays.slice(0, want) : [];
+      while (entry.overlays.length < want) entry.overlays.push(null); // placeholder, auto-filled
+    }
+    function _autoArrangeOverlays() {
+      // Collect all sprite indices (enemyIdx, instIdx) for entries with image_url
+      const slots = [];
+      _tfEnemies.forEach((e, ei) => {
+        const info = _epPool.find(x => x.key === e.enemy_key);
+        if (!info?.image_url) return;
+        _ensureOverlays(e);
+        for (let ii = 0; ii < e.overlays.length; ii++) slots.push([ei, ii]);
+      });
+      const N = slots.length;
+      if (!N) return;
+      const cols = Math.ceil(Math.sqrt(N));
+      const rows = Math.ceil(N / cols);
+      const cellW = 1 / cols, cellH = 1 / rows;
+      const baseScale = Math.min(0.75 / cols, 0.55);
+      slots.forEach(([ei, ii], i) => {
+        const col = i % cols, row = Math.floor(i / cols);
+        _tfEnemies[ei].overlays[ii] = {
+          x: (col + 0.5) * cellW,
+          y: (row + 0.5) * cellH,
+          scale: baseScale,
+          rot: 0,
+        };
+      });
+      _renderOverlayEditor();
+    }
+    function _spriteBounds(t) {
+      // Approximate sprite bbox in unit coords (square sprite of size = scale)
+      const s = t.scale;
+      return { l: t.x - s/2, r: t.x + s/2, t: t.y - s/2, b: t.y + s/2 };
+    }
+    function _spritesOverlap(a, b) {
+      const A = _spriteBounds(a), B = _spriteBounds(b);
+      return !(A.r < B.l || A.l > B.r || A.b < B.t || A.t > B.b);
+    }
+    function _renderOverlayEditor() {
+      const sec = overlay.querySelector('#tf-overlay-section');
+      const surf = overlay.querySelector('#tf-overlay-surface');
+      if (!sec || !surf) return;
+      const tileImg = overlay.querySelector('#tf-img-preview img')?.src || p.image_url || '';
+      // Build sprite list from enemies with image_url
+      const sprites = [];
+      _tfEnemies.forEach((e, ei) => {
+        const info = _epPool.find(x => x.key === e.enemy_key);
+        if (!info?.image_url) return;
+        _ensureOverlays(e);
+        // Auto-fill any null overlays via auto-arrange — but only those
+        e.overlays.forEach((t, ii) => {
+          if (!t) {
+            // initial placement: center-ish, will be re-laid out via Auto button
+            e.overlays[ii] = { x: 0.5, y: 0.5, scale: 0.35, rot: 0 };
+          }
+          sprites.push({ enemyIdx: ei, instIdx: ii, info, t: e.overlays[ii] });
+        });
+      });
+      sec.style.display = tileImg && sprites.length ? '' : 'none';
+      if (!tileImg || !sprites.length) {
+        surf.innerHTML = `<div id="tf-overlay-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:.78rem;text-align:center;padding:14px">Brak obrazu kafelka lub wrogów<br><span style="font-size:.7rem;opacity:.6">Wygeneruj obraz kafelka i dodaj wroga z obrazem (🖼)</span></div>`;
+        return;
+      }
+      const showColl = overlay.querySelector('#tf-ov-collision-warn')?.checked !== false;
+      // Compute collision pairs
+      const colliding = new Set();
+      if (showColl) {
+        for (let i = 0; i < sprites.length; i++)
+          for (let j = i+1; j < sprites.length; j++)
+            if (_spritesOverlap(sprites[i].t, sprites[j].t)) { colliding.add(i); colliding.add(j); }
+      }
+      surf.innerHTML = `<img src="${_esc(tileImg)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none">` +
+        sprites.map((sp, i) => {
+          const collCls = colliding.has(i) ? 'tf-ov-collide' : '';
+          const sizePct = sp.t.scale * 100;
+          return `<div class="tf-ov-sprite ${collCls}" data-spr="${i}" data-ei="${sp.enemyIdx}" data-ii="${sp.instIdx}"
+            style="position:absolute;left:${sp.t.x*100}%;top:${sp.t.y*100}%;width:${sizePct}%;height:${sizePct}%;transform:translate(-50%,-50%) rotate(${sp.t.rot}deg);cursor:grab;outline:${collCls?'2px solid #ef4444':'1px dashed rgba(245,158,11,.5)'};outline-offset:-1px;border-radius:4px">
+            <img src="${_esc(sp.info.image_url)}" draggable="false" style="width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;pointer-events:none">
+            <div style="position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#facc15;font-size:.62rem;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;font-family:monospace">${_esc(sp.info.label||sp.info.key)} ${(sp.t.scale*100|0)}%${sp.t.rot?` ${sp.t.rot|0}°`:''}</div>
+          </div>`;
+        }).join('');
+    }
+    // Drag/scale/rotate via pointer events on surface
+    let _ovDrag = null;
+    function _onSurfDown(ev) {
+      const sprite = ev.target.closest('.tf-ov-sprite');
+      if (!sprite) return;
+      ev.preventDefault();
+      const ei = parseInt(sprite.dataset.ei, 10);
+      const ii = parseInt(sprite.dataset.ii, 10);
+      const surf = overlay.querySelector('#tf-overlay-surface');
+      const rect = surf.getBoundingClientRect();
+      const t = _tfEnemies[ei].overlays[ii];
+      _ovDrag = {
+        ei, ii, rect,
+        shift: ev.shiftKey,
+        startX: ev.clientX, startY: ev.clientY,
+        origX: t.x, origY: t.y, origRot: t.rot || 0,
+      };
+      sprite.style.cursor = ev.shiftKey ? 'ew-resize' : 'grabbing';
+      surf.setPointerCapture?.(ev.pointerId);
+    }
+    function _onSurfMove(ev) {
+      if (!_ovDrag) return;
+      const t = _tfEnemies[_ovDrag.ei].overlays[_ovDrag.ii];
+      if (_ovDrag.shift) {
+        // Rotate: dx in pixels → degrees
+        const dx = ev.clientX - _ovDrag.startX;
+        t.rot = (_ovDrag.origRot + dx) % 360;
+      } else {
+        // Move
+        const dx = (ev.clientX - _ovDrag.startX) / _ovDrag.rect.width;
+        const dy = (ev.clientY - _ovDrag.startY) / _ovDrag.rect.height;
+        t.x = Math.max(0.02, Math.min(0.98, _ovDrag.origX + dx));
+        t.y = Math.max(0.02, Math.min(0.98, _ovDrag.origY + dy));
+      }
+      _renderOverlayEditor();
+    }
+    function _onSurfUp() { _ovDrag = null; }
+    function _onSurfWheel(ev) {
+      const sprite = ev.target.closest('.tf-ov-sprite');
+      if (!sprite) return;
+      ev.preventDefault();
+      const ei = parseInt(sprite.dataset.ei, 10);
+      const ii = parseInt(sprite.dataset.ii, 10);
+      const t = _tfEnemies[ei].overlays[ii];
+      const delta = ev.deltaY < 0 ? 0.04 : -0.04;
+      t.scale = Math.max(0.08, Math.min(0.85, (t.scale || 0.35) + delta));
+      _renderOverlayEditor();
+    }
+    // Wire surface events once
+    {
+      const surf = overlay.querySelector('#tf-overlay-surface');
+      if (surf) {
+        surf.addEventListener('pointerdown', _onSurfDown);
+        surf.addEventListener('pointermove', _onSurfMove);
+        surf.addEventListener('pointerup', _onSurfUp);
+        surf.addEventListener('pointercancel', _onSurfUp);
+        surf.addEventListener('wheel', _onSurfWheel, { passive: false });
+      }
+      overlay.querySelector('#tf-ov-arrange')?.addEventListener('click', _autoArrangeOverlays);
+      overlay.querySelector('#tf-ov-collision-warn')?.addEventListener('change', _renderOverlayEditor);
+    }
+
+    // ── Chip delete (delegated) ───────────────────────────────
+    ['#tf-enemies-chips','#tf-items-chips','#tf-states-chips','#tf-exits-chips'].forEach(sel => {
+      overlay.querySelector(sel).addEventListener('click', ev => {
+        const btn = ev.target.closest('.tf-chip-del');
+        if (!btn) return;
+        const idx = parseInt(btn.dataset.idx, 10);
+        const t = btn.dataset.type;
+        if (t==='enemy') { _tfEnemies.splice(idx,1); _rfEnemy(); }
+        else if (t==='item')  { _tfItems.splice(idx,1);   _rfItem(); }
+        else if (t==='state') { _tfStates.splice(idx,1);  _rfState(); }
+        else if (t==='exit')  { _tfExits.splice(idx,1);   _rfExit(); }
+        else if (t==='enemy-img') {
+          const key = btn.dataset.key;
+          const info = _epPool.find(x=>x.key===key) || { key };
+          // Enrich enemy context with tile room_description for thematic match
+          const roomDesc = overlay.querySelector('#tf-desc')?.value?.trim() || '';
+          const enriched = Object.assign({}, info, {
+            description: [info.description||info.label||key, roomDesc ? `dungeon setting: ${roomDesc}` : ''].filter(Boolean).join('. '),
+            _tileContext: true,  // triggers top-down perspective in _buildEnemyImagePrompt
+          });
+          openEnemyImageModal(key, enriched);
+          // Refresh chip after modal closes to pick up new image_url in pool
+          const obs = new MutationObserver(() => {
+            if (!document.getElementById('enemy-img-modal')) {
+              obs.disconnect();
+              // re-fetch enemy to update pool image_url
+              apiFetch('/api/admin/enemies').then(r => {
+                _epPool = r.items || _epPool;
+                _rfEnemy();
+              }).catch(()=>{});
+            }
+          });
+          obs.observe(document.body, { childList: true });
+        }
+      });
+    });
+
+    // ── State params ──────────────────────────────────────────
+    const DICE_OPTS = ['1d4','1d6','1d8','1d10','1d12','2d4','2d6'];
+    const STATS_LIST = ['STR','DEX','CON','INT','WIS','CHA'];
+    function _renderStateParams() {
+      const type = overlay.querySelector('#tf-state-type').value;
+      const el = overlay.querySelector('#tf-state-params');
+      if (!['burning','flooding','poison_gas','cold','lightning'].includes(type)) {
+        el.innerHTML = `<span style="font-size:.75rem;color:var(--t3)">Brak parametrów</span>`; return;
+      }
+      el.innerHTML = `
+        <label class="tf-param-lbl">Kostka obrażeń
+          <select id="tf-state-die" class="form-input" style="width:88px">${DICE_OPTS.map(d=>`<option value="${d}">${d}</option>`).join('')}</select>
+        </label>
+        <label class="tf-param-lbl">Stat ucieczki
+          <select id="tf-state-save" class="form-input" style="width:88px">${STATS_LIST.map(s=>`<option value="${s}"${s==='DEX'?' selected':''}>${s}</option>`).join('')}</select>
+        </label>
+        <label class="tf-param-lbl">DC
+          <input id="tf-state-dc" type="number" class="form-input" value="12" min="1" max="30" style="width:68px">
+        </label>`;
+    }
+    overlay.querySelector('#tf-state-type').addEventListener('change', _renderStateParams);
+    _renderStateParams();
+
+    // ── Exit params ───────────────────────────────────────────
+    function _renderExitParams() {
+      const type = overlay.querySelector('#tf-exit-type').value;
+      const el = overlay.querySelector('#tf-exit-params');
+      if (type==='enemies_cleared'||type==='riddle_solved') {
+        el.innerHTML = `<span style="font-size:.75rem;color:var(--t3)">Brak parametrów</span>`; return;
+      }
+      if (type==='item_in_inventory') {
+        const allItems = [...(_ipPool.item||[]),...(_ipPool.weapon||[]),...(_ipPool.consumable||[])];
+        el.innerHTML = `<label class="tf-param-lbl">Przedmiot
+          <select id="tf-exit-item-key" class="form-input" style="min-width:200px">
+            <option value="">— wybierz —</option>
+            ${allItems.map(it=>`<option value="${_esc(it.key)}">${_esc(it.label||it.key)}</option>`).join('')}
+          </select></label>`; return;
+      }
+      if (type==='stat_roll') {
+        el.innerHTML = `
+          <label class="tf-param-lbl">Statystyka
+            <select id="tf-exit-stat" class="form-input" style="width:88px">${STATS_LIST.map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+          </label>
+          <label class="tf-param-lbl">DC
+            <input id="tf-exit-dc" type="number" class="form-input" value="14" min="1" max="30" style="width:68px">
+          </label>`; return;
+      }
+    }
+    overlay.querySelector('#tf-exit-type').addEventListener('change', _renderExitParams);
+    _renderExitParams();
+
+    // ── Add handlers ──────────────────────────────────────────
+    overlay.querySelector('#tf-enemy-add-btn').addEventListener('click', () => {
+      const key = overlay.querySelector('#tf-enemy-sel').value;
+      const cnt = parseInt(overlay.querySelector('#tf-enemy-count').value, 10) || 1;
+      if (!key) { showToast('Wybierz wroga', 'warn'); return; }
+      if (_tfEnemies.find(e=>e.enemy_key===key)) { showToast('Ten wróg już dodany', 'warn'); return; }
+      _tfEnemies.push({ enemy_key: key, count: cnt });
+      _rfEnemy();
+    });
+
+    overlay.querySelector('#tf-item-type').addEventListener('change', () => _populateItemSel(overlay.querySelector('#tf-item-type').value));
+
+    overlay.querySelector('#tf-item-add-btn').addEventListener('click', () => {
+      const type = overlay.querySelector('#tf-item-type').value;
+      const key  = overlay.querySelector('#tf-item-sel').value;
+      const pct  = parseFloat(overlay.querySelector('#tf-item-chance').value) || 50;
+      if (!key) { showToast('Wybierz przedmiot', 'warn'); return; }
+      const entry = { chance: Math.round(pct)/100 };
+      if (type==='weapon') entry.weapon_key = key;
+      else if (type==='consumable') entry.consumable_key = key;
+      else entry.item_key = key;
+      _tfItems.push(entry);
+      _rfItem();
+    });
+
+    overlay.querySelector('#tf-state-add-btn').addEventListener('click', () => {
+      const type = overlay.querySelector('#tf-state-type').value;
+      const hasDmg = ['burning','flooding','poison_gas','cold','lightning'].includes(type);
+      const entry = { type };
+      if (hasDmg) {
+        entry.damage_die = overlay.querySelector('#tf-state-die')?.value  || '1d4';
+        entry.save_stat  = overlay.querySelector('#tf-state-save')?.value || 'DEX';
+        entry.dc         = parseInt(overlay.querySelector('#tf-state-dc')?.value || '12', 10);
+      }
+      _tfStates.push(entry);
+      _rfState();
+    });
+
+    overlay.querySelector('#tf-exit-add-btn').addEventListener('click', () => {
+      const type = overlay.querySelector('#tf-exit-type').value;
+      const entry = { type };
+      if (type==='item_in_inventory') {
+        const key = overlay.querySelector('#tf-exit-item-key')?.value;
+        if (!key) { showToast('Wybierz przedmiot', 'warn'); return; }
+        entry.item_key = key;
+      } else if (type==='stat_roll') {
+        entry.stat = overlay.querySelector('#tf-exit-stat')?.value || 'STR';
+        entry.dc   = parseInt(overlay.querySelector('#tf-exit-dc')?.value || '14', 10);
+      }
+      if (_tfExits.find(x=>x.type===entry.type&&x.item_key===entry.item_key&&x.stat===entry.stat&&x.dc===entry.dc)) {
+        showToast('Ten warunek już istnieje', 'warn'); return;
+      }
+      _tfExits.push(entry);
+      _rfExit();
+    });
+
+    // ── Pool population helpers ───────────────────────────────
+    function _populateEnemySel(pool) {
+      const sel = overlay.querySelector('#tf-enemy-sel');
+      if (!sel) return;
+      const groups = {};
+      pool.forEach(e => { const t = String(e.tier||'—'); (groups[t]=groups[t]||[]).push(e); });
+      let html = '<option value="">— wybierz wroga —</option>';
+      Object.keys(groups).sort().forEach(t => {
+        html += `<optgroup label="Tier: ${_esc(t)}">`;
+        html += groups[t].map(e=>`<option value="${_esc(e.key)}">${_esc(e.label||e.key)} (HP:${e.hp_base||'?'})</option>`).join('');
+        html += '</optgroup>';
+      });
+      sel.innerHTML = html;
+    }
+
+    function _populateItemSel(type) {
+      const sel = overlay.querySelector('#tf-item-sel');
+      if (!sel) return;
+      const pool = _ipPool[type] || [];
+      sel.innerHTML = `<option value="">— wybierz —</option>` +
+        pool.map(it=>`<option value="${_esc(it.key)}">${_esc(it.label||it.key)}</option>`).join('');
+    }
+
+    function _populateRiddleSel(pool) {
+      const sel = overlay.querySelector('#tf-riddle-sel');
+      if (!sel) return;
+      sel.innerHTML = '<option value="">— brak zagadki —</option>' +
+        pool.map(r=>`<option value="${_esc(r.key)}" ${r.key===p.riddle_key?'selected':''}>${_esc((r.text||r.key).substring(0,70))}</option>`).join('');
+    }
+
+    // ── Async pool load ───────────────────────────────────────
+    (async () => {
+      try {
+        const [er, ir, wr, cr, rr] = await Promise.all([
+          apiFetch('/api/admin/enemies'),
+          apiFetch('/api/admin/items'),
+          apiFetch('/api/admin/weapons'),
+          apiFetch('/api/admin/consumables'),
+          apiFetch('/api/admin/riddles'),
+        ]);
+        _epPool = er.items || [];
+        _ipPool.item        = (ir.items||[]).filter(it=>!it.item_type||it.item_type!=='armor');
+        _ipPool.weapon      = wr.items || [];
+        _ipPool.consumable  = cr.items || [];
+        _rpPool             = rr.items || [];
+        _populateEnemySel(_epPool);
+        _populateItemSel(overlay.querySelector('#tf-item-type').value || 'item');
+        _populateRiddleSel(_rpPool);
+        _rfEnemy(); _rfItem(); _rfExit(); // re-render with names resolved
+      } catch(err) { console.warn('[tile-form] pool load failed', err); }
+    })();
+
+    // Initial chip render (before pools arrive)
+    _rfEnemy(); _rfItem(); _rfState(); _rfExit();
+
+    // ── Save & actions ────────────────────────────────────────
+    overlay.querySelector('#tf-save-btn').addEventListener('click', () => _saveTile(overlay, p.id, {
+      enemies:          _tfEnemies,
+      items:            _tfItems,
+      active_states:    _tfStates,
+      exit_conditions:  _tfExits,
+      riddle_key:       overlay.querySelector('#tf-riddle-sel')?.value || null,
+    }));
+
+    if (p.id) {
+      overlay.querySelector('#tf-generate-btn')?.addEventListener('click', () => _generateTileImage(p.id, overlay));
+      overlay.querySelector('#tf-del-btn')?.addEventListener('click', () => deleteTile(p.id));
+    }
+    // Expose overlay editor refresh so out-of-closure callers can trigger re-render
+    overlay._refreshOverlayEditor = _renderOverlayEditor;
   }
 
-  function _parseJsonField(el, label) {
-    const v = (el.value || '').trim();
-    if (!v) return [];
-    try { return JSON.parse(v); }
-    catch (e) { throw new Error(`Niepoprawny JSON w polu "${label}": ${e.message}`); }
-  }
-
-  async function _saveTile(overlay, tileId) {
+  async function _saveTile(overlay, tileId, dynData) {
     try {
+      const dyn = dynData || {};
       const payload = {
-        label: overlay.querySelector('#tf-label').value.trim(),
-        category_key: overlay.querySelector('#tf-cat').value,
-        doors: Array.from(overlay.querySelectorAll('#tf-doors input:checked')).map(i => i.dataset.door),
+        label:            overlay.querySelector('#tf-label').value.trim(),
+        category_key:     overlay.querySelector('#tf-cat').value,
+        doors:            Array.from(overlay.querySelectorAll('#tf-doors input:checked')).map(i=>i.dataset.door),
         room_description: overlay.querySelector('#tf-desc').value,
-        enemies: _parseJsonField(overlay.querySelector('#tf-enemies'), 'wrogowie'),
-        items: _parseJsonField(overlay.querySelector('#tf-items'), 'przedmioty'),
-        active_states: _parseJsonField(overlay.querySelector('#tf-states'), 'stany'),
-        exit_conditions: _parseJsonField(overlay.querySelector('#tf-exits'), 'warunki wyjścia'),
-        riddle_key: overlay.querySelector('#tf-riddle').value.trim() || null,
-        is_boss_tile: overlay.querySelector('#tf-boss').checked,
-        is_active: overlay.querySelector('#tf-active').checked,
+        enemies:          dyn.enemies          || [],
+        items:            dyn.items            || [],
+        active_states:    dyn.active_states    || [],
+        exit_conditions:  dyn.exit_conditions  || [],
+        riddle_key:       dyn.riddle_key       || null,
+        is_boss_tile:     overlay.querySelector('#tf-boss').checked,
+        is_active:        overlay.querySelector('#tf-active').checked,
       };
       if (!payload.label) throw new Error('Nazwa jest wymagana');
       if (!payload.doors.length) throw new Error('Wybierz przynajmniej 1 drzwi');
-
       if (tileId) {
-        await apiFetch(`/api/admin/dungeon-tiles/${tileId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+        await apiFetch(`/api/admin/dungeon-tiles/${tileId}`, { method:'PATCH', body:JSON.stringify(payload) });
         showToast('Zapisano', 'success');
       } else {
-        const r = await apiFetch('/api/admin/dungeon-tiles', { method: 'POST', body: JSON.stringify(payload) });
+        const r = await apiFetch('/api/admin/dungeon-tiles', { method:'POST', body:JSON.stringify(payload) });
         showToast(`Utworzono kafelek #${r.id}`, 'success');
       }
       overlay.remove();
@@ -9411,7 +10064,7 @@
       const r = await apiFetch(`/api/admin/dungeon-tiles/${tileId}/generate-image`, { method: 'POST', body: '{}' });
       preview.innerHTML = `<img src="${_esc(r.image_url)}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover">`;
       showToast('Obraz wygenerowany (zapisz aby zaktualizować inne pola)', 'success');
-      // Refresh tile grid in background so card thumbnail updates
+      overlay._refreshOverlayEditor?.();
       _loadDungeonTiles();
     } catch (e) {
       preview.innerHTML = `<div style="color:#ef4444;padding:14px;text-align:center;font-size:0.78rem">${_esc(e.message)}</div>`;
@@ -9965,10 +10618,11 @@
   }
 
   const _MODE_LABELS = {
-    ai_campaign_enabled:  { label: 'Kampania AI',              desc: 'Generowanie kampanii przez AI na żywo.' },
-    prebuilt_enabled:     { label: 'Gotowa kampania',           desc: 'Wybór z predefiniowanych szablonów przygód.' },
-    dungeon_enabled:      { label: 'Loch (Dungeon Run)',        desc: 'Farmowalne lochy z własnym loot systemem.' },
-    multiplayer_enabled:  { label: 'Multiplayer (Wyprawa grupowa)', desc: 'Lobby wieloosobowe — tworzenie i dołączanie do sesji grupowych.' },
+    ai_campaign_enabled:    { label: 'Kampania AI',              desc: 'Generowanie kampanii przez AI na żywo.' },
+    prebuilt_enabled:       { label: 'Gotowa kampania',           desc: 'Wybór z predefiniowanych szablonów przygód.' },
+    dungeon_enabled:        { label: 'Loch (stary)',              desc: 'Farmowalne lochy — stary system proceduralny.' },
+    dungeon_tiles_enabled:  { label: 'Loch (Kafelki)',            desc: 'Nowy system kafelkowy z wizualnymi komnatami.' },
+    multiplayer_enabled:    { label: 'Multiplayer (Wyprawa grupowa)', desc: 'Lobby wieloosobowe — tworzenie i dołączanie do sesji grupowych.' },
   };
 
   async function _loadPdrawerModes(userId) {
@@ -14177,14 +14831,58 @@
 
   function _buildEnemyImagePrompt(e) {
     const tierMap = { weak:'weak creature, fragile enemy', standard:'standard fantasy enemy, combat ready', elite:'elite dangerous creature, powerful warrior', boss:'massive boss monster, terrifying creature, legendary' };
-    const typeMap = { humanoid:'humanoid fantasy character, warrior stance', beast:'wild beast, animal creature', undead:'undead creature, dark fantasy', demon:'demonic entity, corrupted being', dragon:'draconic creature, scales and claws', golem:'stone construct, magical golem', spirit:'ethereal spirit, ghostly form' };
+    // typeMap: keys checked against description + label (EN and PL keywords)
+    const typeMap = {
+      humanoid:'humanoid fantasy character, warrior stance',
+      beast:'wild beast, animal creature',
+      undead:'undead creature, dark fantasy',
+      demon:'demonic entity, corrupted being',
+      dragon:'draconic creature, scales and claws',
+      golem:'stone construct, magical golem',
+      spirit:'ethereal spirit, ghostly form',
+      wolf:'wolf, large wolf creature, grey fur, fangs',
+      wilk:'wolf, large wolf creature, grey fur, fangs',
+      rat:'rat creature, giant rat',
+      szczur:'rat creature, giant rat',
+      goblin:'goblin creature, small green humanoid',
+      orc:'orc warrior, muscular green humanoid',
+      ork:'orc warrior, muscular green humanoid',
+      skeleton:'skeleton warrior, animated bones',
+      zombie:'zombie, rotting undead',
+      vampire:'vampire creature, dark undead',
+      wampir:'vampire creature, dark undead',
+      spider:'giant spider, arachnid creature',
+      pająk:'giant spider, arachnid creature',
+      troll:'troll creature, large rocky humanoid',
+      giant:'giant creature, enormous humanoid',
+      ogre:'ogre creature, massive brute',
+    };
     const tier = tierMap[e.tier] || 'fantasy creature';
+    // Search description + label for type keywords
+    const d = ((e.description || '') + ' ' + (e.label || '') + ' ' + (e.key || '')).toLowerCase();
     const typeHint = (() => {
-      const d = (e.description || '').toLowerCase();
       for (const [k,v] of Object.entries(typeMap)) if (d.includes(k)) return v;
       return 'fantasy enemy creature';
     })();
-    return [typeHint, tier, 'character portrait', 'dramatic side lighting', 'detailed fantasy illustration', 'dark moody atmosphere', 'no text', 'no UI'].join(', ');
+    // Always include label in prompt so model knows what creature to draw
+    const nameTag = e.label ? e.label + ', ' : '';
+
+    if (e._tileContext) {
+      // Top-down creature token for overlay on dungeon tile.
+      // Solid black background = chroma-key target (frontend can apply mix-blend-mode: screen).
+      // Do NOT include floor/scenery/tiles — those come from the underlying tile image.
+      return [nameTag + typeHint, tier,
+        'top down view, overhead perspective, seen from directly above',
+        'isolated creature sprite, single subject, centered',
+        'Gloomhaven board game token art style, flat 2D illustration',
+        'pure solid black background, void background, no scenery, no floor, no shadows',
+        'square format, no text, no UI'].join(', ');
+    }
+    // Standard: character portrait
+    return [nameTag + typeHint, tier,
+      'character portrait, dramatic side lighting',
+      'detailed fantasy illustration, dark moody atmosphere',
+      'no text, no UI'].join(', ');
   }
 
   function _buildNpcImagePrompt(n) {
@@ -14228,7 +14926,13 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button id="ei-gen-btn" class="btn btn-primary" style="flex:1">⚡ Generuj</button>
           <button id="ei-ref-btn" class="btn btn-secondary" style="flex:1" disabled>🔄 Popraw</button>
+          <button id="ei-nobg-btn" class="btn btn-secondary" style="flex:none" ${e.image_url?'':'disabled'} title="Usuń tło (próg jasności)">✂ Usuń tło</button>
           <button class="btn btn-secondary" style="flex:none" onclick="eiOpenGallery('${_esc(key)}')">🖼 Galeria</button>
+        </div>
+        <div id="ei-nobg-row" style="display:${e.image_url?'flex':'none'};align-items:center;gap:8px;flex-wrap:nowrap">
+          <label style="font-size:0.72rem;color:var(--t3);white-space:nowrap">Próg tła</label>
+          <input type="range" id="ei-nobg-thresh" min="5" max="100" value="30" step="1" style="flex:1;accent-color:var(--accent)">
+          <span id="ei-nobg-val" style="font-size:0.72rem;color:var(--t2);width:28px;text-align:right">30</span>
         </div>
       </div>
       <div class="modal-foot" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
@@ -14240,8 +14944,8 @@
     document.body.appendChild(m);
     m.addEventListener('click', ev => { if (ev.target === m) m.remove(); });
 
-    let _lastFilename = null;
-    let _lastUrl = null;
+    let _lastFilename = e.image_url ? e.image_url.split('/').pop() : null;
+    let _lastUrl = e.image_url || null;
     const ta = document.getElementById('ei-prompt');
     const _autoResize = t => { t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,240)+'px'; };
     ta.addEventListener('input', () => _autoResize(ta)); _autoResize(ta);
@@ -14258,6 +14962,7 @@
         prev.innerHTML = `<img src="${_esc(r.url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
         document.getElementById('ei-ref-btn').disabled = false;
         document.getElementById('ei-accept-btn').disabled = false;
+        _showNobgRow();
       } catch(ex) { _showToast(ex.message||'Błąd generowania','error'); }
       finally { btn.disabled=false; btn.textContent='⚡ Generuj'; }
     };
@@ -14271,6 +14976,7 @@
         const r = await apiFetch('/api/admin/images/refine',{method:'POST',body:JSON.stringify({source_filename:_lastFilename,prompt:ta.value.trim(),denoise:0.6,steps})});
         _lastFilename=r.filename; _lastUrl=r.url;
         document.getElementById('ei-preview').innerHTML=`<img src="${_esc(r.url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+        _showNobgRow();
       } catch(ex){ _showToast(ex.message||'Błąd','error'); }
       finally{ btn.disabled=false; btn.textContent='🔄 Popraw'; }
     };
@@ -14298,7 +15004,34 @@
       } catch(ex){ _showToast(ex.message||'Błąd','error'); }
     };
 
+    const _nobgThresh = document.getElementById('ei-nobg-thresh');
+    const _nobgVal = document.getElementById('ei-nobg-val');
+    _nobgThresh.addEventListener('input', () => { _nobgVal.textContent = _nobgThresh.value; });
+
+    const _showNobgRow = () => {
+      document.getElementById('ei-nobg-row').style.display = 'flex';
+      document.getElementById('ei-nobg-btn').disabled = false;
+    };
+
+    document.getElementById('ei-nobg-btn').onclick = async () => {
+      if (!_lastFilename) return;
+      const btn = document.getElementById('ei-nobg-btn');
+      btn.disabled=true; btn.textContent='⏳ Usuwam…';
+      const thresh = parseInt(_nobgThresh.value)||30;
+      try {
+        const r = await apiFetch(`/api/admin/images/remove-bg/${encodeURIComponent(_lastFilename)}?threshold=${thresh}`,{method:'POST'});
+        _lastFilename=r.filename; _lastUrl=r.url;
+        // Checkered bg shows through transparent areas
+        document.getElementById('ei-preview').innerHTML=`<div style="background:repeating-conic-gradient(#666 0% 25%,#444 0% 50%) 0 0/16px 16px;border-radius:6px;display:inline-block;max-width:100%"><img src="${_esc(r.url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain;display:block"></div>`;
+        document.getElementById('ei-accept-btn').disabled=false;
+        _showToast('Tło usunięte — sprawdź podgląd.','success');
+      } catch(ex){ _showToast(ex.message||'Błąd usuwania tła','error'); }
+      finally{ btn.disabled=false; btn.textContent='✂ Usuń tło'; }
+    };
+
     setTimeout(async () => {
+      // Skip AI auto-replace when tile context — initial prompt is already creature-focused and top-down
+      if (e._tileContext) return;
       if (!e.description) return;
       try {
         const r = await apiFetch('/api/admin/images/describe-prompt',{method:'POST',body:JSON.stringify({text:e.description,context:`enemy tier:${e.tier||'standard'}, type:creature`})});
@@ -16163,10 +16896,11 @@ Niech kości się toczą! 🎲`,
       const d = await apiFetch('/api/admin/game-modes');
       const flags = d.flags || {};
       const set = (id, key) => { const el = document.getElementById(id); if (el) el.checked = flags[key] !== false; };
-      set('gm-ai-campaign', 'ai_campaign_enabled');
-      set('gm-prebuilt',    'prebuilt_enabled');
-      set('gm-dungeon',     'dungeon_enabled');
-      set('gm-multiplayer', 'multiplayer_enabled');
+      set('gm-ai-campaign',    'ai_campaign_enabled');
+      set('gm-prebuilt',       'prebuilt_enabled');
+      set('gm-dungeon',        'dungeon_enabled');
+      set('gm-dungeon-tiles',  'dungeon_tiles_enabled');
+      set('gm-multiplayer',    'multiplayer_enabled');
     } catch(e) { console.warn('game-modes load', e.message); }
   }
 
@@ -16176,10 +16910,11 @@ Niech kości się toczą! 🎲`,
       await apiFetch('/api/admin/game-modes', {
         method: 'PATCH',
         body: JSON.stringify({
-          ai_campaign_enabled: get('gm-ai-campaign'),
-          prebuilt_enabled:    get('gm-prebuilt'),
-          dungeon_enabled:     get('gm-dungeon'),
-          multiplayer_enabled: get('gm-multiplayer'),
+          ai_campaign_enabled:   get('gm-ai-campaign'),
+          prebuilt_enabled:      get('gm-prebuilt'),
+          dungeon_enabled:       get('gm-dungeon'),
+          dungeon_tiles_enabled: get('gm-dungeon-tiles'),
+          multiplayer_enabled:   get('gm-multiplayer'),
         }),
       });
       _showToast('Tryby gry zapisane', 'success');

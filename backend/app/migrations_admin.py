@@ -3825,6 +3825,7 @@ def _ensure_dungeon_tile_schema(conn: sqlite3.Connection) -> None:
         "ALTER TABLE game_dungeons ADD COLUMN difficulty_config_json TEXT NOT NULL DEFAULT "
         "'{\"1\":{\"tiles\":4},\"2\":{\"tiles\":6},\"3\":{\"tiles\":8},\"4\":{\"tiles\":10}}'",
         "ALTER TABLE game_dungeons ADD COLUMN boss_tile_id INTEGER",
+        "ALTER TABLE game_dungeons ADD COLUMN tile_count INTEGER",
     ]:
         try:
             conn.execute(sql); conn.commit()
