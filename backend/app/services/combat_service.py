@@ -2194,7 +2194,10 @@ def resolve_attack(
             )
             _persist_combatants(conn, row, combatants, loot_pool=loot_pool_accum)
             conn.commit()
-            advance_turn(campaign_id)
+            # NOTE: do NOT advance_turn here. The enemy-attack path also relies on
+            # the caller (post_enemy_turn) to advance. Advancing here too caused a
+            # double-advance (enemy→player→enemy), letting the same enemy charge AND
+            # attack in one round, skipping the player's turn. (#232)
             out["combat_state"] = load_combat_snapshot(campaign_id)
             return out
 
