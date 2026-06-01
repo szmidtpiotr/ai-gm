@@ -401,6 +401,76 @@ def _clear_active_encounter(conn: sqlite3.Connection, campaign_id: int) -> None:
         logger.warning("clear_active_encounter_failed", error=str(_exc))
 
 
+def _inject_dungeon_tile_context(
+    conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
+) -> bool:
+    """Inject current tile + category context when player is in a tile dungeon.
+    Returns True if injected (caller should skip location context)."""
+    import json as _j
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,)
+        ).fetchone()
+        if not gs:
+            return False
+        flags = _j.loads(gs[0] or "{}")
+        run = flags.get("dungeon_run")
+        if not run or run.get("system") != "tiles":
+            return False
+
+        tiles = run.get("tiles", [])
+        current_index = run.get("current_index", 0)
+        if not tiles:
+            return False
+        current_tile = tiles[min(current_index, len(tiles) - 1)]
+        category_key = run.get("category_key", "dungeon")
+
+        cat = conn.execute(
+            "SELECT label, system_prompt FROM dungeon_tile_categories WHERE key = ?",
+            (category_key,)
+        ).fetchone()
+        category_label = cat[0] if cat else category_key
+        category_prompt = (cat[1] if cat else "") or ""
+
+        tile_label = current_tile.get("label", "Komnata")
+        tile_desc = current_tile.get("room_description", "")
+        tile_idx = current_index + 1
+        tile_total = len(tiles)
+        is_boss = current_tile.get("is_boss_tile", False)
+        is_cleared = current_tile.get("cleared", False)
+        enemies = current_tile.get("enemies", [])
+        dungeon_label = run.get("dungeon_label", category_label)
+
+        lines = [f"[DUNGEON TILE CONTEXT — {category_label.upper()}]"]
+        if category_prompt:
+            lines.append(f"\n{category_prompt.strip()}\n")
+        lines.append(f"Loch: {dungeon_label}")
+        lines.append(f"Komnata {tile_idx}/{tile_total}: {tile_label}{'  ⚠ BOSS' if is_boss else ''}")
+        if tile_desc:
+            lines.append(f"Opis: {tile_desc}")
+        if enemies and not is_cleared:
+            names = [e.get("label", e.get("key", "?")) for e in enemies[:3]]
+            lines.append(f"Wrogowie w komnacie: {', '.join(names)}")
+        if is_cleared:
+            lines.append("Status: komnata oczyszczona.")
+        lines.append(
+            "\n[INSTRUKCJA NARRACJI] Gracz JEST TERAZ w tym lochu. "
+            "Opisuj komnatę zgodnie z powyższym opisem. "
+            "Nie odwołuj się do poprzedniej lokacji ani kampanii fabularnej. "
+            "Narracja powinna odzwierciedlać atmosferę lochu."
+        )
+
+        if messages:
+            messages.insert(1, {"role": "system", "content": "\n".join(lines)})
+        logger.info("dungeon_tile_context_injected", campaign_id=campaign_id,
+                    tile=tile_label, index=tile_idx)
+        return True
+    except Exception as exc:
+        logger.warning("dungeon_tile_context_failed", error=str(exc))
+        return False
+
+
 def _inject_location_llm_context(
     conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
 ) -> None:
@@ -663,7 +733,9 @@ def build_narrative_messages(
 
     if has_db_conn:
         _inject_campaign_s11_context(conn, campaign, messages, current_user_text=user_text)
-        _inject_location_llm_context(conn, int(campaign["id"]), messages)
+        in_tile_dungeon = _inject_dungeon_tile_context(conn, int(campaign["id"]), messages)
+        if not in_tile_dungeon:
+            _inject_location_llm_context(conn, int(campaign["id"]), messages)
         _inject_npc_llm_context(conn, int(campaign["id"]), messages)
         _inject_hex_terrain_context(conn, int(campaign["id"]), messages)
         _inject_character_inventory_context(conn, character, messages)

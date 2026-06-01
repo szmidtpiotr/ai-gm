@@ -7702,20 +7702,23 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 
 /* ── Dungeon Room Reveal ─────────────────────────────────────────────────── */
 .drr-overlay { position: fixed; inset: 0; z-index: 1100;
-  background: #000; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; }
+  background: #000; display: flex; flex-direction: column; }
 .drr-overlay[hidden] { display: none; }
-.drr-image { width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0;
-  opacity: 0.85; }
-.drr-content { position: absolute; bottom: 80px; z-index: 1; text-align: center; padding: 0 24px;
-  background: linear-gradient(transparent, rgba(0,0,0,0.85) 40%);
-  width: 100%; }
-.drr-label { font-family: Cinzel, serif; font-size: 1.6rem; color: #c9a060;
-  text-shadow: 0 2px 12px #000; margin-bottom: 6px; }
-.drr-desc { font-size: 0.85rem; color: #b09060; text-shadow: 0 1px 6px #000;
+.drr-zoom-wrap { flex: 1; overflow: hidden; position: relative;
+  touch-action: none; cursor: grab; background: #000; }
+.drr-zoom-wrap.grabbing { cursor: grabbing; }
+.drr-image { display: block; width: 100%; height: auto;
+  transform-origin: 0 0; will-change: transform;
+  opacity: 0.9; user-select: none; pointer-events: none; }
+.drr-footer { flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 14px 24px 20px;
+  background: linear-gradient(rgba(0,0,0,0.7), #0a0604 80%); }
+.drr-content { text-align: center; }
+.drr-label { font-family: Cinzel, serif; font-size: 1.4rem; color: #c9a060;
+  text-shadow: 0 2px 12px #000; margin-bottom: 4px; }
+.drr-desc { font-size: 0.82rem; color: #b09060; text-shadow: 0 1px 6px #000;
   max-width: 420px; margin: 0 auto; line-height: 1.5; }
-.drr-enter-btn { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
-  z-index: 2; background: rgba(201,117,26,0.15); border: 1px solid #c9751a;
+.drr-enter-btn { background: rgba(201,117,26,0.15); border: 1px solid #c9751a;
   color: #c9a060; font-family: Cinzel, serif; font-size: 0.9rem; letter-spacing: 0.1em;
   padding: 10px 32px; border-radius: 6px; cursor: pointer; }
 .drr-enter-btn:hover { background: rgba(201,117,26,0.3); color: #e8c080; }
@@ -7732,9 +7735,10 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .dmap-close:hover { color: #eee; }
 
 .dmap-canvas-wrap { flex: 1; overflow: hidden; position: relative;
-  cursor: grab; touch-action: none; display: flex; align-items: center; justify-content: center; }
+  cursor: grab; touch-action: none; }
 .dmap-canvas-wrap.grabbing { cursor: grabbing; }
-.dmap-svg { display: block; transform-origin: 0 0; will-change: transform; }
+.dmap-svg { display: block; transform-origin: 0 0; will-change: transform;
+  position: absolute; top: 0; left: 0; }
 
 .dmap-legend { display: flex; gap: 14px; padding: 8px 18px 14px; flex-shrink: 0;
   font-size: 0.68rem; color: #4a3a20; }

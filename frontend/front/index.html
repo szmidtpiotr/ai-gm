@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AI-GM</title>
-  <link rel="stylesheet" href="./css/styles.css?v=dungeon-tiles-map2">
+  <link rel="stylesheet" href="./css/styles.css?v=dungeon-tiles-map6">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=IM+Fell+English:ital@0;1&family=Uncial+Antiqua&display=swap" rel="stylesheet">
@@ -1970,12 +1970,16 @@
 
   <!-- Dungeon Room Reveal Overlay -->
   <div id="dungeon-room-reveal" class="drr-overlay" hidden>
-    <img class="drr-image" id="drr-image" src="" alt="">
-    <div class="drr-content">
-      <div class="drr-label" id="drr-label"></div>
-      <div class="drr-desc" id="drr-desc"></div>
+    <div class="drr-zoom-wrap" id="drr-zoom-wrap">
+      <img class="drr-image" id="drr-image" src="" alt="">
     </div>
-    <button type="button" class="drr-enter-btn" id="drr-close">Wejdź →</button>
+    <div class="drr-footer">
+      <div class="drr-content">
+        <div class="drr-label" id="drr-label"></div>
+        <div class="drr-desc" id="drr-desc"></div>
+      </div>
+      <button type="button" class="drr-enter-btn" id="drr-close">Wejdź →</button>
+    </div>
   </div>
 
   <!-- Dungeon Map Overlay (full screen) -->
@@ -2170,6 +2174,6 @@
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
   <script src="./js/multiplayer_ui.js?v=31"></script>
-  <script src="./js/app.js?v=dungeon-tiles-map2"></script>
+  <script src="./js/app.js?v=dungeon-tiles-map6"></script>
 </body>
 </html>

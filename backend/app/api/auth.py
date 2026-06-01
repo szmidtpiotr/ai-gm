@@ -574,7 +574,15 @@ def verify_email(body: dict):
         ).fetchone()
         from app.services.jwt_service import issue_pair
         token_pair = issue_pair(user_id=user_id, username=user["username"], role=user["role"], is_admin=int(user["is_admin"]))
-        return {"ok": True, **token_pair}
+        return {
+            "ok": True,
+            "user_id": user_id,
+            "username": user["username"],
+            "is_admin": bool(int(user["is_admin"])),
+            "role": user["role"] or "player",
+            "display_name": None,
+            **token_pair,
+        }
     finally:
         conn.close()
 

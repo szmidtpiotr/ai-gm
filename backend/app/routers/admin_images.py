@@ -375,6 +375,47 @@ async def list_models():
         raise HTTPException(status_code=502, detail=str(ex))
 
 
+@router.post("/remove-bg/{filename}")
+async def remove_background(filename: str, threshold: int = 30, feather: int = 35):
+    """Remove near-black background from a tile image, returning new PNG with alpha.
+    threshold: pixels with max(R,G,B) < threshold become fully transparent (default 30).
+    feather: soft edge width above threshold (default 35).
+    """
+    if "/" in filename or "\\" in filename or filename.startswith("."):
+        raise HTTPException(status_code=400, detail="invalid filename")
+    threshold = max(0, min(120, threshold))
+    feather = max(1, min(80, feather))
+    src_path = TILES_DIR / filename
+    if not src_path.exists():
+        raise HTTPException(status_code=404, detail="not found")
+
+    try:
+        from PIL import Image, ImageChops
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Pillow not installed")
+
+    img = Image.open(src_path).convert("RGBA")
+    r, g, b, _ = img.split()
+    max_rgb = ImageChops.lighter(r, ImageChops.lighter(g, b))
+
+    mask = max_rgb.point(lambda p:
+        0 if p < threshold else
+        255 if p > threshold + feather else
+        int(255 * (p - threshold) / feather)
+    )
+    img.putalpha(mask)
+
+    ts = int(time.time())
+    base = filename if not filename.endswith(".png") else filename[:-4]
+    dest_name = f"aigm_{ts}_nobg_{base}.png"
+    dest_path = TILES_DIR / dest_name
+    TILES_DIR.mkdir(parents=True, exist_ok=True)
+    img.save(str(dest_path), "PNG")
+
+    url = f"{TILES_URL_PREFIX}/{dest_name}"
+    return {"status": "ok", "filename": dest_name, "url": url}
+
+
 @router.delete("/{filename}")
 async def delete_image(filename: str):
     # Safety: no path traversal

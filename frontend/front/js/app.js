@@ -432,8 +432,11 @@ function showScreen(screenName) {
         // Hide dungeon HUD on any screen except game
         if (screenName !== 'game') {
             document.getElementById('dungeon-hud')?.setAttribute('hidden', '');
+            document.getElementById('dungeon-tile-card')?.setAttribute('hidden', '');
             document.getElementById('dungeon-riddle-panel')?.setAttribute('hidden', '');
             document.getElementById('dungeon-map-overlay')?.setAttribute('hidden', '');
+            document.getElementById('dungeon-room-reveal')?.setAttribute('hidden', '');
+            document.getElementById('game-screen')?.classList.remove('game-screen--dungeon');
         } else if (_activeDungeonRun && !_activeDungeonRun.completed && !_activeDungeonRun.failed) {
             // Restore HUD when back on game screen with active run
             showDungeonHUD(true);
@@ -2929,6 +2932,35 @@ async function enterGame(campaign) {
                 window.multiplayerUI?.activate(campaign.id, characterData.id, characterData.name || 'Bohater', isHost, timerMin);
             }
             return;
+        } else if (campaign?.mode === 'dungeon') {
+            // Dungeon campaign — generate LLM opening with tile context
+            showScreen('game');
+            updateAdminSettingsVisibility();
+            if (characterData) populateCharacterSheet(characterData);
+            startCombatPolling();
+            scrollToBottom();
+            const _dTyping = showTypingIndicator();
+            try {
+                const _dOpenResp = await apiRequest('POST', `/campaigns/${campaign.id}/turns`, {
+                    text: '__AI_GM_OPEN',
+                    character_id: characterData?.id,
+                });
+                _dTyping.remove();
+                const _dText = _dOpenResp.prose || _dOpenResp.result?.message || '';
+                let _dRendered = false;
+                if (_dText) {
+                    const { narrative: _dContent } = parseGmFull(_dText);
+                    if (_dContent) { appendMessage({ role: 'assistant', content: _dContent, created_at: new Date() }); _dRendered = true; }
+                }
+                if (!_dRendered) {
+                    appendMessage({ role: 'assistant', content: 'Stoisz w mroku lochu. Powietrze jest ciężkie od kurzu i wilgoci…', created_at: new Date() });
+                }
+            } catch (_de) {
+                _dTyping.remove();
+                appendMessage({ role: 'assistant', content: 'Stoisz w mroku lochu. Powietrze jest ciężkie od kurzu i wilgoci…', created_at: new Date() });
+            }
+            scrollToBottom();
+            return;
         } else {
             // No turns yet — new solo campaign. Send an empty opening turn to trigger plan gen + opening scene
             showScreen('game');
@@ -2944,9 +2976,14 @@ async function enterGame(campaign) {
                 });
                 typingIndicator.remove();
                 const gmText = openingResp.prose || openingResp.result?.message || openingResp.assistant_text || '';
+                let rendered = false;
                 if (gmText) {
                     const { narrative: gmContent } = parseGmFull(gmText);
-                    if (gmContent) appendMessage({ role: 'assistant', content: gmContent, created_at: new Date() });
+                    if (gmContent) { appendMessage({ role: 'assistant', content: gmContent, created_at: new Date() }); rendered = true; }
+                }
+                // Backend returned 200 but no usable prose — surface fallback instead of silence
+                if (!rendered) {
+                    appendMessage({ role: 'assistant', content: 'Witaj, bohaterze. Twoja przygoda się zaczyna…', created_at: new Date() });
                 }
             } catch (_e) {
                 typingIndicator.remove();
@@ -10963,11 +11000,6 @@ async function enterDungeon(dungeonKey) {
         await enterGame(dungeonCampaign);
         updateDungeonHUD();
         showDungeonHUD(true);
-
-        if (resp.room_narrative) {
-            appendMessage({ role: 'assistant', content: resp.room_narrative, created_at: new Date() });
-            scrollToBottom();
-        }
         renderCurrentRoom();
     } catch (err) {
         showToast(err.message || 'Błąd wejścia do lochu', 'error');
@@ -11177,16 +11209,21 @@ function showDungeonRoomReveal(tile) {
     const overlay = document.getElementById('dungeon-room-reveal');
     if (!overlay) return;
     const img = document.getElementById('drr-image');
-    if (img) { img.src = tile.image_url || ''; img.style.display = tile.image_url ? '' : 'none'; }
+    if (img) {
+        img.src = tile.image_url || '';
+        img.style.display = tile.image_url ? '' : 'none';
+        img.style.transform = '';
+    }
+    Object.assign(_drrState, { scale: 1, tx: 0, ty: 0, dragging: false });
     const lbl = document.getElementById('drr-label');
     if (lbl) lbl.textContent = (tile.is_boss_tile ? '💀 ' : '') + (tile.label || 'Komnata');
     const desc = document.getElementById('drr-desc');
     if (desc) desc.textContent = tile.room_description || '';
     overlay.removeAttribute('hidden');
-    // Close on button, overlay click, or escape
+    _drrInitEvents();
+    // Close on button or escape
     const close = () => overlay.setAttribute('hidden', '');
     document.getElementById('drr-close')?.addEventListener('click', close, { once: true });
-    overlay.addEventListener('click', e => { if (e.target === overlay) close(); }, { once: true });
     const esc = e => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); } };
     document.addEventListener('keydown', esc);
 }
@@ -11355,7 +11392,7 @@ function _renderTileMap(run, svg) {
     });
     html += '</defs>';
 
-    // Corridors first (behind tiles)
+    // Corridors first (behind tiles) — only between both-discovered rooms
     tiles.forEach((tile, i) => {
         const next = tiles[i + 1];
         if (!next) return;
@@ -11363,49 +11400,55 @@ function _renderTileMap(run, svg) {
         const p2 = next.position || [0, 0];
         const dist = Math.abs(p2[0]-p1[0]) + Math.abs(p2[1]-p1[1]);
         if (dist !== 1) return;
-        const known = discovered.has(`${p1[0]},${p1[1]}`);
+        const p1Known = discovered.has(`${p1[0]},${p1[1]}`) || i === curIdx;
+        const p2Known = discovered.has(`${p2[0]},${p2[1]}`) || (i + 1) === curIdx;
+        if (!p1Known || !p2Known) return; // fog of war: hide paths to unknown rooms
         const dx = p2[0]-p1[0], dy = p2[1]-p1[1];
-        // corridors always drawn — full path visible even for undiscovered rooms
-        html += `<line x1="${cX(p1[0])+dx*(S/2+1)}" y1="${cY(p1[1])+dy*(S/2+1)}" x2="${cX(p2[0])-dx*(S/2+1)}" y2="${cY(p2[1])-dy*(S/2+1)}" stroke="#3a2510" stroke-width="4" opacity="${known?0.55:0.3}"/>`;
+        html += `<line x1="${cX(p1[0])+dx*(S/2+1)}" y1="${cY(p1[1])+dy*(S/2+1)}" x2="${cX(p2[0])-dx*(S/2+1)}" y2="${cY(p2[1])-dy*(S/2+1)}" stroke="#3a2510" stroke-width="4" opacity="0.55"/>`;
     });
 
-    // Tiles — all shown; undiscovered dimmed so player sees the path shape
+    // Tiles — only discovered rooms shown (fog of war)
     tiles.forEach((tile, i) => {
         const pos = tile.position || [0, 0];
-        const x = tX(pos[0]), y = tY(pos[1]);
         const isCurrent = i === curIdx;
+        const isKnown = discovered.has(`${pos[0]},${pos[1]}`) || isCurrent;
+        if (!isKnown) return; // undiscovered = invisible
+        const x = tX(pos[0]), y = tY(pos[1]);
         const isCleared = !!tile.cleared;
-        const isKnown = discovered.has(`${pos[0]},${pos[1]}`);
         const isBoss = !!tile.is_boss_tile;
 
         let fill, stroke, strokeW = 1, opacity;
         if (isCurrent)      { fill='#1a1005'; stroke='#c9751a'; strokeW=2; opacity='1'; }
         else if (isCleared) { fill='#100e08'; stroke='#3a2808'; opacity='0.75'; }
-        else if (isKnown)   { fill='#0d0904'; stroke='#2a1a08'; opacity='0.9'; }
-        else                { fill='#111008'; stroke='#2a2015'; opacity='0.55'; } // visible but dimmed
+        else                { fill='#0d0904'; stroke='#2a1a08'; opacity='0.9'; }
 
-        if (isBoss && isKnown) { stroke='#8a2010'; fill='#140802'; }
+        if (isBoss && !isCurrent) { stroke='#8a2010'; fill='#140802'; }
 
         html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="6" fill="${fill}" stroke="${stroke}" stroke-width="${strokeW}" opacity="${opacity}"/>`;
         if (isCurrent) html += `<rect x="${x-2}" y="${y-2}" width="${S+4}" height="${S+4}" rx="8" fill="none" stroke="#c9751a" stroke-width="1.5" opacity="0.5"/>`;
 
-        if (isKnown && tile.image_url) {
+        if (tile.image_url) {
             html += `<image href="${escapeHtml(tile.image_url)}" x="${x}" y="${y}" width="${S}" height="${S}" preserveAspectRatio="xMidYMid slice" clip-path="url(#dtmc-${i})" opacity="${isCleared?0.45:0.75}"/>`;
             html += `<rect x="${x}" y="${y}" width="${S}" height="${S}" rx="6" fill="${fill}" opacity="${isCurrent?0.25:0.5}"/>`;
         }
 
-        const labelColor = isCurrent ? '#d4a060' : (isKnown ? '#5a4a28' : '#2a2515');
-        const numColor   = isKnown ? '#6a5a30' : '#3a3020';
-        if (isKnown) {
-            const shortLabel = (tile.label || '').slice(0, 8);
-            html += `<text x="${x+S/2}" y="${y+S-7}" text-anchor="middle" font-size="6" fill="${labelColor}" font-family="sans-serif" style="text-transform:uppercase;letter-spacing:0.06em">${shortLabel}</text>`;
-            if (isBoss) html += `<text x="${x+S/2}" y="${y+22}" text-anchor="middle" font-size="14" style="pointer-events:none">💀</text>`;
-            if (isCleared && !isCurrent) html += `<text x="${x+S-10}" y="${y+12}" text-anchor="middle" font-size="9" fill="#5a8040" style="pointer-events:none">✓</text>`;
-        } else {
-            // Undiscovered: show boss skull hint only
-            if (isBoss) html += `<text x="${x+S/2}" y="${y+S/2}" text-anchor="middle" dominant-baseline="middle" font-size="16" opacity="0.4" style="pointer-events:none">💀</text>`;
+        const labelColor = isCurrent ? '#d4a060' : '#5a4a28';
+        const shortLabel = (tile.label || '').slice(0, 8);
+        html += `<text x="${x+S/2}" y="${y+S-7}" text-anchor="middle" font-size="6" fill="${labelColor}" font-family="sans-serif" style="text-transform:uppercase;letter-spacing:0.06em">${shortLabel}</text>`;
+        if (isBoss) html += `<text x="${x+S/2}" y="${y+22}" text-anchor="middle" font-size="14" style="pointer-events:none">💀</text>`;
+        if (isCleared && !isCurrent) html += `<text x="${x+S-10}" y="${y+12}" text-anchor="middle" font-size="9" fill="#5a8040" style="pointer-events:none">✓</text>`;
+        html += `<text x="${x+7}" y="${y+11}" text-anchor="middle" font-size="7" fill="#6a5a30" style="pointer-events:none">${i+1}</text>`;
+
+        // Door indicators — small amber dashes on edges showing active door sides
+        const doors = tile.doors || [];
+        if (doors.length) {
+            const dCol = isCurrent ? '#f59e0b' : isCleared ? '#5a4020' : '#9a6a30';
+            const dLen = 14, dT = 3;
+            if (doors.includes('N')) html += `<rect x="${x+S/2-dLen/2}" y="${y-1}" width="${dLen}" height="${dT}" fill="${dCol}" rx="1"/>`;
+            if (doors.includes('S')) html += `<rect x="${x+S/2-dLen/2}" y="${y+S-2}" width="${dLen}" height="${dT}" fill="${dCol}" rx="1"/>`;
+            if (doors.includes('W')) html += `<rect x="${x-1}" y="${y+S/2-dLen/2}" width="${dT}" height="${dLen}" fill="${dCol}" rx="1"/>`;
+            if (doors.includes('E')) html += `<rect x="${x+S-2}" y="${y+S/2-dLen/2}" width="${dT}" height="${dLen}" fill="${dCol}" rx="1"/>`;
         }
-        html += `<text x="${x+7}" y="${y+11}" text-anchor="middle" font-size="7" fill="${numColor}" style="pointer-events:none">${i+1}</text>`;
     });
 
     svg.innerHTML = html;
@@ -11535,6 +11578,82 @@ function renderDungeonMap(run) {
     });
 
     svg.innerHTML = html;
+}
+
+// ── Dungeon room reveal zoom state ────────────────────────────────────────
+const _drrState = { scale: 1, tx: 0, ty: 0, dragging: false, lastX: 0, lastY: 0, pinchDist: 0 };
+
+function _drrApplyTransform() {
+    const img = document.getElementById('drr-image');
+    if (img) img.style.transform = `translate(${_drrState.tx}px,${_drrState.ty}px) scale(${_drrState.scale})`;
+}
+
+function _drrOnMouseMove(e) {
+    if (!_drrState.dragging) return;
+    _drrState.tx += e.clientX - _drrState.lastX;
+    _drrState.ty += e.clientY - _drrState.lastY;
+    _drrState.lastX = e.clientX; _drrState.lastY = e.clientY;
+    _drrApplyTransform();
+}
+function _drrOnMouseUp() {
+    _drrState.dragging = false;
+    document.getElementById('drr-zoom-wrap')?.classList.remove('grabbing');
+}
+
+function _drrInitEvents() {
+    const wrap = document.getElementById('drr-zoom-wrap');
+    if (!wrap || wrap._drrEvt) return;
+    wrap._drrEvt = true;
+    wrap.addEventListener('wheel', e => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.11;
+        const rect = wrap.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        _drrState.tx = mx - (mx - _drrState.tx) * delta;
+        _drrState.ty = my - (my - _drrState.ty) * delta;
+        _drrState.scale = Math.min(5, Math.max(0.5, _drrState.scale * delta));
+        _drrApplyTransform();
+    }, { passive: false });
+    wrap.addEventListener('mousedown', e => {
+        _drrState.dragging = true; _drrState.lastX = e.clientX; _drrState.lastY = e.clientY;
+        wrap.classList.add('grabbing');
+    });
+    document.addEventListener('mousemove', _drrOnMouseMove);
+    document.addEventListener('mouseup', _drrOnMouseUp);
+    wrap.addEventListener('touchstart', e => {
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            _drrState.pinchDist = Math.hypot(dx, dy);
+        } else if (e.touches.length === 1) {
+            _drrState.dragging = true;
+            _drrState.lastX = e.touches[0].clientX; _drrState.lastY = e.touches[0].clientY;
+        }
+    }, { passive: true });
+    wrap.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const dist = Math.hypot(dx, dy);
+            const delta = dist / (_drrState.pinchDist || dist);
+            _drrState.pinchDist = dist;
+            const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+            const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+            const rect = wrap.getBoundingClientRect();
+            const mx = cx - rect.left, my = cy - rect.top;
+            _drrState.tx = mx - (mx - _drrState.tx) * delta;
+            _drrState.ty = my - (my - _drrState.ty) * delta;
+            _drrState.scale = Math.min(5, Math.max(0.5, _drrState.scale * delta));
+            _drrApplyTransform();
+        } else if (e.touches.length === 1 && _drrState.dragging) {
+            _drrState.tx += e.touches[0].clientX - _drrState.lastX;
+            _drrState.ty += e.touches[0].clientY - _drrState.lastY;
+            _drrState.lastX = e.touches[0].clientX; _drrState.lastY = e.touches[0].clientY;
+            _drrApplyTransform();
+        }
+    }, { passive: false });
+    wrap.addEventListener('touchend', () => { _drrState.dragging = false; _drrState.pinchDist = 0; });
 }
 
 // ── Dungeon map pan/zoom state ─────────────────────────────────────────────

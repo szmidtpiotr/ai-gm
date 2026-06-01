@@ -3788,11 +3788,17 @@ def _ensure_dungeon_tile_schema(conn: sqlite3.Connection) -> None:
             label           TEXT NOT NULL,
             description     TEXT NOT NULL DEFAULT '',
             style_modifier  TEXT NOT NULL DEFAULT '',
+            system_prompt   TEXT NOT NULL DEFAULT '',
             sort_order      INTEGER NOT NULL DEFAULT 0,
             is_active       INTEGER NOT NULL DEFAULT 1,
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         )
     """)
+    try:
+        conn.execute("ALTER TABLE dungeon_tile_categories ADD COLUMN system_prompt TEXT NOT NULL DEFAULT ''")
+        conn.commit()
+    except Exception as _e:
+        if "duplicate column" not in str(_e).lower(): pass
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS dungeon_tiles (
@@ -3826,6 +3832,16 @@ def _ensure_dungeon_tile_schema(conn: sqlite3.Connection) -> None:
         "'{\"1\":{\"tiles\":4},\"2\":{\"tiles\":6},\"3\":{\"tiles\":8},\"4\":{\"tiles\":10}}'",
         "ALTER TABLE game_dungeons ADD COLUMN boss_tile_id INTEGER",
         "ALTER TABLE game_dungeons ADD COLUMN tile_count INTEGER",
+    ]:
+        try:
+            conn.execute(sql); conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower(): raise
+
+    # Phase 7: mechanical door/wall compositing — raw AI image + per-door overlays
+    for sql in [
+        "ALTER TABLE dungeon_tiles ADD COLUMN image_url_raw TEXT",
+        "ALTER TABLE dungeon_tiles ADD COLUMN door_overlays_json TEXT NOT NULL DEFAULT '{}'",
     ]:
         try:
             conn.execute(sql); conn.commit()

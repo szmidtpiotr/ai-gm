@@ -1906,6 +1906,9 @@ def _require_gm_plan_before_narrative_llm(
         return
     if _narrative_turn_count(conn, campaign_id) > 0:
         return
+    # Dungeon-mode campaigns don't need a GM plan — tile sequence IS the plan
+    if str(campaign["mode"] or "solo").lower() == "dungeon":
+        return
 
     # Plan not ready and no turns yet — auto-generate now
     try:
@@ -1950,7 +1953,9 @@ def _require_gm_plan_before_narrative_llm(
         logger.info("gm_plan_auto_generated_on_first_turn", campaign_id=campaign_id)
 
         # Also generate opening scene so player sees a welcome message
-        if gm_ready:
+        # Skip for dungeon-mode campaigns — enter_dungeon already provides room_narrative
+        _camp_mode = str(campaign["mode"] or "solo").lower() if campaign else "solo"
+        if gm_ready and _camp_mode != "dungeon":
             try:
                 from app.services.llm_service import generate_chat as _gen
                 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT as _OPENING_SYS
@@ -2658,6 +2663,86 @@ def create_turn(
             if _opening_turn:
                 return {"prose": _opening_turn["assistant_text"], "turn_number": 1,
                         "route": "narrative", "result": {"message": _opening_turn["assistant_text"]}}
+            # Resolve model once for any opening-LLM paths below
+            _opening_model = resolve_model_name(
+                requested_model=payload.engine,
+                campaign_model=campaign["model_id"],
+                llm_config=llm_config,
+            )
+            _camp_mode_open = str(campaign["mode"] or "solo").lower()
+
+            # Dungeon-mode campaigns: generate LLM opening using tile context
+            if _camp_mode_open == "dungeon":
+                try:
+                    _opening_result = run_narrative_turn(
+                        conn=conn,
+                        campaign=campaign,
+                        character=character,
+                        user_text="Opisz klimatycznie komnatę w której właśnie stanąłem, wciągnij mnie w atmosferę lochu.",
+                        model=_opening_model,
+                        ollama_base_url=None,
+                        llm_config=llm_config,
+                        roll_result_message=None,
+                        roll_result_data=None,
+                    )
+                    _opening_text = (_opening_result.get("message") or "").strip()
+                    if _opening_text:
+                        _nt = int((conn.execute(
+                            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                            (campaign_id,),
+                        ).fetchone()[0]) or 1)
+                        conn.execute(
+                            "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, route, assistant_text) "
+                            "VALUES (?,?,?,?,?,?)",
+                            (campaign_id, int(character["id"] or 0), _nt, "", "narrative", _opening_text),
+                        )
+                        conn.commit()
+                        return {"prose": _opening_text, "turn_number": _nt,
+                                "route": "narrative", "result": {"message": _opening_text}}
+                except Exception as _de:
+                    logger.warning("dungeon_opening_llm_failed", campaign_id=campaign_id, error=str(_de))
+
+            # Non-dungeon fallback: opening should have been created by
+            # _require_gm_plan_before_narrative_llm above. If not (LLM failure,
+            # missing plan, etc.), generate one inline so the player never sees
+            # a vanishing typing indicator with no message.
+            try:
+                from app.services.llm_service import generate_chat as _gen
+                from app.system_prompt_loader import SYSTEM_PROMPT_TEXT as _OPENING_SYS
+                import json as _j_open
+                _sheet_open = _j_open.loads(character["sheet_json"] or "{}")
+                _name_open = character["name"] or "Bohater"
+                _arch_open = str(_sheet_open.get("archetype", "warrior")).lower()
+                _arch_lbl = "Uczony" if _arch_open == "scholar" else "Wojownik"
+                _loc_open = character["location"] or "nieznane miejsce"
+                _opening_prompt = (
+                    f"Postać: {_name_open}, Archetyp: {_arch_lbl}, Lokalizacja: {_loc_open}.\n\n"
+                    "To jest pierwsza chwila przygody. Zacznij sesję od klimatycznego opisu miejsca, "
+                    "w którym bohater się znajduje. Nie pytaj gracza o plany - po prostu opisz scenę "
+                    "i zostaw otwarte zakończenie zachęcające do działania."
+                )
+                _opening_fb = (_gen(
+                    messages=[{"role": "system", "content": _OPENING_SYS},
+                              {"role": "user", "content": _opening_prompt}],
+                    model=_opening_model, llm_config=llm_config,
+                ) or "").strip()
+                if _opening_fb:
+                    _nt_fb = int((conn.execute(
+                        "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                        (campaign_id,),
+                    ).fetchone()[0]) or 1)
+                    conn.execute(
+                        "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, route, assistant_text) "
+                        "VALUES (?,?,?,?,?,?)",
+                        (campaign_id, int(character["id"] or 0), _nt_fb, "", "narrative", _opening_fb),
+                    )
+                    conn.commit()
+                    logger.info("opening_scene_inline_fallback_generated", campaign_id=campaign_id)
+                    return {"prose": _opening_fb, "turn_number": _nt_fb,
+                            "route": "narrative", "result": {"message": _opening_fb}}
+            except Exception as _fb_err:
+                logger.warning("opening_inline_fallback_failed", campaign_id=campaign_id, error=str(_fb_err))
+
             return {"prose": None, "turn_number": 0, "route": "narrative", "result": {}}
 
         if not text:

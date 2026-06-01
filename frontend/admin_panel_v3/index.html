@@ -3471,7 +3471,11 @@
               <button class="chip on" data-cat="">Wszystkie</button>
               <!-- categories populated by JS -->
             </div>
-            <span class="td-muted" style="font-size:0.78rem;margin-left:auto" id="tiles-count-info">—</span>
+            <label style="display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--t3);cursor:pointer;margin-left:auto">
+              <input type="checkbox" id="tile-show-inactive" onchange="_renderTilesGrid()">
+              Pokaż nieaktywne
+            </label>
+            <span class="td-muted" style="font-size:0.78rem" id="tiles-count-info">—</span>
           </div>
           <div id="tiles-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;padding:8px 4px">
             <div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--t3)">Ładowanie…</div>
@@ -9271,6 +9275,7 @@
   });
 
   // ── Dungeon Tiles (Kafelki, issue #224) ───────────────────────────────────────
+  const IMAGE_GEN_DEFAULT_MODEL = 'flux1-schnell-Q5_K_S.gguf';
   let _tileCategoriesCache = null;
   let _tilesCache = [];
   let _tileEnemyImgCache = {};  // key → image_url, used by tile grid card overlay render
@@ -9315,7 +9320,9 @@
     if (!grid) return;
     const activeCat = document.querySelector('#tile-cat-filter .chip.on')?.dataset.cat || '';
     const q = (document.getElementById('tile-search')?.value || '').toLowerCase().trim();
+    const showInactive = document.getElementById('tile-show-inactive')?.checked;
     const list = _tilesCache.filter(t =>
+      (showInactive || t.is_active !== false) &&
       (!activeCat || t.category_key === activeCat) &&
       (!q || (t.label || '').toLowerCase().includes(q))
     );
@@ -9389,25 +9396,41 @@
     if (!document.getElementById('tf-styles')) {
       const s = document.createElement('style'); s.id = 'tf-styles';
       s.textContent = `
-        .tf-section{background:rgba(10,10,20,.6);border:1px solid var(--border,#2a2a40);border-radius:8px;padding:14px 16px}
-        .tf-section-head{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#f59e0b;margin-bottom:10px;display:flex;align-items:center;gap:7px}
+        /* Sections */
+        .tf-section{background:rgba(6,6,16,.8);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:14px 16px}
+        .tf-section-head{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:#f59e0b;margin-bottom:10px;display:flex;align-items:center;gap:7px}
         .tf-chips-row{display:flex;flex-wrap:wrap;gap:6px;min-height:8px;margin-bottom:10px}
-        .tf-chip{display:inline-flex;align-items:center;gap:5px;background:#1e1e30;border:1px solid #2a2a40;border-radius:6px;padding:3px 8px;font-size:.79rem;line-height:1.35}
-        .tf-chip-del{background:none;border:none;color:#777;cursor:pointer;padding:0 2px;font-size:.82rem;line-height:1}
+        .tf-chip{display:inline-flex;align-items:center;gap:5px;background:#0e0e1c;border:1px solid #1a1a2e;border-radius:6px;padding:3px 8px;font-size:.79rem;line-height:1.35}
+        .tf-chip-del{background:none;border:none;color:#555;cursor:pointer;padding:0 2px;font-size:.82rem;line-height:1}
         .tf-chip-del:hover{color:#ef4444}
         .tf-add-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
-        .tf-door-btn{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:2px solid var(--border,#2a2a40);border-radius:8px;cursor:pointer;font-family:monospace;font-weight:700;font-size:1rem;color:#777;transition:all .15s;user-select:none}
-        .tf-door-btn.on{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.12)}
+        /* Door compass */
+        .tf-dc-wrap{display:inline-grid;grid-template-columns:44px 46px 44px;grid-template-rows:32px 46px 32px;gap:4px;align-items:center;justify-items:center}
+        .tf-dc-center{width:46px;height:46px;display:flex;align-items:center;justify-content:center;background:#07070f;border:1px solid rgba(255,255,255,.07);border-radius:7px;color:#1e1e38;font-size:1.1rem;pointer-events:none}
+        .tf-door-btn{display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-family:monospace;font-weight:700;font-size:.72rem;letter-spacing:.04em;color:#32324e;background:#08081a;border:1.5px solid #16163a;border-radius:6px;transition:all .15s;user-select:none;width:44px;height:28px}
+        .tf-door-e,.tf-door-w{width:28px;height:46px}
+        .tf-door-btn.on{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.1);box-shadow:0 0 10px rgba(245,158,11,.14)}
+        .tf-door-btn:hover{border-color:#c87d20;color:#c87d20;background:rgba(200,125,32,.1)}
+        /* Toggle */
         .tf-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
         .tf-toggle input[type=checkbox]{display:none}
-        .tf-toggle-track{width:36px;height:20px;background:#2a2a40;border-radius:10px;position:relative;transition:background .2s;flex-shrink:0}
-        .tf-toggle-track::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s}
-        .tf-toggle input:checked~.tf-toggle-track{background:#f59e0b}
-        .tf-toggle input:checked~.tf-toggle-track::after{transform:translateX(16px)}
-        .tf-toggle-label{font-size:.82rem;color:var(--t2,#bbb)}
-        .tf-param-lbl{font-size:.72rem;color:#888;display:flex;flex-direction:column;gap:3px}
-        .tf-modal-body::-webkit-scrollbar{width:6px}
-        .tf-modal-body::-webkit-scrollbar-thumb{background:#2a2a40;border-radius:3px}
+        .tf-toggle-track{width:34px;height:18px;background:#0c0c1e;border:1px solid #1c1c36;border-radius:9px;position:relative;transition:all .2s;flex-shrink:0}
+        .tf-toggle-track::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;background:#2a2a4a;border-radius:50%;transition:transform .2s,background .2s}
+        .tf-toggle input:checked~.tf-toggle-track{background:rgba(245,158,11,.1);border-color:#f59e0b}
+        .tf-toggle input:checked~.tf-toggle-track::after{transform:translateX(16px);background:#f59e0b}
+        .tf-toggle-label{font-size:.8rem;color:#666}
+        /* Image studio */
+        .tf-studio{background:#04040c;border:1px solid rgba(255,255,255,.07);border-radius:9px;padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+        .tf-studio-head{font-size:.61rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:#c87d20;display:flex;align-items:center;gap:6px;margin-bottom:2px}
+        .tf-studio-lbl{font-size:.64rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#383858;margin-bottom:3px}
+        /* Image frame */
+        .tf-img-frame{width:100%;aspect-ratio:1;background:#03030a;border:1px solid rgba(245,158,11,.1);border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center;transition:border-color .2s}
+        .tf-img-frame:hover{border-color:rgba(245,158,11,.28)}
+        .tf-img-frame img{width:100%;height:100%;object-fit:cover;display:block}
+        /* Misc */
+        .tf-param-lbl{font-size:.72rem;color:#777;display:flex;flex-direction:column;gap:3px}
+        .tf-modal-body::-webkit-scrollbar{width:5px}
+        .tf-modal-body::-webkit-scrollbar-thumb{background:#111128;border-radius:3px}
         .tf-ov-sprite{transition:outline-color .1s}
         .tf-ov-sprite:hover{outline-color:#f59e0b !important}
         .tf-ov-collide{outline:2px solid #ef4444 !important}
@@ -9420,6 +9443,18 @@
     let _tfItems   = JSON.parse(JSON.stringify(p.items          || []));
     let _tfStates  = JSON.parse(JSON.stringify(p.active_states  || []));
     let _tfExits   = JSON.parse(JSON.stringify(p.exit_conditions|| []));
+    let _tfDoorOverlays = JSON.parse(JSON.stringify(p.door_overlays || {}));
+
+    // Door defaults — MUST mirror backend tile_compositor.DEFAULT_DOOR_OVERLAYS
+    // (TILE_SIZE=512, WALL_BORDER=70 → 35/512 = 0.0684, 477/512 = 0.9316)
+    const DOOR_DEFAULTS = {
+      N: {x: 0.5,    y: 0.0684, scale: 1.0, rot: 0},
+      S: {x: 0.5,    y: 0.9316, scale: 1.0, rot: 180},
+      E: {x: 0.9316, y: 0.5,    scale: 1.0, rot: 270},
+      W: {x: 0.0684, y: 0.5,    scale: 1.0, rot: 90},
+    };
+    const DOOR_W_REL = 90/512;   // base sprite W as fraction of tile
+    const DOOR_H_REL = 70/512;   // base sprite H as fraction of tile
 
     // ── Pools loaded async ────────────────────────────────────
     let _epPool = [];
@@ -9429,17 +9464,65 @@
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay open';
     overlay.innerHTML = `
-<div class="modal-box" style="width:880px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
-  <div class="modal-head" style="flex-shrink:0;background:#0f0f1a;border-bottom:1px solid var(--border)">
-    <span class="modal-title" style="font-size:.95rem">${p.id ? '✎ Edytuj kafelek' : '＋ Nowy kafelek'}</span>
+<div class="modal-box" style="width:940px;max-height:94vh;display:flex;flex-direction:column;overflow:hidden">
+
+  <!-- Header -->
+  <div class="modal-head" style="flex-shrink:0;background:#07070e;border-bottom:1px solid rgba(255,255,255,.07);padding:11px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px;overflow:hidden;min-width:0">
+      <span class="modal-title" style="font-size:.86rem;flex-shrink:0">${p.id ? '✎ Edytuj kafelek' : '＋ Nowy kafelek'}</span>
+      ${p.label ? `<span style="font-size:.78rem;color:#f59e0b;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">— ${_esc(p.label)}</span>` : ''}
+      ${p.id ? `<code style="flex-shrink:0;font-size:.64rem;color:#303050;background:#0a0a16;border:1px solid #181830;border-radius:4px;padding:2px 7px;font-family:monospace">#${p.id}</code>` : ''}
+    </div>
     <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
   </div>
-  <div class="tf-modal-body" style="overflow-y:auto;flex:1;padding:18px 20px;display:flex;flex-direction:column;gap:14px">
 
-    <!-- Row 1: basics + image -->
-    <div style="display:grid;grid-template-columns:1fr 252px;gap:18px;align-items:start">
-      <div style="display:flex;flex-direction:column;gap:12px">
+  <!-- Scrollable body -->
+  <div class="tf-modal-body" style="overflow-y:auto;flex:1;display:flex;flex-direction:column">
 
+    <!-- TOP: two-column grid -->
+    <div style="display:grid;grid-template-columns:288px 1fr;border-bottom:1px solid rgba(255,255,255,.06)">
+
+      <!-- LEFT: image column -->
+      <div style="padding:16px;background:#050510;border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:.61rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#282844">Obraz kafelka</div>
+
+        <!-- Image preview — id required by _generateTileImage -->
+        <div id="tf-img-preview" class="tf-img-frame">
+          ${p.image_url
+            ? `<img src="${_esc(p.image_url)}" style="width:100%;height:100%;object-fit:cover">`
+            : `<div style="display:flex;flex-direction:column;align-items:center;gap:7px;color:#202038;text-align:center;padding:16px">
+                <span style="font-size:2.2rem;opacity:.15">🏰</span>
+                <span style="font-size:.72rem;line-height:1.8">Brak obrazu<br><span style="font-size:.65rem;opacity:.55">Zapisz kafelek,<br>potem Generuj</span></span>
+              </div>`
+          }
+        </div>
+
+        <!-- Image Studio -->
+        <div class="tf-studio">
+          <div class="tf-studio-head">⚙ Studio obrazu</div>
+
+          <div>
+            <div class="tf-studio-lbl">Prompt (EN)</div>
+            <textarea id="tf-img-prompt" class="form-input" rows="4" style="resize:vertical;font-size:.71rem;font-family:monospace;line-height:1.5" placeholder="English room description for image gen…">${_esc(p.image_gen_prompt||'')}</textarea>
+          </div>
+
+          <div>
+            <div class="tf-studio-lbl">Model</div>
+            <select id="tf-img-model" class="form-input" style="font-size:.77rem">
+              <option value="">⏳ Ładowanie…</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary btn-sm" id="tf-generate-btn" style="width:100%;padding:7px 10px;font-size:.79rem;letter-spacing:.02em" ${!p.id?'disabled':''}>
+            🔄 Generuj / Regeneruj obraz
+          </button>
+        </div>
+      </div>
+
+      <!-- RIGHT: form fields -->
+      <div style="padding:18px 22px;display:flex;flex-direction:column;gap:14px">
+
+        <!-- Name + Category -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
           <div>
             <label class="form-label">Nazwa <span style="color:#f59e0b">*</span></label>
@@ -9453,120 +9536,145 @@
           </div>
         </div>
 
+        <!-- Door compass -->
         <div>
-          <label class="form-label">Drzwi <span style="color:#f59e0b">*</span> <span style="font-size:.7rem;color:var(--t3);font-weight:400">(N=góra S=dół E=prawo W=lewo)</span></label>
-          <div id="tf-doors" style="display:flex;gap:8px;margin-top:6px">
-            ${['N','S','E','W'].map(d=>`<label class="tf-door-btn${(p.doors||[]).includes(d)?' on':''}" data-d="${d}"><input type="checkbox" data-door="${d}" ${(p.doors||[]).includes(d)?'checked':''} style="display:none"><span>${d}</span></label>`).join('')}
+          <label class="form-label">Drzwi <span style="color:#f59e0b">*</span> <span style="font-size:.68rem;color:var(--t3);font-weight:400">(N=góra  S=dół  E=prawo  W=lewo)</span></label>
+          <div id="tf-doors" style="margin-top:10px">
+            <div class="tf-dc-wrap">
+              <div></div>
+              <label class="tf-door-btn tf-door-n${(p.doors||[]).includes('N')?' on':''}" data-d="N"><input type="checkbox" data-door="N" ${(p.doors||[]).includes('N')?'checked':''} style="display:none"><span>N</span></label>
+              <div></div>
+              <label class="tf-door-btn tf-door-w${(p.doors||[]).includes('W')?' on':''}" data-d="W"><input type="checkbox" data-door="W" ${(p.doors||[]).includes('W')?'checked':''} style="display:none"><span>W</span></label>
+              <div class="tf-dc-center">◈</div>
+              <label class="tf-door-btn tf-door-e${(p.doors||[]).includes('E')?' on':''}" data-d="E"><input type="checkbox" data-door="E" ${(p.doors||[]).includes('E')?'checked':''} style="display:none"><span>E</span></label>
+              <div></div>
+              <label class="tf-door-btn tf-door-s${(p.doors||[]).includes('S')?' on':''}" data-d="S"><input type="checkbox" data-door="S" ${(p.doors||[]).includes('S')?'checked':''} style="display:none"><span>S</span></label>
+              <div></div>
+            </div>
           </div>
         </div>
 
-        <div style="display:flex;gap:20px">
+        <!-- Toggles -->
+        <div style="display:flex;gap:22px">
           <label class="tf-toggle"><input type="checkbox" id="tf-boss" ${p.is_boss_tile?'checked':''}><span class="tf-toggle-track"></span><span class="tf-toggle-label">Kafelek bossa</span></label>
           <label class="tf-toggle"><input type="checkbox" id="tf-active" ${p.is_active!==false?'checked':''}><span class="tf-toggle-track"></span><span class="tf-toggle-label">Aktywny</span></label>
         </div>
 
-        <div>
+        <!-- Room description -->
+        <div style="flex:1;display:flex;flex-direction:column">
           <label class="form-label">Opis pokoju <span style="font-size:.7rem;color:var(--t3);font-weight:400">(AI GM + prompt obrazu)</span></label>
-          <textarea id="tf-desc" class="form-input" rows="3" style="resize:vertical" placeholder="np. Stara komnata strażnicza z rdzawą zbroją na ścianie…">${_esc(p.room_description||'')}</textarea>
+          <textarea id="tf-desc" class="form-input" rows="6" style="resize:vertical;flex:1" placeholder="np. Stara komnata strażnicza z rdzawą zbroją na ścianie i poczerniałymi pochodniami…">${_esc(p.room_description||'')}</textarea>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- SECTIONS -->
+    <div style="padding:14px 18px 18px;display:flex;flex-direction:column;gap:12px">
+
+      <!-- Enemies -->
+      <div class="tf-section">
+        <div class="tf-section-head">⚔ Wrogowie</div>
+        <div id="tf-enemies-chips" class="tf-chips-row"></div>
+        <div class="tf-add-row">
+          <select id="tf-enemy-sel" class="form-input" style="flex:1;min-width:200px"><option value="">⏳ Ładowanie…</option></select>
+          <label class="tf-param-lbl">Ilość<input id="tf-enemy-count" type="number" class="form-input" value="1" min="1" max="20" style="width:68px"></label>
+          <button class="btn btn-secondary btn-sm" id="tf-enemy-add-btn">+ Dodaj</button>
         </div>
       </div>
 
-      <div>
-        <label class="form-label">Obraz kafelka</label>
-        <div id="tf-img-preview" style="width:100%;aspect-ratio:1;background:#060610;border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;align-items:center;justify-content:center">
-          ${p.image_url?`<img src="${_esc(p.image_url)}" style="width:100%;height:100%;object-fit:cover">`:`<div style="color:var(--t3);font-size:.78rem;text-align:center;padding:14px;line-height:1.7">Brak obrazu<br><span style="font-size:.68rem;opacity:.5">Zapisz najpierw,<br>potem Generuj</span></div>`}
+      <!-- Sprite overlay editor -->
+      <div class="tf-section" id="tf-overlay-section" style="${p.image_url?'':'display:none'}">
+        <div class="tf-section-head" style="display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:8px">
+          <span>🎯 Pozycje sprite'ów na kafelku</span>
+          <span style="display:flex;gap:8px;align-items:center;font-weight:400;text-transform:none;letter-spacing:0">
+            <button type="button" class="btn btn-secondary btn-sm" id="tf-ov-arrange" title="Rozmieść automatycznie (siatka, bez kolizji)">🎲 Auto</button>
+            <label class="tf-toggle" style="font-size:.72rem"><input type="checkbox" id="tf-ov-collision-warn" checked><span class="tf-toggle-track"></span><span class="tf-toggle-label">Pokaż kolizje</span></label>
+          </span>
         </div>
-        <button class="btn btn-primary btn-sm" id="tf-generate-btn" style="width:100%;margin-top:8px" ${!p.id?'disabled':''}>🎨 Generuj obraz</button>
-        ${p.image_gen_prompt?`<details style="margin-top:5px"><summary style="cursor:pointer;font-size:.68rem;color:var(--t3)">Prompt</summary><div style="font-size:.65rem;color:var(--t3);background:#0a0a0f;padding:7px;border-radius:4px;margin-top:3px;white-space:pre-wrap;max-height:80px;overflow:auto;font-family:monospace">${_esc(p.image_gen_prompt)}</div></details>`:''}
-        ${p.id?`<div style="margin-top:6px;font-size:.7rem;color:var(--t3)">ID: <code style="font-family:monospace">#${p.id}</code></div>`:''}
+        <div style="font-size:.72rem;color:var(--t3);margin-bottom:8px">Przeciągnij = przesuń &nbsp;|&nbsp; kółko myszy = skala &nbsp;|&nbsp; Shift+przeciągnij = obrót</div>
+        <div id="tf-overlay-surface" style="position:relative;width:100%;max-width:520px;aspect-ratio:1;background:#060610;border:1px solid var(--border);border-radius:10px;overflow:hidden;user-select:none;touch-action:none">
+          <div id="tf-overlay-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:.78rem;text-align:center;padding:14px">Brak obrazu kafelka lub wrogów<br><span style="font-size:.7rem;opacity:.6">Wygeneruj obraz kafelka i dodaj wroga z obrazem (🖼)</span></div>
+        </div>
       </div>
-    </div>
 
-    <!-- Enemies -->
-    <div class="tf-section">
-      <div class="tf-section-head">⚔ Wrogowie</div>
-      <div id="tf-enemies-chips" class="tf-chips-row"></div>
-      <div class="tf-add-row">
-        <select id="tf-enemy-sel" class="form-input" style="flex:1;min-width:200px"><option value="">⏳ Ładowanie…</option></select>
-        <label class="tf-param-lbl">Ilość<input id="tf-enemy-count" type="number" class="form-input" value="1" min="1" max="20" style="width:68px"></label>
-        <button class="btn btn-secondary btn-sm" id="tf-enemy-add-btn">+ Dodaj</button>
+      <!-- Door overlay editor -->
+      <div class="tf-section" id="tf-door-overlay-section" style="${p.image_url?'':'display:none'}">
+        <div class="tf-section-head" style="display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:8px">
+          <span>🚪 Pozycje drzwi <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3);font-size:.7rem">(kompozytor backend)</span></span>
+          <span style="display:flex;gap:8px;align-items:center;font-weight:400;text-transform:none;letter-spacing:0">
+            <button type="button" class="btn btn-secondary btn-sm" id="tf-door-reset" title="Powrót do kanonicznych pozycji domyślnych">🎲 Auto</button>
+            <button type="button" class="btn btn-primary btn-sm" id="tf-door-apply" title="Zapisz pozycje i zrekomponuj obraz (bez nowej generacji AI)">✓ Zastosuj</button>
+          </span>
+        </div>
+        <div style="font-size:.72rem;color:var(--t3);margin-bottom:8px">Przeciągnij łuk = przesuń &nbsp;|&nbsp; kółko myszy = skala &nbsp;|&nbsp; Shift+przeciągnij = obrót</div>
+        <div id="tf-door-overlay-surface" style="position:relative;width:100%;max-width:520px;aspect-ratio:1;background:#060610;border:1px solid var(--border);border-radius:10px;overflow:hidden;user-select:none;touch-action:none">
+          <div id="tf-door-overlay-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:.78rem;text-align:center;padding:14px">Brak obrazu kafelka lub aktywnych drzwi<br><span style="font-size:.7rem;opacity:.6">Wygeneruj obraz i wybierz drzwi (kompas powyżej)</span></div>
+        </div>
       </div>
-    </div>
 
-    <!-- Sprite overlay editor -->
-    <div class="tf-section" id="tf-overlay-section" style="${p.image_url?'':'display:none'}">
-      <div class="tf-section-head" style="display:flex;align-items:center;gap:10px;justify-content:space-between;margin-bottom:8px">
-        <span>🎯 Pozycje sprite'ów na kafelku</span>
-        <span style="display:flex;gap:8px;align-items:center;font-weight:400;text-transform:none;letter-spacing:0">
-          <button type="button" class="btn btn-secondary btn-sm" id="tf-ov-arrange" title="Rozmieść automatycznie (siatka, bez kolizji)">🎲 Auto</button>
-          <label class="tf-toggle" style="font-size:.72rem"><input type="checkbox" id="tf-ov-collision-warn" checked><span class="tf-toggle-track"></span><span class="tf-toggle-label">Pokaż kolizje</span></label>
-        </span>
+      <!-- Items -->
+      <div class="tf-section">
+        <div class="tf-section-head">💎 Przedmioty / łupy</div>
+        <div id="tf-items-chips" class="tf-chips-row"></div>
+        <div class="tf-add-row">
+          <select id="tf-item-type" class="form-input" style="width:148px">
+            <option value="item">Przedmiot</option>
+            <option value="weapon">Broń</option>
+            <option value="consumable">Konsumable</option>
+          </select>
+          <select id="tf-item-sel" class="form-input" style="flex:1;min-width:180px"><option value="">⏳ Ładowanie…</option></select>
+          <label class="tf-param-lbl">Szansa %<input id="tf-item-chance" type="number" class="form-input" value="50" min="1" max="100" style="width:68px"></label>
+          <button class="btn btn-secondary btn-sm" id="tf-item-add-btn">+ Dodaj</button>
+        </div>
       </div>
-      <div style="font-size:.72rem;color:var(--t3);margin-bottom:8px">Przeciągnij = przesuń &nbsp;|&nbsp; kółko myszy = skala &nbsp;|&nbsp; Shift+przeciągnij = obrót</div>
-      <div id="tf-overlay-surface" style="position:relative;width:100%;max-width:520px;aspect-ratio:1;background:#060610;border:1px solid var(--border);border-radius:10px;overflow:hidden;user-select:none;touch-action:none">
-        <div id="tf-overlay-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:.78rem;text-align:center;padding:14px">Brak obrazu kafelka lub wrogów<br><span style="font-size:.7rem;opacity:.6">Wygeneruj obraz kafelka i dodaj wroga z obrazem (🖼)</span></div>
+
+      <!-- Riddle -->
+      <div class="tf-section">
+        <div class="tf-section-head">❓ Zagadka <span style="font-size:.7rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)">(opcjonalna — wymaga osobnego warunku wyjścia riddle_solved)</span></div>
+        <select id="tf-riddle-sel" class="form-input" style="max-width:520px"><option value="">⏳ Ładowanie…</option></select>
       </div>
-    </div>
 
-    <!-- Items -->
-    <div class="tf-section">
-      <div class="tf-section-head">💎 Przedmioty / łupy</div>
-      <div id="tf-items-chips" class="tf-chips-row"></div>
-      <div class="tf-add-row">
-        <select id="tf-item-type" class="form-input" style="width:148px">
-          <option value="item">Przedmiot</option>
-          <option value="weapon">Broń</option>
-          <option value="consumable">Konsumable</option>
-        </select>
-        <select id="tf-item-sel" class="form-input" style="flex:1;min-width:180px"><option value="">⏳ Ładowanie…</option></select>
-        <label class="tf-param-lbl">Szansa %<input id="tf-item-chance" type="number" class="form-input" value="50" min="1" max="100" style="width:68px"></label>
-        <button class="btn btn-secondary btn-sm" id="tf-item-add-btn">+ Dodaj</button>
+      <!-- Active States -->
+      <div class="tf-section">
+        <div class="tf-section-head">🔥 Aktywne stany <span style="font-size:.7rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)">(efekty oddziałujące co turę na gracza)</span></div>
+        <div id="tf-states-chips" class="tf-chips-row"></div>
+        <div class="tf-add-row">
+          <select id="tf-state-type" class="form-input" style="width:185px">
+            <option value="burning">🔥 Płonący (burning)</option>
+            <option value="flooding">🌊 Zalany (flooding)</option>
+            <option value="poison_gas">☠ Trujący gaz</option>
+            <option value="cold">❄ Zimno (cold)</option>
+            <option value="lightning">⚡ Błyskawica</option>
+            <option value="cursed">💀 Przeklęty (cursed)</option>
+          </select>
+          <div id="tf-state-params" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"></div>
+          <button class="btn btn-secondary btn-sm" id="tf-state-add-btn" style="margin-left:auto;flex-shrink:0">+ Dodaj</button>
+        </div>
       </div>
-    </div>
 
-    <!-- Riddle -->
-    <div class="tf-section">
-      <div class="tf-section-head">❓ Zagadka <span style="font-size:.7rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)">(opcjonalna — wymaga osobnego warunku wyjścia riddle_solved)</span></div>
-      <select id="tf-riddle-sel" class="form-input" style="max-width:520px"><option value="">⏳ Ładowanie…</option></select>
-    </div>
-
-    <!-- Active States -->
-    <div class="tf-section">
-      <div class="tf-section-head">🔥 Aktywne stany <span style="font-size:.7rem;font-weight:400;text-transform:none;letter-spacing:0;color:var(--t3)">(efekty oddziałujące co turę na gracza)</span></div>
-      <div id="tf-states-chips" class="tf-chips-row"></div>
-      <div class="tf-add-row">
-        <select id="tf-state-type" class="form-input" style="width:185px">
-          <option value="burning">🔥 Płonący (burning)</option>
-          <option value="flooding">🌊 Zalany (flooding)</option>
-          <option value="poison_gas">☠ Trujący gaz</option>
-          <option value="cold">❄ Zimno (cold)</option>
-          <option value="lightning">⚡ Błyskawica</option>
-          <option value="cursed">💀 Przeklęty (cursed)</option>
-        </select>
-        <div id="tf-state-params" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"></div>
-        <button class="btn btn-secondary btn-sm" id="tf-state-add-btn" style="margin-left:auto;flex-shrink:0">+ Dodaj</button>
+      <!-- Exit Conditions -->
+      <div class="tf-section">
+        <div class="tf-section-head">🚪 Warunki wyjścia</div>
+        <div style="font-size:.74rem;color:var(--t3);margin-bottom:8px">Brak warunków = wyjście zawsze otwarte. Dodaj warunek by zablokować przejście.</div>
+        <div id="tf-exits-chips" class="tf-chips-row"></div>
+        <div class="tf-add-row">
+          <select id="tf-exit-type" class="form-input" style="width:220px">
+            <option value="enemies_cleared">⚔ Wrogowie pokonani</option>
+            <option value="riddle_solved">❓ Zagadka rozwiązana</option>
+            <option value="item_in_inventory">🎒 Przedmiot w ekwipunku</option>
+            <option value="stat_roll">🎲 Test statystyki</option>
+          </select>
+          <div id="tf-exit-params" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"></div>
+          <button class="btn btn-secondary btn-sm" id="tf-exit-add-btn" style="margin-left:auto;flex-shrink:0">+ Dodaj</button>
+        </div>
       </div>
-    </div>
 
-    <!-- Exit Conditions -->
-    <div class="tf-section">
-      <div class="tf-section-head">🚪 Warunki wyjścia</div>
-      <div style="font-size:.74rem;color:var(--t3);margin-bottom:8px">Brak warunków = wyjście zawsze otwarte. Dodaj warunek by zablokować przejście.</div>
-      <div id="tf-exits-chips" class="tf-chips-row"></div>
-      <div class="tf-add-row">
-        <select id="tf-exit-type" class="form-input" style="width:220px">
-          <option value="enemies_cleared">⚔ Wrogowie pokonani</option>
-          <option value="riddle_solved">❓ Zagadka rozwiązana</option>
-          <option value="item_in_inventory">🎒 Przedmiot w ekwipunku</option>
-          <option value="stat_roll">🎲 Test statystyki</option>
-        </select>
-        <div id="tf-exit-params" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end"></div>
-        <button class="btn btn-secondary btn-sm" id="tf-exit-add-btn" style="margin-left:auto;flex-shrink:0">+ Dodaj</button>
-      </div>
     </div>
-
   </div>
-  <div class="modal-foot" style="flex-shrink:0;display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid var(--border)">
+
+  <!-- Footer -->
+  <div class="modal-foot" style="flex-shrink:0;display:flex;gap:8px;justify-content:flex-end;padding:11px 16px;border-top:1px solid rgba(255,255,255,.07)">
     ${p.id?`<button class="btn btn-secondary btn-sm" id="tf-del-btn">🗑 Usuń</button>`:''}
     <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
     <button class="btn btn-primary btn-sm" id="tf-save-btn">💾 Zapisz kafelek</button>
@@ -9580,6 +9688,8 @@
         const cb = lbl.querySelector('input');
         cb.checked = !cb.checked;
         lbl.classList.toggle('on', cb.checked);
+        // Refresh door overlay editor — active doors changed
+        if (typeof _renderDoorEditor === 'function') _renderDoorEditor();
       });
     });
 
@@ -9795,6 +9905,131 @@
       overlay.querySelector('#tf-ov-collision-warn')?.addEventListener('change', _renderOverlayEditor);
     }
 
+    // ── Door overlay editor (Phase 7) ─────────────────────────
+    function _getDoorOverlay(side) {
+      return { ...DOOR_DEFAULTS[side], ...(_tfDoorOverlays[side] || {}) };
+    }
+    function _setDoorOverlay(side, patch) {
+      _tfDoorOverlays[side] = { ..._getDoorOverlay(side), ...patch };
+    }
+    function _renderDoorEditor() {
+      const sec  = overlay.querySelector('#tf-door-overlay-section');
+      const surf = overlay.querySelector('#tf-door-overlay-surface');
+      if (!sec || !surf) return;
+      const tileImg = overlay.querySelector('#tf-img-preview img')?.src || p.image_url || '';
+      const activeDoors = Array.from(overlay.querySelectorAll('#tf-doors input:checked'))
+        .map(i => i.dataset.door);
+      if (!tileImg || !activeDoors.length) {
+        sec.style.display = 'none';
+        surf.innerHTML = `<div id="tf-door-overlay-empty" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:.78rem;text-align:center;padding:14px">Brak obrazu kafelka lub aktywnych drzwi<br><span style="font-size:.7rem;opacity:.6">Wygeneruj obraz i wybierz drzwi (kompas powyżej)</span></div>`;
+        return;
+      }
+      sec.style.display = '';
+      surf.innerHTML = `<img src="${_esc(tileImg)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none">` +
+        activeDoors.map(side => {
+          const ov = _getDoorOverlay(side);
+          // Base sprite is W×H = 90×70; after rot 90/270 dims swap
+          const rotMod = ((ov.rot % 360) + 360) % 360;
+          const isSwapped = (rotMod === 90 || rotMod === 270);
+          const wRel = (isSwapped ? DOOR_H_REL : DOOR_W_REL) * ov.scale;
+          const hRel = (isSwapped ? DOOR_W_REL : DOOR_H_REL) * ov.scale;
+          return `<div class="tf-door-h" data-side="${side}"
+            style="position:absolute;left:${ov.x*100}%;top:${ov.y*100}%;width:${wRel*100}%;height:${hRel*100}%;
+                   transform:translate(-50%,-50%);
+                   border:2px dashed #f59e0b;background:rgba(245,158,11,.22);
+                   cursor:grab;border-radius:6px;display:flex;align-items:center;justify-content:center;gap:3px;
+                   color:#fff;font-weight:700;font-size:.95rem;font-family:monospace;user-select:none;
+                   text-shadow:0 0 4px rgba(0,0,0,.85);box-shadow:0 0 14px rgba(245,158,11,.35)">
+            ${side}<sub style="font-size:.52rem;opacity:.7;font-weight:500;letter-spacing:0">${(ov.scale*100|0)}%${ov.rot?` ${ov.rot|0}°`:''}</sub>
+          </div>`;
+        }).join('');
+    }
+
+    let _ddDrag = null;
+    function _onDoorDown(ev) {
+      const h = ev.target.closest('.tf-door-h');
+      if (!h) return;
+      ev.preventDefault();
+      const side = h.dataset.side;
+      const surf = overlay.querySelector('#tf-door-overlay-surface');
+      const rect = surf.getBoundingClientRect();
+      const ov = _getDoorOverlay(side);
+      _ddDrag = {
+        side, rect, shift: ev.shiftKey,
+        startX: ev.clientX, startY: ev.clientY,
+        origX: ov.x, origY: ov.y, origRot: ov.rot,
+      };
+      h.style.cursor = ev.shiftKey ? 'ew-resize' : 'grabbing';
+      surf.setPointerCapture?.(ev.pointerId);
+    }
+    function _onDoorMove(ev) {
+      if (!_ddDrag) return;
+      if (_ddDrag.shift) {
+        const dx = ev.clientX - _ddDrag.startX;
+        _setDoorOverlay(_ddDrag.side, { rot: Math.round(_ddDrag.origRot + dx) % 360 });
+      } else {
+        const dx = (ev.clientX - _ddDrag.startX) / _ddDrag.rect.width;
+        const dy = (ev.clientY - _ddDrag.startY) / _ddDrag.rect.height;
+        _setDoorOverlay(_ddDrag.side, {
+          x: Math.max(0.02, Math.min(0.98, _ddDrag.origX + dx)),
+          y: Math.max(0.02, Math.min(0.98, _ddDrag.origY + dy)),
+        });
+      }
+      _renderDoorEditor();
+    }
+    function _onDoorUp() { _ddDrag = null; }
+    function _onDoorWheel(ev) {
+      const h = ev.target.closest('.tf-door-h');
+      if (!h) return;
+      ev.preventDefault();
+      const side = h.dataset.side;
+      const ov = _getDoorOverlay(side);
+      const delta = ev.deltaY < 0 ? 0.08 : -0.08;
+      _setDoorOverlay(side, { scale: Math.max(0.3, Math.min(2.5, +(ov.scale + delta).toFixed(2))) });
+      _renderDoorEditor();
+    }
+    {
+      const dsurf = overlay.querySelector('#tf-door-overlay-surface');
+      if (dsurf) {
+        dsurf.addEventListener('pointerdown', _onDoorDown);
+        dsurf.addEventListener('pointermove', _onDoorMove);
+        dsurf.addEventListener('pointerup',   _onDoorUp);
+        dsurf.addEventListener('pointercancel', _onDoorUp);
+        dsurf.addEventListener('wheel', _onDoorWheel, { passive: false });
+      }
+      overlay.querySelector('#tf-door-reset')?.addEventListener('click', () => {
+        _tfDoorOverlays = {};
+        _renderDoorEditor();
+        showToast('Pozycje drzwi przywrócone do domyślnych — kliknij Zastosuj', 'info');
+      });
+      overlay.querySelector('#tf-door-apply')?.addEventListener('click', async () => {
+        if (!p.id) { showToast('Najpierw zapisz kafelek', 'warn'); return; }
+        const btn = overlay.querySelector('#tf-door-apply');
+        btn.disabled = true;
+        const orig = btn.textContent;
+        btn.textContent = '⏳ Kompozytor…';
+        try {
+          await apiFetch(`/api/admin/dungeon-tiles/${p.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ door_overlays: _tfDoorOverlays }),
+          });
+          const r = await apiFetch(`/api/admin/dungeon-tiles/${p.id}/recomposite`, { method: 'POST' });
+          // Update image preview
+          const prev = overlay.querySelector('#tf-img-preview');
+          if (prev && r.image_url) {
+            prev.innerHTML = `<img src="${_esc(r.image_url)}?_t=${Date.now()}" style="width:100%;height:100%;object-fit:cover">`;
+          }
+          _renderDoorEditor();
+          showToast('Pozycje drzwi zastosowane', 'success');
+        } catch (e) {
+          showToast('Błąd: ' + e.message, 'error');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = orig;
+        }
+      });
+    }
+
     // ── Chip delete (delegated) ───────────────────────────────
     ['#tf-enemies-chips','#tf-items-chips','#tf-states-chips','#tf-exits-chips'].forEach(sel => {
       overlay.querySelector(sel).addEventListener('click', ev => {
@@ -9993,6 +10228,8 @@
 
     // Initial chip render (before pools arrive)
     _rfEnemy(); _rfItem(); _rfState(); _rfExit();
+    // Initial door overlay editor render
+    _renderDoorEditor();
 
     // ── Save & actions ────────────────────────────────────────
     overlay.querySelector('#tf-save-btn').addEventListener('click', () => _saveTile(overlay, p.id, {
@@ -10001,14 +10238,31 @@
       active_states:    _tfStates,
       exit_conditions:  _tfExits,
       riddle_key:       overlay.querySelector('#tf-riddle-sel')?.value || null,
+      door_overlays:    _tfDoorOverlays,
     }));
 
     if (p.id) {
       overlay.querySelector('#tf-generate-btn')?.addEventListener('click', () => _generateTileImage(p.id, overlay));
       overlay.querySelector('#tf-del-btn')?.addEventListener('click', () => deleteTile(p.id));
     }
+    // Populate model dropdown — prefer global checkpoint from visual_config, fall back to hardcoded default
+    Promise.all([
+      apiFetch('/api/admin/images/models'),
+      apiFetch('/api/admin/images/config').catch(() => ({})),
+    ]).then(([data, cfg]) => {
+      const sel = overlay.querySelector('#tf-img-model');
+      if (!sel) return;
+      const models = data.models || [];
+      if (!models.length) { sel.innerHTML = '<option value="">Brak modeli</option>'; return; }
+      const globalDefault = (cfg.checkpoint || '').trim() || IMAGE_GEN_DEFAULT_MODEL;
+      sel.innerHTML = models.map(m => `<option value="${_esc(m.key)}"${m.key===globalDefault?' selected':''}>${_esc(m.label)} — ${_esc(m.hint||'')}</option>`).join('');
+    }).catch(() => {
+      const sel = overlay.querySelector('#tf-img-model');
+      if (sel) sel.innerHTML = '<option value="">Błąd ładowania</option>';
+    });
     // Expose overlay editor refresh so out-of-closure callers can trigger re-render
     overlay._refreshOverlayEditor = _renderOverlayEditor;
+    overlay._refreshDoorEditor    = _renderDoorEditor;
   }
 
   async function _saveTile(overlay, tileId, dynData) {
@@ -10018,7 +10272,9 @@
         label:            overlay.querySelector('#tf-label').value.trim(),
         category_key:     overlay.querySelector('#tf-cat').value,
         doors:            Array.from(overlay.querySelectorAll('#tf-doors input:checked')).map(i=>i.dataset.door),
+        door_overlays:    dyn.door_overlays    || {},
         room_description: overlay.querySelector('#tf-desc').value,
+        image_gen_prompt: overlay.querySelector('#tf-img-prompt')?.value || '',
         enemies:          dyn.enemies          || [],
         items:            dyn.items            || [],
         active_states:    dyn.active_states    || [],
@@ -10044,13 +10300,37 @@
   }
 
   async function deleteTile(tileId) {
-    if (!confirm('Usunąć kafelek (oznaczy jako nieaktywny)?')) return;
+    const ok = await _adminConfirm('Usunąć kafelek?', 'Kafelek zostanie oznaczony jako nieaktywny (można przywrócić).');
+    if (!ok) return;
     try {
       await apiFetch(`/api/admin/dungeon-tiles/${tileId}`, { method: 'DELETE' });
       showToast('Kafelek usunięty', 'success');
-      document.querySelector('.modal-overlay')?.remove();
+      // Close the tile form modal specifically (may be nested among other overlays)
+      (document.querySelector('#tf-del-btn')?.closest('.modal-overlay')
+        || document.querySelector('.modal-overlay'))?.remove();
       _loadDungeonTiles();
     } catch (e) { showToast('Błąd: ' + e.message, 'error'); }
+  }
+
+  function _adminConfirm(title, detail = '') {
+    return new Promise(resolve => {
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:center;justify-content:center';
+      ov.innerHTML = `
+        <div style="background:#12121e;border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:24px 28px;max-width:360px;width:90%;display:flex;flex-direction:column;gap:14px">
+          <div style="font-size:.95rem;font-weight:600;color:#e8e8f8">${_esc(title)}</div>
+          ${detail ? `<div style="font-size:.82rem;color:#888;line-height:1.5">${_esc(detail)}</div>` : ''}
+          <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+            <button class="btn btn-secondary btn-sm" id="_ac-cancel">Anuluj</button>
+            <button class="btn btn-danger btn-sm" id="_ac-ok">Usuń</button>
+          </div>
+        </div>`;
+      document.body.appendChild(ov);
+      const cleanup = val => { ov.remove(); resolve(val); };
+      ov.querySelector('#_ac-ok').addEventListener('click', () => cleanup(true));
+      ov.querySelector('#_ac-cancel').addEventListener('click', () => cleanup(false));
+      ov.addEventListener('click', e => { if (e.target === ov) cleanup(false); });
+    });
   }
 
   async function _generateTileImage(tileId, overlay) {
@@ -10061,10 +10341,16 @@
     btn.textContent = '⏳ Generowanie (~30s)…';
     preview.innerHTML = '<div style="color:var(--t3)">Generowanie…</div>';
     try {
-      const r = await apiFetch(`/api/admin/dungeon-tiles/${tileId}/generate-image`, { method: 'POST', body: '{}' });
+      const imgPromptVal = (overlay.querySelector('#tf-img-prompt')?.value || '').trim();
+      const modelVal = overlay.querySelector('#tf-img-model')?.value || '';
+      const body = {};
+      if (imgPromptVal) body.image_gen_prompt = imgPromptVal;
+      if (modelVal) body.model = modelVal;
+      const r = await apiFetch(`/api/admin/dungeon-tiles/${tileId}/generate-image`, { method: 'POST', body: JSON.stringify(body) });
       preview.innerHTML = `<img src="${_esc(r.image_url)}?t=${Date.now()}" style="width:100%;height:100%;object-fit:cover">`;
       showToast('Obraz wygenerowany (zapisz aby zaktualizować inne pola)', 'success');
       overlay._refreshOverlayEditor?.();
+      overlay._refreshDoorEditor?.();
       _loadDungeonTiles();
     } catch (e) {
       preview.innerHTML = `<div style="color:#ef4444;padding:14px;text-align:center;font-size:0.78rem">${_esc(e.message)}</div>`;
@@ -10105,7 +10391,7 @@
     const p = prefill || {};
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay open';
-    overlay.innerHTML = `<div class="modal-box" style="width:480px">
+    overlay.innerHTML = `<div class="modal-box" style="width:560px">
       <div class="modal-head"><span class="modal-title">${p.key ? 'Edytuj kategorię' : 'Nowa kategoria'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
       <div class="modal-body">
         <label class="form-label">Klucz (kebab-case) *</label>
@@ -10117,6 +10403,15 @@
         <label class="form-label" style="margin-top:10px">Modyfikator stylu (do promptu obrazu)</label>
         <textarea id="tcf-style" class="form-input" rows="2" style="font-family:monospace;font-size:0.78rem">${_esc(p.style_modifier || '')}</textarea>
         <span style="font-size:0.7rem;color:var(--t3)">np. <code>dark stone dungeon walls, torch sconces, medieval</code></span>
+
+        <div style="margin-top:14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <label class="form-label" style="margin:0;flex:1;min-width:180px">System Prompt MG (kontekst narracji) 🤖</label>
+          <button class="btn btn-secondary btn-sm" id="tcf-gen-btn" style="font-size:0.75rem;padding:4px 10px" ${!p.key ? 'disabled title="Zapisz kategorię najpierw, aby wygenerować prompt"' : ''}>
+            ✨ Generuj AI
+          </button>
+        </div>
+        <textarea id="tcf-sysprompt" class="form-input" rows="5" style="font-size:0.78rem;line-height:1.5;margin-top:6px" placeholder="Opis klimatu i instrukcje dla MG jak prowadzić narrację w tym lochu...">${_esc(p.system_prompt || '')}</textarea>
+        <span style="font-size:0.7rem;color:var(--t3)">Injektowany do LLM gdy gracz wchodzi do lochu tej kategorii. Nadpisuje domyślny kontekst lokacji.</span>
       </div>
       <div class="modal-foot" style="display:flex;gap:8px;justify-content:flex-end;padding:14px">
         <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
@@ -10124,6 +10419,23 @@
       </div>
     </div>`;
     document.body.appendChild(overlay);
+
+    // AI generate button
+    overlay.querySelector('#tcf-gen-btn')?.addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      const key = p.key || overlay.querySelector('#tcf-key').value.trim();
+      if (!key) { showToast('Zapisz kategorię najpierw', 'error'); return; }
+      btn.disabled = true; btn.textContent = '⏳ Generuję…';
+      try {
+        const r = await apiFetch(`/api/admin/dungeon-tile-categories/${key}/generate-system-prompt`, { method: 'POST' });
+        if (r.system_prompt) {
+          overlay.querySelector('#tcf-sysprompt').value = r.system_prompt;
+          showToast('Prompt wygenerowany', 'success');
+        }
+      } catch (e) { showToast('Błąd generowania: ' + e.message, 'error'); }
+      finally { btn.disabled = false; btn.textContent = '✨ Generuj AI'; }
+    });
+
     overlay.querySelector('#tcf-save').addEventListener('click', async () => {
       const key = overlay.querySelector('#tcf-key').value.trim();
       const label = overlay.querySelector('#tcf-label').value.trim();
@@ -10132,6 +10444,7 @@
         key, label,
         description: overlay.querySelector('#tcf-desc').value,
         style_modifier: overlay.querySelector('#tcf-style').value,
+        system_prompt: overlay.querySelector('#tcf-sysprompt').value,
       };
       try {
         if (p.key) {
@@ -13896,22 +14209,24 @@
       sel.innerHTML = '<option value="">(domyślny serwisu)</option>' +
         _igModels.map(m => `<option value="${_esc(m.key)}" title="${_esc(m.hint||'')}">${_esc(m.label)}</option>`).join('');
       if (current) sel.value = current;
-      _updateIgModelHint();
+      _updateIgModelHint(false);  // hint only — don't overwrite saved steps with model defaults
     } catch(e) { console.warn('models load failed:', e.message); }
   }
 
-  function _updateIgModelHint() {
+  function _updateIgModelHint(autoFillSteps = true) {
     const sel = document.getElementById('ig-checkpoint');
     const hintEl = document.getElementById('ig-model-hint');
     if (!sel || !hintEl) return;
     const m = _igModels.find(x => x.key === sel.value);
     if (m) {
       hintEl.textContent = m.hint || '';
-      // Auto-fill steps from model defaults when user changes selection
-      const stepsEl = document.getElementById('ig-steps');
-      const refEl = document.getElementById('ig-refine-steps');
-      if (stepsEl && m.default_steps_t2i) stepsEl.value = m.default_steps_t2i;
-      if (refEl && m.default_steps_i2i) refEl.value = m.default_steps_i2i;
+      // Auto-fill steps only when user manually changes the model, not during initial load
+      if (autoFillSteps) {
+        const stepsEl = document.getElementById('ig-steps');
+        const refEl = document.getElementById('ig-refine-steps');
+        if (stepsEl && m.default_steps_t2i) stepsEl.value = m.default_steps_t2i;
+        if (refEl && m.default_steps_i2i) refEl.value = m.default_steps_i2i;
+      }
     } else {
       hintEl.textContent = '';
     }

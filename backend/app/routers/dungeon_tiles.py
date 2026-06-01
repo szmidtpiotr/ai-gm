@@ -26,6 +26,7 @@ from app.services.dungeon_tile_service import (
     draw_tile_sequence,
     resolve_tile_content,
 )
+from app.services.tile_compositor import composite_tile, default_overlays_for
 
 DB_PATH = Path("/data/ai_gm.db")
 TILES_DIR = Path("/app/tiles")  # bind-mounted to frontend/images/tiles
@@ -37,8 +38,9 @@ IMAGE_GEN_TIMEOUT = int(os.getenv("DUNGEON_IMAGE_GEN_TIMEOUT", "180"))
 
 BASE_PROMPT = (
     "Gloomhaven dungeon tile art style, top down view, flat 2D illustration, "
-    "stone floor, thick dark stone walls forming square border, fantasy board game tile, "
-    "overhead perspective, square tile format, painted game art, cartoonish style"
+    "stone floor with room interior decor and furniture, fantasy board game tile, "
+    "overhead perspective, square tile format, painted game art, cartoonish style, "
+    "NO walls, NO doors, NO doorways, NO archways, NO openings — only floor and interior content"
 )
 
 DIRECTION_WORDS = {"N": "north", "S": "south", "E": "east", "W": "west"}
@@ -63,6 +65,11 @@ def _tile_to_dict(row: sqlite3.Row) -> dict:
             d[k.replace("_json", "")] = json.loads(d.get(k) or "[]")
         except Exception:
             d[k.replace("_json", "")] = []
+    # door_overlays is a dict (per-side positions), not a list
+    try:
+        d["door_overlays"] = json.loads(d.get("door_overlays_json") or "{}")
+    except Exception:
+        d["door_overlays"] = {}
     d["is_boss_tile"] = bool(d.get("is_boss_tile") or 0)
     d["is_active"] = bool(d.get("is_active") or 0)
     return d
@@ -91,11 +98,12 @@ def create_category(payload: dict = Body(...)) -> dict:
         try:
             c.execute(
                 """INSERT INTO dungeon_tile_categories
-                   (key, label, description, style_modifier, sort_order)
-                   VALUES (?, ?, ?, ?, ?)""",
+                   (key, label, description, style_modifier, system_prompt, sort_order)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
                 (key, label,
                  payload.get("description", ""),
                  payload.get("style_modifier", ""),
+                 payload.get("system_prompt", ""),
                  int(payload.get("sort_order") or 0)),
             )
             c.commit()
@@ -109,7 +117,7 @@ def create_category(payload: dict = Body(...)) -> dict:
 def update_category(key: str, payload: dict = Body(...)) -> dict:
     fields = []
     params: list[Any] = []
-    for k in ("label", "description", "style_modifier", "sort_order", "is_active"):
+    for k in ("label", "description", "style_modifier", "system_prompt", "sort_order", "is_active"):
         if k in payload:
             fields.append(f"{k} = ?")
             params.append(payload[k])
@@ -120,6 +128,53 @@ def update_category(key: str, payload: dict = Body(...)) -> dict:
         c.execute(f"UPDATE dungeon_tile_categories SET {', '.join(fields)} WHERE key = ?", params)
         c.commit()
     return {"ok": True}
+
+
+@router.post("/dungeon-tile-categories/{key}/generate-system-prompt",
+             dependencies=[Depends(require_admin_token)])
+def generate_category_system_prompt(key: str) -> dict:
+    """Use LLM to generate a GM system prompt for this tile category."""
+    with _conn() as c:
+        row = c.execute(
+            "SELECT key, label, description, style_modifier FROM dungeon_tile_categories WHERE key = ?",
+            (key,)
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    from app.services.llm_service import generate_chat
+
+    cat = dict(row)
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Jesteś ekspertem od projektowania gier fabularnych. Tworzysz instrukcje dla Mistrza Gry "
+                "do gry RPG w stylu dark fantasy. Odpowiadasz wyłącznie po polsku."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Stwórz system prompt dla Mistrza Gry dla kategorii kafelkowego lochu o nazwie '{cat['label']}'.\n"
+                f"Opis kategorii: {cat['description'] or '(brak)'}\n"
+                f"Styl wizualny: {cat['style_modifier'] or '(brak)'}\n\n"
+                "System prompt powinien:\n"
+                "1. Ustawić klimat i atmosferę (3-5 zdań)\n"
+                "2. Wskazać MG jak opisywać komnaty, dźwięki, zapachy, nastrój\n"
+                "3. Określić poziom mroku i niebezpieczeństwa\n"
+                "4. Być napisany po POLSKU, w trybie rozkazującym (instrukcje dla MG)\n"
+                "5. Mieć max 200 słów — zwięzły, konkretny\n\n"
+                "Zwróć TYLKO sam tekst promptu, bez nagłówków ani komentarzy."
+            ),
+        },
+    ]
+
+    try:
+        result = generate_chat(messages, call_type="admin_gen")
+        return {"ok": True, "system_prompt": result.strip()}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"LLM error: {exc}")
 
 
 # ── Tiles ─────────────────────────────────────────────────────────────────────
@@ -213,6 +268,7 @@ def update_tile(tile_id: int, payload: dict = Body(...)) -> dict:
         "image_url": ("image_url", lambda v: v),
         "image_gen_prompt": ("image_gen_prompt", lambda v: v),
         "doors": ("doors_json", lambda v: json.dumps(_normalize_doors(v))),
+        "door_overlays": ("door_overlays_json", lambda v: json.dumps(v or {})),
         "room_description": ("room_description", lambda v: v),
         "enemies": ("enemies_json", lambda v: json.dumps(v or [])),
         "items": ("items_json", lambda v: json.dumps(v or [])),
@@ -251,22 +307,16 @@ def delete_tile(tile_id: int) -> dict:
 # ── Image generation ──────────────────────────────────────────────────────────
 
 def _build_prompt(tile: dict, category_style: str) -> str:
-    """Compose final prompt from base + category style + tile content + doors."""
+    """Compose final prompt — interior decor only. Walls + doors are composited
+    mechanically by `tile_compositor.py`, so the prompt explicitly forbids them.
+    """
     parts = [BASE_PROMPT]
     if category_style:
         parts.append(category_style)
-    room_desc = (tile.get("room_description") or "").strip()
-    if room_desc:
-        parts.append(room_desc)
-    doors = _normalize_doors(tile.get("doors") or json.loads(tile.get("doors_json") or "[]"))
-    if doors:
-        words = [DIRECTION_WORDS[d] for d in doors]
-        if len(words) == 1:
-            parts.append(f"gap opening in {words[0]} wall")
-        elif len(words) == 4:
-            parts.append("gap openings in all four walls north south east west")
-        else:
-            parts.append("gap openings in " + " and ".join(f"{w} wall" for w in words))
+    # Use image_gen_prompt (English) not room_description (Polish — FLUX won't understand)
+    img_prompt = (tile.get("image_gen_prompt") or "").strip()
+    if img_prompt:
+        parts.append(img_prompt)
     return ", ".join(parts)
 
 
@@ -284,19 +334,38 @@ def generate_tile_image(tile_id: int, payload: dict = Body(default={})) -> dict:
         ).fetchone()
     cat_style = cat["style_modifier"] if cat else ""
 
-    # Build prompt (admin override possible)
+    # Build prompt — admin can override full prompt OR just the image_gen_prompt part
     override_prompt = (payload or {}).get("prompt")
+    override_img_prompt = (payload or {}).get("image_gen_prompt")
     if override_prompt:
         prompt = str(override_prompt).strip()
+    elif override_img_prompt:
+        tile_dict = _tile_to_dict(tile)
+        tile_dict["image_gen_prompt"] = str(override_img_prompt).strip()
+        prompt = _build_prompt(tile_dict, cat_style)
     else:
         prompt = _build_prompt(_tile_to_dict(tile), cat_style)
 
-    steps = int((payload or {}).get("steps") or 8)
-    model = str((payload or {}).get("model") or IMAGE_GEN_MODEL)
+    # Read global image quality config from visual_config (set via #system/imagegen).
+    # Per-request overrides from payload still take precedence.
+    try:
+        from app.routers.admin_images import _get_image_config as _img_cfg
+        _gcfg = _img_cfg()
+    except Exception:
+        _gcfg = {}
+    _global_steps = int(_gcfg.get("image_gen.refine_steps") or 8)
+    _global_model = str(_gcfg.get("image_gen.checkpoint") or "").strip() or IMAGE_GEN_MODEL
+
+    steps = int((payload or {}).get("steps") or _global_steps)
+    model = str((payload or {}).get("model") or _global_model)
+
+    _gen_url = str(_gcfg.get("image_gen.url") or IMAGE_GEN_URL).strip().rstrip("/") + "/generate"
+    if not _gen_url.startswith("http"):
+        _gen_url = IMAGE_GEN_URL
 
     try:
         resp = requests.post(
-            IMAGE_GEN_URL,
+            _gen_url,
             json={"prompt": prompt, "width": 512, "height": 512, "steps": steps, "model": model},
             timeout=IMAGE_GEN_TIMEOUT,
         )
@@ -314,26 +383,106 @@ def generate_tile_image(tile_id: int, payload: dict = Body(default={})) -> dict:
         raise HTTPException(status_code=502,
                             detail=f"Image gen missing b64: {data.get('error', 'unknown error')}")
 
-    # Save to bind-mounted dir; bust browser cache with timestamp
+    # Save raw AI output (kept on disk for re-compositing if door overlays change)
     ts = int(time.time())
-    fname = f"dungeon_tile_{tile_id}_{ts}.png"
-    out_path = TILES_DIR / fname
+    raw_fname = f"dungeon_tile_{tile_id}_raw_{ts}.png"
+    raw_path = TILES_DIR / raw_fname
     try:
-        out_path.write_bytes(base64.b64decode(data["b64"]))
+        raw_bytes = base64.b64decode(data["b64"])
+        raw_path.write_bytes(raw_bytes)
     except (ValueError, OSError) as exc:
         raise HTTPException(status_code=500,
-                            detail=f"Failed to save image: {exc}") from None
+                            detail=f"Failed to save raw image: {exc}") from None
+    raw_url = f"/images/tiles/{raw_fname}"
 
-    public_url = f"/images/tiles/{fname}"
+    # Composite: raw + procedural wall frame + door arches at active sides
+    tile_dict = _tile_to_dict(tile)
+    doors = _normalize_doors(tile_dict.get("doors") or [])
+    overlays = tile_dict.get("door_overlays") or {}
+    try:
+        final_bytes = composite_tile(raw_bytes, doors, overlays)
+    except Exception as exc:
+        raise HTTPException(status_code=500,
+                            detail=f"Compositor failed: {exc}") from None
+
+    final_fname = f"dungeon_tile_{tile_id}_{ts}.png"
+    final_path = TILES_DIR / final_fname
+    try:
+        final_path.write_bytes(final_bytes)
+    except OSError as exc:
+        raise HTTPException(status_code=500,
+                            detail=f"Failed to save composited image: {exc}") from None
+    final_url = f"/images/tiles/{final_fname}"
+
+    # Backfill overlays with defaults for any active door missing a custom position
+    if doors:
+        merged_overlays = dict(overlays or {})
+        for side in doors:
+            if side not in merged_overlays:
+                merged_overlays.update(default_overlays_for([side]))
+    else:
+        merged_overlays = overlays
+
     with _conn() as c:
         c.execute(
-            "UPDATE dungeon_tiles SET image_url = ?, image_gen_prompt = ?, "
-            "updated_at = datetime('now') WHERE id = ?",
-            (public_url, prompt, tile_id),
+            "UPDATE dungeon_tiles SET image_url = ?, image_url_raw = ?, "
+            "door_overlays_json = ?, updated_at = datetime('now') WHERE id = ?",
+            (final_url, raw_url, json.dumps(merged_overlays), tile_id),
         )
         c.commit()
 
-    return {"ok": True, "image_url": public_url, "prompt": prompt, "filename": fname}
+    return {
+        "ok": True,
+        "image_url": final_url,
+        "image_url_raw": raw_url,
+        "prompt": prompt,
+        "filename": final_fname,
+        "door_overlays": merged_overlays,
+    }
+
+
+@router.post("/dungeon-tiles/{tile_id}/recomposite",
+             dependencies=[Depends(require_admin_token)])
+def recomposite_tile_image(tile_id: int) -> dict:
+    """Re-run the wall+door compositor on the stored raw image.
+
+    Use after editing door_overlays_json or active doors — no AI gen call needed.
+    Returns 400 if no raw image is stored for this tile.
+    """
+    with _conn() as c:
+        tile = c.execute("SELECT * FROM dungeon_tiles WHERE id = ?", (tile_id,)).fetchone()
+        if not tile:
+            raise HTTPException(status_code=404, detail="Tile not found")
+    tile_dict = _tile_to_dict(tile)
+    raw_url = tile_dict.get("image_url_raw")
+    if not raw_url:
+        raise HTTPException(
+            status_code=400,
+            detail="No raw image stored — regenerate first to capture raw AI output.",
+        )
+    raw_fname = raw_url.rsplit("/", 1)[-1]
+    raw_path = TILES_DIR / raw_fname
+    if not raw_path.exists():
+        raise HTTPException(status_code=400, detail=f"Raw image missing on disk: {raw_fname}")
+    raw_bytes = raw_path.read_bytes()
+    doors = _normalize_doors(tile_dict.get("doors") or [])
+    overlays = tile_dict.get("door_overlays") or {}
+    try:
+        final_bytes = composite_tile(raw_bytes, doors, overlays)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Compositor failed: {exc}") from None
+
+    ts = int(time.time())
+    final_fname = f"dungeon_tile_{tile_id}_{ts}.png"
+    (TILES_DIR / final_fname).write_bytes(final_bytes)
+    final_url = f"/images/tiles/{final_fname}"
+    with _conn() as c:
+        c.execute(
+            "UPDATE dungeon_tiles SET image_url = ?, updated_at = datetime('now') WHERE id = ?",
+            (final_url, tile_id),
+        )
+        c.commit()
+    return {"ok": True, "image_url": final_url, "filename": final_fname}
 
 
 # ── Path preview (admin testing) ──────────────────────────────────────────────
