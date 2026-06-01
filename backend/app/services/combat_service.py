@@ -1753,24 +1753,26 @@ def resolve_attack(
             dmg = 0
             player_attack_log_meta = None
             if attack_roll:
-                player_attack_log_meta = json.dumps(
-                    {
-                        "raw_d20": int(player_raw) if player_raw is not None else None,
-                        "attack_test": str(attack_roll.get("test") or ""),
-                        "attack_stat": str(attack_roll.get("attack_stat") or ""),
-                        "attack_label": {
-                            "melee_attack": "ATAK WRĘCZ",
-                            "ranged_attack": "ATAK DYSTANSOWY",
-                            "spell_attack": "KANTRYP MAGICZNY" if (weapon_row or {}).get("key") == "scholar_cantrip" else "ATAK MAGICZNY",
-                        }.get(str(attack_roll.get("test") or ""), "ATAK"),
-                        "modifier": int(attack_roll.get("modifier") or 0),
-                        "total": int(attack_roll.get("total") or roll_result or 0),
-                        "weapon_key": str(attack_roll.get("weapon_key") or ""),
-                        "weapon_label": str(attack_roll.get("weapon_label") or ""),
-                        "weapon_type": str(attack_roll.get("weapon_type") or ""),
-                    },
-                    ensure_ascii=False,
-                )
+                _meta: dict = {
+                    "raw_d20": int(player_raw) if player_raw is not None else None,
+                    "attack_test": str(attack_roll.get("test") or ""),
+                    "attack_stat": str(attack_roll.get("attack_stat") or ""),
+                    "attack_label": {
+                        "melee_attack": "ATAK WRĘCZ",
+                        "ranged_attack": "ATAK DYSTANSOWY",
+                        "spell_attack": "KANTRYP MAGICZNY" if (weapon_row or {}).get("key") == "scholar_cantrip" else "ATAK MAGICZNY",
+                    }.get(str(attack_roll.get("test") or ""), "ATAK"),
+                    "modifier": int(attack_roll.get("modifier") or 0),
+                    "total": int(attack_roll.get("total") or roll_result or 0),
+                    "weapon_key": str(attack_roll.get("weapon_key") or ""),
+                    "weapon_label": str(attack_roll.get("weapon_label") or ""),
+                    "weapon_type": str(attack_roll.get("weapon_type") or ""),
+                }
+                if dodge_roll is not None:
+                    _meta["dodged"] = bool(dodge_roll.get("dodged"))
+                    _meta["dodge_total"] = int(dodge_roll.get("total") or 0)
+                    _meta["dodge_raw"] = int(dodge_roll.get("raw") or 0)
+                player_attack_log_meta = json.dumps(_meta, ensure_ascii=False)
 
             # ── Spell: detect spell_attack weapon + mana deduction ────────────
             _is_spell = str(

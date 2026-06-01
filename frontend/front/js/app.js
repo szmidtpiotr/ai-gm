@@ -626,6 +626,7 @@ function handleLogout() {
     localStorage.removeItem('aigm_refresh_token');
     localStorage.removeItem('aigm_hero_id');
     localStorage.removeItem('aigm_campaign_id');
+    localStorage.removeItem('aigm_bugreport_pos');
     try { sessionStorage.removeItem('aigm_hero_id'); sessionStorage.removeItem('aigm_active_session'); } catch {}
     showScreen('login');
 }
@@ -5706,9 +5707,11 @@ function _buildCombatBubble(row) {
         const label = escapeHtml(String(meta.attack_label || 'ATAK'));
         const stat = meta.attack_stat ? ` · ${escapeHtml(String(meta.attack_stat).toUpperCase())}` : '';
         const ac = meta.target_ac != null ? ` vs AC ${meta.target_ac}` : '';
+        const dodgeInfo = (!hit && meta.dodged && meta.dodge_total != null)
+            ? ` (unik: ${meta.dodge_total})` : '';
         const hitLine = hit
             ? `<span class="cturn__hit">✅ TRAFIENIE · ${dmg != null ? dmg : '?'} obrażeń</span>`
-            : `<span class="cturn__miss">❌ PUDŁO</span>`;
+            : `<span class="cturn__miss">❌ PUDŁO${dodgeInfo}</span>`;
         html = `<div class="cturn cturn--player">
             <div class="cturn__head">⚔️ <strong>${label}</strong>${stat} → ${tgt}</div>
             <div class="cturn__detail">Rzut: ${rv != null ? rv : '—'}${ac} → ${hitLine}</div>
@@ -11872,64 +11875,73 @@ const _capturedJsErrors = [];
 })();
 
 function _makeDraggable(el) {
-    let startY, startTop, dragging = false;
-    const STORAGE_KEY = 'aigm_bugreport_pos';
-    const MARGIN = 8;
+    const KEY = 'aigm_bugreport_pos';
+    const M = 8;
+    let startX, startY, startLeft, startTop, dragging = false;
 
-    function parentH() {
-        return window.innerHeight;
+    function clamp(left, top) {
+        const w = el.offsetWidth || 44, h = el.offsetHeight || 44;
+        return {
+            left: Math.max(M, Math.min(window.innerWidth  - w - M, left)),
+            top:  Math.max(M, Math.min(window.innerHeight - h - M, top)),
+        };
     }
 
-    function clampTop(top) {
-        const h = el.offsetHeight || 44;
-        return Math.max(MARGIN, Math.min(parentH() - h - MARGIN, top));
-    }
-
-    function applyStoredPos() {
+    function applyStored() {
         try {
-            const p = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-            if (p && p.top != null) {
-                el.style.top    = clampTop(parseFloat(p.top) || 0) + 'px';
-                el.style.bottom = 'auto';
-                el.style.left   = 'auto';
-                el.style.right  = '16px';
+            const p = JSON.parse(localStorage.getItem(KEY) || 'null');
+            if (p && p.left != null && p.top != null) {
+                const c = clamp(parseFloat(p.left), parseFloat(p.top));
+                el.style.left      = c.left + 'px';
+                el.style.top       = c.top  + 'px';
+                el.style.right     = 'auto';
+                el.style.bottom    = 'auto';
+                el.style.transform = 'none';
             }
         } catch {}
     }
-    applyStoredPos();
-    window.addEventListener('resize', applyStoredPos);
+    applyStored();
+    window.addEventListener('resize', applyStored);
 
     function onStart(cx, cy) {
         dragging = true;
-        startY = cy;
+        startX = cx; startY = cy;
         const rect = el.getBoundingClientRect();
-        const parentRect = (el.parentElement || document.getElementById('game-screen') || document.body).getBoundingClientRect();
-        startTop = rect.top - parentRect.top;
-        el.style.top    = startTop + 'px';
-        el.style.bottom = 'auto';
-        el.style.left   = 'auto';
-        el.style.right  = '16px';
+        startLeft = rect.left; startTop = rect.top;
+        el.style.left      = startLeft + 'px';
+        el.style.top       = startTop  + 'px';
+        el.style.right     = 'auto';
+        el.style.bottom    = 'auto';
+        el.style.transform = 'none';
     }
     function onMove(cx, cy) {
         if (!dragging) return;
-        el.style.top = clampTop(startTop + cy - startY) + 'px';
+        const c = clamp(startLeft + cx - startX, startTop + cy - startY);
+        el.style.left = c.left + 'px';
+        el.style.top  = c.top  + 'px';
     }
     function onEnd(wasTap) {
         if (!dragging) return;
         dragging = false;
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ top: el.style.top })); } catch {}
+        try { localStorage.setItem(KEY, JSON.stringify({ left: el.style.left, top: el.style.top })); } catch {}
         if (wasTap) openBugReportModal();
     }
 
-    el.addEventListener('mousedown', e => { e.preventDefault(); const sy = e.clientY; const moved = { v: false }; onStart(e.clientX, e.clientY);
-        const mm = e2 => { if (Math.abs(e2.clientY - sy) > 4) moved.v = true; onMove(e2.clientX, e2.clientY); };
+    el.addEventListener('mousedown', e => {
+        e.preventDefault();
+        const sx = e.clientX, sy = e.clientY; const moved = { v: false };
+        onStart(sx, sy);
+        const mm = e2 => { if (Math.abs(e2.clientX - sx) > 5 || Math.abs(e2.clientY - sy) > 5) moved.v = true; onMove(e2.clientX, e2.clientY); };
         const mu = () => { document.removeEventListener('mousemove', mm); document.removeEventListener('mouseup', mu); onEnd(!moved.v); };
-        document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu); });
-
-    el.addEventListener('touchstart', e => { const t = e.touches[0]; const sy = t.clientY; const moved = { v: false }; onStart(t.clientX, t.clientY);
-        const tm = e2 => { const t2 = e2.touches[0]; if (Math.abs(t2.clientY - sy) > 4) moved.v = true; onMove(t2.clientX, t2.clientY); };
+        document.addEventListener('mousemove', mm); document.addEventListener('mouseup', mu);
+    });
+    el.addEventListener('touchstart', e => {
+        const t = e.touches[0]; const sx = t.clientX, sy = t.clientY; const moved = { v: false };
+        onStart(sx, sy);
+        const tm = e2 => { const t2 = e2.touches[0]; if (Math.abs(t2.clientX - sx) > 5 || Math.abs(t2.clientY - sy) > 5) moved.v = true; onMove(t2.clientX, t2.clientY); };
         const te = () => { el.removeEventListener('touchmove', tm); el.removeEventListener('touchend', te); onEnd(!moved.v); };
-        el.addEventListener('touchmove', tm, { passive: true }); el.addEventListener('touchend', te); }, { passive: true });
+        el.addEventListener('touchmove', tm, { passive: true }); el.addEventListener('touchend', te);
+    }, { passive: true });
 }
 
 function _refreshBugReportButton() {
@@ -11938,7 +11950,7 @@ function _refreshBugReportButton() {
     if (!btn) {
         btn = document.createElement('button');
         btn.id = 'bug-report-btn';
-        btn.title = 'Zgłoś błąd (przeciągnij, żeby przenieść)';
+        btn.title = 'Zgłoś błąd / Sugestia (przeciągnij, żeby przenieść)';
         btn.innerHTML = '🐞';
         _makeDraggable(btn);
         document.body.appendChild(btn);
