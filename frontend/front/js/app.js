@@ -680,6 +680,12 @@ async function handleRegister(e) {
         errEl.hidden = false;
         return;
     }
+    const confirm = document.getElementById('register-password-confirm').value;
+    if (password !== confirm) {
+        errEl.textContent = 'Hasła nie są zgodne';
+        errEl.hidden = false;
+        return;
+    }
 
     const btn = document.querySelector('#register-form button[type="submit"]');
     btn.disabled = true;
