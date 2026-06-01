@@ -2162,12 +2162,13 @@ function _renderStep2(c) {
         const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
         const canMinus = v > WIZARD_STAT_MIN;
         const canPlus = v < WIZARD_STAT_MAX && wizardStatUnassigned > 0;
-        const hint = STAT_HINTS[stat] || stat;
+        const hintFull = STAT_HINTS[stat] || stat;
+        const hintDesc = hintFull.includes(' — ') ? hintFull.split(' — ')[1] : hintFull;
         rows += `
             <div class="wizard-stat-row" data-stat="${stat}">
-                <div class="wizard-stat-label-wrap">
+                <div class="wizard-stat-label-group">
                     <span class="wizard-stat-label">${stat}</span>
-                    <span class="wizard-stat-hint" data-tooltip="${hint}">?</span>
+                    <span class="wizard-stat-desc">${hintDesc}</span>
                 </div>
                 <span class="wizard-stat-mod">${modStr}</span>
                 <div class="wizard-stat-controls">
@@ -2188,7 +2189,7 @@ function _renderStep2(c) {
 
     c.innerHTML = `
         <div class="wizard-form wiz-stats-reveal">
-            <p class="wizard-hint">Przesuń punkty między statystykami. Zmniejsz stat (−) aby dodać do puli, wydaj pulę (+) na inne. Bonusy klasy dodawane automatycznie.</p>
+            <p class="wizard-hint">Przesuń punkty między statystykami. Zakres: ${WIZARD_STAT_MIN}–${WIZARD_STAT_MAX} · Zmniejsz stat (−) aby dodać do puli, wydaj pulę (+) na inne.</p>
             <div class="wizard-points">Niezapisane punkty: <strong>${wizardStatUnassigned}</strong></div>
             <p class="wizard-class-note">${bonusStr} dodawane automatycznie po potwierdzeniu</p>
             <div class="wizard-stat-grid">${rows}</div>
@@ -2384,6 +2385,7 @@ function _renderStep3(c) {
                     <div class="wiz-scard-main">
                         <span class="wiz-scard-name">${_esc(curRow.label)}</span>
                         <span class="wiz-scard-stat">${curRow.stat}</span>
+                        ${curRow.hint ? `<span class="wiz-scard-desc">${_esc(curRow.hint)}</span>` : ''}
                     </div>
                     <div class="wiz-scard-foot">
                         <span class="wiz-scard-dots">${_rankDots(rank)}</span>

@@ -6361,9 +6361,19 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   padding: 10px 14px;
 }
 .wizard-stat-label-wrap { display: flex; align-items: center; gap: 4px; min-width: 42px; }
+.wizard-stat-label-group {
+  display: flex; flex-direction: column; gap: 2px;
+  flex: 1; min-width: 0;
+}
 .wizard-stat-label {
   font-weight: 700;
   font-size: 0.9rem;
+}
+.wizard-stat-desc {
+  font-size: 0.67rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+  opacity: 0.85;
 }
 .wizard-stat-hint {
   width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.3);
@@ -10035,7 +10045,7 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 
 /* Card inner layout */
 .wiz-scard-body {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: flex-start; gap: 8px;
   padding: 9px 10px;
 }
 .wiz-scard-main {
@@ -10050,6 +10060,13 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 .wiz-scard-stat {
   font-family: 'Cinzel', serif; font-size: 0.6rem; font-weight: 700;
   color: var(--text-muted); letter-spacing: 0.1em;
+}
+.wiz-scard-desc {
+  font-size: 0.62rem; color: var(--text-muted); line-height: 1.3;
+  opacity: 0.75; white-space: normal;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 1px;
 }
 
 .wiz-scard-foot {
