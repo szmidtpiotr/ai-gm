@@ -43,7 +43,7 @@ const DICE = (function() {
         desk_color: '#101010', //canvas background
         desk_opacity: 0.5,
         use_shadows: true,
-        use_adapvite_timestep: true //todo: setting this to false improves performace a lot. but the dice rolls don't look as natural...
+        use_adapvite_timestep: false // false = fixed timestep: faster physics, less natural but reliable on all devices
 
     }
 

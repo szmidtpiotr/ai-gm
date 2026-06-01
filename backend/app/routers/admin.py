@@ -343,6 +343,8 @@ class WeaponPatchReq(BaseModel):
     weapon_slot: str | None = None  # Stage 5
     is_active: bool | None = None
     rarity: int | None = None
+    image_prompt: str | None = None
+    image_url: str | None = None
     force: bool = False
 
 
@@ -467,6 +469,8 @@ class ItemPatchReq(BaseModel):
     note: str | None = None
     is_active: bool | None = None
     rarity: int | None = None
+    image_prompt: str | None = None
+    image_url: str | None = None
     force: bool = False
 
 
@@ -551,6 +555,9 @@ class ConsumablePatchReq(BaseModel):
     note: str | None = None
     is_active: bool | None = None
     rarity: int | None = None
+    effect_json: str | None = None
+    image_prompt: str | None = None
+    image_url: str | None = None
     force: bool = False
 
 
@@ -1228,6 +1235,9 @@ def admin_create_weapon(req: WeaponCreateReq, _: None = Depends(require_admin_to
 @router.patch("/admin/weapons/{key}")
 def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_admin_token)):
     try:
+        _fs = req.model_fields_set
+        image_url_val = "" if ("image_url" in _fs and req.image_url is None) else req.image_url
+        image_prompt_val = "" if ("image_prompt" in _fs and req.image_prompt is None) else req.image_prompt
         item = update_weapon(
             key,
             label=req.label,
@@ -1248,6 +1258,8 @@ def admin_patch_weapon(key: str, req: WeaponPatchReq, _: None = Depends(require_
             effect_json=req.effect_json,
             weapon_slot=req.weapon_slot,
             is_active=req.is_active,
+            image_prompt=image_prompt_val,
+            image_url=image_url_val,
             force=req.force,
         )
         if req.rarity is not None:
@@ -1639,6 +1651,9 @@ def admin_create_item(req: ItemCreateReq, _: None = Depends(require_admin_token)
 @router.patch("/admin/items/{key}")
 def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admin_token)):
     try:
+        _fs = req.model_fields_set
+        image_url_val = "" if ("image_url" in _fs and req.image_url is None) else req.image_url
+        image_prompt_val = "" if ("image_prompt" in _fs and req.image_prompt is None) else req.image_prompt
         item = update_item(
             key,
             label=req.label,
@@ -1659,6 +1674,8 @@ def admin_patch_item(key: str, req: ItemPatchReq, _: None = Depends(require_admi
             approved=req.approved,
             note=req.note,
             is_active=req.is_active,
+            image_prompt=image_prompt_val,
+            image_url=image_url_val,
             force=req.force,
         )
         if req.rarity is not None:
@@ -1784,6 +1801,9 @@ def admin_create_consumable(req: ConsumableCreateReq, _: None = Depends(require_
 @router.patch("/admin/consumables/{key}")
 def admin_patch_consumable(key: str, req: ConsumablePatchReq, _: None = Depends(require_admin_token)):
     try:
+        _fs = req.model_fields_set
+        image_url_val = "" if ("image_url" in _fs and req.image_url is None) else req.image_url
+        image_prompt_val = "" if ("image_prompt" in _fs and req.image_prompt is None) else req.image_prompt
         item = update_consumable(
             key,
             new_key=req.new_key,
@@ -1798,6 +1818,9 @@ def admin_patch_consumable(key: str, req: ConsumablePatchReq, _: None = Depends(
             base_price=req.value_gp,
             note=req.note,
             is_active=req.is_active,
+            effect_json=req.effect_json,
+            image_prompt=image_prompt_val,
+            image_url=image_url_val,
             force=req.force,
         )
         if req.rarity is not None:
@@ -4094,6 +4117,7 @@ class InviteCreateReq(BaseModel):
     email: str | None = None           # None = open invite (admin only)
     message: str | None = None
     expires_hours: int = 72
+    max_uses: int = 1                  # 1 = single-use, N>1 = batch, 0 = unlimited
 
 
 @router.post("/admin/invites")
@@ -4106,6 +4130,7 @@ def admin_create_invite(
     if not verify_admin_token(token):
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
+    max_uses = max(0, req.max_uses)  # clamp negative values to 0 (unlimited)
     code = _secrets.token_urlsafe(20)
     expires_at = (datetime.now(timezone.utc) + timedelta(hours=req.expires_hours)).isoformat()
 
@@ -4117,10 +4142,10 @@ def admin_create_invite(
         admin_user_id = row["id"] if row else 1
         conn.execute(
             """
-            INSERT INTO user_invites (code, created_by, email, message, created_at, expires_at)
-            VALUES (?, ?, ?, ?, datetime('now'), ?)
+            INSERT INTO user_invites (code, created_by, email, message, created_at, expires_at, max_uses, uses_count)
+            VALUES (?, ?, ?, ?, datetime('now'), ?, ?, 0)
             """,
-            (code, admin_user_id, req.email or None, req.message or None, expires_at),
+            (code, admin_user_id, req.email or None, req.message or None, expires_at, max_uses),
         )
         conn.commit()
 
@@ -4133,13 +4158,22 @@ def admin_create_invite(
             "invite_link": invite_link,
             "email": req.email,
             "expires_at": expires_at,
+            "max_uses": max_uses,
         }
     finally:
         conn.close()
 
 
+class InviteSendEmailReq(BaseModel):
+    inviter_name: str | None = None
+
+
 @router.post("/admin/invites/{code}/send-email")
-def admin_send_invite_email(code: str, authorization: str | None = Header(default=None)):
+def admin_send_invite_email(
+    code: str,
+    req: InviteSendEmailReq = None,
+    authorization: str | None = Header(default=None),
+):
     """Admin: send (or re-send) an invite email for an existing invite code."""
     token = (authorization or "").removeprefix("Bearer ").strip()
     if not verify_admin_token(token):
@@ -4158,13 +4192,25 @@ def admin_send_invite_email(code: str, authorization: str | None = Header(defaul
             raise HTTPException(status_code=400, detail="Invite has no email address")
         message = row["message"]
 
-        admin_row = conn.execute(
-            "SELECT username FROM users WHERE is_admin=1 ORDER BY id LIMIT 1"
-        ).fetchone()
-        inviter_name = admin_row["username"] if admin_row else "AI-GM"
+        # inviter_name: use override from request, else fall back to admin username
+        if req and req.inviter_name:
+            inviter_name = req.inviter_name
+        else:
+            admin_row = conn.execute(
+                "SELECT username FROM users WHERE is_admin=1 ORDER BY id LIMIT 1"
+            ).fetchone()
+            inviter_name = admin_row["username"] if admin_row else "AI-GM"
 
         base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
         invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+
+        # Strip link from message — button + fallback in email template handle the CTA
+        import re as _re
+        if message:
+            message = message.replace("[LINK]", "").replace("[link zostanie wstawiony po wygenerowaniu]", "")
+            # Strip bare URLs (invite link itself if already substituted)
+            message = _re.sub(r'https?://\S*register\?invite=\S*', '', message)
+            message = message.strip().rstrip(':').strip()
 
         from app.services.email_service import send_invite_email
         sent = send_invite_email(email, inviter_name, message, invite_link)

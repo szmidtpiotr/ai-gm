@@ -90,6 +90,9 @@ def send_invite_email(
         <p style="color:#6a5030;font-size:0.85rem;margin-top:24px;">
           Link ważny {expires_hours} godziny. Możesz użyć go tylko raz.
         </p>
+        <p style="color:#5a4030;font-size:0.78rem;margin-top:8px;word-break:break-all;">
+          Jeśli przycisk nie działa, skopiuj link: <a href="{invite_link}" style="color:#8a6040;">{invite_link}</a>
+        </p>
       </div>
     </body></html>
     """

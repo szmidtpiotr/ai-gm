@@ -3145,6 +3145,7 @@ function parseGmResponse(text) {
     const stripExtra = s => String(s || '')
         .replace(/\s*\[LOCATION_BLOCKED:[^\]]*\]/g, '')
         .replace(/\s*\[APPLY_CONDITION:[^\]]*\]/g, '')
+        .replace(/\s*\[TIP:[^\]]*\]/gi, '')
         .trim();
 
     if (!text) return '';
@@ -4181,12 +4182,14 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
 // The LLM wraps its output in {"narrative":"...","location_intent":...}
 // During streaming we receive this incrementally — strip the JSON prefix/suffix
 // so the player only sees clean prose while tokens arrive.
+const _GM_TAG_RE = /\[(?:XP_GRANT|BEAT_COMPLETE|QUEST_COMPLETE|DUNGEON_CLEAR|CAMPAIGN_END|DISCOVERY|TIP|LOCATION_BLOCKED|APPLY_CONDITION):[^\]]*\]\s*/gi;
+
 function _extractStreamingNarrative(raw) {
     // Try: once we have at least {"narrative": " we can strip the prefix
     const m = raw.match(/^\{"narrative"\s*:\s*"([\s\S]*)/);
     if (m) {
-        // Unescape JSON string content (basic: \" → ", \n → newline)
-        return m[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        // Unescape JSON string content (basic: \" → ", \n → newline), strip GM-only tags
+        return m[1].replace(/\\"/g, '"').replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(_GM_TAG_RE, '');
     }
     // Not yet past the JSON prefix — hide it (show nothing until narrative starts)
     if (raw.startsWith('{') && !raw.includes('"narrative"')) return '';
@@ -4237,6 +4240,7 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             if (meta.skill_test_pending) result.skill_test_pending = meta.skill_test_pending;
             if (meta.current_location)   result.current_location   = meta.current_location;
             if (meta.campaign_ended)     result.campaign_ended     = true;
+            if (meta.suggested_actions)  result.suggested_actions  = meta.suggested_actions;
             // BUG-02: clock is included in [DONE] — update header immediately, no extra request
             if (meta.clock) renderClock(meta.clock);
             return;
@@ -4661,8 +4665,8 @@ function showSkillTestPopup(pending) {
 
     // One frame later — container dimensions are non-zero
     requestAnimationFrame(() => {
-        // Fallback: if DICE library didn't load, animate the number in the roll btn
-        if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
+        // Fallback: if DICE library didn't load OR device is too slow for 3D physics
+        if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function' || _isLowEndDevice()) {
             _showSimpleFallbackRoll(pending, _showResult);
             return;
         }
@@ -4752,6 +4756,16 @@ function showSkillTestPopup(pending) {
             triggerThrow(); // desktop: auto-roll, no shake
         }
     });
+}
+
+// Budget Android skips 3D physics dice — Three.js/Cannon.js too slow on low-end mobile GPU.
+// deviceMemory ≤ 4 GB catches budget/mid-range (Moto G32 = 4); high-end (Pixel 10 = 8) gets 3D.
+// Falls back to core count on browsers that don't expose deviceMemory.
+function _isLowEndDevice() {
+    if (!/android/i.test(navigator.userAgent)) return false;
+    const mem = navigator.deviceMemory;   // bucketed: 0.25/0.5/1/2/4/8
+    if (mem !== undefined) return mem <= 4;
+    return (navigator.hardwareConcurrency || 8) <= 4;
 }
 
 // Lightweight number-spinning fallback when dice.js/Three.js fail to load
@@ -5766,8 +5780,8 @@ function _showCombatDiceRoll(row, onDone) {
     const committedD20 = rv !== null ? Math.max(1, Math.min(20, rv)) : null;
 
     requestAnimationFrame(() => {
-        if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function') {
-            // Fallback: number spin
+        if (typeof DICE === 'undefined' || typeof DICE.dice_box !== 'function' || _isLowEndDevice()) {
+            // Fallback: number spin (also used on low-end Android — skips 3D physics)
             let ticks = 0;
             const iv = setInterval(() => {
                 numEl.textContent = Math.ceil(Math.random() * 20);
@@ -9970,6 +9984,16 @@ async function init() {
         if (elements.heroesWelcome) elements.heroesWelcome.textContent = `Witaj, ${displayName}`;
         if (elements.welcomeUser) elements.welcomeUser.textContent = `Witaj, ${displayName}`;
         await loadHeroes();
+        if (window._pendingJoinToken) {
+            const token = window._pendingJoinToken;
+            delete window._pendingJoinToken;
+            await loadCampaigns();
+            showScreen('campaigns');
+            const tokenInput = document.getElementById('lobby-join-token-input');
+            if (tokenInput) tokenInput.value = token;
+            joinViaToken();
+            return;
+        }
         if (await tryRestoreSession()) return;
         // Restore screen from URL hash (e.g. F5 on campaigns screen)
         const _hashScreen = location.hash.slice(1);

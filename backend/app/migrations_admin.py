@@ -855,6 +855,11 @@ ADMIN_MIGRATIONS = [
     # Multi-use invite links — max_uses=0 means unlimited; uses_count tracks redemptions
     "ALTER TABLE user_invites ADD COLUMN max_uses INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE user_invites ADD COLUMN uses_count INTEGER NOT NULL DEFAULT 0",
+    # Image generation support for catalog items
+    "ALTER TABLE game_config_weapons ADD COLUMN image_prompt TEXT DEFAULT NULL",
+    "ALTER TABLE game_config_weapons ADD COLUMN image_url TEXT DEFAULT NULL",
+    "ALTER TABLE game_config_items ADD COLUMN image_prompt TEXT DEFAULT NULL",
+    "ALTER TABLE game_config_items ADD COLUMN image_url TEXT DEFAULT NULL",
 ]
 
 ADMIN_SEEDS = [

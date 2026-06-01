@@ -248,6 +248,12 @@ RAW_MIGRATIONS = [
     "ALTER TABLE game_config_consumables ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
 
     "ALTER TABLE users ADD COLUMN game_mode_flags TEXT DEFAULT NULL",
+
+    # Image gen config seeds — stored in game_config_visual for admin-editability
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.url', '\"http://192.168.1.170:8765\"')",
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.steps', '4')",
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.refine_steps', '8')",
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.checkpoint', '\"\"')",
 ]
 
 

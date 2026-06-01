@@ -160,8 +160,8 @@ def _build_narrative_actions(
             reason="Nie możesz tu bezpiecznie odpocząć" if not safe else None,
         ))
 
-    # 5) BUILD_CAMP — Stage 2B R4: only visible when hex is unsafe (otherwise REST works)
-    if len(actions) < MAX_ACTIONS and not _is_safe_for_rest(conn, current_loc_key):
+    # 5) BUILD_CAMP — Stage 2B R4: only when hex is KNOWN and unsafe (skip if location unknown)
+    if len(actions) < MAX_ACTIONS and current_loc_key and not _is_safe_for_rest(conn, current_loc_key):
         actions.append(SuggestedAction(
             label="Rozbij obóz",
             action="BUILD_CAMP",

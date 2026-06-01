@@ -4738,6 +4738,39 @@ def create_turn_stream(
                         _npc_img_conn.close()
                 except Exception:
                     pass
+            # T33: build suggested actions and include in DONE payload
+            try:
+                _sa_conn = sqlite3.connect(DB_PATH)
+                _sa_conn.row_factory = sqlite3.Row
+                try:
+                    _sf_sa: dict = {}
+                    _sf_sa_row = _sa_conn.execute(
+                        "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+                        (campaign_id_val,),
+                    ).fetchone()
+                    if _sf_sa_row:
+                        _sf_sa = json.loads(_sf_sa_row["session_flags"] or "{}")
+                    _gs_sa = _sf_sa.get("state", "NARRATIVE")
+                    if new_combat:
+                        _gs_sa = "COMBAT"
+                    _llm_sa_s: list[dict] | None = None
+                    _pjson_sa = locals().get("_parsed_json_s")
+                    if isinstance(_pjson_sa, dict):
+                        _raw_sa = _pjson_sa.get("suggested_actions")
+                        if isinstance(_raw_sa, list):
+                            _llm_sa_s = _raw_sa
+                    done_payload["suggested_actions"] = build_suggested_actions(
+                        conn=_sa_conn,
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        game_state=_gs_sa,
+                        session_flags=_sf_sa,
+                        llm_suggested=_llm_sa_s,
+                    )
+                finally:
+                    _sa_conn.close()
+            except Exception:
+                pass
             yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(

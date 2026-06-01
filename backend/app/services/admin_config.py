@@ -1053,6 +1053,8 @@ def update_weapon(
     note: str | None = None,
     effect_json: str | None = None,
     weapon_slot: str | None = None,
+    image_prompt: str | None = None,
+    image_url: str | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1064,7 +1066,7 @@ def update_weapon(
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
                    two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
                    value_gp, weight_kg, description, note, effect_json, weapon_slot,
-                   is_active, locked_at, created_at, updated_at
+                   is_active, locked_at, created_at, updated_at, image_prompt, image_url
             FROM game_config_weapons WHERE key = ?
             """,
             (safe_key,),
@@ -1127,13 +1129,15 @@ def update_weapon(
         else:
             final_weapon_slot = current.get("weapon_slot") or ("two_handed" if final_two else "main_hand")
 
+        final_image_prompt = (None if image_prompt == "" else image_prompt) if image_prompt is not None else current.get("image_prompt")
+        final_image_url = (None if image_url == "" else image_url) if image_url is not None else current.get("image_url")
         conn.execute(
             """
             UPDATE game_config_weapons
             SET label = ?, damage_die = ?, weapon_type = ?, linked_stat = ?, allowed_classes = ?,
                 two_handed = ?, finesse = ?, range_m = ?, targeting = ?, aoe_radius_m = ?, magic_school = ?,
                 value_gp = ?, weight_kg = ?, description = ?, note = ?, effect_json = ?, weapon_slot = ?,
-                is_active = ?, updated_at = datetime('now')
+                is_active = ?, image_prompt = ?, image_url = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
             (
@@ -1155,6 +1159,8 @@ def update_weapon(
                 final_effect_json,
                 final_weapon_slot,
                 final_is_active,
+                final_image_prompt,
+                final_image_url,
                 safe_key,
             ),
         )
@@ -1164,7 +1170,7 @@ def update_weapon(
             SELECT key, label, damage_die, weapon_type, linked_stat, allowed_classes,
                    two_handed, finesse, range_m, targeting, aoe_radius_m, magic_school,
                    value_gp, weight_kg, description, note, effect_json, weapon_slot,
-                   is_active, locked_at, created_at, updated_at
+                   is_active, locked_at, created_at, updated_at, image_prompt, image_url
             FROM game_config_weapons WHERE key = ?
             """,
             (safe_key,),
@@ -1457,7 +1463,7 @@ def update_enemy(
                     raise ValueError("invalid_loot_table_key")
                 final_loot = lk
         final_note = note if note is not None else current.get("note")
-        final_image_url = image_url if image_url is not None else current.get("image_url")
+        final_image_url = (None if image_url == "" else image_url) if image_url is not None else current.get("image_url")
         cur_drop = float(current.get("drop_chance") if current.get("drop_chance") is not None else 1.0)
         final_drop = _validate_drop_chance(drop_chance, current=cur_drop)
 
@@ -1862,6 +1868,8 @@ def update_item(
     ai_generated: int | None = None,
     approved: int | None = None,
     note: str | None = None,
+    image_prompt: str | None = None,
+    image_url: str | None = None,
 ) -> dict:
     safe_key = _validate_key(key)
     conn = sqlite3.connect(DB_PATH)
@@ -1873,7 +1881,7 @@ def update_item(
             SELECT key, label, item_type, description, value_gp, weight_kg,
                    allowed_classes, ac_bonus, armor_coverage,
                    charges, effect_json, ai_generated, approved,
-                   note, is_active, locked_at, created_at, updated_at
+                   note, is_active, locked_at, created_at, updated_at, image_prompt, image_url
             FROM game_config_items WHERE key = ?
             """,
             (safe_key,),
@@ -1937,13 +1945,15 @@ def update_item(
         final_appr = int(approved) if approved is not None else int(current.get("approved") or 1)
         final_note = note if note is not None else current.get("note")
 
+        final_image_prompt = (None if image_prompt == "" else image_prompt) if image_prompt is not None else current.get("image_prompt")
+        final_image_url = (None if image_url == "" else image_url) if image_url is not None else current.get("image_url")
         conn.execute(
             """
             UPDATE game_config_items
             SET label = ?, item_type = ?, description = ?, value_gp = ?, weight_kg = ?,
                 allowed_classes = ?, ac_bonus = ?, armor_coverage = ?,
                 charges = ?, effect_json = ?, ai_generated = ?, approved = ?,
-                note = ?, is_active = ?, updated_at = datetime('now')
+                note = ?, is_active = ?, image_prompt = ?, image_url = ?, updated_at = datetime('now')
             WHERE key = ?
             """,
             (
@@ -1961,6 +1971,8 @@ def update_item(
                 final_appr,
                 final_note,
                 final_active,
+                final_image_prompt,
+                final_image_url,
                 safe_key,
             ),
         )
@@ -1970,7 +1982,7 @@ def update_item(
             SELECT key, label, item_type, description, value_gp, weight_kg,
                    allowed_classes, ac_bonus, armor_coverage,
                    charges, effect_json, ai_generated, approved,
-                   note, is_active, locked_at, created_at, updated_at
+                   note, is_active, locked_at, created_at, updated_at, image_prompt, image_url
             FROM game_config_items WHERE key = ?
             """,
             (safe_key,),
@@ -2108,6 +2120,9 @@ def update_consumable(
     note: str | None,
     is_active: bool | None,
     new_key: str | None = None,
+    effect_json: str | None = None,
+    image_prompt: str | None = None,
+    image_url: str | None = None,
     force: bool,
 ) -> dict:
     """DEPRECATED 8H — updates game_config_items row for consumable catalog entries."""
@@ -2155,7 +2170,7 @@ def update_consumable(
             item_type=None,
             description=description,
             value_gp=base_price,
-            effect_json=None,
+            effect_json=effect_json,
             is_active=is_active,
             force=force,
             weight_kg=weight_kg,
@@ -2169,6 +2184,8 @@ def update_consumable(
             ai_generated=None,
             approved=None,
             note=note,
+            image_prompt=image_prompt,
+            image_url=image_url,
         )
         return _consumable_row_as_legacy_dict(updated)
     finally:

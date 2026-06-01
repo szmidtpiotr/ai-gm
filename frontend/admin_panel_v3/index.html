@@ -2057,7 +2057,7 @@
 </div>
 
 <!-- ── Effect JSON Builder Overlay ── -->
-<div class="modal-overlay" id="ej-builder-overlay" onclick="if(event.target===this)closeEffectBuilder()">
+<div class="modal-overlay" id="ej-builder-overlay" style="z-index:2000" onclick="if(event.target===this)closeEffectBuilder()">
   <div class="modal" style="max-width:700px;width:95vw">
     <div class="modal-header">
       <div>
@@ -4536,6 +4536,7 @@
         <button class="stab" data-systab="voice">🔊 Głos</button>
         <button class="stab" data-systab="narration">📜 Narracja</button>
         <button class="stab" data-systab="gamemodes">🎮 Tryby gry</button>
+        <button class="stab" data-systab="imagegen">🖼 Obrazy</button>
       </div>
 
       <!-- LLM tab -->
@@ -4985,6 +4986,53 @@
               </span>
             </label>
           </div>
+        </div>
+      </div>
+
+      <!-- Image Gen tab -->
+      <div class="stab-panel" id="systab-imagegen" style="display:none">
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-header">
+            <span class="card-title">Serwis generowania obrazów</span>
+            <button class="btn btn-sm btn-secondary" onclick="_pingImageGen()">⚡ Ping</button>
+          </div>
+          <div style="padding:12px 0 4px">
+            <div id="imagegen-status" style="font-size:0.8rem;color:var(--t3);margin-bottom:10px">Sprawdź status połączenia.</div>
+            <div class="form-row" style="margin-bottom:8px">
+              <label class="form-label">URL serwisu (ComfyUI / Flask)</label>
+              <input class="form-input" id="ig-url" type="text" placeholder="http://192.168.1.170:8765">
+            </div>
+            <div class="form-row" style="margin-bottom:8px">
+              <label class="form-label" style="display:flex;align-items:center;gap:8px">
+                Checkpoint / model
+                <button type="button" class="btn btn-sm btn-secondary" style="font-size:0.72rem;padding:2px 8px" onclick="_refreshImageGenModels()">↺ Odśwież</button>
+              </label>
+              <select class="form-input" id="ig-checkpoint">
+                <option value="">(domyślny serwisu)</option>
+              </select>
+              <div id="ig-model-hint" style="font-size:0.72rem;color:var(--t3);margin-top:3px"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-header"><span class="card-title">Domyślne parametry generowania</span></div>
+          <div style="padding:12px 0 4px;display:flex;gap:24px;flex-wrap:wrap">
+            <div class="form-row">
+              <label class="form-label">Kroki (generate)</label>
+              <input class="form-input" id="ig-steps" type="number" min="1" max="50" style="width:80px">
+            </div>
+            <div class="form-row">
+              <label class="form-label">Kroki (refine)</label>
+              <input class="form-input" id="ig-refine-steps" type="number" min="1" max="50" style="width:80px">
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-bottom:12px">
+          <div class="card-header"><span class="card-title">Galeria — statystyki</span></div>
+          <div id="imagegen-gallery-stats" style="padding:12px;font-size:0.85rem;color:var(--t2)">Ładowanie…</div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+          <button class="btn btn-primary" id="ig-save-btn">💾 Zapisz ustawienia</button>
         </div>
       </div>
     </section>
@@ -5779,7 +5827,7 @@
         {name:'weight_kg',label:'Waga (kg)', type:'number', step:'0.1'},
         {name:'value_gp', label:'Cena (gp)', type:'number'},
         {name:'rarity',   label:'Rzadkość (1-5)', type:'number', min:1, max:5},
-        {name:'effect_json', label:'Efekt (JSON)', type:'textarea'},
+        {name:'effect_json', label:'Efekt (JSON)', type:'effect-builder'},
         {name:'is_active',label:'Aktywny',   type:'checkbox'},
         {name:'description', label:'Opis',   type:'textarea'},
       ], reload: () => { _contentLoaded.delete('items'); _loadItems(); } },
@@ -5792,6 +5840,7 @@
         {name:'base_price',  label:'Cena',          type:'number'},
         {name:'weight_kg',   label:'Waga (kg)',     type:'number', step:'0.1'},
         {name:'rarity',      label:'Rzadkość (1-5)', type:'number', min:1, max:5},
+        {name:'effect_json', label:'Efekt (JSON)',  type:'effect-builder'},
         {name:'is_active',   label:'Aktywny',       type:'checkbox'},
         {name:'description', label:'Opis',          type:'textarea'},
       ], reload: () => { _contentLoaded.delete('consumables'); _loadConsumables(); } },
@@ -5825,8 +5874,24 @@
       ], reload: () => { _worldLoaded.delete('npcs'); _loadNPCs(); } },
   };
 
+  let _genModalEjData = null;
+  function _openGenericEjBuilder() {
+    openEffectBuilder(_genModalEjData, 'standard', 'Effect JSON', function(data) {
+      _genModalEjData = data;
+      const p = document.getElementById('gen-ej-preview');
+      if (p) p.textContent = data ? JSON.stringify(data, null, 2) : '— brak efektu —';
+    });
+  }
+
   function _openGenericEditModal(cfg, record) {
     const key = record[cfg.keyField];
+    // Init effect-builder state from record
+    _genModalEjData = null;
+    const ejField = cfg.fields.find(f => f.type === 'effect-builder');
+    if (ejField) {
+      const raw = record[ejField.name];
+      try { _genModalEjData = raw ? JSON.parse(raw) : null; } catch(e) {}
+    }
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay open';
     const fieldsHtml = cfg.fields.map(f => {
@@ -5840,6 +5905,12 @@
       if (f.type === 'image-preview') {
         if (!v) return `<div class="form-row"><label class="form-label">${_esc(f.label)}</label><div style="font-size:0.75rem;color:var(--t3);padding:6px 0">Brak obrazu</div></div>`;
         return `<div class="form-row"><label class="form-label">${_esc(f.label)}</label><div style="margin-top:4px"><img src="${_esc(v)}" style="max-width:100%;max-height:200px;border-radius:var(--r);border:1px solid var(--border);object-fit:contain;display:block"><div style="font-size:0.68rem;color:var(--t3);margin-top:4px;word-break:break-all">${_esc(v)}</div></div></div>`;
+      }
+      if (f.type === 'effect-builder') {
+        let ejData = null;
+        try { ejData = v ? JSON.parse(v) : null; } catch(e) {}
+        const preview = ejData ? JSON.stringify(ejData, null, 2) : '— brak efektu —';
+        return `<div class="form-row"><label class="form-label" style="display:flex;justify-content:space-between;align-items:center"><span>${_esc(f.label)}</span><button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px" onclick="_openGenericEjBuilder()">Edytuj efekty</button></label><div id="gen-ej-preview" style="background:#111;border:1px solid #2a2a2a;border-radius:4px;padding:8px;font-size:0.72rem;color:#555;font-family:monospace;word-break:break-all;cursor:pointer;white-space:pre-wrap;max-height:80px;overflow:auto" onclick="_openGenericEjBuilder()">${_esc(preview)}</div></div>`;
       }
       const step = f.step ? ` step="${f.step}"` : '';
       return `<div class="form-row"><label class="form-label">${_esc(f.label)}</label><input class="form-input" name="${f.name}" type="${f.type}" value="${_esc(v??'')}"${step}></div>`;
@@ -5860,6 +5931,7 @@
       const payload = {};
       for (const f of cfg.fields) {
         if (f.type === 'image-preview') continue;
+        if (f.type === 'effect-builder') { payload[f.name] = _genModalEjData ? JSON.stringify(_genModalEjData) : null; continue; }
         const el = overlay.querySelector(`[name="${f.name}"]`);
         if (!el) continue;
         if (f.type === 'checkbox') payload[f.name] = el.checked;
@@ -6368,7 +6440,7 @@
     document.getElementById('tpl-entity-campaign-specific').checked = false;
     document.getElementById('tpl-entity-campaign-specific').parentElement.style.display = 'none'; // hide for DB items
     document.getElementById('tpl-entity-form').innerHTML = _renderEntityForm(modalType, entityData);
-    if (modalType === 'item' || modalType === 'weapon') _ejPopulate(entityData.effect_json ?? null);
+    if (modalType === 'item' || modalType === 'weapon' || modalType === 'consumable') _ejPopulate(entityData.effect_json ?? null);
     document.getElementById('tpl-entity-delete-btn').style.display = 'none'; // no delete from here
     modal.style.display = 'flex';
   }
@@ -6756,7 +6828,7 @@
           <td class="detail-col">${w.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
           <td class="detail-col"><span class="lock-icon">${w.is_locked?'🔒':''}</span></td>
           <td class="detail-col td-muted" style="font-size:0.72rem">${w.template_id ? '<span title="Przedmiot powiązany z szablonem #'+w.template_id+'" style="cursor:help">📖 #'+w.template_id+'</span>' : '—'}</td>
-          <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
+          <td class="td-actions"><button class="btn-icon" style="font-size:0.8rem" title="Obraz" onclick="openItemImageModal('${_esc(w.key)}','${enc}','weapon')">🖼</button> <button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
         </tr>`;
       }).join('');
       const pg = document.querySelector('#stab-weapons .pagination span');
@@ -6788,7 +6860,7 @@
         <td>${_stars(it)}</td>
         <td class="detail-col">${it.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span class="lock-icon">${it.is_locked?'🔒':''}</span></td>
-        <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
+        <td class="td-actions"><button class="btn-icon" style="font-size:0.8rem" title="Obraz" onclick="openItemImageModal('${_esc(it.key)}','${enc}','armor')">🖼</button> <button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
       </tr>`;
       }).join('');
       _wireRowActions('armor-table');
@@ -6822,7 +6894,7 @@
           <td class="detail-col td-muted" style="font-size:0.72rem">${_esc(it.created_by||'—')}</td>
           <td class="detail-col">${it.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
           <td class="detail-col"><span class="lock-icon">${it.is_locked?'🔒':''}</span></td>
-          <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
+          <td class="td-actions"><button class="btn-icon" style="font-size:0.8rem" title="Obraz" onclick="openItemImageModal('${_esc(it.key)}','${enc}','item')">🖼</button> <button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
         </tr>`;
       }).join('');
       _wireRowActions('items-table');
@@ -6884,7 +6956,7 @@
           <td>${_stars(c)}</td>
           <td class="detail-col">${c.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
           <td class="detail-col"><span class="lock-icon">${c.is_locked?'🔒':''}</span></td>
-          <td class="td-actions"><button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
+          <td class="td-actions"><button class="btn-icon" style="font-size:0.8rem" title="Obraz" onclick="openItemImageModal('${_esc(c.key)}','${enc}','consumable')">🖼</button> <button class="btn-icon" title="Edytuj">✎</button> <button class="btn-icon danger" title="Usuń">✕</button></td>
         </tr>`;
       }).join('');
       _wireRowActions('consumables-table');
@@ -11173,7 +11245,7 @@
       data.name || data.label || data.key || '(nowy)';
     document.getElementById('tpl-entity-campaign-specific').checked = !!data.campaign_specific;
     document.getElementById('tpl-entity-form').innerHTML = _renderEntityForm(type, data.overrides || data);
-    if (type === 'item' || type === 'weapon') _ejPopulate(data.overrides?.effect_json ?? data.effect_json ?? null);
+    if (type === 'item' || type === 'weapon' || type === 'consumable') _ejPopulate(data.overrides?.effect_json ?? data.effect_json ?? null);
     document.getElementById('tpl-entity-delete-btn').style.display = idx < 0 ? 'none' : '';
     modal.style.display = 'flex';
   }
@@ -11251,6 +11323,15 @@
     }
     _refreshTplEntityList(listKey);
     closeTplEntityModal();
+  }
+
+  let _forgeEjData = null;
+  function _forgeEjOpen(mode) {
+    openEffectBuilder(_forgeEjData, mode, 'Effect JSON', function(data) {
+      _forgeEjData = data;
+      const p = document.getElementById('ef-ej-preview');
+      if (p) p.textContent = data ? JSON.stringify(data, null, 2) : '— brak efektu —';
+    });
   }
 
   const EFFECT_JSON_SCHEMA = {
@@ -11438,26 +11519,13 @@
   }
 
   function _ejPopulate(effectJson) {
-    const catSel = document.getElementById('ef-ej-category');
-    if (!catSel) return;
     let parsed = effectJson;
     if (typeof parsed === 'string') {
       try { parsed = JSON.parse(parsed); } catch(e) { parsed = null; }
     }
-    if (!parsed || !parsed.effect_category || !EFFECT_JSON_SCHEMA.categories[parsed.effect_category]) {
-      catSel.value = '';
-      const list = document.getElementById('ef-ej-effects-list');
-      if (list) list.innerHTML = '';
-      const addBtn = document.getElementById('ef-ej-add-btn');
-      if (addBtn) addBtn.style.display = 'none';
-      _ejUpdatePreview();
-      return;
-    }
-    catSel.value = parsed.effect_category;
-    const addBtn = document.getElementById('ef-ej-add-btn');
-    if (addBtn) addBtn.style.display = 'inline-block';
-    _ejRenderEffects(parsed.effects || []);
-    _ejUpdatePreview();
+    _forgeEjData = (parsed && typeof parsed === 'object') ? parsed : null;
+    const preview = document.getElementById('ef-ej-preview');
+    if (preview) preview.textContent = _forgeEjData ? JSON.stringify(_forgeEjData, null, 2) : '— brak efektu —';
   }
 
   function _renderEntityForm(type, d) {
@@ -11522,17 +11590,7 @@
       txt('magic_school','Szkoła magii',d.magic_school||'','np. necromancy'),
       ta('description','Opis',d.description,2),
       ta('note','Notatka GM (efekty)',d.note,2),
-      '<div class="form-row" style="grid-column:1/-1"><label class="form-label">Effect JSON</label>' +
-      '<div id="ef-effect-json-builder" style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
-      '<select id="ef-ej-category" class="form-input" style="max-width:220px" onchange="_ejCategoryChange()">' +
-      '<option value="">— brak efektu mechanicznego —</option>' +
-      Object.entries(EFFECT_JSON_SCHEMA.categories).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('') +
-      '</select></div>' +
-      '<div id="ef-ej-effects-list"></div>' +
-      '<button type="button" id="ef-ej-add-btn" style="display:none;margin-top:4px;background:#2d5a1b;color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer" onclick="_ejAddEffect()">+ Dodaj efekt</button>' +
-      '<div id="ef-ej-preview" style="font-size:0.7rem;color:#666;margin-top:6px;word-break:break-all;font-family:monospace"></div>' +
-      '</div></div>'
+      '<div class="form-row" style="grid-column:1/-1"><label class="form-label" style="display:flex;justify-content:space-between;align-items:center"><span>Effect JSON</span><button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px" onclick="_forgeEjOpen(\'weapon\')">Edytuj efekty</button></label><div id="ef-ej-preview" style="background:#111;border:1px solid #2a2a2a;border-radius:4px;padding:8px;font-size:0.72rem;color:#666;font-family:monospace;word-break:break-all;cursor:pointer;white-space:pre-wrap;max-height:80px;overflow:auto" onclick="_forgeEjOpen(\'weapon\')">— brak efektu —</div></div>'
       + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
       + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
     );
@@ -11553,17 +11611,7 @@
       num('charges','Ładunki',d.charges||1),
       ta('description','Opis',d.description,2),
       ta('note','Notatka GM',d.note,2),
-      '<div class="form-row" style="grid-column:1/-1"><label class="form-label">Effect JSON</label>' +
-      '<div id="ef-effect-json-builder" style="background:#111;border:1px solid #333;border-radius:6px;padding:10px">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
-      '<select id="ef-ej-category" class="form-input" style="max-width:220px" onchange="_ejCategoryChange()">' +
-      '<option value="">— brak efektu mechanicznego —</option>' +
-      Object.entries(EFFECT_JSON_SCHEMA.categories).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('') +
-      '</select></div>' +
-      '<div id="ef-ej-effects-list"></div>' +
-      '<button type="button" id="ef-ej-add-btn" style="display:none;margin-top:4px;background:#2d5a1b;color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer" onclick="_ejAddEffect()">+ Dodaj efekt</button>' +
-      '<div id="ef-ej-preview" style="font-size:0.7rem;color:#666;margin-top:6px;word-break:break-all;font-family:monospace"></div>' +
-      '</div></div>'
+      '<div class="form-row" style="grid-column:1/-1"><label class="form-label" style="display:flex;justify-content:space-between;align-items:center"><span>Effect JSON</span><button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px" onclick="_forgeEjOpen(\'standard\')">Edytuj efekty</button></label><div id="ef-ej-preview" style="background:#111;border:1px solid #2a2a2a;border-radius:4px;padding:8px;font-size:0.72rem;color:#666;font-family:monospace;word-break:break-all;cursor:pointer;white-space:pre-wrap;max-height:80px;overflow:auto" onclick="_forgeEjOpen(\'standard\')">— brak efektu —</div></div>'
       + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
       + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
     );
@@ -11580,7 +11628,8 @@
       num('weight_kg','Waga (kg)',d.weight_kg||0),
       sel('rarity','Rzadkość',rarity,String(d.rarity||1)),
       ta('description','Opis',d.description,2),
-      ta('note','Notatka GM',d.note,2)
+      ta('note','Notatka GM',d.note,2),
+      '<div class="form-row" style="grid-column:1/-1"><label class="form-label" style="display:flex;justify-content:space-between;align-items:center"><span>Effect JSON</span><button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px" onclick="_forgeEjOpen(\'standard\')">Edytuj efekty</button></label><div id="ef-ej-preview" style="background:#111;border:1px solid #2a2a2a;border-radius:4px;padding:8px;font-size:0.72rem;color:#666;font-family:monospace;word-break:break-all;cursor:pointer;white-space:pre-wrap;max-height:80px;overflow:auto" onclick="_forgeEjOpen(\'standard\')">— brak efektu —</div></div>'
       + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
       + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
     );
@@ -11603,9 +11652,9 @@
     const b  = id => !!(document.getElementById('ef-'+id)||{}).checked;
     if (type === 'npc') return { key:v('key'), name:v('name'), npc_type:v('npc_type'), personality_prompt:v('personality_prompt'), description:v('description'), is_quest_giver:b('is_quest_giver'), is_ally:b('is_ally'), keyword_triggers: v('keyword_triggers').split(',').map(s=>s.trim()).filter(Boolean) };
     if (type === 'enemy') return { key:v('key'), label:v('label'), hp_base:n('hp_base'), ac_base:n('ac_base'), attack_bonus:n('attack_bonus'), damage_bonus:n('damage_bonus'), damage_die:v('damage_die'), damage_type:v('damage_type'), tier:v('tier'), attacks_per_turn:n('attacks_per_turn'), xp_award:n('xp_award'), fear_aura:b('fear_aura'), fear_dc:n('fear_dc'), conditions_immune:v('conditions_immune'), description:v('description'), note:v('note') };
-    if (type === 'weapon') return { key:v('key'), label:v('label'), damage_die:v('damage_die'), linked_stat:v('linked_stat'), weapon_type:v('weapon_type'), weapon_slot:v('weapon_slot'), targeting:v('targeting'), two_handed:b('two_handed'), finesse:b('finesse'), range_m:n('range_m'), value_gp:n('value_gp'), rarity:n('rarity'), magic_school:v('magic_school'), description:v('description'), note:v('note'), effect_json:_ejSerialize(), hidden:b('hidden'), location_hint:v('location_hint') };
-    if (type === 'item') return { key:v('key'), label:v('label'), item_type:v('item_type'), armor_coverage:v('armor_coverage'), ac_bonus:n('ac_bonus'), value_gp:n('value_gp'), weight_kg:n('weight_kg'), rarity:n('rarity'), effect_target:v('effect_target'), effect_type:v('effect_type'), effect_dice:v('effect_dice'), effect_bonus:n('effect_bonus'), charges:n('charges'), description:v('description'), note:v('note'), effect_json:_ejSerialize(), hidden:b('hidden'), location_hint:v('location_hint') };
-    if (type === 'consumable') return { key:v('key'), label:v('label'), effect_type:v('effect_type'), effect_target:v('effect_target'), effect_dice:v('effect_dice'), effect_bonus:n('effect_bonus'), charges:n('charges'), base_price:n('base_price'), weight_kg:n('weight_kg'), rarity:n('rarity'), description:v('description'), note:v('note'), hidden:b('hidden'), location_hint:v('location_hint') };
+    if (type === 'weapon') return { key:v('key'), label:v('label'), damage_die:v('damage_die'), linked_stat:v('linked_stat'), weapon_type:v('weapon_type'), weapon_slot:v('weapon_slot'), targeting:v('targeting'), two_handed:b('two_handed'), finesse:b('finesse'), range_m:n('range_m'), value_gp:n('value_gp'), rarity:n('rarity'), magic_school:v('magic_school'), description:v('description'), note:v('note'), effect_json:_forgeEjData ? JSON.stringify(_forgeEjData) : null, hidden:b('hidden'), location_hint:v('location_hint') };
+    if (type === 'item') return { key:v('key'), label:v('label'), item_type:v('item_type'), armor_coverage:v('armor_coverage'), ac_bonus:n('ac_bonus'), value_gp:n('value_gp'), weight_kg:n('weight_kg'), rarity:n('rarity'), effect_target:v('effect_target'), effect_type:v('effect_type'), effect_dice:v('effect_dice'), effect_bonus:n('effect_bonus'), charges:n('charges'), description:v('description'), note:v('note'), effect_json:_forgeEjData ? JSON.stringify(_forgeEjData) : null, hidden:b('hidden'), location_hint:v('location_hint') };
+    if (type === 'consumable') return { key:v('key'), label:v('label'), effect_type:v('effect_type'), effect_target:v('effect_target'), effect_dice:v('effect_dice'), effect_bonus:n('effect_bonus'), charges:n('charges'), base_price:n('base_price'), weight_kg:n('weight_kg'), rarity:n('rarity'), description:v('description'), note:v('note'), effect_json:_forgeEjData ? JSON.stringify(_forgeEjData) : null, hidden:b('hidden'), location_hint:v('location_hint') };
     if (type === 'location') return { key:v('key'), name:v('name'), location_type:v('location_type'), biome:v('biome'), description:v('description'), role:v('role') };
     return {};
   }
@@ -12787,7 +12836,7 @@
   function _loadSysTab(tab) {
     if (_sysTabLoaded.has(tab)) return;
     _sysTabLoaded.add(tab);
-    const fn = { llm: _loadSysLlm, database: _loadSysDatabase, config: () => {}, slash: _loadSysSlash, email: _loadSysEmail, visual: _loadSysVisual, resurrection: _loadSysResurrection, teksty: _loadSysTeksty, voice: _loadVoice, narration: _loadNarration, gamemodes: _loadGameModes }[tab];
+    const fn = { llm: _loadSysLlm, database: _loadSysDatabase, config: () => {}, slash: _loadSysSlash, email: _loadSysEmail, visual: _loadSysVisual, resurrection: _loadSysResurrection, teksty: _loadSysTeksty, voice: _loadVoice, narration: _loadNarration, gamemodes: _loadGameModes, imagegen: _loadSysImageGen }[tab];
     if (fn) fn().catch(e => { _sysTabLoaded.delete(tab); console.warn('sys tab', tab, e.message); });
   }
 
@@ -12823,6 +12872,110 @@
         });
       }
     } catch(e) { _showToast(e.message || 'Błąd ładowania konfiguracji.', 'error'); }
+  }
+
+  let _igModels = [];
+
+  async function _refreshImageGenModels(savedCheckpoint) {
+    const sel = document.getElementById('ig-checkpoint');
+    if (!sel) return;
+    try {
+      const r = await apiFetch('/api/admin/images/models');
+      _igModels = r.models || [];
+      const current = savedCheckpoint !== undefined ? savedCheckpoint : sel.value;
+      sel.innerHTML = '<option value="">(domyślny serwisu)</option>' +
+        _igModels.map(m => `<option value="${_esc(m.key)}" title="${_esc(m.hint||'')}">${_esc(m.label)}</option>`).join('');
+      if (current) sel.value = current;
+      _updateIgModelHint();
+    } catch(e) { console.warn('models load failed:', e.message); }
+  }
+
+  function _updateIgModelHint() {
+    const sel = document.getElementById('ig-checkpoint');
+    const hintEl = document.getElementById('ig-model-hint');
+    if (!sel || !hintEl) return;
+    const m = _igModels.find(x => x.key === sel.value);
+    if (m) {
+      hintEl.textContent = m.hint || '';
+      // Auto-fill steps from model defaults when user changes selection
+      const stepsEl = document.getElementById('ig-steps');
+      const refEl = document.getElementById('ig-refine-steps');
+      if (stepsEl && m.default_steps_t2i) stepsEl.value = m.default_steps_t2i;
+      if (refEl && m.default_steps_i2i) refEl.value = m.default_steps_i2i;
+    } else {
+      hintEl.textContent = '';
+    }
+  }
+
+  async function _loadSysImageGen() {
+    try {
+      const cfg = await apiFetch('/api/admin/images/config');
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+      set('ig-url', cfg.url || '');
+      set('ig-steps', cfg.steps ?? 4);
+      set('ig-refine-steps', cfg.refine_steps ?? 8);
+
+      // Load model list then set saved checkpoint
+      await _refreshImageGenModels(cfg.checkpoint || '');
+
+      // Wire model change → auto-fill steps + hint
+      const sel = document.getElementById('ig-checkpoint');
+      if (sel && !sel._wired) {
+        sel._wired = true;
+        sel.addEventListener('change', _updateIgModelHint);
+      }
+
+      // Gallery stats
+      try {
+        const gd = await apiFetch('/api/admin/images/list');
+        const imgs = gd.images || [];
+        const totalKb = imgs.reduce((s, i) => s + (i.size || 0), 0) / 1024;
+        const statsEl = document.getElementById('imagegen-gallery-stats');
+        if (statsEl) statsEl.innerHTML = `Obrazów: <strong>${imgs.length}</strong> &nbsp;·&nbsp; Rozmiar: <strong>${totalKb.toFixed(0)} KB</strong>`;
+      } catch {}
+
+      const saveBtn = document.getElementById('ig-save-btn');
+      if (saveBtn && !saveBtn._wired) {
+        saveBtn._wired = true;
+        saveBtn.addEventListener('click', async () => {
+          saveBtn.disabled = true;
+          const orig = saveBtn.textContent; saveBtn.textContent = '⏳';
+          try {
+            const payload = {
+              url: document.getElementById('ig-url').value.trim() || null,
+              checkpoint: document.getElementById('ig-checkpoint').value.trim(),
+              steps: parseInt(document.getElementById('ig-steps').value, 10) || null,
+              refine_steps: parseInt(document.getElementById('ig-refine-steps').value, 10) || null,
+            };
+            if (isNaN(payload.steps)) payload.steps = null;
+            if (isNaN(payload.refine_steps)) payload.refine_steps = null;
+            await apiFetch('/api/admin/images/config', { method: 'PATCH', body: JSON.stringify(payload) });
+            _showToast('Zapisano ustawienia generatora.', 'success');
+            _sysTabLoaded.delete('imagegen');
+            _loadSysImageGen();
+          } catch(e) { _showToast(e.message || 'Błąd zapisu.', 'error'); }
+          finally { saveBtn.disabled = false; saveBtn.textContent = orig; }
+        });
+      }
+    } catch(e) { _showToast(e.message || 'Błąd ładowania konfiguracji obrazów.', 'error'); }
+  }
+
+  async function _pingImageGen() {
+    const statusEl = document.getElementById('imagegen-status');
+    if (statusEl) { statusEl.textContent = '⏳ Sprawdzam…'; statusEl.style.color = 'var(--t3)'; }
+    try {
+      const r = await apiFetch('/api/admin/images/status');
+      if (statusEl) {
+        if (r.online) {
+          const extra = r.data && Object.keys(r.data).length ? ' — ' + JSON.stringify(r.data) : '';
+          statusEl.innerHTML = `<span style="color:var(--success)">✓ Online</span> <span style="color:var(--t3);font-size:0.78rem">${_esc(r.url)}${_esc(extra)}</span>`;
+        } else {
+          statusEl.innerHTML = `<span style="color:var(--danger)">✕ Offline</span> <span style="color:var(--t3);font-size:0.78rem">${_esc(r.url)} — ${_esc(r.error||'')}</span>`;
+        }
+      }
+    } catch(e) {
+      if (statusEl) { statusEl.textContent = 'Błąd: ' + (e.message || 'nieznany'); statusEl.style.color = 'var(--danger)'; }
+    }
   }
 
   async function _loadSystem() {
@@ -14012,6 +14165,153 @@
         } catch(ex){_showToast(ex.message||'Błąd','error');}
       };
     }
+  }
+
+  // ── Item / Weapon / Consumable Image Modal ───────────────
+  async function openItemImageModal(key, encData, tableType) {
+    const item = typeof encData === 'string' ? JSON.parse(decodeURIComponent(encData)) : encData;
+    const endpointMap = { weapon: '/api/admin/weapons', item: '/api/admin/items', consumable: '/api/admin/consumables', armor: '/api/admin/items' };
+    const reloadMap = { weapon: () => { _contentLoaded.delete('weapons'); _loadWeapons(); }, item: () => { _contentLoaded.delete('items'); _loadItems(); }, consumable: () => { _contentLoaded.delete('consumables'); _loadConsumables(); }, armor: () => { _contentLoaded.delete('armor'); _loadArmor(); } };
+    const endpoint = endpointMap[tableType] || '/api/admin/items';
+    const reload = reloadMap[tableType] || (() => {});
+    const modalId = 'item-img-modal';
+    const initialPrompt = item.image_prompt || '';
+    const m = document.createElement('div');
+    m.id = modalId;
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+    m.innerHTML = `<div style="background:var(--surface);border-radius:12px;width:min(560px,96vw);max-height:92vh;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <strong>🖼 Obraz: ${_esc(item.label||key)}</strong>
+        <span id="ii-trans-badge" style="font-size:0.68rem;background:var(--border);border-radius:4px;padding:2px 6px;color:var(--t3)">✦ auto</span>
+        <button onclick="document.getElementById('${modalId}').remove()" style="margin-left:auto;background:none;border:none;color:var(--t2);font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+      </div>
+      <div class="modal-body" style="overflow-y:auto;flex:1;padding:16px;display:flex;flex-direction:column;gap:14px">
+        <div>
+          <label style="font-size:0.75rem;color:var(--t3);display:block;margin-bottom:4px">Prompt (EN)</label>
+          <textarea id="ii-prompt" style="resize:none;width:100%;box-sizing:border-box;overflow:hidden;field-sizing:content;min-height:72px;max-height:240px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--t1);font-size:0.82rem">${_esc(initialPrompt)}</textarea>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:0.75rem;color:var(--t3)">Model</label>
+          <select id="ii-model" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--t1);font-size:0.8rem;flex:1;min-width:160px">
+            <option value="">(domyślny)</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:0.75rem;color:var(--t3)">Rozmiar</label>
+          <select id="ii-size" style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--t1);font-size:0.8rem">
+            <option value="512x512" selected>512×512 kwadrat ★</option>
+            <option value="768x768">768×768</option>
+            <option value="576x1024">576×1024 portret</option>
+          </select>
+          <label style="font-size:0.75rem;color:var(--t3)">Kroki</label>
+          <input type="number" id="ii-steps" value="4" min="1" max="20" style="width:52px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 6px;color:var(--t1);font-size:0.8rem">
+        </div>
+        <div id="ii-preview" style="min-height:60px;border-radius:8px;border:1px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:0.8rem">
+          ${item.image_url ? `<img src="${_esc(item.image_url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">` : 'Brak obrazu'}
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="ii-gen-btn" class="btn btn-primary" style="flex:1">⚡ Generuj</button>
+          <button id="ii-ref-btn" class="btn btn-secondary" style="flex:1" disabled>🔄 Popraw</button>
+        </div>
+      </div>
+      <div class="modal-foot" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
+        <button id="ii-accept-btn" class="btn btn-success" disabled>✓ Akceptuj i zapisz</button>
+        <button id="ii-remove-btn" class="btn btn-danger" ${item.image_url?'':'disabled'} style="font-size:0.8rem">✕ Usuń obraz</button>
+        <button onclick="document.getElementById('${modalId}').remove()" class="btn btn-secondary">Anuluj</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click', ev => { if (ev.target === m) m.remove(); });
+
+    // Populate model dropdown
+    const modelSel = document.getElementById('ii-model');
+    const stepsEl = document.getElementById('ii-steps');
+    const _fillModels = async () => {
+      let models = _igModels;
+      if (!models.length) {
+        try { const r = await apiFetch('/api/admin/images/models'); models = r.models || []; _igModels = models; } catch {}
+      }
+      if (models.length) {
+        modelSel.innerHTML = '<option value="">(domyślny)</option>' +
+          models.map(mdl => `<option value="${_esc(mdl.key)}" title="${_esc(mdl.hint||'')}">${_esc(mdl.label)}</option>`).join('');
+        // Pre-select saved checkpoint
+        const savedCp = item.image_prompt ? '' : (await apiFetch('/api/admin/images/config').then(c=>c.checkpoint).catch(()=>''));
+        if (savedCp) modelSel.value = savedCp;
+      }
+    };
+    _fillModels();
+    modelSel.addEventListener('change', () => {
+      const m2 = _igModels.find(x => x.key === modelSel.value);
+      if (m2 && m2.default_steps_t2i && stepsEl) stepsEl.value = m2.default_steps_t2i;
+    });
+
+    let _lastFilename = null;
+    let _lastUrl = null;
+    const ta = document.getElementById('ii-prompt');
+    const _autoResize = t => { t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,240)+'px'; };
+    ta.addEventListener('input', () => _autoResize(ta)); _autoResize(ta);
+
+    document.getElementById('ii-gen-btn').onclick = async () => {
+      const btn = document.getElementById('ii-gen-btn');
+      btn.disabled=true; btn.textContent='⏳ Generuję…';
+      try {
+        const [w,h]=(document.getElementById('ii-size').value||'512x512').split('x').map(Number);
+        const steps=parseInt(document.getElementById('ii-steps').value)||4;
+        const checkpoint=document.getElementById('ii-model')?.value||null;
+        const genPayload={prompt:ta.value.trim()||'fantasy item, detailed illustration',width:w,height:h,steps};
+        if(checkpoint) genPayload.checkpoint=checkpoint;
+        const r=await apiFetch('/api/admin/images/generate',{method:'POST',body:JSON.stringify(genPayload)});
+        _lastFilename=r.filename; _lastUrl=r.url;
+        document.getElementById('ii-preview').innerHTML=`<img src="${_esc(r.url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+        document.getElementById('ii-ref-btn').disabled=false;
+        document.getElementById('ii-accept-btn').disabled=false;
+      } catch(ex){_showToast(ex.message||'Błąd generowania','error');}
+      finally{btn.disabled=false;btn.textContent='⚡ Generuj';}
+    };
+
+    document.getElementById('ii-ref-btn').onclick = async () => {
+      if (!_lastFilename) return;
+      const btn=document.getElementById('ii-ref-btn');
+      btn.disabled=true; btn.textContent='⏳ Poprawa…';
+      try {
+        const steps=parseInt(document.getElementById('ii-steps').value)||8;
+        const r=await apiFetch('/api/admin/images/refine',{method:'POST',body:JSON.stringify({source_filename:_lastFilename,prompt:ta.value.trim(),denoise:0.6,steps})});
+        _lastFilename=r.filename; _lastUrl=r.url;
+        document.getElementById('ii-preview').innerHTML=`<img src="${_esc(r.url)}?t=${Date.now()}" style="max-width:100%;max-height:300px;border-radius:6px;object-fit:contain">`;
+      } catch(ex){_showToast(ex.message||'Błąd','error');}
+      finally{btn.disabled=false;btn.textContent='🔄 Popraw';}
+    };
+
+    document.getElementById('ii-accept-btn').onclick = async () => {
+      if (!_lastUrl) return;
+      try {
+        await apiFetch(`${endpoint}/${encodeURIComponent(key)}`,{method:'PATCH',body:JSON.stringify({image_url:_lastUrl,image_prompt:ta.value.trim()||null})});
+        _showToast('Obraz zapisany.','success');
+        m.remove();
+        reload();
+      } catch(ex){_showToast(ex.message||'Błąd zapisu','error');}
+    };
+
+    document.getElementById('ii-remove-btn').onclick = async () => {
+      try {
+        await apiFetch(`${endpoint}/${encodeURIComponent(key)}`,{method:'PATCH',body:JSON.stringify({image_url:''})});
+        _showToast('Obraz usunięty.','success');
+        document.getElementById('ii-preview').innerHTML='Brak obrazu';
+        document.getElementById('ii-remove-btn').disabled=true;
+      } catch(ex){_showToast(ex.message||'Błąd','error');}
+    };
+
+    setTimeout(async () => {
+      if (!item.description || initialPrompt) return;
+      try {
+        const r=await apiFetch('/api/admin/images/describe-prompt',{method:'POST',body:JSON.stringify({text:item.description,context:`fantasy ${tableType}, item illustration`})});
+        if (r.keywords) {
+          ta.value=r.keywords+', fantasy item, detailed illustration, dramatic lighting, no text, no UI'; _autoResize(ta);
+          const badge=document.getElementById('ii-trans-badge');
+          if(badge){badge.textContent='✦ auto+AI';badge.style.background='#7c3aed33';badge.style.color='#a78bfa';}
+        }
+      } catch{}
+    }, 100);
   }
 
   // ── Mechanics ────────────────────────────────────────────
@@ -16459,8 +16759,8 @@ Niech kości się toczą! 🎲`,
               ${hasRaw ? `<button onclick="_toggleTurnJson(this)" style="font-size:0.68rem;padding:1px 7px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--t3);cursor:pointer;white-space:nowrap">{ } JSON</button>` : ''}
             </div>
             <div class="br-turn-text">
-              <div><b>Gracz:</b> ${_esc((t.user_text||'').slice(0,300))}</div>
-              ${hasRaw ? `<div style="margin-top:4px;color:var(--t2)"><b>GM:</b> ${_esc(raw.slice(0,500))}</div>` : ''}
+              <div><b>Gracz:</b> ${_esc((t.user_text||'').slice(0,1000))}</div>
+              ${hasRaw ? `<div style="margin-top:4px;color:var(--t2)"><b>GM:</b> ${_esc(raw.slice(0,2000))}</div>` : ''}
             </div>
             ${hasRaw ? `<pre class="br-turn-json" style="display:none;background:rgba(0,0,0,0.4);border-radius:6px;padding:10px;font-size:0.71rem;line-height:1.5;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:320px;margin-top:6px">${_esc(pretty)}</pre>` : ''}
           </div>`;

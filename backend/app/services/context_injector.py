@@ -626,6 +626,9 @@ class ContextInjector:
     def _mechanic_item_use(self, r: dict) -> str:
         lines = ["=== WYNIK MECHANICZNY ===", "Akcja: UŻYCIE PRZEDMIOTU"]
         lines.append(f"Przedmiot: {r.get('item_name', r.get('item_key','?'))}")
+        desc = r.get("item_description", "")
+        if desc:
+            lines.append(f"Opis przedmiotu (użyj do narracji): {desc}")
         effect = r.get("effect_description", "")
         if effect:
             lines.append(f"Efekt: {effect}")
@@ -637,6 +640,9 @@ class ContextInjector:
     def _mechanic_item_pickup(self, r: dict) -> str:
         lines = ["=== WYNIK MECHANICZNY ===", "Akcja: PODNIESIENIE PRZEDMIOTU"]
         lines.append(f"Przedmiot: {r.get('item_name', r.get('item_key','?'))}")
+        desc = r.get("item_description", "")
+        if desc:
+            lines.append(f"Opis przedmiotu (użyj do narracji): {desc}")
         lines.append("Przedmiot dodany do ekwipunku.")
         return "\n".join(lines)
 

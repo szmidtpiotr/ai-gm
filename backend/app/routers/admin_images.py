@@ -3,19 +3,130 @@ Admin image generation — proxy to local FLUX service on .170:8765
 Images stored in /usr/share/nginx/html/images/tiles/ (bind-mounted from ./frontend/images/tiles/)
 Flask API returns b64-encoded image so no shared filesystem needed.
 """
+import json
 import os
+import sqlite3
 import time
 import base64
 import httpx
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel
+from typing import Any
 
 router = APIRouter(prefix="/api/admin/images", tags=["admin-images"])
 
 IMAGE_GEN_URL = os.getenv("IMAGE_GEN_URL", "http://192.168.1.170:8765")
 TILES_DIR = Path(os.getenv("IMAGES_TILES_DIR", "/app/tiles"))
 TILES_URL_PREFIX = "/images/tiles"
+_DB_PATH = Path("/data/ai_gm.db")
+
+_IMAGE_GEN_KEYS = ("image_gen.url", "image_gen.steps", "image_gen.refine_steps", "image_gen.checkpoint")
+_IMAGE_GEN_DEFAULTS: dict[str, Any] = {
+    "image_gen.url": IMAGE_GEN_URL,
+    "image_gen.steps": 4,
+    "image_gen.refine_steps": 8,
+    "image_gen.checkpoint": "",
+}
+
+
+def _read_visual(key: str, default: Any = None) -> Any:
+    try:
+        with sqlite3.connect(_DB_PATH) as c:
+            row = c.execute("SELECT value FROM game_config_visual WHERE key = ?", (key,)).fetchone()
+        if row:
+            return json.loads(row[0])
+    except Exception:
+        pass
+    return default
+
+
+def _get_image_gen_url() -> str:
+    url = _read_visual("image_gen.url", IMAGE_GEN_URL)
+    return str(url).strip() or IMAGE_GEN_URL
+
+
+def _get_image_config() -> dict[str, Any]:
+    try:
+        with sqlite3.connect(_DB_PATH) as c:
+            rows = c.execute(
+                "SELECT key, value FROM game_config_visual WHERE key IN (?,?,?,?)",
+                _IMAGE_GEN_KEYS,
+            ).fetchall()
+        result = dict(_IMAGE_GEN_DEFAULTS)
+        for key, val in rows:
+            try:
+                result[key] = json.loads(val)
+            except Exception:
+                result[key] = val
+        return result
+    except Exception:
+        return dict(_IMAGE_GEN_DEFAULTS)
+
+
+@router.get("/config")
+async def get_image_config():
+    cfg = _get_image_config()
+    return {
+        "url": cfg.get("image_gen.url", IMAGE_GEN_URL),
+        "steps": cfg.get("image_gen.steps", 4),
+        "refine_steps": cfg.get("image_gen.refine_steps", 8),
+        "checkpoint": cfg.get("image_gen.checkpoint", ""),
+    }
+
+
+class ImageConfigPatch(BaseModel):
+    url: str | None = None
+    steps: int | None = None
+    refine_steps: int | None = None
+    checkpoint: str | None = None
+
+
+@router.patch("/config")
+async def patch_image_config(req: ImageConfigPatch):
+    updates: list[tuple[str, str]] = []
+    if req.url is not None:
+        updates.append(("image_gen.url", json.dumps(req.url.strip())))
+    if req.steps is not None:
+        updates.append(("image_gen.steps", json.dumps(max(1, min(50, req.steps)))))
+    if req.refine_steps is not None:
+        updates.append(("image_gen.refine_steps", json.dumps(max(1, min(50, req.refine_steps)))))
+    if req.checkpoint is not None:
+        updates.append(("image_gen.checkpoint", json.dumps(req.checkpoint.strip())))
+    if updates:
+        with sqlite3.connect(_DB_PATH) as c:
+            for key, val in updates:
+                c.execute(
+                    "INSERT INTO game_config_visual (key, value, updated_at) VALUES (?,?,datetime('now')) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=datetime('now')",
+                    (key, val),
+                )
+            c.commit()
+    return {"ok": True}
+
+
+@router.get("/status")
+async def get_image_gen_status():
+    url = _get_image_gen_url()
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(f"{url}/status")
+            data = r.json() if r.status_code == 200 else {}
+            return {"online": True, "url": url, "data": data}
+    except Exception as ex:
+        return {"online": False, "url": url, "error": str(ex)}
+
+
+@router.get("/models")
+async def list_models():
+    url = _get_image_gen_url()
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            r = await client.get(f"{url}/models")
+            r.raise_for_status()
+            return {"models": r.json()}
+    except Exception as ex:
+        return {"models": [], "error": str(ex)}
 
 
 class GenerateRequest(BaseModel):
@@ -23,6 +134,7 @@ class GenerateRequest(BaseModel):
     width: int = 512
     height: int = 512
     steps: int = 4
+    checkpoint: str | None = None
 
 
 class RefineRequest(BaseModel):
@@ -38,18 +150,25 @@ async def generate_image(req: GenerateRequest):
         raise HTTPException(status_code=400, detail="prompt required")
 
     TILES_DIR.mkdir(parents=True, exist_ok=True)
+    gen_url = _get_image_gen_url()
+
+    payload: dict[str, Any] = {
+        "prompt": req.prompt,
+        "width": req.width,
+        "height": req.height,
+        "steps": req.steps,
+    }
+    # Use per-request checkpoint, fall back to DB default
+    checkpoint = req.checkpoint if req.checkpoint is not None else _read_visual("image_gen.checkpoint", "")
+    if checkpoint:
+        payload["checkpoint"] = checkpoint
 
     async with httpx.AsyncClient(timeout=300) as client:
         try:
-            r = await client.post(f"{IMAGE_GEN_URL}/generate", json={
-                "prompt": req.prompt,
-                "width": req.width,
-                "height": req.height,
-                "steps": req.steps,
-            })
+            r = await client.post(f"{gen_url}/generate", json=payload)
             r.raise_for_status()
         except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail="Image generator offline (192.168.1.170:8765)")
+            raise HTTPException(status_code=503, detail=f"Image generator offline ({gen_url})")
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Image generator timeout")
         except httpx.HTTPStatusError as e:
@@ -71,7 +190,7 @@ async def generate_image(req: GenerateRequest):
     else:
         # Fallback: download via /files endpoint on Flask API
         async with httpx.AsyncClient(timeout=60) as dl:
-            resp = await dl.get(f"{IMAGE_GEN_URL}/files/{src_filename}")
+            resp = await dl.get(f"{gen_url}/files/{src_filename}")
             if resp.status_code == 200:
                 dest_path.write_bytes(resp.content)
             else:
@@ -94,9 +213,10 @@ async def refine_image(req: RefineRequest):
 
     image_b64 = base64.b64encode(src_path.read_bytes()).decode()
 
+    ref_url = _get_image_gen_url()
     async with httpx.AsyncClient(timeout=300) as client:
         try:
-            r = await client.post(f"{IMAGE_GEN_URL}/refine", json={
+            r = await client.post(f"{ref_url}/refine", json={
                 "prompt": req.prompt,
                 "image_b64": image_b64,
                 "denoise": req.denoise,
@@ -104,7 +224,7 @@ async def refine_image(req: RefineRequest):
             })
             r.raise_for_status()
         except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail="Image generator offline")
+            raise HTTPException(status_code=503, detail=f"Image generator offline ({ref_url})")
         except httpx.TimeoutException:
             raise HTTPException(status_code=504, detail="Image generator timeout")
         except httpx.HTTPStatusError as e:
@@ -124,7 +244,7 @@ async def refine_image(req: RefineRequest):
         dest_path.write_bytes(base64.b64decode(b64_data))
     else:
         async with httpx.AsyncClient(timeout=60) as dl:
-            resp = await dl.get(f"{IMAGE_GEN_URL}/files/{data['filename']}")
+            resp = await dl.get(f"{ref_url}/files/{data['filename']}")
             if resp.status_code == 200:
                 dest_path.write_bytes(resp.content)
             else:
@@ -238,6 +358,21 @@ async def list_images():
                 "created_at": int(f.stat().st_mtime),
             })
     return {"images": images}
+
+
+@router.get("/models")
+async def list_models():
+    """Proxy to image gen service /models — returns available checkpoints with metadata."""
+    url = _get_image_gen_url()
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            r = await client.get(f"{url}/models")
+            r.raise_for_status()
+            return {"models": r.json()}
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail=f"Image generator offline ({url})")
+    except Exception as ex:
+        raise HTTPException(status_code=502, detail=str(ex))
 
 
 @router.delete("/{filename}")

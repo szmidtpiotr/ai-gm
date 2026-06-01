@@ -58,6 +58,7 @@ services:
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_CLAIMS_EMAIL=${VAPID_CLAIMS_EMAIL:-mailto:admin@example.com}
+      - APP_BASE_URL=https://aigm-dev.studio-colorbox.com
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:

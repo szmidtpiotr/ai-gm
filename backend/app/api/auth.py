@@ -384,8 +384,13 @@ def get_invite(code: str):
         ).fetchone()
         if not inv:
             raise HTTPException(status_code=404, detail="Zaproszenie nie istnieje")
-        if inv["used_at"]:
+        max_uses = inv["max_uses"] if "max_uses" in inv.keys() else 1
+        uses_count = inv["uses_count"] if "uses_count" in inv.keys() else 0
+        # single-use: check used_at; multi-use: check uses_count vs max_uses
+        if max_uses == 1 and inv["used_at"]:
             raise HTTPException(status_code=409, detail="Zaproszenie zostało już wykorzystane")
+        if max_uses > 1 and uses_count >= max_uses:
+            raise HTTPException(status_code=409, detail="Limit zaproszeń wyczerpany")
         if _is_expired(inv["expires_at"]):
             raise HTTPException(status_code=410, detail="Zaproszenie wygasło")
 
@@ -402,6 +407,8 @@ def get_invite(code: str):
             "message": inv["message"],
             "inviter_name": inviter_name,
             "expires_at": inv["expires_at"],
+            "max_uses": max_uses,
+            "uses_count": uses_count,
         }
     finally:
         conn.close()
@@ -437,8 +444,12 @@ def register(req: RegisterReq):
         ).fetchone()
         if not inv:
             raise HTTPException(status_code=404, detail="Nieprawidłowy kod zaproszenia")
-        if inv["used_at"]:
+        max_uses = inv["max_uses"] if "max_uses" in inv.keys() else 1
+        uses_count = inv["uses_count"] if "uses_count" in inv.keys() else 0
+        if max_uses == 1 and inv["used_at"]:
             raise HTTPException(status_code=409, detail="Zaproszenie zostało już wykorzystane")
+        if max_uses > 1 and uses_count >= max_uses:
+            raise HTTPException(status_code=409, detail="Limit zaproszeń wyczerpany")
         if _is_expired(inv["expires_at"]):
             raise HTTPException(status_code=410, detail="Zaproszenie wygasło")
 
@@ -476,11 +487,17 @@ def register(req: RegisterReq):
         new_user_id = cursor.lastrowid
         conn.commit()
 
-        # Mark invite used
-        conn.execute(
-            "UPDATE user_invites SET accepted_by = ?, used_at = ? WHERE code = ?",
-            (new_user_id, _now_iso(), invite_code),
-        )
+        # Mark invite used — single-use sets used_at; multi-use increments counter only
+        if max_uses == 1:
+            conn.execute(
+                "UPDATE user_invites SET accepted_by = ?, used_at = ?, uses_count = uses_count + 1 WHERE code = ?",
+                (new_user_id, _now_iso(), invite_code),
+            )
+        else:
+            conn.execute(
+                "UPDATE user_invites SET uses_count = uses_count + 1 WHERE code = ?",
+                (invite_code,),
+            )
         conn.commit()
 
         # Send verification email

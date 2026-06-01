@@ -1452,6 +1452,42 @@ def forge_generate_template_item(
     if entity_type not in ("weapon", "item", "consumable"):
         raise HTTPException(status_code=400, detail="entity_type must be weapon, item, or consumable")
 
+    EFFECT_JSON_STRICT_RULES = """
+EFFECT_JSON — KONTRAKT MECHANICZNY (każde naruszenie = odrzucenie przez engine):
+
+JEDYNE DOZWOLONE KLUCZE TOP-LEVEL — schema_version, effect_category, effects.
+NIE WOLNO DODAWAĆ: once_per_scene, on_hit, active_effect, curse, trigger, bonus_damage,
+tags, special, ritual_use, drawback, conditional, requirement, choice, duration, ani żadnych innych.
+
+effect_category → TYLKO jeden z:
+  "gear_bonus"          typy efektu: static_stat_modifier
+  "character_condition" typy efektu: periodic_save, static_stat_modifier, block_action
+  "aura"                typy efektu: periodic_save, static_stat_modifier, apply_condition,
+                                     remove_condition, block_action
+
+Klucze obiektu efektu → TYLKO: type, stat, value, tick, condition_key, dc_key, expires
+  stat  → STR | DEX | CON | INT | WIS | CHA
+  tick  → on_use | start_turn | each_round
+  value → string: "1" lub "1d4"
+
+OBOWIĄZKOWE ZASADY:
+1. Zawsze generuj MECHANICZNY efekt — static_stat_modifier, apply_condition lub inny realny typ.
+   NIE używaj "narrative_only" — to pusty typ bez żadnej mechaniki w engine.
+2. Pole "note" ZAWSZE wypełnij opisem dla Mistrza Gry: co magicznie robi przedmiot,
+   jak MG powinien to narrować graczowi, jakie są efekty fabularne.
+3. Efekty warunkowe (on_hit, once_per_scene, vs enemy type, curse) → wyłącznie w "note".
+
+DWA POPRAWNE PRZYKŁADY:
+
+Pierścień +2 DEX (gear_bonus):
+effect_json: {"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"static_stat_modifier","stat":"DEX","value":"2","tick":"on_use"}]}
+note: "Pierścień emanuje subtelną magią zwinności. MG: postać porusza się z nadnaturalną gracją, +2 DEX aktywne przez cały czas noszenia."
+
+Amulet aury strachu (aura, trwa 2 rundy):
+effect_json: {"schema_version":1,"effect_category":"aura","effects":[{"type":"apply_condition","condition_key":"frightened","tick":"start_turn","expires":2}]}
+note: "Amulet emanuje ciemną aurą grozy. MG: każdy wróg wchodzący w kontakt wzrokowy z noszącym musi sprawdzić WIS DC 13 lub otrzyma stan frightened na 2 rundy."
+"""
+
     type_schemas = {
         "weapon": (
             '{"entity_type":"weapon","key":"slug","label":"Nazwa","damage_die":"1d6",'
@@ -1461,8 +1497,10 @@ def forge_generate_template_item(
         ),
         "item": (
             '{"entity_type":"item","key":"slug","label":"Nazwa","item_type":"misc|gear|magic|quest",'
-            '"value_gp":10,"rarity":1,"description":"opis dla gracza",'
-            '"note":"efekty mechaniczne dla MG","effect_json":null}'
+            '"value_gp":10,"rarity":2,"description":"opis dla gracza",'
+            '"note":"efekty mechaniczne i narracja dla MG (tu opisz wszystko warunkowe/rytualne)",'
+            '"effect_json":{"schema_version":1,"effect_category":"gear_bonus",'
+            '"effects":[{"type":"static_stat_modifier","stat":"STR","value":"1","tick":"on_use"}]}}'
         ),
         "consumable": (
             '{"entity_type":"consumable","key":"slug","label":"Nazwa",'
@@ -1476,8 +1514,9 @@ def forge_generate_template_item(
 
     system_prompt = (
         f"Jesteś projektantem gier RPG. Tworzysz {type_labels[entity_type]} dla kampanii. "
-        f"Zwróć TYLKO JSON pasujący do schematu: {type_schemas[entity_type]}\n"
-        "Klucz (key): lowercase_slug. Warto powiązać przedmiot z fabułą kampanii."
+        f"Zwróć TYLKO poprawny JSON pasujący do tego schematu:\n{type_schemas[entity_type]}\n"
+        "Klucz (key): lowercase_slug. Powiąż przedmiot tematycznie z fabułą kampanii.\n"
+        + (EFFECT_JSON_STRICT_RULES if entity_type in ("weapon", "item") else "")
     )
     user_prompt = (
         f"Kampania: {tpl['title']}\n"
@@ -1499,6 +1538,22 @@ def forge_generate_template_item(
             except Exception:
                 raise HTTPException(status_code=500, detail="LLM returned no valid JSON")
         result["entity_type"] = entity_type
+        # Sanitize effect_json for weapon and item: wipe to null if LLM generated invalid schema
+        if entity_type in ("weapon", "item") and result.get("effect_json") is not None:
+            from app.services.admin_config import validate_effect_json_payload
+            ej = result["effect_json"]
+            if isinstance(ej, str):
+                try:
+                    ej = json.loads(ej)
+                except Exception:
+                    ej = None
+            if ej is None or validate_effect_json_payload(ej):
+                result["effect_json"] = None  # invalid schema — wipe; admin can fill manually
+            else:
+                # Also wipe if only narrative_only effects (no real mechanics)
+                effects = ej.get("effects") or []
+                all_narrative = all(e.get("type") == "narrative_only" for e in effects) if effects else True
+                result["effect_json"] = None if all_narrative else ej
         return {"ok": True, "item": result}
     except HTTPException:
         raise

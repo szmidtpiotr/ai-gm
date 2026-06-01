@@ -428,7 +428,7 @@ def _load_action_context(
 
     # Equipped weapon
     weap_row = conn.execute(
-        """SELECT gw.key, gw.label, gw.damage_die, gw.linked_stat, gw.weapon_type, gw.finesse
+        """SELECT gw.key, gw.label, gw.damage_die, gw.linked_stat, gw.weapon_type, gw.finesse, gw.description
            FROM character_inventory ci
            JOIN game_config_weapons gw ON gw.key = ci.weapon_key
            WHERE ci.character_id = ? AND ci.equipped = 1 AND ci.weapon_key IS NOT NULL
@@ -452,7 +452,7 @@ def _load_action_context(
     item_key = params.get("item_key", "")
     if item_key:
         irow = conn.execute(
-            "SELECT key, label, item_type, effect_json, value_gp FROM game_config_items WHERE key = ?",
+            "SELECT key, label, item_type, effect_json, value_gp, description FROM game_config_items WHERE key = ?",
             (item_key,)
         ).fetchone()
         if irow:
@@ -460,7 +460,7 @@ def _load_action_context(
         else:
             # Check consumables
             crow = conn.execute(
-                "SELECT key, label, effect_type, effect_dice, effect_bonus FROM game_config_consumables WHERE key = ?",
+                "SELECT key, label, effect_type, effect_dice, effect_bonus, description FROM game_config_consumables WHERE key = ?",
                 (item_key,)
             ).fetchone()
             if crow:

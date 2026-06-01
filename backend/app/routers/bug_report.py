@@ -198,8 +198,8 @@ def _build_github_body(req: BugReportReq, ctx: dict, user_agent: str) -> str:
     turns_md = ""
     for t in turns:
         turns_md += f"\n**Turn {t.get('turn_number','?')} [{t.get('route','?')}]**\n"
-        turns_md += f"*Player:* {str(t.get('user_text') or '')[:500]}\n"
-        assistant = str(t.get("assistant_text") or "")[:800]
+        turns_md += f"*Player:* {str(t.get('user_text') or '')[:1000]}\n"
+        assistant = str(t.get("assistant_text") or "")[:4000]
         if assistant:
             turns_md += f"*GM:* {assistant}\n"
 

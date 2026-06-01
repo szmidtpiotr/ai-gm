@@ -410,6 +410,7 @@ def _resolve_item_use(params: dict, ctx: dict) -> dict:
         "outcome": "SUCCESS",
         "item_key": params.get("item_key", ""),
         "item_name": item.get("label", ""),
+        "item_description": item.get("description", ""),
         "effect_description": str(heal_dice or restore_mana or ""),
         "hp_change": hp_change,
         "hp_before": current_hp,
@@ -424,6 +425,7 @@ def _resolve_item_pickup(params: dict, ctx: dict) -> dict:
         "outcome": "SUCCESS",
         "item_key": params.get("item_key", ""),
         "item_name": item.get("label", params.get("item_key", "")),
+        "item_description": item.get("description", ""),
     }
 
 
