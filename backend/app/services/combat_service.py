@@ -1316,7 +1316,12 @@ def _save_combat_row(
     )
 
 
-def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) -> dict[str, Any]:
+def initiate_combat(
+    campaign_id: int,
+    character_id: int,
+    enemy_keys: list[str],
+    ally_npc_keys: list[str] | None = None,
+) -> dict[str, Any]:
     if not enemy_keys:
         raise ValueError("enemy_keys required")
 
@@ -1433,6 +1438,29 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
                 }
             )
             turn_slots.append((slug, init_e, idx))
+
+        # Ally NPCs (#323) — story companions join combat with default stats
+        _ALLY_DEFAULT_HP = 15
+        _ALLY_DEFAULT_AC = 12
+        _ALLY_DEFAULT_ATK = 3
+        for _ally_key in (ally_npc_keys or []):
+            _ally_slug = str(_ally_key).strip().lower().replace(" ", "_")
+            _init_a = roll_d20() + 1  # DEX +1 default
+            combatants.append({
+                "id": _ally_slug,
+                "type": "ally",
+                "name": str(_ally_key).replace("_", " ").title(),
+                "npc_key": _ally_slug,
+                "hp_current": _ALLY_DEFAULT_HP,
+                "hp_max": _ALLY_DEFAULT_HP,
+                "defense": _ALLY_DEFAULT_AC,
+                "attack_bonus": _ALLY_DEFAULT_ATK,
+                "damage_dice": "1d6",
+                "initiative_roll": _init_a,
+                "conditions": [],
+                "zone": ZONE_ENGAGED,
+            })
+            turn_slots.append((_ally_slug, _init_a, len(turn_slots)))
 
         # Sort: highest initiative first; ties: player wins (lower tie-break value sorts first after negating init)
         turn_slots.sort(key=lambda t: (-t[1], 0 if t[0] == "player" else 1))
@@ -2730,3 +2758,88 @@ def claim_post_combat_loot(
             "available": pool,
             "selected_indexes": sorted(selected_set),
         }
+
+
+# ── Ally NPC auto-turn (#323) ─────────────────────────────────────────────────
+
+def execute_ally_auto_attack(campaign_id: int, ally_id: str) -> dict[str, Any]:
+    """Auto-resolve an ally NPC's combat turn: attack the weakest living enemy.
+
+    Rolls d20 + ally.attack_bonus vs enemy.defense.
+    On hit: rolls ally.damage_dice, applies to enemy HP.
+    Advances turn after resolution.
+    Returns a summary dict for the frontend combat log.
+    """
+    with _conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM active_combat WHERE campaign_id = ? AND status = 'active'",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            return {"error": "no active combat"}
+
+        combatants: list[dict] = json.loads(row["combatants"] or "[]")
+        ally = _find_combatant(combatants, ally_id)
+        if not ally or ally.get("type") != "ally":
+            return {"error": f"ally '{ally_id}' not found"}
+        if int(ally.get("hp_current", 0) or 0) <= 0:
+            advance_turn(campaign_id)
+            return {"skipped": True, "reason": "ally dead"}
+
+        # Pick weakest living enemy
+        living_enemies = [
+            c for c in combatants
+            if c.get("type") == "enemy" and int(c.get("hp_current", 0) or 0) > 0
+        ]
+        if not living_enemies:
+            return {"error": "no living enemies"}
+        target = min(living_enemies, key=lambda c: int(c.get("hp_current", 0) or 0))
+
+        # Roll attack
+        d20 = roll_d20()
+        atk_bonus = int(ally.get("attack_bonus", 3) or 3)
+        total = d20 + atk_bonus
+        defense = int(target.get("defense", 12) or 12)
+        hit = d20 == 20 or (d20 != 1 and total >= defense)
+
+        dmg = 0
+        if hit:
+            dmg_dice = str(ally.get("damage_dice") or "1d6")
+            dice_parts = dmg_dice.lower().split("d")
+            n = int(dice_parts[0]) if len(dice_parts) == 2 else 1
+            sides = int(dice_parts[1]) if len(dice_parts) == 2 else 6
+            import random as _rand
+            dmg = sum(_rand.randint(1, sides) for _ in range(n))
+            new_hp = max(0, int(target["hp_current"]) - dmg)
+            target["hp_current"] = new_hp
+
+        _save_combat_row(
+            conn,
+            campaign_id,
+            character_id=int(row["character_id"]),
+            round_n=int(row["round"] or 1),
+            turn_order=json.loads(row["turn_order"] or "[]"),
+            current_turn=str(row["current_turn"] or ""),
+            combatants=combatants,
+            status="active",
+            ended_reason=None,
+            location_tag=None,
+        )
+        conn.commit()
+
+    advance_turn(campaign_id)
+
+    result = {
+        "ally_id": ally_id,
+        "ally_name": ally.get("name", ally_id),
+        "target_id": target["id"],
+        "target_name": target.get("name", target["id"]),
+        "d20": d20,
+        "total": total,
+        "defense": defense,
+        "hit": hit,
+        "damage": dmg,
+        "target_hp_after": target["hp_current"] if hit else int(target.get("hp_current", 0)),
+    }
+    logger.info("ally_auto_attack", **{k: v for k, v in result.items() if isinstance(v, (int, str, bool))})
+    return result
