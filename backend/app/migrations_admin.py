@@ -2265,12 +2265,26 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
             is_active       INTEGER NOT NULL DEFAULT 1
         )
     """, "v2-game-dungeons")
-    _exec("""
-        INSERT OR IGNORE INTO game_dungeons (key, label, location_key, rooms, enemy_pool, boss_enemy, loot_tier, atmosphere, cooldown_hours, min_level) VALUES
-        ('goblin_warren',  'Nora Goblinów',     'goblin_warren',  5, '["goblin","kobold"]', 'hobgoblin',      'standard', 'Ciasne tunele, smród gnijącego mięsa, pobrzękiwanie oręża w ciemności.',              48, 1),
-        ('crypt_of_bones', 'Krypta Kości',      'crypt_of_bones', 6, '["skeleton","zombie"]',      'skeleton_warrior','rich',   'Wilgotne katakumby, fosforyzujące kości, echo kroków odbija się od kamiennych ścian.', 72, 2),
-        ('rat_tunnels',    'Kanały pod Miastem','rat_tunnels',    4, '["giant_rat"]',              NULL,             'poor',     'Ciemne, zawilgocone kanały. Coś tu mieszka i nie lubi gości.',                        24, 1)
-    """, "v2-game-dungeons-seed")
+    # Seed default dungeons exactly once; admin hard-deletes are permanent.
+    # Use game_config_meta as a run-once marker so restarts never re-insert.
+    _seed_marker = conn.execute(
+        "SELECT 1 FROM game_config_meta WHERE key = 'dungeon_legacy_seed_applied' LIMIT 1"
+    ).fetchone()
+    if not _seed_marker:
+        _exec("""
+            INSERT OR IGNORE INTO game_dungeons (key, label, location_key, rooms, enemy_pool, boss_enemy, loot_tier, atmosphere, cooldown_hours, min_level) VALUES
+            ('goblin_warren',  'Nora Goblinów',     'goblin_warren',  5, '["goblin","kobold"]', 'hobgoblin',      'standard', 'Ciasne tunele, smród gnijącego mięsa, pobrzękiwanie oręża w ciemności.',              48, 1),
+            ('crypt_of_bones', 'Krypta Kości',      'crypt_of_bones', 6, '["skeleton","zombie"]',      'skeleton_warrior','rich',   'Wilgotne katakumby, fosforyzujące kości, echo kroków odbija się od kamiennych ścian.', 72, 2),
+            ('rat_tunnels',    'Kanały pod Miastem','rat_tunnels',    4, '["giant_rat"]',              NULL,             'poor',     'Ciemne, zawilgocone kanały. Coś tu mieszka i nie lubi gości.',                        24, 1)
+        """, "v2-game-dungeons-seed")
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO game_config_meta (key, value, updated_at) VALUES (?, ?, datetime('now'))",
+                ("dungeon_legacy_seed_applied", "1"),
+            )
+            conn.commit()
+        except Exception:
+            pass
     # ─────────────────────────────────────────────────────────────────────────
 
     # ── Issue #38: backfill sheet_json.level from xp_lifetime_earned ────────
@@ -3870,3 +3884,19 @@ def _ensure_dungeon_tile_schema(conn: sqlite3.Connection) -> None:
         )
     conn.commit()
     logger.info("admin_migration_applied", label="dungeon-tile-schema")
+
+    # Stage 10 A1-A2: session token storage (#254)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_sessions (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER NOT NULL,
+            token_hash TEXT    NOT NULL UNIQUE,
+            created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+            expires_at TEXT    NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions(token_hash)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id   ON user_sessions(user_id)")
+    conn.commit()
+    logger.info("admin_migration_applied", label="user-sessions-table")
