@@ -3900,3 +3900,12 @@ def _ensure_dungeon_tile_schema(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id   ON user_sessions(user_id)")
     conn.commit()
     logger.info("admin_migration_applied", label="user-sessions-table")
+
+    # Stage 10 A6: add csrf_token column to user_sessions (#260)
+    try:
+        conn.execute("ALTER TABLE user_sessions ADD COLUMN csrf_token TEXT")
+        conn.commit()
+        logger.info("admin_migration_applied", label="user-sessions-csrf-token")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise

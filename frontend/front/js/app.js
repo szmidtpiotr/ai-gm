@@ -341,11 +341,17 @@ async function apiRequest(method, endpoint, body = null) {
         // can otherwise resolve from cache and skip the intro-turn trigger.
         'Cache-Control': 'no-cache',
     };
-    // Stage 10 A2 — attach JWT when we have one. Backend continues accepting
-    // ?user_id= query param during 10-B; this header is additive.
-    const accessToken = localStorage.getItem('aigm_access_token');
+    // Stage 10 A3 — prefer DB session token (opaque, revocable) over JWT.
+    // Falls back to JWT access token during the migration window.
+    const sessionToken = sessionStorage.getItem('aigm_session_token');
+    const accessToken = sessionToken || localStorage.getItem('aigm_access_token');
     if (accessToken) {
         headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+    // Stage 10 A6 — attach CSRF token on state-changing requests.
+    const csrfToken = sessionStorage.getItem('aigm_csrf_token');
+    if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
     }
 
     const options = { method, headers, cache: 'no-store' };
@@ -507,6 +513,14 @@ async function handleLogin(e) {
             if (response.refresh_token) {
                 localStorage.setItem('aigm_refresh_token', response.refresh_token);
             }
+            // Stage 10 A3 — store opaque session token (revocable, DB-backed).
+            if (response.session_token) {
+                sessionStorage.setItem('aigm_session_token', response.session_token);
+            }
+            // Stage 10 A6 — store CSRF token for POST request validation.
+            if (response.csrf_token) {
+                sessionStorage.setItem('aigm_csrf_token', response.csrf_token);
+            }
             authToken = response.access_token || `user:${currentUser.id}`;
             localStorage.setItem('token', authToken);
             localStorage.setItem('user', JSON.stringify(currentUser));
@@ -627,7 +641,13 @@ function handleLogout() {
     localStorage.removeItem('aigm_hero_id');
     localStorage.removeItem('aigm_campaign_id');
     localStorage.removeItem('aigm_bugreport_pos');
-    try { sessionStorage.removeItem('aigm_hero_id'); sessionStorage.removeItem('aigm_active_session'); } catch {}
+    try {
+        sessionStorage.removeItem('aigm_hero_id');
+        sessionStorage.removeItem('aigm_active_session');
+        // Stage 10 A3/A6 — clear session token and CSRF on logout.
+        sessionStorage.removeItem('aigm_session_token');
+        sessionStorage.removeItem('aigm_csrf_token');
+    } catch {}
     showScreen('login');
 }
 

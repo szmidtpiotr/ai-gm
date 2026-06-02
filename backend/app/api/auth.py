@@ -204,9 +204,8 @@ def player_login(req: PlayerLoginReq):
             is_admin=is_admin_val,
         )
 
-        # Stage 10 A3 — DB-backed opaque session token (#257).
-        # Stored as sha256(token) in user_sessions; plain token returned to client.
-        session_token = generate_session_token(int(row["id"]), conn)
+        # Stage 10 A3/A6 — DB-backed opaque session token + CSRF token (#257/#260).
+        session_token, csrf_token = generate_session_token(int(row["id"]), conn)
         session_expires_at = (
             datetime.now(timezone.utc) + timedelta(days=7)
         ).isoformat()
@@ -250,6 +249,7 @@ def player_login(req: PlayerLoginReq):
             "onboarded_at": onboarded,
             "session_token": session_token,
             "session_expires_at": session_expires_at,
+            "csrf_token": csrf_token,
             **token_pair,
         }
     except sqlite3.OperationalError:

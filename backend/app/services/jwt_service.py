@@ -20,6 +20,7 @@ import os
 import secrets
 import sqlite3
 import time
+import uuid
 from typing import Any
 
 import jwt as pyjwt  # PyJWT
@@ -120,22 +121,36 @@ def issue_pair(*, user_id: int, username: str, role: str, is_admin: int) -> dict
 SESSION_TTL_DAYS = 7
 
 
-def generate_session_token(user_id: int, conn: sqlite3.Connection) -> str:
-    """Create a session token, persist its sha256 hash, return the plain token.
+def generate_session_token(user_id: int, conn: sqlite3.Connection) -> tuple[str, str]:
+    """Create a session token, persist its sha256 hash, return (plain_token, csrf_token).
 
     The plain token is returned ONCE and never stored — only sha256(token) lives
     in the DB so a DB leak doesn't expose valid credentials.
+    The csrf_token (UUID) is stored in the session row and must accompany POST requests.
     """
     raw = base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")
     token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    csrf = str(uuid.uuid4())
     conn.execute(
-        """INSERT INTO user_sessions (user_id, token_hash, expires_at)
-           VALUES (?, ?, datetime('now', ?))""",
-        (user_id, token_hash, f"+{SESSION_TTL_DAYS} days"),
+        """INSERT INTO user_sessions (user_id, token_hash, expires_at, csrf_token)
+           VALUES (?, ?, datetime('now', ?), ?)""",
+        (user_id, token_hash, f"+{SESSION_TTL_DAYS} days", csrf),
     )
     conn.commit()
     logger.info("session_token_issued", user_id=user_id, ttl_days=SESSION_TTL_DAYS)
-    return raw
+    return raw, csrf
+
+
+def get_csrf_token_for_session(token: str, conn: sqlite3.Connection) -> str | None:
+    """Look up the CSRF token associated with a session token."""
+    if not token:
+        return None
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    row = conn.execute(
+        "SELECT csrf_token FROM user_sessions WHERE token_hash = ? AND expires_at > datetime('now')",
+        (token_hash,),
+    ).fetchone()
+    return str(row[0]) if row and row[0] else None
 
 
 def validate_session_token(token: str, conn: sqlite3.Connection) -> int | None:

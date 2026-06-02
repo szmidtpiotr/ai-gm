@@ -104,45 +104,58 @@ def resolve_authed_user_id(
     """Derive the authenticated user_id from the request.
 
     Order of trust:
-      1. `Authorization: Bearer <access_jwt>` (verified signature → payload.sub)
-      2. `?user_id=N` query param (LEGACY — logged as deprecation warning)
+      1. `Authorization: Bearer <jwt>` — verified JWT signature → payload.sub
+      2. `Authorization: Bearer <opaque>` — DB session token lookup (Stage 10 A3)
+      3. `?user_id=N` query param (LEGACY — logged as deprecation warning)
 
     Raises:
-      HTTPException 401 — neither JWT nor query param present
-      HTTPException 401 — JWT present but invalid
-      HTTPException 400 — JWT and query param both present but disagree
-
-    During Stage 10-C this is THE auth point for player-facing endpoints. After
-    the deprecation period the query-param branch can be removed (one-liner).
+      HTTPException 401 — neither token nor query param present
+      HTTPException 401 — token present but invalid/expired
+      HTTPException 400 — token and query param both present but disagree
     """
     token = _extract_bearer(authorization)
-    jwt_uid: int | None = None
+    authed_uid: int | None = None
+
     if token:
+        # Try JWT first (stateless, fast)
         try:
             payload = verify_token(token, expected_type="access")
-            jwt_uid = int(payload.get("sub") or 0) or None
-        except JWTError as e:
-            raise HTTPException(status_code=401, detail=str(e)) from None
+            authed_uid = int(payload.get("sub") or 0) or None
+        except JWTError:
+            pass  # Not a JWT — try opaque session token below
 
-    if jwt_uid is not None:
-        if user_id_query is not None and int(user_id_query) != jwt_uid:
+        # Stage 10 A3 — try DB-backed opaque session token when JWT fails
+        if authed_uid is None:
+            import sqlite3 as _sqlite3
+            from app.services.jwt_service import validate_session_token as _validate
+            _conn = _sqlite3.connect(resolve_db_path())
+            try:
+                authed_uid = _validate(token, _conn)
+            finally:
+                _conn.close()
+
+        if authed_uid is None:
+            raise HTTPException(status_code=401, detail="Invalid or expired token") from None
+
+    if authed_uid is not None:
+        if user_id_query is not None and int(user_id_query) != authed_uid:
             raise HTTPException(
                 status_code=400,
-                detail=f"user_id query param ({user_id_query}) does not match JWT subject ({jwt_uid})",
+                detail=f"user_id query param ({user_id_query}) does not match token subject ({authed_uid})",
             )
-        return jwt_uid
+        return authed_uid
 
     if user_id_query is not None:
         _logger.warning(
             "legacy_query_param_auth",
             user_id=int(user_id_query),
-            hint="Frontend should send Authorization: Bearer <access_token> — query param fallback is deprecated.",
+            hint="Frontend should send Authorization: Bearer <token> — query param fallback is deprecated.",
         )
         return int(user_id_query)
 
     raise HTTPException(
         status_code=401,
-        detail="Missing authentication (send Authorization: Bearer <access_token>)",
+        detail="Missing authentication (send Authorization: Bearer <token>)",
     )
 
 
