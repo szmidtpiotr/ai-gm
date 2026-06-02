@@ -60,7 +60,19 @@ W kontenerze sprawdź pliki i sygnatury (ścieżka aplikacji: `/app/app/...`):
 - **T02–T04:** `history_summary_service.py` — `SUMMARY_AUDIENCE_GM`, `PLAYER_SUMMARY_SYSTEM_APPEND`, `format_gm_plan_block`.
 - **T01:** test `tests/test_history_summary_t01_dual_prompt.py`.
 
-Testy (w kontenerze, `/app`):
+Testy (w kontenerze, `/app`) — prefer `./scripts/test_dev.sh` z katalogu repo na `.61`:
+
+```bash
+./scripts/test_dev.sh \
+  tests/test_history_summary_t01_dual_prompt.py \
+  tests/test_history_summary_t02_audience.py \
+  tests/test_history_summary_t03_player_only.py \
+  tests/test_history_summary_t04_gm_context.py \
+  tests/test_gm_plan_schema.py \
+  tests/test_t05_gm_plan_generation.py -q
+```
+
+Alternatywnie:
 
 ```bash
 docker exec -w /app ai-gm-dev-backend-1 python3 -m pytest \

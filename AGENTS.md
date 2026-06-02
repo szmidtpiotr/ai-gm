@@ -12,3 +12,11 @@
 
 - Default to the remote dev stack (`ai-gm-dev-*` containers), not production.
 - Do not touch production containers unless the user explicitly requests it.
+
+## Testing & TDD
+
+- **Verify setup:** `./scripts/verify_testing_setup.sh`
+- **Local pytest:** `./scripts/test_local.sh` (no SSH)
+- **Docker pytest:** `./scripts/test_dev.sh` (container `ai-gm-dev-backend-1`)
+- **Guide:** [`docs/TESTING.md`](docs/TESTING.md) · skill: `.cursor/skills/ai-gm-tdd/SKILL.md`
+- **Live playtest:** `.claude/skills/game-test/SKILL.md` (not unit tests)

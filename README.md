@@ -128,6 +128,17 @@ cd ~/ai-gm
 docker compose -f docker-compose.dev.yml logs backend --tail=50
 ```
 
+### Tests (TDD)
+
+```bash
+./scripts/verify_testing_setup.sh          # smoke-check tooling
+./scripts/test_local.sh                    # local venv (recommended)
+./scripts/test_local.sh tests/test_gm_plan_schema.py -v
+./scripts/test_dev.sh                      # inside Docker backend container
+```
+
+See **[`docs/TESTING.md`](docs/TESTING.md)** — paths, container layout (`tests/` not `backend/tests/` in Docker), known suite limitations.
+
 ---
 
 ## LLM Configuration
