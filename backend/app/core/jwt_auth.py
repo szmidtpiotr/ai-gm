@@ -127,6 +127,7 @@ def resolve_authed_user_id(
         # Stage 10 A3 — try DB-backed opaque session token when JWT fails
         if authed_uid is None:
             import sqlite3 as _sqlite3
+            from app.core.db_runtime import resolve_db_path
             from app.services.jwt_service import validate_session_token as _validate
             _conn = _sqlite3.connect(resolve_db_path())
             try:
