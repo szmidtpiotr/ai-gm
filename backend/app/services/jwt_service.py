@@ -14,9 +14,11 @@ in `core/jwt_auth.py` will translate to HTTPException(401).
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import os
 import secrets
+import sqlite3
 import time
 from typing import Any
 
@@ -109,3 +111,64 @@ def issue_pair(*, user_id: int, username: str, role: str, is_admin: int) -> dict
         "token_type": "bearer",
         "expires_in": ACCESS_TTL_SECONDS,
     }
+
+
+# ── Stage 10 A1-A2: DB-backed opaque session tokens (#254/#255) ───────────────
+# Unlike JWTs, these are revocable (DELETE from user_sessions) and have no
+# decodable payload — the raw token is opaque to the client.
+
+SESSION_TTL_DAYS = 7
+
+
+def generate_session_token(user_id: int, conn: sqlite3.Connection) -> str:
+    """Create a session token, persist its sha256 hash, return the plain token.
+
+    The plain token is returned ONCE and never stored — only sha256(token) lives
+    in the DB so a DB leak doesn't expose valid credentials.
+    """
+    raw = base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")
+    token_hash = hashlib.sha256(raw.encode()).hexdigest()
+    conn.execute(
+        """INSERT INTO user_sessions (user_id, token_hash, expires_at)
+           VALUES (?, ?, datetime('now', ?))""",
+        (user_id, token_hash, f"+{SESSION_TTL_DAYS} days"),
+    )
+    conn.commit()
+    logger.info("session_token_issued", user_id=user_id, ttl_days=SESSION_TTL_DAYS)
+    return raw
+
+
+def validate_session_token(token: str, conn: sqlite3.Connection) -> int | None:
+    """Verify a session token against the DB. Returns user_id or None.
+
+    Returns None when the token is missing, not found, or expired.
+    Expired rows are cleaned up lazily on successful validation.
+    """
+    if not token:
+        return None
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    row = conn.execute(
+        """SELECT user_id FROM user_sessions
+           WHERE token_hash = ? AND expires_at > datetime('now')""",
+        (token_hash,),
+    ).fetchone()
+    if not row:
+        return None
+    return int(row[0])
+
+
+def revoke_session_token(token: str, conn: sqlite3.Connection) -> bool:
+    """Delete a session token from the DB (logout). Returns True if found."""
+    if not token:
+        return False
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    cur = conn.execute("DELETE FROM user_sessions WHERE token_hash = ?", (token_hash,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def purge_expired_sessions(conn: sqlite3.Connection) -> int:
+    """Remove expired sessions. Returns count of deleted rows."""
+    cur = conn.execute("DELETE FROM user_sessions WHERE expires_at <= datetime('now')")
+    conn.commit()
+    return cur.rowcount
