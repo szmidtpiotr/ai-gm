@@ -638,8 +638,10 @@ function handleLogout() {
     // Stage 10 A2 — clear JWT pair on logout.
     localStorage.removeItem('aigm_access_token');
     localStorage.removeItem('aigm_refresh_token');
-    localStorage.removeItem('aigm_hero_id');
-    localStorage.removeItem('aigm_campaign_id');
+    // #238 — Keep hero_id + campaign_id through logout so tryRestoreSession
+    // can resume the correct campaign on re-login. The user_id ownership check
+    // in tryRestoreSession (restored.user_id !== currentUser.id) prevents
+    // cross-user session restore, so this is safe.
     localStorage.removeItem('aigm_bugreport_pos');
     try {
         sessionStorage.removeItem('aigm_hero_id');
