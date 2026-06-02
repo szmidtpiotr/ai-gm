@@ -196,13 +196,20 @@ def player_login(req: PlayerLoginReq):
         # Stage 10 A2 — emit JWT pair so the client can switch to Bearer auth.
         # Returned alongside the legacy `user_id`/`is_admin`/`role` fields so
         # existing clients keep working unchanged during the overlap window.
-        from app.services.jwt_service import issue_pair
+        from app.services.jwt_service import generate_session_token, issue_pair
         token_pair = issue_pair(
             user_id=int(row["id"]),
             username=str(row["username"] or ""),
             role=role,
             is_admin=is_admin_val,
         )
+
+        # Stage 10 A3 — DB-backed opaque session token (#257).
+        # Stored as sha256(token) in user_sessions; plain token returned to client.
+        session_token = generate_session_token(int(row["id"]), conn)
+        session_expires_at = (
+            datetime.now(timezone.utc) + timedelta(days=7)
+        ).isoformat()
 
         # Stage 11-C C6 — email verification gate on 2nd+ login
         # First session (onboarded_at IS NULL) is allowed through so new users
@@ -241,6 +248,8 @@ def player_login(req: PlayerLoginReq):
             "is_tester": is_tester_val,
             "role": role,
             "onboarded_at": onboarded,
+            "session_token": session_token,
+            "session_expires_at": session_expires_at,
             **token_pair,
         }
     except sqlite3.OperationalError:
