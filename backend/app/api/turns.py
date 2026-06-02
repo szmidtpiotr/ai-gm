@@ -4615,6 +4615,72 @@ def create_turn_stream(
                         user_text=user_text_val,
                         assistant_text=clean_text,
                     )
+                    # ── Streaming: [SKILL_TEST] tag + roll_cue intercept ──────────
+                    # The non-streaming path calls intercept_skill_test_tag here.
+                    # Streaming never did — so roll_cue/[SKILL_TEST] in LLM JSON
+                    # responses silently fell through with no dice popup. (#237)
+                    try:
+                        from app.services.skill_service import (
+                            intercept_skill_test_tag as _ists,
+                            calc_skill_modifier_info as _csmi,
+                            _skill_label as _sl,
+                            _get_counter as _gc,
+                        )
+                        import uuid as _uuid_s
+                        _char_sh_s = json.loads(character["sheet_json"] or "{}")
+                        _sk_pending_s = None
+                        # 1) [SKILL_TEST:key:DC] tag in narrative
+                        _clean_after_tag, _sk_pending_s = _ists(
+                            clean_text,
+                            conn=save_conn,
+                            campaign_id=campaign_id_val,
+                            character_id=character_id_val,
+                            user_text=user_text_val,
+                        )
+                        # 2) roll_cue in parsed JSON (if tag intercept didn't fire)
+                        if not _sk_pending_s and _parsed_json_s and _text_is_action_attempt(user_text_val):
+                            _raw_cue_s = str(_parsed_json_s.get("roll_cue") or "").strip()
+                            if _raw_cue_s:
+                                import re as _rc_re_s
+                                _cm_s = _rc_re_s.match(r"^Roll (.+?) d\d+$", _raw_cue_s, _rc_re_s.IGNORECASE)
+                                if _cm_s:
+                                    _cue_name_s = _cm_s.group(1).strip()
+                                    _canonical_s = resolve_test_name(_cue_name_s)
+                                    if _canonical_s is None:
+                                        _norm_s = _cue_name_s.lower().replace(" ", "_")
+                                        _cue_db_s = save_conn.execute(
+                                            "SELECT key FROM game_config_skills WHERE key = ? LIMIT 1",
+                                            (_norm_s,),
+                                        ).fetchone()
+                                        if _cue_db_s:
+                                            _canonical_s = _norm_s
+                                    if _canonical_s and not is_attack_test(_canonical_s) and not _is_combat_class_skill(_canonical_s):
+                                        _sk_pending_s = {
+                                            "skill_test_id": f"st-{_uuid_s.uuid4().hex[:8]}",
+                                            "skill_key": _canonical_s,
+                                            "skill_label": _sl(_canonical_s),
+                                            "counter": _gc(save_conn, _canonical_s),
+                                            "modifier_breakdown": _csmi(_char_sh_s, _canonical_s),
+                                        }
+                        if _sk_pending_s and not _is_combat_class_skill(_sk_pending_s.get("skill_key", "")):
+                            _gs_st_s = save_conn.execute(
+                                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                                (campaign_id_val,),
+                            ).fetchone()
+                            if _gs_st_s:
+                                _sf_st_s = json.loads(_gs_st_s["session_flags"] or "{}")
+                                _sf_st_s = _commit_pending_skill_test(_sk_pending_s, _sf_st_s)
+                                save_conn.execute(
+                                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                                    (json.dumps(_sf_st_s, ensure_ascii=False), campaign_id_val),
+                                )
+                                save_conn.commit()
+                                logger.info("stream_skill_test_pending_set",
+                                            skill=_sk_pending_s.get("skill_key"),
+                                            campaign_id=campaign_id_val)
+                    except Exception as _sks_err:
+                        logger.warning("stream_skill_test_intercept_error", error=str(_sks_err))
+                    # ──────────────────────────────────────────────────────────────
                     for _gil in grant_item_labels:
                         _gil_desc_s = grant_item_descriptions.get(_gil)
                         _resolved = _resolve_grant_catalog_item(save_conn, _gil)
