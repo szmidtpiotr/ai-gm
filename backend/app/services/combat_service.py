@@ -417,8 +417,16 @@ _RANGED_ENEMY_KEYWORDS = (
 
 
 def _default_zone_for_player(sheet: dict) -> str:
-    """Warrior/melee builds start in engaged; Scholar/casters start in ranged."""
-    arch = str((sheet or {}).get("archetype") or "").strip().lower()
+    """Players with ranged weapons start in ranged zone; Scholar archetype also defaults ranged.
+
+    Checks _equipped_weapon_type (pre-resolved by initiate_combat) first — if 'ranged',
+    returns ZONE_RANGED regardless of archetype. Archetype fallback handles Scholar.
+    """
+    s = sheet or {}
+    weapon_type = str(s.get("_equipped_weapon_type") or "").strip().lower()
+    if weapon_type == "ranged":
+        return ZONE_RANGED
+    arch = str(s.get("archetype") or "").strip().lower()
     if arch == "scholar":
         return ZONE_RANGED
     return ZONE_ENGAGED
@@ -1346,6 +1354,13 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         dex_mod = _stat_mod(sheet, "DEX")
         init_player = roll_d20() + dex_mod
         ability_stats = _ability_stats_seven(sheet)
+
+        # Resolve equipped weapon type so _default_zone_for_player can detect ranged (#327)
+        try:
+            _weapon_row = resolve_sheet_weapon(conn, sheet, character_id)
+            sheet["_equipped_weapon_type"] = str((_weapon_row or {}).get("weapon_type") or "melee").lower()
+        except Exception:
+            pass
 
         combatants: list[dict[str, Any]] = [
             {
