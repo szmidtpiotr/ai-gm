@@ -584,6 +584,24 @@ def apply_resurrection(
             (user_id,),
         )
 
+    # Set briefing flag so next narrative turn orients the player (#325)
+    if campaign_id:
+        try:
+            gs = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if gs:
+                sf = json.loads(gs["session_flags"] or "{}")
+                sf["pending_resurrection_briefing"] = True
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                    (json.dumps(sf, ensure_ascii=False), campaign_id),
+                )
+                conn.commit()
+        except Exception as _e:
+            logger.warning("resurrection_briefing_flag_error", error=str(_e))
+
     conn.commit()
     logger.info(
         "hero_resurrected",

@@ -517,6 +517,50 @@ def _inject_clock_context(
         logger.warning("clock_context_inject_failed", error=str(exc))
 
 
+def _inject_resurrection_briefing(
+    conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
+) -> None:
+    """Inject a one-shot orientation instruction after hero resurrection (#325).
+
+    When apply_resurrection() revives a hero it sets session_flags.pending_resurrection_briefing=True.
+    On the very next narrative turn this function injects a mandatory LLM instruction to orient
+    the player (where are they, what happened, what is next). The flag is cleared immediately
+    so the briefing only fires once.
+    """
+    if not messages:
+        return
+    first = messages[0]
+    if not isinstance(first, dict) or first.get("role") != "system":
+        return
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            return
+        sf = json.loads(gs["session_flags"] or "{}")
+        if not sf.get("pending_resurrection_briefing"):
+            return
+        briefing_block = (
+            "[WSKRZESZENIE — ORIENTACJA GRACZA] Bohater właśnie powrócił do życia. "
+            "W tej turze MUSISZ napisać krótkie (2-4 zdania) opisanie orientacyjne: "
+            "gdzie bohater się znajduje, co widzi/czuje po powrocie, i co jest następnym krokiem. "
+            "Nie pomijaj tego kontekstu — gracz nie wie co się działo gdy był martwy."
+        )
+        first["content"] = f"{first['content'].rstrip()}\n\n{briefing_block}"
+        # Clear flag — briefing fires only once
+        sf.pop("pending_resurrection_briefing", None)
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (json.dumps(sf, ensure_ascii=False), campaign_id),
+        )
+        conn.commit()
+        logger.info("resurrection_briefing_injected", campaign_id=campaign_id)
+    except Exception as exc:
+        logger.warning("resurrection_briefing_inject_failed", error=str(exc))
+
+
 def _inject_location_llm_context(
     conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
 ) -> None:
@@ -786,6 +830,7 @@ def build_narrative_messages(
         _inject_hex_terrain_context(conn, int(campaign["id"]), messages)
         _inject_character_inventory_context(conn, character, messages)
         _inject_clock_context(conn, int(campaign["id"]), messages)
+        _inject_resurrection_briefing(conn, int(campaign["id"]), messages)
 
     combat_log_block = combat_svc.get_combat_turns_context_for_prompt(int(campaign["id"]))
     if combat_log_block and messages:
