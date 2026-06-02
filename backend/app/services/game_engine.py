@@ -471,6 +471,52 @@ def _inject_dungeon_tile_context(
         return False
 
 
+def _inject_clock_context(
+    conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
+) -> None:
+    """Inject current in-game time into the system prompt so the LLM narrates
+    correct atmosphere (day vs. night). Reads ingame_hours from session_flags.
+    Without this the LLM defaults to whatever feels atmospheric — often 'night'
+    regardless of the actual game clock. (#233)"""
+    if not messages:
+        return
+    first = messages[0]
+    if not isinstance(first, dict) or first.get("role") != "system":
+        return
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not gs:
+            return
+        sf = json.loads(gs["session_flags"] or "{}")
+        ingame_hours = int(sf.get("ingame_hours", 9) or 9)
+        ingame_minutes = int(sf.get("ingame_minutes", 0) or 0)
+        day = (ingame_hours // 24) + 1
+        hour = ingame_hours % 24
+        hour_str = f"{hour:02d}:{ingame_minutes:02d}"
+        if 5 <= hour < 9:
+            period = "świt"
+        elif 9 <= hour < 13:
+            period = "rano"
+        elif 13 <= hour < 17:
+            period = "południe"
+        elif 17 <= hour < 20:
+            period = "popołudnie"
+        elif 20 <= hour < 23:
+            period = "zmierzch"
+        else:
+            period = "noc"
+        clock_block = (
+            f"[CZAS GRY] Dzień {day}, {hour_str} — {period}. "
+            f"Narracja MUSI odzwierciedlać tę porę dnia."
+        )
+        first["content"] = f"{first['content'].rstrip()}\n\n{clock_block}"
+    except Exception as exc:
+        logger.warning("clock_context_inject_failed", error=str(exc))
+
+
 def _inject_location_llm_context(
     conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
 ) -> None:
@@ -739,6 +785,7 @@ def build_narrative_messages(
         _inject_npc_llm_context(conn, int(campaign["id"]), messages)
         _inject_hex_terrain_context(conn, int(campaign["id"]), messages)
         _inject_character_inventory_context(conn, character, messages)
+        _inject_clock_context(conn, int(campaign["id"]), messages)
 
     combat_log_block = combat_svc.get_combat_turns_context_for_prompt(int(campaign["id"]))
     if combat_log_block and messages:
