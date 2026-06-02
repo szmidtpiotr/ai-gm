@@ -136,6 +136,34 @@ def _is_reading_context(text: str) -> bool:
     return has_verb and has_target
 
 
+# ── Compound action detector (issue #241) ───────────────────────────────────
+# When a player sends multi-intent text (NPC dialogue + movement + skill check),
+# the pre-LLM keyword scanner must be bypassed so the LLM handles all parts.
+_COMPOUND_CONNECTORS = (
+    " i ", " potem ", " nastepnie ", " po czym ",
+    " a potem ", " a nastepnie ", " i ide ", " i wracam ",
+    " i pytam ", " i mowie ", " i wychodze ",
+)
+_COMPOUND_DIALOGUE_MARKERS = (
+    "mowie", "pytam", "powiedzi", "powiedzial",
+    "krzycze", "odpowiadam", "zwracam sie", "mowię",
+)
+
+
+def _is_compound_action(text: str) -> bool:
+    """Return True when text contains multiple distinct player intents.
+
+    Compound = has a sequence connector (i/potem/po czym) AND a dialogue marker
+    (mówię/pytam/powiedziałem). In that case the pre-LLM keyword scanner is
+    bypassed so the LLM can narrate all parts of the turn, not just the
+    first matched skill keyword.
+    """
+    norm = _normalize_pl(text or "")
+    if not any(c in norm for c in _COMPOUND_CONNECTORS):
+        return False
+    return any(d in norm for d in _COMPOUND_DIALOGUE_MARKERS)
+
+
 # ── Combat-keyword fallback (issue #135) ────────────────────────────────────
 # When the player declares an attack in Polish and the LLM forgot to emit
 # [COMBAT_START:enemy_key], inject the tag post-hoc so the combat engine
@@ -3254,7 +3282,7 @@ def create_turn(
         # If a keyword matches and we're not in combat, trigger skill test immediately.
         # Reading actions (issue #12 BUG-02) bypass this scanner so e.g. "odczytuję napis"
         # doesn't fire phantom Arkana — system prompt rule handles narration instead.
-        if not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text):
+        if not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text) and not _is_compound_action(text):
             try:
                 _txt_pre = _normalize_pl(text)
                 # Combat-class skills (attack / ranged_attack / two_handed) represent
