@@ -8,6 +8,8 @@ description: >-
 
 # AI-GM — test-driven development (backend)
 
+Human-readable setup: [`docs/GETTING_STARTED.md`](../../../docs/GETTING_STARTED.md). UX E2E: `./scripts/test_e2e.sh`.
+
 ## Run tests (no SSH)
 
 | Command | Environment |

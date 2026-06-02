@@ -1991,6 +1991,9 @@ def _make_character_first_migration(conn: sqlite3.Connection) -> None:
     if "status" in cols:
         logger.debug("v2_migration_skipped", label="v2-character-first-flow")
         return
+    if not cols and os.getenv("AIGM_E2E_DB") == "1":
+        logger.warning("v2_migration_skipped", label="v2-character-first-flow", reason="no characters table yet")
+        return
 
     conn.execute("PRAGMA foreign_keys = OFF")
     try:
@@ -2049,6 +2052,9 @@ def _make_character_first_migration(conn: sqlite3.Connection) -> None:
         conn.commit()
         logger.info("v2_migration_applied", label="v2-character-first-flow")
     except Exception as e:
+        if os.getenv("AIGM_E2E_DB") == "1":
+            logger.warning("v2_migration_failed", label="v2-character-first-flow", error=str(e))
+            return
         logger.error("v2_migration_failed", label="v2-character-first-flow", error=str(e))
         raise
     finally:
@@ -3369,7 +3375,11 @@ def run_admin_migrations() -> None:
 
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+    # E2E / fresh SQLite bootstrap: allow admin seeds before all FK parents exist.
+    if os.getenv("AIGM_E2E_DB") == "1":
+        conn.execute("PRAGMA foreign_keys = OFF")
+    else:
+        conn.execute("PRAGMA foreign_keys = ON")
 
     try:
         for sql in ADMIN_MIGRATIONS:
@@ -3432,6 +3442,14 @@ def run_admin_migrations() -> None:
                     )
                 else:
                     raise
+            except sqlite3.IntegrityError as e:
+                if os.getenv("AIGM_E2E_DB") != "1":
+                    raise
+                logger.warning(
+                    "admin_seed_deferred",
+                    sql_preview=sql.strip().splitlines()[0],
+                    reason=str(e),
+                )
 
         _migrate_legacy_archetype_json(conn)
         _ensure_campaign_ai_summaries_audience(conn)

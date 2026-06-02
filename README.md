@@ -128,16 +128,17 @@ cd ~/ai-gm
 docker compose -f docker-compose.dev.yml logs backend --tail=50
 ```
 
-### Tests (TDD)
+### Tests (local — no SSH required)
+
+**New contributor? Start here:** **[`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md)** — install, first run, daily commands, UX tests, troubleshooting.
 
 ```bash
-./scripts/verify_testing_setup.sh          # smoke-check tooling
-./scripts/test_local.sh                    # local venv (recommended)
-./scripts/test_local.sh tests/test_gm_plan_schema.py -v
-./scripts/test_dev.sh                      # inside Docker backend container
+./scripts/verify_testing_setup.sh   # once after clone
+./scripts/test_local.sh tests/test_gm_plan_schema.py -v   # TDD (pytest)
+./scripts/test_e2e.sh               # UX (Playwright + stub LLM)
 ```
 
-See **[`docs/TESTING.md`](docs/TESTING.md)** — paths, container layout (`tests/` not `backend/tests/` in Docker), known suite limitations.
+Reference: **[`docs/TESTING.md`](docs/TESTING.md)** — test pyramid, Docker paths, known suite limits.
 
 ---
 

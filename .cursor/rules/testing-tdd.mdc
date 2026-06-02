@@ -12,7 +12,7 @@ alwaysApply: false
 When changing `backend/app/` behavior:
 
 1. **Prefer test-first** — add or extend a test in `backend/tests/` (or `tests/`) that fails for the new requirement or reproduces the bug.
-2. **Run tests on DEV only** — `./scripts/test_dev.sh` on `192.168.1.61` inside `ai-gm-dev-backend-1`. Do not run pytest locally on the NFS mount machine.
+2. **Run unit tests locally** — `./scripts/test_local.sh` or `./scripts/test_dev.sh` (Docker). UX: `./scripts/test_e2e.sh`.
 3. **Use in-memory SQLite fixtures** and **mock LLM/HTTP** — no live Ollama in unit tests.
 4. **Locked mechanics** — if a test encodes DC/roll/stats from `system_prompt.txt`, fix code to match the contract; do not weaken assertions without human approval.
 5. **Rebuild backend image** after Python deploy when verifying in-container code.

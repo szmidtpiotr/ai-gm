@@ -2,6 +2,7 @@
   "name": "ai-test-agent",
   "private": true,
   "scripts": {
+    "test:ux": "playwright test --config=playwright/playwright.config.js",
     "test:poc": "playwright test --config=playwright/playwright.config.js playwright/poc_manual_flow.spec.js",
     "test:all": "playwright test --config=playwright/playwright.config.js",
     "test:agent": "node --test tests/test_validator.js tests/test_snapshot.js",

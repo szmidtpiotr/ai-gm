@@ -54,10 +54,11 @@ echo "$wrong" | grep -q "file or directory not found" \
 ok "container rejects wrong backend/tests/ path"
 
 echo "=== 5. Docs and skill files ==="
-for f in docs/TESTING.md .cursor/skills/ai-gm-tdd/SKILL.md backend/pytest.ini; do
+for f in docs/GETTING_STARTED.md docs/TESTING.md scripts/e2e_preflight.sh scripts/test_e2e.sh .cursor/skills/ai-gm-tdd/SKILL.md backend/pytest.ini; do
   [[ -f "$f" ]] || fail "missing $f"
 done
-ok "docs/skill/pytest.ini"
+[[ -x scripts/e2e_preflight.sh ]] || fail "not executable: scripts/e2e_preflight.sh (chmod +x)"
+ok "docs/skill/pytest.ini/e2e scripts"
 
 if grep -q 'ssh piotrszmidt@192.168.1.61' docs/TESTING.md 2>/dev/null && \
    ! grep -q 'test_local.sh' docs/TESTING.md 2>/dev/null; then

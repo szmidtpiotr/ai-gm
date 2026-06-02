@@ -1,6 +1,42 @@
 # Testing & TDD — AI-GM
 
-## Two ways to run tests (no SSH)
+> **First time here?** Step-by-step setup for contributors: **[`GETTING_STARTED.md`](GETTING_STARTED.md)**.
+
+## Test pyramid (what “reliable” means here)
+
+| Layer | Command | Guarantees |
+|-------|---------|------------|
+| **UX (Playwright)** | `./scripts/test_e2e.sh` | Real browser: login → heroes → campaign → game → GM reply (stub LLM, deterministic) |
+| **Unit (pytest)** | `./scripts/test_local.sh` | Service logic, combat, economy — fast, no browser |
+| **Verify tooling** | `./scripts/verify_testing_setup.sh` | Scripts + smoke pytest (local + Docker image) |
+| **E2E preflight** | `./scripts/e2e_preflight.sh` | API gates before Playwright (after seed + `AI_TEST_MODE=1`) |
+
+**100% UX** for the whole RPG is not realistic (infinite LLM paths). The E2E suite locks **critical paths** that must never break; extend `ai_test_agent/playwright/ux/` for each new flow.
+
+### UX E2E (isolated Docker stack)
+
+```bash
+./scripts/test_e2e.sh
+```
+
+This script:
+
+1. Starts `docker-compose.e2e.yml` (ports **18100** / **13002**) unless DEV is already on **8100** / **3002**
+2. Seeds `ai_test_player` / `TestPlayer` / `AI Test Campaign`
+3. Runs **`scripts/e2e_preflight.sh`** — fails fast if `/api/campaigns`, `/api/heroes`, or `/api/campaigns/1/characters` break (common when E2E DB schema drifts)
+4. Runs Playwright under `ai_test_agent/playwright/ux/` (stub LLM: `AI_TEST_STUB_LLM=1`)
+
+Preflight only:
+
+```bash
+BACKEND_URL=http://127.0.0.1:18100 ./scripts/e2e_preflight.sh
+```
+
+E2E DB schema lives in `backend/sql/e2e_bootstrap.sql` (applied on first empty volume). If you add a new API the player UI needs, extend bootstrap **and** preflight.
+
+**Most reliable on a laptop with full dev data:** run `docker compose -f docker-compose.dev.yml` with `env.test` (`AI_TEST_MODE=1`, `AI_TEST_STUB_LLM=1`) and `./scripts/test_e2e.sh` — it will attach to DEV instead of the isolated stack.
+
+## Two ways to run backend tests (no SSH)
 
 | Script | When |
 |--------|------|

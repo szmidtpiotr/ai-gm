@@ -192,6 +192,11 @@ def seed() -> dict:
         _ensure_core_tables(conn)
         player_id = _ensure_user(conn, "ai_test_player", "AI Test Player", 0)
         gm_id = _ensure_user(conn, "ai_test_gm", "AI Test GM", 1)
+        now = _now_iso()
+        for uid in (player_id, gm_id):
+            cols = _ensure_users_table_columns(conn)
+            if "onboarded_at" in cols:
+                conn.execute("UPDATE users SET onboarded_at = ? WHERE id = ?", (now, uid))
         # Owner must be the test player — UI lists only campaigns owned by logged-in user.
         campaign_id = _ensure_campaign(conn, player_id)
         conn.execute(

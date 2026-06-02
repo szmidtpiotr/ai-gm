@@ -307,8 +307,9 @@ async def lifespan(app: FastAPI):
     init_db()
     run_raw_migrations()
     run_app_sql_migrations()
-    run_admin_migrations()
-    hydrate_runtime_from_stored_preset()
+    if os.getenv("AIGM_E2E_LITE") != "1":
+        run_admin_migrations()
+        hydrate_runtime_from_stored_preset()
     yield
     # Shutdown (nothing needed)
 

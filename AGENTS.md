@@ -15,8 +15,12 @@
 
 ## Testing & TDD
 
+- **Contributor guide (humans):** [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md)
 - **Verify setup:** `./scripts/verify_testing_setup.sh`
 - **Local pytest:** `./scripts/test_local.sh` (no SSH)
+- **UX E2E:** `./scripts/test_e2e.sh` · preflight: `./scripts/e2e_preflight.sh`
 - **Docker pytest:** `./scripts/test_dev.sh` (container `ai-gm-dev-backend-1`)
-- **Guide:** [`docs/TESTING.md`](docs/TESTING.md) · skill: `.cursor/skills/ai-gm-tdd/SKILL.md`
+- **Reference:** [`docs/TESTING.md`](docs/TESTING.md) · skill: `.cursor/skills/ai-gm-tdd/SKILL.md`
 - **Live playtest:** `.claude/skills/game-test/SKILL.md` (not unit tests)
+
+On a **normal local git clone**, contributors run tests on their machine. Remote-only execution applies when the workspace is the maintainer’s NFS mount of `192.168.1.61` (see `.cursor/rules/dev-environment.mdc`).
