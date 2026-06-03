@@ -353,7 +353,7 @@ def generate_tile_image(tile_id: int, payload: dict = Body(default={})) -> dict:
         _gcfg = _img_cfg()
     except Exception:
         _gcfg = {}
-    _global_steps = int(_gcfg.get("image_gen.refine_steps") or 8)
+    _global_steps = int(_gcfg.get("image_gen.steps") or 4)
     _global_model = str(_gcfg.get("image_gen.checkpoint") or "").strip() or IMAGE_GEN_MODEL
 
     steps = int((payload or {}).get("steps") or _global_steps)

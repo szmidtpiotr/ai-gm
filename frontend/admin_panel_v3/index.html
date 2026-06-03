@@ -630,6 +630,8 @@
     .sort-icon { font-size: 9px; opacity: 0.5; }
     .sort-icon.asc  { opacity: 1; }
     .sort-icon.desc { opacity: 1; transform: scaleY(-1); display: inline-block; }
+    .th-inner:has(.sort-icon) { cursor: pointer; user-select: none; }
+    .th-inner:has(.sort-icon):hover .sort-icon { opacity: 0.8; }
 
     /* Checkbox column */
     th.col-check, td.col-check {
@@ -2294,6 +2296,7 @@
             <button class="chip" onclick="filterCampaigns(this,'aktywne')">Aktywne</button>
             <button class="chip" onclick="filterCampaigns(this,'w walce')">W walce</button>
             <button class="chip" onclick="filterCampaigns(this,'zakończone')">Zakończone</button>
+            <button class="chip" onclick="filterCampaigns(this,'usunięte')">🗑 Usunięte</button>
           </div>
         </div>
 
@@ -5497,6 +5500,80 @@
     });
   }
 
+  // ── Generic column sort ───────────────────────────────────────────────────────
+  function _initTableSort() {
+    document.querySelectorAll('.th-inner').forEach(thInner => {
+      if (!thInner.querySelector('.sort-icon')) return;
+      thInner.style.cursor = 'pointer';
+      thInner.addEventListener('click', () => _sortByThInner(thInner));
+    });
+  }
+
+  function _sortByThInner(thInner) {
+    const th = thInner.closest('th');
+    const table = thInner.closest('table');
+    if (!th || !table) return;
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+
+    // Determine column index
+    const allTh = Array.from(th.parentElement.children);
+    const colIdx = allTh.indexOf(th);
+
+    // Toggle asc/desc for clicked header
+    const isAsc = thInner.classList.contains('sorted') && thInner.querySelector('.sort-icon')?.classList.contains('asc');
+    const newAsc = thInner.classList.contains('sorted') ? !isAsc : true;
+
+    // Reset all headers in this table
+    table.querySelectorAll('.th-inner').forEach(h => {
+      h.classList.remove('sorted');
+      const icon = h.querySelector('.sort-icon');
+      if (icon) { icon.classList.remove('asc', 'desc'); }
+    });
+
+    // Set active sort on clicked header
+    thInner.classList.add('sorted');
+    const icon = thInner.querySelector('.sort-icon');
+    if (icon) icon.classList.add(newAsc ? 'asc' : 'desc');
+
+    // Sort visible rows only (hidden rows stay hidden but keep their position relative to visible)
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const visible = rows.filter(r => r.style.display !== 'none');
+    const hidden = rows.filter(r => r.style.display === 'none');
+
+    const _val = td => {
+      if (!td) return '';
+      const v = td.dataset.sortVal ?? td.textContent.trim();
+      const n = parseFloat(v.replace(/[^0-9.,\-]/g, '').replace(',', '.'));
+      return isNaN(n) ? v.toLowerCase() : n;
+    };
+
+    visible.sort((a, b) => {
+      const va = _val(a.children[colIdx]);
+      const vb = _val(b.children[colIdx]);
+      if (typeof va === 'number' && typeof vb === 'number') return newAsc ? va - vb : vb - va;
+      return newAsc ? String(va).localeCompare(String(vb), 'pl') : String(vb).localeCompare(String(va), 'pl');
+    });
+
+    // Re-append: visible sorted first, hidden after
+    visible.forEach(r => tbody.appendChild(r));
+    hidden.forEach(r => tbody.appendChild(r));
+  }
+
+  // Wire on DOMContentLoaded (headers are static even if tbody is dynamic)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initTableSort);
+  } else {
+    _initTableSort();
+  }
+
+  // Close camp-cmd dropdowns on outside click
+  document.addEventListener('click', e => {
+    if (!e.target.closest('[id^="camp-cmd-"]') && !e.target.closest('[id^="camp-cmd-suggest-"]')) {
+      document.querySelectorAll('[id^="camp-cmd-suggest-"]').forEach(d => d.style.display = 'none');
+    }
+  });
+
   function filterLocationsType(chip, type) {
     document.querySelectorAll('#locations-type-filter .chip').forEach(c => c.classList.remove('on'));
     chip.classList.add('on');
@@ -5510,7 +5587,7 @@
   function filterCampaigns(chip, status) {
     document.querySelectorAll('#section-campaigns .filter-group .chip').forEach(c => c.classList.remove('on'));
     chip.classList.add('on');
-    const statusMap = { 'aktywne': 'aktywna', 'w walce': 'walce', 'zakończone': 'zakończona' };
+    const statusMap = { 'aktywne': 'aktywna', 'w walce': 'walce', 'zakończone': 'zakończona', 'usunięte': 'usunięta' };
     const match = statusMap[status] || status;
     // Filter table rows
     document.querySelectorAll('#campaigns-table tbody tr').forEach(row => {
@@ -6770,16 +6847,16 @@
       _campsData = items;
       if (!items.length) { tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--t3)">Brak kampanii</td></tr>`; _renderCampCards(); return; }
       const archMap = { warrior:'Wojownik', scholar:'Uczony', rogue:'Złodziej', ranger:'Ranger' };
-      const statusBadge = s => ({'active':'<span class="badge badge-green">● Aktywna</span>','in_combat':'<span class="badge badge-red">⚔ W walce</span>','ended':'<span class="badge badge-slate">✓ Zakończona</span>','idle':'<span class="badge badge-slate">○ Oczekuje</span>'}[s] || `<span class="badge badge-slate">${_esc(s)}</span>`);
+      const statusBadge = s => ({'active':'<span class="badge badge-green">● Aktywna</span>','in_combat':'<span class="badge badge-red">⚔ W walce</span>','ended':'<span class="badge badge-slate">✓ Zakończona</span>','idle':'<span class="badge badge-slate">○ Oczekuje</span>','deleted_by_player':'<span class="badge badge-slate" style="opacity:0.6">🗑 Usunięta</span>'}[s] || `<span class="badge badge-slate">${_esc(s)}</span>`);
       tbody.innerHTML = items.map(c => `<tr>
         <td class="col-check"><input type="checkbox" class="camp-row-check" onchange="rowCheck('camp')"></td>
-        <td class="td-sticky"><div class="campaign-row-name">${_esc(c.title)}</div><div class="campaign-row-sub"><span class="td-muted" style="margin-right:6px">#${c.id}</span>${_timeAgo(c.last_turn_at)||'brak tur'}</div></td>
-        <td class="td-mono">${_esc(c.char_name||'—')}${c.owner_username?`<div class="td-muted" style="font-size:0.74rem">@${_esc(c.owner_username)}</div>`:''}</td>
-        <td>${c.char_archetype?`<span class="type-badge">${_esc(archMap[c.char_archetype]||c.char_archetype)}</span>`:'<span class="td-muted">—</span>'}</td>
-        <td class="td-mono">${c.char_level??'—'}</td>
-        <td>${_hp(c.char_current_hp, c.char_max_hp)}</td>
-        <td class="td-mono">${c.turn_count??'—'}</td>
-        <td>${statusBadge(c.status)}</td>
+        <td class="td-sticky" data-sort-val="${_esc(c.title)}"><div class="campaign-row-name">${_esc(c.title)}</div><div class="campaign-row-sub"><span class="td-muted" style="margin-right:6px">#${c.id}</span>${_timeAgo(c.last_turn_at)||'brak tur'}</div></td>
+        <td class="td-mono" data-sort-val="${_esc(c.char_name||'')}">${_esc(c.char_name||'—')}${c.owner_username?`<div class="td-muted" style="font-size:0.74rem">@${_esc(c.owner_username)}</div>`:''}</td>
+        <td data-sort-val="${_esc(archMap[c.char_archetype]||c.char_archetype||'')}">${c.char_archetype?`<span class="type-badge">${_esc(archMap[c.char_archetype]||c.char_archetype)}</span>`:'<span class="td-muted">—</span>'}</td>
+        <td class="td-mono" data-sort-val="${c.char_level??''}">${c.char_level??'—'}</td>
+        <td data-sort-val="${c.char_current_hp??''}">${_hp(c.char_current_hp, c.char_max_hp)}</td>
+        <td class="td-mono" data-sort-val="${c.turn_count??''}">${c.turn_count??'—'}</td>
+        <td data-sort-val="${c.status??''}">${statusBadge(c.status)}</td>
         <td class="td-actions"><button class="btn-icon" title="Szczegóły" onclick="openCampaignModal(${c.id})">⊞</button> <button class="btn-icon danger" title="Usuń kampanię" onclick="deleteCampaign(${c.id},'${_esc(c.title)}',this)">✕</button></td>
       </tr>`).join('');
       const pg = document.querySelector('#section-campaigns .pagination span');
@@ -6799,7 +6876,7 @@
     grid.innerHTML = _campsData.map(c => {
       const pct = c.char_max_hp ? Math.round((c.char_current_hp/c.char_max_hp)*100) : 0;
       const hpCls = pct < 30 ? 'low' : pct < 65 ? 'mid' : 'green';
-      const statusBadge = ({'active':'<span class="badge badge-green">● Aktywna</span>','in_combat':'<span class="badge badge-red">⚔ W walce</span>','ended':'<span class="badge badge-slate">✓ Zakończona</span>','idle':'<span class="badge badge-slate">○ Oczekuje</span>'}[c.status] || '<span class="badge badge-slate">—</span>');
+      const statusBadge = ({'active':'<span class="badge badge-green">● Aktywna</span>','in_combat':'<span class="badge badge-red">⚔ W walce</span>','ended':'<span class="badge badge-slate">✓ Zakończona</span>','idle':'<span class="badge badge-slate">○ Oczekuje</span>','deleted_by_player':'<span class="badge badge-slate" style="opacity:0.6">🗑 Usunięta</span>'}[c.status] || '<span class="badge badge-slate">—</span>');
       return `<div class="card" style="padding:14px;cursor:pointer" onclick="openCampaignModal(${c.id})">
         <div style="display:flex;justify-content:space-between;align-items:start;gap:8px;margin-bottom:8px">
           <div style="font-weight:600;color:var(--t1);font-size:0.94rem">${_esc(c.title)}</div>
@@ -10603,16 +10680,16 @@
       if (!items.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--t3)">Brak użytkowników</td></tr>`; return; }
       tbody.innerHTML = items.map(u => `<tr>
         <td class="col-check"><input type="checkbox" class="player-row-check" onchange="rowCheck('player')"></td>
-        <td class="td-sticky">
+        <td class="td-sticky" data-sort-val="${_esc(u.username||'')}">
           <div style="display:flex;align-items:center;gap:8px">
             <div class="user-avatar" style="width:24px;height:24px;font-size:10px">${_esc((u.username||'?')[0].toUpperCase())}</div>
             <div><div class="td-name">${_esc(u.username)}</div><div class="td-muted">${_esc(u.display_name||'')}</div></div>
           </div>
         </td>
         <td>${u.is_admin?'<span class="badge badge-red">Admin</span>':'<span class="badge badge-blue">Gracz</span>'}${u.is_tester?'<span class="badge badge-amber" style="margin-left:4px">Tester</span>':''}</td>
-        <td class="td-muted">${u.campaigns_count??0} kampanii</td>
-        <td class="td-mono">—</td>
-        <td class="td-muted">${_timeAgo(u.created_at)||'—'}</td>
+        <td class="td-muted" data-sort-val="${u.campaigns_count??0}">${u.campaigns_count??0} kampanii</td>
+        <td class="td-mono" data-sort-val="0">—</td>
+        <td class="td-muted" data-sort-val="${u.created_at||''}">${_timeAgo(u.created_at)||'—'}</td>
         <td>
           <span class="badge badge-slate" id="llm-badge-${u.id}">…</span>
         </td>
@@ -10878,7 +10955,7 @@
             const pct = (hp!=null && maxHp) ? Math.round((hp/maxHp)*100) : null;
             const tone = pct===null ? '' : (pct<30?'red':pct<60?'amber':'green');
             const lastT = c.last_turn_at ? new Date(c.last_turn_at).toLocaleDateString('pl-PL') : '—';
-            const isDead = c.char_status === 'dead';
+            const isDead = c.char_status === 'dead' || (c.char_current_hp != null && c.char_current_hp <= 0);
             return `
             <div class="card" style="padding:10px;margin-bottom:8px">
               <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
@@ -10928,6 +11005,129 @@
       document.getElementById('pdrawer-camps').dataset.loaded = '';
       _loadPdrawerCamps(userId);
     } catch(e) { _showToast(e.message || 'Błąd wskrzeszenia.', 'error'); btn.disabled = false; btn.textContent = '✦ Wskrześ bohatera (force)'; }
+  }
+
+  const _CAMP_CMDS = [
+    { cmd: '/debug set-hp',          hint: 'N',          desc: 'Ustaw HP postaci' },
+    { cmd: '/debug dump-state',       hint: '',           desc: 'Pokaż pełny stan' },
+    { cmd: '/debug xp add',          hint: 'N',          desc: 'Dodaj XP' },
+    { cmd: '/debug xp set',          hint: 'N',          desc: 'Ustaw XP' },
+    { cmd: '/debug roll',            hint: '[skill]',     desc: 'Rzut kością' },
+    { cmd: '/debug reset-cooldowns', hint: '',           desc: 'Resetuj cooldowny' },
+    { cmd: '/debug set-state',       hint: 'NARRATIVE|COMBAT', desc: 'Zmień stan sesji' },
+    { cmd: '/heal',                  hint: '[N|max]',    desc: 'Dodaj HP (domyślnie max)' },
+    { cmd: '/sethp',                 hint: 'N',          desc: 'Ustaw HP na N' },
+    { cmd: '/gold',                  hint: 'N',          desc: 'Dodaj N złota' },
+    { cmd: '/setgold',               hint: 'N',          desc: 'Ustaw złoto na N' },
+    { cmd: '/level',                 hint: 'N',          desc: 'Ustaw poziom' },
+    { cmd: '/stat',                  hint: 'STR|DEX|CON|INT|WIS|CHA N', desc: 'Dodaj do statystyki' },
+    { cmd: '/additem',               hint: 'klucz',      desc: 'Dodaj przedmiot' },
+    { cmd: '/removeitem',            hint: 'klucz',      desc: 'Usuń przedmiot' },
+    { cmd: '/clearinv',              hint: '',           desc: 'Wyczyść ekwipunek' },
+    { cmd: '/questadd',              hint: 'klucz',      desc: 'Dodaj quest' },
+    { cmd: '/questfinish',           hint: 'klucz',      desc: 'Zakończ quest' },
+    { cmd: '/combatend',             hint: '',           desc: 'Zakończ walkę' },
+    { cmd: '/show',                  hint: '',           desc: 'Pokaż stan postaci' },
+  ];
+
+  let _campCmdSuggestIdx = -1;
+
+  function _campCmdSuggest(campId, input) {
+    const dropdown = document.getElementById(`camp-cmd-suggest-${campId}`);
+    if (!dropdown) return;
+    const val = (input.value || '').toLowerCase();
+    if (!val || !val.startsWith('/')) { dropdown.style.display = 'none'; return; }
+    const matches = _CAMP_CMDS.filter(c => c.cmd.toLowerCase().startsWith(val) || c.cmd.toLowerCase().includes(val.slice(1)));
+    if (!matches.length) { dropdown.style.display = 'none'; return; }
+    _campCmdSuggestIdx = -1;
+    dropdown.innerHTML = matches.map((c, i) => `
+      <div class="camp-cmd-item" data-idx="${i}" data-fill="${_esc(c.hint ? c.cmd + ' ' : c.cmd)}"
+        style="padding:7px 12px;cursor:pointer;display:flex;gap:10px;align-items:baseline;border-bottom:1px solid rgba(255,255,255,0.05)"
+        onmouseenter="this.style.background='rgba(124,111,224,0.15)'" onmouseleave="this.style.background=''"
+        onmousedown="event.preventDefault();_campCmdPick(${campId},'${_esc(c.hint ? c.cmd + ' ' : c.cmd)}')">
+        <span style="font-family:monospace;font-size:0.8rem;color:var(--t1);white-space:nowrap">${_esc(c.cmd)}${c.hint ? ' <span style=\'color:var(--t3)\'>' + _esc(c.hint) + '</span>' : ''}</span>
+        <span style="font-size:0.72rem;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(c.desc)}</span>
+      </div>`).join('');
+    dropdown.style.display = 'block';
+  }
+
+  function _campCmdPick(campId, fill) {
+    const input = document.getElementById(`camp-cmd-input-${campId}`);
+    const dropdown = document.getElementById(`camp-cmd-suggest-${campId}`);
+    if (input) { input.value = fill; input.focus(); }
+    if (dropdown) dropdown.style.display = 'none';
+    _campCmdSuggestIdx = -1;
+  }
+
+  function _campCmdKey(event, charId, campId) {
+    const dropdown = document.getElementById(`camp-cmd-suggest-${campId}`);
+    const items = dropdown ? Array.from(dropdown.querySelectorAll('.camp-cmd-item')) : [];
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      _campCmdSuggestIdx = Math.min(_campCmdSuggestIdx + 1, items.length - 1);
+    } else if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      _campCmdSuggestIdx = Math.max(_campCmdSuggestIdx - 1, -1);
+    } else if (event.key === 'Tab' && items.length) {
+      event.preventDefault();
+      const idx = _campCmdSuggestIdx >= 0 ? _campCmdSuggestIdx : 0;
+      _campCmdPick(campId, items[idx]?.dataset.fill || '');
+      return;
+    } else if (event.key === 'Enter') {
+      if (_campCmdSuggestIdx >= 0 && items[_campCmdSuggestIdx]) {
+        event.preventDefault();
+        _campCmdPick(campId, items[_campCmdSuggestIdx].dataset.fill || '');
+      } else {
+        if (dropdown) dropdown.style.display = 'none';
+        _campCmd(charId, campId, event.target);
+      }
+      return;
+    } else if (event.key === 'Escape') {
+      if (dropdown) dropdown.style.display = 'none';
+      _campCmdSuggestIdx = -1;
+      return;
+    }
+    items.forEach((el, i) => {
+      el.style.background = i === _campCmdSuggestIdx ? 'rgba(124,111,224,0.25)' : '';
+    });
+  }
+
+  async function _campCmd(charId, campId, btnOrEvent) {
+    const inputEl = document.getElementById(`camp-cmd-input-${campId}`);
+    const resultEl = document.getElementById(`camp-cmd-result-${campId}`);
+    if (!inputEl) return;
+    const raw = inputEl.value.trim();
+    if (!raw.startsWith('/')) { if (resultEl) resultEl.innerHTML = '<span style="color:var(--red)">Komenda musi zaczynać się od /</span>'; return; }
+
+    if (resultEl) resultEl.innerHTML = '<span style="color:var(--t3)">⏳ Wykonuję…</span>';
+    const btn = btnOrEvent instanceof HTMLElement ? btnOrEvent : null;
+    if (btn) btn.disabled = true;
+    try {
+      const res = await apiFetch(`/api/admin/campaigns/${campId}/run-command`, {
+        method: 'POST',
+        body: JSON.stringify({ text: raw }),
+      });
+      const inner = res.result ?? res;
+      const summary = typeof inner === 'object'
+        ? Object.entries(inner).filter(([k]) => k !== 'ok').map(([k,v]) => `${k}: <b>${Array.isArray(v)?v.join(', '):v}</b>`).join(' · ')
+        : String(inner);
+      if (resultEl) resultEl.innerHTML = `<span style="color:#4caf78">✓ ${summary || 'OK'}</span>`;
+      inputEl.value = '';
+    } catch(e) {
+      if (resultEl) resultEl.innerHTML = `<span style="color:var(--red)">✗ ${_esc(e.message)}</span>`;
+    }
+    if (btn) btn.disabled = false;
+  }
+
+  async function _campModalResurrect(charId, name, btn) {
+    if (!confirm(`Wskrzesić bohatera „${name}" bezpłatnie (admin force)?`)) return;
+    btn.disabled = true; btn.textContent = 'Wskrzeszam…';
+    try {
+      const res = await apiFetch(`/api/admin/characters/${charId}/resurrect`, { method:'POST', body: JSON.stringify({ force: true }) });
+      _showToast(`✦ ${name} wskrzeszony — HP ${res.revived_hp ?? '?'}/${res.max_hp ?? '?'}`, 'success');
+      btn.textContent = '✓ Wskrzeszony';
+      btn.style.background = 'var(--green)';
+    } catch(e) { _showToast(e.message || 'Błąd wskrzeszenia.', 'error'); btn.disabled = false; btn.textContent = '✦ Wskrześ bohatera'; }
   }
 
   const _MODE_LABELS = {
@@ -13678,6 +13878,7 @@
             </div>
             <div>
               <div style="margin-bottom:8px">${_hp(c.char_current_hp, c.char_max_hp)}</div>
+              ${(c.char_id && c.char_current_hp != null && c.char_current_hp <= 0) ? `<button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:8px" onclick="_campModalResurrect(${c.char_id},'${_esc(c.char_name||'Bohater')}',this)">✦ Wskrześ bohatera</button>` : ''}
               <div style="font-size:0.75rem;color:var(--t2);font-weight:600;margin-bottom:4px">Kondycje</div>
               <div style="display:flex;gap:4px;flex-wrap:wrap">${condArr.length ? condArr.map(cd => `<span class="badge badge-amber">${_esc(cd)}</span>`).join('') : '<span class="td-muted">Brak</span>'}</div>
               ${c.arc_title ? `<div style="margin-top:10px;font-size:0.75rem;color:var(--t2);font-weight:600">Aktywny arc</div><div style="font-size:0.82rem;color:var(--t1);margin-top:2px">${_esc(c.arc_title)}</div>` : ''}
@@ -13686,7 +13887,22 @@
           </div>
           ${c.last_turn_player ? `<div style="font-size:0.75rem;color:var(--t2);font-weight:600;margin-bottom:6px">Ostatnia tura</div>
             <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px 12px;font-size:0.8rem;color:var(--t2);margin-bottom:6px">${_esc((c.last_turn_player||'').slice(0,200))}</div>
-            <div style="background:var(--blue-light);border:1px solid var(--blue-border);border-radius:var(--r);padding:10px 12px;font-size:0.8rem;color:var(--blue-text)">${_esc((c.last_turn_gm||'').slice(0,300))}</div>` : ''}`;
+            <div style="background:var(--blue-light);border:1px solid var(--blue-border);border-radius:var(--r);padding:10px 12px;font-size:0.8rem;color:var(--blue-text)">${_esc((c.last_turn_gm||'').slice(0,300))}</div>` : ''}
+          ${c.char_id ? `<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+            <div style="font-size:0.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">⚡ Admin Komendy</div>
+            <div style="position:relative">
+              <div style="display:flex;gap:6px">
+                <input id="camp-cmd-input-${campId}" type="text" class="field-input" autocomplete="off"
+                  style="flex:1;font-family:monospace;font-size:0.82rem;padding:4px 8px"
+                  placeholder="/debug set-hp 50 · /heal max · /gold 100 · /level 5"
+                  oninput="_campCmdSuggest(${campId},this)"
+                  onkeydown="_campCmdKey(event,${c.char_id},${campId})" />
+                <button class="btn btn-sm btn-secondary" style="white-space:nowrap" onclick="_campCmd(${c.char_id},${campId},this)">▶ Wyślij</button>
+              </div>
+              <div id="camp-cmd-suggest-${campId}" style="display:none;position:absolute;left:0;right:48px;top:100%;z-index:200;background:var(--card-bg,#1a1a2e);border:1px solid var(--border);border-radius:6px;box-shadow:0 6px 24px rgba(0,0,0,0.5);max-height:240px;overflow-y:auto;margin-top:2px"></div>
+            </div>
+            <div id="camp-cmd-result-${campId}" style="font-size:0.75rem;margin-top:6px;min-height:18px;font-family:monospace"></div>
+          </div>` : ''}`;
       } catch(e) { panel.innerHTML = `<p style="color:var(--red)">${_esc(e.message)}</p>`; }
     }
 

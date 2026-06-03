@@ -133,7 +133,7 @@ class GenerateRequest(BaseModel):
     prompt: str
     width: int = 512
     height: int = 512
-    steps: int = 4
+    steps: int | None = None       # None → read from DB config (image_gen.steps)
     checkpoint: str | None = None
 
 
@@ -141,7 +141,7 @@ class RefineRequest(BaseModel):
     source_filename: str       # existing tile filename in TILES_DIR
     prompt: str
     denoise: float = 0.6       # 0.1 = subtle tweak, 0.9 = big change
-    steps: int = 8
+    steps: int | None = None   # None → read from DB config (image_gen.refine_steps)
 
 
 @router.post("/generate")
@@ -152,11 +152,12 @@ async def generate_image(req: GenerateRequest):
     TILES_DIR.mkdir(parents=True, exist_ok=True)
     gen_url = _get_image_gen_url()
 
+    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.steps", 4))
     payload: dict[str, Any] = {
         "prompt": req.prompt,
         "width": req.width,
         "height": req.height,
-        "steps": req.steps,
+        "steps": steps,
     }
     # Use per-request checkpoint, fall back to DB default
     checkpoint = req.checkpoint if req.checkpoint is not None else _read_visual("image_gen.checkpoint", "")
@@ -213,6 +214,7 @@ async def refine_image(req: RefineRequest):
 
     image_b64 = base64.b64encode(src_path.read_bytes()).decode()
 
+    steps = req.steps if req.steps is not None else int(_read_visual("image_gen.refine_steps", 8))
     ref_url = _get_image_gen_url()
     async with httpx.AsyncClient(timeout=300) as client:
         try:
@@ -220,7 +222,7 @@ async def refine_image(req: RefineRequest):
                 "prompt": req.prompt,
                 "image_b64": image_b64,
                 "denoise": req.denoise,
-                "steps": req.steps,
+                "steps": steps,
             })
             r.raise_for_status()
         except httpx.ConnectError:

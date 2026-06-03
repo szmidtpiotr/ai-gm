@@ -154,7 +154,8 @@ def list_campaigns():
             (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count,
             (SELECT ch.id FROM characters ch WHERE ch.campaign_id = c.id AND ch.is_active = 1 LIMIT 1) AS character_id
         FROM campaigns c
-        WHERE NOT (
+        WHERE c.status != 'deleted_by_player'
+          AND NOT (
             c.status = 'active'
             AND (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) = 0
             AND c.created_at IS NOT NULL
@@ -803,19 +804,15 @@ def delete_campaign(campaign_id: int):
                 "user_id": int(h["user_id"]),
             })
 
+        # Soft-delete: mark as deleted_by_player, keep turns + campaign row for admin
         conn.execute(
-            "DELETE FROM campaign_turns WHERE campaign_id = ?",
+            "UPDATE campaigns SET status = 'deleted_by_player', ended_at = datetime('now') WHERE id = ?",
             (campaign_id,),
         )
 
         # Free heroes — keep them, just unlink from this campaign
         conn.execute(
             "UPDATE characters SET campaign_id = NULL, status = 'idle' WHERE campaign_id = ?",
-            (campaign_id,),
-        )
-
-        conn.execute(
-            "DELETE FROM campaigns WHERE id = ?",
             (campaign_id,),
         )
 

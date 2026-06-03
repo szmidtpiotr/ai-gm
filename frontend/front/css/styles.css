@@ -10440,8 +10440,9 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 /* ── Bug Report Button & Modal ─────────────────────────────── */
 #bug-report-btn {
   position: fixed;
-  bottom: 175px;
-  right: 16px;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 900;
   touch-action: none;
   user-select: none;

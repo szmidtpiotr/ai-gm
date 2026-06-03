@@ -2751,6 +2751,35 @@ def admin_patch_resurrection_config(
         conn.close()
 
 
+@router.post("/admin/characters/{character_id}/resurrect")
+def admin_force_resurrect(
+    character_id: int,
+    _: None = Depends(require_admin_token),
+):
+    """Force-resurrect any hero — bypasses ownership, cost, and uses_remaining gates."""
+    from app.services.resurrection_service import apply_resurrection
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        char = conn.execute(
+            "SELECT id, user_id, status, sheet_json FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            raise HTTPException(status_code=404, detail="character not found")
+        import json as _j
+        sheet = _j.loads(char["sheet_json"] or "{}")
+        is_dead = char["status"] == "dead" or int(sheet.get("current_hp") or 0) <= 0
+        if not is_dead:
+            raise HTTPException(
+                status_code=409,
+                detail=f"hero is '{char['status']}' with {sheet.get('current_hp')} HP — not dead",
+            )
+        return apply_resurrection(character_id, int(char["user_id"]), conn, force=True)
+    finally:
+        conn.close()
+
+
 @router.get("/admin/campaigns/{campaign_id}/known-npcs")
 def admin_get_campaign_known_npcs(
     campaign_id: int,
@@ -4110,6 +4139,94 @@ def admin_delete_riddle(key: str, _: None = Depends(require_admin_token)):
         return {"ok": True}
     finally:
         conn.close()
+
+
+# ── Admin campaign slash-command dispatch ─────────────────────────────────────
+
+class AdminRunCommandReq(BaseModel):
+    text: str  # raw slash command, e.g. "/debug set-hp 50"
+
+
+@router.post("/admin/campaigns/{campaign_id}/run-command")
+def admin_run_campaign_command(
+    campaign_id: int,
+    req: AdminRunCommandReq,
+    _: None = Depends(require_admin_token),
+):
+    """Execute a slash command against a campaign's character — admin token auth only."""
+    text = (req.text or "").strip()
+    if not text.startswith("/"):
+        raise HTTPException(status_code=400, detail="Command must start with /")
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        camp = conn.execute(
+            "SELECT char_id FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        char_id = camp["char_id"]
+        if not char_id:
+            raise HTTPException(status_code=400, detail="Campaign has no linked character")
+    finally:
+        conn.close()
+
+    cmd = text.split()[0].lower()
+
+    # /debug, /roll, /xp → commands_service.execute_command_logic
+    if cmd in ("/debug", "/roll", "/xp"):
+        try:
+            from app.services.commands_service import execute_command_logic
+            result = execute_command_logic(char_id, text)
+            return {"ok": True, "result": result.payload}
+        except LookupError as e:
+            raise HTTPException(status_code=404, detail=str(e)) from None
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from None
+
+    # /heal, /sethp, /gold, /level, /stat, /additem, /removeitem, /clearinv,
+    # /questadd, /questfinish, /combatend, /show → admin cheat API
+    from app.routers import admin_cheat as _ac
+
+    parts = text[1:].split()
+    sub = parts[0].lower()
+    rest = parts[1:]
+
+    cheat_req: dict = {}
+    if sub == "heal":
+        v = rest[0] if rest else "max"
+        cheat_req = {"cmd": "set health" if v == "max" else "add health", "value": "max" if v == "max" else int(v)}
+    elif sub == "sethp":
+        cheat_req = {"cmd": "set health", "value": int(rest[0]) if rest else 0}
+    elif sub == "gold":
+        cheat_req = {"cmd": "add gold", "value": int(rest[0]) if rest else 0}
+    elif sub == "setgold":
+        cheat_req = {"cmd": "set gold", "value": int(rest[0]) if rest else 0}
+    elif sub == "level":
+        cheat_req = {"cmd": "set level", "value": int(rest[0]) if rest else 1}
+    elif sub == "stat":
+        cheat_req = {"cmd": "add stat", "stat": rest[0].upper() if rest else "", "value": int(rest[1]) if len(rest) > 1 else 0}
+    elif sub == "additem":
+        cheat_req = {"cmd": "add item", "key": rest[0] if rest else ""}
+    elif sub == "removeitem":
+        cheat_req = {"cmd": "remove item", "key": rest[0] if rest else ""}
+    elif sub == "clearinv":
+        cheat_req = {"cmd": "clear inventory"}
+    elif sub == "questadd":
+        cheat_req = {"cmd": "quest add", "key": rest[0] if rest else ""}
+    elif sub in ("questfinish", "questcomplete"):
+        cheat_req = {"cmd": "quest complete", "key": rest[0] if rest else ""}
+    elif sub == "combatend":
+        cheat_req = {"cmd": "combat end"}
+    elif sub == "show":
+        cheat_req = {"cmd": "show state"}
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown command: /{sub}. Use /debug, /roll, /xp, or: /heal /sethp /gold /setgold /level /stat /additem /removeitem /clearinv /questadd /questfinish /combatend /show")
+
+    cheat_model = _ac.CheatRequest(**cheat_req)
+    # Call admin_cheat directly — passes _=None to bypass FastAPI dependency injection
+    return _ac.admin_cheat(character_id=char_id, req=cheat_model, _=None)
 
 
 # ── Stage 11-C — Invite management (admin) ────────────────────────────────────
