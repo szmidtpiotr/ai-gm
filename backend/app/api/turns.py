@@ -5154,6 +5154,26 @@ def resolve_skill_test_endpoint(
         elif result.get("nat1"):
             nat_instruction = "To był fumble — wprowadź komplikację, która stworzy przyszłe napięcie."
 
+        # Inject in-game clock context so narrator matches actual time of day (#240)
+        clock_hint = ""
+        try:
+            from app.services.clock_service import get_clock_state as _get_clock
+            _clock = _get_clock(campaign_id, conn=conn)
+            _hours = int(_clock.get("ingame_hours", 9) or 9)
+            _mins = int(_clock.get("ingame_minutes", 0) or 0)
+            _day = (_hours // 24) + 1
+            _h = _hours % 24
+            _hour_str = f"{_h:02d}:{_mins:02d}"
+            if 5 <= _h < 9: _period = "świt"
+            elif 9 <= _h < 13: _period = "rano"
+            elif 13 <= _h < 17: _period = "południe"
+            elif 17 <= _h < 20: _period = "popołudnie"
+            elif 20 <= _h < 23: _period = "zmierzch"
+            else: _period = "noc"
+            clock_hint = f"[CZAS GRY] Dzień {_day}, {_hour_str} — {_period}. pora dnia MUSI być odzwierciedlona w narracji. "
+        except Exception:
+            pass
+
         # Stage 3 Z4 — stealth flavour hint when zaskoczony just applied
         stealth_hint = ""
         if _stealth_applied:
@@ -5169,6 +5189,7 @@ def resolve_skill_test_endpoint(
 
         narrator_prompt = (
             f"{skill_ctx}\n\n"
+            f"{clock_hint}"
             f"Napisz narrację wyniku testu umiejętności po polsku. "
             f"60-90 słów. Klimat dark fantasy. Nie wymieniaj liczb ani kości. "
             f"{nat_instruction}{stealth_hint}"
