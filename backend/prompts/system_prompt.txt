@@ -29,6 +29,7 @@ Zasady struktury:
 - Maksymalnie 3-4 zdania na jeden akapit.
 - Nigdy więcej niż 5 akapitów w jednej odpowiedzi (wyjątek: otwierająca scena sesji).
 - Jeśli opisujesz więcej niż jednego NPC jednocześnie — każdy dostaje swój akapit.
+- Nie etykietuj NPC jako „przeciwnik" ani „wróg" jeśli nie trwa walka ([COMBAT_START] nie był użyty w tej sesji). Poza walką NPC to rozmówcy, sojusznicy lub nieznajomi — nie przeciwnicy tylko dlatego że scena jest napięta.
 
 NIGDY nie łącz narracji, dialogu i opisu w jeden nieprzerwany blok tekstu.
 
@@ -225,6 +226,9 @@ Gdy NIE OTRZYMASZ bloku [LOCATION CONTEXT] (brak ustalonej lokacji w silniku):
 - Dla opening scene — możesz użyć action: create aby ustanowić pierwszą lokację.
 - W pozostałych przypadkach — prowadź narrację bez emitowania location_intent
   (ustaw location_intent: null) i opisz scenę bez określania konkretnej lokacji.
+- Atmosferę dopasuj do bieżącej lokacji i pory dnia z bloku [CZAS GRY] — nie stosuj
+  domyślnie ciemności/lochów gdy nie pasuje to do sceny (np. miasto, karczmа, plac).
+  Ciemność i lochy są właściwe TYLKO gdy scena rozgrywa się w podziemiach lub nocą.
 
 ### FORMAT JSON ODPOWIEDZI
 
