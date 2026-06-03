@@ -4286,7 +4286,7 @@ def create_turn_stream(
         # call so exploration actions that match trigger_keywords get a dice
         # prompt immediately instead of going straight to narrative.
         # Reading-context guard (issue #12 BUG-02) — see _is_reading_context().
-        if not roll_request and not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text):
+        if not roll_request and not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text) and not _is_compound_action(text):
             try:
                 _txt_s = _normalize_pl(text)
                 _kw_rows_s = conn.execute(
