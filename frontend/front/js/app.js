@@ -4201,6 +4201,8 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
 
         // Show initiative roll results when combat just started
         if (result.combat_started) {
+            // #239 — reset only on new combat start, not on re-entry
+            lastRenderedCombatTurnId = 0;
             const combatants = result.combat_started.combatants || [];
             const sorted = [...combatants].sort((a, b) => (b.initiative_roll || 0) - (a.initiative_roll || 0));
             if (sorted.length && sorted.some(c => c.initiative_roll != null)) {
@@ -5339,7 +5341,11 @@ function showLootPopup(loot, gold) {
 
 function showCombatUI() {
     combatActive = true;
-    lastRenderedCombatTurnId = 0;
+    // #239 — do NOT reset lastRenderedCombatTurnId here.
+    // enterGame() sets it to the max already-rendered combat turn id.
+    // Resetting here causes fetchAndAppendNewCombatTurns() to re-animate
+    // all historical combat events on game re-entry.
+    // The reset happens only when a NEW combat starts (result.combat_started handler).
     elements.combatBanner.hidden = false;
     elements.combatComposer.hidden = false;
     elements.composer?.classList.add('composer--hidden');
