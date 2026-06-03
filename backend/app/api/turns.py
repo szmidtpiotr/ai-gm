@@ -5172,6 +5172,8 @@ def resolve_skill_test_endpoint(
             f"Napisz narrację wyniku testu umiejętności po polsku. "
             f"60-90 słów. Klimat dark fantasy. Nie wymieniaj liczb ani kości. "
             f"{nat_instruction}{stealth_hint}"
+            f" ZAKAZANE: Nie używaj tagów [SKILL_TEST], [TRAP], roll_cue ani żadnych"
+            f" znaczników mechanicznych — to jest wyłącznie narracja wyniku, nie nowy test."
         )
         try:
             prose_raw = _gen_chat(
