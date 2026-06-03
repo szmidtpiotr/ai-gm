@@ -5215,15 +5215,16 @@ async function handleEnemyTurn() {
     // between POST request and the next render.
     _showEnemyTurnOverlay(true);
     try {
-        const r = await fetch(`/api/campaigns/${currentCampaignId}/combat/enemy-turn`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+        // Use apiRequest to include Authorization + CSRF headers (#324)
+        const data = await apiRequest('POST', `/campaigns/${currentCampaignId}/combat/enemy-turn`).catch(err => {
+            setCombatMsg('Błąd tury wroga.', true);
+            throw err;
         });
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) {
+        if (!data) {
             setCombatMsg('Błąd tury wroga.', true);
             return;
         }
+        // Compatibility shim — apiRequest throws on non-ok, so reaching here means ok=true
         const cs = data.combat_state;
         if (cs) {
             lastCombatState = cs;
