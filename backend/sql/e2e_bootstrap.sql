@@ -1,6 +1,19 @@
 -- Minimal schema extensions for isolated E2E stack (AIGM_E2E_LITE=1).
 -- Keeps UX paths working without full run_admin_migrations().
 
+-- user_sessions (required by auth/login → generate_session_token)
+CREATE TABLE IF NOT EXISTS user_sessions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
+    token_hash TEXT    NOT NULL UNIQUE,
+    created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT    NOT NULL,
+    csrf_token TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_token_hash ON user_sessions(token_hash);
+CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id    ON user_sessions(user_id);
+
 -- users (auth / onboarding)
 ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0;
