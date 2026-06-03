@@ -1410,8 +1410,19 @@ async function loadCampaigns() {
         const campaigns = allCampaigns.filter(c => {
             const ownerId = c.owner_user_id ?? c.owneruserid;
             if (Number(ownerId) !== Number(currentUser?.id)) return false;
-            // Hide ended/archived campaigns
-            if (c.status === 'ended' || c.status === 'archived' || c.status === 'discarded') return false;
+            // Hide archived/discarded always; hide 'ended' unless hero is dead (#329)
+            if (c.status === 'archived' || c.status === 'discarded') return false;
+            if (c.status === 'ended') {
+                // Allow ended campaign through if hero has 0 HP (needs resurrection UI)
+                const heroHp = parseInt(
+                    currentHero?.sheet_json?.current_hp
+                    ?? currentHero?.current_hp
+                    ?? currentHero?.hp
+                    ?? 1
+                );
+                const heroDead = currentHero && (currentHero.status === 'dead' || heroHp <= 0);
+                if (!heroDead) return false;
+            }
             // If we have a hero, only show campaigns that have this hero as character
             if (currentHero?.id) {
                 const campCharId = c.character_id ?? c.char_id;
@@ -1596,6 +1607,16 @@ async function selectCampaign(campaign) {
         if (myCharacter) {
             characterData = myCharacter;
             await enterGame(campaign);
+            // #329 — if campaign ended with dead hero, show death screen for resurrection
+            if (campaign.status === 'ended') {
+                const heroHp = parseInt(
+                    myCharacter?.sheet_json?.current_hp ?? myCharacter?.current_hp ?? myCharacter?.hp ?? 1
+                );
+                if (myCharacter.status === 'dead' || heroHp <= 0) {
+                    showDeathScreen(myCharacter.name || 'Bohater');
+                    return;
+                }
+            }
             // Restore dungeon HUD if this is a dungeon campaign
             if (campaign.mode === 'dungeon') {
                 try {
@@ -10010,6 +10031,16 @@ async function tryRestoreSession() {
                 const camp = await apiRequest('GET', `/campaigns/${campId}`);
                 currentCampaign = camp;
                 await enterGame(camp);
+                // #329 — restore death screen if campaign ended with dead hero
+                if (camp.status === 'ended') {
+                    const heroHp = parseInt(
+                        myChar?.sheet_json?.current_hp ?? myChar?.current_hp ?? myChar?.hp ?? 1
+                    );
+                    if (myChar.status === 'dead' || heroHp <= 0) {
+                        showDeathScreen(myChar.name || 'Bohater');
+                        return true;
+                    }
+                }
                 // Restore dungeon HUD if dungeon campaign
                 if (camp.mode === 'dungeon') {
                     try {

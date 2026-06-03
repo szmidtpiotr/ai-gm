@@ -55,8 +55,20 @@ def test_apply_resurrection_sets_pending_briefing_flag(conn):
     character_id = row["character_id"]
     user_id = row["owner_user_id"]
 
-    # Check function signature accepts campaign_id param or sets flag via session
-    # We test by inspecting what gets written to session_flags
+    # Clear flag first (may be leftover from a prior test run)
+    gs_row = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+        (campaign_id,),
+    ).fetchone()
+    if gs_row:
+        flags_clean = json.loads(gs_row["session_flags"] or "{}")
+        flags_clean.pop("pending_resurrection_briefing", None)
+        conn.execute(
+            "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+            (json.dumps(flags_clean, ensure_ascii=False), campaign_id),
+        )
+        conn.commit()
+
     gs_before = conn.execute(
         "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
         (campaign_id,),
@@ -65,7 +77,7 @@ def test_apply_resurrection_sets_pending_briefing_flag(conn):
 
     # The flag must NOT be present before resurrection
     assert "pending_resurrection_briefing" not in flags_before, (
-        "Flag should not exist before resurrection"
+        "Flag should not exist before resurrection (cleanup failed)"
     )
 
     # Apply resurrection (force=True to bypass config/uses checks)
