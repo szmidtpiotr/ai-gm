@@ -2519,7 +2519,14 @@ def _advance_turn_impl(campaign_id: int) -> str:
             living.append(tid)
 
         if len(living) <= 1:
-            _persist_combatants_and_maybe_end(conn, row, combatants, status="ended", ended_reason="victory")
+            # Determine correct ended_reason: 'player_dead' if player HP=0 and enemies
+            # still alive, 'victory' otherwise (#330 — was always 'victory' before fix)
+            player_dead = all(
+                int(c.get("hp_current", 0) or 0) <= 0
+                for c in combatants if c.get("type") == "player"
+            )
+            ended_reason = "player_dead" if (player_dead and not _all_enemies_dead(combatants)) else "victory"
+            _persist_combatants_and_maybe_end(conn, row, combatants, status="ended", ended_reason=ended_reason)
             conn.commit()
             return "ended"
 
