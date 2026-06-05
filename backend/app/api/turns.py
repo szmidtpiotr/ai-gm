@@ -81,6 +81,274 @@ APPLY_CONDITION_RE = re.compile(r"\[APPLY_CONDITION:\s*([^:\s\]]+)\s*:\s*([^\]\s
 GRANT_ITEM_RE    = re.compile(r"^Grant Item\s+(.+)$", re.IGNORECASE)
 GRANT_GOLD_RE = re.compile(r"^Grant Gold\s+([+-]?\d+)$", re.IGNORECASE)
 OPEN_SHOP_RE = re.compile(r"^Open Shop\s+(\S+)$", re.IGNORECASE)
+
+# K2 fix helpers ──────────────────────────────────────────────────────────────
+_PL_NORMALIZE = str.maketrans("ąćęłńóśźżĄĆĘŁŃÓŚŹŻ", "acelnoszzACELNOSZZ")
+
+
+def _normalize_pl(text: str) -> str:
+    return text.lower().translate(_PL_NORMALIZE)
+
+
+def _kw_matches(kw: str, normalized_text: str) -> bool:
+    """Match keyword allowing Polish verb conjugation stem variations (issue #237).
+
+    Polish verbs conjugate with stem changes: "nasłuchuję" (I listen) vs "nasłuchując"
+    (gerund: listening) have different stems after normalization.
+
+    Solution: find word in text that shares a common prefix with kw of ≥5 chars.
+    E.g., "nasluchuje" and "nasluchujac" both start with "nasluch" (7 chars).
+
+    Regex: word-boundary-start + keyword_prefix(≥5) + optional extra chars + word-boundary-end
+    """
+    # Use at least 5 chars of the keyword to avoid false matches
+    prefix_len = max(5, len(kw) - 2)  # Allow 1-2 char differences in stem endings
+    prefix = kw[:prefix_len]
+
+    return bool(re.search(
+        r"(?<![a-zA-Z0-9_])" + re.escape(prefix) + r"[a-z]*(?![a-zA-Z0-9_])",
+        normalized_text
+    ))
+
+
+def _text_is_action_attempt(text: str) -> bool:
+    """
+    False for messages that are clearly questions or passive descriptions.
+    Prevents noun trigger-keywords from firing on ambient narrative text.
+    """
+    stripped = text.strip()
+    # Questions are never action attempts in the pre-LLM scanner
+    if stripped.endswith("?"):
+        return False
+    return True
+
+
+_READING_PHRASES = (
+    "na glos", "glosno", "co tam jest napisane", "co jest napisane",
+    "tresc", "co tam pisze", "co pisze", "co tam mowi",
+)
+_READING_VERBS = (
+    "czytam", "odczytuje", "czytaj", "spogladam na", "patrze na",
+)
+_READING_TARGETS = (
+    "napis", "inskrypcj", "ksieg", "ksiazk", "zwoj", "pergamin",
+    "list", "notatk", "mape", "tabliczk", "rune",
+)
+
+
+def _is_reading_context(text: str) -> bool:
+    """Detect pure reading/examining actions so they bypass keyword-based skill routing.
+
+    Why: reading should never trigger a roll (system prompt rule, issue #12 BUG-02).
+    The pre-LLM keyword scanner matches words like ``odczytuje`` (arcana keyword) which
+    is also a normal reading verb in Polish. Without this guard, "odczytuję napis na
+    głos" wrongly fires an Arkana skill test before the LLM ever sees the request.
+    """
+    norm = _normalize_pl(text)
+    if any(p in norm for p in _READING_PHRASES):
+        return True
+    has_verb = any(v in norm for v in _READING_VERBS)
+    has_target = any(t in norm for t in _READING_TARGETS)
+    return has_verb and has_target
+
+
+# ── Compound action detector (issue #241) ───────────────────────────────────
+# When a player sends multi-intent text (NPC dialogue + movement + skill check),
+# the pre-LLM keyword scanner must be bypassed so the LLM handles all parts.
+_COMPOUND_CONNECTORS = (
+    " i ", " potem ", " nastepnie ", " po czym ",
+    " a potem ", " a nastepnie ", " i ide ", " i wracam ",
+    " i pytam ", " i mowie ", " i wychodze ",
+)
+_COMPOUND_DIALOGUE_MARKERS = (
+    "mowie", "pytam", "powiedzi", "powiedzial",
+    "krzycze", "odpowiadam", "zwracam sie", "mowię",
+)
+
+
+def _is_compound_action(text: str) -> bool:
+    """Return True when text contains multiple distinct player intents.
+
+    Compound = has a sequence connector (i/potem/po czym) AND a dialogue marker
+    (mówię/pytam/powiedziałem). In that case the pre-LLM keyword scanner is
+    bypassed so the LLM can narrate all parts of the turn, not just the
+    first matched skill keyword.
+    """
+    norm = _normalize_pl(text or "")
+    if not any(c in norm for c in _COMPOUND_CONNECTORS):
+        return False
+    return any(d in norm for d in _COMPOUND_DIALOGUE_MARKERS)
+
+
+# ── Combat-keyword fallback (issue #135) ────────────────────────────────────
+# When the player declares an attack in Polish and the LLM forgot to emit
+# [COMBAT_START:enemy_key], inject the tag post-hoc so the combat engine
+# actually starts. Pre-existing system prompt rule covered most cases but
+# Polish narrative mode still slipped through ~5% of the time. Without this
+# fallback the entire fight plays out as cinematic prose with zero HP / dice.
+_COMBAT_INTENT_VERBS = (
+    # atakować
+    "atakuj", "atakuje", "zaatakuj", "zaatakuje",
+    # uderzać / bić
+    "uderzam", "uderzac", "uderz", "bij", "bije", "bije sie", "bijac",
+    # walczyć
+    "walcze", "walczy",
+    # machać / zamachiwać (swing) — "machając młotem", "zamach mieczem"
+    "macha", "machac", "macham", "machajac", "zamach", "wymach",
+    # ciąć / kroić
+    "tne", "tnac", "siekam", "siekan",
+    # kłuć / pchnąć / dźgać / ugodzić
+    "klue", "klu ", "pcham", "pchnij", "dzgam", "dzgac", "ugadzam", "ugodzam",
+    # strzelać / miotać
+    "strzelam", "strzelac", "miotam", "wypalac",
+    # rzucać się / skakać na
+    "rzucam sie na", "rzucam sie", "skacze na", "skacze",
+    # nacierać / szarżować / ruszać na
+    "naciera", "nacierac", "szarzuje", "szarze", "ruszam na", "ruszam sie na",
+    # kopać / obalać
+    "kopie", "kopnij", "obalam",
+    # wyciągać broń / brać zamach
+    "wyciagam bron", "biore zamach", "wyjmuje bron", "chwytam za bron",
+    # cios / wymierzać / zadawać
+    "cios", "zadaje cios", "wyprowadzam cios", "wymierzam", "wymierz",
+    # zabijać / ranić
+    "zabijam", "zabije", "ranie", "ranic",
+    # inne
+    "obalam", "przewracam", "powalem",
+    # pchnąć nożem / inne bronie
+    "pcham noz", "klu sztyletem",
+)
+
+# Weapon stems that signal combat context when combined with a motion verb.
+_COMBAT_WEAPON_STEMS = (
+    "mlot", "miecz", "sztylet", "szabl", "topor", "kord", "wloczni",
+    "bron", "luk", "kusza", "kij", "maczug", "berlo", "rapier", "buz", "noz",
+    "halabard", "morgenszt", "cep",
+)
+_COMBAT_MOTION_STEMS = (
+    "macha", "uderz", "wymach", "wymierz", "zamach", "cios",
+    "rzuc", "pchn", "dzgn", "kluj", "siekn", "walcz", "ataku",
+    "nacier", "szarz", "rusz", "skacz",
+)
+
+
+def _player_combat_intent(text: str) -> bool:
+    """Detect explicit attack declaration in player text.
+
+    Two paths:
+    1. Direct verb match against _COMBAT_INTENT_VERBS.
+    2. Weapon-context: player mentions a weapon item + a motion/action stem
+       (catches "machając młotem", "wymachuję toporem", "uderzyłem berłem").
+    """
+    norm = _normalize_pl(text or "")
+    if any(v in norm for v in _COMBAT_INTENT_VERBS):
+        return True
+    has_weapon = any(ws in norm for ws in _COMBAT_WEAPON_STEMS)
+    has_motion = any(ms in norm for ms in _COMBAT_MOTION_STEMS)
+    return has_weapon and has_motion
+
+
+def _resolve_enemy_key_from_context(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    assistant_text: str,
+) -> str:
+    """Best-effort enemy_key resolution from the current GM response + last
+    few turns. Falls back to `unknown_attacker` if nothing matches.
+
+    Priority:
+    1. active_encounter in session_flags — uses injected enemy_key directly
+    2. game_config_enemies.label substring match in narrative
+    """
+    import json as _json
+    # Priority 1: active_encounter enemy_key (injected encounter still in flags)
+    try:
+        gs = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if gs:
+            flags = _json.loads(gs["session_flags"] or "{}")
+            enc = flags.get("active_encounter")
+            if enc and isinstance(enc, dict):
+                enemies = enc.get("enemies") or []
+                for e in enemies:
+                    ek = str(e.get("enemy_key") or "").strip()
+                    if ek:
+                        return ek
+    except Exception:
+        pass
+
+    haystack_parts: list[str] = [str(assistant_text or "")]
+    try:
+        rows = conn.execute(
+            "SELECT assistant_text FROM campaign_turns WHERE campaign_id = ? ORDER BY id DESC LIMIT 3",
+            (campaign_id,),
+        ).fetchall()
+        for r in rows:
+            haystack_parts.append(str(r[0] or ""))
+    except sqlite3.OperationalError:
+        pass
+    haystack = _normalize_pl(" ".join(haystack_parts))
+    if not haystack.strip():
+        return "unknown_attacker"
+    try:
+        enemy_rows = conn.execute(
+            "SELECT key, label FROM game_config_enemies WHERE is_active = 1"
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return "unknown_attacker"
+    best_key = None
+    for er in enemy_rows:
+        label = _normalize_pl(str(er["label"] or ""))
+        key_norm = _normalize_pl(str(er["key"] or ""))
+        # Substring on the label OR direct mention of the key in narrative.
+        if label and len(label) >= 4 and label in haystack:
+            best_key = er["key"]
+            break
+        if key_norm and len(key_norm) >= 4 and key_norm in haystack:
+            best_key = er["key"]
+            break
+    return best_key or "unknown_attacker"
+
+
+def _ensure_combat_start_tag(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    player_text: str,
+    assistant_text: str,
+) -> str:
+    """If player declared combat intent and the GM response is missing both
+    a [COMBAT_START:…] tag AND a `Roll Initiative d20` cue, append a tag so
+    the combat engine fires. No-op when a tag/cue is already present or when
+    a combat is already active.
+    """
+    if not _player_combat_intent(player_text):
+        return assistant_text
+    if COMBAT_START_RE.search(assistant_text or ""):
+        return assistant_text
+    if re.search(r"Roll\s+Initiative\s+d20", assistant_text or "", re.IGNORECASE):
+        return assistant_text
+    try:
+        active = conn.execute(
+            "SELECT id FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if active:
+            return assistant_text
+    except sqlite3.OperationalError:
+        pass
+    enemy_key = _resolve_enemy_key_from_context(conn, campaign_id, assistant_text)
+    logger.info(
+        "combat_start_tag_injected",
+        campaign_id=campaign_id,
+        enemy_key=enemy_key,
+        player_snippet=(player_text or "")[:80],
+    )
+    sep = "\n\n" if not (assistant_text or "").endswith("\n") else ""
+    return f"{assistant_text or ''}{sep}[COMBAT_START:{enemy_key}]"
+
+
 # 9A-4c+ — gdy model nie generuje cue, dołącz „Open Shop” na podstawie intencji gracza i NPC w scenie.
 _TRADE_USER_INTENT_RE = re.compile(
     r"(kup|sprzed|towar|towary|towarem|handl|handel|sklep|poka|pokaz"
@@ -116,9 +384,10 @@ def _get_session_id_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> 
 
 
 def _inject_location_blocked(assistant_response: str, reason: str) -> str:
+    # BUG-07: do not leak the technical reason tag into player-visible narrative.
+    # Just null the location_intent so the bogus move isn't persisted; the block
+    # is already logged server-side in `_process_location_intent` (location_move_blocked).
     data = json.loads(_strip_json_code_fence(assistant_response))
-    narrative = str(data.get("narrative") or "").rstrip()
-    data["narrative"] = f"{narrative}\n\n[LOCATION_BLOCKED: {reason}]".strip()
     data["location_intent"] = None
     return json.dumps(data, ensure_ascii=False)
 
@@ -236,6 +505,91 @@ def _process_location_intent(
                 "UPDATE game_locations SET usage_count = usage_count + 1 WHERE id = ?",
                 (result.resolved_location_id,),
             )
+            # Also sync current_hex so the world map pin follows narrative movement
+            try:
+                import json as _jloc
+                _loc_row = conn.execute(
+                    "SELECT key FROM game_locations WHERE id = ?",
+                    (result.resolved_location_id,),
+                ).fetchone()
+                if _loc_row and _loc_row["key"]:
+                    _hex_row = conn.execute(
+                        "SELECT q, r FROM world_hexes WHERE location_key = ? AND is_active = 1 LIMIT 1",
+                        (_loc_row["key"],),
+                    ).fetchone()
+                    if _hex_row:
+                        _gs_sf = conn.execute(
+                            "SELECT id, session_flags FROM game_sessions WHERE id = ?",
+                            (session_id,),
+                        ).fetchone()
+                        if _gs_sf:
+                            _sf_loc = _jloc.loads(_gs_sf["session_flags"] or "{}")
+                            _sf_loc["current_hex"] = {"q": int(_hex_row["q"]), "r": int(_hex_row["r"])}
+                            conn.execute(
+                                "UPDATE game_sessions SET session_flags = ? WHERE id = ?",
+                                (_jloc.dumps(_sf_loc, ensure_ascii=False), _gs_sf["id"]),
+                            )
+            except Exception as _hex_sync_err:
+                logger.warning("hex_sync_on_location_move_failed", error=str(_hex_sync_err))
+            # Link new gm_runtime location to the current world_hex so it appears on the admin map
+            if result.is_new_location:
+                try:
+                    _loc_key_row = conn.execute(
+                        "SELECT key FROM game_locations WHERE id = ? LIMIT 1",
+                        (result.resolved_location_id,),
+                    ).fetchone()
+                    _gs_for_hex = conn.execute(
+                        "SELECT session_flags FROM game_sessions WHERE id = ? LIMIT 1",
+                        (session_id,),
+                    ).fetchone()
+                    if _loc_key_row and _gs_for_hex:
+                        import json as _jnewloc
+                        _sf_for_hex = _jnewloc.loads(_gs_for_hex["session_flags"] or "{}")
+                        _cur_hex = _sf_for_hex.get("current_hex")
+                        if _cur_hex and isinstance(_cur_hex, dict):
+                            _nhq, _nhr = int(_cur_hex.get("q", 0)), int(_cur_hex.get("r", 0))
+                            conn.execute(
+                                """UPDATE world_hexes SET location_key = ?
+                                   WHERE q = ? AND r = ? AND is_active = 1
+                                   AND (location_key IS NULL OR location_key = '')""",
+                                (_loc_key_row["key"], _nhq, _nhr),
+                            )
+                            # BUG-186: stamp hex coords onto game_locations so player hex map resolves
+                            conn.execute(
+                                "UPDATE game_locations SET world_hex_q = ?, world_hex_r = ? WHERE key = ? AND world_hex_q IS NULL",
+                                (_nhq, _nhr, _loc_key_row["key"]),
+                            )
+                            # Also update hex_type from location biome if hex is still default 'plains'
+                            try:
+                                loc_biome = conn.execute(
+                                    "SELECT biome FROM game_locations WHERE key = ?", (_loc_key_row["key"],)
+                                ).fetchone()
+                                biome = (loc_biome["biome"] if loc_biome else None) or ""
+                                BIOME_TO_HEX_TYPE = {
+                                    "forest": "forest",
+                                    "swamp": "swamp",
+                                    "mountain": "mountains",
+                                    "mountains": "mountains",
+                                    "urban": "town",
+                                    "dungeon": "dungeon",
+                                    "ruin": "ruins",
+                                    "underground": "dungeon",
+                                    "coast": "plains",
+                                    "desert": "plains",
+                                    "tundra": "plains",
+                                    "rural": "plains",
+                                    "plains": "plains",
+                                }
+                                mapped_type = BIOME_TO_HEX_TYPE.get(biome.lower())
+                                if mapped_type and mapped_type != "plains":
+                                    conn.execute(
+                                        "UPDATE world_hexes SET hex_type = ? WHERE q = ? AND r = ? AND hex_type = 'plains'",
+                                        (mapped_type, _nhq, _nhr),
+                                    )
+                            except Exception:
+                                pass
+                except Exception as _newloc_hex_err:
+                    logger.warning("new_location_hex_link_failed", error=str(_newloc_hex_err))
             conn.commit()
             logger.info(
                 "location_updated_from_gm_response",
@@ -412,18 +766,20 @@ def _maybe_handle_blocked_player_combat_turn(
     combat = cs.get_active_combat(campaign_id)
     if not combat or str(combat.get("status") or "") != "active":
         return None
-    if str(combat.get("current_turn") or "") != "player":
-        return None
+    # Block narrative during ALL active combat turns (player or enemy)
+
 
     turn_effects = cs.evaluate_current_turn_conditions(campaign_id)
-    if not turn_effects.get("blocked"):
-        return None
-
-    assistant_text = str(
-        turn_effects.get("message") or "Warunek blokuje akcję bohatera w tej turze."
-    ).strip()
-    if not assistant_text:
-        assistant_text = "Warunek blokuje akcję bohatera w tej turze."
+    condition_blocked = bool(turn_effects.get("blocked"))
+    if not condition_blocked:
+        # BUG-186: narrative must not process during active combat even when no condition blocks
+        assistant_text = "Walka trwa! Użyj interfejsu walki, by wykonać akcję bojową."
+    else:
+        assistant_text = str(
+            turn_effects.get("message") or "Warunek blokuje akcję bohatera w tej turze."
+        ).strip()
+        if not assistant_text:
+            assistant_text = "Warunek blokuje akcję bohatera w tej turze."
 
     log = create_turn_log(
         conn=conn,
@@ -441,7 +797,9 @@ def _maybe_handle_blocked_player_combat_turn(
         user_text=user_text,
         assistant_text=assistant_text,
     )
-    combat_extra = _maybe_advance_combat_after_player_narrative(campaign_id)
+    # Only advance when a real condition (stun/paralysis) blocks the player.
+    # "Walka trwa!" is not a blocking condition — no turn consumed.
+    combat_extra = _maybe_advance_combat_after_player_narrative(campaign_id) if condition_blocked else None
 
     out: dict[str, Any] = {
         "id": log["id"],
@@ -1046,9 +1404,17 @@ def _extract_narrative_for_cues(text: str) -> tuple[str, dict | None]:
     """
     If text is JSON containing `narrative`, return (narrative, parsed_dict).
     Otherwise return (text, None) as plain-text fallback.
+
+    The SSE streaming path encodes newlines as \\n then decodes them back to
+    literal newline characters before this function is called. Literal newlines
+    inside JSON string values are technically invalid per spec, so json.loads
+    rejects them. We use strict=False to allow literal control characters inside
+    strings so that grant_item and other top-level fields are extracted correctly.
     """
+    _decoder = json.JSONDecoder(strict=False)
+    stripped = _strip_json_code_fence(text)
     try:
-        parsed = json.loads(_strip_json_code_fence(text))
+        parsed = _decoder.decode(stripped)
         if isinstance(parsed, dict) and "narrative" in parsed:
             return str(parsed.get("narrative") or ""), parsed
     except (ValueError, TypeError):
@@ -1179,16 +1545,36 @@ def maybe_append_open_shop_fallback(
     return _repack_narrative(raw, new_narr.strip(), parsed)
 
 
-def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None, str | None]:
+def _parse_grant_item_entry(x: object) -> tuple[str, str | None] | None:
+    """Parse a single grant_item element into (label, description|None). Returns None if invalid."""
+    if isinstance(x, dict):
+        label = str(x.get("label") or "").strip()
+        desc = str(x.get("description") or "").strip() or None
+        return (label, desc) if label else None
+    if isinstance(x, str) and x.strip():
+        return (x.strip(), None)
+    return None
+
+
+def extract_grant_cues(
+    assistant_text: str,
+) -> tuple[str, list[str], int | None, str | None, dict[str, str | None]]:
     """
     Collect GM grant cues from the end of assistant text.
-    Returns cleaned_text, grant_item_labels (list), grant_gold_amount, open_shop_npc_key.
-    Handles: roll_cue "Grant Item X", grant_item "X", grant_item ["X","Y"], last-line cues.
+    Returns: cleaned_text, grant_item_labels, grant_gold_amount, open_shop_npc_key, grant_item_descriptions.
+    grant_item_descriptions maps label → description (or None) for narrative items.
+    Handles: roll_cue "Grant Item X", grant_item "X"/"obj", grant_item [...]s, last-line cues.
     """
     clean_text = (assistant_text or "").rstrip()
     grant_item_labels: list[str] = []
+    grant_item_descriptions: dict[str, str | None] = {}
     grant_gold_amount: int | None = None
     open_shop_npc_key: str | None = None
+
+    def _add_entry(entry: tuple[str, str | None] | None) -> None:
+        if entry and entry[0] not in grant_item_labels:
+            grant_item_labels.append(entry[0])
+            grant_item_descriptions[entry[0]] = entry[1]
 
     # JSON-mode GM response
     try:
@@ -1196,13 +1582,14 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None,
     except Exception:
         payload = None
     if isinstance(payload, dict):
-        # Check dedicated grant_item field (string or array) — LLM alternate format
+        # Check dedicated grant_item field (string, object, or array) — LLM alternate format
         raw_gi = payload.get("grant_item")
         if raw_gi:
             if isinstance(raw_gi, list):
-                grant_item_labels.extend(str(x).strip() for x in raw_gi if str(x).strip())
-            elif isinstance(raw_gi, str) and raw_gi.strip():
-                grant_item_labels.append(raw_gi.strip())
+                for x in raw_gi:
+                    _add_entry(_parse_grant_item_entry(x))
+            else:
+                _add_entry(_parse_grant_item_entry(raw_gi))
             if grant_item_labels:
                 payload["grant_item"] = None
                 clean_text = json.dumps(payload, ensure_ascii=False)
@@ -1212,6 +1599,7 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None,
             rc_item = parse_grant_item_cue(roll_cue)
             if rc_item and rc_item not in grant_item_labels:
                 grant_item_labels.append(rc_item)
+                grant_item_descriptions.setdefault(rc_item, None)
             if grant_gold_amount is None:
                 grant_gold_amount = parse_grant_gold_cue(roll_cue)
             if open_shop_npc_key is None:
@@ -1224,6 +1612,8 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None,
         maybe_item = parse_grant_item_cue(clean_text)
         if maybe_item and maybe_item not in grant_item_labels:
             grant_item_labels.append(maybe_item)
+            # Plain-text cues carry no description
+            grant_item_descriptions.setdefault(maybe_item, None)
             clean_text = strip_last_grant_item_cue(clean_text)
             continue
         if grant_gold_amount is None:
@@ -1239,7 +1629,7 @@ def extract_grant_cues(assistant_text: str) -> tuple[str, list[str], int | None,
                 clean_text = strip_last_open_shop_cue(clean_text)
                 continue
         break
-    return clean_text, grant_item_labels, grant_gold_amount, open_shop_npc_key
+    return clean_text, grant_item_labels, grant_gold_amount, open_shop_npc_key, grant_item_descriptions
 
 
 def _resolve_grant_catalog_item(conn: sqlite3.Connection, label: str) -> dict[str, str] | None:
@@ -1406,13 +1796,13 @@ def _grant_narrative_weapon(
                 (key, label, f"Narracyjna broń: {label}"),
             )
 
-        # Grant via normal weapon_key path
+        # Grant via normal weapon_key path (store original label for display)
         conn.execute(
             """INSERT INTO character_inventory
                (character_id, weapon_key, item_key, consumable_key, label,
                 quantity, equipped, source, meta_json)
-               VALUES (?, ?, NULL, NULL, NULL, 1, 0, ?, ?)""",
-            (int(character_id), key, str(source or "gm"),
+               VALUES (?, ?, NULL, NULL, ?, 1, 0, ?, ?)""",
+            (int(character_id), key, str(label), str(source or "gm"),
              json.dumps({"narrative_weapon": True, "original_label": label}, ensure_ascii=False)),
         )
         logger.info("narrative_weapon_created", key=key, label=label, campaign_id=campaign_id)
@@ -1452,9 +1842,13 @@ def resolve_model_name(
     req = _clean_model_hint(requested_model)
     cam = _clean_model_hint(campaign_model)
     effective = get_effective_config(llm_config)
-    if effective["provider"] == "openai":
+    # For OpenAI and Azure the caller specifies the model/deployment by name directly —
+    # no need to validate against a remote list (Azure catalogs show model IDs, not deployment names).
+    if effective["provider"] in ("openai", "azure"):
         return (req or cam or effective["model"]).strip()
 
+    # For Ollama and other self-hosted providers, validate against the live model list
+    # so the UI can fall back to whatever is actually pulled locally.
     health = get_health(llm_config)
     available = health.get("models") or []
     if not available:
@@ -1516,16 +1910,48 @@ def _require_gm_plan_before_narrative_llm(
     """
     T05: ensure gm_plan_json is ready before running the narrative LLM.
     If plan is missing, auto-generate it now (on-demand, first turn triggers it).
+    Pre-built campaigns (template_id set) keep the template plan untouched and
+    use generate_opening_scene() which reads key_locations for a location-specific intro.
     """
     from app.services.gm_plan_schema import gm_plan_is_ready
+    import json as _j
 
     try:
         raw = campaign["gm_plan_json"]
     except (KeyError, IndexError):
         raw = None
+
+    # Pre-built campaigns: the template plan is authoritative — never overwrite it.
+    # Use the dedicated opening-scene generator which reads key_locations from the plan.
+    try:
+        template_id = campaign["template_id"]
+    except (KeyError, IndexError):
+        template_id = None
+
+    if template_id and raw and raw.strip() not in ("", "{}"):
+        if _narrative_turn_count(conn, campaign_id) == 0:
+            try:
+                from app.services.turn_pipeline import generate_opening_scene
+                from app.services.user_llm_settings import get_user_llm_settings_full
+                char_row = conn.execute(
+                    "SELECT id, user_id FROM characters WHERE campaign_id = ? AND is_active = 1 LIMIT 1",
+                    (campaign_id,),
+                ).fetchone()
+                if char_row:
+                    _llm_cfg = get_user_llm_settings_full(int(char_row["user_id"] or 0))
+                    _model = _llm_cfg.get("model") or "gemma3:1b"
+                    generate_opening_scene(campaign_id, int(char_row["id"]), _model, _llm_cfg, conn)
+                    logger.info("prebuilt_opening_scene_generated", campaign_id=campaign_id)
+            except Exception as _oe:
+                logger.warning("prebuilt_opening_scene_failed", campaign_id=campaign_id, error=str(_oe))
+        return  # template plan is the plan — never fall through to overwrite
+
     if gm_plan_is_ready(raw):
         return
     if _narrative_turn_count(conn, campaign_id) > 0:
+        return
+    # Dungeon-mode campaigns don't need a GM plan — tile sequence IS the plan
+    if str(campaign["mode"] or "solo").lower() == "dungeon":
         return
 
     # Plan not ready and no turns yet — auto-generate now
@@ -1571,7 +1997,9 @@ def _require_gm_plan_before_narrative_llm(
         logger.info("gm_plan_auto_generated_on_first_turn", campaign_id=campaign_id)
 
         # Also generate opening scene so player sees a welcome message
-        if gm_ready:
+        # Skip for dungeon-mode campaigns — enter_dungeon already provides room_narrative
+        _camp_mode = str(campaign["mode"] or "solo").lower() if campaign else "solo"
+        if gm_ready and _camp_mode != "dungeon":
             try:
                 from app.services.llm_service import generate_chat as _gen
                 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT as _OPENING_SYS
@@ -1665,6 +2093,270 @@ def create_turn_log(
         )
 
         schedule_after_narrative_turn_committed(campaign_id)
+
+    # BUG-02: auto-advance the in-game clock per turn type.
+    # Routes that should NOT tick: meta/slash commands, opening turn, rolls
+    # (the player just rolled dice — no in-world time passed).
+    try:
+        from app.services.clock_config_service import get_clock_config
+        from app.services.clock_service import advance_clock
+
+        cfg = get_clock_config()
+        default_min = 0
+        if route == "narrative":
+            default_min = cfg["narrative_min"]
+        elif route == "combat":
+            default_min = cfg["combat_min"]
+        elif route == "travel":
+            default_min = cfg["travel_min"]
+
+        # LLM override: only honored for narrative turns. The MG can request a
+        # larger advance ("rozmowa trwała godzinę" → 60). Smaller values are
+        # ignored — backend default is the floor so quick turns still tick.
+        llm_min = 0
+        if route == "narrative" and assistant_text:
+            try:
+                _adata = json.loads(_strip_json_code_fence(assistant_text))
+                if isinstance(_adata, dict):
+                    _raw = _adata.get("time_advance_minutes")
+                    if _raw is not None:
+                        llm_min = max(0, min(int(_raw), 480))  # clamp 0-480 (8h)
+            except Exception:
+                pass
+
+        effective_min = max(default_min, llm_min)
+        if effective_min > 0:
+            advance_clock(
+                campaign_id,
+                minutes=effective_min,
+                reason=f"turn_{route}",
+                conn=conn,
+            )
+            conn.commit()
+    except Exception as _clk_err:
+        logger.warning(
+            "clock_auto_advance_failed",
+            campaign_id=campaign_id,
+            route=route,
+            error=str(_clk_err),
+        )
+
+    # BUG-03: persist NPCs from MG response. The narrator may emit `npc_met`
+    # (first encounter) and/or `npc_update` (relation/notes change). Both are
+    # optional and only on narrative turns; everything else is a no-op.
+    if route == "narrative" and assistant_text:
+        try:
+            from app.services.npc_memory_service import (
+                record_npc_met,
+                update_npc_relation,
+            )
+
+            _ndata = json.loads(_strip_json_code_fence(assistant_text))
+            if isinstance(_ndata, dict):
+                _turn_num = int(row["turn_number"])
+                _met_raw = _ndata.get("npc_met")
+                _met_entries = _met_raw if isinstance(_met_raw, list) else (
+                    [_met_raw] if isinstance(_met_raw, dict) else []
+                )
+                for _e in _met_entries:
+                    if not isinstance(_e, dict):
+                        continue
+                    _name = str(_e.get("name") or "").strip()
+                    if not _name:
+                        continue
+                    _met_res = record_npc_met(
+                        campaign_id=campaign_id,
+                        name=_name,
+                        role=(str(_e.get("role")).strip() if _e.get("role") else None),
+                        first_met_location=(str(_e.get("location")).strip() if _e.get("location") else None),
+                        first_met_turn=_turn_num,
+                        notes=(str(_e.get("notes")).strip() if _e.get("notes") else None),
+                        conn=conn,
+                    )
+                    # BUG-06 / XS6: +5 XP for first encounter with a named NPC
+                    if _met_res.get("ok") and _met_res.get("new") and character_id is not None:
+                        try:
+                            from app.services.xp_sources import grant_first_npc_talk
+                            _npc_key = _name.lower().replace(" ", "_")
+                            grant_first_npc_talk(conn, int(character_id), campaign_id, _npc_key, _turn_num)
+                        except Exception as _xp_err:
+                            logger.warning("xs6_npc_xp_failed", error=str(_xp_err))
+
+                _upd_raw = _ndata.get("npc_update")
+                _upd_entries = _upd_raw if isinstance(_upd_raw, list) else (
+                    [_upd_raw] if isinstance(_upd_raw, dict) else []
+                )
+                for _e in _upd_entries:
+                    if not isinstance(_e, dict):
+                        continue
+                    _name = str(_e.get("name") or "").strip()
+                    if not _name:
+                        continue
+                    _rel = _e.get("relation_status")
+                    res = update_npc_relation(
+                        campaign_id=campaign_id,
+                        name=_name,
+                        relation_status=(str(_rel).strip().lower() if _rel else None),
+                        notes=(str(_e.get("notes")).strip() if _e.get("notes") else None),
+                        conn=conn,
+                    )
+                    # If the MG sent an update for someone not yet recorded, fall
+                    # through to record_npc_met so we don't drop the relation hint.
+                    if not res.get("ok") and res.get("reason") == "not_found":
+                        record_npc_met(
+                            campaign_id=campaign_id,
+                            name=_name,
+                            first_met_turn=_turn_num,
+                            notes=(str(_e.get("notes")).strip() if _e.get("notes") else None),
+                            conn=conn,
+                        )
+                        if _rel:
+                            update_npc_relation(
+                                campaign_id=campaign_id,
+                                name=_name,
+                                relation_status=str(_rel).strip().lower(),
+                                conn=conn,
+                            )
+                conn.commit()
+        except Exception as _npc_err:
+            logger.warning(
+                "npc_memory_persist_failed",
+                campaign_id=campaign_id,
+                error=str(_npc_err),
+            )
+
+    # BUG-01: remove items when GM signals the player handed/lost one.
+    # Only on narrative turns and only when we have a character to update.
+    if route == "narrative" and assistant_text and character_id is not None:
+        try:
+            _rdata = json.loads(_strip_json_code_fence(assistant_text))
+            if isinstance(_rdata, dict):
+                _ri_raw = _rdata.get("remove_item")
+                _ri_entries = _ri_raw if isinstance(_ri_raw, list) else (
+                    [_ri_raw] if isinstance(_ri_raw, dict) else []
+                )
+                for _ri in _ri_entries:
+                    if not isinstance(_ri, dict):
+                        continue
+                    _label = str(_ri.get("label") or "").strip()
+                    if not _label:
+                        continue
+                    _inv_row = conn.execute(
+                        """
+                        SELECT id, quantity FROM character_inventory
+                        WHERE character_id = ? AND LOWER(label) = LOWER(?)
+                        LIMIT 1
+                        """,
+                        (int(character_id), _label),
+                    ).fetchone()
+                    if not _inv_row:
+                        logger.warning(
+                            "remove_item_not_found",
+                            campaign_id=campaign_id,
+                            character_id=character_id,
+                            label=_label,
+                        )
+                        continue
+                    if int(_inv_row["quantity"] or 1) > 1:
+                        conn.execute(
+                            "UPDATE character_inventory SET quantity = quantity - 1 WHERE id = ?",
+                            (_inv_row["id"],),
+                        )
+                    else:
+                        conn.execute(
+                            "DELETE FROM character_inventory WHERE id = ?",
+                            (_inv_row["id"],),
+                        )
+                    logger.info(
+                        "remove_item_applied",
+                        campaign_id=campaign_id,
+                        character_id=character_id,
+                        label=_label,
+                    )
+                conn.commit()
+        except Exception as _ri_err:
+            logger.warning(
+                "remove_item_persist_failed",
+                campaign_id=campaign_id,
+                error=str(_ri_err),
+            )
+
+    # BUG-04: parse gm_note (per-turn), scene_advance, and gm_plan_update from LLM response.
+    # All fields are optional. Only runs on narrative turns.
+    if route == "narrative" and assistant_text:
+        try:
+            from app.services.gm_plan_schema import normalize_gm_plan
+            _pdata = json.loads(_strip_json_code_fence(assistant_text))
+            if isinstance(_pdata, dict):
+                _gm_note = str(_pdata.get("gm_note") or "").strip()
+                _scene_advance = bool(_pdata.get("scene_advance"))
+                _plan_update = _pdata.get("gm_plan_update")
+
+                if _gm_note or _scene_advance or isinstance(_plan_update, dict):
+                    _turn_num = int(row["turn_number"])
+                    _camp_row = conn.execute(
+                        "SELECT gm_plan_json FROM campaigns WHERE id = ?",
+                        (campaign_id,),
+                    ).fetchone()
+                    _plan = normalize_gm_plan(_camp_row["gm_plan_json"] if _camp_row else None)
+                    _ep = dict(_plan.get("engine_private") or {})
+
+                    if _gm_note:
+                        _buf = list(_ep.get("gm_note_buffer") or [])
+                        _buf.append({"turn": _turn_num, "note": _gm_note})
+                        if len(_buf) > 30:
+                            _buf = _buf[-30:]
+                        _ep["gm_note_buffer"] = _buf
+
+                    if _scene_advance:
+                        _aa = _plan.get("active_arc_id")
+                        if _aa and isinstance(_plan.get("arcs"), dict) and _aa in _plan["arcs"]:
+                            _plan["arcs"][_aa]["current_scene_ordinal"] = (
+                                int(_plan["arcs"][_aa].get("current_scene_ordinal") or 0) + 1
+                            )
+
+                    if isinstance(_plan_update, dict):
+                        _aa = _plan.get("active_arc_id")
+                        if _aa and isinstance(_plan.get("arcs"), dict) and _aa in _plan["arcs"]:
+                            _arc = _plan["arcs"][_aa]
+                            _rn = str(_plan_update.get("roadmap_note") or "").strip()
+                            if _rn:
+                                _old_rm = str(_arc.get("roadmap") or "").strip()
+                                _arc["roadmap"] = (
+                                    _old_rm + f"\n\n[T{_turn_num}] " + _rn
+                                ).strip()
+                            _goals_done = [
+                                str(g).strip().lower()
+                                for g in (_plan_update.get("scene_goals_done") or [])
+                                if g
+                            ]
+                            if _goals_done:
+                                _arc["scene_goals"] = [
+                                    g for g in (_arc.get("scene_goals") or [])
+                                    if not any(d in g.lower() for d in _goals_done)
+                                ]
+                            for _ng in (_plan_update.get("scene_goals_add") or []):
+                                _ns = str(_ng).strip()
+                                if _ns:
+                                    _arc.setdefault("scene_goals", []).append(_ns)
+                            if bool(_plan_update.get("scene_advance")):
+                                _arc["current_scene_ordinal"] = (
+                                    int(_arc.get("current_scene_ordinal") or 0) + 1
+                                )
+                        _ep["last_plan_updated_turn"] = _turn_num
+
+                    _plan["engine_private"] = _ep
+                    conn.execute(
+                        "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
+                        (json.dumps(_plan, ensure_ascii=False), campaign_id),
+                    )
+                    conn.commit()
+        except Exception as _plan_err:
+            logger.warning(
+                "gm_plan_update_hook_failed",
+                campaign_id=campaign_id,
+                error=str(_plan_err),
+            )
 
     return {
         "id": row["id"],
@@ -2015,6 +2707,86 @@ def create_turn(
             if _opening_turn:
                 return {"prose": _opening_turn["assistant_text"], "turn_number": 1,
                         "route": "narrative", "result": {"message": _opening_turn["assistant_text"]}}
+            # Resolve model once for any opening-LLM paths below
+            _opening_model = resolve_model_name(
+                requested_model=payload.engine,
+                campaign_model=campaign["model_id"],
+                llm_config=llm_config,
+            )
+            _camp_mode_open = str(campaign["mode"] or "solo").lower()
+
+            # Dungeon-mode campaigns: generate LLM opening using tile context
+            if _camp_mode_open == "dungeon":
+                try:
+                    _opening_result = run_narrative_turn(
+                        conn=conn,
+                        campaign=campaign,
+                        character=character,
+                        user_text="Opisz klimatycznie komnatę w której właśnie stanąłem, wciągnij mnie w atmosferę lochu.",
+                        model=_opening_model,
+                        ollama_base_url=None,
+                        llm_config=llm_config,
+                        roll_result_message=None,
+                        roll_result_data=None,
+                    )
+                    _opening_text = (_opening_result.get("message") or "").strip()
+                    if _opening_text:
+                        _nt = int((conn.execute(
+                            "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                            (campaign_id,),
+                        ).fetchone()[0]) or 1)
+                        conn.execute(
+                            "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, route, assistant_text) "
+                            "VALUES (?,?,?,?,?,?)",
+                            (campaign_id, int(character["id"] or 0), _nt, "", "narrative", _opening_text),
+                        )
+                        conn.commit()
+                        return {"prose": _opening_text, "turn_number": _nt,
+                                "route": "narrative", "result": {"message": _opening_text}}
+                except Exception as _de:
+                    logger.warning("dungeon_opening_llm_failed", campaign_id=campaign_id, error=str(_de))
+
+            # Non-dungeon fallback: opening should have been created by
+            # _require_gm_plan_before_narrative_llm above. If not (LLM failure,
+            # missing plan, etc.), generate one inline so the player never sees
+            # a vanishing typing indicator with no message.
+            try:
+                from app.services.llm_service import generate_chat as _gen
+                from app.system_prompt_loader import SYSTEM_PROMPT_TEXT as _OPENING_SYS
+                import json as _j_open
+                _sheet_open = _j_open.loads(character["sheet_json"] or "{}")
+                _name_open = character["name"] or "Bohater"
+                _arch_open = str(_sheet_open.get("archetype", "warrior")).lower()
+                _arch_lbl = "Uczony" if _arch_open == "scholar" else "Wojownik"
+                _loc_open = character["location"] or "nieznane miejsce"
+                _opening_prompt = (
+                    f"Postać: {_name_open}, Archetyp: {_arch_lbl}, Lokalizacja: {_loc_open}.\n\n"
+                    "To jest pierwsza chwila przygody. Zacznij sesję od klimatycznego opisu miejsca, "
+                    "w którym bohater się znajduje. Nie pytaj gracza o plany - po prostu opisz scenę "
+                    "i zostaw otwarte zakończenie zachęcające do działania."
+                )
+                _opening_fb = (_gen(
+                    messages=[{"role": "system", "content": _OPENING_SYS},
+                              {"role": "user", "content": _opening_prompt}],
+                    model=_opening_model, llm_config=llm_config,
+                ) or "").strip()
+                if _opening_fb:
+                    _nt_fb = int((conn.execute(
+                        "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                        (campaign_id,),
+                    ).fetchone()[0]) or 1)
+                    conn.execute(
+                        "INSERT INTO campaign_turns (campaign_id, character_id, turn_number, user_text, route, assistant_text) "
+                        "VALUES (?,?,?,?,?,?)",
+                        (campaign_id, int(character["id"] or 0), _nt_fb, "", "narrative", _opening_fb),
+                    )
+                    conn.commit()
+                    logger.info("opening_scene_inline_fallback_generated", campaign_id=campaign_id)
+                    return {"prose": _opening_fb, "turn_number": _nt_fb,
+                            "route": "narrative", "result": {"message": _opening_fb}}
+            except Exception as _fb_err:
+                logger.warning("opening_inline_fallback_failed", campaign_id=campaign_id, error=str(_fb_err))
+
             return {"prose": None, "turn_number": 0, "route": "narrative", "result": {}}
 
         if not text:
@@ -2125,6 +2897,28 @@ def create_turn(
                     character_row=character,
                     death_reason=dr,
                 )
+                # J2: write history row + queue chapter summary generation
+                try:
+                    from app.services.chapter_summary_service import close_campaign_with_summary
+                    _ch_sheet = json.loads(character["sheet_json"] or "{}")
+                    _ch_xp = int(_ch_sheet.get("xp_lifetime_earned") or 0)
+                    _ch_gold = int(_ch_sheet.get("gold_gp") or _ch_sheet.get("gold") or 0)
+                    _ch_turns = conn.execute(
+                        "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    close_campaign_with_summary(
+                        conn,
+                        campaign_id=campaign_id,
+                        character_id=int(payload.character_id),
+                        outcome="death",
+                        user_id=int(character["user_id"]),
+                        xp_earned=_ch_xp,
+                        gold_at_end=_ch_gold,
+                        turns_count=int(_ch_turns or 0),
+                    )
+                except Exception as _j2_err:
+                    logger.warning("j2_death_history_failed", error=str(_j2_err))
                 user_line = user_text_stored if roll_request else (roll_result_message or text)
                 log = create_turn_log(
                     conn=conn,
@@ -2156,7 +2950,25 @@ def create_turn(
         if text.startswith("/") and not roll_request:
             route = "command"
             cmd = text.split(" ", 1)[0].lower()
-            sk_dispatch = slash_registry_key_for_dispatch(text)
+            _is_admin_user = False
+            try:
+                _u_row = conn.execute(
+                    "SELECT COALESCE(is_admin, 0) AS is_admin FROM users WHERE id = ? LIMIT 1",
+                    (character["user_id"],),
+                ).fetchone()
+                _is_admin_user = bool(_u_row and int(_u_row["is_admin"] or 0))
+            except Exception:
+                pass
+            sk_dispatch = slash_registry_key_for_dispatch(text, is_admin=_is_admin_user)
+            # Alias support: rewrite cmd + text to canonical first-token so the
+            # per-command branches below (cmd == '/mem', etc.) match. The user's
+            # original text remains in user_text for logging.
+            if sk_dispatch:
+                _canon = sk_dispatch.split(" ", 1)[0].lower()
+                if _canon != cmd:
+                    rest = text[len(cmd):]
+                    text = _canon + rest
+                    cmd = _canon
             if (
                 sk_dispatch
                 and not is_slash_command_enabled(sk_dispatch)
@@ -2208,6 +3020,51 @@ def create_turn(
                 return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
 
             # /sheet
+            # /quest — list player's active quests + short narrative
+            if cmd == "/quest":
+                quest_rows = []
+                try:
+                    quest_rows = conn.execute(
+                        """
+                        SELECT id, quest_type, title, narrative, status, created_turn
+                        FROM character_quests
+                        WHERE character_id = ? AND campaign_id = ? AND status = 'active'
+                        ORDER BY created_turn DESC, id DESC
+                        """,
+                        (payload.character_id, campaign_id),
+                    ).fetchall()
+                except Exception:
+                    quest_rows = []
+                quests = []
+                for r in quest_rows:
+                    narrative_str = str(r["narrative"] or "").strip()
+                    if len(narrative_str) > 220:
+                        narrative_str = narrative_str[:217].rstrip() + "…"
+                    quests.append({
+                        "id": int(r["id"]),
+                        "type": str(r["quest_type"] or "main"),
+                        "title": str(r["title"] or ""),
+                        "narrative": narrative_str,
+                        "created_turn": r["created_turn"],
+                    })
+                if quests:
+                    lines = [f"📜 **Aktywne zadania** ({len(quests)}):", ""]
+                    for q in quests:
+                        type_badge = "⚔" if q["type"] == "main" else "•"
+                        lines.append(f"{type_badge} **{q['title']}**")
+                        if q["narrative"]:
+                            lines.append(f"  {q['narrative']}")
+                        lines.append("")
+                    message = "\n".join(lines).rstrip()
+                else:
+                    message = "📜 Brak aktywnych zadań."
+                result = {"command": "quest", "quests": quests, "message": message}
+                log = create_turn_log(
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False), route=route,
+                )
+                return _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+
             if cmd == "/sheet":
                 result = {
                     "command": "sheet",
@@ -2439,13 +3296,11 @@ def create_turn(
 
         # ── Pre-LLM: scan player text against trigger_keywords ───────────────
         # If a keyword matches and we're not in combat, trigger skill test immediately.
-        if not text.startswith("__AI_GM"):
+        # Reading actions (issue #12 BUG-02) bypass this scanner so e.g. "odczytuję napis"
+        # doesn't fire phantom Arkana — system prompt rule handles narration instead.
+        if not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text) and not _is_compound_action(text):
             try:
-                _PL_MAP_PRE = str.maketrans(
-                    "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
-                    "acelnoszzACELNOSZZ"
-                )
-                _txt_pre = text.lower().translate(_PL_MAP_PRE)
+                _txt_pre = _normalize_pl(text)
                 # Combat-class skills (attack / ranged_attack / two_handed) represent
                 # weapon-modifier stats used during real combat resolution, not
                 # standalone skill checks. Their trigger_keywords are combat verbs
@@ -2459,23 +3314,22 @@ def create_turn(
                     "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
                     "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
                 ).fetchall()
-                # Wrap text with spaces for word-boundary matching
-                _txt_padded = " " + _txt_pre + " "
                 _pre_match = None
                 for _kr_pre in _kw_rows_pre:
                     raw_kws = (_kr_pre["trigger_keywords"] or "").replace(",", " ")
                     # Only use keywords ≥5 chars to avoid common particles like "sie", "cel"
-                    _kws_pre = [k.strip().lower().translate(_PL_MAP_PRE)
+                    # K2 fix: use exact word-boundary match (not prefix) so "legend" does
+                    # not match "legendzie", "kronik" doesn't match "kroniki", etc.
+                    _kws_pre = [k.strip().lower().translate(_PL_NORMALIZE)
                                 for k in raw_kws.split()
                                 if k.strip() and len(k.strip()) >= 5]
-                    # Word-boundary match: keyword must appear as a whole word
-                    if any(kw and f" {kw}" in _txt_padded for kw in _kws_pre):
+                    if any(_kw_matches(kw, _txt_pre) for kw in _kws_pre):
                         _pre_match = _kr_pre["key"]
                         break
                 if _pre_match and not is_attack_test(_pre_match):
                     # Check not already in combat
                     _active_combat_pre = conn.execute(
-                        "SELECT id FROM active_combat WHERE campaign_id = ? LIMIT 1",
+                        "SELECT id FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
                         (campaign_id,),
                     ).fetchone()
                     if not _active_combat_pre:
@@ -2502,7 +3356,25 @@ def create_turn(
                             )
                             conn.commit()
                         logger.info("skill_test_triggered_by_keywords", skill=_pre_match, text_snippet=text[:40])
-                        return _with_turn_trace({"skill_test_pending": _pending_pre, "prose": None, "route": "skill_test_keyword"}, turn_id)
+                        # BUG-186: save turn row so turn_number is non-null
+                        _log_pre = create_turn_log(
+                            conn=conn,
+                            campaign_id=campaign_id,
+                            character_id=payload.character_id,
+                            user_text=text,
+                            assistant_text=None,
+                            route="skill_test_keyword",
+                        )
+                        conn.commit()
+                        return _with_turn_trace({
+                            "id": _log_pre["id"],
+                            "campaign_id": _log_pre["campaign_id"],
+                            "turn_number": _log_pre["turn_number"],
+                            "created_at": _log_pre["created_at"],
+                            "skill_test_pending": _pending_pre,
+                            "prose": None,
+                            "route": "skill_test_keyword",
+                        }, turn_id)
             except Exception as _pre_err:
                 logger.warning("pre_llm_keyword_scan_error: %s", str(_pre_err))
 
@@ -2529,6 +3401,30 @@ def create_turn(
             narrative_text = _structured_action_to_tag(text)
             logger.info("structured_action_converted", original=text, converted=narrative_text)
 
+        # ── B3: Gate Mechanic — validate against World State before LLM ─────
+        if not roll_request:
+            try:
+                from app.services.gate_service import validate_action as _gate_validate
+                _gate_result = _gate_validate(campaign_id, narrative_text)
+                if not _gate_result.allowed:
+                    logger.info(
+                        "gate_blocked",
+                        campaign_id=campaign_id,
+                        reason=_gate_result.reason,
+                        action_preview=narrative_text[:60],
+                    )
+                    return _with_turn_trace(
+                        {
+                            "blocked": True,
+                            "feedback": _gate_result.feedback,
+                            "reason": _gate_result.reason,
+                        },
+                        turn_id,
+                    )
+            except Exception as _gate_err:
+                logger.warning("gate_check_error", error=str(_gate_err))
+                # Gate errors must never break the game — fall through to LLM
+
         result = run_narrative_turn(
             conn=conn,
             campaign=campaign,
@@ -2544,11 +3440,43 @@ def create_turn(
         assistant_text = (result.get("message") or "").strip()
         if not assistant_text:
             raise HTTPException(status_code=500, detail="Empty narrative response")
+
+        # Snapshot hex before location intent (for hex_enter encounter trigger)
+        _hex_before_enc = None
+        try:
+            _gs_pre_enc = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+            ).fetchone()
+            if _gs_pre_enc:
+                _sf_pre_enc = json.loads(_gs_pre_enc["session_flags"] or "{}")
+                _hex_before_enc = _sf_pre_enc.get("current_hex")
+        except Exception:
+            _hex_before_enc = None
+
         assistant_text = _process_location_intent(
             conn=conn,
             campaign_id=campaign_id,
             assistant_response=assistant_text,
         )
+
+        # Hex-enter encounter trigger: fire when current_hex changed
+        _hex_after_enc = None
+        try:
+            _gs_post_enc = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+            ).fetchone()
+            if _gs_post_enc:
+                _sf_post_enc = json.loads(_gs_post_enc["session_flags"] or "{}")
+                _hex_after_enc = _sf_post_enc.get("current_hex")
+                if _hex_after_enc and _hex_after_enc != _hex_before_enc:
+                    from app.services.encounter_service import maybe_inject_encounter as _mie
+                    _mie(
+                        conn, campaign_id, "hex_enter",
+                        q=int(_hex_after_enc.get("q", 0)),
+                        r=int(_hex_after_enc.get("r", 0)),
+                    )
+        except Exception as _enc_trigger_err:
+            logger.warning("hex_enter_encounter_trigger_error", error=str(_enc_trigger_err))
 
         # ── [SKILL_TEST:] / [TRAP:] tag interception ─────────────────────────
         _skill_pending_narrator = None
@@ -2613,24 +3541,36 @@ def create_turn(
         clean_assistant = APPLY_CONDITION_RE.sub("", clean_assistant).rstrip()
         clean_assistant = maybe_append_open_shop_fallback(conn, campaign_id, text, clean_assistant)
         _narrative_for_cues, _parsed_json = _extract_narrative_for_cues(clean_assistant)
-        _narrative_for_cues, grant_item_labels, grant_gold_amount, open_shop_npc_key = extract_grant_cues(
-            _narrative_for_cues
-        )
+        (
+            _narrative_for_cues,
+            grant_item_labels,
+            grant_gold_amount,
+            open_shop_npc_key,
+            grant_item_descriptions,
+        ) = extract_grant_cues(_narrative_for_cues)
         # Also check top-level grant_item in parsed JSON — extract_grant_cues only sees
         # the plain narrative text and can't find fields in the outer JSON object.
         if isinstance(_parsed_json, dict):
             _raw_gi_json = _parsed_json.get("grant_item")
-            if isinstance(_raw_gi_json, list):
-                for _x in _raw_gi_json:
-                    _s = str(_x).strip()
-                    if _s and _s not in grant_item_labels:
-                        grant_item_labels.append(_s)
-            elif isinstance(_raw_gi_json, str) and _raw_gi_json.strip():
-                _s = _raw_gi_json.strip()
-                if _s not in grant_item_labels:
-                    grant_item_labels.append(_s)
+            _entries_json: list = (_raw_gi_json if isinstance(_raw_gi_json, list) else [_raw_gi_json]) if _raw_gi_json else []
+            for _x in _entries_json:
+                _entry = _parse_grant_item_entry(_x)
+                if _entry and _entry[0] not in grant_item_labels:
+                    grant_item_labels.append(_entry[0])
+                    grant_item_descriptions[_entry[0]] = _entry[1]
         grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
         clean_assistant = _repack_narrative(clean_assistant, _narrative_for_cues, _parsed_json)
+        # Inject _debug into assistant JSON for frontend debug block
+        _mr = result.get("mechanic_result") if isinstance(result, dict) else None
+        if _mr and isinstance(_mr, dict):
+            try:
+                _dbg_payload = {k: _mr[k] for k in ("roll", "total", "dc", "outcome", "action_type") if k in _mr}
+                _ca_parsed = json.loads(_strip_json_code_fence(clean_assistant))
+                if isinstance(_ca_parsed, dict):
+                    _ca_parsed["_debug"] = _dbg_payload
+                    clean_assistant = json.dumps(_ca_parsed, ensure_ascii=False)
+            except Exception:
+                pass
         validate_roll_cue_name(clean_assistant.strip())
 
         # ── roll_cue skill test intercept ─────────────────────────────────────
@@ -2639,8 +3579,10 @@ def create_turn(
         # Issue #53 fix 3: when LLM emits plain text (no JSON envelope), scan the
         # narrative tail for a trailing "Roll <skill> d20" line — same intercept
         # path, just sourced from raw text instead of the parsed JSON field.
+        # K2 guard: suppress LLM-emitted roll_cue when player asked a question —
+        # questions cannot be action attempts even if the LLM hallucinates a roll.
         _raw_cue = ""
-        if _parsed_json and not _skill_pending_narrator:
+        if _text_is_action_attempt(text) and _parsed_json and not _skill_pending_narrator:
             _raw_cue = str(_parsed_json.get("roll_cue") or "").strip()
         elif not _parsed_json and not _skill_pending_narrator:
             import re as _rc_re_pre
@@ -2678,24 +3620,20 @@ def create_turn(
                     # Both player text and keywords are normalized to ASCII so that
                     # Polish chars (ń→n, ć→c, ę→e, ó→o, ą→a, ł→l, ś→s, ź/ż→z) match.
                     try:
-                        _PL_MAP = str.maketrans(
-                            "ąćęłńóśźżĄĆĘŁŃÓŚŹŻ",
-                            "acelnoszzACELNOSZZ"
-                        )
-                        _txt_norm = (text or "").lower().translate(_PL_MAP)
+                        _txt_norm = _normalize_pl(text or "")
                         # Same combat-class exclusion as the pre-LLM scan above.
                         _kw_rows = conn.execute(
                             "SELECT key, trigger_keywords FROM game_config_skills "
                             "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
                             "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
                         ).fetchall()
-                        _txt_norm_padded = " " + _txt_norm + " "
                         for _kr in _kw_rows:
                             _raw_kws = (_kr["trigger_keywords"] or "").replace(",", " ")
-                            _kws = [k.strip().lower().translate(_PL_MAP)
+                            # K2 fix: exact word boundary, same as pre-LLM scanner
+                            _kws = [k.strip().lower().translate(_PL_NORMALIZE)
                                     for k in _raw_kws.split()
                                     if k.strip() and len(k.strip()) >= 5]
-                            if any(kw and f" {kw}" in _txt_norm_padded for kw in _kws):
+                            if any(_kw_matches(kw, _txt_norm) for kw in _kws):
                                 _canonical = _kr["key"]
                                 break
                     except Exception as _kw_err:
@@ -2745,6 +3683,7 @@ def create_turn(
             import re as _xs_re
             from app.services.xp_sources import (
                 process_narrative_xp_tags,
+                strip_narrative_tags,
                 grant_first_location_visit,
                 grant_first_npc_talk,
                 grant_session_start,
@@ -2788,6 +3727,15 @@ def create_turn(
         except Exception as _xs_err:
             logger.warning("narrative_xp_hooks_error", error=str(_xs_err))
 
+        # Strip GM-only directive tags from player-visible text after XP processing
+        try:
+            from app.services.xp_sources import strip_narrative_tags as _strip_tags
+            _narrative_part, _parsed_part = _extract_narrative_for_cues(clean_assistant)
+            _stripped = _strip_tags(_narrative_part)
+            clean_assistant = _repack_narrative(clean_assistant, _stripped, _parsed_part)
+        except Exception as _strip_err:
+            logger.warning("narrative_tag_strip_error", error=str(_strip_err))
+
         log = create_turn_log(
             conn=conn,
             campaign_id=campaign_id,
@@ -2805,6 +3753,7 @@ def create_turn(
             assistant_text=clean_assistant,
         )
         for _gil in grant_item_labels:
+            _gil_desc = grant_item_descriptions.get(_gil)
             _resolved = _resolve_grant_catalog_item(conn, _gil)
             if _resolved:
                 from app.services.loot_service import grant_loot_to_character
@@ -2819,6 +3768,7 @@ def create_turn(
             else:
                 _grant_narrative_item_to_inventory(conn, character_id=payload.character_id,
                                                    label=_gil, source="gm",
+                                                   description=_gil_desc,
                                                    given_at=f"turn:{log['turn_number']}")
         if grant_item_labels:
             conn.commit()
@@ -2837,12 +3787,56 @@ def create_turn(
                 new_total_gp=new_total,
             )
 
+        # N-turns encounter trigger: every 5 peaceful turns since last combat
+        try:
+            _n_turns_interval = 5
+            _last_combat_turn = conn.execute(
+                "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns WHERE campaign_id=? AND route='combat'",
+                (campaign_id,),
+            ).fetchone()[0]
+            _peaceful_since = conn.execute(
+                "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id=? AND turn_number > ? AND route != 'combat'",
+                (campaign_id, _last_combat_turn),
+            ).fetchone()[0]
+            if _peaceful_since > 0 and _peaceful_since % _n_turns_interval == 0:
+                from app.services.encounter_service import maybe_inject_encounter as _mie2
+                _gs_nturn = conn.execute(
+                    "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1", (campaign_id,)
+                ).fetchone()
+                if _gs_nturn:
+                    _sf_nturn = json.loads(_gs_nturn["session_flags"] or "{}")
+                    _hex_nturn = _sf_nturn.get("current_hex")
+                    _mie2(
+                        conn, campaign_id, "n_turns",
+                        q=int(_hex_nturn.get("q", 0)) if _hex_nturn else None,
+                        r=int(_hex_nturn.get("r", 0)) if _hex_nturn else None,
+                    )
+        except Exception as _n_enc_err:
+            logger.warning("n_turns_encounter_trigger_error", error=str(_n_enc_err))
+
+        # Issue #135 — inject [COMBAT_START] when player declared attack but
+        # LLM omitted the tag. Keeps combat engine engaged in Polish narrative mode.
+        assistant_text = _ensure_combat_start_tag(conn, campaign_id, text, assistant_text)
+
         new_combat = _maybe_start_combat_from_gm_tag(
             campaign_id, payload.character_id, assistant_text
         )
         combat_extra = None
         if combat_was_active and not new_combat:
             combat_extra = _maybe_advance_combat_after_player_narrative(campaign_id)
+
+        # Extract travel_hint from JSON field (preferred) or legacy [TRAVEL_HINT:] tag
+        import re as _re
+        _travel_hint_label: str | None = None
+        if isinstance(_parsed_json, dict):
+            _th = _parsed_json.get("travel_hint")
+            if _th and isinstance(_th, str):
+                _travel_hint_label = _th.strip()
+        if not _travel_hint_label:
+            _travel_hint_match = _re.search(r'\[TRAVEL_HINT:([^\]]+)\]', clean_assistant or '')
+            if _travel_hint_match:
+                _travel_hint_label = _travel_hint_match.group(1).strip()
+                clean_assistant = _re.sub(r'\s*\[TRAVEL_HINT:[^\]]+\]', '', clean_assistant).strip()
 
         result_out = (
             {**result, "message": clean_assistant} if isinstance(result, dict) else result
@@ -2875,6 +3869,7 @@ def create_turn(
                 game_state=_game_state_for_sa,
                 session_flags=_sf_for_sa,
                 llm_suggested=_llm_suggested,
+                travel_hint=_travel_hint_label,
             )
         except Exception as _sa_err:
             logger.warning("suggested_actions_build_error", error=str(_sa_err))
@@ -2898,8 +3893,19 @@ def create_turn(
             out.update(combat_extra)
         if open_shop_npc_key:
             out["open_shop"] = open_shop_npc_key
+        # Hex travel signal: frontend uses this to auto-update map pin
+        if _hex_after_enc and _hex_before_enc and _hex_after_enc != _hex_before_enc:
+            out["hex_changed"] = {"from": _hex_before_enc, "to": _hex_after_enc}
         if _dungeon_clear_result:
             out["dungeon_cleared"] = _dungeon_clear_result
+
+        # B5: auto-save World State snapshot after each narrative turn
+        try:
+            from app.services.world_state_service import auto_save_snapshot as _ws_snap
+            _ws_snap(campaign_id)
+        except Exception as _ws_err:
+            logger.warning("world_state_snapshot_error", error=str(_ws_err))
+
         return out
 
     except RuntimeError as e:
@@ -3128,6 +4134,28 @@ def create_turn_stream(
                     character_row=character,
                     death_reason=dr,
                 )
+                # J2: write history row + queue chapter summary generation
+                try:
+                    from app.services.chapter_summary_service import close_campaign_with_summary
+                    _ch_sheet = json.loads(character["sheet_json"] or "{}")
+                    _ch_xp = int(_ch_sheet.get("xp_lifetime_earned") or 0)
+                    _ch_gold = int(_ch_sheet.get("gold_gp") or _ch_sheet.get("gold") or 0)
+                    _ch_turns = conn.execute(
+                        "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ? AND route = 'narrative'",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    close_campaign_with_summary(
+                        conn,
+                        campaign_id=campaign_id,
+                        character_id=int(payload.character_id),
+                        outcome="death",
+                        user_id=int(character["user_id"]),
+                        xp_earned=_ch_xp,
+                        gold_at_end=_ch_gold,
+                        turns_count=int(_ch_turns or 0),
+                    )
+                except Exception as _j2_err:
+                    logger.warning("j2_death_history_failed_stream", error=str(_j2_err))
                 user_line = user_text_stored if roll_request else (roll_result_message or text)
                 log = create_turn_log(
                     conn=conn,
@@ -3160,7 +4188,23 @@ def create_turn_stream(
         # Commands are not streamed (except /roll, which is turned into a narrative input)
         if text.startswith("/") and not roll_request:
             cmd = text.split(" ", 1)[0].lower()
-            sk_stream = slash_registry_key_for_dispatch(text)
+            _is_admin_stream = False
+            try:
+                _ur = conn.execute(
+                    "SELECT COALESCE(is_admin, 0) AS is_admin FROM users WHERE id = ? LIMIT 1",
+                    (character["user_id"],),
+                ).fetchone()
+                _is_admin_stream = bool(_ur and int(_ur["is_admin"] or 0))
+            except Exception:
+                pass
+            sk_stream = slash_registry_key_for_dispatch(text, is_admin=_is_admin_stream)
+            # Alias support: rewrite cmd + text to canonical first-token
+            if sk_stream:
+                _canon_s = sk_stream.split(" ", 1)[0].lower()
+                if _canon_s != cmd:
+                    rest_s = text[len(cmd):]
+                    text = _canon_s + rest_s
+                    cmd = _canon_s
             if (
                 sk_stream
                 and not is_slash_command_enabled(sk_stream)
@@ -3218,6 +4262,64 @@ def create_turn_stream(
                     headers=stream_headers,
                 )
 
+            # /quest — list player's active quests
+            if cmd == "/quest":
+                route_cmd = "command"
+                quest_rows = []
+                try:
+                    quest_rows = conn.execute(
+                        """
+                        SELECT id, quest_type, title, narrative, status, created_turn
+                        FROM character_quests
+                        WHERE character_id = ? AND campaign_id = ? AND status = 'active'
+                        ORDER BY created_turn DESC, id DESC
+                        """,
+                        (payload.character_id, campaign_id),
+                    ).fetchall()
+                except Exception:
+                    quest_rows = []
+                quests = []
+                for r in quest_rows:
+                    narr = str(r["narrative"] or "").strip()
+                    if len(narr) > 220:
+                        narr = narr[:217].rstrip() + "…"
+                    quests.append({
+                        "id": int(r["id"]),
+                        "type": str(r["quest_type"] or "main"),
+                        "title": str(r["title"] or ""),
+                        "narrative": narr,
+                        "created_turn": r["created_turn"],
+                    })
+                if quests:
+                    lines = [f"📜 **Aktywne zadania** ({len(quests)}):", ""]
+                    for q in quests:
+                        type_badge = "⚔" if q["type"] == "main" else "•"
+                        lines.append(f"{type_badge} **{q['title']}**")
+                        if q["narrative"]:
+                            lines.append(f"  {q['narrative']}")
+                        lines.append("")
+                    message = "\n".join(lines).rstrip()
+                else:
+                    message = "📜 Brak aktywnych zadań."
+                result = {"command": "quest", "quests": quests, "message": message}
+                log = create_turn_log(
+                    conn=conn, campaign_id=campaign_id, character_id=payload.character_id,
+                    user_text=text, assistant_text=json.dumps(result, ensure_ascii=False),
+                    route=route_cmd,
+                )
+                outer = _with_turn_trace({**log, "route": "command", "result": result}, turn_id)
+                outer_json = json.dumps(outer, ensure_ascii=False)
+
+                def quest_cmd_stream():
+                    yield f"data: [CMD_JSON]{outer_json}\n\n"
+                    yield "data: [DONE]\n\n"
+
+                return StreamingResponse(
+                    quest_cmd_stream(),
+                    media_type="text/event-stream",
+                    headers=stream_headers,
+                )
+
             def command_stream():
                 yield f"data: [CMD] {text}\n\n"
                 yield "data: [DONE]\n\n"
@@ -3226,6 +4328,78 @@ def create_turn_stream(
                 media_type="text/event-stream",
                 headers=stream_headers,
             )
+
+        # ── Pre-LLM keyword scan (streaming endpoint) ────────────────────────
+        # Mirror of the same scanner in create_turn(); fires before the LLM
+        # call so exploration actions that match trigger_keywords get a dice
+        # prompt immediately instead of going straight to narrative.
+        # Reading-context guard (issue #12 BUG-02) — see _is_reading_context().
+        if not roll_request and not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text) and not _is_compound_action(text):
+            try:
+                _txt_s = _normalize_pl(text)
+                _kw_rows_s = conn.execute(
+                    "SELECT key, trigger_keywords FROM game_config_skills "
+                    "WHERE trigger_keywords IS NOT NULL AND trigger_keywords != '' "
+                    "AND key NOT IN ('attack', 'ranged_attack', 'two_handed', 'melee_attack', 'spell_attack', 'initiative')"
+                ).fetchall()
+                _pre_match_s = None
+                for _kr_s in _kw_rows_s:
+                    raw_kws_s = (_kr_s["trigger_keywords"] or "").replace(",", " ")
+                    # K2 fix: exact word-boundary match (not prefix) — "legend" ≠ "legendzie"
+                    _kws_s = [k.strip().lower().translate(_PL_NORMALIZE)
+                              for k in raw_kws_s.split()
+                              if k.strip() and len(k.strip()) >= 5]
+                    if any(_kw_matches(kw, _txt_s) for kw in _kws_s):
+                        _pre_match_s = _kr_s["key"]
+                        break
+                if _pre_match_s and not is_attack_test(_pre_match_s):
+                    _active_combat_s = conn.execute(
+                        "SELECT id FROM active_combat WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+                        (campaign_id,),
+                    ).fetchone()
+                    if not _active_combat_s:
+                        from app.services.skill_service import calc_skill_modifier_info, _skill_label, _get_counter
+                        import uuid as _uuid_s
+                        _char_sh_s = json.loads(character["sheet_json"] or "{}")
+                        _pending_s = {
+                            "skill_test_id": f"st-{_uuid_s.uuid4().hex[:8]}",
+                            "skill_key": _pre_match_s,
+                            "skill_label": _skill_label(_pre_match_s),
+                            "counter": _get_counter(conn, _pre_match_s),
+                            "modifier_breakdown": calc_skill_modifier_info(_char_sh_s, _pre_match_s),
+                        }
+                        gs_row_s = conn.execute(
+                            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                            (campaign_id,),
+                        ).fetchone()
+                        if gs_row_s:
+                            _sf_s = json.loads(gs_row_s["session_flags"] or "{}")
+                            _sf_s = _commit_pending_skill_test(_pending_s, _sf_s)
+                            conn.execute(
+                                "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                                (json.dumps(_sf_s, ensure_ascii=False), campaign_id),
+                            )
+                            conn.commit()
+                        logger.info("skill_test_triggered_by_keywords_stream", skill=_pre_match_s, text_snippet=text[:40])
+                        _done_kw = json.dumps({"skill_test_pending": _pending_s}, ensure_ascii=False)
+
+                        # B5: auto-save World State snapshot on skill test trigger
+                        try:
+                            from app.services.world_state_service import auto_save_snapshot as _ws_snap_kw
+                            _ws_snap_kw(campaign_id)
+                        except Exception as _ws_kw_err:
+                            logger.warning("world_state_snapshot_kw_error", error=str(_ws_kw_err))
+
+                        def _skill_kw_stream():
+                            yield f"data: [DONE]{_done_kw}\n\n"
+
+                        return StreamingResponse(
+                            _skill_kw_stream(),
+                            media_type="text/event-stream",
+                            headers=stream_headers,
+                        )
+            except Exception as _pre_err_s:
+                logger.warning("pre_llm_keyword_scan_stream_error: %s", str(_pre_err_s))
 
         _require_gm_plan_before_narrative_llm(conn, campaign_id, campaign)
 
@@ -3344,6 +4518,8 @@ def create_turn_stream(
                         user_text=user_text_val,
                         assistant_text=clean_text,
                     )
+                    # Issue #135 — inject [COMBAT_START] when player attacked but LLM omitted it.
+                    clean_text = _ensure_combat_start_tag(save_conn, campaign_id_val, user_text_val, clean_text)
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, clean_text
                     )
@@ -3441,6 +4617,7 @@ def create_turn_stream(
                 hook_conn.close()
             new_combat = None
             combat_extra = None
+            _npc_dialogue_key = None
             if full_raw.strip():
                 clean_text = COMBAT_START_RE.sub("", full_raw).rstrip()
                 # Stage 3 Z4 — apply + strip [APPLY_CONDITION:condition_key:enemy_key]
@@ -3468,21 +4645,26 @@ def create_turn_stream(
                     grant_item_labels,
                     grant_gold_amount,
                     open_shop_npc_key,
+                    grant_item_descriptions,
                 ) = extract_grant_cues(_narrative_for_cues_s)
                 # Also check top-level grant_item in parsed JSON (same fix as non-streaming path)
                 if isinstance(_parsed_json_s, dict):
                     _raw_gi_s = _parsed_json_s.get("grant_item")
-                    if isinstance(_raw_gi_s, list):
-                        for _xs in _raw_gi_s:
-                            _ss = str(_xs).strip()
-                            if _ss and _ss not in grant_item_labels:
-                                grant_item_labels.append(_ss)
-                    elif isinstance(_raw_gi_s, str) and _raw_gi_s.strip():
-                        _ss = _raw_gi_s.strip()
-                        if _ss not in grant_item_labels:
-                            grant_item_labels.append(_ss)
+                    _entries_s: list = (_raw_gi_s if isinstance(_raw_gi_s, list) else [_raw_gi_s]) if _raw_gi_s else []
+                    for _xs in _entries_s:
+                        _entry_s = _parse_grant_item_entry(_xs)
+                        if _entry_s and _entry_s[0] not in grant_item_labels:
+                            grant_item_labels.append(_entry_s[0])
+                            grant_item_descriptions[_entry_s[0]] = _entry_s[1]
                 grant_item_label = grant_item_labels[0] if grant_item_labels else None  # compat
                 clean_text = _repack_narrative(clean_text, _narrative_for_cues_s, _parsed_json_s)
+                # Strip GM-only directive tags before saving (XP already processed from full_raw)
+                try:
+                    from app.services.xp_sources import strip_narrative_tags as _strip_tags_s
+                    _narr_s, _pjson_s2 = _extract_narrative_for_cues(clean_text)
+                    clean_text = _repack_narrative(clean_text, _strip_tags_s(_narr_s), _pjson_s2)
+                except Exception as _ste:
+                    logger.warning("narrative_tag_strip_stream_error", error=str(_ste))
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(
@@ -3516,7 +4698,74 @@ def create_turn_stream(
                         user_text=user_text_val,
                         assistant_text=clean_text,
                     )
+                    # ── Streaming: [SKILL_TEST] tag + roll_cue intercept ──────────
+                    # The non-streaming path calls intercept_skill_test_tag here.
+                    # Streaming never did — so roll_cue/[SKILL_TEST] in LLM JSON
+                    # responses silently fell through with no dice popup. (#237)
+                    try:
+                        from app.services.skill_service import (
+                            intercept_skill_test_tag as _ists,
+                            calc_skill_modifier_info as _csmi,
+                            _skill_label as _sl,
+                            _get_counter as _gc,
+                        )
+                        import uuid as _uuid_s
+                        _char_sh_s = json.loads(character["sheet_json"] or "{}")
+                        _sk_pending_s = None
+                        # 1) [SKILL_TEST:key:DC] tag in narrative
+                        _clean_after_tag, _sk_pending_s = _ists(
+                            clean_text,
+                            conn=save_conn,
+                            campaign_id=campaign_id_val,
+                            character_id=character_id_val,
+                            user_text=user_text_val,
+                        )
+                        # 2) roll_cue in parsed JSON (if tag intercept didn't fire)
+                        if not _sk_pending_s and _parsed_json_s and _text_is_action_attempt(user_text_val):
+                            _raw_cue_s = str(_parsed_json_s.get("roll_cue") or "").strip()
+                            if _raw_cue_s:
+                                import re as _rc_re_s
+                                _cm_s = _rc_re_s.match(r"^Roll (.+?) d\d+$", _raw_cue_s, _rc_re_s.IGNORECASE)
+                                if _cm_s:
+                                    _cue_name_s = _cm_s.group(1).strip()
+                                    _canonical_s = resolve_test_name(_cue_name_s)
+                                    if _canonical_s is None:
+                                        _norm_s = _cue_name_s.lower().replace(" ", "_")
+                                        _cue_db_s = save_conn.execute(
+                                            "SELECT key FROM game_config_skills WHERE key = ? LIMIT 1",
+                                            (_norm_s,),
+                                        ).fetchone()
+                                        if _cue_db_s:
+                                            _canonical_s = _norm_s
+                                    if _canonical_s and not is_attack_test(_canonical_s) and not _is_combat_class_skill(_canonical_s):
+                                        _sk_pending_s = {
+                                            "skill_test_id": f"st-{_uuid_s.uuid4().hex[:8]}",
+                                            "skill_key": _canonical_s,
+                                            "skill_label": _sl(_canonical_s),
+                                            "counter": _gc(save_conn, _canonical_s),
+                                            "modifier_breakdown": _csmi(_char_sh_s, _canonical_s),
+                                        }
+                        if _sk_pending_s and not _is_combat_class_skill(_sk_pending_s.get("skill_key", "")):
+                            _gs_st_s = save_conn.execute(
+                                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                                (campaign_id_val,),
+                            ).fetchone()
+                            if _gs_st_s:
+                                _sf_st_s = json.loads(_gs_st_s["session_flags"] or "{}")
+                                _sf_st_s = _commit_pending_skill_test(_sk_pending_s, _sf_st_s)
+                                save_conn.execute(
+                                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                                    (json.dumps(_sf_st_s, ensure_ascii=False), campaign_id_val),
+                                )
+                                save_conn.commit()
+                                logger.info("stream_skill_test_pending_set",
+                                            skill=_sk_pending_s.get("skill_key"),
+                                            campaign_id=campaign_id_val)
+                    except Exception as _sks_err:
+                        logger.warning("stream_skill_test_intercept_error", error=str(_sks_err))
+                    # ──────────────────────────────────────────────────────────────
                     for _gil in grant_item_labels:
+                        _gil_desc_s = grant_item_descriptions.get(_gil)
                         _resolved = _resolve_grant_catalog_item(save_conn, _gil)
                         if _resolved:
                             from app.services.loot_service import grant_loot_to_character
@@ -3531,6 +4780,7 @@ def create_turn_stream(
                         else:
                             _grant_narrative_item_to_inventory(
                                 save_conn, character_id=character_id_val, label=_gil, source="gm",
+                                description=_gil_desc_s,
                                 given_at=f"turn:{stream_log['turn_number']}")
                     if grant_item_labels:
                         save_conn.commit()
@@ -3567,8 +4817,9 @@ def create_turn_stream(
                         _xp_total2 += grant_session_start(save_conn, _xp_char_id2, campaign_id_val, _xp_turn2)
                         _dlg_m2 = _xs_re2.match(r"^DIALOGUE:(.+)$", (user_text_val or "").strip(), _xs_re2.I)
                         if _dlg_m2:
+                            _npc_dialogue_key = _dlg_m2.group(1).strip()
                             _xp_total2 += grant_first_npc_talk(
-                                save_conn, _xp_char_id2, campaign_id_val, _dlg_m2.group(1).strip(), _xp_turn2
+                                save_conn, _xp_char_id2, campaign_id_val, _npc_dialogue_key, _xp_turn2
                             )
                         for _bm2 in _xs_re2.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", full_raw or "", _xs_re2.I):
                             _xp_total2 += grant_beat_complete(save_conn, _xp_char_id2, campaign_id_val, _bm2.group(1), _xp_turn2)
@@ -3590,6 +4841,57 @@ def create_turn_stream(
                             save_conn.commit()
                     except Exception as _xs_err2:
                         logger.warning("narrative_xp_hooks_stream_error", error=str(_xs_err2))
+                    # BUG-04 (stream): parse gm_note / scene_advance / gm_plan_update
+                    try:
+                        from app.services.gm_plan_schema import normalize_gm_plan
+                        _pdata4 = json.loads(_strip_json_code_fence(persisted_assistant_text or ""))
+                        if isinstance(_pdata4, dict):
+                            _gm_note4 = str(_pdata4.get("gm_note") or "").strip()
+                            _scene_advance4 = bool(_pdata4.get("scene_advance"))
+                            _plan_update4 = _pdata4.get("gm_plan_update")
+                            if _gm_note4 or _scene_advance4 or isinstance(_plan_update4, dict):
+                                _turn_num4 = save_conn.execute(
+                                    "SELECT COALESCE(MAX(turn_number),1) FROM campaign_turns WHERE campaign_id=?",
+                                    (campaign_id_val,),
+                                ).fetchone()[0]
+                                _camp_row4 = save_conn.execute(
+                                    "SELECT gm_plan_json FROM campaigns WHERE id = ?",
+                                    (campaign_id_val,),
+                                ).fetchone()
+                                _plan4 = normalize_gm_plan(_camp_row4["gm_plan_json"] if _camp_row4 else None)
+                                _ep4 = dict(_plan4.get("engine_private") or {})
+                                if _gm_note4:
+                                    _buf4 = list(_ep4.get("gm_note_buffer") or [])
+                                    _buf4.append({"turn": _turn_num4, "note": _gm_note4})
+                                    if len(_buf4) > 30:
+                                        _buf4 = _buf4[-30:]
+                                    _ep4["gm_note_buffer"] = _buf4
+                                if _scene_advance4:
+                                    _aa4 = _plan4.get("active_arc_id")
+                                    if _aa4 and isinstance(_plan4.get("arcs"), dict) and _aa4 in _plan4["arcs"]:
+                                        _plan4["arcs"][_aa4]["current_scene_ordinal"] = (
+                                            int(_plan4["arcs"][_aa4].get("current_scene_ordinal") or 0) + 1
+                                        )
+                                if isinstance(_plan_update4, dict):
+                                    _aa4 = _plan4.get("active_arc_id")
+                                    if _aa4 and isinstance(_plan4.get("arcs"), dict) and _aa4 in _plan4["arcs"]:
+                                        for _k4, _v4 in _plan_update4.items():
+                                            if _k4 in ("goal", "hooks", "notes") and _v4:
+                                                _plan4["arcs"][_aa4][_k4] = _v4
+                                _plan4["engine_private"] = _ep4
+                                save_conn.execute(
+                                    "UPDATE campaigns SET gm_plan_json=? WHERE id=?",
+                                    (json.dumps(_plan4, ensure_ascii=False), campaign_id_val),
+                                )
+                                save_conn.commit()
+                                logger.info("gm_note_buffer_updated_stream",
+                                            campaign_id=campaign_id_val,
+                                            note_len=len(_gm_note4),
+                                            scene_advance=_scene_advance4)
+                    except Exception as _gm4_err:
+                        logger.warning("gm_note_stream_error", error=str(_gm4_err))
+                    # Issue #135 — fallback inject for streaming narrative path too.
+                    full_raw = _ensure_combat_start_tag(save_conn, campaign_id_val, user_text_val, full_raw)
                     new_combat = _maybe_start_combat_from_gm_tag(
                         campaign_id_val, character_id_val, full_raw
                     )
@@ -3638,10 +4940,78 @@ def create_turn_stream(
                             done_payload["skill_test_pending"] = _sf_done["pending_skill_test"]
                         if _sf_done.get("state"):
                             done_payload["state"] = _sf_done["state"]
+                    # T38: signal victory when [CAMPAIGN_END] tag fired this turn
+                    _camp_row = _sf_done_conn.execute(
+                        "SELECT status FROM campaigns WHERE id = ? LIMIT 1",
+                        (campaign_id_val,),
+                    ).fetchone()
+                    if _camp_row and str(_camp_row["status"] or "").lower() in ("completed", "ended"):
+                        done_payload["campaign_ended"] = True
+                    # BUG-02: include current clock so frontend updates immediately
+                    try:
+                        from app.services.clock_service import get_clock_state as _gcs
+                        done_payload["clock"] = _gcs(campaign_id_val, conn=_sf_done_conn)
+                    except Exception:
+                        pass
                 finally:
                     _sf_done_conn.close()
             except Exception:
                 pass
+            if _npc_dialogue_key:
+                try:
+                    _npc_img_conn = sqlite3.connect(DB_PATH)
+                    _npc_img_conn.row_factory = sqlite3.Row
+                    try:
+                        _npc_img_row = _npc_img_conn.execute(
+                            "SELECT key, label, image_url FROM npcs WHERE key = ? AND is_active = 1 LIMIT 1",
+                            (_npc_dialogue_key,),
+                        ).fetchone()
+                        if _npc_img_row and _npc_img_row["image_url"]:
+                            yield f"data: [NPC_INTERACTION]{json.dumps({'key': _npc_img_row['key'], 'label': _npc_img_row['label'], 'image_url': _npc_img_row['image_url']}, ensure_ascii=False)}\n\n"
+                    finally:
+                        _npc_img_conn.close()
+                except Exception:
+                    pass
+            # T33: build suggested actions and include in DONE payload
+            try:
+                _sa_conn = sqlite3.connect(DB_PATH)
+                _sa_conn.row_factory = sqlite3.Row
+                try:
+                    _sf_sa: dict = {}
+                    _sf_sa_row = _sa_conn.execute(
+                        "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+                        (campaign_id_val,),
+                    ).fetchone()
+                    if _sf_sa_row:
+                        _sf_sa = json.loads(_sf_sa_row["session_flags"] or "{}")
+                    _gs_sa = _sf_sa.get("state", "NARRATIVE")
+                    if new_combat:
+                        _gs_sa = "COMBAT"
+                    _llm_sa_s: list[dict] | None = None
+                    _pjson_sa = locals().get("_parsed_json_s")
+                    if isinstance(_pjson_sa, dict):
+                        _raw_sa = _pjson_sa.get("suggested_actions")
+                        if isinstance(_raw_sa, list):
+                            _llm_sa_s = _raw_sa
+                    done_payload["suggested_actions"] = build_suggested_actions(
+                        conn=_sa_conn,
+                        campaign_id=campaign_id_val,
+                        character_id=character_id_val,
+                        game_state=_gs_sa,
+                        session_flags=_sf_sa,
+                        llm_suggested=_llm_sa_s,
+                    )
+                finally:
+                    _sa_conn.close()
+            except Exception:
+                pass
+            # B5: auto-save World State snapshot after each streaming narrative turn
+            try:
+                from app.services.world_state_service import auto_save_snapshot as _ws_snap_s
+                _ws_snap_s(campaign_id_val)
+            except Exception as _ws_err_s:
+                logger.warning("world_state_snapshot_stream_error", error=str(_ws_err_s))
+
             yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
         return StreamingResponse(
@@ -3846,6 +5216,26 @@ def resolve_skill_test_endpoint(
         elif result.get("nat1"):
             nat_instruction = "To był fumble — wprowadź komplikację, która stworzy przyszłe napięcie."
 
+        # Inject in-game clock context so narrator matches actual time of day (#240)
+        clock_hint = ""
+        try:
+            from app.services.clock_service import get_clock_state as _get_clock
+            _clock = _get_clock(campaign_id, conn=conn)
+            _hours = int(_clock.get("ingame_hours", 9) or 9)
+            _mins = int(_clock.get("ingame_minutes", 0) or 0)
+            _day = (_hours // 24) + 1
+            _h = _hours % 24
+            _hour_str = f"{_h:02d}:{_mins:02d}"
+            if 5 <= _h < 9: _period = "świt"
+            elif 9 <= _h < 13: _period = "rano"
+            elif 13 <= _h < 17: _period = "południe"
+            elif 17 <= _h < 20: _period = "popołudnie"
+            elif 20 <= _h < 23: _period = "zmierzch"
+            else: _period = "noc"
+            clock_hint = f"[CZAS GRY] Dzień {_day}, {_hour_str} — {_period}. pora dnia MUSI być odzwierciedlona w narracji. "
+        except Exception:
+            pass
+
         # Stage 3 Z4 — stealth flavour hint when zaskoczony just applied
         stealth_hint = ""
         if _stealth_applied:
@@ -3861,9 +5251,12 @@ def resolve_skill_test_endpoint(
 
         narrator_prompt = (
             f"{skill_ctx}\n\n"
+            f"{clock_hint}"
             f"Napisz narrację wyniku testu umiejętności po polsku. "
             f"60-90 słów. Klimat dark fantasy. Nie wymieniaj liczb ani kości. "
             f"{nat_instruction}{stealth_hint}"
+            f" ZAKAZANE: Nie używaj tagów [SKILL_TEST], [TRAP], roll_cue ani żadnych"
+            f" znaczników mechanicznych — to jest wyłącznie narracja wyniku, nie nowy test."
         )
         try:
             prose_raw = _gen_chat(
@@ -3883,8 +5276,23 @@ def resolve_skill_test_endpoint(
                 logger.info("skill_test_narrator_fallback_ok")
             except Exception as e2:
                 logger.warning("skill_test_narrator_fallback_error", error=str(e2))
-                outcome = result.get("outcome", "")
-                prose_raw = "Sukces!" if "SUCCESS" in outcome else "Niepowodzenie."
+                prose_raw = ""
+
+        # Guard: if LLM returned None or empty (no exception raised), use a minimal
+        # outcome line so the frontend always has prose to display. (#236)
+        if not prose_raw.strip():
+            _outcome_str = result.get("outcome", "")
+            _skill_lbl = pending.get("skill_label") or pending.get("skill_key") or "Test"
+            if result.get("nat20"):
+                prose_raw = f"{_skill_lbl} — wyjątkowy sukces!"
+            elif result.get("nat1"):
+                prose_raw = f"{_skill_lbl} — fumble."
+            elif "SUCCESS" in _outcome_str:
+                prose_raw = f"{_skill_lbl} — sukces."
+            else:
+                prose_raw = f"{_skill_lbl} — niepowodzenie."
+            logger.warning("skill_test_narrator_empty_fallback",
+                           campaign_id=campaign_id, outcome=_outcome_str)
 
         prose, _ = _proc_tags(prose_raw, conn, campaign_id)
 
@@ -3905,8 +5313,19 @@ def resolve_skill_test_endpoint(
         else:
             _outcome = "Porażka"
         _sign = "+" if _mod >= 0 else "−"
+        # For opposed checks, append the opponent's result so the player knows why they succeeded/failed
+        _opp_roll = result.get("opponent_roll")
+        _opp_total = result.get("opponent_total")
+        _counter = pending.get("counter", {})
+        if _counter.get("counter_type") == "opposed" and _opp_roll is not None:
+            _opp_key = _counter.get("counter_key", "przeciwnik")
+            _opp_mod = (_opp_total or 0) - _opp_roll
+            _opp_sign = "+" if _opp_mod >= 0 else "−"
+            _opp_suffix = f" vs {_opp_key}: {_opp_roll} {_opp_sign}{abs(_opp_mod)} = {_opp_total}"
+        else:
+            _opp_suffix = ""
         _persisted_roll = (
-            f"[Rzut: {skill_label} — {payload.d20_roll} {_sign}{abs(_mod)} = {_total} — {_outcome}]"
+            f"[Rzut: {skill_label} — {committed} {_sign}{abs(_mod)} = {_total}{_opp_suffix} — {_outcome}]"
         )
         conn.execute(
             """INSERT INTO campaign_turns
@@ -3937,6 +5356,13 @@ def resolve_skill_test_endpoint(
         char_sheet = _json.loads((char_state_row[0] if char_state_row else None) or "{}")
         current_loc = get_current_location_info(conn, campaign_id)
 
+        # B5: auto-save World State snapshot after skill test resolves
+        try:
+            from app.services.world_state_service import auto_save_snapshot as _ws_snap_st
+            _ws_snap_st(campaign_id)
+        except Exception as _ws_err_st:
+            logger.warning("world_state_snapshot_skilltest_error", error=str(_ws_err_st))
+
         return {
             "prose": prose,
             "skill_test_result": result,
@@ -3954,7 +5380,7 @@ def resolve_skill_test_endpoint(
 # ── Player World Map — Task 43 ────────────────────────────────────────────────
 
 @router.get("/campaigns/{campaign_id}/world-map")
-def get_campaign_world_map(campaign_id: int, character_id: int = 0):
+def get_campaign_world_map(campaign_id: int, character_id: int = 0, parent_q: int = None, parent_r: int = None):
     """
     Player-facing hex world map with fog of war.
     Returns only discovered hexes + empty outlines for adjacent unvisited.
@@ -3967,6 +5393,47 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0):
     conn = _sq.connect(DB_PATH)
     conn.row_factory = _sq.Row
     try:
+        # Local submap mode — return all hexes for a specific city/castle
+        if parent_q is not None and parent_r is not None:
+            parent = conn.execute(
+                "SELECT id, hex_type, label FROM world_hexes WHERE q = ? AND r = ? AND map_level = 0 LIMIT 1",
+                (parent_q, parent_r),
+            ).fetchone()
+            if not parent:
+                return {"hexes": [], "teleport_connections": [], "current_hex": None, "hex_types": {}, "local_mode": True, "parent_label": None}
+            parent_id = parent["id"]
+            local_hexes_rows = conn.execute(
+                "SELECT q, r, hex_type, label, atmosphere FROM world_hexes WHERE parent_hex_id = ? AND map_level = 1 AND is_active = 1",
+                (parent_id,),
+            ).fetchall()
+            # Auto-generate local submap on first zoom into a town/castle
+            if not local_hexes_rows and parent["hex_type"] in ("town", "castle"):
+                try:
+                    from app.routers.hex_world import _auto_generate_local_hexes
+                    _auto_generate_local_hexes(conn, parent_q, parent_r)
+                    local_hexes_rows = conn.execute(
+                        "SELECT q, r, hex_type, label, atmosphere FROM world_hexes WHERE parent_hex_id = ? AND map_level = 1 AND is_active = 1",
+                        (parent_id,),
+                    ).fetchall()
+                except Exception:
+                    pass
+            local_hexes = [
+                {"q": row["q"], "r": row["r"], "hex_type": row["hex_type"],
+                 "label": row["label"], "status": "discovered"}
+                for row in local_hexes_rows
+            ]
+            hex_types = {r["hex_type"]: dict(r) for r in conn.execute(
+                "SELECT hex_type, label, map_color, map_icon FROM hex_type_config WHERE is_active = 1"
+            ).fetchall()}
+            return {
+                "hexes": local_hexes,
+                "teleport_connections": [],
+                "current_hex": None,
+                "hex_types": hex_types,
+                "local_mode": True,
+                "parent_label": parent["label"] or f"({parent_q},{parent_r})",
+            }
+
         # Hex neighbour directions (flat-top)
         _DIRS = [(1,0),(-1,0),(0,1),(0,-1),(1,-1),(-1,1)]
 
@@ -4028,8 +5495,26 @@ def get_campaign_world_map(campaign_id: int, character_id: int = 0):
                 if nb not in discovered_coords and nb in all_hexes:
                     outline_coords.add(nb)
 
+        # Also expose all 6 neighbors of current hex so the player always sees
+        # which directions they can travel from where they stand.
+        # Real world_hexes neighbors → regular outline; phantom coords → 'unexplored'
+        # (these will auto-generate a hex on travel via _auto_generate_hex).
+        _unexplored_coords: set[tuple[int, int]] = set()
+        if current_hex:
+            ch = (int(current_hex["q"]), int(current_hex["r"]))
+            for dq, dr in _DIRS:
+                nb = (ch[0]+dq, ch[1]+dr)
+                if nb not in discovered_coords:
+                    if nb in all_hexes:
+                        outline_coords.add(nb)
+                    else:
+                        _unexplored_coords.add(nb)
+
         for coord in outline_coords:
             result_hexes.append({"q": coord[0], "r": coord[1], "status": "outline",
+                                  "hex_type": None, "label": None})
+        for coord in _unexplored_coords:
+            result_hexes.append({"q": coord[0], "r": coord[1], "status": "unexplored",
                                   "hex_type": None, "label": None})
 
         # Teleport connections (only where at least one endpoint is discovered)
