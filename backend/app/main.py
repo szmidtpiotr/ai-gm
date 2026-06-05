@@ -34,6 +34,7 @@ from app.api import (
     characters,
     combat,
     commands,
+    friends,
     turns,
     mechanics,
     inventory,
@@ -44,6 +45,9 @@ from app.api.dungeons import router as dungeons_router
 from app.api.health import router as health_router
 from app.api.models import router as models_router
 from app.api.client_logs import router as client_logs_router
+from app.api.knowledge import router as knowledge_router
+from app.api.multiplayer import router as multiplayer_router
+from app.api.party_chat import router as party_chat_router
 from app.migrations_admin import run_admin_migrations
 from app.services.llm_admin_service import hydrate_runtime_from_stored_preset
 from app.routers.admin import router as admin_router
@@ -51,6 +55,7 @@ from app.routers.admin_cheat import router as admin_cheat_router
 from app.routers.sandbox import router as sandbox_router
 from app.routers.rest_sandbox import router as rest_sandbox_router
 from app.routers.admin_visual import admin_router as admin_visual_router, public_router as visual_public_router
+from app.routers.admin_ui_texts import admin_router as admin_ui_texts_router, public_router as ui_texts_public_router
 from app.routers.settings import router as settings_router
 from app.routers.debug import router as debug_router
 from app.routers.test_runner import router as test_runner_router
@@ -58,12 +63,17 @@ from app.routers.locations import router as locations_router
 from app.routers.session_location import router as session_location_router
 from app.routers.admin_location import router as admin_location_router
 from app.routers.bg_images import router as bg_images_router
+from app.routers.dungeon_tiles import router as dungeon_tiles_router
 from app.routers.admin_analytics import router as admin_analytics_router
 from app.routers.world_review import router as world_review_router
-from app.routers.ideas_workshop import router as ideas_workshop_router
-from app.routers.campaign_workshop import router as campaign_workshop_router
 from app.routers.smart_entry import router as smart_entry_router
+from app.routers.adventure_forge import router as adventure_forge_router, public_router as campaign_templates_router
 from app.routers.hex_world import router as hex_world_router
+from app.routers.voice_proxy import public_router as voice_public_router
+from app.routers.voice_proxy import admin_router as voice_admin_router
+from app.routers.admin_images import router as admin_images_router
+from app.routers.bug_report import router as bug_report_router
+from app.routers.push_notifications import router as push_notifications_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -223,6 +233,28 @@ RAW_MIGRATIONS = [
         'time_of_day.noc',
         '{"color":"#5a6d99","accent":"#7a8cb8","label":"Noc"}'
     )""",
+    # 2026-05-25 — multi-role NPCs. `is_shop` already exists; add `is_quest_giver`
+    # and `is_ally` to mirror the same boolean-capability pattern, then backfill
+    # from the legacy single-value `npc_type` so existing rows keep their role.
+    # `npc_type` stays as the "primary" role (auto-derived on PATCH) for the
+    # ~30 callers in services/* that still SELECT it.
+    "ALTER TABLE npcs ADD COLUMN is_quest_giver INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE npcs ADD COLUMN is_ally INTEGER NOT NULL DEFAULT 0",
+    "UPDATE npcs SET is_shop = 1        WHERE npc_type = 'merchant'    AND is_shop = 0",
+    "UPDATE npcs SET is_quest_giver = 1 WHERE npc_type = 'quest_giver' AND is_quest_giver = 0",
+    "UPDATE npcs SET is_ally = 1        WHERE npc_type = 'ally'        AND is_ally = 0",
+
+    "ALTER TABLE game_config_weapons     ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE game_config_items       ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE game_config_consumables ADD COLUMN rarity INTEGER NOT NULL DEFAULT 1",
+
+    "ALTER TABLE users ADD COLUMN game_mode_flags TEXT DEFAULT NULL",
+
+    # Image gen config seeds — stored in game_config_visual for admin-editability
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.url', '\"http://192.168.1.170:8765\"')",
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.steps', '4')",
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.refine_steps', '8')",
+    "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.checkpoint', '\"\"')",
 ]
 
 
@@ -275,21 +307,29 @@ async def lifespan(app: FastAPI):
     init_db()
     run_raw_migrations()
     run_app_sql_migrations()
-    run_admin_migrations()
-    hydrate_runtime_from_stored_preset()
+    if os.getenv("AIGM_E2E_LITE") != "1":
+        run_admin_migrations()
+        hydrate_runtime_from_stored_preset()
     yield
     # Shutdown (nothing needed)
 
 
 app = FastAPI(title="AI Game Master PL", lifespan=lifespan)
 
+
+def _get_cors_origins() -> list[str]:
+    raw = os.environ.get("CORS_ORIGINS", "https://aigm-dev.studio-colorbox.com,https://aigm.studio-colorbox.com")
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 @app.middleware("http")
@@ -326,8 +366,10 @@ app.include_router(inventory.router, prefix="/api")
 app.include_router(npcs.router, prefix="/api")
 app.include_router(shop.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(friends.router, prefix="/api")
 app.include_router(mechanics.router, prefix="/api")
 app.include_router(client_logs_router, prefix="/api")
+app.include_router(knowledge_router, prefix="/api")
 # Keep non-prefixed character endpoints available for direct local calls
 # (e.g. /characters/{id}/sheet), while preserving /api/* routes.
 app.include_router(characters.router)
@@ -340,16 +382,26 @@ app.include_router(sandbox_router, prefix="/api")
 app.include_router(rest_sandbox_router, prefix="/api")
 app.include_router(admin_visual_router, prefix="/api")
 app.include_router(visual_public_router, prefix="/api")
+app.include_router(admin_ui_texts_router, prefix="/api")
+app.include_router(ui_texts_public_router, prefix="/api")
 app.include_router(settings_router, prefix="/api")
 app.include_router(locations_router, prefix="/api")
 app.include_router(session_location_router)
 app.include_router(admin_location_router)
 app.include_router(bg_images_router, prefix="/api")
+app.include_router(dungeon_tiles_router, prefix="/api")
 app.include_router(world_review_router)
-app.include_router(ideas_workshop_router)
-app.include_router(campaign_workshop_router)
 app.include_router(smart_entry_router)
+app.include_router(adventure_forge_router)
+app.include_router(campaign_templates_router, prefix="/api")
 app.include_router(hex_world_router)
+app.include_router(voice_public_router)
+app.include_router(voice_admin_router)
+app.include_router(admin_images_router)
+app.include_router(bug_report_router, prefix="/api")
+app.include_router(push_notifications_router, prefix="/api")
+app.include_router(multiplayer_router, prefix="/api")
+app.include_router(party_chat_router, prefix="/api")
 if os.getenv("AI_TEST_MODE") == "1":
     app.include_router(debug_router, prefix="/api")
     app.include_router(test_runner_router, prefix="/api")
