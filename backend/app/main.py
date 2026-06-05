@@ -73,6 +73,7 @@ from app.routers.voice_proxy import public_router as voice_public_router
 from app.routers.voice_proxy import admin_router as voice_admin_router
 from app.routers.admin_images import router as admin_images_router
 from app.routers.bug_report import router as bug_report_router
+from app.routers.world_state_history import router as world_state_history_router
 from app.routers.push_notifications import router as push_notifications_router
 
 
@@ -417,6 +418,7 @@ app.include_router(voice_public_router)
 app.include_router(voice_admin_router)
 app.include_router(admin_images_router)
 app.include_router(bug_report_router, prefix="/api")
+app.include_router(world_state_history_router, prefix="/api")
 app.include_router(push_notifications_router, prefix="/api")
 app.include_router(multiplayer_router, prefix="/api")
 app.include_router(party_chat_router, prefix="/api")
