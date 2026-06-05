@@ -255,6 +255,24 @@ RAW_MIGRATIONS = [
     "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.steps', '4')",
     "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.refine_steps', '8')",
     "INSERT OR IGNORE INTO game_config_visual (key, value) VALUES ('image_gen.checkpoint', '\"\"')",
+
+    # B1/B2 (#347/#348) — World State columns on game_sessions + snapshots table.
+    # ALTER TABLE is idempotent via the try/except OperationalError in run_raw_migrations.
+    "ALTER TABLE game_sessions ADD COLUMN scene_enemies TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE game_sessions ADD COLUMN scene_npcs TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE game_sessions ADD COLUMN scene_cleared INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE game_sessions ADD COLUMN active_quests TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE game_sessions ADD COLUMN player_conditions TEXT NOT NULL DEFAULT '[]'",
+    """CREATE TABLE IF NOT EXISTS world_state_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaign_id INTEGER NOT NULL,
+        turn_number INTEGER NOT NULL DEFAULT 0,
+        snapshot_json TEXT NOT NULL DEFAULT '{}',
+        snapshot_source TEXT NOT NULL DEFAULT 'auto',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )""",
+    """CREATE INDEX IF NOT EXISTS idx_world_state_snapshots_campaign
+    ON world_state_snapshots(campaign_id, turn_number DESC)""",
 ]
 
 
