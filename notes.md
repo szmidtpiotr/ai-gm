@@ -1,0 +1,174 @@
+# AI-GM — Master Task Checklist
+
+Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
+
+**Schemat kodów:** A=Faza -1 | B=Faza 0 | C=Faza 1 | D=Faza 2 | E=Faza 3 | F=Faza 4 | G=Faza 5 (MP) | H=Faza 6
+
+| Faza | Ukończone | Total |
+|------|-----------|-------|
+| A (Faza -1) | 12/12 | 100% ✅ |
+| B (Faza 0) | 5/6 | 83% |
+| C (Faza 1) | 0/16 | 0% |
+| D (Faza 2) | 0/13 | 0% |
+| E (Faza 3) | 0/28 | 0% |
+| F (Faza 4) | 0/21 | 0% |
+| G (Faza 5 MP) | 0/15 | 0% |
+| H (Faza 6) | 0/5 | 0% |
+| **TOTAL** | **17/116** | **15%** |
+
+---
+
+## FAZA -1 — Procedury wstępne ✅ UKOŃCZONA (2026-06-05)
+
+- [x] A1 — Dead code cleanup (~1.9GB) — usunięcie nieużywanych zasobów
+- [x] A2 — Audyt schematu DB — lista tabel do migracji/usunięcia
+- [x] A3 — PROD restoration na .62 + freeze starego kodu (tag v1.0-legacy)
+- [x] A4 — Version tagging (git tag)
+- [x] A5 — Maintenance notification workflow (banner dla graczy podczas deployów)
+- [x] A6 — Parity check admin2 vs admin3
+- [x] A7 — Redirect /admin → /admin3
+- [x] A8 — Usunięcie admin2 z serwera
+- [x] A9 — Usunięcie `frontend/admin_panel_v2/` z repo
+- [x] FINF-1 — ~~Potwierdzenie IP hosta GPU~~ ZAMKNIĘTE (RTX3060=.170, GTX1660=.16)
+- [x] A10 — Nowa skorupa admin panelu (thin shell + nav)
+- [x] A11 — Shared utilities admin (api.js, toast.js, modal.js, table.js)
+- [x] A12 — Game config seed — `data/game_config_seed.sql` w git; skrypty export/import
+
+---
+
+## FAZA 0 — World State
+
+- [x] B1 — Tabela `world_state_snapshots` (campaign_id, turn_number, state_json) — commit 6579e9a
+- [x] B2 — Rozbudowa session_flags: scene_enemies, scene_npcs, active_quests, player_conditions — commit c7db68d
+- [x] B3 — Gate Mechaniki — middleware walidujący akcje gracza PRZED LLM — commit c7db68d
+- [x] B4 — Parser intencji gracza (ATTACK/MOVE/TALK/REST → walidacja przez Gate) — commit c7db68d
+- [x] B5 — Auto-zapis snapshotu World State po każdej turze narracyjnej
+- [ ] B6 — Admin UI — World State History (zakładka w Campaign Monitor, diff między turami)
+
+---
+
+## FAZA 1 — Rdzeń pętli (core loop)
+
+- [ ] C1 — Fix Bug 1 — LLM musi sugerować ruch hex po N turach bez zmiany lokacji
+- [ ] C2 — Walidacja ruchu mechaniczna (nowy hex, terrain, lokacja check, update World State)
+- [ ] C3 — Fix Bug 2 — Gate walki (scene_enemies check przed każdym ATTACK)
+- [ ] C4 — Unifikacja wound_penalty: refactor z sheet-only na hp_current/hp_max
+- [ ] C5 — Symetria ran: wound_penalty dla wrogów (nie tylko gracza)
+- [ ] C6 — Ujednolicenie progów ran frontend/backend
+- [ ] C7 — XP Spend — endpoint spend_skill (wszystkie archetypy)
+- [ ] C8 — XP Spend — endpoint spend_stat (wszystkie archetypy)
+- [ ] C9 — UI długiego odpoczynku — modal "Ucz się" (lista zakupów XP)
+- [ ] C10 — System questów — QUEST_SUGGEST tag + walidacja backend
+- [ ] C11 — Mechaniczne śledzenie postępu questów (auto-complete per akcja)
+- [ ] C12 — `[SPEND_GOLD:X]` tag — kwota z tabeli/configu, NIE z LLM
+- [ ] C13 — Instrukcja "tylko złoto GP" w system_prompt (usunięcie waluty srebrnej)
+- [ ] C14 — Hero-first fix: startCharacterWizard() tylko z Heroes screen
+- [ ] C15 — Error boundary dla API failures (toast zamiast białego ekranu)
+- [ ] C16 — Delete confirmation modals (kampania, postać)
+
+---
+
+## FAZA 2 — Systemy + Narracja
+
+- [ ] D1 — Pending flow przedmiotów (GRANT_ITEM nieznanego klucza → auto-screen → pending=true)
+- [ ] D2 — Pending flow wrogów (analogicznie do D1)
+- [ ] D3 — NPC pamięć w World State (NPC_MEMORY tag → context injection przy kolejnej wizycie)
+- [ ] D4 — Auto-screening admin queue (Poziom 1 tech validation + Poziom 2 LLM scoring)
+- [ ] D5 — Item VIEW — podgląd przedmiotu w inventory (tooltip/modal)
+- [ ] D6 — Narracja: tagi, parsery, Narrative State struktura
+- [ ] D7 — Encountery generyczne (adventure_hooks + gameconfig_encounter_templates unifikacja)
+- [ ] D8 — Ekran profilu gracza (konto, znajomi, ustawienia LLM)
+- [ ] D9 — Ekran kampanii — 5 trybów (Nowa/Gotowa/Loch/Loch-kafelki/Multiplayer)
+- [ ] D10 — Onboarding animacja + wybór motywu (nowy gracz)
+- [ ] D11 — Confirm password na rejestracji
+- [ ] D12 — Szybka nawigacja Hub → Gra (bez przeładowania)
+- [ ] D13 — Mobile layout — weryfikacja responsywności wszystkich ekranów
+
+---
+
+## FAZA 3 — Jakość + Treść
+
+- [ ] E1 — Player HUD (HP/Mana, Złoto, Questy, XP bar, Czas) — aktualizacja per tura
+- [ ] E2 — Kreator bohatera — tooltips (archetyp, statystyki, umiejętności z przykładami)
+- [ ] E3 — Ekran zakończenia kampanii (podsumowanie + LLM epitafium)
+- [ ] E4 — Ekran śmierci (epitafium + statystyki + Wskrześ/Nowy bohater)
+- [ ] E5 — Zamknięcie dostępu do kampanii martwego bohatera (hero_status=dead)
+- [ ] E6 — Narracja: kompresja, historia, tagi narracyjne
+- [ ] E7 — Rozbudowa `campaign_templates` (required_npc_keys, required_beats, player_visible)
+- [ ] E8 — Ekran wyboru gotowej kampanii dla gracza (karty, trudność, opisy)
+- [ ] E9 — Story Gravity: trigger = next_required_beat nie odpalony przez N tur
+- [ ] E10 — Forge: walidacja wymaganych NPC/lokacji przy publikacji szablonu
+- [ ] E11 — Template Narrative State pre-seeding
+- [ ] E12 — Workflow publikacji szablonów (draft → review → published)
+- [ ] E13 — Encountery generyczne — rozbudowa puli adventure_hooks
+- [ ] E14 — Skalowanie encounterów per poziom gracza
+- [ ] E15 — Snapshot stanu przy wejściu do lochu
+- [ ] E16 — Przywróć snapshot przy śmierci w lochu + restart
+- [ ] E17 — Rarity tierów loot w lochach (5 tierów)
+- [ ] E18 — Cooldown UI lochów w Admin Panelu
+- [ ] E19 — LLM Vision: obrazek → opis kafelka (task na maszynie .170)
+- [ ] E20 — Admin UI tile manager (obrazki, drzwi, opisy kafelków)
+- [ ] E21 — Wejście do lochu z mapy hex kampanii
+- [ ] E22 — Resume niedokończonego runu lochu
+- [ ] E23 — Seen_mechanics tracking per gracz
+- [ ] E24 — Backend trigger kart onboarding (first mechanic occurrence)
+- [ ] E25 — Karty onboarding UI (nieblokujące overlay, "Rozumiem")
+- [ ] E26 — Biblioteka kart (gracz może wrócić do przeczytanych)
+- [ ] E27 — Karty dla nowych mechanik (afiksy, crafting, MP) — gdy systemy gotowe
+- [ ] E28 — Tutorial kampania "Moja Pierwsza Przygoda"
+
+---
+
+## FAZA 4 — Rozbudowa: Efekty, Afiksy, Ekonomia
+
+- [ ] F1 — Unified Effects System — przepisanie effect_json na typed objects
+- [ ] F2 — Affix System — game_config_affixes + affixes_json na inventory row
+- [ ] F3 — Admin buildery afiksów i efektów
+- [ ] F4 — `[SPEND_GOLD:X]` tag z tabeli/configu (jeśli nie w Fazie 1)
+- [ ] F5 — Włączenie + konfiguracja wskrzeszenia jako gold sink
+- [ ] F6 — Sink afiksów: NPC is_crafter, nałóż/reroll afiks (T1=150g, T2=500g, T3=1200g)
+- [ ] F7 — Trwałość (durability): punktowa per cios, penalty przy 0, naprawa
+- [ ] F8 — Napady: encounter kradnący % złota
+- [ ] F9 — Dynamiczny asortyment sklepu (lokacja+poziom)
+- [ ] F10 — CHA na kupno (nie tylko sprzedaż)
+- [ ] F11 — Unifikacja ceny → jeden price_gp
+- [ ] F12 — Anti-farm: malejąca cena przy spam-sprzedaży
+- [ ] F13 — Background expire wynajmu (sweep)
+- [ ] F14 — Usunięcie martwego economy_service kodu
+- [ ] F15 — Balans walki → mikstury potrzebne
+- [ ] F16 — Balans całości (ceny, dropy, sinki) — playtest
+- [ ] F17 — Hidden Trait system (LLM sugeruje z puli, trigger kontekstowy, reveal)
+- [ ] F18 — Rosnące progi XP (konfigurowalne z Admin Panelu)
+- [ ] F19 — Globalne stany NPC (śmierć NPC między kampaniami)
+- [ ] F20 — Mechaniczne efekty pory dnia (noc/świt bonusy, game_config)
+- [ ] F21 — World State History UI dla admina (zakładka, diff między turami)
+
+---
+
+## FAZA 5 — Multiplayer
+
+- [ ] G1 — Timer enforcement — background sweep co ~30s (domknij rundę po deadline)
+- [ ] G2 — Absencja: token [BRAK AKCJI], licznik ostrzeżeń, reset po powrocie
+- [ ] G3 — Vote-to-kick + auto-kick 2-os + zaproszenie zastępstwa
+- [ ] G4 — World State integracja MP (jeden żeton drużyny, współdzielony stan)
+- [ ] G5 — Conflict resolution: inicjatywa jako kolejność, "Cel już martwy/zabrany"
+- [ ] G6 — Ruch drużyny: głosowanie hex (wszyscy głosują, host bez veta)
+- [ ] G7 — Walka MP — reuse silnika turowego solo
+- [ ] G8 — Auto-roll kości przez kod w rundzie MP
+- [ ] G9 — Timer walki skrócony (2 min) + push "Twoja kolej" per tura
+- [ ] G10 — Loot per-gracz z filtrem klasy + złoto dzielone równo
+- [ ] G11 — Catch-up po powrocie (narracje pominiętych rund)
+- [ ] G12 — Spóźnialscy: wprowadzenie narracyjne + start bez pełnej drużyny
+- [ ] G13 — Kick → bohater do `idle` z zachowaniem XP/złota/przedmiotów
+- [ ] G14 — Handel między graczami
+- [ ] G15 — Skalowanie trudności/loot wg liczby graczy (playtest)
+
+---
+
+## FAZA 6 — Observability + Długoterminowe
+
+- [ ] H1 — Observability design: co logować, schemat metryk, lekki log writer w backendzie
+- [ ] H2 — Text-to-speech — per single player opt-in (F5TTS na hoście .16)
+- [ ] H3 — Konfiguracja image gen pipeline na .170 (FLUX.1-schnell + ComfyUI)
+- [ ] H4 — Konfiguracja Ollama na .170 dla offline content gen (admin AI Kreator)
+- [ ] H5 — GPU pipeline: tile → LLM Vision → opis → DB (dungeon tiles offline)
