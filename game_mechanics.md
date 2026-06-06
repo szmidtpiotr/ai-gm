@@ -1841,9 +1841,9 @@ Endpoint `POST /api/campaigns` (`backend/app/api/campaigns.py`) tworzy kampanię
 |---------|--------|
 | `hp_current` / `hp_max` w `characters` | ✅ Istnieje |
 | Formula hp_max (`vitality_service`) | ✅ Istnieje |
-| Reset HP przy tworzeniu kampanii | ❌ C19 — do naprawy |
+| Reset HP przy tworzeniu kampanii | ✅ C19 — `maybe_reset_hp_for_new_campaign()` |
 | Zachowanie HP przy wznowieniu kampanii | ✅ Działa (brak resetu = poprawne) |
-| Test: nowa kampania → hp_current == hp_max | ❌ C19 — do napisania |
+| Test: nowa kampania → hp_current == hp_max | ✅ C19 — 7 testów GREEN |
 
 ---
 

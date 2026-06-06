@@ -69,7 +69,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] C16 — Delete confirmation modals (kampania, postać) — [#370](https://github.com/szmidtpiotr/ai-gm/issues/370)
 - [x] C17 — Kontekst ekwipunku postaci — injection listy przedmiotów i złota do LLM per tura — [#373](https://github.com/szmidtpiotr/ai-gm/issues/373)
 - [x] C18 — Fix Bug 3: kampanie startują na istniejących hexach, nie nowych obrzeżach — [#374](https://github.com/szmidtpiotr/ai-gm/issues/374)
-- [ ] C19 — Fix Bug 4: bohater startuje nową kampanię z pełnym HP (reset hp_current = hp_max) — [#375](https://github.com/szmidtpiotr/ai-gm/issues/375)
+- [x] C19 — Fix Bug 4: bohater startuje nową kampanię z pełnym HP (reset hp_current = hp_max) — [#375](https://github.com/szmidtpiotr/ai-gm/issues/375)
 
 ---
 
