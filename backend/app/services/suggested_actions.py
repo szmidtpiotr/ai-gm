@@ -123,9 +123,13 @@ def _build_narrative_actions(
             enabled=True,
         ))
 
-    # 4) REST — depends on location safe_for_rest flag
+    # 4) REST — safe if EITHER session location OR current hex location allows it
+    current_hex = session_flags.get("current_hex") or {}
+    hex_q = current_hex.get("q")
+    hex_r = current_hex.get("r")
+    has_hex = hex_q is not None and hex_r is not None
+    safe = _is_safe_for_rest(conn, current_loc_key) or (has_hex and _is_hex_safe_for_rest(conn, hex_q, hex_r))
     if len(actions) < MAX_ACTIONS:
-        safe = _is_safe_for_rest(conn, current_loc_key)
         actions.append(SuggestedAction(
             label="Odpocznij",
             action="REST:long",
@@ -133,10 +137,8 @@ def _build_narrative_actions(
             reason="Nie możesz tu bezpiecznie odpocząć" if not safe else None,
         ))
 
-    # 5) BUILD_CAMP — Stage 2B R4: only when hex is unsafe AND session has a hex position
-    current_hex = session_flags.get("current_hex") or {}
-    has_hex = current_hex.get("q") is not None and current_hex.get("r") is not None
-    if len(actions) < MAX_ACTIONS and not _is_safe_for_rest(conn, current_loc_key) and has_hex:
+    # 5) BUILD_CAMP — only when unsafe AND has hex position (consistent with world_service.build_camp check)
+    if len(actions) < MAX_ACTIONS and not safe and has_hex:
         actions.append(SuggestedAction(
             label="Rozbij obóz",
             action="BUILD_CAMP",
@@ -243,6 +245,25 @@ def _is_safe_for_rest(conn: sqlite3.Connection, location_key: str) -> bool:
             return bool(row["safe_for_rest"])
     except Exception as exc:
         logger.warning("safe_for_rest_error", error=str(exc))
+    return False
+
+
+def _is_hex_safe_for_rest(conn: sqlite3.Connection, q, r) -> bool:
+    """Mirror of world_service.build_camp safety check: hex's assigned location."""
+    try:
+        hex_row = conn.execute(
+            "SELECT location_key FROM world_hexes WHERE q=? AND r=? AND is_active=1",
+            (q, r),
+        ).fetchone()
+        if hex_row and hex_row["location_key"]:
+            loc_row = conn.execute(
+                "SELECT safe_for_rest FROM game_locations WHERE key=? AND is_active=1",
+                (hex_row["location_key"],),
+            ).fetchone()
+            if loc_row:
+                return bool(loc_row["safe_for_rest"])
+    except Exception as exc:
+        logger.warning("hex_safe_for_rest_error", error=str(exc))
     return False
 
 
