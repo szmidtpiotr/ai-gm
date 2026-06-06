@@ -279,6 +279,10 @@ RAW_MIGRATIONS = [
     "ALTER TABLE hex_type_config ADD COLUMN is_passable INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE hex_type_config ADD COLUMN required_item TEXT",
     "UPDATE hex_type_config SET is_passable = 0 WHERE hex_type IN ('lake', 'ocean', 'sea')",
+    # C7: XP skill costs aligned to game_mechanics.md (new=100, 1→2=75, 2→3=150)
+    "INSERT OR REPLACE INTO game_config_meta (key, value) VALUES ('xp_skill_rank_costs', '{\"1\":100,\"2\":75,\"3\":150}')",
+    # C7: skill rank ceiling = 3 for all skills
+    "UPDATE game_config_skills SET rank_ceiling = 3",
 ]
 
 

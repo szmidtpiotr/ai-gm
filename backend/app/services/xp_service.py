@@ -135,16 +135,23 @@ def _stat_known_in_catalog(conn: sqlite3.Connection, stat_key: str) -> bool:
 
 
 def _rank_ceiling_for_skill(skill_key: str) -> int:
-    cfg = config_service.get_runtime_config()
-    skills_list = cfg.get("skills") if isinstance(cfg.get("skills"), list) else []
     keys_to_try = [skill_key]
     alt = DICE_TEST_TO_CONFIG_SKILL_KEY.get(skill_key)
     if alt and alt not in keys_to_try:
         keys_to_try.append(alt)
-    for lk in keys_to_try:
-        for s in skills_list:
-            if isinstance(s, dict) and s.get("key") == lk:
-                return int(s.get("rank_ceiling") or 5)
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            for lk in keys_to_try:
+                row = conn.execute(
+                    "SELECT rank_ceiling FROM game_config_skills WHERE key = ?", (lk,)
+                ).fetchone()
+                if row is not None:
+                    return int(row[0] or 5)
+        finally:
+            conn.close()
+    except Exception:
+        pass
     return 5
 
 

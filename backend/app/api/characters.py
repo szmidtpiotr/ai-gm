@@ -1413,6 +1413,12 @@ def spend_character_skill_xp(character_id: int, req: SpendSkillXpRequest):
         conn.close()
 
 
+@router.post("/characters/{character_id}/spend-xp/skill")
+def spend_character_skill_xp_alias(character_id: int, req: SpendSkillXpRequest):
+    """C7 alias — canonical URL for spend_skill (game_mechanics.md)."""
+    return spend_character_skill_xp(character_id, req)
+
+
 @router.post("/characters/{character_id}/xp/spend-stat")
 def spend_character_stat_xp(character_id: int, req: SpendStatXpRequest):
     """Spend XP to increase one stat from `game_config_stats` by 1 (**T21**)."""
