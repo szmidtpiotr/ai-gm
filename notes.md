@@ -6,15 +6,15 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 | Faza | Ukończone | Total |
 |------|-----------|-------|
-| A (Faza -1) | 12/12 | 100% ✅ |
-| B (Faza 0) | 5/6 | 83% |
+| A (Faza -1) | 13/13 | 100% ✅ |
+| B (Faza 0) | 7/7 | 100% ✅ |
 | C (Faza 1) | 0/16 | 0% |
 | D (Faza 2) | 0/13 | 0% |
 | E (Faza 3) | 0/28 | 0% |
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
-| **TOTAL** | **17/116** | **15%** |
+| **TOTAL** | **20/118** | **17%** |
 
 ---
 
@@ -36,35 +36,36 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA 0 — World State
+## FAZA 0 — World State ✅ UKOŃCZONA (2026-06-06)
 
 - [x] B1 — Tabela `world_state_snapshots` (campaign_id, turn_number, state_json) — commit 6579e9a
 - [x] B2 — Rozbudowa session_flags: scene_enemies, scene_npcs, active_quests, player_conditions — commit c7db68d
 - [x] B3 — Gate Mechaniki — middleware walidujący akcje gracza PRZED LLM — commit c7db68d
 - [x] B4 — Parser intencji gracza (ATTACK/MOVE/TALK/REST → walidacja przez Gate) — commit c7db68d
-- [ ] B5 — Auto-zapis snapshotu World State po każdej turze narracyjnej
-- [ ] B6 — Admin UI — World State History (zakładka w Campaign Monitor, diff między turami)
+- [x] B5 — Auto-zapis snapshotu World State po każdej turze narracyjnej — commit 48ce52b
+- [x] B6 — Admin UI — World State History (zakładka w Campaign Monitor, diff między turami) — commit 48ce52b
+- [x] B7 — DEV Inspector — panel diagnostyczny dla adminów (intent + gate + world state per kampania) — commit e9f29c3
 
 ---
 
 ## FAZA 1 — Rdzeń pętli (core loop)
 
-- [ ] C1 — Fix Bug 1 — LLM musi sugerować ruch hex po N turach bez zmiany lokacji
-- [ ] C2 — Walidacja ruchu mechaniczna (nowy hex, terrain, lokacja check, update World State)
-- [ ] C3 — Fix Bug 2 — Gate walki (scene_enemies check przed każdym ATTACK)
-- [ ] C4 — Unifikacja wound_penalty: refactor z sheet-only na hp_current/hp_max
-- [ ] C5 — Symetria ran: wound_penalty dla wrogów (nie tylko gracza)
-- [ ] C6 — Ujednolicenie progów ran frontend/backend
-- [ ] C7 — XP Spend — endpoint spend_skill (wszystkie archetypy)
-- [ ] C8 — XP Spend — endpoint spend_stat (wszystkie archetypy)
-- [ ] C9 — UI długiego odpoczynku — modal "Ucz się" (lista zakupów XP)
-- [ ] C10 — System questów — QUEST_SUGGEST tag + walidacja backend
-- [ ] C11 — Mechaniczne śledzenie postępu questów (auto-complete per akcja)
-- [ ] C12 — `[SPEND_GOLD:X]` tag — kwota z tabeli/configu, NIE z LLM
-- [ ] C13 — Instrukcja "tylko złoto GP" w system_prompt (usunięcie waluty srebrnej)
-- [ ] C14 — Hero-first fix: startCharacterWizard() tylko z Heroes screen
-- [ ] C15 — Error boundary dla API failures (toast zamiast białego ekranu)
-- [ ] C16 — Delete confirmation modals (kampania, postać)
+- [ ] C1 — Fix Bug 1 — LLM musi sugerować ruch hex po N turach bez zmiany lokacji — [#355](https://github.com/szmidtpiotr/ai-gm/issues/355)
+- [ ] C2 — Walidacja ruchu mechaniczna (nowy hex, terrain, lokacja check, update World State) — [#356](https://github.com/szmidtpiotr/ai-gm/issues/356)
+- [ ] C3 — Fix Bug 2 — Gate walki (scene_enemies check przed każdym ATTACK) — [#357](https://github.com/szmidtpiotr/ai-gm/issues/357)
+- [ ] C4 — Unifikacja wound_penalty: refactor z sheet-only na hp_current/hp_max — [#360](https://github.com/szmidtpiotr/ai-gm/issues/360)
+- [ ] C5 — Symetria ran: wound_penalty dla wrogów (nie tylko gracza) — [#358](https://github.com/szmidtpiotr/ai-gm/issues/358)
+- [ ] C6 — Ujednolicenie progów ran frontend/backend — [#359](https://github.com/szmidtpiotr/ai-gm/issues/359)
+- [ ] C7 — XP Spend — endpoint spend_skill (wszystkie archetypy) — [#361](https://github.com/szmidtpiotr/ai-gm/issues/361)
+- [ ] C8 — XP Spend — endpoint spend_stat (wszystkie archetypy) — [#362](https://github.com/szmidtpiotr/ai-gm/issues/362)
+- [ ] C9 — UI długiego odpoczynku — modal "Ucz się" (lista zakupów XP) — [#363](https://github.com/szmidtpiotr/ai-gm/issues/363)
+- [ ] C10 — System questów — QUEST_SUGGEST tag + walidacja backend — [#364](https://github.com/szmidtpiotr/ai-gm/issues/364)
+- [ ] C11 — Mechaniczne śledzenie postępu questów (auto-complete per akcja) — [#365](https://github.com/szmidtpiotr/ai-gm/issues/365)
+- [ ] C12 — `[SPEND_GOLD:X]` tag — kwota z tabeli/configu, NIE z LLM — [#366](https://github.com/szmidtpiotr/ai-gm/issues/366)
+- [ ] C13 — Instrukcja "tylko złoto GP" w system_prompt (usunięcie waluty srebrnej) — [#367](https://github.com/szmidtpiotr/ai-gm/issues/367)
+- [ ] C14 — Hero-first fix: startCharacterWizard() tylko z Heroes screen — [#368](https://github.com/szmidtpiotr/ai-gm/issues/368)
+- [ ] C15 — Error boundary dla API failures (toast zamiast białego ekranu) — [#369](https://github.com/szmidtpiotr/ai-gm/issues/369)
+- [ ] C16 — Delete confirmation modals (kampania, postać) — [#370](https://github.com/szmidtpiotr/ai-gm/issues/370)
 
 ---
 
