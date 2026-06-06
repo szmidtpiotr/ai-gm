@@ -625,8 +625,10 @@ def get_campaign_debug_state(
     against current world state. Admin-only.
     """
     if authorization:
-        from app.core.jwt_auth import require_admin_role
-        require_admin_role(authorization, user_id)
+        token = authorization.removeprefix("Bearer ").strip()
+        from app.services.admin_auth import verify_admin_token
+        if not verify_admin_token(token):
+            raise HTTPException(status_code=401, detail="Invalid admin token")
     elif not _user_is_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin role required")
 
