@@ -12,7 +12,7 @@
 >
 > Kiedy pracujesz nad GitHub Issues, TDD, lub jakimkolwiek zadaniem implementacyjnym:
 >
-> 1. **Szukaj kodu zadania** w **CZĘŚĆ 7** (linia ~840) — master lista implementacyjna. **Schemat kodów:** A=Faza -1, B=Faza 0, C=Faza 1, D=Faza 2, E=Faza 3, F=Faza 4, G=Faza 5 (MP), H=Faza 6. Numery sekwencyjne w obrębie sekcji (B1, B2, ..., B6).
+> 1. **Szukaj kodu zadania** w **CZĘŚĆ 7** (linia ~840) — master lista implementacyjna. **Schemat kodów:** A=Faza -1, B=Faza 0, C=Faza 1, D=Faza 2, E=Faza 3, F=Faza 4, G=Faza 5 (MP), H=Faza 6. Numery sekwencyjne w obrębie sekcji (B1, B2, ..., B7). **FAZA -1 i FAZA 0 ukończone — patrz sekcja WYKONANE na końcu pliku.**
 > 2. **Szukaj kontekstu decyzji projektowej** w sekcji tematycznej (CZĘŚĆ X = Afiksy, CZĘŚĆ AB = Walka/Rany, CZĘŚĆ AC = Multiplayer, CZĘŚĆ AF = Ekonomia, CZĘŚĆ AG = Infrastruktura, itd.).
 > 3. **Każda decyzja projektowa** ma blok `> **Zasada projektowa**` + `> **Dlaczego?**` + `> **Co odrzucono?**` — przeczytaj je zanim zaczniesz kodować.
 > 4. **GitHub Issues** powinny mieć w tytule kod zadania (`[TASK] B1 — ...`) i odwoływać się do tej sekcji w treści.
@@ -36,6 +36,7 @@
 > | CZĘŚĆ AG | Infrastruktura (.170=RTX3060, .16=GTX1660, workload rules) |
 > | CZĘŚĆ 10 | Zasady projektowe (5 reguł) |
 > | CZĘŚĆ 10b | Observability — odłożone do prod deployment |
+> | **WYKONANE** | **Fazy zakończone (FAZA -1, FAZA 0 B1-B7) — na końcu pliku** |
 >
 > ### Kluczowe zależności (nie łam ich)
 >
@@ -842,43 +843,6 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 > **Filozofia:** Każda faza musi być w pełni działająca zanim zaczniesz następną. Nie buduj dachu bez ścian. Lista obejmuje WSZYSTKIE rodziny zadań z całego dokumentu.
 
 > **Aktualizacja 2026-06-05:** Przepisano z pierwotnej listy (F0-F4) na pełną listę pokrywającą sekcje X, Y, Z, AA–AG + nowe rodziny zadań.
-
----
-
-### FAZA -1 — Procedury wstępne ✅ UKOŃCZONA (2026-06-05)
-
-Wszystko poniżej musi być gotowe przed startem Fazy 0.
-
-| Kod | Zadanie | Zależy od |
-|---|---|---|
-| A1 | Dead code cleanup (~1.9GB) — usunięcie nieużywanych zasobów | — |
-| A2 | Audyt schematu DB — lista tabel do migracji/usunięcia | — |
-| A3 | PROD restoration na .62 + freeze starego kodu (tag v1.0-legacy) | A1 |
-| A4 | Version tagging (git tag) | A3 |
-| A5 | Maintenance notification workflow (banner dla graczy podczas deployów) | A3 |
-| A6 | Parity check admin2 vs admin3 (czy admin3 pokrywa wszystkie sekcje admin2) | — |
-| A7 | Redirect /admin → /admin3 | A6 |
-| A8 | Usunięcie admin2 z serwera | A7 |
-| A9 | Usunięcie `frontend/admin_panel_v2/` z repo | A8 |
-| FINF-1 | ~~Potwierdzenie IP hosta GPU~~ ✅ ZAMKNIĘTE — RTX3060=.170, GTX1660=.16 | — |
-| A10 | Nowa skorupa admin panelu (thin shell + nav) | — |
-| A11 | Shared utilities admin (api.js, toast.js, modal.js, table.js) | A10 |
-| A12 | Game config seed — `data/game_config_seed.sql` w git; skrypty export/import | A3 |
-
----
-
-### FAZA 0 — World State (fundament danych)
-
-> **Blokuje wszystko dalej.** Nic nie działa mechanicznie poprawnie bez World State.
-
-| Kod | Zadanie | Zależy od |
-|---|---|---|
-| B1 | Tabela `world_state_snapshots` (campaign_id, turn_number, state_json) | — |
-| B2 | Rozbudowa `session_flags`: scene_enemies, scene_npcs, active_quests, player_conditions | B1 |
-| B3 | Gate Mechaniki — middleware walidujący akcje gracza PRZED LLM | B2 |
-| B4 | Parser intencji gracza (ATTACK/MOVE/TALK/REST → walidacja przez Gate) | B3 |
-| B5 | Auto-zapis snapshotu World State po każdej turze narracyjnej | B1 |
-| B6 | Admin UI — World State History (zakładka w Campaign Monitor, diff między turami) | B5 |
 
 ---
 
@@ -3083,3 +3047,49 @@ Po każdej sesji gracz powinien móc wskazać co urosło w jego postaci. Nie "mo
 
 ### Zasada 5: Admin-asynchroniczny, nie Admin-nieobecny
 Admin zatwierdza kiedy może, nie kiedy musi. System nie powinien czekać na admina żeby działać — ale świat rośnie dzięki adminowi.
+
+---
+
+---
+
+## WYKONANE
+
+> Sekcje przeniesione tutaj po ukończeniu implementacji. Kolejność taka sama jak w oryginalnym planie.
+
+---
+
+### FAZA -1 — Procedury wstępne ✅ UKOŃCZONA (2026-06-05)
+
+Wszystko poniżej musi być gotowe przed startem Fazy 0.
+
+| Kod | Zadanie | Zależy od |
+|---|---|---|
+| A1 | Dead code cleanup (~1.9GB) — usunięcie nieużywanych zasobów | — |
+| A2 | Audyt schematu DB — lista tabel do migracji/usunięcia | — |
+| A3 | PROD restoration na .62 + freeze starego kodu (tag v1.0-legacy) | A1 |
+| A4 | Version tagging (git tag) | A3 |
+| A5 | Maintenance notification workflow (banner dla graczy podczas deployów) | A3 |
+| A6 | Parity check admin2 vs admin3 (czy admin3 pokrywa wszystkie sekcje admin2) | — |
+| A7 | Redirect /admin → /admin3 | A6 |
+| A8 | Usunięcie admin2 z serwera | A7 |
+| A9 | Usunięcie `frontend/admin_panel_v2/` z repo | A8 |
+| FINF-1 | ~~Potwierdzenie IP hosta GPU~~ ✅ ZAMKNIĘTE — RTX3060=.170, GTX1660=.16 | — |
+| A10 | Nowa skorupa admin panelu (thin shell + nav) | — |
+| A11 | Shared utilities admin (api.js, toast.js, modal.js, table.js) | A10 |
+| A12 | Game config seed — `data/game_config_seed.sql` w git; skrypty export/import | A3 |
+
+---
+
+### FAZA 0 — World State (fundament danych) ✅ UKOŃCZONA (2026-06-06)
+
+> **Blokuje wszystko dalej.** Nic nie działa mechanicznie poprawnie bez World State.
+
+| Kod | Zadanie | Zależy od |
+|---|---|---|
+| B1 | Tabela `world_state_snapshots` (campaign_id, turn_number, state_json) | — |
+| B2 | Rozbudowa `session_flags`: scene_enemies, scene_npcs, active_quests, player_conditions | B1 |
+| B3 | Gate Mechaniki — middleware walidujący akcje gracza PRZED LLM | B2 |
+| B4 | Parser intencji gracza (ATTACK/MOVE/TALK/REST → walidacja przez Gate) | B3 |
+| B5 | Auto-zapis snapshotu World State po każdej turze narracyjnej | B1 |
+| B6 | Admin UI — World State History (zakładka w Campaign Monitor, diff między turami) | B5 |
+| B7 | DEV Inspector — panel diagnostyczny dla adminów (intent + gate + world state per kampania) | B5 |

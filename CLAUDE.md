@@ -256,4 +256,4 @@ This applies to every implementation, no matter how small.
 - Player UI: `frontend/front/index.html`, `frontend/front/js/app.js`, `frontend/front/css/styles.css`
 - Compose: `docker-compose.yml` (PROD), `docker-compose.dev.yml` (DEV)
 - Planned work: `to_do_ideas.md`
-- Game mechanics reference (stats, combat, skills, DC, archetypes): `docs/game_mechanics.md`
+- Game mechanics reference (stats, combat, skills, DC, archetypes): `game_mechanics.md`
