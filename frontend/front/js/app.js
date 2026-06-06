@@ -5,6 +5,15 @@
 
 const API_BASE = '/api';
 
+// C6 — wound thresholds loaded from backend at startup; fallback to wound_utils.py values
+let _woundThresholds = { healthy_pct: 75, moderate_pct: 50, critical_pct: 25 };
+(async () => {
+    try {
+        const r = await fetch('/api/config/wound-thresholds');
+        if (r.ok) _woundThresholds = await r.json();
+    } catch (_) {}
+})();
+
 const SLASH_COMMANDS = [
     { cmd: '/help',    desc: 'Pokaż listę dostępnych komend' },
     { cmd: '/sheet',   desc: 'Otwórz kartę postaci' },
@@ -3485,8 +3494,8 @@ function updateHeaderStats() {
     if (elements.headerHpBarFill && maxHp > 0) {
         const pct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
         elements.headerHpBarFill.style.width = `${pct}%`;
-        elements.headerHpBarFill.classList.toggle('header-hp-bar__fill--low', pct <= 40 && pct > 20);
-        elements.headerHpBarFill.classList.toggle('header-hp-bar__fill--critical', pct <= 20);
+        elements.headerHpBarFill.classList.toggle('header-hp-bar__fill--low', pct <= _woundThresholds.moderate_pct && pct > _woundThresholds.critical_pct);
+        elements.headerHpBarFill.classList.toggle('header-hp-bar__fill--critical', pct <= _woundThresholds.critical_pct);
     }
 }
 
@@ -3887,7 +3896,7 @@ function _renderInitiativeTrack(cs) {
         const downed = hpCur <= 0;
         const active = !downed && id === currentTurnId;
         const acted = !active && !downed && _initActedThisRound.has(id);
-        const tier = pct > 60 ? 'high' : (pct > 25 ? 'mid' : 'low');
+        const tier = pct > _woundThresholds.healthy_pct ? 'high' : (pct > _woundThresholds.critical_pct ? 'mid' : 'low');
         const portrait = isPlayer ? '🛡️' : (downed ? '💀' : '⚔️');
         const ini = c.initiative_roll != null ? `INI ${c.initiative_roll}` : '';
         const zone = String(c.zone || 'engaged');
@@ -3971,7 +3980,7 @@ function renderCombatUI(cs) {
         const def = c.defense != null ? ` · DEF ${c.defense}` : '';
         const ini = c.initiative_roll != null ? `INI ${c.initiative_roll}` : '';
         if (isPlayer) {
-            const hpPct = pct > 60 ? 'high' : (pct > 25 ? 'mid' : 'low');
+            const hpPct = pct > _woundThresholds.healthy_pct ? 'high' : (pct > _woundThresholds.critical_pct ? 'mid' : 'low');
             const woundHTML = renderWoundLabelHTML(hpCur, hpMax);
             return `
                 <div class="combat-combatant combat-combatant--player">
