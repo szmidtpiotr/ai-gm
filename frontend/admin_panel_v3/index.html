@@ -2142,6 +2142,7 @@
         <div class="user-name">piotrszmidt</div>
         <div class="user-role">Admin</div>
       </div>
+      <div id="admin-version-badge" style="margin-left:auto;font-size:10px;color:var(--t3);white-space:nowrap">v—</div>
     </div>
   </aside>
 
@@ -19086,5 +19087,17 @@ Niech kości się toczą! 🎲`,
 </script>
 
 <button id="kreator-fab" title="Kreator AI" onclick="_fabClick()">✨</button>
+
+<script>
+(async function _loadAdminVersion() {
+  try {
+    const resp = await fetch('/api/version');
+    if (!resp.ok) return;
+    const { version } = await resp.json();
+    const el = document.getElementById('admin-version-badge');
+    if (el) el.textContent = `v${version}`;
+  } catch (_e) {}
+})();
+</script>
 </body>
 </html>

@@ -44,6 +44,7 @@ from app.api import (
 from app.api.dungeons import router as dungeons_router
 from app.api.health import router as health_router
 from app.api.models import router as models_router
+from app.api.version import router as version_router
 from app.api.client_logs import router as client_logs_router
 from app.api.knowledge import router as knowledge_router
 from app.api.multiplayer import router as multiplayer_router
@@ -394,6 +395,7 @@ app.include_router(knowledge_router, prefix="/api")
 app.include_router(characters.router)
 app.include_router(health_router, prefix="/api")
 app.include_router(models_router, prefix="/api")
+app.include_router(version_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(admin_analytics_router, prefix="/api")
 app.include_router(admin_cheat_router, prefix="/api")

@@ -7782,8 +7782,19 @@ async function loadBgSettings() {
     } catch (_e) {}
 }
 
+async function loadAppVersion() {
+    try {
+        const resp = await fetch('/api/version');
+        if (!resp.ok) return;
+        const { version } = await resp.json();
+        const el = document.getElementById('app-version-badge');
+        if (el) el.textContent = `v${version}`;
+    } catch (_e) {}
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     loadBgSettings();
+    loadAppVersion();
     init();
 });
 
