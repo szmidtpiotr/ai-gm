@@ -12,7 +12,7 @@
 >
 > Kiedy pracujesz nad GitHub Issues, TDD, lub jakimkolwiek zadaniem implementacyjnym:
 >
-> 1. **Szukaj kodu zadania** w **CZĘŚĆ 7** (linia ~840) — master lista implementacyjna. **Schemat kodów:** A=Faza -1, B=Faza 0, C=Faza 1, D=Faza 2, E=Faza 3, F=Faza 4, G=Faza 5 (MP), H=Faza 6. Numery sekwencyjne w obrębie sekcji (B1, B2, ..., B7). **FAZA -1 i FAZA 0 ukończone — patrz sekcja WYKONANE na końcu pliku.**
+> 1. **Szukaj kodu zadania** w **CZĘŚĆ 7** (linia ~840) — master lista implementacyjna. **Schemat kodów:** A=Faza -1, B=Faza 0, C=Faza 1, D=Faza 2, E=Faza 3, F=Faza 4, G=Faza 5 (MP), H=Faza 6. Numery sekwencyjne w obrębie sekcji (B1, B2, ..., B7). **FAZA -1, FAZA 0 i FAZA 1 (C1–C8) ukończone — patrz sekcja WYKONANE na końcu pliku.**
 > 2. **Szukaj kontekstu decyzji projektowej** w sekcji tematycznej (CZĘŚĆ X = Afiksy, CZĘŚĆ AB = Walka/Rany, CZĘŚĆ AC = Multiplayer, CZĘŚĆ AF = Ekonomia, CZĘŚĆ AG = Infrastruktura, itd.).
 > 3. **Każda decyzja projektowa** ma blok `> **Zasada projektowa**` + `> **Dlaczego?**` + `> **Co odrzucono?**` — przeczytaj je zanim zaczniesz kodować.
 > 4. **GitHub Issues** powinny mieć w tytule kod zadania (`[TASK] B1 — ...`) i odwoływać się do tej sekcji w treści.
@@ -36,7 +36,7 @@
 > | CZĘŚĆ AG | Infrastruktura (.170=RTX3060, .16=GTX1660, workload rules) |
 > | CZĘŚĆ 10 | Zasady projektowe (5 reguł) |
 > | CZĘŚĆ 10b | Observability — odłożone do prod deployment |
-> | **WYKONANE** | **Fazy zakończone (FAZA -1, FAZA 0 B1-B7) — na końcu pliku** |
+> | **WYKONANE** | **Fazy zakończone (FAZA -1 A1-A12, FAZA 0 B1-B7, FAZA 1 C1-C8) — na końcu pliku** |
 >
 > ### Kluczowe zależności (nie łam ich)
 >
@@ -3078,6 +3078,24 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 | A11 | Shared utilities admin (api.js, toast.js, modal.js, table.js) | A10 |
 | A12 | Game config seed — `data/game_config_seed.sql` w git; skrypty export/import | A3 |
 
+#### Notatki implementacyjne
+
+**A1** — Usunięto ~1.9 GB martwego kodu: `actions-runner/` (887 MB), `voice-service/` (708 MB), `observability/` (~266 MB), `output/`, `temp-img/`, `combat_v2_service.py`. Usunięto `frontend/admin_panel_v2/` po weryfikacji parzystości z admin3 (A6–A9). Zaktualizowano `.gitignore` o `data/`, `backups/`, `__pycache__/`, `*.pyc`, `.venv/`.
+
+**A2** — Przeprowadzono audyt schematu bazy danych: przegląd tabel `game_config_*`, `campaigns`, `characters`, `users`, `game_sessions`. Zidentyfikowano trzy różne formaty `effect_json` w różnych tabelach (problem opisany w CZĘŚCI X) oraz brakujące kolumny w `game_locations`. Wyniki audytu stały się podstawą migracji dla B1/B2 i projektu ekonomii (CZĘŚĆ AF).
+
+**A3** — PROD przeniesiony na 192.168.1.62, stary deploy na .63 zamrożony tagiem git `v1.0-legacy`. Nginx Proxy Manager (.4) przekierowany: `aigm.studio-colorbox.com` → `.62`. Skrypt `deploy_from_github.sh` stworzony na .62 — kod PROD pochodzi wyłącznie z `git main`, bezpośrednia edycja plików na serwerze prod jest zabroniona.
+
+**A4** — Wprowadzono system tagów git (v1.0.0, v1.1.0, v1.2.0…). Frontend i admin panel wyświetlają numer wersji jako klikalną odznakę w nagłówku. Kliknięcie odznaki otwiera popup z sekcją changelog dla aktualnej wersji.
+
+**A5** — Zdefiniowano i wdrożono workflow deployów z 30-minutowym powiadomieniem przez Telegram przed każdym restartem PROD. Skrypt `deploy_prod.sh` wykonuje `git fetch origin main` + `reset --hard` + rebuild obrazu Docker + healthcheck automatycznie.
+
+**A6–A9** — Audyt parzystości admin2 vs admin3 potwierdził pełne pokrycie wszystkich sekcji. Trasa `/admin2/` przekierowana na `/admin3/`. Katalog `frontend/admin_panel_v2/` usunięty z repozytorium. Dokumentacja (`CLAUDE.md`) zaktualizowana — `admin_panel_v3` jako jedyny aktywny panel.
+
+**A10–A11** — Nowa skorupa `admin_panel_v3` z dynamicznym ładowaniem sekcji przez sidebar nav. Shared utilities: `api.js` (`adminFetch` + `APIError`), `toast.js`, `modal.js`, `table.js`, `smart_entry.js` — każdy moduł sekcji korzysta z tych samych helperów bez duplikacji kodu.
+
+**A12** — Statyczny SQL seed z zatwierdzoną zawartością gry (`game_config_*`) wersjonowany w git jako `data/game_config_seed.sql`. Skrypty `export_seed.sh` / `import_seed.sh` w `scripts/`. Dane graczy (`characters`, `campaigns`, `users`) są w `.gitignore` — prywatne i nie trafiają do repozytorium.
+
 ---
 
 ### FAZA 0 — World State (fundament danych) ✅ UKOŃCZONA (2026-06-06)
@@ -3093,3 +3111,54 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 | B5 | Auto-zapis snapshotu World State po każdej turze narracyjnej | B1 |
 | B6 | Admin UI — World State History (zakładka w Campaign Monitor, diff między turami) | B5 |
 | B7 | DEV Inspector — panel diagnostyczny dla adminów (intent + gate + world state per kampania) | B5 |
+
+#### Notatki implementacyjne
+
+**B1** — Stworzono tabelę `world_state_snapshots` (kolumny: `id`, `campaign_id`, `turn_number`, `snapshot_json`, `snapshot_source`, `created_at`) z migracją w `migrations_admin.py`. Serwis `world_state_service.py` implementuje `save_snapshot()`, `get_latest_snapshot()`, `build_snapshot()` i `auto_save_snapshot()` jako jeden punkt zapisu stanu sceny.
+
+**B2** — Pięć kolumn live World State dodanych do `game_sessions`: `scene_enemies` (JSON list), `scene_npcs` (JSON list), `scene_cleared` (bool), `active_quests` (JSON list), `player_conditions` (JSON list). Helpery `get_world_state_flags()` i `set_world_state_flags()` w `world_state_service.py` z typowaną serializacją JSON — klucze nieznane są cicho ignorowane.
+
+**B3** — Gate Mechanic w `turns.py` sprawdza intencję gracza (B4) względem World State PRZED wywołaniem LLM. ATTACK blokowany gdy `scene_enemies=[]`, MOVE blokowany gdy hex niedostępny, REST wymaga bezpiecznej lokacji. Blok nie pobiera tury — gracz dostaje komunikat i może zmienić akcję bez utraty kolejki.
+
+**B4** — Parser intencji klasyfikuje tekst gracza na: ATTACK, MOVE, TALK, REST, EXPLORE lub OTHER. Regex-based matching na polskie wyrażenia kluczowe. Wynik parsowania trafia do Gate (B3) jako podstawa decyzji o dopuszczeniu akcji.
+
+**B5** — `auto_save_snapshot()` wywołuje `build_snapshot()` — zbiera aktualny stan z `game_sessions` (enemies, npcs, quests, conditions) + `MAX(turn_number)` z `campaign_turns` — i zapisuje z `source="auto"`. Podpięte do 3 ścieżek w `turns.py`: main streaming DONE, skill_test keyword early exit i skill_test resolve endpoint. Prune do 50 snapshotów per kampania.
+
+**B6** — Zakładka "🌍 Stan Świata" w Campaign Monitor admina wyświetla listę snapshotów z timeline oraz podgląd JSON stanu (wrogowie, NPC, questy, warunki) dla każdego snapshotu. Endpointy `GET /api/admin/campaigns/{id}/world-state` i `/world-state/latest` w `admin.py`; `snapshot_json` automatycznie parsowany z JSON string na dict przy zwrocie.
+
+**B7** — DEV Inspector — panel diagnostyczny w zakładce kampanii, widoczny dla adminów i graczy z `debugMode`. Endpoint `GET /api/admin/dev-inspector/{campaign_id}` zwraca: `last_intent`, `gate_result`, `world_state` flags, `session_flags`, aktualną lokację. Przycisk "🔍" dostępny z player UI dla adminów bez opuszczania ekranu gry.
+
+---
+
+### FAZA 1 — Rdzeń pętli ✅ UKOŃCZONA (C1–C8, 2026-06-06, v1.2.1)
+
+> Podstawowe gameplay działa bezbłędnie. Walka, ruch, progi ran, XP spend — wszystko deterministyczne.
+
+| Kod | Zadanie | Zależy od |
+|---|---|---|
+| C1 | Fix Bug 1 — LLM sugeruje ruch po 5 turach bez zmiany lokacji (STORY_STALE) | B3 |
+| C2 | Walidacja ruchu mechaniczna (hex, terrain check, World State update) | C1 |
+| C3 | Fix Bug 2 — Gate walki: ATTACK blokowany gdy scene_enemies=[] | B3 |
+| C4 | Unifikacja wound_penalty: hp_current/hp_max → modifier (utility) | — |
+| C5 | Symetria ran: wound_penalty dla wrogów (nie tylko gracza) | C4 |
+| C6 | Synchronizacja progów ran frontend/backend przez endpoint | C4 |
+| C7 | XP Spend — spend_skill endpoint (wszystkie archetypy, poprawne koszty) | — |
+| C8 | XP Spend — spend_stat endpoint (koszty z tabeli, ceiling=19, CON→hp_max) | C7 |
+
+#### Notatki implementacyjne
+
+**C1** — Po 5 turach gracza w tym samym hexie bez zmiany lokacji, backend wstrzykuje sygnał `STORY_STALE` do kontekstu LLM. LLM otrzymuje instrukcję: zaproponuj ruch, wywołaj nowe wydarzenie lub encounter. Licznik resetuje się przy każdej zmianie hex lub lokacji.
+
+**C2** — Backend sprawdza przed aktualizacją World State czy docelowy hex jest odkryty i czy terrain jest dostępny dla postaci. Poprawna zmiana lokacji aktualizuje `current_hex` i `current_location` w `session_flags`. Ruch do nieznanego hexu blokowany z komunikatem — gracz nie może teleportować się poza mapę.
+
+**C3** — Gate walki blokuje akcję ATTACK gdy `scene_enemies=[]` w World State aktywnej kampanii. Gracz otrzymuje komunikat "Brak celu w scenie" zamiast narracji walki z nieistniejącym wrogiem. Blok nie pobiera tury — gracz może wybrać inną akcję.
+
+**C4** — `wound_penalty_from_hp(current_hp, max_hp)` zwraca modifier od 0 do -4 zależnie od procentu HP: pełnia zdrowia = 0, ranny = -1, ciężko ranny = -2, krytyczny = -3, umierający = -4. Jeden punkt prawdy dla kary za rany, używany przez `combat_service`, `vitality_service` i synchronizowany z frontendem przez endpoint C6.
+
+**C5** — `wound_penalty_from_hp()` stosowany do rzutów ataku wroga gdy jego HP jest niskie. Wróg ranny trafia rzadziej — ta sama formuła i te same progi co dla gracza. Symetria mechaniki eliminuje sytuację gdzie gracz jest karany za rany, a wróg nie.
+
+**C6** — Endpoint `GET /api/mechanics/wound-thresholds` zwraca progi ran (`wounded`, `critical`, `dying`) z backendu. Frontend pobiera progi z API zamiast hardkodować wartości w JS. Jeden punkt prawdy eliminuje rozbieżności między UI a silnikiem walki.
+
+**C7** — `POST /api/characters/{id}/xp/spend-skill` — wydawanie XP na umiejętności: nowa nauka = 100 XP, rank 1→2 = 75 XP, rank 2→3 = 150 XP. Limit `rank_ceiling=3`. Dostępny dla wszystkich archetypów (Wojownik, Łotr, Uczony) — nie tylko Uczonego jak wcześniej.
+
+**C8** — `POST /api/characters/{id}/xp/spend-stat` — wydawanie XP na +1 do statystyki zgodnie z tabelą kosztów z game_mechanics.md (50/100/200/400 XP zależnie od obecnej wartości). Sufit=19 — wartość 20+ niedostępna mechanicznie. Wzrost CON automatycznie przelicza `hp_max` przez formułę `CON_mod × level`.

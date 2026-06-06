@@ -184,6 +184,8 @@ class OllamaDriver:
                     json=payload,
                     headers=_build_headers(api_key),
                 ) as resp:
+                    if not resp.is_success:
+                        resp.read()
                     resp.raise_for_status()
                     for line in resp.iter_lines():
                         if not line:
@@ -270,13 +272,15 @@ class OpenAIDriver:
     def generate_stream(base_url: str, model: str, messages: list[dict], api_key: str) -> Generator[str, None, None]:
         started_at = time.perf_counter()
         payload = {"model": model, "messages": messages, "stream": True, "temperature": 0.8}
-        url = f"{base_url}/chat/completions"
+        url = f"{base_url}/v1/chat/completions"
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
         try:
             with httpx.Client(timeout=float(os.getenv("OLLAMA_TIMEOUT", "120"))) as client:
                 with client.stream("POST", url, json=payload, headers=headers) as resp:
+                    if not resp.is_success:
+                        resp.read()
                     resp.raise_for_status()
                     for line in resp.iter_lines():
                         if not line or line == "data: [DONE]":
@@ -398,6 +402,8 @@ class AzureDriver:
         try:
             with httpx.Client(timeout=float(os.getenv("OLLAMA_TIMEOUT", "120"))) as client:
                 with client.stream("POST", url, json=payload, headers=headers) as resp:
+                    if not resp.is_success:
+                        resp.read()
                     resp.raise_for_status()
                     for line in resp.iter_lines():
                         if not line or line == "data: [DONE]":

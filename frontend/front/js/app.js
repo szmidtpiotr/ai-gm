@@ -2151,7 +2151,7 @@ function appendMessage(msg, opts = {}) {
         dbg.style.display = debugMode ? 'block' : 'none';
         _renderDebugCombatLine(dbg, cs);
         dbg.innerHTML += `<span class="debug-block__loc">${escapeHtml(locLine)}${locJson ? '\n' + escapeHtml(locJson) : ''}</span>`;
-        elements.chatMessages.appendChild(dbg);
+        bubble.appendChild(dbg);
     }
 }
 
@@ -3095,6 +3095,7 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             const meta = payload.length > 6 ? JSON.parse(payload.slice(6)) : {};
             if (meta.skill_test_pending) result.skill_test_pending = meta.skill_test_pending;
             if (meta.current_location)   result.current_location   = meta.current_location;
+            if (meta.suggested_actions)  result.suggested_actions  = meta.suggested_actions;
             return;
         }
 
@@ -3187,6 +3188,15 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
         });
         // TTS — speak the full text once streaming is done
         if (gmContent) window.voiceUI?.speakGMText?.(gmContent);
+
+        // Debug block — attach to bubble so it stays in the chat area
+        if (debugMode) {
+            const dbg = document.createElement('div');
+            dbg.className = 'debug-block';
+            dbg.dataset.stale = '1';
+            dbg.style.display = 'block';
+            streamBubble.appendChild(dbg);
+        }
     } else if (firstToken) {
         // No tokens at all — remove typing indicator if still present
         typingIndicator.remove();
@@ -3422,8 +3432,12 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
             scrollToBottom();
         }
 
-        // Re-enable input
+        // Re-enable input + restore suggested actions
         if (elements.btnSend) elements.btnSend.disabled = false;
+        if (response.suggested_actions) {
+            _suggestedActions = response.suggested_actions;
+            renderSuggestedActions(_suggestedActions);
+        }
     } catch (err) {
         popupEl?.remove();
         showToast(err.message || 'Błąd rozwiązania testu', 'error');

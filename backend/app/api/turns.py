@@ -5363,10 +5363,30 @@ def resolve_skill_test_endpoint(
         except Exception as _ws_err_st:
             logger.warning("world_state_snapshot_skilltest_error", error=str(_ws_err_st))
 
+        _sa_after: list[dict] = []
+        try:
+            _sf_st: dict = {}
+            _sf_st_row = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id=? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _sf_st_row:
+                _sf_st = _json.loads(_sf_st_row[0] or "{}")
+            _sa_after = build_suggested_actions(
+                conn=conn,
+                campaign_id=campaign_id,
+                character_id=int(payload.character_id),
+                game_state=_sf_st.get("state", "NARRATIVE"),
+                session_flags=_sf_st,
+            )
+        except Exception:
+            pass
+
         return {
             "prose": prose,
             "skill_test_result": result,
             "turn_number": turn_number,
+            "suggested_actions": _sa_after,
             "state": {
                 "character_hp": char_sheet.get("current_hp"),
                 "character_max_hp": char_sheet.get("max_hp"),

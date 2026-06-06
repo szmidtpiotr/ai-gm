@@ -45,6 +45,7 @@ def build_suggested_actions(
     game_state: str | None,
     session_flags: dict,
     llm_suggested: list[dict] | None = None,
+    travel_hint: str | None = None,
 ) -> list[dict]:
     """
     Build up to MAX_ACTIONS quick-action buttons for the player UI.
@@ -132,8 +133,10 @@ def _build_narrative_actions(
             reason="Nie możesz tu bezpiecznie odpocząć" if not safe else None,
         ))
 
-    # 5) BUILD_CAMP — Stage 2B R4: only visible when hex is unsafe (otherwise REST works)
-    if len(actions) < MAX_ACTIONS and not _is_safe_for_rest(conn, current_loc_key):
+    # 5) BUILD_CAMP — Stage 2B R4: only when hex is unsafe AND session has a hex position
+    current_hex = session_flags.get("current_hex") or {}
+    has_hex = current_hex.get("q") is not None and current_hex.get("r") is not None
+    if len(actions) < MAX_ACTIONS and not _is_safe_for_rest(conn, current_loc_key) and has_hex:
         actions.append(SuggestedAction(
             label="Rozbij obóz",
             action="BUILD_CAMP",
