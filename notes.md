@@ -9,13 +9,13 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 |------|-----------|-------|
 | A (Faza -1) | 13/13 | 100% ✅ |
 | B (Faza 0) | 7/7 | 100% ✅ |
-| C (Faza 1) | 0/16 | 0% |
+| C (Faza 1) | 0/18 | 0% |
 | D (Faza 2) | 0/13 | 0% |
 | E (Faza 3) | 0/28 | 0% |
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
-| **TOTAL** | **20/118** | **17%** |
+| **TOTAL** | **20/120** | **17%** |
 
 ---
 
@@ -67,6 +67,8 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] C14 — Hero-first fix: startCharacterWizard() tylko z Heroes screen — [#368](https://github.com/szmidtpiotr/ai-gm/issues/368)
 - [ ] C15 — Error boundary dla API failures (toast zamiast białego ekranu) — [#369](https://github.com/szmidtpiotr/ai-gm/issues/369)
 - [ ] C16 — Delete confirmation modals (kampania, postać) — [#370](https://github.com/szmidtpiotr/ai-gm/issues/370)
+- [ ] C17 — Kontekst ekwipunku postaci — injection listy przedmiotów i złota do LLM per tura — [#373](https://github.com/szmidtpiotr/ai-gm/issues/373)
+- [ ] C18 — Fix Bug 3: kampanie startują na istniejących hexach, nie nowych obrzeżach — [#374](https://github.com/szmidtpiotr/ai-gm/issues/374)
 
 ---
 
