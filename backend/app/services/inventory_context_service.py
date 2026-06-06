@@ -1,4 +1,7 @@
+import logging
 import sqlite3
+
+_log = logging.getLogger(__name__)
 
 
 def build_inventory_block(conn: sqlite3.Connection, character_id: int) -> str:
@@ -10,7 +13,8 @@ def build_inventory_block(conn: sqlite3.Connection, character_id: int) -> str:
     """
     try:
         return _build(conn, character_id)
-    except Exception:
+    except Exception as e:
+        _log.warning("inventory_context_build_failed", character_id=character_id, error=str(e))
         return ""
 
 

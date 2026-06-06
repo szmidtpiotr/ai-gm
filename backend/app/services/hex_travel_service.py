@@ -633,10 +633,11 @@ def resolve_starting_hex(
             starting_name=starting_location_name,
         )
 
-    conn.execute(
-        "UPDATE world_hexes SET location_key = ? WHERE q = ? AND r = ?",
-        (loc_key, sq, sr),
-    )
+    if is_new:
+        conn.execute(
+            "UPDATE world_hexes SET location_key = ? WHERE q = ? AND r = ?",
+            (loc_key, sq, sr),
+        )
 
     # Also anchor the session at the resolved location so context injection works from turn 1
     if gs:

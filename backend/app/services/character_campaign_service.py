@@ -34,6 +34,12 @@ def maybe_reset_hp_for_new_campaign(
         return False
 
     sheet["current_hp"] = max_hp
+
+    # Scholar also gets mana restored on fresh campaign start
+    max_mana = int(sheet.get("max_mana") or 0)
+    if max_mana > 0:
+        sheet["current_mana"] = max_mana
+
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",
         (json.dumps(sheet, ensure_ascii=False), character_id),
