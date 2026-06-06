@@ -16,6 +16,7 @@ from app.services.admin_accounts import (
     list_accounts,
     reset_account_sheet,
     set_account_password,
+    hard_delete_account,
     soft_delete_account,
     update_account,
 )
@@ -2413,8 +2414,8 @@ def admin_recreate_character(
 @router.delete("/admin/accounts/{account_id}")
 def admin_delete_account(account_id: int, _: None = Depends(require_admin_token)):
     try:
-        soft_delete_account(account_id)
-        return {"ok": True}
+        result = hard_delete_account(account_id)
+        return {"ok": True, **result}
     except KeyError:
         raise HTTPException(status_code=404, detail="Account not found") from None
 
