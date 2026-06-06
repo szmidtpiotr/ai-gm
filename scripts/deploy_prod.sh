@@ -40,7 +40,7 @@ if [[ "$CURRENT_BRANCH" != "main" ]]; then
   exit 1
 fi
 
-if [[ -n "$(git status --porcelain)" ]]; then
+if [[ -n "$(git status --porcelain | grep -v '^??')" ]]; then
   echo "❌ BŁĄD: Masz niezacommitowane zmiany."
   echo "   Zacommituj/stashuj je przed deployem."
   exit 1
