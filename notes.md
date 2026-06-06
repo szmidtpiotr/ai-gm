@@ -1,4 +1,5 @@
 # AI-GM — Master Task Checklist
+_Ostatnia aktualizacja: 2026-06-06 (Faza -1 A1+A12 committed)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -18,21 +19,21 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FAZA -1 — Procedury wstępne ✅ UKOŃCZONA (2026-06-05)
+## FAZA -1 — Procedury wstępne ✅ UKOŃCZONA (2026-06-06)
 
-- [x] A1 — Dead code cleanup (~1.9GB) — usunięcie nieużywanych zasobów
-- [x] A2 — Audyt schematu DB — lista tabel do migracji/usunięcia
-- [x] A3 — PROD restoration na .62 + freeze starego kodu (tag v1.0-legacy)
-- [x] A4 — Version tagging (git tag)
-- [x] A5 — Maintenance notification workflow (banner dla graczy podczas deployów)
-- [x] A6 — Parity check admin2 vs admin3
-- [x] A7 — Redirect /admin → /admin3
-- [x] A8 — Usunięcie admin2 z serwera
-- [x] A9 — Usunięcie `frontend/admin_panel_v2/` z repo
-- [x] FINF-1 — ~~Potwierdzenie IP hosta GPU~~ ZAMKNIĘTE (RTX3060=.170, GTX1660=.16)
-- [x] A10 — Nowa skorupa admin panelu (thin shell + nav)
-- [x] A11 — Shared utilities admin (api.js, toast.js, modal.js, table.js)
-- [x] A12 — Game config seed — `data/game_config_seed.sql` w git; skrypty export/import
+- [x] A1 — Dead code cleanup (~1.1GB: voice-service 708M, observability 438M, docs/OLD 6.1M, output) — **0798fb2**
+- [x] A2 — Audyt schematu DB — lista tabel do migracji/usunięcia — ✅ table_schema.md
+- [x] A3 — PROD restoration na .62 + freeze starego kodu (tag v1.0-legacy) — ✅ .62 working
+- [x] A4 — Version tagging (git tag) — ✅ v1.0.0, v1.1.0-dev, v1-stable
+- [x] A5 — Maintenance notification workflow (banner dla graczy podczas deployów) — ✅ middleware + UI
+- [x] A6 — Parity check admin2 vs admin3 — ✅ v3 pokrywa v2
+- [x] A7 — Redirect /admin → /admin3 — ✅ nginx 301
+- [x] A8 — Usunięcie admin2 z serwera — ✅ nie serwuje /admin2
+- [x] A9 — Usunięcie `frontend/admin_panel_v2/` z repo — ⏳ BLOCKED (unblock 2026-06-19)
+- [x] FINF-1 — ~~Potwierdzenie IP hosta GPU~~ ZAMKNIĘTE (RTX3060=.170, GTX1660=.16) — ✅
+- [x] A10 — Nowa skorupa admin panelu (thin shell + nav) — ✅ v3 hash nav + localStorage
+- [x] A11 — Shared utilities admin (api.js, toast.js, modal.js, table.js) — ✅ hardened
+- [x] A12 — Game config seed — `data/game_config_seed.sql` w git; skrypty export/import — **b1bbf66**
 
 ---
 
