@@ -15,6 +15,7 @@ from app.character_creation_config import (
     roll_4d6_drop_lowest,
     roll_creation_skills,
 )
+from app.services.opening_context import build_opening_plan_context
 from app.services.loot_service import grant_loot_to_character
 from app.services.vitality_service import calculate_hp, calculate_mana
 from app.services.campaign_plan_service import generate_v2_campaign_plan
@@ -2128,30 +2129,13 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                         )
 
                     if gm_plan_ready:
-                        # Pull GM plan context so opening scene matches the campaign world
                         _gm_row = conn.execute(
                             "SELECT gm_plan_json FROM campaigns WHERE id = ? LIMIT 1",
                             (campaign_id,),
                         ).fetchone()
-                        _plan_ctx = ""
-                        try:
-                            if _gm_row and _gm_row["gm_plan_json"]:
-                                _plan = json.loads(_gm_row["gm_plan_json"])
-                                _arc = (_plan.get("arcs") or {})
-                                _active_arc = _arc.get(_plan.get("active_arc_id") or "default") or next(iter(_arc.values()), {})
-                                _arc_title = _active_arc.get("title", "")
-                                _arc_road = _active_arc.get("roadmap", "")
-                                _arc_locs = ((_active_arc.get("hooks") or {}).get("locations") or [])
-                                if _arc_title or _arc_locs:
-                                    _plan_ctx = (
-                                        f"\n\nKontekst kampanii:"
-                                        + (f"\n- Tytuł wątku: {_arc_title}" if _arc_title else "")
-                                        + (f"\n- Zarys: {_arc_road[:200]}" if _arc_road else "")
-                                        + (f"\n- Sugerowane lokacje: {', '.join(_arc_locs[:3])}" if _arc_locs else "")
-                                        + "\n\nOtwarcie MUSI być spójne z tym kontekstem — wybierz odpowiednie miejsce startowe, NIE las jeśli fabuła tego nie wymaga."
-                                    )
-                        except Exception:
-                            pass
+                        _plan_ctx = build_opening_plan_context(
+                            _gm_row["gm_plan_json"] if _gm_row else None
+                        )
                         opening_prompt = (
                             f"{char_summary}{_plan_ctx}\n\n"
                             "To jest pierwsza chwila przygody. Zacznij sesję od klimatycznego opisu miejsca, "
