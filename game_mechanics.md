@@ -17,6 +17,7 @@
 > 3. **Każda decyzja projektowa** ma blok `> **Zasada projektowa**` + `> **Dlaczego?**` + `> **Co odrzucono?**` — przeczytaj je zanim zaczniesz kodować.
 > 4. **GitHub Issues** powinny mieć w tytule kod zadania (`[TASK] B1 — ...`) i odwoływać się do tej sekcji w treści.
 > 5. **notes.md** w katalogu głównym = bieżące notatki robocze (otwarte pytania, decyzje z sesji). Sprawdź go gdy coś nie jest jasne.
+> 6. **Zasada synchronizacji:** Gdy dodajesz nowe zadanie do CZĘŚĆ 7 (tabela fazy), **zawsze** dodaj ten sam wpis do `notes.md` jako `- [ ] XNN — opis` w odpowiedniej sekcji fazy. Zaktualizuj też tabelę progress na górze notes.md (Total column). Jeśli tworzysz GitHub Issue — dodaj link `[#NNN]` obok wpisu w notes.md.
 >
 > ### Mapa sekcji (szybka nawigacja)
 >
@@ -868,6 +869,8 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | C14 | Hero-first fix: startCharacterWizard() tylko z Heroes screen, NIGDY z _finalCreateCampaign | — |
 | C15 | Error boundary dla API failures (toast zamiast białego ekranu) | — |
 | C16 | Delete confirmation modals (kampania, postać) | — |
+| C17 | Kontekst ekwipunku postaci — injection listy posiadanych przedmiotów i złota do LLM przy każdej turze | — |
+| C18 | Fix Bug 3 — kampanie zawsze startują na nowych hexach na obrzeżach mapy zamiast reużyć istniejących hexów | C14 |
 
 ---
 
@@ -1679,6 +1682,117 @@ Sprawdź: czy kompresja narracyjna potrzebna?
         ▼
 → Gracz widzi narrację, pętla się powtarza
 ```
+
+---
+
+---
+
+### C17 — Kontekst Ekwipunku Postaci (Character Context Injection)
+
+> **Zadanie C17** z listy implementacyjnej Fazy 1.
+
+#### Problem który rozwiązuje
+
+LLM przy każdej turze dostaje wyłącznie imię postaci i ostatnie tury narracji. Nie wie co postać nosi, ile ma złota, ani jaką bronią walczy. Skutek: LLM swobodnie **wymyśla stan ekwipunku**. Typowy przykład: gracz zaczyna nową kampanię z sztyletkiem i skórzanym pancerzem, a LLM otwiera sesję sceną "obudziłeś się bez niczego — miecza nie ma, sakiewka pusta". Gracz widzi w ekwipunku sztylet i pancerz — sprzeczność jest oczywista.
+
+> **Zasada projektowa (zatwierdzona 2026-06-06):**
+> Przy każdym wywołaniu LLM (narratywa zwykła i otwarcie kampanii) backend wstrzykuje do bloku systemowego skrócony opis aktualnego ekwipunku postaci: broń w dłoni, założona zbroja, kluczowe przedmioty w plecaku i stan złota. LLM dostaje to jako fakt — nie może go zmienić bez mechanicznego powodu.
+
+> **Dlaczego?**
+> LLM nie ma dostępu do bazy danych. Jeśli nie dostanie listy przedmiotów w prompcie, **wymyśla ją** — i wymyśla źle, bo dramatyczne otwarcia z utratą ekwipunku to klasyczny motyw literacki. Bez injektu gracz nie może ufać narracji: "mam miecz według inventory, ale narracja mówi że nie mam". To podkopuje immersję i powoduje zamieszanie przy każdej kampanii.
+
+> **Co odrzucono i dlaczego?**
+> - **Nic nie robić, liczyć na historię tur** — tury zawierają narrację, ale nie jawny stan ekwipunku. LLM musiałby wnioskować co postać ma z kontekstu — zawodne, zwłaszcza przy nowych kampaniach gdzie nie ma historii tur.
+> - **Pełna lista wszystkich przedmiotów** — zbyt wiele tokenów. Plecak może zawierać dziesiątki wpisów (narrative items, zwoje, klucze). Wysyłamy tylko mechanicznie istotne: broń, zbroja, złoto, + max 5 kluczowych narrative items.
+
+#### Jak to działa krok po kroku
+
+**Co wstrzykujemy (blok `[EKWIPUNEK]`):**
+
+```
+[EKWIPUNEK POSTACI — FAKTY MECHANICZNE]
+Broń w dłoni: Sztylet (1d4+DEX obrażeń)
+Zbroja: Skórzany Pancerz (AC 12)
+W plecaku: krótki łuk, strzały ×20, lina 10m, pochodnia ×2, racja żywnościowa ×3
+Złoto: 36 GP
+[Kluczowe przedmioty fabularne: Księga z czarną pieczęcią kruków, Żelazny klucz z wroną]
+```
+
+LLM dostaje ten blok PRZED ostatnimi turami, jako część systemu. Nie może narracyjnie usunąć ani zmienić tych przedmiotów — jedyna zmiana ekwipunku następuje przez mechaniczne tagi (`Grant Item`, `SPEND_GOLD`) przetwarzane przez backend.
+
+**Skąd bierzemy dane:**
+
+```
+character_inventory WHERE character_id = X
+  → equipped (is_equipped=1): broń + zbroja → "w dłoni / na sobie"
+  → nie-equipped (is_equipped=0), item_type != 'narrative': plecak (max 10)
+  → narrative items z label != NULL: kluczowe przedmioty fabularne (max 5)
+
+characters.gold_gp → stan złota
+```
+
+**Miejsce injektu w kodzie:**
+
+Funkcja `buildmessages` w `backend/app/core/turn_engine.py` (linia 61) aktualnie wstrzykuje tylko imię postaci. C17 dodaje wywołanie `_build_inventory_block(conn, character_id)` → wynik doklejany do bloku `system_content`.
+
+Identyczna zmiana dla otwarcia kampanii w `_maybe_auto_generate_gm_plan_and_opening` (`backend/app/api/turns.py`) oraz `finalize_character_sheet` (`backend/app/api/characters.py`).
+
+#### Status implementacji
+
+| Element | Status |
+|---------|--------|
+| Inventory w DB (`character_inventory`) | ✅ Istnieje |
+| Złoto w DB (`characters.gold_gp`) | ✅ Istnieje |
+| Injection ekwipunku do `buildmessages` | ❌ C17 — do zbudowania |
+| Injection ekwipunku do otwarcia kampanii | ❌ C17 — do zbudowania |
+| Instrukcja w system_prompt: "nie zmieniaj ekwipunku bez tagu" | ❌ C17 — do zbudowania |
+
+---
+
+### C18 — Fix Bug 3: Kampanie na Istniejących Hexach (Campaign Hex Reuse)
+
+> **Zadanie C18** z listy implementacyjnej Fazy 1. Powiązane: C14 (hero-first fix), C2 (walidacja ruchu mechaniczna).
+
+#### Problem który rozwiązuje
+
+Każda nowa kampania dostaje losowy `start_hex` generowany od zera — typowo trafia na obrzeże mapy (wysokie q/r), tam gdzie nie ma jeszcze żadnej aktywności gracza. Skutek: **gracz ma wiele kampanii każda na innym, pustym hexie** — mapy się nie łączą, świat wygląda jak archipelag izolowanych wysepek, a nie spójne terytorium.
+
+Poprawne zachowanie: nowa kampania powinna startować na hexie który już istnieje w `world_hexes` gracza (odkryty, niezerowy ruch) albo — gdy gracz zaczyna od zera — na standardowym hexie startowym (0,0) lub najbliższym odkrytym hexie.
+
+> **Zasada projektowa (zatwierdzona 2026-06-06):**
+> Hex startowy kampanii to **wybór z istniejących odkrytych hexów gracza**, nie generowanie nowych. Gdy gracz nie ma jeszcze żadnego hexu — startujemy na (0,0). System nigdy nie tworzy kampanii na losowych obrzeżach — losowość pojawia się tylko w zawartości locha lub encountera, nie w pozycji na mapie.
+
+> **Dlaczego?**
+> Mapa świata to kluczowy element ciągłości gry — gracz powinien widzieć jak jego przygody pokrywają jedno spójne terytorium. Generowanie nowych hexów per kampania łamie tę ciągłość: gracz widzi wiele rozrzuconych punktów bez połączenia. Dodatkowo: każdy nowy obrzeżny hex oznacza nowy, pusty region bez contentu — gracz ląduje "w nieznanym" bez kontekstu zamiast wracać do znajomego świata.
+
+> **Co odrzucono i dlaczego?**
+> - **Losowy hex na mapie** — problem który mamy teraz. Gracz nie wraca do świata, tworzy nowe.
+> - **Stały hex (0,0) zawsze** — za sztywne. Gracz który odkrył już 20 hexów chciałby kontynuować z innego punktu.
+> - **Hex z poprzedniej kampanii tego bohatera** — dobry domyślny, ale wymaga że bohater miał już kampanię. Jako fallback — tak.
+
+#### Jak to działa krok po kroku
+
+```
+Przy tworzeniu kampanii:
+1. Pobierz world_hexes WHERE discovered=TRUE AND należące do gracza/bohatera
+2. Jeśli bohater miał poprzednią kampanię → użyj jej ostatniego current_hex
+3. Else jeśli discovered_hexes > 0 → użyj centrum odkrytego obszaru (mediana q,r)
+4. Else → (0,0) jako hex startowy
+5. NIE generuj nowych hexów na obrzeżach
+```
+
+**Gdzie leży bug w kodzie:**
+
+Funkcja tworzenia kampanii (`POST /api/campaigns` w `backend/app/api/campaigns.py`) ustawia `start_hex_q` / `start_hex_r` przed wywołaniem `create_campaign()`. Sprawdź jak wartości są obliczane — najprawdopodobniej brak zapytania do `world_hexes` lub losowanie w stylu `random.randint(max_q+1, max_q+5)`.
+
+#### Status implementacji
+
+| Element | Status |
+|---------|--------|
+| `world_hexes` tabela z odkrytymi hexami | ✅ Istnieje |
+| Wybór hexu startowego z istniejących | ❌ C18 — do naprawy |
+| Fallback na (0,0) gdy brak odkrytych | ❌ C18 — do naprawy |
+| Test: nowa kampania ląduje na istniejącym hexie | ❌ C18 — do napisania |
 
 ---
 
