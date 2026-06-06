@@ -283,6 +283,10 @@ RAW_MIGRATIONS = [
     "INSERT OR REPLACE INTO game_config_meta (key, value) VALUES ('xp_skill_rank_costs', '{\"1\":100,\"2\":75,\"3\":150}')",
     # C7: skill rank ceiling = 3 for all skills
     "UPDATE game_config_skills SET rank_ceiling = 3",
+    # C8: stat XP costs per game_mechanics.md (new_value→cost); current 8-10=50, 11-13=100, 14-16=200, 17-18=400
+    "INSERT OR REPLACE INTO game_config_meta (key, value) VALUES ('xp_stat_point_costs', '{\"9\":50,\"10\":50,\"11\":50,\"12\":100,\"13\":100,\"14\":100,\"15\":200,\"16\":200,\"17\":200,\"18\":400,\"19\":400}')",
+    # C8: stat ceiling = 19 (19+ = Niedostępne per game_mechanics.md)
+    "INSERT OR REPLACE INTO game_config_meta (key, value) VALUES ('xp_stat_value_ceiling', '19')",
 ]
 
 

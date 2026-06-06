@@ -28,24 +28,24 @@ DEFAULT_RANK_UP_COSTS: dict[int, int] = {
     5: 1200,
 }
 
-# Target stat value (after +1) → XP cost; merged with `game_config_meta.xp_stat_point_costs`.
+# New stat value (after +1) → XP cost per game_mechanics.md CZĘŚĆ 7.
+# Ranges: current 8-10 → 50, 11-13 → 100, 14-16 → 200, 17-18 → 400; 19+ = ceiling.
 DEFAULT_STAT_POINT_COSTS: dict[int, int] = {
-    8: 40,
-    9: 50,
-    10: 65,
-    11: 85,
-    12: 110,
-    13: 140,
-    14: 180,
-    15: 230,
-    16: 300,
-    17: 400,
-    18: 550,
-    19: 750,
-    20: 1000,
+    9: 50,    # current 8→9
+    10: 50,   # current 9→10
+    11: 50,   # current 10→11
+    12: 100,  # current 11→12
+    13: 100,  # current 12→13
+    14: 100,  # current 13→14
+    15: 200,  # current 14→15
+    16: 200,  # current 15→16
+    17: 200,  # current 16→17
+    18: 400,  # current 17→18
+    19: 400,  # current 18→19
 }
 
-DEFAULT_STAT_VALUE_CEILING = 20
+# game_mechanics.md: current 19+ = "Niedostępne" → ceiling at 19.
+DEFAULT_STAT_VALUE_CEILING = 19
 
 
 def _load_rank_costs(conn: sqlite3.Connection) -> dict[int, int]:
@@ -373,6 +373,16 @@ def spend_stat_point_up(
     stats[sk] = new_value
     sheet["stats"] = stats
     sheet["xp_available"] = xp - cost
+
+    # CON change → recalculate hp_max: delta_mod × level
+    if sk.upper() == "CON":
+        level = int(sheet.get("level") or 1)
+        old_mod = (current - 10) // 2
+        new_mod = (new_value - 10) // 2
+        delta = new_mod - old_mod
+        if delta:
+            old_max = int(sheet.get("max_hp") or 0)
+            sheet["max_hp"] = old_max + delta * level
 
     conn.execute(
         "UPDATE characters SET sheet_json = ? WHERE id = ?",
