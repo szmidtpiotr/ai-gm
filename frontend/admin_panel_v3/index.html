@@ -14153,7 +14153,10 @@
           clearInterval(window._inspectorTimer); window._inspectorTimer = null; return;
         }
         try {
-          const d = await apiFetch(`/api/debug/campaigns/${campId}/state`);
+          const _tok = localStorage.getItem(_ADMIN_TOKEN_KEY);
+          const _r = await fetch(`/api/debug/campaigns/${campId}/state`, { headers: _tok ? { 'Authorization': `Bearer ${_tok}` } : {} });
+          if (!_r.ok) { panel.innerHTML = `<div style="color:var(--red);padding:8px">Auth error ${_r.status} — zaloguj się ponownie</div>`; return; }
+          const d = await _r.json();
           const intent = d.intent || {};
           const ws = d.world_state || {};
           const gr = d.gate_result || {};
