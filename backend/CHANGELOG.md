@@ -4,6 +4,20 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.2.1 — 2026-06-06 — Faza 1: World Loop Core (C1-C8)
+
+### Added / Fixed
+- **C1** — STORY_STALE: po 5 turach bez zmiany lokacji LLM sugeruje ruch (#355)
+- **C2** — Walidacja ruchu mechaniczna: hex, terrain, World State update (#356)
+- **C3** — Gate walki: sprawdzanie scene_enemies przed każdym ATTACK (#357)
+- **C4** — wound_penalty utility: unifikacja hp_current/hp_max → roll modifier (#360)
+- **C5** — Symetria ran: wound_penalty dla wrogów (nie tylko gracza) (#358)
+- **C6** — Progi ran frontend/backend: stałe z API zamiast hardcode (#359)
+- **C7** — XP spend skill: poprawne koszty (100/75/150 XP), rank ceiling=3 (#361)
+- **C8** — XP spend stat: koszty per game_mechanics.md (50/100/200/400), ceiling=19, CON→hp_max (#362)
+
+---
+
 ## v1.2.0-dev — 2026-06-06 — Faza 1: World Loop Core
 
 In progress (Faza 1 — C tasks).
