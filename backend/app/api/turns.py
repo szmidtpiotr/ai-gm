@@ -4709,6 +4709,30 @@ def create_turn_stream(
                     clean_text = _repack_narrative(clean_text, _sqs(_narr_qs), _pjson_qs)
                 except Exception as _qse:
                     logger.warning("quest_suggest_parse_error", error=str(_qse))
+                # C12: parse [SPEND_GOLD:key] → deduct from character, strip tag
+                try:
+                    from app.services.spend_gold_service import parse_spend_gold_tags as _psg, spend_gold_on_service as _sgs
+                    import re as _re_sg
+                    _sg_conn = get_db()
+                    try:
+                        _sg_narr, _sg_pjson = _extract_narrative_for_cues(clean_text)
+                        _sg_tags = _psg(_sg_narr, _sg_conn)
+                        for _sg_key, _sg_cost in _sg_tags:
+                            _sg_ok, _sg_new = _sgs(_sg_conn, character_id_val, _sg_key)
+                            if _sg_ok:
+                                _sg_conn.commit()
+                                logger.info("spend_gold_applied", campaign_id=campaign_id_val,
+                                            service_key=_sg_key, cost=_sg_cost, new_gold=_sg_new)
+                            else:
+                                logger.info("spend_gold_insufficient_stream", campaign_id=campaign_id_val,
+                                            service_key=_sg_key, cost=_sg_cost)
+                    finally:
+                        _sg_conn.close()
+                    # Strip [SPEND_GOLD:*] tags from narrative regardless of success
+                    _sg_narr_clean = _re_sg.sub(r'\[SPEND_GOLD:[^\]]+\]', '', _sg_narr).strip()
+                    clean_text = _repack_narrative(clean_text, _sg_narr_clean, _sg_pjson)
+                except Exception as _sge:
+                    logger.warning("spend_gold_parse_error", error=str(_sge))
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(

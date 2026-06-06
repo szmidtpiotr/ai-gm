@@ -2780,6 +2780,22 @@ def _ensure_auth_ux_schema(conn: sqlite3.Connection) -> None:
                 logger.warning("auth_ux_migration_warning", sql_preview=sql.strip()[:80], error=str(e))
 
 
+def _ensure_game_config_services(conn: sqlite3.Connection) -> None:
+    """C12: create game_config_services table if absent."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS game_config_services (
+            key         TEXT PRIMARY KEY,
+            label       TEXT NOT NULL,
+            cost_gp     INTEGER NOT NULL DEFAULT 0,
+            description TEXT NOT NULL DEFAULT '',
+            is_active   INTEGER NOT NULL DEFAULT 1,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -2851,7 +2867,8 @@ def run_admin_migrations() -> None:
         _ensure_dungeon_v2_schema(conn)
         _ensure_narrative_items_schema(conn)
         _ensure_auth_ux_schema(conn)
+        _ensure_game_config_services(conn)
     finally:
         conn.close()
 
-    logger.info("admin_migration_complete", phase="12.2")
+    logger.info("admin_migration_complete", phase="12.3")
