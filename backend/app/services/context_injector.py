@@ -143,6 +143,7 @@ class ContextInjector:
         blocks = [
             continuity_block,
             self._build_world_block(location, ingame_hours),
+            self._build_stale_block(session_flags),
             self._build_entities_block(npcs, combat_roster),
             self._build_mechanic_block(action_type, mechanic_result),
             self._build_character_state_block(character, active_conditions),
@@ -312,6 +313,14 @@ class ContextInjector:
 
         lines.append(f"Pora: {_time_of_day(ingame_hours)}")
         return "\n".join(lines)
+
+    _STORY_STALE_THRESHOLD = 5
+
+    def _build_stale_block(self, session_flags: dict) -> str:
+        turns = session_flags.get("turns_at_location", 0)
+        if turns < self._STORY_STALE_THRESHOLD:
+            return ""
+        return f"[STORY_STALE: {turns} tur bez ruchu — zasugeruj bohaterowi opuszczenie lokacji]"
 
     def _build_entities_block(self, npcs: list[dict], combat_roster: list[dict]) -> str:
         lines = ["=== POSTACIE NA SCENIE ==="]
