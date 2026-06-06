@@ -513,6 +513,10 @@ ADMIN_MIGRATIONS = [
     # Phase 8D-5 — Location auto-create review state and DEV default flag
     "ALTER TABLE game_locations ADD COLUMN ai_generated INTEGER DEFAULT 0",
     "ALTER TABLE game_locations ADD COLUMN approved INTEGER DEFAULT 1",
+    # Phase 0-B1 — Add created_by, canonical, source_campaign_id tracking to game_locations
+    "ALTER TABLE game_locations ADD COLUMN created_by TEXT DEFAULT 'admin_manual'",
+    "ALTER TABLE game_locations ADD COLUMN canonical INTEGER DEFAULT 0",
+    "ALTER TABLE game_locations ADD COLUMN source_campaign_id INTEGER",
     """
     INSERT OR IGNORE INTO game_config_meta (key, value)
     VALUES ('location_auto_create_enabled', '1')
