@@ -628,7 +628,9 @@ def get_campaign_debug_state(
         token = authorization.removeprefix("Bearer ").strip()
         from app.services.admin_auth import verify_admin_token
         if not verify_admin_token(token):
-            raise HTTPException(status_code=401, detail="Invalid admin token")
+            # Fall back to JWT admin check (player UI sends access token)
+            from app.core.jwt_auth import require_admin_role
+            require_admin_role(authorization, user_id)
     elif not _user_is_admin(user_id):
         raise HTTPException(status_code=403, detail="Admin role required")
 
