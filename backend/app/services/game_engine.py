@@ -445,6 +445,13 @@ def build_narrative_messages(
         _inject_campaign_s11_context(conn, campaign, messages, current_user_text=user_text)
         _inject_location_llm_context(conn, int(campaign["id"]), messages)
         _inject_npc_llm_context(conn, int(campaign["id"]), messages)
+        if character and messages:
+            from app.services.inventory_context_service import build_inventory_block
+            inv_block = build_inventory_block(conn, int(character["id"]))
+            if inv_block:
+                first = messages[0]
+                if isinstance(first, dict) and first.get("role") == "system":
+                    first["content"] = f"{first.get('content', '').rstrip()}\n\n{inv_block}"
 
     combat_log_block = combat_svc.get_combat_turns_context_for_prompt(int(campaign["id"]))
     if combat_log_block and messages:
