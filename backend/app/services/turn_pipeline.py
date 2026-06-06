@@ -167,12 +167,14 @@ def process_v2_turn(
 
     # ── Step 5: Mechanic Resolver ─────────────────────────────────────────
     mechanic_result = mechanic_resolve(action_type, params, context)
+    mechanic_result["action_type"] = action_type  # ensure action_type propagated for downstream checks
 
     # ── Step 6: World State Update ────────────────────────────────────────
     turn_number = _get_next_turn_number(campaign_id, conn)
     _apply_world_state(mechanic_result, context, character_id, campaign_id, turn_number, conn)
     _update_session_flags(wsm_result, session_flags, mechanic_result, conn, campaign_id)
     _update_turns_at_location(mechanic_result, session_flags, conn, campaign_id)
+    _update_hex_world_state(mechanic_result, session_flags, conn, campaign_id)
 
     # XS1: Beat complete XP
     xp_delta = _process_beat_signals(mechanic_result, campaign_id, character_id, turn_number, conn)
@@ -585,6 +587,30 @@ def _update_turns_at_location(
         session_flags["turns_at_location"] = 0
     else:
         session_flags["turns_at_location"] = session_flags.get("turns_at_location", 0) + 1
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+        (json.dumps(session_flags, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
+
+
+def _update_hex_world_state(
+    mechanic_result: dict, session_flags: dict, conn: sqlite3.Connection, campaign_id: int
+) -> None:
+    """After successful hex movement, sync current_hex (and location_key if set) in session_flags."""
+    if mechanic_result.get("action_type") != "MOVEMENT" or mechanic_result.get("outcome") != "SUCCESS":
+        return
+    dest_q = mechanic_result.get("destination_q")
+    dest_r = mechanic_result.get("destination_r")
+    if dest_q is None or dest_r is None:
+        return
+    session_flags["current_hex"] = {"q": int(dest_q), "r": int(dest_r)}
+    hex_row = conn.execute(
+        "SELECT location_key FROM world_hexes WHERE q = ? AND r = ? AND is_active = 1",
+        (int(dest_q), int(dest_r)),
+    ).fetchone()
+    if hex_row and hex_row["location_key"]:
+        session_flags["current_location_key"] = hex_row["location_key"]
     conn.execute(
         "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
         (json.dumps(session_flags, ensure_ascii=False), campaign_id),

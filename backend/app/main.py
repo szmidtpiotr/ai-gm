@@ -275,6 +275,10 @@ RAW_MIGRATIONS = [
     )""",
     """CREATE INDEX IF NOT EXISTS idx_world_state_snapshots_campaign
     ON world_state_snapshots(campaign_id, turn_number DESC)""",
+    # C2: terrain passability for hex movement
+    "ALTER TABLE hex_type_config ADD COLUMN is_passable INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE hex_type_config ADD COLUMN required_item TEXT",
+    "UPDATE hex_type_config SET is_passable = 0 WHERE hex_type IN ('lake', 'ocean', 'sea')",
 ]
 
 

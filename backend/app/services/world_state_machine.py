@@ -359,8 +359,25 @@ class WorldStateMachine:
             ).fetchone()
             if not dest_hex:
                 return WSMResult.blocked("To miejsce nie istnieje na mapie.")
-            # Actual pathfinding happens in resolve_chain_travel;
-            # WSM just confirms dest hex exists and movement is legal state-wise
+            # Terrain passability check (C2)
+            hex_type = dest_hex["hex_type"]
+            terrain_cfg = self.conn.execute(
+                "SELECT is_passable, required_item FROM hex_type_config WHERE hex_type = ?",
+                (hex_type,),
+            ).fetchone()
+            if terrain_cfg and not terrain_cfg["is_passable"]:
+                required = terrain_cfg["required_item"]
+                if required:
+                    has_item = self.conn.execute(
+                        "SELECT 1 FROM character_inventory WHERE character_id = ? AND item_key = ? AND quantity > 0",
+                        (character_id, required),
+                    ).fetchone()
+                    if not has_item:
+                        return WSMResult.blocked(
+                            f"Nie możesz wejść na ten teren. Potrzebujesz: {required}."
+                        )
+                else:
+                    return WSMResult.blocked("Ten teren jest nieprzejezdny.")
             return WSMResult(valid=True)
 
         # ── Legacy location-key movement (backward compat) ────────────────
