@@ -66,28 +66,28 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] C13 — Instrukcja "tylko złoto GP" w system_prompt (usunięcie waluty srebrnej) — [#367](https://github.com/szmidtpiotr/ai-gm/issues/367)
 - [ ] C14 — Hero-first fix: startCharacterWizard() tylko z Heroes screen — [#368](https://github.com/szmidtpiotr/ai-gm/issues/368)
 - [ ] C15 — Error boundary dla API failures (toast zamiast białego ekranu) — [#369](https://github.com/szmidtpiotr/ai-gm/issues/369)
-- [ ] C16 — Delete confirmation modals (kampania, postać) — [#370](https://github.com/szmidtpiotr/ai-gm/issues/370)
-- [ ] C17 — Kontekst ekwipunku postaci — injection listy przedmiotów i złota do LLM per tura — [#373](https://github.com/szmidtpiotr/ai-gm/issues/373)
-- [ ] C18 — Fix Bug 3: kampanie startują na istniejących hexach, nie nowych obrzeżach — [#374](https://github.com/szmidtpiotr/ai-gm/issues/374)
+- [x] C16 — Delete confirmation modals (kampania, postać) — [#370](https://github.com/szmidtpiotr/ai-gm/issues/370)
+- [x] C17 — Kontekst ekwipunku postaci — injection listy przedmiotów i złota do LLM per tura — [#373](https://github.com/szmidtpiotr/ai-gm/issues/373)
+- [x] C18 — Fix Bug 3: kampanie startują na istniejących hexach, nie nowych obrzeżach — [#374](https://github.com/szmidtpiotr/ai-gm/issues/374)
 - [ ] C19 — Fix Bug 4: bohater startuje nową kampanię z pełnym HP (reset hp_current = hp_max) — [#375](https://github.com/szmidtpiotr/ai-gm/issues/375)
 
 ---
 
 ## FAZA 2 — Systemy + Narracja
 
-- [ ] D1 — Pending flow przedmiotów (GRANT_ITEM nieznanego klucza → auto-screen → pending=true)
-- [ ] D2 — Pending flow wrogów (analogicznie do D1)
-- [ ] D3 — NPC pamięć w World State (NPC_MEMORY tag → context injection przy kolejnej wizycie)
-- [ ] D4 — Auto-screening admin queue (Poziom 1 tech validation + Poziom 2 LLM scoring)
-- [ ] D5 — Item VIEW — podgląd przedmiotu w inventory (tooltip/modal)
-- [ ] D6 — Narracja: tagi, parsery, Narrative State struktura
-- [ ] D7 — Encountery generyczne (adventure_hooks + gameconfig_encounter_templates unifikacja)
-- [ ] D8 — Ekran profilu gracza (konto, znajomi, ustawienia LLM)
-- [ ] D9 — Ekran kampanii — 5 trybów (Nowa/Gotowa/Loch/Loch-kafelki/Multiplayer)
-- [ ] D10 — Onboarding animacja + wybór motywu (nowy gracz)
-- [ ] D11 — Confirm password na rejestracji
-- [ ] D12 — Szybka nawigacja Hub → Gra (bez przeładowania)
-- [ ] D13 — Mobile layout — weryfikacja responsywności wszystkich ekranów
+- [ ] D1 — Pending flow przedmiotów (GRANT_ITEM nieznanego klucza → auto-screen → pending=true) — [#376](https://github.com/szmidtpiotr/ai-gm/issues/376)
+- [ ] D2 — Pending flow wrogów (analogicznie do D1) — [#377](https://github.com/szmidtpiotr/ai-gm/issues/377)
+- [ ] D3 — NPC pamięć w World State (NPC_MEMORY tag → context injection przy kolejnej wizycie) — [#378](https://github.com/szmidtpiotr/ai-gm/issues/378)
+- [ ] D4 — Auto-screening admin queue (Poziom 1 tech validation + Poziom 2 LLM scoring) — [#379](https://github.com/szmidtpiotr/ai-gm/issues/379)
+- [ ] D5 — Item VIEW — podgląd przedmiotu w inventory (tooltip/modal) — [#380](https://github.com/szmidtpiotr/ai-gm/issues/380)
+- [ ] D6 — Narracja: tagi, parsery, Narrative State struktura — [#381](https://github.com/szmidtpiotr/ai-gm/issues/381)
+- [ ] D7 — Encountery generyczne (adventure_hooks + gameconfig_encounter_templates unifikacja) — [#382](https://github.com/szmidtpiotr/ai-gm/issues/382)
+- [ ] D8 — Ekran profilu gracza (konto, znajomi, ustawienia LLM) — [#383](https://github.com/szmidtpiotr/ai-gm/issues/383)
+- [ ] D9 — Ekran kampanii — 5 trybów (Nowa/Gotowa/Loch/Loch-kafelki/Multiplayer) — [#384](https://github.com/szmidtpiotr/ai-gm/issues/384)
+- [ ] D10 — Onboarding animacja + wybór motywu (nowy gracz) — [#385](https://github.com/szmidtpiotr/ai-gm/issues/385)
+- [ ] D11 — Confirm password na rejestracji — [#386](https://github.com/szmidtpiotr/ai-gm/issues/386)
+- [ ] D12 — Szybka nawigacja Hub → Gra (bez przeładowania) — [#387](https://github.com/szmidtpiotr/ai-gm/issues/387)
+- [ ] D13 — Mobile layout — weryfikacja responsywności wszystkich ekranów — [#388](https://github.com/szmidtpiotr/ai-gm/issues/388)
 
 ---
 
