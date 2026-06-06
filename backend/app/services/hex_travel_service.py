@@ -488,6 +488,26 @@ def _find_nearby_empty_hex(
     return (0, 0)
 
 
+def _find_character_existing_hex(
+    conn: sqlite3.Connection,
+    new_campaign_id: int,
+    user_id: int,
+) -> "tuple[int, int] | None":
+    """C18: Return (q, r) of a previously discovered hex for this user, or None."""
+    row = conn.execute(
+        """SELECT chd.hex_q, chd.hex_r
+           FROM campaign_hex_data chd
+           JOIN campaigns c ON c.id = chd.campaign_id
+           WHERE c.owner_user_id = ? AND c.id != ? AND chd.discovered = 1
+           ORDER BY chd.id DESC
+           LIMIT 1""",
+        (user_id, new_campaign_id),
+    ).fetchone()
+    if row:
+        return (int(row["hex_q"]), int(row["hex_r"]))
+    return None
+
+
 def resolve_starting_hex(
     campaign_id: int,
     character_id: int,
@@ -528,21 +548,38 @@ def resolve_starting_hex(
         hex_type = matched_hex["hex_type"]
         label = matched_hex["label"]
     else:
-        # Create new hex near existing world
-        sq, sr = _find_nearby_empty_hex(conn, max_distance=4)
-        hex_type = _infer_hex_type_from_name(starting_location_name or "")
-        label = None  # global label stays empty — campaign layer will hold the specific name
-        is_new = True
-
-        # Insert into world_hexes
-        conn.execute(
-            """INSERT OR IGNORE INTO world_hexes
-               (q, r, hex_type, label, encounter_chance, encounter_pool,
-                created_by_gm, created_by_campaign_id, discovered_in_campaign_id)
-               VALUES (?,?,?,?,?,?,0,?,?)""",
-            (sq, sr, hex_type, label, 0.15 if hex_type not in ("town", "castle") else 0.0,
-             "[]", campaign_id, campaign_id),
+        # C18: prefer an already-discovered hex from same user's previous campaigns
+        owner_row = conn.execute(
+            "SELECT owner_user_id FROM campaigns WHERE id = ?", (campaign_id,)
+        ).fetchone()
+        owner_user_id = int(owner_row["owner_user_id"]) if owner_row else None
+        reuse_coords = (
+            _find_character_existing_hex(conn, campaign_id, owner_user_id)
+            if owner_user_id else None
         )
+
+        if reuse_coords:
+            sq, sr = reuse_coords
+            wh = conn.execute(
+                "SELECT hex_type, label FROM world_hexes WHERE q = ? AND r = ?", (sq, sr)
+            ).fetchone()
+            hex_type = wh["hex_type"] if wh else "plains"
+            label = wh["label"] if wh else None
+            is_new = False
+        else:
+            # Fallback: (0,0) — fresh start, no prior history
+            sq, sr = 0, 0
+            hex_type = _infer_hex_type_from_name(starting_location_name or "")
+            label = None
+            is_new = True
+            conn.execute(
+                """INSERT OR IGNORE INTO world_hexes
+                   (q, r, hex_type, label, encounter_chance, encounter_pool,
+                    created_by_gm, created_by_campaign_id, discovered_in_campaign_id)
+                   VALUES (?,?,?,?,?,?,0,?,?)""",
+                (sq, sr, hex_type, label, 0.15 if hex_type not in ("town", "castle") else 0.0,
+                 "[]", campaign_id, campaign_id),
+            )
 
     # Campaign-specific overlay: store the specific location name as campaign_label
     campaign_label = starting_location_name if is_new or starting_location_name else None
