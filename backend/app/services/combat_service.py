@@ -22,6 +22,7 @@ from app.services.weapon_rules import (
     resolve_sheet_weapon,
     stat_modifier,
 )
+from app.services.wound_utils import wound_penalty
 
 # Tests may monkeypatch this to a temp file path.
 COMBAT_DB_PATH = "/data/ai_gm.db"
@@ -2145,7 +2146,12 @@ def resolve_attack(
 
         raw = roll_d20()
         atk_b = int(enemy.get("attack_bonus") or 0)
-        attack_roll = raw + atk_b
+        wp = wound_penalty(
+            int(enemy.get("hp_current", 0) or 0),
+            int(enemy.get("hp_max", 0) or 0),
+        )
+        attack_roll = raw + atk_b + wp
+        out["wound_penalty"] = wp
         p = _find_combatant(combatants, "player")
         if not p:
             raise ValueError("player combatant missing")
