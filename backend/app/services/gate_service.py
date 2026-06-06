@@ -29,6 +29,7 @@ class GateResult:
 _COMBAT_BLOCKED_ACTIONS = {
     "DIALOGUE",
     "MOVEMENT",
+    "MOVE",
     "SEARCH",
     "ITEM_PICKUP",
     "REST",

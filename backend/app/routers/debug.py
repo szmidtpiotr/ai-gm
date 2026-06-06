@@ -609,3 +609,90 @@ def reset_test_env():
         "gm_id": int(gm_row["id"]) if gm_row else None,
         "timestamp": _iso_now(),
     }
+
+
+# ── B7 (#354) — DEV Inspector: live intent + world state + gate result ────────
+
+@router.get("/campaigns/{campaign_id}/state", tags=["debug"])
+def get_campaign_debug_state(
+    campaign_id: int,
+    user_id: int | None = Query(None),
+    authorization: str | None = Header(default=None),
+):
+    """Return live diagnostic state for a campaign: intent, world_state, gate_result.
+
+    Reconstructs intent from last player turn text + re-runs gate validation
+    against current world state. Admin-only.
+    """
+    if authorization:
+        from app.core.jwt_auth import require_admin_role
+        require_admin_role(authorization, user_id)
+    elif not _user_is_admin(user_id):
+        raise HTTPException(status_code=403, detail="Admin role required")
+
+    from app.services.world_state_service import get_world_state_flags
+    from app.services.intent_service import parse_intent
+    from app.services.gate_service import validate_action
+
+    # ── World State ──────────────────────────────────────────────────────────
+    try:
+        ws = get_world_state_flags(campaign_id)
+    except Exception:
+        ws = {
+            "scene_enemies": [], "scene_npcs": [], "active_quests": [],
+            "player_conditions": [], "scene_cleared": False,
+        }
+
+    # ── Last player turn text ────────────────────────────────────────────────
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            """SELECT user_text FROM campaign_turns
+               WHERE campaign_id = ?
+               ORDER BY id DESC LIMIT 1""",
+            (campaign_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    last_input = row["user_text"] if row else None
+
+    # ── Intent ───────────────────────────────────────────────────────────────
+    if last_input:
+        pi = parse_intent(last_input, campaign_id)
+        intent = {
+            "action_type": pi.action_type,
+            "target": pi.target,
+            "confidence": pi.confidence,
+            "raw_input": pi.raw_input,
+        }
+    else:
+        intent = None
+
+    # ── Gate result ──────────────────────────────────────────────────────────
+    if last_input:
+        try:
+            gate = validate_action(
+                campaign_id,
+                last_input,
+                intent={"action_type": (intent or {}).get("action_type", "UNKNOWN"),
+                        "target": (intent or {}).get("target")},
+            )
+            gate_result = {
+                "blocked": not gate.allowed,
+                "reason": gate.reason,
+                "feedback": gate.feedback,
+            }
+        except Exception as e:
+            gate_result = {"blocked": False, "reason": None, "feedback": str(e)}
+    else:
+        gate_result = {"blocked": False, "reason": None, "feedback": None}
+
+    return {
+        "campaign_id": campaign_id,
+        "intent": intent,
+        "world_state": ws,
+        "gate_result": gate_result,
+        "last_player_input": last_input,
+    }
