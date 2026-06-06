@@ -2120,10 +2120,35 @@ def finalize_character_sheet(character_id: int, req: FinalizeSheetRequest):
                         )
 
                     if gm_plan_ready:
+                        # Pull GM plan context so opening scene matches the campaign world
+                        _gm_row = conn.execute(
+                            "SELECT gm_plan_json FROM campaigns WHERE id = ? LIMIT 1",
+                            (campaign_id,),
+                        ).fetchone()
+                        _plan_ctx = ""
+                        try:
+                            if _gm_row and _gm_row["gm_plan_json"]:
+                                _plan = json.loads(_gm_row["gm_plan_json"])
+                                _arc = (_plan.get("arcs") or {})
+                                _active_arc = _arc.get(_plan.get("active_arc_id") or "default") or next(iter(_arc.values()), {})
+                                _arc_title = _active_arc.get("title", "")
+                                _arc_road = _active_arc.get("roadmap", "")
+                                _arc_locs = ((_active_arc.get("hooks") or {}).get("locations") or [])
+                                if _arc_title or _arc_locs:
+                                    _plan_ctx = (
+                                        f"\n\nKontekst kampanii:"
+                                        + (f"\n- Tytuł wątku: {_arc_title}" if _arc_title else "")
+                                        + (f"\n- Zarys: {_arc_road[:200]}" if _arc_road else "")
+                                        + (f"\n- Sugerowane lokacje: {', '.join(_arc_locs[:3])}" if _arc_locs else "")
+                                        + "\n\nOtwarcie MUSI być spójne z tym kontekstem — wybierz odpowiednie miejsce startowe, NIE las jeśli fabuła tego nie wymaga."
+                                    )
+                        except Exception:
+                            pass
                         opening_prompt = (
-                            f"{char_summary}\n\n"
+                            f"{char_summary}{_plan_ctx}\n\n"
                             "To jest pierwsza chwila przygody. Zacznij sesję od klimatycznego opisu miejsca, "
-                            "w którym bohater się znajduje. Nie pytaj gracza o plany - po prostu opisz scenę "
+                            "w którym bohater się znajduje — miejsce MUSI pasować do kontekstu kampanii. "
+                            "Nie pytaj gracza o plany - po prostu opisz scenę "
                             "i zostaw otwarte zakończenie zachęcające do działania."
                         )
                         messages = [

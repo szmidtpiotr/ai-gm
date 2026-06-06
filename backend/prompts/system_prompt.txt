@@ -272,8 +272,8 @@ Pole `location_intent` zawiera intencję ruchu — lub `null` gdy gracz nie zmie
     "target_label": "Nazwa nowej lokalizacji",
     "parent_key": "klucz_rodzica",
     "description": "Krótki opis dla systemu",
-    "biome": "forest",
-    "location_subtype": "forest_clearing"
+    "biome": "urban",
+    "location_subtype": "tavern"
   }
 }
 ```

@@ -2003,10 +2003,35 @@ def _require_gm_plan_before_narrative_llm(
             try:
                 from app.services.llm_service import generate_chat as _gen
                 from app.system_prompt_loader import SYSTEM_PROMPT_TEXT as _OPENING_SYS
+                # Pull GM plan context so opening scene matches the campaign world
+                _plan_ctx_t = ""
+                try:
+                    _gm_row_t = conn.execute(
+                        "SELECT gm_plan_json FROM campaigns WHERE id = ? LIMIT 1",
+                        (campaign_id,),
+                    ).fetchone()
+                    if _gm_row_t and _gm_row_t["gm_plan_json"]:
+                        _plan_t = json.loads(_gm_row_t["gm_plan_json"])
+                        _arc_t = (_plan_t.get("arcs") or {})
+                        _active_t = _arc_t.get(_plan_t.get("active_arc_id") or "default") or next(iter(_arc_t.values()), {})
+                        _arc_title_t = _active_t.get("title", "")
+                        _arc_road_t = _active_t.get("roadmap", "")
+                        _arc_locs_t = ((_active_t.get("hooks") or {}).get("locations") or [])
+                        if _arc_title_t or _arc_locs_t:
+                            _plan_ctx_t = (
+                                f"\n\nKontekst kampanii:"
+                                + (f"\n- Tytuł wątku: {_arc_title_t}" if _arc_title_t else "")
+                                + (f"\n- Zarys: {_arc_road_t[:200]}" if _arc_road_t else "")
+                                + (f"\n- Sugerowane lokacje: {', '.join(_arc_locs_t[:3])}" if _arc_locs_t else "")
+                                + "\n\nOtwarcie MUSI być spójne z tym kontekstem — wybierz odpowiednie miejsce startowe, NIE las jeśli fabuła tego nie wymaga."
+                            )
+                except Exception:
+                    pass
                 _opening_prompt = (
-                    f"{char_summary}\n\n"
+                    f"{char_summary}{_plan_ctx_t}\n\n"
                     "To jest pierwsza chwila przygody. Zacznij sesję od klimatycznego opisu miejsca, "
-                    "w którym bohater się znajduje. Nie pytaj gracza o plany - po prostu opisz scenę "
+                    "w którym bohater się znajduje — miejsce MUSI pasować do kontekstu kampanii. "
+                    "Nie pytaj gracza o plany - po prostu opisz scenę "
                     "i zostaw otwarte zakończenie zachęcające do działania."
                 )
                 _opening = (_gen(
