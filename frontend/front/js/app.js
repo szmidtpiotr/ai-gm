@@ -7787,8 +7787,11 @@ async function loadAppVersion() {
         const resp = await fetch('/api/version');
         if (!resp.ok) return;
         const { version } = await resp.json();
+        const label = `v${version}`;
         const el = document.getElementById('app-version-badge');
-        if (el) el.textContent = `v${version}`;
+        if (el) el.textContent = label;
+        const fixed = document.getElementById('app-version-fixed');
+        if (fixed) fixed.textContent = label;
     } catch (_e) {}
 }
 
