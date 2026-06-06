@@ -1185,6 +1185,14 @@ def assign_hero_to_campaign(character_id: int, req: dict = Body(...)):
                     )
             except Exception:
                 pass
+
+        # C19: reset HP to max on fresh campaign start (0 turns played)
+        try:
+            from app.services.character_campaign_service import maybe_reset_hp_for_new_campaign
+            maybe_reset_hp_for_new_campaign(conn, character_id, int(campaign_id))
+        except Exception as e:
+            logger.warning("[assign_campaign] hp_reset failed (non-fatal): %s", str(e))
+
         conn.commit()
 
         # Place on starting hex (fast — no LLM call)
