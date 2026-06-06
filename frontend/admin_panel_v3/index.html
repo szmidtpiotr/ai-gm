@@ -19097,9 +19097,58 @@ Niech kości się toczą! 🎲`,
     if (!resp.ok) return;
     const { version } = await resp.json();
     const el = document.getElementById('admin-version-badge');
-    if (el) el.textContent = `v${version}`;
+    if (el) {
+      el.textContent = `v${version}`;
+      el.style.cursor = 'pointer';
+      el.title = 'Kliknij aby zobaczyć changelog';
+      el.onclick = _showAdminChangelog;
+    }
   } catch (_e) {}
 })();
+
+function _renderMd(md) {
+  return md
+    .replace(/^# .+$/m, '')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^\- \*\*(.+?)\*\* — (.+)$/gm, '<li><strong>$1</strong> — $2</li>')
+    .replace(/^\- (.+)$/gm, '<li>$1</li>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(<li>[\s\S]*?<\/li>)+/g, m => `<ul>${m}</ul>`)
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
+async function _showAdminChangelog() {
+  let modal = document.getElementById('adm-changelog-modal');
+  if (modal) { modal.remove(); return; }
+  modal = document.createElement('div');
+  modal.id = 'adm-changelog-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);backdrop-filter:blur(3px)';
+  modal.innerHTML = `
+    <div style="background:var(--bg2,#161b22);border:1px solid var(--border,#30363d);border-radius:10px;width:min(660px,92vw);max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px #0009">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border,#30363d)">
+        <span style="color:var(--accent,#7c8cf8);font-family:monospace;font-size:14px;font-weight:bold">📋 Release History</span>
+        <button id="adm-cl-close" style="background:none;border:none;color:var(--t2,#8b949e);font-size:22px;cursor:pointer;line-height:1;padding:0 4px">×</button>
+      </div>
+      <div id="adm-cl-body" style="overflow-y:auto;padding:16px 20px;color:var(--t1,#c9d1d9);font-size:13px;line-height:1.7">
+        <em style="color:var(--t3,#484f58)">Ładowanie...</em>
+      </div>
+    </div>`;
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  modal.querySelector('#adm-cl-close').onclick = () => modal.remove();
+  document.body.appendChild(modal);
+  try {
+    const r = await fetch('/api/changelog');
+    const md = await r.text();
+    const body = document.getElementById('adm-cl-body');
+    if (body) body.innerHTML = `<style>#adm-cl-body h2{color:var(--accent,#7c8cf8);margin:12px 0 4px;font-size:14px}#adm-cl-body h3{color:var(--t2,#8b949e);margin:8px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:.06em}#adm-cl-body ul{margin:4px 0 8px 16px;padding:0}#adm-cl-body li{margin:2px 0}#adm-cl-body hr{border:none;border-top:1px solid var(--border,#30363d);margin:12px 0}#adm-cl-body strong{color:var(--t0,#f0f6fc)}</style>` + _renderMd(md);
+  } catch (_e) {
+    const body = document.getElementById('adm-cl-body');
+    if (body) body.textContent = 'Nie można załadować changelogu.';
+  }
+}
 </script>
 </body>
 </html>

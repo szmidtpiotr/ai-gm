@@ -7789,10 +7789,58 @@ async function loadAppVersion() {
         const { version } = await resp.json();
         const label = `v${version}`;
         const el = document.getElementById('app-version-badge');
-        if (el) el.textContent = label;
+        if (el) { el.textContent = label; el.style.cursor = 'pointer'; el.onclick = showChangelog; }
         const fixed = document.getElementById('app-version-fixed');
-        if (fixed) fixed.textContent = label;
+        if (fixed) { fixed.textContent = label; fixed.style.pointerEvents = 'auto'; fixed.style.cursor = 'pointer'; fixed.onclick = showChangelog; fixed.style.opacity = '0.6'; }
     } catch (_e) {}
+}
+
+function _renderChangelog(md) {
+    return md
+        .replace(/^# .+$/m, '')
+        .replace(/^---$/gm, '<hr>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^\- \*\*(.+?)\*\* — (.+)$/gm, '<li><strong>$1</strong> — $2</li>')
+        .replace(/^\- (.+)$/gm, '<li>$1</li>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/(<li>[\s\S]*?<\/li>)+/g, m => `<ul>${m}</ul>`)
+        .replace(/\n{2,}/g, '\n')
+        .trim();
+}
+
+async function showChangelog() {
+    let modal = document.getElementById('changelog-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'changelog-modal';
+        modal.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);backdrop-filter:blur(3px)';
+        modal.innerHTML = `
+            <div style="background:#1a1a2e;border:1px solid #3a3a5c;border-radius:10px;width:min(640px,92vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px #000a">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #3a3a5c">
+                    <span style="color:#c8b8ff;font-family:monospace;font-size:14px;font-weight:bold">📋 Release History</span>
+                    <button onclick="document.getElementById('changelog-modal').remove()" style="background:none;border:none;color:#888;font-size:20px;cursor:pointer;line-height:1">×</button>
+                </div>
+                <div id="changelog-body" style="overflow-y:auto;padding:16px 20px;color:#ccc;font-size:13px;line-height:1.6">
+                    <em style="color:#666">Ładowanie...</em>
+                </div>
+            </div>`;
+        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+        document.body.appendChild(modal);
+        try {
+            const r = await fetch('/api/changelog');
+            const md = await r.text();
+            const body = document.getElementById('changelog-body');
+            if (body) {
+                body.innerHTML = `<style>#changelog-body h2{color:#c8b8ff;margin:12px 0 4px;font-size:14px}#changelog-body h3{color:#88aacc;margin:8px 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.05em}#changelog-body ul{margin:4px 0 8px 16px;padding:0}#changelog-body li{margin:2px 0}#changelog-body hr{border:none;border-top:1px solid #333;margin:12px 0}#changelog-body strong{color:#e0d0ff}</style>` + _renderChangelog(md);
+            }
+        } catch (_e) {
+            const body = document.getElementById('changelog-body');
+            if (body) body.textContent = 'Nie można załadować changelogu.';
+        }
+    } else {
+        modal.remove();
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
