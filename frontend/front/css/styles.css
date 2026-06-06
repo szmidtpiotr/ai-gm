@@ -1483,14 +1483,7 @@ body {
 }
 
 .bubble-meta__route {
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  opacity: 0.6;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
-  padding: 1px 4px;
+  display: none;
 }
 
 .bubble-meta__datetime {
@@ -7093,6 +7086,7 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 }
 .debug-drawer-toggle:active { transform: scale(0.96); }
 .debug-drawer-toggle[hidden] { display: none; }
+#dev-inspector-toggle { top: 148px; }
 
 .debug-drawer {
   position: fixed;
