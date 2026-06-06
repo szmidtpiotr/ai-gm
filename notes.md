@@ -42,7 +42,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] B2 — Rozbudowa session_flags: scene_enemies, scene_npcs, active_quests, player_conditions — commit c7db68d
 - [x] B3 — Gate Mechaniki — middleware walidujący akcje gracza PRZED LLM — commit c7db68d
 - [x] B4 — Parser intencji gracza (ATTACK/MOVE/TALK/REST → walidacja przez Gate) — commit c7db68d
-- [x] B5 — Auto-zapis snapshotu World State po każdej turze narracyjnej
+- [ ] B5 — Auto-zapis snapshotu World State po każdej turze narracyjnej
 - [ ] B6 — Admin UI — World State History (zakładka w Campaign Monitor, diff między turami)
 
 ---

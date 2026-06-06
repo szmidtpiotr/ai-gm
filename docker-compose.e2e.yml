@@ -1,0 +1,50 @@
+# Isolated stack for Playwright UX tests (no test-agent, no Ollama).
+#   docker compose -f docker-compose.e2e.yml up -d --build --wait
+#   ./scripts/test_e2e.sh
+name: ai-gm-e2e
+
+services:
+  backend:
+    build:
+      context: ./backend
+    command: ["/bin/sh", "/app/scripts/e2e_entrypoint.sh"]
+    ports:
+      - "${E2E_BACKEND_PORT:-18100}:8000"
+    environment:
+      AI_TEST_MODE: "1"
+      AI_TEST_STUB_LLM: "1"
+      AI_TEST_STUB_LLM_TEXT: "[E2E] The GM speaks with a steady voice. The path ahead is clear."
+      DATABASE_URL: sqlite:////data/ai_gm.db
+      AI_TEST_DB_PATH: /data/ai_gm.db
+      JWT_SECRET: e2e-jwt-secret-at-least-32-characters-long
+      AI_TEST_CONFIG_PATH: /data/ai_test_config.json
+      AIGM_E2E_DB: "1"
+      AIGM_E2E_LITE: "1"
+    volumes:
+      - e2e-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/api/healthz', timeout=5).read()",
+        ]
+      interval: 5s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "${E2E_FRONTEND_PORT:-13002}:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  e2e-data:

@@ -1,0 +1,22 @@
+---
+description: Test-driven development for AI-GM backend — write or update pytest before/with production changes
+globs:
+  - backend/app/**/*.py
+  - backend/tests/**/*.py
+  - tests/**/*.py
+alwaysApply: false
+---
+
+# Testing & TDD (backend)
+
+When changing `backend/app/` behavior:
+
+1. **Prefer test-first** — add or extend a test in `backend/tests/` (or `tests/`) that fails for the new requirement or reproduces the bug.
+2. **Run unit tests locally** — `./scripts/test_local.sh` or `./scripts/test_dev.sh` (Docker). UX: `./scripts/test_e2e.sh`.
+3. **Use in-memory SQLite fixtures** and **mock LLM/HTTP** — no live Ollama in unit tests.
+4. **Locked mechanics** — if a test encodes DC/roll/stats from `system_prompt.txt`, fix code to match the contract; do not weaken assertions without human approval.
+5. **Rebuild backend image** after Python deploy when verifying in-container code.
+
+Full workflow: `.cursor/skills/ai-gm-tdd/SKILL.md` and `docs/TESTING.md`.
+
+For live gameplay verification after a fix, use `.claude/skills/game-test/` — not a substitute for pytest.
