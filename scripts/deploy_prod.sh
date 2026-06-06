@@ -59,8 +59,12 @@ cp data/ai_gm.db "$BACKUP_FILE"
 echo "   Backup: $BACKUP_FILE"
 
 echo "⬇️  [3/5] Aktualizacja kodu z origin/main..."
-git fetch origin
-git pull --ff-only origin main
+if [[ "${CI:-}" == "true" ]]; then
+  echo "   CI=true — git pull already done by runner, skipping."
+else
+  git fetch origin
+  git pull --ff-only origin main
+fi
 
 echo "🐳 [4/5] Restart kontenerów PROD..."
 compose up -d --build --remove-orphans
