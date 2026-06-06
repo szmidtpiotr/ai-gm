@@ -4533,7 +4533,36 @@ def create_turn_stream(
                     yield f"data: [COMBAT_STARTED]{json.dumps(new_combat)}\n\n"
                 if combat_extra:
                     yield f"data: [COMBAT]{json.dumps(combat_extra)}\n\n"
-                yield "data: [DONE]\n\n"
+                # C11: kill quest auto-complete on enemy_killed
+                _combat_done: dict = {}
+                try:
+                    from app.services.quest_checker import check_kill_quest as _ckq, parse_reward as _preward
+                    from app.services.world_state_service import get_world_state_flags as _gwsf_cq, set_world_state_flags as _swsf_cq
+                    _cq_quests = _gwsf_cq(campaign_id_val).get("active_quests", [])
+                    _ek_name = (combat_ended_pre_payload or {}).get("enemy_name", "")
+                    if _ek_name and _cq_quests:
+                        _cq_updated, _cq_done = _ckq(_cq_quests, _ek_name)
+                        if _cq_done:
+                            _swsf_cq(campaign_id_val, active_quests=_cq_updated)
+                            _rwd_conn = get_db()
+                            try:
+                                for _cq_item in _cq_done:
+                                    _rwd = _preward(_cq_item.get("reward", ""))
+                                    if _rwd["xp"] > 0:
+                                        from app.services.xp_service import grant_character_xp as _gcxp
+                                        _gcxp(_rwd_conn, character_id_val, _rwd["xp"], reason=f"quest_complete:{_cq_item['title']}")
+                                    if _rwd["gold"] > 0:
+                                        apply_grant_gold_to_character(_rwd_conn, character_id=character_id_val, amount=_rwd["gold"], source="quest_reward", campaign_id=campaign_id_val)
+                                    logger.info("quest_completed_kill", campaign_id=campaign_id_val, title=_cq_item["title"])
+                                _rwd_conn.commit()
+                            finally:
+                                _rwd_conn.close()
+                        _combat_done["active_quests"] = _cq_updated
+                    elif _cq_quests:
+                        _combat_done["active_quests"] = _cq_quests
+                except Exception as _cqe:
+                    logger.warning("kill_quest_check_error", error=str(_cqe))
+                yield f"data: [DONE]{json.dumps(_combat_done, ensure_ascii=False)}\n\n"
                 return
 
             if post_loot_summary_payload:
@@ -5022,10 +5051,35 @@ def create_turn_stream(
                 pass
             # B5: auto-save World State snapshot after each streaming narrative turn
             try:
-                from app.services.world_state_service import auto_save_snapshot as _ws_snap_s, get_world_state_flags as _gwsf_done
+                from app.services.world_state_service import auto_save_snapshot as _ws_snap_s, get_world_state_flags as _gwsf_done, set_world_state_flags as _swsf_done
                 _ws_snap_s(campaign_id_val)
+                _aq_current = _gwsf_done(campaign_id_val).get("active_quests", [])
+                # C11: location quest auto-complete when player moves to a new location
+                try:
+                    _loc_name = (loc_info or {}).get("label", "") or (loc_info or {}).get("key", "")
+                    if _loc_name and _aq_current:
+                        from app.services.quest_checker import check_location_quest as _clq, parse_reward as _preward_loc
+                        _lq_updated, _lq_done = _clq(_aq_current, _loc_name)
+                        if _lq_done:
+                            _swsf_done(campaign_id_val, active_quests=_lq_updated)
+                            _aq_current = _lq_updated
+                            _lrwd_conn = get_db()
+                            try:
+                                for _lq_item in _lq_done:
+                                    _lrwd = _preward_loc(_lq_item.get("reward", ""))
+                                    if _lrwd["xp"] > 0:
+                                        from app.services.xp_service import grant_character_xp as _gcxp_l
+                                        _gcxp_l(_lrwd_conn, character_id_val, _lrwd["xp"], reason=f"quest_complete:{_lq_item['title']}")
+                                    if _lrwd["gold"] > 0:
+                                        apply_grant_gold_to_character(_lrwd_conn, character_id=character_id_val, amount=_lrwd["gold"], source="quest_reward", campaign_id=campaign_id_val)
+                                    logger.info("quest_completed_location", campaign_id=campaign_id_val, title=_lq_item["title"])
+                                _lrwd_conn.commit()
+                            finally:
+                                _lrwd_conn.close()
+                except Exception as _lqe:
+                    logger.warning("location_quest_check_error", error=str(_lqe))
                 # C10: include current active_quests in DONE payload
-                done_payload["active_quests"] = _gwsf_done(campaign_id_val).get("active_quests", [])
+                done_payload["active_quests"] = _aq_current
             except Exception as _ws_err_s:
                 logger.warning("world_state_snapshot_stream_error", error=str(_ws_err_s))
 
