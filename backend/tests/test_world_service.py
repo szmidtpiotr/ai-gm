@@ -27,9 +27,10 @@ def db():
             key TEXT UNIQUE, label TEXT, location_type TEXT DEFAULT 'sub',
             description TEXT, parent_id INTEGER, parent_key TEXT,
             rules TEXT, review_status TEXT DEFAULT 'permanent',
-            ai_generated INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1,
+            ai_generated INTEGER DEFAULT 0, approved INTEGER DEFAULT 1, is_active INTEGER DEFAULT 1,
             safe_for_rest INTEGER DEFAULT 0, npc_keys TEXT DEFAULT '[]',
-            enemy_keys TEXT DEFAULT '[]'
+            enemy_keys TEXT DEFAULT '[]', created_by TEXT DEFAULT 'admin_manual',
+            canonical INTEGER DEFAULT 0, source_campaign_id INTEGER
         );
         CREATE TABLE npcs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
