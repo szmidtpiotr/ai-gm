@@ -75,7 +75,15 @@ def validate_action(
             feedback="Jesteś w walce! Musisz najpierw pokonać wrogów lub uciec.",
         )
 
-    # ── Check 2: attack when scene already cleared ─────────────────────────
+    # ── Check 2a: attack when no enemies ever in scene (C3) ───────────────
+    if action_type == "ATTACK" and not enemies and not scene_cleared:
+        return GateResult(
+            allowed=False,
+            reason="no_enemies",
+            feedback="Nie ma tu wrogów do ataku.",
+        )
+
+    # ── Check 2b: attack when scene already cleared ────────────────────────
     if scene_cleared and action_type == "ATTACK":
         return GateResult(
             allowed=False,
