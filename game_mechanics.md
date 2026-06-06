@@ -871,6 +871,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | C16 | Delete confirmation modals (kampania, postać) | — |
 | C17 | Kontekst ekwipunku postaci — injection listy posiadanych przedmiotów i złota do LLM przy każdej turze | — |
 | C18 | Fix Bug 3 — kampanie zawsze startują na nowych hexach na obrzeżach mapy zamiast reużyć istniejących hexów | C14 |
+| C19 | Fix Bug 4 — bohater startujący nową kampanię dostaje ostatni stan HP zamiast pełnego | — |
 
 ---
 
@@ -1793,6 +1794,56 @@ Funkcja tworzenia kampanii (`POST /api/campaigns` w `backend/app/api/campaigns.p
 | Wybór hexu startowego z istniejących | ❌ C18 — do naprawy |
 | Fallback na (0,0) gdy brak odkrytych | ❌ C18 — do naprawy |
 | Test: nowa kampania ląduje na istniejącym hexie | ❌ C18 — do napisania |
+
+---
+
+### C19 — Fix Bug 4: Reset HP przy starcie nowej kampanii (Full HP on New Campaign)
+
+> **Zadanie C19** z listy implementacyjnej Fazy 1. Powiązane: C4 (unifikacja wound_penalty), C14 (hero-first).
+
+#### Problem który rozwiązuje
+
+Bohater jest bytem niezależnym — może grać wiele kampanii po kolei. Gdy gracz kończy jedną kampanię (lub porzuca ją w połowie) i zaczyna nową, bohater wchodzi do nowej przygody z **ostatnim zarejestrowanym stanem HP** — np. 3/45 HP po ciężkiej walce. Gracz widzi postać umierającą już na starcie nowej historii bez żadnego sensu narracyjnego.
+
+Poprawne zachowanie: każda **nowa** kampania to nowa przygoda — bohater wchodzi w nią z pełnym HP (`hp_max`). Stara kampania (jeśli wznowiona) powinna pamiętać stan z ostatniej tury.
+
+> **Zasada projektowa (zatwierdzona 2026-06-06):**
+> Tworzenie nowej kampanii zawsze resetuje `hp_current` bohatera do `hp_max`. Wznowienie istniejącej kampanii (gracz wraca do kampanii w toku) zachowuje ostatni stan HP bez zmian. Mechanicznie: reset HP następuje w momencie `POST /api/campaigns` (tworzenie), nie przy `selectCampaign()` (wybór istniejącej).
+
+> **Dlaczego?**
+> Bohater jest jak postać w serialu — między sezonami wraca do zdrowia, nie kontynuuje z kończącą się krwią. Nowa kampania = nowa historia. Stara kampania = ta sama historia kontynuowana. Bez resetu: gracz który ukończył kampanię z 2/45 HP wchodzi do następnej jako "prawie martwy" bez wyjaśnienia — to narusza immersję i jest zwykłym błędem UX.
+
+> **Co odrzucono i dlaczego?**
+> - **Narracyjne wytłumaczenie niskiego HP** (LLM opisuje "wracasz z ran") — nie rozwiązuje problemu mechanicznego; LLM może to opisać, ale HP powinno być pełne.
+> - **Reset HP tylko gdy bohater idle** — hero_status=idle oznacza brak kampanii, ale kampania może być zakończona przy `status=active`. Prościej: reset przy tworzeniu, nie przy statusie.
+> - **Brak resetu — pełna ciągłość HP** — mogłoby mieć sens w trybie roguelike (permadeath across campaigns), ale nie w tym projekcie. Kampanie są niezależnymi historiami.
+
+#### Jak to działa krok po kroku
+
+```
+POST /api/campaigns (tworzenie nowej kampanii):
+1. Pobierz bohatera z characters WHERE id = hero_id
+2. Oblicz hp_max (formula: archetype_base + CON_mod × level)
+3. UPDATE characters SET hp_current = hp_max WHERE id = hero_id
+4. Następnie utwórz kampanię z tym bohaterem
+
+selectCampaign() / wznowienie (istniejąca kampania):
+- NIE resetuj HP — zachowaj hp_current z bazy
+```
+
+**Gdzie leży bug w kodzie:**
+
+Endpoint `POST /api/campaigns` (`backend/app/api/campaigns.py`) tworzy kampanię i przypisuje bohatera. Brakuje kroku resetu `hp_current = hp_max` przed przypisaniem. Formula `hp_max` jest w `vitality_service.py` lub `character_service.py` — użyć istniejącej funkcji, nie duplikować.
+
+#### Status implementacji
+
+| Element | Status |
+|---------|--------|
+| `hp_current` / `hp_max` w `characters` | ✅ Istnieje |
+| Formula hp_max (`vitality_service`) | ✅ Istnieje |
+| Reset HP przy tworzeniu kampanii | ❌ C19 — do naprawy |
+| Zachowanie HP przy wznowieniu kampanii | ✅ Działa (brak resetu = poprawne) |
+| Test: nowa kampania → hp_current == hp_max | ❌ C19 — do napisania |
 
 ---
 

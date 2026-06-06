@@ -9,13 +9,13 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 |------|-----------|-------|
 | A (Faza -1) | 13/13 | 100% ✅ |
 | B (Faza 0) | 7/7 | 100% ✅ |
-| C (Faza 1) | 0/18 | 0% |
+| C (Faza 1) | 0/19 | 0% |
 | D (Faza 2) | 0/13 | 0% |
 | E (Faza 3) | 0/28 | 0% |
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
-| **TOTAL** | **20/120** | **17%** |
+| **TOTAL** | **20/121** | **17%** |
 
 ---
 
@@ -69,6 +69,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] C16 — Delete confirmation modals (kampania, postać) — [#370](https://github.com/szmidtpiotr/ai-gm/issues/370)
 - [ ] C17 — Kontekst ekwipunku postaci — injection listy przedmiotów i złota do LLM per tura — [#373](https://github.com/szmidtpiotr/ai-gm/issues/373)
 - [ ] C18 — Fix Bug 3: kampanie startują na istniejących hexach, nie nowych obrzeżach — [#374](https://github.com/szmidtpiotr/ai-gm/issues/374)
+- [ ] C19 — Fix Bug 4: bohater startuje nową kampanię z pełnym HP (reset hp_current = hp_max) — [#375](https://github.com/szmidtpiotr/ai-gm/issues/375)
 
 ---
 
