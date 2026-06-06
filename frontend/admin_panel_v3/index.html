@@ -3727,7 +3727,7 @@
         <div class="selection-bar" id="player-sel-bar" style="border-top:1px solid var(--blue-border);border-bottom:none">
           <span class="sel-count" id="player-sel-count">0 zaznaczonych</span>
           <button class="btn btn-sm btn-secondary">Zmień rolę</button>
-          <button class="btn btn-sm btn-danger">Usuń konta</button>
+          <button class="btn btn-sm btn-danger" onclick="_bulkDeletePlayers(this)">Usuń konta</button>
         </div>
         <div class="pagination">
           <span>5 użytkowników</span>
@@ -10678,7 +10678,7 @@
       const d = await apiFetch('/api/admin/accounts');
       const items = d.items || [];
       if (!items.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--t3)">Brak użytkowników</td></tr>`; return; }
-      tbody.innerHTML = items.map(u => `<tr>
+      tbody.innerHTML = items.map(u => `<tr data-player-id="${u.id}">
         <td class="col-check"><input type="checkbox" class="player-row-check" onchange="rowCheck('player')"></td>
         <td class="td-sticky" data-sort-val="${_esc(u.username||'')}">
           <div style="display:flex;align-items:center;gap:8px">
@@ -10922,6 +10922,23 @@
     _showToast(`Usunięto ${ok}${fail?' (błąd: '+fail+')':''}.`, fail ? 'warn' : 'success');
     btn.disabled = false;
     _contentLoaded.delete('weapons'); _loadWeapons();
+  }
+
+  async function _bulkDeletePlayers(btn) {
+    const checked = [...document.querySelectorAll('.player-row-check:checked')];
+    if (!checked.length) { _showToast('Nic nie zaznaczone.','warn'); return; }
+    if (!confirm(`Usunąć ${checked.length} konto(-a)? Operacji nie da się cofnąć.`)) return;
+    btn.disabled = true;
+    let ok = 0, fail = 0;
+    for (const cb of checked) {
+      const row = cb.closest('tr');
+      const userId = row?.dataset?.playerId;
+      if (!userId) { fail++; continue; }
+      try { await apiFetch(`/api/admin/accounts/${userId}`, { method:'DELETE' }); ok++; } catch { fail++; }
+    }
+    _showToast(`Usunięto ${ok}${fail?' (błąd: '+fail+')':''}.`, fail ? 'warn' : 'success');
+    btn.disabled = false;
+    _sectionLoaded.delete('players'); _loadPlayers();
   }
 
   async function _loadPdrawerCamps(userId) {
