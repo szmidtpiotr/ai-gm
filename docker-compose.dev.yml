@@ -8,7 +8,8 @@ name: ai-gm-dev
 services:
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     # Agent musi być zdrowy zanim backend przyjmie ruch Test Runner (unika race przy starcie).
     depends_on:
