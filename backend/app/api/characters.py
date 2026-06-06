@@ -1457,6 +1457,12 @@ def spend_character_stat_xp(character_id: int, req: SpendStatXpRequest):
         conn.close()
 
 
+@router.post("/characters/{character_id}/spend-xp/stat")
+def spend_character_stat_xp_alias(character_id: int, req: SpendStatXpRequest):
+    """C8 alias — canonical URL for spend_stat (game_mechanics.md)."""
+    return spend_character_stat_xp(character_id, req)
+
+
 @router.post("/characters/{character_id}/xp/grant-mg")
 def grant_character_xp_mg(
     character_id: int,
