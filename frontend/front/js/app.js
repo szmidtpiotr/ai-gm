@@ -5977,6 +5977,84 @@ function _refreshDebugToggleVisibility() {
     if (dbgToggle.hidden) {
         document.getElementById('debug-drawer')?.classList.remove('debug-drawer--open');
     }
+    // B7 — DEV Inspector toggle mirrors same condition
+    const inspToggle = document.getElementById('dev-inspector-toggle');
+    if (inspToggle) inspToggle.hidden = !(isAdmin && debugMode);
+}
+
+// B7 — DEV Inspector modal for player UI (admin + debugMode)
+let _inspectorModalTimer = null;
+
+function _openInspectorModal() {
+    if (!currentCampaignId) { alert('Brak aktywnej kampanii'); return; }
+    const existing = document.getElementById('dev-inspector-modal');
+    if (existing) { existing.remove(); if (_inspectorModalTimer) { clearInterval(_inspectorModalTimer); _inspectorModalTimer = null; } return; }
+
+    const modal = document.createElement('div');
+    modal.id = 'dev-inspector-modal';
+    modal.style.cssText = 'position:fixed;top:60px;right:16px;width:380px;max-height:80vh;overflow-y:auto;background:#0f172a;border:1px solid #334155;border-radius:10px;z-index:9000;box-shadow:0 8px 32px rgba(0,0,0,0.6);font-family:monospace;font-size:0.78rem;color:#cbd5e1';
+    modal.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid #334155;background:#1e293b;border-radius:10px 10px 0 0">
+        <span style="font-weight:700;color:#94a3b8;font-size:0.75rem;text-transform:uppercase;letter-spacing:.06em">🔍 DEV Inspector</span>
+        <button onclick="document.getElementById('dev-inspector-modal').remove();clearInterval(window._inspectorModalTimer);window._inspectorModalTimer=null" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:1rem;padding:0 4px">✕</button>
+      </div>
+      <div id="dev-inspector-body" style="padding:12px">Ładowanie…</div>`;
+    document.body.appendChild(modal);
+
+    const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+    const _render = async () => {
+        if (!document.getElementById('dev-inspector-modal')) { clearInterval(_inspectorModalTimer); _inspectorModalTimer = null; return; }
+        try {
+            const tok = localStorage.getItem('aigm_access_token');
+            const r = await fetch(`/api/debug/campaigns/${currentCampaignId}/state`, {
+                headers: tok ? { 'Authorization': `Bearer ${tok}` } : {}
+            });
+            if (!r.ok) { document.getElementById('dev-inspector-body').innerHTML = `<span style="color:#f87171">Błąd ${r.status} — brak uprawnień?</span>`; return; }
+            const d = await r.json();
+            const intent = d.intent || {};
+            const ws = d.world_state || {};
+            const gr = d.gate_result || {};
+            const blocked = gr.blocked === true;
+            const enemies = (ws.scene_enemies || []);
+            const aliveEnemies = enemies.filter(e => (e.hp || 0) > 0);
+            document.getElementById('dev-inspector-body').innerHTML = `
+              <div style="margin-bottom:10px">
+                <div style="color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Intent</div>
+                ${d.intent === null ? `<span style="color:#475569">Brak tur</span>` : `
+                  <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+                    <span style="background:#1d4ed8;color:#bfdbfe;border-radius:4px;padding:1px 8px;font-weight:700">${_esc(intent.action_type||'?')}</span>
+                    <span style="color:#475569">conf: ${((intent.confidence||0)*100).toFixed(0)}%</span>
+                  </div>
+                  ${intent.target ? `<div style="color:#64748b">→ <span style="color:#94a3b8">${_esc(intent.target)}</span></div>` : ''}
+                  <div style="padding:4px 6px;background:#0a0f1e;border-radius:4px;color:#64748b;margin-top:2px;word-break:break-word">"${_esc((intent.raw_input||'').slice(0,100))}"</div>
+                `}
+              </div>
+              <div style="margin-bottom:10px">
+                <div style="color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Gate</div>
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="background:${blocked?'#7f1d1d':'#14532d'};color:${blocked?'#fca5a5':'#86efac'};border-radius:4px;padding:1px 8px;font-weight:700">${blocked?'BLOCKED':'PASS'}</span>
+                  ${gr.reason ? `<span style="color:#475569">${_esc(gr.reason)}</span>` : ''}
+                </div>
+                ${gr.feedback ? `<div style="color:#64748b;margin-top:2px">${_esc(gr.feedback)}</div>` : ''}
+              </div>
+              <div>
+                <div style="color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">World State <span style="color:#334155;font-weight:400">${ws.scene_cleared?'✓ cleared':aliveEnemies.length+' alive'}</span></div>
+                <div style="display:flex;flex-direction:column;gap:2px">
+                  <div><span style="color:#334155">Enemies:</span> ${enemies.length ? enemies.map(e=>`<span style="color:${(e.hp||0)<=0?'#f87171':'#4ade80'}">${_esc(e.name||e.key||'?')}(${e.hp??'?'})</span>`).join(' ') : '<span style="color:#334155">—</span>'}</div>
+                  <div><span style="color:#334155">NPCs:</span> ${(ws.scene_npcs||[]).map(n=>_esc(n.name||n.key||'?')).join(', ')||'<span style="color:#334155">—</span>'}</div>
+                  <div><span style="color:#334155">Quests:</span> ${(ws.active_quests||[]).length || '<span style="color:#334155">—</span>'}</div>
+                </div>
+              </div>
+              <div style="margin-top:8px;color:#1e293b;font-size:0.65rem;text-align:right">${new Date().toLocaleTimeString()}</div>`;
+        } catch(e) {
+            const body = document.getElementById('dev-inspector-body');
+            if (body) body.innerHTML = `<span style="color:#f87171">Błąd: ${_esc(String(e))}</span>`;
+        }
+    };
+
+    _render();
+    window._inspectorModalTimer = setInterval(_render, 1000);
 }
 
 // Stage 9 P4 — Command palette modal.
@@ -7120,6 +7198,8 @@ function initEventListeners() {
 
     // Stage 8 D3 — debug drawer toggle (admin only; visibility set by updateAdminSettingsVisibility)
     document.getElementById('debug-drawer-toggle')?.addEventListener('click', _toggleDebugDrawer);
+    // B7 — DEV Inspector toggle
+    document.getElementById('dev-inspector-toggle')?.addEventListener('click', _openInspectorModal);
 
     // Stage 9 P4 — command palette modal
     _wirePaletteEvents();
