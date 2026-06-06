@@ -1,27 +1,26 @@
-name: Deploy to Production (legacy manual workflow disabled)
+name: Deploy to Production
 
 on:
-  workflow_dispatch:
-    inputs:
-      release_note:
-        description: "Opis wdrozenia (widoczny w historii releasow)"
-        required: true
-        default: "Manual production deploy"
+  push:
+    branches:
+      - main
 
 jobs:
-  disabled:
-    name: Manual deploy required
+  deploy:
+    name: Deploy to PROD (.62)
     runs-on: ubuntu-latest
+
     steps:
-      - name: Explain current production flow
-        run: |
-          echo "This GitHub Actions workflow is intentionally disabled."
-          echo ""
-          echo "Current production model:"
-          echo "  1. Promote develop -> main outside the production host."
-          echo "  2. SSH to the dedicated PROD machine."
-          echo "  3. Run ./scripts/deploy_prod.sh manually on the PROD host."
-          echo ""
-          echo "Reason:"
-          echo "  Production is being moved off the old mixed DEV/PROD host."
-          echo "  The repo now treats manual deployment on the dedicated PROD VM as the source of truth."
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script: |
+            cd /home/piotrszmidt/ai-gm
+            git pull --ff-only origin main
+            ./scripts/deploy_prod.sh
+          script_stop: true
+          command_timeout: 10m
