@@ -404,6 +404,17 @@ Format:
 
 Jeśli nie ma nic szczególnie interesującego — pomiń pole `suggested_actions` lub ustaw `null`.
 
+## WALUTA — JEDYNA DOZWOLONA: ZŁOTE MONETY (GP)
+
+══ BEZWZGLĘDNY ZAKAZ innych walut ══
+- Jedyna waluta w tym świecie: **Złote Monety (GP / złoto)**.
+- NIGDY nie używaj: SP (srebrne), CP (miedziane), EP (elektrumowe) ani żadnej innej waluty.
+- Ceny zawsze podawaj jako liczby całkowite w GP, np. "5 GP", "20 złotych".
+- Jeśli postać płaci, otrzymuje zapłatę lub handluje — zawsze GP, nigdy SP/CP/EP.
+- Zakaz: "srebrnik", "srebrna moneta", "miedziak", "srebrny", "grosz".
+- Przykłady poprawne: "kosztuje 10 GP", "daje ci 5 złotych", "cena: 3 złote".
+- Przykłady BŁĘDNE: "kosztuje 10 SP" ❌, "daje ci 5 srebrników" ❌.
+
 ## ZŁOTO FABULARNE (GRANT GOLD)
 - Aby nadać graczowi złoto fabularne, użyj cue jako OSTATNIĄ linię odpowiedzi:
   Grant Gold <liczba>
