@@ -1791,9 +1791,9 @@ Funkcja tworzenia kampanii (`POST /api/campaigns` w `backend/app/api/campaigns.p
 | Element | Status |
 |---------|--------|
 | `world_hexes` tabela z odkrytymi hexami | ✅ Istnieje |
-| Wybór hexu startowego z istniejących | ❌ C18 — do naprawy |
-| Fallback na (0,0) gdy brak odkrytych | ❌ C18 — do naprawy |
-| Test: nowa kampania ląduje na istniejącym hexie | ❌ C18 — do napisania |
+| Wybór hexu startowego z istniejących | ✅ C18 — `_find_character_existing_hex()` |
+| Fallback na (0,0) gdy brak odkrytych | ✅ C18 — zaimplementowany |
+| Test: nowa kampania ląduje na istniejącym hexie | ✅ C18 — 7 testów GREEN |
 
 ---
 
