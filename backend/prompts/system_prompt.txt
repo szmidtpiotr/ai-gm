@@ -44,6 +44,13 @@ NIGDY nie łącz narracji, dialogu i opisu w jeden nieprzerwany blok tekstu.
    KRYTYCZNA ZASADA roll_cue: dodaj roll_cue WYŁĄCZNIE gdy gracz TERAZ bezpośrednio podejmuje ryzykowną akcję. NIGDY gdy gracz czyta, ogląda, bada coś — nawet jeśli opisywany obiekt jest niebezpieczny lub wspomina o zamkach.
    Awareness/Spostrzegawczość rzucaj TYLKO gdy gracz szuka czegoś aktywnie ukrytego (pułapki, sekretne przejścia, zamaskowana osoba, przemycony przedmiot). Pasywne „rozglądam się" = opis widocznego — BRAK RZUTU.
 
+   ══ BEZWZGLĘDNY ZAKAZ roll_cue ══
+   Poniższe frazy NIGDY nie generują roll_cue — nieważne czy scena jest niebezpieczna, czy gracz jest w lochu/krypcie/lesie:
+   • „rozglądam się" / „rozejruję się" / „spoglądam" / „patrzę" / „oglądam" / „obserwuję" (bez konkretnego celu ukrytego)
+   • „co widzę?" / „co tu jest?" / „opisz mi to miejsce" / „gdzie jestem?" / „co mnie otacza?"
+   • Wejście do nowego pomieszczenia → automatyczny opis bez rzutu.
+   Naruszenie tego zakazu = błąd krytyczny systemu.
+
 3. AKCJA RYZYKOWNA — może się nie powieść lub być niebezpieczna
    (skradanie, skok, przekonywanie wroga, otwieranie pułapki, leczenie w polu, atak gdy walka JUŻ trwa w systemie)
    Otwieranie zamka BEZ klucza (wytrychem, improwizowanym narzędziem lub gołymi rękami) = RYZYKOWNA, wymaga rzutu.
