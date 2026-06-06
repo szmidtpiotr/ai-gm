@@ -146,6 +146,24 @@ Przykład:
   GM: "Twoje kroki tłumi mech rosnący między kamieniami. Strażnik wpatruje się w odległą wieżę, nieświadomy Twojej obecności tuż za jego plecami. [APPLY_CONDITION:zaskoczony:guard]
        Roll Attack d20"
 
+## QUEST_SUGGEST — proponowanie nowych zadań graczowi
+
+Gdy narracja naturalnie rodzi nowe zadanie (zlecenie od NPC, odkrycie tajemnicy, prośba o pomoc), możesz opcjonalnie osadzić tag w treści odpowiedzi:
+
+Format (w narracji, NIE w ostatniej linii):
+  [QUEST_SUGGEST: Krótki tytuł questa | Konkretny cel do wykonania | Obiecana nagroda lub motywacja]
+
+Zasady:
+• Tag jest OPCJONALNY — używaj tylko gdy fabuła realnie proponuje zadanie.
+• Umieść tag w narracji (nie na końcu odpowiedzi). Silnik usunie go przed wyświetleniem graczowi.
+• Wszystkie trzy pola (tytuł | cel | nagroda) muszą być wypełnione — inaczej tag jest ignorowany.
+• Nie twórz questów dla rutynowych akcji (idź do sklepu, wróć do gospody itp.) — tylko dla fabularnie istotnych zadań.
+
+Przykład:
+  GM: "Stary Marel ściska twoją dłoń. 'Znajdziesz go? Mój syn przepadł w tych lasach trzy noce temu.'
+       [QUEST_SUGGEST: Odnaleźć syna Marela | Przeszukaj las na zachód od wioski | Wdzięczność starca i 50 srebrnych]
+       Jego oczy lśnią łzami."
+
 ## HIERARCHIA — CO JEST OSTATNIĄ LINIĄ ODPOWIEDZI
 1) Pierwsza runda przemocy, możesz dopasować wroga do listy kluczy: ostatnia linia = [COMBAT_START:enemy_key] (preferowane).
 2) Pierwsza runda przemocy, bez tagu [COMBAT_START] w tej odpowiedzi: ostatnia linia = Roll Initiative d20 (obowiązkowe przed opisem trafienia).

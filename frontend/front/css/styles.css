@@ -203,6 +203,29 @@ body {
   background: #c0392b;
 }
 
+.quest-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 4px;
+  max-width: 200px;
+}
+.quest-bar[hidden] { display: none; }
+.quest-chip {
+  font-size: 0.62rem;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: rgba(201,165,74,0.15);
+  border: 1px solid rgba(201,165,74,0.35);
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+  cursor: default;
+}
+
 .header__back,
 .header__action,
 .header__avatar {

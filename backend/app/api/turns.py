@@ -4665,6 +4665,21 @@ def create_turn_stream(
                     clean_text = _repack_narrative(clean_text, _strip_tags_s(_narr_s), _pjson_s2)
                 except Exception as _ste:
                     logger.warning("narrative_tag_strip_stream_error", error=str(_ste))
+                # C10: parse QUEST_SUGGEST tags → active_quests, strip from narrative
+                try:
+                    from app.services.quest_suggest_parser import parse_quest_suggest as _pqs, strip_quest_suggest_tags as _sqs
+                    from app.services.world_state_service import get_world_state_flags as _gwsf, set_world_state_flags as _swsf
+                    _narr_qs, _pjson_qs = _extract_narrative_for_cues(clean_text)
+                    _new_quests = _pqs(_narr_qs)
+                    if _new_quests:
+                        _existing = _gwsf(campaign_id_val).get("active_quests", [])
+                        _seen_titles = {q.get("title", "") for q in _existing}
+                        _to_add = [q for q in _new_quests if q["title"] not in _seen_titles]
+                        if _to_add:
+                            _swsf(campaign_id_val, active_quests=_existing + _to_add)
+                    clean_text = _repack_narrative(clean_text, _sqs(_narr_qs), _pjson_qs)
+                except Exception as _qse:
+                    logger.warning("quest_suggest_parse_error", error=str(_qse))
                 validate_roll_cue_name(clean_text.strip())
                 if GM_ROLL_CARD_PREFIX in clean_text:
                     clean_text = re.sub(
@@ -5007,8 +5022,10 @@ def create_turn_stream(
                 pass
             # B5: auto-save World State snapshot after each streaming narrative turn
             try:
-                from app.services.world_state_service import auto_save_snapshot as _ws_snap_s
+                from app.services.world_state_service import auto_save_snapshot as _ws_snap_s, get_world_state_flags as _gwsf_done
                 _ws_snap_s(campaign_id_val)
+                # C10: include current active_quests in DONE payload
+                done_payload["active_quests"] = _gwsf_done(campaign_id_val).get("active_quests", [])
             except Exception as _ws_err_s:
                 logger.warning("world_state_snapshot_stream_error", error=str(_ws_err_s))
 
