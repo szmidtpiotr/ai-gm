@@ -332,6 +332,11 @@ async function apiRequest(method, endpoint, body = null) {
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error(`[API] Error ${response.status}:`, errorData);
+        // C15: unrecovered 401 → session expired, logout gracefully
+        if (response.status === 401 && typeof handleSessionExpired === 'function') {
+            handleSessionExpired();
+            throw new Error('Sesja wygasła');
+        }
         // Surface structured `detail` objects (e.g. historia_cooldown) — string
         // detail goes into the Error message, full body attached as `err.body`.
         const detail = errorData?.detail;
@@ -506,6 +511,11 @@ function handleLogout() {
     localStorage.removeItem('aigm_campaign_id');
     try { sessionStorage.removeItem('aigm_hero_id'); sessionStorage.removeItem('aigm_active_session'); } catch {}
     showScreen('login');
+}
+
+function handleSessionExpired() {
+    showToast('Sesja wygasła — zaloguj się ponownie.', 'error', 5000);
+    handleLogout();
 }
 
 // ── Registration ──────────────────────────────────────────────────────────
@@ -776,10 +786,15 @@ let currentHero = null;
 
 async function loadHeroes() {
     if (!currentUser?.id) return;
-    // Stage 6 H1: use the enriched /heroes endpoint.
-    const response = await apiRequest('GET', `/heroes?user_id=${currentUser.id}`);
-    const heroes = response.heroes || [];
-    renderHeroes(heroes);
+    try {
+        // Stage 6 H1: use the enriched /heroes endpoint.
+        const response = await apiRequest('GET', `/heroes?user_id=${currentUser.id}`);
+        const heroes = response.heroes || [];
+        renderHeroes(heroes);
+    } catch (error) {
+        console.error('[Heroes] Failed to load:', error);
+        showToast('Nie udało się załadować bohaterów', 'error');
+    }
 }
 
 // Stage 6 H3: status chip mapping (label + CSS modifier class).
@@ -1082,13 +1097,13 @@ function renderCampaigns(campaigns) {
 
         deleteAction.addEventListener('click', (e) => {
             e.stopPropagation();
-            handleDeleteCampaignFromList(campaign, true);
+            handleDeleteCampaignFromList(campaign);
         });
 
         deleteAction.addEventListener('touchend', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            handleDeleteCampaignFromList(campaign, true);
+            handleDeleteCampaignFromList(campaign);
         });
 
         initSwipeGesture(wrapper, card);
@@ -1143,12 +1158,10 @@ function initSwipeGesture(wrapper, card) {
     }, { passive: true });
 }
 
-async function handleDeleteCampaignFromList(campaign, skipConfirm = false) {
-    if (!skipConfirm) {
-        const campaignTitle = campaign.title || campaign.name || 'ta kampania';
-        const confirmed = confirm(`USUNĄĆ kampanię "${campaignTitle}"? Ta operacja jest nieodwracalna.`);
-        if (!confirmed) return;
-    }
+async function handleDeleteCampaignFromList(campaign) {
+    const campaignTitle = campaign.title || campaign.name || 'ta kampania';
+    const confirmed = await showDeleteCampaignModal(campaignTitle);
+    if (!confirmed) return;
 
     try {
         await apiRequest('DELETE', `/campaigns/${campaign.id}`);
@@ -1211,13 +1224,18 @@ async function selectCampaign(campaign) {
             } catch (err) {
                 showToast(err.message || 'Nie można przypisać bohatera', 'error');
             }
-            startCharacterWizard();
+            // Hero assignment failed — send back to heroes screen
+            showToast('Wróć do ekranu Bohaterowie i wybierz bohatera.', 'info', 3000);
+            loadHeroes().then(() => showScreen('heroes'));
         } else {
-            startCharacterWizard();
+            // No hero — redirect to heroes screen (hero-first model)
+            showToast('Najpierw wybierz lub stwórz bohatera.', 'info', 3000);
+            loadHeroes().then(() => showScreen('heroes'));
         }
     } catch (error) {
         console.error('Error loading characters:', error);
-        startCharacterWizard();
+        showToast('Błąd ładowania postaci. Wróć do ekranu Bohaterowie.', 'error', 3000);
+        loadHeroes().then(() => showScreen('heroes'));
     }
 }
 
@@ -1301,7 +1319,22 @@ async function handleCreateCampaign(e) {
         });
         currentCampaignId = campaign.id;
         currentCampaign = campaign;
-        startCharacterWizard();
+        if (currentHero?.id) {
+            // Hero exists — assign and enter game
+            await apiRequest('POST', `/characters/${currentHero.id}/assign-campaign`, {
+                campaign_id: campaign.id,
+                user_id: currentUser.id,
+            });
+            const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
+            currentHero = heroResp.character || heroResp;
+            characterData = currentHero;
+            showToast(`Kampania "${name}" gotowa! Wkraczasz do gry…`, 'success', 3000);
+            await enterGame(campaign);
+        } else {
+            // No hero — send to heroes screen (hero-first model)
+            showToast('Kampania stworzona! Teraz wybierz lub stwórz bohatera.', 'info', 3000);
+            loadHeroes().then(() => showScreen('heroes'));
+        }
     } catch (error) {
         console.error('Create campaign error:', error);
         showToast(error.message || 'Nie udało się utworzyć kampanii', 'error');
@@ -8776,6 +8809,41 @@ function initDungeon() {
 }
 
 // ── Custom DELETE hero confirmation modal ────────────────────────────────────
+
+function showDeleteCampaignModal(campaignTitle) {
+  return new Promise(resolve => {
+    const overlay = document.createElement('div');
+    overlay.className = 'delete-modal-overlay';
+    overlay.innerHTML = `
+      <div class="delete-modal" role="dialog" aria-modal="true">
+        <div class="delete-modal__header">
+          <span class="delete-modal__icon">🗑</span>
+          <span class="delete-modal__title">Usuń kampanię</span>
+        </div>
+        <div class="delete-modal__body">
+          <div class="delete-modal__hero-name">${escapeHtml(campaignTitle)}</div>
+          <p class="delete-modal__desc">
+            Kampania zostanie trwale usunięta.<br>
+            Bohater pozostanie — kampania jest tylko odłączana.<br>
+            Tej operacji nie można cofnąć.
+          </p>
+        </div>
+        <div class="delete-modal__footer">
+          <button class="delete-modal__btn delete-modal__btn--cancel" id="del-campaign-cancel">Anuluj</button>
+          <button class="delete-modal__btn delete-modal__btn--confirm" id="del-campaign-confirm">Usuń kampanię</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+    const confirmBtn = overlay.querySelector('#del-campaign-confirm');
+    const cancelBtn = overlay.querySelector('#del-campaign-cancel');
+
+    confirmBtn.addEventListener('click', () => { overlay.remove(); resolve(true); });
+    cancelBtn.addEventListener('click', () => { overlay.remove(); resolve(false); });
+    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
+    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') { overlay.remove(); resolve(false); } });
+  });
+}
 
 function showDeleteHeroModal(heroName) {
   return new Promise(resolve => {
