@@ -4,6 +4,7 @@
 # DB bind-mount data directory (ignore DB files; keep data/.gitkeep and backups/.gitkeep tracked)
 data/*
 !data/.gitkeep
+!data/game_config_seed.sql
 backups/*
 !backups/.gitkeep
 ollama/
