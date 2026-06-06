@@ -300,13 +300,18 @@ def _resolve_rest(params: dict, ctx: dict) -> dict:
 def _resolve_movement(params: dict, ctx: dict) -> dict:
     dest = ctx.get("destination_location") or {}
     current = ctx.get("location") or {}
-    return {
+    result = {
         "outcome": "SUCCESS",
         "from_location_key": current.get("key", ""),
         "from_location_name": current.get("label", ""),
         "to_location_key": dest.get("key", params.get("destination_key", "")),
         "to_location_name": dest.get("label", params.get("destination_key", "")),
     }
+    if "destination_q" in params:
+        result["destination_q"] = params["destination_q"]
+    if "destination_r" in params:
+        result["destination_r"] = params["destination_r"]
+    return result
 
 
 def _resolve_examine(params: dict, ctx: dict) -> dict:
