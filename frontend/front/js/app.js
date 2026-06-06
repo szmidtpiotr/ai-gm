@@ -4644,8 +4644,50 @@ function renderRestButtons(character, sheet) {
         </div>`;
 
     container.querySelector('#btn-short-rest')?.addEventListener('click', () => doRest('short', character, sheet));
-    container.querySelector('#btn-long-rest')?.addEventListener('click', () => doRest('long', character, sheet));
+    container.querySelector('#btn-long-rest')?.addEventListener('click', () => openLongRestModal(character, sheet));
     container.querySelector('#btn-awansuj')?.addEventListener('click', () => openAwansujPanel(character, sheet));
+}
+
+function openLongRestModal(character, sheet) {
+    const existing = document.getElementById('long-rest-choice-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'long-rest-choice-modal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-box rest-choice-box">
+            <div class="modal-box__header">
+                <h3>Długi odpoczynek</h3>
+                <button class="modal-close" id="long-rest-close">✕</button>
+            </div>
+            <div class="rest-choice-body">
+                <p class="rest-choice-intro">Masz <strong>${sheet.xp_available ?? 0} PD</strong> do wydania. Co chcesz zrobić tej nocy?</p>
+                <div class="rest-choice-btns">
+                    <button class="btn btn--primary" id="rest-choice-learn">
+                        📖 Ucz się
+                        <span class="rest-choice-sub">Wydaj PD na umiejętności i statystyki</span>
+                    </button>
+                    <button class="btn btn--secondary" id="rest-choice-sleep">
+                        🌙 Śpij i odpocznij
+                        <span class="rest-choice-sub">Odbuduj HP i manę, zachowaj PD na później</span>
+                    </button>
+                </div>
+            </div>
+        </div>`;
+    document.body.appendChild(modal);
+
+    modal.querySelector('#long-rest-close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    modal.querySelector('#rest-choice-learn').addEventListener('click', () => {
+        modal.remove();
+        openAwansujPanel(character, sheet);
+    });
+    modal.querySelector('#rest-choice-sleep').addEventListener('click', async () => {
+        modal.remove();
+        await doRest('long', character, sheet);
+    });
 }
 
 async function doRest(type, character, sheet) {
@@ -4697,10 +4739,12 @@ async function openAwansujPanel(character, sheet) {
         const mods = sheet.stat_modifiers || {};
         const rankCosts = xpData.rank_up_costs || {};
         const statCosts = xpData.stat_point_costs || {};
+        const skillRankCeiling = xpData.skill_rank_ceiling ?? 3;
+        const statValueCeiling = xpData.stat_value_ceiling ?? 19;
         const isScholar = (sheet.archetype || '').toLowerCase() === 'scholar';
 
         // X6: skill rank-up cards
-        const skillCards = Object.entries(skills).filter(([, rank]) => rank < 5).map(([key, rank]) => {
+        const skillCards = Object.entries(skills).filter(([, rank]) => rank < skillRankCeiling).map(([key, rank]) => {
             const newRank = rank + 1;
             const cost = rankCosts[newRank] || rankCosts[String(newRank)] || '?';
             const canAfford = typeof cost === 'number' && xpAvail >= cost;
@@ -4719,7 +4763,7 @@ async function openAwansujPanel(character, sheet) {
         const statCards = Object.entries(stats).map(([key, val]) => {
             const newVal = val + 1;
             const cost = statCosts[newVal] || statCosts[String(newVal)];
-            if (!cost || newVal > 20) return '';
+            if (!cost || newVal > statValueCeiling) return '';
             const canAfford = xpAvail >= cost;
             const mod = mods[key] ?? Math.floor((val - 10) / 2);
             const newMod = Math.floor((newVal - 10) / 2);
