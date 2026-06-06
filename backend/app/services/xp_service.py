@@ -410,12 +410,18 @@ def get_xp_snapshot(conn: sqlite3.Connection, character_id: int) -> dict[str, An
     costs = _load_rank_costs(conn)
     st_costs = _load_stat_point_costs(conn)
     st_ceil = _stat_value_ceiling(conn)
+    # Read skill rank ceiling from DB (C7 migration set rank_ceiling=3 for all skills)
+    sk_ceil_row = conn.execute(
+        "SELECT MIN(rank_ceiling) FROM game_config_skills WHERE rank_ceiling > 0"
+    ).fetchone()
+    sk_ceil = int(sk_ceil_row[0] or 3) if sk_ceil_row and sk_ceil_row[0] else 3
     return {
         "xp_available": int(sheet.get("xp_available") or 0),
         "xp_lifetime_earned": int(sheet.get("xp_lifetime_earned") or 0),
         "rank_up_costs": {str(k): costs[k] for k in sorted(costs.keys())},
         "stat_point_costs": {str(k): st_costs[k] for k in sorted(st_costs.keys())},
         "stat_value_ceiling": st_ceil,
+        "skill_rank_ceiling": sk_ceil,
     }
 
 
