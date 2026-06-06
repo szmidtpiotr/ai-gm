@@ -8,19 +8,11 @@ on:
 jobs:
   deploy:
     name: Deploy to PROD (.62)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          port: 22
-          script: |
-            cd /home/piotrszmidt/ai-gm
-            git pull --ff-only origin main
-            ./scripts/deploy_prod.sh
-          script_stop: true
-          command_timeout: 10m
+      - name: Deploy
+        working-directory: /home/piotrszmidt/ai-gm
+        run: |
+          git pull --ff-only origin main
+          ./scripts/deploy_prod.sh
