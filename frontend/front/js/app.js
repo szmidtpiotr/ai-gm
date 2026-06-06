@@ -2866,6 +2866,17 @@ function renderSuggestedActions(actions) {
     });
 }
 
+// C10: Render quest chips in the header quest bar
+function renderQuestBar(quests) {
+    const bar = document.getElementById('quest-bar');
+    if (!bar) return;
+    if (!quests || !quests.length) { bar.hidden = true; return; }
+    bar.hidden = false;
+    bar.innerHTML = quests.map(q =>
+        `<span class="quest-chip" title="${escapeHtml(q.objective)} | ${escapeHtml(q.reward)}">📜 ${escapeHtml(q.title)}</span>`
+    ).join('');
+}
+
 // T33: Send a structured action (button click)
 async function sendStructuredAction(actionStr, displayLabel) {
     const input = elements.chatInput;
@@ -2987,6 +2998,7 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
 
         _suggestedActions = result.suggested_actions || _suggestedActions || [];
         renderSuggestedActions(_suggestedActions);
+        if (result.active_quests) renderQuestBar(result.active_quests);
 
         await refreshCharacterData();
         await pollCombatState();
@@ -3058,6 +3070,7 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             if (meta.skill_test_pending) result.skill_test_pending = meta.skill_test_pending;
             if (meta.current_location)   result.current_location   = meta.current_location;
             if (meta.suggested_actions)  result.suggested_actions  = meta.suggested_actions;
+            if (meta.active_quests)      result.active_quests      = meta.active_quests;
             return;
         }
 
@@ -3392,6 +3405,7 @@ async function resolveSkillTest(skillTestId, d20Roll, popupEl) {
             _suggestedActions = response.suggested_actions;
             renderSuggestedActions(_suggestedActions);
         }
+        if (response.active_quests) renderQuestBar(response.active_quests);
     } catch (err) {
         popupEl?.remove();
         showToast(err.message || 'Błąd rozwiązania testu', 'error');
