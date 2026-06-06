@@ -122,37 +122,6 @@ services:
     labels:
       - service=test-agent-dev
 
-  voice-service:
-    build:
-      context: ./voice-service
-    container_name: ai-gm-voice-dev
-    restart: unless-stopped
-    # Host port 8302 — PROD voice na tej maszynie zajmuje 8300; wewnętrznie nadal :8300.
-    ports:
-      - "8302:8300"
-    environment:
-      - VOICE_CONFIG_PATH=/app/config.json
-      - VOICE_MODELS_DIR=/app/models/tts
-      - VOICE_MODELS_DIR_STT=/app/models/stt
-      - PIPER_BIN=/opt/piper/piper
-    volumes:
-      - ./voice-service/models:/app/models
-      - ./voice-service/config.json:/app/config.json
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8300/voice/healthz"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 120s
-    labels:
-      - service=voice-dev
-    networks:
-      - ai-gm-dev
-
-
 networks:
   ai-gm-dev:
     driver: bridge
-  observability-dev:
-    external: true
-    name: ai-gm-observability-dev_observability-dev
