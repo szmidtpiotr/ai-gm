@@ -2132,50 +2132,6 @@ function appendMessage(msg, opts = {}) {
         if (rawText) window.voiceUI?.speakGMText?.(rawText);
     }
 
-    // Debug block — plain div (avoid <details> overflow:hidden bug in Chrome)
-    if (msg.role === 'assistant' || msg.actor === 'gm') {
-        const m = msg.debugMeta || {};
-        const cs = typeof lastCombatState !== 'undefined' ? lastCombatState : null;
-
-        let locLine = 'LOCATION: (brak)';
-        let locJson = '';
-        if (m.locationIntent) {
-            const li = m.locationIntent;
-            locLine = `▼ LOCATION: ${li.action || '—'} → ${li.target_label || ''}`;
-            locJson = JSON.stringify(li, null, 2);
-        }
-
-        const dbg = document.createElement('div');
-        dbg.className = 'debug-block';
-        dbg.dataset.stale = '1';
-        dbg.style.display = debugMode ? 'block' : 'none';
-        _renderDebugCombatLine(dbg, cs);
-        dbg.innerHTML += `<span class="debug-block__loc">${escapeHtml(locLine)}${locJson ? '\n' + escapeHtml(locJson) : ''}</span>`;
-        bubble.appendChild(dbg);
-    }
-}
-
-function _renderDebugCombatLine(dbg, cs) {
-    const line = cs && cs.active
-        ? `COMBAT: active=true, turn=${cs.current_turn ?? '—'}, round=${cs.round ?? '—'}`
-        : cs
-            ? `COMBAT: active=false (turn=${cs.current_turn ?? '—'}, round=${cs.round ?? '—'})`
-            : 'COMBAT: (brak — active=false)';
-    let el = dbg.querySelector('.debug-block__combat');
-    if (!el) {
-        el = document.createElement('pre');
-        el.className = 'debug-block__pre debug-block__combat';
-        dbg.prepend(el);
-    }
-    el.textContent = line;
-}
-
-function _refreshDebugBlocks() {
-    const cs = typeof lastCombatState !== 'undefined' ? lastCombatState : null;
-    document.querySelectorAll('.debug-block[data-stale]').forEach(dbg => {
-        _renderDebugCombatLine(dbg, cs);
-        delete dbg.dataset.stale;
-    });
 }
 
 function formatDateTime(dateStr) {
@@ -2922,6 +2878,13 @@ async function sendStructuredAction(actionStr, displayLabel) {
         return;
     }
 
+    // REST:long opens the long-rest modal (which calls /rest API for HP restore).
+    if (actionStr === 'REST:long') {
+        const sheet = characterData?.sheet_json || {};
+        openLongRestModal(characterData, sheet);
+        return;
+    }
+
     await sendTurn(actionStr, 'structured', displayLabel);
 }
 
@@ -3027,7 +2990,6 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
 
         await refreshCharacterData();
         await pollCombatState();
-        _refreshDebugBlocks();
         updateInputPlaceholder();
     } catch (error) {
         typingIndicator.remove();
@@ -3189,14 +3151,6 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
         // TTS — speak the full text once streaming is done
         if (gmContent) window.voiceUI?.speakGMText?.(gmContent);
 
-        // Debug block — attach to bubble so it stays in the chat area
-        if (debugMode) {
-            const dbg = document.createElement('div');
-            dbg.className = 'debug-block';
-            dbg.dataset.stale = '1';
-            dbg.style.display = 'block';
-            streamBubble.appendChild(dbg);
-        }
     } else if (firstToken) {
         // No tokens at all — remove typing indicator if still present
         typingIndicator.remove();
@@ -7506,9 +7460,6 @@ function initBubblePrefs() {
         toggleDebug.addEventListener('change', e => {
             debugMode = e.target.checked;
             localStorage.setItem('aigm_debug', debugMode ? '1' : '0');
-            document.querySelectorAll('.debug-block').forEach(el => {
-                el.style.display = debugMode ? 'block' : 'none';
-            });
             // Stage 8 follow-up: 🐛 drawer toggle visibility follows this same setting.
             _refreshDebugToggleVisibility();
             // Re-render debug id chips (requires reload — hint user)
