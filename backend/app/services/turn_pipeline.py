@@ -172,6 +172,7 @@ def process_v2_turn(
     turn_number = _get_next_turn_number(campaign_id, conn)
     _apply_world_state(mechanic_result, context, character_id, campaign_id, turn_number, conn)
     _update_session_flags(wsm_result, session_flags, mechanic_result, conn, campaign_id)
+    _update_turns_at_location(mechanic_result, session_flags, conn, campaign_id)
 
     # XS1: Beat complete XP
     xp_delta = _process_beat_signals(mechanic_result, campaign_id, character_id, turn_number, conn)
@@ -574,6 +575,21 @@ def _update_session_flags(wsm_result, session_flags: dict, mechanic_result: dict
             (json.dumps(session_flags), campaign_id)
         )
         conn.commit()
+
+
+def _update_turns_at_location(
+    mechanic_result: dict, session_flags: dict, conn: sqlite3.Connection, campaign_id: int
+) -> None:
+    """Track consecutive turns without location change for STORY_STALE injection."""
+    if mechanic_result.get("action_type") == "MOVEMENT" and mechanic_result.get("outcome") == "SUCCESS":
+        session_flags["turns_at_location"] = 0
+    else:
+        session_flags["turns_at_location"] = session_flags.get("turns_at_location", 0) + 1
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+        (json.dumps(session_flags, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
 
 
 def _reload_session_flags(campaign_id: int, conn: sqlite3.Connection) -> dict | None:
