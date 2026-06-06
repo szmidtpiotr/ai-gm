@@ -119,6 +119,32 @@ def soft_delete_account(account_id: int) -> None:
     update_account(account_id, display_name=None, is_active=0, is_admin=None)
 
 
+def hard_delete_account(account_id: int) -> dict:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        user = _get_user(conn, account_id)
+        if not user:
+            raise KeyError("not_found")
+
+        characters_deleted = conn.execute(
+            "SELECT COUNT(*) FROM characters WHERE user_id = ?", (account_id,)
+        ).fetchone()[0]
+        campaigns_deleted = conn.execute(
+            "SELECT COUNT(*) FROM campaigns WHERE owner_user_id = ?", (account_id,)
+        ).fetchone()[0]
+
+        conn.execute("DELETE FROM characters WHERE user_id = ?", (account_id,))
+        conn.execute("DELETE FROM campaigns WHERE owner_user_id = ?", (account_id,))
+        conn.execute("DELETE FROM users WHERE id = ?", (account_id,))
+
+        _audit(conn, str(account_id), "DELETE", user, None)
+        conn.commit()
+        return {"characters_deleted": characters_deleted, "campaigns_deleted": campaigns_deleted}
+    finally:
+        conn.close()
+
+
 def create_account_admin(
     *,
     username: str,
