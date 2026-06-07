@@ -599,6 +599,25 @@ def reset_test_env():
             """,
             (campaign_id,),
         )
+        # Ensure a game_sessions row exists so the in-game clock (#390) and
+        # world-state flags function in the test env like real campaigns; reset
+        # the clock to the 09:00 baseline so clock-tick tests start fresh.
+        sess = conn.execute(
+            "SELECT id FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not sess:
+            conn.execute(
+                "INSERT INTO game_sessions (id, campaign_id, session_flags, ingame_hours) "
+                "VALUES (?, ?, '{\"ingame_hours\": 9}', 9)",
+                (f"sess-test-{campaign_id}", campaign_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE game_sessions SET session_flags = '{\"ingame_hours\": 9}', ingame_hours = 9 "
+                "WHERE campaign_id = ?",
+                (campaign_id,),
+            )
         conn.commit()
     except HTTPException:
         conn.rollback()
