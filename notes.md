@@ -10,12 +10,12 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | A (Faza -1) | 13/13 | 100% ✅ |
 | B (Faza 0) | 7/7 | 100% ✅ |
 | C (Faza 1) | 19/19 | 100% ✅ |
-| D (Faza 2) | 1/14 | 7% |
+| D (Faza 2) | 2/14 | 14% |
 | E (Faza 3) | 0/28 | 0% |
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
-| **TOTAL** | **40/122** | **33%** |
+| **TOTAL** | **41/122** | **34%** |
 
 ---
 
@@ -76,7 +76,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 ## FAZA 2 — Systemy + Narracja
 
 - [x] D1 — Pending flow przedmiotów (GRANT_ITEM nieznanego klucza → auto-screen → pending=true) — [#376](https://github.com/szmidtpiotr/ai-gm/issues/376)
-- [ ] D2 — Pending flow wrogów (analogicznie do D1) — [#377](https://github.com/szmidtpiotr/ai-gm/issues/377)
+- [x] D2 — Pending flow wrogów (analogicznie do D1) — [#377](https://github.com/szmidtpiotr/ai-gm/issues/377)
 - [ ] D3 — NPC pamięć w World State (NPC_MEMORY tag → context injection przy kolejnej wizycie) — [#378](https://github.com/szmidtpiotr/ai-gm/issues/378)
 - [ ] D4 — Auto-screening admin queue (Poziom 1 tech validation + Poziom 2 LLM scoring) — [#379](https://github.com/szmidtpiotr/ai-gm/issues/379)
 - [ ] D5 — Item VIEW — podgląd przedmiotu w inventory (tooltip/modal) — [#380](https://github.com/szmidtpiotr/ai-gm/issues/380)
