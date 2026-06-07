@@ -177,3 +177,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [ ] H3 — Konfiguracja image gen pipeline na .170 (FLUX.1-schnell + ComfyUI)
 - [ ] H4 — Konfiguracja Ollama na .170 dla offline content gen (admin AI Kreator)
 - [ ] H5 — GPU pipeline: tile → LLM Vision → opis → DB (dungeon tiles offline)
+
+---
+
+## Zrobione dodatkowe
+
+Standalone bugixy i feature'y spoza głównej architektury A-H.
+
+- [x] [#372](https://github.com/szmidtpiotr/ai-gm/issues/372) — Opening scene zawsze w lesie: wyodrębniono `build_opening_plan_context()` + 16 testów TDD — commit 88c1d9a
