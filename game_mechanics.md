@@ -3314,6 +3314,8 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 
 **C1** — Po 5 turach gracza w tym samym hexie bez zmiany lokacji, backend wstrzykuje sygnał `STORY_STALE` do kontekstu LLM. LLM otrzymuje instrukcję: zaproponuj ruch, wywołaj nowe wydarzenie lub encounter. Licznik resetuje się przy każdej zmianie hex lub lokacji.
 
+**C1 Follow-up (#391)** — TRAVEL_HINT pills: jeśli gracz jest w STORY_STALE (5+ tur), backend sugeruje kierunki ruchu w formie `[TRAVEL_HINT: [Lokacja1] [Lokacja2] ... — wskaż bohaterowi bezpieczne kierunki]`. Źródło: `discovered_hexes` z session_flags (fallback: query nearby approved game_locations z world_hex_q/r). Max 5 pillsów. LLM wykorzystuje te sugestie do naturalnego zaproponowania kierunku ruchu.
+
 **C2** — Backend sprawdza przed aktualizacją World State czy docelowy hex jest odkryty i czy terrain jest dostępny dla postaci. Poprawna zmiana lokacji aktualizuje `current_hex` i `current_location` w `session_flags`. Ruch do nieznanego hexu blokowany z komunikatem — gracz nie może teleportować się poza mapę.
 
 **C3** — Gate walki blokuje akcję ATTACK gdy `scene_enemies=[]` w World State aktywnej kampanii. Gracz otrzymuje komunikat "Brak celu w scenie" zamiast narracji walki z nieistniejącym wrogiem. Blok nie pobiera tury — gracz może wybrać inną akcję.
