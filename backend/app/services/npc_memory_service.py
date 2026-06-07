@@ -12,6 +12,7 @@ Schema migration: `_ensure_campaign_known_npcs` in `migrations_admin.py`.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any, Iterable
@@ -312,3 +313,88 @@ def format_known_npcs_block(
                 pass
         lines.append(line)
     return "\n".join(lines)
+
+
+# ── D3 (#378) — NPC_MEMORY tag: explicit remembered facts ─────────────────────
+
+# [NPC_MEMORY: Imię | zapamiętany fakt] — name and fact separated by a pipe so the
+# fact itself may contain colons. Case-insensitive, DOTALL off (facts are one line).
+NPC_MEMORY_RE = re.compile(
+    r"\[NPC_MEMORY:\s*([^|\]]+?)\s*\|\s*([^\]]+?)\s*\]", re.IGNORECASE
+)
+
+# Max accumulated facts kept per NPC — keeps the injected prompt block bounded.
+MAX_NPC_MEMORY_FACTS = 8
+
+
+def parse_npc_memory_tags(text: str) -> list[tuple[str, str]]:
+    """Extract (npc_name, fact) pairs from `[NPC_MEMORY: name | fact]` tags."""
+    out: list[tuple[str, str]] = []
+    for m in NPC_MEMORY_RE.finditer(text or ""):
+        name = (m.group(1) or "").strip()
+        fact = (m.group(2) or "").strip()
+        if name and fact:
+            out.append((name, fact))
+    return out
+
+
+def strip_npc_memory_tags(text: str) -> str:
+    """Remove all `[NPC_MEMORY:...]` tags from narrative shown to the player."""
+    if not text:
+        return text or ""
+    return NPC_MEMORY_RE.sub("", text).strip()
+
+
+def append_npc_memory(
+    *,
+    campaign_id: int,
+    name: str,
+    memory: str,
+    conn: sqlite3.Connection | None = None,
+    max_facts: int = MAX_NPC_MEMORY_FACTS,
+) -> dict[str, Any]:
+    """Append a remembered fact to an NPC's accumulated memory (`notes`).
+
+    Facts accumulate (";"-joined) instead of clobbering, are de-duplicated, and
+    capped to the last `max_facts`. Creates the roster row via record_npc_met if
+    the NPC isn't known yet. The fact is injected on the next visit through the
+    existing format_known_npcs_block (`notes` field). Mirrors D1/D2 pending flow
+    in spirit: an LLM-emitted tag deterministically persists state.
+    """
+    name = (name or "").strip()
+    memory = (memory or "").strip()
+    if not name or not memory:
+        return {"ok": False, "reason": "empty"}
+
+    managed = conn is None
+    if managed:
+        conn = _conn()
+    try:
+        row = conn.execute(
+            "SELECT id, notes FROM campaign_known_npcs WHERE campaign_id = ? AND npc_name = ?",
+            (campaign_id, name),
+        ).fetchone()
+
+        if not row:
+            record_npc_met(campaign_id=campaign_id, name=name, notes=memory, conn=conn)
+            if managed:
+                conn.commit()
+            return {"ok": True, "created": True, "facts": [memory]}
+
+        existing = (row["notes"] or "").strip()
+        facts = [f.strip() for f in existing.split(";") if f.strip()] if existing else []
+        if memory in facts:
+            return {"ok": True, "created": False, "facts": facts, "duplicate": True}
+
+        facts.append(memory)
+        facts = facts[-max_facts:]
+        conn.execute(
+            "UPDATE campaign_known_npcs SET notes = ?, updated_at = datetime('now') WHERE id = ?",
+            ("; ".join(facts), row["id"]),
+        )
+        if managed:
+            conn.commit()
+        return {"ok": True, "created": False, "facts": facts}
+    finally:
+        if managed:
+            conn.close()

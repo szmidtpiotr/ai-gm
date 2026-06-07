@@ -2135,6 +2135,19 @@ def create_turn_log(
     cur = conn.cursor()
     turn_number = get_next_turn_number(conn, campaign_id)
 
+    # D3 (#378) — NPC_MEMORY tags: capture remembered facts, then strip the raw
+    # `[NPC_MEMORY:...]` tag from the stored/displayed narrative so the player
+    # never sees it. Facts are persisted below (narrative branch).
+    _npc_memory_pairs: list[tuple[str, str]] = []
+    if assistant_text:
+        from app.services.npc_memory_service import (
+            parse_npc_memory_tags,
+            strip_npc_memory_tags,
+        )
+        _npc_memory_pairs = parse_npc_memory_tags(assistant_text)
+        if _npc_memory_pairs:
+            assistant_text = strip_npc_memory_tags(assistant_text)
+
     cur.execute(
         """
         INSERT INTO campaign_turns (
@@ -2332,6 +2345,30 @@ def create_turn_log(
                 "npc_memory_persist_failed",
                 campaign_id=campaign_id,
                 error=str(_npc_err),
+            )
+
+    # D3 (#378) — persist explicit NPC_MEMORY facts (accumulate into NPC notes,
+    # injected on next visit via format_known_npcs_block). Independent of the
+    # JSON-envelope parsing above so plain-text narratives still work.
+    if route == "narrative" and _npc_memory_pairs:
+        try:
+            from app.services.npc_memory_service import append_npc_memory
+
+            for _nm_name, _nm_fact in _npc_memory_pairs:
+                append_npc_memory(
+                    campaign_id=campaign_id, name=_nm_name, memory=_nm_fact, conn=conn
+                )
+            conn.commit()
+            logger.info(
+                "npc_memory_tag_persisted",
+                campaign_id=campaign_id,
+                count=len(_npc_memory_pairs),
+            )
+        except Exception as _nm_err:
+            logger.warning(
+                "npc_memory_tag_persist_failed",
+                campaign_id=campaign_id,
+                error=str(_nm_err),
             )
 
     # BUG-01: remove items when GM signals the player handed/lost one.
