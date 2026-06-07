@@ -3678,6 +3678,7 @@ async function handleCombatEnded(cs) {
         const gold = pendingGold;
         pendingLoot = null;
         pendingGold = 0;
+        hideCombatUI();
         if (loot.length > 0 || gold > 0) {
             await showLootPopup(loot, gold);
         }
@@ -4234,10 +4235,12 @@ async function handleCombatAttack() {
         setCombatMsg(`Błąd ataku: ${e.message || e}`, true);
     } finally {
         combatBusy = false;
-        if (lastCombatState && elements.combatEndOverlay?.hidden !== false) renderCombatUI(lastCombatState);
-        elements.btnCombatAttack.disabled = false;
-        document.getElementById('combat-spell-btn').disabled = false;
-        elements.btnCombatFlee.disabled = false;
+        if (combatActive) {
+            if (lastCombatState && elements.combatEndOverlay?.hidden !== false) renderCombatUI(lastCombatState);
+            elements.btnCombatAttack.disabled = false;
+            document.getElementById('combat-spell-btn').disabled = false;
+            elements.btnCombatFlee.disabled = false;
+        }
     }
 }
 
