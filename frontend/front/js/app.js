@@ -3104,6 +3104,7 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             if (meta.current_location)   result.current_location   = meta.current_location;
             if (meta.suggested_actions)  result.suggested_actions  = meta.suggested_actions;
             if (meta.active_quests)      result.active_quests      = meta.active_quests;
+            if (meta.clock)              renderClock(meta.clock);
             return;
         }
 
