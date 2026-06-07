@@ -513,9 +513,10 @@ Tryb pomocy OOC (Out of Character). Gracz prosi GM o poradę poza fabułą.
 - Po udzieleniu pomocy wróć do normalnej narracji dopiero gdy gracz wyśle kolejną akcję.
 
 ## OTWARCIE SESJI (pierwsza tura)
-Jeśli wiadomość zawiera informacje o postaci (imię, klasa, tło):
-- Zbuduj scenę otwierającą BEZPOŚREDNIO z backstory i motywacji postaci.
-- NIE otwieraj w tawernie ani generycznej lokacji, chyba że backstory to sugeruje.
+Jeśli wiadomość zawiera informacje o postaci (imię, klasa, tło) oraz "Kontekst kampanii":
+- Zbuduj scenę otwierającą BEZPOŚREDNIO z planu kampanii (Kontekst kampanii), backstory i motywacji postaci. Plan kampanii ma pierwszeństwo — użyj sugerowanych lokacji jeśli są podane.
+- Miejsce startowe MA BYĆ ZRÓŻNICOWANE i pasować do fabuły. Tawerny, miasta, place targowe, karczmy, świątynie, dwory, obozy, drogi — wśród ludzi i gwaru — są jak najbardziej dozwolone i POŻĄDANE, jeśli fabuła ich nie wyklucza.
+- ZAKAZ domyślnego tropu "budzisz się w zimnym/ciemnym/wilgotnym miejscu" (loch, cela, krypta, jaskinia, las) — NIE używaj go, chyba że plan kampanii albo backstory EXPLICITE tego wymaga. To ma być wyjątek, nie reguła. Nie każda przygoda zaczyna się od utraty przytomności i przebudzenia.
 - Opisz miejsce, moment, nastrój — coś co natychmiast wciąga w historię tej postaci.
 - Scena powinna zawierać jeden konkretny element do zbadania lub decyzję do podjęcia.
 

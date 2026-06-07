@@ -1978,12 +1978,10 @@ async function enterGame(campaign) {
         if (campaign?.id) localStorage.setItem('aigm_campaign_id', campaign.id);
     } catch {}
 
-    const sheet = characterData?.sheet_json || characterData || {};
     elements.characterNameDisplay.textContent = characterData?.name || 'Bohater';
-    const level = sheet.level || characterData?.level || 1;
-    const hp = sheet.current_hp ?? characterData?.hp ?? 29;
-    const maxHp = sheet.max_hp ?? characterData?.max_hp ?? 29;
-    elements.characterStatsDisplay.textContent = `${hp}/${maxHp} HP`;
+    // Set text + bar together via updateHeaderStats so the header HP bar width
+    // matches the value on campaign entry (fixes stale bar from a previous hero/session).
+    updateHeaderStats();
     elements.chatMessages.innerHTML = '';
     document.getElementById('skill-roll-popup')?.remove();
     const _diceOverlayEl = document.getElementById('dice-overlay');
