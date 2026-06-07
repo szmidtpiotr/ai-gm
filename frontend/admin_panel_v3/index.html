@@ -17241,14 +17241,32 @@ Niech kości się toczą! 🎲`,
       if (!specs.length) {
         listEl.innerHTML = '<div style="color:var(--t3);font-size:0.78rem">Brak spec files w <code>playwright/ux/regression/</code></div>';
       } else {
-        listEl.innerHTML = specs.map(s => `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border:1px solid var(--bdr,#333);border-radius:6px">
-            <div>
-              <div style="font-weight:600;font-size:0.82rem;color:var(--t1)">${_esc(s.label)}</div>
-              <div style="font-size:0.7rem;color:var(--t3)">${_esc(s.filename)}</div>
-            </div>
-            <button class="btn btn-sm btn-secondary" onclick="_runPlaywrightSpec('${_esc(s.filename)}',this)">▶</button>
-          </div>`).join('');
+        listEl.innerHTML = specs.map(s => {
+          const issueBadge = s.issue
+            ? `<a href="https://github.com/szmidtpiotr/ai-gm/issues/${s.issue}" target="_blank" rel="noopener"
+                style="display:inline-block;background:var(--accent,#6c8);color:#000;font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:3px;text-decoration:none;margin-right:4px">#${s.issue}</a>`
+            : '';
+          const countBadge = s.testCount
+            ? `<span style="font-size:0.65rem;color:var(--t3);margin-left:4px">${s.testCount} test${s.testCount !== 1 ? 'y' : ''}</span>`
+            : '';
+          const desc = s.description
+            ? `<div style="font-size:0.72rem;color:var(--t2);margin-top:5px;line-height:1.5">${_esc(s.description)}</div>`
+            : '';
+          return `
+            <div style="padding:10px 12px;border:1px solid var(--bdr,#333);border-radius:6px;display:flex;flex-direction:column;gap:0">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:2px">
+                    ${issueBadge}
+                    <span style="font-weight:600;font-size:0.82rem;color:var(--t1)">${_esc(s.filename.replace('.spec.js',''))}</span>
+                    ${countBadge}
+                  </div>
+                  ${desc}
+                </div>
+                <button class="btn btn-sm btn-secondary" style="flex-shrink:0" onclick="_runPlaywrightSpec('${_esc(s.filename)}',this)">▶</button>
+              </div>
+            </div>`;
+        }).join('');
       }
     } catch(e) {
       listEl.innerHTML = `<div style="color:var(--red,#e55);font-size:0.78rem">${_esc(e.message)}</div>`;
