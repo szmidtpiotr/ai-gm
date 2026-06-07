@@ -4338,7 +4338,7 @@
           <div style="display:flex;flex-direction:column;gap:10px">
             <div class="card">
               <div class="card-header">
-                <span class="card-title">Testy regresyjne</span>
+                <span class="card-title">Testy Playwright</span>
                 <button class="btn btn-sm btn-primary" id="pw-run-all">▶ Uruchom wszystkie</button>
               </div>
               <div style="padding:12px;display:flex;flex-direction:column;gap:8px" id="pw-spec-list">
@@ -4348,8 +4348,9 @@
             <div class="card" style="padding:14px">
               <div style="font-size:0.75rem;color:var(--t2);line-height:1.6">
                 <strong>Jak działa:</strong><br>
-                Playwright odpala spec files z <code>playwright/ux/regression/</code> wewnątrz kontenera test-agent.<br><br>
-                <strong>Regresja:</strong> każdy test jest powiązany z issue #NNN — uruchamiaj po każdym PR aby wykryć regresje.
+                Playwright odpala spec files z <code>playwright/ux/</code> (regression, acceptance, admin3) wewnątrz kontenera test-agent.<br><br>
+                <strong>▶ grupa</strong> uruchamia całą suitę, <strong>▶</strong> pojedynczy plik.<br>
+                <strong>Uwaga:</strong> Acceptance (C1–C19) rozgrywa tury z prawdziwym LLM — trwa kilka–kilkanaście minut.
               </div>
             </div>
           </div>
@@ -17239,9 +17240,13 @@ Niech kości się toczą! 🎲`,
       const d = await apiFetch('/api/test_runner/playwright-specs');
       const specs = d.specs || [];
       if (!specs.length) {
-        listEl.innerHTML = '<div style="color:var(--t3);font-size:0.78rem">Brak spec files w <code>playwright/ux/regression/</code></div>';
+        listEl.innerHTML = '<div style="color:var(--t3);font-size:0.78rem">Brak spec files w <code>playwright/ux/</code></div>';
       } else {
-        listEl.innerHTML = specs.map(s => {
+        // Group specs by suite folder (regression / acceptance / admin3 / …).
+        const groups = {};
+        specs.forEach(s => { (groups[s.group || 'ux'] = groups[s.group || 'ux'] || []).push(s); });
+        const GROUP_LABEL = { regression: '🐞 Regresja', acceptance: '✅ Acceptance (C1–C19)', admin3: '🛠 Admin3 smoke', ux: 'Inne' };
+        const specCard = (s) => {
           const issueBadge = s.issue
             ? `<a href="https://github.com/szmidtpiotr/ai-gm/issues/${s.issue}" target="_blank" rel="noopener"
                 style="display:inline-block;background:var(--accent,#6c8);color:#000;font-size:0.65rem;font-weight:700;padding:1px 5px;border-radius:3px;text-decoration:none;margin-right:4px">#${s.issue}</a>`
@@ -17252,13 +17257,14 @@ Niech kości się toczą! 🎲`,
           const desc = s.description
             ? `<div style="font-size:0.72rem;color:var(--t2);margin-top:5px;line-height:1.5">${_esc(s.description)}</div>`
             : '';
+          const name = s.filename.split('/').pop().replace('.spec.js','');
           return `
             <div style="padding:10px 12px;border:1px solid var(--bdr,#333);border-radius:6px;display:flex;flex-direction:column;gap:0">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
                 <div style="flex:1;min-width:0">
                   <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:2px">
                     ${issueBadge}
-                    <span style="font-weight:600;font-size:0.82rem;color:var(--t1)">${_esc(s.filename.replace('.spec.js',''))}</span>
+                    <span style="font-weight:600;font-size:0.82rem;color:var(--t1)">${_esc(name)}</span>
                     ${countBadge}
                   </div>
                   ${desc}
@@ -17266,7 +17272,14 @@ Niech kości się toczą! 🎲`,
                 <button class="btn btn-sm btn-secondary" style="flex-shrink:0" onclick="_runPlaywrightSpec('${_esc(s.filename)}',this)">▶</button>
               </div>
             </div>`;
-        }).join('');
+        };
+        listEl.innerHTML = Object.keys(groups).sort().map(g => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px">
+            <span style="font-size:0.72rem;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.04em">${GROUP_LABEL[g] || g}</span>
+            <button class="btn btn-sm btn-secondary" style="font-size:0.68rem;padding:2px 8px" onclick="_runPlaywrightSpec('${_esc(g)}',this)">▶ grupa</button>
+          </div>
+          ${groups[g].map(specCard).join('')}
+        `).join('');
       }
     } catch(e) {
       listEl.innerHTML = `<div style="color:var(--red,#e55);font-size:0.78rem">${_esc(e.message)}</div>`;

@@ -213,8 +213,29 @@ app.post("/agent/stop", (req, res) => {
   res.json({ success: true, message: "Zatrzymywanie testu...", run_id: runState.currentRunId });
 });
 
-// ── Playwright regression specs ───────────────────────────────────────────────
+// ── Playwright specs (all ux/ suites: regression, acceptance, admin3, …) ──────
 const PLAYWRIGHT_SPECS_DIR = path.resolve(__dirname, "../playwright/ux/regression");
+const PLAYWRIGHT_UX_DIR = path.resolve(__dirname, "../playwright/ux");
+
+// Recursively collect *.spec.js under a root, returning posix paths relative to it.
+function _walkSpecs(root, rel = "") {
+  const out = [];
+  let entries = [];
+  try {
+    entries = fs.readdirSync(path.join(root, rel), { withFileTypes: true });
+  } catch (_) {
+    return out;
+  }
+  for (const e of entries) {
+    const childRel = rel ? `${rel}/${e.name}` : e.name;
+    if (e.isDirectory()) {
+      out.push(..._walkSpecs(root, childRel));
+    } else if (e.isFile() && e.name.endsWith(".spec.js")) {
+      out.push(childRel);
+    }
+  }
+  return out;
+}
 
 function _parseSpecMeta(filePath) {
   try {
@@ -240,18 +261,22 @@ function _issueFromFilename(filename) {
 app.get("/playwright/specs", (_req, res) => {
   logStructured("info", "playwright_list_specs");
   try {
-    if (!fs.existsSync(PLAYWRIGHT_SPECS_DIR)) {
+    if (!fs.existsSync(PLAYWRIGHT_UX_DIR)) {
       return res.json({ specs: [] });
     }
-    const specs = fs.readdirSync(PLAYWRIGHT_SPECS_DIR)
-      .filter((f) => f.endsWith(".spec.js"))
-      .map((f) => {
-        const { description, testCount } = _parseSpecMeta(path.join(PLAYWRIGHT_SPECS_DIR, f));
-        const issue = _issueFromFilename(f);
+    // `filename` is a posix path relative to playwright/ux (e.g.
+    // "regression/issue_391_story_stale.spec.js", "acceptance/c_series.spec.js").
+    const specs = _walkSpecs(PLAYWRIGHT_UX_DIR)
+      .sort()
+      .map((rel) => {
+        const { description, testCount } = _parseSpecMeta(path.join(PLAYWRIGHT_UX_DIR, rel));
+        const base = rel.split("/").pop();
+        const group = rel.includes("/") ? rel.split("/")[0] : "ux";
         return {
-          filename: f,
-          label: f.replace(".spec.js", "").replace(/_/g, " "),
-          issue,
+          filename: rel,
+          group,
+          label: base.replace(".spec.js", "").replace(/_/g, " "),
+          issue: _issueFromFilename(base),
           description,
           testCount,
         };
@@ -264,7 +289,13 @@ app.get("/playwright/specs", (_req, res) => {
 
 app.post("/playwright/run", (req, res) => {
   const { spec } = req.body || {};
-  const specArg = spec ? `playwright/ux/regression/${spec}` : "playwright/ux/regression";
+  // spec is a path relative to playwright/ux — either a single *.spec.js file or
+  // a suite folder (regression / acceptance / admin3). Empty → run every suite.
+  if (spec && (spec.includes("..") || !/^[A-Za-z0-9_./-]+$/.test(spec))) {
+    res.status(400).json({ error: "invalid spec path" });
+    return;
+  }
+  const specArg = spec ? `playwright/ux/${spec}` : "playwright/ux";
 
   logStructured("info", "playwright_run_start", { spec: spec || "all" });
 
