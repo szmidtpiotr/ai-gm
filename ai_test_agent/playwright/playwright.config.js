@@ -2,6 +2,7 @@ const { defineConfig } = require("@playwright/test");
 
 module.exports = defineConfig({
   testDir: "./",
+  workers: 1,
   timeout: 120000,
   use: {
     headless: process.env.HEADED !== "1",
