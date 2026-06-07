@@ -453,6 +453,26 @@ def build_narrative_messages(
                 if isinstance(first, dict) and first.get("role") == "system":
                     first["content"] = f"{first.get('content', '').rstrip()}\n\n{inv_block}"
 
+        # C1: inject STORY_STALE when player hasn't moved for >= 5 consecutive turns
+        if messages:
+            try:
+                _sf_row = conn.execute(
+                    "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                    (int(campaign["id"]),),
+                ).fetchone()
+                if _sf_row and _sf_row["session_flags"]:
+                    _sf = json.loads(_sf_row["session_flags"] or "{}")
+                    _stale = int(_sf.get("turns_at_location", 0))
+                    if _stale >= 5:
+                        first = messages[0]
+                        if isinstance(first, dict) and first.get("role") == "system":
+                            first["content"] = (
+                                f"{first.get('content', '').rstrip()}\n\n"
+                                f"[STORY_STALE: {_stale} tur bez ruchu — zasugeruj bohaterowi opuszczenie lokacji]"
+                            )
+            except Exception as _c1_err:
+                logger.warning("story_stale_inject_failed", error=str(_c1_err))
+
     combat_log_block = combat_svc.get_combat_turns_context_for_prompt(int(campaign["id"]))
     if combat_log_block and messages:
         first = messages[0]
