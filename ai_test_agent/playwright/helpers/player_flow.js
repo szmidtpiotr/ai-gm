@@ -39,8 +39,19 @@ async function login(page, { username = DEFAULT_USER, password = DEFAULT_PASS } 
   await page.fill("#login-username", username);
   await page.fill("#login-password", password);
   await page.locator("#login-form button[type='submit']").click();
+  // Wait for any post-login screen (onboarding, heroes, or game) before attempting dismiss.
+  // The login API call can take several seconds, so we wait here instead of hoping the
+  // 3s timeout in dismissOnboardingIfPresent is enough.
+  await page.waitForFunction(
+    () => {
+      const ids = ["onboarding-screen", "heroes-screen", "game-screen"];
+      return ids.some((id) => document.getElementById(id)?.classList.contains("screen--active"));
+    },
+    null,
+    { timeout: 25000 },
+  );
   await dismissOnboardingIfPresent(page);
-  // Heroes hub or direct game restore
+  // Now wait for heroes or game (onboarding dismissed above)
   await page.waitForFunction(
     () => {
       const heroes = document.getElementById("heroes-screen");
@@ -50,18 +61,25 @@ async function login(page, { username = DEFAULT_USER, password = DEFAULT_PASS } 
       );
     },
     null,
-    { timeout: 25000 },
+    { timeout: 15000 },
   );
 }
 
 async function openHeroAndCampaign(
   page,
-  { heroName = DEFAULT_HERO, campaignTitle = DEFAULT_CAMPAIGN } = {},
+  { heroName = DEFAULT_HERO, campaignTitle = DEFAULT_CAMPAIGN, campaignId = null } = {},
 ) {
+  // Always navigate away from game screen first to guarantee fresh campaign selection.
+  // Without this, if the browser auto-restores to a PREVIOUS campaign on login, openHeroAndCampaign
+  // would return early (onGame=true) without navigating to the seeded campaign.
   const onGame = await page.evaluate(
     () => document.getElementById("game-screen")?.classList.contains("screen--active"),
   );
-  if (onGame) return;
+  if (onGame) {
+    // Navigate back to heroes so we can select the right campaign by ID.
+    await page.locator("#home-btn").click().catch(() => {});
+    await page.waitForSelector("#heroes-screen.screen--active", { timeout: 15000 }).catch(() => {});
+  }
 
   const onHeroes = await page.evaluate(
     () => document.getElementById("heroes-screen")?.classList.contains("screen--active"),
@@ -77,7 +95,11 @@ async function openHeroAndCampaign(
   }
 
   await page.waitForSelector("#campaigns-screen.screen--active", { timeout: 20000 });
-  const campBtn = page.locator("button.campaign-card").filter({ hasText: campaignTitle }).first();
+  // Prefer selecting by campaign ID (exact match) when available, to avoid picking a stale
+  // campaign with the same title from a previous test run.
+  const campBtn = campaignId
+    ? page.locator(`button.campaign-card[data-campaign-id="${campaignId}"]`)
+    : page.locator("button.campaign-card").filter({ hasText: campaignTitle }).first();
   await campBtn.waitFor({ state: "visible", timeout: 15000 });
   await campBtn.click();
 
@@ -90,7 +112,9 @@ async function enterGame(page, opts = {}) {
   const reset = await resetTestEnv();
   expect(reset.reset).toBe(true);
   await login(page, opts);
-  await openHeroAndCampaign(page, opts);
+  // Pass campaign_id so openHeroAndCampaign selects the exact seeded campaign (not a stale one).
+  await openHeroAndCampaign(page, { ...opts, campaignId: reset.campaign_id });
+  return reset;
 }
 
 async function sendTurnAndWaitForGm(page, text, { timeout = 90000 } = {}) {
