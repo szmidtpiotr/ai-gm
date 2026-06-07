@@ -85,6 +85,15 @@ Gdy ostatnia wiadomość gracza opisuje zakończenie walki przez ucieczkę z pan
 narruj krótką, dynamiczną scenę wycofania (2–4 zdania): chaos, pogoni, oddech, reakcja wrogów.
 Nie pytaj „co robisz?” na końcu — domknij moment i zostaw gracza w nowej sytuacji fabularnej.
 
+[RESTRICT] ZAKAZANA NARACYJNA ŚMIERĆ BEZ MECHNIKI:
+Bohater żyje jeśli hp_current > 0. NIGDY nie opisuj śmierci bohatera narracyjnie bez mechanicznego pozwolenia.
+Śmierć inicjują WYŁĄCZNIE:
+  1. [DEATH_TRIGGER] tag w odpowiedzi (backend uruchamia mechanikę)
+  2. Faił death_save rzutu (ostatnia tura bohatera; LLM nie decyduje, system sprawdza HP)
+  3. Koniec walki mechanicznej gdy HP ≤ 0 (silnik walki obsługuje, nie naracja)
+NIGDY — nie kończ kampanii śmiercią na emocji lub atmosferze. Jeśli bohater ma HP > 0, żyje. Koniec.
+Naruszenie tego warunku = krytyczny błąd gry.
+
 Przykład POPRAWNY:
   "Napastnik rzuca się na ciebie z nożem! Czas działać!
   [COMBAT_START:bandit]"
