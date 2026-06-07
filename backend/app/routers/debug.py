@@ -700,10 +700,36 @@ def get_campaign_debug_state(
     else:
         gate_result = {"blocked": False, "reason": None, "feedback": None}
 
+    # ── C1 debug ─────────────────────────────────────────────────────────────
+    c1_debug: dict = {}
+    try:
+        conn2 = sqlite3.connect(DB_PATH)
+        conn2.row_factory = sqlite3.Row
+        try:
+            sf_row = conn2.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if sf_row and sf_row["session_flags"]:
+                _sf = json.loads(sf_row["session_flags"] or "{}")
+                _stale = int(_sf.get("turns_at_location", 0))
+                c1_debug = {
+                    "turns_at_location": _stale,
+                    "prev_turn_hex": _sf.get("_prev_turn_hex"),
+                    "current_hex": _sf.get("current_hex"),
+                    "story_stale_threshold": 5,
+                    "story_stale_active": _stale >= 5,
+                }
+        finally:
+            conn2.close()
+    except Exception:
+        pass
+
     return {
         "campaign_id": campaign_id,
         "intent": intent,
         "world_state": ws,
         "gate_result": gate_result,
         "last_player_input": last_input,
+        "c1_debug": c1_debug,
     }

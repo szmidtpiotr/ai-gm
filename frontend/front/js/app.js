@@ -6115,6 +6115,7 @@ function _openInspectorModal() {
                   <div><span style="color:#334155">Quests:</span> ${(ws.active_quests||[]).length || '<span style="color:#334155">—</span>'}</div>
                 </div>
               </div>
+              ${(()=>{const c1=d.c1_debug||{};if(!Object.keys(c1).length)return'';const active=c1.story_stale_active;const n=c1.turns_at_location??0;const thr=c1.story_stale_threshold??5;return`<div style="margin-top:8px;border-top:1px solid #1e293b;padding-top:8px"><div style="color:#64748b;font-size:0.68rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">C1 STORY_STALE</div><div style="display:flex;flex-direction:column;gap:2px"><div><span style="color:#334155">Turns@loc:</span> <span style="color:${active?'#fbbf24':'#4ade80'};font-weight:700">${n}/${thr}</span>${active?' <span style="background:#78350f;color:#fde68a;border-radius:4px;padding:0 5px;font-size:0.7rem">AKTYWNY</span>':''}</div><div style="color:#475569;font-size:0.65rem">hex: ${c1.current_hex?`${c1.current_hex.q},${c1.current_hex.r}`:'—'} prev: ${c1.prev_turn_hex?`${c1.prev_turn_hex.q},${c1.prev_turn_hex.r}`:'—'}</div></div></div>`;})()}
               <div style="margin-top:8px;color:#1e293b;font-size:0.65rem;text-align:right">${new Date().toLocaleTimeString()}</div>`;
         } catch(e) {
             const body = document.getElementById('dev-inspector-body');
