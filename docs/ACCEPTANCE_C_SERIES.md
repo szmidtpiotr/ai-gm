@@ -9,7 +9,7 @@ suite doubles as an **executable backlog**.
 | Layer | Where | What it proves | Driven by |
 |-------|-------|----------------|-----------|
 | **pytest (mechanical)** | `backend/tests/acceptance/test_c_series_acceptance.py` | Deterministic backend truth — endpoints, utils, DB invariants | urllib → `localhost:8000` (in-container) + direct `/data/ai_gm.db` reads |
-| **Playwright (E2E)** | `ai_test_agent/playwright/ux/acceptance/c_series.spec.js` | Player-observable behaviour. LLM-playable tasks **play the game with a real model** (≤30 turns) toward the goal | `helpers/acceptance.js` → `playUntilGoal()` |
+| **Playwright (E2E)** | `ai_test_agent/playwright/ux/acceptance/c01..c19_*.spec.js` (one file per task) | Player-observable behaviour. LLM-playable tasks **play the game with a real model** (≤30 turns) toward the goal | `helpers/acceptance.js` → `playUntilGoal()` |
 
 A task can be GREEN in pytest but `⊘ skipped`/`—` in E2E when it is not observable
 from the player client (e.g. C5 enemy wound penalty). pytest is authoritative for
@@ -49,14 +49,15 @@ mechanical correctness; E2E is authoritative for player-facing behaviour.
 ssh claude@192.168.1.61 'docker exec ai-gm-dev-backend-1 \
   pytest tests/acceptance/test_c_series_acceptance.py -v'
 
-# Playwright only (real LLM, slow)
+# Playwright only — whole suite (real LLM, slow)
 ssh claude@192.168.1.61 'docker exec ai-gm-dev-test-agent-1 \
-  npx playwright test playwright/ux/acceptance/c_series.spec.js \
+  npx playwright test playwright/ux/acceptance/ \
   --config=playwright/playwright.config.js --reporter=list'
 
-# A single task (Playwright grep by C-code)
+# A single task — one file per task (run individually, also from the Tools UI)
 ssh claude@192.168.1.61 'docker exec ai-gm-dev-test-agent-1 \
-  npx playwright test playwright/ux/acceptance/c_series.spec.js -g "C13"'
+  npx playwright test playwright/ux/acceptance/c13_gold_only.spec.js \
+  --config=playwright/playwright.config.js --reporter=list'
 ```
 
 > **Backend code is baked into the image.** After editing the pytest file,

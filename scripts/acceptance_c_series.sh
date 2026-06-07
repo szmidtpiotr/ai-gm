@@ -3,7 +3,7 @@
 #
 # Runs BOTH layers and writes a combined per-task report:
 #   1. pytest mechanical  → backend/tests/acceptance/test_c_series_acceptance.py
-#   2. Playwright LLM-play → ai_test_agent/playwright/ux/acceptance/c_series.spec.js
+#   2. Playwright LLM-play → ai_test_agent/playwright/ux/acceptance/ (c01..c19, one file per task)
 #
 # Run ON the DEV host (.61):
 #   ./scripts/acceptance_c_series.sh
@@ -28,7 +28,7 @@ docker exec "$BE" pytest tests/acceptance/test_c_series_acceptance.py -v --no-he
 PY_RC=$?
 
 echo "▶ Playwright LLM-play acceptance (real LLM, ≤30 turns/test)…"
-docker exec "$TA" npx playwright test playwright/ux/acceptance/c_series.spec.js \
+docker exec "$TA" npx playwright test playwright/ux/acceptance/ \
   --config=playwright/playwright.config.js --reporter=list > "$PWLOG" 2>&1
 PW_RC=$?
 
