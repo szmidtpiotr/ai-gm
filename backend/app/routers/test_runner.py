@@ -710,6 +710,51 @@ def _load_ai_test_config_file() -> dict[str, Any]:
     return {"config_path": path_str, **data}
 
 
+class PlaywrightRunReq(BaseModel):
+    spec: str | None = Field(default=None, description="filename, np. issue_392_hp_no_death.spec.js; null = uruchom wszystkie")
+
+
+@router.get("/playwright-specs", dependencies=[Depends(require_admin_bearer_or_query)])
+def list_playwright_specs() -> dict[str, Any]:
+    """Lista spec files z playwright/ux/regression/ (przez agenta Node)."""
+    agent = _agent_url()
+    try:
+        with httpx.Client(timeout=httpx.Timeout(5.0, connect=3.0)) as client:
+            r = client.get(f"{agent}/playwright/specs")
+            r.raise_for_status()
+            return r.json()
+    except Exception as e:
+        if _is_test_agent_unreachable(e):
+            return {"specs": [], "error": _format_test_agent_error(agent, e)}
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+@router.post("/playwright-run", dependencies=[Depends(require_admin_bearer_or_query)])
+def run_playwright(body: PlaywrightRunReq) -> StreamingResponse:
+    """Uruchom Playwright spec(s) — SSE stream z logami i wynikiem."""
+    agent = _agent_url()
+
+    def gen():
+        try:
+            with httpx.Client(timeout=httpx.Timeout(connect=10.0, read=None, write=10.0, pool=5.0)) as client:
+                with client.stream("POST", f"{agent}/playwright/run", json={"spec": body.spec}) as resp:
+                    if resp.status_code != 200:
+                        err_txt = resp.read()[:2000].decode("utf-8", errors="replace")
+                        yield f"data: {json.dumps({'type':'done','success':False,'error':f'HTTP {resp.status_code}: {err_txt}'})}\n\n"
+                        return
+                    for line in resp.iter_lines():
+                        if line is None:
+                            continue
+                        line = line if isinstance(line, str) else line.decode("utf-8", errors="replace")
+                        line = line.strip()
+                        if line.startswith("data: "):
+                            yield f"{line}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type':'done','success':False,'error':_format_test_agent_error(agent, e)})}\n\n"
+
+    return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+
+
 @router.get("/ai_test_config", dependencies=[Depends(require_admin_bearer_or_query)])
 def get_ai_test_config() -> dict[str, Any]:
     """
