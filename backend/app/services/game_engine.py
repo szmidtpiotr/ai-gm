@@ -508,7 +508,32 @@ def build_narrative_messages(
                             )
 
                             # C1 follow-up: inject TRAVEL_HINT with nearby discovered locations
+                            # Try session_flags first, fallback to querying DB for nearby locations
                             _discovered = _sf.get("discovered_hexes", [])
+                            if not _discovered and _sf.get("current_hex"):
+                                _ch = _sf.get("current_hex", {})
+                                _cq, _cr = int(_ch.get("q", 0)), int(_ch.get("r", 0))
+                                # Query nearby game_locations within hex distance 2
+                                try:
+                                    _nearby_rows = conn.execute(
+                                        """
+                                        SELECT name, world_hex_q as q, world_hex_r as r
+                                        FROM game_locations
+                                        WHERE approved = 1
+                                        AND (world_hex_q IS NOT NULL AND world_hex_r IS NOT NULL)
+                                        AND abs(world_hex_q - ?) <= 2 AND abs(world_hex_r - ?) <= 2
+                                        AND NOT (world_hex_q = ? AND world_hex_r = ?)
+                                        ORDER BY abs(world_hex_q - ?) + abs(world_hex_r - ?)
+                                        LIMIT 5
+                                        """,
+                                        (_cq, _cr, _cq, _cr, _cq, _cr),
+                                    ).fetchall()
+                                    _discovered = [
+                                        {"q": int(r["q"]), "r": int(r["r"]), "name": r["name"]}
+                                        for r in _nearby_rows
+                                    ]
+                                except Exception:
+                                    pass
                             _travel_hint = build_travel_hint_block(_discovered, _stale)
                             if _travel_hint and isinstance(first, dict):
                                 first["content"] = (
