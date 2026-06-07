@@ -1,6 +1,7 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const { spawn } = require("child_process");
 const { run } = require("./orchestrator");
 const { validateScenario } = require("./scenario_validator");
 const { probePlannerConnectivity } = require("./llm_client");
@@ -210,6 +211,65 @@ app.post("/agent/stop", (req, res) => {
 
   cancelRun();
   res.json({ success: true, message: "Zatrzymywanie testu...", run_id: runState.currentRunId });
+});
+
+// ── Playwright regression specs ───────────────────────────────────────────────
+const PLAYWRIGHT_SPECS_DIR = path.resolve(__dirname, "../playwright/ux/regression");
+
+app.get("/playwright/specs", (_req, res) => {
+  logStructured("info", "playwright_list_specs");
+  try {
+    if (!fs.existsSync(PLAYWRIGHT_SPECS_DIR)) {
+      return res.json({ specs: [] });
+    }
+    const specs = fs.readdirSync(PLAYWRIGHT_SPECS_DIR)
+      .filter((f) => f.endsWith(".spec.js"))
+      .map((f) => ({
+        filename: f,
+        label: f.replace(".spec.js", "").replace(/_/g, " "),
+      }));
+    return res.json({ specs });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/playwright/run", (req, res) => {
+  const { spec } = req.body || {};
+  const specArg = spec ? `playwright/ux/regression/${spec}` : "playwright/ux/regression";
+
+  logStructured("info", "playwright_run_start", { spec: spec || "all" });
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  if (res.flushHeaders) res.flushHeaders();
+
+  const send = (data) => {
+    try { res.write(`data: ${JSON.stringify(data)}\n\n`); } catch (_) { /* closed */ }
+  };
+
+  const args = ["playwright", "test", specArg, "--config=playwright/playwright.config.js", "--reporter=line"];
+  const child = spawn("npx", args, {
+    cwd: path.resolve(__dirname, ".."),
+    env: { ...process.env, FORCE_COLOR: "0" },
+  });
+
+  child.stdout.on("data", (chunk) => {
+    chunk.toString().split("\n").filter(Boolean).forEach((line) => send({ type: "log", line }));
+  });
+  child.stderr.on("data", (chunk) => {
+    chunk.toString().split("\n").filter(Boolean).forEach((line) => send({ type: "log", line, isErr: true }));
+  });
+  child.on("close", (code) => {
+    logStructured("info", "playwright_run_done", { spec: spec || "all", exitCode: code });
+    send({ type: "done", success: code === 0, exitCode: code });
+    try { res.end(); } catch (_) { /* ignore */ }
+  });
+  child.on("error", (err) => {
+    send({ type: "done", success: false, error: err.message });
+    try { res.end(); } catch (_) { /* ignore */ }
+  });
 });
 
 const PORT = Number(process.env.AGENT_PORT || 4000);

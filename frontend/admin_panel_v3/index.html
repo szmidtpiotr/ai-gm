@@ -4278,6 +4278,7 @@
         <button class="stab" data-toolstab="knowledge">📖 Wiedza</button>
         <button class="stab" data-toolstab="mcp">⬡ MCP</button>
         <button class="stab" data-toolstab="images">🖼 Obrazy</button>
+        <button class="stab" data-toolstab="playwright">🎭 Playwright</button>
       </div>
 
       <!-- Test Runner panel -->
@@ -4325,6 +4326,41 @@
                 </thead>
                 <tbody><tr><td colspan="3" style="text-align:center;padding:18px;color:var(--t3)">Kliknij ⟳ aby odświeżyć listę.</td></tr></tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Playwright Regression panel -->
+      <div class="stab-panel" id="toolstab-playwright" style="display:none">
+        <div style="margin-top:12px;display:grid;grid-template-columns:320px 1fr;gap:16px;align-items:start">
+          <!-- Left: spec list -->
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">Testy regresyjne</span>
+                <button class="btn btn-sm btn-primary" id="pw-run-all">▶ Uruchom wszystkie</button>
+              </div>
+              <div style="padding:12px;display:flex;flex-direction:column;gap:8px" id="pw-spec-list">
+                <div style="color:var(--t3);font-size:0.78rem">Kliknij zakładkę aby załadować…</div>
+              </div>
+            </div>
+            <div class="card" style="padding:14px">
+              <div style="font-size:0.75rem;color:var(--t2);line-height:1.6">
+                <strong>Jak działa:</strong><br>
+                Playwright odpala spec files z <code>playwright/ux/regression/</code> wewnątrz kontenera test-agent.<br><br>
+                <strong>Regresja:</strong> każdy test jest powiązany z issue #NNN — uruchamiaj po każdym PR aby wykryć regresje.
+              </div>
+            </div>
+          </div>
+          <!-- Right: live output -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Wyniki / log</span>
+              <span id="pw-status" style="font-size:0.78rem;font-weight:600"></span>
+            </div>
+            <div id="pw-log" style="padding:12px;min-height:200px;max-height:500px;overflow-y:auto;font-family:monospace;font-size:0.72rem;color:var(--t2);background:var(--bg2,#111);border-radius:4px;line-height:1.5">
+              <span style="color:var(--t3)">Tu pojawi się output testów…</span>
             </div>
           </div>
         </div>
@@ -17107,7 +17143,8 @@ Niech kości się toczą! 🎲`,
         if (tab === 'rest')      _loadRestSandbox().catch(e =>   { _toolsTabLoaded.delete(tab); console.warn('tools rest tab', e.message); });
         if (tab === 'knowledge') _loadToolsKnowledge().catch(e =>{ _toolsTabLoaded.delete(tab); console.warn('tools knowledge tab', e.message); });
         if (tab === 'mcp')       _loadToolsMcp().catch(e =>      { _toolsTabLoaded.delete(tab); console.warn('tools mcp tab', e.message); });
-        if (tab === 'images')    _loadImgGallery().catch(e =>   { _toolsTabLoaded.delete(tab); console.warn('tools images tab', e.message); });
+        if (tab === 'images')    _loadImgGallery().catch(e =>      { _toolsTabLoaded.delete(tab); console.warn('tools images tab', e.message); });
+        if (tab === 'playwright') _loadToolsPlaywright().catch(e => { _toolsTabLoaded.delete(tab); console.warn('tools playwright tab', e.message); });
       }
     });
   });
@@ -17190,6 +17227,101 @@ Niech kości się toczą! 🎲`,
       const status = s.status || s.state || 'unknown';
       link.parentElement.insertAdjacentHTML('beforeend', `<div style="font-size:0.72rem;color:var(--t3);margin-top:4px">Status: <code>${_esc(status)}</code> · faza: <code>${_esc(s.phase||'-')}</code></div>`);
     } catch(e) { _showToast(e.message, 'error'); }
+  }
+
+  // ── Playwright Regression panel ───────────────────────────────────────────
+  async function _loadToolsPlaywright() {
+    const listEl = document.getElementById('pw-spec-list');
+    const runAllBtn = document.getElementById('pw-run-all');
+    if (!listEl) return;
+    listEl.innerHTML = '<div style="color:var(--t3);font-size:0.78rem">Ładowanie…</div>';
+    try {
+      const d = await apiFetch('/api/test_runner/playwright-specs');
+      const specs = d.specs || [];
+      if (!specs.length) {
+        listEl.innerHTML = '<div style="color:var(--t3);font-size:0.78rem">Brak spec files w <code>playwright/ux/regression/</code></div>';
+      } else {
+        listEl.innerHTML = specs.map(s => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;border:1px solid var(--bdr,#333);border-radius:6px">
+            <div>
+              <div style="font-weight:600;font-size:0.82rem;color:var(--t1)">${_esc(s.label)}</div>
+              <div style="font-size:0.7rem;color:var(--t3)">${_esc(s.filename)}</div>
+            </div>
+            <button class="btn btn-sm btn-secondary" onclick="_runPlaywrightSpec('${_esc(s.filename)}',this)">▶</button>
+          </div>`).join('');
+      }
+    } catch(e) {
+      listEl.innerHTML = `<div style="color:var(--red,#e55);font-size:0.78rem">${_esc(e.message)}</div>`;
+    }
+    if (runAllBtn && !runAllBtn._wired) {
+      runAllBtn._wired = true;
+      runAllBtn.addEventListener('click', () => _runPlaywrightSpec(null, runAllBtn));
+    }
+  }
+
+  async function _runPlaywrightSpec(filename, btn) {
+    const logEl = document.getElementById('pw-log');
+    const statusEl = document.getElementById('pw-status');
+    if (!logEl) return;
+    if (btn) { btn.disabled = true; }
+    logEl.innerHTML = `<span style="color:var(--t3)">Uruchamianie: ${_esc(filename || 'wszystkie')} …</span>`;
+    if (statusEl) { statusEl.textContent = '⏳ Running…'; statusEl.style.color = 'var(--t3)'; }
+
+    const append = (line, isErr = false) => {
+      const el = document.createElement('div');
+      el.style.cssText = `white-space:pre-wrap;color:${isErr ? '#f88' : 'var(--t2)'}`;
+      el.textContent = line;
+      logEl.appendChild(el);
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    const tok = localStorage.getItem('aigm_admin_token') || '';
+    try {
+      const resp = await fetch('/api/test_runner/playwright-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tok}` },
+        body: JSON.stringify({ spec: filename }),
+      });
+      if (!resp.ok) { throw new Error(`HTTP ${resp.status}`); }
+
+      logEl.innerHTML = '';
+      const reader = resp.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+      let done = false;
+      let success = false;
+
+      while (!done) {
+        const { value, done: d } = await reader.read();
+        done = d;
+        if (value) buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const obj = JSON.parse(line.slice(6));
+            if (obj.type === 'log') append(obj.line, obj.isErr);
+            else if (obj.type === 'done') { success = obj.success; done = true; }
+          } catch (_) { /* parse error */ }
+        }
+      }
+
+      if (statusEl) {
+        statusEl.textContent = success ? '✓ Passed' : '✗ Failed';
+        statusEl.style.color = success ? '#4c8' : '#e55';
+      }
+      _showToast(success ? 'Testy przeszły ✓' : 'Testy nie przeszły ✗', success ? 'success' : 'error');
+    } catch(e) {
+      append(`Błąd: ${e.message}`, true);
+      if (statusEl) { statusEl.textContent = '✗ Error'; statusEl.style.color = '#e55'; }
+      _showToast(e.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = btn.id === 'pw-run-all' ? '▶ Uruchom wszystkie' : '▶';
+      }
+    }
   }
 
   let _rstState = { campId: null, charId: null, heroId: null };

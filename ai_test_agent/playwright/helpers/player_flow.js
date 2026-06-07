@@ -104,6 +104,17 @@ async function sendTurnAndWaitForGm(page, text, { timeout = 90000 } = {}) {
   return gmBubble;
 }
 
+async function sendMultipleTurns(page, text, count, opts = {}) {
+  const results = [];
+  for (let i = 0; i < count; i++) {
+    const bubble = await sendTurnAndWaitForGm(page, text, opts);
+    const content = await bubble.textContent();
+    results.push(content);
+    if (opts.afterEach) await opts.afterEach(content, i);
+  }
+  return results;
+}
+
 async function openCharacterSheet(page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('#mobile-bottom-bar button[data-mbb="character"]').click();
@@ -117,6 +128,7 @@ module.exports = {
   openHeroAndCampaign,
   enterGame,
   sendTurnAndWaitForGm,
+  sendMultipleTurns,
   openCharacterSheet,
   loadConfig,
   DEFAULT_USER,

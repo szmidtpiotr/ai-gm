@@ -105,6 +105,7 @@ services:
     volumes:
       - ./data-dev:/data:ro
       - ./ai_test_agent/scenarios:/app/scenarios:rw
+      - ./ai_test_agent/playwright:/app/playwright:rw
     healthcheck:
       test:
         [
