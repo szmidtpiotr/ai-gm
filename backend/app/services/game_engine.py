@@ -454,6 +454,7 @@ def build_narrative_messages(
                     first["content"] = f"{first.get('content', '').rstrip()}\n\n{inv_block}"
 
         # C1: inject STORY_STALE when player hasn't moved for >= 5 consecutive turns
+        # Escalates in intensity: mild suggestion (5-9), strong push (10-14), critical (15+)
         if messages:
             try:
                 _sf_row = conn.execute(
@@ -466,9 +467,26 @@ def build_narrative_messages(
                     if _stale >= 5:
                         first = messages[0]
                         if isinstance(first, dict) and first.get("role") == "system":
+                            if _stale >= 15:
+                                _stale_msg = (
+                                    f"[STORY_STALE: {_stale} tur bez ruchu — KRYTYCZNE! "
+                                    "Bohater MUSI natychmiast opuścić tę lokację! "
+                                    "Śmierć czai się w każdej sekundzie zwłoki. "
+                                    "Uruchom działanie lub scenę ucieczki TERAZ.]"
+                                )
+                            elif _stale >= 10:
+                                _stale_msg = (
+                                    f"[STORY_STALE: {_stale} tur bez ruchu — "
+                                    "Sytuacja staje się niebezpieczna i naglna! "
+                                    "Bohater POWINIEN KONIECZNIE opuścić tę lokację w następnej turze.]"
+                                )
+                            else:
+                                _stale_msg = (
+                                    f"[STORY_STALE: {_stale} tur bez ruchu — "
+                                    "zasugeruj bohaterowi opuszczenie lokacji]"
+                                )
                             first["content"] = (
-                                f"{first.get('content', '').rstrip()}\n\n"
-                                f"[STORY_STALE: {_stale} tur bez ruchu — zasugeruj bohaterowi opuszczenie lokacji]"
+                                f"{first.get('content', '').rstrip()}\n\n{_stale_msg}"
                             )
             except Exception as _c1_err:
                 logger.warning("story_stale_inject_failed", error=str(_c1_err))
