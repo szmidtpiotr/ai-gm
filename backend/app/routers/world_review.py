@@ -16,6 +16,7 @@ from app.services.world_service import (
     get_pending_npcs,
     get_pending_enemies,
     get_pending_weapons,
+    get_pending_items,
     approve_entity,
     discard_entity,
 )
@@ -75,6 +76,16 @@ def pending_weapons():
     conn = _get_db()
     try:
         return {"items": get_pending_weapons(conn)}
+    finally:
+        conn.close()
+
+
+@router.get("/pending/items")
+def pending_items():
+    """D1 (#376) — narrative items awaiting admin review."""
+    conn = _get_db()
+    try:
+        return {"items": get_pending_items(conn)}
     finally:
         conn.close()
 

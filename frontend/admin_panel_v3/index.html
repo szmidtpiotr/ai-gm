@@ -8070,19 +8070,21 @@
     if (!container) return;
     container.innerHTML = '<div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div>';
     try {
-      const [npcRes, enemyRes, weapRes] = await Promise.allSettled([
+      const [npcRes, enemyRes, weapRes, itemRes] = await Promise.allSettled([
         apiFetch('/api/admin/world/pending/npcs'),
         apiFetch('/api/admin/world/pending/enemies'),
         apiFetch('/api/admin/world/pending/weapons'),
+        apiFetch('/api/admin/world/pending/items'),
       ]);
       const npcs    = npcRes.status==='fulfilled'   ? (npcRes.value?.items||npcRes.value||[])     : [];
       const enemies = enemyRes.status==='fulfilled' ? (enemyRes.value?.items||enemyRes.value||[]) : [];
       const weapons = weapRes.status==='fulfilled'  ? (weapRes.value?.items||weapRes.value||[])   : [];
-      const total = npcs.length + enemies.length + weapons.length;
+      const items   = itemRes.status==='fulfilled'  ? (itemRes.value?.items||itemRes.value||[])   : [];
+      const total = npcs.length + enemies.length + weapons.length + items.length;
       const badge = document.getElementById('world-pending-badge');
       if (badge) { badge.textContent = total || ''; badge.style.display = total ? '' : 'none'; }
       if (!total) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Brak oczekujących</div><div class="empty-sub">Wszystkie NPC, wrogowie i bronie zatwierdzone.</div></div>';
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Brak oczekujących</div><div class="empty-sub">Wszystkie NPC, wrogowie, bronie i przedmioty zatwierdzone.</div></div>';
         return;
       }
       const _pendingName = (label, key) => `<div class="td-name">${_esc(label||key)}</div><div class="td-muted" style="font-size:0.7rem;margin-top:1px">${_esc(key)}</div>`;
@@ -8121,6 +8123,17 @@
           <button class="btn-icon danger" title="Odrzuć" onclick="reviewEntityBestiary('weapon','${_esc(p.key)}','discard',this)">✕</button>
         </td>
       </tr>`;
+      const mkItemRow = p => `<tr>
+        <td class="col-check"><input type="checkbox"></td>
+        <td class="td-sticky">${_pendingName(p.label, p.key)}</td>
+        <td><span class="badge badge-blue">Przedmiot</span></td>
+        <td class="td-muted">${_esc(p.item_type||'—')}</td>
+        <td class="td-muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
+        <td class="td-actions">
+          <button class="btn-icon success" title="Zatwierdź" onclick="reviewEntityBestiary('item','${_esc(p.key)}','approve',this)">✓</button>
+          <button class="btn-icon danger" title="Odrzuć" onclick="reviewEntityBestiary('item','${_esc(p.key)}','discard',this)">✕</button>
+        </td>
+      </tr>`;
       container.innerHTML = `<div class="table-wrap"><table class="data-table" id="bestiary-pending-table">
         <thead><tr>
           <th class="col-check"></th>
@@ -8130,7 +8143,7 @@
           <th><div class="th-inner">Opis</div></th>
           <th><div class="th-inner" style="justify-content:flex-end">Akcje</div></th>
         </tr></thead>
-        <tbody>${[...npcs.map(mkNpcRow), ...enemies.map(mkEnemyRow), ...weapons.map(mkWeaponRow)].join('')}</tbody>
+        <tbody>${[...npcs.map(mkNpcRow), ...enemies.map(mkEnemyRow), ...weapons.map(mkWeaponRow), ...items.map(mkItemRow)].join('')}</tbody>
       </table></div>`;
     } catch(e) {
       container.innerHTML = `<div style="padding:24px;text-align:center;color:var(--red);font-size:0.8rem">${_esc(e.message)}</div>`;
@@ -8274,11 +8287,12 @@
     if (!container) return;
     container.innerHTML = '<div style="padding:28px;text-align:center;color:var(--t3);font-size:0.8rem">Ładowanie…</div>';
     try {
-      const [locs, npcs, enemies, weapons] = await Promise.allSettled([
+      const [locs, npcs, enemies, weapons, items] = await Promise.allSettled([
         apiFetch('/api/admin/world/pending/locations'),
         apiFetch('/api/admin/world/pending/npcs'),
         apiFetch('/api/admin/world/pending/enemies'),
         apiFetch('/api/admin/world/pending/weapons'),
+        apiFetch('/api/admin/world/pending/items'),
       ]);
       const pending = [];
       const addItems = (result, displayType, apiType, icon, cls) => {
@@ -8287,10 +8301,11 @@
           items.forEach(x => pending.push({ displayType, apiType, icon, cls, key: x.key, name: x.label||x.key, meta: x.tier?`tier ${x.tier}`:'', desc: x.description||x.note||'' }));
         }
       };
-      addItems(locs,    'Lokacja', 'location', '⊕', 'loc');
-      addItems(npcs,    'NPC',     'npc',      '◉', 'npc');
-      addItems(enemies, 'Wróg',    'enemy',    '☠', 'item');
-      addItems(weapons, 'Broń',    'weapon',   '⚔', 'loc');
+      addItems(locs,    'Lokacja',  'location', '⊕', 'loc');
+      addItems(npcs,    'NPC',      'npc',      '◉', 'npc');
+      addItems(enemies, 'Wróg',     'enemy',    '☠', 'item');
+      addItems(weapons, 'Broń',     'weapon',   '⚔', 'loc');
+      addItems(items,   'Przedmiot','item',     '🎁', 'item');
 
       if (!pending.length) {
         container.innerHTML = '<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-title">Brak oczekujących</div><div class="empty-sub">Wszystkie treści zatwierdzone.</div></div>';

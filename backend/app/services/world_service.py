@@ -768,6 +768,7 @@ def get_pending_review_counts(conn: sqlite3.Connection) -> dict[str, int]:
         ("npcs", "npcs"),
         ("game_config_enemies", "enemies"),
         ("game_config_weapons", "weapons"),
+        ("game_config_items", "items"),
     ]:
         try:
             row = conn.execute(
@@ -777,6 +778,21 @@ def get_pending_review_counts(conn: sqlite3.Connection) -> dict[str, int]:
         except Exception:
             counts[label] = 0
     return counts
+
+
+def get_pending_items(conn: sqlite3.Connection) -> list[dict]:
+    """D1 (#376) — Return narrative items awaiting admin review."""
+    try:
+        rows = conn.execute(
+            """SELECT key, label, item_type, description, value_gp,
+                      campaign_id, review_status, ai_generated
+               FROM game_config_items
+               WHERE review_status = 'pending_review'
+               ORDER BY rowid DESC LIMIT 100"""
+        ).fetchall()
+        return [dict(r) for r in rows]
+    except Exception:
+        return []
 
 
 def get_pending_weapons(conn: sqlite3.Connection) -> list[dict]:
@@ -838,6 +854,7 @@ def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
     table = {
         "location": "game_locations", "npc": "npcs",
         "enemy": "game_config_enemies", "weapon": "game_config_weapons",
+        "item": "game_config_items",
     }.get(entity_type)
     if not table:
         return False
@@ -849,6 +866,11 @@ def approve_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
             # Approve globally: clear campaign_id so weapon is available everywhere
             conn.execute(
                 "UPDATE game_config_weapons SET approved = 1, campaign_id = NULL WHERE key = ?", (key,)
+            )
+        if entity_type == "item":
+            # D1 (#376) — approve globally: catalog filters by COALESCE(approved, 1) = 1
+            conn.execute(
+                "UPDATE game_config_items SET approved = 1, campaign_id = NULL WHERE key = ?", (key,)
             )
         if entity_type == "location":
             # Location validator + injectors filter by COALESCE(approved, 1) = 1, so flipping
@@ -894,6 +916,7 @@ def discard_entity(conn: sqlite3.Connection, entity_type: str, key: str) -> bool
     table = {
         "location": "game_locations", "npc": "npcs",
         "enemy": "game_config_enemies", "weapon": "game_config_weapons",
+        "item": "game_config_items",
     }.get(entity_type)
     if not table:
         return False

@@ -61,3 +61,9 @@ backend/ai_gm.db
 
 # Downloaded binaries
 *.tar.gz
+
+# TaskMaster config (contains GitHub PAT token) — never commit
+.taskmaster/
+
+# Scratch screenshots / temp images
+temp-img/
