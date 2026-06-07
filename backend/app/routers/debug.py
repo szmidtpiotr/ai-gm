@@ -188,6 +188,13 @@ def get_last_turn_debug(
                 "route": (last_turn or {}).get("route") if last_turn else None,
                 "created_at": (last_turn or {}).get("created_at") if last_turn else None,
             } if last_turn else None,
+            "c1_debug": {
+                "turns_at_location": session_flags.get("turns_at_location", 0),
+                "prev_turn_hex": session_flags.get("_prev_turn_hex"),
+                "current_hex": session_flags.get("current_hex"),
+                "story_stale_threshold": 5,
+                "story_stale_active": int(session_flags.get("turns_at_location", 0)) >= 5,
+            },
         }
     finally:
         conn.close()
