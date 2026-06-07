@@ -90,6 +90,69 @@ def pending_items():
         conn.close()
 
 
+# ── D4 (#379) — Auto-screening kolejki ────────────────────────────────────────
+
+_PENDING_FETCHER = {
+    "item": get_pending_items,
+    "weapon": get_pending_weapons,
+    "npc": get_pending_npcs,
+    "enemy": get_pending_enemies,
+    "location": get_pending_locations,
+}
+
+
+@router.post("/auto-screen/{entity_type}/{key}")
+def auto_screen_one(entity_type: str, key: str, dry_run: bool = False):
+    """D4 — screen a single pending record. `dry_run=1` runs L1 only (no LLM, no
+    approval) so the contract can be checked deterministically."""
+    from app.services.screening_service import (
+        auto_screen_record, validate_level1, _load_record,
+    )
+    conn = _get_db()
+    try:
+        if dry_run:
+            rec = _load_record(conn, entity_type, key)
+            if rec is None:
+                raise HTTPException(status_code=404, detail="record not found")
+            return {
+                "dry_run": True, "entity_type": entity_type, "key": key,
+                "l1": validate_level1(entity_type, rec),
+            }
+        return auto_screen_record(conn, entity_type, key)
+    finally:
+        conn.close()
+
+
+@router.post("/auto-screen-queue/{entity_type}")
+def auto_screen_queue(entity_type: str, dry_run: bool = False):
+    """D4 — screen every pending record of a type. Returns per-record decisions
+    (dry_run → L1 only). High-score + L1-pass records are auto-approved."""
+    from app.services.screening_service import (
+        auto_screen_record, validate_level1, _load_record,
+    )
+    fetcher = _PENDING_FETCHER.get(entity_type)
+    if not fetcher:
+        raise HTTPException(status_code=400, detail=f"unknown entity_type: {entity_type}")
+    conn = _get_db()
+    try:
+        results = []
+        for rec in fetcher(conn):
+            key = rec.get("key")
+            if not key:
+                continue
+            if dry_run:
+                # Pending-list dicts are column-truncated; L1 needs the full row.
+                full = _load_record(conn, entity_type, key) or rec
+                results.append({"key": key, "l1": validate_level1(entity_type, full)})
+            else:
+                results.append(auto_screen_record(conn, entity_type, key))
+        approved = sum(1 for r in results if r.get("decision") == "auto_approve")
+        return {"entity_type": entity_type, "dry_run": dry_run,
+                "screened": len(results), "auto_approved": approved, "results": results}
+    finally:
+        conn.close()
+
+
 class ReviewAction(BaseModel):
     action: str  # "approve" or "discard"
 
