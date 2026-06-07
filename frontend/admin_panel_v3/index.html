@@ -8130,6 +8130,7 @@
         <td class="td-muted">${_esc(p.item_type||'—')}</td>
         <td class="td-muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(p.description||p.note||'')}">${_esc((p.description||p.note||'').slice(0,70)||'—')}</td>
         <td class="td-actions">
+          <button class="btn-icon" title="Edytuj i Zatwierdź" onclick="openPendingItemEditModal(${JSON.stringify(p).replace(/"/g,'&quot;')})">✎</button>
           <button class="btn-icon success" title="Zatwierdź" onclick="reviewEntityBestiary('item','${_esc(p.key)}','approve',this)">✓</button>
           <button class="btn-icon danger" title="Odrzuć" onclick="reviewEntityBestiary('item','${_esc(p.key)}','discard',this)">✕</button>
         </td>
@@ -8276,6 +8277,60 @@
       _worldLoaded.delete('pending'); _worldLoaded.delete('enemies');
       await _loadBestiaryPending();
       _showToast('Zatwierdzono wroga.', 'success');
+    } catch(e) {
+      _showToast(e.message || 'Błąd.', 'error');
+      btn.disabled = false; btn.textContent = '✓ Zapisz i Zatwierdź';
+    }
+  }
+
+  // D1 (#376) — edit a pending item before approving it.
+  function openPendingItemEditModal(item) {
+    const p = typeof item === 'string' ? JSON.parse(item) : item;
+    const TYPES = ['misc','quest','armor','consumable','narrative'];
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay open';
+    overlay.innerHTML = `<div class="modal-box" style="max-width:520px">
+      <div class="modal-head"><span class="modal-title">Edytuj i Zatwierdź: ${_esc(p.label||p.key)}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
+      <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Nazwa *</label><input id="pi-label" class="field-input" value="${_esc(p.label||'')}"></div>
+        <div class="form-row"><label class="form-label">Typ</label>
+          <select id="pi-type" class="field-input">${TYPES.map(t=>`<option value="${t}"${(p.item_type||'misc')===t?' selected':''}>${t}</option>`).join('')}</select>
+        </div>
+        <div class="form-row"><label class="form-label">Wartość (GP)</label><input id="pi-value" class="field-input" type="number" min="0" value="${p.value_gp??0}"></div>
+        <div class="form-row"><label class="form-label">Waga (kg)</label><input id="pi-weight" class="field-input" type="number" min="0" step="0.1" value="${p.weight_kg??0}"></div>
+        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Opis</label><textarea id="pi-desc" class="field-input" rows="2">${_esc(p.description||'')}</textarea></div>
+        <div class="form-row" style="grid-column:1/-1"><label class="form-label">Notatka (specjalne zdolności)</label><textarea id="pi-note" class="field-input" rows="2">${_esc(p.note||'')}</textarea></div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+        <button class="btn btn-primary" onclick="savePendingItem('${_esc(p.key)}',this)">✓ Zapisz i Zatwierdź</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+  }
+
+  async function savePendingItem(key, btn) {
+    const g = id => document.getElementById(id);
+    const label = g('pi-label')?.value?.trim();
+    if (!label) { _showToast('Wypełnij nazwę.', 'error'); return; }
+    btn.disabled = true; btn.textContent = '⏳';
+    const body = {
+      label,
+      item_type: g('pi-type')?.value || 'misc',
+      value_gp: parseInt(g('pi-value')?.value) || 0,
+      weight_kg: g('pi-weight')?.value !== '' ? parseFloat(g('pi-weight').value) : 0,
+      description: g('pi-desc')?.value?.trim() || null,
+      note: g('pi-note')?.value?.trim() || null,
+    };
+    try {
+      // PATCH keeps review_status='pending_review' (update_item never touches it),
+      // then approve flips it permanent + clears campaign_id.
+      await apiFetch(`/api/admin/items/${key}`, { method: 'PATCH', body: JSON.stringify(body) });
+      await apiFetch(`/api/admin/world/review/item/${key}`, { method: 'POST', body: JSON.stringify({ action: 'approve' }) });
+      btn.closest('.modal-overlay').remove();
+      _worldLoaded.delete('pending'); _worldLoaded.delete('content');
+      await _loadBestiaryPending();
+      _showToast('Zatwierdzono przedmiot.', 'success');
     } catch(e) {
       _showToast(e.message || 'Błąd.', 'error');
       btn.disabled = false; btn.textContent = '✓ Zapisz i Zatwierdź';

@@ -15,10 +15,14 @@ test("REGRESSION #376 — kolejka pending items odpowiada poprawnym kontraktem",
   const listBody = await list.json();
   expect(Array.isArray(listBody.items), "/pending/items.items musi być tablicą (#376)").toBeTruthy();
 
-  // Każdy rekord (jeśli są) musi mieć review_status=pending_review i klucz.
+  // Każdy rekord (jeśli są) musi mieć review_status=pending_review, klucz oraz pola
+  // które pre-filluje modal "Edytuj i Zatwierdź" (label/item_type/description/value_gp/note/weight_kg).
   for (const it of listBody.items) {
     expect(it.key, "pending item bez klucza (#376)").toBeTruthy();
     expect(it.review_status, "pending item musi mieć review_status=pending_review (#376)").toBe("pending_review");
+    for (const f of ["label", "item_type", "description", "value_gp", "note", "weight_kg"]) {
+      expect(f in it, `pending item musi udostępniać '${f}' dla modala edycji (#376)`).toBeTruthy();
+    }
   }
 
   // 2) Licznik kolejki zawiera `items` — badge w panelu admina liczy na ten klucz.

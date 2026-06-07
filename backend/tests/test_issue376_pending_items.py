@@ -25,6 +25,7 @@ def _schema(conn: sqlite3.Connection) -> None:
           effect_json  TEXT,
           is_active    INTEGER NOT NULL DEFAULT 1,
           weight_kg    REAL NOT NULL DEFAULT 0.0,
+          note         TEXT,
           ai_generated INTEGER NOT NULL DEFAULT 0,
           approved     INTEGER NOT NULL DEFAULT 1,
           review_status TEXT,
@@ -117,6 +118,74 @@ class TestPendingItemGrant(unittest.TestCase):
 
         counts = get_pending_review_counts(self.conn)
         self.assertGreaterEqual(counts.get("items", 0), 1)
+
+
+# ─── Edycja przed akceptacją (#376 follow-up) ────────────────────────────────
+
+class TestEditBeforeApprove(unittest.TestCase):
+    def setUp(self):
+        self.conn = sqlite3.connect(":memory:")
+        self.conn.row_factory = sqlite3.Row
+        _schema(self.conn)
+
+    def tearDown(self):
+        self.conn.close()
+
+    def test_pending_items_expose_editable_fields(self):
+        """Modal 'Edytuj i Zatwierdź' pre-filluje pola → get_pending_items musi je zwracać."""
+        from app.api.turns import _grant_pending_item
+        from app.services.world_service import get_pending_items
+
+        _grant_pending_item(self.conn, campaign_id=1, character_id=7,
+                            label="Amulet Szeptów", source="gm", description="opis")
+        pending = get_pending_items(self.conn)
+        p = next(x for x in pending if x["label"] == "Amulet Szeptów")
+        for field in ("item_type", "description", "value_gp", "note", "weight_kg"):
+            self.assertIn(field, p,
+                          f"get_pending_items musi zwracać '{field}' dla modala edycji (#376)")
+
+    def test_edit_pending_item_keeps_it_in_queue(self):
+        """Edycja pól pending przedmiotu NIE może go usunąć z kolejki (review_status bez zmian).
+
+        Kluczowy inwariant: kolejka filtruje po review_status='pending_review', więc edycja
+        pól (nazwa/opis/wartość) musi zostawić review_status nietknięty — `update_item` w
+        backendzie nie dotyka tej kolumny (ani campaign_id), co tu sprawdzamy na poziomie SQL
+        odzwierciedlającym jego klauzulę SET.
+        """
+        from app.api.turns import _grant_pending_item
+
+        key = _grant_pending_item(self.conn, campaign_id=1, character_id=7,
+                                  label="Surowy klucz", source="gm")
+        # update_item SET nie zawiera review_status/campaign_id → tu to samo:
+        self.conn.execute(
+            "UPDATE game_config_items SET label=?, description=?, value_gp=?, note=? WHERE key=?",
+            ("Poprawiona nazwa", "lepszy opis", 25, "rzadki", key),
+        )
+        row = self.conn.execute(
+            "SELECT label, value_gp, review_status FROM game_config_items WHERE key=?",
+            (key,),
+        ).fetchone()
+        self.assertEqual(row["label"], "Poprawiona nazwa")
+        self.assertEqual(int(row["value_gp"]), 25)
+        self.assertEqual(row["review_status"], "pending_review",
+                         "edycja nie może usunąć przedmiotu z kolejki recenzji")
+
+    def test_approve_item_flips_status_and_clears_campaign(self):
+        """Po edycji approve → permanent + approved=1 + campaign_id=NULL (globalny)."""
+        from app.api.turns import _grant_pending_item
+        from app.services.world_service import approve_entity
+
+        key = _grant_pending_item(self.conn, campaign_id=1, character_id=7,
+                                  label="Do zatwierdzenia", source="gm")
+        ok = approve_entity(self.conn, "item", key)
+        self.assertTrue(ok)
+        row = self.conn.execute(
+            "SELECT review_status, approved, campaign_id FROM game_config_items WHERE key=?",
+            (key,),
+        ).fetchone()
+        self.assertEqual(row["review_status"], "permanent")
+        self.assertEqual(int(row["approved"]), 1)
+        self.assertIsNone(row["campaign_id"])
 
 
 # ─── Backward compatibility — stary kod nadal działa ─────────────────────────

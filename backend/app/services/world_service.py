@@ -781,10 +781,14 @@ def get_pending_review_counts(conn: sqlite3.Connection) -> dict[str, int]:
 
 
 def get_pending_items(conn: sqlite3.Connection) -> list[dict]:
-    """D1 (#376) — Return narrative items awaiting admin review."""
+    """D1 (#376) — Return narrative items awaiting admin review.
+
+    Includes `note` and `weight_kg` so the admin "Edytuj i Zatwierdź" modal can
+    pre-fill all editable fields before approval.
+    """
     try:
         rows = conn.execute(
-            """SELECT key, label, item_type, description, value_gp,
+            """SELECT key, label, item_type, description, value_gp, weight_kg, note,
                       campaign_id, review_status, ai_generated
                FROM game_config_items
                WHERE review_status = 'pending_review'
