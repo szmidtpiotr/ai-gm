@@ -19,6 +19,55 @@ DEFAULT_BASE_URL = "http://localhost:11434"
 DEFAULT_MODEL = "gemma4:e4b"
 logger = get_logger(__name__)
 
+# Set once per process the first time we lazy-hydrate from the stored active
+# preset (see _ensure_runtime_hydrated). Prevents repeated DB reads when there
+# is genuinely no active preset.
+_hydrate_attempted = False
+
+
+class LLMConfigError(RuntimeError):
+    """No LLM provider/model could be resolved from the active preset or env.
+
+    Raised at actual call sites (generate_chat / generate_chat_stream) instead
+    of silently falling back to the hardcoded Ollama default — so a missing or
+    broken preset fails loudly rather than quietly hitting a local model.
+    """
+
+
+def _ensure_runtime_hydrated() -> None:
+    """Lazy-load the active stored preset into this process's runtime config.
+
+    The FastAPI lifespan hydrates on startup, but fresh processes (pytest,
+    one-off scripts, workers) import this module with an empty ``_runtime_config``.
+    Without this they would skip the admin's active preset and resolve to the
+    hardcoded Ollama/``gemma4:e4b`` default. Runs at most once per process, and
+    only while the runtime is still empty.
+    """
+    global _hydrate_attempted
+    if _hydrate_attempted or _runtime_override_is_set():
+        return
+    _hydrate_attempted = True
+    try:
+        # Lazy import — llm_admin_service imports this module at top level.
+        from app.services.llm_admin_service import hydrate_runtime_from_stored_preset
+
+        hydrate_runtime_from_stored_preset()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("runtime_hydrate_failed", error=str(exc))
+
+
+def _provider_canonical_base_url(provider: str) -> str:
+    """Deterministic base URL for a provider when its preset leaves it blank.
+
+    Not a 'random' fallback — each provider has exactly one canonical endpoint.
+    Returns '' for providers (e.g. azure) where the base URL must be explicit.
+    """
+    if provider == "ollama":
+        return DEFAULT_BASE_URL
+    if provider == "openai":
+        return "https://api.openai.com"
+    return ""
+
 
 def set_runtime_config(provider: str, base_url: str, model: str, api_key: str) -> None:
     _runtime_config["provider"] = (provider or "").strip().lower()
@@ -47,38 +96,89 @@ def _runtime_override_is_set() -> bool:
     return any(bool((value or "").strip()) for value in _runtime_config.values())
 
 
-def get_effective_config(llm_config: dict[str, str] | None = None) -> dict[str, str]:
-    """
-    Effective LLM config resolution.
+def get_effective_config(
+    llm_config: dict[str, str] | None = None, strict: bool = False
+) -> dict[str, str]:
+    """Resolve the effective LLM config as a COHERENT endpoint identity.
 
-    Precedence:
-    1) explicit llm_config override (if provided)
-    2) global runtime config (set by /api/settings/llm)
-    3) environment variables
+    provider + base_url + model always come from ONE source — never mixed —
+    in priority order:
+      1) explicit per-user override (``llm_config`` that names a provider)
+      2) active preset / global runtime config (lazy-hydrated from the DB)
+      3) environment variables (``LLM_PROVIDER`` etc.)
+
+    The hardcoded Ollama endpoint/model is applied ONLY when the resolved
+    provider is itself Ollama, so an OpenAI/Azure preset can never inherit
+    ``gemma4:e4b`` or ``localhost:11434``.
+
+    ``api_key`` is a credential, not part of the endpoint identity, so it may
+    fall back across sources (user picks a provider but reuses the server key).
+
+    strict=True (used at real call sites): raise :class:`LLMConfigError` when no
+    provider/model is configured anywhere, instead of silently using Ollama.
+    strict=False (display paths): return a best-effort, possibly-empty config.
     """
     override = llm_config or {}
 
-    def _pick(field: str, env_key: str) -> str:
-        # If a field is explicitly present in the override, use it — except `api_key`:
-        # an empty string in DB (user saved provider without pasting a key) should still
-        # fall back to runtime `/api/settings/llm` or `LLM_API_KEY`, otherwise OpenAI gets 401.
-        if field in override:
-            val = (override.get(field) or "").strip()
-            if field != "api_key" or val:
-                return val
-        runtime_val = _runtime_config.get(field, "")
-        return (runtime_val or os.getenv(env_key, "") or "").strip()
+    # Make sure a fresh process honors the admin's active preset.
+    _ensure_runtime_hydrated()
 
-    provider = _pick("provider", "LLM_PROVIDER") or DEFAULT_PROVIDER
-    base_url = _pick("base_url", "LLM_BASE_URL") or DEFAULT_BASE_URL
-    model = _pick("model", "LLM_MODEL") or DEFAULT_MODEL
-    api_key = _pick("api_key", "LLM_API_KEY")
-    normalized_provider = provider.strip().lower()
+    def _has_provider(src: dict[str, str]) -> bool:
+        return bool((src.get("provider") or "").strip())
+
+    env_src: dict[str, str] = {
+        "provider": os.getenv("LLM_PROVIDER", ""),
+        "base_url": os.getenv("LLM_BASE_URL", ""),
+        "model": os.getenv("LLM_MODEL", ""),
+        "api_key": os.getenv("LLM_API_KEY", ""),
+    }
+
+    # Pick the endpoint identity from the highest-priority source that names a provider.
+    if _has_provider(override):
+        identity: dict[str, str] | None = override
+    elif _runtime_override_is_set():
+        identity = _runtime_config
+    elif _has_provider(env_src):
+        identity = env_src
+    else:
+        identity = None
+
+    if identity is None:
+        if strict:
+            raise LLMConfigError(
+                "No active LLM preset configured. Activate one in "
+                "Admin → Accounts, or set LLM_PROVIDER/LLM_MODEL on the server."
+            )
+        return {"provider": "", "base_url": "", "model": "", "api_key": ""}
+
+    provider = (identity.get("provider") or "").strip().lower()
+    base_url = (identity.get("base_url") or "").strip()
+    model = (identity.get("model") or "").strip()
+
+    # Deterministic per-provider base URL when the chosen source leaves it blank.
+    if not base_url:
+        base_url = _provider_canonical_base_url(provider)
+
+    # api_key may fall back across sources (credential, not endpoint identity).
+    api_key = (override.get("api_key") or "").strip()
+    if not api_key:
+        api_key = (identity.get("api_key") or "").strip()
+    if not api_key:
+        api_key = (_runtime_config.get("api_key") or "").strip()
+    if not api_key:
+        api_key = (os.getenv("LLM_API_KEY", "") or "").strip()
+
+    if strict and not model:
+        raise LLMConfigError(
+            f"Active LLM preset for provider '{provider or 'unknown'}' has no "
+            "model set. Fix the preset in Admin → Accounts."
+        )
+
     return {
-        "provider": normalized_provider,
-        "base_url": _normalize_base_url(base_url.strip(), normalized_provider),
-        "model": model.strip(),
-        "api_key": api_key.strip(),
+        "provider": provider,
+        "base_url": _normalize_base_url(base_url, provider),
+        "model": model,
+        "api_key": api_key,
     }
 
 
@@ -497,7 +597,7 @@ def _raise_llm_http_error(exc: httpx.HTTPStatusError) -> None:
 
 
 def generate_chat(messages: list[dict], model: str | None = None, llm_config: dict[str, str] | None = None) -> str:
-    effective = get_effective_config(llm_config)
+    effective = get_effective_config(llm_config, strict=True)
     resolved_model = _resolve_model(model, effective)
     provider = effective["provider"]
     started_at = time.perf_counter()
@@ -556,7 +656,7 @@ def generate_chat(messages: list[dict], model: str | None = None, llm_config: di
 def generate_chat_stream(
     messages: list[dict], model: str | None = None, llm_config: dict[str, str] | None = None
 ) -> Generator[str, None, None]:
-    effective = get_effective_config(llm_config)
+    effective = get_effective_config(llm_config, strict=True)
     resolved_model = _resolve_model(model, effective)
     if os.getenv("AI_TEST_MODE") == "1" and os.getenv("AI_TEST_STUB_LLM") == "1":
         stub = (os.getenv("AI_TEST_STUB_LLM_TEXT") or "").strip() or (
