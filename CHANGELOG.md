@@ -4,6 +4,23 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.2.2 — 2026-06-07 — Faza 1 Core Loop (C9-C19)
+
+### Added
+- **C17** — Inventory context injection — LLM dostaje faktyczny ekwipunek postaci per turę (koniec halucynacji "straciłeś wszystko")
+- **C18** — Nowe kampanie startują na wcześniej odkrytych hexach (nie na pustkowiu)
+- **C19** — Bohater wchodzi w nową kampanię z pełnym HP i maną
+- **C10-C13** — Systemowe tagi QUEST_SUGGEST, SPEND_GOLD, mechaniczne śledzenie questów, reguła złota w system_prompt
+- **C14-C16** — Hero-first flow, error boundary na loadHeroes, modal potwierdzenia kasowania kampanii
+- **C9** — Modal długiego odpoczynku — "Ucz się" UI z levelupem
+
+### Fixed
+- Opening scene zawsze generowana z kontekstem planu GM (nie domyślny las)
+- Pasywna obserwacja nie wyzwala zbędnego rzutu Awareness
+- Streaming LLM URL fix, BUILD_CAMP gate, debug bloki usunięte z player UI
+
+---
+
 ## v1.2.1 — 2026-06-06 — Faza 1: World Loop Core (C1-C8)
 
 ### Added / Fixed
