@@ -466,6 +466,37 @@ def _fetch_enemy_row(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
     ).fetchone()
 
 
+def _create_pending_combat_enemy(
+    conn: sqlite3.Connection, enemy_key: str
+) -> sqlite3.Row | None:
+    """D2 (#377) — Pending flow for enemies.
+
+    When combat starts with an unknown enemy key (LLM emitted
+    `[COMBAT_START:goblin_szaman]` but `goblin_szaman` isn't in the catalog),
+    create a `review_status='pending_review'` template with standard-tier
+    defaults so the fight can proceed immediately AND the enemy lands in the
+    admin review queue. Mirrors the D1 item flow (`_grant_pending_item`).
+
+    INSERT OR IGNORE: if the key already exists (race / known enemy) the existing
+    row is left untouched. Returns the fetched enemy row, or None on failure.
+    """
+    name = enemy_key.replace("_", " ").title()
+    try:
+        # Standard-tier defaults — same baseline as world_service._get_or_create_enemy.
+        conn.execute(
+            """INSERT OR IGNORE INTO game_config_enemies
+               (key, label, tier, hp_base, ac_base, attack_bonus, damage_die,
+                damage_bonus, attacks_per_turn, xp_award, is_active, review_status)
+               VALUES (?, ?, 'standard', 12, 11, 2, 'd6', 0, 1, 25, 1, 'pending_review')""",
+            (enemy_key, name),
+        )
+        logger.info("combat_pending_enemy_created", enemy_key=enemy_key)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("combat_pending_enemy_create_failed", enemy_key=enemy_key, error=str(e))
+        return None
+    return _fetch_enemy_row(conn, enemy_key)
+
+
 def _infer_template_key_from_combatant_slug(combatant_id: str) -> str | None:
     """Combatant id like bandit_01 → template key bandit (matches initiate_combat slugging)."""
     s = (combatant_id or "").strip()
@@ -1347,13 +1378,19 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         for ek in enemy_keys:
             er = _fetch_enemy_row(conn, ek)
             if not er:
-                logger.warning(
-                    "combat_unknown_enemy_key",
+                # D2 (#377) — unknown enemy key → create a pending_review template so
+                # the fight proceeds and the enemy lands in the admin review queue,
+                # instead of silently dropping it (mirrors D1 item pending flow).
+                logger.info(
+                    "combat_unknown_enemy_key_pending",
                     enemy_key=ek,
                     campaign_id=campaign_id,
-                    message="[COMBAT] unknown enemy key, skipping",
+                    message="[COMBAT] unknown enemy key → creating pending_review template",
                 )
-                continue
+                er = _create_pending_combat_enemy(conn, ek)
+                if not er:
+                    logger.warning("combat_pending_enemy_unavailable", enemy_key=ek, campaign_id=campaign_id)
+                    continue
             resolved_enemies.append((ek, er))
 
         if not resolved_enemies:
