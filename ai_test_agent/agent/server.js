@@ -216,6 +216,27 @@ app.post("/agent/stop", (req, res) => {
 // ── Playwright regression specs ───────────────────────────────────────────────
 const PLAYWRIGHT_SPECS_DIR = path.resolve(__dirname, "../playwright/ux/regression");
 
+function _parseSpecMeta(filePath) {
+  try {
+    const src = fs.readFileSync(filePath, "utf8");
+    // Extract first /** ... */ block
+    const match = src.match(/^\/\*\*([\s\S]*?)\*\//);
+    const description = match
+      ? match[1].split("\n").map((l) => l.replace(/^\s*\*\s?/, "").trim()).filter(Boolean).join(" ")
+      : "";
+    // Count test() calls
+    const testCount = (src.match(/^\s*test\(/gm) || []).length;
+    return { description, testCount };
+  } catch (_) {
+    return { description: "", testCount: 0 };
+  }
+}
+
+function _issueFromFilename(filename) {
+  const m = filename.match(/issue_(\d+)/i);
+  return m ? Number(m[1]) : null;
+}
+
 app.get("/playwright/specs", (_req, res) => {
   logStructured("info", "playwright_list_specs");
   try {
@@ -224,10 +245,17 @@ app.get("/playwright/specs", (_req, res) => {
     }
     const specs = fs.readdirSync(PLAYWRIGHT_SPECS_DIR)
       .filter((f) => f.endsWith(".spec.js"))
-      .map((f) => ({
-        filename: f,
-        label: f.replace(".spec.js", "").replace(/_/g, " "),
-      }));
+      .map((f) => {
+        const { description, testCount } = _parseSpecMeta(path.join(PLAYWRIGHT_SPECS_DIR, f));
+        const issue = _issueFromFilename(f);
+        return {
+          filename: f,
+          label: f.replace(".spec.js", "").replace(/_/g, " "),
+          issue,
+          description,
+          testCount,
+        };
+      });
     return res.json({ specs });
   } catch (err) {
     return res.status(500).json({ error: err.message });
