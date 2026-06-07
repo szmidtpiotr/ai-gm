@@ -703,6 +703,8 @@ def get_campaign_debug_state(
     # ── C1 debug ─────────────────────────────────────────────────────────────
     c1_debug: dict = {}
     try:
+        from app.services.game_engine import build_travel_hint_block
+
         conn2 = sqlite3.connect(DB_PATH)
         conn2.row_factory = sqlite3.Row
         try:
@@ -713,12 +715,16 @@ def get_campaign_debug_state(
             if sf_row and sf_row["session_flags"]:
                 _sf = json.loads(sf_row["session_flags"] or "{}")
                 _stale = int(_sf.get("turns_at_location", 0))
+                _discovered = _sf.get("discovered_hexes", [])
+                _travel_hint = build_travel_hint_block(_discovered, _stale)
                 c1_debug = {
                     "turns_at_location": _stale,
                     "prev_turn_hex": _sf.get("_prev_turn_hex"),
                     "current_hex": _sf.get("current_hex"),
                     "story_stale_threshold": 5,
                     "story_stale_active": _stale >= 5,
+                    "travel_hints": _travel_hint,
+                    "discovered_locations_count": len(_discovered) if _discovered else 0,
                 }
         finally:
             conn2.close()

@@ -15,6 +15,24 @@ from app.services.solo_death_service import DEATH_SAVE_FAILURE_THRESHOLD
 logger = get_logger(__name__)
 
 
+def build_travel_hint_block(discovered_hexes: list[dict] | None, turns_at_location: int, max_pills: int = 5) -> str | None:
+    """Build [TRAVEL_HINT: ...] block from discovered nearby locations.
+
+    Returns None if:
+    - turns_at_location < 5 (STORY_STALE not active yet)
+    - discovered_hexes is empty or None
+
+    Otherwise returns: [TRAVEL_HINT: [Loc1] [Loc2] ... — wskaż bohaterowi bezpieczne kierunki]
+    Pills limited to max_pills (default 5) to avoid LLM distraction.
+    """
+    if turns_at_location < 5 or not discovered_hexes:
+        return None
+
+    limited = discovered_hexes[:max_pills]
+    pills = " ".join([f"[{hex.get('name', 'Unknown')}]" for hex in limited])
+    return f"[TRAVEL_HINT: {pills} — wskaż bohaterowi bezpieczne kierunki]"
+
+
 def resolve_enemy_loot(enemy_key: str) -> list[dict]:
     """
     Roll this enemy's drop_chance, then weight-pick one row from its loot table.
@@ -488,6 +506,14 @@ def build_narrative_messages(
                             first["content"] = (
                                 f"{first.get('content', '').rstrip()}\n\n{_stale_msg}"
                             )
+
+                            # C1 follow-up: inject TRAVEL_HINT with nearby discovered locations
+                            _discovered = _sf.get("discovered_hexes", [])
+                            _travel_hint = build_travel_hint_block(_discovered, _stale)
+                            if _travel_hint and isinstance(first, dict):
+                                first["content"] = (
+                                    f"{first.get('content', '').rstrip()}\n\n{_travel_hint}"
+                                )
             except Exception as _c1_err:
                 logger.warning("story_stale_inject_failed", error=str(_c1_err))
 
