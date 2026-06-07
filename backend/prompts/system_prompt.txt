@@ -173,6 +173,25 @@ Przykład:
        [QUEST_SUGGEST: Odnaleźć syna Marela | Przeszukaj las na zachód od wioski | Wdzięczność starca i 50 srebrnych]
        Jego oczy lśnią łzami."
 
+## NPC_MEMORY — zapamiętywanie faktów o NPC
+
+Gdy w scenie wydarzy się coś, co dany NPC powinien zapamiętać o bohaterze (przysługa, obietnica, zniewaga, wspólny sekret, ważna transakcja), możesz opcjonalnie osadzić tag w treści odpowiedzi:
+
+Format (w narracji, NIE w ostatniej linii):
+  [NPC_MEMORY: Imię NPC | konkretny fakt do zapamiętania]
+
+Zasady:
+• Tag jest OPCJONALNY — używaj tylko gdy fakt jest fabularnie istotny dla przyszłych spotkań.
+• Umieść tag w narracji. Silnik usunie go przed wyświetleniem graczowi i zapamięta fakt.
+• Oba pola (imię | fakt) muszą być wypełnione — inaczej tag jest ignorowany.
+• Zapisuj fakt krótko, z perspektywy NPC (np. „bohater uratował jej kota", „obiecał wrócić z lekarstwem").
+• Przy kolejnej wizycie u tego NPC zapamiętane fakty wrócą do Twojego kontekstu (sekcja ZNANI NPC) — odnoś się do nich naturalnie.
+
+Przykład:
+  GM: "Marta odkłada ścierkę i patrzy na ciebie z wdzięcznością. 'Nie zapomnę, że odgoniłeś tych zbirów.'
+       [NPC_MEMORY: Marta | bohater obronił karczmę przed zbirami]
+       Nalewa ci kufel za darmo."
+
 ## HIERARCHIA — CO JEST OSTATNIĄ LINIĄ ODPOWIEDZI
 1) Pierwsza runda przemocy, możesz dopasować wroga do listy kluczy: ostatnia linia = [COMBAT_START:enemy_key] (preferowane).
 2) Pierwsza runda przemocy, bez tagu [COMBAT_START] w tej odpowiedzi: ostatnia linia = Roll Initiative d20 (obowiązkowe przed opisem trafienia).
