@@ -2656,6 +2656,25 @@ def _ensure_narrative_items_schema(conn: sqlite3.Connection) -> None:
         if "duplicate column" not in str(e).lower():
             raise
 
+    # D1 (#376) — pending flow for items: unknown Grant Item keys land in
+    # game_config_items as pending_review, mirroring the weapons pipeline.
+    try:
+        conn.execute(
+            "ALTER TABLE game_config_items ADD COLUMN campaign_id INTEGER REFERENCES campaigns(id) ON DELETE SET NULL"
+        )
+        conn.commit()
+        logger.info("admin_migration_d1_items_campaign_id")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise
+    try:
+        conn.execute("ALTER TABLE game_config_items ADD COLUMN review_status TEXT DEFAULT 'permanent'")
+        conn.commit()
+        logger.info("admin_migration_d1_items_review_status")
+    except sqlite3.OperationalError as e:
+        if "duplicate column" not in str(e).lower():
+            raise
+
     # Migrate existing sheet_json.narrative_items → character_inventory rows
     try:
         chars = conn.execute(

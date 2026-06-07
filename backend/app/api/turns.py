@@ -1817,6 +1817,74 @@ def _grant_narrative_weapon(
         return None
 
 
+def _grant_pending_item(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: int,
+    character_id: int,
+    label: str,
+    source: str = "gm",
+    description: str | None = None,
+) -> str | None:
+    """D1 (#376) — Pending flow for items.
+
+    When the GM grants an item whose key is unknown (not a weapon, not in the
+    catalog), create a pending_review entry in game_config_items so it lands in
+    the admin review queue, then grant it to the player via item_key so it shows
+    up in the inventory immediately. Mirrors _grant_narrative_weapon.
+
+    Returns the new item key, or None on failure (caller falls back to a plain
+    narrative inventory row).
+    """
+    import re as _re
+    import time as _time
+    slug = _re.sub(r"[^a-z0-9]+", "_", label.lower().strip())[:30].strip("_")
+    key = f"narrative_item_{slug}_{campaign_id}_{int(_time.time()) % 100000}"
+    desc = description or f"Narracyjny przedmiot: {label}"
+
+    try:
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(game_config_items)").fetchall()}
+        has_campaign_col = "campaign_id" in cols
+        has_review_col = "review_status" in cols
+
+        if has_campaign_col and has_review_col:
+            conn.execute(
+                """INSERT OR IGNORE INTO game_config_items
+                   (key, label, item_type, description, value_gp,
+                    ai_generated, approved, campaign_id, review_status, is_active)
+                   VALUES (?, ?, 'misc', ?, 0, 1, 0, ?, 'pending_review', 1)""",
+                (key, label, desc, int(campaign_id)),
+            )
+        else:
+            # Fallback if migration hasn't run yet — approved=0 still marks it pending.
+            conn.execute(
+                """INSERT OR IGNORE INTO game_config_items
+                   (key, label, item_type, description, value_gp,
+                    ai_generated, approved, is_active)
+                   VALUES (?, ?, 'misc', ?, 0, 1, 0, 1)""",
+                (key, label, desc),
+            )
+
+        # Grant via normal item_key path (store original label for display)
+        conn.execute(
+            """INSERT INTO character_inventory
+               (character_id, item_key, weapon_key, consumable_key, label,
+                quantity, equipped, source, meta_json)
+               VALUES (?, ?, NULL, NULL, ?, 1, 0, ?, ?)""",
+            (int(character_id), key, str(label), str(source or "gm"),
+             json.dumps({"pending_item": True, "original_label": label}, ensure_ascii=False)),
+        )
+        logger.info("pending_item_created", key=key, label=label, campaign_id=campaign_id)
+        return key
+    except Exception as e:
+        logger.warning("pending_item_create_failed", label=label, error=str(e))
+        # Fall back to plain narrative item
+        _grant_narrative_item_to_inventory(conn, character_id=character_id, label=label,
+                                           source=source, item_type="narrative",
+                                           description=description)
+        return None
+
+
 def _sheet_current_hp(sheet: dict) -> int | None:
     if not isinstance(sheet, dict):
         return None
@@ -3807,10 +3875,10 @@ def create_turn(
                 _grant_narrative_weapon(conn, campaign_id=campaign_id,
                                         character_id=payload.character_id, label=_gil, source="gm")
             else:
-                _grant_narrative_item_to_inventory(conn, character_id=payload.character_id,
-                                                   label=_gil, source="gm",
-                                                   description=_gil_desc,
-                                                   given_at=f"turn:{log['turn_number']}")
+                # D1 (#376) — unknown item → pending_review catalog entry + admin queue
+                _grant_pending_item(conn, campaign_id=campaign_id,
+                                    character_id=payload.character_id,
+                                    label=_gil, source="gm", description=_gil_desc)
         if grant_item_labels:
             conn.commit()
         if grant_gold_amount is not None:
@@ -4887,10 +4955,11 @@ def create_turn_stream(
                             _grant_narrative_weapon(save_conn, campaign_id=campaign_id_val,
                                                     character_id=character_id_val, label=_gil, source="gm")
                         else:
-                            _grant_narrative_item_to_inventory(
-                                save_conn, character_id=character_id_val, label=_gil, source="gm",
-                                description=_gil_desc_s,
-                                given_at=f"turn:{stream_log['turn_number']}")
+                            # D1 (#376) — unknown item → pending_review catalog entry + admin queue
+                            _grant_pending_item(
+                                save_conn, campaign_id=campaign_id_val,
+                                character_id=character_id_val, label=_gil, source="gm",
+                                description=_gil_desc_s)
                     if grant_item_labels:
                         save_conn.commit()
                     if grant_gold_amount is not None:
