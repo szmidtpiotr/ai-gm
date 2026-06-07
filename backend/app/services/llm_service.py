@@ -276,63 +276,84 @@ class OpenAIDriver:
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
-        try:
-            with httpx.Client(timeout=float(os.getenv("OLLAMA_TIMEOUT", "120"))) as client:
-                with client.stream("POST", url, json=payload, headers=headers) as resp:
-                    if not resp.is_success:
-                        resp.read()
-                    resp.raise_for_status()
-                    for line in resp.iter_lines():
-                        if not line or line == "data: [DONE]":
-                            continue
-                        if line.startswith("data: "):
-                            raw = line[6:]
-                            try:
-                                chunk = json.loads(raw)
-                            except Exception:
+        max_retries = 3
+        attempt = 0
+        while True:
+            try:
+                with httpx.Client(timeout=float(os.getenv("OLLAMA_TIMEOUT", "120"))) as client:
+                    with client.stream("POST", url, json=payload, headers=headers) as resp:
+                        if not resp.is_success:
+                            resp.read()
+                        resp.raise_for_status()
+                        for line in resp.iter_lines():
+                            if not line or line == "data: [DONE]":
                                 continue
-                            token = ((chunk.get("choices") or [{}])[0]
-                                     .get("delta", {}).get("content") or "")
-                            if token:
-                                yield f"data: {token.replace(chr(10), '\\n')}\n\n"
-            yield "data: [DONE]\n\n"
-        except httpx.TimeoutException as exc:
-            logger.error(
-                "llm_timeout",
-                model=model,
-                llm_provider="openai",
-                duration_ms=_duration_ms(started_at),
-                error_message=str(exc),
-            )
-            yield f"data: [ERROR] LLM timeout: {exc}\n\n"
-        except httpx.HTTPStatusError as exc:
-            detail = exc.response.text if exc.response is not None else str(exc)
-            logger.error(
-                "llm_error",
-                model=model,
-                llm_provider="openai",
-                duration_ms=_duration_ms(started_at),
-                error_message=_trim_error_message(detail),
-            )
-            yield f"data: [ERROR] LLM HTTP error: {detail}\n\n"
-        except httpx.RequestError as exc:
-            logger.error(
-                "llm_error",
-                model=model,
-                llm_provider="openai",
-                duration_ms=_duration_ms(started_at),
-                error_message=str(exc),
-            )
-            yield f"data: [ERROR] LLM connection error: {exc}\n\n"
-        except Exception as exc:
-            logger.error(
-                "llm_error",
-                model=model,
-                llm_provider="openai",
-                duration_ms=_duration_ms(started_at),
-                error_message=str(exc),
-            )
-            yield f"data: [ERROR] LLM error: {exc}\n\n"
+                            if line.startswith("data: "):
+                                raw = line[6:]
+                                try:
+                                    chunk = json.loads(raw)
+                                except Exception:
+                                    continue
+                                token = ((chunk.get("choices") or [{}])[0]
+                                         .get("delta", {}).get("content") or "")
+                                if token:
+                                    yield f"data: {token.replace(chr(10), '\\n')}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+            except httpx.HTTPStatusError as exc:
+                if exc.response is not None and exc.response.status_code == 429 and attempt < max_retries - 1:
+                    retry_after = float((exc.response.headers or {}).get("retry-after", "5"))
+                    retry_after = min(retry_after + 1.0, 60.0)
+                    logger.warning(
+                        "llm_429_retry",
+                        model=model,
+                        llm_provider="openai",
+                        attempt=attempt + 1,
+                        retry_after_s=retry_after,
+                    )
+                    time.sleep(retry_after)
+                    attempt += 1
+                    continue
+                detail = exc.response.text if exc.response is not None else str(exc)
+                logger.error(
+                    "llm_error",
+                    model=model,
+                    llm_provider="openai",
+                    duration_ms=_duration_ms(started_at),
+                    error_message=_trim_error_message(detail),
+                )
+                yield f"data: [ERROR] LLM HTTP error: {detail}\n\n"
+                return
+            except httpx.TimeoutException as exc:
+                logger.error(
+                    "llm_timeout",
+                    model=model,
+                    llm_provider="openai",
+                    duration_ms=_duration_ms(started_at),
+                    error_message=str(exc),
+                )
+                yield f"data: [ERROR] LLM timeout: {exc}\n\n"
+                return
+            except httpx.RequestError as exc:
+                logger.error(
+                    "llm_error",
+                    model=model,
+                    llm_provider="openai",
+                    duration_ms=_duration_ms(started_at),
+                    error_message=str(exc),
+                )
+                yield f"data: [ERROR] LLM connection error: {exc}\n\n"
+                return
+            except Exception as exc:
+                logger.error(
+                    "llm_error",
+                    model=model,
+                    llm_provider="openai",
+                    duration_ms=_duration_ms(started_at),
+                    error_message=str(exc),
+                )
+                yield f"data: [ERROR] LLM error: {exc}\n\n"
+                return
 
     @staticmethod
     def health(base_url: str, api_key: str) -> dict[str, Any]:
