@@ -4,6 +4,23 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.2.3 — 2026-06-07 — Harness testów C1–C19 + panel Playwright w admin3
+
+### Added
+- Harness testów akceptacyjnych C1–C19 (pytest + Playwright), uruchamialny z admin3 → Narzędzia → 🎭 Playwright — każde zadanie jako osobny test
+- Panel Playwright w admin3 odpala wszystkie suity (regression / acceptance / admin3) z UI; skan rekursywny + run po pliku lub grupie
+- Smoke testy admin3 (dev-login + 14 sekcji bocznego menu)
+- Regression Playwright dla #355 (STORY_STALE) i #390 (zegar in-game)
+
+### Fixed
+- #394 — przycisk „Atakuj" pozostawał aktywny po wygranej walce
+- #395 — aktywny preset LLM jako jedyne źródło prawdy (brak cichego fallbacku do Ollama/gemma)
+- #391 — TRAVEL_HINT gdy brak odkrytych hexów
+- #390 — zegar in-game tyka (advance_clock obsługuje `minutes=` + akumulacja)
+- reset_test_env: czyści `model_id` kampanii + zapewnia wiersz `game_sessions`
+
+---
+
 ## v1.2.2 — 2026-06-07 — Faza 1 Core Loop (C9-C19)
 
 ### Added
