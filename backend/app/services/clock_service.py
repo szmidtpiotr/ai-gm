@@ -111,35 +111,36 @@ def get_clock_state(campaign_id: int, conn: sqlite3.Connection | None = None) ->
 
 def advance_clock(
     campaign_id: int,
-    hours: float,
-    reason: str,
+    hours: float = 0.0,
+    reason: str = "",
     conn: sqlite3.Connection | None = None,
+    *,
+    minutes: int = 0,
 ) -> dict[str, Any]:
     """Advance the in-game clock for a campaign.
 
     Args:
         campaign_id: target campaign
-        hours: hours to add (rounded to int; sub-hour resolution not supported)
+        hours: hours to add (integer precision; legacy positional callers)
         reason: short string identifying the cause — one of
                 "travel" | "short_rest" | "long_rest" | "camp_setup" | "admin" | …
-                Free-form but please use the canonical values when possible
-                so reports stay clean.
         conn: optional existing sqlite connection (for transactional callers).
+        minutes: keyword-only; sub-hour minutes accumulated in
+                 session_flags.pending_clock_minutes until ≥60, then promoted
+                 to whole hours. Allows turn_route callers to pass minutes
+                 directly (e.g. minutes=15 for a narrative tick).
 
     Returns: same shape as get_clock_state(), reflecting the post-advance state,
-             plus `delta_hours` (the rounded amount actually applied).
+             plus `delta_hours` (whole hours actually applied this call).
 
     Notes:
-        - hours ≤ 0 is a no-op (returns current state without writing).
-        - hours > MAX_ADVANCE_HOURS is clamped to the cap and logged.
+        - hours ≤ 0 AND minutes ≤ 0 is a no-op.
+        - hours > MAX_ADVANCE_HOURS is clamped to the cap.
         - Audit log entry pushed onto session_flags.clock_history (rolling 50).
     """
-    delta = int(round(max(0.0, float(hours or 0))))
-    if delta == 0:
-        # No-op: caller probably passed 0 or a tiny float; nothing to write.
+    total_minutes = int(round(float(hours or 0) * 60)) + max(0, int(minutes or 0))
+    if total_minutes <= 0:
         return {**get_clock_state(campaign_id, conn=conn), "delta_hours": 0}
-    if delta > MAX_ADVANCE_HOURS:
-        delta = MAX_ADVANCE_HOURS
 
     managed = conn is None
     if managed:
@@ -150,27 +151,31 @@ def advance_clock(
             (campaign_id,),
         ).fetchone()
         if not row:
-            # No session row yet — nothing to advance against. Caller should
-            # ensure the session exists before driving the clock.
             return {**get_clock_state(campaign_id, conn=conn), "delta_hours": 0}
 
         flags = json.loads(row["session_flags"] or "{}")
-        old_hours = int(flags.get("ingame_hours", START_HOUR_DEFAULT))
-        new_hours = old_hours + delta
 
-        # Audit entry (rolling buffer)
-        history = list(flags.get("clock_history") or [])
-        history.append({
-            "from": old_hours,
-            "to": new_hours,
-            "delta": delta,
-            "reason": str(reason or "unspecified"),
-        })
-        if len(history) > CLOCK_HISTORY_MAX_ENTRIES:
-            history = history[-CLOCK_HISTORY_MAX_ENTRIES:]
+        # Accumulate sub-hour minutes; only advance full hours
+        pending = int(flags.get("pending_clock_minutes", 0)) + total_minutes
+        delta = min(pending // 60, MAX_ADVANCE_HOURS)
+        flags["pending_clock_minutes"] = pending % 60
 
-        flags["ingame_hours"] = new_hours
-        flags["clock_history"] = history
+        if delta > 0:
+            old_hours = int(flags.get("ingame_hours", START_HOUR_DEFAULT))
+            new_hours = old_hours + delta
+
+            history = list(flags.get("clock_history") or [])
+            history.append({
+                "from": old_hours,
+                "to": new_hours,
+                "delta": delta,
+                "reason": str(reason or "unspecified"),
+            })
+            if len(history) > CLOCK_HISTORY_MAX_ENTRIES:
+                history = history[-CLOCK_HISTORY_MAX_ENTRIES:]
+
+            flags["ingame_hours"] = new_hours
+            flags["clock_history"] = history
 
         conn.execute(
             "UPDATE game_sessions SET session_flags = ? WHERE id = ?",

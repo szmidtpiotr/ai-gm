@@ -2150,6 +2150,38 @@ def create_turn_log(
             error=str(_clk_err),
         )
 
+    # C1: track consecutive turns without hex change for STORY_STALE injection.
+    # Compares current_hex with _prev_turn_hex stored at end of previous turn.
+    # On change: reset counter to 0. Same hex: increment. Context injector reads
+    # turns_at_location and fires [STORY_STALE:…] when >= threshold (default 5).
+    if route in ("narrative", "combat", "travel"):
+        try:
+            _sf_c1_row = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _sf_c1_row:
+                _sf_c1 = json.loads(_sf_c1_row["session_flags"] or "{}")
+                _curr_hex_c1 = _sf_c1.get("current_hex")
+                _prev_hex_c1 = _sf_c1.get("_prev_turn_hex")
+                if _curr_hex_c1 != _prev_hex_c1:
+                    _sf_c1["turns_at_location"] = 0
+                else:
+                    _sf_c1["turns_at_location"] = _sf_c1.get("turns_at_location", 0) + 1
+                _sf_c1["_prev_turn_hex"] = _curr_hex_c1
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                    (json.dumps(_sf_c1, ensure_ascii=False), campaign_id),
+                )
+                conn.commit()
+        except Exception as _c1_err:
+            logger.warning(
+                "turns_at_location_update_failed",
+                campaign_id=campaign_id,
+                route=route,
+                error=str(_c1_err),
+            )
+
     # BUG-03: persist NPCs from MG response. The narrator may emit `npc_met`
     # (first encounter) and/or `npc_update` (relation/notes change). Both are
     # optional and only on narrative turns; everything else is a no-op.
