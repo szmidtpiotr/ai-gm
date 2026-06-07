@@ -168,6 +168,65 @@ def test_c12_spend_gold_module_contract():
     assert hasattr(sg, "spend_gold_on_service")
 
 
+# ── C10 — QUEST_SUGGEST parsed and stored in world_state_flags ──────────────
+
+def test_c10_quest_suggest_parser():
+    """C10 — [QUEST_SUGGEST: t | obj | reward] parses; bad format ignored."""
+    from app.services.quest_suggest_parser import parse_quest_suggest, strip_quest_suggest_tags
+
+    text = (
+        "Starzec spogląda na ciebie. "
+        "[QUEST_SUGGEST: Zaginiony kowal | odnajdź kowala w lesie | 50 XP, 20 GP] "
+        "Powodzenia, wędrowcze."
+    )
+    quests = parse_quest_suggest(text)
+    assert len(quests) == 1, f"Tag QUEST_SUGGEST nie sparsowany (C10): {quests}"
+    assert quests[0]["title"] == "Zaginiony kowal"
+    assert quests[0]["status"] == "active"
+    assert "[QUEST_SUGGEST" not in strip_quest_suggest_tags(text)
+    assert parse_quest_suggest("[QUEST_SUGGEST: tylko_tytul]") == []  # bad format ignored
+
+
+def test_c10_quest_suggest_wired_into_turn_flow():
+    """C10 — the turn flow parses the tag and persists it to world_state_flags."""
+    import inspect
+    import app.api.turns as turns
+
+    src = inspect.getsource(turns)
+    assert "parse_quest_suggest" in src, "Turn flow nie woła parse_quest_suggest (C10)"
+    assert "active_quests" in src and "set_world_state_flags" in src, (
+        "Turn flow nie zapisuje active_quests do world_state (C10)"
+    )
+
+
+# ── C11 — quest auto-completes on kill / arrival, reward parsed ─────────────
+
+def test_c11_kill_quest_autocompletes_with_reward():
+    from app.services.quest_checker import check_kill_quest, parse_reward
+
+    active = [
+        {"title": "Polowanie", "objective": "zabij olbrzymiego szczura",
+         "reward": "30 XP, 10 GP", "status": "active"},
+    ]
+    updated, completed = check_kill_quest(active, "Olbrzymi szczur")
+    assert len(completed) == 1, "Quest zabójstwa nie auto-ukończył się (C11)"
+    assert completed[0]["status"] == "completed"
+    r = parse_reward(completed[0]["reward"])
+    assert r["xp"] == 30 and r["gold"] == 10, f"Reward źle sparsowany (C11): {r}"
+
+
+def test_c11_location_quest_autocompletes():
+    from app.services.quest_checker import check_location_quest
+
+    active = [
+        {"title": "Wędrówka", "objective": "dotrzyj do Starego Mostu",
+         "reward": "20 XP", "status": "active"},
+    ]
+    updated, completed = check_location_quest(active, "Stary Most")
+    assert len(completed) == 1, "Quest dotarcia nie auto-ukończył się (C11)"
+    assert completed[0]["status"] == "completed"
+
+
 # ── C17 — inventory context injected so LLM won't narrate equipment loss ────
 
 def test_c17_inventory_context_block_mentions_gear(env):
