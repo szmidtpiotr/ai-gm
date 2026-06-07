@@ -593,7 +593,8 @@ def reset_test_env():
         conn.execute(
             """
             UPDATE campaigns
-            SET status = 'active', death_reason = NULL, ended_at = NULL, epitaph = NULL
+            SET status = 'active', death_reason = NULL, ended_at = NULL, epitaph = NULL,
+                model_id = NULL
             WHERE id = ?
             """,
             (campaign_id,),
