@@ -12,7 +12,7 @@
 >
 > Kiedy pracujesz nad GitHub Issues, TDD, lub jakimkolwiek zadaniem implementacyjnym:
 >
-> 1. **Szukaj kodu zadania** w **CZĘŚĆ 7** (linia ~840) — master lista implementacyjna. **Schemat kodów:** A=Faza -1, B=Faza 0, C=Faza 1, D=Faza 2, E=Faza 3, F=Faza 4, G=Faza 5 (MP), H=Faza 6. Numery sekwencyjne w obrębie sekcji (B1, B2, ..., B7). **FAZA -1, FAZA 0 i FAZA 1 (C1–C8) ukończone — patrz sekcja WYKONANE na końcu pliku.**
+> 1. **Szukaj kodu zadania** w **CZĘŚĆ 7** (linia ~840) — master lista implementacyjna. **Schemat kodów:** A=Faza -1, B=Faza 0, C=Faza 1, D=Faza 2, E=Faza 3, F=Faza 4, G=Faza 5 (MP), H=Faza 6. Numery sekwencyjne w obrębie sekcji (B1, B2, ..., B7). **FAZA -1, FAZA 0 i FAZA 1 (C1–C19) ukończone — patrz sekcja WYKONANE na końcu pliku.**
 > 2. **Szukaj kontekstu decyzji projektowej** w sekcji tematycznej (CZĘŚĆ X = Afiksy, CZĘŚĆ AB = Walka/Rany, CZĘŚĆ AC = Multiplayer, CZĘŚĆ AF = Ekonomia, CZĘŚĆ AG = Infrastruktura, itd.).
 > 3. **Każda decyzja projektowa** ma blok `> **Zasada projektowa**` + `> **Dlaczego?**` + `> **Co odrzucono?**` — przeczytaj je zanim zaczniesz kodować.
 > 4. **GitHub Issues** powinny mieć w tytule kod zadania (`[TASK] B1 — ...`) i odwoływać się do tej sekcji w treści.
@@ -37,7 +37,7 @@
 > | CZĘŚĆ AG | Infrastruktura (.170=RTX3060, .16=GTX1660, workload rules) |
 > | CZĘŚĆ 10 | Zasady projektowe (5 reguł) |
 > | CZĘŚĆ 10b | Observability — odłożone do prod deployment |
-> | **WYKONANE** | **Fazy zakończone (FAZA -1 A1-A12, FAZA 0 B1-B7, FAZA 1 C1-C8) — na końcu pliku** |
+> | **WYKONANE** | **Fazy zakończone (FAZA -1 A1-A12, FAZA 0 B1-B7, FAZA 1 C1-C19) — na końcu pliku** |
 >
 > ### Kluczowe zależności (nie łam ich)
 >
@@ -847,8 +847,9 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
-### FAZA 1 — Rdzeń pętli (core loop)
+### FAZA 1 — Rdzeń pętli (core loop) ✅ UKOŃCZONA (C1–C19, 2026-06-06, v1.2.3)
 
+> ✅ Cała faza zakończona — pełne notatki implementacyjne w sekcji **WYKONANE** na końcu pliku. Tabela poniżej pozostaje jako referencja zakresu.
 > Podstawowe gameplay musi działać bezbłędnie. Zależności krytyczne: Gate(B3) + World State(B1).
 
 | Kod | Zadanie | Zależy od |
@@ -894,6 +895,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | D11 | Confirm password na rejestracji | — |
 | D12 | Szybka nawigacja Hub → Gra (bez przeładowania) | — |
 | D13 | Mobile layout — weryfikacja responsywności wszystkich ekranów | — |
+| D14 | Bugfix: `update_item` ustawia approved=1 przy edycji przedmiotu z approved=0 (`current.approved or 1` traktuje 0 jako fałsz) — znaleziony przy D1/#376 | — |
 
 ---
 
@@ -3295,9 +3297,9 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 
 ---
 
-### FAZA 1 — Rdzeń pętli ✅ UKOŃCZONA (C1–C8, 2026-06-06, v1.2.1)
+### FAZA 1 — Rdzeń pętli ✅ UKOŃCZONA (C1–C19, 2026-06-06, v1.2.3)
 
-> Podstawowe gameplay działa bezbłędnie. Walka, ruch, progi ran, XP spend — wszystko deterministyczne.
+> Podstawowe gameplay działa bezbłędnie. Walka, ruch, progi ran, XP spend, questy, ekonomia złota, hero-first flow — wszystko deterministyczne. Harness testów C1–C19 + panel Playwright w admin3 (v1.2.3).
 
 | Kod | Zadanie | Zależy od |
 |---|---|---|
@@ -3309,6 +3311,17 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 | C6 | Synchronizacja progów ran frontend/backend przez endpoint | C4 |
 | C7 | XP Spend — spend_skill endpoint (wszystkie archetypy, poprawne koszty) | — |
 | C8 | XP Spend — spend_stat endpoint (koszty z tabeli, ceiling=19, CON→hp_max) | C7 |
+| C9 | UI długiego odpoczynku — modal "Ucz się" (lista zakupów XP) | C7, C8 |
+| C10 | System questów — QUEST_SUGGEST tag + walidacja backend | B2 |
+| C11 | Mechaniczne śledzenie postępu questów (auto-complete per akcja) | C10 |
+| C12 | `[SPEND_GOLD:X]` tag — kwota z tabeli/configu, NIE z LLM | — |
+| C13 | Instrukcja "tylko złoto GP" w system_prompt (usunięcie waluty srebrnej) | — |
+| C14 | Hero-first fix: startCharacterWizard() tylko z Heroes screen | — |
+| C15 | Error boundary dla API failures (toast zamiast białego ekranu) | — |
+| C16 | Delete confirmation modals (kampania, postać) | — |
+| C17 | Kontekst ekwipunku — injection listy przedmiotów i złota do LLM per tura | — |
+| C18 | Fix Bug 3 — kampanie startują na istniejących hexach, nie nowych obrzeżach | C14 |
+| C19 | Fix Bug 4 — bohater startuje nową kampanię z pełnym HP (reset hp_current=hp_max) | — |
 
 #### Notatki implementacyjne
 
@@ -3329,3 +3342,25 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 **C7** — `POST /api/characters/{id}/xp/spend-skill` — wydawanie XP na umiejętności: nowa nauka = 100 XP, rank 1→2 = 75 XP, rank 2→3 = 150 XP. Limit `rank_ceiling=3`. Dostępny dla wszystkich archetypów (Wojownik, Łotr, Uczony) — nie tylko Uczonego jak wcześniej.
 
 **C8** — `POST /api/characters/{id}/xp/spend-stat` — wydawanie XP na +1 do statystyki zgodnie z tabelą kosztów z game_mechanics.md (50/100/200/400 XP zależnie od obecnej wartości). Sufit=19 — wartość 20+ niedostępna mechanicznie. Wzrost CON automatycznie przelicza `hp_max` przez formułę `CON_mod × level`.
+
+**C9** — Modal "Ucz się" w długim odpoczynku: lista zakupów XP (umiejętności + statystyki) z kosztami, spina endpointy C7/C8. Gracz wydaje zgromadzone XP podczas odpoczynku.
+
+**C10** — Tag `QUEST_SUGGEST` emitowany przez LLM przechwytywany i walidowany w backendzie; sugerowany quest zapisywany do stanu kampanii (nie hallucynowany w narracji).
+
+**C11** — Postęp questów śledzony mechanicznie: per akcja gracza backend sprawdza warunki ukończenia i auto-completuje kroki questa, niezależnie od narracji LLM.
+
+**C12** — Tag `[SPEND_GOLD:X]` pobiera kwotę z tabeli/configu (NIE z LLM) — eliminuje halucynowane ceny. Złoto odejmowane deterministycznie.
+
+**C13** — System prompt wymusza "tylko złoto GP" — usunięta waluta srebrna, spójna ekonomia jednowalutowa.
+
+**C14** — Hero-first: `startCharacterWizard()` wywoływany tylko z ekranu Heroes, nigdy z `_finalCreateCampaign` — bohater jest niezależnym bytem tworzonym przed kampanią.
+
+**C15** — Error boundary dla błędów API: zamiast białego ekranu pokazuje się toast z komunikatem, gra nie wywala się przy chwilowym błędzie sieci/backendu.
+
+**C16** — Modale potwierdzenia przy usuwaniu kampanii i postaci — chroni przed przypadkową utratą danych.
+
+**C17** — Kontekst ekwipunku: lista posiadanych przedmiotów + złoto wstrzykiwane do LLM przy każdej turze, dzięki czemu narrator wie czym gracz faktycznie dysponuje.
+
+**C18** — Fix Bug 3: nowe kampanie startują na istniejących hexach mapy zamiast generować nowe na obrzeżach — świat jest spójny między kampaniami.
+
+**C19** — Fix Bug 4: bohater rozpoczynający nową kampanię dostaje pełne HP (`hp_current = hp_max`) zamiast ostatniego stanu z poprzedniej rozgrywki.
