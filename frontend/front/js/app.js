@@ -1429,6 +1429,29 @@ function startCharacterWizard() {
     wizardIdentityPreview = null;
     _wizardRender();
     showScreen('characterWizard');
+    // E2 (#417) — load tooltip content (descriptions + mechanical examples) and
+    // re-render once it arrives so the creator tooltips show roll examples.
+    _loadCreatorHelp().then(() => { if (elements.characterWizard?.classList.contains('screen--active')) _wizardRender(); });
+}
+
+// E2 (#417) — Creator help cache: archetype/stat/skill examples for tooltips.
+let _creatorHelp = null;
+async function _loadCreatorHelp() {
+    if (_creatorHelp) return _creatorHelp;
+    try {
+        const r = await fetch('/api/mechanics/creator-help');
+        if (r.ok) _creatorHelp = await r.json();
+    } catch (_e) { /* fall back to local hints */ }
+    return _creatorHelp;
+}
+function _statExample(key) {
+    return (_creatorHelp?.stats || []).find(s => s.key === key)?.example || '';
+}
+function _skillExample(key) {
+    return (_creatorHelp?.skills || []).find(s => s.key === key)?.example || '';
+}
+function _archetypeExample(key) {
+    return (_creatorHelp?.archetypes || []).find(a => a.key === key)?.example || '';
 }
 
 function _wizardRender() {
@@ -1472,19 +1495,19 @@ function _renderStep1(c) {
             <div class="form-field">
                 <label>Archetyp</label>
                 <div class="archetype-grid">
-                    <button type="button" class="archetype-card${savedArch === 'warrior' ? ' archetype-card--selected' : ''}" data-arch="warrior">
+                    <button type="button" class="archetype-card${savedArch === 'warrior' ? ' archetype-card--selected' : ''}" data-arch="warrior"${_archetypeExample('warrior') ? ` data-tooltip="${_esc(_archetypeExample('warrior'))}"` : ''}>
                         <span class="archetype-icon">⚔️</span>
                         <span class="archetype-title">Wojownik</span>
                         <span class="archetype-desc">Frontowy wojownik w ciężkiej zbroi. Wysoki HP, silne ciosy, mistrz broni wręcz.</span>
                         <span class="archetype-bonus">+2 STR · +1 KON · HP: 12</span>
                     </button>
-                    <button type="button" class="archetype-card${savedArch === 'rogue' ? ' archetype-card--selected' : ''}" data-arch="rogue">
+                    <button type="button" class="archetype-card${savedArch === 'rogue' ? ' archetype-card--selected' : ''}" data-arch="rogue"${_archetypeExample('rogue') ? ` data-tooltip="${_esc(_archetypeExample('rogue'))}"` : ''}>
                         <span class="archetype-icon">🏹</span>
                         <span class="archetype-title">Łotrzyk</span>
                         <span class="archetype-desc">Zwinny cień: snajper z ukrycia lub złodziej w ciemnościach. Skradanie, łuk, inteligentna walka.</span>
                         <span class="archetype-bonus">+2 ZRĘ · +1 SZCZ · HP: 8</span>
                     </button>
-                    <button type="button" class="archetype-card${savedArch === 'scholar' ? ' archetype-card--selected' : ''}" data-arch="scholar">
+                    <button type="button" class="archetype-card${savedArch === 'scholar' ? ' archetype-card--selected' : ''}" data-arch="scholar"${_archetypeExample('scholar') ? ` data-tooltip="${_esc(_archetypeExample('scholar'))}"` : ''}>
                         <span class="archetype-icon">📜</span>
                         <span class="archetype-title">Uczony</span>
                         <span class="archetype-desc">Tkacz arkanów: kruchy, ale niszczycielski dzięki zaklęciom. Zarządza maną i ryzykiem Omylenia.</span>
@@ -1537,12 +1560,13 @@ function _renderStep2(c) {
         const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
         const canMinus = v > WIZARD_STAT_MIN;
         const canPlus = v < WIZARD_STAT_MAX && wizardStatUnassigned > 0;
-        const hint = STAT_HINTS[stat] || stat;
+        const ex = _statExample(stat);
+        const hint = (STAT_HINTS[stat] || stat) + (ex ? ` — ${ex}` : '');
         rows += `
             <div class="wizard-stat-row" data-stat="${stat}">
                 <div class="wizard-stat-label-wrap">
                     <span class="wizard-stat-label">${stat}</span>
-                    <span class="wizard-stat-hint" data-tooltip="${hint}">?</span>
+                    <span class="wizard-stat-hint" data-tooltip="${_esc(hint)}">?</span>
                 </div>
                 <span class="wizard-stat-mod">${modStr}</span>
                 <div class="wizard-stat-controls">
@@ -1645,12 +1669,13 @@ function _renderStep3(c) {
             ? `<button type="button" class="wizard-skill-swap-btn wizard-skill-swap-btn--revert" data-revert="${origKey}" title="Cofnij zamianę">↩</button>`
             : `<button type="button" class="wizard-skill-swap-btn" data-swap="${origKey}" title="Zamień skill">↔</button>`;
 
-        const skillHint = curRow.hint || '';
+        const skillEx = _skillExample(currentKey);
+        const skillHint = (curRow.hint || '') + (skillEx ? ` — ${skillEx}` : '');
         return `
             <div class="wizard-skill-row${changed ? ' wizard-skill-row--changed' : ''}" data-orig="${origKey}">
                 <span class="wizard-skill-name">
                     ${_esc(curRow.label)} <span class="wizard-skill-stat">— ${curRow.stat}</span>
-                    ${skillHint ? `<span class="wizard-stat-hint" data-tooltip="${_esc(skillHint)}">?</span>` : ''}
+                    ${skillHint.trim() ? `<span class="wizard-stat-hint" data-tooltip="${_esc(skillHint)}">?</span>` : ''}
                     ${swapBtn}
                 </span>
                 <div class="wizard-stat-controls wizard-skill-controls">
