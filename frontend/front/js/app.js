@@ -5437,6 +5437,7 @@ async function renderInventoryTab(character) {
     }
 
     _wireInventoryActions();
+    _wireItemView();
 }
 
 // Stage 5 E6: per-render backpack filter — slot key set by clicking an empty slot.
@@ -5604,6 +5605,76 @@ function _renderLoreRow(item) {
             </div>
             ${dropBtn}
         </div>`;
+}
+
+// D5 (#380) — Item VIEW: click an inventory row/slot to see full detail.
+function _wireItemView() {
+    document.querySelectorAll('#tab-inventory [data-inventory-id]').forEach(el => {
+        if (el.__viewWired) return;
+        el.__viewWired = true;
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', async (ev) => {
+            // Action buttons (Załóż / Użyj / Zdejmij / Wyrzuć) keep their own handlers.
+            if (ev.target.closest('[data-action]')) return;
+            const id = parseInt(el.dataset.inventoryId, 10);
+            if (!id || !characterData?.id) return;
+            try {
+                const r = await fetch(`/api/inventory/${characterData.id}/${id}/detail`);
+                const j = await r.json();
+                if (j && j.ok && j.data) _showItemDetailModal(j.data);
+            } catch (e) {
+                console.warn('[item-view] fetch failed', e);
+            }
+        });
+    });
+}
+
+function _showItemDetailModal(d) {
+    document.getElementById('item-view-modal')?.remove();
+    const typePl = { weapon: 'Broń', armor: 'Zbroja', consumable: 'Mikstura',
+                     quest: 'Przedmiot fabularny', misc: 'Przedmiot', narrative: 'Przedmiot' };
+    const rows = [];
+    rows.push(['Typ', typePl[d.item_type] || d.item_type || '—']);
+    if (d.weapon && d.weapon.damage_die) {
+        rows.push(['Obrażenia', d.weapon.damage_die + (d.weapon.attack_bonus ? ` (+${d.weapon.attack_bonus})` : '')]);
+        if (d.weapon.linked_stat) rows.push(['Statystyka', d.weapon.linked_stat]);
+    }
+    if (d.armor) {
+        rows.push(['Pancerz (AC)', '+' + (d.armor.ac_bonus || 0)]);
+        if (d.armor.coverage) rows.push(['Pokrycie', d.armor.coverage]);
+    }
+    if (d.consumable) {
+        const eff = [d.consumable.effect_type, d.consumable.effect_dice,
+                     d.consumable.effect_bonus ? `+${d.consumable.effect_bonus}` : '']
+                    .filter(Boolean).join(' ');
+        if (eff) rows.push(['Efekt', eff]);
+        if (d.consumable.effect_target) rows.push(['Cel', d.consumable.effect_target]);
+    }
+    if (d.value_gp != null) rows.push(['Wartość', d.value_gp + ' GP']);
+    if (d.quantity > 1) rows.push(['Ilość', '×' + d.quantity]);
+    if (d.note) rows.push(['Notatka', d.note]);
+
+    const statRows = rows.map(([k, v]) =>
+        `<div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06)">
+            <span style="color:#9aa">${escapeHtml(k)}</span>
+            <span style="color:#eee;text-align:right">${escapeHtml(String(v))}</span>
+         </div>`).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'item-view-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+    overlay.innerHTML = `
+        <div style="background:#14141c;border:1px solid rgba(245,158,11,.25);border-radius:12px;max-width:420px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.5)">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px">
+                <div style="font-size:1.05rem;font-weight:700;color:#f5deb3">${escapeHtml(d.name || '?')}</div>
+                <button id="item-view-close" style="background:none;border:none;color:#999;font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+            </div>
+            ${d.description ? `<div style="color:#bbb;font-size:.88rem;line-height:1.5;margin-bottom:12px">${escapeHtml(d.description)}</div>` : ''}
+            <div>${statRows}</div>
+        </div>`;
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#item-view-close').addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
 }
 
 function _wireInventoryActions() {

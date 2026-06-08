@@ -614,6 +614,126 @@ def get_character_inventory(character_id: int) -> list[dict]:
     return out
 
 
+def _rget(row: sqlite3.Row, col: str, default: Any = None) -> Any:
+    try:
+        return row[col] if col in row.keys() else default
+    except (KeyError, IndexError):
+        return default
+
+
+def get_inventory_item_detail(character_id: int, inventory_id: int) -> dict:
+    """D5 (#380) — full detail for one inventory entry, for the item-view modal.
+
+    Resolves the character_inventory row to its catalog (weapon/consumable/item)
+    and returns common fields (name, description, type, value, quantity, equipped)
+    plus kind-specific blocks: weapon{damage_die,linked_stat,...},
+    armor{ac_bonus,coverage}, consumable{effect_*}. Narrative items fall back to
+    the stored label + meta description. Raises ValueError if not found.
+    """
+    cid = int(character_id)
+    iid = int(inventory_id)
+    with _conn() as conn:
+        ci = conn.execute(
+            "SELECT * FROM character_inventory WHERE id = ? AND character_id = ?",
+            (iid, cid),
+        ).fetchone()
+        if not ci:
+            raise ValueError("inventory item not found")
+        base = {
+            "id": iid,
+            "quantity": int(_rget(ci, "quantity", 1) or 1),
+            "equipped": int(_rget(ci, "equipped", 0) or 0),
+        }
+
+        # Weapon
+        if _rget(ci, "weapon_key"):
+            wkey = ci["weapon_key"]
+            w = conn.execute(
+                "SELECT * FROM game_config_weapons WHERE key = ?", (wkey,)
+            ).fetchone()
+            if w:
+                return {
+                    **base, "kind": "weapon", "item_type": "weapon",
+                    "name": _rget(w, "label") or wkey,
+                    "description": _rget(w, "description"),
+                    "value_gp": int(_rget(w, "value_gp", 0) or 0),
+                    "note": _rget(w, "note"),
+                    "weapon": {
+                        "damage_die": _rget(w, "damage_die"),
+                        "linked_stat": _rget(w, "linked_stat"),
+                        "weapon_type": _rget(w, "weapon_type"),
+                        "attack_bonus": int(_rget(w, "attack_bonus", 0) or 0),
+                    },
+                }
+            return {
+                **base, "kind": "weapon", "item_type": "weapon",
+                "name": _rget(ci, "label") or wkey, "description": None, "weapon": {},
+            }
+
+        # Consumable
+        if _rget(ci, "consumable_key"):
+            ckey = ci["consumable_key"]
+            c = conn.execute(
+                "SELECT * FROM game_config_consumables WHERE key = ?", (ckey,)
+            ).fetchone()
+            if c:
+                return {
+                    **base, "kind": "consumable", "item_type": "consumable",
+                    "name": _rget(c, "label") or ckey,
+                    "description": _rget(c, "description"),
+                    "value_gp": int(_rget(c, "base_price", 0) or 0),
+                    "note": _rget(c, "note"),
+                    "consumable": {
+                        "effect_type": _rget(c, "effect_type"),
+                        "effect_dice": _rget(c, "effect_dice"),
+                        "effect_bonus": int(_rget(c, "effect_bonus", 0) or 0),
+                        "effect_target": _rget(c, "effect_target"),
+                    },
+                }
+
+        # Catalog item (incl. armor)
+        ikey = _rget(ci, "item_key")
+        if ikey and ikey != "__narrative__":
+            it = conn.execute(
+                "SELECT * FROM game_config_items WHERE key = ?", (ikey,)
+            ).fetchone()
+            if it:
+                item_type = str(_rget(it, "item_type") or "item").strip().lower() or "item"
+                detail = {
+                    **base, "kind": item_type, "item_type": item_type,
+                    "name": _rget(it, "label") or ikey,
+                    "description": _rget(it, "description"),
+                    "value_gp": int(_rget(it, "value_gp", 0) or 0),
+                    "note": _rget(it, "note"),
+                }
+                if item_type == "armor":
+                    detail["armor"] = {
+                        "ac_bonus": int(_rget(it, "ac_bonus", 0) or 0),
+                        "coverage": _rget(it, "armor_coverage"),
+                    }
+                if _rget(it, "effect_type"):
+                    detail["consumable"] = {
+                        "effect_type": _rget(it, "effect_type"),
+                        "effect_dice": _rget(it, "effect_dice"),
+                        "effect_bonus": int(_rget(it, "effect_bonus", 0) or 0),
+                        "effect_target": _rget(it, "effect_target"),
+                    }
+                return detail
+
+        # Narrative fallback
+        try:
+            meta = json.loads(_rget(ci, "meta_json") or "{}")
+        except Exception:
+            meta = {}
+        return {
+            **base, "kind": "narrative",
+            "item_type": str(meta.get("item_type") or "narrative"),
+            "name": _rget(ci, "label") or "Przedmiot",
+            "description": meta.get("description"),
+            "is_narrative": True,
+        }
+
+
 def use_inventory_item(character_id: int, inventory_id: int) -> dict[str, Any]:
     """Consume one inventory stack and apply supported effects to the character sheet."""
     cid = int(character_id)
