@@ -1003,6 +1003,17 @@ async function selectHero(hero) {
 // ============================================================================
 async function loadCampaigns() {
     console.log('[Campaigns] Loading for user:', currentUser?.id);
+    // #400 — admin-only entry to the campaign spectator/resume browser.
+    try {
+        const adminBtn = document.getElementById('heroes-admin-btn');
+        if (adminBtn) {
+            adminBtn.style.display = currentUser?.is_admin ? '' : 'none';
+            if (!adminBtn.__wired) {
+                adminBtn.__wired = true;
+                adminBtn.addEventListener('click', _openAdminSpectator);
+            }
+        }
+    } catch {}
     try {
         const response = await apiRequest('GET', '/campaigns');
         console.log('[Campaigns] Raw response:', response);
@@ -5676,6 +5687,118 @@ function _showItemDetailModal(d) {
     overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
     overlay.querySelector('#item-view-close').addEventListener('click', () => overlay.remove());
     document.body.appendChild(overlay);
+}
+
+// ── #400 — Admin spectator + resume ──────────────────────────────────────────
+async function _openAdminSpectator() {
+    const uid = currentUser?.id;
+    if (!uid) return;
+    document.getElementById('admin-spectate-modal')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'admin-spectate-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9998;padding:16px';
+    overlay.innerHTML = `
+      <div style="background:#14141c;border:1px solid rgba(245,158,11,.25);border-radius:12px;max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.5)">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 18px 8px">
+          <div style="font-size:1.05rem;font-weight:700;color:#f5deb3">🛡 Kampanie (admin)</div>
+          <button id="admin-spectate-close" style="background:none;border:none;color:#999;font-size:1.2rem;cursor:pointer">✕</button>
+        </div>
+        <div style="padding:0 18px 10px;display:flex;align-items:center;gap:8px">
+          <label style="color:#9aa;font-size:.8rem">Gracz:</label>
+          <select id="admin-spectate-user" style="flex:1;background:#0e0e16;border:1px solid rgba(255,255,255,.12);color:#eee;border-radius:8px;padding:8px"></select>
+        </div>
+        <div id="admin-spectate-list" style="overflow-y:auto;padding:4px 18px 18px;flex:1">
+          <div style="color:#888;text-align:center;padding:20px">Ładowanie…</div>
+        </div>
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#admin-spectate-close').addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
+
+    try {
+        const ru = await fetch(`/api/admin-spectate/users?admin_user_id=${uid}`);
+        const ju = await ru.json();
+        const sel = overlay.querySelector('#admin-spectate-user');
+        sel.innerHTML = (ju.users || []).map(u =>
+            `<option value="${u.id}"${Number(u.id) === Number(uid) ? ' selected' : ''}>${escapeHtml(u.display_name || ('user ' + u.id))}${u.is_admin ? ' (admin)' : ''}</option>`).join('');
+        sel.addEventListener('change', () => _adminSpectateLoad(parseInt(sel.value, 10)));
+    } catch (e) { console.warn('[admin-spectate] users', e); }
+
+    _adminSpectateLoad(uid); // default = own
+}
+
+async function _adminSpectateLoad(userId) {
+    const uid = currentUser?.id;
+    const listEl = document.getElementById('admin-spectate-list');
+    if (!listEl) return;
+    listEl.innerHTML = '<div style="color:#888;text-align:center;padding:20px">Ładowanie…</div>';
+    try {
+        const r = await fetch(`/api/admin-spectate/campaigns?admin_user_id=${uid}&user_id=${userId}`);
+        const j = await r.json();
+        const camps = j.campaigns || [];
+        if (!camps.length) { listEl.innerHTML = '<div style="color:#888;text-align:center;padding:20px">Brak kampanii</div>'; return; }
+        listEl.innerHTML = camps.map(c => {
+            const hero = c.character_name ? escapeHtml(c.character_name) : '—';
+            const meta = `${escapeHtml(c.owner_name || '?')} · ${hero} · tura ${c.last_turn || 0} · ${escapeHtml(c.status || '')}`;
+            return `<div style="border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#0e0e16">
+                <div style="font-weight:600;color:#eee;font-size:.92rem">${escapeHtml(c.title || ('Kampania ' + c.id))}</div>
+                <div style="color:#8aa;font-size:.72rem;margin:3px 0 8px">${meta}</div>
+                <div style="display:flex;gap:8px">
+                  <button data-act="preview" data-id="${c.id}" style="flex:1;background:#1a2230;border:1px solid rgba(120,160,255,.3);color:#cde;border-radius:8px;padding:7px;cursor:pointer">👁 Podgląd</button>
+                  <button data-act="resume" data-id="${c.id}" style="flex:1;background:#22301a;border:1px solid rgba(160,255,120,.3);color:#dfd;border-radius:8px;padding:7px;cursor:pointer">▶ Wznów</button>
+                </div>
+              </div>`;
+        }).join('');
+        listEl.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+            const id = parseInt(b.dataset.id, 10);
+            if (b.dataset.act === 'preview') _adminSpectatePreview(id);
+            else _adminSpectateResume(id);
+        }));
+    } catch (e) {
+        listEl.innerHTML = `<div style="color:#e88;text-align:center;padding:20px">Błąd: ${escapeHtml(String(e.message || e))}</div>`;
+    }
+}
+
+function _extractNarrativePreview(text) {
+    try { const o = JSON.parse(text); return o.narrative || text; } catch { return text; }
+}
+
+async function _adminSpectatePreview(campaignId) {
+    const uid = currentUser?.id;
+    try {
+        const r = await fetch(`/api/admin-spectate/campaigns/${campaignId}/view?admin_user_id=${uid}&limit=20`);
+        const j = await r.json();
+        const turns = j.turns || [];
+        document.getElementById('admin-spectate-preview')?.remove();
+        const ov = document.createElement('div');
+        ov.id = 'admin-spectate-preview';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+        const rows = turns.map(t => {
+            const who = t.user_text ? `<div style="color:#9bd;font-size:.8rem;margin-top:10px">▸ ${escapeHtml(t.user_text)}</div>` : '';
+            const gm = t.assistant_text ? `<div style="color:#ccc;font-size:.82rem;line-height:1.5">${escapeHtml(_extractNarrativePreview(t.assistant_text).slice(0, 600))}</div>` : '';
+            return who + gm;
+        }).join('');
+        ov.innerHTML = `<div style="background:#14141c;border:1px solid rgba(245,158,11,.25);border-radius:12px;max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px"><div style="color:#f5deb3;font-weight:700">${escapeHtml(j.campaign?.title || 'Podgląd')} (tylko odczyt)</div><button id="asp-close" style="background:none;border:none;color:#999;font-size:1.2rem;cursor:pointer">✕</button></div>
+            <div style="overflow-y:auto;padding:0 18px 18px">${rows || '<div style="color:#888">Brak tur</div>'}</div>
+          </div>`;
+        ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+        ov.querySelector('#asp-close').addEventListener('click', () => ov.remove());
+        document.body.appendChild(ov);
+    } catch (e) { showToast('Błąd podglądu', 'error'); }
+}
+
+async function _adminSpectateResume(campaignId) {
+    const uid = currentUser?.id;
+    if (!confirm('Wznowić tę kampanię? Bohater zostanie podpięty i kampania aktywowana.')) return;
+    try {
+        const r = await fetch(`/api/admin-spectate/campaigns/${campaignId}/resume?admin_user_id=${uid}`, { method: 'POST' });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(j.detail || 'resume failed');
+        showToast('Kampania wznowiona — pojawi się na liście Twoich bohaterów.', 'success');
+        document.getElementById('admin-spectate-modal')?.remove();
+        if (typeof loadCampaigns === 'function') loadCampaigns();
+    } catch (e) { showToast('Błąd wznawiania: ' + (e.message || e), 'error'); }
 }
 
 function _wireInventoryActions() {
