@@ -2161,6 +2161,13 @@ async function enterGame(campaign) {
     window.clog?.event('game_entered', { campaign_id: campaign.id, character_id: characterData?.id });
     startCombatPolling();
 
+    // E1 (#416) — load active quests into the quest bar on campaign entry / resume.
+    // Without this, the bar stays hidden until after the first turn of the session.
+    try {
+        const qResp = await fetch(`/api/campaigns/${campaign.id}/quests`).then(r => r.ok ? r.json() : null).catch(() => null);
+        if (qResp?.active_quests) renderQuestBar(qResp.active_quests);
+    } catch (_e) {}
+
     // Stage 10-C+ Bug 1 fix — on F5 / resume, the campaign GET payload carries
     // any pending_skill_test. Re-mount the roll popup so the player can't
     // walk away from a bad roll by refreshing.
