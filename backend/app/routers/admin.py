@@ -723,6 +723,33 @@ def require_admin_token(
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
 
+def _get_admin_creator_id(authorization: str | None) -> int | None:
+    """Validate admin token and return the user_id from the dev-login label."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing admin token")
+    raw = authorization.removeprefix("Bearer ").strip()
+    if not verify_admin_token(raw):
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    from app.services.admin_auth import hash_admin_token as _hash_tok
+    token_hash = _hash_tok(raw)
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT label FROM admin_tokens WHERE token_hash = ?", (token_hash,)
+        ).fetchone()
+        if row and row["label"] and str(row["label"]).startswith("dev-login:"):
+            username = str(row["label"]).split(":")[1]
+            user = conn.execute(
+                "SELECT id FROM users WHERE username = ?", (username,)
+            ).fetchone()
+            if user:
+                return int(user["id"])
+    finally:
+        conn.close()
+    return None
+
+
 @router.post("/admin/auth")
 def admin_auth(req: AdminAuthReq):
     if not verify_admin_token(req.token):
@@ -3623,8 +3650,7 @@ def admin_create_invite(
     authorization: str | None = Header(default=None),
 ):
     """Admin: create a personalised or open invite link."""
-    from app.core.jwt_auth import require_admin_role
-    admin_user_id = require_admin_role(authorization)
+    admin_user_id = _get_admin_creator_id(authorization)
 
     code = _secrets.token_urlsafe(20)
     expires_at = (datetime.now(timezone.utc) + timedelta(hours=req.expires_hours)).isoformat()
@@ -3658,8 +3684,7 @@ def admin_create_invite(
 @router.get("/admin/invites")
 def admin_list_invites(authorization: str | None = Header(default=None)):
     """Admin: list all invites."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    require_admin_token(authorization)
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
@@ -3681,8 +3706,7 @@ def admin_list_invites(authorization: str | None = Header(default=None)):
 @router.delete("/admin/invites/{invite_id}")
 def admin_revoke_invite(invite_id: int, authorization: str | None = Header(default=None)):
     """Admin: revoke (delete) an unused invite."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    require_admin_token(authorization)
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     try:
@@ -3700,8 +3724,7 @@ def admin_revoke_invite(invite_id: int, authorization: str | None = Header(defau
 @router.get("/admin/invite-tree")
 def admin_invite_tree(authorization: str | None = Header(default=None)):
     """Admin: return nested invite tree for D3.js visualization."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    require_admin_token(authorization)
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
@@ -3777,8 +3800,7 @@ def admin_set_invite_limit(
     authorization: str | None = Header(default=None),
 ):
     """Admin: override a user's weekly invite limit."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    require_admin_token(authorization)
     limit = int(body.get("invite_weekly_limit", 3))
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
@@ -4037,8 +4059,7 @@ _SMTP_KEYS = frozenset([
 @router.get("/admin/email/config")
 def admin_email_config_get(authorization: str | None = Header(default=None)):
     """Get SMTP configuration keys from game_config_meta."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    require_admin_token(authorization)
 
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
@@ -4070,8 +4091,7 @@ def admin_email_config_patch(
     authorization: str | None = Header(default=None),
 ):
     """Update SMTP config keys in game_config_meta (upsert)."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    require_admin_token(authorization)
 
     data = {k: v for k, v in req.model_dump().items() if v is not None and k in _SMTP_KEYS}
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
@@ -4098,8 +4118,7 @@ def admin_email_test(
     authorization: str | None = Header(default=None),
 ):
     """Send a test email to the given address."""
-    from app.core.jwt_auth import require_admin_role
-    require_admin_role(authorization)
+    require_admin_token(authorization)
 
     to = req.to.strip()
     if not to:
@@ -4112,4 +4131,265 @@ def admin_email_test(
             status_code=503,
             detail="Email sending failed — check SMTP configuration",
         )
+    return {"ok": True}
+
+
+# ── Admin invite send-email ────────────────────────────────────────────────────
+
+class InviteSendEmailReq(BaseModel):
+    inviter_name: str = "AI-GM"
+
+
+@router.post("/admin/invites/{code}/send-email")
+def admin_send_invite_email(
+    code: str,
+    req: InviteSendEmailReq,
+    authorization: str | None = Header(default=None),
+):
+    """Send invite link email to the address stored on the invite."""
+    require_admin_token(authorization)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT code, email, message FROM user_invites WHERE code = ? LIMIT 1", (code,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if not row["email"]:
+        raise HTTPException(status_code=400, detail="Invite has no email address")
+
+    from app.services.email_service import send_invite_email as _send_invite_email
+    base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+    invite_link = f"{base_url}/register?invite={code}" if base_url else f"/register?invite={code}"
+    ok = _send_invite_email(
+        to=row["email"],
+        inviter_name=req.inviter_name,
+        message=row["message"] or "",
+        invite_link=invite_link,
+    )
+    if not ok:
+        raise HTTPException(status_code=503, detail="Email sending failed — check SMTP configuration")
+    return {"ok": True}
+
+
+# ── Admin bug-reports endpoints ────────────────────────────────────────────────
+
+@router.get("/admin/bug-reports")
+def admin_list_bug_reports(authorization: str | None = Header(default=None)):
+    """List all player bug reports."""
+    require_admin_token(authorization)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT b.id, b.user_id, u.username, b.campaign_id, b.observation,
+                   b.reproduction, b.report_type, b.github_issue_url,
+                   b.github_issue_number, b.created_at,
+                   COALESCE(b.github_status, 'pending') AS github_status
+            FROM bug_reports b
+            LEFT JOIN users u ON u.id = b.user_id
+            ORDER BY b.created_at DESC
+            LIMIT 500
+            """
+        ).fetchall()
+        return {"reports": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/bug-reports/{report_id}")
+def admin_delete_bug_report(report_id: int, authorization: str | None = Header(default=None)):
+    """Delete a bug report."""
+    require_admin_token(authorization)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        cur = conn.execute("DELETE FROM bug_reports WHERE id = ?", (report_id,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Report not found")
+        return {"ok": True}
+    finally:
+        conn.close()
+
+
+class BugReportSyncResult(BaseModel):
+    report_id: int
+    github_issue_number: int | None = None
+    github_issue_url: str | None = None
+    status: str
+
+
+@router.post("/admin/bug-reports/{report_id}/sync-github")
+async def admin_sync_bug_report_github(
+    report_id: int,
+    authorization: str | None = Header(default=None),
+):
+    """Sync a single bug report to GitHub (creates or updates issue)."""
+    require_admin_token(authorization)
+
+    github_pat = os.getenv("GITHUB_PAT", "").strip()
+    github_repo = os.getenv("GITHUB_REPO", "szmidtpiotr/ai-gm").strip()
+    if not github_pat:
+        raise HTTPException(status_code=503, detail="GITHUB_PAT not configured")
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(
+            "SELECT * FROM bug_reports WHERE id = ? LIMIT 1", (report_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    import httpx as _httpx
+    is_feature = str(row["report_type"] or "bug") == "feature"
+    type_tag = "[FEATURE]" if is_feature else "[BUG]"
+    gh_labels = ["enhancement", "tester-report"] if is_feature else ["bug", "tester-report"]
+    username = row["user_id"]
+    observation = str(row["observation"] or "")
+    title = f"{type_tag} user#{username} — {observation[:60]}"
+    body = f"**Obserwacja:** {observation}\n\n**Reprodukcja:** {str(row['reproduction'] or '')}\n\n_ID:_ {report_id}"
+
+    async with _httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.post(
+            f"https://api.github.com/repos/{github_repo}/issues",
+            headers={
+                "Authorization": f"Bearer {github_pat}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            json={"title": title, "body": body, "labels": gh_labels},
+        )
+        if resp.status_code != 201:
+            raise HTTPException(status_code=502, detail=f"GitHub error: {resp.status_code}")
+        data = resp.json()
+
+    github_issue_url = data.get("html_url")
+    github_issue_number = data.get("number")
+
+    conn2 = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        conn2.execute(
+            "UPDATE bug_reports SET github_issue_url=?, github_issue_number=?, github_status='synced' WHERE id=?",
+            (github_issue_url, github_issue_number, report_id),
+        )
+        conn2.commit()
+    finally:
+        conn2.close()
+
+    return {"ok": True, "github_issue_url": github_issue_url, "github_issue_number": github_issue_number}
+
+
+@router.post("/admin/bug-reports/sync-all-github")
+async def admin_sync_all_bug_reports_github(authorization: str | None = Header(default=None)):
+    """Sync all bug reports without GitHub issues."""
+    require_admin_token(authorization)
+
+    github_pat = os.getenv("GITHUB_PAT", "").strip()
+    if not github_pat:
+        raise HTTPException(status_code=503, detail="GITHUB_PAT not configured")
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            "SELECT id FROM bug_reports WHERE github_issue_number IS NULL ORDER BY id"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    results = []
+    for row in rows:
+        try:
+            result = await admin_sync_bug_report_github(row["id"], authorization)
+            results.append({"id": row["id"], "ok": True, "issue": result.get("github_issue_number")})
+        except Exception as e:
+            results.append({"id": row["id"], "ok": False, "error": str(e)})
+
+    return {"synced": len([r for r in results if r["ok"]]), "results": results}
+
+
+# ── Admin push subscription endpoints ─────────────────────────────────────────
+
+@router.get("/admin/push/subscriptions")
+def admin_list_push_subscriptions(authorization: str | None = Header(default=None)):
+    """List all push subscriptions grouped by user."""
+    require_admin_token(authorization)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(
+            """
+            SELECT s.user_id, u.username, u.display_name,
+                   COUNT(s.id) AS subscription_count,
+                   MAX(s.created_at) AS last_subscribed
+            FROM user_push_subscriptions s
+            LEFT JOIN users u ON u.id = s.user_id
+            GROUP BY s.user_id
+            ORDER BY s.user_id
+            """
+        ).fetchall()
+        return {"subscriptions": [dict(r) for r in rows]}
+    except Exception:
+        return {"subscriptions": []}
+    finally:
+        conn.close()
+
+
+@router.delete("/admin/push/subscriptions/{user_id}")
+def admin_delete_push_subscriptions(user_id: int, authorization: str | None = Header(default=None)):
+    """Remove all push subscriptions for a user."""
+    require_admin_token(authorization)
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    try:
+        cur = conn.execute(
+            "DELETE FROM user_push_subscriptions WHERE user_id = ?", (user_id,)
+        )
+        conn.commit()
+        return {"ok": True, "removed": cur.rowcount}
+    finally:
+        conn.close()
+
+
+class AdminPushSendReq(BaseModel):
+    user_id: int
+    title: str = "AI-GM"
+    body: str
+    url: str = "/"
+    icon: str | None = None
+    image: str | None = None
+    vibrate: list | None = None
+
+
+@router.post("/admin/push/send-test")
+def admin_push_send_test(
+    req: AdminPushSendReq,
+    authorization: str | None = Header(default=None),
+):
+    """Send a test push notification to a user."""
+    require_admin_token(authorization)
+
+    from app.services.push_notification_service import send_push
+    send_push(
+        user_id=req.user_id,
+        title=req.title,
+        body=req.body,
+        url=req.url,
+        icon=req.icon,
+        image=req.image,
+        vibrate=req.vibrate,
+    )
     return {"ok": True}
