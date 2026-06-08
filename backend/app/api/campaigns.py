@@ -20,6 +20,19 @@ logger = get_logger(__name__)
 router = APIRouter()
 
 
+@router.get("/campaign-modes")
+def get_campaign_modes():
+    """D9 (#384) — 5 trybów huba kampanii (Nowa/Gotowa/Loch/Loch-kafelki/Multiplayer)
+    z flagą `available` zależną od danych, by UI nie prowadził w broken state."""
+    from app.services.campaign_modes_service import get_available_modes
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        return {"modes": get_available_modes(conn)}
+    finally:
+        conn.close()
+
+
 def _is_global_admin(conn: sqlite3.Connection, user_id: int | None) -> bool:
     if user_id is None:
         return False
