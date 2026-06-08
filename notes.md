@@ -15,7 +15,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
-| **FADM (admin rebuild)** | 2/13 | 15% ⚠️ AKTYWNE — D wstrzymane |
+| **FADM (admin rebuild)** | 3/13 | 23% ⚠️ AKTYWNE — D wstrzymane |
 | **TOTAL** | **50/135** | **37%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
@@ -190,8 +190,8 @@ Wyrównanie z planem CZĘŚĆ AE. Monolit `admin_panel_v3` (19 447 linii, 1 plik
 
 - [x] FADM-P0 — Bootstrap skorupy `admin/` + shared utils (api/table/toast/modal/form) — [#402](https://github.com/szmidtpiotr/ai-gm/issues/402) ✅ 2026-06-08
 - [x] FADM-P1 — Port sekcji overview — [#403](https://github.com/szmidtpiotr/ai-gm/issues/403) ✅ 2026-06-08
-- [ ] FADM-P2 — Port sekcji mechanics — [#404](https://github.com/szmidtpiotr/ai-gm/issues/404) **← następne**
-- [ ] FADM-P3 — Port sekcji content (+ D5 item VIEW) — [#405](https://github.com/szmidtpiotr/ai-gm/issues/405)
+- [x] FADM-P2 — Port sekcji mechanics — [#404](https://github.com/szmidtpiotr/ai-gm/issues/404) ✅ 2026-06-08
+- [ ] FADM-P3 — Port sekcji content (+ D5 item VIEW) — [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) **← następne**
 - [ ] FADM-P4 — Port sekcji world (+ D7 encountery) — [#406](https://github.com/szmidtpiotr/ai-gm/issues/406)
 - [ ] FADM-P5 — Port sekcji map — [#407](https://github.com/szmidtpiotr/ai-gm/issues/407)
 - [ ] FADM-P6 — Port sekcji campaigns (+ B6/B7/D6) — [#408](https://github.com/szmidtpiotr/ai-gm/issues/408)
