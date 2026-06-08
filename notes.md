@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-07 (D1 #376 done — pending flow + edycja; D14 #399 bug update_item)_
+_Ostatnia aktualizacja: 2026-06-08 (FADM-P0 #402 bootstrap skorupy admin/ done; sekcja D wstrzymana — FADM admin rebuild #401)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -15,8 +15,8 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
-| **FADM (admin rebuild)** | 0/13 | 0% ⚠️ AKTYWNE — D wstrzymane |
-| **TOTAL** | **48/135** | **36%** |
+| **FADM (admin rebuild)** | 1/13 | 8% ⚠️ AKTYWNE — D wstrzymane |
+| **TOTAL** | **49/135** | **36%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -42,7 +42,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ## FAZA 0 — World State ✅ UKOŃCZONA (2026-06-06)
 
-- [x] B1 — Tabela `world_state_snapshots` (campaign_id, turn_number, state_json) — commit 6579e9a
+- [x] B1 — Tabela `world_state_snapshots` (campaign_id, turn_number, state_json) — commit c7db68d + migracja 3da9235
 - [x] B2 — Rozbudowa session_flags: scene_enemies, scene_npcs, active_quests, player_conditions — commit c7db68d
 - [x] B3 — Gate Mechaniki — middleware walidujący akcje gracza PRZED LLM — commit c7db68d
 - [x] B4 — Parser intencji gracza (ATTACK/MOVE/TALK/REST → walidacja przez Gate) — commit c7db68d
@@ -188,8 +188,8 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 Wyrównanie z planem CZĘŚĆ AE. Monolit `admin_panel_v3` (19 447 linii, 1 plik) → modularny `frontend/admin/`. admin3 zostaje jako fallback; sekcję kasujemy z monolitu dopiero po porcie (anty-grób). Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401). Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`.
 
-- [ ] FADM-P0 — Bootstrap skorupy `admin/` + shared utils (api/table/toast/modal/form) — [#402](https://github.com/szmidtpiotr/ai-gm/issues/402) **← start**
-- [ ] FADM-P1 — Port sekcji overview — [#403](https://github.com/szmidtpiotr/ai-gm/issues/403)
+- [x] FADM-P0 — Bootstrap skorupy `admin/` + shared utils (api/table/toast/modal/form) — [#402](https://github.com/szmidtpiotr/ai-gm/issues/402) ✅ 2026-06-08
+- [ ] FADM-P1 — Port sekcji overview — [#403](https://github.com/szmidtpiotr/ai-gm/issues/403) **← następne**
 - [ ] FADM-P2 — Port sekcji mechanics — [#404](https://github.com/szmidtpiotr/ai-gm/issues/404)
 - [ ] FADM-P3 — Port sekcji content (+ D5 item VIEW) — [#405](https://github.com/szmidtpiotr/ai-gm/issues/405)
 - [ ] FADM-P4 — Port sekcji world (+ D7 encountery) — [#406](https://github.com/szmidtpiotr/ai-gm/issues/406)

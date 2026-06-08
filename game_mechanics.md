@@ -2938,7 +2938,7 @@ Edycja jednej funkcji = otwierasz jeden mały plik, nie monolit. To jest cel mod
 | Mock dane w wysyłanym HTML | ⚠️ ryzyko fałszywych wierszy przy cichym błędzie loadera |
 | Loadery bez komunikatu błędu (tylko warn) | ⚠️ stały/pusty UI bez sygnału |
 | Reszta `?? ?? ` zgadywania pól (dungeons, sandbox) | ⚠️ niezweryfikowane kontrakty |
-| Modularność (1 plik 18.9k linii) | ❌ dług — strategia: strangler-fig modularny (zatwierdzona) |
+| Modularność (1 plik 18.9k linii) | 🔄 w toku — FADM-P0 (#402, 2026-06-08): skorupa `admin/` + shared utils żyją pod `/admin/`, sekcje portowane jedna po drugiej (monolit kurczy się do FADM-DONE) |
 
 ### Zadania implementacyjne
 
@@ -2946,8 +2946,8 @@ Edycja jednej funkcji = otwierasz jeden mały plik, nie monolit. To jest cel mod
 
 | # | Zadanie | Priorytet |
 |---|---------|-----------|
-| A10 | Cienka skorupa `admin/index.html` + nav + mount point, dziedzicząca CSS/wygląd admin3 | 1 |
-| A11 | Shared utils: `api.js` (apiFetch), `table.js` (`_ROW_REGISTRY`), `toast.js`, `modal.js`, `form.js` — wyciągnięte z admin3 | 1 |
+| A10 | ✅ 2026-06-08 (#402) — Cienka skorupa `admin/index.html` + nav (14 sekcji) + hash-router + mount point, dziedzicząca CSS/wygląd admin3 | 1 |
+| A11 | ✅ 2026-06-08 (#402) — Shared utils: `api.js` (apiFetch + APIError), `table.js` (esc + renderTable), `toast.js`, `modal.js`, `form.js` — wyciągnięte z admin3 | 1 |
 | F3 | `effects_builder.js` + `affix_builder.js` — nowe komponenty (CZĘŚĆ X) | wraz z Fazą 4 |
 
 **Port sekcji (każda wraz z fazą jej systemu backendowego):**
@@ -2961,6 +2961,33 @@ Edycja jednej funkcji = otwierasz jeden mały plik, nie monolit. To jest cel mod
 | A6..A4 | Migracja/usunięcie admin2 — patrz A1 (niezależne, równoległe) | 1 |
 
 > **Nota:** dawne FADM-1..6 (knowledge, kontrakty, mock-dane, loadery, de-dup, alert) NIE są osobnymi taskami na admin3 — są wchłonięte do FADM-P2/P3 i naprawiane przy okazji portu danej sekcji. Nie łatamy monolitu, który i tak znika.
+
+### Realignment 2026-06-08 — start faktycznej przebudowy
+
+> **Decyzja (2026-06-08):** Praca nad sekcją D **wstrzymana**. Audyt wykazał że `admin_panel_v3/index.html` to nadal **monolit 19 447 linii / 1 MB / 14 sekcji inline**, a A10/A11 ("wydzielone utils") **nie istnieją jako pliki**. `frontend/admin/` nie istnieje. Zaczynamy faktyczny strangler-fig wg tego planu.
+
+> **Dlaczego teraz?** Każdy D-feature (D5/D6/D7) dorzucany do monolitu zwiększa dług portu. Im później start, tym większy port przy FADM-DONE. Wyrównujemy zanim sekcja D urośnie dalej.
+
+Plan rozbity na konkretne issues (epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401)):
+
+| Etap | Issue | Sekcja / zakres |
+|---|---|---|
+| FADM-P0 | #402 | Bootstrap skorupy `admin/` + shared utils (api/table/toast/modal/form) |
+| FADM-P1 | #403 | overview |
+| FADM-P2 | #404 | mechanics |
+| FADM-P3 | #405 | content (+ D5 item VIEW) |
+| FADM-P4 | #406 | world (+ D7 encountery) |
+| FADM-P5 | #407 | map |
+| FADM-P6 | #408 | campaigns (+ B6 World State + B7 Inspector + D6 narrative) |
+| FADM-P7 | #409 | dungeons |
+| FADM-P8 | #410 | forge (+ D7 hook_type) |
+| FADM-P9 | #411 | players |
+| FADM-P10 | #412 | tools (sandbox/Playwright/Inspector) |
+| FADM-P11 | #413 | system (LLM presety + config) |
+| FADM-P12 | #414 | misc (invites/push/bugreports) |
+| FADM-DONE | — | `rm -rf admin_panel_v3/` — po Fazie 4 |
+
+Brief wykonawczy agenta: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`.
 
 ---
 

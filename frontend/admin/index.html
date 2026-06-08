@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pl" data-admin-shell="1">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI-GM — Admin (modular)</title>
+  <style>
+    :root { --bg:#0a0a0f; --panel:#0e0e16; --surface:#14141c; --border:rgba(255,255,255,.08);
+            --t1:#eee; --t2:#bbb; --t3:#888; --accent:#f59e0b; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--t1);
+           font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; }
+    .adm-shell { display:flex; min-height:100vh; }
+    .adm-sidebar { width:220px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--border);
+                   padding:14px 10px; display:flex; flex-direction:column; gap:2px; position:sticky; top:0; height:100vh; overflow-y:auto; }
+    .adm-brand { font-weight:800; color:var(--accent); padding:6px 10px 14px; letter-spacing:.5px; }
+    .adm-brand small { display:block; color:var(--t3); font-weight:400; font-size:.66rem; letter-spacing:0; }
+    .nav-item { display:flex; align-items:center; gap:9px; padding:9px 11px; border:none; background:none;
+                color:var(--t2); border-radius:8px; cursor:pointer; font-size:.85rem; text-align:left; width:100%; transition:background .12s; }
+    .nav-item:hover { background:rgba(255,255,255,.04); color:var(--t1); }
+    .nav-item.active { background:rgba(245,158,11,.12); color:#f5deb3; }
+    .nav-item .ico { width:18px; text-align:center; }
+    .adm-main { flex:1; min-width:0; }
+    #panel { padding:22px 26px; }
+    .adm-placeholder { max-width:560px; margin:40px auto; background:var(--surface); border:1px solid var(--border);
+                       border-radius:12px; padding:26px; text-align:center; }
+    .adm-placeholder h2 { color:#f5deb3; margin:0 0 8px; }
+    .adm-placeholder a { color:var(--accent); }
+    .adm-foot { color:var(--t3); font-size:.66rem; padding:10px; text-align:center; }
+    .adm-input { background:var(--panel); border:1px solid var(--border); color:var(--t1); border-radius:8px; padding:8px 10px; font-size:.85rem; }
+    .adm-banner { background:#3a2410; color:#f5deb3; border:1px solid rgba(245,158,11,.3); border-radius:8px;
+                  padding:8px 12px; margin:0 0 14px; font-size:.8rem; }
+  </style>
+</head>
+<body>
+  <div class="adm-shell">
+    <nav class="adm-sidebar" id="admin-nav">
+      <div class="adm-brand">AI-GM ADMIN <small>modular · strangler-fig</small></div>
+      <!-- nav items injected by router; data-section keys must stay stable -->
+    </nav>
+    <div class="adm-main">
+      <main id="panel"><div class="adm-placeholder">Ładowanie…</div></main>
+      <div class="adm-foot">FADM modular shell — sekcje nieportowane otwórz w <a href="/admin3/" style="color:var(--t3)">/admin3/</a></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { apiFetch } from './shared/api.js';
+    import { showToast } from './shared/toast.js';
+
+    // 14 sekcji — klucze MUSZĄ pokrywać data-section z admin3 (port 1:1).
+    const SECTIONS = [
+      { key: 'overview',   label: 'Przegląd',   ico: '▦' },
+      { key: 'players',    label: 'Gracze',     ico: '◉' },
+      { key: 'campaigns',  label: 'Kampanie',   ico: '⛺' },
+      { key: 'content',    label: 'Przedmioty', ico: '⚔' },
+      { key: 'world',      label: 'Świat',      ico: '⊕' },
+      { key: 'map',        label: 'Mapa',       ico: '🗺' },
+      { key: 'mechanics',  label: 'Mechanika',  ico: '⚙' },
+      { key: 'dungeons',   label: 'Lochy',      ico: '⛓' },
+      { key: 'forge',      label: 'Kuźnia',     ico: '⚒' },
+      { key: 'invites',    label: 'Zaproszenia',ico: '✉' },
+      { key: 'bugreports', label: 'Zgłoszenia', ico: '🐞' },
+      { key: 'push',       label: 'Push',       ico: '🔔' },
+      { key: 'tools',      label: 'Narzędzia',  ico: '🛠' },
+      { key: 'system',     label: 'System',     ico: '⎔' },
+    ];
+    const KEYS = SECTIONS.map(s => s.key);
+    const LAST_KEY = 'aigm_admin_last_section';
+
+    const nav = document.getElementById('admin-nav');
+    SECTIONS.forEach(s => {
+      const b = document.createElement('button');
+      b.className = 'nav-item';
+      b.dataset.section = s.key;
+      b.innerHTML = `<span class="ico">${s.ico}</span>${s.label}`;
+      b.addEventListener('click', () => { location.hash = '#' + s.key; });
+      nav.appendChild(b);
+    });
+
+    function setActive(key) {
+      nav.querySelectorAll('.nav-item').forEach(b =>
+        b.classList.toggle('active', b.dataset.section === key));
+    }
+
+    function placeholder(key) {
+      return `<div class="adm-placeholder">
+        <h2>Sekcja „${key}"</h2>
+        <p style="color:var(--t2)">W trakcie migracji do modularnego panelu.</p>
+        <p><a href="/admin3/#${key}">Otwórz w /admin3/#${key} →</a></p>
+      </div>`;
+    }
+
+    async function route() {
+      let key = (location.hash || '').replace(/^#/, '');
+      if (!KEYS.includes(key)) key = localStorage.getItem(LAST_KEY) || 'overview';
+      if (!KEYS.includes(key)) key = 'overview';
+      localStorage.setItem(LAST_KEY, key);
+      setActive(key);
+      const panel = document.getElementById('panel');
+      panel.innerHTML = '<div class="adm-placeholder">Ładowanie…</div>';
+      try {
+        // Sekcja portowana → sections/<key>.js eksportuje init(panel).
+        const mod = await import(`./sections/${key}.js`);
+        if (mod && typeof mod.init === 'function') {
+          await mod.init(panel);
+          return;
+        }
+        panel.innerHTML = placeholder(key);
+      } catch (e) {
+        // Brak modułu (jeszcze nieportowana) lub błąd → fallback placeholder.
+        panel.innerHTML = placeholder(key);
+      }
+    }
+
+    window.addEventListener('hashchange', route);
+    window.addEventListener('admin-unauthorized', () => {
+      const panel = document.getElementById('panel');
+      panel.insertAdjacentHTML('afterbegin',
+        '<div class="adm-banner">Sesja admina wygasła — zaloguj się w <a href="/admin3/" style="color:#f5deb3">/admin3/</a> (token współdzielony).</div>');
+    });
+
+    // expose shared do debug (sekcje importują własne moduły, to tylko wygoda)
+    window.__adminShell = { apiFetch, showToast, SECTIONS };
+    route();
+  </script>
+</body>
+</html>
