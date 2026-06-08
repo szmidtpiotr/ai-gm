@@ -70,7 +70,7 @@ frontend/admin/
 
 **Hash-router:** `#<key>` → `import('./sections/<key>.js')` → `await mod.init(panel)`. localStorage zapamiętuje ostatnią sekcję.
 
-**Fallback:** sekcja jeszcze nieportowana → placeholder "Sekcja w trakcie migracji — użyj /admin3/#<key>" + link. Zero martwych klików.
+**Fallback (symetryczny redirect):** każda sekcja działa w **dokładnie jednym** miejscu. Klik sekcji jeszcze nieportowanej w `/admin/` → `window.location.replace('/admin3/#<key>')` (bounce do admin3, jej aktualny dom). Symetrycznie: klik sekcji już sportowanej w `/admin3/` → redirect do `/admin/#<key>`. Lista sportowanych: `const PORTED` w `admin/index.html` (rośnie z każdym FADM-Px). Placeholder zostaje tylko jako sygnał błędu importu modułu (ported, ale padł) — nie cichy redirect, by nie maskować buga. Zero martwych klików.
 
 **Trasy:** `/admin/` serwowane równolegle z `/admin3/`. Oba żyją przez całą migrację. `/admin3/` znika dopiero w FADM-DONE (osobny task, po Fazie 4).
 
