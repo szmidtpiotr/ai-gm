@@ -14,7 +14,11 @@ const ADMIN_PASS = process.env.AI_TEST_ADMIN_PASS || "demo";
 // Loguje przez overlay admin3 → token ląduje w localStorage (współdzielony /admin/ ↔ /admin3/),
 // więc apiFetch w sekcji overview ma Bearer i endpointy /api/admin/* odpowiadają 200.
 async function adminLogin(page) {
-  await page.goto("/admin3/");
+  // Navigate to /api/health (same origin, no JS redirects) to safely clear stale token
+  await page.goto("/api/health");
+  await page.evaluate(() => localStorage.removeItem('aigm_admin_token'));
+  // Use #forge hash — not in PORTED set, so requestAnimationFrame won't redirect to /admin/#players.
+  await page.goto("/admin3/#forge");
   await page.waitForSelector("#login-overlay.open", { timeout: 15000 });
   await page.fill("#login-user", ADMIN_USER);
   await page.fill("#login-pass", ADMIN_PASS);
