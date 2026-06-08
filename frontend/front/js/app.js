@@ -5705,7 +5705,12 @@ async function _openAdminSpectator() {
         </div>
         <div style="padding:0 18px 10px;display:flex;align-items:center;gap:8px">
           <label style="color:#9aa;font-size:.8rem">Gracz:</label>
-          <select id="admin-spectate-user" style="flex:1;background:#0e0e16;border:1px solid rgba(255,255,255,.12);color:#eee;border-radius:8px;padding:8px"></select>
+          <div id="admin-spectate-user-dd" style="flex:1;position:relative">
+            <button type="button" id="asp-user-trigger" style="width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px;background:#0e0e16;border:1px solid rgba(255,255,255,.12);color:#eee;border-radius:8px;padding:9px 12px;cursor:pointer;font-size:.85rem">
+              <span id="asp-user-label">—</span><span style="color:#888">▾</span>
+            </button>
+            <div id="asp-user-options" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#14141c;border:1px solid rgba(245,158,11,.25);border-radius:8px;max-height:240px;overflow-y:auto;z-index:10;box-shadow:0 8px 24px rgba(0,0,0,.6)"></div>
+          </div>
         </div>
         <div id="admin-spectate-list" style="overflow-y:auto;padding:4px 18px 18px;flex:1">
           <div style="color:#888;text-align:center;padding:20px">Ładowanie…</div>
@@ -5718,13 +5723,36 @@ async function _openAdminSpectator() {
     try {
         const ru = await fetch(`/api/admin-spectate/users?admin_user_id=${uid}`);
         const ju = await ru.json();
-        const sel = overlay.querySelector('#admin-spectate-user');
-        sel.innerHTML = (ju.users || []).map(u =>
-            `<option value="${u.id}"${Number(u.id) === Number(uid) ? ' selected' : ''}>${escapeHtml(u.display_name || ('user ' + u.id))}${u.is_admin ? ' (admin)' : ''}</option>`).join('');
-        sel.addEventListener('change', () => _adminSpectateLoad(parseInt(sel.value, 10)));
+        _aspRenderUserDropdown(overlay, ju.users || [], uid);
     } catch (e) { console.warn('[admin-spectate] users', e); }
 
     _adminSpectateLoad(uid); // default = own
+}
+
+// Custom dark dropdown (native <select> opens an OS picker that clashes with the theme).
+function _aspRenderUserDropdown(overlay, users, selectedId) {
+    const trigger = overlay.querySelector('#asp-user-trigger');
+    const label = overlay.querySelector('#asp-user-label');
+    const opts = overlay.querySelector('#asp-user-options');
+    if (!trigger || !label || !opts) return;
+    const nameOf = (u) => (u.display_name || ('user ' + u.id)) + (u.is_admin ? ' (admin)' : '');
+    const cur = users.find(u => Number(u.id) === Number(selectedId)) || users[0];
+    if (cur) label.textContent = nameOf(cur);
+    opts.innerHTML = users.map(u =>
+        `<div data-uid="${u.id}" style="padding:10px 12px;cursor:pointer;color:#eee;font-size:.85rem;border-bottom:1px solid rgba(255,255,255,.05)">${escapeHtml(nameOf(u))}</div>`).join('');
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', () => { opts.style.display = 'none'; });
+    opts.querySelectorAll('[data-uid]').forEach(o => o.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const u = users.find(x => Number(x.id) === Number(o.dataset.uid));
+        if (!u) return;
+        label.textContent = nameOf(u);
+        opts.style.display = 'none';
+        _adminSpectateLoad(u.id);
+    }));
 }
 
 async function _adminSpectateLoad(userId) {
@@ -5741,7 +5769,7 @@ async function _adminSpectateLoad(userId) {
             const hero = c.character_name ? escapeHtml(c.character_name) : '—';
             const meta = `${escapeHtml(c.owner_name || '?')} · ${hero} · tura ${c.last_turn || 0} · ${escapeHtml(c.status || '')}`;
             return `<div style="border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:#0e0e16">
-                <div style="font-weight:600;color:#eee;font-size:.92rem">${escapeHtml(c.title || ('Kampania ' + c.id))}</div>
+                <div style="font-weight:600;color:#eee;font-size:.92rem">${escapeHtml(c.title || ('Kampania ' + c.id))} <span style="color:#777;font-weight:400;font-size:.78rem">#${c.id}</span></div>
                 <div style="color:#8aa;font-size:.72rem;margin:3px 0 8px">${meta}</div>
                 <div style="display:flex;gap:8px">
                   <button data-act="preview" data-id="${c.id}" style="flex:1;background:#1a2230;border:1px solid rgba(120,160,255,.3);color:#cde;border-radius:8px;padding:7px;cursor:pointer">👁 Podgląd</button>
@@ -5779,7 +5807,7 @@ async function _adminSpectatePreview(campaignId) {
             return who + gm;
         }).join('');
         ov.innerHTML = `<div style="background:#14141c;border:1px solid rgba(245,158,11,.25);border-radius:12px;max-width:560px;width:100%;max-height:85vh;display:flex;flex-direction:column">
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px"><div style="color:#f5deb3;font-weight:700">${escapeHtml(j.campaign?.title || 'Podgląd')} (tylko odczyt)</div><button id="asp-close" style="background:none;border:none;color:#999;font-size:1.2rem;cursor:pointer">✕</button></div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px"><div style="color:#f5deb3;font-weight:700">${escapeHtml(j.campaign?.title || 'Podgląd')} <span style="color:#888;font-weight:400;font-size:.8rem">#${campaignId}</span> · tylko odczyt</div><button id="asp-close" style="background:none;border:none;color:#999;font-size:1.2rem;cursor:pointer">✕</button></div>
             <div style="overflow-y:auto;padding:0 18px 18px">${rows || '<div style="color:#888">Brak tur</div>'}</div>
           </div>`;
         ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
