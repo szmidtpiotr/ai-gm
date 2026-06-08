@@ -455,6 +455,26 @@ def get_campaign_death_summary(campaign_id: int):
     return payload
 
 
+@router.get("/campaigns/{campaign_id}/quests")
+def get_campaign_quests(campaign_id: int):
+    """E1 (#416) — Player-facing active quests for the HUD quest bar.
+
+    Returns the active_quests list from game_sessions so the frontend
+    can populate the quest bar on campaign entry without waiting for a turn.
+    """
+    from app.services.world_state_service import get_world_state_flags
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT id FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+    finally:
+        conn.close()
+    flags = get_world_state_flags(campaign_id)
+    return {"active_quests": flags.get("active_quests", [])}
+
+
 @router.get("/campaigns/{campaign_id}/end-summary")
 def get_campaign_end_summary(campaign_id: int):
     """Stage 9 P5+P6 — unified summary for both death AND victory screens.
