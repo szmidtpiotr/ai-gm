@@ -2405,6 +2405,14 @@ def _run_v2_schema_migrations(conn: sqlite3.Connection) -> None:
             created_at                  TEXT DEFAULT (datetime('now'))
         )
     """, "v2-world-hexes")
+    # Deduplicate world_hexes before creating unique index (keep row with highest id per q,r)
+    try:
+        conn.execute(
+            "DELETE FROM world_hexes WHERE id NOT IN (SELECT MAX(id) FROM world_hexes GROUP BY q, r)"
+        )
+        conn.commit()
+    except Exception:
+        pass
     _exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_world_hexes_coords ON world_hexes(q, r)",
           "v2-world-hexes-idx")
 

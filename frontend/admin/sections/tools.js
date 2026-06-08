@@ -1409,7 +1409,7 @@ export async function init(panel) {
               <span class="card-title">Testy Playwright</span>
               <button class="btn btn-sm btn-primary" id="pw-run-all">▶ Uruchom wszystkie</button>
             </div>
-            <div style="padding:12px;display:flex;flex-direction:column;gap:8px" id="pw-spec-list">
+            <div style="padding:12px;display:flex;flex-direction:column;gap:8px;max-height:500px;overflow-y:auto" id="pw-spec-list">
               <div style="color:var(--t3);font-size:0.78rem">Kliknij zakładkę aby załadować…</div>
             </div>
           </div>
