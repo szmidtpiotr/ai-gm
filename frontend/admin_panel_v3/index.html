@@ -2562,20 +2562,6 @@
 
       <!-- Tab: Szablony -->
       <div id="forge-tab-templates" style="display:none">
-        <!-- E9 (#424) — Story Gravity config -->
-        <div class="card" style="padding:12px 14px;margin-bottom:12px">
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-            <div style="font-size:0.86rem;font-weight:600;color:var(--t1)">⚖ Story Gravity — eskalacja gdy fabuła utknie</div>
-            <button class="btn btn-sm btn-secondary" onclick="_saveStoryGravity()">💾 Zapisz progi</button>
-          </div>
-          <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:10px;align-items:center">
-            <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--t2)"><input type="checkbox" id="sg-enabled" style="width:auto"> Włączone</label>
-            <label style="font-size:0.78rem;color:var(--t2)">L1 (podpowiedź) po <input type="number" id="sg-l1" min="1" max="200" style="width:56px" class="form-input"> turach</label>
-            <label style="font-size:0.78rem;color:var(--t2)">L2 (instrukcja) po <input type="number" id="sg-l2" min="1" max="200" style="width:56px" class="form-input"> turach</label>
-            <label style="font-size:0.78rem;color:var(--t2)">L3 (wymuszona scena) po <input type="number" id="sg-l3" min="1" max="200" style="width:56px" class="form-input"> turach</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;color:var(--t2)"><input type="checkbox" id="sg-l3-enabled" style="width:auto"> L3 aktywne (domyślnie OFF)</label>
-          </div>
-        </div>
         <div style="display:flex;gap:8px;margin-bottom:12px">
           <button class="btn btn-primary btn-sm" onclick="openCreateTemplate()">+ Nowy szablon</button>
           <span id="forge-templates-count" style="font-size:0.8rem;color:var(--t3);align-self:center"></span>
@@ -5330,30 +5316,7 @@
     } catch(e) { _showToast(e.message || 'Błąd zapisu.', 'error'); }
   }
 
-  // E9 (#424) — Story Gravity config load/save.
-  async function _loadStoryGravity() {
-    try {
-      const d = await apiFetch('/api/settings/story-gravity');
-      const c = d.data || {};
-      const set = (id, v) => { const el = document.getElementById(id); if (el) { if (el.type === 'checkbox') el.checked = !!v; else el.value = v; } };
-      set('sg-enabled', c.enabled); set('sg-l1', c.turns_l1); set('sg-l2', c.turns_l2); set('sg-l3', c.turns_l3); set('sg-l3-enabled', c.l3_enabled);
-    } catch (e) { /* leave defaults */ }
-  }
-  async function _saveStoryGravity() {
-    const num = id => parseInt(document.getElementById(id)?.value, 10);
-    const payload = {
-      enabled: document.getElementById('sg-enabled')?.checked ?? true,
-      turns_l1: num('sg-l1'), turns_l2: num('sg-l2'), turns_l3: num('sg-l3'),
-      l3_enabled: document.getElementById('sg-l3-enabled')?.checked ?? false,
-    };
-    try {
-      await apiFetch('/api/settings/story-gravity', { method: 'PATCH', body: JSON.stringify(payload) });
-      _showToast('Progi Story Gravity zapisane.', 'success');
-    } catch (e) { _showToast(e.message || 'Błąd zapisu.', 'error'); }
-  }
-
   async function _loadForgeTemplates() {
-    _loadStoryGravity();
     const grid = document.getElementById('forge-templates-grid');
     const count = document.getElementById('forge-templates-count');
     if (!grid) return;
