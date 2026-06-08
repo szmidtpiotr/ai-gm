@@ -2574,8 +2574,10 @@
             <button class="btn btn-sm btn-secondary" onclick="_closeTemplateEditor()">← Szablony</button>
             <input id="tpl-title" class="form-input" style="font-weight:600;font-size:0.95rem;max-width:320px" placeholder="Tytuł szablonu">
             <span id="tpl-status-badge" style="font-size:0.72rem;font-weight:600;padding:3px 8px;border-radius:var(--r);background:var(--surface);border:1px solid var(--border)"></span>
-            <div style="margin-left:auto;display:flex;gap:6px">
+            <div style="margin-left:auto;display:flex;gap:6px" id="tpl-workflow-btns">
+              <!-- E12 (#427) — workflow buttons injected by _renderTplWorkflow(status) -->
               <button class="btn btn-sm btn-secondary" id="tpl-publish-btn" onclick="_toggleTemplatePublish()"></button>
+              <button class="btn btn-sm btn-secondary" id="tpl-revert-btn" style="display:none" onclick="_revertTemplate()"></button>
               <button class="btn btn-sm btn-primary" onclick="forgeGeneratePlan()" id="tpl-generate-btn">⚡ Generuj plan AI</button>
               <button class="btn btn-sm btn-primary" onclick="saveTemplateEdits()">💾 Zapisz</button>
             </div>
@@ -5331,17 +5333,20 @@
         return;
       }
       grid.innerHTML = templates.map(t => {
-        const statusColor = t.status === 'published' ? 'var(--green)' : 'var(--t3)';
+        const statusColor = {published:'var(--green)', review:'var(--amber,#f59e0b)', draft:'var(--t3)'}[t.status] || 'var(--t3)';
+        const statusLabel = {published:'Opublikowany', review:'W recenzji', draft:'Szkic'}[t.status] || t.status;
         return '<div class="card" style="padding:12px;cursor:pointer" onclick="openTemplateEditor(' + t.id + ')">' +
           '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
             '<span style="font-weight:600;font-size:0.88rem">' + _esc(t.title) + '</span>' +
-            '<span style="font-size:0.7rem;color:' + statusColor + ';font-weight:600">' + t.status + '</span>' +
+            '<span style="font-size:0.7rem;color:' + statusColor + ';font-weight:600">' + statusLabel + '</span>' +
           '</div>' +
           '<div style="font-size:0.78rem;color:var(--t2);margin-bottom:8px">' + _esc((t.description||'').substring(0,120)) + ((t.description||'').length>120?'…':'') + '</div>' +
           '<div style="font-size:0.72rem;color:var(--t3);margin-bottom:8px">⭐ ' + t.difficulty_rating + '/5 · 🎮 ' + t.play_count + ' rozegrań · ' + (t.hook_ids||[]).length + ' hooków</div>' +
           (t.start_hex_q != null ? '<div style="font-size:0.72rem;color:var(--amber,#c9a227);margin-bottom:6px">📍 Start: (' + t.start_hex_q + ', ' + t.start_hex_r + ')</div>' : '<div style="font-size:0.72rem;color:var(--t3);margin-bottom:6px">📍 Brak przydzielonego terenu</div>') +
           '<div style="display:flex;gap:4px;flex-wrap:wrap">' +
-            (t.status === 'draft' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgePublishTemplate(' + t.id + ')">Opublikuj</button>' : '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeUnpublishTemplate(' + t.id + ')">Wycofaj</button>') +
+            (t.status === 'draft' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgeSetTemplateStatus(' + t.id + ',\'review\')">→ Recenzja</button>' : '') +
+            (t.status === 'review' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgePublishTemplate(' + t.id + ')">Opublikuj</button>' : '') +
+            (t.status !== 'draft' ? '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeUnpublishTemplate(' + t.id + ')">↩ Szkic</button>' : '') +
             '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();openTemplateEditor(' + t.id + ')">Edytuj</button>' +
             '<button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();forgeAllocateHex(' + t.id + ')">🗺 Przydziel teren</button>' +
             (t.status === 'published' ? '<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();forgeLaunchCampaignFromTemplate(' + t.id + ')" style="background:var(--green);border-color:var(--green)">🚀 Uruchom kampanię</button>' : '') +
@@ -5352,12 +5357,32 @@
     } catch(e) { grid.innerHTML = '<div style="color:var(--red);font-size:0.8rem">' + _esc(e.message) + '</div>'; }
   }
 
-  async function forgePublishTemplate(id) {
+  // E12 (#427) — card quick-action: change template status, surfacing 422 detail.
+  async function forgeSetTemplateStatus(id, status) {
     try {
-      await apiFetch(`/api/admin/forge/templates/${id}`, { method:'PATCH', body:JSON.stringify({status:'published'}) });
-      _showToast('Szablon opublikowany.', 'success');
+      const token = localStorage.getItem(_ADMIN_TOKEN_KEY);
+      const r = await fetch(_buildUrl('/api/admin/forge/templates/' + id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        body: JSON.stringify({ status }),
+      });
+      if (r.status === 422) {
+        const det = (await r.json().catch(() => ({}))).detail || {};
+        const parts = [];
+        if ((det.missing_npcs || []).length) parts.push('Brak NPC: ' + det.missing_npcs.join(', '));
+        if ((det.missing_beats || []).length) parts.push('Brak beatów: ' + det.missing_beats.join(', '));
+        _showToast((det.message || 'Nie można zmienić statusu') + (parts.length ? ' — ' + parts.join(' · ') : ''), 'error', 6000);
+        return;
+      }
+      if (!r.ok) { _showToast('Błąd (HTTP ' + r.status + ')', 'error'); return; }
+      const MSG = { review: 'Wysłano do recenzji.', published: 'Szablon opublikowany.', draft: 'Cofnięto do szkicu.' };
+      _showToast(MSG[status] || 'Status zmieniony.', 'success');
       await _loadForgeTemplates();
-    } catch(e) { _showToast(e.message||'Błąd.','error'); }
+    } catch(e) { _showToast(e.message || 'Błąd.', 'error'); }
+  }
+
+  async function forgePublishTemplate(id) {
+    return forgeSetTemplateStatus(id, 'published');
   }
 
   async function forgeAllocateHex(id) {
@@ -5471,11 +5496,7 @@
   }
 
   async function forgeUnpublishTemplate(id) {
-    try {
-      await apiFetch(`/api/admin/forge/templates/${id}`, { method:'PATCH', body:JSON.stringify({status:'draft'}) });
-      _showToast('Szablon wycofany.', 'success');
-      await _loadForgeTemplates();
-    } catch(e) { _showToast(e.message||'Błąd.','error'); }
+    return forgeSetTemplateStatus(id, 'draft');
   }
 
   let _forgePlanIdeaId = null;   // set when creating template from idea
@@ -5551,10 +5572,7 @@
       if (document.getElementById('tpl-required-npcs')) document.getElementById('tpl-required-npcs').value = (d.required_npc_keys || []).join(', ');
       if (document.getElementById('tpl-required-beats')) document.getElementById('tpl-required-beats').value = (d.required_beats || []).join(', ');
       if (document.getElementById('tpl-player-visible')) document.getElementById('tpl-player-visible').checked = (d.player_visible ?? 1) ? true : false;
-      const statusBadge = document.getElementById('tpl-status-badge');
-      if (statusBadge) { statusBadge.textContent = d.status; statusBadge.style.color = d.status === 'published' ? 'var(--green)' : 'var(--t3)'; }
-      const publishBtn = document.getElementById('tpl-publish-btn');
-      if (publishBtn) publishBtn.textContent = d.status === 'published' ? '↩ Wycofaj' : '✓ Opublikuj';
+      _renderTplWorkflow(d.status);
 
       // Wire editor tabs
       document.getElementById('tpl-editor-tabs')?.querySelectorAll('.stab[data-tpltab]').forEach(btn => {
@@ -6477,11 +6495,30 @@
     } catch(e) { _showToast(e.message || 'Błąd zapisu.', 'error'); }
   }
 
-  async function _toggleTemplatePublish() {
+  // E12 (#427) — render the 3-state workflow buttons for the current status.
+  function _renderTplWorkflow(status) {
+    const badge = document.getElementById('tpl-status-badge');
+    const LABELS = { draft: 'Szkic', review: 'W recenzji', published: 'Opublikowany' };
+    const COLORS = { draft: 'var(--t3)', review: 'var(--amber, #f59e0b)', published: 'var(--green)' };
+    if (badge) { badge.textContent = LABELS[status] || status; badge.style.color = COLORS[status] || 'var(--t3)'; }
+    const fwd = document.getElementById('tpl-publish-btn');
+    const rev = document.getElementById('tpl-revert-btn');
+    // Forward button: draft → Wyślij do recenzji; review → Opublikuj; published → (none, use revert)
+    if (fwd) {
+      if (status === 'draft') { fwd.textContent = '→ Do recenzji'; fwd.style.display = ''; }
+      else if (status === 'review') { fwd.textContent = '✓ Opublikuj'; fwd.style.display = ''; }
+      else { fwd.style.display = 'none'; }
+    }
+    // Revert button: review → Cofnij do szkicu; published → Wycofaj do szkicu
+    if (rev) {
+      if (status === 'review' || status === 'published') { rev.textContent = '↩ Cofnij do szkicu'; rev.style.display = ''; }
+      else { rev.style.display = 'none'; }
+    }
+  }
+
+  async function _patchTplStatus(newStatus, okMsg) {
     if (!_tplEditorData) return;
-    const newStatus = _tplEditorData.status === 'published' ? 'draft' : 'published';
-    // E10 (#425) — publishing can be rejected (422) with a list of missing
-    // required NPCs/beats. Use a raw fetch so we can read that structured detail.
+    // E10/E12 — publish can be rejected (422) with a structured detail; raw fetch reads it.
     try {
       const token = localStorage.getItem(_ADMIN_TOKEN_KEY);
       const r = await fetch(_buildUrl('/api/admin/forge/templates/' + _tplEditorData.id), {
@@ -6495,17 +6532,26 @@
         const parts = [];
         if ((det.missing_npcs || []).length) parts.push('Brak NPC: ' + det.missing_npcs.join(', '));
         if ((det.missing_beats || []).length) parts.push('Brak beatów: ' + det.missing_beats.join(', '));
-        _showToast('Nie można opublikować — ' + (parts.join(' · ') || 'brakuje wymaganych elementów'), 'error', 6000);
+        _showToast((det.message || 'Nie można zmienić statusu') + (parts.length ? ' — ' + parts.join(' · ') : ''), 'error', 6000);
         return;
       }
-      if (!r.ok) { _showToast('Błąd publikacji (HTTP ' + r.status + ')', 'error'); return; }
+      if (!r.ok) { _showToast('Błąd zmiany statusu (HTTP ' + r.status + ')', 'error'); return; }
       _tplEditorData.status = newStatus;
-      const badge = document.getElementById('tpl-status-badge');
-      if (badge) { badge.textContent = newStatus; badge.style.color = newStatus==='published'?'var(--green)':'var(--t3)'; }
-      const btn = document.getElementById('tpl-publish-btn');
-      if (btn) btn.textContent = newStatus==='published'?'↩ Wycofaj':'✓ Opublikuj';
-      _showToast(newStatus==='published'?'Szablon opublikowany.':'Szablon wycofany.','success');
-    } catch(e) { _showToast(e.message,'error'); }
+      _renderTplWorkflow(newStatus);
+      _showToast(okMsg, 'success');
+    } catch(e) { _showToast(e.message, 'error'); }
+  }
+
+  // Forward transition: draft → review → published.
+  async function _toggleTemplatePublish() {
+    if (!_tplEditorData) return;
+    if (_tplEditorData.status === 'draft') return _patchTplStatus('review', 'Szablon wysłany do recenzji.');
+    if (_tplEditorData.status === 'review') return _patchTplStatus('published', 'Szablon opublikowany.');
+  }
+
+  // Revert: review/published → draft.
+  async function _revertTemplate() {
+    return _patchTplStatus('draft', 'Szablon cofnięty do szkicu.');
   }
 
   let _forgePlanTemplateId = null;

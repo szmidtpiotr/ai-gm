@@ -343,6 +343,12 @@ async def lifespan(app: FastAPI):
     if os.getenv("AIGM_E2E_LITE") != "1":
         run_admin_migrations()
         hydrate_runtime_from_stored_preset()
+        # E13 (#428) — ensure the generic encounter pool exists (idempotent).
+        try:
+            from app.services.encounter_seed_service import seed_generic_encounters
+            seed_generic_encounters()
+        except Exception:
+            pass
     yield
     # Shutdown (nothing needed)
 

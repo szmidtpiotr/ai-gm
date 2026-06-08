@@ -179,7 +179,8 @@ def maybe_inject_encounter(
                 "SELECT id, draft_data FROM adventure_hooks WHERE draft_data LIKE '%\"encounter\"%' AND status IN ('approved','promoted') ORDER BY id",
             ).fetchall()
 
-        # 4. Filter by trigger type and biome
+        # 4. Filter by trigger type, biome and player level (E13/E14 #428/#429)
+        hero_level = _hero_level_for_campaign(conn, campaign_id)
         candidates = []
         for row in rows:
             try:
@@ -187,11 +188,7 @@ def maybe_inject_encounter(
                 enc = dd.get("encounter")
                 if not enc:
                     continue
-                enc_triggers = enc.get("trigger_types") or ["hex_enter"]
-                if trigger not in enc_triggers:
-                    continue
-                enc_biomes = enc.get("biomes") or []
-                if enc_biomes and hex_type and hex_type not in enc_biomes:
+                if not encounter_matches(enc, trigger=trigger, hex_type=hex_type, hero_level=hero_level):
                     continue
                 prob = float(enc.get("trigger_probability") or 0.25)
                 candidates.append((prob, enc, row["id"]))
@@ -258,6 +255,32 @@ def maybe_inject_encounter(
     except Exception as exc:
         logger.warning("maybe_inject_encounter_error", error=str(exc), campaign_id=campaign_id)
         return False
+
+
+def encounter_matches(enc: dict, *, trigger: str, hex_type: str | None, hero_level: int) -> bool:
+    """E13/E14 (#428/#429) — does an encounter qualify for the current context?
+
+    Gates: trigger type, biome (vs hex_type) and player level band
+    (level_min/level_max). An encounter with no level bounds fits any level;
+    one with no biomes fits any biome.
+    """
+    if not isinstance(enc, dict):
+        return False
+    triggers = enc.get("trigger_types") or ["hex_enter"]
+    if trigger not in triggers:
+        return False
+    biomes = enc.get("biomes") or []
+    if biomes and hex_type and hex_type not in biomes:
+        return False
+    # E14 — level scaling: skip too-hard (below min) and too-easy (above max).
+    lvl = int(hero_level or 1)
+    lmin = enc.get("level_min")
+    if lmin is not None and lvl < int(lmin):
+        return False
+    lmax = enc.get("level_max")
+    if lmax is not None and int(lmax) > 0 and lvl > int(lmax):
+        return False
+    return True
 
 
 def is_encounter_blocked_by_location(conn: sqlite3.Connection, session_flags: dict) -> bool:
