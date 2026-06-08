@@ -155,7 +155,7 @@ Modularny `admin/` musi pokryć wszystkie zdolności admina aż do D7:
 |---|---|---|
 | FADM-P0 bootstrap (skorupa + shared utils) | [#402](https://github.com/szmidtpiotr/ai-gm/issues/402) | ✅ 2026-06-08 |
 | FADM-P1 overview | [#403](https://github.com/szmidtpiotr/ai-gm/issues/403) | ✅ 2026-06-08 |
-| FADM-P2 mechanics | [#404](https://github.com/szmidtpiotr/ai-gm/issues/404) | ❌ |
+| FADM-P2 mechanics | [#404](https://github.com/szmidtpiotr/ai-gm/issues/404) | ✅ 2026-06-08 |
 | FADM-P3 content (+D5) | [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) | ❌ |
 | FADM-P4 world (+D7) | [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) | ❌ |
 | FADM-P5 map | [#407](https://github.com/szmidtpiotr/ai-gm/issues/407) | ❌ |
@@ -189,6 +189,16 @@ Skorupa `frontend/admin/` żyje: `index.html` (router hash + sidebar 14 sekcji m
 **Anty-grób:** overview usunięte z monolitu (−364 linie: sekcja HTML + wszystkie loadery analityki + handler zakładek + wpisy dispatch/hash). admin3 `/admin3/#overview` → **redirect do `/admin/#overview`**, domyślna sekcja admin3 = `players`, 13 pozostałych sekcji nietknięte (smoke 16/16). Incydentalnie utwardzono współdzielony dispatch `_load` (`Promise.resolve(fn())` — pre-existing crash mechanics przy void-arrow loaderze).
 
 **Testy:** `issue_403_overview.spec.js` (struktura + przełączanie sub-tabów + dane z API + zero błędów JS), `admin3_smoke.spec.js` zaktualizowany (overview→redirect, default players). Wszystko GREEN.
+
+### FADM-P2 — port sekcji mechanics ✅ 2026-06-08
+
+`sections/mechanics.js` (`init(panel)`) — port 1:1 z monolitu: encounter config (interwał/dwell, `/api/admin/world/encounter-config`) + 5 zakładek stab: Statystyki (`/api/admin/stats`), Umiejętności (`/api/admin/skills`, CRUD modal), Poziomy DC (`/api/admin/dc`, inline PATCH), Kondycje (`/api/admin/conditions`, CRUD modal), Archetypy (`/api/admin/archetypes`, inline PATCH). Backend netknięty.
+
+**Gotcha:** `mechPatchEdit` jest SHARED — używana też przez Enemies (world) i Hex Terrain (map) → funkcja POZOSTAŁA w monolicie. Przy portowaniu world/map — przenieść do `shared/` lub zduplikować w modułach.
+
+**Anty-grób:** mechanics usunięte z monolitu (−384 linie: sekcja HTML + _mechLoaded + _loadStats/Skills/DC/Conditions/Archetypes + loadEncounterConfig/saveEncounterConfig + _loadMechanicsTab + event handler + openAddSkillModal/EditSkillModal + _openSkillForm + openAddConditionModal/EditConditionModal + _openConditionForm + deleteSkill/deleteCondition + wpis dispatch + subtab hash). `mechPatchEdit` POZOSTAJE. admin3 `/admin3/#mechanics` → **redirect do `/admin/#mechanics`**. Smoke spec: mechanics usunięte z SECTIONS, dodany test redirect.
+
+**Testy:** `issue_404_mechanics.spec.js` (struktura 5 tabów + encounter config + stats 8s load + skills tab przełączenie + admin3 alive). `admin3_smoke.spec.js` zaktualizowany. 8/8 GREEN.
 
 ---
 
