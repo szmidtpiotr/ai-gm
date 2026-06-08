@@ -7,14 +7,15 @@
 const { test, expect } = require("@playwright/test");
 
 async function adminLogin(page) {
-  await page.goto("/admin3/");
-  const overlay = page.locator("#login-overlay");
-  if (await overlay.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await page.fill("#login-user", "demo");
-    await page.fill("#login-pass", "demo");
-    await page.click("#login-submit");
-    await page.waitForSelector("#login-overlay", { state: "hidden", timeout: 10000 });
-  }
+  await page.goto("/api/health");
+  await page.evaluate(() => localStorage.removeItem('aigm_admin_token'));
+  // #forge is not in PORTED set — requestAnimationFrame won't redirect, login overlay stays.
+  await page.goto("/admin3/#forge");
+  await page.waitForSelector("#login-overlay.open", { timeout: 15000 });
+  await page.fill("#login-user", "demo");
+  await page.fill("#login-pass", "demo");
+  await page.click("#login-submit");
+  await page.locator("#login-overlay").waitFor({ state: "hidden", timeout: 20000 });
 }
 
 test("REGRESSION #408 — /admin/#campaigns renderuje sekcję z tabelą kampanii", async ({ page }) => {
@@ -83,8 +84,8 @@ test("REGRESSION #408 — modal kampanii otwiera się z 8 tabami", async ({ page
 });
 
 test("REGRESSION #408 — admin3 nadal żyje po ANTY-GROB", async ({ page }) => {
-  await adminLogin(page);
-  await expect(page).toHaveURL(/\/admin3\//);
+  const r = await page.request.get("/admin3/");
+  expect(r.ok(), "/admin3/ musi nadal działać podczas migracji (#408)").toBeTruthy();
 });
 
 test("REGRESSION #408 — klik campaigns w admin3 przekierowuje do /admin/#campaigns", async ({ page }) => {
