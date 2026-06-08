@@ -1293,7 +1293,7 @@ async function _openCampaignModesHub() {
     const routes = {
         nowa: () => handleNewCampaignWithHero(),
         loch: () => (typeof openDungeonPicker === 'function' ? openDungeonPicker() : showToast('Loch chwilowo niedostępny', 'info')),
-        gotowa: () => showToast('Gotowe kampanie — wybór szablonu pojawi się tutaj', 'info', 3000),
+        gotowa: () => _openReadyCampaignPicker(),
         loch_kafelki: () => showToast('Loch z kafelkami — wkrótce w tym miejscu', 'info', 3000),
         multiplayer: () => (typeof openMultiplayerLobby === 'function' ? openMultiplayerLobby() : showToast('Multiplayer — lobby pojawi się tutaj', 'info', 3000)),
     };
@@ -1319,6 +1319,108 @@ async function _openCampaignModesHub() {
         const k = b.dataset.mode; overlay.remove(); (routes[k] || (() => {}))();
     }));
     document.body.appendChild(overlay);
+}
+
+// E8 (#423) — player picker for ready (pre-built) campaigns. Cards show title,
+// description and difficulty; a difficulty filter narrows the list; clicking a
+// card launches the campaign from that template (copies the GM plan).
+const _DIFF_LABELS = { 1: 'Łatwa', 2: 'Średnia', 3: 'Trudna', 4: 'Bardzo trudna', 5: 'Legendarna' };
+
+async function _openReadyCampaignPicker() {
+    if (!currentHero?.id) { showToast('Najpierw wybierz bohatera.', 'info', 3000); return; }
+    document.getElementById('ready-campaign-picker')?.remove();
+
+    let templates = [];
+    try {
+        const d = await apiRequest('GET', '/campaign-templates');
+        templates = d.items || [];
+    } catch (e) {
+        showToast('Nie udało się pobrać gotowych kampanii.', 'error', 3000);
+        return;
+    }
+    if (!templates.length) {
+        showToast('Brak opublikowanych gotowych kampanii.', 'info', 3000);
+        return;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'ready-campaign-picker';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9998;padding:16px';
+
+    const diffs = [...new Set(templates.map(t => t.difficulty_rating || 2))].sort();
+    const filterBtns = `<button data-diff="all" class="rcp-filter rcp-filter--active" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(245,158,11,.3);background:#1a1a24;color:#f5deb3;cursor:pointer;font-size:.74rem">Wszystkie</button>` +
+        diffs.map(dv => `<button data-diff="${dv}" class="rcp-filter" style="padding:5px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:#0e0e16;color:#aaa;cursor:pointer;font-size:.74rem">${'★'.repeat(dv)} ${escapeHtml(_DIFF_LABELS[dv] || dv)}</button>`).join('');
+
+    overlay.innerHTML = `<div style="background:#14141c;border:1px solid rgba(245,158,11,.25);border-radius:12px;max-width:560px;width:100%;padding:18px;display:flex;flex-direction:column;gap:12px;max-height:88vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:700;color:#f5deb3;font-size:1.05rem">Wybierz gotową kampanię</div><button id="rcp-close" style="background:none;border:none;color:#999;font-size:1.2rem;cursor:pointer">✕</button></div>
+        <div id="rcp-filters" style="display:flex;flex-wrap:wrap;gap:6px">${filterBtns}</div>
+        <div id="rcp-list" style="display:flex;flex-direction:column;gap:10px"></div>
+      </div>`;
+
+    const listEl = overlay.querySelector('#rcp-list');
+    const renderList = (filter) => {
+        const shown = filter === 'all' ? templates : templates.filter(t => String(t.difficulty_rating || 2) === String(filter));
+        listEl.innerHTML = shown.map(t => {
+            const diff = t.difficulty_rating || 2;
+            const stars = '★'.repeat(diff) + '☆'.repeat(Math.max(0, 5 - diff));
+            const plays = t.play_count ? ` · ${t.play_count}× zagrane` : '';
+            return `<button data-tpl="${t.id}" style="text-align:left;background:#0e0e16;border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:12px 14px;cursor:pointer;width:100%">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+                    <div style="font-weight:600;color:#eee">${escapeHtml(t.title || 'Kampania')}</div>
+                    <div style="font-size:.74rem;color:#f5b342;white-space:nowrap" title="${escapeHtml(_DIFF_LABELS[diff] || '')}">${stars}</div>
+                </div>
+                <div style="font-size:.76rem;color:#9aa;margin-top:4px">${escapeHtml(t.description || 'Brak opisu.')}</div>
+                <div style="font-size:.7rem;color:#778;margin-top:4px">${escapeHtml(t.atmosphere || '')}${plays}</div>
+              </button>`;
+        }).join('') || '<div style="color:#778;font-size:.8rem;text-align:center;padding:12px">Brak kampanii o tej trudności.</div>';
+        listEl.querySelectorAll('[data-tpl]').forEach(b => b.addEventListener('click', () => {
+            overlay.remove();
+            _launchReadyCampaign(Number(b.dataset.tpl), templates.find(t => String(t.id) === b.dataset.tpl));
+        }));
+    };
+    renderList('all');
+
+    overlay.querySelectorAll('.rcp-filter').forEach(b => b.addEventListener('click', () => {
+        overlay.querySelectorAll('.rcp-filter').forEach(x => { x.style.background = '#0e0e16'; x.style.color = '#aaa'; x.style.borderColor = 'rgba(255,255,255,.12)'; });
+        b.style.background = '#1a1a24'; b.style.color = '#f5deb3'; b.style.borderColor = 'rgba(245,158,11,.3)';
+        renderList(b.dataset.diff);
+    }));
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#rcp-close').addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
+}
+
+async function _launchReadyCampaign(templateId, tpl) {
+    if (!currentHero || !currentUser?.id) return;
+    const loadingToast = showToast('Uruchamiam gotową kampanię…', 'info', 0);
+    try {
+        const title = tpl?.title || `Przygoda ${currentHero.name || 'Bohatera'}`;
+        const campaign = await apiRequest('POST', '/campaigns', {
+            title,
+            system_id: 'fantasy',
+            model_id: 'default',
+            owner_user_id: currentUser.id,
+            language: 'pl',
+            mode: 'pre_built',
+            status: 'active',
+            template_id: templateId,
+        });
+        currentCampaignId = campaign.id;
+        currentCampaign = campaign;
+        await apiRequest('POST', `/characters/${currentHero.id}/assign-campaign`, {
+            campaign_id: campaign.id,
+            user_id: currentUser.id,
+        });
+        const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
+        currentHero = heroResp.character || heroResp;
+        characterData = currentHero;
+        loadingToast?.remove?.();
+        showToast(`Kampania "${title}" gotowa! Wkraczasz do gry…`, 'success', 3000);
+        await enterGame(campaign);
+    } catch (err) {
+        loadingToast?.remove?.();
+        showToast(err.message || 'Nie udało się uruchomić kampanii.', 'error', 3000);
+    }
 }
 
 async function handleNewCampaignWithHero() {

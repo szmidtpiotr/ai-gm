@@ -133,6 +133,8 @@ class CampaignCreateRequest(BaseModel):
     language: str = DEFAULT_CAMPAIGN_LANGUAGE
     mode: str = "solo"
     status: str = "active"
+    # E8 (#423) — launch a ready campaign from a published template.
+    template_id: int | None = None
 
 
 class GmPlanPatchRequest(BaseModel):
@@ -501,10 +503,23 @@ def create_campaign(req: CampaignCreateRequest):
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
+    # E8 (#423) — when launching from a template, copy its GM plan into the new
+    # campaign and bump the template play_count.
+    tpl_plan = "{}"
+    if req.template_id is not None:
+        tpl = conn.execute(
+            "SELECT gm_plan_json FROM campaign_templates WHERE id = ? AND status = 'published'",
+            (req.template_id,),
+        ).fetchone()
+        if not tpl:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Published template not found")
+        tpl_plan = tpl["gm_plan_json"] or "{}"
+
     cur.execute(
         """
-        INSERT INTO campaigns (title, system_id, model_id, owner_user_id, language, mode, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO campaigns (title, system_id, model_id, owner_user_id, language, mode, status, gm_plan_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             req.title,
@@ -514,11 +529,19 @@ def create_campaign(req: CampaignCreateRequest):
             req.language,
             req.mode,
             req.status,
+            tpl_plan,
         ),
     )
     conn.commit()
 
     campaign_id = cur.lastrowid
+
+    if req.template_id is not None:
+        conn.execute(
+            "UPDATE campaign_templates SET play_count = play_count + 1 WHERE id = ?",
+            (req.template_id,),
+        )
+        conn.commit()
 
     row = conn.execute(
         """
