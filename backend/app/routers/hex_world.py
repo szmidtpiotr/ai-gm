@@ -85,7 +85,7 @@ def get_world_map(authorization: str | None = Header(default=None)):
     conn = _get_db()
     try:
         hexes = [dict(r) for r in conn.execute(
-            "SELECT * FROM world_hexes WHERE is_active = 1 ORDER BY q, r"
+            "SELECT * FROM world_hexes WHERE is_active = 1 AND parent_hex_id IS NULL ORDER BY q, r"
         ).fetchall()]
         for h in hexes:
             try:
@@ -123,7 +123,7 @@ def create_hex(body: HexCreate, authorization: str | None = Header(default=None)
     conn = _get_db()
     try:
         existing = conn.execute(
-            "SELECT id FROM world_hexes WHERE q = ? AND r = ?", (body.q, body.r)
+            "SELECT id FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL", (body.q, body.r)
         ).fetchone()
         if existing:
             raise HTTPException(status_code=409, detail=f"Hex ({body.q},{body.r}) already exists")
@@ -496,6 +496,230 @@ def patch_terrain_config(
         if not row:
             raise HTTPException(status_code=404, detail="Terrain type not found")
         return dict(row)
+    finally:
+        conn.close()
+
+
+# ── Submap endpoints ──────────────────────────────────────────────────────────
+
+@router.get("/hexes/submappable")
+def get_submappable_hexes(authorization: str | None = Header(default=None)):
+    """World hexes whose terrain type has has_submap=1, with submap_exists flag."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        rows = conn.execute(
+            """SELECT wh.id, wh.q, wh.r, wh.hex_type, wh.label,
+                      htc.label AS type_label, htc.map_icon, htc.map_color,
+                      (SELECT COUNT(*) FROM world_hexes sh WHERE sh.parent_hex_id = wh.id) > 0 AS submap_exists
+               FROM world_hexes wh
+               JOIN hex_type_config htc ON htc.hex_type = wh.hex_type
+               WHERE htc.has_submap = 1 AND wh.parent_hex_id IS NULL AND wh.is_active = 1
+               ORDER BY wh.q, wh.r"""
+        ).fetchall()
+        return {"hexes": [dict(r) for r in rows]}
+    finally:
+        conn.close()
+
+
+class LocalGenRequest(BaseModel):
+    parent_q: int
+    parent_r: int
+    seed: int = 0
+    radius: int = 3
+
+
+@router.post("/generate-local")
+def generate_local(body: LocalGenRequest, authorization: str | None = Header(default=None)):
+    """Generate a local sub-hex map for a world hex using Voronoi clustering."""
+    _require_admin(authorization)
+    if body.radius > 6:
+        raise HTTPException(status_code=400, detail="Max local radius: 6")
+    conn = _get_db()
+    try:
+        parent = conn.execute(
+            "SELECT id, hex_type FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
+            (body.parent_q, body.parent_r),
+        ).fetchone()
+        if not parent:
+            raise HTTPException(status_code=404, detail="Parent hex not found")
+
+        terrain_rows = conn.execute(
+            "SELECT hex_type, spawn_weight, encounter_base_chance FROM hex_type_config WHERE is_active = 1 AND spawn_weight > 0"
+        ).fetchall()
+        if not terrain_rows:
+            raise HTTPException(status_code=400, detail="No terrain types configured")
+
+        types = [r["hex_type"] for r in terrain_rows]
+        weights = [r["spawn_weight"] for r in terrain_rows]
+
+        rng = random.Random(body.seed or (body.parent_q * 1000 + body.parent_r))
+
+        all_hexes = [
+            (q, r)
+            for q in range(-body.radius, body.radius + 1)
+            for r in range(-body.radius, body.radius + 1)
+            if abs(q) + abs(r) + abs(q + r) <= 2 * body.radius
+        ]
+
+        # Fewer seeds for small local area, tighter chaos
+        n_seeds = max(3, len(all_hexes) // 7)
+        biome_map = _generate_biome_map(all_hexes, types, weights, rng, n_seeds=n_seeds, chaos=1.5)
+
+        # Clear existing sub-hexes
+        conn.execute("DELETE FROM world_hexes WHERE parent_hex_id = ?", (parent["id"],))
+
+        hexes_created = 0
+        for (q, r), hex_type in biome_map.items():
+            conn.execute(
+                """INSERT INTO world_hexes (q, r, hex_type, encounter_chance, encounter_pool,
+                          is_active, map_level, parent_hex_id)
+                   VALUES (?, ?, ?, ?, '[]', 1, 1, ?)""",
+                (q, r, hex_type, 0.15, parent["id"]),
+            )
+            hexes_created += 1
+
+        conn.commit()
+        return {"hexes_created": hexes_created, "parent_q": body.parent_q, "parent_r": body.parent_r}
+    finally:
+        conn.close()
+
+
+@router.get("/local-map/{q}/{r}")
+def get_local_map(q: int, r: int, authorization: str | None = Header(default=None)):
+    """Get sub-hexes for the local map of a world hex."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        parent = conn.execute(
+            "SELECT * FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
+            (q, r),
+        ).fetchone()
+        if not parent:
+            return {"ok": False, "error": "Parent hex not found"}
+
+        sub_hexes = conn.execute(
+            "SELECT * FROM world_hexes WHERE parent_hex_id = ? ORDER BY q, r",
+            (parent["id"],),
+        ).fetchall()
+        if not sub_hexes:
+            return {"ok": False, "error": "Brak podmopy — użyj 'Generuj' aby utworzyć."}
+
+        return {
+            "ok": True,
+            "parent": dict(parent),
+            "hexes": [dict(h) for h in sub_hexes],
+        }
+    finally:
+        conn.close()
+
+
+@router.patch("/local-hexes/{q}/{r}/{lq}/{lr}")
+def patch_local_hex(
+    q: int, r: int, lq: int, lr: int,
+    body: dict[str, Any] = Body(...),
+    authorization: str | None = Header(default=None),
+):
+    """Paint a sub-hex (update its hex_type or label)."""
+    _require_admin(authorization)
+    allowed = {"hex_type", "label", "atmosphere", "encounter_chance"}
+    updates = {k: v for k, v in body.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields")
+    conn = _get_db()
+    try:
+        parent = conn.execute(
+            "SELECT id FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
+            (q, r),
+        ).fetchone()
+        if not parent:
+            raise HTTPException(status_code=404, detail="Parent hex not found")
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        cur = conn.execute(
+            f"UPDATE world_hexes SET {set_clause} WHERE parent_hex_id = ? AND q = ? AND r = ?",
+            (*updates.values(), parent["id"], lq, lr),
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Sub-hex not found")
+        row = conn.execute(
+            "SELECT * FROM world_hexes WHERE parent_hex_id = ? AND q = ? AND r = ?",
+            (parent["id"], lq, lr),
+        ).fetchone()
+        return dict(row)
+    finally:
+        conn.close()
+
+
+@router.get("/hex-location/{q}/{r}/{lq}/{lr}")
+def get_hex_location(
+    q: int, r: int, lq: int, lr: int,
+    authorization: str | None = Header(default=None),
+):
+    """Location info for a sub-hex: specific (assigned to this sub-hex) + generic (parent's)."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        parent = conn.execute(
+            "SELECT id, location_key FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
+            (q, r),
+        ).fetchone()
+        if not parent:
+            raise HTTPException(status_code=404, detail="Parent hex not found")
+
+        sub = conn.execute(
+            "SELECT id, location_key FROM world_hexes WHERE parent_hex_id = ? AND q = ? AND r = ?",
+            (parent["id"], lq, lr),
+        ).fetchone()
+        if not sub:
+            raise HTTPException(status_code=404, detail="Sub-hex not found")
+
+        def _loc(key):
+            if not key:
+                return None
+            row = conn.execute(
+                "SELECT key, label, description, location_type FROM game_locations WHERE key = ?", (key,)
+            ).fetchone()
+            return dict(row) if row else None
+
+        specific = _loc(sub["location_key"])
+        generic = _loc(parent["location_key"])
+
+        candidates_rows = conn.execute(
+            "SELECT key, label, location_type FROM game_locations WHERE is_active = 1 ORDER BY label"
+        ).fetchall()
+        candidates = [dict(r) for r in candidates_rows]
+
+        return {"specific": specific, "generic": generic, "candidates": candidates}
+    finally:
+        conn.close()
+
+
+@router.patch("/assign-hex-location/{q}/{r}/{lq}/{lr}")
+def assign_hex_location(
+    q: int, r: int, lq: int, lr: int,
+    body: dict[str, Any] = Body(...),
+    authorization: str | None = Header(default=None),
+):
+    """Assign a location to a sub-hex (sets its location_key)."""
+    _require_admin(authorization)
+    location_key = body.get("location_key")
+    conn = _get_db()
+    try:
+        parent = conn.execute(
+            "SELECT id FROM world_hexes WHERE q = ? AND r = ? AND parent_hex_id IS NULL",
+            (q, r),
+        ).fetchone()
+        if not parent:
+            raise HTTPException(status_code=404, detail="Parent hex not found")
+        cur = conn.execute(
+            "UPDATE world_hexes SET location_key = ? WHERE parent_hex_id = ? AND q = ? AND r = ?",
+            (location_key, parent["id"], lq, lr),
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Sub-hex not found")
+        return {"ok": True, "location_key": location_key}
     finally:
         conn.close()
 
