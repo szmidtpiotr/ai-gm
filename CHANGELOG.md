@@ -4,6 +4,23 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.2.4 — 2026-06-08 — Admin panel modularny (FADM) + onboarding theme + D7–D10
+
+### Added
+- FADM (cała faza): nowy modularny panel admin `/admin/` — port wszystkich sekcji z monolitu admin3 (P0–P12): overview, mechanics, content, world, map, campaigns, dungeons, players, tools, system, invites, bug-reports, push, knowledge
+- D10 #385: onboarding — wybór motywu wizualnego (dark_fantasy / classic), zapis per user w `game_mode_flags`, stosowany przy każdym logowaniu
+- D9 #384: hub kampanii — 5 trybów z flagami dostępności (Nowa / Gotowa / Loch / Loch-kafelki / Multiplayer)
+- D8 #383: ekran profilu gracza — edycja email, lista znajomych, ustawienia LLM Connect
+- D7 #382: encountery generyczne, gate `safe_for_rest`, dwell decay, interwał config w admin
+- FAB bug-report dla testerów w player UI (#405)
+
+### Fixed
+- Naracja skill_test injektuje lokację i last-turn context (#1214)
+- Mapa świata generuje klastry Voronoi zamiast random hex-po-hex (#407)
+- Bugged porty FADM — invites/email auth, bug-reports/push endpoints, Playwright scroll
+
+---
+
 ## v1.2.3 — 2026-06-07 — Harness testów C1–C19 + panel Playwright w admin3
 
 ### Added
