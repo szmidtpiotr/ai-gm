@@ -1252,14 +1252,57 @@ async function selectCampaign(campaign) {
 
 function showNewCampaignScreen() {
     if (currentHero && currentHero.id) {
-        // Hero already selected — create campaign immediately
-        handleNewCampaignWithHero();
+        // D9 (#384) — show the 5-mode hub instead of creating directly.
+        _openCampaignModesHub();
         return;
     }
     // No hero selected — send to heroes screen so the player picks one first.
     // The old new-campaign wizard (character creation) must not appear if heroes exist.
     showToast('Najpierw wybierz bohatera, aby stworzyć nową kampanię.', 'info', 3000);
     loadHeroes().then(() => showScreen('heroes'));
+}
+
+// D9 (#384) — Hub kampanii: 5 trybów z flagą dostępności (no broken states).
+async function _openCampaignModesHub() {
+    if (!currentHero?.id) {
+        showToast('Najpierw wybierz bohatera.', 'info', 3000);
+        loadHeroes().then(() => showScreen('heroes'));
+        return;
+    }
+    document.getElementById('campaign-modes-hub')?.remove();
+    let modes = [];
+    try { const d = await apiRequest('GET', '/campaign-modes'); modes = d.modes || []; }
+    catch (e) { modes = [{ key: 'nowa', label: 'Nowa kampania', description: '', available: true }]; }
+
+    const routes = {
+        nowa: () => handleNewCampaignWithHero(),
+        loch: () => (typeof openDungeonPicker === 'function' ? openDungeonPicker() : showToast('Loch chwilowo niedostępny', 'info')),
+        gotowa: () => showToast('Gotowe kampanie — wybór szablonu pojawi się tutaj', 'info', 3000),
+        loch_kafelki: () => showToast('Loch z kafelkami — wkrótce w tym miejscu', 'info', 3000),
+        multiplayer: () => (typeof openMultiplayerLobby === 'function' ? openMultiplayerLobby() : showToast('Multiplayer — lobby pojawi się tutaj', 'info', 3000)),
+    };
+
+    const overlay = document.createElement('div');
+    overlay.id = 'campaign-modes-hub';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:9998;padding:16px';
+    const cards = modes.map(m => {
+        const dis = !m.available;
+        const cnt = (m.count != null && m.count > 0) ? ` <span style="color:#888;font-size:.72rem">(${m.count})</span>` : '';
+        return `<button data-mode="${m.key}" ${dis ? 'disabled' : ''} style="text-align:left;background:${dis ? '#0a0a0f' : '#0e0e16'};border:1px solid ${dis ? 'rgba(255,255,255,.05)' : 'rgba(245,158,11,.25)'};border-radius:10px;padding:12px 14px;cursor:${dis ? 'not-allowed' : 'pointer'};opacity:${dis ? .5 : 1};width:100%">
+            <div style="font-weight:600;color:#eee">${escapeHtml(m.label)}${cnt}</div>
+            <div style="font-size:.76rem;color:#9aa;margin-top:3px">${escapeHtml(m.description || '')}${dis ? ' — niedostępne' : ''}</div>
+          </button>`;
+    }).join('');
+    overlay.innerHTML = `<div style="background:#14141c;border:1px solid rgba(245,158,11,.25);border-radius:12px;max-width:460px;width:100%;padding:18px;display:flex;flex-direction:column;gap:10px;max-height:88vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:700;color:#f5deb3;font-size:1.05rem">Wybierz tryb gry</div><button id="cmh-close" style="background:none;border:none;color:#999;font-size:1.2rem;cursor:pointer">✕</button></div>
+        ${cards}
+      </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#cmh-close').addEventListener('click', () => overlay.remove());
+    overlay.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+        const k = b.dataset.mode; overlay.remove(); (routes[k] || (() => {}))();
+    }));
+    document.body.appendChild(overlay);
 }
 
 async function handleNewCampaignWithHero() {
