@@ -2799,6 +2799,16 @@ def _ensure_auth_ux_schema(conn: sqlite3.Connection) -> None:
                 logger.warning("auth_ux_migration_warning", sql_preview=sql.strip()[:80], error=str(e))
 
 
+def _ensure_submap_schema(conn: sqlite3.Connection) -> None:
+    """Drop the legacy plain (q,r) unique index that blocks sub-hex insertion.
+    The scoped index idx_world_hexes_qr_scope already enforces uniqueness per scope."""
+    try:
+        conn.execute("DROP INDEX IF EXISTS idx_world_hexes_coords")
+        conn.commit()
+    except Exception:
+        pass
+
+
 def _ensure_game_config_services(conn: sqlite3.Connection) -> None:
     """C12: create game_config_services table if absent."""
     conn.execute("""
@@ -2887,6 +2897,7 @@ def run_admin_migrations() -> None:
         _ensure_narrative_items_schema(conn)
         _ensure_auth_ux_schema(conn)
         _ensure_game_config_services(conn)
+        _ensure_submap_schema(conn)
     finally:
         conn.close()
 
