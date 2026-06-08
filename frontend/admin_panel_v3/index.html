@@ -14230,6 +14230,16 @@
           const npcs = (j.scene_npcs||[]);
           const quests = (j.active_quests||[]);
           const conds = (j.player_conditions||[]);
+          // D6 (#381) — Narrative State (events + active seeds)
+          const ns = j.narrative_state || {};
+          const nsEvents = (ns.events||[]);
+          const nsSeeds = (ns.seeds||[]).filter(x=>(x.status||'active')==='active');
+          const nsBlock = (nsEvents.length||nsSeeds.length) ? `
+            <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;font-size:0.78rem">
+              <div style="font-weight:600;color:var(--t2);margin-bottom:4px">📖 Narrative State</div>
+              ${nsEvents.length ? `<div style="color:var(--t3);margin-bottom:2px">Zdarzenia (${nsEvents.length}):</div>${nsEvents.map(e=>`<div style="padding:1px 0">• ${_esc(e.note||e.key||'?')} <span style="color:var(--t3)">(t${e.turn??'?'})</span></div>`).join('')}` : ''}
+              ${nsSeeds.length ? `<div style="color:var(--t3);margin:4px 0 2px">Zasiane wątki (${nsSeeds.length}):</div>${nsSeeds.map(x=>`<div style="padding:1px 0">• ${_esc(x.hint||x.key||'?')}</div>`).join('')}` : ''}
+            </div>` : '';
           return `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.8rem">
               <div>
@@ -14248,7 +14258,7 @@
                 <div style="font-weight:600;color:var(--t2);margin-bottom:4px">💊 Kondycje (${conds.length})</div>
                 <div style="display:flex;flex-wrap:wrap;gap:4px">${conds.length ? conds.map(c=>`<span class="badge badge-amber">${_esc(typeof c==='string'?c:c.key||JSON.stringify(c))}</span>`).join('') : '<span style="color:var(--t3)">Brak</span>'}</div>
               </div>
-            </div>`;
+            </div>${nsBlock}`;
         };
         panel.innerHTML = `
           <div style="margin-bottom:14px">
@@ -14321,6 +14331,19 @@
                 <div><span style="color:var(--t3)">Conds:</span> ${(ws.player_conditions||[]).length ? (ws.player_conditions||[]).map(c=>`<span class="badge badge-amber">${_esc(typeof c==='string'?c:c.key||'?')}</span>`).join('') : '<span style="color:var(--t3)">—</span>'}</div>
               </div>
             </div>
+            ${(() => {
+              const ns = d.narrative_state || {};
+              const nsEvents = (ns.events||[]);
+              const nsSeeds = (ns.seeds||[]).filter(x=>(x.status||'active')==='active');
+              if (!nsEvents.length && !nsSeeds.length) return '';
+              return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:10px;margin-top:10px">
+                <div style="font-size:0.7rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">📖 Narrative State</div>
+                <div style="font-size:0.78rem">
+                  ${nsEvents.length ? `<div style="color:var(--t3);margin-bottom:2px">Zdarzenia (${nsEvents.length}):</div>${nsEvents.map(e=>`<div style="padding:1px 0">• ${_esc(e.note||e.key||'?')} <span style="color:var(--t3)">(t${e.turn??'?'})</span></div>`).join('')}` : ''}
+                  ${nsSeeds.length ? `<div style="color:var(--t3);margin:4px 0 2px">Zasiane wątki (${nsSeeds.length}):</div>${nsSeeds.map(x=>`<div style="padding:1px 0">• ${_esc(x.hint||x.key||'?')}</div>`).join('')}` : ''}
+                </div>
+              </div>`;
+            })()}
             <div style="margin-top:6px;font-size:0.7rem;color:var(--t3);text-align:right">Polling co 1s · ${new Date().toLocaleTimeString()}</div>`;
         } catch(e) {
           if (document.body.contains(panel)) panel.innerHTML = `<div style="color:var(--red);padding:8px">Błąd: ${_esc(String(e))}</div>`;

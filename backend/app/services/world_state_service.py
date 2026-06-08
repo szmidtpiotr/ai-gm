@@ -153,6 +153,18 @@ def build_snapshot(campaign_id: int) -> dict:
             (campaign_id,),
         ).fetchone()
         turn_number = turn_row["max_turn"] or 0 if turn_row else 0
+        # D6 (#381) — narrative_state lives in session_flags JSON (not a dedicated
+        # column), so read it here for the snapshot / Stan Świata / Inspector.
+        narrative_state: dict = {}
+        sf_row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if sf_row and sf_row["session_flags"]:
+            try:
+                narrative_state = (json.loads(sf_row["session_flags"]) or {}).get("narrative_state") or {}
+            except (json.JSONDecodeError, TypeError):
+                narrative_state = {}
     finally:
         conn.close()
 
@@ -164,6 +176,7 @@ def build_snapshot(campaign_id: int) -> dict:
         "active_quests": ws.get("active_quests", []),
         "player_conditions": ws.get("player_conditions", []),
         "scene_cleared": ws.get("scene_cleared", False),
+        "narrative_state": narrative_state,
     }
     return snapshot
 

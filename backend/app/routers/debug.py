@@ -722,6 +722,7 @@ def get_campaign_debug_state(
 
     # ── C1 debug ─────────────────────────────────────────────────────────────
     c1_debug: dict = {}
+    narrative_state: dict = {}  # D6 (#381) — surfaced in Inspector
     try:
         from app.services.game_engine import build_travel_hint_block
 
@@ -734,6 +735,7 @@ def get_campaign_debug_state(
             ).fetchone()
             if sf_row and sf_row["session_flags"]:
                 _sf = json.loads(sf_row["session_flags"] or "{}")
+                narrative_state = _sf.get("narrative_state") or {}
                 _stale = int(_sf.get("turns_at_location", 0))
                 _discovered = _sf.get("discovered_hexes", [])
                 _travel_hint = build_travel_hint_block(_discovered, _stale)
@@ -758,4 +760,5 @@ def get_campaign_debug_state(
         "gate_result": gate_result,
         "last_player_input": last_input,
         "c1_debug": c1_debug,
+        "narrative_state": narrative_state,
     }
