@@ -157,7 +157,7 @@ Modularny `admin/` musi pokryć wszystkie zdolności admina aż do D7:
 | FADM-P1 overview | [#403](https://github.com/szmidtpiotr/ai-gm/issues/403) | ✅ 2026-06-08 |
 | FADM-P2 mechanics | [#404](https://github.com/szmidtpiotr/ai-gm/issues/404) | ✅ 2026-06-08 |
 | FADM-P3 content (+D5) | [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) | ✅ 2026-06-08 |
-| FADM-P4 world (+D7) | [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) | ❌ |
+| FADM-P4 world (+D7) | [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) | ✅ 2026-06-08 |
 | FADM-P5 map | [#407](https://github.com/szmidtpiotr/ai-gm/issues/407) | ❌ |
 | FADM-P6 campaigns (+B6/B7/D6) | [#408](https://github.com/szmidtpiotr/ai-gm/issues/408) | ❌ |
 | FADM-P7 dungeons | [#409](https://github.com/szmidtpiotr/ai-gm/issues/409) | ❌ |
@@ -215,6 +215,18 @@ Skorupa `frontend/admin/` żyje: `index.html` (router hash + sidebar 14 sekcji m
 **Anty-grób:** content usunięte z monolitu (−1068 linii fazy 1: sekcja HTML 2297-2929 + `_contentLoaded` Set + ROW_REGISTRY entries armor/items/consumables + `_loadContentTab` + `_loadWeapons`/`_loadArmor`/`_loadItems` + `_loadConsumables` przez `deleteSpell` z pominięciem `_loadEnemiesContent`; −33 linie fazy 2: content-tabs event handler + weapons-table event handler + weapon save reload + smart-entry-saved weapons/items/consumables handlers + wpis content w `_load dispatch` + bulk delete reload + `openItemImageModal` reloadMap). admin3 `/admin3/#content` → **redirect do `/admin/#content`**. Smoke spec: content usunięte z SECTIONS, dodany test redirect.
 
 **Testy:** `issue_405_content.spec.js` (6 tabów + weapons load >0 rows + spells tab switch + admin3 alive). `admin3_smoke.spec.js` zaktualizowany. 4/4 GREEN.
+
+### FADM-P4 — port sekcji world ✅ 2026-06-08
+
+`sections/world.js` (`init(panel)`) — port 1:1 z monolitu: 4 zakładki `data-wtab` — NPC (`/api/admin/npcs`), Wrogowie (`/api/admin/enemies`), Tabele Łupów (`/api/admin/loot-tables`), Oczekujące (`/api/admin/world/pending/*`).
+
+**Przeniesione dodatkowo:** `openLootEntriesModal` — w monolicie nie istniała po P3 (content usunął ją jako `_openLootEntriesModal`). W world.js zaimplementowana ponownie z content.js source. Obrazy enemy (`openEnemyImageModal`, `eiOpenGallery`, `eiPickGallery`, `_buildEnemyImagePrompt`) i NPC (`openNpcImageModal`, `niOpenGallery`, `niPickGallery`, `_buildNpcImagePrompt`) portowane w całości.
+
+**Poprawka:** `openEnemyImageModal`/`eiPickGallery` — użyto `_loadEnemies()` zamiast `_loadEnemiesContent()` (dead function po P3). ROW_REGISTRY dla NPC z pełnym CRUD.
+
+**Anty-grób:** world usunięte z monolitu (−1206 linii: section-world HTML + world-tabs handler + ROW_REGISTRY npcs-table + `_loadWorldTab` + `_loadNPCs` + `openShopInventoryModal` + `_loadBestiaryLoot` + `_openAddLootTableModal` + `_submitAddLootTable` + `_deleteBestiaryLootTable` + `_loadBestiaryPending` + `reviewEntityBestiary` + `openPending*/savePending*` (NPC/Enemy/Item) + `_loadEnemies` + `deleteEnemy` + `openEnemyFormModal` + `saveEnemyForm` + `_worldAddAction` + wszystkie image modals enemy/NPC). admin3 `/admin3/#world` → **redirect do `/admin/#world`**. Smoke spec: world usunięte z SECTIONS, dodany test redirect.
+
+**Testy:** `issue_406_world.spec.js` (4 taby + NPC load >0 rows + enemies tab switch + admin3 alive). `admin3_smoke.spec.js` zaktualizowany. 4/4 GREEN, 16/16 smoke GREEN.
 
 ---
 
