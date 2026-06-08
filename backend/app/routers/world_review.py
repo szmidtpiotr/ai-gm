@@ -101,6 +101,45 @@ _PENDING_FETCHER = {
 }
 
 
+class EncounterConfigReq(_BaseModel):
+    n_turns_interval: int | None = None
+    dwell_settle_turns: int | None = None
+
+
+@router.get("/encounter-config")
+def get_encounter_config_ep():
+    """D7 (#382) — bieżący config encounterów (interwał n_turns, dwell)."""
+    from app.services.encounter_config_service import get_encounter_config
+    return get_encounter_config()
+
+
+@router.post("/encounter-config")
+def set_encounter_config_ep(req: EncounterConfigReq):
+    """D7 (#382) — strojenie częstotliwości encounterów z admin3."""
+    from app.services.encounter_config_service import set_encounter_config
+    try:
+        return set_encounter_config(
+            n_turns_interval=req.n_turns_interval,
+            dwell_settle_turns=req.dwell_settle_turns,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+
+
+@router.get("/encounter-templates")
+def encounter_templates(level: int = 1, location_tag: str | None = None):
+    """D7 (#382) — generyczne encountery pasujące do poziomu + terenu (deterministyczne).
+    Jeden punkt prawdy doboru template per teren/poziom dla pipeline'u spotkań."""
+    from app.services.encounter_service import match_encounter_templates
+    conn = _get_db()
+    try:
+        cands = match_encounter_templates(conn, level=level, location_tag=location_tag)
+        return {"level": level, "location_tag": location_tag,
+                "count": len(cands), "candidates": cands}
+    finally:
+        conn.close()
+
+
 @router.post("/auto-screen/{entity_type}/{key}")
 def auto_screen_one(entity_type: str, key: str, dry_run: bool = False):
     """D4 — screen a single pending record. `dry_run=1` runs L1 only (no LLM, no

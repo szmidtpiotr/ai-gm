@@ -3511,6 +3511,21 @@
           <div class="section-sub">Statystyki, umiejętności, DC, kondycje, archetypy</div>
         </div>
       </div>
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 14px">
+          <div style="font-weight:600">⚔ Encountery — częstotliwość</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:.78rem;color:var(--t3)">Interwał (spokojne tury w dziczy)</label>
+            <input id="enc-cfg-interval" type="number" min="3" max="200" class="field-input" style="width:80px">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:.78rem;color:var(--t3)">Osiedlenie (tury → spadek szansy)</label>
+            <input id="enc-cfg-dwell" type="number" min="1" max="50" class="field-input" style="width:70px">
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="saveEncounterConfig()">Zapisz</button>
+          <span id="enc-cfg-status" style="font-size:.75rem;color:var(--t3)"></span>
+        </div>
+      </div>
       <div class="card" style="overflow:visible">
         <div class="stab-bar" id="mech-stab-bar">
           <button class="stab active" data-mtab="stats">Statystyki</button>
@@ -6681,7 +6696,7 @@
   function _load(key) {
     if (_sectionLoaded.has(key)) return;
     const fn = { overview:_loadOverview, campaigns:_loadCampaigns, content:()=>_loadContentTab('weapons'),
-      world:()=>_loadWorldTab('npcs'), map:()=>_loadMapTab('builder'), mechanics:()=>_loadMechanicsTab('stats'),
+      world:()=>_loadWorldTab('npcs'), map:()=>_loadMapTab('builder'), mechanics:()=>{ _loadMechanicsTab('stats'); loadEncounterConfig(); },
       dungeons:_loadDungeons, players:_loadPlayers, forge:_loadForge,
       system:_loadSystem, invites:_loadInvites, bugreports:_loadBugReports,
       tools:_loadTools, push:_loadPush }[key];
@@ -16205,6 +16220,28 @@
 
   // ── Mechanics ────────────────────────────────────────────
   const _mechLoaded = new Set();
+
+  // D7 (#382) — globalny config częstotliwości encounterów (admin-tunable).
+  async function loadEncounterConfig() {
+    try {
+      const c = await apiFetch('/api/admin/world/encounter-config');
+      const i = document.getElementById('enc-cfg-interval'); if (i) i.value = c.n_turns_interval ?? 20;
+      const d = document.getElementById('enc-cfg-dwell'); if (d) d.value = c.dwell_settle_turns ?? 3;
+    } catch (e) { /* ignore */ }
+  }
+  async function saveEncounterConfig() {
+    const st = document.getElementById('enc-cfg-status');
+    const body = {
+      n_turns_interval: parseInt(document.getElementById('enc-cfg-interval')?.value) || 20,
+      dwell_settle_turns: parseInt(document.getElementById('enc-cfg-dwell')?.value) || 3,
+    };
+    try {
+      const r = await apiFetch('/api/admin/world/encounter-config', { method: 'POST', body: JSON.stringify(body) });
+      if (st) { st.textContent = `✓ zapisano (interwał ${r.n_turns_interval})`; st.style.color = 'var(--green)'; }
+    } catch (e) {
+      if (st) { st.textContent = '✕ ' + (e.message || 'błąd'); st.style.color = 'var(--red)'; }
+    }
+  }
 
   function _loadMechanicsTab(tab) {
     if (_mechLoaded.has(tab)) return Promise.resolve();
