@@ -2,7 +2,7 @@
 
 > **Cel tego dokumentu:** Zaprojektować jak gra POWINNA działać, naprawić fundamentalne błędy projektowe, i zdefiniować kolejność implementacji od zera.
 >
-> **Ostatnia aktualizacja:** 2026-06-05
+> **Ostatnia aktualizacja:** 2026-06-09
 >
 > ---
 >
@@ -12,7 +12,7 @@
 >
 > Kiedy pracujesz nad GitHub Issues, TDD, lub jakimkolwiek zadaniem implementacyjnym:
 >
-> 1. **Szukaj kodu zadania** w **CZĘŚĆ 7** (linia ~840) — master lista implementacyjna. **Schemat kodów:** A=Faza -1, B=Faza 0, C=Faza 1, D=Faza 2, E=Faza 3, F=Faza 4, G=Faza 5 (MP), H=Faza 6. Numery sekwencyjne w obrębie sekcji (B1, B2, ..., B7). **FAZA -1, FAZA 0 i FAZA 1 (C1–C19) ukończone — patrz sekcja WYKONANE na końcu pliku.**
+> 1. **Szukaj kodu zadania** w **CZĘŚĆ 7** (linia ~840) — master lista implementacyjna. **Schemat kodów:** A=Faza -1, B=Faza 0, C=Faza 1, D=Faza 2, E=Faza 3, F=Faza 4, G=Faza 5 (MP), H=Faza 6. Numery sekwencyjne w obrębie sekcji (B1, B2, ..., B7). **FAZA -1, FAZA 0, FAZA 1 (C1–C19) i FAZA 2 (D1–D14) ukończone; FAZA 3 w toku (E1–E14 ✅) — patrz sekcja WYKONANE na końcu pliku.**
 > 2. **Szukaj kontekstu decyzji projektowej** w sekcji tematycznej (CZĘŚĆ X = Afiksy, CZĘŚĆ AB = Walka/Rany, CZĘŚĆ AC = Multiplayer, CZĘŚĆ AF = Ekonomia, CZĘŚĆ AG = Infrastruktura, itd.).
 > 3. **Każda decyzja projektowa** ma blok `> **Zasada projektowa**` + `> **Dlaczego?**` + `> **Co odrzucono?**` — przeczytaj je zanim zaczniesz kodować.
 > 4. **GitHub Issues** powinny mieć w tytule kod zadania (`[TASK] B1 — ...`) i odwoływać się do tej sekcji w treści.
@@ -899,9 +899,9 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
-### FAZA 3 — Jakość + Treść
+### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E14 ✅ 2026-06-09, E15–E28 oczekujące)
 
-> Retencja graczy i zawartość. Wymaga działającej Fazy 1+2.
+> Retencja graczy i zawartość. Wymaga działającej Fazy 1+2. E1–E14 zaimplementowane (GitHub #416–429); E15–E28 następna iteracja.
 
 | Kod | Zadanie | Zależy od |
 |---|---|---|
@@ -1008,10 +1008,15 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | Etap | Co portować | Kiedy |
 |---|---|---|
 | A10/S2 | Nowa skorupa + shared utils | Faza -1 |
-| FADM-P1 | Sekcje używane w Fazie 0-1 (World State viewer, HP/mana, kampanie) | z Fazą 0 |
-| FADM-P2 | Sekcje używane w Fazie 2-3 (NPCe, lochy, onboarding) | z Fazą 2 |
-| FADM-P3 | Sekcje używane w Fazie 4 (afiksy, efekty, ekonomia) | z Fazą 4 |
-| FADM-DONE | Wyłączenie admin3 monolitu — tylko moduły | po Fazie 4 |
+| FADM-P0..P3 | ✅ Skorupa + overview/mechanics/content | 2026-06-08 |
+| FADM-P4..P7 | world/map/campaigns/dungeons — następna iteracja | z Fazą 2 |
+| FADM-P8 | ⏭ SKIPPED stałe — Forge zostaje w admin3 jako standalone tool | — |
+| FADM-P9..P12 | ✅ players/tools/system/drobne (invites/push/bugreports) | 2026-06-08 |
+| FADM-P13 | Port ekranu logowania admina do modularnego shella (#449) | Faza 3 |
+| FADM-P14 | Port Forge (Kuźnia) → `sections/forge.js` (#450) | po P13 |
+| FADM-P15 | Anti-grób: usuń Forge z monolitu + rewire bounce/banner (#451) | po P13+P14 |
+| FADM-P16 | Migracja testów Playwright admin3 → /admin/ (#452) | po P14 |
+| FADM-P17 | Decommission admin3 (pliki + nginx + docs) (#453) | po P13..P16 |
 
 ---
 
@@ -3391,3 +3396,77 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 **C18** — Fix Bug 3: nowe kampanie startują na istniejących hexach mapy zamiast generować nowe na obrzeżach — świat jest spójny między kampaniami.
 
 **C19** — Fix Bug 4: bohater rozpoczynający nową kampanię dostaje pełne HP (`hp_current = hp_max`) zamiast ostatniego stanu z poprzedniej rozgrywki.
+
+---
+
+### FAZA 2 — Systemy + Narracja ✅ UKOŃCZONA (D1–D14, 2026-06-08)
+
+> Pending flows, NPC pamięć, auto-screening, narracja, encountery, UI gracza, onboarding — pełna warstwa systemów nad rdzeniem.
+
+| Kod | Zadanie | GitHub |
+|---|---|---|
+| D1 | Pending flow przedmiotów (GRANT_ITEM nieznanego klucza → auto-screen → pending=true) | [#376](https://github.com/szmidtpiotr/ai-gm/issues/376) |
+| D2 | Pending flow wrogów (analogicznie do D1) | [#377](https://github.com/szmidtpiotr/ai-gm/issues/377) |
+| D3 | NPC pamięć w World State (NPC_MEMORY tag → context injection) | [#378](https://github.com/szmidtpiotr/ai-gm/issues/378) |
+| D4 | Auto-screening admin queue (tech validation + LLM scoring) | [#379](https://github.com/szmidtpiotr/ai-gm/issues/379) |
+| D5 | Item VIEW — podgląd przedmiotu w inventory (tooltip/modal) | [#380](https://github.com/szmidtpiotr/ai-gm/issues/380) |
+| D6 | Narracja: tagi, parsery, Narrative State struktura | [#381](https://github.com/szmidtpiotr/ai-gm/issues/381) |
+| D7 | Encountery generyczne + gate safe_for_rest + dwell decay + interwał config | [#382](https://github.com/szmidtpiotr/ai-gm/issues/382) |
+| D8 | Ekran profilu gracza (konto + edycja email, LLM settings) | [#383](https://github.com/szmidtpiotr/ai-gm/issues/383) |
+| D9 | Ekran kampanii — 5 trybów hub + dostępność per dane | [#384](https://github.com/szmidtpiotr/ai-gm/issues/384) |
+| D10 | Onboarding animacja + wybór motywu (nowy gracz) | [#385](https://github.com/szmidtpiotr/ai-gm/issues/385) |
+| D11 | Confirm password na rejestracji | [#386](https://github.com/szmidtpiotr/ai-gm/issues/386) |
+| D12 | Szybka nawigacja Hub → Gra (bez przeładowania) | [#387](https://github.com/szmidtpiotr/ai-gm/issues/387) |
+| D13 | Mobile layout — weryfikacja responsywności wszystkich ekranów | [#388](https://github.com/szmidtpiotr/ai-gm/issues/388) |
+| D14 | Bugfix: `update_item` nadpisywał approved=0 → approved=1 | [#399](https://github.com/szmidtpiotr/ai-gm/issues/399) |
+
+---
+
+### FAZA 3 — Jakość + Treść ⚠️ CZĘŚCIOWO UKOŃCZONA (E1–E14, 2026-06-09)
+
+> E1–E14 wdrożone. E15–E28 (lochy, onboarding karty, tutorial) — następna iteracja.
+
+| Kod | Zadanie | GitHub |
+|---|---|---|
+| E1 | Player HUD (HP/Mana, Złoto, Questy, XP bar, Czas) — aktualizacja per tura | [#416](https://github.com/szmidtpiotr/ai-gm/issues/416) |
+| E2 | Kreator bohatera — tooltips (archetyp, statystyki, umiejętności z przykładami) | [#417](https://github.com/szmidtpiotr/ai-gm/issues/417) |
+| E3 | Ekran zakończenia kampanii (podsumowanie + LLM epitafium) | [#418](https://github.com/szmidtpiotr/ai-gm/issues/418) |
+| E4 | Ekran śmierci (epitafium + statystyki + Wskrześ/Nowy bohater) | [#419](https://github.com/szmidtpiotr/ai-gm/issues/419) |
+| E5 | Zamknięcie dostępu do kampanii martwego bohatera (hero_status=dead) | [#420](https://github.com/szmidtpiotr/ai-gm/issues/420) |
+| E6 | Narracja: kompresja chapter_summary + seeds injection + ARC_ADVANCE automation | [#421](https://github.com/szmidtpiotr/ai-gm/issues/421) |
+| E7 | Rozbudowa `campaign_templates` (required_npc_keys, required_beats, player_visible) | [#422](https://github.com/szmidtpiotr/ai-gm/issues/422) |
+| E8 | Ekran wyboru gotowej kampanii dla gracza (karty, trudność, opisy) | [#423](https://github.com/szmidtpiotr/ai-gm/issues/423) |
+| E9 | Story Gravity: escalation przez N tur bez wymaganego beatu (5/10/15, L3 domyślnie OFF) | [#424](https://github.com/szmidtpiotr/ai-gm/issues/424) |
+| E10 | Forge: walidacja wymaganych NPC/lokacji przy publikacji szablonu | [#425](https://github.com/szmidtpiotr/ai-gm/issues/425) |
+| E11 | Template Narrative State pre-seeding (narrative_hooks z szablonu → World State) | [#426](https://github.com/szmidtpiotr/ai-gm/issues/426) |
+| E12 | Workflow publikacji szablonów (draft → review → published) | [#427](https://github.com/szmidtpiotr/ai-gm/issues/427) |
+| E13 | Encountery generyczne — rozbudowa puli adventure_hooks (biome/trigger/level) | [#428](https://github.com/szmidtpiotr/ai-gm/issues/428) |
+| E14 | Skalowanie encounterów per poziom gracza (level_min/level_max band gating) | [#429](https://github.com/szmidtpiotr/ai-gm/issues/429) |
+
+#### Notatki implementacyjne
+
+**E1** — Player HUD: pasek HP/Mana, złoto, lista aktywnych questów, XP bar do następnego progu, czas in-game (dzień/godzina). Endpoint `GET /api/campaigns/{id}/quests` zwraca active_quests z World State. Aktualizowany po każdej turze narracyjnej — `app.js` `_loadCreatorHelp()` + helper `_renderRunStats()`.
+
+**E2** — Kreator bohatera: tooltips na kartach archetypu (`data-tooltip` atrybut + CSS `::after` pseudo-element), mechaniczne przykłady przy każdej statystyce i umiejętności. Backend: `GET /api/mechanics/creator-help` zwraca `_CREATOR_ARCHETYPES`, `_CREATOR_STATS` (7 kanonicznych statystyk z LCK), `_CREATOR_SKILL_EXAMPLES`. Fix: LCK brakował w `game_config_stats` → `_CREATOR_STATS` jako twarda lista override.
+
+**E3/E4** — Ekrany zakończenia kampanii i śmierci: `_renderRunStats(elId, stats)` wyświetla kafelki ze statystykami runu (tury, złoto, NPC, questy). Backend: `campaign_run_stats(conn, campaign_id, character_id)` w `solo_death_service.py` zwraca te liczby. Ekran śmierci: Wskrześ (płatne) / Nowy bohater. Ekran zakończenia: LLM epitafium + statystyki.
+
+**E5** — Kampanie martwego bohatera: HTTP 410 Gone na `GET /api/campaigns/{id}` gdy `hero_status=dead`. Regression lock — mechanizm już istniał, dodano test E5 jako zabezpieczenie regresji.
+
+**E6** — Narracja: `chapter_summary` kompresja starych tur (ponad N), `seed_events` injekcja do kontekstu LLM. Tag `[ARC_ADVANCE:arc_id]` parsowany w `turns.py` (obie ścieżki: streaming + narrative) → wywołuje `advance_arc()` w `campaign_plan_runtime.py`. `_ANY_NARRATIVE_RE` rozszerzony o ARC_ADVANCE strip.
+
+**E7** — `campaign_templates`: 3 nowe kolumny przez migrację w `migrations_admin.py`: `required_npc_keys TEXT DEFAULT '[]'`, `required_beats TEXT DEFAULT '[]'`, `player_visible INTEGER DEFAULT 1`. Admin Forge UI (admin3): pola w edytorze szablonu.
+
+**E8** — Player-facing kampania gotowa: `_openReadyCampaignPicker()` + `_launchReadyCampaign()` w `app.js`. Backend: `list_published_templates()` filtruje `player_visible=1` AND `status=published`. Gracz widzi karty z trudnością/opisem, wybiera → nowa kampania startuje z pre-seeded narrative state.
+
+**E9** — Story Gravity: `story_gravity_service.py` — `compute_story_gravity(campaign_id, conn)` zlicza tury bez wymaganego beatu i zwraca `{level: 0-3, message: str}`. Config per instancja w `game_config_meta` (klucz `story_gravity_config`): progi L1/L2/L3 (5/10/15 tur), L3 domyślnie wyłączony. UI konfiguracji: modularny panel System → Narracja (`frontend/admin/sections/system.js`), sekcja `systab-narration`.
+
+**E10** — Forge validate: `validate_template_publish(template_id, conn)` w `adventure_forge.py` — sprawdza czy `required_npc_keys` istnieją w tabeli `npcs`, `required_beats` istnieją w `_plan_beat_keys(plan)`. Zwraca `{"valid": bool, "missing_npcs": [], "missing_beats": []}`. Admin UI: `_toggleTemplatePublish()` używa raw `fetch()` (nie `apiFetch`) by parsować strukturalny 422 JSON.
+
+**E11** — Template pre-seeding: `seed_narrative_state_from_plan(campaign_id, plan, conn)` w `narrative_state_service.py`. Przy starcie kampanii z szablonu: `narrative_hooks` z `gm_plan_json` → `session_flags.narrative_seeds`. LLM dostaje kontekst narracyjny od pierwszej tury.
+
+**E12** — Workflow szablonów: 3 stany (draft/review/published) — endpointy `PATCH /api/admin/forge/templates/{id}` z walidacją przejść. Nieznane statusy → 422. Admin Forge UI (admin3): `_renderTplWorkflow(status)` — badges kolorowe, przyciski akcji (Wyślij do review / Cofnij / Opublikuj / Cofnij do review), `forgeSetTemplateStatus()`.
+
+**E13** — `encounter_seed_service.py`: `GENERIC_ENCOUNTERS` lista 5 predefiniowanych spotkań (wilki/bandyci/gobliny/nieumarli/łobuzy) z biome/trigger/level tagami. `seed_generic_encounters()` idempotentny (marker `__generic_encounter__` w draft_data). Wywołany w `main.py` lifespan startup.
+
+**E14** — Level gating w `encounter_service.py`: `encounter_matches(enc, *, trigger, hex_type, hero_level)` — sprawdza biome/trigger/level_min/level_max. `_hero_level_for_campaign()` helper. `maybe_inject_encounter()` refaktoryzowany: candidates loop używa `encounter_matches()` zamiast ad-hoc logiki.
