@@ -97,34 +97,34 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ## FAZA 3 — Jakość + Treść
 
-- [ ] E1 — Player HUD (HP/Mana, Złoto, Questy, XP bar, Czas) — aktualizacja per tura
-- [ ] E2 — Kreator bohatera — tooltips (archetyp, statystyki, umiejętności z przykładami)
-- [ ] E3 — Ekran zakończenia kampanii (podsumowanie + LLM epitafium)
-- [ ] E4 — Ekran śmierci (epitafium + statystyki + Wskrześ/Nowy bohater)
-- [ ] E5 — Zamknięcie dostępu do kampanii martwego bohatera (hero_status=dead)
-- [ ] E6 — Narracja: kompresja, historia, tagi narracyjne
-- [ ] E7 — Rozbudowa `campaign_templates` (required_npc_keys, required_beats, player_visible)
-- [ ] E8 — Ekran wyboru gotowej kampanii dla gracza (karty, trudność, opisy)
-- [ ] E9 — Story Gravity: trigger = next_required_beat nie odpalony przez N tur
-- [ ] E10 — Forge: walidacja wymaganych NPC/lokacji przy publikacji szablonu
-- [ ] E11 — Template Narrative State pre-seeding
-- [ ] E12 — Workflow publikacji szablonów (draft → review → published)
-- [ ] E13 — Encountery generyczne — rozbudowa puli adventure_hooks
-- [ ] E14 — Skalowanie encounterów per poziom gracza
-- [ ] E15 — Snapshot stanu przy wejściu do lochu
-- [ ] E16 — Przywróć snapshot przy śmierci w lochu + restart
-- [ ] E17 — Rarity tierów loot w lochach (5 tierów)
-- [ ] E18 — Cooldown UI lochów w Admin Panelu
-- [ ] E19 — LLM Vision: obrazek → opis kafelka (task na maszynie .170)
-- [ ] E20 — Admin UI tile manager (obrazki, drzwi, opisy kafelków)
-- [ ] E21 — Wejście do lochu z mapy hex kampanii
-- [ ] E22 — Resume niedokończonego runu lochu
-- [ ] E23 — Seen_mechanics tracking per gracz
-- [ ] E24 — Backend trigger kart onboarding (first mechanic occurrence)
-- [ ] E25 — Karty onboarding UI (nieblokujące overlay, "Rozumiem")
-- [ ] E26 — Biblioteka kart (gracz może wrócić do przeczytanych)
-- [ ] E27 — Karty dla nowych mechanik (afiksy, crafting, MP) — gdy systemy gotowe
-- [ ] E28 — Tutorial kampania "Moja Pierwsza Przygoda"
+- [ ] E1 — Player HUD (HP/Mana, Złoto, Questy, XP bar, Czas) — aktualizacja per tura — [#416](https://github.com/szmidtpiotr/ai-gm/issues/416)
+- [ ] E2 — Kreator bohatera — tooltips (archetyp, statystyki, umiejętności z przykładami) — [#417](https://github.com/szmidtpiotr/ai-gm/issues/417)
+- [ ] E3 — Ekran zakończenia kampanii (podsumowanie + LLM epitafium) — [#418](https://github.com/szmidtpiotr/ai-gm/issues/418)
+- [ ] E4 — Ekran śmierci (epitafium + statystyki + Wskrześ/Nowy bohater) — [#419](https://github.com/szmidtpiotr/ai-gm/issues/419)
+- [ ] E5 — Zamknięcie dostępu do kampanii martwego bohatera (hero_status=dead) — [#420](https://github.com/szmidtpiotr/ai-gm/issues/420)
+- [ ] E6 — Narracja: kompresja chapter_summary + seeds injection + ARC_ADVANCE automation — [#421](https://github.com/szmidtpiotr/ai-gm/issues/421)
+- [ ] E7 — Rozbudowa `campaign_templates` (required_npc_keys, required_beats, player_visible) — [#422](https://github.com/szmidtpiotr/ai-gm/issues/422)
+- [ ] E8 — Ekran wyboru gotowej kampanii dla gracza (karty, trudność, opisy) — [#423](https://github.com/szmidtpiotr/ai-gm/issues/423)
+- [ ] E9 — Story Gravity: trigger = next_required_beat nie odpalony przez N tur (5/10/15, L3 domyślnie OFF) — [#424](https://github.com/szmidtpiotr/ai-gm/issues/424)
+- [ ] E10 — Forge: walidacja wymaganych NPC/lokacji przy publikacji szablonu — [#425](https://github.com/szmidtpiotr/ai-gm/issues/425)
+- [ ] E11 — Template Narrative State pre-seeding (narrative_hooks z szablonu → World State) — [#426](https://github.com/szmidtpiotr/ai-gm/issues/426)
+- [ ] E12 — Workflow publikacji szablonów (draft → review → published) — [#427](https://github.com/szmidtpiotr/ai-gm/issues/427)
+- [ ] E13 — Encountery generyczne — rozbudowa puli adventure_hooks (biome/trigger/level) — [#428](https://github.com/szmidtpiotr/ai-gm/issues/428)
+- [ ] E14 — Skalowanie encounterów per poziom gracza — [#429](https://github.com/szmidtpiotr/ai-gm/issues/429)
+- [ ] E15 — Snapshot stanu przy wejściu do lochu — [#430](https://github.com/szmidtpiotr/ai-gm/issues/430)
+- [ ] E16 — Przywróć snapshot przy śmierci w lochu + restart — [#431](https://github.com/szmidtpiotr/ai-gm/issues/431)
+- [ ] E17 — Rarity tierów loot w lochach (5 tierów, mapowanie difficulty→rarity) — [#432](https://github.com/szmidtpiotr/ai-gm/issues/432)
+- [ ] E18 — Cooldown UI lochów w Admin Panelu — [#433](https://github.com/szmidtpiotr/ai-gm/issues/433)
+- [ ] E19 — LLM Vision: obrazek → opis kafelka (task na maszynie .170) — [#434](https://github.com/szmidtpiotr/ai-gm/issues/434)
+- [ ] E20 — Admin UI tile manager (obrazki, drzwi, opisy kafelków) — [#435](https://github.com/szmidtpiotr/ai-gm/issues/435)
+- [ ] E21 — Wejście do lochu z mapy hex kampanii — [#436](https://github.com/szmidtpiotr/ai-gm/issues/436)
+- [ ] E22 — Resume niedokończonego runu lochu — [#437](https://github.com/szmidtpiotr/ai-gm/issues/437)
+- [ ] E23 — Seen_mechanics tracking per gracz (tabela + endpoint mark-seen) — [#438](https://github.com/szmidtpiotr/ai-gm/issues/438)
+- [ ] E24 — Backend trigger kart onboarding (first mechanic occurrence: rzut/walka/rana/XP/złoto/death) — [#439](https://github.com/szmidtpiotr/ai-gm/issues/439)
+- [ ] E25 — Karty onboarding UI (nieblokujące overlay, "Rozumiem") — [#440](https://github.com/szmidtpiotr/ai-gm/issues/440)
+- [ ] E26 — Biblioteka kart (gracz może wrócić do przeczytanych) — [#441](https://github.com/szmidtpiotr/ai-gm/issues/441)
+- [ ] E27 — Karty dla nowych mechanik (afiksy, crafting, MP) — gdy systemy gotowe (Faza 4+) — [#442](https://github.com/szmidtpiotr/ai-gm/issues/442)
+- [ ] E28 — Tutorial kampania "Moja Pierwsza Przygoda" (domyślnie ON, Pomiń, instrukcje LLM) — [#443](https://github.com/szmidtpiotr/ai-gm/issues/443)
 
 ---
 
@@ -196,11 +196,11 @@ Wyrównanie z planem CZĘŚĆ AE. Monolit `admin_panel_v3` (19 447 linii, 1 plik
 - [ ] FADM-P5 — Port sekcji map — [#407](https://github.com/szmidtpiotr/ai-gm/issues/407)
 - [ ] FADM-P6 — Port sekcji campaigns (+ B6/B7/D6) — [#408](https://github.com/szmidtpiotr/ai-gm/issues/408)
 - [ ] FADM-P7 — Port sekcji dungeons — [#409](https://github.com/szmidtpiotr/ai-gm/issues/409)
-- [ ] FADM-P8 — Port sekcji forge (+ D7 hook_type) — [#410](https://github.com/szmidtpiotr/ai-gm/issues/410)
-- [ ] FADM-P9 — Port sekcji players — [#411](https://github.com/szmidtpiotr/ai-gm/issues/411)
-- [ ] FADM-P10 — Port sekcji tools (sandbox/Playwright/Inspector) — [#412](https://github.com/szmidtpiotr/ai-gm/issues/412)
-- [ ] FADM-P11 — Port sekcji system (LLM presety + config) — [#413](https://github.com/szmidtpiotr/ai-gm/issues/413)
-- [ ] FADM-P12 — Port sekcji drobnych (invites/push/bugreports) — [#414](https://github.com/szmidtpiotr/ai-gm/issues/414)
+- [x] FADM-P8 — ⏭ SKIPPED na stałe (forge/Kuźnia zostaje w admin3, standalone tool) — [#410](https://github.com/szmidtpiotr/ai-gm/issues/410)
+- [x] FADM-P9 — Port sekcji players — [#411](https://github.com/szmidtpiotr/ai-gm/issues/411)
+- [x] FADM-P10 — Port sekcji tools (sandbox/Playwright/Inspector) — [#412](https://github.com/szmidtpiotr/ai-gm/issues/412)
+- [x] FADM-P11 — Port sekcji system (LLM presety + config) — [#413](https://github.com/szmidtpiotr/ai-gm/issues/413)
+- [x] FADM-P12 — Port sekcji drobnych (invites/push/bugreports) — [#414](https://github.com/szmidtpiotr/ai-gm/issues/414)
 - [ ] FADM-DONE — `rm -rf admin_panel_v3/` (osobny task, **po Fazie 4**)
 
 ---
