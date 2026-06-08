@@ -4025,6 +4025,12 @@
     if (key === 'map') { window.location.href = '/admin/#map'; return; }
     if (key === 'campaigns') { window.location.href = '/admin/#campaigns'; return; }
     if (key === 'dungeons') { window.location.href = '/admin/#dungeons'; return; }
+    if (key === 'players') { window.location.href = '/admin/#players'; return; }
+    if (key === 'tools') { window.location.href = '/admin/#tools'; return; }
+    if (key === 'system') { window.location.href = '/admin/#system'; return; }
+    if (key === 'invites') { window.location.href = '/admin/#invites'; return; }
+    if (key === 'bugreports') { window.location.href = '/admin/#bugreports'; return; }
+    if (key === 'push') { window.location.href = '/admin/#push'; return; }
     document.querySelectorAll('.nav-item[data-section]').forEach(b =>
       b.classList.toggle('active', b.dataset.section === key));
     document.querySelectorAll('.section').forEach(s =>
