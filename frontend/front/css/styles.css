@@ -6061,6 +6061,36 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
+
+/* E2 (#417) — Creator tooltips. The `?` hints and archetype cards carry a
+   data-tooltip; this renders it as a floating bubble on hover/focus so the
+   player sees the mechanical explanation. Without this rule the attribute did
+   nothing. pointer-events:none keeps the bubble from blocking the click. */
+[data-tooltip] { position: relative; }
+[data-tooltip]:hover::after,
+[data-tooltip]:focus::after,
+[data-tooltip]:focus-within::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  width: max-content;
+  max-width: 260px;
+  padding: 8px 11px;
+  border-radius: 8px;
+  background: rgba(18, 16, 22, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
+  color: var(--text-primary);
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: left;
+  pointer-events: none;
+}
 .wizard-stat-mod {
   font-size: 0.82rem;
   color: var(--accent);

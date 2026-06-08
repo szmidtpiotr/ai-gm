@@ -42,6 +42,115 @@ def get_mechanics_metadata():
     }
 
 
+# E2 (#417) — Creator help content: archetypes / stats / skills, each with a
+# plain-language description AND a concrete mechanical example so the character
+# creator tooltips can explain what the player is choosing.
+_CREATOR_ARCHETYPES = [
+    {
+        "key": "warrior",
+        "label": "Wojownik",
+        "icon": "⚔️",
+        "description": "Frontowy wojownik w ciężkiej zbroi. Wysoki HP, silne ciosy, mistrz broni wręcz.",
+        "bonus": "+2 SIŁ · +1 KON · HP: 12",
+        "example": "Atak mieczem: d20 + SIŁ + ranga Atak Wręcz ≥ DC. Najwięcej HP — wytrzyma najwięcej ciosów w zwarciu.",
+    },
+    {
+        "key": "rogue",
+        "label": "Łotrzyk",
+        "icon": "🏹",
+        "description": "Zwinny cień: snajper z ukrycia lub złodziej w ciemnościach. Skradanie, łuk, inteligentna walka.",
+        "bonus": "+2 ZRĘ · +1 SZCZ · HP: 8",
+        "example": "Skradanie: d20 + ZRĘ + ranga ≥ DC 12. Atak z ukrycia dodaje obrażenia; wysoki SZCZ poprawia łupy i ucieczki.",
+    },
+    {
+        "key": "scholar",
+        "label": "Uczony",
+        "icon": "📜",
+        "description": "Tkacz arkanów: kruchy, ale niszczycielski dzięki zaklęciom. Zarządza maną i ryzykiem Omylenia.",
+        "bonus": "+2 INT · +1 MĄD · HP: 6 · Mana",
+        "example": "Zaklęcie: d20 + INT ≥ DC, koszt many. Nat 1 = Omylenie (ogłuszenie/obrażenia własne). Najmniej HP — unikaj zwarcia.",
+    },
+]
+
+# Canonical 7 stats (locked per game mechanics). Config may lack LCK, so we
+# define key→(label, description, example) here and merge config descriptions on top.
+_CREATOR_STATS = [
+    ("STR", "Siła", "Obrażenia wręcz, atletyka, dźwiganie, forsowanie drzwi.",
+     "Forsowanie drzwi: d20 + SIŁ ≥ DC 12. Modyfikuje obrażenia w walce wręcz."),
+    ("DEX", "Zręczność", "Inicjatywa, skradanie, uniki, ataki finezyjne i dystansowe.",
+     "Unik strzału: d20 + ZRĘ ≥ DC. Decyduje o inicjatywie i atakach dystansowych."),
+    ("CON", "Kondycja", "Punkty życia, odporność na trucizny i ból, wytrzymałość.",
+     "Odporność na truciznę: d20 + KON ≥ DC. Zwiększa HP o modyfikator na każdy poziom."),
+    ("INT", "Inteligencja", "Magia arkanów, wiedza, badanie, alchemia.",
+     "Identyfikacja artefaktu: d20 + INT ≥ DC 16. Zasila zaklęcia i pulę many."),
+    ("WIS", "Mądrość", "Percepcja, przetrwanie, medycyna, odporność na strach.",
+     "Zauważ pułapkę: d20 + MĄD ≥ DC 14. Percepcja, medycyna, odporność na strach."),
+    ("CHA", "Charyzma", "Perswazja, zastraszanie, negocjacje, przywództwo.",
+     "Przekonaj strażnika: d20 + CHA ≥ DC 12. Perswazja, zastraszanie, handel."),
+    ("LCK", "Szczęście", "Rzuty losowe, jakość łupów, szanse ucieczki i zdarzenia losowe.",
+     "Rzut losowy zdarzenia: wysoki SZCZ przechyla wynik na twoją korzyść (łupy, ucieczki)."),
+]
+
+_CREATOR_SKILL_EXAMPLES = {
+    "athletics": "Wspinaczka po murze: d20 + SIŁ + ranga ≥ DC 12 (Średni).",
+    "endurance": "Marsz w śnieżycy: d20 + KON + ranga ≥ DC 14.",
+    "stealth": "Przemknij obok straży: d20 + ZRĘ + ranga ≥ DC 12.",
+    "sleight_of_hand": "Kradzież sakiewki: d20 + ZRĘ + ranga ≥ DC 16 (Trudny).",
+    "arcana": "Rozpoznaj zaklęcie: d20 + INT + ranga ≥ DC 16.",
+    "investigation": "Znajdź ukryty przełącznik: d20 + INT + ranga ≥ DC 14.",
+    "lore": "Przypomnij sobie legendę: d20 + INT + ranga ≥ DC 12.",
+    "awareness": "Wykryj zasadzkę: d20 + MĄD + ranga ≥ DC 14.",
+    "survival": "Wytrop zwierzynę: d20 + MĄD + ranga ≥ DC 12.",
+    "medicine": "Zatamuj krwawienie: d20 + MĄD + ranga ≥ DC 12.",
+    "persuasion": "Wynegocjuj cenę: d20 + CHA + ranga ≥ DC 12.",
+    "intimidation": "Zmuś do ucieczki: d20 + CHA + ranga ≥ DC 14.",
+    "melee_attack": "Cios mieczem: d20 + SIŁ + ranga ≥ obrona celu.",
+    "ranged_attack": "Strzał z łuku: d20 + ZRĘ + ranga ≥ obrona celu.",
+}
+
+
+@router.get("/mechanics/creator-help")
+def get_creator_help():
+    """E2 (#417) — Tooltip content for the character creator.
+
+    Returns archetypes, stats and skills, each with a description and a
+    concrete mechanical example (roll formula / DC). Stat and skill labels
+    come from admin config so they stay in sync; examples are curated here.
+    """
+    skills = list_skills()
+
+    # Config descriptions keyed by stat — merged over the canonical defaults.
+    cfg_stats = {s.get("key"): s for s in list_stats() if s.get("key")}
+    stat_out = []
+    for key, label, desc, example in _CREATOR_STATS:
+        cfg = cfg_stats.get(key, {})
+        stat_out.append({
+            "key": key,
+            "label": cfg.get("label") or label,
+            "description": cfg.get("description") or desc,
+            "example": example,
+        })
+
+    skill_out = []
+    for s in skills:
+        key = s.get("key")
+        if not key:
+            continue
+        skill_out.append({
+            "key": key,
+            "label": s.get("label") or key,
+            "stat": s.get("linked_stat") or "",
+            "description": s.get("description") or s.get("label") or key,
+            "example": _CREATOR_SKILL_EXAMPLES.get(key, f"Test: d20 + cecha + ranga ≥ DC."),
+        })
+
+    return {
+        "archetypes": _CREATOR_ARCHETYPES,
+        "stats": stat_out,
+        "skills": skill_out,
+    }
+
+
 @router.get("/mechanics/slash-commands")
 def get_slash_commands_public():
     """Chat `/` autocomplete: tylko komendy włączone w adminie (Config → slash commands)."""
