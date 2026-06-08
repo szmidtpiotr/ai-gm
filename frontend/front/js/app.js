@@ -566,11 +566,17 @@ async function handleRegister(e) {
     const email    = document.getElementById('register-email').value.trim();
     const username = document.getElementById('register-username').value.trim();
     const password = document.getElementById('register-password').value;
+    const confirm  = document.getElementById('register-password-confirm')?.value ?? '';
     const errEl    = document.getElementById('register-error');
     errEl.hidden   = true;
 
-    if (!email || !username || !password) {
+    if (!email || !username || !password || !confirm) {
         errEl.textContent = 'Wypełnij wszystkie pola';
+        errEl.hidden = false;
+        return;
+    }
+    if (password !== confirm) {
+        errEl.textContent = 'Hasła nie są zgodne';
         errEl.hidden = false;
         return;
     }
