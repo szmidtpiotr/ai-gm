@@ -161,11 +161,11 @@ Modularny `admin/` musi pokryć wszystkie zdolności admina aż do D7:
 | FADM-P5 map | [#407](https://github.com/szmidtpiotr/ai-gm/issues/407) | ✅ 2026-06-08 |
 | FADM-P6 campaigns (+B6/B7/D6) | [#408](https://github.com/szmidtpiotr/ai-gm/issues/408) | ✅ 2026-06-08 |
 | FADM-P7 dungeons | [#409](https://github.com/szmidtpiotr/ai-gm/issues/409) | ✅ 2026-06-08 |
-| FADM-P8 forge (+D7) | [#410](https://github.com/szmidtpiotr/ai-gm/issues/410) | ❌ |
-| FADM-P9 players | [#411](https://github.com/szmidtpiotr/ai-gm/issues/411) | ❌ |
-| FADM-P10 tools | [#412](https://github.com/szmidtpiotr/ai-gm/issues/412) | ❌ |
-| FADM-P11 system | [#413](https://github.com/szmidtpiotr/ai-gm/issues/413) | ❌ |
-| FADM-P12 misc (invites/push/bugreports) | [#414](https://github.com/szmidtpiotr/ai-gm/issues/414) | ❌ |
+| FADM-P8 forge (+D7) | [#410](https://github.com/szmidtpiotr/ai-gm/issues/410) | ⏭ SKIPPED — Kuźnia zostaje w admin3 na stałe (forge/Kuźnia to standalone tool, nie sekcja codzienna; brak zgłoszeń parity issues) |
+| FADM-P9 players | [#411](https://github.com/szmidtpiotr/ai-gm/issues/411) | ✅ 2026-06-08 |
+| FADM-P10 tools | [#412](https://github.com/szmidtpiotr/ai-gm/issues/412) | ✅ 2026-06-08 |
+| FADM-P11 system | [#413](https://github.com/szmidtpiotr/ai-gm/issues/413) | ✅ 2026-06-08 |
+| FADM-P12 misc (invites/push/bugreports) | [#414](https://github.com/szmidtpiotr/ai-gm/issues/414) | ✅ 2026-06-08 |
 | FADM-DONE `rm -rf admin_panel_v3/` | — | ❌ (po Fazie 4) |
 
 ---
@@ -270,6 +270,29 @@ Skorupa `frontend/admin/` żyje: `index.html` (router hash + sidebar 14 sekcji m
 **Anty-grób:** campaigns usunięte z monolitu (−958 linii): section-campaigns HTML + `filterCampaigns` + `_campsData`/`_loadCampaigns`/`_renderCampCards`/`_setCampView` + `deleteCampaign`/`_bulkDeleteCampaigns` + `_CAMP_CMDS` + cmd helpers + `_campModalResurrect` + `_renderAdminHexMap` + `_HEX_TYPES` + `_showHexEditModal` + `openCampaignModal` + `_loadCampTab` (8 tabów) + `advanceCampScene` + `_loadWorkshopEncounters` + `_injectEncounterFromWorkshop` + `sendWorkshopMsg`. Dispatcher `_load` — wpis `campaigns:_loadCampaigns` sprzątnięty. admin3 `/admin3/#campaigns` → **redirect do `/admin/#campaigns`**. `_loadPdrawerCamps` (players drawer) — NIE portowana, zostaje w monolicie (należy do players sekcji).
 
 **Testy:** `issue_408_campaigns.spec.js` (tabela renderuje + dane z API + modal 8 tabów + admin3 alive + redirect). `admin3_smoke.spec.js` zaktualizowany (campaigns redirect + usunięte z SECTIONS). 5/5 GREEN, 16/16 smoke GREEN.
+
+---
+
+### FADM-P8 — forge ⏭ SKIPPED na stałe
+
+Kuźnia (`section-forge`) **zostaje w admin3 na stałe** — to standalone narzędzie (generowanie planów GM / szablonów kampanii via MCP `forge_*`), nie sekcja codziennej administracji, i nie wpłynęło żadne zgłoszenie parity. `forge` pozostaje w `SECTIONS` (`admin/index.html`) ale **NIE** w `PORTED` → klik „Kuźnia" w `/admin/` bounce'uje do `/admin3/#forge`. Modale forge (`tpl-entity-modal`, `forge-plan-dialog`, `subloc-edit-dialog`, `hook-modal`) i cały JS forge nietknięte w monolicie.
+
+---
+
+### FADM-P9..P12 — port players / tools / system / misc ✅ 2026-06-08
+
+Siedem sekcji sportowanych 1:1 z monolitu do `frontend/admin/sections/` w jednej fali:
+
+- **P9 `players.js`** (#411) — konta graczy, drawer 4-tab (Info / Kampanie / LLM / Tryby gry), zarządzanie wskrzeszeniami, filtrowanie. Lokalny stan `_pdrawerCurrentUser`.
+- **P10 `tools.js`** (#412, 1698 linii) — 7 zakładek stab: runner, playwright, combat sandbox, rest, knowledge, mcp, images. `_wireStabBar()` + `_wireImgPresets()` po wstrzyknięciu HTML; lazy-load per zakładka (`_toolsTabLoaded`).
+- **P11 `system.js`** (#413, 1925 linii) — 12 zakładek: LLM (presety + fetch-models), baza (info/backup/migrate/restore), konfiguracja (export/dry-run/import), slash commands, wskrzeszenie, email (SMTP), wygląd (pora dnia + tła), teksty (UI CMS), głos (TTS/STT/hosty Piper+Whisper), narracja (system prompt), tryby gry, obrazy (ComfyUI). `_wireSysTabs()` + lazy `_loadSysTab` (`_sysTabLoaded`).
+- **P12** — `invites.js` (#414, drzewo zaproszeń), `bugreports.js` (zgłoszenia + sync GitHub), `push.js` (powiadomienia), `knowledge.js` (RAG — nie w nav, ładowana z tools).
+
+**Adaptacje wobec monolitu:** `_showToast(` → `showToast(` (import z shared/toast.js); `_ADMIN_TOKEN_KEY` → `ADMIN_TOKEN_KEY` (import z shared/api.js); `_buildUrl(path)` → `path` bezpośrednio; usunięte `_sectionLoaded.delete(...)`; funkcje wołane z `onclick=` eksponowane przez `Object.assign(window, {...})` na końcu `init()`; HTML `<section class="section" id="section-X">` → `<div id="section-X">` (klasa `.section` chowa bez `.active`). Wszystkie 7 modułów `node --check` OK, serwują 200.
+
+**Anty-grób:** 7 bloków `<section>` HTML usuniętych z monolitu (−1290 linii): players (2178-2330) + tools/system/knowledge/invites/bugreports/push (2857-3993, ciągłe). Forge (2455-2856) zachowany. Po usunięciu: section open/close zbalansowane (1/1 = forge), `</main>` OK, inline `<script>` (414K znaków) parsuje, admin3+admin serwują 200. Redirecty `switchSection` (admin3 4028-4033) + `PORTED` set (admin/index.html) egzekwują jedno źródło prawdy w runtime.
+
+**Świadomy dług (follow-up):** JS loaderów (`_loadPlayers`, `_loadSystem`, `_loadTools`, …) **NIE** usunięto z monolitu. Są null-guarded (`if(!el)return` → no-op przy brakującym DOM) i część nadal legalnie wołana przez **zachowane** sekcje (np. `_loadPlayers()` po akcjach kampanii, linie 5254/5425/5438/5461/5471/5506; dispatcher `_load` 5127-5129). Bulk-delete złamałby zachowany kod (ReferenceError w literale obiektu dispatchera). Czyszczenie martwego JS = osobne zadanie z rozplątaniem cross-refs.
 
 ---
 
