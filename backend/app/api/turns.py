@@ -5531,6 +5531,26 @@ def resolve_skill_test_endpoint(
         except Exception:
             pass
 
+        # Inject current location + last turn context so narrator doesn't invent wrong setting (#1214)
+        location_hint = ""
+        last_turn_hint = ""
+        try:
+            _loc = get_current_location_info(conn, campaign_id)
+            if _loc:
+                location_hint = f"[LOKACJA] Bohater znajduje się w: {_loc['label']}. Narracja MUSI być osadzona w tej lokacji. "
+        except Exception:
+            pass
+        try:
+            _last = conn.execute(
+                "SELECT assistant_text FROM campaign_turns WHERE campaign_id=? ORDER BY turn_number DESC LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if _last and _last[0]:
+                _snippet = str(_last[0])[:400]
+                last_turn_hint = f"[POPRZEDNIA NARRACJA (skrót)] {_snippet}\n\n"
+        except Exception:
+            pass
+
         # Stage 3 Z4 — stealth flavour hint when zaskoczony just applied
         stealth_hint = ""
         if _stealth_applied:
@@ -5545,7 +5565,9 @@ def resolve_skill_test_endpoint(
             )
 
         narrator_prompt = (
+            f"{last_turn_hint}"
             f"{skill_ctx}\n\n"
+            f"{location_hint}"
             f"{clock_hint}"
             f"Napisz narrację wyniku testu umiejętności po polsku. "
             f"60-90 słów. Klimat dark fantasy. Nie wymieniaj liczb ani kości. "
