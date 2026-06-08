@@ -796,7 +796,7 @@ const _ROW_REGISTRY = {
     if (!tbody) return;
     tbody.innerHTML = _loading(8);
     try {
-      const rows = await apiFetch('/api/admin/hex-terrain-config');
+      const rows = await apiFetch('/api/admin/world/hex-terrain-config');
       const items = Array.isArray(rows) ? rows : (rows.items || []);
       const totalW = items.reduce((s,r) => s+(r.spawn_weight||0), 0);
       if (!items.length) { tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--t3)">Brak typów terenu</td></tr>`; return; }
@@ -805,7 +805,7 @@ const _ROW_REGISTRY = {
         return `<tr>
           <td style="text-align:center;font-size:1.2rem">${r.map_icon||'?'}</td>
           <td class="td-mono" style="font-size:0.75rem">${_esc(r.hex_type)}</td>
-          <td class="td-name editable" onclick="mechPatchEdit(this,'/api/admin/hex-terrain-config/${_esc(r.hex_type)}','label')">${_esc(r.label||'')}</td>
+          <td class="td-name editable" onclick="mechPatchEdit(this,'/api/admin/world/hex-terrain-config/${_esc(r.hex_type)}','label')">${_esc(r.label||'')}</td>
           <td>
             <input type="number" class="field-input" style="width:72px;padding:3px 6px;font-size:0.8rem"
               value="${r.spawn_weight}" min="0" max="999"
@@ -844,7 +844,7 @@ const _ROW_REGISTRY = {
     if (isNaN(value)) return;
     const apiField = field === 'encounter_pct' ? 'encounter_base_chance' : field;
     try {
-      await apiFetch(`/api/admin/hex-terrain-config/${key}`, { method: 'PATCH', body: JSON.stringify({ [apiField]: value }) });
+      await apiFetch(`/api/admin/world/hex-terrain-config/${key}`, { method: 'PATCH', body: JSON.stringify({ [apiField]: value }) });
       _showToast('Zapisano.', 'success');
       _worldLoaded.delete('terrain');
       await _loadTerrain();
@@ -897,9 +897,9 @@ const _ROW_REGISTRY = {
     btn.disabled = true; btn.textContent = '⏳';
     try {
       if (existingKey) {
-        await apiFetch(`/api/admin/hex-terrain-config/${key}`, { method: 'PATCH', body: JSON.stringify(body) });
+        await apiFetch(`/api/admin/world/hex-terrain-config/${key}`, { method: 'PATCH', body: JSON.stringify(body) });
       } else {
-        await apiFetch('/api/admin/hex-terrain-config', { method: 'POST', body: JSON.stringify(body) });
+        await apiFetch('/api/admin/world/hex-terrain-config', { method: 'POST', body: JSON.stringify(body) });
       }
       btn.closest('.modal-overlay').remove();
       _worldLoaded.delete('terrain');

@@ -5,10 +5,11 @@ Admin endpoints for the hex grid world map.
 from __future__ import annotations
 
 import json
+import random
 import sqlite3
-from typing import Optional
+from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException
 from pydantic import BaseModel
 
 from app.services.admin_auth import verify_admin_token
@@ -274,6 +275,183 @@ def delete_teleport(conn_id: int, authorization: str | None = Header(default=Non
         conn.execute("DELETE FROM hex_teleport_connections WHERE id = ?", (conn_id,))
         conn.commit()
         return {"ok": True}
+    finally:
+        conn.close()
+
+
+# ── World generation ──────────────────────────────────────────────────────────
+
+class WorldGenRequest(BaseModel):
+    seed: int = 42
+    radius: int = 25
+
+
+@router.post("/generate")
+def generate_world(body: WorldGenRequest, authorization: str | None = Header(default=None)):
+    """Procedurally generate a hex world grid using weighted terrain types."""
+    _require_admin(authorization)
+    if body.radius > 50:
+        raise HTTPException(status_code=400, detail="Max radius: 50")
+
+    conn = _get_db()
+    try:
+        terrain_rows = conn.execute(
+            "SELECT hex_type, spawn_weight, encounter_base_chance FROM hex_type_config WHERE is_active = 1 AND spawn_weight > 0"
+        ).fetchall()
+        if not terrain_rows:
+            raise HTTPException(status_code=400, detail="No terrain types with spawn_weight > 0 configured")
+
+        types = [r["hex_type"] for r in terrain_rows]
+        weights = [r["spawn_weight"] for r in terrain_rows]
+        encounter_chances = {r["hex_type"]: r["encounter_base_chance"] for r in terrain_rows}
+
+        rng = random.Random(body.seed)
+        hexes_created = 0
+        counts: dict[str, int] = {}
+
+        # Axial hex grid: all hexes (q, r) where |q| + |r| + |q+r| <= 2*radius
+        for q in range(-body.radius, body.radius + 1):
+            for r in range(-body.radius, body.radius + 1):
+                if abs(q) + abs(r) + abs(q + r) > 2 * body.radius:
+                    continue
+                hex_type = rng.choices(types, weights=weights, k=1)[0]
+                enc = encounter_chances.get(hex_type, 0.15)
+                try:
+                    conn.execute(
+                        """INSERT INTO world_hexes (q, r, hex_type, encounter_chance, encounter_pool, is_active)
+                           VALUES (?, ?, ?, ?, '[]', 1)
+                           ON CONFLICT DO NOTHING""",
+                        (q, r, hex_type, enc),
+                    )
+                    if conn.execute("SELECT changes()").fetchone()[0]:
+                        hexes_created += 1
+                        counts[hex_type] = counts.get(hex_type, 0) + 1
+                except Exception:
+                    pass
+
+        conn.commit()
+        return {"hexes_created": hexes_created, "counts": counts, "seed": body.seed, "radius": body.radius}
+    finally:
+        conn.close()
+
+
+@router.delete("/clear")
+def clear_world(authorization: str | None = Header(default=None)):
+    """Delete all top-level world hexes (map_level=0, no parent)."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        deleted = conn.execute(
+            "DELETE FROM world_hexes WHERE map_level = 0 AND parent_hex_id IS NULL"
+        )
+        conn.commit()
+        return {"hexes_deleted": deleted.rowcount}
+    finally:
+        conn.close()
+
+
+# ── Locations map overlay ──────────────────────────────────────────────────────
+
+@router.get("/locations-map")
+def get_locations_map(authorization: str | None = Header(default=None)):
+    """Locations with world hex coordinates for map overlay."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        locs = conn.execute(
+            """SELECT key, label, location_type, map_icon, world_hex_q AS q, world_hex_r AS r,
+                      review_status, is_active
+               FROM game_locations
+               WHERE world_hex_q IS NOT NULL AND world_hex_r IS NOT NULL
+               ORDER BY label"""
+        ).fetchall()
+        pending = conn.execute(
+            "SELECT COUNT(*) AS n FROM game_locations WHERE review_status = 'pending'"
+        ).fetchone()
+        return {
+            "locations": [dict(r) for r in locs],
+            "pending_count": pending["n"] if pending else 0,
+        }
+    finally:
+        conn.close()
+
+
+# ── Terrain config CRUD ────────────────────────────────────────────────────────
+
+@router.get("/hex-terrain-config")
+def list_terrain_config(authorization: str | None = Header(default=None)):
+    """All terrain types from hex_type_config (admin panel terrain tab)."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        rows = conn.execute("SELECT * FROM hex_type_config ORDER BY hex_type").fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+class TerrainConfigCreate(BaseModel):
+    hex_type: str
+    label: str
+    travel_hours: float = 1.0
+    encounter_base_chance: float = 0.15
+    map_color: str = "#4a6a4a"
+    map_icon: Optional[str] = None
+    spawn_weight: int = 0
+    has_submap: int = 0
+    is_passable: int = 1
+    is_active: int = 1
+
+
+@router.post("/hex-terrain-config")
+def create_terrain_config(body: TerrainConfigCreate, authorization: str | None = Header(default=None)):
+    """Create a new terrain type."""
+    _require_admin(authorization)
+    conn = _get_db()
+    try:
+        conn.execute(
+            """INSERT INTO hex_type_config
+               (hex_type, label, travel_hours, encounter_base_chance, map_color, map_icon,
+                spawn_weight, has_submap, is_passable, is_active)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (body.hex_type, body.label, body.travel_hours, body.encounter_base_chance,
+             body.map_color, body.map_icon, body.spawn_weight, body.has_submap,
+             body.is_passable, body.is_active),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM hex_type_config WHERE hex_type = ?", (body.hex_type,)).fetchone()
+        return dict(row)
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=409, detail=f"Terrain type '{body.hex_type}' already exists")
+    finally:
+        conn.close()
+
+
+@router.patch("/hex-terrain-config/{hex_type}")
+def patch_terrain_config(
+    hex_type: str,
+    body: dict[str, Any] = Body(...),
+    authorization: str | None = Header(default=None),
+):
+    """Update terrain type fields."""
+    _require_admin(authorization)
+    allowed = {"label", "travel_hours", "encounter_base_chance", "map_color", "map_icon",
+               "spawn_weight", "has_submap", "is_passable", "is_active", "required_item"}
+    updates = {k: v for k, v in body.items() if k in allowed}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    conn = _get_db()
+    try:
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        conn.execute(
+            f"UPDATE hex_type_config SET {set_clause} WHERE hex_type = ?",
+            (*updates.values(), hex_type),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM hex_type_config WHERE hex_type = ?", (hex_type,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Terrain type not found")
+        return dict(row)
     finally:
         conn.close()
 
