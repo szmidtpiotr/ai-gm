@@ -1007,6 +1007,13 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
         row = conn.execute("SELECT * FROM campaign_templates WHERE id = ?", (template_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Template not found")
+        # E12 (#427) — workflow guard: only draft → review → published (+ revert) allowed.
+        if req.status is not None and req.status not in ("draft", "review", "published"):
+            raise HTTPException(status_code=422, detail={
+                "error": "invalid_status",
+                "message": f"Nieprawidłowy status '{req.status}'. Dozwolone: draft, review, published.",
+                "allowed": ["draft", "review", "published"],
+            })
         # E10 (#425) — block publishing when required NPCs/beats are missing.
         if req.status == "published":
             # Apply any required_* changes coming in the same request first, so
