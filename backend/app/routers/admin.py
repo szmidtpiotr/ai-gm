@@ -3876,6 +3876,50 @@ def complete_onboarding(authorization: str | None = Header(default=None)):
         conn.close()
 
 
+_VALID_VISUAL_THEMES = {"dark_fantasy", "classic"}
+
+
+class GameSettingsReq(BaseModel):
+    visual_theme: str | None = None
+
+
+@router.patch("/me/game-settings")
+def update_game_settings(
+    req: GameSettingsReq,
+    authorization: str | None = Header(default=None),
+):
+    """D10 — save player visual theme to game_mode_flags JSON."""
+    from app.core.jwt_auth import require_current_user
+    payload = require_current_user(authorization)
+    user_id = int(payload.get("sub") or 0)
+
+    if req.visual_theme is not None and req.visual_theme not in _VALID_VISUAL_THEMES:
+        raise HTTPException(status_code=400, detail=f"Unknown theme '{req.visual_theme}'. Valid: {sorted(_VALID_VISUAL_THEMES)}")
+
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute("SELECT game_mode_flags FROM users WHERE id = ?", (user_id,)).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        try:
+            flags: dict = json.loads(row["game_mode_flags"] or "{}")
+        except (ValueError, TypeError):
+            flags = {}
+
+        if req.visual_theme is not None:
+            flags["visual_theme"] = req.visual_theme
+
+        conn.execute(
+            "UPDATE users SET game_mode_flags = ? WHERE id = ?",
+            (json.dumps(flags), user_id),
+        )
+        conn.commit()
+        return {"ok": True, "game_mode_flags": flags}
+    finally:
+        conn.close()
+
+
 @router.get("/me/stats")
 def get_me_stats(authorization: str | None = Header(default=None)):
     """Stage 11-C C12 — player chronicle stats for profile page."""

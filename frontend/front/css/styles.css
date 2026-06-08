@@ -7954,6 +7954,75 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
 
 .onboarding__cta-icon { font-size: 1.1rem; }
 
+/* ── Onboarding theme picker ── */
+.onboarding__themes {
+  opacity: 0;
+  transform: translateY(8px);
+  animation: onboarding-fade-in 0.6s ease-out 4s both;
+  text-align: center;
+  margin-bottom: var(--space-lg);
+}
+
+.onboarding__themes-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-sm);
+}
+
+.onboarding__theme-cards {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+}
+
+.onboarding__theme-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-md) var(--space-lg);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+  font-family: 'Cinzel', serif;
+  font-size: var(--font-size-sm);
+  min-width: 120px;
+}
+
+.onboarding__theme-card:hover {
+  border-color: rgba(201,165,74,0.4);
+  background: rgba(201,165,74,0.06);
+  color: var(--text-primary);
+}
+
+.onboarding__theme-card--selected,
+.onboarding__theme-card[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: rgba(201,165,74,0.12);
+  color: var(--accent);
+}
+
+.onboarding__theme-icon { font-size: 1.4rem; }
+.onboarding__theme-name { font-size: 0.72rem; letter-spacing: 0.04em; }
+
+/* ── CSS theme variables — applied to <body data-theme="..."> ── */
+body[data-theme="classic"] {
+  --bg-primary: #0f0e0c;
+  --bg-secondary: #1a1714;
+  --bg-tertiary: #231f1b;
+  --accent: #b8956a;
+  --accent-dark: #9a7a54;
+  --text-primary: #e8ddd0;
+  --text-secondary: #c4b49e;
+  --text-muted: #8a7a68;
+  --border: rgba(184,149,106,0.15);
+}
+
 @keyframes onboarding-fade-in {
   from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }

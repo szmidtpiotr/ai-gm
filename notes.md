@@ -87,7 +87,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] D7 — Encountery generyczne (adventure_hooks + gameconfig_encounter_templates unifikacja) + gate safe_for_rest + dwell decay + interwał config (admin3) — [#382](https://github.com/szmidtpiotr/ai-gm/issues/382)
 - [x] D8 — Ekran profilu gracza (konto + edycja email, znajomi, ustawienia LLM) — [#383](https://github.com/szmidtpiotr/ai-gm/issues/383)
 - [x] D9 — Ekran kampanii — 5 trybów (Nowa/Gotowa/Loch/Loch-kafelki/Multiplayer) — hub + dostępność per dane — [#384](https://github.com/szmidtpiotr/ai-gm/issues/384)
-- [ ] D10 — Onboarding animacja + wybór motywu (nowy gracz) — [#385](https://github.com/szmidtpiotr/ai-gm/issues/385)
+- [x] D10 — Onboarding animacja + wybór motywu (nowy gracz) — [#385](https://github.com/szmidtpiotr/ai-gm/issues/385)
 - [ ] D11 — Confirm password na rejestracji — [#386](https://github.com/szmidtpiotr/ai-gm/issues/386)
 - [ ] D12 — Szybka nawigacja Hub → Gra (bez przeładowania) — [#387](https://github.com/szmidtpiotr/ai-gm/issues/387)
 - [ ] D13 — Mobile layout — weryfikacja responsywności wszystkich ekranów — [#388](https://github.com/szmidtpiotr/ai-gm/issues/388)

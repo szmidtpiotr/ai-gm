@@ -2788,7 +2788,7 @@ KAMPANIE (hub) — 5 trybów: Nowa / Gotowa / Loch / Loch-kafelki / Multiplayer
 | Element | Status |
 |---------|--------|
 | Logowanie + rejestracja + weryfikacja + reset hasła | ✅ działa |
-| Onboarding (cinematic + motyw) | ✅ działa, ⚠️ brak "pomiń" |
+| Onboarding (cinematic + motyw) | ✅ działa — D10 [#385] karty motywu + zapis |
 | Hub Bohaterowie (hero-first) | ✅ działa |
 | Profil (konto, LLM Connect, znajomi, usuń) | ✅ działa |
 | Kreator postaci 4-kroki (animacje kostki/skilli) | ✅ działa, ⚠️ hard-back gubi draft |
