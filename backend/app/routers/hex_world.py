@@ -281,6 +281,44 @@ def delete_teleport(conn_id: int, authorization: str | None = Header(default=Non
 
 # ── World generation ──────────────────────────────────────────────────────────
 
+def _hex_dist(q1: int, r1: int, q2: int, r2: int) -> float:
+    dq, dr = q1 - q2, r1 - r2
+    return (abs(dq) + abs(dr) + abs(dq + dr)) / 2.0
+
+
+def _generate_biome_map(
+    all_hexes: list[tuple[int, int]],
+    types: list[str],
+    weights: list[int],
+    rng: random.Random,
+    n_seeds: int | None = None,
+    chaos: float = 2.5,
+) -> dict[tuple[int, int], str]:
+    """Voronoi biome clustering: each hex assigned to nearest biome seed with boundary noise.
+
+    chaos — controls how jagged cluster edges are (0 = perfect Voronoi, >4 = nearly random).
+    n_seeds — number of biome regions; defaults to 1 per ~18 hexes.
+    """
+    if n_seeds is None:
+        n_seeds = max(8, len(all_hexes) // 18)
+    n_seeds = min(n_seeds, len(all_hexes))
+
+    seed_positions = rng.sample(all_hexes, n_seeds)
+    seed_types = rng.choices(types, weights=weights, k=n_seeds)
+
+    result: dict[tuple[int, int], str] = {}
+    for q, r in all_hexes:
+        best_dist = float("inf")
+        chosen = types[0]
+        for i, (sq, sr) in enumerate(seed_positions):
+            dist = _hex_dist(q, r, sq, sr) + rng.uniform(0, chaos)
+            if dist < best_dist:
+                best_dist = dist
+                chosen = seed_types[i]
+        result[(q, r)] = chosen
+    return result
+
+
 class WorldGenRequest(BaseModel):
     seed: int = 42
     radius: int = 25
@@ -288,7 +326,7 @@ class WorldGenRequest(BaseModel):
 
 @router.post("/generate")
 def generate_world(body: WorldGenRequest, authorization: str | None = Header(default=None)):
-    """Procedurally generate a hex world grid using weighted terrain types."""
+    """Procedurally generate a hex world grid using Voronoi biome clustering."""
     _require_admin(authorization)
     if body.radius > 50:
         raise HTTPException(status_code=400, detail="Max radius: 50")
@@ -306,28 +344,34 @@ def generate_world(body: WorldGenRequest, authorization: str | None = Header(def
         encounter_chances = {r["hex_type"]: r["encounter_base_chance"] for r in terrain_rows}
 
         rng = random.Random(body.seed)
+
+        # Build all hex coordinates (axial grid)
+        all_hexes = [
+            (q, r)
+            for q in range(-body.radius, body.radius + 1)
+            for r in range(-body.radius, body.radius + 1)
+            if abs(q) + abs(r) + abs(q + r) <= 2 * body.radius
+        ]
+
+        # Voronoi biome assignment — clustered, not per-hex random
+        biome_map = _generate_biome_map(all_hexes, types, weights, rng)
+
         hexes_created = 0
         counts: dict[str, int] = {}
-
-        # Axial hex grid: all hexes (q, r) where |q| + |r| + |q+r| <= 2*radius
-        for q in range(-body.radius, body.radius + 1):
-            for r in range(-body.radius, body.radius + 1):
-                if abs(q) + abs(r) + abs(q + r) > 2 * body.radius:
-                    continue
-                hex_type = rng.choices(types, weights=weights, k=1)[0]
-                enc = encounter_chances.get(hex_type, 0.15)
-                try:
-                    conn.execute(
-                        """INSERT INTO world_hexes (q, r, hex_type, encounter_chance, encounter_pool, is_active)
-                           VALUES (?, ?, ?, ?, '[]', 1)
-                           ON CONFLICT DO NOTHING""",
-                        (q, r, hex_type, enc),
-                    )
-                    if conn.execute("SELECT changes()").fetchone()[0]:
-                        hexes_created += 1
-                        counts[hex_type] = counts.get(hex_type, 0) + 1
-                except Exception:
-                    pass
+        for (q, r), hex_type in biome_map.items():
+            enc = encounter_chances.get(hex_type, 0.15)
+            try:
+                conn.execute(
+                    """INSERT INTO world_hexes (q, r, hex_type, encounter_chance, encounter_pool, is_active)
+                       VALUES (?, ?, ?, ?, '[]', 1)
+                       ON CONFLICT DO NOTHING""",
+                    (q, r, hex_type, enc),
+                )
+                if conn.execute("SELECT changes()").fetchone()[0]:
+                    hexes_created += 1
+                    counts[hex_type] = counts.get(hex_type, 0) + 1
+            except Exception:
+                pass
 
         conn.commit()
         return {"hexes_created": hexes_created, "counts": counts, "seed": body.seed, "radius": body.radius}
