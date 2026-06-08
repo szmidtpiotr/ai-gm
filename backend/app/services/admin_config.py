@@ -1927,7 +1927,8 @@ def update_item(
         if final_charges < 1:
             raise ValueError("invalid_charges")
         final_ai = int(ai_generated) if ai_generated is not None else int(current.get("ai_generated") or 0)
-        final_appr = int(approved) if approved is not None else int(current.get("approved") or 1)
+        _cur_appr = current.get("approved")
+        final_appr = int(approved) if approved is not None else (int(_cur_appr) if _cur_appr is not None else 1)
         final_note = note if note is not None else current.get("note")
 
         conn.execute(

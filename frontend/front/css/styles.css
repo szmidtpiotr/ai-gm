@@ -450,6 +450,7 @@ body {
   justify-content: center;
   gap: var(--space-sm);
   padding: var(--space-md) var(--space-xl);
+  min-height: 44px; /* iOS HIG touch target minimum */
   border: none;
   border-radius: var(--radius-md);
   font-family: inherit;
