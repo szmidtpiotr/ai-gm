@@ -156,7 +156,7 @@ Modularny `admin/` musi pokryć wszystkie zdolności admina aż do D7:
 | FADM-P0 bootstrap (skorupa + shared utils) | [#402](https://github.com/szmidtpiotr/ai-gm/issues/402) | ✅ 2026-06-08 |
 | FADM-P1 overview | [#403](https://github.com/szmidtpiotr/ai-gm/issues/403) | ✅ 2026-06-08 |
 | FADM-P2 mechanics | [#404](https://github.com/szmidtpiotr/ai-gm/issues/404) | ✅ 2026-06-08 |
-| FADM-P3 content (+D5) | [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) | ❌ |
+| FADM-P3 content (+D5) | [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) | ✅ 2026-06-08 |
 | FADM-P4 world (+D7) | [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) | ❌ |
 | FADM-P5 map | [#407](https://github.com/szmidtpiotr/ai-gm/issues/407) | ❌ |
 | FADM-P6 campaigns (+B6/B7/D6) | [#408](https://github.com/szmidtpiotr/ai-gm/issues/408) | ❌ |
@@ -199,6 +199,22 @@ Skorupa `frontend/admin/` żyje: `index.html` (router hash + sidebar 14 sekcji m
 **Anty-grób:** mechanics usunięte z monolitu (−384 linie: sekcja HTML + _mechLoaded + _loadStats/Skills/DC/Conditions/Archetypes + loadEncounterConfig/saveEncounterConfig + _loadMechanicsTab + event handler + openAddSkillModal/EditSkillModal + _openSkillForm + openAddConditionModal/EditConditionModal + _openConditionForm + deleteSkill/deleteCondition + wpis dispatch + subtab hash). `mechPatchEdit` POZOSTAJE. admin3 `/admin3/#mechanics` → **redirect do `/admin/#mechanics`**. Smoke spec: mechanics usunięte z SECTIONS, dodany test redirect.
 
 **Testy:** `issue_404_mechanics.spec.js` (struktura 5 tabów + encounter config + stats 8s load + skills tab przełączenie + admin3 alive). `admin3_smoke.spec.js` zaktualizowany. 8/8 GREEN.
+
+### FADM-P3 — port sekcji content (+D5) ✅ 2026-06-08
+
+`sections/content.js` (`init(panel)`) — port 1:1 z monolitu: 6 zakładek stab — Broń (`/api/admin/weapons`), Zbroje (`/api/admin/items?item_type=armor`), Przedmioty (`/api/admin/items`), Materiały eksploatacyjne (`/api/admin/consumables`), Tabele łupów (`/api/admin/loot-tables`), Czary (`/api/admin/spells`). Tabela łupów była ukryta w monolicie (brak przycisku tab) — wyeksponowana jako 6. tab w module. Backend netknięty.
+
+**D5 item VIEW:** klik na nazwę przedmiotu w tabeli → modal read-only (nazwa, opis, statystyki, miniatura obrazu). Zaimplementowane przez `_openItemViewModal(rec)`. Triggery via `window._contentViewRec`.
+
+**Smart Entry (Kreator AI):** pełny port overlay SE — lazy init, schema fetch, LLM chat, form fill. Tabele: weapons/items/consumables/enemies. Funkcje eksponowane na `window._contentImgModal`, `window._contentViewRec`, `window._contentEditSpell`, itp. (JS modules nie wystawiają globalnych funkcji automatycznie — `window._contentXxx` pattern).
+
+**_ROW_REGISTRY:** dodano entry dla `weapons-table` (monolitu brakowało — edycja broni była zepsuta). Broń teraz ma pełny CRUD przez `_wireRowActions`.
+
+**Gotcha:** `_ROW_REGISTRY`, `_wireRowActions`, `_openGenericEditModal`, `_genericDelete` są SHARED — używane też przez world (enemies). Pozostają w monolicie. `_loadEnemiesContent` i `openEnemyImageModal` — też shared — pozostają. `openLootEntriesModal` wywoływana w world section (linia ~6359 monolitu) — pozostaje w monolicie.
+
+**Anty-grób:** content usunięte z monolitu (−1068 linii fazy 1: sekcja HTML 2297-2929 + `_contentLoaded` Set + ROW_REGISTRY entries armor/items/consumables + `_loadContentTab` + `_loadWeapons`/`_loadArmor`/`_loadItems` + `_loadConsumables` przez `deleteSpell` z pominięciem `_loadEnemiesContent`; −33 linie fazy 2: content-tabs event handler + weapons-table event handler + weapon save reload + smart-entry-saved weapons/items/consumables handlers + wpis content w `_load dispatch` + bulk delete reload + `openItemImageModal` reloadMap). admin3 `/admin3/#content` → **redirect do `/admin/#content`**. Smoke spec: content usunięte z SECTIONS, dodany test redirect.
+
+**Testy:** `issue_405_content.spec.js` (6 tabów + weapons load >0 rows + spells tab switch + admin3 alive). `admin3_smoke.spec.js` zaktualizowany. 4/4 GREEN.
 
 ---
 

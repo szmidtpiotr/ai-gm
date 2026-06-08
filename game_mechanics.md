@@ -2975,7 +2975,7 @@ Plan rozbity na konkretne issues (epic [#401](https://github.com/szmidtpiotr/ai-
 | FADM-P0 | #402 | Bootstrap skorupy `admin/` + shared utils (api/table/toast/modal/form) |
 | FADM-P1 | #403 | overview ✅ 2026-06-08 (port 1:1 + components.css współdzielony; usunięte z monolitu) |
 | FADM-P2 | #404 | mechanics ✅ 2026-06-08 (port 1:1; mechPatchEdit shared → pozostał w monolicie; usunięte z monolitu) |
-| FADM-P3 | #405 | content (+ D5 item VIEW) |
+| FADM-P3 | #405 | content (+ D5 item VIEW) ✅ 2026-06-08 (6 tabów; D5 item VIEW modal; Smart Entry port; loot tab wyeksponowany; usunięte z monolitu) |
 | FADM-P4 | #406 | world (+ D7 encountery) |
 | FADM-P5 | #407 | map |
 | FADM-P6 | #408 | campaigns (+ B6 World State + B7 Inspector + D6 narrative) |

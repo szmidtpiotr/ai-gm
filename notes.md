@@ -191,8 +191,8 @@ Wyrównanie z planem CZĘŚĆ AE. Monolit `admin_panel_v3` (19 447 linii, 1 plik
 - [x] FADM-P0 — Bootstrap skorupy `admin/` + shared utils (api/table/toast/modal/form) — [#402](https://github.com/szmidtpiotr/ai-gm/issues/402) ✅ 2026-06-08
 - [x] FADM-P1 — Port sekcji overview — [#403](https://github.com/szmidtpiotr/ai-gm/issues/403) ✅ 2026-06-08
 - [x] FADM-P2 — Port sekcji mechanics — [#404](https://github.com/szmidtpiotr/ai-gm/issues/404) ✅ 2026-06-08
-- [ ] FADM-P3 — Port sekcji content (+ D5 item VIEW) — [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) **← następne**
-- [ ] FADM-P4 — Port sekcji world (+ D7 encountery) — [#406](https://github.com/szmidtpiotr/ai-gm/issues/406)
+- [x] FADM-P3 — Port sekcji content (+ D5 item VIEW) — [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) ✅ 2026-06-08
+- [ ] FADM-P4 — Port sekcji world (+ D7 encountery) — [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) **← następne**
 - [ ] FADM-P5 — Port sekcji map — [#407](https://github.com/szmidtpiotr/ai-gm/issues/407)
 - [ ] FADM-P6 — Port sekcji campaigns (+ B6/B7/D6) — [#408](https://github.com/szmidtpiotr/ai-gm/issues/408)
 - [ ] FADM-P7 — Port sekcji dungeons — [#409](https://github.com/szmidtpiotr/ai-gm/issues/409)
