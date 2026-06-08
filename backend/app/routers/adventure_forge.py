@@ -933,6 +933,73 @@ def forge_create_template(req: CreateTemplateReq, _: None = Depends(_require_adm
         conn.close()
 
 
+def _plan_beat_keys(plan: dict) -> set[str]:
+    """Collect every beat_key present in a gm_plan (arcs[].key_beats[] or acts[].key_beats[])."""
+    keys: set[str] = set()
+    containers = []
+    arcs = plan.get("arcs")
+    if isinstance(arcs, dict):
+        containers.extend(arcs.values())
+    elif isinstance(arcs, list):
+        containers.extend(arcs)
+    if isinstance(plan.get("acts"), list):
+        containers.extend(plan["acts"])
+    for c in containers:
+        if not isinstance(c, dict):
+            continue
+        for b in (c.get("key_beats") or []):
+            if isinstance(b, dict) and b.get("beat_key"):
+                keys.add(str(b["beat_key"]))
+            elif isinstance(b, str):
+                keys.add(b)
+    return keys
+
+
+def validate_template_publish(template_id: int, conn: sqlite3.Connection) -> dict:
+    """E10 (#425) — Verify a template is publishable.
+
+    Checks that every required NPC key exists in the npcs table and every
+    required beat exists in the template's gm_plan. Returns
+    {ok, missing_npcs, missing_beats}.
+    """
+    row = conn.execute(
+        "SELECT required_npc_keys, required_beats, gm_plan_json FROM campaign_templates WHERE id = ?",
+        (template_id,),
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    def _load(v):
+        try:
+            return json.loads(v or "[]")
+        except Exception:
+            return []
+
+    required_npcs = _load(row["required_npc_keys"])
+    required_beats = _load(row["required_beats"])
+    try:
+        plan = json.loads(row["gm_plan_json"] or "{}")
+    except Exception:
+        plan = {}
+
+    missing_npcs = []
+    for key in required_npcs:
+        hit = conn.execute(
+            "SELECT 1 FROM npcs WHERE key = ? AND is_active = 1", (key,)
+        ).fetchone()
+        if not hit:
+            missing_npcs.append(key)
+
+    plan_beats = _plan_beat_keys(plan)
+    missing_beats = [b for b in required_beats if b not in plan_beats]
+
+    return {
+        "ok": not missing_npcs and not missing_beats,
+        "missing_npcs": missing_npcs,
+        "missing_beats": missing_beats,
+    }
+
+
 @router.patch("/templates/{template_id}")
 def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depends(_require_admin)):
     conn = _get_db()
@@ -940,6 +1007,26 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
         row = conn.execute("SELECT * FROM campaign_templates WHERE id = ?", (template_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Template not found")
+        # E10 (#425) — block publishing when required NPCs/beats are missing.
+        if req.status == "published":
+            # Apply any required_* changes coming in the same request first, so
+            # validation runs against the about-to-be-saved values.
+            if req.required_npc_keys is not None or req.required_beats is not None:
+                if req.required_npc_keys is not None:
+                    conn.execute("UPDATE campaign_templates SET required_npc_keys = ? WHERE id = ?",
+                                 (json.dumps(req.required_npc_keys, ensure_ascii=False), template_id))
+                if req.required_beats is not None:
+                    conn.execute("UPDATE campaign_templates SET required_beats = ? WHERE id = ?",
+                                 (json.dumps(req.required_beats, ensure_ascii=False), template_id))
+                conn.commit()
+            vres = validate_template_publish(template_id, conn)
+            if not vres["ok"]:
+                raise HTTPException(status_code=422, detail={
+                    "error": "template_incomplete",
+                    "message": "Nie można opublikować — brakuje wymaganych elementów.",
+                    "missing_npcs": vres["missing_npcs"],
+                    "missing_beats": vres["missing_beats"],
+                })
         updates: list[str] = []
         params: list = []
         for field, val in [

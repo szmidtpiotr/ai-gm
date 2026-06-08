@@ -243,4 +243,13 @@ def get_narrator_context_block(campaign_id: int, conn: sqlite3.Connection) -> st
     if alive_npcs:
         lines.append(f"Key NPCs (alive): {', '.join(alive_npcs[:4])}")
 
+    # E9 (#424) — story gravity: nudge the narrator when a beat has stalled.
+    try:
+        from app.services.story_gravity_service import compute_story_gravity
+        g = compute_story_gravity(campaign_id, conn)
+        if g.get("hint"):
+            lines.append(g["hint"])
+    except Exception:
+        pass
+
     return "\n".join(lines)

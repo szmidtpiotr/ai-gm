@@ -87,6 +87,30 @@ def patch_summary_settings(
         conn.close()
 
 
+# E9 (#424) — Story Gravity thresholds, configurable from the Admin Panel.
+class StoryGravityPatchReq(BaseModel):
+    enabled: bool | None = None
+    turns_l1: int | None = Field(default=None, ge=1, le=200)
+    turns_l2: int | None = Field(default=None, ge=1, le=200)
+    turns_l3: int | None = Field(default=None, ge=1, le=200)
+    l3_enabled: bool | None = None
+
+
+@router.get("/settings/story-gravity")
+def get_story_gravity_settings():
+    from app.services.story_gravity_service import get_story_gravity_config
+    return {"ok": True, "data": get_story_gravity_config()}
+
+
+@router.patch("/settings/story-gravity")
+def patch_story_gravity_settings(
+    req: StoryGravityPatchReq, _: None = Depends(_require_admin_bearer)
+):
+    from app.services.story_gravity_service import set_story_gravity_config
+    patch = {k: v for k, v in req.model_dump().items() if v is not None}
+    return {"ok": True, "data": set_story_gravity_config(**patch)}
+
+
 class LlmSettingsReq(BaseModel):
     provider: str
     base_url: str
