@@ -158,7 +158,7 @@ Modularny `admin/` musi pokryć wszystkie zdolności admina aż do D7:
 | FADM-P2 mechanics | [#404](https://github.com/szmidtpiotr/ai-gm/issues/404) | ✅ 2026-06-08 |
 | FADM-P3 content (+D5) | [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) | ✅ 2026-06-08 |
 | FADM-P4 world (+D7) | [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) | ✅ 2026-06-08 |
-| FADM-P5 map | [#407](https://github.com/szmidtpiotr/ai-gm/issues/407) | ❌ |
+| FADM-P5 map | [#407](https://github.com/szmidtpiotr/ai-gm/issues/407) | ✅ 2026-06-08 |
 | FADM-P6 campaigns (+B6/B7/D6) | [#408](https://github.com/szmidtpiotr/ai-gm/issues/408) | ❌ |
 | FADM-P7 dungeons | [#409](https://github.com/szmidtpiotr/ai-gm/issues/409) | ❌ |
 | FADM-P8 forge (+D7) | [#410](https://github.com/szmidtpiotr/ai-gm/issues/410) | ❌ |
@@ -227,6 +227,20 @@ Skorupa `frontend/admin/` żyje: `index.html` (router hash + sidebar 14 sekcji m
 **Anty-grób:** world usunięte z monolitu (−1206 linii: section-world HTML + world-tabs handler + ROW_REGISTRY npcs-table + `_loadWorldTab` + `_loadNPCs` + `openShopInventoryModal` + `_loadBestiaryLoot` + `_openAddLootTableModal` + `_submitAddLootTable` + `_deleteBestiaryLootTable` + `_loadBestiaryPending` + `reviewEntityBestiary` + `openPending*/savePending*` (NPC/Enemy/Item) + `_loadEnemies` + `deleteEnemy` + `openEnemyFormModal` + `saveEnemyForm` + `_worldAddAction` + wszystkie image modals enemy/NPC). admin3 `/admin3/#world` → **redirect do `/admin/#world`**. Smoke spec: world usunięte z SECTIONS, dodany test redirect.
 
 **Testy:** `issue_406_world.spec.js` (4 taby + NPC load >0 rows + enemies tab switch + admin3 alive). `admin3_smoke.spec.js` zaktualizowany. 4/4 GREEN, 16/16 smoke GREEN.
+
+### FADM-P5 — port sekcji map ✅ 2026-06-08
+
+`sections/map.js` (`init(panel)`) — port 1:1: 5 zakładek `data-mtap` — budowniczy świata (SVG hex grid), generuj świat (proceduralnie), lokacje (drzewo parent/child), teren (`/api/admin/hex-terrain-config`), oczekujące (lokacje + heksy submappable).
+
+**Największa sekcja dotąd (+2009 linii w map.js).** Złożone podsystemy: `_wb*` world builder (paint/select, teleporty, location markers, zoom/pan, ResizeObserver), `openSubmapModal` (edytor podmapy z paintem + przypisaniem lokacji), `_renderLocTree` (akordeon parent/child), `openLocImageModal` (generowanie/galeria obrazów lokacji), `openLocNpcModal`, terrain CRUD z `mechPatchEdit` inline.
+
+**Cache na re-mount:** `_worldLoaded.clear()` na starcie `init()` — DOM jest czyszczony przy każdym mount, więc cache zakładek resetowany aby budowniczy odrysował SVG od nowa (różnica wobec world.js — strictly safer).
+
+**Inline globals:** ekspozycja nazw bare przez `Object.assign(window, {...})` (port zachowuje oryginalne nazwy onclick — zero przepisywania handlerów). `mechPatchEdit` skopiowany lokalnie (shared helper). Generic edit/delete (`_openGenericEditModal`/`_genericDelete`/`_wireRowActions`) + wpis `locations-table` (noDelete).
+
+**Anty-grób:** map usunięte z monolitu (−1758 linii): section-map HTML + map-tabs handler + `locations-table` ROW_REGISTRY + `_loadMapTab` + `hexmap*` + drzewo lokacji + `openLocNpcModal` + `_loadPendingLocations` + `pendingGenSubmap` + `openSubmapModal` + `approveKanon` + `reviewEntity` + terrain + cały world builder + `openLocImageModal`. **Martwy `_loadPendingReview` (zero callerów) usunięty.** Dispatcher `_load` — wpis `map:` sprzątnięty. admin3 `/admin3/#map` → **redirect do `/admin/#map`**. CSS `.wb-*` już w `components.css`; `.smod-*`/`.whx`/`.wloc-marker` to selektory bez stylów (inline w JS).
+
+**Testy:** `issue_407_map.spec.js` (5 tabów + SVG heksy `wb-svg polygon.whx` >0 + paleta terenu + lokacje load + teren load + admin3 alive). `admin3_smoke.spec.js` zaktualizowany (map redirect + usunięte z SECTIONS). 5/5 GREEN, 16/16 smoke GREEN, 4/4 world (#406) bez regresji.
 
 ---
 
