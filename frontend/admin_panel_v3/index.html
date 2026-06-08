@@ -3400,101 +3400,6 @@
       </div>
     </section>
 
-    <section class="section" id="section-mechanics">
-      <div class="section-header">
-        <div>
-          <div class="section-heading">Mechaniki</div>
-          <div class="section-sub">Statystyki, umiejętności, DC, kondycje, archetypy</div>
-        </div>
-      </div>
-      <div class="card" style="margin-bottom:12px">
-        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 14px">
-          <div style="font-weight:600">⚔ Encountery — częstotliwość</div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <label style="font-size:.78rem;color:var(--t3)">Interwał (spokojne tury w dziczy)</label>
-            <input id="enc-cfg-interval" type="number" min="3" max="200" class="field-input" style="width:80px">
-          </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <label style="font-size:.78rem;color:var(--t3)">Osiedlenie (tury → spadek szansy)</label>
-            <input id="enc-cfg-dwell" type="number" min="1" max="50" class="field-input" style="width:70px">
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="saveEncounterConfig()">Zapisz</button>
-          <span id="enc-cfg-status" style="font-size:.75rem;color:var(--t3)"></span>
-        </div>
-      </div>
-      <div class="card" style="overflow:visible">
-        <div class="stab-bar" id="mech-stab-bar">
-          <button class="stab active" data-mtab="stats">Statystyki</button>
-          <button class="stab" data-mtab="skills">Umiejętności</button>
-          <button class="stab" data-mtab="dc">Poziomy DC</button>
-          <button class="stab" data-mtab="conditions">Kondycje</button>
-          <button class="stab" data-mtab="archetypes">Archetypy</button>
-        </div>
-        <div id="mtab-stats" class="stab-panel active">
-          <div class="toolbar"><span class="td-muted" style="font-size:0.78rem">Statystyki są zdefiniowane systemowo — możesz edytować nazwę i opis.</span></div>
-          <div class="table-wrap">
-            <table class="data-table" id="stats-table">
-              <thead><tr>
-                <th>Klucz</th><th>Nazwa</th><th>Opis</th><th style="width:80px">Zablokowany</th>
-              </tr></thead>
-              <tbody><tr><td colspan="4" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-        <div id="mtab-skills" class="stab-panel" style="display:none">
-          <div class="toolbar">
-            <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj umiejętności…" oninput="filterTableGeneric(this,'skills-table','td-name')"></div>
-            <button class="btn btn-primary btn-sm" onclick="openAddSkillModal()">+ Umiejętność</button>
-          </div>
-          <div class="table-wrap">
-            <table class="data-table" id="skills-table">
-              <thead><tr>
-                <th>Klucz</th><th>Nazwa</th><th>Statystyka</th><th>Maks. rang</th><th>Słowa kluczowe</th><th>Opis</th><th>Zablokowany</th><th class="td-actions">Akcje</th>
-              </tr></thead>
-              <tbody><tr><td colspan="8" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-        <div id="mtab-dc" class="stab-panel" style="display:none">
-          <div class="toolbar"><span class="td-muted" style="font-size:0.78rem">Poziomy DC są stałe — możesz edytować wartość i opis.</span></div>
-          <div class="table-wrap">
-            <table class="data-table" id="dc-table">
-              <thead><tr>
-                <th>Klucz</th><th>Nazwa</th><th style="width:80px">Wartość</th><th>Opis</th><th style="width:80px">Zablokowany</th>
-              </tr></thead>
-              <tbody><tr><td colspan="5" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-        <div id="mtab-conditions" class="stab-panel" style="display:none">
-          <div class="toolbar">
-            <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj kondycji…" oninput="filterTableGeneric(this,'conditions-table','td-name')"></div>
-            <button class="btn btn-primary btn-sm" onclick="openAddConditionModal()">+ Kondycja</button>
-          </div>
-          <div class="table-wrap">
-            <table class="data-table" id="conditions-table">
-              <thead><tr>
-                <th>Klucz</th><th>Nazwa</th><th>Efekt JSON</th><th style="width:90px">Kumulowalny</th><th style="width:90px">Aktywny</th><th>Zablokowany</th><th class="td-actions">Akcje</th>
-              </tr></thead>
-              <tbody><tr><td colspan="7" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-        <div id="mtab-archetypes" class="stab-panel" style="display:none">
-          <div class="toolbar"><span class="td-muted" style="font-size:0.78rem">Archetypy definiują klasy postaci — HP bazowe i złoto startowe.</span></div>
-          <div class="table-wrap">
-            <table class="data-table" id="archetypes-table">
-              <thead><tr>
-                <th>Klucz</th><th>Nazwa</th><th style="width:90px">HP bazowe</th><th style="width:100px">Złoto startowe</th><th>Opis</th><th style="width:80px">Zablokowany</th>
-              </tr></thead>
-              <tbody><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
-
     <section class="section" id="section-players">
       <div class="section-header">
         <div>
@@ -5339,6 +5244,7 @@
   function switchSection(key) {
     // FADM-P1 (#403): overview przeniesione do modularnego /admin/. Klik nav -> redirect.
     if (key === 'overview') { window.location.href = '/admin/#overview'; return; }
+    if (key === 'mechanics') { window.location.href = '/admin/#mechanics'; return; }
     document.querySelectorAll('.nav-item[data-section]').forEach(b =>
       b.classList.toggle('active', b.dataset.section === key));
     document.querySelectorAll('.section').forEach(s =>
@@ -6573,7 +6479,7 @@
   function _load(key) {
     if (_sectionLoaded.has(key)) return;
     const fn = { campaigns:_loadCampaigns, content:()=>_loadContentTab('weapons'),
-      world:()=>_loadWorldTab('npcs'), map:()=>_loadMapTab('builder'), mechanics:()=>{ _loadMechanicsTab('stats'); loadEncounterConfig(); },
+      world:()=>_loadWorldTab('npcs'), map:()=>_loadMapTab('builder'),
       dungeons:_loadDungeons, players:_loadPlayers, forge:_loadForge,
       system:_loadSystem, invites:_loadInvites, bugreports:_loadBugReports,
       tools:_loadTools, push:_loadPush }[key];
@@ -15854,153 +15760,6 @@
   }
 
   // ── Mechanics ────────────────────────────────────────────
-  const _mechLoaded = new Set();
-
-  // D7 (#382) — globalny config częstotliwości encounterów (admin-tunable).
-  async function loadEncounterConfig() {
-    try {
-      const c = await apiFetch('/api/admin/world/encounter-config');
-      const i = document.getElementById('enc-cfg-interval'); if (i) i.value = c.n_turns_interval ?? 20;
-      const d = document.getElementById('enc-cfg-dwell'); if (d) d.value = c.dwell_settle_turns ?? 3;
-    } catch (e) { /* ignore */ }
-  }
-  async function saveEncounterConfig() {
-    const st = document.getElementById('enc-cfg-status');
-    const body = {
-      n_turns_interval: parseInt(document.getElementById('enc-cfg-interval')?.value) || 20,
-      dwell_settle_turns: parseInt(document.getElementById('enc-cfg-dwell')?.value) || 3,
-    };
-    try {
-      const r = await apiFetch('/api/admin/world/encounter-config', { method: 'POST', body: JSON.stringify(body) });
-      if (st) { st.textContent = `✓ zapisano (interwał ${r.n_turns_interval})`; st.style.color = 'var(--green)'; }
-    } catch (e) {
-      if (st) { st.textContent = '✕ ' + (e.message || 'błąd'); st.style.color = 'var(--red)'; }
-    }
-  }
-
-  function _loadMechanicsTab(tab) {
-    if (_mechLoaded.has(tab)) return Promise.resolve();
-    const fn = { stats:_loadStats, skills:_loadSkills, dc:_loadDC,
-      conditions:_loadConditions, archetypes:_loadArchetypes }[tab];
-    if (!fn) return Promise.resolve();
-    _mechLoaded.add(tab);
-    return fn().catch(err => { _mechLoaded.delete(tab); console.warn('Mech tab failed:', tab, err.message); });
-  }
-
-  document.getElementById('mech-stab-bar')?.querySelectorAll('.stab[data-mtab]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#mech-stab-bar .stab').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const tab = btn.dataset.mtab;
-      document.querySelectorAll('#section-mechanics .stab-panel').forEach(p => p.style.display = 'none');
-      const panel = document.getElementById(`mtab-${tab}`);
-      if (panel) { panel.style.display = ''; panel.classList.add('active'); }
-      if (_sectionLoaded.has('mechanics')) _loadMechanicsTab(tab);
-    });
-  });
-
-  async function _loadStats() {
-    const tbody = document.querySelector('#stats-table tbody');
-    if (!tbody) return;
-    tbody.innerHTML = _loading(4);
-    try {
-      const d = await apiFetch('/api/admin/stats');
-      const items = d.items || [];
-      if (!items.length) { tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--t3)">Brak statystyk</td></tr>`; return; }
-      tbody.innerHTML = items.map(s => `<tr>
-        <td class="td-mono">${_esc(s.key)}</td>
-        <td class="td-name editable" onclick="startEdit(this)" data-key="${_esc(s.key)}" data-field="label" data-patch="/api/admin/stats/${_esc(s.key)}">${_esc(s.label||s.key)}</td>
-        <td class="td-muted editable" onclick="startEdit(this)" data-key="${_esc(s.key)}" data-field="description" data-patch="/api/admin/stats/${_esc(s.key)}">${_esc((s.description||'').slice(0,80)||'—')}</td>
-        <td>${s.locked_at ? `<span class="badge badge-amber" title="${_esc(s.locked_at)}">🔒</span>` : '<span class="td-muted">—</span>'}</td>
-      </tr>`).join('');
-    } catch(e) { tbody.innerHTML = _errRow(4, e.message); }
-  }
-
-  async function _loadSkills() {
-    const tbody = document.querySelector('#skills-table tbody');
-    if (!tbody) return;
-    tbody.innerHTML = _loading(7);
-    try {
-      const [sd, sk] = await Promise.all([apiFetch('/api/admin/stats'), apiFetch('/api/admin/skills')]);
-      window._statsCache = sd.items || [];
-      const items = sk.items || [];
-      if (!items.length) { tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--t3)">Brak umiejętności</td></tr>`; return; }
-      tbody.innerHTML = items.map(s => `<tr>
-        <td class="td-mono">${_esc(s.key)}</td>
-        <td class="td-name">${_esc(s.label||s.key)}</td>
-        <td><span class="badge badge-blue">${_esc(s.linked_stat||'—')}</span></td>
-        <td class="td-mono">${s.rank_ceiling??'—'}</td>
-        <td class="td-muted" style="font-size:0.72rem;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(s.trigger_keywords||'')}">${_esc(s.trigger_keywords||'—')}</td>
-        <td class="td-muted">${_esc((s.description||'').slice(0,60)||'—')}</td>
-        <td>${s.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
-        <td class="td-actions">
-          <button class="btn-icon" title="Edytuj" onclick="openEditSkillModal('${_esc(s.key)}')">✎</button>
-          <button class="btn-icon danger" title="Usuń" onclick="deleteSkill('${_esc(s.key)}', this, ${s.locked_at ? 'true' : 'false'})">✕</button>
-        </td>
-      </tr>`).join('');
-    } catch(e) { tbody.innerHTML = _errRow(8, e.message); }
-  }
-
-  async function _loadDC() {
-    const tbody = document.querySelector('#dc-table tbody');
-    if (!tbody) return;
-    tbody.innerHTML = _loading(5);
-    try {
-      const d = await apiFetch('/api/admin/dc');
-      const items = d.items || [];
-      if (!items.length) { tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--t3)">Brak poziomów DC</td></tr>`; return; }
-      tbody.innerHTML = items.map(dc => `<tr>
-        <td class="td-mono">${_esc(dc.key)}</td>
-        <td class="td-name">${_esc(dc.label||dc.key)}</td>
-        <td class="td-mono editable" onclick="mechPatchEdit(this, '/api/admin/dc/${_esc(dc.key)}', 'value')">${dc.value??'—'}</td>
-        <td class="td-muted">${_esc((dc.description||'').slice(0,80)||'—')}</td>
-        <td>${dc.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
-      </tr>`).join('');
-    } catch(e) { tbody.innerHTML = _errRow(5, e.message); }
-  }
-
-  async function _loadConditions() {
-    const tbody = document.querySelector('#conditions-table tbody');
-    if (!tbody) return;
-    tbody.innerHTML = _loading(7);
-    try {
-      const d = await apiFetch('/api/admin/conditions');
-      const items = d.items || [];
-      if (!items.length) { tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--t3)">Brak kondycji</td></tr>`; return; }
-      tbody.innerHTML = items.map(c => `<tr>
-        <td class="td-mono">${_esc(c.key)}</td>
-        <td class="td-name">${_esc(c.label||c.key)}</td>
-        <td class="td-mono" style="font-size:0.72rem;max-width:160px;overflow:hidden;text-overflow:ellipsis">${c.effect_json ? _esc(typeof c.effect_json==='string'?c.effect_json:JSON.stringify(c.effect_json)) : '—'}</td>
-        <td style="text-align:center">${c.stackable ? '✓' : '—'}</td>
-        <td style="text-align:center">${c.is_active ? '<span class="badge badge-green">●</span>' : '<span class="badge badge-slate">○</span>'}</td>
-        <td>${c.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
-        <td class="td-actions">
-          <button class="btn-icon" title="Edytuj" onclick="openEditConditionModal('${_esc(c.key)}')">✎</button>
-          ${!c.locked_at ? `<button class="btn-icon danger" title="Usuń" onclick="deleteCondition('${_esc(c.key)}', this)">✕</button>` : ''}
-        </td>
-      </tr>`).join('');
-    } catch(e) { tbody.innerHTML = _errRow(7, e.message); }
-  }
-
-  async function _loadArchetypes() {
-    const tbody = document.querySelector('#archetypes-table tbody');
-    if (!tbody) return;
-    tbody.innerHTML = _loading(6);
-    try {
-      const d = await apiFetch('/api/admin/archetypes');
-      const items = d.items || [];
-      if (!items.length) { tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak archetypów</td></tr>`; return; }
-      tbody.innerHTML = items.map(a => `<tr>
-        <td class="td-mono">${_esc(a.key)}</td>
-        <td class="td-name">${_esc(a.label||a.key)}</td>
-        <td class="td-mono editable" onclick="mechPatchEdit(this, '/api/admin/archetypes/${_esc(a.key)}', 'hp_base')">${a.hp_base??'—'}</td>
-        <td class="td-mono editable" onclick="mechPatchEdit(this, '/api/admin/archetypes/${_esc(a.key)}', 'starter_gold_gp')">${a.starter_gold_gp??'—'}</td>
-        <td class="td-muted">${_esc((a.description||'').slice(0,60)||'—')}</td>
-        <td>${a.locked_at ? `<span class="badge badge-amber">🔒</span>` : '<span class="td-muted">—</span>'}</td>
-      </tr>`).join('');
-    } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
-  }
-
   async function mechPatchEdit(cell, patchUrl, field) {
     const orig = cell.textContent.trim();
     const input = document.createElement('input');
@@ -16022,148 +15781,6 @@
     input.addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape'){cell.textContent=orig;} });
   }
 
-  async function openAddSkillModal() {
-    const stats = window._statsCache || (await apiFetch('/api/admin/stats').then(d => d.items||[]));
-    _openSkillForm(null, stats, async data => {
-      try {
-        await apiFetch('/api/admin/skills', { method:'POST', body:JSON.stringify(data) });
-        _mechLoaded.delete('skills');
-        _loadSkills();
-        showToast('Dodano umiejętność.', 'success');
-      } catch(e) { showToast('Błąd: '+e.message, 'error'); }
-    });
-  }
-
-  async function openEditSkillModal(key) {
-    const stats = window._statsCache || (await apiFetch('/api/admin/stats').then(d => d.items||[]));
-    const all = await apiFetch('/api/admin/skills').then(d => d.items||[]);
-    const row = all.find(s => s.key === key);
-    if (!row) return;
-    _openSkillForm(row, stats, async data => {
-      try {
-        await apiFetch(`/api/admin/skills/${key}`, { method:'PATCH', body:JSON.stringify(data) });
-        _mechLoaded.delete('skills');
-        _loadSkills();
-        showToast('Zapisano.', 'success');
-      } catch(e) { showToast('Błąd: '+e.message, 'error'); }
-    });
-  }
-
-  function _openSkillForm(prefill, stats, onSubmit) {
-    const p = prefill || {};
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay open';
-    overlay.innerHTML = `<div class="modal-box" style="width:440px">
-      <div class="modal-head"><span class="modal-title">${p.key ? 'Edytuj umiejętność' : 'Nowa umiejętność'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-      <div class="modal-body">
-        <div class="form-row"><label class="form-label">Klucz *</label><input class="form-input" name="key" value="${_esc(p.key||'')}" placeholder="np. acrobatics" ${p.key?'readonly':''}></div>
-        <div class="form-row"><label class="form-label">Nazwa *</label><input class="form-input" name="label" value="${_esc(p.label||'')}" placeholder="Akrobatyka"></div>
-        <div class="form-row"><label class="form-label">Statystyka *</label><select class="form-input" name="linked_stat">${stats.map(s=>`<option value="${_esc(s.key)}" ${p.linked_stat===s.key?'selected':''}>${_esc(s.label||s.key)}</option>`).join('')}</select></div>
-        <div class="form-row"><label class="form-label">Maks. rang</label><input class="form-input" name="rank_ceiling" type="number" value="${p.rank_ceiling??5}" min="1"></div>
-        <div class="form-row"><label class="form-label">Opis</label><textarea class="form-input" name="description" rows="2">${_esc(p.description||'')}</textarea></div>
-        <div class="form-row"><label class="form-label">Trigger keywords</label><input class="form-input" name="trigger_keywords" value="${_esc(p.trigger_keywords||'')}" placeholder="miecz,broń,wykuć — oddzielone przecinkami"></div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
-        <button class="btn btn-primary" id="skill-save-btn">Zapisz</button>
-      </div>
-    </div>`;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#skill-save-btn').onclick = async () => {
-      const key = overlay.querySelector('[name="key"]').value.trim();
-      const label = overlay.querySelector('[name="label"]').value.trim();
-      const linked_stat = overlay.querySelector('[name="linked_stat"]').value;
-      const rank_ceiling = parseInt(overlay.querySelector('[name="rank_ceiling"]').value, 10);
-      const description = overlay.querySelector('[name="description"]').value.trim();
-      const trigger_keywords = overlay.querySelector('[name="trigger_keywords"]').value.trim();
-      if (!key) { showToast('Klucz jest wymagany.', 'error'); return; }
-      if (!label) { showToast('Nazwa jest wymagana.', 'error'); return; }
-      overlay.remove();
-      await onSubmit({ key, label, linked_stat, rank_ceiling, description: description||null, trigger_keywords: trigger_keywords||null });
-    };
-  }
-
-  async function openAddConditionModal() { _openConditionForm(null); }
-  async function openEditConditionModal(key) {
-    const all = await apiFetch('/api/admin/conditions').then(d => d.items||[]);
-    _openConditionForm(all.find(c => c.key === key) || null);
-  }
-
-  function _openConditionForm(prefill) {
-    const p = prefill || {};
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay open';
-    overlay.innerHTML = `<div class="modal-box" style="width:440px">
-      <div class="modal-head"><span class="modal-title">${p.key ? 'Edytuj kondycję' : 'Nowa kondycja'}</span><button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button></div>
-      <div class="modal-body">
-        <div class="form-row"><label class="form-label">Klucz *</label><input class="form-input" name="key" value="${_esc(p.key||'')}" placeholder="np. poisoned" ${p.key?'readonly':''}></div>
-        <div class="form-row"><label class="form-label">Nazwa *</label><input class="form-input" name="label" value="${_esc(p.label||'')}" placeholder="Zatruty"></div>
-        <div class="form-row"><label class="form-label">Efekt JSON</label><textarea class="form-input form-mono" name="effect_json" rows="3" placeholder='{"penalty": -2}'>${_esc(typeof p.effect_json==='object'?JSON.stringify(p.effect_json,null,2):(p.effect_json||''))}</textarea></div>
-        <div class="form-row"><label class="form-label">Opis</label><textarea class="form-input" name="description" rows="2">${_esc(p.description||'')}</textarea></div>
-        <div class="form-row"><label class="form-label">Auto-usuń</label><input class="form-input" name="auto_remove" value="${_esc(p.auto_remove||'')}" placeholder="np. on_turn_end"></div>
-        <div class="form-row" style="flex-direction:row;gap:20px;align-items:center">
-          <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" name="stackable" ${p.stackable?'checked':''}> Kumulowalny</label>
-          <label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" name="is_active" ${(p.is_active??true)?'checked':''}> Aktywny</label>
-        </div>
-      </div>
-      <div class="modal-foot">
-        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
-        <button class="btn btn-primary" id="cond-save-btn">Zapisz</button>
-      </div>
-    </div>`;
-    document.body.appendChild(overlay);
-    overlay.querySelector('#cond-save-btn').onclick = async () => {
-      const key = overlay.querySelector('[name="key"]').value.trim();
-      const label = overlay.querySelector('[name="label"]').value.trim();
-      const effect_json_raw = overlay.querySelector('[name="effect_json"]').value.trim();
-      const description = overlay.querySelector('[name="description"]').value.trim();
-      const auto_remove = overlay.querySelector('[name="auto_remove"]').value.trim();
-      const stackable = overlay.querySelector('[name="stackable"]').checked;
-      const is_active = overlay.querySelector('[name="is_active"]').checked;
-      if (!key) { showToast('Klucz jest wymagany.', 'error'); return; }
-      if (!label) { showToast('Nazwa jest wymagana.', 'error'); return; }
-      if (effect_json_raw) {
-        try { JSON.parse(effect_json_raw); } catch { showToast('Efekt JSON jest nieprawidłowy.', 'error'); return; }
-      }
-      overlay.remove();
-      const data = { key, label, description: description||null, effect_json: effect_json_raw||null, stackable, is_active, auto_remove: auto_remove||null };
-      try {
-        if (p.key) {
-          await apiFetch(`/api/admin/conditions/${p.key}`, { method:'PATCH', body:JSON.stringify(data) });
-        } else {
-          await apiFetch('/api/admin/conditions', { method:'POST', body:JSON.stringify(data) });
-        }
-        _mechLoaded.delete('conditions');
-        _loadConditions();
-        showToast('Zapisano.', 'success');
-      } catch(e) { showToast('Błąd: '+e.message, 'error'); }
-    };
-  }
-
-  async function deleteSkill(key, btn, isLocked) {
-    const msg = isLocked ? `Umiejętność "${key}" jest zablokowana. Na pewno usunąć?` : `Usunąć umiejętność "${key}"?`;
-    if (!confirm(msg)) return;
-    btn.disabled = true;
-    try {
-      const opts = { method: 'DELETE' };
-      if (isLocked) { opts.headers = {'Content-Type':'application/json'}; opts.body = JSON.stringify({force:true}); }
-      await apiFetch(`/api/admin/skills/${key}`, opts);
-      _mechLoaded.delete('skills');
-      _loadSkills();
-      showToast('Usunięto.', 'success');
-    } catch(e) { showToast('Błąd: '+e.message, 'error'); btn.disabled = false; }
-  }
-
-  async function deleteCondition(key, btn) {
-    if (!confirm(`Usunąć kondycję "${key}"?`)) return;
-    btn.disabled = true;
-    try {
-      await apiFetch(`/api/admin/conditions/${key}`, { method: 'DELETE' });
-      _mechLoaded.delete('conditions');
-      _loadConditions();
-      showToast('Usunięto.', 'success');
-    } catch(e) { showToast('Błąd: '+e.message, 'error'); btn.disabled = false; }
-  }
 
   // ── Knowledge Book ────────────────────────────────────────────────────────────
 
@@ -18656,7 +18273,7 @@ Niech kości się toczą! 🎲`,
     content:   ['#content-tabs',   'data-tab'],
     world:     ['#world-tabs',     'data-wtab'],
     map:       ['#map-tabs',       'data-mtap'],
-    mechanics: ['#mech-stab-bar',  'data-mtab'],
+
     system:    ['#sys-stab-bar',   'data-systab'],
   };
 
@@ -18685,7 +18302,7 @@ Niech kości się toczą! 🎲`,
       { sel: '#content-tabs',  attr: 'data-tab',    section: 'content'   },
       { sel: '#world-tabs',    attr: 'data-wtab',   section: 'world'     },
       { sel: '#map-tabs',      attr: 'data-mtap',   section: 'map'       },
-      { sel: '#mech-stab-bar', attr: 'data-mtab',   section: 'mechanics' },
+
       { sel: '#sys-stab-bar',  attr: 'data-systab', section: 'system'    },
     ];
     patches.forEach(({ sel, attr, section }) => {
