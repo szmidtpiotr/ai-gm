@@ -159,7 +159,7 @@ Modularny `admin/` musi pokryć wszystkie zdolności admina aż do D7:
 | FADM-P3 content (+D5) | [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) | ✅ 2026-06-08 |
 | FADM-P4 world (+D7) | [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) | ✅ 2026-06-08 |
 | FADM-P5 map | [#407](https://github.com/szmidtpiotr/ai-gm/issues/407) | ✅ 2026-06-08 |
-| FADM-P6 campaigns (+B6/B7/D6) | [#408](https://github.com/szmidtpiotr/ai-gm/issues/408) | ❌ |
+| FADM-P6 campaigns (+B6/B7/D6) | [#408](https://github.com/szmidtpiotr/ai-gm/issues/408) | ✅ 2026-06-08 |
 | FADM-P7 dungeons | [#409](https://github.com/szmidtpiotr/ai-gm/issues/409) | ❌ |
 | FADM-P8 forge (+D7) | [#410](https://github.com/szmidtpiotr/ai-gm/issues/410) | ❌ |
 | FADM-P9 players | [#411](https://github.com/szmidtpiotr/ai-gm/issues/411) | ❌ |
@@ -241,6 +241,19 @@ Skorupa `frontend/admin/` żyje: `index.html` (router hash + sidebar 14 sekcji m
 **Anty-grób:** map usunięte z monolitu (−1758 linii): section-map HTML + map-tabs handler + `locations-table` ROW_REGISTRY + `_loadMapTab` + `hexmap*` + drzewo lokacji + `openLocNpcModal` + `_loadPendingLocations` + `pendingGenSubmap` + `openSubmapModal` + `approveKanon` + `reviewEntity` + terrain + cały world builder + `openLocImageModal`. **Martwy `_loadPendingReview` (zero callerów) usunięty.** Dispatcher `_load` — wpis `map:` sprzątnięty. admin3 `/admin3/#map` → **redirect do `/admin/#map`**. CSS `.wb-*` już w `components.css`; `.smod-*`/`.whx`/`.wloc-marker` to selektory bez stylów (inline w JS).
 
 **Testy:** `issue_407_map.spec.js` (5 tabów + SVG heksy `wb-svg polygon.whx` >0 + paleta terenu + lokacje load + teren load + admin3 alive). `admin3_smoke.spec.js` zaktualizowany (map redirect + usunięte z SECTIONS). 5/5 GREEN, 16/16 smoke GREEN, 4/4 world (#406) bez regresji.
+
+### FADM-P6 — port sekcji campaigns ✅ 2026-06-08
+
+`sections/campaigns.js` (`init(panel)`) — port 1:1: tabela kampanii (widok tabela/karty toggle), 8-tabowy modal kampanii (overview/plan/turns/map/npcs/workshop/world/inspector), admin komendy `/debug set-hp`, Warsztat kampanii (LLM), wstrzykiwanie spotkań.
+
+**Adapatacje wobec monolitu:**
+- `deleteCampaign` / `_bulkDeleteCampaigns`: usunięto `_sectionLoaded.delete('campaigns')` (nie istnieje w module) → bezpośrednie `_loadCampaigns()` po operacji
+- Inspector tab: raw `fetch()` z `_ADMIN_TOKEN_KEY` zastąpiony przez `apiFetch()` (auth obsługiwany przez shared/api.js)
+- Moduł definiuje lokalne `_timeAgo`, `_hp`, `_showToast`, `filterTableGeneric` (te z monolitu globalnych, niezdostępne w module)
+
+**Anty-grób:** campaigns usunięte z monolitu (−958 linii): section-campaigns HTML + `filterCampaigns` + `_campsData`/`_loadCampaigns`/`_renderCampCards`/`_setCampView` + `deleteCampaign`/`_bulkDeleteCampaigns` + `_CAMP_CMDS` + cmd helpers + `_campModalResurrect` + `_renderAdminHexMap` + `_HEX_TYPES` + `_showHexEditModal` + `openCampaignModal` + `_loadCampTab` (8 tabów) + `advanceCampScene` + `_loadWorkshopEncounters` + `_injectEncounterFromWorkshop` + `sendWorkshopMsg`. Dispatcher `_load` — wpis `campaigns:_loadCampaigns` sprzątnięty. admin3 `/admin3/#campaigns` → **redirect do `/admin/#campaigns`**. `_loadPdrawerCamps` (players drawer) — NIE portowana, zostaje w monolicie (należy do players sekcji).
+
+**Testy:** `issue_408_campaigns.spec.js` (tabela renderuje + dane z API + modal 8 tabów + admin3 alive + redirect). `admin3_smoke.spec.js` zaktualizowany (campaigns redirect + usunięte z SECTIONS). 5/5 GREEN, 16/16 smoke GREEN.
 
 ---
 
