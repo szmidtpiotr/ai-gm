@@ -25,7 +25,10 @@ NARRATIVE_EVENT_RE = re.compile(
 NARRATIVE_SEED_RE = re.compile(
     r"\[NARRATIVE_SEED:\s*key=([^,\]]+?)\s*,\s*hint=([^\]]+?)\s*\]", re.IGNORECASE
 )
-_ANY_NARRATIVE_RE = re.compile(r"\[NARRATIVE_(?:EVENT|SEED):[^\]]*\]", re.IGNORECASE)
+# E6 (#421): also strip the [ARC_ADVANCE: key] GM directive so players never see it.
+_ANY_NARRATIVE_RE = re.compile(
+    r"\[(?:NARRATIVE_(?:EVENT|SEED)|ARC_ADVANCE):[^\]]*\]", re.IGNORECASE
+)
 
 MAX_EVENTS = 30
 MAX_SEEDS = 20

@@ -11,10 +11,60 @@ Live campaign plan operations during gameplay:
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import structlog
 
 logger = structlog.get_logger()
+
+# E6 (#421) — narrator emits [ARC_ADVANCE: arc_key] to jump the active arc.
+_ARC_ADVANCE_RE = re.compile(r"\[ARC_ADVANCE:\s*([^\]\s]+)\s*\]", re.IGNORECASE)
+
+
+def parse_arc_advance_tags(text: str | None) -> list[str]:
+    """Extract arc keys from [ARC_ADVANCE: key] tags in narrator output."""
+    if not text:
+        return []
+    return [m.group(1).strip() for m in _ARC_ADVANCE_RE.finditer(text)]
+
+
+def advance_arc(campaign_id: int, arc_id: str, conn: sqlite3.Connection) -> bool:
+    """E6 (#421) — Advance the GM plan to a named arc.
+
+    Closes the currently active arc, activates the target arc and repoints
+    `active_arc_id`. No-op (returns False) when the target arc does not exist
+    or is already active. Uses the canonical `arcs` dict shape.
+    """
+    if not arc_id:
+        return False
+    from app.services.gm_plan_schema import normalize_gm_plan
+
+    row = conn.execute(
+        "SELECT gm_plan_json FROM campaigns WHERE id = ?", (campaign_id,)
+    ).fetchone()
+    if not row:
+        return False
+    plan = normalize_gm_plan(row[0] if not isinstance(row, sqlite3.Row) else row["gm_plan_json"])
+    arcs = plan.get("arcs")
+    if not isinstance(arcs, dict) or arc_id not in arcs:
+        return False
+    if plan.get("active_arc_id") == arc_id:
+        return False
+
+    prev = plan.get("active_arc_id")
+    if prev and prev in arcs and isinstance(arcs[prev], dict):
+        arcs[prev]["status"] = "closed"
+    if isinstance(arcs[arc_id], dict):
+        arcs[arc_id]["status"] = "active"
+    plan["active_arc_id"] = arc_id
+
+    conn.execute(
+        "UPDATE campaigns SET gm_plan_json = ? WHERE id = ?",
+        (json.dumps(plan, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
+    logger.info("arc_advanced", campaign_id=campaign_id, arc_id=arc_id, prev=prev)
+    return True
 
 
 # ── Plan access ────────────────────────────────────────────────────────────

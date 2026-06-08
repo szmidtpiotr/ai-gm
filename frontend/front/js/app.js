@@ -6861,6 +6861,7 @@ async function showDeathScreen(characterName) {
                     if (data?.outcome === 'death' && data?.epitaph) {
                         epitaphElement.textContent = data.epitaph;
                     }
+                    _renderRunStats('death-stats', data?.stats);
                 }
             } catch (_e) { /* keep default */ }
             // Trigger the fade-in animation after the text is in place.
@@ -6910,6 +6911,25 @@ function _formatResurrectCostLine(preview) {
     }
 }
 
+// E3/E4 (#418/#419) — render the campaign run stats block on death/victory screens.
+function _renderRunStats(elId, stats) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    if (!stats) { el.hidden = true; return; }
+    const items = [
+        ['🎲', 'Tury', stats.turn_count ?? 0],
+        ['💰', 'Złoto', stats.gold ?? 0],
+        ['🧑', 'NPC poznani', stats.npcs_met ?? 0],
+        ['📜', 'Questy ukończone', stats.quests_completed ?? 0],
+    ];
+    el.innerHTML = items.map(([icon, label, val]) =>
+        `<div class="run-stat"><span class="run-stat__icon">${icon}</span>` +
+        `<span class="run-stat__val">${val}</span>` +
+        `<span class="run-stat__label">${label}</span></div>`
+    ).join('');
+    el.hidden = false;
+}
+
 function hideDeathScreen() {
     const deathScreen = document.getElementById('death-screen');
     if (deathScreen) {
@@ -6939,6 +6959,7 @@ async function showVictoryScreen() {
         if (metaEl)  metaEl.textContent  = `${data.character_class || ''} · Poz. ${data.level || 1} · ${data.xp_lifetime_earned ?? 0} PD`;
         if (titleEl) titleEl.textContent = data.ending_title || '';
         if (sumEl)   sumEl.textContent   = data.ending_summary || '';
+        _renderRunStats('victory-stats', data?.stats);
     } catch (_e) {}
 }
 
