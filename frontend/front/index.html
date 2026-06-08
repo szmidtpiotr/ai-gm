@@ -295,7 +295,11 @@
               </button>
               <span class="pf-login-hint" id="profile-login-hint"></span>
             </div>
-            <div class="pf-email" id="profile-email-label"></div>
+            <div class="pf-email-row" style="display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap">
+              <span class="pf-email" id="profile-email-label" contenteditable="false" spellcheck="false"></span>
+              <button type="button" class="pf-pencil pf-pencil--sm" id="profile-email-edit-btn" title="Edytuj e-mail (Enter aby zapisać)">✎</button>
+              <span class="pf-login-hint" id="profile-email-hint"></span>
+            </div>
           </div>
         </div>
 
@@ -345,6 +349,41 @@
           </svg>
           Zaproś do przygody
         </button>
+      </div>
+
+      <!-- ── ZNAJOMI (D8 #383) ──────────────────────────────── -->
+      <div class="pf-card">
+        <div class="pf-section-label">
+          <span class="pf-section-label__line"></span>
+          <span class="pf-section-label__text">Znajomi</span>
+          <span class="pf-section-label__line"></span>
+        </div>
+        <div id="profile-friends-list" style="display:flex;flex-direction:column;gap:8px">
+          <div style="color:var(--text-muted,#888);font-size:.82rem;text-align:center;padding:6px">Ładowanie…</div>
+        </div>
+      </div>
+
+      <!-- ── MODEL AI / LLM (D8 #383) ───────────────────────── -->
+      <div class="pf-card">
+        <div class="pf-section-label">
+          <span class="pf-section-label__line"></span>
+          <span class="pf-section-label__text">Model AI</span>
+          <span class="pf-section-label__line"></span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;padding:4px 2px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:.85rem">
+            <input type="checkbox" id="profile-llm-custom"> Używaj własnych ustawień modelu
+          </label>
+          <div id="profile-llm-fields" style="display:none;flex-direction:column;gap:8px">
+            <input type="text" id="profile-llm-model" class="field-input" placeholder="Model (np. gpt-4.1-mini)">
+            <input type="text" id="profile-llm-baseurl" class="field-input" placeholder="Base URL (opcjonalnie)">
+            <input type="password" id="profile-llm-key" class="field-input" placeholder="API key (opcjonalnie)">
+          </div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button type="button" class="pf-action-btn pf-action-btn--primary" id="profile-llm-save-btn">Zapisz model</button>
+            <span id="profile-llm-hint" style="font-size:.75rem;color:var(--text-muted,#888)"></span>
+          </div>
+        </div>
       </div>
 
       <!-- ── BEZPIECZEŃSTWO ─────────────────────────────────── -->
@@ -1539,7 +1578,7 @@
   <script src="./js/cannon.min.js"></script>
   <script src="./js/teal.js"></script>
   <script src="./js/dice.js"></script>
-  <script src="./js/app.js?v=admin-spectate-b-2026-06-08"></script>
+  <script src="./js/app.js?v=profile-d8-2026-06-08"></script>
   <div id="app-version-fixed" style="position:fixed;bottom:4px;left:6px;font-size:9px;opacity:0.4;color:#fff;z-index:9999;font-family:monospace;text-shadow:0 0 3px #000;user-select:none">v—</div>
 </body>
 </html>

@@ -7154,6 +7154,10 @@ async function loadProfilePage() {
     } catch (e) {
         console.error('[Profile] stats failed:', e);
     }
+
+    // D8 (#383) — znajomi + ustawienia modelu AI
+    loadProfileFriends();
+    loadProfileLlm();
 }
 
 async function _saveProfile(patch) {
@@ -7364,6 +7368,101 @@ function _initProfileEditing() {
         if (!pwErrorEl) return;
         pwErrorEl.textContent = msg;
         pwErrorEl.hidden = false;
+    }
+
+    // ── E-mail (D8 #383) ──────────────────────────────────────────
+    const emailEl = document.getElementById('profile-email-label');
+    const emailEditBtn = document.getElementById('profile-email-edit-btn');
+    const emailHint = document.getElementById('profile-email-hint');
+    let _originalEmail = '';
+    emailEditBtn?.addEventListener('click', () => {
+        _originalEmail = emailEl.textContent.trim();
+        emailEl.contentEditable = 'true';
+        if (emailHint) emailHint.textContent = 'Enter aby zapisać · Esc aby anulować';
+        _focusEnd(emailEl);
+    });
+    emailEl?.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const newEmail = emailEl.textContent.trim();
+            emailEl.contentEditable = 'false';
+            if (!newEmail || newEmail === _originalEmail) { emailEl.textContent = _originalEmail; if (emailHint) emailHint.textContent = ''; return; }
+            const resp = await _saveProfile({ email: newEmail });
+            if (resp && resp.email) { emailEl.textContent = resp.email; if (emailHint) emailHint.textContent = '✓ zapisano'; }
+            else { emailEl.textContent = _originalEmail; }
+        }
+        if (e.key === 'Escape') { emailEl.textContent = _originalEmail; emailEl.contentEditable = 'false'; if (emailHint) emailHint.textContent = ''; }
+    });
+    emailEl?.addEventListener('blur', () => {
+        if (emailEl.contentEditable === 'true') { emailEl.textContent = _originalEmail; emailEl.contentEditable = 'false'; }
+    });
+
+    // ── Model AI / LLM (D8 #383) ──────────────────────────────────
+    const llmCustom = document.getElementById('profile-llm-custom');
+    const llmFields = document.getElementById('profile-llm-fields');
+    const llmSaveBtn = document.getElementById('profile-llm-save-btn');
+    llmCustom?.addEventListener('change', () => { if (llmFields) llmFields.style.display = llmCustom.checked ? 'flex' : 'none'; });
+    llmSaveBtn?.addEventListener('click', saveProfileLlm);
+}
+
+// ── D8 (#383): Profil — znajomi + ustawienia LLM ──────────────────────────
+async function loadProfileFriends() {
+    const el = document.getElementById('profile-friends-list');
+    if (!el) return;
+    try {
+        const d = await apiRequest('GET', '/me/friends');
+        const accepted = d.accepted || [], incoming = d.incoming || [], outgoing = d.outgoing || [];
+        const parts = [];
+        incoming.forEach(f => parts.push(`<div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+            <span style="font-size:.85rem">${escapeHtml(f.display_name || f.username)} <span style="color:#888;font-size:.72rem">prosi o znajomość</span></span>
+            <span style="display:flex;gap:6px">
+              <button class="pf-action-btn" style="padding:4px 10px;font-size:.78rem" onclick="acceptFriendReq(${f.friendship_id})">✓</button>
+              <button class="pf-action-btn" style="padding:4px 10px;font-size:.78rem" onclick="removeFriendReq(${f.friendship_id})">✕</button>
+            </span></div>`));
+        accepted.forEach(f => parts.push(`<div style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+            <span style="font-size:.85rem">${escapeHtml(f.display_name || f.username)}</span>
+            <button class="pf-action-btn" style="padding:4px 10px;font-size:.78rem" onclick="removeFriendReq(${f.friendship_id})" title="Usuń">✕</button></div>`));
+        outgoing.forEach(f => parts.push(`<div style="font-size:.82rem;color:#888">${escapeHtml(f.display_name || f.username)} — zaproszenie wysłane</div>`));
+        el.innerHTML = parts.length ? parts.join('') : '<div style="color:#888;font-size:.82rem;text-align:center;padding:6px">Brak znajomych</div>';
+    } catch (e) {
+        el.innerHTML = '<div style="color:#888;font-size:.82rem;text-align:center;padding:6px">Brak znajomych</div>';
+    }
+}
+async function acceptFriendReq(id) {
+    try { await apiRequest('POST', `/me/friends/${id}/accept`, {}); showToast('Dodano do znajomych', 'success'); loadProfileFriends(); }
+    catch (e) { showToast(e.message || 'Błąd', 'error'); }
+}
+async function removeFriendReq(id) {
+    try { await apiRequest('DELETE', `/me/friends/${id}`); loadProfileFriends(); }
+    catch (e) { showToast(e.message || 'Błąd', 'error'); }
+}
+async function loadProfileLlm() {
+    if (!currentUser?.id) return;
+    try {
+        const s = await (await fetch(`/api/users/${currentUser.id}/llm-settings`)).json();
+        const isCustom = (s.mode === 'custom');
+        const c = document.getElementById('profile-llm-custom'); if (c) c.checked = isCustom;
+        const f = document.getElementById('profile-llm-fields'); if (f) f.style.display = isCustom ? 'flex' : 'none';
+        const m = document.getElementById('profile-llm-model'); if (m) m.value = s.model || '';
+        const b = document.getElementById('profile-llm-baseurl'); if (b) b.value = s.base_url || '';
+    } catch (e) { /* ignore */ }
+}
+async function saveProfileLlm() {
+    if (!currentUser?.id) return;
+    const hint = document.getElementById('profile-llm-hint');
+    const custom = document.getElementById('profile-llm-custom')?.checked;
+    const body = {
+        mode: custom ? 'custom' : 'default',
+        model: document.getElementById('profile-llm-model')?.value?.trim() || null,
+        base_url: document.getElementById('profile-llm-baseurl')?.value?.trim() || null,
+        api_key: document.getElementById('profile-llm-key')?.value?.trim() || null,
+    };
+    try {
+        const r = await fetch(`/api/users/${currentUser.id}/llm-settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        if (hint) { hint.textContent = '✓ zapisano'; hint.style.color = '#4caf50'; }
+    } catch (e) {
+        if (hint) { hint.textContent = '✕ błąd zapisu'; hint.style.color = 'var(--red,#e88)'; }
     }
 }
 
