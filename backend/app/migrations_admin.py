@@ -147,6 +147,10 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_admin_audit_log_table_time
     ON admin_audit_log(table_name, performed_at)
     """,
+    # E7 (#422) — campaign_templates: required NPCs/beats + player-visibility gate.
+    "ALTER TABLE campaign_templates ADD COLUMN required_npc_keys TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE campaign_templates ADD COLUMN required_beats TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE campaign_templates ADD COLUMN player_visible INTEGER NOT NULL DEFAULT 1",
     "ALTER TABLE game_config_stats ADD COLUMN locked_at TEXT",
     "ALTER TABLE game_config_skills ADD COLUMN locked_at TEXT",
     "ALTER TABLE game_config_dc ADD COLUMN locked_at TEXT",

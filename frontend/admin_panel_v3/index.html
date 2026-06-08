@@ -2603,6 +2603,17 @@
                   <div id="tpl-difficulty-stars" style="display:flex;gap:4px;padding:4px 0"></div>
                 </div>
               </div>
+              <!-- E7 (#422) — required NPCs/beats + player visibility -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
+                <div class="form-row"><label class="form-label">Wymagani NPC (klucze, po przecinku)</label><input id="tpl-required-npcs" class="form-input" type="text" placeholder="np. npc_alik, npc_strażnik"></div>
+                <div class="form-row"><label class="form-label">Wymagane beaty (klucze, po przecinku)</label><input id="tpl-required-beats" class="form-input" type="text" placeholder="np. beat_intro, beat_finał"></div>
+              </div>
+              <div class="form-row" style="margin-top:10px">
+                <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input id="tpl-player-visible" type="checkbox" checked style="width:auto">
+                  Widoczny dla graczy (w ekranie wyboru gotowej kampanii)
+                </label>
+              </div>
             </div>
             <div class="card" style="padding:16px">
               <div class="card-header" style="padding:0 0 10px;margin-bottom:10px;border-bottom:1px solid var(--border)">
@@ -5536,6 +5547,10 @@
       document.getElementById('tpl-description').value = d.description || '';
       document.getElementById('tpl-atmosphere').value = d.atmosphere || '';
       _setTplDifficulty(d.difficulty_rating || 2);
+      // E7 (#422) — required NPCs/beats + player visibility
+      if (document.getElementById('tpl-required-npcs')) document.getElementById('tpl-required-npcs').value = (d.required_npc_keys || []).join(', ');
+      if (document.getElementById('tpl-required-beats')) document.getElementById('tpl-required-beats').value = (d.required_beats || []).join(', ');
+      if (document.getElementById('tpl-player-visible')) document.getElementById('tpl-player-visible').checked = (d.player_visible ?? 1) ? true : false;
       const statusBadge = document.getElementById('tpl-status-badge');
       if (statusBadge) { statusBadge.textContent = d.status; statusBadge.style.color = d.status === 'published' ? 'var(--green)' : 'var(--t3)'; }
       const publishBtn = document.getElementById('tpl-publish-btn');
@@ -6432,6 +6447,11 @@
     return plan;
   }
 
+  // E7 (#422) — split a comma/newline separated key list into a clean array.
+  function _splitKeys(s) {
+    return (s || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean);
+  }
+
   async function saveTemplateEdits() {
     if (!_tplEditorData) { _showToast('Brak danych szablonu.', 'error'); return; }
     const plan = _collectTplPlan();
@@ -6442,6 +6462,10 @@
       difficulty_rating: _tplDifficulty,
       gm_plan_json: plan,
       hook_ids: _tplEditorData.hook_ids || [],
+      // E7 (#422)
+      required_npc_keys: _splitKeys(document.getElementById('tpl-required-npcs')?.value),
+      required_beats: _splitKeys(document.getElementById('tpl-required-beats')?.value),
+      player_visible: document.getElementById('tpl-player-visible')?.checked ?? true,
     };
     try {
       await apiFetch('/api/admin/forge/templates/' + _tplEditorData.id, {

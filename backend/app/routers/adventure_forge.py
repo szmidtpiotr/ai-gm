@@ -266,6 +266,10 @@ def _template_to_dict(row: sqlite3.Row) -> dict:
         "created_at": row["created_at"],
         "start_hex_q": row["start_hex_q"] if "start_hex_q" in keys else None,
         "start_hex_r": row["start_hex_r"] if "start_hex_r" in keys else None,
+        # E7 (#422) — required NPCs/beats + player visibility.
+        "required_npc_keys": json.loads(row["required_npc_keys"] or "[]") if "required_npc_keys" in keys else [],
+        "required_beats": json.loads(row["required_beats"] or "[]") if "required_beats" in keys else [],
+        "player_visible": row["player_visible"] if "player_visible" in keys else 1,
     }
 
 
@@ -465,6 +469,10 @@ class CreateTemplateReq(BaseModel):
     gm_plan_json: dict = {}
     hook_ids: list[int] = []
     adventure_idea_id: Optional[int] = None
+    # E7 (#422)
+    required_npc_keys: list[str] = []
+    required_beats: list[str] = []
+    player_visible: bool = True
 
 
 class PatchTemplateReq(BaseModel):
@@ -476,6 +484,10 @@ class PatchTemplateReq(BaseModel):
     hook_ids: Optional[list[int]] = None
     status: Optional[str] = None
     adventure_idea_id: Optional[int] = None
+    # E7 (#422)
+    required_npc_keys: Optional[list[str]] = None
+    required_beats: Optional[list[str]] = None
+    player_visible: Optional[bool] = None
 
 
 # ── Chat endpoints ────────────────────────────────────────────────────────────
@@ -901,13 +913,17 @@ def forge_create_template(req: CreateTemplateReq, _: None = Depends(_require_adm
 
         cur = conn.execute(
             """INSERT INTO campaign_templates
-               (title, description, difficulty_rating, atmosphere, gm_plan_json, hook_ids, status, created_by, adventure_idea_id)
-               VALUES (?, ?, ?, ?, ?, ?, 'draft', 'admin', ?)""",
+               (title, description, difficulty_rating, atmosphere, gm_plan_json, hook_ids, status, created_by, adventure_idea_id,
+                required_npc_keys, required_beats, player_visible)
+               VALUES (?, ?, ?, ?, ?, ?, 'draft', 'admin', ?, ?, ?, ?)""",
             (
                 req.title, req.description, req.difficulty_rating, req.atmosphere,
                 json.dumps(gm_plan, ensure_ascii=False),
                 json.dumps(hook_ids, ensure_ascii=False),
                 req.adventure_idea_id,
+                json.dumps(req.required_npc_keys, ensure_ascii=False),
+                json.dumps(req.required_beats, ensure_ascii=False),
+                1 if req.player_visible else 0,
             ),
         )
         conn.commit()
@@ -942,6 +958,16 @@ def forge_patch_template(template_id: int, req: PatchTemplateReq, _: None = Depe
         if req.adventure_idea_id is not None:
             updates.append("adventure_idea_id = ?")
             params.append(req.adventure_idea_id)
+        # E7 (#422)
+        if req.required_npc_keys is not None:
+            updates.append("required_npc_keys = ?")
+            params.append(json.dumps(req.required_npc_keys, ensure_ascii=False))
+        if req.required_beats is not None:
+            updates.append("required_beats = ?")
+            params.append(json.dumps(req.required_beats, ensure_ascii=False))
+        if req.player_visible is not None:
+            updates.append("player_visible = ?")
+            params.append(1 if req.player_visible else 0)
         if not updates:
             return _template_to_dict(row)
         params.append(template_id)
@@ -1171,8 +1197,11 @@ def list_published_templates():
     """Return published campaign templates for player campaign creation."""
     conn = _get_db()
     try:
+        # E8 (#423) — only player-visible templates appear in the player picker.
+        # COALESCE keeps pre-migration rows (NULL) visible by default.
         rows = conn.execute(
-            "SELECT * FROM campaign_templates WHERE status = 'published' ORDER BY play_count DESC, created_at DESC"
+            "SELECT * FROM campaign_templates WHERE status = 'published' "
+            "AND COALESCE(player_visible, 1) = 1 ORDER BY play_count DESC, created_at DESC"
         ).fetchall()
         items = []
         for r in rows:
