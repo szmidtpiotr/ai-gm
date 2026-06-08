@@ -40,6 +40,16 @@ def get_inventory(character_id: int):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
+@router.get("/inventory/{character_id}/{inventory_id}/detail")
+def get_inventory_item_detail(character_id: int, inventory_id: int):
+    """D5 (#380) — full detail for one inventory entry (item-view modal)."""
+    try:
+        data = loot_service.get_inventory_item_detail(character_id, inventory_id)
+        return {"ok": True, "data": data}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+
+
 @router.post("/inventory/{character_id}/equip")
 def post_inventory_equip(character_id: int, body: EquipRequest):
     try:
