@@ -3900,6 +3900,13 @@ def create_turn(
             # XS1: [BEAT_COMPLETE:key] tag in narrative
             for _bm in _xs_re.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", assistant_text or "", _xs_re.I):
                 _xp_total += grant_beat_complete(conn, _xp_char_id, campaign_id, _bm.group(1), _xp_turn)
+            # E6 (#421): [ARC_ADVANCE:key] tag — jump the active GM-plan arc
+            try:
+                from app.services.campaign_plan_runtime import parse_arc_advance_tags as _paat, advance_arc as _adv_arc
+                for _arc_key in _paat(assistant_text or ""):
+                    _adv_arc(campaign_id, _arc_key, conn)
+            except Exception as _arc_err:
+                logger.warning("arc_advance_error", error=str(_arc_err))
             # XS2-XS4/XS7-XS8/XS12: bulk narrative tag parser
             _tag_r = process_narrative_xp_tags(
                 assistant_text or "", conn, _xp_char_id, campaign_id, _xp_turn
@@ -5091,6 +5098,13 @@ def create_turn_stream(
                             )
                         for _bm2 in _xs_re2.finditer(r"\[BEAT_COMPLETE:\s*([^\]\s]+)\s*\]", full_raw or "", _xs_re2.I):
                             _xp_total2 += grant_beat_complete(save_conn, _xp_char_id2, campaign_id_val, _bm2.group(1), _xp_turn2)
+                        # E6 (#421): [ARC_ADVANCE:key] tag in streaming path
+                        try:
+                            from app.services.campaign_plan_runtime import parse_arc_advance_tags as _paat2, advance_arc as _adv_arc2
+                            for _arc_key2 in _paat2(full_raw or ""):
+                                _adv_arc2(campaign_id_val, _arc_key2, save_conn)
+                        except Exception as _arc_err2:
+                            logger.warning("arc_advance_stream_error", error=str(_arc_err2))
                         _tag_r2 = process_narrative_xp_tags(
                             full_raw or "", save_conn, _xp_char_id2, campaign_id_val, _xp_turn2
                         )

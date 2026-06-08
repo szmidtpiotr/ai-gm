@@ -3595,6 +3595,32 @@ body.hide-bubble-datetime .bubble-meta__datetime { display: none; }
   opacity: 0;
 }
 
+/* E3/E4 (#418/#419) — campaign run stats row on death/victory screens. */
+.run-stats {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  margin: 4px 0 18px;
+  animation: textFadeUp 1s ease-out 1.4s forwards;
+  opacity: 0;
+}
+.run-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 72px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.run-stat__icon { font-size: 1.1rem; opacity: 0.85; }
+.run-stat__val { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); }
+.run-stat__label { font-size: 0.66rem; color: var(--text-muted); text-align: center; }
+
 .death-btn {
   display: flex;
   align-items: center;

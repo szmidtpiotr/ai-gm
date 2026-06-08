@@ -176,6 +176,40 @@ def end_solo_campaign_on_death(
     return epitaph
 
 
+def campaign_run_stats(
+    conn: sqlite3.Connection,
+    campaign_id: int,
+    character_id: int,
+) -> dict[str, int]:
+    """E3/E4 (#418/#419) — summary stats for the end/death screen.
+
+    Counts narrative turns, current gold, distinct NPCs met and completed
+    quests. Each count is defensive — a missing table yields 0, never raises.
+    """
+    def _scalar(sql: str, args: tuple) -> int:
+        try:
+            row = conn.execute(sql, args).fetchone()
+            return int(row[0]) if row and row[0] is not None else 0
+        except Exception:
+            return 0
+
+    return {
+        "turn_count": _scalar(
+            "SELECT COUNT(*) FROM campaign_turns WHERE campaign_id = ?", (campaign_id,)
+        ),
+        "gold": _scalar(
+            "SELECT gold_gp FROM characters WHERE id = ?", (character_id,)
+        ),
+        "npcs_met": _scalar(
+            "SELECT COUNT(*) FROM campaign_known_npcs WHERE campaign_id = ?", (campaign_id,)
+        ),
+        "quests_completed": _scalar(
+            "SELECT COUNT(*) FROM character_quests WHERE campaign_id = ? AND completed_turn IS NOT NULL",
+            (campaign_id,),
+        ),
+    }
+
+
 def death_summary_payload(
     conn: sqlite3.Connection,
     campaign_id: int,
@@ -296,4 +330,6 @@ def _end_summary_payload(
         "ending_summary": ending_summary,
         "secret": str(ident.get("secret") or ""),
         "bonds": bonds_out,
+        # E3/E4 (#418/#419) — campaign run stats for the summary screen.
+        "stats": campaign_run_stats(conn, int(camp["id"]), int(ch["id"])),
     }

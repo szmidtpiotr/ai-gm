@@ -97,12 +97,12 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ## FAZA 3 — Jakość + Treść
 
-- [ ] E1 — Player HUD (HP/Mana, Złoto, Questy, XP bar, Czas) — aktualizacja per tura — [#416](https://github.com/szmidtpiotr/ai-gm/issues/416)
-- [ ] E2 — Kreator bohatera — tooltips (archetyp, statystyki, umiejętności z przykładami) — [#417](https://github.com/szmidtpiotr/ai-gm/issues/417)
-- [ ] E3 — Ekran zakończenia kampanii (podsumowanie + LLM epitafium) — [#418](https://github.com/szmidtpiotr/ai-gm/issues/418)
-- [ ] E4 — Ekran śmierci (epitafium + statystyki + Wskrześ/Nowy bohater) — [#419](https://github.com/szmidtpiotr/ai-gm/issues/419)
-- [ ] E5 — Zamknięcie dostępu do kampanii martwego bohatera (hero_status=dead) — [#420](https://github.com/szmidtpiotr/ai-gm/issues/420)
-- [ ] E6 — Narracja: kompresja chapter_summary + seeds injection + ARC_ADVANCE automation — [#421](https://github.com/szmidtpiotr/ai-gm/issues/421)
+- [x] E1 — Player HUD (HP/Mana, Złoto, Questy, XP bar, Czas) — aktualizacja per tura — [#416](https://github.com/szmidtpiotr/ai-gm/issues/416)
+- [x] E2 — Kreator bohatera — tooltips (archetyp, statystyki, umiejętności z przykładami) — [#417](https://github.com/szmidtpiotr/ai-gm/issues/417)
+- [x] E3 — Ekran zakończenia kampanii (podsumowanie + LLM epitafium) — [#418](https://github.com/szmidtpiotr/ai-gm/issues/418)
+- [x] E4 — Ekran śmierci (epitafium + statystyki + Wskrześ/Nowy bohater) — [#419](https://github.com/szmidtpiotr/ai-gm/issues/419)
+- [x] E5 — Zamknięcie dostępu do kampanii martwego bohatera (hero_status=dead) — [#420](https://github.com/szmidtpiotr/ai-gm/issues/420)
+- [x] E6 — Narracja: kompresja chapter_summary + seeds injection + ARC_ADVANCE automation — [#421](https://github.com/szmidtpiotr/ai-gm/issues/421)
 - [ ] E7 — Rozbudowa `campaign_templates` (required_npc_keys, required_beats, player_visible) — [#422](https://github.com/szmidtpiotr/ai-gm/issues/422)
 - [ ] E8 — Ekran wyboru gotowej kampanii dla gracza (karty, trudność, opisy) — [#423](https://github.com/szmidtpiotr/ai-gm/issues/423)
 - [ ] E9 — Story Gravity: trigger = next_required_beat nie odpalony przez N tur (5/10/15, L3 domyślnie OFF) — [#424](https://github.com/szmidtpiotr/ai-gm/issues/424)
