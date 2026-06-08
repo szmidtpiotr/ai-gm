@@ -542,6 +542,12 @@ def create_campaign(req: CampaignCreateRequest):
             (req.template_id,),
         )
         conn.commit()
+        # E11 (#426) — pre-seed NarrativeState from the template's narrative_hooks.
+        try:
+            from app.services.narrative_state_service import seed_narrative_state_from_plan
+            seed_narrative_state_from_plan(campaign_id, json.loads(tpl_plan or "{}"), conn)
+        except Exception:
+            pass
 
     row = conn.execute(
         """

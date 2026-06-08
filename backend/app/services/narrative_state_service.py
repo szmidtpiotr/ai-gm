@@ -102,6 +102,40 @@ def apply_narrative_tags(
     return st
 
 
+def seed_narrative_state_from_plan(campaign_id: int, plan: dict, conn) -> bool:
+    """E11 (#426) — pre-seed a campaign's NarrativeState from a template plan.
+
+    Reads `plan["narrative_hooks"]` (list of {key, hint}) and writes them as
+    active seeds into game_sessions.session_flags.narrative_state. Ensures the
+    session row exists. No-op (returns False) when there are no hooks.
+    """
+    import json as _json
+    hooks = (plan or {}).get("narrative_hooks") or []
+    seeds = [(h.get("key"), h.get("hint", "")) for h in hooks
+             if isinstance(h, dict) and h.get("key")]
+    if not seeds:
+        return False
+
+    conn.execute(
+        "INSERT OR IGNORE INTO game_sessions (id, campaign_id, session_flags) VALUES (?, ?, '{}')",
+        (str(campaign_id), campaign_id),
+    )
+    row = conn.execute(
+        "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1", (campaign_id,)
+    ).fetchone()
+    try:
+        flags = _json.loads((row[0] if not hasattr(row, "keys") else row["session_flags"]) or "{}")
+    except Exception:
+        flags = {}
+    flags["narrative_state"] = apply_narrative_tags(flags.get("narrative_state"), seeds=seeds, turn=0)
+    conn.execute(
+        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+        (_json.dumps(flags, ensure_ascii=False), campaign_id),
+    )
+    conn.commit()
+    return True
+
+
 def format_narrative_state_block(state: dict | None, *, max_events: int = 8, max_seeds: int = 6) -> str:
     """Render a compressed Polish NARRATIVE STATE block for context injection.
 
