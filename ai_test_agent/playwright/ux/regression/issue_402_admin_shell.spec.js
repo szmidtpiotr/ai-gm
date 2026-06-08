@@ -33,6 +33,13 @@ test("REGRESSION #402 — skorupa /admin/ renderuje nav 14 sekcji + panel + rout
   await expect(page.locator('.nav-item[data-section="overview"]')).toHaveClass(/active/);
 });
 
+test("REGRESSION #402 — sekcja nieportowana bounce'uje do admin3", async ({ page }) => {
+  // Symetria: sekcja jeszcze nieportowana (np. players) ma dom w admin3 → /admin/#players
+  // przekierowuje do /admin3/#players (jedno źródło prawdy, zero martwego placeholdera).
+  await page.goto("/admin/#players");
+  await expect(page).toHaveURL(/\/admin3\/#players$/, { timeout: 10000 });
+});
+
 test("REGRESSION #402 — admin3 nadal żyje (fallback)", async ({ page }) => {
   const r = await page.request.get("/admin3/");
   expect(r.ok(), "/admin3/ musi nadal działać podczas migracji (#402)").toBeTruthy();
