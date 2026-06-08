@@ -15,8 +15,8 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
-| **FADM (admin rebuild)** | 9/18 | 50% ⚠️ AKTYWNE (P4-P7 + P13-P17 oczekujące) |
-| **TOTAL** | **76/140** | **54%** |
+| **FADM (admin rebuild)** | 10/18 | 56% ⚠️ AKTYWNE (P4-P7 + P14-P17 oczekujące) |
+| **TOTAL** | **77/140** | **55%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -202,7 +202,7 @@ Wyrównanie z planem CZĘŚĆ AE. Monolit `admin_panel_v3` (19 447 linii, 1 plik
 - [x] FADM-P11 — Port sekcji system (LLM presety + config) — [#413](https://github.com/szmidtpiotr/ai-gm/issues/413)
 - [x] FADM-P12 — Port sekcji drobnych (invites/push/bugreports) — [#414](https://github.com/szmidtpiotr/ai-gm/issues/414)
 ### FADM-P13..P17 — domknięcie modularności + usunięcie admin3 (strangler, krok po kroku)
-- [ ] FADM-P13 — Port ekranu logowania admina do modularnego shella — [#449](https://github.com/szmidtpiotr/ai-gm/issues/449)
+- [x] FADM-P13 — Port ekranu logowania admina do modularnego shella — [#449](https://github.com/szmidtpiotr/ai-gm/issues/449)
 - [ ] FADM-P14 — Port Forge (Kuźnia) → `sections/forge.js` — [#450](https://github.com/szmidtpiotr/ai-gm/issues/450)
 - [ ] FADM-P15 — Anti-grób: usuń Forge z monolitu + rewire bounce/banner — [#451](https://github.com/szmidtpiotr/ai-gm/issues/451) _(zależy P13+P14)_
 - [ ] FADM-P16 — Migracja testów Playwright admin3 → /admin/ — [#452](https://github.com/szmidtpiotr/ai-gm/issues/452) _(zależy P14)_
