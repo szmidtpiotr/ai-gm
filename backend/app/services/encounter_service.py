@@ -7,7 +7,13 @@ import unicodedata
 
 import structlog
 
+from app.services.encounter_config_service import get_encounter_config
+
 logger = structlog.get_logger()
+
+# D7 (#382) — base chance the generic template fallback fires when it matches
+# (so it isn't guaranteed every eligible turn). Scaled by the dwell multiplier.
+TEMPLATE_FALLBACK_BASE_PROB = 0.5
 
 
 def _slugify(text: str) -> str:
@@ -132,6 +138,20 @@ def maybe_inject_encounter(
         if sf.get("state") in ("COMBAT", "SKILL_TEST_PENDING"):
             return False
 
+        # 1b. D7 (#382) — safety gate: no random encounters in safe locations
+        #     (tavern/settlement marked safe_for_rest). Same hex, different
+        #     narrative location — sitting in a room ≠ ambush.
+        if is_encounter_blocked_by_location(conn, sf):
+            return False
+
+        # 1c. Dwell decay: the longer the hero has settled in one location doing
+        #     things, the lower the encounter chance (occupied, not exploring).
+        try:
+            _settle = int(get_encounter_config(conn=conn).get("dwell_settle_turns", 3))
+        except Exception:
+            _settle = 3
+        dwell = dwell_chance_multiplier(sf.get("turns_at_location", 0), settle_turns=_settle)
+
         # 2. Get hex context for biome/pool filtering
         hex_type = None
         hex_pool = []
@@ -178,13 +198,12 @@ def maybe_inject_encounter(
             except Exception:
                 continue
 
-        if not candidates:
-            return False
-
-        # 5. Shuffle, roll each candidate, use first that fires
+        # 5. Shuffle, roll each candidate (chance scaled by dwell decay), first
+        #    that fires wins. No early return — fall through to the generic
+        #    template fallback (step 6) when no hook candidate fires.
         random.shuffle(candidates)
         for prob, enc, hook_id in candidates:
-            if random.random() <= prob:
+            if random.random() <= prob * dwell:
                 enc = ensure_encounter_enemies_in_db(conn, enc)
                 sf["active_encounter"] = enc
                 conn.execute(
@@ -203,6 +222,138 @@ def maybe_inject_encounter(
 
         return False
 
+        # 6. D7 (#382) — fallback: no adventure_hook fired → try a GENERIC template
+        #    from gameconfig_encounter_templates matched by hero level + terrain tag.
+        level = _hero_level_for_campaign(conn, campaign_id)
+        tmpl = select_encounter_template(conn, level=level, location_tag=hex_type)
+        if tmpl:
+            enc = {
+                "label": tmpl.get("label"),
+                "source": "template",
+                "template_key": tmpl.get("key"),
+                "difficulty": tmpl.get("difficulty"),
+                "trigger": trigger,
+                "enemies": [
+                    {"enemy_key": e.get("key"), "name": e.get("key"),
+                     "count": int(e.get("count") or 1)}
+                    for e in tmpl.get("enemies", []) if e.get("key")
+                ],
+            }
+            if enc["enemies"] and random.random() <= TEMPLATE_FALLBACK_BASE_PROB * dwell:
+                sf["active_encounter"] = enc
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                    (json.dumps(sf, ensure_ascii=False), campaign_id),
+                )
+                conn.commit()
+                logger.info(
+                    "encounter_template_injected", trigger=trigger,
+                    template_key=tmpl.get("key"), campaign_id=campaign_id,
+                    level=level, hex_type=hex_type,
+                )
+                return True
+
+        return False
+
     except Exception as exc:
         logger.warning("maybe_inject_encounter_error", error=str(exc), campaign_id=campaign_id)
         return False
+
+
+def is_encounter_blocked_by_location(conn: sqlite3.Connection, session_flags: dict) -> bool:
+    """D7 (#382) — żadnych losowych encounterów w bezpiecznej lokacji (karczma,
+    osada itp.). Gate po `safe_for_rest` bieżącej lokacji narracyjnej."""
+    key = (session_flags or {}).get("current_location_key")
+    if not key:
+        return False
+    try:
+        row = conn.execute(
+            "SELECT safe_for_rest FROM game_locations WHERE key = ? AND is_active = 1 LIMIT 1",
+            (key,),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return False
+    return bool(row and int(row["safe_for_rest"] or 0))
+
+
+def dwell_chance_multiplier(turns_at_location, settle_turns: int = 3) -> float:
+    """D7 (#382) — im dłużej bohater osiadł w tej samej lokacji robiąc rzeczy,
+    tym niższa szansa losowego encountera (osiadł = zajęty, nie eksploruje).
+    1.0 dopóki < settle_turns, potem maleje do podłogi 0.1."""
+    t = int(turns_at_location or 0)
+    if t < settle_turns:
+        return 1.0
+    extra = t - settle_turns
+    return max(0.1, 1.0 - 0.18 * (extra + 1))
+
+
+def _parse_tags(raw) -> list[str]:
+    """location_tags może być JSON array albo CSV. Zwraca lowercase listę."""
+    if not raw:
+        return []
+    try:
+        v = json.loads(raw)
+        if isinstance(v, list):
+            return [str(x).strip().lower() for x in v if str(x).strip()]
+    except Exception:
+        pass
+    return [t.strip().lower() for t in str(raw).split(",") if t.strip()]
+
+
+def _hero_level_for_campaign(conn: sqlite3.Connection, campaign_id: int) -> int:
+    """Poziom aktywnego bohatera kampanii (sheet_json.level), domyślnie 1."""
+    try:
+        row = conn.execute(
+            "SELECT sheet_json FROM characters WHERE campaign_id = ? AND is_active = 1 "
+            "ORDER BY id DESC LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not row:
+            return 1
+        sheet = json.loads(row["sheet_json"] or "{}")
+        return max(1, int(sheet.get("level") or 1))
+    except Exception:
+        return 1
+
+
+def match_encounter_templates(
+    conn: sqlite3.Connection, *, level: int, location_tag: str | None = None
+) -> list[dict]:
+    """D7 (#382) — ALL generic templates matching hero level + terrain (deterministic).
+
+    From gameconfig_encounter_templates (is_active=1) where min_level <= level <=
+    max_level. Tagged templates require a matching `location_tag`; tagless templates
+    are generic (eligible anywhere). Sorted by threat_total. Each result carries a
+    parsed `enemies` list.
+    """
+    try:
+        rows = conn.execute(
+            "SELECT * FROM gameconfig_encounter_templates "
+            "WHERE is_active = 1 AND min_level <= ? AND max_level >= ? "
+            "ORDER BY COALESCE(threat_total, 0), key",
+            (int(level), int(level)),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+
+    lt = (location_tag or "").strip().lower()
+    out: list[dict] = []
+    for r in rows:
+        tags = _parse_tags(r["location_tags"] if "location_tags" in r.keys() else None)
+        if tags and (not lt or lt not in tags):
+            continue  # tagged template needs a matching location
+        d = dict(r)
+        try:
+            d["enemies"] = json.loads(r["enemies_json"] or "[]")
+        except Exception:
+            d["enemies"] = []
+        out.append(d)
+    return out
+
+
+def select_encounter_template(
+    conn: sqlite3.Connection, *, level: int, location_tag: str | None = None
+) -> dict | None:
+    """D7 (#382) — pick ONE matching template at random (for actual injection)."""
+    candidates = match_encounter_templates(conn, level=level, location_tag=location_tag)
+    return random.choice(candidates) if candidates else None

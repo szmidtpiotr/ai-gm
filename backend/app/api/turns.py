@@ -3983,7 +3983,12 @@ def create_turn(
 
         # N-turns encounter trigger: every 5 peaceful turns since last combat
         try:
-            _n_turns_interval = 5
+            # D7 (#382) — interwał z configu (admin3-editable), default 20 (był 5 — za często).
+            try:
+                from app.services.encounter_config_service import get_encounter_config as _get_enc_cfg
+                _n_turns_interval = int(_get_enc_cfg().get("n_turns_interval", 20))
+            except Exception:
+                _n_turns_interval = 20
             _last_combat_turn = conn.execute(
                 "SELECT COALESCE(MAX(turn_number), 0) FROM campaign_turns WHERE campaign_id=? AND route='combat'",
                 (campaign_id,),

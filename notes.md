@@ -10,12 +10,12 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | A (Faza -1) | 13/13 | 100% ✅ |
 | B (Faza 0) | 7/7 | 100% ✅ |
 | C (Faza 1) | 19/19 | 100% ✅ |
-| D (Faza 2) | 6/14 | 43% |
+| D (Faza 2) | 7/14 | 50% |
 | E (Faza 3) | 0/28 | 0% |
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
-| **TOTAL** | **45/122** | **37%** |
+| **TOTAL** | **46/122** | **38%** |
 
 ---
 
@@ -81,7 +81,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] D4 — Auto-screening admin queue (Poziom 1 tech validation + Poziom 2 LLM scoring) — [#379](https://github.com/szmidtpiotr/ai-gm/issues/379)
 - [x] D5 — Item VIEW — podgląd przedmiotu w inventory (tooltip/modal) — [#380](https://github.com/szmidtpiotr/ai-gm/issues/380)
 - [x] D6 — Narracja: tagi, parsery, Narrative State struktura — [#381](https://github.com/szmidtpiotr/ai-gm/issues/381)
-- [ ] D7 — Encountery generyczne (adventure_hooks + gameconfig_encounter_templates unifikacja) — [#382](https://github.com/szmidtpiotr/ai-gm/issues/382)
+- [x] D7 — Encountery generyczne (adventure_hooks + gameconfig_encounter_templates unifikacja) + gate safe_for_rest + dwell decay + interwał config (admin3) — [#382](https://github.com/szmidtpiotr/ai-gm/issues/382)
 - [ ] D8 — Ekran profilu gracza (konto, znajomi, ustawienia LLM) — [#383](https://github.com/szmidtpiotr/ai-gm/issues/383)
 - [ ] D9 — Ekran kampanii — 5 trybów (Nowa/Gotowa/Loch/Loch-kafelki/Multiplayer) — [#384](https://github.com/szmidtpiotr/ai-gm/issues/384)
 - [ ] D10 — Onboarding animacja + wybór motywu (nowy gracz) — [#385](https://github.com/szmidtpiotr/ai-gm/issues/385)
