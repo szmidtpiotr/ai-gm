@@ -3796,6 +3796,7 @@ class UpdateProfileReq(BaseModel):
     display_name: str | None = None
     avatar_url: str | None = None
     username: str | None = None
+    email: str | None = None  # D8 (#383)
 
 
 @router.patch("/me/profile")
@@ -3808,44 +3809,28 @@ def update_my_profile(
     payload = require_current_user(authorization)
     user_id = int(payload.get("sub") or 0)
 
-    import re as _re
+    from app.services.account_service import update_account
+    _ERR_HTTP = {
+        "username_empty": (422, "Login nie może być pusty"),
+        "username_invalid_chars": (422, "Login może zawierać tylko litery, cyfry i _"),
+        "username_too_short": (422, "Login musi mieć min. 3 znaki"),
+        "username_taken": (409, "Ta nazwa jest już zajęta"),
+        "invalid_email": (422, "Nieprawidłowy adres e-mail"),
+        "email_taken": (409, "Ten e-mail jest już zajęty"),
+    }
     conn = sqlite3.connect(ADMIN_SQLITE_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        if req.username is not None:
-            uname = req.username.strip().lower()[:30]
-            if not uname:
-                raise HTTPException(status_code=422, detail="Login nie może być pusty")
-            if not _re.match(r'^[a-z0-9_]+$', uname):
-                raise HTTPException(status_code=422, detail="Login może zawierać tylko litery, cyfry i _")
-            if len(uname) < 3:
-                raise HTTPException(status_code=422, detail="Login musi mieć min. 3 znaki")
-            taken = conn.execute(
-                "SELECT id FROM users WHERE username = ? AND id != ? LIMIT 1", (uname, user_id)
-            ).fetchone()
-            if taken:
-                raise HTTPException(status_code=409, detail="Ta nazwa jest już zajęta")
-            conn.execute("UPDATE users SET username = ? WHERE id = ?", (uname, user_id))
-        if req.display_name is not None:
-            name = req.display_name.strip()[:40] or None
-            conn.execute("UPDATE users SET display_name = ? WHERE id = ?", (name, user_id))
-        if req.avatar_url is not None:
-            url = req.avatar_url.strip() or None
-            try:
-                conn.execute("UPDATE users SET avatar_url = ? WHERE id = ?", (url, user_id))
-            except sqlite3.OperationalError:
-                pass
-        conn.commit()
-        row = conn.execute(
-            "SELECT username, display_name, email, avatar_url FROM users WHERE id = ?", (user_id,)
-        ).fetchone()
-        avatar = None
-        try:
-            avatar = row["avatar_url"]
-        except Exception:
-            pass
-        return {"ok": True, "username": row["username"], "display_name": row["display_name"],
-                "email": row["email"], "avatar_url": avatar}
+        return update_account(
+            conn, user_id,
+            username=req.username,
+            display_name=req.display_name,
+            email=req.email,
+            avatar_url=req.avatar_url,
+        )
+    except ValueError as e:
+        code, msg = _ERR_HTTP.get(str(e), (422, "Nieprawidłowe dane profilu"))
+        raise HTTPException(status_code=code, detail=msg) from e
     finally:
         conn.close()
 
