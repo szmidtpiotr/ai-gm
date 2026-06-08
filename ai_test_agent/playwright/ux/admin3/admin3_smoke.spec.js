@@ -22,11 +22,11 @@ const ADMIN_PASS = process.env.AI_TEST_ADMIN_PASS || "demo";
 // NOTE: `world` ported to modular /admin/#world (FADM-P4 #406) — admin3 redirects it.
 // NOTE: `map` ported to modular /admin/#map (FADM-P5 #407) — admin3 redirects it.
 // NOTE: `campaigns` ported to modular /admin/#campaigns (FADM-P6 #408) — admin3 redirects it.
+// NOTE: `dungeons` ported to modular /admin/#dungeons (FADM-P7 #409) — admin3 redirects it.
 // Covered by issue_403_overview.spec.js, issue_404_mechanics.spec.js, issue_405_content.spec.js,
-// issue_406_world.spec.js, issue_407_map.spec.js, issue_408_campaigns.spec.js.
+// issue_406_world.spec.js, issue_407_map.spec.js, issue_408_campaigns.spec.js, issue_409_dungeons.spec.js.
 const SECTIONS = [
   "players",
-  "dungeons",
   "forge",
   "invites",
   "push",
@@ -122,6 +122,13 @@ test.describe("ADMIN3 — auth", () => {
     await adminLogin(page);
     await page.locator('aside.sidebar button.nav-item[data-section="campaigns"]').first().click();
     await expect(page).toHaveURL(/\/admin\/#campaigns$/, { timeout: 15000 });
+  });
+
+  test("klik 'dungeons' w admin3 przekierowuje do modularnego /admin/", async ({ page }) => {
+    await clearState(page);
+    await adminLogin(page);
+    await page.locator('aside.sidebar button.nav-item[data-section="dungeons"]').first().click();
+    await expect(page).toHaveURL(/\/admin\/#dungeons$/, { timeout: 15000 });
   });
 });
 

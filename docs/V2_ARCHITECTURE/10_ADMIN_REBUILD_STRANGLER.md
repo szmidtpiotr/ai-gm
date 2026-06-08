@@ -160,7 +160,7 @@ Modularny `admin/` musi pokryć wszystkie zdolności admina aż do D7:
 | FADM-P4 world (+D7) | [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) | ✅ 2026-06-08 |
 | FADM-P5 map | [#407](https://github.com/szmidtpiotr/ai-gm/issues/407) | ✅ 2026-06-08 |
 | FADM-P6 campaigns (+B6/B7/D6) | [#408](https://github.com/szmidtpiotr/ai-gm/issues/408) | ✅ 2026-06-08 |
-| FADM-P7 dungeons | [#409](https://github.com/szmidtpiotr/ai-gm/issues/409) | ❌ |
+| FADM-P7 dungeons | [#409](https://github.com/szmidtpiotr/ai-gm/issues/409) | ✅ 2026-06-08 |
 | FADM-P8 forge (+D7) | [#410](https://github.com/szmidtpiotr/ai-gm/issues/410) | ❌ |
 | FADM-P9 players | [#411](https://github.com/szmidtpiotr/ai-gm/issues/411) | ❌ |
 | FADM-P10 tools | [#412](https://github.com/szmidtpiotr/ai-gm/issues/412) | ❌ |
@@ -241,6 +241,22 @@ Skorupa `frontend/admin/` żyje: `index.html` (router hash + sidebar 14 sekcji m
 **Anty-grób:** map usunięte z monolitu (−1758 linii): section-map HTML + map-tabs handler + `locations-table` ROW_REGISTRY + `_loadMapTab` + `hexmap*` + drzewo lokacji + `openLocNpcModal` + `_loadPendingLocations` + `pendingGenSubmap` + `openSubmapModal` + `approveKanon` + `reviewEntity` + terrain + cały world builder + `openLocImageModal`. **Martwy `_loadPendingReview` (zero callerów) usunięty.** Dispatcher `_load` — wpis `map:` sprzątnięty. admin3 `/admin3/#map` → **redirect do `/admin/#map`**. CSS `.wb-*` już w `components.css`; `.smod-*`/`.whx`/`.wloc-marker` to selektory bez stylów (inline w JS).
 
 **Testy:** `issue_407_map.spec.js` (5 tabów + SVG heksy `wb-svg polygon.whx` >0 + paleta terenu + lokacje load + teren load + admin3 alive). `admin3_smoke.spec.js` zaktualizowany (map redirect + usunięte z SECTIONS). 5/5 GREEN, 16/16 smoke GREEN, 4/4 world (#406) bez regresji.
+
+### FADM-P7 — port sekcji dungeons ✅ 2026-06-08
+
+`sections/dungeons.js` (`init(panel)`) — port 1:1: tabela lochów (4 taby: lochy/zagadki/kafelki/kategorie), tile grid (image studio, door compass, enemy overlays), `filterDungeons`, stab-bar tab switcher, CRUD dla lochów/kafelków/zagadek/kategorii.
+
+**Adaptacje wobec monolitu:**
+- `_sectionLoaded.delete('dungeons')` (3 miejsca: `_doCreateDungeon`, `deleteDungeon`, `_doSaveDungeon`) → bezpośrednie `_loadDungeons()`
+- Inline stab-bar listener (`document.getElementById('dungeons-stab-bar')?.addEventListener`) był na poziomie skryptu → przeniesiony do `init()` po `panel.innerHTML`
+- `_fabUpdate()` (monolith global) → `if (typeof _fabUpdate === 'function') _fabUpdate()` (safe guard)
+- Wrapper `<section class="section" id="section-dungeons">` → `<div id="section-dungeons">` (`.section` CSS hide bez `.active`, ale selektory `#section-dungeons` w JS nadal działają)
+
+**Anty-grób:** dungeons usunięte z monolitu (−1773 linii): section-dungeons HTML + `filterDungeons` + `_dungeonTileCatOptions`/`_dungeonBossTileOptions`/`_dungeonModeToggle` + CRUD dungeons + `_loadDungeons` + stab-bar inline listener + cały tiles system (`IMAGE_GEN_DEFAULT_MODEL`/`_ensureTileCategories`/`_loadDungeonTiles`/`_renderTilesGrid`/`_renderTileCard`/`_openTileForm`/`_saveTile`/`deleteTile`/`_generateTileImage`) + `_loadTileCategories`/`_openTileCatForm` + `filterRiddles`/`_loadRiddles`/`_openRiddleForm`/`deleteRiddle`. Dispatcher `_load` — wpis `dungeons:_loadDungeons` sprzątnięty. admin3 `/admin3/#dungeons` → **redirect do `/admin/#dungeons`**.
+
+**Testy:** `issue_409_dungeons.spec.js` (tabela renderuje + dane z API + admin3 alive + redirect). `admin3_smoke.spec.js` zaktualizowany (dungeons redirect + usunięte z SECTIONS). 4/4 GREEN, 16/16 smoke GREEN.
+
+---
 
 ### FADM-P6 — port sekcji campaigns ✅ 2026-06-08
 
