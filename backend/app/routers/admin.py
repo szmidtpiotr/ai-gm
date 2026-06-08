@@ -761,7 +761,7 @@ def admin_auth(req: AdminAuthReq):
 def admin_dev_login(req: AdminDevLoginReq):
     try:
         token = issue_dev_admin_token(req.username.strip(), req.password)
-        return {"ok": True, "token": token}
+        return {"ok": True, "token": token, "username": req.username.strip()}
     except ValueError:
         raise HTTPException(status_code=400, detail="username and password are required") from None
     except PermissionError as e:
