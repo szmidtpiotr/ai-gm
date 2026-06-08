@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-08 (FADM-P1 #403 port overview done; sekcja D wstrzymana — FADM admin rebuild #401)_
+_Ostatnia aktualizacja: 2026-06-09 (E1–E14 #416-429 ukończone; FADM-P13..P17 #449-453 zaplanowane)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -10,13 +10,13 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | A (Faza -1) | 13/13 | 100% ✅ |
 | B (Faza 0) | 7/7 | 100% ✅ |
 | C (Faza 1) | 19/19 | 100% ✅ |
-| D (Faza 2) | 9/14 | 64% |
-| E (Faza 3) | 0/28 | 0% |
+| D (Faza 2) | 14/14 | 100% ✅ |
+| E (Faza 3) | 14/28 | 50% ⚠️ W TOKU (E1–E14 ✅, E15–E28 oczekujące) |
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
-| **FADM (admin rebuild)** | 3/13 | 23% ⚠️ AKTYWNE — D wstrzymane |
-| **TOTAL** | **50/135** | **37%** |
+| **FADM (admin rebuild)** | 9/18 | 50% ⚠️ AKTYWNE (P4-P7 + P13-P17 oczekujące) |
+| **TOTAL** | **76/140** | **54%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
