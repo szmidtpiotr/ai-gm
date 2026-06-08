@@ -18,11 +18,11 @@ const ADMIN_PASS = process.env.AI_TEST_ADMIN_PASS || "demo";
 // Sections exposed in the v3 sidebar (button.nav-item[data-section=…]).
 // NOTE: `overview` ported to modular /admin/#overview (FADM-P1 #403) — admin3 redirects it.
 // NOTE: `mechanics` ported to modular /admin/#mechanics (FADM-P2 #404) — admin3 redirects it.
-// Covered by issue_403_overview.spec.js and issue_404_mechanics.spec.js respectively.
+// NOTE: `content` ported to modular /admin/#content (FADM-P3 #405) — admin3 redirects it.
+// Covered by issue_403_overview.spec.js, issue_404_mechanics.spec.js, issue_405_content.spec.js.
 const SECTIONS = [
   "players",
   "campaigns",
-  "content",
   "world",
   "map",
   "dungeons",
@@ -93,6 +93,13 @@ test.describe("ADMIN3 — auth", () => {
     await adminLogin(page);
     await page.locator('aside.sidebar button.nav-item[data-section="mechanics"]').first().click();
     await expect(page).toHaveURL(/\/admin\/#mechanics$/, { timeout: 15000 });
+  });
+
+  test("klik 'content' w admin3 przekierowuje do modularnego /admin/", async ({ page }) => {
+    await clearState(page);
+    await adminLogin(page);
+    await page.locator('aside.sidebar button.nav-item[data-section="content"]').first().click();
+    await expect(page).toHaveURL(/\/admin\/#content$/, { timeout: 15000 });
   });
 });
 
