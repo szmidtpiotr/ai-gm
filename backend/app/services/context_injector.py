@@ -142,6 +142,7 @@ class ContextInjector:
         # Build blocks
         blocks = [
             continuity_block,
+            self._build_narrative_state_block(session_flags),
             self._build_world_block(location, ingame_hours),
             self._build_stale_block(session_flags),
             self._build_entities_block(npcs, combat_roster),
@@ -285,6 +286,16 @@ class ContextInjector:
             )
         except Exception as e:
             logger.warning("continuity_block_failed", error=str(e))
+            return ""
+
+    def _build_narrative_state_block(self, session_flags: dict) -> str:
+        """D6 (#381) — inject compressed Narrative State (key events + active seeds)
+        so the LLM keeps story continuity across many turns."""
+        try:
+            from app.services.narrative_state_service import format_narrative_state_block
+            return format_narrative_state_block(session_flags.get("narrative_state"))
+        except Exception as e:
+            logger.warning("narrative_state_block_failed", error=str(e))
             return ""
 
     def _build_world_block(self, location: dict | None, ingame_hours: int) -> str:

@@ -2148,6 +2148,21 @@ def create_turn_log(
         if _npc_memory_pairs:
             assistant_text = strip_npc_memory_tags(assistant_text)
 
+    # D6 (#381) — Narrative State tags: capture key events + planted seeds, then
+    # strip the raw [NARRATIVE_EVENT/SEED:...] tags from the displayed narrative.
+    _narr_events: list[tuple[str, str]] = []
+    _narr_seeds: list[tuple[str, str]] = []
+    if assistant_text:
+        from app.services.narrative_state_service import (
+            parse_narrative_event_tags,
+            parse_narrative_seed_tags,
+            strip_narrative_tags,
+        )
+        _narr_events = parse_narrative_event_tags(assistant_text)
+        _narr_seeds = parse_narrative_seed_tags(assistant_text)
+        if _narr_events or _narr_seeds:
+            assistant_text = strip_narrative_tags(assistant_text)
+
     cur.execute(
         """
         INSERT INTO campaign_turns (
@@ -2369,6 +2384,39 @@ def create_turn_log(
                 "npc_memory_tag_persist_failed",
                 campaign_id=campaign_id,
                 error=str(_nm_err),
+            )
+
+    # D6 (#381) — persist Narrative State into session_flags (World State), so the
+    # compressed block can be injected on later turns for continuity.
+    if route == "narrative" and (_narr_events or _narr_seeds):
+        try:
+            import json as _ns_json
+            from app.services.narrative_state_service import apply_narrative_tags
+
+            gs = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+            if gs:
+                sf = _ns_json.loads(gs["session_flags"] or "{}")
+                sf["narrative_state"] = apply_narrative_tags(
+                    sf.get("narrative_state"),
+                    events=_narr_events, seeds=_narr_seeds, turn=int(turn_number),
+                )
+                conn.execute(
+                    "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                    (_ns_json.dumps(sf, ensure_ascii=False), campaign_id),
+                )
+                conn.commit()
+                logger.info(
+                    "narrative_state_updated", campaign_id=campaign_id,
+                    events=len(_narr_events), seeds=len(_narr_seeds),
+                )
+        except Exception as _ns_err:
+            logger.warning(
+                "narrative_state_persist_failed",
+                campaign_id=campaign_id,
+                error=str(_ns_err),
             )
 
     # BUG-01: remove items when GM signals the player handed/lost one.
