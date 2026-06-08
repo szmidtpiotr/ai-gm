@@ -5589,7 +5589,8 @@ function _renderBackpackRow(item, occupied) {
 
 function _renderLoreRow(item) {
     const qty = item.quantity > 1 ? `<span class="inv-row__qty">×${item.quantity}</span>` : '';
-    const desc = item.description ? ` data-tooltip="${escapeHtml(item.description)}"` : '';
+    // D5 (#380): old hover tooltip removed — the click-to-open detail modal replaces it
+    // (was duplicating the description with the new modal).
     const isNarrative = item.is_narrative || item.item_type === 'narrative';
     // Stage 4 S7: quest items can never be dropped — story-critical, no escape hatch.
     const isQuest = item.item_type === 'quest' || item.is_quest === true;
@@ -5597,7 +5598,7 @@ function _renderLoreRow(item) {
         ? `<button class="inv-row__drop-btn" data-action="drop" data-inventory-id="${item.id}" title="Wyrzuć przedmiot">✕</button>`
         : '';
     return `
-        <div class="inv-row" data-inventory-id="${item.id}"${desc}>
+        <div class="inv-row" data-inventory-id="${item.id}">
             <div class="inv-row__icon">${INV_ICONS.scroll}</div>
             <div class="inv-row__info">
                 <div class="inv-row__name">${escapeHtml(item.label || item.key || '?')}${qty}</div>
