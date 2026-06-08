@@ -78,6 +78,7 @@ def player_login(req: PlayerLoginReq):
                        COALESCE(is_admin, 0) AS is_admin,
                        COALESCE(role, 'player') AS role,
                        COALESCE(failed_login_count, 0) AS failed_login_count,
+                       COALESCE(is_tester, 0) AS is_tester,
                        lockout_until, email_verified_at, onboarded_at, email
                 FROM users WHERE username = ? LIMIT 1
                 """,
@@ -206,12 +207,19 @@ def player_login(req: PlayerLoginReq):
                 }
             )
 
+        is_tester_val = 0
+        try:
+            is_tester_val = int(row["is_tester"] or 0)
+        except (KeyError, IndexError):
+            pass
+
         return {
             "ok": True,
             "user_id": int(row["id"]),
             "username": row["username"],
             "display_name": row["display_name"],
             "is_admin": is_admin_val,
+            "is_tester": is_tester_val,
             "role": role,
             "onboarded_at": onboarded,
             **token_pair,

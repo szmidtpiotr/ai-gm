@@ -445,6 +445,7 @@ async function handleLogin(e) {
                 username: response.username || username,
                 display_name: response.display_name,
                 is_admin: response.is_admin,
+                is_tester: response.is_tester || 0,
                 role: response.role || (response.is_admin ? 'admin' : 'player'),
             };
             // Stage 10 A2 — store JWT pair when present (backend now emits them).
@@ -616,6 +617,7 @@ async function autoVerifyEmail(token) {
                 id: resp.user_id, username: resp.username,
                 display_name: resp.display_name,
                 is_admin: resp.is_admin || false,
+                is_tester: resp.is_tester || 0,
                 role: resp.role || 'player'
             };
             localStorage.setItem('user', JSON.stringify(currentUser));
@@ -723,6 +725,7 @@ async function handleResetPassword(e) {
                 id: resp.user_id, username: resp.username,
                 display_name: resp.display_name,
                 is_admin: resp.is_admin || false,
+                is_tester: resp.is_tester || 0,
                 role: resp.role || 'player'
             };
             localStorage.setItem('user', JSON.stringify(currentUser));
@@ -2139,6 +2142,7 @@ async function enterGame(campaign) {
 
     updateAdminSettingsVisibility();
     showScreen('game');
+    _refreshBugReportFab();
     scrollToBottom();
     window.clog?.setContext({ campaign_id: campaign.id, character_id: characterData?.id, screen: 'game' });
     window.clog?.event('game_entered', { campaign_id: campaign.id, character_id: characterData?.id });
@@ -6301,6 +6305,9 @@ function updateAdminSettingsVisibility() {
     // to keep the production view clean.
     _refreshDebugToggleVisibility();
 
+    // Tester bug-report FAB — show in game screen for is_tester=1 users
+    _refreshBugReportFab();
+
     if (isAdmin) pollServiceHealth();
 }
 
@@ -6317,6 +6324,86 @@ function _refreshDebugToggleVisibility() {
     const inspToggle = document.getElementById('dev-inspector-toggle');
     if (inspToggle) inspToggle.hidden = !(isAdmin && debugMode);
 }
+
+// ── Tester bug-report FAB + modal ────────────────────────────────────────────
+
+function _refreshBugReportFab() {
+    const fab = document.getElementById('bug-report-fab');
+    if (!fab) return;
+    const isTester = currentUser?.is_tester === 1 || currentUser?.is_tester === true;
+    const onGameScreen = document.getElementById('game-screen')?.classList.contains('active') ||
+                         document.querySelector('.screen.active')?.id === 'game-screen';
+    fab.hidden = !(isTester && onGameScreen);
+}
+
+(function _initBugReportFab() {
+    const fab = document.getElementById('bug-report-fab');
+    const modal = document.getElementById('bug-report-modal');
+    if (!fab || !modal) return;
+
+    fab.addEventListener('click', () => {
+        document.getElementById('bug-report-observation').value = '';
+        document.getElementById('bug-report-reproduction').value = '';
+        document.getElementById('bug-report-type').value = 'bug';
+        document.getElementById('bug-report-status').textContent = '';
+        modal.style.display = 'flex';
+    });
+
+    function closeModal() { modal.style.display = 'none'; }
+    document.getElementById('bug-report-close')?.addEventListener('click', closeModal);
+    document.getElementById('bug-report-cancel')?.addEventListener('click', closeModal);
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+    document.getElementById('bug-report-submit')?.addEventListener('click', async () => {
+        const observation = document.getElementById('bug-report-observation').value.trim();
+        const reproduction = document.getElementById('bug-report-reproduction').value.trim();
+        const report_type = document.getElementById('bug-report-type').value;
+        const statusEl = document.getElementById('bug-report-status');
+        const submitBtn = document.getElementById('bug-report-submit');
+
+        if (!observation) {
+            statusEl.style.color = '#e74c3c';
+            statusEl.textContent = 'Opisz co się stało — pole jest wymagane.';
+            return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Wysyłam…';
+        statusEl.textContent = '';
+
+        try {
+            const campaign_id = currentCampaign?.id || null;
+            const js_errors = window.clog?._state?.queue
+                ?.filter(e => e.level === 'error')
+                ?.slice(-5)
+                ?.map(e => ({ message: e.message || e.event, filename: e.error?.filename, lineno: e.error?.lineno }))
+                ?? [];
+
+            const resp = await fetch('/api/bug-report', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authToken}`,
+                },
+                body: JSON.stringify({ observation, reproduction, report_type, campaign_id, js_errors }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) throw new Error(data?.detail || `HTTP ${resp.status}`);
+
+            statusEl.style.color = '#2ecc71';
+            statusEl.textContent = data.github_issue_url
+                ? `✅ Zgłoszono! Issue: ${data.github_issue_url}`
+                : '✅ Zgłoszenie zapisane. Dziękujemy!';
+            submitBtn.textContent = '✓ Wysłano';
+            setTimeout(() => { if (modal.style.display !== 'none') closeModal(); }, 2500);
+        } catch (e) {
+            statusEl.style.color = '#e74c3c';
+            statusEl.textContent = `❌ Błąd: ${e.message}`;
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Wyślij zgłoszenie';
+        }
+    });
+})();
 
 // B7 — DEV Inspector modal for player UI (admin + debugMode)
 let _inspectorModalTimer = null;
