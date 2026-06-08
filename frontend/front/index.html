@@ -228,6 +228,20 @@
           <p class="onboarding__inviter-name" id="onboarding-inviter-name">—</p>
         </div>
 
+        <div class="onboarding__themes" id="onboarding-themes" aria-label="Wybierz klimat gry">
+          <p class="onboarding__themes-label">Wybierz klimat</p>
+          <div class="onboarding__theme-cards">
+            <button type="button" class="onboarding__theme-card onboarding__theme-card--selected" data-theme="dark_fantasy" aria-pressed="true">
+              <span class="onboarding__theme-icon">🌑</span>
+              <span class="onboarding__theme-name">Mroczne fantasy</span>
+            </button>
+            <button type="button" class="onboarding__theme-card" data-theme="classic" aria-pressed="false">
+              <span class="onboarding__theme-icon">⚔</span>
+              <span class="onboarding__theme-name">Klasyczne RPG</span>
+            </button>
+          </div>
+        </div>
+
         <div class="onboarding__progress">
           <div class="onboarding__progress-bar" id="onboarding-progress-bar"></div>
         </div>
@@ -1513,7 +1527,7 @@
 
   <!-- Tester bug-report FAB — visible for is_tester=1 users in game screen -->
   <button id="bug-report-fab" type="button" title="Zgłoś błąd" aria-label="Zgłoś błąd" hidden
-    style="position:fixed;bottom:72px;right:16px;z-index:900;width:42px;height:42px;border-radius:50%;background:#1a1a2e;border:1px solid #c0392b;color:#e74c3c;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);transition:background .15s">🐛</button>
+    style="position:fixed;bottom:155px;right:16px;z-index:900;width:42px;height:42px;border-radius:50%;background:#1a1a2e;border:1px solid #c0392b;color:#e74c3c;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.5);transition:background .15s">🐛</button>
 
   <!-- Tester bug-report modal -->
   <div id="bug-report-modal" style="display:none;position:fixed;inset:0;z-index:1100;background:rgba(0,0,0,.7);align-items:center;justify-content:center">

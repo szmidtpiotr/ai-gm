@@ -79,7 +79,8 @@ def player_login(req: PlayerLoginReq):
                        COALESCE(role, 'player') AS role,
                        COALESCE(failed_login_count, 0) AS failed_login_count,
                        COALESCE(is_tester, 0) AS is_tester,
-                       lockout_until, email_verified_at, onboarded_at, email
+                       lockout_until, email_verified_at, onboarded_at, email,
+                       game_mode_flags
                 FROM users WHERE username = ? LIMIT 1
                 """,
                 (username,),
@@ -222,6 +223,7 @@ def player_login(req: PlayerLoginReq):
             "is_tester": is_tester_val,
             "role": role,
             "onboarded_at": onboarded,
+            "game_mode_flags": row["game_mode_flags"] if "game_mode_flags" in row.keys() else None,
             **token_pair,
         }
     except sqlite3.OperationalError:

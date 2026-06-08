@@ -473,6 +473,13 @@ async function handleLogin(e) {
             } catch (e) {
                 console.error('[Login] loadHeroes failed:', e);
             }
+            if (response.game_mode_flags) {
+                try {
+                    const flags = typeof response.game_mode_flags === 'string'
+                        ? JSON.parse(response.game_mode_flags) : response.game_mode_flags;
+                    if (flags?.visual_theme) _applyTheme(flags.visual_theme);
+                } catch (_) {}
+            }
             if (!response.onboarded_at) {
                 showOnboardingCinematic();
             } else {
@@ -7198,8 +7205,22 @@ function handleKeyPress(e) {
 })();
 
 // ── Onboarding cinematic ──────────────────────────────────────────────────
+let _selectedTheme = 'dark_fantasy';
+
+function _applyTheme(theme) {
+    document.body.dataset.theme = theme === 'classic' ? 'classic' : '';
+}
+
 async function showOnboardingCinematic() {
     showScreen('onboarding');
+
+    // Reset theme selection to default
+    _selectedTheme = 'dark_fantasy';
+    document.querySelectorAll('.onboarding__theme-card').forEach(card => {
+        const isDefault = card.dataset.theme === 'dark_fantasy';
+        card.classList.toggle('onboarding__theme-card--selected', isDefault);
+        card.setAttribute('aria-pressed', String(isDefault));
+    });
 
     // Fetch inviter info
     try {
@@ -7225,8 +7246,16 @@ async function showOnboardingCinematic() {
 async function completeOnboarding() {
     clearTimeout(_onboardingTimer);
     try {
+        await apiRequest('PATCH', '/me/game-settings', { visual_theme: _selectedTheme });
+    } catch (_) {}
+    try {
         await apiRequest('PATCH', '/me/onboarding');
     } catch (_) {}
+    _applyTheme(_selectedTheme);
+    if (currentUser) {
+        currentUser.game_mode_flags = JSON.stringify({ visual_theme: _selectedTheme });
+        localStorage.setItem('user', JSON.stringify(currentUser));
+    }
     showScreen('heroes');
 }
 
@@ -7663,6 +7692,17 @@ function initEventListeners() {
 
     // Onboarding cinematic
     document.getElementById('onboarding-cta')?.addEventListener('click', completeOnboarding);
+    document.getElementById('onboarding-themes')?.addEventListener('click', e => {
+        const card = e.target.closest('.onboarding__theme-card');
+        if (!card) return;
+        _selectedTheme = card.dataset.theme;
+        document.querySelectorAll('.onboarding__theme-card').forEach(c => {
+            const selected = c === card;
+            c.classList.toggle('onboarding__theme-card--selected', selected);
+            c.setAttribute('aria-pressed', String(selected));
+        });
+        _applyTheme(_selectedTheme);
+    });
 
     // Profile page
     document.getElementById('profile-back-btn')?.addEventListener('click', () => showScreen(_profileReturnScreen || 'heroes'));
