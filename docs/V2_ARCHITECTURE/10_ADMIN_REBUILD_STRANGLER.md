@@ -154,7 +154,7 @@ Modularny `admin/` musi pokryć wszystkie zdolności admina aż do D7:
 | Etap | Issue | Status |
 |---|---|---|
 | FADM-P0 bootstrap (skorupa + shared utils) | [#402](https://github.com/szmidtpiotr/ai-gm/issues/402) | ✅ 2026-06-08 |
-| FADM-P1 overview | [#403](https://github.com/szmidtpiotr/ai-gm/issues/403) | ❌ |
+| FADM-P1 overview | [#403](https://github.com/szmidtpiotr/ai-gm/issues/403) | ✅ 2026-06-08 |
 | FADM-P2 mechanics | [#404](https://github.com/szmidtpiotr/ai-gm/issues/404) | ❌ |
 | FADM-P3 content (+D5) | [#405](https://github.com/szmidtpiotr/ai-gm/issues/405) | ❌ |
 | FADM-P4 world (+D7) | [#406](https://github.com/szmidtpiotr/ai-gm/issues/406) | ❌ |
@@ -177,6 +177,18 @@ Modularny `admin/` musi pokryć wszystkie zdolności admina aż do D7:
 Skorupa `frontend/admin/` żyje: `index.html` (router hash + sidebar 14 sekcji montowanych z listy `SECTIONS`), `shared/` (`api.js`, `toast.js`, `modal.js`, `table.js`, `form.js`). Trasa `/admin/` przepięta z martwego legacy v1 (alias do nieistniejącego `admin_panel/` → 404) na nową skorupę. `/admin3/` nietknięte (200). Sekcje nieportowane → placeholder „w trakcie migracji → /admin3/#key". Spec: `playwright/ux/regression/issue_402_admin_shell.spec.js` (RED: /admin/ 404 → GREEN: skorupa + router + admin3 żyje). Anty-grób: brak — P0 nie portuje żadnej sekcji, monolit nietknięty.
 
 > **⚠️ Gotcha (zapamiętać na każdą zmianę `nginx.conf`):** frontend to `nginx:alpine` z **bind-mountami** (`./frontend:/usr/share/nginx/html` + `./frontend/nginx.conf:/etc/nginx/conf.d/default.conf`). Pliki w `admin/` (mount katalogu) widać od razu — wystarczy odświeżyć przeglądarkę. Ale `nginx.conf` to **mount pojedynczego pliku**: edytor na sshfs zapisuje atomowo (nowy inode), więc kontener dalej trzyma stary inode — `nginx -s reload` NIE wystarczy. Trzeba **zrestartować kontener** (`docker compose -f docker-compose.dev.yml restart frontend`), żeby bind-mount przeładował inode. Zmiana treści sekcji (HTML/JS w `admin/`) = bez restartu; zmiana `nginx.conf` = restart frontendu.
+
+### FADM-P1 — port sekcji overview ✅ 2026-06-08
+
+`sections/overview.js` (`init(panel)`) — port 1:1 z monolitu: 4 karty statystyk + 2 feedy (tury/audyt, `/api/admin/overview`) + 6 zakładek analityki (overview/dice/combat/economy/events/llm, `/api/admin/analytics/*`, filtr 7/30/Wszystko). Backend nietknięty.
+
+**Odkrycie wzorca (walidacja na prostej sekcji — po to były pierwsze):** admin3 to **light theme** (`--canvas` biały, `--t1` ciemny, `--accent` niebieski). Skorupa P0 miała własny dark theme → brak parzystości wizualnej. Rozwiązanie: wyciągnięto cały blok `<style>` admin3 do **`admin/shared/components.css`** (1956 linii, dziedziczony przez WSZYSTKIE przyszłe sekcje), a skorupę przepisano na prawdziwą ramkę admin3 (`.shell`/`.sidebar`/`.topbar`/`.main`, klasy `.nav-item[data-section]`). To jednorazowy koszt na P1 — kolejne sekcje już mają wygląd.
+
+**Smell-fixy przy porcie (FADM-P2):** brak mock-liczb w HTML (start `—`, dane z API), usunięte zmyślone delty/subtitle, ciche `console.warn` → widoczny toast błędu, kontrakty 1:1.
+
+**Anty-grób:** overview usunięte z monolitu (−364 linie: sekcja HTML + wszystkie loadery analityki + handler zakładek + wpisy dispatch/hash). admin3 `/admin3/#overview` → **redirect do `/admin/#overview`**, domyślna sekcja admin3 = `players`, 13 pozostałych sekcji nietknięte (smoke 16/16). Incydentalnie utwardzono współdzielony dispatch `_load` (`Promise.resolve(fn())` — pre-existing crash mechanics przy void-arrow loaderze).
+
+**Testy:** `issue_403_overview.spec.js` (struktura + przełączanie sub-tabów + dane z API + zero błędów JS), `admin3_smoke.spec.js` zaktualizowany (overview→redirect, default players). Wszystko GREEN.
 
 ---
 

@@ -2973,7 +2973,7 @@ Plan rozbity na konkretne issues (epic [#401](https://github.com/szmidtpiotr/ai-
 | Etap | Issue | Sekcja / zakres |
 |---|---|---|
 | FADM-P0 | #402 | Bootstrap skorupy `admin/` + shared utils (api/table/toast/modal/form) |
-| FADM-P1 | #403 | overview |
+| FADM-P1 | #403 | overview ✅ 2026-06-08 (port 1:1 + components.css współdzielony; usunięte z monolitu) |
 | FADM-P2 | #404 | mechanics |
 | FADM-P3 | #405 | content (+ D5 item VIEW) |
 | FADM-P4 | #406 | world (+ D7 encountery) |

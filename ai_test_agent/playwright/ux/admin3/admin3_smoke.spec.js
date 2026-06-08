@@ -16,8 +16,9 @@ const ADMIN_USER = process.env.AI_TEST_ADMIN_USER || "ai_test_player";
 const ADMIN_PASS = process.env.AI_TEST_ADMIN_PASS || "demo";
 
 // Sections exposed in the v3 sidebar (button.nav-item[data-section=…]).
+// NOTE: `overview` ported out to modular /admin/#overview (FADM-P1 #403) — admin3 now
+// redirects it. Covered by issue_403_overview.spec.js, not this smoke list.
 const SECTIONS = [
-  "overview",
   "players",
   "campaigns",
   "content",
@@ -76,8 +77,15 @@ test.describe("ADMIN3 — auth", () => {
     await clearState(page);
     await adminLogin(page);
     await expect(page.locator("#login-overlay")).not.toHaveClass(/open/);
-    // Default section (overview) must be present after login.
-    await expect(page.locator("#section-overview")).toHaveClass(/active/, { timeout: 15000 });
+    // Default section is now `players` (overview ported out do /admin/, FADM-P1 #403).
+    await expect(page.locator("#section-players")).toHaveClass(/active/, { timeout: 15000 });
+  });
+
+  test("klik 'overview' w admin3 przekierowuje do modularnego /admin/", async ({ page }) => {
+    await clearState(page);
+    await adminLogin(page);
+    await page.locator('aside.sidebar button.nav-item[data-section="overview"]').first().click();
+    await expect(page).toHaveURL(/\/admin\/#overview$/, { timeout: 15000 });
   });
 });
 
