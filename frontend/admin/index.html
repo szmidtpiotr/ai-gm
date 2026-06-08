@@ -19,6 +19,21 @@
     .adm-banner { background:var(--amber-light); color:var(--amber); border:1px solid var(--amber-border); border-radius:8px;
                   padding:8px 12px; margin:0 0 14px; font-size:.8rem; }
     .adm-banner a { color:var(--amber); font-weight:700; }
+    /* ── Login overlay (FADM-P13) ── */
+    .login-overlay { display:none; position:fixed; inset:0; background:var(--page); z-index:300;
+                     align-items:center; justify-content:center; }
+    .login-overlay.open { display:flex; }
+    .login-box { background:var(--canvas); border:1px solid var(--border); border-radius:var(--r-xl,12px);
+                 box-shadow:var(--shadow-md); padding:32px; width:100%; max-width:340px; }
+    .login-head { display:flex; align-items:center; gap:10px; margin-bottom:22px; }
+    .login-title { font-size:.95rem; font-weight:700; color:var(--t1); }
+    .login-sub { font-size:.73rem; color:var(--t3); }
+    .login-err { font-size:.78rem; color:var(--red); background:var(--red-light); border:1px solid var(--red-border);
+                 border-radius:var(--r,6px); padding:8px 12px; margin-bottom:14px; display:none; }
+    .login-err.show { display:block; }
+    .sidebar-footer .btn-logout { background:none; border:none; cursor:pointer; color:var(--t3);
+                                  font-size:.72rem; padding:2px 4px; border-radius:4px; margin-top:2px; }
+    .sidebar-footer .btn-logout:hover { color:var(--red); background:var(--red-light); }
   </style>
 </head>
 <body>
@@ -33,8 +48,12 @@
         <!-- nav items injected by router; data-section keys must stay stable -->
       </nav>
       <div class="sidebar-footer">
-        <div class="user-avatar">A</div>
-        <div class="user-info"><div class="user-name">Admin</div><div class="user-role">modular shell</div></div>
+        <div class="user-avatar" id="user-avatar">A</div>
+        <div class="user-info">
+          <div class="user-name" id="user-name">Admin</div>
+          <div class="user-role">modular shell</div>
+          <button class="btn-logout" id="btn-logout" onclick="doLogout()">Wyloguj</button>
+        </div>
       </div>
     </aside>
 
@@ -45,6 +64,29 @@
     <main class="main" id="panel">
       <div class="section active"><div class="adm-placeholder">Ładowanie…</div></div>
     </main>
+  </div>
+
+  <!-- Login overlay (FADM-P13) — widoczny gdy brak tokenu lub 401 -->
+  <div class="login-overlay" id="login-overlay">
+    <div class="login-box">
+      <div class="login-head">
+        <div class="sidebar-logo-mark">GM</div>
+        <div>
+          <div class="login-title">AI-GM Admin</div>
+          <div class="login-sub">Panel administratora (modular)</div>
+        </div>
+      </div>
+      <div class="login-err" id="login-err"></div>
+      <div class="form-field" style="margin-bottom:12px">
+        <label class="form-label">Nazwa użytkownika</label>
+        <input class="form-input" id="login-user" type="text" placeholder="demo" autocomplete="username">
+      </div>
+      <div class="form-field" style="margin-bottom:20px">
+        <label class="form-label">Hasło</label>
+        <input class="form-input" id="login-pass" type="password" autocomplete="current-password">
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center" id="login-submit">Zaloguj się</button>
+    </div>
   </div>
 
   <div class="adm-foot">FADM modular shell — sekcje nieportowane otwórz w <a href="/admin3/">/admin3/</a></div>
@@ -129,16 +171,79 @@
       }
     }
 
+    // ── Auth (FADM-P13) ──────────────────────────────────────────────────────
+    const LOGGED_IN_USER_KEY = 'aigm_admin_user';
+
+    function showLogin() { document.getElementById('login-overlay').classList.add('open'); }
+    function hideLogin() { document.getElementById('login-overlay').classList.remove('open'); }
+
+    function _updateUserDisplay(username) {
+      const nameEl = document.getElementById('user-name');
+      const avatarEl = document.getElementById('user-avatar');
+      if (nameEl) nameEl.textContent = username || 'Admin';
+      if (avatarEl) avatarEl.textContent = (username || 'A')[0].toUpperCase();
+    }
+
+    async function doLogin() {
+      const btn = document.getElementById('login-submit');
+      const err = document.getElementById('login-err');
+      const user = document.getElementById('login-user').value.trim();
+      const pass = document.getElementById('login-pass').value;
+      err.classList.remove('show');
+      btn.disabled = true; btn.textContent = 'Logowanie…';
+      try {
+        const res = await fetch('/api/admin/dev-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user, password: pass }),
+        });
+        const body = await res.json();
+        if (!res.ok || !body.token) throw new Error(body.detail || `HTTP ${res.status}`);
+        localStorage.setItem('aigm_admin_token', body.token);
+        if (body.username) {
+          localStorage.setItem(LOGGED_IN_USER_KEY, body.username);
+          _updateUserDisplay(body.username);
+        }
+        hideLogin();
+        route();
+      } catch (e) {
+        err.textContent = e.message || 'Błąd logowania';
+        err.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Zaloguj się';
+      }
+    }
+
+    function doLogout() {
+      localStorage.removeItem('aigm_admin_token');
+      localStorage.removeItem(LOGGED_IN_USER_KEY);
+      _updateUserDisplay('Admin');
+      showLogin();
+    }
+
+    // Expose globally — onclick="doLogin()" / onclick="doLogout()" w HTML
+    window.doLogin = doLogin;
+    window.doLogout = doLogout;
+
+    document.getElementById('login-submit').addEventListener('click', doLogin);
+    document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+    // ────────────────────────────────────────────────────────────────────────
     window.addEventListener('hashchange', route);
-    window.addEventListener('admin-unauthorized', () => {
-      const panel = document.getElementById('panel');
-      panel.insertAdjacentHTML('afterbegin',
-        '<div class="adm-banner">Sesja admina wygasła — zaloguj się w <a href="/admin3/">/admin3/</a> (token współdzielony).</div>');
-    });
+    window.addEventListener('admin-unauthorized', () => showLogin());
 
     // expose shared do debug (sekcje importują własne moduły, to tylko wygoda)
     window.__adminShell = { apiFetch, showToast, SECTIONS };
-    route();
+
+    // Przy starcie: brak tokenu → od razu login, nie czekaj na 401.
+    const _initToken = localStorage.getItem('aigm_admin_token');
+    if (!_initToken) {
+      showLogin();
+    } else {
+      const _savedUser = localStorage.getItem(LOGGED_IN_USER_KEY);
+      if (_savedUser) _updateUserDisplay(_savedUser);
+      route();
+    }
   </script>
 </body>
 </html>
