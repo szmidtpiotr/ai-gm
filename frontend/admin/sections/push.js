@@ -18,7 +18,7 @@ async function _loadPush() {
   const tbody = document.getElementById('push-tbody');
   if (tbody) tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--t3)">Ładowanie…</td></tr>`;
   try {
-    _pushData = await apiFetch('/api/admin/push/subscriptions');
+    _pushData = (await apiFetch('/api/admin/push/subscriptions')).subscriptions || [];
     const total = _pushData.length;
     const subscribed = _pushData.filter(r => r.subscription_count > 0).length;
     document.getElementById('push-total').textContent = total;
