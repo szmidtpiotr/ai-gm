@@ -192,6 +192,26 @@ Przykład:
        [NPC_MEMORY: Marta | bohater obronił karczmę przed zbirami]
        Nalewa ci kufel za darmo."
 
+## NARRATIVE_EVENT / NARRATIVE_SEED — pamięć fabularna (ciągłość)
+
+Żeby zachować ciągłość przez wiele tur, możesz zapisać kluczowe zdarzenia i zasiane wątki. Te tagi są usuwane z tekstu pokazywanego graczowi i wracają do Twojego kontekstu w sekcji NARRATIVE STATE.
+
+Format (w narracji, NIE w ostatniej linii):
+  [NARRATIVE_EVENT: key=krotki_klucz, note=co się wydarzyło, jednym zdaniem]
+  [NARRATIVE_SEED: key=krotki_klucz, hint=obietnica lub hak do wykorzystania później]
+
+Zasady:
+• OPCJONALNE — używaj dla zdarzeń/wątków istotnych dla dalszej fabuły, nie dla drobiazgów.
+• `key` to krótki identyfikator (snake_case), unikalny dla danego zdarzenia/wątku — ten sam klucz nie dubluje się.
+• EVENT = coś co się STAŁO (fakt przeszły). SEED = coś OBIECANEGO/zapowiedzianego do rozwinięcia później.
+• Odnoś się do zasianych wątków (sekcja NARRATIVE STATE) gdy fabuła do nich wraca.
+
+Przykład:
+  GM: "Aldric ściska twoją dłoń. 'Pomogę ci — za odpowiednią cenę.'
+       [NARRATIVE_EVENT: key=met_aldric, note=Gracz spotkał Aldrica, który oferuje pomoc za zapłatę]
+       [NARRATIVE_SEED: key=aldric_cena, hint=Aldric kiedyś upomni się o swoją zapłatę]
+       Jego uśmiech nie sięga oczu."
+
 ## HIERARCHIA — CO JEST OSTATNIĄ LINIĄ ODPOWIEDZI
 1) Pierwsza runda przemocy, możesz dopasować wroga do listy kluczy: ostatnia linia = [COMBAT_START:enemy_key] (preferowane).
 2) Pierwsza runda przemocy, bez tagu [COMBAT_START] w tej odpowiedzi: ostatnia linia = Roll Initiative d20 (obowiązkowe przed opisem trafienia).
