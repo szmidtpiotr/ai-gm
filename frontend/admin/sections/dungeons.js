@@ -713,7 +713,7 @@ function _sectionHtml() { return `
           </div>
 
           <button class="btn btn-secondary btn-sm" id="tf-gen-prompt-btn" style="width:100%;padding:6px 10px;font-size:.79rem">
-            ✨ Generuj prompt AI
+            ✨ 1. Generuj prompt + nazwę AI
           </button>
 
           <div>
@@ -723,8 +723,8 @@ function _sectionHtml() { return `
             </select>
           </div>
 
-          <button class="btn btn-primary btn-sm" id="tf-generate-btn" style="width:100%;padding:7px 10px;font-size:.79rem;letter-spacing:.02em" ${!p.id?'disabled':''}>
-            🔄 Generuj / Regeneruj obraz
+          <button class="btn btn-primary btn-sm" id="tf-generate-btn" style="width:100%;padding:7px 10px;font-size:.79rem;letter-spacing:.02em" ${!p.id?'disabled':''} title="${!p.id?'Najpierw zapisz kafelek (💾 Zapisz), potem generuj obraz':''}">
+            🖼 2. Generuj obraz${!p.id?' (zapisz najpierw)':''}
           </button>
         </div>
       </div>
@@ -748,7 +748,7 @@ function _sectionHtml() { return `
 
         <!-- Door compass -->
         <div>
-          <label class="form-label">Drzwi <span style="color:#f59e0b">*</span> <span style="font-size:.68rem;color:var(--t3);font-weight:400">(N=góra  S=dół  E=prawo  W=lewo)</span></label>
+          <label class="form-label">Drzwi — <span style="font-size:.7rem;color:#f59e0b;font-weight:600">3. Zaznacz po wygenerowaniu obrazka</span> <span style="font-size:.68rem;color:var(--t3);font-weight:400">(N=góra  S=dół  E=prawo  W=lewo, wybierz 2-4)</span></label>
           <div id="tf-doors" style="margin-top:10px">
             <div class="tf-dc-wrap">
               <div></div>
@@ -1574,6 +1574,7 @@ function _sectionHtml() { return `
   async function _aiGeneratePrompt(overlay) {
     const catSel = overlay.querySelector('#tf-cat');
     const promptTA = overlay.querySelector('#tf-img-prompt');
+    const labelInput = overlay.querySelector('#tf-label');
     const descTA = overlay.querySelector('#tf-desc');
     const btn = overlay.querySelector('#tf-gen-prompt-btn');
     if (!catSel || !promptTA) return;
@@ -1588,7 +1589,11 @@ function _sectionHtml() { return `
         body: JSON.stringify({ category_key: catKey, ...(hint ? { description_hint: hint } : {}) }),
       });
       promptTA.value = r.image_gen_prompt;
-      showToast('Prompt wygenerowany', 'success');
+      // Fill label if empty — AI now returns suggested Polish name
+      if (labelInput && !labelInput.value.trim() && r.suggested_label) {
+        labelInput.value = r.suggested_label;
+      }
+      showToast('Prompt i nazwa wygenerowane', 'success');
     } catch (e) {
       showToast('Błąd AI: ' + e.message, 'error');
     } finally {

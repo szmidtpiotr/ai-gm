@@ -40,7 +40,8 @@ BASE_PROMPT = (
     "Gloomhaven dungeon tile art style, top down view, flat 2D illustration, "
     "stone floor with room interior decor and furniture, fantasy board game tile, "
     "overhead perspective, square tile format, painted game art, cartoonish style, "
-    "NO walls, NO doors, NO doorways, NO archways, NO openings — only floor and interior content"
+    "interior designed with 2-4 open pathways toward wall edges for dungeon connectivity, "
+    "NO explicit walls, NO explicit doors, NO doorways, NO archways — only floor and interior content"
 )
 
 DIRECTION_WORDS = {"N": "north", "S": "south", "E": "east", "W": "west"}
@@ -226,29 +227,41 @@ def generate_tile_image_prompt(payload: dict = Body(...)) -> dict:
             "content": (
                 "You are an expert dungeon art director generating prompts for a FLUX image generation model. "
                 "You create concise, vivid English descriptions optimized for top-down 2D dungeon tile art. "
-                "Always respond in English only."
+                "Always respond with valid JSON only, no markdown, no explanation."
             ),
         },
         {
             "role": "user",
             "content": (
-                f"Generate a FLUX image generation prompt for a dungeon tile in the '{cat['label']}' category.\n"
+                f"Create a dungeon tile definition for the '{cat['label']}' category.\n"
                 f"Category style: {cat['style_modifier'] or '(not specified)'}\n"
                 + (f"Room hint: {description_hint}\n" if description_hint else "")
-                + "\nRequirements:\n"
-                "- English only\n"
+                + '\nReturn JSON with exactly these two fields:\n'
+                '{"label": "Polish tile name (3-6 words, e.g. Komnata strażnicza)", '
+                '"image_gen_prompt": "English FLUX prompt (15-50 words)"}\n\n'
+                "image_gen_prompt requirements:\n"
                 "- Top-down 2D dungeon tile, floor and interior decor\n"
                 "- Specific objects, textures, lighting atmosphere\n"
-                "- 15-50 words, comma-separated style tags\n"
-                "- NO walls, NO doors — only floor and interior content\n\n"
-                "Return ONLY the prompt text, no explanation, no quotes."
+                "- Interior designed with 2-4 open pathways toward wall edges (for dungeon maze connectivity)\n"
+                "- NO explicit walls, NO explicit doors — only floor and interior content\n\n"
+                "Return ONLY the JSON object."
             ),
         },
     ]
 
     try:
+        import re
         result = generate_chat(messages)
-        return {"ok": True, "image_gen_prompt": result.strip()}
+        cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", result).strip()
+        try:
+            data = json.loads(cleaned)
+            image_gen_prompt = str(data.get("image_gen_prompt") or "").strip()
+            suggested_label = str(data.get("label") or "").strip()
+        except (json.JSONDecodeError, ValueError):
+            # Fallback: treat entire response as the prompt (backward compat)
+            image_gen_prompt = result.strip()
+            suggested_label = ""
+        return {"ok": True, "image_gen_prompt": image_gen_prompt, "suggested_label": suggested_label}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"LLM error: {exc}")
 
