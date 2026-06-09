@@ -161,12 +161,16 @@ Modularny `admin/` musi pokryć wszystkie zdolności admina aż do D7:
 | FADM-P5 map | [#407](https://github.com/szmidtpiotr/ai-gm/issues/407) | ✅ 2026-06-08 |
 | FADM-P6 campaigns (+B6/B7/D6) | [#408](https://github.com/szmidtpiotr/ai-gm/issues/408) | ✅ 2026-06-08 |
 | FADM-P7 dungeons | [#409](https://github.com/szmidtpiotr/ai-gm/issues/409) | ✅ 2026-06-08 |
-| FADM-P8 forge (+D7) | [#410](https://github.com/szmidtpiotr/ai-gm/issues/410) | ⏭ SKIPPED — Kuźnia zostaje w admin3 na stałe (forge/Kuźnia to standalone tool, nie sekcja codzienna; brak zgłoszeń parity issues) |
+| FADM-P8 forge (+D7) | [#410](https://github.com/szmidtpiotr/ai-gm/issues/410) | ⏭ SKIPPED — zastąpione przez P14 (nowa implementacja jako standalone ES moduł) |
 | FADM-P9 players | [#411](https://github.com/szmidtpiotr/ai-gm/issues/411) | ✅ 2026-06-08 |
 | FADM-P10 tools | [#412](https://github.com/szmidtpiotr/ai-gm/issues/412) | ✅ 2026-06-08 |
 | FADM-P11 system | [#413](https://github.com/szmidtpiotr/ai-gm/issues/413) | ✅ 2026-06-08 |
 | FADM-P12 misc (invites/push/bugreports) | [#414](https://github.com/szmidtpiotr/ai-gm/issues/414) | ✅ 2026-06-08 |
-| FADM-DONE `rm -rf admin_panel_v3/` | — | ❌ (po Fazie 4) |
+| FADM-P13 login natywny w /admin/ | [#449](https://github.com/szmidtpiotr/ai-gm/issues/449) | ✅ 2026-06-09 |
+| FADM-P14 port Forge (Kuźnia) do modularnego forge.js | [#450](https://github.com/szmidtpiotr/ai-gm/issues/450) | ✅ 2026-06-09 |
+| FADM-P15 anty-grób — usunięcie Forge z admin3 | [#451](https://github.com/szmidtpiotr/ai-gm/issues/451) | ✅ 2026-06-09 |
+| FADM-P16 migracja testów Playwright admin3 → /admin/ + SSE heartbeat | [#452](https://github.com/szmidtpiotr/ai-gm/issues/452) | ✅ 2026-06-09 |
+| FADM-P17 decommission admin3 (nginx + `rm -rf admin_panel_v3/`) | [#453](https://github.com/szmidtpiotr/ai-gm/issues/453) | ✅ 2026-06-09 |
 
 ---
 
