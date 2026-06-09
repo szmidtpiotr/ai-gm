@@ -11,7 +11,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | B (Faza 0) | 7/7 | 100% ✅ |
 | C (Faza 1) | 19/19 | 100% ✅ |
 | D (Faza 2) | 14/14 | 100% ✅ |
-| E (Faza 3) | 26/28 | 93% ⚠️ W TOKU (E1–E26 ✅, E27–E28 oczekujące) |
+| E (Faza 3) | 27/28 | 96% ⚠️ W TOKU (E1–E26+E28 ✅, E27 deferred) |
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
@@ -124,7 +124,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] E25 — Karty onboarding UI (nieblokujące overlay, "Rozumiem") — [#440](https://github.com/szmidtpiotr/ai-gm/issues/440)
 - [x] E26 — Biblioteka kart (gracz może wrócić do przeczytanych) — [#441](https://github.com/szmidtpiotr/ai-gm/issues/441)
 - [ ] E27 — Karty dla nowych mechanik (afiksy, crafting, MP) — gdy systemy gotowe (Faza 4+) — [#442](https://github.com/szmidtpiotr/ai-gm/issues/442)
-- [ ] E28 — Tutorial kampania "Moja Pierwsza Przygoda" (domyślnie ON, Pomiń, instrukcje LLM) — [#443](https://github.com/szmidtpiotr/ai-gm/issues/443)
+- [x] E28 — Tutorial kampania "Moja Pierwsza Przygoda" (domyślnie ON, Pomiń, instrukcje LLM) — [#443](https://github.com/szmidtpiotr/ai-gm/issues/443)
 
 ---
 

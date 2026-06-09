@@ -202,6 +202,8 @@ class CampaignCreateRequest(BaseModel):
     status: str = "active"
     # E8 (#423) — launch a ready campaign from a published template.
     template_id: int | None = None
+    # E28 (#443) — tutorial campaign flag.
+    is_tutorial: bool = False
 
 
 class GmPlanPatchRequest(BaseModel):
@@ -581,8 +583,8 @@ def create_campaign(req: CampaignCreateRequest):
 
     cur.execute(
         """
-        INSERT INTO campaigns (title, system_id, model_id, owner_user_id, language, mode, status, gm_plan_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO campaigns (title, system_id, model_id, owner_user_id, language, mode, status, gm_plan_json, is_tutorial)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             req.title,
@@ -593,6 +595,7 @@ def create_campaign(req: CampaignCreateRequest):
             req.mode,
             req.status,
             tpl_plan,
+            1 if req.is_tutorial else 0,
         ),
     )
     conn.commit()

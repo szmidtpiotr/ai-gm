@@ -300,6 +300,8 @@ RAW_MIGRATIONS = [
     )
     """,
     "CREATE INDEX IF NOT EXISTS idx_seen_mechanics_user ON seen_mechanics(user_id)",
+    # E28 — tutorial campaign flag
+    "ALTER TABLE campaigns ADD COLUMN is_tutorial INTEGER NOT NULL DEFAULT 0",
 ]
 
 
