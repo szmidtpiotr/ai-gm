@@ -619,33 +619,84 @@ def roll_room_ambient_loot(dungeon_key: str, loot_chance: float) -> list[dict]:
         conn.close()
 
 
+def restore_dungeon_entry_snapshot(campaign_id: int, character_id: int) -> bool:
+    """Restore character HP/gold/inventory from the dungeon_enter snapshot."""
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            """SELECT snapshot_json FROM world_state_snapshots
+               WHERE campaign_id = ? AND snapshot_source = 'dungeon_enter'
+               ORDER BY id DESC LIMIT 1""",
+            (campaign_id,)
+        ).fetchone()
+        if not row:
+            return False
+        snap = json.loads(row["snapshot_json"] or "{}")
+
+        char = conn.execute(
+            "SELECT sheet_json FROM characters WHERE id = ?", (character_id,)
+        ).fetchone()
+        if not char:
+            return False
+        sheet = json.loads(char["sheet_json"] or "{}")
+
+        if snap.get("current_hp") is not None:
+            sheet["current_hp"] = snap["current_hp"]
+        if snap.get("max_hp") is not None:
+            sheet["max_hp"] = snap["max_hp"]
+
+        conn.execute(
+            "UPDATE characters SET sheet_json = ?, gold = ?, gold_gp = ? WHERE id = ?",
+            (json.dumps(sheet, ensure_ascii=False), snap.get("gold", 0), snap.get("gold_gp", 0), character_id)
+        )
+
+        inventory = snap.get("inventory") or []
+        conn.execute("DELETE FROM character_inventory WHERE character_id = ?", (character_id,))
+        for item in inventory:
+            conn.execute(
+                """INSERT INTO character_inventory
+                       (character_id, item_key, weapon_key, consumable_key, quantity, equipped)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (character_id, item.get("item_key"), item.get("weapon_key"),
+                 item.get("consumable_key"), item.get("quantity", 1), item.get("equipped", 0))
+            )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def _reset_dungeon_run(run: dict) -> dict:
+    """Reset an in-progress run back to room 1 with all rooms un-cleared."""
+    run["current_room"] = 1
+    run["completed"] = False
+    run["failed"] = False
+    for room in run.get("rooms", []):
+        room["cleared"] = False
+    return run
+
+
 def handle_dungeon_death(campaign_id: int, character_id: int) -> dict:
-    """Hero died in dungeon. Apply death mode, start cooldown, mark run failed."""
+    """Hero died in dungeon. Restore entry snapshot and restart run from room 1."""
     conn, flags = _load_flags(campaign_id)
     try:
         run = flags.get("dungeon_run")
         if not run:
-            return {"ok": True}
-        run["failed"] = True
-        run["completed"] = False
-
+            return {"ok": True, "restored": False, "restarted": False}
         death_mode = _get_meta(conn, "dungeon_death_hp_mode", "campaign_state")
-
         dungeon_key = run.get("dungeon_key", "")
+        _reset_dungeon_run(run)
         flags["dungeon_run"] = run
         _save_flags(conn, campaign_id, flags)
     finally:
         conn.close()
 
-    # Start cooldown even on death
-    try:
-        complete_dungeon(character_id, dungeon_key)
-    except Exception:
-        pass
+    restored = restore_dungeon_entry_snapshot(campaign_id, character_id)
 
     return {
         "ok": True,
         "death_mode": death_mode,
         "dungeon_key": dungeon_key,
-        "failed": True,
+        "restored": restored,
+        "restarted": True,
     }
