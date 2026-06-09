@@ -1499,7 +1499,8 @@ function _sectionHtml() { return `
         is_active:        overlay.querySelector('#tf-active').checked,
       };
       if (!payload.label) throw new Error('Nazwa jest wymagana');
-      if (!payload.doors.length) throw new Error('Wybierz przynajmniej 1 drzwi');
+      // Doors are NOT required at save time — admin sets them AFTER generating the
+      // image (step 3). Empty doors is valid; they get added once the art is seen.
       if (tileId) {
         await apiFetch(`/api/admin/dungeon-tiles/${tileId}`, { method:'PATCH', body:JSON.stringify(payload) });
         showToast('Zapisano', 'success');
