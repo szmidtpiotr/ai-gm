@@ -3463,6 +3463,7 @@ def admin_update_dungeon(
     allowed = {
         "label", "location_key", "rooms", "enemy_pool", "boss_enemy",
         "loot_tier", "atmosphere", "cooldown_hours", "min_level", "is_active",
+        "dungeon_difficulty",
     }
     updates = {k: v for k, v in req.items() if k in allowed}
     if not updates:

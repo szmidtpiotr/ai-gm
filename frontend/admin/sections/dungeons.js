@@ -365,6 +365,7 @@ function _sectionHtml() { return `
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Klucz lokacji</label><input id="ed-loc" class="form-input form-mono" value="${_esc(dg.location_key||'')}"></div>
         <div class="form-row"><label class="form-label">Min. poziom</label><input id="ed-lvl" class="form-input" type="number" value="${dg.min_level||1}" min="1" max="20"></div>
         <div class="form-row"><label class="form-label">Cooldown (h)</label><input id="ed-cool" class="form-input" type="number" value="${dg.cooldown_hours||72}" min="1" max="720"></div>
+        <div class="form-row"><label class="form-label">Trudność (D1–D5)</label><input id="ed-diff" class="form-input" type="number" value="${dg.dungeon_difficulty||1}" min="1" max="5"></div>
         <div class="form-row" style="grid-column:1/-1"><label class="form-label">Atmosfera</label><textarea id="ed-atmo" class="form-input" rows="2">${_esc(dg.atmosphere||'')}</textarea></div>
 
         <div class="form-row" style="grid-column:1/-1;border-top:1px solid var(--accent);padding-top:8px;margin-top:4px">
@@ -426,6 +427,7 @@ function _sectionHtml() { return `
       location_key: g('ed-loc')?.value?.trim()||key,
       min_level: parseInt(g('ed-lvl')?.value)||1,
       cooldown_hours: parseInt(g('ed-cool')?.value)||72,
+      dungeon_difficulty: parseInt(g('ed-diff')?.value)||1,
       is_active: g('ed-active')?.checked ? 1 : 0,
       atmosphere: g('ed-atmo')?.value?.trim()||null,
       tile_category_key: g('ed-tile-cat')?.value || null,

@@ -899,7 +899,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
-### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E17 ✅ 2026-06-09, E18–E28 oczekujące)
+### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E18 ✅ 2026-06-09, E19–E28 oczekujące)
 
 > Retencja graczy i zawartość. Wymaga działającej Fazy 1+2. E1–E14 zaimplementowane (GitHub #416–429); E15–E28 następna iteracja.
 
@@ -2359,7 +2359,7 @@ Ukończenie lub śmierć = cooldown startuje.
 | Admin UI: tile manager (obrazki, drzwi, opis) | ⚠️ Częściowy |
 | `source_exclusive = "dungeon"` flag | ✅ Istnieje |
 | Rarity jako tier lootu per trudność | ✅ `RARITY_TIERS` + `dungeon_difficulty` + `get_loot_rarity_for_difficulty()` |
-| Cooldown konfigurowalny z Admin Panelu | ⚠️ Jest w DB, nie ma UI |
+| Cooldown konfigurowalny z Admin Panelu | ✅ Edytowalny z `/admin/#dungeons` + `dungeon_difficulty` też |
 
 ---
 
