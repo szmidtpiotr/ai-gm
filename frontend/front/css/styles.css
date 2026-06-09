@@ -8489,6 +8489,35 @@ body[data-theme="classic"] {
 }
 .pf-password-actions .pf-action-btn { flex: 1; }
 
+/* ── Theme selector in profile ─────────────────────────────────────────── */
+.theme-selector-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  flex: 1;
+  padding: 12px 8px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+  font-size: 0.85rem;
+}
+.theme-selector-btn:hover {
+  border-color: rgba(201,165,74,0.3);
+  background: rgba(201,165,74,0.05);
+  color: var(--text-primary);
+}
+.theme-selector-btn--selected {
+  border-color: var(--accent);
+  background: rgba(201,165,74,0.12);
+  color: var(--accent);
+  font-weight: 500;
+}
+
 /* ── Heroes invite chip ──────────────────────────────────────────────────── */ ──────────────────────────────────────────────────── */
 .heroes-invite-row {
   display: flex;
