@@ -2897,7 +2897,7 @@ def create_turn(
         character = get_character_or_404(conn, campaign_id, payload.character_id)
 
         # E5 (#420) — block turns for dead heroes
-        if character.get("status") == "dead":
+        if ("status" in character.keys() and character["status"] == "dead"):
             raise HTTPException(
                 status_code=423,
                 detail="Cannot continue — hero is dead. Create a new hero to resume.",
