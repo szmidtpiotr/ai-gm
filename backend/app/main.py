@@ -77,6 +77,7 @@ from app.routers.admin_images import router as admin_images_router
 from app.routers.bug_report import router as bug_report_router
 from app.routers.world_state_history import router as world_state_history_router
 from app.routers.push_notifications import router as push_notifications_router
+from app.routers.seen_mechanics import router as seen_mechanics_router
 
 
 # Keep DB path consistent with API routers using raw sqlite connections.
@@ -288,6 +289,17 @@ RAW_MIGRATIONS = [
     "INSERT OR REPLACE INTO game_config_meta (key, value) VALUES ('xp_stat_point_costs', '{\"9\":50,\"10\":50,\"11\":50,\"12\":100,\"13\":100,\"14\":100,\"15\":200,\"16\":200,\"17\":200,\"18\":400,\"19\":400}')",
     # C8: stat ceiling = 19 (19+ = Niedostępne per game_mechanics.md)
     "INSERT OR REPLACE INTO game_config_meta (key, value) VALUES ('xp_stat_value_ceiling', '19')",
+    # E23 — seen_mechanics per-user tracking
+    """
+    CREATE TABLE IF NOT EXISTS seen_mechanics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        mechanic_key TEXT NOT NULL,
+        seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(user_id, mechanic_key)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_seen_mechanics_user ON seen_mechanics(user_id)",
 ]
 
 
@@ -442,6 +454,7 @@ app.include_router(admin_images_router)
 app.include_router(bug_report_router, prefix="/api")
 app.include_router(world_state_history_router, prefix="/api")
 app.include_router(push_notifications_router, prefix="/api")
+app.include_router(seen_mechanics_router, prefix="/api")
 app.include_router(multiplayer_router, prefix="/api")
 app.include_router(party_chat_router, prefix="/api")
 if os.getenv("AI_TEST_MODE") == "1":
