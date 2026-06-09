@@ -6166,6 +6166,14 @@ def player_hex_travel(campaign_id: int, payload: HexTravelPayload):
         except Exception as _clk_err:  # noqa: BLE001 — log + degrade gracefully
             logger.warning("clock_advance_travel_failed", error=str(_clk_err), campaign_id=campaign_id)
 
+        # E21: flag dungeon hexes so frontend auto-opens dungeon picker.
+        # Check destination (not arrived_hex) — travel may fail but hex is still dungeon.
+        hex_row = conn.execute(
+            "SELECT hex_type FROM world_hexes WHERE q=? AND r=? AND is_active=1 LIMIT 1",
+            (dest_q, dest_r),
+        ).fetchone()
+        result["dungeon_prompt"] = bool(hex_row and hex_row["hex_type"] == "dungeon")
+
         return result
     finally:
         conn.close()
