@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-09 (E1–E14 #416-429 ukończone; FADM-P13..P17 #449-453 zaplanowane)_
+_Ostatnia aktualizacja: 2026-06-09 (E1–E14 #416-429 ukończone; FADM-P13..P17 #449-453 KOMPLETNE — strangler fig done)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -15,8 +15,8 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
-| **FADM (admin rebuild)** | 13/18 | 72% ⚠️ AKTYWNE (P4-P7 + P17 oczekujące) |
-| **TOTAL** | **80/140** | **57%** |
+| **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
+| **TOTAL** | **85/140** | **61%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -184,9 +184,9 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ---
 
-## FADM — Przebudowa Admin Panelu (strangler-fig) ⚠️ AKTYWNE
+## FADM — Przebudowa Admin Panelu (strangler-fig) ✅ KOMPLETNE 2026-06-09
 
-Wyrównanie z planem CZĘŚĆ AE. Monolit `admin_panel_v3` (19 447 linii, 1 plik) → modularny `frontend/admin/`. admin3 zostaje jako fallback; sekcję kasujemy z monolitu dopiero po porcie (anty-grób). Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401). Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`.
+Monolit `admin_panel_v3` (19 447 linii) → modularny `frontend/admin/` (14 sekcji ES). P0-P17 kompletne. admin3 usunięty; `/admin3/` → 301 → `/admin/`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
 - [x] FADM-P0 — Bootstrap skorupy `admin/` + shared utils (api/table/toast/modal/form) — [#402](https://github.com/szmidtpiotr/ai-gm/issues/402) ✅ 2026-06-08
 - [x] FADM-P1 — Port sekcji overview — [#403](https://github.com/szmidtpiotr/ai-gm/issues/403) ✅ 2026-06-08
@@ -196,7 +196,7 @@ Wyrównanie z planem CZĘŚĆ AE. Monolit `admin_panel_v3` (19 447 linii, 1 plik
 - [ ] FADM-P5 — Port sekcji map — [#407](https://github.com/szmidtpiotr/ai-gm/issues/407)
 - [ ] FADM-P6 — Port sekcji campaigns (+ B6/B7/D6) — [#408](https://github.com/szmidtpiotr/ai-gm/issues/408)
 - [ ] FADM-P7 — Port sekcji dungeons — [#409](https://github.com/szmidtpiotr/ai-gm/issues/409)
-- [x] FADM-P8 — ⏭ SKIPPED na stałe (forge/Kuźnia zostaje w admin3, standalone tool) — [#410](https://github.com/szmidtpiotr/ai-gm/issues/410)
+- [x] FADM-P8 — ⏭ RETROAKTYWNIE ANULOWANY (Forge portowano w P14; pierwotny skip cofnięty) — [#410](https://github.com/szmidtpiotr/ai-gm/issues/410)
 - [x] FADM-P9 — Port sekcji players — [#411](https://github.com/szmidtpiotr/ai-gm/issues/411)
 - [x] FADM-P10 — Port sekcji tools (sandbox/Playwright/Inspector) — [#412](https://github.com/szmidtpiotr/ai-gm/issues/412)
 - [x] FADM-P11 — Port sekcji system (LLM presety + config) — [#413](https://github.com/szmidtpiotr/ai-gm/issues/413)
@@ -206,7 +206,7 @@ Wyrównanie z planem CZĘŚĆ AE. Monolit `admin_panel_v3` (19 447 linii, 1 plik
 - [x] FADM-P14 — Port Forge (Kuźnia) → `sections/forge.js` — [#450](https://github.com/szmidtpiotr/ai-gm/issues/450)
 - [x] FADM-P15 — Anti-grób: usuń Forge z monolitu + rewire bounce/banner — [#451](https://github.com/szmidtpiotr/ai-gm/issues/451) _(zależy P13+P14)_
 - [x] FADM-P16 — Migracja testów Playwright admin3 → /admin/ — [#452](https://github.com/szmidtpiotr/ai-gm/issues/452) _(zależy P14)_
-- [ ] FADM-P17 — Decommission admin3 (pliki + nginx) — [#453](https://github.com/szmidtpiotr/ai-gm/issues/453) _(zależy P13+P14+P15+P16)_
+- [x] FADM-P17 — Decommission admin3 (pliki + nginx + redirects + CLAUDE.md) — [#453](https://github.com/szmidtpiotr/ai-gm/issues/453) ✅ 2026-06-09
 
 ---
 
