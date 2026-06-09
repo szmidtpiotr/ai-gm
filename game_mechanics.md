@@ -899,7 +899,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
-### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E15 ✅ 2026-06-09, E16–E28 oczekujące)
+### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E16 ✅ 2026-06-09, E17–E28 oczekujące)
 
 > Retencja graczy i zawartość. Wymaga działającej Fazy 1+2. E1–E14 zaimplementowane (GitHub #416–429); E15–E28 następna iteracja.
 
@@ -2368,7 +2368,7 @@ Ukończenie lub śmierć = cooldown startuje.
 | # | Zadanie | Faza |
 |---|---------|------|
 | E15 | Snapshot stanu przy wejściu do lochu | 3 |
-| E16 | Przywróć snapshot przy śmierci + restart lochu | 3 |
+| E16 ✅ | Przywróć snapshot przy śmierci + restart lochu — #431 (2026-06-09) | 3 |
 | E17 | Rarity tierów loot w lochach: 5 tierów (Zwykły/szary, Ulepszony/zielony, Rzadki/niebieski, Epicki/fioletowy, Legendarny/złoty). Mapowanie difficulty→rarity: D1=Zwykły–Ulepszony, D2=Ulepszony–Rzadki, D3=Rzadki–Epicki, D4=Epicki–Legendarny, D5 boss=Epicki–Legendarny (guaranteed). | 3 |
 | E18 | Cooldown UI w Admin Panelu | 3 |
 | E19 | LLM Vision: obrazek → opis kafelka | 3 |
