@@ -121,6 +121,73 @@ def _apply_gm_plan_visibility(
     return row_dict
 
 
+def _check_hero_dead(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: int,
+    character_id: int,
+) -> bool:
+    """E5 (#420) — check if hero is dead (hero_status='dead')."""
+    try:
+        row = conn.execute(
+            "SELECT status FROM characters WHERE id = ? AND campaign_id = ?",
+            (character_id, campaign_id),
+        ).fetchone()
+        return bool(row and row["status"] == "dead")
+    except sqlite3.OperationalError:
+        return False
+
+
+def _get_campaign_with_hero_state(
+    conn: sqlite3.Connection,
+    *,
+    campaign_id: int,
+) -> dict | None:
+    """E5 (#420) — get campaign with hero_blocked and hero_status fields.
+
+    Returns None if campaign not found.
+    Adds hero_blocked=True if attached hero has status='dead'.
+    """
+    try:
+        # Fetch campaign
+        c_row = conn.execute(
+            """
+            SELECT id, title, system_id, model_id, owner_user_id,
+                   language, mode, status, created_at, gm_plan_json
+            FROM campaigns
+            WHERE id = ?
+            """,
+            (campaign_id,),
+        ).fetchone()
+        if not c_row:
+            return None
+
+        campaign_dict = dict(c_row)
+
+        # Fetch attached hero status if any
+        hero_status = None
+        try:
+            ch_row = conn.execute(
+                """
+                SELECT ch.status
+                FROM characters ch
+                WHERE ch.campaign_id = ? AND ch.status IN ('dead', 'in_campaign')
+                LIMIT 1
+                """,
+                (campaign_id,),
+            ).fetchone()
+            if ch_row:
+                hero_status = ch_row["status"]
+        except sqlite3.OperationalError:
+            pass
+
+        campaign_dict["hero_status"] = hero_status
+        campaign_dict["hero_blocked"] = hero_status == "dead"
+        return campaign_dict
+    except sqlite3.OperationalError:
+        return None
+
+
 def _parse_gm_plan(raw: str | None) -> dict:
     return normalize_gm_plan(raw)
 
@@ -163,7 +230,8 @@ def list_campaigns():
             c.created_at,
             c.gm_plan_json,
             (SELECT COUNT(*) FROM characters ch WHERE ch.campaign_id = c.id) AS character_count,
-            (SELECT ch.id FROM characters ch WHERE ch.campaign_id = c.id AND ch.is_active = 1 LIMIT 1) AS character_id
+            (SELECT ch.id FROM characters ch WHERE ch.campaign_id = c.id AND ch.is_active = 1 LIMIT 1) AS character_id,
+            (SELECT ch.status FROM characters ch WHERE ch.campaign_id = c.id AND ch.status IN ('dead', 'in_campaign') LIMIT 1) AS hero_status
         FROM campaigns c
         WHERE NOT (
             c.status = 'active'
@@ -213,6 +281,9 @@ def list_campaigns():
                 plan_ready = bool(title or premise or roadmap)
         item["description"] = description
         item["plan_ready"] = plan_ready
+        # E5 (#420) — mark campaigns with dead heroes as blocked
+        hero_status = item.get("hero_status")
+        item["hero_blocked"] = hero_status == "dead"
         out.append(item)
 
     return {"campaigns": out}
@@ -239,20 +310,12 @@ def get_campaign(
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:
-        row = conn.execute(
-            """
-            SELECT id, title, system_id, model_id, owner_user_id, language, mode, status, created_at,
-                   gm_plan_json
-            FROM campaigns
-            WHERE id = ?
-            """,
-            (campaign_id,),
-        ).fetchone()
-
-        if not row:
+        # E5 (#420) — include hero status + hero_blocked flag
+        campaign_dict = _get_campaign_with_hero_state(conn, campaign_id=campaign_id)
+        if not campaign_dict:
             raise HTTPException(status_code=404, detail="Campaign not found")
 
-        return _apply_gm_plan_visibility(conn, dict(row), campaign_id, effective_uid)
+        return _apply_gm_plan_visibility(conn, campaign_dict, campaign_id, effective_uid)
     finally:
         conn.close()
 

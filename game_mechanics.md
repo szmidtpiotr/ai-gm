@@ -3451,7 +3451,7 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 
 **E3/E4** — Ekrany zakończenia kampanii i śmierci: `_renderRunStats(elId, stats)` wyświetla kafelki ze statystykami runu (tury, złoto, NPC, questy). Backend: `campaign_run_stats(conn, campaign_id, character_id)` w `solo_death_service.py` zwraca te liczby. Ekran śmierci: Wskrześ (płatne) / Nowy bohater. Ekran zakończenia: LLM epitafium + statystyki.
 
-**E5** — Kampanie martwego bohatera: HTTP 410 Gone na `GET /api/campaigns/{id}` gdy `hero_status=dead`. Regression lock — mechanizm już istniał, dodano test E5 jako zabezpieczenie regresji.
+**E5** — Kampanie martwego bohatera: zablokowany dostęp gdy `hero_status=dead`. GET `/api/campaigns/{id}` zwraca `hero_blocked=true` + `hero_status=dead`. POST `/api/campaigns/{id}/turns` zwraca HTTP 423 Locked + msg "Cannot continue — hero is dead". ✅ 420
 
 **E6** — Narracja: `chapter_summary` kompresja starych tur (ponad N), `seed_events` injekcja do kontekstu LLM. Tag `[ARC_ADVANCE:arc_id]` parsowany w `turns.py` (obie ścieżki: streaming + narrative) → wywołuje `advance_arc()` w `campaign_plan_runtime.py`. `_ANY_NARRATIVE_RE` rozszerzony o ARC_ADVANCE strip.
 
