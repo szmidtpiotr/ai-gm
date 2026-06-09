@@ -3552,6 +3552,74 @@ def admin_patch_campaign_hex(campaign_id: int, q: int, r: int, req: HexOverlayPa
         conn.close()
 
 
+@router.get("/admin/campaigns/{campaign_id}/known-npcs")
+def admin_get_campaign_known_npcs(campaign_id: int, _: None = Depends(require_admin_token)):
+    """Return NPCs known to the campaign: world NPCs at visited locations + NPC memory entries."""
+    conn = sqlite3.connect(ADMIN_SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        # World NPCs at all locations ever visited by this campaign (via game_sessions history)
+        # plus any locations created by this campaign
+        session_loc_rows = conn.execute(
+            """SELECT DISTINCT gl.key
+               FROM game_sessions gs
+               JOIN game_locations gl ON gs.current_location_id = gl.id
+               WHERE gs.campaign_id = ?""",
+            (campaign_id,),
+        ).fetchall()
+        created_loc_rows = conn.execute(
+            "SELECT key FROM game_locations WHERE source_campaign_id=?", (campaign_id,)
+        ).fetchall()
+        loc_keys = list({r["key"] for r in session_loc_rows} | {r["key"] for r in created_loc_rows})
+
+        world_npcs: list[dict] = []
+        if loc_keys:
+            placeholders = ",".join("?" * len(loc_keys))
+            rows = conn.execute(
+                f"""SELECT n.key, n.label, n.npc_type, n.is_ally, n.description,
+                           GROUP_CONCAT(nl.location_key) AS location_keys
+                    FROM npcs n
+                    JOIN npc_locations nl ON n.id = nl.npc_id
+                    WHERE nl.location_key IN ({placeholders})
+                    GROUP BY n.id""",
+                loc_keys,
+            ).fetchall()
+            for r in rows:
+                d = dict(r)
+                d["location_keys"] = d["location_keys"].split(",") if d["location_keys"] else []
+                d["last_interaction"] = None
+                d["source"] = "world"
+                world_npcs.append(d)
+
+        # NPC memory entries (from NPC_MEMORY tags)
+        mem_rows = conn.execute(
+            "SELECT npc_name, notes, updated_at FROM campaign_known_npcs WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchall()
+        memory_npcs = [
+            {
+                "key": r["npc_name"].lower().replace(" ", "_"),
+                "label": r["npc_name"],
+                "npc_type": "neutral",
+                "is_ally": 0,
+                "description": r["notes"],
+                "location_keys": [],
+                "last_interaction": r["updated_at"],
+                "source": "memory",
+            }
+            for r in mem_rows
+        ]
+
+        # Merge: prefer world NPC data, annotate with memory notes
+        world_keys = {n["label"].lower() for n in world_npcs}
+        extra_memory = [m for m in memory_npcs if m["label"].lower() not in world_keys]
+        result = world_npcs + extra_memory
+
+        return {"npcs": result, "count": len(result)}
+    finally:
+        conn.close()
+
+
 # ── Admin: Riddle Bank ────────────────────────────────────────────────────────
 
 class RiddleReq(BaseModel):
