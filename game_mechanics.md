@@ -3470,3 +3470,8 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 **E13** — `encounter_seed_service.py`: `GENERIC_ENCOUNTERS` lista 5 predefiniowanych spotkań (wilki/bandyci/gobliny/nieumarli/łobuzy) z biome/trigger/level tagami. `seed_generic_encounters()` idempotentny (marker `__generic_encounter__` w draft_data). Wywołany w `main.py` lifespan startup.
 
 **E14** — Level gating w `encounter_service.py`: `encounter_matches(enc, *, trigger, hex_type, hero_level)` — sprawdza biome/trigger/level_min/level_max. `_hero_level_for_campaign()` helper. `maybe_inject_encounter()` refaktoryzowany: candidates loop używa `encounter_matches()` zamiast ad-hoc logiki.
+
+## Poprawki standalone (poza fazami A-H)
+
+- #456 — SB-2: `scene_enemies` / `player_conditions` zawsze puste — naprawione: `initiate_combat()` → `set_world_state_flags(scene_enemies=[...])`, `end_combat()` → clear, `auto_save_snapshot()` → `_sync_player_conditions()` z arkusza postaci. Commit po deploy DEV (TDD 4/4 + Playwright 2/2). ✅
+- #457 — SB-3/SB-4: keyword scan nadpisywał `SKILL_TEST_PENDING` — guard przed skanem w `create_turn` + ścieżce streaming; fix `is_admin` w `slash_registry_key_for_dispatch` (HTTP 500 na slash komendy). ✅
