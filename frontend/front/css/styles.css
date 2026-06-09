@@ -6088,6 +6088,17 @@ body.crit-shake { animation: critShake 180ms ease-out 1; }
   flex-shrink: 0;
 }
 
+/* E2 (#417) — inline stat/skill descriptions replace tooltip duplicates */
+.wizard-stat-desc,
+.wizard-skill-desc {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.55);
+  margin-top: 4px;
+  padding: 4px 0;
+  border-top: 1px solid rgba(255,255,255,0.1);
+  line-height: 1.4;
+}
+
 /* E2 (#417) — Creator tooltips. The `?` hints and archetype cards carry a
    data-tooltip; this renders it as a floating bubble on hover/focus so the
    player sees the mechanical explanation. Without this rule the attribute did

@@ -1600,19 +1600,19 @@ function _renderStep1(c) {
             <div class="form-field">
                 <label>Archetyp</label>
                 <div class="archetype-grid">
-                    <button type="button" class="archetype-card${savedArch === 'warrior' ? ' archetype-card--selected' : ''}" data-arch="warrior"${_archetypeExample('warrior') ? ` data-tooltip="${_esc(_archetypeExample('warrior'))}"` : ''}>
+                    <button type="button" class="archetype-card${savedArch === 'warrior' ? ' archetype-card--selected' : ''}" data-arch="warrior">
                         <span class="archetype-icon">⚔️</span>
                         <span class="archetype-title">Wojownik</span>
                         <span class="archetype-desc">Frontowy wojownik w ciężkiej zbroi. Wysoki HP, silne ciosy, mistrz broni wręcz.</span>
                         <span class="archetype-bonus">+2 STR · +1 KON · HP: 12</span>
                     </button>
-                    <button type="button" class="archetype-card${savedArch === 'rogue' ? ' archetype-card--selected' : ''}" data-arch="rogue"${_archetypeExample('rogue') ? ` data-tooltip="${_esc(_archetypeExample('rogue'))}"` : ''}>
+                    <button type="button" class="archetype-card${savedArch === 'rogue' ? ' archetype-card--selected' : ''}" data-arch="rogue">
                         <span class="archetype-icon">🏹</span>
                         <span class="archetype-title">Łotrzyk</span>
                         <span class="archetype-desc">Zwinny cień: snajper z ukrycia lub złodziej w ciemnościach. Skradanie, łuk, inteligentna walka.</span>
                         <span class="archetype-bonus">+2 ZRĘ · +1 SZCZ · HP: 8</span>
                     </button>
-                    <button type="button" class="archetype-card${savedArch === 'scholar' ? ' archetype-card--selected' : ''}" data-arch="scholar"${_archetypeExample('scholar') ? ` data-tooltip="${_esc(_archetypeExample('scholar'))}"` : ''}>
+                    <button type="button" class="archetype-card${savedArch === 'scholar' ? ' archetype-card--selected' : ''}" data-arch="scholar">
                         <span class="archetype-icon">📜</span>
                         <span class="archetype-title">Uczony</span>
                         <span class="archetype-desc">Tkacz arkanów: kruchy, ale niszczycielski dzięki zaklęciom. Zarządza maną i ryzykiem Omylenia.</span>
@@ -1671,7 +1671,6 @@ function _renderStep2(c) {
             <div class="wizard-stat-row" data-stat="${stat}">
                 <div class="wizard-stat-label-wrap">
                     <span class="wizard-stat-label">${stat}</span>
-                    <span class="wizard-stat-hint" data-tooltip="${_esc(hint)}">?</span>
                 </div>
                 <span class="wizard-stat-mod">${modStr}</span>
                 <div class="wizard-stat-controls">
@@ -1679,6 +1678,7 @@ function _renderStep2(c) {
                     <span class="wizard-stat-val">${v}</span>
                     <button type="button" class="wizard-stat-btn" data-dir="+" ${canPlus ? '' : 'disabled'}>+</button>
                 </div>
+                ${hint.trim() ? `<div class="wizard-stat-desc">${_esc(hint)}</div>` : ''}
             </div>`;
     }
 
@@ -1780,7 +1780,6 @@ function _renderStep3(c) {
             <div class="wizard-skill-row${changed ? ' wizard-skill-row--changed' : ''}" data-orig="${origKey}">
                 <span class="wizard-skill-name">
                     ${_esc(curRow.label)} <span class="wizard-skill-stat">— ${curRow.stat}</span>
-                    ${skillHint.trim() ? `<span class="wizard-stat-hint" data-tooltip="${_esc(skillHint)}">?</span>` : ''}
                     ${swapBtn}
                 </span>
                 <div class="wizard-stat-controls wizard-skill-controls">
@@ -1788,6 +1787,7 @@ function _renderStep3(c) {
                     <span class="wizard-skill-rank">${rank} · ${rankName}</span>
                     <button type="button" class="wizard-stat-btn" data-skill-dir="+" data-orig="${origKey}" ${canPlus ? '' : 'disabled'}>+</button>
                 </div>
+                ${skillHint.trim() ? `<div class="wizard-stat-desc">${_esc(skillHint)}</div>` : ''}
             </div>`;
     }).join('');
 
