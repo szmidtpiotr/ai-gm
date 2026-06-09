@@ -852,6 +852,10 @@ def log_narrative_turn_structured(
         max_chars = 0
     tid, ui_tid = _trace_ids_for_story_log()
     try:
+        # Convert Row to dict if needed (some code paths pass sqlite3.Row)
+        if not isinstance(turn_row, dict):
+            turn_row = dict(turn_row) if hasattr(turn_row, 'keys') else {}
+
         logger.info(
             "narrative_turn",
             campaign_id=str(campaign_id),
@@ -886,6 +890,10 @@ def log_memory_turn_structured(
         max_chars = 0
     tid, ui_tid = _trace_ids_for_story_log()
     try:
+        # Convert Row to dict if needed
+        if not isinstance(turn_row, dict):
+            turn_row = dict(turn_row) if hasattr(turn_row, 'keys') else {}
+
         logger.info(
             "memory_turn",
             campaign_id=str(campaign_id),
@@ -2887,6 +2895,14 @@ def create_turn(
     try:
         campaign = get_active_campaign_or_gone(conn, campaign_id)
         character = get_character_or_404(conn, campaign_id, payload.character_id)
+
+        # E5 (#420) — block turns for dead heroes
+        if character.get("status") == "dead":
+            raise HTTPException(
+                status_code=423,
+                detail="Cannot continue — hero is dead. Create a new hero to resume.",
+            )
+
         llm_config = get_user_llm_settings_full(character["user_id"])
         text = (payload.text or "").strip()
 
