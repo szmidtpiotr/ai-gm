@@ -131,7 +131,7 @@ def is_slash_command_enabled(command_key: str) -> bool:
     return True
 
 
-def slash_registry_key_for_dispatch(text: str) -> str | None:
+def slash_registry_key_for_dispatch(text: str, is_admin: bool = False) -> str | None:
     """Klucz z listy admin (np. /mem [pytanie]) albo /search; alias /walka → /atak."""
     raw = (text or "").strip()
     if not raw.startswith("/"):
