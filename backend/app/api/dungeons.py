@@ -46,6 +46,45 @@ def get_dungeon_detail(dungeon_key: str, character_id: int | None = None):
     return d
 
 
+# ── Dungeon entry snapshot ────────────────────────────────────────────────────
+
+def _save_dungeon_entry_snapshot(campaign_id: int, character_id: int) -> None:
+    """Save a world_state_snapshots row capturing HP, gold, and inventory at dungeon entry."""
+    from app.services.world_state_service import save_snapshot
+    conn = _get_db()
+    try:
+        char = conn.execute(
+            "SELECT sheet_json, gold, gold_gp FROM characters WHERE id = ?",
+            (character_id,),
+        ).fetchone()
+        if not char:
+            return
+        sheet = json.loads(char["sheet_json"] or "{}")
+        inv_rows = conn.execute(
+            """SELECT item_key, weapon_key, consumable_key, quantity, equipped
+               FROM character_inventory WHERE character_id = ?""",
+            (character_id,),
+        ).fetchall()
+        inventory = [dict(r) for r in inv_rows]
+        turn_row = conn.execute(
+            "SELECT MAX(turn_number) AS t FROM campaign_turns WHERE campaign_id = ?",
+            (campaign_id,),
+        ).fetchone()
+        turn_number = (turn_row["t"] or 0) if turn_row else 0
+    finally:
+        conn.close()
+
+    state_dict = {
+        "current_hp": sheet.get("current_hp"),
+        "max_hp": sheet.get("max_hp"),
+        "gold": char["gold"],
+        "gold_gp": char["gold_gp"],
+        "inventory": inventory,
+        "dungeon_key": None,  # populated by caller context, available via session_flags
+    }
+    save_snapshot(campaign_id, turn_number, state_dict, source="dungeon_enter")
+
+
 # ── Enter ─────────────────────────────────────────────────────────────────────
 
 class DungeonEnterReq(BaseModel):
@@ -76,6 +115,8 @@ def enter_dungeon(dungeon_key: str, req: DungeonEnterReq):
             detail["cooldown_until"] = parts[1]
             detail["hours_remaining"] = float(parts[2])
         raise HTTPException(status_code=423, detail=detail)
+
+    _save_dungeon_entry_snapshot(req.campaign_id, req.character_id)
 
     first_room = instance["rooms"][0] if instance["rooms"] else {}
     room_type = first_room.get("room_type", "combat")
