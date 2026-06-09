@@ -899,7 +899,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
-### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E14 ✅ 2026-06-09, E15–E28 oczekujące)
+### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E15 ✅ 2026-06-09, E16–E28 oczekujące)
 
 > Retencja graczy i zawartość. Wymaga działającej Fazy 1+2. E1–E14 zaimplementowane (GitHub #416–429); E15–E28 następna iteracja.
 
@@ -2352,7 +2352,7 @@ Ukończenie lub śmierć = cooldown startuje.
 | `dungeon_run` w session_flags | ✅ Istnieje |
 | Cooldown per character | ✅ Istnieje |
 | Skalowanie wrogów | ✅ Istnieje |
-| Snapshot stanu przy wejściu | ❌ Brak — stan nie jest snapshotowany |
+| Snapshot stanu przy wejściu | ✅ `source="dungeon_enter"` w `world_state_snapshots` — HP, złoto, inventory |
 | Przywrócenie snapshotu przy śmierci/wyjściu | ❌ Brak |
 | Obrazki + opisy per tile | ⚠️ Tabela istnieje, zawartość mała |
 | LLM Vision workflow (obrazek → opis) | ❌ Do zbudowania |
