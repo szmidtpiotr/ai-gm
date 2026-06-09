@@ -1,6 +1,7 @@
 /**
- * REGRESSION #396 — All ux suites (regression/acceptance/admin3) grouped in Playwright panel.
- * Acceptance: /playwright-specs returns specs from multiple groups including 'admin3'.
+ * REGRESSION #396 — All ux suites (regression/acceptance) grouped in Playwright panel.
+ * Acceptance: /playwright-specs endpoint istnieje i jest auth-gated. (Grupa admin3 usunięta
+ * w FADM-P16 #452 — monolit wycofany, specy zmigrowane do regression na /admin/.)
  */
 const { test, expect } = require("@playwright/test");
 

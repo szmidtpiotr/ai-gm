@@ -16,11 +16,18 @@ test("FADM-P10 #412 — API /api/admin/sandbox/heroes responds", async ({ page }
   expect([200, 401], `/api/admin/sandbox/heroes got ${r.status()}`).toContain(r.status());
 });
 
-test("FADM-P10 #412 — admin3 switchSection redirects tools to /admin/", async ({ page }) => {
-  const r = await page.request.get("/admin3/");
-  expect(r.status()).toBe(200);
-  const body = await r.text();
-  expect(body, "admin3 should have redirect for tools").toContain("/admin/#tools");
+test("FADM-P10 #412 — /admin/#tools renderuje moduł tools", async ({ page }) => {
+  await page.goto("/admin/");
+  await page.evaluate(async () => {
+    const r = await fetch("/api/admin/dev-login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "demo", password: "demo" }),
+    });
+    const b = await r.json();
+    localStorage.setItem("aigm_admin_token", b.token);
+  });
+  await page.goto("/admin/#tools");
+  await expect(page.locator("#section-tools"), "sekcja tools nie wyrenderowana w /admin/ (FADM-P10 #412)").toBeVisible({ timeout: 10000 });
 });
 
 test("FADM-P10 #412 — PORTED set includes tools", async ({ page }) => {

@@ -27,13 +27,20 @@ test("FADM-P12 #414 — API /api/admin/bug-reports missing — known backend gap
   expect([200, 401], `/api/admin/invite-tree got ${r.status()}`).toContain(r.status());
 });
 
-test("FADM-P12 #414 — admin3 redirects invites/bugreports/push to /admin/", async ({ page }) => {
-  const r = await page.request.get("/admin3/");
-  expect(r.status()).toBe(200);
-  const body = await r.text();
-  expect(body, "admin3 should redirect invites").toContain("/admin/#invites");
-  expect(body, "admin3 should redirect bugreports").toContain("/admin/#bugreports");
-  expect(body, "admin3 should redirect push").toContain("/admin/#push");
+test("FADM-P12 #414 — /admin/#invites + #bugreports + #push renderują moduły", async ({ page }) => {
+  await page.goto("/admin/");
+  await page.evaluate(async () => {
+    const r = await fetch("/api/admin/dev-login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "demo", password: "demo" }),
+    });
+    const b = await r.json();
+    localStorage.setItem("aigm_admin_token", b.token);
+  });
+  for (const key of ["invites", "bugreports", "push"]) {
+    await page.goto("/admin/#" + key);
+    await expect(page.locator("#section-" + key), key + " nie wyrenderowana w /admin/ (#414)").toBeVisible({ timeout: 10000 });
+  }
 });
 
 test("FADM-P12 #414 — PORTED set includes invites bugreports push", async ({ page }) => {
