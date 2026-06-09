@@ -181,7 +181,8 @@ def generate_category_system_prompt(key: str) -> dict:
 
 @router.get("/dungeon-tiles", dependencies=[Depends(require_admin_token)])
 def list_tiles(category_key: str | None = None,
-               include_inactive: bool = False) -> dict:
+               include_inactive: bool = False,
+               needs_description: bool = False) -> dict:
     sql = "SELECT * FROM dungeon_tiles WHERE 1=1"
     params: list[Any] = []
     if category_key:
@@ -189,6 +190,8 @@ def list_tiles(category_key: str | None = None,
         params.append(category_key)
     if not include_inactive:
         sql += " AND is_active = 1"
+    if needs_description:
+        sql += " AND (room_description IS NULL OR room_description = '')"
     sql += " ORDER BY category_key, is_boss_tile DESC, label"
     with _conn() as c:
         rows = c.execute(sql, params).fetchall()

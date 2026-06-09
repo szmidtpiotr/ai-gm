@@ -899,7 +899,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
-### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E18 ✅ 2026-06-09, E19–E28 oczekujące)
+### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E19 ✅ 2026-06-09, E20–E28 oczekujące)
 
 > Retencja graczy i zawartość. Wymaga działającej Fazy 1+2. E1–E14 zaimplementowane (GitHub #416–429); E15–E28 następna iteracja.
 
@@ -2355,7 +2355,7 @@ Ukończenie lub śmierć = cooldown startuje.
 | Snapshot stanu przy wejściu | ✅ `source="dungeon_enter"` w `world_state_snapshots` — HP, złoto, inventory |
 | Przywrócenie snapshotu przy śmierci/wyjściu | ❌ Brak |
 | Obrazki + opisy per tile | ⚠️ Tabela istnieje, zawartość mała |
-| LLM Vision workflow (obrazek → opis) | ❌ Do zbudowania |
+| LLM Vision workflow (obrazek → opis) | ✅ `scripts/vision_describe_tiles.py` na .170 (llava:7b + `needs_description` filter) |
 | Admin UI: tile manager (obrazki, drzwi, opis) | ⚠️ Częściowy |
 | `source_exclusive = "dungeon"` flag | ✅ Istnieje |
 | Rarity jako tier lootu per trudność | ✅ `RARITY_TIERS` + `dungeon_difficulty` + `get_loot_rarity_for_difficulty()` |
