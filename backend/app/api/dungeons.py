@@ -35,6 +35,41 @@ def list_dungeons_for_character(character_id: int | None = None):
     return {"dungeons": list_dungeons(character_id)}
 
 
+@router.get("/dungeons/active-run")
+def get_active_dungeon_run_for_character(character_id: int):
+    """E22: Return the active (incomplete) dungeon run for a character, if any.
+
+    Searches campaigns with mode='dungeon' and status='active' where the character
+    is assigned, then looks for a non-completed dungeon_run in session_flags.
+    Returns {active_run: {campaign_id, dungeon_key, current_room, ...} | null}.
+    """
+    conn = _get_db()
+    try:
+        rows = conn.execute(
+            """SELECT c.id AS campaign_id
+               FROM campaigns c
+               JOIN characters ch ON ch.campaign_id = c.id
+               WHERE ch.id = ? AND c.mode = 'dungeon' AND c.status = 'active'
+               ORDER BY c.id DESC""",
+            (character_id,),
+        ).fetchall()
+        for row in rows:
+            cid = row["campaign_id"]
+            gs = conn.execute(
+                "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+                (cid,),
+            ).fetchone()
+            if not gs:
+                continue
+            flags = json.loads(gs["session_flags"] or "{}")
+            run = flags.get("dungeon_run")
+            if run and not run.get("completed") and not run.get("failed"):
+                return {"active_run": {**run, "campaign_id": cid}}
+        return {"active_run": None}
+    finally:
+        conn.close()
+
+
 @router.get("/dungeons/{dungeon_key}")
 def get_dungeon_detail(dungeon_key: str, character_id: int | None = None):
     from app.services.dungeon_service import check_cooldown, get_dungeon

@@ -8753,6 +8753,13 @@ function _wmOnHexClick(e) {
     ? typeName
     : `${typeName} — nieznany teren`;
 
+  // E21: dungeon hex → skip travel, open dungeon picker directly
+  if (hex.hex_type === 'dungeon') {
+    _wmClose();
+    openDungeonPicker();
+    return;
+  }
+
   _wmap.pendingTravel = { q, r, label };
   const confirm = _wmap.confirm;
   confirm.querySelector('#wmap-confirm-title').textContent = `Podróżujesz do ${label}`;
@@ -9059,13 +9066,40 @@ async function openDungeonPicker() {
     list.innerHTML = '<div class="dungeon-picker-loading">Ładowanie lochów…</div>';
 
     try {
+        // E22: check for active (incomplete) dungeon run first
+        let activeRun = null;
+        try {
+            const runData = await apiRequest('GET', `/dungeons/active-run?character_id=${currentHero.id}`);
+            activeRun = runData.active_run || null;
+        } catch (_) { /* ignore — non-critical */ }
+
         const data = await apiRequest('GET', `/dungeons?character_id=${currentHero.id}`);
         const dungeons = data.dungeons || [];
-        if (!dungeons.length) {
+        list.innerHTML = '';
+
+        // E22: Resume card at top when active run exists
+        if (activeRun) {
+            const resumeCard = document.createElement('button');
+            resumeCard.className = 'dungeon-card dungeon-card--resume';
+            resumeCard.innerHTML = `
+                <div class="dungeon-card__icon">▶</div>
+                <div class="dungeon-card__body">
+                    <div class="dungeon-card__name">Wznów ekspedycję</div>
+                    <div class="dungeon-card__meta">${escapeHtml(activeRun.dungeon_key || '?')} · Komnata ${activeRun.current_room || 1}</div>
+                    <div class="dungeon-card__atm" style="color:#86efac">Niedokończony run — wróć do lochu</div>
+                </div>
+                <div class="dungeon-card__arrow" style="color:#86efac">›</div>`;
+            resumeCard.addEventListener('click', async () => {
+                overlay.setAttribute('hidden', '');
+                await _resumeDungeonRun(activeRun.campaign_id);
+            });
+            list.appendChild(resumeCard);
+        }
+
+        if (!dungeons.length && !activeRun) {
             list.innerHTML = '<p class="dungeon-picker-empty">Brak dostępnych lochów.</p>';
             return;
         }
-        list.innerHTML = '';
         dungeons.forEach(d => {
             const cd = d.cooldown || {};
             const onCooldown = cd.on_cooldown;
@@ -9147,6 +9181,34 @@ async function enterDungeon(dungeonKey) {
         renderCurrentRoom();
     } catch (err) {
         showToast(err.message || 'Błąd wejścia do lochu', 'error');
+    }
+}
+
+// E22: Resume an existing incomplete dungeon run
+async function _resumeDungeonRun(campaignId) {
+    try {
+        showToast('Wznawiasz ekspedycję…', 'info', 2000);
+        const campResp = await apiRequest('GET', `/campaigns/${campaignId}`);
+        const camp = campResp.campaign || campResp;
+        _dungeonCampaignId = campaignId;
+        currentCampaignId = campaignId;
+        currentCampaign = camp;
+
+        const heroResp = await apiRequest('GET', `/characters/${currentHero.id}`);
+        currentHero = heroResp.character || heroResp;
+        characterData = currentHero;
+
+        const runResp = await apiRequest('GET', `/campaigns/${campaignId}/dungeon-run`);
+        if (runResp.dungeon_run && !runResp.dungeon_run.completed && !runResp.dungeon_run.failed) {
+            _activeDungeonRun = runResp.dungeon_run;
+        }
+
+        await enterGame(camp);
+        updateDungeonHUD();
+        showDungeonHUD(true);
+        renderCurrentRoom();
+    } catch (err) {
+        showToast(err.message || 'Błąd wznawiania lochu', 'error');
     }
 }
 
