@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-09 (E1–E18 #416-433 ukończone; FADM-P13..P17 #449-453 KOMPLETNE — strangler fig done)_
+_Ostatnia aktualizacja: 2026-06-09 (E1–E19 #416-434 ukończone; FADM-P13..P17 #449-453 KOMPLETNE — strangler fig done)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -11,12 +11,12 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | B (Faza 0) | 7/7 | 100% ✅ |
 | C (Faza 1) | 19/19 | 100% ✅ |
 | D (Faza 2) | 14/14 | 100% ✅ |
-| E (Faza 3) | 18/28 | 64% ⚠️ W TOKU (E1–E18 ✅, E19–E28 oczekujące) |
+| E (Faza 3) | 19/28 | 68% ⚠️ W TOKU (E1–E19 ✅, E20–E28 oczekujące) |
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **85/140** | **61%** |
+| **TOTAL** | **86/140** | **61%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -115,7 +115,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] E16 — Przywróć snapshot przy śmierci w lochu + restart — [#431](https://github.com/szmidtpiotr/ai-gm/issues/431)
 - [x] E17 — Rarity tierów loot w lochach (5 tierów, mapowanie difficulty→rarity) — [#432](https://github.com/szmidtpiotr/ai-gm/issues/432)
 - [x] E18 — Cooldown UI lochów w Admin Panelu — [#433](https://github.com/szmidtpiotr/ai-gm/issues/433)
-- [ ] E19 — LLM Vision: obrazek → opis kafelka (task na maszynie .170) — [#434](https://github.com/szmidtpiotr/ai-gm/issues/434)
+- [x] E19 — LLM Vision: obrazek → opis kafelka (task na maszynie .170) — [#434](https://github.com/szmidtpiotr/ai-gm/issues/434)
 - [ ] E20 — Admin UI tile manager (obrazki, drzwi, opisy kafelków) — [#435](https://github.com/szmidtpiotr/ai-gm/issues/435)
 - [ ] E21 — Wejście do lochu z mapy hex kampanii — [#436](https://github.com/szmidtpiotr/ai-gm/issues/436)
 - [ ] E22 — Resume niedokończonego runu lochu — [#437](https://github.com/szmidtpiotr/ai-gm/issues/437)
