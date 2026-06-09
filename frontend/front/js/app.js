@@ -1571,9 +1571,62 @@ function _wizardRender() {
 
     const content = elements.wizardContent;
     if (wizardStepNum === 0) _renderStep1(content);
-    else if (wizardStepNum === 1) _renderStep2(content);
-    else if (wizardStepNum === 2) _renderStep3(content);
+    else if (wizardStepNum === 1) _renderStep2(content, true);
+    else if (wizardStepNum === 2) _renderStep3(content, true);
     else _renderStep4(content);
+}
+
+function _wizardRollAnimate(container, type) {
+    const DICE = ['⚀','⚁','⚂','⚃','⚄','⚅'];
+    if (type === 'stat') {
+        container.querySelectorAll('.wizard-stat-row').forEach((row, i) => {
+            row.classList.add('wiz-entering');
+            row.style.setProperty('--wiz-i', i);
+            const valEl = row.querySelector('.wizard-stat-val');
+            if (!valEl) return;
+            const finalVal = valEl.textContent.trim();
+            const finalNum = parseInt(finalVal);
+            if (isNaN(finalNum)) return;
+            const rollStart = i * 52 + 90;
+            const rollDuration = 320 + i * 35;
+            valEl.classList.add('wiz-val-rolling');
+            let t;
+            setTimeout(() => {
+                t = setInterval(() => {
+                    valEl.textContent = WIZARD_STAT_MIN + Math.floor(Math.random() * (WIZARD_STAT_MAX - WIZARD_STAT_MIN + 1));
+                }, 55);
+                setTimeout(() => {
+                    clearInterval(t);
+                    valEl.textContent = finalVal;
+                    valEl.classList.remove('wiz-val-rolling');
+                    valEl.classList.add('wiz-val-landed');
+                    setTimeout(() => valEl.classList.remove('wiz-val-landed'), 420);
+                }, rollDuration);
+            }, rollStart);
+        });
+    } else {
+        container.querySelectorAll('.wizard-skill-row:not(.wizard-skill-row--swapping)').forEach((row, i) => {
+            row.classList.add('wiz-entering');
+            row.style.setProperty('--wiz-i', i);
+            const rankEl = row.querySelector('.wizard-skill-rank');
+            if (!rankEl) return;
+            const finalRank = rankEl.textContent.trim();
+            const flashStart = i * 52 + 80;
+            const flashDuration = 220 + i * 25;
+            rankEl.classList.add('wiz-rank-rolling');
+            let t;
+            setTimeout(() => {
+                t = setInterval(() => { rankEl.textContent = DICE[Math.floor(Math.random() * 6)]; }, 50);
+                setTimeout(() => {
+                    clearInterval(t);
+                    rankEl.textContent = finalRank;
+                    rankEl.classList.remove('wiz-rank-rolling');
+                    rankEl.classList.add('wiz-rank-landed');
+                    setTimeout(() => rankEl.classList.remove('wiz-rank-landed'), 360);
+                }, flashDuration);
+            }, flashStart);
+        });
+    }
 }
 
 // Step 1 — Name, background, archetype
@@ -1631,6 +1684,7 @@ function _renderStep1(c) {
 }
 
 // Step 2 — Stat redistribution (pool model matching original frontend)
+let _step2FirstRender = false;
 function _wizardCalcHP(archetype, con, level = 1) {
     const base = archetype === 'warrior' ? 12 : archetype === 'rogue' ? 8 : archetype === 'scholar' ? 6 : 8;
     const mod = Math.floor((con - 10) / 2);
@@ -1653,7 +1707,7 @@ const STAT_HINTS = {
     LCK: 'Szczęście — wpływa na rzuty losowe, jakość łupów, szanse ucieczki i zdarzenia losowe',
 };
 
-function _renderStep2(c) {
+function _renderStep2(c, animate = false) {
     const archetype = wizardCreatedChar?.sheet_json?.archetype || 'warrior';
     const bonus = ARCHETYPE_BONUS[archetype] || {};
     const bonusStr = Object.entries(bonus).map(([k, v]) => `+${v} ${k}`).join(', ');
@@ -1704,6 +1758,8 @@ function _renderStep2(c) {
         </div>
     `;
 
+    if (animate) _wizardRollAnimate(c, 'stat');
+
     c.querySelectorAll('.wizard-stat-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const stat = btn.closest('.wizard-stat-row').dataset.stat;
@@ -1728,7 +1784,7 @@ function _renderStep2(c) {
 }
 
 // Step 3 — Skill swaps + level adjustments (matching original frontend mechanic)
-function _renderStep3(c) {
+function _renderStep3(c, animate = false) {
     const budgetUsed = _skillBudgetUsed();
     const slotRows = ALL_SKILL_ROWS.filter(r => Number(wizardSkillSnapshot[r.key] || 0) > 0)
         .sort((a, b) => {
@@ -1799,6 +1855,8 @@ function _renderStep3(c) {
             <button type="button" class="btn btn--secondary wizard-reset-btn" id="wiz-skill-reset">Reset</button>
         </div>
     `;
+
+    if (animate) _wizardRollAnimate(c, 'skill');
 
     // Swap mode open
     c.querySelectorAll('[data-swap]').forEach(btn => {
