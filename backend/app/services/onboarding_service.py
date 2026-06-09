@@ -60,6 +60,37 @@ MECHANIC_CARDS: dict[str, dict] = {
 }
 
 
+def inject_onboarding_to_out(out: dict, user_id: int, conn) -> dict:
+    """Detect triggered mechanics from a turn out-dict and inject onboarding_cards in-place.
+
+    Trigger heuristics:
+    - dice_roll   → out has skill_test_pending
+    - combat_start → out has combat_state
+    - xp_gained   → result has xp_granted or xp_earned > 0
+    - gold_gained  → result has gold_drop or gold_earned > 0
+    - damage_taken → result has damage > 0
+    - death_save   → result.test == "death_save"
+    """
+    triggered: List[str] = []
+    if out.get("skill_test_pending"):
+        triggered.append("dice_roll")
+    if out.get("combat_state") is not None:
+        triggered.append("combat_start")
+    result = out.get("result") or {}
+    if isinstance(result, dict):
+        if int(result.get("xp_granted") or result.get("xp_earned") or 0) > 0:
+            triggered.append("xp_gained")
+        if int(result.get("gold_drop") or result.get("gold_earned") or 0) > 0:
+            triggered.append("gold_gained")
+        if int(result.get("damage") or 0) > 0:
+            triggered.append("damage_taken")
+        if result.get("test") == "death_save":
+            triggered.append("death_save")
+    cards = check_onboarding_triggers(user_id=user_id, triggered_keys=triggered, conn=conn)
+    out["onboarding_cards"] = cards
+    return out
+
+
 def check_onboarding_triggers(
     user_id: int,
     triggered_keys: List[str],

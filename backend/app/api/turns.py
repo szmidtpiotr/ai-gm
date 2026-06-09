@@ -3502,7 +3502,13 @@ def create_turn(
                     (json.dumps(_sf, ensure_ascii=False), campaign_id),
                 )
                 conn.commit()
-            return _with_turn_trace({"skill_test_pending": _pending, "prose": None, "route": "skill_test"}, turn_id)
+            _stp_out = {"skill_test_pending": _pending, "prose": None, "route": "skill_test"}
+            try:
+                from app.services.onboarding_service import inject_onboarding_to_out as _ob_inj
+                _ob_inj(_stp_out, user_id=int(character["user_id"]), conn=conn)
+            except Exception:
+                _stp_out.setdefault("onboarding_cards", [])
+            return _with_turn_trace(_stp_out, turn_id)
 
         # ── Pre-LLM: scan player text against trigger_keywords ───────────────
         # If a keyword matches and we're not in combat, trigger skill test immediately.
@@ -4267,6 +4273,14 @@ def create_turn(
             _ws_snap(campaign_id)
         except Exception as _ws_err:
             logger.warning("world_state_snapshot_error", error=str(_ws_err))
+
+        # E25: inject onboarding cards for first-time mechanic triggers
+        try:
+            from app.services.onboarding_service import inject_onboarding_to_out as _ob_inject
+            _ob_inject(out, user_id=int(character["user_id"]), conn=conn)
+        except Exception as _ob_err:
+            logger.warning("onboarding_injection_error", error=str(_ob_err))
+            out.setdefault("onboarding_cards", [])
 
         return out
 
@@ -5522,6 +5536,19 @@ def create_turn_stream(
                 done_payload["active_quests"] = _aq_current
             except Exception as _ws_err_s:
                 logger.warning("world_state_snapshot_stream_error", error=str(_ws_err_s))
+
+            # E25: inject onboarding cards into stream DONE payload
+            try:
+                from app.services.onboarding_service import inject_onboarding_to_out as _ob_inj_s
+                _ob_dict = {
+                    "result": {},
+                    "skill_test_pending": done_payload.get("skill_test_pending"),
+                    "combat_state": new_combat,
+                }
+                _ob_inj_s(_ob_dict, user_id=int(character["user_id"]), conn=sqlite3.connect(DB_PATH))
+                done_payload["onboarding_cards"] = _ob_dict.get("onboarding_cards", [])
+            except Exception:
+                done_payload.setdefault("onboarding_cards", [])
 
             yield f"data: [DONE]{json.dumps(done_payload, ensure_ascii=False)}\n\n"
 
