@@ -171,7 +171,7 @@ def generate_category_system_prompt(key: str) -> dict:
     ]
 
     try:
-        result = generate_chat(messages, call_type="admin_gen")
+        result = generate_chat(messages)
         return {"ok": True, "system_prompt": result.strip()}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"LLM error: {exc}")
@@ -196,6 +196,140 @@ def list_tiles(category_key: str | None = None,
     with _conn() as c:
         rows = c.execute(sql, params).fetchall()
     return {"tiles": [_tile_to_dict(r) for r in rows]}
+
+
+@router.post("/dungeon-tiles/generate-image-prompt",
+             dependencies=[Depends(require_admin_token)])
+def generate_tile_image_prompt(payload: dict = Body(...)) -> dict:
+    """LLM generates an English FLUX image prompt for a tile category."""
+    import re
+    from app.services.llm_service import generate_chat
+
+    category_key = (payload.get("category_key") or "").strip()
+    if not category_key:
+        raise HTTPException(status_code=422, detail="category_key required")
+
+    with _conn() as c:
+        cat = c.execute(
+            "SELECT key, label, description, style_modifier FROM dungeon_tile_categories WHERE key = ?",
+            (category_key,),
+        ).fetchone()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    cat = dict(cat)
+    description_hint = (payload.get("description_hint") or "").strip()
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an expert dungeon art director generating prompts for a FLUX image generation model. "
+                "You create concise, vivid English descriptions optimized for top-down 2D dungeon tile art. "
+                "Always respond in English only."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Generate a FLUX image generation prompt for a dungeon tile in the '{cat['label']}' category.\n"
+                f"Category style: {cat['style_modifier'] or '(not specified)'}\n"
+                + (f"Room hint: {description_hint}\n" if description_hint else "")
+                + "\nRequirements:\n"
+                "- English only\n"
+                "- Top-down 2D dungeon tile, floor and interior decor\n"
+                "- Specific objects, textures, lighting atmosphere\n"
+                "- 15-50 words, comma-separated style tags\n"
+                "- NO walls, NO doors — only floor and interior content\n\n"
+                "Return ONLY the prompt text, no explanation, no quotes."
+            ),
+        },
+    ]
+
+    try:
+        result = generate_chat(messages)
+        return {"ok": True, "image_gen_prompt": result.strip()}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"LLM error: {exc}")
+
+
+@router.post("/dungeon-tiles/ai-create",
+             dependencies=[Depends(require_admin_token)])
+def ai_create_tile(payload: dict = Body(...)) -> dict:
+    """LLM generates tile label + image_gen_prompt for a category and inserts the record."""
+    import re
+    from app.services.llm_service import generate_chat
+
+    category_key = (payload.get("category_key") or "").strip()
+    if not category_key:
+        raise HTTPException(status_code=422, detail="category_key required")
+
+    with _conn() as c:
+        cat = c.execute(
+            "SELECT key, label, description, style_modifier FROM dungeon_tile_categories WHERE key = ?",
+            (category_key,),
+        ).fetchone()
+    if not cat:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+    cat = dict(cat)
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an expert dungeon designer creating dungeon tile definitions for a dark fantasy RPG. "
+                "Always respond with valid JSON only, no markdown, no explanation."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Create a dungeon tile for the '{cat['label']}' category.\n"
+                f"Category description: {cat['description'] or '(none)'}\n"
+                f"Visual style: {cat['style_modifier'] or '(none)'}\n\n"
+                'Return JSON with exactly these fields:\n'
+                '{"label": "Polish room name (3-6 words)", '
+                '"image_gen_prompt": "English FLUX prompt (15-50 words, top-down 2D tile, floor and decor only, no walls, no doors)"}\n\n'
+                "Good label examples: 'Komnata strażnicza', 'Izba tortur', 'Skarbiec', 'Sala rytuałów'\n"
+                "Return ONLY the JSON object."
+            ),
+        },
+    ]
+
+    try:
+        result = generate_chat(messages)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"LLM error: {exc}")
+
+    try:
+        cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", result).strip()
+        data = json.loads(cleaned)
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"LLM returned invalid JSON: {exc}. Raw: {result[:200]}",
+        )
+
+    label = str(data.get("label") or "").strip()
+    image_gen_prompt = str(data.get("image_gen_prompt") or "").strip()
+
+    if not label or not image_gen_prompt:
+        raise HTTPException(
+            status_code=500,
+            detail=f"LLM response missing label or prompt: {data}",
+        )
+
+    with _conn() as c:
+        cur = c.execute(
+            "INSERT INTO dungeon_tiles (category_key, label, image_gen_prompt, doors_json, is_active) "
+            "VALUES (?, ?, ?, '[]', 1)",
+            (category_key, label, image_gen_prompt),
+        )
+        tile_id = cur.lastrowid
+        tile_row = c.execute("SELECT * FROM dungeon_tiles WHERE id = ?", (tile_id,)).fetchone()
+
+    return {"ok": True, "tile": _tile_to_dict(tile_row)}
 
 
 @router.get("/dungeon-tiles/{tile_id}",

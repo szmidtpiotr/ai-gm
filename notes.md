@@ -232,3 +232,4 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 - [x] [#457](https://github.com/szmidtpiotr/ai-gm/issues/457) — SB-3/SB-4: keyword scan nadpisuje SKILL_TEST_PENDING; guard przed skanem w create_turn + stream; fix is_admin w slash_registry_key_for_dispatch (TDD 2/2 GREEN)
 - [x] [#458](https://github.com/szmidtpiotr/ai-gm/issues/458) — SB-5: test umiejętności zablokowany po committed_d20; SB-3/SB-4 guard rozszerzony o inline auto-resolve gdy committed_d20 ustawione; backward compat zachowany (TDD 4/4 GREEN + Playwright 2/2)
 - [x] [#455](https://github.com/szmidtpiotr/ai-gm/issues/455) — SB-1: Znajomi NPC tab 404; endpoint GET /admin/campaigns/{id}/known-npcs dodany (impl 492cc65, TDD 9/9 GREEN + Playwright 3/3)
+- [x] [#459](https://github.com/szmidtpiotr/ai-gm/issues/459) — E19b: Dungeon tile AI prompt generator — 2 endpointy (generate-image-prompt + ai-create) + 2 przyciski UI + bugfix call_type w 3 miejscach (TDD 10/10 GREEN + Playwright 3/3)

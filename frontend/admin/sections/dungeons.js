@@ -170,6 +170,7 @@ function _sectionHtml() { return `
               Pokaż nieaktywne
             </label>
             <span class="td-muted" style="font-size:0.78rem" id="tiles-count-info">—</span>
+            <button id="tile-ai-gen-btn" class="btn btn-secondary btn-sm" onclick="_aiGenerateTile()" style="display:none;margin-left:6px">✨ Generuj kafelek AI</button>
           </div>
           <div id="tiles-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px;padding:8px 4px">
             <div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--t3)">Ładowanie…</div>
@@ -531,6 +532,8 @@ function _sectionHtml() { return `
     );
     const info = document.getElementById('tiles-count-info');
     if (info) info.textContent = `${list.length}/${_tilesCache.length} kafli`;
+    const aiBtn = document.getElementById('tile-ai-gen-btn');
+    if (aiBtn) aiBtn.style.display = activeCat ? '' : 'none';
     if (!list.length) {
       grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--t3)">Brak kafli — kliknij „+ Nowy kafelek"</div>';
       return;
@@ -708,6 +711,10 @@ function _sectionHtml() { return `
             <div class="tf-studio-lbl">Prompt (EN)</div>
             <textarea id="tf-img-prompt" class="form-input" rows="4" style="resize:vertical;font-size:.71rem;font-family:monospace;line-height:1.5" placeholder="English room description for image gen…">${_esc(p.image_gen_prompt||'')}</textarea>
           </div>
+
+          <button class="btn btn-secondary btn-sm" id="tf-gen-prompt-btn" style="width:100%;padding:6px 10px;font-size:.79rem">
+            ✨ Generuj prompt AI
+          </button>
 
           <div>
             <div class="tf-studio-lbl">Model</div>
@@ -1444,6 +1451,7 @@ function _sectionHtml() { return `
       door_overlays:    _tfDoorOverlays,
     }));
 
+    overlay.querySelector('#tf-gen-prompt-btn')?.addEventListener('click', () => _aiGeneratePrompt(overlay));
     if (p.id) {
       overlay.querySelector('#tf-generate-btn')?.addEventListener('click', () => _generateTileImage(p.id, overlay));
       overlay.querySelector('#tf-del-btn')?.addEventListener('click', () => deleteTile(p.id));
@@ -1534,6 +1542,54 @@ function _sectionHtml() { return `
       ov.querySelector('#_ac-cancel').addEventListener('click', () => cleanup(false));
       ov.addEventListener('click', e => { if (e.target === ov) cleanup(false); });
     });
+  }
+
+  async function _aiGenerateTile() {
+    const activeCat = document.querySelector('#tile-cat-filter .chip.on')?.dataset.cat || '';
+    if (!activeCat) { showToast('Wybierz kategorię kafelków przed generowaniem', 'error'); return; }
+    const btn = document.getElementById('tile-ai-gen-btn');
+    const orig = btn?.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generuję…'; }
+    try {
+      const catLabel = document.querySelector(`#tile-cat-filter .chip.on`)?.textContent || activeCat;
+      const r = await apiFetch('/api/admin/dungeon-tiles/ai-create', {
+        method: 'POST',
+        body: JSON.stringify({ category_key: activeCat }),
+      });
+      showToast(`Kafelek „${r.tile.label}" utworzony`, 'success');
+      await _loadDungeonTiles();
+      const cats = await _ensureTileCategories();
+      openEditTileModal(r.tile.id);
+    } catch (e) {
+      showToast('Błąd AI: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+    }
+  }
+
+  async function _aiGeneratePrompt(overlay) {
+    const catSel = overlay.querySelector('#tf-cat');
+    const promptTA = overlay.querySelector('#tf-img-prompt');
+    const descTA = overlay.querySelector('#tf-desc');
+    const btn = overlay.querySelector('#tf-gen-prompt-btn');
+    if (!catSel || !promptTA) return;
+    const catKey = catSel.value;
+    if (!catKey) { showToast('Wybierz kategorię przed generowaniem promptu', 'error'); return; }
+    const orig = btn?.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generuję…'; }
+    try {
+      const hint = (descTA?.value || '').trim().slice(0, 200);
+      const r = await apiFetch('/api/admin/dungeon-tiles/generate-image-prompt', {
+        method: 'POST',
+        body: JSON.stringify({ category_key: catKey, ...(hint ? { description_hint: hint } : {}) }),
+      });
+      promptTA.value = r.image_gen_prompt;
+      showToast('Prompt wygenerowany', 'success');
+    } catch (e) {
+      showToast('Błąd AI: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+    }
   }
 
   async function _generateTileImage(tileId, overlay) {
@@ -1810,7 +1866,7 @@ export async function init(panel) {
   Object.assign(window, {
     filterTableGeneric, filterDungeons,
     openNewDungeonModal, openEditDungeonModal, deleteDungeon,
-    openNewTileModal, openEditTileModal, deleteTile, _generateTileImage, _filterTiles,
+    openNewTileModal, openEditTileModal, deleteTile, _generateTileImage, _aiGenerateTile, _filterTiles,
     openNewTileCategoryModal, openEditTileCategoryModal,
     openNewRiddleModal, openEditRiddleModal, deleteRiddle,
     filterRiddles,
