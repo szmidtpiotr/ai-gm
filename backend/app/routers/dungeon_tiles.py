@@ -622,6 +622,81 @@ def recomposite_tile_image(tile_id: int) -> dict:
     return {"ok": True, "image_url": final_url, "filename": final_fname}
 
 
+@router.post("/dungeon-tiles/{tile_id}/generate-description",
+             dependencies=[Depends(require_admin_token)])
+def generate_tile_description(tile_id: int) -> dict:
+    """LLM generates a Polish room description considering active doors and tile context.
+
+    Considers doors (N/S/E/W) so description mentions passages on correct walls.
+    Saves result to dungeon_tiles.room_description.
+    """
+    from app.services.llm_service import generate_chat
+
+    with _conn() as c:
+        tile = c.execute("SELECT * FROM dungeon_tiles WHERE id = ?", (tile_id,)).fetchone()
+        if not tile:
+            raise HTTPException(status_code=404, detail="Tile not found")
+        cat = c.execute(
+            "SELECT label, description, system_prompt FROM dungeon_tile_categories WHERE key = ?",
+            (tile["category_key"],),
+        ).fetchone()
+
+    tile_dict = _tile_to_dict(tile)
+    doors = _normalize_doors(tile_dict.get("doors") or [])
+    img_prompt = (tile_dict.get("image_gen_prompt") or "").strip()
+    cat_label = cat["label"] if cat else tile["category_key"]
+    cat_system = (cat["system_prompt"] if cat else "") or ""
+
+    door_names = [{"N": "północnej", "S": "południowej", "E": "wschodniej", "W": "zachodniej"}[d]
+                  for d in doors if d in ("N", "S", "E", "W")]
+    doors_info = (
+        f"Aktywne przejścia (drzwi) na ścianach: {', '.join(door_names)}."
+        if door_names
+        else "Brak przejść — komnata bez wyjść."
+    )
+
+    system_content = (
+        cat_system + "\n\n" if cat_system else ""
+    ) + (
+        "Jesteś Mistrzem Gry w dark fantasy RPG. Opisujesz komnatę lochu z perspektywy gracza. "
+        "Piszesz krótko, klimatycznie, po POLSKU. Uwzględniasz dokładnie na których ścianach są przejścia."
+    )
+
+    messages = [
+        {"role": "system", "content": system_content},
+        {
+            "role": "user",
+            "content": (
+                f"Napisz opis komnaty dla Mistrza Gry.\n"
+                f"Kategoria: {cat_label}\n"
+                f"Wygląd (EN, dla AI): {img_prompt or '(brak)'}\n"
+                f"{doors_info}\n\n"
+                "Wymagania:\n"
+                "- Po POLSKU, 3-5 zdań\n"
+                "- Klimatyczny, konkretny opis — co gracz widzi, słyszy, czuje\n"
+                "- Jeśli są drzwi: wspomnij przejścia na konkretnych ścianach\n"
+                "- Jeśli brak drzwi: zaznacz że komnata jest zamknięta\n"
+                "- Bez nagłówków, bez cudzysłowów, tylko sam opis"
+            ),
+        },
+    ]
+
+    try:
+        description = generate_chat(messages)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"LLM error: {exc}")
+
+    description = description.strip()
+    with _conn() as c:
+        c.execute(
+            "UPDATE dungeon_tiles SET room_description = ?, updated_at = datetime('now') WHERE id = ?",
+            (description, tile_id),
+        )
+        c.commit()
+
+    return {"ok": True, "room_description": description}
+
+
 # ── Path preview (admin testing) ──────────────────────────────────────────────
 
 @router.get("/dungeon-tiles/preview-path/{category_key}",

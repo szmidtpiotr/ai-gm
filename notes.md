@@ -233,3 +233,4 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 - [x] [#458](https://github.com/szmidtpiotr/ai-gm/issues/458) — SB-5: test umiejętności zablokowany po committed_d20; SB-3/SB-4 guard rozszerzony o inline auto-resolve gdy committed_d20 ustawione; backward compat zachowany (TDD 4/4 GREEN + Playwright 2/2)
 - [x] [#455](https://github.com/szmidtpiotr/ai-gm/issues/455) — SB-1: Znajomi NPC tab 404; endpoint GET /admin/campaigns/{id}/known-npcs dodany (impl 492cc65, TDD 9/9 GREEN + Playwright 3/3)
 - [x] [#459](https://github.com/szmidtpiotr/ai-gm/issues/459) — E19b: Dungeon tile AI prompt generator — 2 endpointy (generate-image-prompt + ai-create) + 2 przyciski UI + bugfix call_type w 3 miejscach (TDD 10/10 GREEN + Playwright 3/3)
+- [x] [#460](https://github.com/szmidtpiotr/ai-gm/issues/460) — E19c: Compositor redesign — cienka ramka 5px + flat amber drzwi-markery + endpoint generate-description (TDD 13/13 GREEN + Playwright 3/3)

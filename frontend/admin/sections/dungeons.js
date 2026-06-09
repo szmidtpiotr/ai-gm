@@ -772,7 +772,10 @@ function _sectionHtml() { return `
 
         <!-- Room description -->
         <div style="flex:1;display:flex;flex-direction:column">
-          <label class="form-label">Opis pokoju <span style="font-size:.7rem;color:var(--t3);font-weight:400">(AI GM + prompt obrazu)</span></label>
+          <label class="form-label" style="display:flex;align-items:center;gap:.5rem">
+            Opis pokoju <span style="font-size:.7rem;color:var(--t3);font-weight:400">(AI GM + prompt obrazu)</span>
+            <button type="button" id="tf-gen-desc-btn" class="btn btn-sm" style="margin-left:auto;font-size:.7rem;padding:.2rem .6rem" onclick="_aiGenerateDescription(this.closest('.modal-overlay'))">✨ Generuj opis AI</button>
+          </label>
           <textarea id="tf-desc" class="form-input" rows="6" style="resize:vertical;flex:1" placeholder="np. Stara komnata strażnicza z rdzawą zbroją na ścianie i poczerniałymi pochodniami…">${_esc(p.room_description||'')}</textarea>
         </div>
 
@@ -890,6 +893,7 @@ function _sectionHtml() { return `
     <button class="btn btn-primary btn-sm" id="tf-save-btn">💾 Zapisz kafelek</button>
   </div>
 </div>`;
+    if (p.id) overlay.dataset.tileId = p.id;
     document.body.appendChild(overlay);
 
     // ── Door buttons ──────────────────────────────────────────
@@ -1592,6 +1596,26 @@ function _sectionHtml() { return `
     }
   }
 
+  async function _aiGenerateDescription(overlay) {
+    if (!overlay) return;
+    const tileId = overlay.dataset.tileId;
+    if (!tileId) { showToast('Zapisz kafelek przed generowaniem opisu', 'error'); return; }
+    const btn = overlay.querySelector('#tf-gen-desc-btn');
+    const descTA = overlay.querySelector('#tf-desc');
+    if (!descTA) return;
+    const orig = btn?.textContent;
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Generuję…'; }
+    try {
+      const r = await apiFetch(`/api/admin/dungeon-tiles/${tileId}/generate-description`, { method: 'POST' });
+      descTA.value = r.room_description;
+      showToast('Opis wygenerowany', 'success');
+    } catch (e) {
+      showToast('Błąd AI: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+    }
+  }
+
   async function _generateTileImage(tileId, overlay) {
     const btn = overlay.querySelector('#tf-generate-btn');
     const preview = overlay.querySelector('#tf-img-preview');
@@ -1866,7 +1890,7 @@ export async function init(panel) {
   Object.assign(window, {
     filterTableGeneric, filterDungeons,
     openNewDungeonModal, openEditDungeonModal, deleteDungeon,
-    openNewTileModal, openEditTileModal, deleteTile, _generateTileImage, _aiGenerateTile, _filterTiles,
+    openNewTileModal, openEditTileModal, deleteTile, _generateTileImage, _aiGenerateTile, _aiGenerateDescription, _filterTiles,
     openNewTileCategoryModal, openEditTileCategoryModal,
     openNewRiddleModal, openEditRiddleModal, deleteRiddle,
     filterRiddles,
