@@ -71,29 +71,31 @@ Global provider/credentials edited from `Admin Panel → Accounts`. Player UI "C
 
 **Player UI** (`frontend/index.html` + `frontend/js/`): Login gate → gameplay. Standard RPG turn flow.
 
-**Admin UI v2** (`frontend/admin_panel_v2/`) — the active admin interface at `/admin2/`:
-- Entry: `index.html` — loads sidebar nav, mounts section modules dynamically
-- Layout: `layout.css` — all shared styles
-- Shared utilities: `shared/api.js` (adminFetch + APIError), `shared/toast.js`, `shared/modal.js`, `shared/table.js`, `shared/smart_entry.js`
+**Modular Admin Shell** (`frontend/admin/`) — active admin interface at `/admin/` (FADM migration, replaces admin3 monolith):
+- Entry: `index.html` — loads sidebar nav, mounts section ES modules dynamically
+- Login: native overlay (`doLogin`/`doLogout`) using `POST /api/admin/dev-login`; token stored in localStorage
+- Shared utilities: `shared/api.js` (adminFetch + APIError), `shared/toast.js`, `shared/modal.js`
 
-**Admin Panel v2 sections** (each exports `async init(panel)`):
+**Modular Admin sections** (each exports `async init(panel)`):
 
 | Section key | File | Description |
 |---|---|---|
-| `dashboard` | `sections/dashboard.js` | Overview stats |
-| `mechanics` | `sections/mechanics.js` | Stats, skills, DC, conditions |
+| `overview` | `sections/overview.js` | Overview stats |
+| `players` | `sections/players.js` | User accounts, LLM settings |
+| `campaigns` | `sections/campaigns.js` | Campaign monitor + Warsztat tab |
 | `content` | `sections/content.js` | Weapons, armor, items, consumables, loot tables + 🤖 Kreator AI |
 | `world` | `sections/world.js` | Locations, NPCs, enemies, rules, pending review, world builder |
-| `narrator` | `sections/narrator.js` | Narracja / system prompt tuning |
-| `players` | `sections/players.js` | User accounts, LLM settings |
-| `campaigns` | `sections/campaigns_hub.js` → `campaigns.js` | Campaign monitor + Warsztat tab |
-| `analytics` | `sections/analytics.js` | Stats/usage charts |
-| `workshops` | `sections/workshops.js` | Bank pomysłów (Ideas Bank) |
-| `sandbox` | `sections/sandbox.js` | ⚔ Combat Sandbox — admin harness for testing combat mechanics on an isolated hero clone (issue #21) |
-| `voice` | `sections/voice.js` | Piper TTS settings |
+| `map` | `sections/map.js` | Mapa świata (hex grid) |
+| `mechanics` | `sections/mechanics.js` | Stats, skills, DC, conditions |
+| `dungeons` | `sections/dungeons.js` | Dungeon seeds + runs |
+| `forge` | `sections/forge.js` | Kuźnia — asset forge / batch content builder |
+| `invites` | `sections/invites.js` | Invite codes |
+| `bugreports` | `sections/bugreports.js` | Bug report inbox |
+| `push` | `sections/push.js` | Push notifications |
+| `tools` | `sections/tools.js` | Test Runner (Playwright), DB tools |
 | `system` | `sections/system.js` | LLM presets, config export/import |
 
-**Old Admin UI v1** (`frontend/admin_panel/`) — still accessible at `/admin/`. Being superseded by v2.
+**Legacy Admin (`frontend/admin_panel_v2/`)** — still operational at `/admin2/`; has sandbox, analytics, narrator, voice sections not yet ported to modular admin. Do not add new features here.
 
 ### Smart Entry (AI Kreator) — `shared/smart_entry.js` v4
 
@@ -151,7 +153,7 @@ Standalone farmable dungeons separate from campaign story content.
 - Entry: `POST /api/dungeons/{key}/enter` — checks cooldown (423 if blocked), generates scaled instance, stores in `session_flags.dungeon_run`
 - Advance: `POST /api/dungeons/advance-room` — marks room cleared, moves to next, records completion on last room
 - Enemy scaling: ×0.75–×2.0 by hero level; boss always one tier above regular enemies
-- Admin: Świat → Lochy tab in admin panel v2
+- Admin: Świat → Lochy tab in modular admin (`/admin/#dungeons`)
 
 ### Loot System
 
@@ -247,12 +249,11 @@ This applies to every implementation, no matter how small.
 - Smart Entry router: `backend/app/routers/smart_entry.py`
 - Ideas Workshop router: `backend/app/routers/ideas_workshop.py`
 - Admin migrations: `backend/app/migrations_admin.py`
-- Admin Panel v2 entry: `frontend/admin_panel_v2/index.html`
-- Smart Entry overlay: `frontend/admin_panel_v2/shared/smart_entry.js`
-- Content section (weapons/items): `frontend/admin_panel_v2/sections/content.js`
-- Campaign monitor: `frontend/admin_panel_v2/sections/campaigns.js`
-- Ideas Bank: `frontend/admin_panel_v2/sections/workshops.js`
-- All styles: `frontend/admin_panel_v2/layout.css`
+- Modular Admin entry: `frontend/admin/index.html`
+- Content section (weapons/items): `frontend/admin/sections/content.js`
+- Campaign monitor: `frontend/admin/sections/campaigns.js`
+- Forge (asset builder): `frontend/admin/sections/forge.js`
+- All admin styles: `frontend/admin/layout.css`
 - Player UI: `frontend/front/index.html`, `frontend/front/js/app.js`, `frontend/front/css/styles.css`
 - Compose: `docker-compose.yml` (PROD), `docker-compose.dev.yml` (DEV)
 - Planned work: `to_do_ideas.md`
