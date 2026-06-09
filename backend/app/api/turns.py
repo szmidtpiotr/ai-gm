@@ -3508,7 +3508,51 @@ def create_turn(
         # If a keyword matches and we're not in combat, trigger skill test immediately.
         # Reading actions (issue #12 BUG-02) bypass this scanner so e.g. "odczytuję napis"
         # doesn't fire phantom Arkana — system prompt rule handles narration instead.
-        if not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text) and not _is_compound_action(text):
+        # #457 (SB-4): skip scan when already SKILL_TEST_PENDING — re-firing would overwrite
+        # the existing pending test and trap the player in an infinite keyword-scan loop.
+        _kw_scan_sf_row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        _kw_scan_state = "NARRATIVE"
+        if _kw_scan_sf_row:
+            try:
+                _kw_scan_state = json.loads(_kw_scan_sf_row["session_flags"] or "{}").get("state", "NARRATIVE")
+            except Exception:
+                pass
+        _kw_scan_already_pending = _kw_scan_state == "SKILL_TEST_PENDING"
+
+        # #457 (SB-3): when already SKILL_TEST_PENDING, re-surface existing pending test
+        # without calling the narrative LLM. Player must resolve the roll before continuing.
+        if _kw_scan_already_pending:
+            _existing_sf = {}
+            if _kw_scan_sf_row:
+                try:
+                    _existing_sf = json.loads(_kw_scan_sf_row["session_flags"] or "{}")
+                except Exception:
+                    pass
+            _existing_pending = _existing_sf.get("pending_skill_test") or {}
+            if _existing_pending:
+                _log_re = create_turn_log(
+                    conn=conn,
+                    campaign_id=campaign_id,
+                    character_id=payload.character_id,
+                    user_text=text,
+                    assistant_text=None,
+                    route="skill_test",
+                )
+                conn.commit()
+                return _with_turn_trace({
+                    "id": _log_re["id"],
+                    "campaign_id": _log_re["campaign_id"],
+                    "turn_number": _log_re["turn_number"],
+                    "created_at": _log_re["created_at"],
+                    "skill_test_pending": _existing_pending,
+                    "prose": None,
+                    "route": "skill_test",
+                }, turn_id)
+
+        if not _kw_scan_already_pending and not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text) and not _is_compound_action(text):
             try:
                 _txt_pre = _normalize_pl(text)
                 # Combat-class skills (attack / ranged_attack / two_handed) represent
@@ -4556,6 +4600,52 @@ def create_turn_stream(
         # call so exploration actions that match trigger_keywords get a dice
         # prompt immediately instead of going straight to narrative.
         # Reading-context guard (issue #12 BUG-02) — see _is_reading_context().
+        # #457 (SB-3/SB-4): check existing state — skip scan if already SKILL_TEST_PENDING.
+        _s_sf_row = conn.execute(
+            "SELECT session_flags FROM game_sessions WHERE campaign_id = ? LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        _s_sf_state = "NARRATIVE"
+        _s_sf_pending = {}
+        if _s_sf_row:
+            try:
+                _s_sf = json.loads(_s_sf_row["session_flags"] or "{}")
+                _s_sf_state = _s_sf.get("state", "NARRATIVE")
+                _s_sf_pending = _s_sf.get("pending_skill_test") or {}
+            except Exception:
+                pass
+
+        if _s_sf_state == "SKILL_TEST_PENDING" and _s_sf_pending:
+            _log_re_s = create_turn_log(
+                conn=conn,
+                campaign_id=campaign_id,
+                character_id=payload.character_id,
+                user_text=text,
+                assistant_text=None,
+                route="skill_test",
+            )
+            conn.commit()
+            _re_payload = json.dumps({
+                "id": _log_re_s["id"],
+                "campaign_id": _log_re_s["campaign_id"],
+                "turn_number": _log_re_s["turn_number"],
+                "created_at": _log_re_s["created_at"],
+                "skill_test_pending": _s_sf_pending,
+                "prose": None,
+                "route": "skill_test",
+                "turn_id": turn_id,
+            }, ensure_ascii=False)
+
+            def _pending_resuface_stream():
+                yield f"data: [SKILL_TEST_PENDING]{_re_payload}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                _pending_resuface_stream(),
+                media_type="text/event-stream",
+                headers=stream_headers,
+            )
+
         if not roll_request and not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text) and not _is_compound_action(text):
             try:
                 _txt_s = _normalize_pl(text)
