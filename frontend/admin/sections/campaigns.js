@@ -511,18 +511,50 @@ function filterTableGeneric(input, tableId, nameClass) {
         const arcs = plan?.arcs || {};
         const arcList = typeof arcs === 'object' && !Array.isArray(arcs) ? Object.values(arcs) : (Array.isArray(arcs) ? arcs : []);
         if (!arcList.length) { panel.innerHTML = '<p style="color:var(--t3);text-align:center;padding:24px">Brak planu GM.</p>'; return; }
-        panel.innerHTML = arcList.map((arc, arcIdx) => `
-          <details style="margin-bottom:12px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden" ${arc.status==='active'?'open':''}>
-            <summary style="background:var(--surface);padding:10px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)">
+        const activeArcId = plan?.active_arc_id;
+        panel.innerHTML = arcList.map((arc, arcIdx) => {
+          const isActive = arc.status === 'active' || arc.id === activeArcId;
+          const currentScene = typeof arc.current_scene_ordinal === 'number' ? arc.current_scene_ordinal : null;
+          const goals = arc.scene_goals || [];
+          const hooksForScene = arc.hooks || [];
+          const scenesHtml = goals.length ? `
+            <div style="font-size:0.75rem;color:var(--t3);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Sceny (${goals.length})</div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+              ${goals.map((g, si) => {
+                const isCurrent = currentScene !== null && si === currentScene;
+                const isDone = currentScene !== null && si < currentScene;
+                const goalText = typeof g === 'string' ? g : (g?.goal || g?.description || JSON.stringify(g));
+                const extraHtml = isCurrent && hooksForScene.length ? `
+                  <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(var(--accent-rgb,100,160,255),.2)">
+                    <div style="font-size:0.72rem;color:var(--accent,#64a0ff);font-weight:600;margin-bottom:4px">Hooki sceny</div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap">${hooksForScene.slice(0,8).map(h=>`<span class="badge badge-slate">${_esc(typeof h==='string'?h:(h.label||h.name||JSON.stringify(h)).slice(0,40))}</span>`).join('')}</div>
+                  </div>` : '';
+                return `<details open style="border-radius:var(--r);border:1px solid ${isCurrent?'rgba(var(--accent-rgb,100,160,255),.45)':'var(--border)'};background:${isCurrent?'rgba(var(--accent-rgb,100,160,255),.08)':isDone?'var(--surface)':'transparent'};opacity:${isDone?'0.6':'1'}">
+                  <summary style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;cursor:pointer;list-style:none;outline:none">
+                    <span style="font-size:0.72rem;font-weight:700;color:${isCurrent?'var(--accent,#64a0ff)':'var(--t3)'};min-width:18px;padding-top:2px;flex-shrink:0">${isDone?'✓':(isCurrent?'▶':String(si+1))}</span>
+                    <span style="font-size:0.82rem;font-weight:${isCurrent?'600':'400'};color:${isCurrent?'var(--t1)':isDone?'var(--t3)':'var(--t2)'};">${_esc(goalText)}</span>
+                  </summary>
+                  ${extraHtml ? `<div style="padding:0 10px 10px 36px">${extraHtml}</div>` : ''}
+                </details>`;
+              }).join('')}
+            </div>` : '';
+          const hooksHtml = arc.hooks?.length && currentScene === null ? `
+            <div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Hooki</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px">${arc.hooks.slice(0,12).map(h=>`<span class="badge badge-slate">${_esc(typeof h==='string'?h:(h.label||h.name||JSON.stringify(h)).slice(0,40))}</span>`).join('')}</div>` : '';
+          const roadmapHtml = arc.roadmap ? `
+            <div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Roadmapa</div>
+            <p style="font-size:0.8rem;color:var(--t2);margin:0 0 10px;background:var(--surface);padding:8px;border-radius:var(--r)">${_esc(arc.roadmap)}</p>` : '';
+          return `<div style="margin-bottom:14px;border:1px solid ${isActive?'rgba(var(--accent-rgb,100,160,255),.4)':'var(--border)'};border-radius:var(--r);overflow:hidden">
+            <div style="background:var(--surface);padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)">
               <span style="font-weight:700;font-size:0.88rem;color:var(--t1)">${_esc(arc.title||arc.id||`Akt ${arcIdx+1}`)}</span>
-              <span class="badge ${arc.status==='active'?'badge-green':'badge-slate'}">${arc.status==='active'?'● Aktywny':'○ Nieaktywny'}</span>
-            </summary>
-            <div style="padding:12px 14px">
-              ${arc.roadmap ? `<div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px;font-weight:600">Roadmapa</div><p style="font-size:0.8rem;color:var(--t2);margin:0 0 10px;background:var(--surface);padding:8px;border-radius:var(--r)">${_esc(arc.roadmap)}</p>` : ''}
-              ${arc.scene_goals?.length ? `<div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px;font-weight:600">Cele scen (${arc.scene_goals.length})</div><ul style="margin:0 0 10px;padding-left:16px;font-size:0.8rem;color:var(--t2)">${arc.scene_goals.map(g=>`<li>${_esc(typeof g==='string'?g:JSON.stringify(g))}</li>`).join('')}</ul>` : ''}
-              ${arc.hooks?.length ? `<div style="font-size:0.75rem;color:var(--t3);margin-bottom:4px;font-weight:600">Hooki (${arc.hooks.length})</div><div style="display:flex;gap:4px;flex-wrap:wrap">${arc.hooks.slice(0,12).map(h=>`<span class="badge badge-slate">${_esc(typeof h==='string'?h:(h.label||h.name||JSON.stringify(h)).slice(0,40))}</span>`).join('')}</div>` : ''}
+              <div style="display:flex;align-items:center;gap:6px">
+                ${currentScene !== null ? `<span style="font-size:0.72rem;color:var(--t3)">Scena ${currentScene+1}/${goals.length}</span>` : ''}
+                <span class="badge ${isActive?'badge-green':'badge-slate'}">${isActive?'● Aktywny':'○ Nieaktywny'}</span>
+              </div>
             </div>
-          </details>`).join('') +
+            <div style="padding:12px 14px">${roadmapHtml}${scenesHtml}${hooksHtml}</div>
+          </div>`;
+        }).join('') +
           `<div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px">
             <button class="btn btn-sm btn-secondary" onclick="advanceCampScene(${campId}, this)">➡ Następna scena</button>
           </div>`;

@@ -157,7 +157,7 @@
       panel.innerHTML = '<div class="section active"><div class="adm-placeholder">Ładowanie…</div></div>';
       try {
         // Sekcja portowana → sections/<key>.js eksportuje init(panel).
-        const mod = await import(`./sections/${key}.js`);
+        const mod = await import(`./sections/${key}.js?v=2`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(panel);
           return;
