@@ -726,6 +726,24 @@ function _sectionHtml() { return `
           <button class="btn btn-primary btn-sm" id="tf-generate-btn" style="width:100%;padding:7px 10px;font-size:.79rem;letter-spacing:.02em" ${!p.id?'disabled':''} title="${!p.id?'Najpierw zapisz kafelek (💾 Zapisz), potem generuj obraz':''}">
             🖼 2. Generuj obraz${!p.id?' (zapisz najpierw)':''}
           </button>
+
+          <!-- Door compass — in left column, below image gen, so admin picks doors AFTER seeing the image -->
+          <div style="border-top:1px solid rgba(255,255,255,.06);padding-top:10px">
+            <div class="tf-studio-lbl" style="color:#f59e0b;margin-bottom:6px">3. Drzwi — zaznacz po wygenerowaniu obrazka <span style="color:var(--t3);font-weight:400">(wybierz 2-4)</span></div>
+            <div id="tf-doors" style="display:flex;justify-content:center">
+              <div class="tf-dc-wrap">
+                <div></div>
+                <label class="tf-door-btn tf-door-n${(p.doors||[]).includes('N')?' on':''}" data-d="N"><input type="checkbox" data-door="N" ${(p.doors||[]).includes('N')?'checked':''} style="display:none"><span>N</span></label>
+                <div></div>
+                <label class="tf-door-btn tf-door-w${(p.doors||[]).includes('W')?' on':''}" data-d="W"><input type="checkbox" data-door="W" ${(p.doors||[]).includes('W')?'checked':''} style="display:none"><span>W</span></label>
+                <div class="tf-dc-center">◈</div>
+                <label class="tf-door-btn tf-door-e${(p.doors||[]).includes('E')?' on':''}" data-d="E"><input type="checkbox" data-door="E" ${(p.doors||[]).includes('E')?'checked':''} style="display:none"><span>E</span></label>
+                <div></div>
+                <label class="tf-door-btn tf-door-s${(p.doors||[]).includes('S')?' on':''}" data-d="S"><input type="checkbox" data-door="S" ${(p.doors||[]).includes('S')?'checked':''} style="display:none"><span>S</span></label>
+                <div></div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -743,24 +761,6 @@ function _sectionHtml() { return `
             <select id="tf-cat" class="form-input">
               ${cats.map(c => `<option value="${_esc(c.key)}" ${p.category_key===c.key?'selected':''}>${_esc(c.label)}</option>`).join('')}
             </select>
-          </div>
-        </div>
-
-        <!-- Door compass -->
-        <div>
-          <label class="form-label">Drzwi — <span style="font-size:.7rem;color:#f59e0b;font-weight:600">3. Zaznacz po wygenerowaniu obrazka</span> <span style="font-size:.68rem;color:var(--t3);font-weight:400">(N=góra  S=dół  E=prawo  W=lewo, wybierz 2-4)</span></label>
-          <div id="tf-doors" style="margin-top:10px">
-            <div class="tf-dc-wrap">
-              <div></div>
-              <label class="tf-door-btn tf-door-n${(p.doors||[]).includes('N')?' on':''}" data-d="N"><input type="checkbox" data-door="N" ${(p.doors||[]).includes('N')?'checked':''} style="display:none"><span>N</span></label>
-              <div></div>
-              <label class="tf-door-btn tf-door-w${(p.doors||[]).includes('W')?' on':''}" data-d="W"><input type="checkbox" data-door="W" ${(p.doors||[]).includes('W')?'checked':''} style="display:none"><span>W</span></label>
-              <div class="tf-dc-center">◈</div>
-              <label class="tf-door-btn tf-door-e${(p.doors||[]).includes('E')?' on':''}" data-d="E"><input type="checkbox" data-door="E" ${(p.doors||[]).includes('E')?'checked':''} style="display:none"><span>E</span></label>
-              <div></div>
-              <label class="tf-door-btn tf-door-s${(p.doors||[]).includes('S')?' on':''}" data-d="S"><input type="checkbox" data-door="S" ${(p.doors||[]).includes('S')?'checked':''} style="display:none"><span>S</span></label>
-              <div></div>
-            </div>
           </div>
         </div>
 
