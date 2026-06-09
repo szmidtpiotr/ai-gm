@@ -23,6 +23,7 @@ from app.services.weapon_rules import (
     stat_modifier,
 )
 from app.services.wound_utils import wound_penalty
+from app.services.world_state_service import set_world_state_flags
 
 # Tests may monkeypatch this to a temp file path.
 COMBAT_DB_PATH = "/data/ai_gm.db"
@@ -1496,6 +1497,19 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         enemy_keys=started_keys,
         combat_id=out.get("id"),
     )
+
+    # Sync scene_enemies world-state column from active combatants.
+    # gate_service reads `hp` (not hp_current) and `key` fields.
+    enemy_entries = [
+        {"key": c["enemy_key"], "name": c["name"], "hp": c["hp_current"]}
+        for c in out.get("combatants", [])
+        if c.get("type") == "enemy"
+    ]
+    try:
+        set_world_state_flags(campaign_id, scene_enemies=enemy_entries)
+    except Exception:
+        pass
+
     return out
 
 
@@ -2577,6 +2591,12 @@ def end_combat(campaign_id: int, reason: str, *, defeated_by: str | None = None)
                     _scholar_restore_mana_after_combat(conn, char_id, _sh, "fled")
             except Exception:
                 pass
+
+    # Clear scene_enemies when combat ends (any reason).
+    try:
+        set_world_state_flags(campaign_id, scene_enemies=[])
+    except Exception:
+        pass
 
     if reason != "player_dead" or char_id is None:
         return

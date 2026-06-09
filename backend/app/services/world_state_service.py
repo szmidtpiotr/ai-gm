@@ -181,11 +181,37 @@ def build_snapshot(campaign_id: int) -> dict:
     return snapshot
 
 
+def _sync_player_conditions(campaign_id: int) -> None:
+    """Push character sheet conditions to game_sessions.player_conditions column."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        ch = conn.execute(
+            "SELECT sheet_json FROM characters WHERE campaign_id = ? AND status = 'active' LIMIT 1",
+            (campaign_id,),
+        ).fetchone()
+        if not ch:
+            ch = conn.execute(
+                "SELECT sheet_json FROM characters WHERE campaign_id = ? LIMIT 1",
+                (campaign_id,),
+            ).fetchone()
+        if ch:
+            try:
+                sheet = json.loads(ch["sheet_json"] or "{}")
+                conditions = sheet.get("conditions") or []
+                set_world_state_flags(campaign_id, player_conditions=list(conditions))
+            except Exception:
+                pass
+    finally:
+        conn.close()
+
+
 def auto_save_snapshot(campaign_id: int, source: str = "auto") -> int:
     """Auto-save snapshot: build + insert + prune to 50.
 
     Returns the new snapshot id.
     """
+    _sync_player_conditions(campaign_id)
     snapshot = build_snapshot(campaign_id)
     turn_number = snapshot["turn_number"]
 
