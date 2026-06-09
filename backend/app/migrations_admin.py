@@ -2559,6 +2559,15 @@ def _ensure_dungeon_v2_schema(conn: sqlite3.Connection) -> None:
         except sqlite3.OperationalError as e:
             if "duplicate column" not in str(e).lower(): raise
 
+    # E17: dungeon difficulty tier for rarity mapping
+    for sql in [
+        "ALTER TABLE game_dungeons ADD COLUMN dungeon_difficulty INTEGER NOT NULL DEFAULT 1",
+    ]:
+        try:
+            conn.execute(sql); conn.commit()
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower(): raise
+
     # source_exclusive on items and weapons
     for sql in [
         "ALTER TABLE game_config_items ADD COLUMN source_exclusive TEXT DEFAULT NULL",

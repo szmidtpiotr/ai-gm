@@ -899,7 +899,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
-### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E16 ✅ 2026-06-09, E17–E28 oczekujące)
+### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E17 ✅ 2026-06-09, E18–E28 oczekujące)
 
 > Retencja graczy i zawartość. Wymaga działającej Fazy 1+2. E1–E14 zaimplementowane (GitHub #416–429); E15–E28 następna iteracja.
 
@@ -2358,7 +2358,7 @@ Ukończenie lub śmierć = cooldown startuje.
 | LLM Vision workflow (obrazek → opis) | ❌ Do zbudowania |
 | Admin UI: tile manager (obrazki, drzwi, opis) | ⚠️ Częściowy |
 | `source_exclusive = "dungeon"` flag | ✅ Istnieje |
-| Rarity jako tier lootu per trudność | ❌ Nie powiązane z dungeon difficulty |
+| Rarity jako tier lootu per trudność | ✅ `RARITY_TIERS` + `dungeon_difficulty` + `get_loot_rarity_for_difficulty()` |
 | Cooldown konfigurowalny z Admin Panelu | ⚠️ Jest w DB, nie ma UI |
 
 ---

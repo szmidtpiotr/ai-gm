@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-09 (E1–E16 ukończone; FADM-P13..P17 #449-453 KOMPLETNE — strangler fig done)_
+_Ostatnia aktualizacja: 2026-06-09 (E1–E17 #416-432 ukończone; FADM-P13..P17 #449-453 KOMPLETNE — strangler fig done)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -11,7 +11,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | B (Faza 0) | 7/7 | 100% ✅ |
 | C (Faza 1) | 19/19 | 100% ✅ |
 | D (Faza 2) | 14/14 | 100% ✅ |
-| E (Faza 3) | 16/28 | 57% ⚠️ W TOKU (E1–E16 ✅, E17–E28 oczekujące) |
+| E (Faza 3) | 17/28 | 61% ⚠️ W TOKU (E1–E17 ✅, E18–E28 oczekujące) |
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
@@ -113,7 +113,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] E14 — Skalowanie encounterów per poziom gracza — [#429](https://github.com/szmidtpiotr/ai-gm/issues/429)
 - [x] E15 — Snapshot stanu przy wejściu do lochu — [#430](https://github.com/szmidtpiotr/ai-gm/issues/430)
 - [x] E16 — Przywróć snapshot przy śmierci w lochu + restart — [#431](https://github.com/szmidtpiotr/ai-gm/issues/431)
-- [ ] E17 — Rarity tierów loot w lochach (5 tierów, mapowanie difficulty→rarity) — [#432](https://github.com/szmidtpiotr/ai-gm/issues/432)
+- [x] E17 — Rarity tierów loot w lochach (5 tierów, mapowanie difficulty→rarity) — [#432](https://github.com/szmidtpiotr/ai-gm/issues/432)
 - [ ] E18 — Cooldown UI lochów w Admin Panelu — [#433](https://github.com/szmidtpiotr/ai-gm/issues/433)
 - [ ] E19 — LLM Vision: obrazek → opis kafelka (task na maszynie .170) — [#434](https://github.com/szmidtpiotr/ai-gm/issues/434)
 - [ ] E20 — Admin UI tile manager (obrazki, drzwi, opisy kafelków) — [#435](https://github.com/szmidtpiotr/ai-gm/issues/435)
