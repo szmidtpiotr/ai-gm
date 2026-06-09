@@ -89,7 +89,7 @@
     </div>
   </div>
 
-  <div class="adm-foot">FADM modular shell — sekcje nieportowane otwórz w <a href="/admin3/">/admin3/</a></div>
+  <div class="adm-foot">FADM modular shell — wszystkie sekcje sportowane (admin3 wycofany)</div>
 
   <script type="module">
     import { apiFetch } from './shared/api.js';
@@ -133,17 +133,15 @@
       if (title) title.textContent = LABELS[key] || 'Panel';
     }
 
-    // Sekcje już sportowane do modularnego admin/ (rośnie z każdym FADM-Px).
-    // Reszta ma swój dom w admin3 → klik takiej sekcji bounce'uje do /admin3/#key.
-    // Jedno źródło prawdy: każda sekcja działa w dokładnie jednym miejscu (symetrycznie do
-    // redirectu admin3 → /admin/ dla sekcji już sportowanych).
+    // FADM-P15: wszystkie 14 sekcji sportowane do modularnego admin/. admin3 wycofany
+    // (każda sekcja w admin3 redirectuje do /admin/). PORTED == KEYS → zero bounce do admin3.
     const PORTED = new Set(['overview', 'mechanics', 'content', 'world', 'map', 'campaigns', 'dungeons', 'players', 'tools', 'system', 'invites', 'bugreports', 'push', 'forge']);
 
     function placeholder(key) {
       return `<div class="section active"><div class="adm-placeholder">
         <h2>Sekcja „${LABELS[key] || key}"</h2>
         <p>Nie udało się załadować modułu sekcji.</p>
-        <p><a href="/admin3/#${key}">Otwórz w /admin3/#${key} →</a></p>
+        <p style="color:var(--t3)">Odśwież stronę lub sprawdź konsolę przeglądarki.</p>
       </div></div>`;
     }
 
@@ -151,8 +149,8 @@
       let key = (location.hash || '').replace(/^#/, '');
       if (!KEYS.includes(key)) key = localStorage.getItem(LAST_KEY) || 'overview';
       if (!KEYS.includes(key)) key = 'overview';
-      // Sekcja nieportowana → jej dom to admin3. Bounce zamiast martwego placeholdera.
-      if (!PORTED.has(key)) { window.location.replace('/admin3/#' + key); return; }
+      // Wszystkie sekcje sportowane → brak bounce do admin3. Nieznany klucz = neutralny placeholder.
+      if (!PORTED.has(key)) { document.getElementById('panel').innerHTML = placeholder(key); return; }
       localStorage.setItem(LAST_KEY, key);
       setActive(key);
       const panel = document.getElementById('panel');
