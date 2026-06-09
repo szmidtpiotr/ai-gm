@@ -4,6 +4,18 @@ Format: `vX.Y.Z — YYYY-MM-DD — opis`
 
 ---
 
+## v1.2.5 — 2026-06-09 — FADM strangler fig ukończony + E1–E14
+
+### Added / Changed / Fixed
+- **FADM strangler fig ukończony** — modularny admin shell `/admin/` zastępuje monolityczny admin3; 18 faz, 14 sekcji portowanych
+- Kuźnia (Forge) portowana do `/admin/#forge` jako ES moduł (P14); admin3 wycofany z zerową funkcjonalnością (P15)
+- Ekran logowania natywny w `/admin/` — `doLogin`/`doLogout`, token w localStorage (P13)
+- **SSE heartbeat fix** — group-run Playwright nie zrywa SSE (`network error`) przy ~90s ciszy startu; natychmiastowy hello + keepalive co 15s (P16/P452)
+- Admin3 wycofany — `/admin3/` → redirect 301 → `/admin/`; katalog `admin_panel_v3/` usunięty (P17)
+- E1–E14: player HUD quest bar, creator tooltips, campaign end/death stats, story gravity, template workflow, generic encounters, level scaling
+
+---
+
 ## v1.2.4 — 2026-06-08 — Admin panel modularny (FADM) + onboarding theme + D7–D10
 
 ### Added
