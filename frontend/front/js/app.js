@@ -518,6 +518,9 @@ function handleLogout() {
     localStorage.removeItem('aigm_hero_id');
     localStorage.removeItem('aigm_campaign_id');
     try { sessionStorage.removeItem('aigm_hero_id'); sessionStorage.removeItem('aigm_active_session'); } catch {}
+    // D10 E2 — reset theme on logout so next user gets theirs
+    _selectedTheme = 'dark_fantasy';
+    document.body.dataset.theme = '';
     showScreen('login');
 }
 
@@ -7911,6 +7914,28 @@ function initEventListeners() {
     });
     elements.btnHeroesLogout?.addEventListener('click', () => loadProfilePage());
     document.getElementById('profile-logout-btn')?.addEventListener('click', handleLogout);
+
+    // D10 E2 — theme selector in profile
+    document.querySelectorAll('.theme-selector-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const theme = this.dataset.theme || 'dark_fantasy';
+            _selectedTheme = theme;
+            _applyTheme(theme);
+            document.querySelectorAll('.theme-selector-btn').forEach(b => {
+                b.classList.toggle('theme-selector-btn--selected', b.dataset.theme === theme);
+            });
+            try {
+                await apiRequest('PATCH', '/me/game-settings', { visual_theme: theme });
+            } catch (e) {
+                console.error('Failed to save theme:', e);
+            }
+        });
+    });
+    // Set initial state from current theme
+    const currentTheme = document.body.dataset.theme === 'classic' ? 'classic' : 'dark_fantasy';
+    document.querySelectorAll('.theme-selector-btn').forEach(btn => {
+        btn.classList.toggle('theme-selector-btn--selected', btn.dataset.theme === currentTheme);
+    });
 
     // Campaigns
     elements.btnNewCampaign?.addEventListener('click', showNewCampaignScreen);
