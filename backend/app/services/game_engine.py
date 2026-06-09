@@ -368,6 +368,27 @@ def _inject_npc_llm_context(
         logger.warning("npc_context_injection_failed", campaign_id=campaign_id, error=str(exc))
 
 
+def _inject_known_npc_memory_context(
+    conn: sqlite3.Connection, campaign_id: int, messages: list[dict]
+) -> None:
+    """D3 (#378) — inject campaign_known_npcs facts into LLM context before each turn."""
+    if not messages:
+        return
+    try:
+        from app.services.npc_memory_service import get_recent_known_npcs, format_known_npcs_block
+        rows = get_recent_known_npcs(campaign_id, conn=conn)
+        block = format_known_npcs_block(rows)
+        if not block:
+            return
+        insert_at = min(3, len(messages))
+        messages.insert(insert_at, {"role": "system", "content": block})
+        logger.info("npc_memory_context_injected", campaign_id=campaign_id, count=len(rows))
+    except sqlite3.OperationalError as exc:
+        logger.info("npc_memory_context_skipped", campaign_id=campaign_id, reason="schema_missing", error=str(exc))
+    except Exception as exc:
+        logger.warning("npc_memory_context_injection_failed", campaign_id=campaign_id, error=str(exc))
+
+
 def _inject_campaign_s11_context(
     conn: sqlite3.Connection,
     campaign: sqlite3.Row,
@@ -463,6 +484,7 @@ def build_narrative_messages(
         _inject_campaign_s11_context(conn, campaign, messages, current_user_text=user_text)
         _inject_location_llm_context(conn, int(campaign["id"]), messages)
         _inject_npc_llm_context(conn, int(campaign["id"]), messages)
+        _inject_known_npc_memory_context(conn, int(campaign["id"]), messages)
         if character and messages:
             from app.services.inventory_context_service import build_inventory_block
             inv_block = build_inventory_block(conn, int(character["id"]))
