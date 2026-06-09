@@ -3300,6 +3300,11 @@ async function sendTurn(text, inputType = 'free_text', displayLabel = null) {
         await refreshCharacterData();
         await pollCombatState();
         updateInputPlaceholder();
+
+        // E25: show onboarding cards for first-time mechanic triggers
+        if (result.onboarding_cards && result.onboarding_cards.length > 0) {
+            showOnboardingCards(result.onboarding_cards);
+        }
     } catch (error) {
         typingIndicator.remove();
         renderSuggestedActions(_suggestedActions);
@@ -3369,6 +3374,7 @@ async function _sendTurnStream(text, inputType, typingIndicator) {
             if (meta.suggested_actions)  result.suggested_actions  = meta.suggested_actions;
             if (meta.active_quests)      result.active_quests      = meta.active_quests;
             if (meta.clock)              renderClock(meta.clock);
+            if (meta.onboarding_cards)   result.onboarding_cards   = meta.onboarding_cards;
             return;
         }
 
@@ -7479,6 +7485,47 @@ async function completeOnboarding() {
         localStorage.setItem('user', JSON.stringify(currentUser));
     }
     showScreen('heroes');
+}
+
+// ── E25: Just-in-time onboarding card overlay ───────────────────────────────
+// Shows cards one at a time with "Rozumiem" button, then POSTs mark-seen.
+function showOnboardingCards(cards) {
+    if (!cards || cards.length === 0) return;
+    let idx = 0;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'onboarding-card-overlay';
+    overlay.className = 'onboarding-card-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+
+    function renderCard() {
+        const card = cards[idx];
+        overlay.innerHTML = `
+            <div class="onboarding-card">
+                <div class="onboarding-card__progress">${idx + 1} / ${cards.length}</div>
+                <h3 class="onboarding-card__title">${escapeHtml(card.title)}</h3>
+                <p class="onboarding-card__content">${escapeHtml(card.content)}</p>
+                <button type="button" class="btn btn--primary onboarding-card__btn-ok">Rozumiem</button>
+            </div>`;
+        overlay.querySelector('.onboarding-card__btn-ok').addEventListener('click', async () => {
+            const key = card.mechanic_key;
+            if (currentUser?.id) {
+                apiRequest('POST', `/users/${currentUser.id}/seen-mechanics`, { mechanic_key: key })
+                    .catch(() => {});
+            }
+            idx++;
+            if (idx < cards.length) {
+                renderCard();
+            } else {
+                overlay.remove();
+            }
+        });
+    }
+
+    renderCard();
+    document.body.appendChild(overlay);
+    overlay.querySelector('.onboarding-card__btn-ok')?.focus();
 }
 
 // ── Profile page ────────────────────────────────────────────────────────

@@ -8740,3 +8740,46 @@ body[data-theme="classic"] {
 .rest-choice-btns { display: flex; flex-direction: column; gap: 10px; }
 .rest-choice-btns .btn { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 12px 16px; text-align: left; }
 .rest-choice-sub { font-size: 0.72rem; color: var(--text-muted); font-weight: normal; }
+
+/* E25 — Onboarding card overlay */
+.onboarding-card-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-xl);
+  animation: fadeIn 0.2s ease;
+}
+.onboarding-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+.onboarding-card__progress {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-sm);
+  text-align: right;
+}
+.onboarding-card__title {
+  color: var(--accent);
+  margin: 0 0 var(--space-md);
+  font-size: 1.1rem;
+}
+.onboarding-card__content {
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-lg);
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+.onboarding-card__btn-ok {
+  width: 100%;
+  font-size: 0.95rem;
+}
