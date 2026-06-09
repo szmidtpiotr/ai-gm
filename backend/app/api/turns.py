@@ -3533,24 +3533,120 @@ def create_turn(
                     pass
             _existing_pending = _existing_sf.get("pending_skill_test") or {}
             if _existing_pending:
-                _log_re = create_turn_log(
-                    conn=conn,
-                    campaign_id=campaign_id,
-                    character_id=payload.character_id,
-                    user_text=text,
-                    assistant_text=None,
-                    route="skill_test",
-                )
-                conn.commit()
-                return _with_turn_trace({
-                    "id": _log_re["id"],
-                    "campaign_id": _log_re["campaign_id"],
-                    "turn_number": _log_re["turn_number"],
-                    "created_at": _log_re["created_at"],
-                    "skill_test_pending": _existing_pending,
-                    "prose": None,
-                    "route": "skill_test",
-                }, turn_id)
+                _sb5_committed = _existing_pending.get("committed_d20")
+                if _sb5_committed is not None:
+                    # SB-5 fix: committed_d20 already set — auto-resolve inline instead of re-surfacing.
+                    # Player sent a regular turn while SKILL_TEST_PENDING; since the roll was locked in at
+                    # test creation, we can resolve immediately and return narrative prose.
+                    import json as _sb5_json
+                    from app.services.skill_service import resolve_skill_test as _sb5_rst, build_skill_result_context as _sb5_bsrc
+                    from app.services.llm_service import generate_chat as _sb5_gen
+                    from app.services.world_service import process_create_tags as _sb5_tags
+
+                    _sb5_committed = int(_sb5_committed)
+                    _sb5_res = _sb5_rst(
+                        d20_roll=_sb5_committed,
+                        pending=_existing_pending,
+                        conn=conn,
+                        campaign_id=campaign_id,
+                        character_id=payload.character_id,
+                    )
+
+                    # Clear pending state
+                    _existing_sf.pop("pending_skill_test", None)
+                    _existing_sf["state"] = "NARRATIVE"
+                    conn.execute(
+                        "UPDATE game_sessions SET session_flags = ? WHERE campaign_id = ?",
+                        (_sb5_json.dumps(_existing_sf, ensure_ascii=False), campaign_id),
+                    )
+
+                    # Build narrator prompt
+                    _sb5_ctx = _sb5_bsrc(_sb5_res)
+                    _sb5_nat = ""
+                    if _sb5_res.get("nat20"):
+                        _sb5_nat = "To był wyjątkowy sukces — pokaż coś nieoczekiwanego i korzystnego."
+                    elif _sb5_res.get("nat1"):
+                        _sb5_nat = "To był fumble — wprowadź komplikację, która stworzy przyszłe napięcie."
+                    _sb5_prompt = (
+                        f"{_sb5_ctx}\n\nNapisz narrację wyniku testu umiejętności po polsku. "
+                        f"60-90 słów. Klimat dark fantasy. Nie wymieniaj liczb ani kości. "
+                        f"{_sb5_nat}"
+                        f" ZAKAZANE: Nie używaj tagów [SKILL_TEST], [TRAP], roll_cue ani żadnych znaczników mechanicznych."
+                    )
+                    try:
+                        _sb5_prose_raw = _sb5_gen(
+                            messages=[{"role": "user", "content": _sb5_prompt}],
+                            llm_config=llm_config,
+                        ) or ""
+                    except Exception:
+                        _sb5_prose_raw = ""
+
+                    if not _sb5_prose_raw.strip():
+                        _sb5_lbl = _existing_pending.get("skill_label") or _existing_pending.get("skill_key") or "Test"
+                        if _sb5_res.get("nat20"): _sb5_prose_raw = f"{_sb5_lbl} — wyjątkowy sukces!"
+                        elif _sb5_res.get("nat1"): _sb5_prose_raw = f"{_sb5_lbl} — fumble."
+                        elif "SUCCESS" in str(_sb5_res.get("outcome", "")): _sb5_prose_raw = f"{_sb5_lbl} — sukces."
+                        else: _sb5_prose_raw = f"{_sb5_lbl} — niepowodzenie."
+
+                    try:
+                        _sb5_prose, _ = _sb5_tags(_sb5_prose_raw, conn, campaign_id)
+                    except Exception:
+                        _sb5_prose = _sb5_prose_raw
+
+                    # Persist turn
+                    _sb5_tn = conn.execute(
+                        "SELECT COALESCE(MAX(turn_number),0)+1 FROM campaign_turns WHERE campaign_id=?",
+                        (campaign_id,),
+                    ).fetchone()[0]
+                    _sb5_lbl = _existing_pending.get("skill_label", _existing_pending.get("skill_key", "skill"))
+                    _sb5_mod = int(_sb5_res.get("modifier") or 0)
+                    _sb5_total = int(_sb5_res.get("player_total") or _sb5_committed)
+                    _sb5_sign = "+" if _sb5_mod >= 0 else "−"
+                    if _sb5_res.get("nat20"): _sb5_oc = "Naturalny 20"
+                    elif _sb5_res.get("nat1"): _sb5_oc = "Naturalny 1"
+                    elif _sb5_res.get("success"): _sb5_oc = "Sukces"
+                    else: _sb5_oc = "Porażka"
+                    _sb5_roll_str = f"[Rzut: {_sb5_lbl} — {_sb5_committed} {_sb5_sign}{abs(_sb5_mod)} = {_sb5_total} — {_sb5_oc}]"
+                    conn.execute(
+                        """INSERT INTO campaign_turns
+                           (campaign_id, character_id, turn_number, user_text, assistant_text, route, created_at)
+                           VALUES (?,?,?,?,?,?,datetime('now'))""",
+                        (campaign_id, payload.character_id, _sb5_tn, _sb5_roll_str, _sb5_prose, "skill_test"),
+                    )
+                    conn.commit()
+
+                    try:
+                        from app.services.world_state_service import auto_save_snapshot as _sb5_snap
+                        _sb5_snap(campaign_id)
+                    except Exception:
+                        pass
+
+                    return _with_turn_trace({
+                        "prose": _sb5_prose,
+                        "skill_test_result": _sb5_res,
+                        "turn_number": _sb5_tn,
+                        "route": "skill_test_auto_resolved",
+                    }, turn_id)
+                else:
+                    # SB-3/SB-4: no committed_d20 — re-surface pending (backward compat)
+                    _log_re = create_turn_log(
+                        conn=conn,
+                        campaign_id=campaign_id,
+                        character_id=payload.character_id,
+                        user_text=text,
+                        assistant_text=None,
+                        route="skill_test",
+                    )
+                    conn.commit()
+                    return _with_turn_trace({
+                        "id": _log_re["id"],
+                        "campaign_id": _log_re["campaign_id"],
+                        "turn_number": _log_re["turn_number"],
+                        "created_at": _log_re["created_at"],
+                        "skill_test_pending": _existing_pending,
+                        "prose": None,
+                        "route": "skill_test",
+                    }, turn_id)
 
         if not _kw_scan_already_pending and not text.startswith("__AI_GM") and _text_is_action_attempt(text) and not _is_reading_context(text) and not _is_compound_action(text):
             try:
