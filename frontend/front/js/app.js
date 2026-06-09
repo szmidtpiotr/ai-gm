@@ -1429,11 +1429,21 @@ async function _launchReadyCampaign(templateId, tpl) {
 
 async function handleNewCampaignWithHero() {
     if (!currentHero || !currentUser?.id) return;
+
+    // E28: offer tutorial for first-time players
+    let isTutorial = false;
+    try {
+        const hc = await apiRequest('GET', `/users/${currentUser.id}/has-campaigns`);
+        if (!hc.has_campaigns) {
+            isTutorial = await _askTutorial();
+        }
+    } catch (_) {}
+
     const loadingToast = showToast('Tworzę kampanię…', 'info', 0);
     try {
         // Auto-generate a working title — GM plan will rename it properly
         const heroName = currentHero.name || 'Bohater';
-        const title = `Przygoda ${heroName}`;
+        const title = isTutorial ? 'Moja Pierwsza Przygoda' : `Przygoda ${heroName}`;
         const campaign = await apiRequest('POST', '/campaigns', {
             title,
             system_id: 'fantasy',
@@ -1442,6 +1452,7 @@ async function handleNewCampaignWithHero() {
             language: 'pl',
             mode: 'solo',
             status: 'active',
+            is_tutorial: isTutorial,
         });
         currentCampaignId = campaign.id;
         currentCampaign = campaign;
@@ -7575,6 +7586,33 @@ async function showCodexLibrary() {
 
     document.body.appendChild(overlay);
     overlay.querySelector('.onboarding-card__btn-ok, .codex-close')?.focus();
+}
+
+// ── E28: Tutorial offer for first-time players ───────────────────────────────
+function _askTutorial() {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'onboarding-card-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.innerHTML = `
+            <div class="onboarding-card">
+                <h3 class="onboarding-card__title">Witaj, Wędrowcze!</h3>
+                <p class="onboarding-card__content">
+                    To Twoja pierwsza przygoda w AI-GM.<br>
+                    Chcesz zacząć od samouczka <strong>"Moja Pierwsza Przygoda"</strong>,
+                    który przeprowadzi Cię przez podstawy gry?
+                </p>
+                <div class="onboarding-card__nav">
+                    <button type="button" class="btn btn--secondary tutorial-skip">Pomiń samouczek</button>
+                    <button type="button" class="btn btn--primary tutorial-yes">Tak, samouczek!</button>
+                </div>
+            </div>`;
+        overlay.querySelector('.tutorial-yes').addEventListener('click', () => { overlay.remove(); resolve(true); });
+        overlay.querySelector('.tutorial-skip').addEventListener('click', () => { overlay.remove(); resolve(false); });
+        document.body.appendChild(overlay);
+        overlay.querySelector('.tutorial-yes')?.focus();
+    });
 }
 
 // ── Profile page ────────────────────────────────────────────────────────

@@ -44,6 +44,20 @@ def get_seen_mechanics(user_id: int):
         conn.close()
 
 
+@router.get("/users/{user_id}/has-campaigns")
+def user_has_campaigns(user_id: int):
+    """Return whether the user has any campaigns (used to decide tutorial offer)."""
+    conn = _get_db()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM campaigns WHERE owner_user_id = ?",
+            (user_id,),
+        ).fetchone()
+        return {"has_campaigns": bool(row and int(row["c"] or 0) > 0)}
+    finally:
+        conn.close()
+
+
 @router.get("/users/{user_id}/mechanic-cards")
 def get_mechanic_cards_library(user_id: int):
     """Return full onboarding cards for all mechanics the user has already seen (the library)."""
