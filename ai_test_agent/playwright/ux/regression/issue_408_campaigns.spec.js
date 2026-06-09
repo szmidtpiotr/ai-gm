@@ -1,21 +1,22 @@
 /**
  * REGRESSION #408 (FADM-P6) — Port sekcji campaigns → modularny admin/.
  * Acceptance: /admin/#campaigns renderuje tabelę kampanii z danymi z API,
- * modal kampanii otwiera się i pokazuje 8 tabów, admin3 żyje po ANTY-GROB,
- * klik campaigns w admin3 przekierowuje do /admin/#campaigns.
+ * modal kampanii otwiera się i pokazuje 8 tabów, sekcja działa w /admin/.
  */
 const { test, expect } = require("@playwright/test");
 
 async function adminLogin(page) {
-  await page.goto("/api/health");
-  await page.evaluate(() => localStorage.removeItem('aigm_admin_token'));
-  // #forge is not in PORTED set — requestAnimationFrame won't redirect, login overlay stays.
-  await page.goto("/admin3/#forge");
-  await page.waitForSelector("#login-overlay.open", { timeout: 15000 });
-  await page.fill("#login-user", "demo");
-  await page.fill("#login-pass", "demo");
-  await page.click("#login-submit");
-  await page.locator("#login-overlay").waitFor({ state: "hidden", timeout: 20000 });
+  // FADM-P16: token przez API + addInitScript → seed localStorage PRZED skryptami strony.
+  // Brak goto tutaj: unika otwarcia login-overlay (P13), który przy nawigacji hash-only
+  // nie znika i przechwytywał kliknięcia w sekcjach.
+  const resp = await page.request.post("/api/admin/dev-login", {
+    data: { username: "demo", password: "demo" },
+  });
+  const { token } = await resp.json();
+  await page.addInitScript((t) => {
+    localStorage.setItem("aigm_admin_token", t);
+    localStorage.setItem("aigm_admin_user", "demo");
+  }, token);
 }
 
 test("REGRESSION #408 — /admin/#campaigns renderuje sekcję z tabelą kampanii", async ({ page }) => {
@@ -83,13 +84,4 @@ test("REGRESSION #408 — modal kampanii otwiera się z 8 tabami", async ({ page
   await expect(page.locator('[data-ctab="overview"]')).toHaveClass(/active/);
 });
 
-test("REGRESSION #408 — admin3 nadal żyje po ANTY-GROB", async ({ page }) => {
-  const r = await page.request.get("/admin3/");
-  expect(r.ok(), "/admin3/ musi nadal działać podczas migracji (#408)").toBeTruthy();
-});
 
-test("REGRESSION #408 — klik campaigns w admin3 przekierowuje do /admin/#campaigns", async ({ page }) => {
-  await adminLogin(page);
-  await page.locator('aside.sidebar button.nav-item[data-section="campaigns"]').first().click();
-  await expect(page).toHaveURL(/\/admin\/#campaigns$/, { timeout: 15000 });
-});

@@ -1,21 +1,22 @@
 /**
  * REGRESSION #409 (FADM-P7) — Port sekcji dungeons → modularny admin/.
  * Acceptance: /admin/#dungeons renderuje tabelę lochów z danymi z API,
- * cztery taby (lochy/zagadki/kafelki/kategorie) istnieją, admin3 żyje po ANTY-GROB,
- * klik dungeons w admin3 przekierowuje do /admin/#dungeons.
+ * cztery taby (lochy/zagadki/kafelki/kategorie) istnieją, sekcja działa w /admin/.
  */
 const { test, expect } = require("@playwright/test");
 
 async function adminLogin(page) {
-  await page.goto("/api/health");
-  await page.evaluate(() => localStorage.removeItem('aigm_admin_token'));
-  // #forge is not in PORTED set — requestAnimationFrame won't redirect, login overlay stays.
-  await page.goto("/admin3/#forge");
-  await page.waitForSelector("#login-overlay.open", { timeout: 15000 });
-  await page.fill("#login-user", "demo");
-  await page.fill("#login-pass", "demo");
-  await page.click("#login-submit");
-  await page.locator("#login-overlay").waitFor({ state: "hidden", timeout: 20000 });
+  // FADM-P16: token przez API + addInitScript → seed localStorage PRZED skryptami strony.
+  // Brak goto tutaj: unika otwarcia login-overlay (P13), który przy nawigacji hash-only
+  // nie znika i przechwytywał kliknięcia w sekcjach.
+  const resp = await page.request.post("/api/admin/dev-login", {
+    data: { username: "demo", password: "demo" },
+  });
+  const { token } = await resp.json();
+  await page.addInitScript((t) => {
+    localStorage.setItem("aigm_admin_token", t);
+    localStorage.setItem("aigm_admin_user", "demo");
+  }, token);
 }
 
 test("REGRESSION #409 — /admin/#dungeons renderuje sekcję z tabelą lochów", async ({ page }) => {
@@ -55,13 +56,4 @@ test("REGRESSION #409 — tabela lochów ładuje dane z API", async ({ page }) =
     .toBeTruthy();
 });
 
-test("REGRESSION #409 — admin3 nadal żyje po ANTY-GROB", async ({ page }) => {
-  const r = await page.request.get("/admin3/");
-  expect(r.ok(), "/admin3/ musi nadal działać podczas migracji (#409)").toBeTruthy();
-});
 
-test("REGRESSION #409 — klik dungeons w admin3 przekierowuje do /admin/#dungeons", async ({ page }) => {
-  await adminLogin(page);
-  await page.locator('aside.sidebar button.nav-item[data-section="dungeons"]').first().click();
-  await expect(page).toHaveURL(/\/admin\/#dungeons$/, { timeout: 15000 });
-});

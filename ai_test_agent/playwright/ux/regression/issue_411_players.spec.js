@@ -16,11 +16,18 @@ test("FADM-P9 #411 — API /api/admin/accounts responds", async ({ page }) => {
   expect([200, 401], `/api/admin/accounts got ${r.status()}`).toContain(r.status());
 });
 
-test("FADM-P9 #411 — admin3 switchSection redirects players to /admin/", async ({ page }) => {
-  const r = await page.request.get("/admin3/");
-  expect(r.status()).toBe(200);
-  const body = await r.text();
-  expect(body, "admin3 should have redirect for players").toContain("/admin/#players");
+test("FADM-P9 #411 — /admin/#players renderuje moduł players", async ({ page }) => {
+  await page.goto("/admin/");
+  await page.evaluate(async () => {
+    const r = await fetch("/api/admin/dev-login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "demo", password: "demo" }),
+    });
+    const b = await r.json();
+    localStorage.setItem("aigm_admin_token", b.token);
+  });
+  await page.goto("/admin/#players");
+  await expect(page.locator("#section-players"), "sekcja players nie wyrenderowana w /admin/ (FADM-P9 #411)").toBeVisible({ timeout: 10000 });
 });
 
 test("FADM-P9 #411 — PORTED set includes players", async ({ page }) => {
