@@ -923,7 +923,9 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | E16 | Przywróć snapshot przy śmierci w lochu + restart | E15 |
 | E17 | Rarity tierów loot w lochach (5 tierów, mapowanie difficulty→rarity) | E15 |
 | E18 | Cooldown UI lochów w Admin Panelu | — |
-| E19 | LLM Vision: obrazek → opis kafelka (task na maszynie .170) | H3 |
+| E19 | LLM Vision: obrazek → opis kafelka (task na maszynie .170) ✅ #434 | H3 |
+| E19b | AI prompt generator + ai-create endpoint dla kafelków ✅ #459 | — |
+| E19c | Compositor redesign: cienka ramka + flat door markers + generate-description ✅ #460 | — |
 | E20 | Admin UI tile manager (obrazki, drzwi, opisy kafelków) | — |
 | E21 | Wejście do lochu z mapy hex kampanii | B1 |
 | E22 | Resume niedokończonego runu lochu | E15 |
