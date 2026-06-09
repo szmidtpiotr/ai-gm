@@ -884,7 +884,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 |---|---|---|
 | D1 | Pending flow przedmiotów (GRANT_ITEM nieznanego klucza → auto-screen → pending=true) | B3 |
 | D2 | Pending flow wrogów (analogicznie do D1) | B3 |
-| D3 | NPC pamięć w World State (NPC_MEMORY tag → context injection przy kolejnej wizycie) | B2 |
+| D3 | NPC pamięć w World State (NPC_MEMORY tag → context injection przy kolejnej wizycie) — ✅ `13678bf` | B2 |
 | D4 | Auto-screening admin queue (Poziom 1 tech validation + Poziom 2 LLM scoring) | — |
 | D5 | Item VIEW — podgląd przedmiotu w inventory (tooltip/modal z pełnym opisem) | — |
 | D6 | Narracja: tagi, parsery, Narrative State struktura (dawne D6/D6/D6) | B1 |
@@ -3407,7 +3407,7 @@ Wszystko poniżej musi być gotowe przed startem Fazy 0.
 |---|---|---|
 | D1 | Pending flow przedmiotów (GRANT_ITEM nieznanego klucza → auto-screen → pending=true) | [#376](https://github.com/szmidtpiotr/ai-gm/issues/376) |
 | D2 | Pending flow wrogów (analogicznie do D1) | [#377](https://github.com/szmidtpiotr/ai-gm/issues/377) |
-| D3 | NPC pamięć w World State (NPC_MEMORY tag → context injection) | [#378](https://github.com/szmidtpiotr/ai-gm/issues/378) |
+| D3 | NPC pamięć w World State (NPC_MEMORY tag → context injection) ✅ | [#378](https://github.com/szmidtpiotr/ai-gm/issues/378) |
 | D4 | Auto-screening admin queue (tech validation + LLM scoring) | [#379](https://github.com/szmidtpiotr/ai-gm/issues/379) |
 | D5 | Item VIEW — podgląd przedmiotu w inventory (tooltip/modal) | [#380](https://github.com/szmidtpiotr/ai-gm/issues/380) |
 | D6 | Narracja: tagi, parsery, Narrative State struktura | [#381](https://github.com/szmidtpiotr/ai-gm/issues/381) |
