@@ -250,13 +250,46 @@ def _roll_loot_table(conn: sqlite3.Connection, table_key: str) -> list[dict]:
     return rolled
 
 
+# ── Rarity tier system (E17) ──────────────────────────────────────────────────
+
+RARITY_TIERS: dict[str, dict] = {
+    "common":    {"label": "Zwykły",    "color": "#9ca3af"},  # gray
+    "uncommon":  {"label": "Ulepszony", "color": "#4ade80"},  # green
+    "rare":      {"label": "Rzadki",    "color": "#60a5fa"},  # blue
+    "epic":      {"label": "Epicki",    "color": "#c084fc"},  # purple
+    "legendary": {"label": "Legendarny","color": "#fbbf24"},  # gold
+}
+
+# D1-D4 normal rooms → random pick between two adjacent tiers
+# D5 / boss → always epic or legendary
+_DIFFICULTY_TO_RANGE: dict[int, tuple[str, str]] = {
+    1: ("common",   "uncommon"),
+    2: ("uncommon", "rare"),
+    3: ("rare",     "epic"),
+    4: ("epic",     "legendary"),
+    5: ("epic",     "legendary"),
+}
+
+
+def get_loot_rarity_for_difficulty(difficulty: int, is_boss: bool = False) -> str:
+    """Return a rarity tier key for the given dungeon difficulty (1-5).
+
+    Boss rooms always get epic/legendary regardless of dungeon difficulty.
+    """
+    if is_boss:
+        lo, hi = "epic", "legendary"
+    else:
+        clamped = max(1, min(5, difficulty))
+        lo, hi = _DIFFICULTY_TO_RANGE.get(clamped, ("common", "uncommon"))
+    return random.choice([lo, hi])
+
+
 # ── Dungeon instance generation ───────────────────────────────────────────────
 
-def generate_dungeon_instance(dungeon_key: str, hero_level: int) -> dict:
-    dungeon = get_dungeon(dungeon_key)
-    if not dungeon:
-        raise ValueError(f"Dungeon not found: {dungeon_key}")
-
+def _build_dungeon_instance(dungeon: dict, hero_level: int) -> dict:
+    """Build a dungeon run instance dict from a dungeon config dict."""
+    dungeon_key = dungeon.get("key", "")
+    dungeon_difficulty = int(dungeon.get("dungeon_difficulty") or 1)
     pool = json.loads(dungeon.get("enemy_pool") or "[]")
     num_rooms = int(dungeon.get("rooms") or 5)
     boss_key = dungeon.get("boss_enemy") or (pool[-1] if pool else None)
@@ -312,6 +345,7 @@ def generate_dungeon_instance(dungeon_key: str, hero_level: int) -> dict:
                 room["enemy_count"] = enemy_count
                 room["enemy_stats"] = scaled
                 room["enemy_label"] = base_stats.get("label", enemy_key or "")
+                room["rarity"] = get_loot_rarity_for_difficulty(dungeon_difficulty, is_boss=is_boss)
             elif room_type == "riddle":
                 riddle = _get_riddle_for_theme(conn)
                 if riddle:
@@ -349,6 +383,7 @@ def generate_dungeon_instance(dungeon_key: str, hero_level: int) -> dict:
                 room["trap"] = random.choice(traps)
             elif room_type == "chest":
                 room["chest_loot_table"] = dungeon.get("chest_loot_table_key") or ""
+                room["rarity"] = get_loot_rarity_for_difficulty(dungeon_difficulty, is_boss=False)
             elif room_type == "rest":
                 heal_pct = random.choice([15, 20, 25, 30])
                 rest_descriptions = [
@@ -372,6 +407,7 @@ def generate_dungeon_instance(dungeon_key: str, hero_level: int) -> dict:
     return {
         "dungeon_key": dungeon_key,
         "dungeon_label": dungeon.get("label", dungeon_key),
+        "dungeon_difficulty": dungeon_difficulty,
         "atmosphere": atmosphere,
         "rooms": rooms,
         "total_rooms": num_rooms,
@@ -384,6 +420,13 @@ def generate_dungeon_instance(dungeon_key: str, hero_level: int) -> dict:
         "boss_loot_table_key": dungeon.get("boss_loot_table_key") or "",
         "loot_collected": [],
     }
+
+
+def generate_dungeon_instance(dungeon_key: str, hero_level: int) -> dict:
+    dungeon = get_dungeon(dungeon_key)
+    if not dungeon:
+        raise ValueError(f"Dungeon not found: {dungeon_key}")
+    return _build_dungeon_instance(dungeon, hero_level)
 
 
 # ── Session management ────────────────────────────────────────────────────────
