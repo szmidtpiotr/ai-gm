@@ -899,7 +899,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
-### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E19 ✅ 2026-06-09, E20–E28 oczekujące)
+### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E22 ✅ 2026-06-09, E23–E28 oczekujące)
 
 > Retencja graczy i zawartość. Wymaga działającej Fazy 1+2. E1–E14 zaimplementowane (GitHub #416–429); E15–E28 następna iteracja.
 
@@ -926,9 +926,9 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | E19 | LLM Vision: obrazek → opis kafelka (task na maszynie .170) ✅ #434 | H3 |
 | E19b | AI prompt generator + ai-create endpoint dla kafelków ✅ #459 | — |
 | E19c | Compositor redesign: cienka ramka + flat door markers + generate-description ✅ #460 | — |
-| E20 | Admin UI tile manager (obrazki, drzwi, opisy kafelków) | — |
-| E21 | Wejście do lochu z mapy hex kampanii | B1 |
-| E22 | Resume niedokończonego runu lochu | E15 |
+| E20 | Admin UI tile manager (obrazki, drzwi, opisy kafelków) ✅ #435 (covered by E19b/E19c) | — |
+| E21 | Wejście do lochu z mapy hex kampanii ✅ #436 | B1 |
+| E22 | Resume niedokończonego runu lochu ✅ #437 | E15 |
 | E23 | Seen_mechanics tracking per gracz (nie per postać) | — |
 | E24 | Backend trigger kart onboarding (first mechanic occurrence) | E23, Faza 1+2 |
 | E25 | Karty onboarding UI (nieblokujące overlay, "Rozumiem") | E24 |
