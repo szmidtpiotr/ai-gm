@@ -87,6 +87,7 @@ const elements = {
     chatMessages: document.getElementById('chat-messages'),
     chatInput: document.getElementById('chat-input'),
     btnHome: document.getElementById('home-btn'),
+    btnOpenCodex: document.getElementById('open-codex-btn'),
     btnOpenSettings: document.getElementById('open-settings-btn'),
     btnSend: document.getElementById('send-btn'),
 
@@ -7528,6 +7529,54 @@ function showOnboardingCards(cards) {
     overlay.querySelector('.onboarding-card__btn-ok')?.focus();
 }
 
+// ── E26: Kodeks — biblioteka przeczytanych kart mechanik ─────────────────────
+async function showCodexLibrary() {
+    if (!currentUser?.id) return;
+    let cards = [];
+    try {
+        const data = await apiRequest('GET', `/users/${currentUser.id}/mechanic-cards`);
+        cards = data.cards || [];
+    } catch (_) {}
+
+    const overlay = document.createElement('div');
+    overlay.className = 'onboarding-card-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+
+    if (cards.length === 0) {
+        overlay.innerHTML = `
+            <div class="onboarding-card">
+                <h3 class="onboarding-card__title">Kodeks gracza</h3>
+                <p class="onboarding-card__content">Nie odkryłeś jeszcze żadnych mechanik. Karty pojawiają się podczas rozgrywki.</p>
+                <button type="button" class="btn btn--primary onboarding-card__btn-ok">Zamknij</button>
+            </div>`;
+        overlay.querySelector('.onboarding-card__btn-ok').addEventListener('click', () => overlay.remove());
+    } else {
+        let idx = 0;
+        function renderCodexCard() {
+            const card = cards[idx];
+            overlay.innerHTML = `
+                <div class="onboarding-card">
+                    <div class="onboarding-card__progress">Kodeks: ${idx + 1} / ${cards.length}</div>
+                    <h3 class="onboarding-card__title">${escapeHtml(card.title)}</h3>
+                    <p class="onboarding-card__content">${escapeHtml(card.content)}</p>
+                    <div class="onboarding-card__nav">
+                        <button type="button" class="btn btn--secondary codex-prev" ${idx === 0 ? 'disabled' : ''}>← Poprzednia</button>
+                        <button type="button" class="btn btn--primary codex-close">Zamknij</button>
+                        <button type="button" class="btn btn--secondary codex-next" ${idx === cards.length - 1 ? 'disabled' : ''}>Następna →</button>
+                    </div>
+                </div>`;
+            overlay.querySelector('.codex-prev')?.addEventListener('click', () => { if (idx > 0) { idx--; renderCodexCard(); } });
+            overlay.querySelector('.codex-next')?.addEventListener('click', () => { if (idx < cards.length - 1) { idx++; renderCodexCard(); } });
+            overlay.querySelector('.codex-close')?.addEventListener('click', () => overlay.remove());
+        }
+        renderCodexCard();
+    }
+
+    document.body.appendChild(overlay);
+    overlay.querySelector('.onboarding-card__btn-ok, .codex-close')?.focus();
+}
+
 // ── Profile page ────────────────────────────────────────────────────────
 function _renderProfileAvatar(avatarUrl, fallbackLetter) {
     const el = document.getElementById('profile-avatar');
@@ -8091,6 +8140,7 @@ function initEventListeners() {
     });
     elements.btnOpenSettings?.addEventListener('click', toggleSettings);
     elements.btnOpenJournal?.addEventListener('click', toggleJournal);
+    elements.btnOpenCodex?.addEventListener('click', showCodexLibrary);
 
     // Combat
     elements.btnCombatAttack?.addEventListener('click', handleCombatAttack);

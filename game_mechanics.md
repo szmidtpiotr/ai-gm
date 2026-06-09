@@ -899,7 +899,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 ---
 
-### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E25 ✅ 2026-06-09, E26–E28 oczekujące)
+### FAZA 3 — Jakość + Treść ⚠️ W TOKU (E1–E26 ✅ 2026-06-09, E27–E28 oczekujące)
 
 > Retencja graczy i zawartość. Wymaga działającej Fazy 1+2. E1–E14 zaimplementowane (GitHub #416–429); E15–E28 następna iteracja.
 
@@ -932,7 +932,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | E23 | Seen_mechanics tracking per gracz (nie per postać) ✅ #438 | — |
 | E24 | Backend trigger kart onboarding (first mechanic occurrence) ✅ #439 | E23, Faza 1+2 |
 | E25 | Karty onboarding UI (nieblokujące overlay, "Rozumiem") ✅ #440 | E24 |
-| E26 | Biblioteka kart (gracz może wrócić do przeczytanych) | E25 |
+| E26 | Biblioteka kart (gracz może wrócić do przeczytanych) ✅ #441 | E25 |
 | E27 | Karty dla nowych mechanik (afiksy, crafting, MP) — dodać gdy systemy gotowe | Faza 4 |
 
 ---

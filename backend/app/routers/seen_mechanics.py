@@ -44,6 +44,32 @@ def get_seen_mechanics(user_id: int):
         conn.close()
 
 
+@router.get("/users/{user_id}/mechanic-cards")
+def get_mechanic_cards_library(user_id: int):
+    """Return full onboarding cards for all mechanics the user has already seen (the library)."""
+    from app.services.onboarding_service import MECHANIC_CARDS
+    conn = _get_db()
+    try:
+        rows = conn.execute(
+            "SELECT mechanic_key, seen_at FROM seen_mechanics WHERE user_id = ? ORDER BY seen_at",
+            (user_id,),
+        ).fetchall()
+        cards = []
+        for r in rows:
+            key = r["mechanic_key"]
+            card_def = MECHANIC_CARDS.get(key)
+            if card_def:
+                cards.append({
+                    "mechanic_key": key,
+                    "title": card_def["title"],
+                    "content": card_def["content"],
+                    "seen_at": r["seen_at"],
+                })
+        return {"cards": cards}
+    finally:
+        conn.close()
+
+
 @router.post("/users/{user_id}/seen-mechanics")
 def mark_mechanic_seen(user_id: int, req: MarkSeenRequest):
     """Mark a mechanic as seen for the user (idempotent — UPSERT)."""
