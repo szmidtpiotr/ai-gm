@@ -11,7 +11,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | B (Faza 0) | 7/7 | 100% ✅ |
 | C (Faza 1) | 19/19 | 100% ✅ |
 | D (Faza 2) | 14/14 | 100% ✅ |
-| E (Faza 3) | 22/28 | 79% ⚠️ W TOKU (E1–E22 ✅, E23–E28 oczekujące) |
+| E (Faza 3) | 24/28 | 86% ⚠️ W TOKU (E1–E24 ✅, E25–E28 oczekujące) |
 | F (Faza 4) | 0/21 | 0% |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
@@ -119,8 +119,8 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] E20 — Admin UI tile manager (obrazki, drzwi, opisy kafelków) — [#435](https://github.com/szmidtpiotr/ai-gm/issues/435) (covered by E19b/E19c)
 - [x] E21 — Wejście do lochu z mapy hex kampanii — [#436](https://github.com/szmidtpiotr/ai-gm/issues/436) — 0213eb9
 - [x] E22 — Resume niedokończonego runu lochu — [#437](https://github.com/szmidtpiotr/ai-gm/issues/437) — 0213eb9
-- [ ] E23 — Seen_mechanics tracking per gracz (tabela + endpoint mark-seen) — [#438](https://github.com/szmidtpiotr/ai-gm/issues/438)
-- [ ] E24 — Backend trigger kart onboarding (first mechanic occurrence: rzut/walka/rana/XP/złoto/death) — [#439](https://github.com/szmidtpiotr/ai-gm/issues/439)
+- [x] E23 — Seen_mechanics tracking per gracz (tabela + endpoint mark-seen) — [#438](https://github.com/szmidtpiotr/ai-gm/issues/438)
+- [x] E24 — Backend trigger kart onboarding (first mechanic occurrence: rzut/walka/rana/XP/złoto/death) — [#439](https://github.com/szmidtpiotr/ai-gm/issues/439)
 - [ ] E25 — Karty onboarding UI (nieblokujące overlay, "Rozumiem") — [#440](https://github.com/szmidtpiotr/ai-gm/issues/440)
 - [ ] E26 — Biblioteka kart (gracz może wrócić do przeczytanych) — [#441](https://github.com/szmidtpiotr/ai-gm/issues/441)
 - [ ] E27 — Karty dla nowych mechanik (afiksy, crafting, MP) — gdy systemy gotowe (Faza 4+) — [#442](https://github.com/szmidtpiotr/ai-gm/issues/442)
@@ -130,27 +130,27 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 ## FAZA 4 — Rozbudowa: Efekty, Afiksy, Ekonomia
 
-- [ ] F1 — Unified Effects System — przepisanie effect_json na typed objects
-- [ ] F2 — Affix System — game_config_affixes + affixes_json na inventory row
-- [ ] F3 — Admin buildery afiksów i efektów
-- [ ] F4 — `[SPEND_GOLD:X]` tag z tabeli/configu (jeśli nie w Fazie 1)
-- [ ] F5 — Włączenie + konfiguracja wskrzeszenia jako gold sink
-- [ ] F6 — Sink afiksów: NPC is_crafter, nałóż/reroll afiks (T1=150g, T2=500g, T3=1200g)
-- [ ] F7 — Trwałość (durability): punktowa per cios, penalty przy 0, naprawa
-- [ ] F8 — Napady: encounter kradnący % złota
-- [ ] F9 — Dynamiczny asortyment sklepu (lokacja+poziom)
-- [ ] F10 — CHA na kupno (nie tylko sprzedaż)
-- [ ] F11 — Unifikacja ceny → jeden price_gp
-- [ ] F12 — Anti-farm: malejąca cena przy spam-sprzedaży
-- [ ] F13 — Background expire wynajmu (sweep)
-- [ ] F14 — Usunięcie martwego economy_service kodu
-- [ ] F15 — Balans walki → mikstury potrzebne
-- [ ] F16 — Balans całości (ceny, dropy, sinki) — playtest
-- [ ] F17 — Hidden Trait system (LLM sugeruje z puli, trigger kontekstowy, reveal)
-- [ ] F18 — Rosnące progi XP (konfigurowalne z Admin Panelu)
-- [ ] F19 — Globalne stany NPC (śmierć NPC między kampaniami)
-- [ ] F20 — Mechaniczne efekty pory dnia (noc/świt bonusy, game_config)
-- [ ] F21 — World State History UI dla admina (zakładka, diff między turami)
+- [ ] F1 — Unified Effects System — effect_json → typed Effect Objects (schema, silnik, LLM DSL) — [#461](https://github.com/szmidtpiotr/ai-gm/issues/461)
+- [ ] F2 — Affix System — game_config_affixes + affixes_json na inventory row + loot engine — [#462](https://github.com/szmidtpiotr/ai-gm/issues/462)
+- [ ] F3 — Admin buildery afiksów i efektów (wizualny UI, nie ręczny JSON) — [#463](https://github.com/szmidtpiotr/ai-gm/issues/463)
+- [ ] F4 — `[SPEND_GOLD:X]` tag z tabeli/configu (NIE z LLM) — [#464](https://github.com/szmidtpiotr/ai-gm/issues/464)
+- [ ] F5 — Wskrzeszenie jako gold sink (włączenie + konfiguracja gold_percent) — [#465](https://github.com/szmidtpiotr/ai-gm/issues/465)
+- [ ] F6 — Sink afiksów: NPC is_crafter, nałóż/reroll (T1=150g, T2=500g, T3=1200g) — [#466](https://github.com/szmidtpiotr/ai-gm/issues/466)
+- [ ] F7 — Trwałość (durability): punktowa per cios, penalty przy 0, naprawa tier_rate — [#467](https://github.com/szmidtpiotr/ai-gm/issues/467)
+- [ ] F8 — Napady: encounter kradnący % złota przy porażce/zaskoczeniu — [#468](https://github.com/szmidtpiotr/ai-gm/issues/468)
+- [ ] F9 — Dynamiczny asortyment sklepu (lokacja + poziom gracza) — [#469](https://github.com/szmidtpiotr/ai-gm/issues/469)
+- [ ] F10 — CHA na kupno — bonus/malus przy zakupach (nie tylko sprzedaży) — [#470](https://github.com/szmidtpiotr/ai-gm/issues/470)
+- [ ] F11 — Unifikacja ceny → jeden price_gp + wycena egzemplarza z afiksami — [#471](https://github.com/szmidtpiotr/ai-gm/issues/471)
+- [ ] F12 — Anti-farm: malejąca cena sprzedaży przy spam-sprzedaży tego samego type — [#472](https://github.com/szmidtpiotr/ai-gm/issues/472)
+- [ ] F13 — Background expire wynajmu — sweep wygasłych tymczasowych bonusów — [#473](https://github.com/szmidtpiotr/ai-gm/issues/473)
+- [ ] F14 — Usunięcie martwego economy_service (generate_combat_loot / claim_loot) — [#474](https://github.com/szmidtpiotr/ai-gm/issues/474)
+- [ ] F15 — Balans walki → mikstury potrzebne (playtest + tuning DC/damage) — [#475](https://github.com/szmidtpiotr/ai-gm/issues/475)
+- [ ] F16 — Balans całości (ceny/dropy/sinki) — pełny playtest — [#476](https://github.com/szmidtpiotr/ai-gm/issues/476)
+- [ ] F17 — Hidden Trait system (LLM z puli, trigger kontekstowy, reveal narracyjny) — [#477](https://github.com/szmidtpiotr/ai-gm/issues/477)
+- [ ] F18 — Rosnące progi XP konfigurowalne z Admin Panelu — [#478](https://github.com/szmidtpiotr/ai-gm/issues/478)
+- [ ] F19 — Globalne stany NPC — śmierć NPC między kampaniami (is_dead globalny) — [#479](https://github.com/szmidtpiotr/ai-gm/issues/479)
+- [ ] F20 — Mechaniczne efekty pory dnia (noc/świt bonusy z game_config) — [#480](https://github.com/szmidtpiotr/ai-gm/issues/480)
+- [ ] F21 — World State History UI admina (zakładka + diff między turami) — [#481](https://github.com/szmidtpiotr/ai-gm/issues/481)
 
 ---
 
