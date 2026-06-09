@@ -530,11 +530,14 @@ function filterTableGeneric(input, tableId, nameClass) {
                     <div style="display:flex;gap:4px;flex-wrap:wrap">${hooksForScene.slice(0,8).map(h=>`<span class="badge badge-slate">${_esc(typeof h==='string'?h:(h.label||h.name||JSON.stringify(h)).slice(0,40))}</span>`).join('')}</div>
                   </div>` : '';
                 return `<details open style="border-radius:var(--r);border:1px solid ${isCurrent?'rgba(var(--accent-rgb,100,160,255),.45)':'var(--border)'};background:${isCurrent?'rgba(var(--accent-rgb,100,160,255),.08)':isDone?'var(--surface)':'transparent'};opacity:${isDone?'0.6':'1'}">
-                  <summary style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;cursor:pointer;list-style:none;outline:none">
-                    <span style="font-size:0.72rem;font-weight:700;color:${isCurrent?'var(--accent,#64a0ff)':'var(--t3)'};min-width:18px;padding-top:2px;flex-shrink:0">${isDone?'✓':(isCurrent?'▶':String(si+1))}</span>
-                    <span style="font-size:0.82rem;font-weight:${isCurrent?'600':'400'};color:${isCurrent?'var(--t1)':isDone?'var(--t3)':'var(--t2)'};">${_esc(goalText)}</span>
+                  <summary style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;list-style:none;outline:none">
+                    <span style="font-size:0.72rem;font-weight:700;color:${isCurrent?'var(--accent,#64a0ff)':'var(--t3)'};min-width:18px;flex-shrink:0">${isDone?'✓':(isCurrent?'▶':String(si+1))}</span>
+                    <span style="font-size:0.78rem;color:var(--t3)">Scena ${si+1}</span>
                   </summary>
-                  ${extraHtml ? `<div style="padding:0 10px 10px 36px">${extraHtml}</div>` : ''}
+                  <div style="padding:6px 10px 10px 36px">
+                    <p style="font-size:0.82rem;font-weight:${isCurrent?'600':'400'};color:${isCurrent?'var(--t1)':isDone?'var(--t3)':'var(--t2)'};margin:0 0 ${extraHtml?'8px':'0'}">${_esc(goalText)}</p>
+                    ${extraHtml}
+                  </div>
                 </details>`;
               }).join('')}
             </div>` : '';
