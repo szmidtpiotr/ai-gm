@@ -735,24 +735,60 @@ def run_playwright(body: PlaywrightRunReq) -> StreamingResponse:
     agent = _agent_url()
 
     def gen():
-        try:
-            with httpx.Client(timeout=httpx.Timeout(connect=10.0, read=None, write=10.0, pool=5.0)) as client:
-                with client.stream("POST", f"{agent}/playwright/run", json={"spec": body.spec}) as resp:
-                    if resp.status_code != 200:
-                        err_txt = resp.read()[:2000].decode("utf-8", errors="replace")
-                        yield f"data: {json.dumps({'type':'done','success':False,'error':f'HTTP {resp.status_code}: {err_txt}'})}\n\n"
-                        return
-                    for line in resp.iter_lines():
-                        if line is None:
-                            continue
-                        line = line if isinstance(line, str) else line.decode("utf-8", errors="replace")
-                        line = line.strip()
-                        if line.startswith("data: "):
-                            yield f"{line}\n\n"
-        except Exception as e:
-            yield f"data: {json.dumps({'type':'done','success':False,'error':_format_test_agent_error(agent, e)})}\n\n"
+        # Czytamy stream agenta w wątku → kolejka. Główna pętla emituje heartbeat (komentarz SSE)
+        # podczas ciszy, by proxy (NPM idle ~60s) nie zerwało połączenia. Group run odpala ~114
+        # testów i Playwright milczy ~90s na starcie (zbieranie + launch) → bez heartbeatu proxy
+        # zrywało SSE i frontend pokazywał "Błąd: network error".
+        import queue as _queue
+        import threading
 
-    return StreamingResponse(gen(), media_type="text/event-stream", headers={"Cache-Control": "no-cache"})
+        q: "_queue.Queue[tuple[str, str | None]]" = _queue.Queue()
+
+        def _reader() -> None:
+            try:
+                with httpx.Client(timeout=httpx.Timeout(connect=10.0, read=None, write=10.0, pool=5.0)) as client:
+                    with client.stream("POST", f"{agent}/playwright/run", json={"spec": body.spec}) as resp:
+                        if resp.status_code != 200:
+                            err_txt = resp.read()[:2000].decode("utf-8", errors="replace")
+                            q.put(("data", json.dumps({'type': 'done', 'success': False, 'error': f'HTTP {resp.status_code}: {err_txt}'})))
+                            return
+                        for line in resp.iter_lines():
+                            if line is None:
+                                continue
+                            line = line if isinstance(line, str) else line.decode("utf-8", errors="replace")
+                            line = line.strip()
+                            if line.startswith("data: "):
+                                q.put(("raw", line))
+            except Exception as e:
+                q.put(("data", json.dumps({'type': 'done', 'success': False, 'error': _format_test_agent_error(agent, e)})))
+            finally:
+                q.put(("eof", None))
+
+        threading.Thread(target=_reader, daemon=True).start()
+
+        # Natychmiastowy hello: klient widzi feedback od razu, a proxy dostaje dane zanim
+        # Playwright (po ~90s ciszy) wyśle pierwszą linię.
+        yield f"data: {json.dumps({'type': 'log', 'line': 'Uruchamianie testów (start Playwright potrafi potrwać ~90s)…'})}\n\n"
+
+        _HEARTBEAT_S = 15  # < proxy idle timeout (NPM ~60s)
+        while True:
+            try:
+                kind, val = q.get(timeout=_HEARTBEAT_S)
+            except _queue.Empty:
+                yield ": keepalive\n\n"  # komentarz SSE — utrzymuje połączenie podczas ciszy startu
+                continue
+            if kind == "eof":
+                break
+            if kind == "raw" and val is not None:
+                yield f"{val}\n\n"
+            elif kind == "data" and val is not None:
+                yield f"data: {val}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/ai_test_config", dependencies=[Depends(require_admin_bearer_or_query)])
