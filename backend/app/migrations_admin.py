@@ -2961,6 +2961,59 @@ def _ensure_price_gp_schema(conn: sqlite3.Connection) -> None:
             pass
 
 
+def _ensure_hidden_traits_schema(conn: sqlite3.Connection) -> None:
+    """F17 (#477): create game_config_hidden_traits table + seed starter traits."""
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS game_config_hidden_traits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE NOT NULL,
+                label TEXT NOT NULL,
+                description TEXT,
+                trigger_keywords TEXT,
+                effect_json TEXT DEFAULT '{}',
+                is_active INTEGER DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        conn.commit()
+    except Exception:
+        pass
+
+    seeds = [
+        ("berserker_rage", "Szał Berserkera",
+         "Gdy zdrowie spada poniżej 30%, ataki zadają +2 obrażeń.",
+         "berserk,rage,wściekłość,szał",
+         '{"type":"damage_bonus","bonus":2,"condition":"hp_below_30pct"}'),
+        ("shadow_step", "Krok Cienia",
+         "Ukryty w walce — wrogowie mają -2 do trafienia przez pierwszą rundę.",
+         "shadow,cień,ukrycie,skradanie",
+         '{"type":"static_stat_modifier","stats":{"enemy_attack_penalty":2},"duration":1}'),
+        ("iron_will", "Żelazna Wola",
+         "Raz na długi odpoczynek zignoruj pierwszą śmiertelną ranę.",
+         "will,wola,przeżycie,determinacja",
+         '{"type":"apply_condition","condition":"death_ward","duration":1,"charges":1}'),
+        ("lucky_charm", "Talizman Szczęścia",
+         "Raz na sesję przerzuć jeden nieudany rzut.",
+         "luck,szczęście,traf,los",
+         '{"type":"apply_condition","condition":"reroll_once","duration":1,"charges":1}'),
+        ("arcane_sensitivity", "Wrażliwość Arkanyczna",
+         "Czujesz obecność magii — DC na wykrycie magicznych pułapek -4.",
+         "magic,magia,arkana,czar,zaklęcie",
+         '{"type":"static_stat_modifier","stats":{"detect_magic_dc_bonus":-4}}'),
+    ]
+    for key, label, desc, keywords, effect in seeds:
+        try:
+            conn.execute(
+                "INSERT OR IGNORE INTO game_config_hidden_traits "
+                "(key, label, description, trigger_keywords, effect_json) VALUES (?,?,?,?,?)",
+                (key, label, desc, keywords, effect),
+            )
+        except Exception:
+            pass
+    conn.commit()
+
+
 def run_admin_migrations() -> None:
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
@@ -3037,6 +3090,7 @@ def run_admin_migrations() -> None:
         _ensure_shop_item_level_location_schema(conn)
         _ensure_price_gp_schema(conn)
         _apply_f15_balance_tuning(conn)
+        _ensure_hidden_traits_schema(conn)
     finally:
         conn.close()
 
