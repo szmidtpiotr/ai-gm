@@ -952,7 +952,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | F5 | Włączenie + konfiguracja wskrzeszenia jako gold sink (✅ #465 KOMPLETNE: retroaktywne TDD; feature od #64; 13 testów GREEN) | — |
 | F6 | Sink afiksów: NPC is_crafter, nałóż/reroll afiks (✅ #466 KOMPLETNE: `crafter_service.py` apply/reroll/upgrade + 3 endpointy POST /craft/*; T1=150g T2=500g T3=1200g apply; T1=100g T2=350g T3=700g reroll; T1→T2=350g T2→T3=700g upgrade; 22 pytest + 4 Playwright GREEN) | F2 |
 | F7 | Trwałość (durability): punktowa per cios, penalty przy 0, naprawa tier_rate×brak_pkt (✅ #467 KOMPLETNE: `durability_service.py` + combat 3 hooki + 2 endpointy; T1=20g T2=50g T3=100g/pt; 24 testów GREEN) | F1 |
-| F8 | Napady: encounter kradnący % złota | D7 |
+| F8 | Napady: encounter kradnący % złota (✅ #468 KOMPLETNE: `robbery_service.py` + turns.py hook + 2 seedy; default 20%; 18 testów GREEN) | D7 |
 | F9 | Dynamiczny asortyment sklepu (lokacja+poziom) | — |
 | F10 | CHA na kupno (nie tylko sprzedaż) | — |
 | F11 | Unifikacja ceny → jeden price_gp | F2 |
@@ -3119,7 +3119,7 @@ grind loch / walka → złoto + przedmioty
 | F5 | ✅ Włączyć + skonfigurować wskrzeszenie jako sink (gold_percent) (#465, commit 34d0d8c) | — |
 | F6 | ✅ Sink afiksów: NPC `is_crafter`, nałóż/reroll afiks (#466, commit 55cfdc9) — `crafter_service.py` + 3 endpointy /craft/*; T1=150g T2=500g T3=1200g; reroll T1=100g T2=350g T3=700g; upgrade T1→T2=350g T2→T3=700g | afiksy (CZĘŚĆ X) |
 | F7 | ✅ Trwałość (#467, commit ad3a585) — spada per uderzenie OTRZYMANE; przy 0: penalty -50% AC/ataku (konfig. `durability_penalty_pct`); naprawa T1=20g T2=50g T3=100g/pt; hooki w combat_service; endpointy /repair-item + /repair-cost | egzemplarze |
-| F8 | Napady (#334): encounter kradnący % złota przy porażce/zaskoczeniu | encountery |
+| F8 | ✅ Napady (#468, commit b7ff32e) — encounter_type='robbery'; `robbery_service.apply_robbery()` kradnie floor(gold * pct/100); turns.py hook; 2 seedy (trakt + miasto); domyślnie 20% | encountery |
 | F9 | Dynamiczny asortyment sklepu (lokacja+poziom, z zatwierdzonych kluczy) | — |
 | F10 | CHA na kupno (nie tylko sprzedaż) | — |
 | F11 | Unifikacja ceny → jeden `price_gp` + wycena egzemplarza z afiksami | unifikacja przedmiotów (CZĘŚĆ X) |
