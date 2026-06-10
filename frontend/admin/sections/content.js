@@ -380,6 +380,272 @@ async function _loadConsumables() {
   } catch(e) { tbody.innerHTML = _errRow(13, e.message); }
 }
 
+// ── Effects Builder (F3 #463) ──────────────────────────────────────────────
+const _EFFECT_TYPES = [
+  { value: 'damage_bonus',       label: 'Bonus obrażeń',          fields: ['value'] },
+  { value: 'heal_on_hit',        label: 'Leczenie przy trafieniu', fields: ['value'] },
+  { value: 'ac_bonus',           label: 'Bonus AC',               fields: ['value'] },
+  { value: 'static_stat_modifier', label: 'Modyfikator statystyki', fields: ['stat', 'value'] },
+  { value: 'apply_condition',    label: 'Aplikuj kondycję',       fields: ['condition_key', 'duration_rounds'] },
+  { value: 'narrative_only',     label: 'Tylko narracja',         fields: [] },
+];
+
+const _STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+
+function _effectBuilderHtml(effects) {
+  const rows = (effects || []).map((e, i) => _effectRowHtml(e, i)).join('');
+  return `<div class="effect-builder" id="effect-builder">
+    <div id="effect-rows">${rows}</div>
+    <button type="button" class="btn btn-sm btn-secondary" id="add-effect-btn" style="margin-top:6px">+ Efekt</button>
+  </div>`;
+}
+
+function _effectRowHtml(e, i) {
+  const typeSel = `<select class="form-input effect-type-sel" style="min-width:170px" data-idx="${i}">
+    ${_EFFECT_TYPES.map(t => `<option value="${t.value}"${e.type===t.value?' selected':''}>${_esc(t.label)}</option>`).join('')}
+  </select>`;
+  const tdef = _EFFECT_TYPES.find(t => t.value === (e.type || 'damage_bonus')) || _EFFECT_TYPES[0];
+  const extraFields = _buildExtraFields(tdef, e);
+  return `<div class="effect-row" data-idx="${i}" style="display:flex;gap:6px;align-items:flex-end;margin-bottom:6px;flex-wrap:wrap">
+    ${typeSel}
+    <div class="effect-extra" style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">${extraFields}</div>
+    <button type="button" class="btn-icon danger effect-del" data-idx="${i}" title="Usuń efekt">✕</button>
+  </div>`;
+}
+
+function _buildExtraFields(tdef, e) {
+  return (tdef.fields || []).map(f => {
+    if (f === 'value') return `<input class="form-input effect-value" type="number" placeholder="Wartość" value="${e.value??''}" style="width:90px">`;
+    if (f === 'stat') {
+      return `<select class="form-input effect-stat" style="width:80px">
+        ${_STATS.map(s => `<option${e.stat===s?' selected':''}>${s}</option>`).join('')}
+      </select>`;
+    }
+    if (f === 'condition_key') return `<input class="form-input effect-cond-key" type="text" placeholder="klucz kondycji" value="${_esc(e.condition_key||'')}" style="width:130px">`;
+    if (f === 'duration_rounds') return `<input class="form-input effect-duration" type="number" placeholder="Rundy" value="${e.duration_rounds??2}" style="width:70px">`;
+    return '';
+  }).join('');
+}
+
+function _wireEffectBuilder(container, onChange) {
+  const rowsEl = container.querySelector('#effect-rows');
+  const addBtn = container.querySelector('#add-effect-btn');
+
+  const rebuild = () => {
+    const effects = _readEffects(container);
+    rowsEl.innerHTML = effects.map((e, i) => _effectRowHtml(e, i)).join('');
+    _wireRows();
+    onChange(effects);
+  };
+
+  const _wireRows = () => {
+    rowsEl.querySelectorAll('.effect-type-sel').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const i = parseInt(sel.dataset.idx);
+        const effects = _readEffects(container);
+        effects[i] = { type: sel.value };
+        rowsEl.innerHTML = effects.map((e, j) => _effectRowHtml(e, j)).join('');
+        _wireRows();
+        onChange(effects);
+      });
+    });
+    rowsEl.querySelectorAll('.effect-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = parseInt(btn.dataset.idx);
+        const effects = _readEffects(container);
+        effects.splice(i, 1);
+        rowsEl.innerHTML = effects.map((e, j) => _effectRowHtml(e, j)).join('');
+        _wireRows();
+        onChange(effects);
+      });
+    });
+    rowsEl.querySelectorAll('.effect-value,.effect-stat,.effect-cond-key,.effect-duration').forEach(inp => {
+      inp.addEventListener('input', () => onChange(_readEffects(container)));
+    });
+  };
+
+  addBtn.addEventListener('click', () => {
+    const effects = _readEffects(container);
+    effects.push({ type: 'damage_bonus', value: 1 });
+    rowsEl.innerHTML = effects.map((e, i) => _effectRowHtml(e, i)).join('');
+    _wireRows();
+    onChange(effects);
+  });
+
+  _wireRows();
+}
+
+function _readEffects(container) {
+  const rows = container.querySelectorAll('#effect-rows .effect-row');
+  return Array.from(rows).map(row => {
+    const type = row.querySelector('.effect-type-sel')?.value || 'damage_bonus';
+    const tdef = _EFFECT_TYPES.find(t => t.value === type) || _EFFECT_TYPES[0];
+    const e = { type };
+    if (tdef.fields.includes('value')) {
+      const v = parseFloat(row.querySelector('.effect-value')?.value ?? '');
+      if (!isNaN(v)) e.value = v;
+    }
+    if (tdef.fields.includes('stat')) {
+      e.stat = row.querySelector('.effect-stat')?.value || 'STR';
+    }
+    if (tdef.fields.includes('condition_key')) {
+      e.condition_key = (row.querySelector('.effect-cond-key')?.value || '').trim();
+    }
+    if (tdef.fields.includes('duration_rounds')) {
+      const d = parseInt(row.querySelector('.effect-duration')?.value ?? '2');
+      e.duration_rounds = isNaN(d) ? 2 : d;
+    }
+    return e;
+  });
+}
+
+function _effectsToJson(effects) {
+  if (!effects || !effects.length) return null;
+  return JSON.stringify({ schema_version: 1, effect_category: 'gear_bonus', effects });
+}
+
+function _parseEffectJson(raw) {
+  if (!raw) return [];
+  try {
+    const p = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(p.effects) ? p.effects : [];
+  } catch { return []; }
+}
+
+// ── Affixes (F3 #463) ─────────────────────────────────────────────────────
+async function _loadAffixes() {
+  const tbody = document.querySelector('#affixes-table tbody');
+  if (!tbody) return;
+  tbody.innerHTML = _loading(6);
+  try {
+    const data = await apiFetch('/api/admin/affixes');
+    const items = data.items || [];
+    if (!items.length) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--t3)">Brak afiksów</td></tr>`;
+      return;
+    }
+    const tierBadge = t => `<span class="badge badge-${['','blue','green','amber','red','red'][t]||'slate'}">T${t}</span>`;
+    tbody.innerHTML = items.map(a => {
+      const effects = _parseEffectJson(a.effect_json);
+      const effectSummary = effects.map(e => {
+        const tdef = _EFFECT_TYPES.find(t => t.value === e.type);
+        const label = tdef?.label || e.type;
+        const val = e.value != null ? ` +${e.value}` : (e.stat ? ` ${e.stat}+${e.value||'?'}` : (e.condition_key ? ` ${e.condition_key}` : ''));
+        return `<span class="badge badge-slate" style="font-size:0.65rem">${_esc(label)}${_esc(val)}</span>`;
+      }).join(' ') || '<span class="td-muted">—</span>';
+      const enc = encodeURIComponent(JSON.stringify(a));
+      return `<tr data-key="${_esc(a.key)}" data-rjson="${enc}">
+        <td class="td-sticky td-mono td-name" style="cursor:pointer" onclick="window._contentAffixEdit('${enc}')">${_esc(a.key)}</td>
+        <td>${_esc(a.name)}</td>
+        <td>${tierBadge(a.tier||1)}</td>
+        <td><span class="badge badge-slate">${_esc(a.allowed_item_types||'weapon')}</span></td>
+        <td style="padding:4px 8px">${effectSummary}</td>
+        <td class="td-actions">
+          <button class="btn-icon" title="Edytuj" onclick="window._contentAffixEdit('${enc}')">✎</button>
+          <button class="btn-icon danger" title="Usuń" onclick="window._contentAffixDelete('${_esc(a.key)}',this)">✕</button>
+        </td>
+      </tr>`;
+    }).join('');
+    const badge = document.querySelector('#content-tabs .stab[data-tab="affixes"] span');
+    if (badge) badge.textContent = `(${items.length})`;
+  } catch(e) { tbody.innerHTML = _errRow(6, e.message); }
+}
+
+function _openAffixModal(existing) {
+  const isEdit = !!existing;
+  const effects = _parseEffectJson(existing?.effect_json);
+  let currentEffects = effects;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay open';
+  overlay.innerHTML = `<div class="modal-box" style="max-width:560px">
+    <div class="modal-head">
+      <span class="modal-title">${isEdit ? 'Edytuj afiks' : 'Nowy afiks'}</span>
+      <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</button>
+    </div>
+    <div class="modal-body" style="padding:12px 16px">
+      ${isEdit ? `<div style="font-size:0.72rem;color:var(--t3);margin-bottom:8px">Klucz: <code>${_esc(existing.key)}</code></div>` : `
+      <div class="form-row">
+        <label class="form-label">Klucz *</label>
+        <input class="form-input" name="key" type="text" placeholder="np. sharp_plus" value="${_esc(existing?.key||'')}">
+      </div>`}
+      <div class="form-row">
+        <label class="form-label">Nazwa *</label>
+        <input class="form-input" name="name" type="text" placeholder="np. Ostry +" value="${_esc(existing?.name||'')}">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-row">
+          <label class="form-label">Tier (1-5)</label>
+          <input class="form-input" name="tier" type="number" min="1" max="5" value="${existing?.tier||1}">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Typ przedmiotu</label>
+          <select class="form-input" name="allowed_item_types">
+            ${['weapon','armor','consumable','misc'].map(t => `<option${(existing?.allowed_item_types||'weapon')===t?' selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label" style="margin-bottom:6px">Efekty</label>
+        ${_effectBuilderHtml(effects)}
+      </div>
+      <div class="form-row" style="margin-top:4px">
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer">
+          <input type="checkbox" name="is_active" ${(existing?.is_active!==false)?'checked':''}> Aktywny
+        </label>
+      </div>
+    </div>
+    <div class="modal-foot" style="padding:12px 16px;display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Anuluj</button>
+      <button class="btn btn-primary" id="affix-save-btn">Zapisz</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+
+  _wireEffectBuilder(overlay.querySelector('#effect-builder'), efx => { currentEffects = efx; });
+
+  overlay.querySelector('#affix-save-btn').onclick = async () => {
+    const key = isEdit ? existing.key : (overlay.querySelector('[name="key"]')?.value?.trim() || '');
+    const name = overlay.querySelector('[name="name"]').value.trim();
+    const tier = parseInt(overlay.querySelector('[name="tier"]').value) || 1;
+    const allowed_item_types = overlay.querySelector('[name="allowed_item_types"]').value;
+    const is_active = overlay.querySelector('[name="is_active"]').checked;
+    const effect_json = _effectsToJson(currentEffects);
+
+    if (!name) { showToast('Nazwa jest wymagana.', 'warn'); return; }
+    if (!isEdit && !key) { showToast('Klucz jest wymagany.', 'warn'); return; }
+
+    try {
+      if (isEdit) {
+        await apiFetch(`/api/admin/affixes/${encodeURIComponent(key)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ name, tier, allowed_item_types, effect_json, is_active }),
+        });
+      } else {
+        await apiFetch('/api/admin/affixes', {
+          method: 'POST',
+          body: JSON.stringify({ key, name, tier, allowed_item_types, effect_json, is_active }),
+        });
+      }
+      showToast(isEdit ? 'Afiks zaktualizowany.' : 'Afiks dodany.', 'success');
+      overlay.remove();
+      _loaded.delete('affixes');
+      _loadAffixes();
+    } catch(e) { showToast(e.message || 'Błąd zapisu.', 'error'); }
+  };
+}
+
+async function _deleteAffix(key, btn) {
+  if (!confirm(`Usunąć afiks "${key}"?`)) return;
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/admin/affixes/${encodeURIComponent(key)}`, { method: 'DELETE' });
+    showToast('Usunięto afiks.', 'success');
+    _loaded.delete('affixes');
+    _loadAffixes();
+  } catch(e) { showToast(e.message || 'Błąd.', 'error'); btn.disabled = false; }
+}
+
 async function _loadLootTables() {
   const tbody = document.querySelector('#loot-table tbody');
   if (!tbody) return;
@@ -440,7 +706,7 @@ async function _loadSpells() {
 
 function _loadTab(tab) {
   if (_loaded.has(tab)) return;
-  const fns = { weapons:_loadWeapons, armor:_loadArmor, items:_loadItems, consumables:_loadConsumables, loot:_loadLootTables, spells:_loadSpells };
+  const fns = { weapons:_loadWeapons, armor:_loadArmor, items:_loadItems, consumables:_loadConsumables, loot:_loadLootTables, spells:_loadSpells, affixes:_loadAffixes };
   const fn = fns[tab];
   if (!fn) return;
   _loaded.add(tab);
@@ -1074,6 +1340,7 @@ function _sectionHtml() {
       <button class="stab" data-tab="consumables">Konsumable <span style="font-size:0.7rem;color:var(--t3)"></span></button>
       <button class="stab" data-tab="loot">Tabele łupów <span style="font-size:0.7rem;color:var(--t3)"></span></button>
       <button class="stab" data-tab="spells">Czary <span style="font-size:0.7rem;color:var(--t3)"></span></button>
+      <button class="stab" data-tab="affixes">Afiksy <span style="font-size:0.7rem;color:var(--t3)"></span></button>
     </div>
 
     <!-- Broń -->
@@ -1203,6 +1470,23 @@ function _sectionHtml() {
         </table>
       </div>
     </div>
+
+    <!-- Afiksy (F3 #463) -->
+    <div class="stab-panel" id="stab-affixes">
+      <div class="toolbar">
+        <div class="search-box"><span class="search-box-icon">🔍</span><input type="text" placeholder="Szukaj afiksów…" data-filter-for="affixes-table"></div>
+        <button class="btn btn-primary btn-sm" id="add-affix-btn">+ Afiks</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="affixes-table">
+          <thead><tr>
+            <th class="td-sticky">Klucz</th><th>Nazwa</th><th style="width:60px">Tier</th>
+            <th>Typ</th><th>Efekty</th><th class="td-actions">Akcje</th>
+          </tr></thead>
+          <tbody><tr><td colspan="6" style="text-align:center;padding:28px;color:var(--t3);font-size:0.8rem">Ładowanie…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </section>`;
 }
@@ -1229,6 +1513,8 @@ export async function init(panel) {
   window._contentDeleteSpell = (key, btn) => _deleteSpell(key, btn);
   window._contentOpenLootEntries = (key, label) => _openLootEntriesModal(key, label);
   window._contentDeleteLootTable = (key, btn) => _deleteLootTable(key, btn);
+  window._contentAffixEdit = enc => _openAffixModal(JSON.parse(decodeURIComponent(enc)));
+  window._contentAffixDelete = (key, btn) => _deleteAffix(key, btn);
 
   // Tab switching
   root.querySelector('#content-tabs').addEventListener('click', e => {
@@ -1254,6 +1540,9 @@ export async function init(panel) {
 
   // Spell add button
   root.querySelector('#add-spell-btn')?.addEventListener('click', _addSpell);
+
+  // Affix add button (F3 #463)
+  root.querySelector('#add-affix-btn')?.addEventListener('click', () => _openAffixModal(null));
 
   // Kreator AI button
   root.querySelector('#content-kreator-btn')?.addEventListener('click', _openSmartEntryForCurrentTab);

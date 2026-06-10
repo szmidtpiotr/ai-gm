@@ -601,6 +601,140 @@ def list_affixes() -> list[dict]:
     return rows
 
 
+def create_affix(
+    *,
+    key: str,
+    name: str,
+    tier: int = 1,
+    allowed_item_types: str = "weapon",
+    effect_json: str | None = None,
+    is_active: bool = True,
+) -> dict:
+    """F3 (#463): create a new affix record in game_config_affixes."""
+    k = _validate_key(key)
+    n = (name or "").strip()
+    if not n:
+        raise ValueError("invalid_name")
+    t = int(tier) if tier is not None else 1
+    if t < 1 or t > 5:
+        raise ValueError("invalid_tier")
+    # validate effect_json if provided
+    if effect_json is not None:
+        raw = effect_json if isinstance(effect_json, str) else json.dumps(effect_json)
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            raise ValueError("invalid_effect_json")
+        errs = validate_effect_json_payload(parsed)
+        if errs:
+            raise ValueError("invalid_effect_json")
+        effect_json = raw
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        existing = conn.execute("SELECT key FROM game_config_affixes WHERE key=?", (k,)).fetchone()
+        if existing:
+            raise ValueError("affix_exists")
+        conn.execute(
+            """
+            INSERT INTO game_config_affixes (key, name, tier, allowed_item_types, effect_json, is_active)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (k, n, t, allowed_item_types or "weapon", effect_json, 1 if is_active else 0),
+        )
+        _audit(conn, "game_config_affixes", k, "INSERT", None, {
+            "key": k, "name": n, "tier": t, "allowed_item_types": allowed_item_types,
+            "effect_json": effect_json, "is_active": is_active,
+        })
+        conn.commit()
+        row = conn.execute(
+            "SELECT key, name, tier, allowed_item_types, effect_json, is_active, created_at, updated_at FROM game_config_affixes WHERE key=?",
+            (k,),
+        ).fetchone()
+        result = dict(row)
+        result["is_active"] = bool(result.get("is_active"))
+        return result
+    finally:
+        conn.close()
+
+
+def update_affix(
+    key: str,
+    *,
+    name: str | None = None,
+    tier: int | None = None,
+    allowed_item_types: str | None = None,
+    effect_json: str | None = None,
+    is_active: bool | None = None,
+) -> dict:
+    """F3 (#463): patch an existing affix record."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        old = conn.execute(
+            "SELECT key, name, tier, allowed_item_types, effect_json, is_active FROM game_config_affixes WHERE key=?",
+            (key,),
+        ).fetchone()
+        if not old:
+            raise KeyError(key)
+        updates: list[str] = []
+        params: list = []
+        if name is not None:
+            n = name.strip()
+            if not n:
+                raise ValueError("invalid_name")
+            updates.append("name=?"); params.append(n)
+        if tier is not None:
+            t = int(tier)
+            if t < 1 or t > 5:
+                raise ValueError("invalid_tier")
+            updates.append("tier=?"); params.append(t)
+        if allowed_item_types is not None:
+            updates.append("allowed_item_types=?"); params.append(allowed_item_types)
+        if effect_json is not None:
+            raw = effect_json if isinstance(effect_json, str) else json.dumps(effect_json)
+            try:
+                parsed = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                raise ValueError("invalid_effect_json")
+            errs = validate_effect_json_payload(parsed)
+            if errs:
+                raise ValueError("invalid_effect_json")
+            updates.append("effect_json=?"); params.append(raw)
+        if is_active is not None:
+            updates.append("is_active=?"); params.append(1 if is_active else 0)
+        if updates:
+            updates.append("updated_at=datetime('now')")
+            params.append(key)
+            conn.execute(f"UPDATE game_config_affixes SET {', '.join(updates)} WHERE key=?", params)
+            _audit(conn, "game_config_affixes", key, "UPDATE", dict(old), None)
+            conn.commit()
+        row = conn.execute(
+            "SELECT key, name, tier, allowed_item_types, effect_json, is_active, created_at, updated_at FROM game_config_affixes WHERE key=?",
+            (key,),
+        ).fetchone()
+        result = dict(row)
+        result["is_active"] = bool(result.get("is_active"))
+        return result
+    finally:
+        conn.close()
+
+
+def delete_affix(key: str) -> None:
+    """F3 (#463): remove an affix from game_config_affixes."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        old = conn.execute("SELECT key FROM game_config_affixes WHERE key=?", (key,)).fetchone()
+        if not old:
+            raise KeyError(key)
+        _audit(conn, "game_config_affixes", key, "DELETE", {"key": key}, None)
+        conn.execute("DELETE FROM game_config_affixes WHERE key=?", (key,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def list_weapons() -> list[dict]:
     rows = _fetch_all(
         """
