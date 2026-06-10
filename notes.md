@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-10 (F1 #461 KOMPLETNE; F2 #462 Affix loot roll KOMPLETNE; F3 #463 Affix Builder KOMPLETNE)_
+_Ostatnia aktualizacja: 2026-06-10 (F1 #461 KOMPLETNE; F2 #462 Affix loot roll KOMPLETNE; F2b #484 Enemy loot_tier drop affixes KOMPLETNE; F3 #463 Affix Builder KOMPLETNE)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -132,6 +132,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 
 - [x] F1 — Unified Effects System — effect_json → typed Effect Objects (schema, silnik, LLM DSL) — [#461](https://github.com/szmidtpiotr/ai-gm/issues/461) — ✅ KOMPLETNE: `damage_bonus` (F1a) + `heal_on_hit` (life-steal, on-hit) + `ac_bonus` (combat-start) + `apply_condition` (on-hit, de-dup) + `static_stat_modifier` (combat-start stats dict) + F1b backward compat + F1d DSL (Smart Entry prompt). 18/18 tests GREEN.
 - [x] F2 — Affix System — game_config_affixes + affixes_json na inventory row + loot engine — [#462](https://github.com/szmidtpiotr/ai-gm/issues/462) — ✅ commit 35b864b: `roll_weapon_affixes()` per loot_tier (poor=0, standard=1×T1, rich=2×T1-T2, treasure=3×T1-T3); `grant_loot_to_character` + `grant_dungeon_loot` przyjmują `loot_tier`; dungeon run instance zawiera `loot_tier`; 10 testów pytest + 3 Playwright GREEN.
+- [x] F2b — Enemy drop affixes — `loot_tier` na `game_config_enemies` → afiksy na broniach z dropów wrogów — [#484](https://github.com/szmidtpiotr/ai-gm/issues/484) — ✅ commit 2c7dfc1: migracja `loot_tier TEXT DEFAULT NULL`; combatant dict + `_preview_loot_from_roll_items` przechowuje `enemy_loot_tier`; `claim_post_combat_loot` przekazuje do `grant_loot_to_character`; backward compat (NULL = brak afiksów); 9 testów pytest + 3 Playwright GREEN.
 - [x] F3 — Admin buildery afiksów i efektów (wizualny UI, nie ręczny JSON) — [#463](https://github.com/szmidtpiotr/ai-gm/issues/463) — ✅ commit db7c638: POST/PATCH/DELETE /api/admin/affixes + zakładka Afiksy w Zawartość + Effects Builder (dropdown typów); 8 testów pytest + 4 Playwright GREEN
 - [ ] F4 — `[SPEND_GOLD:X]` tag z tabeli/configu (NIE z LLM) — [#464](https://github.com/szmidtpiotr/ai-gm/issues/464)
 - [ ] F5 — Wskrzeszenie jako gold sink (włączenie + konfiguracja gold_percent) — [#465](https://github.com/szmidtpiotr/ai-gm/issues/465)
