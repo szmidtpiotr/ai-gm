@@ -1,5 +1,5 @@
 # AI-GM — Master Task Checklist
-_Ostatnia aktualizacja: 2026-06-10 (F1 #461 KOMPLETNE; F3 #463 Affix Builder KOMPLETNE — Afiksy tab + Effects Builder + API CRUD)_
+_Ostatnia aktualizacja: 2026-06-10 (F1 #461 KOMPLETNE; F2 #462 Affix loot roll KOMPLETNE; F3 #463 Affix Builder KOMPLETNE)_
 
 Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryfikacji na DEV.
 
@@ -12,11 +12,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | C (Faza 1) | 19/19 | 100% ✅ |
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 27/28 | 96% ⚠️ W TOKU (E1–E26+E28 ✅, E27 deferred) |
-| F (Faza 4) | 2/21 | 10% (F1✅ F3✅) |
+| F (Faza 4) | 3/21 | 14% (F1✅ F2✅ F3✅) |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **88/140** | **63%** |
+| **TOTAL** | **89/140** | **64%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -131,7 +131,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 ## FAZA 4 — Rozbudowa: Efekty, Afiksy, Ekonomia
 
 - [x] F1 — Unified Effects System — effect_json → typed Effect Objects (schema, silnik, LLM DSL) — [#461](https://github.com/szmidtpiotr/ai-gm/issues/461) — ✅ KOMPLETNE: `damage_bonus` (F1a) + `heal_on_hit` (life-steal, on-hit) + `ac_bonus` (combat-start) + `apply_condition` (on-hit, de-dup) + `static_stat_modifier` (combat-start stats dict) + F1b backward compat + F1d DSL (Smart Entry prompt). 18/18 tests GREEN.
-- [ ] F2 — Affix System — game_config_affixes + affixes_json na inventory row + loot engine — [#462](https://github.com/szmidtpiotr/ai-gm/issues/462) — 🟡 in-progress: tabela `game_config_affixes` (migracja + 3 starter afiksy), `affixes_json` już istnieje, silnik walki sumuje affix damage_bonus (`_inventory_affix_damage_bonus`), GET `/api/admin/affixes`. Pozostało: loot engine losuje afiksy per dungeon tier, admin builder (F3).
+- [x] F2 — Affix System — game_config_affixes + affixes_json na inventory row + loot engine — [#462](https://github.com/szmidtpiotr/ai-gm/issues/462) — ✅ commit 35b864b: `roll_weapon_affixes()` per loot_tier (poor=0, standard=1×T1, rich=2×T1-T2, treasure=3×T1-T3); `grant_loot_to_character` + `grant_dungeon_loot` przyjmują `loot_tier`; dungeon run instance zawiera `loot_tier`; 10 testów pytest + 3 Playwright GREEN.
 - [x] F3 — Admin buildery afiksów i efektów (wizualny UI, nie ręczny JSON) — [#463](https://github.com/szmidtpiotr/ai-gm/issues/463) — ✅ commit db7c638: POST/PATCH/DELETE /api/admin/affixes + zakładka Afiksy w Zawartość + Effects Builder (dropdown typów); 8 testów pytest + 4 Playwright GREEN
 - [ ] F4 — `[SPEND_GOLD:X]` tag z tabeli/configu (NIE z LLM) — [#464](https://github.com/szmidtpiotr/ai-gm/issues/464)
 - [ ] F5 — Wskrzeszenie jako gold sink (włączenie + konfiguracja gold_percent) — [#465](https://github.com/szmidtpiotr/ai-gm/issues/465)
