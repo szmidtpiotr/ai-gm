@@ -77,6 +77,7 @@ from app.services.admin_config import (
     list_consumables,
     list_enemies,
     list_items,
+    list_affixes,
     list_loot_entries,
     list_loot_tables,
     list_weapons,
@@ -1171,6 +1172,12 @@ def admin_patch_xp_reward(
 @router.get("/admin/weapons")
 def admin_weapons(_: None = Depends(require_admin_token)):
     return {"items": list_weapons()}
+
+
+@router.get("/admin/affixes")
+def admin_affixes(_: None = Depends(require_admin_token)):
+    """F2 (#462): list the affix catalog (game_config_affixes)."""
+    return {"items": list_affixes()}
 
 
 @router.post("/admin/weapons")

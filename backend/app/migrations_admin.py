@@ -256,6 +256,35 @@ ADMIN_MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_loot_entries_table
     ON game_config_loot_entries(loot_table_key)
     """,
+    # F2 (#462) — Affix System: affix catalog carrying typed Effect Objects (F1 schema).
+    """
+    CREATE TABLE IF NOT EXISTS game_config_affixes (
+        key                TEXT PRIMARY KEY,
+        name               TEXT NOT NULL,
+        tier               INTEGER NOT NULL DEFAULT 1,
+        allowed_item_types TEXT NOT NULL DEFAULT 'weapon',
+        effect_json        TEXT,
+        is_active          INTEGER NOT NULL DEFAULT 1,
+        created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+    """,
+    # F2 (#462) — starter affixes (flat damage_bonus via F1 typed Effect Objects).
+    """
+    INSERT OR IGNORE INTO game_config_affixes (key, name, tier, allowed_item_types, effect_json)
+    VALUES ('sharp', 'Ostry', 1, 'weapon',
+            '{"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"damage_bonus","value":2}]}')
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_affixes (key, name, tier, allowed_item_types, effect_json)
+    VALUES ('keen', 'Wyostrzony', 2, 'weapon',
+            '{"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"damage_bonus","value":4}]}')
+    """,
+    """
+    INSERT OR IGNORE INTO game_config_affixes (key, name, tier, allowed_item_types, effect_json)
+    VALUES ('brutal', 'Brutalny', 3, 'weapon',
+            '{"schema_version":1,"effect_category":"gear_bonus","effects":[{"type":"damage_bonus","value":6}]}')
+    """,
     "ALTER TABLE game_config_loot_tables ADD COLUMN gold_min INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE game_config_loot_tables ADD COLUMN gold_max INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE game_config_weapons ADD COLUMN description TEXT NOT NULL DEFAULT ''",
