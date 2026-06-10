@@ -944,7 +944,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 
 | Kod | Zadanie | Zależy od |
 |---|---|---|
-| F1 | Unified Effects System — przepisanie effect_json na typed objects (🟡 #461: `damage_bonus`+`heal_on_hit`+`ac_bonus`(schema) ✅; F1b compat ✅; F1d DSL ✅; remaining: `condition_apply`, ac_bonus engine) | C4 |
+| F1 | Unified Effects System — przepisanie effect_json na typed objects (✅ #461 KOMPLETNE: `damage_bonus`+`heal_on_hit`+`ac_bonus`+`apply_condition`+`static_stat_modifier` — schema+engine+F1b+F1d; 18 testów GREEN) | C4 |
 | F2 | Affix System — game_config_affixes + affixes_json na inventory row (🟡 #462: tabela+silnik walki affix damage_bonus+GET /admin/affixes; loot-roll afiksów w toku) | F1 |
 | F3 | Admin buildery afiksów i efektów | F2 |
 | F4 | `[SPEND_GOLD:X]` tag z tabeli/configu (jeśli nie w Fazie 1) | — |
