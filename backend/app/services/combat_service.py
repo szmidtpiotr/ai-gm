@@ -1546,6 +1546,14 @@ def initiate_combat(campaign_id: int, character_id: int, enemy_keys: list[str]) 
         _wac = _weapon_ac_bonus(_wrow_init)
         if _wac:
             ac += _wac
+        # F7 (#467): broken armor reduces AC at combat start
+        try:
+            from app.services.durability_service import get_ac_penalty_for_char as _dur_ac_pen_fn
+            _dur_ac_pen = _dur_ac_pen_fn(conn, int(character_id))
+            if _dur_ac_pen:
+                ac += _dur_ac_pen
+        except Exception:
+            pass
         _wmods = _weapon_stat_modifiers(_wrow_init)
         if _wmods:
             for _st, _delta in _wmods.items():
@@ -1913,6 +1921,15 @@ def resolve_attack(
             if _surprise_fx.get("atk_bonus"):
                 roll_result = int(roll_result) + int(_surprise_fx["atk_bonus"])
                 out["surprise_atk_bonus"] = int(_surprise_fx["atk_bonus"])
+            # F7 (#467): broken weapon reduces attack roll
+            try:
+                from app.services.durability_service import get_attack_penalty_for_char as _dur_atk_fn
+                _dur_atk_pen = _dur_atk_fn(conn, ch_id)
+                if _dur_atk_pen:
+                    roll_result = int(roll_result) + _dur_atk_pen
+                    out["durability_attack_penalty"] = _dur_atk_pen
+            except Exception:
+                pass
             player_nat20 = player_raw == 20
             player_nat1 = player_raw == 1
             dodge_roll: dict[str, Any] | None = None
@@ -2442,6 +2459,12 @@ def resolve_attack(
 
         dmg = 0
         if hit:
+            # F7 (#467): equipment durability decrements on each hit received
+            try:
+                from app.services.durability_service import decrement_durability_on_hit as _decr_dur
+                _decr_dur(conn, ch_id)
+            except Exception as _dur_err:
+                logger.warning("durability_decrement_error", error=str(_dur_err))
             expr = (enemy.get("damage_dice") or "1d6").strip().lower()
             dmg = roll_damage_dice(expr, 0)
             out["damage"] = dmg
