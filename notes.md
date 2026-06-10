@@ -11,12 +11,12 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | B (Faza 0) | 7/7 | 100% ✅ |
 | C (Faza 1) | 19/19 | 100% ✅ |
 | D (Faza 2) | 14/14 | 100% ✅ |
-| E (Faza 3) | 27/28 | 96% ⚠️ W TOKU (E1–E26+E28 ✅, E27 deferred) |
+| E (Faza 3) | 28/28 | 100% ✅ (E1–E28 wszystkie ✅) |
 | F (Faza 4) | 21/21 | 100% ✅ (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅ F21✅) |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **98/140** | **70%** |
+| **TOTAL** | **99/140** | **71%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -123,7 +123,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] E24 — Backend trigger kart onboarding (first mechanic occurrence: rzut/walka/rana/XP/złoto/death) — [#439](https://github.com/szmidtpiotr/ai-gm/issues/439)
 - [x] E25 — Karty onboarding UI (nieblokujące overlay, "Rozumiem") — [#440](https://github.com/szmidtpiotr/ai-gm/issues/440)
 - [x] E26 — Biblioteka kart (gracz może wrócić do przeczytanych) — [#441](https://github.com/szmidtpiotr/ai-gm/issues/441)
-- [ ] E27 — Karty dla nowych mechanik (afiksy, crafting, MP) — gdy systemy gotowe (Faza 4+) — [#442](https://github.com/szmidtpiotr/ai-gm/issues/442)
+- [x] E27 — Karty dla nowych mechanik (afiksy, crafting, MP) — gdy systemy gotowe (Faza 4+) — [#442](https://github.com/szmidtpiotr/ai-gm/issues/442)
 - [x] E28 — Tutorial kampania "Moja Pierwsza Przygoda" (domyślnie ON, Pomiń, instrukcje LLM) — [#443](https://github.com/szmidtpiotr/ai-gm/issues/443)
 
 ---
@@ -235,3 +235,4 @@ Standalone bugixy i feature'y spoza głównej architektury A-H.
 - [x] [#455](https://github.com/szmidtpiotr/ai-gm/issues/455) — SB-1: Znajomi NPC tab 404; endpoint GET /admin/campaigns/{id}/known-npcs dodany (impl 492cc65, TDD 9/9 GREEN + Playwright 3/3)
 - [x] [#459](https://github.com/szmidtpiotr/ai-gm/issues/459) — E19b: Dungeon tile AI prompt generator — 2 endpointy (generate-image-prompt + ai-create) + 2 przyciski UI + bugfix call_type w 3 miejscach (TDD 10/10 GREEN + Playwright 3/3)
 - [x] [#460](https://github.com/szmidtpiotr/ai-gm/issues/460) — E19c: Compositor redesign — cienka ramka 5px + flat amber drzwi-markery + endpoint generate-description (TDD 13/13 GREEN + Playwright 3/3)
+- [x] [#485](https://github.com/szmidtpiotr/ai-gm/issues/485) — Effect JSON Builder UI w sekcji Zawartość (Broń/Zbroja/Przedmioty): builder efektów identyczny jak w Afiksach; 15 testów TDD weryfikujących wszystkie 6 typów F1 + Playwright 3/3 GREEN — commit (po budowaniu)
