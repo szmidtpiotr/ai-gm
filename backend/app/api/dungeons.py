@@ -49,7 +49,7 @@ def get_active_dungeon_run_for_character(character_id: int):
             """SELECT c.id AS campaign_id
                FROM campaigns c
                JOIN characters ch ON ch.campaign_id = c.id
-               WHERE ch.id = ? AND c.mode = 'dungeon' AND c.status = 'active'
+               WHERE ch.id = ? AND c.status = 'active'
                ORDER BY c.id DESC""",
             (character_id,),
         ).fetchall()
