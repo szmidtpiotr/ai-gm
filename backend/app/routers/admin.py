@@ -57,6 +57,7 @@ from app.services.llm_admin_service import (
 )
 from app.services.llm_service import _normalize_base_url as _llm_normalize_base_url
 from app.services.admin_config import (
+    create_affix,
     create_condition,
     create_consumable,
     create_enemy,
@@ -64,6 +65,7 @@ from app.services.admin_config import (
     create_loot_table,
     create_skill,
     create_weapon,
+    delete_affix,
     delete_condition,
     delete_consumable,
     delete_enemy,
@@ -86,6 +88,7 @@ from app.services.admin_config import (
     list_skills,
     list_stats,
     list_archetypes,
+    update_affix,
     update_condition,
     update_enemy,
     update_item,
@@ -378,6 +381,25 @@ class EnemyPatchReq(BaseModel):
 
 class EnemyDeleteReq(BaseModel):
     force: bool = False
+
+
+class AffixCreateReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str
+    name: str
+    tier: int = 1
+    allowed_item_types: str = "weapon"
+    effect_json: str | None = None
+    is_active: bool = True
+
+
+class AffixPatchReq(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = None
+    tier: int | None = None
+    allowed_item_types: str | None = None
+    effect_json: str | None = None
+    is_active: bool | None = None
 
 
 class ConditionCreateReq(BaseModel):
@@ -1178,6 +1200,68 @@ def admin_weapons(_: None = Depends(require_admin_token)):
 def admin_affixes(_: None = Depends(require_admin_token)):
     """F2 (#462): list the affix catalog (game_config_affixes)."""
     return {"items": list_affixes()}
+
+
+@router.post("/admin/affixes")
+def admin_create_affix(req: AffixCreateReq, _: None = Depends(require_admin_token)):
+    """F3 (#463): create a new affix in game_config_affixes."""
+    try:
+        item = create_affix(
+            key=req.key,
+            name=req.name,
+            tier=req.tier,
+            allowed_item_types=req.allowed_item_types,
+            effect_json=req.effect_json,
+            is_active=req.is_active,
+        )
+        return {"item": item}
+    except ValueError as e:
+        if str(e) == "affix_exists":
+            raise HTTPException(status_code=409, detail="Affix key already exists") from None
+        if str(e) == "invalid_key":
+            raise HTTPException(status_code=422, detail="key must be lowercase_snake_case and 1-40 chars") from None
+        if str(e) == "invalid_name":
+            raise HTTPException(status_code=422, detail="name must not be empty") from None
+        if str(e) == "invalid_tier":
+            raise HTTPException(status_code=422, detail="tier must be 1-5") from None
+        if str(e) == "invalid_effect_json":
+            raise HTTPException(status_code=422, detail="invalid effect_json — must use Effect Object schema") from None
+        raise HTTPException(status_code=422, detail="Invalid affix payload") from None
+
+
+@router.patch("/admin/affixes/{key}")
+def admin_patch_affix(key: str, req: AffixPatchReq, _: None = Depends(require_admin_token)):
+    """F3 (#463): update an existing affix."""
+    try:
+        item = update_affix(
+            key,
+            name=req.name,
+            tier=req.tier,
+            allowed_item_types=req.allowed_item_types,
+            effect_json=req.effect_json,
+            is_active=req.is_active,
+        )
+        return {"item": item}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Affix not found") from None
+    except ValueError as e:
+        if str(e) == "invalid_name":
+            raise HTTPException(status_code=422, detail="name must not be empty") from None
+        if str(e) == "invalid_tier":
+            raise HTTPException(status_code=422, detail="tier must be 1-5") from None
+        if str(e) == "invalid_effect_json":
+            raise HTTPException(status_code=422, detail="invalid effect_json — must use Effect Object schema") from None
+        raise HTTPException(status_code=422, detail="Invalid affix payload") from None
+
+
+@router.delete("/admin/affixes/{key}")
+def admin_delete_affix(key: str, _: None = Depends(require_admin_token)):
+    """F3 (#463): remove an affix from game_config_affixes."""
+    try:
+        delete_affix(key)
+        return {"ok": True}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Affix not found") from None
 
 
 @router.post("/admin/weapons")
