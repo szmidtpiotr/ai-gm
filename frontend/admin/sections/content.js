@@ -253,7 +253,7 @@ async function _loadWeapons() {
         <td class="detail-col">${yesNo(w.finesse)}</td>
         <td class="td-mono">${w.weight_kg!=null?w.weight_kg+' kg':'—'}</td>
         <td class="td-mono">${w.value_gp!=null?w.value_gp+' sz':'—'}</td>
-        <td>${_stars(w)}</td>
+        <td data-sort-val="${w.rarity??0}">${_stars(w)}</td>
         <td class="detail-col">${w.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${w.is_locked?'🔒':''}</span></td>
         <td class="detail-col"><span style="font-size:0.72rem;color:var(--t3)">${w.template_id?'📖 #'+w.template_id:'—'}</span></td>
@@ -288,7 +288,7 @@ async function _loadArmor() {
         <td class="detail-col td-muted">${_esc(it.armor_coverage||'—')}</td>
         <td class="td-mono">${it.weight_kg!=null?it.weight_kg+' kg':'—'}</td>
         <td class="td-mono">${it.value_gp!=null?it.value_gp+' sz':'—'}</td>
-        <td>${_stars(it)}</td>
+        <td data-sort-val="${it.rarity??0}">${_stars(it)}</td>
         <td class="detail-col">${it.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${it.is_locked?'🔒':''}</span></td>
         <td class="td-actions">
@@ -324,7 +324,7 @@ async function _loadItems() {
         <td class="detail-col td-mono" style="font-size:0.68rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(fxJson)}">${_esc(fxJson||'—')}</td>
         <td class="td-mono">${it.weight_kg!=null?it.weight_kg+' kg':'—'}</td>
         <td class="td-mono">${it.value_gp!=null?it.value_gp+' sz':'—'}</td>
-        <td>${_stars(it)}</td>
+        <td data-sort-val="${it.rarity??0}">${_stars(it)}</td>
         <td class="detail-col td-muted" style="font-size:0.72rem">${_esc(it.created_by||'—')}</td>
         <td class="detail-col">${it.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${it.is_locked?'🔒':''}</span></td>
@@ -361,7 +361,7 @@ async function _loadConsumables() {
         <td class="detail-col td-mono">${c.charges??'—'}</td>
         <td class="td-mono">—</td>
         <td class="td-mono">${c.base_price!=null?c.base_price+' sz':'—'}</td>
-        <td>${_stars(c)}</td>
+        <td data-sort-val="${c.rarity??0}">${_stars(c)}</td>
         <td class="detail-col">${c.is_active===false?'<span class="badge badge-slate">○</span>':'<span class="badge badge-green">●</span>'}</td>
         <td class="detail-col"><span>${c.is_locked?'🔒':''}</span></td>
         <td class="td-actions">
