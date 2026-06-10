@@ -60,6 +60,27 @@ GENERIC_ENCOUNTERS = [
         "level_min": 1, "level_max": 4, "trigger_probability": 0.18,
         "enemies": [{"enemy_key": "thug", "name": "zbir", "count": 2}],
     },
+    # F8 (#468) — robbery encounters (no combat, gold stolen)
+    {
+        "key": "robbery_road_bandits",
+        "title": "Napad na trakcie",
+        "description": "Uzbrojeni bandyci wyskakują zza drzew i grożą bronią — oddaj sakiewkę!",
+        "biomes": ["road", "plains", "wilderness", "forest"],
+        "trigger_types": ["hex_enter", "n_turns"],
+        "level_min": 1, "level_max": 10, "trigger_probability": 0.12,
+        "encounter_type": "robbery",
+        "enemies": [],
+    },
+    {
+        "key": "robbery_city_pickpocket",
+        "title": "Kieszonkowiec na targu",
+        "description": "W tłumie targowiska zręczne ręce sięgają do twojej sakiewki.",
+        "biomes": ["city", "miasto", "town", "settlement"],
+        "trigger_types": ["n_turns"],
+        "level_min": 1, "level_max": 8, "trigger_probability": 0.10,
+        "encounter_type": "robbery",
+        "enemies": [],
+    },
 ]
 
 
@@ -86,18 +107,21 @@ def seed_generic_encounters() -> int:
         for e in GENERIC_ENCOUNTERS:
             if e["key"] in existing:
                 continue
+            enc_body = {
+                "label": e["title"],
+                "biomes": e["biomes"],
+                "trigger_types": e["trigger_types"],
+                "level_min": e["level_min"],
+                "level_max": e["level_max"],
+                "trigger_probability": e["trigger_probability"],
+                "enemies": e["enemies"],
+                "source": "generic_pool",
+            }
+            if e.get("encounter_type"):
+                enc_body["encounter_type"] = e["encounter_type"]
             draft_data = {
                 "__generic_encounter__": e["key"],
-                "encounter": {
-                    "label": e["title"],
-                    "biomes": e["biomes"],
-                    "trigger_types": e["trigger_types"],
-                    "level_min": e["level_min"],
-                    "level_max": e["level_max"],
-                    "trigger_probability": e["trigger_probability"],
-                    "enemies": e["enemies"],
-                    "source": "generic_pool",
-                },
+                "encounter": enc_body,
             }
             conn.execute(
                 """INSERT INTO adventure_hooks
