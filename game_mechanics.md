@@ -964,7 +964,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | F17 | ✅ Hidden Trait system (#477 KOMPLETNE: `hidden_trait_service.py` get_trait_pool/assign_trait/get_character_trait/reveal_trait; `game_config_hidden_traits` tabela + 5 seed traits; `GET/POST /api/admin/hidden-traits`; sheet_json.hidden_trait + hidden_trait_revealed; 12 testów pytest + 3 Playwright GREEN) | F1 |
 | F18 | ✅ Rosnące progi XP (#478 KOMPLETNE: `level_from_xp(xp, thresholds)` + `get_xp_level_thresholds(conn)` w xp_service.py; DEFAULT_XP_LEVEL_THRESHOLDS (L2=100..L10=2700 nieliniowe); resurrection_service + solo_death_service używają level_from_xp; migracja seed thresholds; 12 testów pytest + 3 Playwright GREEN) | playtest |
 | F19 | ✅ Globalne stany NPC (#479 KOMPLETNE: `npc_global_death_service.py` mark_npc_dead_global/is_npc_dead_global/get_living_npcs/revive_npc; kolumna `is_dead` na `npcs` (migracja); hook w `campaign_plan_runtime.mark_npc_dead`; 11 testów pytest + 3 Playwright GREEN) | B2 |
-| F20 | Mechaniczne efekty pory dnia (noc/świt bonusy, game_config) | B1 |
+| F20 | ✅ Mechaniczne efekty pory dnia (#480 KOMPLETNE: `time_of_day_service.py` get_time_of_day_phase/get_time_of_day_effects/get_active_effects_for_phase; DEFAULT: dawn=+1init, day={}, dusk=+1percDC, night=+2stealthDC+2stealth; migracja seed; 13 testów pytest + 3 Playwright GREEN) | B1 |
 | F21 | World State History UI dla admina (zakładka, diff między turami) | B5 |
 
 ---

@@ -12,11 +12,11 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 | C (Faza 1) | 19/19 | 100% ✅ |
 | D (Faza 2) | 14/14 | 100% ✅ |
 | E (Faza 3) | 27/28 | 96% ⚠️ W TOKU (E1–E26+E28 ✅, E27 deferred) |
-| F (Faza 4) | 19/21 | 90% (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅) |
+| F (Faza 4) | 20/21 | 95% (F1✅ F2✅ F2b✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8✅ F9✅ F10✅ F11✅ F12✅ F13✅ F14✅ F15✅ F16✅ F17✅ F18✅ F19✅ F20✅) |
 | G (Faza 5 MP) | 0/15 | 0% |
 | H (Faza 6) | 0/5 | 0% |
 | **FADM (admin rebuild)** | 18/18 | 100% ✅ KOMPLETNE (strangler fig zakończony) |
-| **TOTAL** | **96/140** | **69%** |
+| **TOTAL** | **97/140** | **69%** |
 
 > **2026-06-08:** Praca nad sekcją D **wstrzymana**. Wyrównanie architektury wg pierwotnego planu (CZĘŚĆ AE strangler-fig) — budujemy modularny `admin/` z monolitu admin3. Brief: `docs/V2_ARCHITECTURE/10_ADMIN_REBUILD_STRANGLER.md`. Epic [#401](https://github.com/szmidtpiotr/ai-gm/issues/401).
 
@@ -150,7 +150,7 @@ Pełna lista tasków z `game_mechanics.md` CZĘŚĆ 7. Aktualizuj `[x]` po weryf
 - [x] F17 — Hidden Trait system (LLM z puli, trigger kontekstowy, reveal narracyjny) — [#477](https://github.com/szmidtpiotr/ai-gm/issues/477)
 - [x] F18 — Rosnące progi XP konfigurowalne z Admin Panelu — [#478](https://github.com/szmidtpiotr/ai-gm/issues/478)
 - [x] F19 — Globalne stany NPC — śmierć NPC między kampaniami (is_dead globalny) — [#479](https://github.com/szmidtpiotr/ai-gm/issues/479)
-- [ ] F20 — Mechaniczne efekty pory dnia (noc/świt bonusy z game_config) — [#480](https://github.com/szmidtpiotr/ai-gm/issues/480)
+- [x] F20 — Mechaniczne efekty pory dnia (noc/świt bonusy z game_config) — [#480](https://github.com/szmidtpiotr/ai-gm/issues/480)
 - [ ] F21 — World State History UI admina (zakładka + diff między turami) — [#481](https://github.com/szmidtpiotr/ai-gm/issues/481)
 
 ---
