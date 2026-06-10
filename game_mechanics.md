@@ -959,7 +959,7 @@ Krótka kampania (5-10 tur) gdzie LLM dostaje instrukcje by podpowiadać narracy
 | F12 | ✅ Anti-farm: malejąca cena przy spam-sprzedaży (#472 KOMPLETNE: `anti_farm_service.get_anti_farm_multiplier`; decay po 3 sprzedażach w 24h, min 10%; `sell_item` taguje gold_log z `item_key`; 13 testów GREEN) | — |
 | F13 | ✅ Background expire wynajmu (sweep) (#473 KOMPLETNE: `rental_service.expire_rentals()` + hook w turns.py) | — |
 | F14 | ✅ Usunięcie martwego economy_service kodu (#474 KOMPLETNE: generate_combat_loot/claim_loot/expire_loot_on_location_change usunięte) | — |
-| F15 | Balans walki → mikstury potrzebne | balans |
+| F15 | ✅ Balans walki (#475) — `expected_hp_loss_pct` formula; `bandit.attack_bonus` +3→+4; ≥60% HP drain at level 3 verified analytically; migration applied | balans |
 | F16 | Balans całości (ceny, dropy, sinki) — playtest | wszystko wyżej |
 | F17 | Hidden Trait system (LLM sugeruje z puli, trigger kontekstowy, LLM narruje reveal) | F1 |
 | F18 | Rosnące progi XP (konfigurowalne z Admin Panelu) | playtest |
@@ -3126,7 +3126,7 @@ grind loch / walka → złoto + przedmioty
 | F12 | ✅ Anti-farm (#472) — `anti_farm_service.get_anti_farm_multiplier(conn, char_id, item_key)`; LIMIT=3 sprzedaże/24h; decay 10%/extra; min 10%; `sell_item` taguje gold_log row `meta_json={item_key}` | — |
 | F13 | ✅ Background expire wynajmu (#473) — `rental_service.expire_rentals(conn, campaign_id, current_turn)` marks status=expired, deletes inventory_id rows; hooked at start of each turn | — |
 | F14 | ✅ Dead code removed (#474) — `generate_combat_loot` / `claim_loot` / `expire_loot_on_location_change` removed from economy_service (~210 lines) | — |
-| F15 | Ekonomia konsumpcji: balans walki tak, by mikstury były potrzebne | balans walki |
+| F15 | ✅ Balans walki (#475 KOMPLETNE: `expected_hp_loss_pct` formula; bandyta attack_bonus +3→+4; próg ≥60% HP spełniony; migracja `_apply_f15_balance_tuning`; 6 testów GREEN) | balans walki |
 | F16 | Balans całości (ceny, dropy, koszty sinków) — playtest | wszystko wyżej |
 
 ---

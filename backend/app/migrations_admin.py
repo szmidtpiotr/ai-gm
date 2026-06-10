@@ -2922,6 +2922,17 @@ def _ensure_shop_item_level_location_schema(conn: sqlite3.Connection) -> None:
                     raise
 
 
+def _apply_f15_balance_tuning(conn: sqlite3.Connection) -> None:
+    """F15 (#475): tune bandit attack_bonus +3→+4 so level-3 fights drain ≥60% HP."""
+    try:
+        conn.execute(
+            "UPDATE game_config_enemies SET attack_bonus = 4 WHERE key = 'bandit' AND attack_bonus < 4"
+        )
+        conn.commit()
+    except Exception:
+        pass
+
+
 def _ensure_price_gp_schema(conn: sqlite3.Connection) -> None:
     """F11 (#471): add unified price_gp column to item catalog tables.
 
@@ -3025,6 +3036,7 @@ def run_admin_migrations() -> None:
         _ensure_submap_schema(conn)
         _ensure_shop_item_level_location_schema(conn)
         _ensure_price_gp_schema(conn)
+        _apply_f15_balance_tuning(conn)
     finally:
         conn.close()
 
