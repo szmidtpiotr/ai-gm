@@ -162,10 +162,8 @@
         const mod = await import(`./sections/${key}.js?v=4`);
         if (mod && typeof mod.init === 'function') {
           await mod.init(panel);
-          // Auto-init sortable tables in panel
-          panel.querySelectorAll('table.data-table').forEach(t => {
-            initSortableTable(t);
-          });
+          // Auto-init sortable tables already in DOM after init
+          panel.querySelectorAll('table.data-table').forEach(t => initSortableTable(t));
           return;
         }
         panel.innerHTML = placeholder(key);
@@ -235,6 +233,23 @@
     // ────────────────────────────────────────────────────────────────────────
     window.addEventListener('hashchange', route);
     window.addEventListener('admin-unauthorized', () => showLogin());
+
+    // MutationObserver — auto-init sorting on any table.data-table added to #panel at any time
+    // (catches lazy-loaded tab tables that appear after init() returns)
+    const _panel = document.getElementById('panel');
+    const _tableObserver = new MutationObserver(mutations => {
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (node.nodeType !== 1) continue;
+          if (node.matches && node.matches('table.data-table')) {
+            initSortableTable(node);
+          } else if (node.querySelectorAll) {
+            node.querySelectorAll('table.data-table').forEach(t => initSortableTable(t));
+          }
+        }
+      }
+    });
+    _tableObserver.observe(_panel, { childList: true, subtree: true });
 
     // Load pending items count for Świat badge
     async function _loadPendingCount() {
