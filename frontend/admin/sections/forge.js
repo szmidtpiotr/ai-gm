@@ -182,6 +182,134 @@ let _ejConditions = [];
 let _ejSkills = [];
 let _ejDataLoaded = false;
 
+// ── Inline effect builder — ta sama mechanika co content.js affix builder ────
+const _FORGE_EFFECT_TYPES = [
+  { value: 'damage_bonus',        label: 'Bonus obrażeń',          fields: ['value'],
+    tooltip: 'Stały bonus do obrażeń (int). NIE podwaja się przy krytycznym.' },
+  { value: 'heal_on_hit',         label: 'Leczenie przy trafieniu', fields: ['value'],
+    tooltip: 'HP przywrócone atakującemu przy każdym trafieniu (int).' },
+  { value: 'ac_bonus',            label: 'Bonus AC',                fields: ['value'],
+    tooltip: 'Bonus do AC na start walki (int).' },
+  { value: 'static_stat_modifier',label: 'Modyfikator statystyki',  fields: ['stat', 'value'],
+    tooltip: 'Modyfikator statystyki na start walki (int, może być ujemny).' },
+  { value: 'apply_condition',     label: 'Aplikuj kondycję',        fields: ['condition_key', 'duration_rounds'],
+    tooltip: 'Aplikuje kondycję na cel przy trafieniu.' },
+  { value: 'narrative_only',      label: 'Tylko narracja',          fields: [],
+    tooltip: 'Brak efektu mechanicznego.' },
+];
+const _FORGE_STATS = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+
+function _forgeEffectBuilderHtml(effects) {
+  const rows = (effects || []).map((e, i) => _forgeEffectRowHtml(e, i)).join('');
+  return `<div class="effect-builder" id="forge-effect-builder">
+    <div id="forge-effect-rows">${rows}</div>
+    <button type="button" class="btn btn-sm btn-secondary" id="forge-add-effect-btn" style="margin-top:6px">+ Efekt</button>
+  </div>`;
+}
+
+function _forgeEffectRowHtml(e, i) {
+  const tdef = _FORGE_EFFECT_TYPES.find(t => t.value === (e.type || 'damage_bonus')) || _FORGE_EFFECT_TYPES[0];
+  const typeSel = `<select class="form-input effect-type-sel forge-effect-type" style="min-width:170px" data-idx="${i}">
+    ${_FORGE_EFFECT_TYPES.map(t => `<option value="${t.value}"${e.type===t.value?' selected':''}>${_esc(t.label)}</option>`).join('')}
+  </select>`;
+  const extras = _forgeBuildExtraFields(tdef, e);
+  return `<div class="effect-row" data-idx="${i}" style="display:flex;gap:6px;align-items:flex-end;margin-bottom:6px;flex-wrap:wrap">
+    ${typeSel}
+    <div class="effect-extra forge-effect-extra" style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">${extras}</div>
+    <button type="button" class="btn-icon danger forge-effect-del" data-idx="${i}" title="Usuń efekt">✕</button>
+  </div>`;
+}
+
+function _forgeBuildExtraFields(tdef, e) {
+  return (tdef.fields || []).map(f => {
+    if (f === 'value') {
+      const tip = tdef.tooltip ? ` title="${_esc(tdef.tooltip)}"` : '';
+      return `<input class="form-input forge-effect-value" type="number" placeholder="Wartość" value="${e.value??''}" style="width:90px"${tip}>`;
+    }
+    if (f === 'stat') {
+      return `<select class="form-input forge-effect-stat" style="width:80px">
+        ${_FORGE_STATS.map(s => `<option${e.stat===s?' selected':''}>${s}</option>`).join('')}
+      </select>`;
+    }
+    if (f === 'condition_key') {
+      const conds = _ejConditions || [];
+      if (conds.length) {
+        const opts = conds.map(c => `<option value="${_esc(c.v)}"${e.condition_key===c.v?' selected':''}>${_esc(c.l)}</option>`).join('');
+        return `<select class="form-input forge-effect-cond" style="width:160px"><option value="">— kondycja —</option>${opts}</select>`;
+      }
+      return `<input class="form-input forge-effect-cond" type="text" placeholder="klucz kondycji" value="${_esc(e.condition_key||'')}" style="width:130px">`;
+    }
+    if (f === 'duration_rounds') return `<input class="form-input forge-effect-duration" type="number" placeholder="Rundy" value="${e.duration_rounds??2}" style="width:70px">`;
+    return '';
+  }).join('');
+}
+
+function _forgeReadEffects() {
+  const rowsEl = document.getElementById('forge-effect-rows');
+  if (!rowsEl) return [];
+  return Array.from(rowsEl.querySelectorAll('.effect-row')).map(row => {
+    const type = row.querySelector('.forge-effect-type')?.value || 'damage_bonus';
+    const tdef = _FORGE_EFFECT_TYPES.find(t => t.value === type) || _FORGE_EFFECT_TYPES[0];
+    const e = { type };
+    if (tdef.fields.includes('value'))          { const v = parseFloat(row.querySelector('.forge-effect-value')?.value ?? ''); if (!isNaN(v)) e.value = v; }
+    if (tdef.fields.includes('stat'))           { e.stat = row.querySelector('.forge-effect-stat')?.value || 'STR'; }
+    if (tdef.fields.includes('condition_key'))  { e.condition_key = (row.querySelector('.forge-effect-cond')?.value || '').trim(); }
+    if (tdef.fields.includes('duration_rounds')){ const d = parseInt(row.querySelector('.forge-effect-duration')?.value ?? '2'); e.duration_rounds = isNaN(d) ? 2 : d; }
+    return e;
+  });
+}
+
+function _forgeSyncEjData() {
+  const effects = _forgeReadEffects();
+  _forgeEjData = effects.length > 0
+    ? { schema_version: 1, effect_category: 'gear_bonus', effects }
+    : null;
+}
+
+function _forgeWireEffectBuilder() {
+  const rowsEl = document.getElementById('forge-effect-rows');
+  const addBtn = document.getElementById('forge-add-effect-btn');
+  if (!rowsEl || !addBtn) return;
+
+  const _wireRows = () => {
+    rowsEl.querySelectorAll('.forge-effect-type').forEach(sel => {
+      sel.addEventListener('change', () => {
+        const i = parseInt(sel.dataset.idx);
+        const effects = _forgeReadEffects();
+        effects[i] = { type: sel.value };
+        rowsEl.innerHTML = effects.map((e, j) => _forgeEffectRowHtml(e, j)).join('');
+        _wireRows();
+        _forgeSyncEjData();
+      });
+    });
+    rowsEl.querySelectorAll('.forge-effect-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const i = parseInt(btn.dataset.idx);
+        const effects = _forgeReadEffects();
+        effects.splice(i, 1);
+        rowsEl.innerHTML = effects.map((e, j) => _forgeEffectRowHtml(e, j)).join('');
+        _wireRows();
+        _forgeSyncEjData();
+      });
+    });
+    rowsEl.querySelectorAll('.forge-effect-value,.forge-effect-stat,.forge-effect-duration,.forge-effect-cond').forEach(inp => {
+      inp.addEventListener('input', _forgeSyncEjData);
+      inp.addEventListener('change', _forgeSyncEjData);
+    });
+  };
+
+  addBtn.addEventListener('click', () => {
+    const effects = _forgeReadEffects();
+    effects.push({ type: 'damage_bonus', value: 1 });
+    rowsEl.innerHTML = effects.map((e, i) => _forgeEffectRowHtml(e, i)).join('');
+    _wireRows();
+    _forgeSyncEjData();
+  });
+
+  _wireRows();
+  _forgeSyncEjData();
+}
+
 // openSmartEntryForDbItem żyje w content/smart-entry (nieportowane tu) — graceful fallback.
 function openSmartEntryForDbItem(entryType, key) {
   if (typeof window !== 'undefined' && typeof window.openSmartEntryForDbItem === 'function' && window.openSmartEntryForDbItem !== openSmartEntryForDbItem) {
@@ -1691,7 +1819,7 @@ async function forgeGeneratePlanItem(entityType, evt) {
 }
 
 // ─── Template Entity Modal ───────────────────────────────────────────────────
-function openTplEntityModal(listKey, idx, type, data) {
+async function openTplEntityModal(listKey, idx, type, data) {
   _tplEntityCtx = { listKey, idx, type };
   const modal = document.getElementById('tpl-entity-modal');
   const typeLabels = {
@@ -1702,8 +1830,10 @@ function openTplEntityModal(listKey, idx, type, data) {
   document.getElementById('tpl-entity-modal-title').textContent =
     data.name || data.label || data.key || '(nowy)';
   document.getElementById('tpl-entity-campaign-specific').checked = !!data.campaign_specific;
+  if (['weapon','item','consumable'].includes(type)) await _ejLoadDynamicData();
+  _forgeEjData = null;
   document.getElementById('tpl-entity-form').innerHTML = _renderEntityForm(type, data.overrides || data);
-  if (type === 'item' || type === 'weapon' || type === 'consumable') _ejPopulate(data.overrides?.effect_json ?? data.effect_json ?? null);
+  if (['weapon','item','consumable'].includes(type)) _forgeWireEffectBuilder();
   document.getElementById('tpl-entity-delete-btn').style.display = idx < 0 ? 'none' : '';
   modal.style.display = 'flex';
 }
@@ -1990,7 +2120,10 @@ function _renderEntityForm(type, d) {
     txt('magic_school','Szkoła magii',d.magic_school||'','np. necromancy'),
     ta('description','Opis',d.description,2),
     ta('note','Notatka GM (efekty)',d.note,2),
-    '<div class="form-row" style="grid-column:1/-1"><label class="form-label" style="display:flex;justify-content:space-between;align-items:center"><span>Effect JSON</span><button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px" onclick="_forgeEjOpen(\'weapon\')">Edytuj efekty</button></label><div id="ef-ej-preview" style="background:#111;border:1px solid #2a2a2a;border-radius:4px;padding:8px;font-size:0.72rem;color:#666;font-family:monospace;word-break:break-all;cursor:pointer;white-space:pre-wrap;max-height:80px;overflow:auto" onclick="_forgeEjOpen(\'weapon\')">— brak efektu —</div></div>'
+    (() => {
+      const existing = (() => { try { const e = typeof d.effect_json==='string'?JSON.parse(d.effect_json):(d.effect_json||null); return Array.isArray(e)?e:(e?.effects||[]); } catch{return[];} })();
+      return `<div class="form-row" style="grid-column:1/-1"><label class="form-label" style="margin-bottom:4px">Efekty broni (on-equip)</label>${_forgeEffectBuilderHtml(existing)}</div>`;
+    })()
     + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
     + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
   );
@@ -2011,7 +2144,10 @@ function _renderEntityForm(type, d) {
     num('charges','Ładunki',d.charges||1),
     ta('description','Opis',d.description,2),
     ta('note','Notatka GM',d.note,2),
-    '<div class="form-row" style="grid-column:1/-1"><label class="form-label" style="display:flex;justify-content:space-between;align-items:center"><span>Effect JSON</span><button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px" onclick="_forgeEjOpen(\'standard\')">Edytuj efekty</button></label><div id="ef-ej-preview" style="background:#111;border:1px solid #2a2a2a;border-radius:4px;padding:8px;font-size:0.72rem;color:#666;font-family:monospace;word-break:break-all;cursor:pointer;white-space:pre-wrap;max-height:80px;overflow:auto" onclick="_forgeEjOpen(\'standard\')">— brak efektu —</div></div>'
+    (() => {
+      const existing = (() => { try { const e = typeof d.effect_json==='string'?JSON.parse(d.effect_json):(d.effect_json||null); return Array.isArray(e)?e:(e?.effects||[]); } catch{return[];} })();
+      return `<div class="form-row" style="grid-column:1/-1"><label class="form-label" style="margin-bottom:4px">Efekty przedmiotu (on-equip)</label>${_forgeEffectBuilderHtml(existing)}</div>`;
+    })()
     + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
     + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
   );
@@ -2029,7 +2165,10 @@ function _renderEntityForm(type, d) {
     sel('rarity','Rzadkość',rarity,String(d.rarity||1)),
     ta('description','Opis',d.description,2),
     ta('note','Notatka GM',d.note,2),
-    '<div class="form-row" style="grid-column:1/-1"><label class="form-label" style="display:flex;justify-content:space-between;align-items:center"><span>Effect JSON</span><button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px" onclick="_forgeEjOpen(\'standard\')">Edytuj efekty</button></label><div id="ef-ej-preview" style="background:#111;border:1px solid #2a2a2a;border-radius:4px;padding:8px;font-size:0.72rem;color:#666;font-family:monospace;word-break:break-all;cursor:pointer;white-space:pre-wrap;max-height:80px;overflow:auto" onclick="_forgeEjOpen(\'standard\')">— brak efektu —</div></div>'
+    (() => {
+      const existing = (() => { try { const e = typeof d.effect_json==='string'?JSON.parse(d.effect_json):(d.effect_json||null); return Array.isArray(e)?e:(e?.effects||[]); } catch{return[];} })();
+      return `<div class="form-row" style="grid-column:1/-1"><label class="form-label" style="margin-bottom:4px">Efekty konsumablu (on-use)</label>${_forgeEffectBuilderHtml(existing)}</div>`;
+    })()
     + chk('hidden','Ukryty (GM musi odkryć)',d.hidden||false)
     + txt('location_hint','Wskazówka lokalizacji',d.location_hint||'','np. "Zbrojownia na 2. piętrze"')
   );
